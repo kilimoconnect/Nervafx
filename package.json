@@ -1,0 +1,35 @@
+{
+  "name": "nervafx",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "load": "node src/index.js load",
+    "check": "node src/index.js check",
+    "repair": "node src/index.js repair",
+    "update": "node src/index.js update",
+    "backfill": "node src/index.js backfill",
+    "strength": "node src/index.js strength",
+    "smooth": "node src/index.js smooth",
+    "spreads": "node src/index.js spreads",
+    "rank": "node src/index.js rank",
+    "states": "node src/index.js states",
+    "market": "node src/index.js market",
+    "signal-backfill": "node src/index.js signal-backfill",
+    "signals": "node src/index.js signals",
+    "risk-backfill": "node src/index.js risk-backfill",
+    "risk": "node src/index.js risk",
+    "dashboard": "node dashboard/server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.105.3",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "node-cron": "^4.2.1"
+  }
+}

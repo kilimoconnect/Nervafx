@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NervaFX — Trading Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-left">
+      <span class="logo">NervaFX</span>
+      <span class="tagline">Currency Strength Engine</span>
+    </div>
+    <div class="header-right">
+      <div class="stat-pill" id="stat-balance">Balance: —</div>
+      <div class="stat-pill" id="stat-risk">Daily Risk: — / 2%</div>
+      <div class="stat-pill" id="stat-trades">Open: — / 3</div>
+      <div class="status-dot" id="status-dot" title="System status"></div>
+      <span class="last-update" id="last-update">—</span>
+    </div>
+  </header>
+
+  <main class="grid">
+
+    <!-- SIGNAL BOARD -->
+    <section class="card span-2" id="section-signals">
+      <h2 class="card-title">Signal Board</h2>
+      <div id="signals-active" class="signal-grid"></div>
+      <div id="signals-wait" class="signal-grid wait-grid"></div>
+      <div id="signals-notrade" class="notrade-row"></div>
+    </section>
+
+    <!-- CURRENCY STRENGTH CHART -->
+    <section class="card" id="section-strength">
+      <h2 class="card-title">Currency Strength <span class="tf-toggle">
+        <button class="tf-btn active" data-tf="6">6H</button>
+        <button class="tf-btn" data-tf="3">3H</button>
+        <button class="tf-btn" data-tf="12">12H</button>
+      </span></h2>
+      <div class="chart-wrap"><canvas id="strengthChart"></canvas></div>
+      <div class="strength-time" id="strength-time"></div>
+    </section>
+
+    <!-- MARKET STATES -->
+    <section class="card" id="section-states">
+      <h2 class="card-title">Market States</h2>
+      <div id="states-table" class="states-table"></div>
+    </section>
+
+    <!-- SPREAD RANKING -->
+    <section class="card" id="section-spreads">
+      <h2 class="card-title">Pair Ranking <span class="sub">by abs spread 6H</span></h2>
+      <div id="spreads-list" class="spreads-list"></div>
+    </section>
+
+    <!-- RISK SUMMARY -->
+    <section class="card" id="section-risk">
+      <h2 class="card-title">Approved Trades</h2>
+      <div id="risk-list" class="risk-list"></div>
+    </section>
+
+    <!-- ACTIONS LOG -->
+    <section class="card" id="section-actions">
+      <h2 class="card-title">Action Log</h2>
+      <div id="actions-list" class="actions-list"></div>
+    </section>
+
+    <!-- DATA QUALITY -->
+    <section class="card quality-card" id="section-quality">
+      <h2 class="card-title">Data Quality</h2>
+      <div id="quality-info" class="quality-info"></div>
+    </section>
+
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
