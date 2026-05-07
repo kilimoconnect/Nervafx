@@ -20,6 +20,7 @@ const { backfillSpreads, rankPairs } = require('./spread');
 const { backfillStates, printLatestStates } = require('./stateDetect');
 const { backfillSignals, printLatestSignals } = require('./signals');
 const { backfillRiskChecks, printRiskReport } = require('./risk');
+const { analyzeActiveSetups } = require('./aiAnalysis');
 
 async function phase1() {
   validate();
@@ -121,13 +122,23 @@ if (command === 'load') {
 } else if (command === 'update') {
   validate();
   if (!isMarketOpen()) {
-    console.log(`[UPDATE] Market closed (${new Date().toUTCString()}). Skipping.`);
-    process.exit(0);
+    // Market closed — skip OANDA fetch but still run AI analysis on existing data
+    console.log(`[UPDATE] Market closed (${new Date().toUTCString()}). Running AI analysis only.`);
+    analyzeActiveSetups()
+      .then(() => process.exit(0))
+      .catch(err => { console.error(err); process.exit(1); });
+  } else {
+    hourlyUpdate().then(r => {
+      console.log(`[UPDATE] status: ${r.status}`);
+      process.exit(r.status === 'FAILED' ? 1 : 0);
+    }).catch(err => { console.error(err); process.exit(1); });
   }
-  hourlyUpdate().then(r => {
-    console.log(`[UPDATE] status: ${r.status}`);
-    process.exit(r.status === 'FAILED' ? 1 : 0);
-  }).catch(err => { console.error(err); process.exit(1); });
+} else if (command === 'ai') {
+  // Standalone AI analysis — useful for testing, always runs regardless of market hours
+  validate();
+  analyzeActiveSetups()
+    .then(() => process.exit(0))
+    .catch(err => { console.error(err); process.exit(1); });
 } else if (command === 'backfill') {
   validate();
   backfillStrength().then(r => {
