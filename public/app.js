@@ -382,14 +382,13 @@ function renderStates(data) {
 
 function renderSpreads(data) {
   if (!data?.spreads) return;
-  const sorted = [...data.spreads].sort((a, b) =>
-    Math.abs(parseFloat(b.spread_6h)) - Math.abs(parseFloat(a.spread_6h))
-  );
-  const max = Math.abs(parseFloat(sorted[0]?.spread_6h || 1));
+  // Use server-sorted order (weighted: 40% 12H + 35% 6H + 15% 3H + 10% accel)
+  const sorted = data.spreads;
+  const maxScore = Math.max(...sorted.map(s => s.weighted_score || 0), 0.0001);
   document.getElementById('spreads-list').innerHTML = sorted.map(s => {
     const v6  = parseFloat(s.spread_6h);
     const cls = v6 >= 0 ? 'buy' : 'sell';
-    const pct = Math.round((Math.abs(v6) / max) * 100);
+    const pct = Math.round(((s.weighted_score || 0) / maxScore) * 100);
     return `
       <div class="spread-row">
         <div class="spread-accent ${cls}"></div>
