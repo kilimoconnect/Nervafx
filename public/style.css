@@ -552,7 +552,8 @@ html, body {
 .conf-factors span {
   font-size: 9px;
   color: #4ade80;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-word;
 }
 
 /* ─── Phase & action badges ────────────────────────────────────────────────── */
