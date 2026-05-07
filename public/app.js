@@ -28,9 +28,10 @@ function pctColor(v) { return Number(v) >= 0 ? '#4ade80' : '#f87171'; }
 function updateHeader(risk) {
   if (!risk?.summary) return;
   const s = risk.summary;
-  document.getElementById('stat-balance').textContent = `Balance: $${Number(s.balance).toLocaleString()}`;
-  document.getElementById('stat-risk').textContent = `Daily Risk: ${s.dailyRiskPct}% / ${s.maxDailyRiskPct}%`;
-  document.getElementById('stat-trades').textContent = `Open: ${s.openTrades} / ${s.maxTrades}`;
+  const bal = Number(s.balance) || 0;
+  document.getElementById('stat-balance').textContent = `Balance: $${bal.toLocaleString()}`;
+  document.getElementById('stat-risk').textContent = `Daily Risk: ${s.dailyRiskPct ?? '0.00'}% / ${s.maxDailyRiskPct ?? 2}%`;
+  document.getElementById('stat-trades').textContent = `Open: ${s.openTrades ?? 0} / ${s.maxTrades ?? 3}`;
 
   const dot = document.getElementById('status-dot');
   dot.className = 'status-dot online';

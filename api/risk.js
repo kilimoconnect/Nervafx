@@ -4,7 +4,8 @@ module.exports = async function handler(req, res) {
   cors(res);
   try {
     const t = await getLatestTime('risk_checks');
-    if (!t) return res.json({ approved: [], rejected: [], summary: {} });
+    const defaultBalance = parseFloat(process.env.ACCOUNT_BALANCE) || 1000;
+    if (!t) return res.json({ approved: [], rejected: [], summary: { openTrades: 0, maxTrades: 3, dailyRisk: 0, dailyRiskPct: '0.00', maxDailyRiskPct: 2, balance: defaultBalance } });
 
     const today = new Date(t);
     const dayStart = new Date(Date.UTC(
@@ -22,7 +23,7 @@ module.exports = async function handler(req, res) {
     const approved = (data || []).filter(r => r.status === 'APPROVED');
     const rejected = (data || []).filter(r => r.status === 'REJECTED');
     const totalRisk = approved.reduce((s, r) => s + parseFloat(r.risk_amount), 0);
-    const balance = parseFloat(approved[0]?.account_balance || process.env.ACCOUNT_BALANCE || 1000);
+    const balance = parseFloat(approved[0]?.account_balance ?? null) || parseFloat(process.env.ACCOUNT_BALANCE) || 1000;
 
     res.json({
       approved,
