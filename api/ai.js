@@ -7,7 +7,7 @@ module.exports = async function handler(req, res) {
       .from('ai_analysis')
       .select('*')
       .order('time', { ascending: false })
-      .limit(56);
+      .limit(168); // 28 pairs × 6 hours lookback
 
     if (error) throw error;
 

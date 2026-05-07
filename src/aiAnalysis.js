@@ -145,14 +145,25 @@ async function analyzeActiveSetups() {
 
   if (sErr) throw sErr;
 
-  // Only analyze READY_TO_ENTER + confident PULLBACK_ACTIVE setups
-  const targets = (states || []).filter(s =>
-    s.state === 'READY_TO_ENTER' ||
-    (s.state === 'PULLBACK_ACTIVE' && s.confidence >= 60)
-  );
+  // Priority tiers — analyze top 6 setups across active states
+  const PRIORITY = {
+    READY_TO_ENTER:   4,
+    ENTRY_ACTIVE:     4,
+    PULLBACK_ACTIVE:  3,
+    PULLBACK_STARTING:2,
+    TREND_FORMING:    1,
+  };
+
+  const targets = (states || [])
+    .filter(s => PRIORITY[s.state] !== undefined && s.confidence >= 40)
+    .sort((a, b) => {
+      const pa = PRIORITY[a.state] || 0, pb = PRIORITY[b.state] || 0;
+      return pa !== pb ? pb - pa : b.confidence - a.confidence;
+    })
+    .slice(0, 6);
 
   if (!targets.length) {
-    console.log('[AI] No active setups to analyze');
+    console.log('[AI] No active setups to analyze (all pairs below threshold or NO_TRADE)');
     return;
   }
 
