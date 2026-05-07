@@ -11,60 +11,61 @@ const { calculateLatestSignals } = require('./signals');
 const { checkLatestSignals } = require('./risk');
 const { processLatestActions } = require('./actions');
 
+async function step(name, fn) {
+  try {
+    await fn();
+    console.log(`[UPDATE] ✓ ${name}`);
+  } catch (err) {
+    console.error(`[UPDATE] ✗ ${name}: ${err.message}`);
+  }
+}
+
 async function hourlyUpdate() {
   console.log(`[UPDATE] ${new Date().toISOString()} - Starting hourly update...`);
 
+  // ── Phase 1: Fetch candles ──────────────────────────────────────────────────
   for (const instrument of config.instruments) {
     try {
       const candles = await fetchAndParseCandles(instrument, { count: 5 });
-
-      if (candles.length > 0) {
-        await upsertCandles(candles);
-        console.log(`[UPDATE] ${instrument}: upserted ${candles.length} candles`);
-      }
-
+      if (candles.length > 0) await upsertCandles(candles);
       await sleep(RATE_LIMIT_DELAY);
     } catch (err) {
-      console.error(`[UPDATE] ${instrument}: FAILED - ${err.message}`);
+      console.error(`[UPDATE] ${instrument}: ${err.message}`);
     }
   }
 
-  console.log('[UPDATE] Fetch complete. Running quality check...');
+  // ── Phase 1: Quality check + repair ────────────────────────────────────────
   const { check } = await runFullQualityCheck();
 
   if (check.status !== 'CLEAN') {
-    console.log(`[UPDATE] Gaps found (${check.missing_candles} missing). Running repair...`);
+    console.log(`[UPDATE] Gaps found (${check.missing_candles}). Repairing...`);
     const repair = await repairAll();
 
     if (repair.status !== 'ALL_CLEAN') {
-      console.error('[UPDATE] REPAIR FAILED. System should not proceed to strength calculation.');
-      return { status: 'FAILED', check, repair };
+      console.error('[UPDATE] REPAIR FAILED — halting pipeline.');
+      return { status: 'FAILED', check };
     }
 
-    console.log('[UPDATE] Repair successful. Running final quality check...');
     const { check: finalCheck } = await runFullQualityCheck();
-
     if (finalCheck.status !== 'CLEAN') {
-      console.error('[UPDATE] STILL DIRTY after repair. Halting.');
+      console.error('[UPDATE] Still dirty after repair — halting.');
       return { status: 'FAILED', check: finalCheck };
     }
   }
 
-  console.log('[UPDATE] Data is clean. Calculating currency strength...');
-  try {
-    const strength = await calculateLatestStrength();
-    console.log(`[UPDATE] Strength stored for ${strength.time}`);
-    await smoothLatest();
-    await calculateLatestSpreads();
-    await calculateLatestStates();
-    await calculateLatestSignals();
-    await checkLatestSignals();
-    await processLatestActions();
-    return { status: 'CLEAN', check, strength: strength.time };
-  } catch (err) {
-    console.error(`[UPDATE] Strength/smooth failed: ${err.message}`);
-    return { status: 'STRENGTH_FAILED', check, error: err.message };
-  }
+  console.log(`[UPDATE] Data clean (${check.found_candles} candles). Running engine...`);
+
+  // ── Phases 2–8: Each step is isolated — one failure won't kill the rest ────
+  await step('strength',      () => calculateLatestStrength());
+  await step('smooth',        () => smoothLatest());
+  await step('spreads',       () => calculateLatestSpreads());
+  await step('states',        () => calculateLatestStates());
+  await step('signals',       () => calculateLatestSignals());
+  await step('risk',          () => checkLatestSignals());
+  await step('actions',       () => processLatestActions());
+
+  console.log('[UPDATE] Complete.');
+  return { status: 'CLEAN', check };
 }
 
 module.exports = { hourlyUpdate };

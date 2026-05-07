@@ -125,8 +125,8 @@ if (command === 'load') {
     process.exit(0);
   }
   hourlyUpdate().then(r => {
-    console.log(JSON.stringify(r, null, 2));
-    process.exit(r.status === 'CLEAN' ? 0 : 1);
+    console.log(`[UPDATE] status: ${r.status}`);
+    process.exit(r.status === 'FAILED' ? 1 : 0);
   }).catch(err => { console.error(err); process.exit(1); });
 } else if (command === 'backfill') {
   validate();
