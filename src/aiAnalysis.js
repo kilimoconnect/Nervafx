@@ -54,6 +54,8 @@ async function analyzeSetup(instrument, state) {
     .slice(-24)
     .map(d => +parseFloat(d.spread_6h || 0).toFixed(5));
 
+  console.log(`[AI] ${instrument} data: base=${baseArr.length} pts, quote=${quoteArr.length} pts, spread=${spreadArr.length} pts`);
+
   // Spread momentum (change per step)
   const spreadChanges = spreadArr.map((v, i) =>
     i === 0 ? 0 : +(v - spreadArr[i - 1]).toFixed(5)
@@ -145,17 +147,26 @@ async function analyzeActiveSetups() {
 
   if (sErr) throw sErr;
 
-  // Priority tiers — analyze top 6 setups across active states
+  // Actual state values from stateDetect.js:
+  // TREND, PULLBACK_STARTING, PULLBACK_ACTIVE, READY_TO_ENTER, REVERSAL_RISK, NO_TRADE
   const PRIORITY = {
-    READY_TO_ENTER:   4,
-    ENTRY_ACTIVE:     4,
-    PULLBACK_ACTIVE:  3,
-    PULLBACK_STARTING:2,
-    TREND_FORMING:    1,
+    READY_TO_ENTER:    4,
+    PULLBACK_ACTIVE:   3,
+    PULLBACK_STARTING: 2,
+    TREND:             1,
   };
 
+  console.log(`[AI] Total states received: ${(states || []).length}`);
+  console.log(`[AI] State breakdown: ${JSON.stringify(
+    (states || []).reduce((acc, s) => { acc[s.state] = (acc[s.state] || 0) + 1; return acc; }, {})
+  )}`);
+
   const targets = (states || [])
-    .filter(s => PRIORITY[s.state] !== undefined && s.confidence >= 40)
+    .filter(s => {
+      const ok = PRIORITY[s.state] !== undefined && s.confidence >= 40;
+      if (!ok && s.confidence >= 40) console.log(`[AI] Skipping ${s.instrument}: state=${s.state} not in priority map`);
+      return ok;
+    })
     .sort((a, b) => {
       const pa = PRIORITY[a.state] || 0, pb = PRIORITY[b.state] || 0;
       return pa !== pb ? pb - pa : b.confidence - a.confidence;
@@ -167,7 +178,7 @@ async function analyzeActiveSetups() {
     return;
   }
 
-  console.log(`[AI] Analyzing ${targets.length} setup(s)...`);
+  console.log(`[AI] Analyzing ${targets.length} setup(s): ${targets.map(t => `${t.instrument}(${t.state}@${t.confidence}%)`).join(', ')}`);
 
   for (const state of targets) {
     try {
