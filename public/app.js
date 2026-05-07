@@ -54,8 +54,10 @@ function renderSignals(data) {
     waiting.length ? waiting.map(waitCard).join('') : '';
 
   document.getElementById('signals-notrade').innerHTML =
-    `<span>NO TRADE (${notrade.length} pairs): </span>` +
-    notrade.map(s => `<span style="color:var(--text-muted);margin-right:8px">${s.instrument}</span>`).join('');
+    `<div style="color:var(--text-muted);font-size:11px;margin-bottom:6px">NO TRADE &mdash; ${notrade.length} pairs</div>` +
+    `<div style="display:flex;flex-wrap:wrap;gap:4px">` +
+    notrade.map(s => `<span style="background:var(--card-bg);color:var(--text-muted);border:1px solid var(--border);border-radius:4px;padding:2px 7px;font-size:10px;font-family:monospace">${s.instrument}</span>`).join('') +
+    `</div>`;
 }
 
 function signalCard(s) {
