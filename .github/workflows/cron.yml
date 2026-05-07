@@ -1,12 +1,7 @@
 name: NervaFX Hourly Update
 
 on:
-  schedule:
-    # :01 past every hour, Monday–Friday only
-    # isMarketOpen() in src/index.js skips if market is actually closed
-    # (e.g. Friday after 21:00 UTC, Sunday before 21:00 UTC)
-    - cron: '1 * * * 1-5'
-  workflow_dispatch:        # manual trigger from GitHub UI or external cron
+  workflow_dispatch:        # triggered by cron-job.org at :01 every hour Mon-Fri
     inputs:
       reason:
         description: 'Why are you triggering this manually?'
