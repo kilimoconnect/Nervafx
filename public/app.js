@@ -86,7 +86,7 @@ function aiHtml(ai, instrument) {
         <span class="ai-badge ai-health ${hCls}">${ai.trend_health||''}</span>
         <span class="ai-badge ai-quality ${(ai.market_quality||'').toLowerCase()}">${ai.market_quality||''}</span>
         <span class="ai-cont">cont: <b>${pct}%</b></span>
-        <button class="ai-bulb-btn" title="AI structure analysis" onclick="openAiModal('${instrument}')">💡</button>
+        <button class="ai-bulb-btn" title="Click for full AI structure analysis" onclick="openAiModal('${instrument}')">💡 <span class="ai-bulb-label">AI Analysis</span></button>
       </div>
       ${ai.summary  ? `<div class="ai-summary">${ai.summary}</div>` : ''}
       ${ai.warning  ? `<div class="ai-warning">⚠ ${ai.warning}</div>` : ''}
