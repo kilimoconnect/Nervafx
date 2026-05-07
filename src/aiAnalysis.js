@@ -63,26 +63,17 @@ async function analyzeSetup(instrument, state) {
 
   const response = await client.chat.completions.create({
     model: 'gpt-4o-mini',
-    max_tokens: 300,
+    max_tokens: 700,
     temperature: 0.1,
     response_format: { type: 'json_object' },
     messages: [
       {
         role: 'system',
-        content: `You are a forex market structure analyst. Analyze smoothed H1 market structure data.
-Return ONLY valid JSON with these exact fields:
-{
-  "structure_type": "HEALTHY_PULLBACK"|"WEAK_PULLBACK"|"STRONG_TREND"|"REVERSAL_RISK"|"CHOPPY"|"EXHAUSTED",
-  "trend_health": "STRONG"|"MODERATE"|"WEAK",
-  "continuation_probability": <number 0.0-1.0>,
-  "market_quality": "CLEAN"|"NOISY"|"CHOPPY",
-  "warning": <null or max 8-word string>,
-  "summary": <one sentence max 12 words>
-}`,
+        content: `You are a professional forex market structure analyst. Analyze smoothed H1 data and return a detailed JSON assessment. Be specific and concise. Return ONLY valid JSON.`,
       },
       {
         role: 'user',
-        content: `Analyze ${instrument.replace('_', '/')} — ${state.bias} bias, state: ${state.state}, confidence: ${state.confidence}%, spread: ${state.spread_behavior || '?'}.
+        content: `Analyze ${instrument.replace('_', '/')} — ${state.bias} bias, state: ${state.state}, confidence: ${state.confidence}%, spread behavior: ${state.spread_behavior || '?'}.
 
 Last 24 smoothed H1 values (oldest → newest):
 ${base} strength: ${JSON.stringify(baseArr)}
@@ -90,7 +81,24 @@ ${quote} strength: ${JSON.stringify(quoteArr)}
 Spread (${base}−${quote}): ${JSON.stringify(spreadArr)}
 Spread momentum: ${JSON.stringify(spreadChanges)}
 
-Assess: trend health, pullback quality, continuation probability, any exhaustion or reversal risk.`,
+Return this exact JSON structure:
+{
+  "structure_type": "HEALTHY_PULLBACK"|"WEAK_PULLBACK"|"STRONG_TREND"|"REVERSAL_RISK"|"CHOPPY"|"EXHAUSTED",
+  "trend_health": "STRONG"|"MODERATE"|"WEAK",
+  "continuation_probability": <0.0-1.0>,
+  "market_quality": "CLEAN"|"NOISY"|"CHOPPY",
+  "warning": <null or max 8-word string>,
+  "summary": <one sentence max 12 words>,
+  "details": {
+    "structure_analysis": <2 sentences: what the spread pattern shows>,
+    "trend_assessment": <2 sentences: base vs quote strength behavior>,
+    "pullback_quality": <1-2 sentences: is compression healthy or aggressive>,
+    "entry_timing": <1 sentence: is now good, early, or late to enter>,
+    "support_factors": [<up to 3 short strings, what supports the setup>],
+    "risk_factors": [<up to 3 short strings, what could invalidate it>],
+    "ai_verdict": "ENTER"|"WAIT"|"AVOID"
+  }
+}`,
       },
     ],
   });
@@ -102,10 +110,11 @@ Assess: trend health, pullback quality, continuation probability, any exhaustion
 // ─── Persist to Supabase ──────────────────────────────────────────────────────
 
 async function saveAnalysis(instrument, time, result) {
+  const { details, ...summary } = result;
   const { error } = await supabase
     .from('ai_analysis')
     .upsert(
-      { instrument, time, ...result },
+      { instrument, time, ...summary, details: details || null },
       { onConflict: 'instrument,time' }
     );
   if (error) throw new Error(`AI save error: ${error.message}`);

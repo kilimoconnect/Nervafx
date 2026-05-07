@@ -69,25 +69,118 @@ function updateHeader(risk) {
   document.getElementById('last-update').textContent   = 'Updated ' + new Date().toLocaleTimeString();
 }
 
-// ─── AI Analysis HTML ─────────────────────────────────────────────────────────
+// ─── AI Analysis ─────────────────────────────────────────────────────────────
 
-function aiHtml(ai) {
+// Stores latest aiMap so modal can access it
+let _aiMap = {};
+
+function aiHtml(ai, instrument) {
   if (!ai) return '';
-  const pct = Math.round((ai.continuation_probability || 0) * 100);
-  const structCls = (ai.structure_type || '').replace(/-/g, '_');
-  const healthCls = (ai.trend_health || '').toLowerCase();
+  const pct  = Math.round((ai.continuation_probability || 0) * 100);
+  const sCls = (ai.structure_type || '').replace(/-/g, '_');
+  const hCls = (ai.trend_health  || '').toLowerCase();
+  const verdictCls = ai.details?.ai_verdict === 'ENTER' ? 'enter'
+                   : ai.details?.ai_verdict === 'WAIT'  ? 'wait' : 'avoid';
   return `
     <div class="ai-block">
       <div class="ai-row">
-        <span class="ai-badge ai-struct ${structCls}">${(ai.structure_type || '').replace(/_/g, ' ')}</span>
-        <span class="ai-badge ai-health ${healthCls}">${ai.trend_health || ''}</span>
-        <span class="ai-badge ai-quality ${(ai.market_quality || '').toLowerCase()}">${ai.market_quality || ''}</span>
+        <span class="ai-badge ai-struct ${sCls}">${(ai.structure_type||'').replace(/_/g,' ')}</span>
+        <span class="ai-badge ai-health ${hCls}">${ai.trend_health||''}</span>
+        <span class="ai-badge ai-quality ${(ai.market_quality||'').toLowerCase()}">${ai.market_quality||''}</span>
         <span class="ai-cont">AI cont: <b>${pct}%</b></span>
+        <button class="ai-bulb-btn" title="AI detailed analysis" onclick="openAiModal('${instrument}')">💡</button>
       </div>
-      ${ai.summary ? `<div class="ai-summary">${ai.summary}</div>` : ''}
-      ${ai.warning ? `<div class="ai-warning">⚠ ${ai.warning}</div>` : ''}
+      ${ai.summary  ? `<div class="ai-summary">${ai.summary}</div>` : ''}
+      ${ai.warning  ? `<div class="ai-warning">⚠ ${ai.warning}</div>` : ''}
     </div>`;
 }
+
+// ─── AI Modal ─────────────────────────────────────────────────────────────────
+
+function openAiModal(instrument) {
+  const ai = _aiMap[instrument];
+  if (!ai) return;
+
+  const d   = ai.details || {};
+  const pct = Math.round((ai.continuation_probability || 0) * 100);
+  const sCls = (ai.structure_type || '').replace(/-/g, '_');
+  const verdictCls = d.ai_verdict === 'ENTER' ? 'enter'
+                   : d.ai_verdict === 'WAIT'  ? 'wait' : 'avoid';
+
+  document.getElementById('ai-modal-pair').textContent = pair(instrument);
+  document.getElementById('ai-modal-dir').innerHTML =
+    `<span class="ai-badge ai-health ${(ai.trend_health||'').toLowerCase()}">${ai.trend_health||''}</span>`;
+  document.getElementById('ai-modal-struct-badge').innerHTML =
+    `<span class="ai-badge ai-struct ${sCls}">${(ai.structure_type||'').replace(/_/g,' ')}</span>`;
+
+  document.getElementById('ai-modal-body').innerHTML = `
+    <div class="ai-modal-score">
+      <div class="ai-modal-prob">
+        <div class="ai-modal-prob-num">${pct}%</div>
+        <div class="ai-modal-prob-label">Continuation Probability</div>
+        <div class="ai-modal-prob-bar"><div class="ai-modal-prob-fill" style="width:${pct}%"></div></div>
+      </div>
+      <div class="ai-verdict-block ${verdictCls}">
+        <div class="ai-verdict-label">AI Verdict</div>
+        <div class="ai-verdict-value">${d.ai_verdict || '—'}</div>
+      </div>
+    </div>
+
+    ${ai.summary ? `<div class="ai-modal-summary">"${ai.summary}"</div>` : ''}
+
+    <div class="ai-modal-sections">
+      ${d.structure_analysis ? `
+        <div class="ai-modal-section">
+          <div class="ai-modal-section-title">📊 Structure Analysis</div>
+          <div class="ai-modal-section-text">${d.structure_analysis}</div>
+        </div>` : ''}
+
+      ${d.trend_assessment ? `
+        <div class="ai-modal-section">
+          <div class="ai-modal-section-title">📈 Trend Assessment</div>
+          <div class="ai-modal-section-text">${d.trend_assessment}</div>
+        </div>` : ''}
+
+      ${d.pullback_quality ? `
+        <div class="ai-modal-section">
+          <div class="ai-modal-section-title">🔄 Pullback Quality</div>
+          <div class="ai-modal-section-text">${d.pullback_quality}</div>
+        </div>` : ''}
+
+      ${d.entry_timing ? `
+        <div class="ai-modal-section">
+          <div class="ai-modal-section-title">⏱ Entry Timing</div>
+          <div class="ai-modal-section-text">${d.entry_timing}</div>
+        </div>` : ''}
+
+      <div class="ai-modal-factors-row">
+        ${(d.support_factors||[]).length ? `
+          <div class="ai-modal-factors">
+            <div class="ai-modal-section-title">✅ Supporting</div>
+            ${d.support_factors.map(f => `<div class="ai-factor support">+ ${f}</div>`).join('')}
+          </div>` : ''}
+
+        ${(d.risk_factors||[]).length ? `
+          <div class="ai-modal-factors">
+            <div class="ai-modal-section-title">⚠ Risk Factors</div>
+            ${d.risk_factors.map(f => `<div class="ai-factor risk">− ${f}</div>`).join('')}
+          </div>` : ''}
+      </div>
+    </div>
+
+    ${ai.warning ? `<div class="ai-modal-warning">⚠ ${ai.warning}</div>` : ''}
+    <div class="ai-modal-footer">Analysis as of ${fmtTime(ai.time)} · gpt-4o-mini</div>
+  `;
+
+  document.getElementById('ai-modal-overlay').classList.add('open');
+}
+
+function closeAiModal() {
+  document.getElementById('ai-modal-overlay').classList.remove('open');
+}
+
+// Close on Escape key
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAiModal(); });
 
 // ─── Live Opportunities ───────────────────────────────────────────────────────
 
@@ -139,7 +232,7 @@ function renderLiveOpportunities(states, aiMap = {}) {
         <div class="live-reason">${s.spread_behavior_text}</div>
         ${(s.confidence_breakdown||[]).length ? `<div class="conf-factors" style="align-items:flex-start;margin-top:6px">${s.confidence_breakdown.map(f=>`<span>+ ${f}</span>`).join('')}</div>` : ''}
         ${s.invalidation ? `<div class="invalidation" style="margin-top:6px">⚠ ${s.invalidation}</div>` : ''}
-        ${aiHtml(aiMap[s.instrument])}
+        ${aiHtml(aiMap[s.instrument], s.instrument)}
       </div>`;
   }).join('');
 }
@@ -194,7 +287,7 @@ function renderTopSetups(states, aiMap = {}) {
           <div style="font-size:9px;color:var(--text-muted);margin-bottom:3px">${s.spread_behavior_text || ''}</div>
           ${nextActionHtml(s.next_action)}
           ${s.invalidation ? `<div class="invalidation">⚠ ${s.invalidation}</div>` : ''}
-          ${aiHtml(aiMap[s.instrument])}
+          ${aiHtml(aiMap[s.instrument], s.instrument)}
         </div>
         <div class="top-conf">
           <div class="conf-num">${s.confidence}%</div>
@@ -493,6 +586,7 @@ async function refresh() {
     // Build AI map: instrument → analysis
     const aiMap = {};
     (aiData.analyses || []).forEach(a => { aiMap[a.instrument] = a; });
+    _aiMap = aiMap; // store globally for modal access
 
     updateHeader(risk);
     renderLiveOpportunities(states.states || [], aiMap);
