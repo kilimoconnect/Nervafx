@@ -68,4 +68,16 @@ async function hourlyUpdate() {
   return { status: 'CLEAN', check };
 }
 
-module.exports = { hourlyUpdate };
+async function runAnalysis() {
+  console.log(`[ANALYZE] ${new Date().toISOString()} - Running engine on current data...`);
+  await step('strength', () => calculateLatestStrength());
+  await step('smooth',   () => smoothLatest());
+  await step('spreads',  () => calculateLatestSpreads());
+  await step('states',   () => calculateLatestStates());
+  await step('signals',  () => calculateLatestSignals());
+  await step('risk',     () => checkLatestSignals());
+  await step('actions',  () => processLatestActions());
+  console.log('[ANALYZE] Complete.');
+}
+
+module.exports = { hourlyUpdate, runAnalysis };

@@ -13,7 +13,7 @@ const { validate } = require('./config');
 const { initialLoad } = require('./loader');
 const { runFullQualityCheck } = require('./quality');
 const { repairAll } = require('./repair');
-const { hourlyUpdate } = require('./updater');
+const { hourlyUpdate, runAnalysis } = require('./updater');
 const { backfillStrength, calculateLatestStrength } = require('./strength');
 const { backfillSmooth } = require('./smooth');
 const { backfillSpreads, rankPairs } = require('./spread');
@@ -179,6 +179,9 @@ if (command === 'load') {
 } else if (command === 'risk') {
   validate();
   printRiskReport().then(() => process.exit(0)).catch(err => { console.error(err); process.exit(1); });
+} else if (command === 'analyze') {
+  validate();
+  runAnalysis().then(() => process.exit(0)).catch(err => { console.error(err); process.exit(1); });
 } else if (command === 'rank') {
   validate();
   rankPairs().then(pairs => {

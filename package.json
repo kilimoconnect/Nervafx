@@ -20,6 +20,7 @@
     "signals": "node src/index.js signals",
     "risk-backfill": "node src/index.js risk-backfill",
     "risk": "node src/index.js risk",
+    "analyze": "node src/index.js analyze",
     "dashboard": "node dashboard/server.js"
   },
   "keywords": [],
