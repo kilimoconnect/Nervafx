@@ -10,6 +10,7 @@ const { calculateLatestStates } = require('./stateDetect');
 const { calculateLatestSignals } = require('./signals');
 const { checkLatestSignals } = require('./risk');
 const { processLatestActions } = require('./actions');
+const { analyzeActiveSetups } = require('./aiAnalysis');
 
 async function step(name, fn) {
   try {
@@ -74,6 +75,7 @@ async function hourlyUpdate() {
   await step('signals',       () => calculateLatestSignals());
   await step('risk',          () => checkLatestSignals());
   await step('actions',       () => processLatestActions());
+  await step('ai_analysis',   () => analyzeActiveSetups());
 
   console.log('[UPDATE] Complete.');
   return { status: 'CLEAN', check };

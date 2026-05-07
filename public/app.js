@@ -69,9 +69,29 @@ function updateHeader(risk) {
   document.getElementById('last-update').textContent   = 'Updated ' + new Date().toLocaleTimeString();
 }
 
+// ─── AI Analysis HTML ─────────────────────────────────────────────────────────
+
+function aiHtml(ai) {
+  if (!ai) return '';
+  const pct = Math.round((ai.continuation_probability || 0) * 100);
+  const structCls = (ai.structure_type || '').replace(/-/g, '_');
+  const healthCls = (ai.trend_health || '').toLowerCase();
+  return `
+    <div class="ai-block">
+      <div class="ai-row">
+        <span class="ai-badge ai-struct ${structCls}">${(ai.structure_type || '').replace(/_/g, ' ')}</span>
+        <span class="ai-badge ai-health ${healthCls}">${ai.trend_health || ''}</span>
+        <span class="ai-badge ai-quality ${(ai.market_quality || '').toLowerCase()}">${ai.market_quality || ''}</span>
+        <span class="ai-cont">AI cont: <b>${pct}%</b></span>
+      </div>
+      ${ai.summary ? `<div class="ai-summary">${ai.summary}</div>` : ''}
+      ${ai.warning ? `<div class="ai-warning">⚠ ${ai.warning}</div>` : ''}
+    </div>`;
+}
+
 // ─── Live Opportunities ───────────────────────────────────────────────────────
 
-function renderLiveOpportunities(states) {
+function renderLiveOpportunities(states, aiMap = {}) {
   const el = document.getElementById('live-opportunities');
   if (!el) return;
 
@@ -119,6 +139,7 @@ function renderLiveOpportunities(states) {
         <div class="live-reason">${s.spread_behavior_text}</div>
         ${(s.confidence_breakdown||[]).length ? `<div class="conf-factors" style="align-items:flex-start;margin-top:6px">${s.confidence_breakdown.map(f=>`<span>+ ${f}</span>`).join('')}</div>` : ''}
         ${s.invalidation ? `<div class="invalidation" style="margin-top:6px">⚠ ${s.invalidation}</div>` : ''}
+        ${aiHtml(aiMap[s.instrument])}
       </div>`;
   }).join('');
 }
@@ -136,7 +157,7 @@ function computeTopSetups(states) {
     .slice(0, 3);
 }
 
-function renderTopSetups(states) {
+function renderTopSetups(states, aiMap = {}) {
   const el = document.getElementById('top-setups');
   if (!states?.length) { el.innerHTML = '<p class="empty-state">No setups forming</p>'; return; }
 
@@ -173,6 +194,7 @@ function renderTopSetups(states) {
           <div style="font-size:9px;color:var(--text-muted);margin-bottom:3px">${s.spread_behavior_text || ''}</div>
           ${nextActionHtml(s.next_action)}
           ${s.invalidation ? `<div class="invalidation">⚠ ${s.invalidation}</div>` : ''}
+          ${aiHtml(aiMap[s.instrument])}
         </div>
         <div class="top-conf">
           <div class="conf-num">${s.confidence}%</div>
@@ -457,7 +479,7 @@ function renderQuality(q) {
 
 async function refresh() {
   try {
-    const [strength, signals, states, risk, actions, quality, spreads] = await Promise.all([
+    const [strength, signals, states, risk, actions, quality, spreads, aiData] = await Promise.all([
       api('/api/strength'),
       api('/api/signals'),
       api('/api/states'),
@@ -465,11 +487,16 @@ async function refresh() {
       api('/api/actions'),
       api('/api/quality'),
       api('/api/spreads'),
+      api('/api/ai').catch(() => ({ analyses: [] })),
     ]);
 
+    // Build AI map: instrument → analysis
+    const aiMap = {};
+    (aiData.analyses || []).forEach(a => { aiMap[a.instrument] = a; });
+
     updateHeader(risk);
-    renderLiveOpportunities(states.states || []);
-    renderTopSetups(states.states || []);
+    renderLiveOpportunities(states.states || [], aiMap);
+    renderTopSetups(states.states || [], aiMap);
     renderSignals(signals, states.states || []);
     buildChart(strength, activeTF);
     renderStates(states);

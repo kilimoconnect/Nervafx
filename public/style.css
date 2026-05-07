@@ -772,6 +772,59 @@ html, body {
 .pb-depth.MODERATE { background: #713f12; color: #fde68a; }   /* watch */
 .pb-depth.DEEP     { background: #7f1d1d; color: #fca5a5; }   /* caution */
 
+/* ─── AI Analysis block ────────────────────────────────────────────────────── */
+.ai-block {
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid var(--border);
+}
+.ai-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.ai-badge {
+  font-size: 8px;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+/* structure_type */
+.ai-struct.HEALTHY_PULLBACK { background: #14532d; color: #86efac; }
+.ai-struct.WEAK_PULLBACK    { background: #713f12; color: #fde68a; }
+.ai-struct.STRONG_TREND     { background: #1e3a5f; color: #93c5fd; }
+.ai-struct.REVERSAL_RISK    { background: #7f1d1d; color: #fca5a5; }
+.ai-struct.CHOPPY           { background: #1a1d24; color: var(--text-muted); }
+.ai-struct.EXHAUSTED        { background: #3b1f2b; color: #f472b6; }
+/* trend_health */
+.ai-health.strong   { background: #14532d; color: #4ade80; }
+.ai-health.moderate { background: #713f12; color: #fbbf24; }
+.ai-health.weak     { background: #7f1d1d; color: #f87171; }
+/* market_quality */
+.ai-quality.clean  { color: #4ade80; }
+.ai-quality.noisy  { color: #fbbf24; }
+.ai-quality.choppy { color: #f87171; }
+.ai-cont {
+  font-size: 9px;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+.ai-cont b { color: var(--text); }
+.ai-summary {
+  font-size: 9px;
+  color: var(--text-dim);
+  font-style: italic;
+}
+.ai-warning {
+  font-size: 9px;
+  color: #fbbf24;
+  margin-top: 2px;
+}
+
 /* ─── Last signal time ─────────────────────────────────────────────────────── */
 .last-signal-bar {
   font-size: 10px;
