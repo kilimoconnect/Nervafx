@@ -76,17 +76,30 @@ let _aiMap = {};
 
 function aiHtml(ai, instrument) {
   if (!ai) return '';
-  const pct  = Math.round((ai.continuation_probability || 0) * 100);
-  const sCls = (ai.structure_type || '').replace(/-/g, '_');
-  const hCls = (ai.trend_health  || '').toLowerCase();
+  const d    = ai.details || {};
+  const sc   = d.scores   || {};
+  const lp   = d.lifecycle_phase || '';
+  const lc   = d.lifecycle_completion || 0;
+  const sCls = (ai.structure_type || '').replace(/-/g,'_');
+  const lpCls = lp.replace(/-/g,'_').toLowerCase();
+
+  const scoreBar = (val, cls) =>
+    `<div class="ai-mini-score ${cls}"><div class="ai-mini-fill" style="width:${val||0}%"></div></div>`;
+
   return `
     <div class="ai-block">
       <div class="ai-row">
+        ${lp ? `<span class="ai-lp-badge ${lpCls}">${lp.replace(/_/g,' ')}</span>` : ''}
         <span class="ai-badge ai-struct ${sCls}">${(ai.structure_type||'').replace(/_/g,' ')}</span>
-        <span class="ai-badge ai-health ${hCls}">${ai.trend_health||''}</span>
         <span class="ai-badge ai-quality ${(ai.market_quality||'').toLowerCase()}">${ai.market_quality||''}</span>
-        <span class="ai-cont">cont: <b>${pct}%</b></span>
         <button class="ai-bulb-btn" title="Click for full AI structure analysis" onclick="openAiModal('${instrument}')">💡 <span class="ai-bulb-label">AI Analysis</span></button>
+      </div>
+      ${lp ? `<div class="ai-lc-bar-wrap"><div class="ai-lc-bar-fill ${lpCls}" style="width:${lc}%"></div><span class="ai-lc-pct">${lc}%</span></div>` : ''}
+      <div class="ai-scores-row">
+        <div class="ai-score-item"><span>Cont</span>${scoreBar(sc.continuation,'cont')}<b>${sc.continuation??'—'}%</b></div>
+        <div class="ai-score-item"><span>Trend</span>${scoreBar(sc.trend_health,'trend')}<b>${sc.trend_health??'—'}%</b></div>
+        <div class="ai-score-item"><span>PBQ</span>${scoreBar(sc.pullback_quality,'pbq')}<b>${sc.pullback_quality??'—'}%</b></div>
+        <div class="ai-score-item"><span>Clean</span>${scoreBar(sc.cleanliness,'clean')}<b>${sc.cleanliness??'—'}%</b></div>
       </div>
       ${ai.summary  ? `<div class="ai-summary">${ai.summary}</div>` : ''}
       ${ai.warning  ? `<div class="ai-warning">⚠ ${ai.warning}</div>` : ''}
@@ -99,9 +112,12 @@ function openAiModal(instrument) {
   const ai = _aiMap[instrument];
   if (!ai) return;
 
-  const d   = ai.details || {};
-  const pct = Math.round((ai.continuation_probability || 0) * 100);
-  const sCls = (ai.structure_type || '').replace(/-/g, '_');
+  const d    = ai.details || {};
+  const sc   = d.scores  || {};
+  const lp   = d.lifecycle_phase       || '';
+  const lc   = d.lifecycle_completion  || 0;
+  const sCls = (ai.structure_type || '').replace(/-/g,'_');
+  const lpCls = lp.replace(/-/g,'_').toLowerCase();
 
   document.getElementById('ai-modal-pair').textContent = pair(instrument);
   document.getElementById('ai-modal-dir').innerHTML =
@@ -109,17 +125,29 @@ function openAiModal(instrument) {
   document.getElementById('ai-modal-struct-badge').innerHTML =
     `<span class="ai-badge ai-struct ${sCls}">${(ai.structure_type||'').replace(/_/g,' ')}</span>`;
 
+  const scoreBlock = (label, val, cls) => `
+    <div class="ai-modal-score-block">
+      <div class="ai-modal-score-label">${label}</div>
+      <div class="ai-modal-score-num">${val ?? '—'}%</div>
+      <div class="ai-modal-score-bar"><div class="ai-modal-score-fill ${cls}" style="width:${val??0}%"></div></div>
+    </div>`;
+
   document.getElementById('ai-modal-body').innerHTML = `
-    <div class="ai-modal-score">
-      <div class="ai-modal-prob">
-        <div class="ai-modal-prob-num">${pct}%</div>
-        <div class="ai-modal-prob-label">Structure Continuation</div>
-        <div class="ai-modal-prob-bar"><div class="ai-modal-prob-fill" style="width:${pct}%"></div></div>
+    ${lp ? `
+    <div class="ai-modal-lifecycle">
+      <div class="ai-modal-lp-header">
+        <span class="ai-lp-badge ${lpCls}">${lp.replace(/_/g,' ')}</span>
+        <span class="ai-modal-lc-label">Phase completion</span>
+        <span class="ai-modal-lc-pct">${lc}%</span>
       </div>
-      <div class="ai-quality-block">
-        <div class="ai-verdict-label">Market Quality</div>
-        <div class="ai-quality-value ${(ai.market_quality||'').toLowerCase()}">${ai.market_quality||'—'}</div>
-      </div>
+      <div class="ai-modal-lc-bar"><div class="ai-modal-lc-fill ${lpCls}" style="width:${lc}%"></div></div>
+    </div>` : ''}
+
+    <div class="ai-modal-scores">
+      ${scoreBlock('Continuation', sc.continuation, 'cont')}
+      ${scoreBlock('Trend Health', sc.trend_health,  'trend')}
+      ${scoreBlock('Pullback Quality', sc.pullback_quality, 'pbq')}
+      ${scoreBlock('Cleanliness', sc.cleanliness, 'clean')}
     </div>
 
     ${ai.summary ? `<div class="ai-modal-summary">${ai.summary}</div>` : ''}
@@ -137,10 +165,10 @@ function openAiModal(instrument) {
           <div class="ai-modal-section-text">${d.trend_assessment}</div>
         </div>` : ''}
 
-      ${d.pullback_quality ? `
+      ${d.pullback_quality_text ? `
         <div class="ai-modal-section">
           <div class="ai-modal-section-title">🔄 Pullback Quality</div>
-          <div class="ai-modal-section-text">${d.pullback_quality}</div>
+          <div class="ai-modal-section-text">${d.pullback_quality_text}</div>
         </div>` : ''}
 
       ${d.momentum_shift ? `
@@ -153,13 +181,13 @@ function openAiModal(instrument) {
         ${(d.support_factors||[]).length ? `
           <div class="ai-modal-factors">
             <div class="ai-modal-section-title">✅ Structure Support</div>
-            ${d.support_factors.map(f => `<div class="ai-factor support">+ ${f}</div>`).join('')}
+            ${d.support_factors.map(f=>`<div class="ai-factor support">+ ${f}</div>`).join('')}
           </div>` : ''}
 
         ${(d.risk_factors||[]).length ? `
           <div class="ai-modal-factors">
             <div class="ai-modal-section-title">⚠ Structure Risks</div>
-            ${d.risk_factors.map(f => `<div class="ai-factor risk">− ${f}</div>`).join('')}
+            ${d.risk_factors.map(f=>`<div class="ai-factor risk">− ${f}</div>`).join('')}
           </div>` : ''}
       </div>
     </div>
