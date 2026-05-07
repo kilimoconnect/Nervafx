@@ -2,16 +2,23 @@ name: NervaFX Hourly Update
 
 on:
   schedule:
-    # Every hour at minute 5, Mon–Fri only (UTC)
-    # Market opens Sun 21:00 UTC — covered by the Sun 21:05 run below
-    - cron: '5 * * * 1-5'   # Mon–Fri, every hour
-    - cron: '5 21 * * 0'    # Sunday 21:05 UTC — market open
-  workflow_dispatch:          # allow manual trigger from GitHub UI
+    # Run every 30 minutes, all days — isMarketOpen() in src/index.js handles
+    # skipping when market is actually closed (Sat all day, Sun before 21:00,
+    # Fri from 21:00). Running 2x/hour means even a 20-min GitHub delay still
+    # covers every market hour.
+    - cron: '5 * * * *'    # :05 past every hour
+    - cron: '35 * * * *'   # :35 past every hour (backup / redundancy)
+  workflow_dispatch:        # manual trigger from GitHub UI or external cron
+    inputs:
+      reason:
+        description: 'Why are you triggering this manually?'
+        required: false
+        default: 'manual'
 
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
