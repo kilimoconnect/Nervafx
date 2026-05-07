@@ -32,9 +32,12 @@ async function getCandlesForInstrument(instrument, timeframe) {
 async function insertQualityCheck(check) {
   const { error } = await supabase
     .from('data_quality_checks')
-    .insert(check);
+    .upsert(
+      { ...check, check_time: new Date().toISOString() },
+      { onConflict: 'timeframe' }
+    );
 
-  if (error) throw new Error(`Quality check insert error: ${error.message}`);
+  if (error) throw new Error(`Quality check upsert error: ${error.message}`);
 }
 
 async function getCandleCount(instrument, timeframe) {

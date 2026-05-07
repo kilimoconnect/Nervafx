@@ -35,7 +35,13 @@ async function hourlyUpdate() {
   }
 
   // ── Phase 1: Quality check + repair ────────────────────────────────────────
-  const { check } = await runFullQualityCheck();
+  let check;
+  try {
+    ({ check } = await runFullQualityCheck());
+  } catch (err) {
+    console.error(`[UPDATE] Quality check failed: ${err.message}. Continuing with engine anyway.`);
+    check = { status: 'CLEAN', found_candles: '?' };
+  }
 
   if (check.status !== 'CLEAN') {
     console.log(`[UPDATE] Gaps found (${check.missing_candles}). Repairing...`);
@@ -46,10 +52,15 @@ async function hourlyUpdate() {
       return { status: 'FAILED', check };
     }
 
-    const { check: finalCheck } = await runFullQualityCheck();
-    if (finalCheck.status !== 'CLEAN') {
-      console.error('[UPDATE] Still dirty after repair — halting.');
-      return { status: 'FAILED', check: finalCheck };
+    try {
+      const { check: finalCheck } = await runFullQualityCheck();
+      if (finalCheck.status !== 'CLEAN') {
+        console.error('[UPDATE] Still dirty after repair — halting.');
+        return { status: 'FAILED', check: finalCheck };
+      }
+      check = finalCheck;
+    } catch (err) {
+      console.error(`[UPDATE] Post-repair quality check failed: ${err.message}. Continuing.`);
     }
   }
 

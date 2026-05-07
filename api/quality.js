@@ -6,7 +6,7 @@ module.exports = async function handler(req, res) {
     const { data, error } = await getClient()
       .from('data_quality_checks')
       .select('*')
-      .order('created_at', { ascending: false })
+      .order('check_time', { ascending: false })
       .limit(1);
     if (error) throw error;
     res.json(data?.[0] || {});
