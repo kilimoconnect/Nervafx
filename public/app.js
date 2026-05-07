@@ -16,6 +16,7 @@ async function api(path) {
 // ─── Formatters ───────────────────────────────────────────────────────────────
 
 function fmt(n, d = 5) { return n != null ? Number(n).toFixed(d) : '—'; }
+function pair(s) { return s ? s.replace('_', '/') : s; }
 function fmtTime(iso) {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -56,7 +57,7 @@ function renderSignals(data) {
   document.getElementById('signals-notrade').innerHTML =
     `<div style="color:var(--text-muted);font-size:11px;margin-bottom:6px">NO TRADE &mdash; ${notrade.length} pairs</div>` +
     `<div style="display:flex;flex-wrap:wrap;gap:4px">` +
-    notrade.map(s => `<span style="background:var(--card-bg);color:var(--text-muted);border:1px solid var(--border);border-radius:4px;padding:2px 7px;font-size:10px;font-family:monospace">${s.instrument}</span>`).join('') +
+    notrade.map(s => `<span style="background:var(--card-bg);color:var(--text-muted);border:1px solid var(--border);border-radius:4px;padding:2px 7px;font-size:10px;font-family:monospace">${pair(s.instrument)}</span>`).join('') +
     `</div>`;
 }
 
@@ -69,7 +70,7 @@ function signalCard(s) {
   return `
     <div class="signal-card ${cls}">
       <div>
-        <span class="signal-pair">${s.instrument}</span>
+        <span class="signal-pair">${pair(s.instrument)}</span>
         <span class="signal-dir ${cls}">${s.signal}</span>
       </div>
       <div class="signal-prices">
@@ -88,7 +89,7 @@ function waitCard(s) {
   return `
     <div class="signal-card wait">
       <div>
-        <span class="signal-pair">${s.instrument}</span>
+        <span class="signal-pair">${pair(s.instrument)}</span>
         <span class="signal-dir ${dir}">${s.direction || 'WAIT'}</span>
       </div>
       <div style="font-size:10px;color:var(--text-muted);margin-top:6px">${s.reason || ''}</div>
@@ -165,7 +166,7 @@ function renderStates(data) {
     const s12cls = parseFloat(s.spread_12h) >= 0 ? 'pos' : 'neg';
     return `
       <div class="state-row">
-        <span class="state-pair">${s.instrument}</span>
+        <span class="state-pair">${pair(s.instrument)}</span>
         <span class="state-badge ${s.state}">${s.state}</span>
         <span class="state-spread ${s6cls}">6H: ${fmt(s.spread_6h, 5)}</span>
         <span style="color:var(--text-muted);font-size:10px">${s.confidence}</span>
@@ -190,7 +191,7 @@ function renderSpreads(data) {
     return `
       <div class="spread-row">
         <div class="spread-accent ${cls}"></div>
-        <span class="spread-pair">${s.instrument}</span>
+        <span class="spread-pair">${pair(s.instrument)}</span>
         <span class="spread-bias ${cls}">${v6 >= 0 ? 'BUY' : 'SELL'}</span>
         <span class="spread-val">${fmt(v6, 5)}</span>
         <div class="spread-bar-wrap"><div class="spread-bar-fill ${cls}" style="width:${pct}%"></div></div>
@@ -215,7 +216,7 @@ function renderRisk(data) {
     return `
       <div class="risk-row">
         <div class="risk-row-header">
-          <span class="risk-pair">${r.instrument} <span class="signal-dir ${dir}" style="font-size:9px">${dir.toUpperCase()}</span></span>
+          <span class="risk-pair">${pair(r.instrument)} <span class="signal-dir ${dir}" style="font-size:9px">${dir.toUpperCase()}</span></span>
           <span style="color:var(--text-muted);font-size:10px">$${Number(r.risk_amount).toFixed(2)} risk · ${r.position_size} lots</span>
         </div>
         <div class="risk-prices">
@@ -238,7 +239,7 @@ function renderActions(actions) {
   }
   el.innerHTML = actions.map(a => `
     <div class="action-row">
-      <span>${a.instrument}</span>
+      <span>${pair(a.instrument)}</span>
       <span class="action-status ${a.status}">${a.status}</span>
       <span style="color:var(--text-muted);font-size:10px">${a.action_type}</span>
       <span class="action-msg">${a.message?.split('\n')[1] || a.error_message || ''}</span>
