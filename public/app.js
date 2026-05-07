@@ -79,16 +79,14 @@ function aiHtml(ai, instrument) {
   const pct  = Math.round((ai.continuation_probability || 0) * 100);
   const sCls = (ai.structure_type || '').replace(/-/g, '_');
   const hCls = (ai.trend_health  || '').toLowerCase();
-  const verdictCls = ai.details?.ai_verdict === 'ENTER' ? 'enter'
-                   : ai.details?.ai_verdict === 'WAIT'  ? 'wait' : 'avoid';
   return `
     <div class="ai-block">
       <div class="ai-row">
         <span class="ai-badge ai-struct ${sCls}">${(ai.structure_type||'').replace(/_/g,' ')}</span>
         <span class="ai-badge ai-health ${hCls}">${ai.trend_health||''}</span>
         <span class="ai-badge ai-quality ${(ai.market_quality||'').toLowerCase()}">${ai.market_quality||''}</span>
-        <span class="ai-cont">AI cont: <b>${pct}%</b></span>
-        <button class="ai-bulb-btn" title="AI detailed analysis" onclick="openAiModal('${instrument}')">💡</button>
+        <span class="ai-cont">cont: <b>${pct}%</b></span>
+        <button class="ai-bulb-btn" title="AI structure analysis" onclick="openAiModal('${instrument}')">💡</button>
       </div>
       ${ai.summary  ? `<div class="ai-summary">${ai.summary}</div>` : ''}
       ${ai.warning  ? `<div class="ai-warning">⚠ ${ai.warning}</div>` : ''}
@@ -104,8 +102,6 @@ function openAiModal(instrument) {
   const d   = ai.details || {};
   const pct = Math.round((ai.continuation_probability || 0) * 100);
   const sCls = (ai.structure_type || '').replace(/-/g, '_');
-  const verdictCls = d.ai_verdict === 'ENTER' ? 'enter'
-                   : d.ai_verdict === 'WAIT'  ? 'wait' : 'avoid';
 
   document.getElementById('ai-modal-pair').textContent = pair(instrument);
   document.getElementById('ai-modal-dir').innerHTML =
@@ -117,16 +113,16 @@ function openAiModal(instrument) {
     <div class="ai-modal-score">
       <div class="ai-modal-prob">
         <div class="ai-modal-prob-num">${pct}%</div>
-        <div class="ai-modal-prob-label">Continuation Probability</div>
+        <div class="ai-modal-prob-label">Structure Continuation</div>
         <div class="ai-modal-prob-bar"><div class="ai-modal-prob-fill" style="width:${pct}%"></div></div>
       </div>
-      <div class="ai-verdict-block ${verdictCls}">
-        <div class="ai-verdict-label">AI Verdict</div>
-        <div class="ai-verdict-value">${d.ai_verdict || '—'}</div>
+      <div class="ai-quality-block">
+        <div class="ai-verdict-label">Market Quality</div>
+        <div class="ai-quality-value ${(ai.market_quality||'').toLowerCase()}">${ai.market_quality||'—'}</div>
       </div>
     </div>
 
-    ${ai.summary ? `<div class="ai-modal-summary">"${ai.summary}"</div>` : ''}
+    ${ai.summary ? `<div class="ai-modal-summary">${ai.summary}</div>` : ''}
 
     <div class="ai-modal-sections">
       ${d.structure_analysis ? `
@@ -147,29 +143,29 @@ function openAiModal(instrument) {
           <div class="ai-modal-section-text">${d.pullback_quality}</div>
         </div>` : ''}
 
-      ${d.entry_timing ? `
+      ${d.momentum_shift ? `
         <div class="ai-modal-section">
-          <div class="ai-modal-section-title">⏱ Entry Timing</div>
-          <div class="ai-modal-section-text">${d.entry_timing}</div>
+          <div class="ai-modal-section-title">⚡ Momentum Shift</div>
+          <div class="ai-modal-section-text">${d.momentum_shift}</div>
         </div>` : ''}
 
       <div class="ai-modal-factors-row">
         ${(d.support_factors||[]).length ? `
           <div class="ai-modal-factors">
-            <div class="ai-modal-section-title">✅ Supporting</div>
+            <div class="ai-modal-section-title">✅ Structure Support</div>
             ${d.support_factors.map(f => `<div class="ai-factor support">+ ${f}</div>`).join('')}
           </div>` : ''}
 
         ${(d.risk_factors||[]).length ? `
           <div class="ai-modal-factors">
-            <div class="ai-modal-section-title">⚠ Risk Factors</div>
+            <div class="ai-modal-section-title">⚠ Structure Risks</div>
             ${d.risk_factors.map(f => `<div class="ai-factor risk">− ${f}</div>`).join('')}
           </div>` : ''}
       </div>
     </div>
 
     ${ai.warning ? `<div class="ai-modal-warning">⚠ ${ai.warning}</div>` : ''}
-    <div class="ai-modal-footer">Analysis as of ${fmtTime(ai.time)} · gpt-4o-mini</div>
+    <div class="ai-modal-footer">48H analysis · updated ${fmtTime(ai.time)} · gpt-4o-mini</div>
   `;
 
   document.getElementById('ai-modal-overlay').classList.add('open');

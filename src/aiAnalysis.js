@@ -7,7 +7,7 @@ function getClient() {
 
 // ─── Fetch last N smoothed values from Supabase ───────────────────────────────
 
-async function getSmoothedHistory(instrument, limit = 24) {
+async function getSmoothedHistory(instrument, limit = 48) {
   const [base, quote] = instrument.split('_');
 
   const { data: strengthData, error: sErr } = await supabase
@@ -36,22 +36,22 @@ async function getSmoothedHistory(instrument, limit = 24) {
 async function analyzeSetup(instrument, state) {
   const { strengthData, spreadData, base, quote } = await getSmoothedHistory(instrument);
 
-  // Sort oldest → newest, take last 24
+  // Sort oldest → newest, take last 48
   const baseArr = strengthData
     .filter(d => d.currency === base)
     .sort((a, b) => new Date(a.time) - new Date(b.time))
-    .slice(-24)
+    .slice(-48)
     .map(d => +parseFloat(d.smooth_6h || 0).toFixed(5));
 
   const quoteArr = strengthData
     .filter(d => d.currency === quote)
     .sort((a, b) => new Date(a.time) - new Date(b.time))
-    .slice(-24)
+    .slice(-48)
     .map(d => +parseFloat(d.smooth_6h || 0).toFixed(5));
 
   const spreadArr = spreadData
     .sort((a, b) => new Date(a.time) - new Date(b.time))
-    .slice(-24)
+    .slice(-48)
     .map(d => +parseFloat(d.spread_6h || 0).toFixed(5));
 
   console.log(`[AI] ${instrument} data: base=${baseArr.length} pts, quote=${quoteArr.length} pts, spread=${spreadArr.length} pts`);
@@ -71,34 +71,33 @@ async function analyzeSetup(instrument, state) {
     messages: [
       {
         role: 'system',
-        content: `You are a professional forex market structure analyst. Analyze smoothed H1 data and return a detailed JSON assessment. Be specific and concise. Return ONLY valid JSON.`,
+        content: `You are a professional forex market structure analyst. Your role is PURELY to analyze market structure — describe what the data shows. Do NOT give trade recommendations, entry signals, or tell anyone to buy/sell. Focus only on: what structure looks like, strength/weakness of trend, quality of pullback, risk factors. Return ONLY valid JSON.`,
       },
       {
         role: 'user',
-        content: `Analyze ${instrument.replace('_', '/')} — ${state.bias} bias, state: ${state.state}, confidence: ${state.confidence}%, spreads: 3H=${(+state.spread_3h||0).toFixed(5)} 6H=${(+state.spread_6h||0).toFixed(5)} 12H=${(+state.spread_12h||0).toFixed(5)}.
+        content: `Analyze ${instrument.replace('_', '/')} market structure — ${state.bias} bias, state: ${state.state}, confidence: ${state.confidence}%, spreads: 3H=${(+state.spread_3h||0).toFixed(5)} 6H=${(+state.spread_6h||0).toFixed(5)} 12H=${(+state.spread_12h||0).toFixed(5)}.
 
-Last 24 smoothed H1 values (oldest → newest):
+Last 48 smoothed H1 values (oldest → newest, covering ~48 hours):
 ${base} strength: ${JSON.stringify(baseArr)}
 ${quote} strength: ${JSON.stringify(quoteArr)}
 Spread (${base}−${quote}): ${JSON.stringify(spreadArr)}
 Spread momentum: ${JSON.stringify(spreadChanges)}
 
-Return this exact JSON structure:
+Return this exact JSON structure (no trade signals — pure structure analysis only):
 {
   "structure_type": "HEALTHY_PULLBACK"|"WEAK_PULLBACK"|"STRONG_TREND"|"REVERSAL_RISK"|"CHOPPY"|"EXHAUSTED",
   "trend_health": "STRONG"|"MODERATE"|"WEAK",
-  "continuation_probability": <0.0-1.0>,
+  "continuation_probability": <0.0-1.0, probability the current structure continues — not a signal>,
   "market_quality": "CLEAN"|"NOISY"|"CHOPPY",
-  "warning": <null or max 8-word string>,
-  "summary": <one sentence max 12 words>,
+  "warning": <null or max 8-word structural observation>,
+  "summary": <one sentence max 12 words describing structure only>,
   "details": {
-    "structure_analysis": <2 sentences: what the spread pattern shows>,
-    "trend_assessment": <2 sentences: base vs quote strength behavior>,
-    "pullback_quality": <1-2 sentences: is compression healthy or aggressive>,
-    "entry_timing": <1 sentence: is now good, early, or late to enter>,
-    "support_factors": [<up to 3 short strings, what supports the setup>],
-    "risk_factors": [<up to 3 short strings, what could invalidate it>],
-    "ai_verdict": "ENTER"|"WAIT"|"AVOID"
+    "structure_analysis": <2 sentences: what the 48H spread pattern reveals about structure>,
+    "trend_assessment": <2 sentences: how base vs quote strength evolved over 48H>,
+    "pullback_quality": <1-2 sentences: depth and character of compression — healthy or aggressive>,
+    "momentum_shift": <1-2 sentences: how momentum changed over the 48H window — accelerating, stalling, or reversing>,
+    "support_factors": [<up to 3 short strings: structural factors that support continuation>],
+    "risk_factors": [<up to 3 short strings: structural factors that could break the setup>]
   }
 }`,
       },

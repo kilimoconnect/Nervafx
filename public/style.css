@@ -889,22 +889,19 @@ html, body {
   transition: width 0.5s;
 }
 
-.ai-verdict-block {
+.ai-quality-block {
   min-width: 90px;
   text-align: center;
   padding: 10px 16px;
   border-radius: 8px;
   border: 1px solid var(--border);
+  background: var(--bg-hover);
 }
-.ai-verdict-block.enter { background: #052e16; border-color: #4ade80; }
-.ai-verdict-block.wait  { background: var(--yellow-dim); border-color: var(--yellow); }
-.ai-verdict-block.avoid { background: var(--red-dim); border-color: var(--red); }
-
 .ai-verdict-label { font-size: 9px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px; }
-.ai-verdict-value { font-size: 18px; font-weight: 800; margin-top: 4px; }
-.ai-verdict-block.enter .ai-verdict-value { color: #4ade80; }
-.ai-verdict-block.wait  .ai-verdict-value { color: #fbbf24; }
-.ai-verdict-block.avoid .ai-verdict-value { color: #f87171; }
+.ai-quality-value { font-size: 15px; font-weight: 700; margin-top: 4px; color: var(--text-dim); }
+.ai-quality-value.clean  { color: #4ade80; }
+.ai-quality-value.noisy  { color: #fbbf24; }
+.ai-quality-value.choppy { color: #f87171; }
 
 .ai-modal-summary {
   font-size: 12px;
