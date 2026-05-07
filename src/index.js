@@ -1,4 +1,14 @@
 const cron = require('node-cron');
+
+// Forex market: opens Sunday 21:00 UTC, closes Friday 21:00 UTC
+function isMarketOpen(now = new Date()) {
+  const day  = now.getUTCDay();   // 0=Sun 1=Mon 2=Tue 3=Wed 4=Thu 5=Fri 6=Sat
+  const hour = now.getUTCHours();
+  if (day === 6) return false;                    // Saturday: always closed
+  if (day === 0 && hour < 21) return false;       // Sunday before 21:00: closed
+  if (day === 5 && hour >= 21) return false;      // Friday from 21:00: closed
+  return true;
+}
 const { validate } = require('./config');
 const { initialLoad } = require('./loader');
 const { runFullQualityCheck } = require('./quality');
@@ -110,6 +120,10 @@ if (command === 'load') {
   }).catch(err => { console.error(err); process.exit(1); });
 } else if (command === 'update') {
   validate();
+  if (!isMarketOpen()) {
+    console.log(`[UPDATE] Market closed (${new Date().toUTCString()}). Skipping.`);
+    process.exit(0);
+  }
   hourlyUpdate().then(r => {
     console.log(JSON.stringify(r, null, 2));
     process.exit(r.status === 'CLEAN' ? 0 : 1);

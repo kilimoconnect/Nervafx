@@ -2,8 +2,11 @@ name: NervaFX Hourly Update
 
 on:
   schedule:
-    - cron: '5 * * * *'   # every hour at minute 5
-  workflow_dispatch:        # allow manual trigger from GitHub UI
+    # Every hour at minute 5, Mon–Fri only (UTC)
+    # Market opens Sun 21:00 UTC — covered by the Sun 21:05 run below
+    - cron: '5 * * * 1-5'   # Mon–Fri, every hour
+    - cron: '5 21 * * 0'    # Sunday 21:05 UTC — market open
+  workflow_dispatch:          # allow manual trigger from GitHub UI
 
 jobs:
   update:
