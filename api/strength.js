@@ -1,12 +1,21 @@
 const { getClient, getLatestTime, cors } = require('./_db');
 
+// Arrow + intensity based on normalized smooth values
+// smooth_6h is the base strength; delta = short-term change
 function momentum(s3, s6, s12) {
-  const delta = (parseFloat(s3) || 0) - (parseFloat(s6) || 0);
-  const str   = Math.abs(parseFloat(s6) || 0);
-  if (str > 0.25 && delta > 0.06) return '↑↑';
-  if (delta > 0.02)                return '↑';
-  if (str > 0.25 && delta < -0.06) return '↓↓';
-  if (delta < -0.02)               return '↓';
+  const v3  = parseFloat(s3)  || 0;
+  const v6  = parseFloat(s6)  || 0;
+  const v12 = parseFloat(s12) || 0;
+  const delta = v3 - v6;       // short-term direction vs medium-term
+  const str   = Math.abs(v6);  // absolute strength magnitude
+
+  // Double arrows: strong absolute strength AND moving fast
+  if (str > 0.15 && delta > 0.04) return '↑↑';
+  if (str > 0.15 && delta < -0.04) return '↓↓';
+  // Single arrows: meaningful directional momentum
+  if (delta > 0.01) return '↑';
+  if (delta < -0.01) return '↓';
+  // Flat
   return '→';
 }
 

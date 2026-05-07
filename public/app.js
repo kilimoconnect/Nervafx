@@ -21,19 +21,52 @@ function fmtTime(iso) {
   if (!iso) return '—';
   return new Date(iso).toUTCString().replace('GMT', 'UTC');
 }
+function timeAgo(iso) {
+  if (!iso) return null;
+  const diff = Date.now() - new Date(iso).getTime();
+  const hrs  = Math.floor(diff / 3600000);
+  const mins = Math.floor(diff / 60000);
+  if (hrs >= 24) return `${Math.floor(hrs / 24)}d ago`;
+  if (hrs > 0)   return `${hrs}h ago`;
+  if (mins > 0)  return `${mins}m ago`;
+  return 'just now';
+}
+
+// ─── Pipeline HTML ────────────────────────────────────────────────────────────
+// stage: 0=none 1=TREND 2=PULLBACK 3=READY 4=ENTRY
+const PIPE_LABELS = ['TREND', 'PULLBACK', 'READY', 'ENTER'];
+function pipelineHtml(stage) {
+  if (!stage || stage === 0) return '';
+  return `<div class="pipeline">` +
+    PIPE_LABELS.map((label, i) => {
+      const s = i + 1;
+      const cls = s < stage ? 'done' : s === stage ? `active${stage === 4 ? ' s4' : ''}` : '';
+      return `<span class="pipe-step ${cls}">${label}</span>` +
+             (i < 3 ? `<span class="pipe-arrow">›</span>` : '');
+    }).join('') +
+  `</div>`;
+}
+
+function nextActionHtml(text) {
+  if (!text || text === 'No setup forming') return '';
+  const cls = text === 'ENTER NOW' ? 'enter'
+            : text.startsWith('Wait') ? 'wait'
+            : text.startsWith('3H') ? 'wait'
+            : 'watch';
+  const icon = text === 'ENTER NOW' ? '▶ ' : '→ ';
+  return `<div class="next-action ${cls}">${icon}${text}</div>`;
+}
 
 // ─── Header ───────────────────────────────────────────────────────────────────
 
 function updateHeader(risk) {
   if (!risk?.summary) return;
   const s = risk.summary;
-  const bal = Number(s.balance) || 0;
-  document.getElementById('stat-balance').textContent = `Balance: $${bal.toLocaleString()}`;
-  document.getElementById('stat-risk').textContent = `Daily Risk: ${s.dailyRiskPct ?? '0.00'}% / ${s.maxDailyRiskPct ?? 2}%`;
-  document.getElementById('stat-trades').textContent = `Open: ${s.openTrades ?? 0} / ${s.maxTrades ?? 3}`;
-  const dot = document.getElementById('status-dot');
-  dot.className = 'status-dot online';
-  document.getElementById('last-update').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  document.getElementById('stat-balance').textContent  = `Balance: $${(Number(s.balance) || 0).toLocaleString()}`;
+  document.getElementById('stat-risk').textContent     = `Daily Risk: ${s.dailyRiskPct ?? '0.00'}% / ${s.maxDailyRiskPct ?? 2}%`;
+  document.getElementById('stat-trades').textContent   = `Open: ${s.openTrades ?? 0} / ${s.maxTrades ?? 3}`;
+  document.getElementById('status-dot').className      = 'status-dot online';
+  document.getElementById('last-update').textContent   = 'Updated ' + new Date().toLocaleTimeString();
 }
 
 // ─── Top Setups ───────────────────────────────────────────────────────────────
@@ -58,10 +91,10 @@ function renderTopSetups(states) {
 
   const rankCls = ['hot', 'warm', 'cool'];
   el.innerHTML = setups.map((s, i) => {
-    const dir = s.bias === 'BUY' ? 'buy' : 'sell';
-    const ta  = s.tf_alignment || {};
+    const dir   = s.bias === 'BUY' ? 'buy' : 'sell';
+    const ta    = s.tf_alignment || {};
     const phCls = (s.phase || '').replace(' ', '_');
-
+    const bd    = s.confidence_breakdown || [];
     return `
       <div class="top-card ${rankCls[i]}">
         <div class="top-rank">${i + 1}</div>
@@ -72,6 +105,7 @@ function renderTopSetups(states) {
             <span class="phase-badge ${phCls}">${s.phase}</span>
             <span class="action-badge ${s.action}">${s.action}</span>
           </div>
+          ${pipelineHtml(s.pipeline_stage)}
           <div class="top-entry-status entry-${s.entry_status}">${(s.entry_status || '').replace(/_/g, ' ')}</div>
           <div class="top-tf">
             <span class="tf-item ${ta.h12}">12H ${ta.h12 || '→'}</span>
@@ -79,15 +113,14 @@ function renderTopSetups(states) {
             <span class="tf-item ${ta.h3}">3H ${ta.h3 || '→'}</span>
             <span class="sb-behavior ${s.spread_behavior}">${s.spread_behavior || ''}</span>
           </div>
-          <div class="top-next">${s.next_condition || ''}</div>
+          <div style="font-size:9px;color:var(--text-muted);margin-bottom:3px">${s.spread_behavior_text || ''}</div>
+          ${nextActionHtml(s.next_action)}
           ${s.invalidation ? `<div class="invalidation">⚠ ${s.invalidation}</div>` : ''}
         </div>
         <div class="top-conf">
           <div class="conf-num">${s.confidence}%</div>
           <div class="conf-bar" style="width:72px"><div class="conf-fill" style="width:${s.confidence}%"></div></div>
-          <div class="conf-factors">
-            ${(s.confidence_breakdown || []).map(f => `<span>+ ${f}</span>`).join('')}
-          </div>
+          ${bd.length ? `<div class="conf-factors">${bd.map(f => `<span>+ ${f}</span>`).join('')}</div>` : ''}
         </div>
       </div>`;
   }).join('');
@@ -113,28 +146,36 @@ function renderSignals(data, statesArr) {
   document.getElementById('signals-wait').innerHTML =
     waiting.length ? waiting.map(s => waitCard(s, stateMap[s.instrument])).join('') : '';
 
+  // Last signal time
+  const ago = data.lastSignalTime ? timeAgo(data.lastSignalTime) : null;
+  const lastBar = ago
+    ? `<div class="last-signal-bar">Last signal: <b>${data.lastSignalInstrument?.replace('_','/')}</b> — ${ago}</div>`
+    : '';
+
+  // NO TRADE — cleaner label
   document.getElementById('signals-notrade').innerHTML =
-    `<div style="color:var(--text-muted);font-size:11px;margin-bottom:6px">NO TRADE — ${notrade.length} pairs</div>` +
+    `<div style="color:var(--text-muted);font-size:10px;margin-bottom:6px">Filtered out: ${notrade.length} pairs (low quality / no alignment)</div>` +
     `<div style="display:flex;flex-wrap:wrap;gap:4px">` +
-    notrade.map(s => `<span style="background:var(--card-bg);color:var(--text-muted);border:1px solid var(--border);border-radius:4px;padding:2px 7px;font-size:10px;font-family:monospace">${pair(s.instrument)}</span>`).join('') +
-    `</div>`;
+    notrade.map(s => `<span style="background:var(--bg-card);color:var(--text-muted);border:1px solid var(--border);border-radius:4px;padding:2px 7px;font-size:10px;font-family:monospace">${pair(s.instrument)}</span>`).join('') +
+    `</div>` + lastBar;
 }
 
-function tfRow(ta, sb) {
+function tfRow(ta, sb, sbText) {
   if (!ta) return '';
   return `<div class="signal-tf-row">
     <span class="tf-item ${ta.h12}">12H ${ta.h12 || '→'}</span>
     <span class="tf-item ${ta.h6}">6H ${ta.h6 || '→'}</span>
     <span class="tf-item ${ta.h3}">3H ${ta.h3 || '→'}</span>
     ${sb ? `<span class="sb-behavior ${sb}">${sb}</span>` : ''}
-  </div>`;
+  </div>
+  ${sbText ? `<div style="font-size:9px;color:var(--text-muted);margin-bottom:4px">${sbText}</div>` : ''}`;
 }
 
 function signalCard(s, st) {
-  const cls    = s.signal.toLowerCase();
-  const ta     = st?.tf_alignment;
-  const phCls  = (st?.phase || '').replace(' ', '_');
-  const bd     = st?.confidence_breakdown || [];
+  const cls   = s.signal.toLowerCase();
+  const ta    = st?.tf_alignment;
+  const phCls = (st?.phase || '').replace(' ', '_');
+  const bd    = st?.confidence_breakdown || [];
   return `
     <div class="signal-card ${cls}">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
@@ -143,7 +184,8 @@ function signalCard(s, st) {
         ${st?.phase ? `<span class="phase-badge ${phCls}">${st.phase}</span>` : ''}
         ${st?.action === 'ENTER' ? `<span class="action-badge ENTER">ENTER</span>` : ''}
       </div>
-      ${tfRow(ta, st?.spread_behavior)}
+      ${pipelineHtml(st?.pipeline_stage)}
+      ${tfRow(ta, st?.spread_behavior, st?.spread_behavior_text)}
       <div class="signal-prices">
         <div class="signal-price-item"><span>Entry</span>${fmt(s.entry_price)}</div>
         <div class="signal-price-item"><span>Stop</span><span style="color:#f87171">${fmt(s.stop_loss)}</span></div>
@@ -153,6 +195,7 @@ function signalCard(s, st) {
         <div class="conf-bar"><div class="conf-fill" style="width:${s.confidence}%"></div></div>
       </div>
       ${bd.length ? `<div class="conf-factors" style="align-items:flex-start;margin-top:5px">${bd.map(f => `<span>+ ${f}</span>`).join('')}</div>` : ''}
+      ${st?.next_action ? nextActionHtml(st.next_action) : ''}
       ${st?.invalidation ? `<div class="invalidation">⚠ ${st.invalidation}</div>` : ''}
     </div>`;
 }
@@ -169,11 +212,12 @@ function waitCard(s, st) {
         <span class="phase-badge ${phCls}">${st?.phase || 'WAIT'}</span>
         <span class="action-badge WAIT">WAIT</span>
       </div>
-      ${tfRow(ta, st?.spread_behavior)}
+      ${pipelineHtml(st?.pipeline_stage)}
+      ${tfRow(ta, st?.spread_behavior, st?.spread_behavior_text)}
       <div class="signal-conf" style="margin-top:4px">Confidence ${s.confidence}%
         <div class="conf-bar"><div class="conf-fill" style="width:${s.confidence}%;background:var(--yellow)"></div></div>
       </div>
-      ${st?.next_condition ? `<div class="signal-next">${st.next_condition}</div>` : ''}
+      ${st?.next_action ? nextActionHtml(st.next_action) : ''}
       ${st?.invalidation ? `<div class="invalidation">⚠ ${st.invalidation}</div>` : ''}
     </div>`;
 }
@@ -246,23 +290,30 @@ function renderStates(data) {
   el.innerHTML = data.states.map(s => {
     const ta    = s.tf_alignment || {};
     const phCls = (s.phase || '').replace(' ', '_');
+    if (s.state === 'NO_TRADE') return `
+      <div class="state-row-v2" style="opacity:0.45">
+        <div class="state-row-top">
+          <span class="state-pair">${pair(s.instrument)}</span>
+          <span class="phase-badge NO_TRADE">NO TRADE</span>
+        </div>
+      </div>`;
     return `
       <div class="state-row-v2">
         <div class="state-row-top">
           <span class="state-pair">${pair(s.instrument)}</span>
           <span class="phase-badge ${phCls}">${s.phase || s.state.replace(/_/g,' ')}</span>
           <span class="action-badge ${s.action}">${s.action || '—'}</span>
-          <div class="state-conf-mini" style="width:40px;margin-left:auto">
+          <div class="state-conf-mini" style="width:36px;margin-left:auto">
             <div class="state-conf-mini-fill" style="width:${s.confidence}%"></div>
           </div>
           <span style="font-size:10px;color:var(--text-muted)">${s.confidence}%</span>
         </div>
         <div class="state-row-bottom">
-          <span class="tfa ${ta.h12}">12H${ta.h12 || '→'}</span>
-          <span class="tfa ${ta.h6}">6H${ta.h6 || '→'}</span>
-          <span class="tfa ${ta.h3}">3H${ta.h3 || '→'}</span>
-          <span class="sb-behavior ${s.spread_behavior}">${s.spread_behavior || ''}</span>
-          ${s.next_condition && s.state !== 'NO_TRADE' ? `<span style="font-size:9px;color:var(--text-muted);margin-left:4px">${s.next_condition}</span>` : ''}
+          <span class="tfa ${ta.h12}">12H${ta.h12||'→'}</span>
+          <span class="tfa ${ta.h6}">6H${ta.h6||'→'}</span>
+          <span class="tfa ${ta.h3}">3H${ta.h3||'→'}</span>
+          <span class="sb-behavior ${s.spread_behavior}">${s.spread_behavior||''}</span>
+          ${s.next_action && s.next_action !== 'No setup forming' ? `<span style="font-size:9px;color:var(--text-muted)">→ ${s.next_action}</span>` : ''}
         </div>
       </div>`;
   }).join('');
@@ -276,7 +327,6 @@ function renderSpreads(data) {
     Math.abs(parseFloat(b.spread_6h)) - Math.abs(parseFloat(a.spread_6h))
   );
   const max = Math.abs(parseFloat(sorted[0]?.spread_6h || 1));
-
   document.getElementById('spreads-list').innerHTML = sorted.map(s => {
     const v6  = parseFloat(s.spread_6h);
     const cls = v6 >= 0 ? 'buy' : 'sell';
@@ -298,12 +348,7 @@ function renderRisk(data) {
   if (!data) return;
   const el       = document.getElementById('risk-list');
   const approved = data.approved || [];
-
-  if (approved.length === 0) {
-    el.innerHTML = '<p class="empty-state">No approved trades today</p>';
-    return;
-  }
-
+  if (approved.length === 0) { el.innerHTML = '<p class="empty-state">No approved trades today</p>'; return; }
   el.innerHTML = approved.map(r => {
     const dir = parseFloat(r.stop_loss) < parseFloat(r.entry_price) ? 'buy' : 'sell';
     return `

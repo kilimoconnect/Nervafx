@@ -1,10 +1,12 @@
 const { getClient, getLatestTime, cors } = require('./_db');
 
+// ─── TF arrow ─────────────────────────────────────────────────────────────────
 function tfArrow(val, bias) {
   if (Math.abs(val) < 0.0003) return '→';
   return (bias === 'BUY' ? val > 0 : val < 0) ? '↑' : '↓';
 }
 
+// ─── Spread behavior ──────────────────────────────────────────────────────────
 function spreadBehavior(s3, s6, s12) {
   const a3 = Math.abs(s3), a6 = Math.abs(s6), a12 = Math.abs(s12);
   if (a3 > a6 * 0.9 && a6 > a12 * 0.9 && a3 > a12 * 1.05) return 'EXPANDING';
@@ -12,6 +14,32 @@ function spreadBehavior(s3, s6, s12) {
   return 'STABLE';
 }
 
+// RE-EXPANDING = was compressing (pullback), now expanding again (entry trigger)
+function spreadBehaviorDisplay(behavior, state) {
+  if (behavior === 'EXPANDING' && state === 'CONTINUATION') return 'RE-EXPANDING';
+  return behavior;
+}
+
+function spreadBehaviorInterpret(display) {
+  switch (display) {
+    case 'RE-EXPANDING':  return 'Re-expanding → Entry signal';
+    case 'EXPANDING':     return 'Expanding → Trend strengthening';
+    case 'COMPRESSING':   return 'Compressing → Pullback forming';
+    default:              return 'Consolidating';
+  }
+}
+
+// ─── Pipeline stage 0–4 ───────────────────────────────────────────────────────
+// 0 = NO_TRADE  1 = TREND  2 = PULLBACK  3 = READY (low conf)  4 = ENTER
+function pipelineStage(state, confidence) {
+  if (state === 'CONTINUATION' && confidence >= 75) return 4;
+  if (state === 'CONTINUATION') return 3;
+  if (state === 'PULLBACK') return 2;
+  if (state === 'TREND') return 1;
+  return 0;
+}
+
+// ─── Entry status ─────────────────────────────────────────────────────────────
 function entryStatus(state, confidence) {
   if (state === 'CONTINUATION' && confidence >= 75) return 'READY_TO_ENTER';
   if (state === 'PULLBACK') return 'WAIT_CONFIRMATION';
@@ -19,6 +47,7 @@ function entryStatus(state, confidence) {
   return 'NO_TRADE';
 }
 
+// ─── Phase / action ───────────────────────────────────────────────────────────
 function phaseAction(state, confidence) {
   if (state === 'CONTINUATION' && confidence >= 75) return { phase: 'READY', action: 'ENTER' };
   if (state === 'CONTINUATION') return { phase: 'READY', action: 'WATCH' };
@@ -28,6 +57,31 @@ function phaseAction(state, confidence) {
   return { phase: 'NO TRADE', action: '—' };
 }
 
+// ─── Next action (what must happen next — positive instruction) ───────────────
+function nextAction(state, bias, confidence) {
+  const pos = bias === 'BUY' ? 'positive' : 'negative';
+  const neg = bias === 'BUY' ? 'negative' : 'positive';
+  if (state === 'CONTINUATION' && confidence >= 75) return 'ENTER NOW';
+  if (state === 'CONTINUATION') return 'Confirm: confidence building';
+  if (state === 'PULLBACK') return `3H must flip ${pos} → ENTER`;
+  if (state === 'TREND') return `Wait: 3H pulls back (turns ${neg})`;
+  return 'No setup forming';
+}
+
+// ─── Invalidation (what KILLS the setup — distinct from next step) ────────────
+// For TREND: 3H turning negative is GOOD (pullback starting), NOT invalidation
+// For PULLBACK: 3H turning positive is GOOD (entry trigger), NOT invalidation
+// Real invalidation = 6H spread reversing direction (bias is broken)
+// For CONTINUATION: 3H turning negative again CANCELS the entry
+function invalidationWarning(state, bias) {
+  if (!state || state === 'NO_TRADE' || !bias || bias === 'NONE') return null;
+  const neg = bias === 'BUY' ? 'negative' : 'positive';
+  if (state === 'CONTINUATION') return `3H turns ${neg} again → entry cancelled`;
+  if (state === 'TREND' || state === 'PULLBACK') return `6H spread reverses direction → bias invalid`;
+  return null;
+}
+
+// ─── Confidence breakdown ─────────────────────────────────────────────────────
 function confBreakdown(s3, s6, s12, bias, state) {
   if (!bias || bias === 'NONE') return [];
   const dir = bias === 'BUY' ? 1 : -1;
@@ -41,26 +95,7 @@ function confBreakdown(s3, s6, s12, bias, state) {
   return out;
 }
 
-function nextCondition(state, bias) {
-  const pos = bias === 'BUY' ? 'positive' : 'negative';
-  const neg = bias === 'BUY' ? 'negative' : 'positive';
-  switch (state) {
-    case 'TREND':        return `Wait: 3H must pull back (turn ${neg})`;
-    case 'PULLBACK':     return `3H must turn ${pos} → triggers CONTINUATION`;
-    case 'CONTINUATION': return 'Entry condition met';
-    default:             return 'No setup forming';
-  }
-}
-
-function invalidationWarning(state, bias) {
-  if (!state || state === 'NO_TRADE' || !bias || bias === 'NONE') return null;
-  const neg = bias === 'BUY' ? 'negative' : 'positive';
-  const opp = bias === 'BUY' ? 'positive' : 'negative';
-  if (state === 'CONTINUATION' || state === 'TREND') return `3H turns ${neg} → signal invalid`;
-  if (state === 'PULLBACK') return `6H reverses to ${opp} → bias invalid`;
-  return null;
-}
-
+// ─── Handler ──────────────────────────────────────────────────────────────────
 module.exports = async function handler(req, res) {
   cors(res);
   try {
@@ -80,15 +115,19 @@ module.exports = async function handler(req, res) {
       const s6  = parseFloat(s.spread_6h)  || 0;
       const s12 = parseFloat(s.spread_12h) || 0;
       const { phase, action } = phaseAction(state, confidence);
+      const sb      = spreadBehavior(s3, s6, s12);
+      const sbDisp  = spreadBehaviorDisplay(sb, state);
       return {
         ...s,
+        pipeline_stage:        pipelineStage(state, confidence),
         entry_status:          entryStatus(state, confidence),
         phase,
         action,
         tf_alignment:          { h12: tfArrow(s12, bias), h6: tfArrow(s6, bias), h3: tfArrow(s3, bias) },
-        spread_behavior:       spreadBehavior(s3, s6, s12),
+        spread_behavior:       sbDisp,
+        spread_behavior_text:  spreadBehaviorInterpret(sbDisp),
         confidence_breakdown:  confBreakdown(s3, s6, s12, bias, state),
-        next_condition:        nextCondition(state, bias),
+        next_action:           nextAction(state, bias, confidence),
         invalidation:          invalidationWarning(state, bias),
       };
     });
