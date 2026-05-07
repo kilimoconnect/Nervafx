@@ -57,28 +57,42 @@ function phaseAction(state, confidence) {
   return { phase: 'NO TRADE', action: '—' };
 }
 
-// ─── Next action (what must happen next — positive instruction) ───────────────
+// ─── Next action ─────────────────────────────────────────────────────────────
+// PULLBACK does NOT require 3H to go negative — 3H weakening (compressing) is enough.
+// A healthy pullback often keeps 3H positive but decreasing. Entry is when 3H re-expands.
 function nextAction(state, bias, confidence) {
-  const pos = bias === 'BUY' ? 'positive' : 'negative';
-  const neg = bias === 'BUY' ? 'negative' : 'positive';
   if (state === 'CONTINUATION' && confidence >= 75) return 'ENTER NOW';
   if (state === 'CONTINUATION') return 'Confirm: confidence building';
-  if (state === 'PULLBACK') return `3H must flip ${pos} → ENTER`;
-  if (state === 'TREND') return `Wait: 3H pulls back (turns ${neg})`;
+  // Pullback entry: watch for 3H momentum to re-expand (c3h turning positive again)
+  if (state === 'PULLBACK') return 'Watch: 3H momentum must re-expand → ENTER';
+  // Trend: watch for 3H to start weakening/compressing (not necessarily go negative)
+  if (state === 'TREND') return 'Watch: 3H momentum weakens (compression zone)';
   return 'No setup forming';
 }
 
-// ─── Invalidation (what KILLS the setup — distinct from next step) ────────────
-// For TREND: 3H turning negative is GOOD (pullback starting), NOT invalidation
-// For PULLBACK: 3H turning positive is GOOD (entry trigger), NOT invalidation
-// Real invalidation = 6H spread reversing direction (bias is broken)
-// For CONTINUATION: 3H turning negative again CANCELS the entry
+// ─── Invalidation ────────────────────────────────────────────────────────────
+// Real invalidation is STRUCTURAL breakdown, NOT a normal pullback:
+//   - 6H collapses (spread shrinks below minimum) → bias is gone
+//   - 12H flips direction → macro reversal
+// A 3H going negative during TREND is NOT invalidation — it is the pullback itself.
+// A 3H re-expanding during PULLBACK is NOT invalidation — it is the entry trigger.
 function invalidationWarning(state, bias) {
   if (!state || state === 'NO_TRADE' || !bias || bias === 'NONE') return null;
-  const neg = bias === 'BUY' ? 'negative' : 'positive';
-  if (state === 'CONTINUATION') return `3H turns ${neg} again → entry cancelled`;
-  if (state === 'TREND' || state === 'PULLBACK') return `6H spread reverses direction → bias invalid`;
+  if (state === 'CONTINUATION') return '6H spread collapses → entry cancelled';
+  if (state === 'TREND' || state === 'PULLBACK') return '6H collapses OR 12H direction flips → reversal risk';
   return null;
+}
+
+// ─── Pullback depth ───────────────────────────────────────────────────────────
+// Light: 3H is still in trend direction (positive for BUY) — healthy compression
+// Moderate: 3H near zero — deeper compression, still within normal range
+// Deep: 3H went against trend direction — stronger correction, but valid if 6H/12H hold
+function pullbackDepth(state, s3, bias) {
+  if (state !== 'PULLBACK') return null;
+  const inDir = s3 * (bias === 'BUY' ? 1 : -1); // positive = still in trend direction
+  if (inDir > 0.001)  return 'LIGHT';    // 3H still bullish/bearish, just compressing
+  if (inDir > -0.001) return 'MODERATE'; // 3H near zero
+  return 'DEEP';                          // 3H moved against trend (deeper but still valid)
 }
 
 // ─── Confidence breakdown ─────────────────────────────────────────────────────
@@ -89,9 +103,12 @@ function confBreakdown(s3, s6, s12, bias, state) {
   if (s12 * dir > 0 && s6 * dir > 0) out.push('12H & 6H aligned');
   if (Math.abs(s6) >= 0.004) out.push('6H strong');
   else if (Math.abs(s6) >= 0.002) out.push('6H moderate');
-  if (s3 * dir > 0) out.push('3H momentum positive');
+  // 3H label depends on context: in pullback, being in trend dir = "light pullback"
+  if (s3 * dir > 0 && state === 'PULLBACK') out.push('Light pullback (3H still bullish)');
+  else if (s3 * dir > 0) out.push('3H aligned with trend');
   if (state === 'CONTINUATION') out.push('Pullback completed');
-  if (Math.abs(s3) > Math.abs(s6)) out.push('Spread expanding');
+  if (Math.abs(s3) > Math.abs(s6) && state !== 'PULLBACK') out.push('Spread expanding');
+  if (state === 'PULLBACK' && Math.abs(s3) < Math.abs(s6)) out.push('3H compressing (pullback forming)');
   return out;
 }
 
@@ -129,6 +146,7 @@ module.exports = async function handler(req, res) {
         confidence_breakdown:  confBreakdown(s3, s6, s12, bias, state),
         next_action:           nextAction(state, bias, confidence),
         invalidation:          invalidationWarning(state, bias),
+        pullback_depth:        pullbackDepth(state, s3, bias),
       };
     });
 

@@ -106,7 +106,10 @@ function renderTopSetups(states) {
             <span class="action-badge ${s.action}">${s.action}</span>
           </div>
           ${pipelineHtml(s.pipeline_stage)}
-          <div class="top-entry-status entry-${s.entry_status}">${(s.entry_status || '').replace(/_/g, ' ')}</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+            <div class="top-entry-status entry-${s.entry_status}">${(s.entry_status || '').replace(/_/g, ' ')}</div>
+            ${s.pullback_depth ? `<span class="pb-depth ${s.pullback_depth}">${s.pullback_depth} PULLBACK</span>` : ''}
+          </div>
           <div class="top-tf">
             <span class="tf-item ${ta.h12}">12H ${ta.h12 || '→'}</span>
             <span class="tf-item ${ta.h6}">6H ${ta.h6 || '→'}</span>
@@ -313,6 +316,7 @@ function renderStates(data) {
           <span class="tfa ${ta.h6}">6H${ta.h6||'→'}</span>
           <span class="tfa ${ta.h3}">3H${ta.h3||'→'}</span>
           <span class="sb-behavior ${s.spread_behavior}">${s.spread_behavior||''}</span>
+          ${s.pullback_depth ? `<span class="pb-depth ${s.pullback_depth}">${s.pullback_depth}</span>` : ''}
           ${s.next_action && s.next_action !== 'No setup forming' ? `<span style="font-size:9px;color:var(--text-muted)">→ ${s.next_action}</span>` : ''}
         </div>
       </div>`;

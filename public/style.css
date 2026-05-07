@@ -704,6 +704,17 @@ html, body {
 .next-action.watch { color: #60a5fa; }
 .next-action.none  { color: var(--text-muted); }
 
+/* ─── Pullback depth badge ─────────────────────────────────────────────────── */
+.pb-depth {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+.pb-depth.LIGHT    { background: #14532d; color: #86efac; }   /* healthy */
+.pb-depth.MODERATE { background: #713f12; color: #fde68a; }   /* watch */
+.pb-depth.DEEP     { background: #7f1d1d; color: #fca5a5; }   /* caution */
+
 /* ─── Last signal time ─────────────────────────────────────────────────────── */
 .last-signal-bar {
   font-size: 10px;

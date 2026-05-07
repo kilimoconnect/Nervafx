@@ -74,16 +74,21 @@ function buildReason(bias, state, spread_6h, spread_12h, changes, prevState) {
 
   switch (state) {
     case 'TREND':
-      return `${bias} bias aligned on 6H and 12H${strong}; 6H spread expanding (${changes.c6h >= 0 ? '+' : ''}${changes.c6h.toFixed(5)}). Active ${dir} trend.`;
+      // 3H is still expanding with the trend — watching for it to weaken (pullback zone upcoming)
+      return `${bias} trend: 12H and 6H both aligned${strong}. 3H momentum expanding. Watch for 3H to weaken/compress — that is your pullback entry zone.`;
 
     case 'PULLBACK':
-      return `${bias} bias intact on 6H and 12H; 3H spread pulling back (${changes.c3h.toFixed(5)}). Potential entry zone.`;
+      // 3H weakened (c3h < 0) — it may still be positive, just compressing. This is NOT trend failure.
+      // A healthy pullback means 3H is weaker than before, while 6H and 12H hold their direction.
+      { const depth = spread_3h * (bias === 'BUY' ? 1 : -1) > 0.001 ? 'Light' : spread_3h * (bias === 'BUY' ? 1 : -1) > -0.001 ? 'Moderate' : 'Deep';
+        return `${bias} bias intact (6H + 12H). ${depth} pullback: 3H momentum compressing (${changes.c3h.toFixed(5)}). Waiting for 3H to re-expand — that triggers the entry.`; }
 
     case 'CONTINUATION':
-      return `${bias} bias intact; prior pullback ended; 3H spread re-expanding (${changes.c3h >= 0 ? '+' : ''}${changes.c3h.toFixed(5)}). Continuation setup.`;
+      // After pullback: 3H started re-expanding (c3h > 0). This is the entry trigger.
+      return `${bias} continuation: pullback ended, 3H momentum re-expanding (+${changes.c3h.toFixed(5)}). 6H and 12H remain aligned. Entry condition met.`;
 
     case 'REVERSAL':
-      return `12H spread (${spread_12h >= 0 ? 'positive' : 'negative'}) conflicts with 6H spread; possible directional reversal underway.`;
+      return `12H spread (${spread_12h >= 0 ? 'positive' : 'negative'}) conflicts with 6H spread; structural disagreement. Possible directional reversal underway.`;
 
     default:
       return '';
