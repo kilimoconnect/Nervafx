@@ -772,13 +772,115 @@ html, body {
   margin-top: 8px;
 }
 
-/* ─── Responsive ───────────────────────────────────────────────────────────── */
+/* ─── Responsive — tablet ──────────────────────────────────────────────────── */
 @media (max-width: 1100px) {
   .grid { grid-template-columns: repeat(2, 1fr); }
   .span-2 { grid-column: span 2; }
   .span-3 { grid-column: span 2; }
+  .top-setups-grid { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ─── Responsive — mobile ──────────────────────────────────────────────────── */
 @media (max-width: 700px) {
-  .grid { grid-template-columns: 1fr; }
+
+  /* Base */
+  html, body { font-size: 12px; }
+
+  /* Header */
+  .header {
+    padding: 10px 14px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .tagline { display: none; }
+  .header-right {
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .stat-pill {
+    font-size: 10px;
+    padding: 2px 8px;
+  }
+  .last-update { display: none; }
+
+  /* Grid */
+  .grid {
+    grid-template-columns: 1fr;
+    padding: 12px;
+    gap: 12px;
+  }
   .span-2, .span-3 { grid-column: span 1; }
+
+  /* Top Setups — stack vertically */
+  .top-setups-grid { grid-template-columns: 1fr; }
+
+  .top-card {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .top-rank { font-size: 20px; }
+  .top-conf {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    min-width: unset;
+    text-align: left;
+  }
+  .conf-factors { align-items: flex-start; }
+
+  /* Live cards — full width */
+  .live-grid { flex-direction: column; }
+  .live-card { min-width: unset; width: 100%; }
+  .live-pair { font-size: 16px; }
+  .live-signal { font-size: 18px; }
+  .live-conf-num { font-size: 20px; }
+
+  /* Signal cards — full width */
+  .signal-grid { flex-direction: column; }
+  .signal-card { min-width: unset; width: 100%; }
+
+  /* Pipeline — allow wrap */
+  .pipeline { flex-wrap: wrap; }
+
+  /* Signal prices — 2 cols on mobile */
+  .signal-prices { grid-template-columns: repeat(2, 1fr); }
+
+  /* Risk prices — 2 cols on mobile */
+  .risk-prices { grid-template-columns: repeat(2, 1fr); }
+
+  /* Action rows — stack */
+  .action-row {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
+  }
+  .action-msg {
+    grid-column: span 2;
+    white-space: normal;
+  }
+
+  /* Chart */
+  .chart-wrap { height: 160px; }
+
+  /* Card padding */
+  .card { padding: 12px; }
+
+  /* Spread rows — tighter */
+  .spread-row {
+    grid-template-columns: 4px 70px 36px 70px 1fr;
+    gap: 5px;
+  }
+
+  /* States max-height relaxed */
+  .states-table { max-height: none; }
+  .spreads-list { max-height: none; }
+
+  /* Card title wrap */
+  .card-title {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  /* TF toggle buttons */
+  .tf-toggle { margin-left: 0; }
 }
