@@ -13,7 +13,11 @@ async function repairInstrument(instrument) {
 
   const missing = check.missing.sort();
   const from = missing[0];
-  const to = missing[missing.length - 1];
+
+  // OANDA's `to` is exclusive — extend by 1 hour so the last missing candle is included
+  const toDate = new Date(missing[missing.length - 1]);
+  toDate.setUTCHours(toDate.getUTCHours() + 1);
+  const to = toDate.toISOString();
 
   const candles = await fetchAndParseCandles(instrument, { from, to });
   await sleep(RATE_LIMIT_DELAY);
