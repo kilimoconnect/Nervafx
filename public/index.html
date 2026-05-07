@@ -25,9 +25,15 @@
 
   <main class="grid">
 
+    <!-- TOP 3 SETUPS -->
+    <section class="card span-3" id="section-top">
+      <h2 class="card-title">Top Setups <span class="sub">best opportunities right now</span></h2>
+      <div id="top-setups" class="top-setups-grid"></div>
+    </section>
+
     <!-- SIGNAL BOARD -->
     <section class="card span-2" id="section-signals">
-      <h2 class="card-title">Signal Board</h2>
+      <h2 class="card-title">Signal Board <span class="sub">confirmed entries &amp; watching</span></h2>
       <div id="signals-active" class="signal-grid"></div>
       <div id="signals-wait" class="signal-grid wait-grid"></div>
       <div id="signals-notrade" class="notrade-row"></div>
@@ -41,12 +47,13 @@
         <button class="tf-btn" data-tf="12">12H</button>
       </span></h2>
       <div class="chart-wrap"><canvas id="strengthChart"></canvas></div>
+      <div id="strength-momentum" class="mom-strip"></div>
       <div class="strength-time" id="strength-time"></div>
     </section>
 
     <!-- MARKET STATES -->
     <section class="card" id="section-states">
-      <h2 class="card-title">Market States</h2>
+      <h2 class="card-title">Market States <span class="sub">all 28 pairs</span></h2>
       <div id="states-table" class="states-table"></div>
     </section>
 

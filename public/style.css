@@ -414,6 +414,242 @@ html, body {
 }
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
+/* ─── Top Setups ───────────────────────────────────────────────────────────── */
+.top-setups-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.top-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  display: flex;
+  gap: 12px;
+  position: relative;
+}
+.top-card.hot  { border-left: 3px solid #4ade80; }
+.top-card.warm { border-left: 3px solid #60a5fa; }
+.top-card.cool { border-left: 3px solid #94a3b8; }
+
+.top-rank {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--border);
+  line-height: 1;
+  min-width: 24px;
+  padding-top: 2px;
+}
+.top-card.hot  .top-rank { color: #166534; }
+.top-card.warm .top-rank { color: #1e3a5f; }
+
+.top-body { flex: 1; min-width: 0; }
+
+.top-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.top-pair {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.top-entry-status {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+.top-entry-status.entry-READY_TO_ENTER    { color: #4ade80; }
+.top-entry-status.entry-WAIT_CONFIRMATION { color: #fbbf24; }
+.top-entry-status.entry-WAIT_PULLBACK     { color: #60a5fa; }
+.top-entry-status.entry-NO_TRADE          { color: var(--text-muted); }
+
+.top-tf {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.top-next {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+
+.top-conf {
+  min-width: 72px;
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.conf-num {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1;
+}
+
+.conf-factors {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-end;
+  margin-top: 4px;
+}
+.conf-factors span {
+  font-size: 9px;
+  color: #4ade80;
+  white-space: nowrap;
+}
+
+/* ─── Phase & action badges ────────────────────────────────────────────────── */
+.phase-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 3px;
+  text-transform: uppercase;
+}
+.phase-badge.READY    { background: #14532d; color: #4ade80; }
+.phase-badge.PULLBACK { background: var(--yellow-dim); color: #fbbf24; }
+.phase-badge.TREND    { background: #1e3a5f; color: #60a5fa; }
+.phase-badge.REVERSAL { background: #3b1f2b; color: #f472b6; }
+.phase-badge.NO_TRADE, .phase-badge.NO\.TRADE { background: #1a1d24; color: var(--text-muted); }
+
+.action-badge {
+  font-size: 9px;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
+}
+.action-badge.ENTER { background: #4ade80; color: #052e16; }
+.action-badge.WAIT  { background: var(--yellow-dim); color: #fbbf24; }
+.action-badge.WATCH { background: #1e3a5f; color: #93c5fd; }
+
+/* ─── TF alignment arrows ──────────────────────────────────────────────────── */
+.tf-item {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+}
+.tf-item.↑, .tf-item.\↑  { color: #4ade80; border-color: #14532d; }
+.tf-item.↑↑               { color: #4ade80; border-color: #4ade80; background: #052e16; }
+.tf-item.↓, .tf-item.\↓  { color: #f87171; border-color: #7f1d1d; }
+.tf-item.↓↓               { color: #f87171; border-color: #f87171; background: #450a0a; }
+.tf-item.→                { color: var(--text-muted); }
+
+/* ─── Spread behavior ──────────────────────────────────────────────────────── */
+.sb-behavior {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+.sb-behavior.EXPANDING   { background: #052e16; color: #4ade80; }
+.sb-behavior.COMPRESSING { background: var(--yellow-dim); color: #fbbf24; }
+.sb-behavior.STABLE      { background: #1a1d24; color: var(--text-muted); }
+
+/* ─── Invalidation warning ─────────────────────────────────────────────────── */
+.invalidation {
+  font-size: 9px;
+  color: #fbbf24;
+  background: var(--yellow-dim);
+  border-radius: 3px;
+  padding: 2px 7px;
+  margin-top: 5px;
+  display: inline-block;
+}
+
+/* ─── Signal card TF row ───────────────────────────────────────────────────── */
+.signal-tf-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin: 6px 0;
+}
+
+/* ─── Signal next condition ────────────────────────────────────────────────── */
+.signal-next {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-top: 4px;
+  font-style: italic;
+}
+
+/* ─── Currency momentum strip ──────────────────────────────────────────────── */
+.mom-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+.mom-item {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+}
+.mom-item.pos { color: #4ade80; border-color: #14532d; }
+.mom-item.neg { color: #f87171; border-color: #7f1d1d; }
+.mom-item.neu { color: var(--text-muted); }
+
+/* ─── Redesigned state rows ────────────────────────────────────────────────── */
+.state-row-v2 {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: var(--bg);
+  transition: background 0.15s;
+}
+.state-row-v2:hover { background: var(--bg-hover); }
+
+.state-row-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.state-row-bottom {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.tfa {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 2px;
+  background: var(--bg-card);
+}
+.tfa.↑ { color: #4ade80; }
+.tfa.↓ { color: #f87171; }
+.tfa.→ { color: var(--text-muted); }
+
 /* ─── Responsive ───────────────────────────────────────────────────────────── */
 @media (max-width: 1100px) {
   .grid { grid-template-columns: repeat(2, 1fr); }
