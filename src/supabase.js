@@ -1,7 +1,10 @@
 const { createClient } = require('@supabase/supabase-js');
 const { config } = require('./config');
+const ws = require('ws');
 
-const supabase = createClient(config.supabase.url, config.supabase.serviceKey);
+const supabase = createClient(config.supabase.url, config.supabase.serviceKey, {
+  realtime: { transport: ws },
+});
 
 async function upsertCandles(candles) {
   if (candles.length === 0) return { inserted: 0 };
