@@ -827,22 +827,23 @@ html, body {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  background: rgba(37,99,235,0.12);
-  border: 1px solid rgba(37,99,235,0.3);
+  background: #92400e;
+  border: 1px solid #d97706;
   border-radius: 5px;
   cursor: pointer;
   font-size: 12px;
-  padding: 2px 7px 2px 5px;
+  padding: 3px 8px 3px 6px;
   line-height: 1;
-  color: #93c5fd;
-  opacity: 0.85;
-  transition: opacity 0.15s, background 0.15s, border-color 0.15s;
+  color: #fde68a;
+  opacity: 1;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
   margin-left: 4px;
+  box-shadow: 0 0 6px rgba(217,119,6,0.25);
 }
 .ai-bulb-btn:hover {
-  opacity: 1;
-  background: rgba(37,99,235,0.25);
-  border-color: rgba(37,99,235,0.6);
+  background: #b45309;
+  border-color: #f59e0b;
+  box-shadow: 0 0 10px rgba(245,158,11,0.4);
 }
 .ai-bulb-label {
   font-size: 10px;
