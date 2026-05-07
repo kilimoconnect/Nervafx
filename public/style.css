@@ -127,6 +127,14 @@ html, body {
   margin-bottom: 10px;
 }
 
+/* WAIT cards always 2-per-row */
+.wait-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
 .signal-card {
   background: var(--bg);
   border: 1px solid var(--border);
@@ -840,6 +848,7 @@ html, body {
   /* Signal cards — full width */
   .signal-grid { flex-direction: column; }
   .signal-card { min-width: unset; width: 100%; }
+  .wait-grid { grid-template-columns: 1fr; }
 
   /* Pipeline — allow wrap */
   .pipeline { flex-wrap: wrap; }
