@@ -167,7 +167,7 @@ function renderStates(data) {
     return `
       <div class="state-row">
         <span class="state-pair">${pair(s.instrument)}</span>
-        <span class="state-badge ${s.state}">${s.state}</span>
+        <span class="state-badge ${s.state}">${s.state.replace(/_/g, ' ')}</span>
         <span class="state-spread ${s6cls}">6H: ${fmt(s.spread_6h, 5)}</span>
         <span style="color:var(--text-muted);font-size:10px">${s.confidence}</span>
         <div class="state-conf-mini"><div class="state-conf-mini-fill" style="width:${s.confidence}%"></div></div>
