@@ -414,6 +414,46 @@ html, body {
 }
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
+/* ─── Live Opportunities ───────────────────────────────────────────────────── */
+.live-title { color: #4ade80; }
+
+.live-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.live-card {
+  background: linear-gradient(135deg, #052e16 0%, #0a1a0a 100%);
+  border: 1px solid #4ade80;
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  min-width: 240px;
+  flex: 1;
+  position: relative;
+  box-shadow: 0 0 20px rgba(74,222,128,0.08);
+}
+.live-card.sell {
+  background: linear-gradient(135deg, #450a0a 0%, #1a0a0a 100%);
+  border-color: #f87171;
+  box-shadow: 0 0 20px rgba(248,113,113,0.08);
+}
+
+.live-pair   { font-size: 18px; font-weight: 800; letter-spacing: 1.5px; }
+.live-signal { font-size: 22px; font-weight: 800; margin: 4px 0; }
+.live-signal.buy  { color: #4ade80; }
+.live-signal.sell { color: #f87171; }
+.live-reason { font-size: 10px; color: var(--text-dim); margin: 4px 0; font-style: italic; }
+
+.live-conf-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.live-conf-num { font-size: 24px; font-weight: 800; color: #4ade80; }
+.live-card.sell .live-conf-num { color: #f87171; }
+
 /* ─── Top Setups ───────────────────────────────────────────────────────────── */
 .top-setups-grid {
   display: grid;
@@ -523,11 +563,16 @@ html, body {
   border-radius: 3px;
   text-transform: uppercase;
 }
+.phase-badge.ENTRY_ACTIVE      { background: #4ade80; color: #052e16; }
+.phase-badge.READY_TO_ENTER    { background: #14532d; color: #4ade80; }
+.phase-badge.PULLBACK_ACTIVE   { background: #713f12; color: #fde68a; }
+.phase-badge.PULLBACK_STARTING { background: var(--yellow-dim); color: #fbbf24; }
+.phase-badge.TREND             { background: #1e3a5f; color: #60a5fa; }
+.phase-badge.REVERSAL_RISK     { background: #3b1f2b; color: #f472b6; }
+.phase-badge.NO_TRADE, .phase-badge.NO\.TRADE { background: #1a1d24; color: var(--text-muted); }
+/* legacy aliases kept for backward compat */
 .phase-badge.READY    { background: #14532d; color: #4ade80; }
 .phase-badge.PULLBACK { background: var(--yellow-dim); color: #fbbf24; }
-.phase-badge.TREND    { background: #1e3a5f; color: #60a5fa; }
-.phase-badge.REVERSAL { background: #3b1f2b; color: #f472b6; }
-.phase-badge.NO_TRADE, .phase-badge.NO\.TRADE { background: #1a1d24; color: var(--text-muted); }
 
 .action-badge {
   font-size: 9px;
@@ -562,9 +607,12 @@ html, body {
   padding: 1px 6px;
   border-radius: 3px;
 }
-.sb-behavior.EXPANDING   { background: #052e16; color: #4ade80; }
-.sb-behavior.COMPRESSING { background: var(--yellow-dim); color: #fbbf24; }
-.sb-behavior.STABLE      { background: #1a1d24; color: var(--text-muted); }
+.sb-behavior.EXPANDING     { background: #052e16; color: #4ade80; }
+.sb-behavior.COMPRESSING   { background: var(--yellow-dim); color: #fbbf24; }
+.sb-behavior.BASE_FORMING  { background: #1e3a5f; color: #93c5fd; }
+.sb-behavior.RE-EXPANDING  { background: #4ade80; color: #052e16; font-weight:800; }
+.sb-behavior.BREAKING      { background: var(--red-dim); color: #f87171; }
+.sb-behavior.STABLE        { background: #1a1d24; color: var(--text-muted); }
 
 /* ─── Invalidation warning ─────────────────────────────────────────────────── */
 .invalidation {

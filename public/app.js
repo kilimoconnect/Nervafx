@@ -33,16 +33,16 @@ function timeAgo(iso) {
 }
 
 // ─── Pipeline HTML ────────────────────────────────────────────────────────────
-// stage: 0=none 1=TREND 2=PULLBACK 3=READY 4=ENTRY
-const PIPE_LABELS = ['TREND', 'PULLBACK', 'READY', 'ENTER'];
+// stage: 0=none 1=TREND 2=PULLBACK_STARTING 3=PULLBACK_ACTIVE 4=READY_TO_ENTER 5=ENTRY_ACTIVE
+const PIPE_LABELS = ['TREND', 'PB START', 'PB ACTIVE', 'READY', 'ENTRY'];
 function pipelineHtml(stage) {
   if (!stage || stage === 0) return '';
   return `<div class="pipeline">` +
     PIPE_LABELS.map((label, i) => {
-      const s = i + 1;
-      const cls = s < stage ? 'done' : s === stage ? `active${stage === 4 ? ' s4' : ''}` : '';
+      const s   = i + 1;
+      const cls = s < stage ? 'done' : s === stage ? `active${stage === 5 ? ' s4' : ''}` : '';
       return `<span class="pipe-step ${cls}">${label}</span>` +
-             (i < 3 ? `<span class="pipe-arrow">›</span>` : '');
+             (i < 4 ? `<span class="pipe-arrow">›</span>` : '');
     }).join('') +
   `</div>`;
 }
@@ -67,6 +67,60 @@ function updateHeader(risk) {
   document.getElementById('stat-trades').textContent   = `Open: ${s.openTrades ?? 0} / ${s.maxTrades ?? 3}`;
   document.getElementById('status-dot').className      = 'status-dot online';
   document.getElementById('last-update').textContent   = 'Updated ' + new Date().toLocaleTimeString();
+}
+
+// ─── Live Opportunities ───────────────────────────────────────────────────────
+
+function renderLiveOpportunities(states) {
+  const el = document.getElementById('live-opportunities');
+  if (!el) return;
+
+  const live = (states || []).filter(s =>
+    s.state === 'READY_TO_ENTER' && s.confidence >= 75
+  );
+
+  if (!live.length) {
+    el.innerHTML = '<p class="empty-state" style="color:var(--text-muted)">No live opportunities right now — monitoring active setups</p>';
+    // Hide the section header glow when no entries
+    const sec = document.getElementById('section-live');
+    if (sec) sec.style.borderColor = 'var(--border)';
+    return;
+  }
+
+  // Make section glow green when live entries exist
+  const sec = document.getElementById('section-live');
+  if (sec) sec.style.borderColor = '#4ade80';
+
+  el.innerHTML = live.map(s => {
+    const dir = s.bias === 'BUY' ? 'buy' : 'sell';
+    const ta  = s.tf_alignment || {};
+    return `
+      <div class="live-card ${dir}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div class="live-pair">${pair(s.instrument)}</div>
+            <div class="live-signal ${dir}">${s.bias}</div>
+            <div style="display:flex;gap:5px;margin-bottom:6px">
+              <span class="phase-badge ENTRY_ACTIVE">ENTRY ACTIVE</span>
+              ${s.pullback_depth ? `<span class="pb-depth ${s.pullback_depth}">${s.pullback_depth} PB</span>` : ''}
+            </div>
+          </div>
+          <div style="text-align:right">
+            <div class="live-conf-num">${s.confidence}%</div>
+            <div class="conf-bar" style="width:60px;margin-left:auto"><div class="conf-fill" style="width:${s.confidence}%"></div></div>
+          </div>
+        </div>
+        <div class="signal-tf-row">
+          <span class="tf-item ${ta.h12}">12H ${ta.h12||'→'}</span>
+          <span class="tf-item ${ta.h6}">6H ${ta.h6||'→'}</span>
+          <span class="tf-item ${ta.h3}">3H ${ta.h3||'→'}</span>
+          <span class="sb-behavior ${s.spread_behavior}">${s.spread_behavior}</span>
+        </div>
+        <div class="live-reason">${s.spread_behavior_text}</div>
+        ${(s.confidence_breakdown||[]).length ? `<div class="conf-factors" style="align-items:flex-start;margin-top:6px">${s.confidence_breakdown.map(f=>`<span>+ ${f}</span>`).join('')}</div>` : ''}
+        ${s.invalidation ? `<div class="invalidation" style="margin-top:6px">⚠ ${s.invalidation}</div>` : ''}
+      </div>`;
+  }).join('');
 }
 
 // ─── Top Setups ───────────────────────────────────────────────────────────────
@@ -269,9 +323,10 @@ function renderMomentumStrip(currencies) {
     (parseFloat(b.smooth_6h) || 0) - (parseFloat(a.smooth_6h) || 0)
   );
   el.innerHTML = sorted.map(c => {
-    const v   = parseFloat(c.smooth_6h) || 0;
-    const cls = v > 0.01 ? 'pos' : v < -0.01 ? 'neg' : 'neu';
-    return `<span class="mom-item ${cls}">${c.currency} ${c.momentum || '→'}</span>`;
+    const v    = parseFloat(c.smooth_6h) || 0;
+    const cls  = v > 0.01 ? 'pos' : v < -0.01 ? 'neg' : 'neu';
+    const acc  = c.accel_label === 'accelerating' ? ' ▲' : c.accel_label === 'decelerating' ? ' ▼' : '';
+    return `<span class="mom-item ${cls}" title="${c.accel_label || ''}">${c.currency} ${c.momentum || '→'}${acc}</span>`;
   }).join('');
 }
 
@@ -414,6 +469,7 @@ async function refresh() {
     ]);
 
     updateHeader(risk);
+    renderLiveOpportunities(states.states || []);
     renderTopSetups(states.states || []);
     renderSignals(signals, states.states || []);
     buildChart(strength, activeTF);

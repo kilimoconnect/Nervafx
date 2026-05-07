@@ -49,24 +49,28 @@ function buildSignal(state, candles) {
   const { time, instrument, bias, state: mktState, confidence, spread_6h, spread_12h } = state;
 
   // NO_TRADE conditions
-  if (mktState === 'NO_TRADE' || mktState === 'REVERSAL') {
+  if (mktState === 'NO_TRADE' || mktState === 'REVERSAL_RISK') {
     return noTrade(time, instrument, confidence, mktState, `State is ${mktState}.`);
   }
 
-  // WAIT on pullback
-  if (mktState === 'PULLBACK') {
+  // WAIT — pullback in progress
+  if (mktState === 'PULLBACK_STARTING') {
     return wait(time, instrument, confidence, mktState, bias,
-      `${bias} bias intact; waiting for pullback to resolve into CONTINUATION.`);
+      `${bias} pullback starting — 3H momentum compressing. Watch for 3H to re-expand.`);
+  }
+  if (mktState === 'PULLBACK_ACTIVE') {
+    return wait(time, instrument, confidence, mktState, bias,
+      `${bias} pullback active — 3H compressing. Wait for 3H re-expansion → entry trigger.`);
   }
 
-  // WAIT if TREND (valid bias but not continuation yet)
+  // WAIT if TREND (no pullback yet)
   if (mktState === 'TREND') {
     return wait(time, instrument, confidence, mktState, bias,
-      `${bias} trend active but no continuation signal yet; waiting for pullback entry.`);
+      `${bias} trend active. Watch for 3H momentum to weaken (compression zone = pullback entry forming).`);
   }
 
-  // Only CONTINUATION with sufficient confidence triggers BUY/SELL
-  if (mktState !== 'CONTINUATION' || confidence < MIN_CONFIDENCE) {
+  // Only READY_TO_ENTER with sufficient confidence triggers BUY/SELL
+  if (mktState !== 'READY_TO_ENTER' || confidence < MIN_CONFIDENCE) {
     return noTrade(time, instrument, confidence, mktState,
       confidence < MIN_CONFIDENCE
         ? `Confidence ${confidence} below minimum ${MIN_CONFIDENCE}.`
@@ -102,7 +106,7 @@ function buildSignal(state, candles) {
       take_profit: takeProfit,
       risk_reward: RISK_REWARD,
       market_state: mktState,
-      reason: `BUY continuation confirmed after pullback; spread re-expanding. Entry: ${entry.toFixed(5)}, SL: ${stopLoss.toFixed(5)}, TP: ${takeProfit.toFixed(5)}.`,
+      reason: `BUY entry: pullback completed, 3H re-expanding. Entry: ${entry.toFixed(5)}, SL: ${stopLoss.toFixed(5)}, TP: ${takeProfit.toFixed(5)}.`,
     };
   }
 
@@ -128,7 +132,7 @@ function buildSignal(state, candles) {
       take_profit: takeProfit,
       risk_reward: RISK_REWARD,
       market_state: mktState,
-      reason: `SELL continuation confirmed after pullback; spread re-expanding. Entry: ${entry.toFixed(5)}, SL: ${stopLoss.toFixed(5)}, TP: ${takeProfit.toFixed(5)}.`,
+      reason: `SELL entry: pullback completed, 3H re-expanding. Entry: ${entry.toFixed(5)}, SL: ${stopLoss.toFixed(5)}, TP: ${takeProfit.toFixed(5)}.`,
     };
   }
 

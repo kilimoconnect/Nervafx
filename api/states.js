@@ -1,98 +1,108 @@
 const { getClient, getLatestTime, cors } = require('./_db');
 
+const MIN_SPREAD = 0.0020;
+
 // ─── TF arrow ─────────────────────────────────────────────────────────────────
 function tfArrow(val, bias) {
   if (Math.abs(val) < 0.0003) return '→';
   return (bias === 'BUY' ? val > 0 : val < 0) ? '↑' : '↓';
 }
 
-// ─── Spread behavior ──────────────────────────────────────────────────────────
-function spreadBehavior(s3, s6, s12) {
+// ─── Spread lifecycle ─────────────────────────────────────────────────────────
+// EXPANDING     — 3H > 6H, trend strengthening
+// COMPRESSING   — 3H < 6H, pullback compressing
+// BASE_FORMING  — deep pullback: 3H very flat near zero (coiling before re-expansion)
+// RE-EXPANDING  — after compression: 3H re-growing (entry trigger)
+// BREAKING      — 6H direction conflicts with 12H (structural breakdown)
+// STABLE        — no strong directional behavior
+function spreadLifecycle(state, s3, s6, s12) {
   const a3 = Math.abs(s3), a6 = Math.abs(s6), a12 = Math.abs(s12);
-  if (a3 > a6 * 0.9 && a6 > a12 * 0.9 && a3 > a12 * 1.05) return 'EXPANDING';
-  if (a3 < a6 * 1.1 && a6 < a12 * 1.1 && a12 > a3 * 1.05) return 'COMPRESSING';
+
+  // Structural breakdown: 6H and 12H disagree on direction
+  if (s6 * s12 < 0 && a6 >= MIN_SPREAD) return 'BREAKING';
+
+  // Re-expansion: pullback done, spread re-growing
+  if (state === 'READY_TO_ENTER' && a3 > a6 * 0.9) return 'RE-EXPANDING';
+
+  // Base forming: deeply compressed, spread at floor, about to re-expand
+  if ((state === 'PULLBACK_ACTIVE') && a3 < a6 * 0.4) return 'BASE_FORMING';
+
+  // Compressing: 3H notably smaller than 6H
+  if (a3 < a6 * 0.85) return 'COMPRESSING';
+
+  // Expanding: 3H larger than 6H
+  if (a3 > a6 * 1.05) return 'EXPANDING';
+
   return 'STABLE';
 }
 
-// RE-EXPANDING = was compressing (pullback), now expanding again (entry trigger)
-function spreadBehaviorDisplay(behavior, state) {
-  if (behavior === 'EXPANDING' && state === 'CONTINUATION') return 'RE-EXPANDING';
-  return behavior;
-}
+const LIFECYCLE_TEXT = {
+  'EXPANDING':    'Expanding → Trend strengthening',
+  'COMPRESSING':  'Compressing → Pullback forming',
+  'BASE_FORMING': 'Base forming → Entry approaching',
+  'RE-EXPANDING': 'Re-expanding → Entry signal ✓',
+  'BREAKING':     'Breaking → Reversal risk',
+  'STABLE':       'Consolidating',
+};
 
-function spreadBehaviorInterpret(display) {
-  switch (display) {
-    case 'RE-EXPANDING':  return 'Re-expanding → Entry signal';
-    case 'EXPANDING':     return 'Expanding → Trend strengthening';
-    case 'COMPRESSING':   return 'Compressing → Pullback forming';
-    default:              return 'Consolidating';
-  }
-}
-
-// ─── Pipeline stage 0–4 ───────────────────────────────────────────────────────
-// 0 = NO_TRADE  1 = TREND  2 = PULLBACK  3 = READY (low conf)  4 = ENTER
+// ─── Pipeline stage 0–5 ───────────────────────────────────────────────────────
 function pipelineStage(state, confidence) {
-  if (state === 'CONTINUATION' && confidence >= 75) return 4;
-  if (state === 'CONTINUATION') return 3;
-  if (state === 'PULLBACK') return 2;
+  if (state === 'READY_TO_ENTER' && confidence >= 75) return 5; // ENTRY_ACTIVE
+  if (state === 'READY_TO_ENTER') return 4;
+  if (state === 'PULLBACK_ACTIVE') return 3;
+  if (state === 'PULLBACK_STARTING') return 2;
   if (state === 'TREND') return 1;
   return 0;
 }
 
+// ─── Phase / action ───────────────────────────────────────────────────────────
+function phaseAction(state, confidence) {
+  if (state === 'READY_TO_ENTER' && confidence >= 75) return { phase: 'ENTRY_ACTIVE', action: 'ENTER' };
+  if (state === 'READY_TO_ENTER') return { phase: 'READY_TO_ENTER', action: 'WATCH' };
+  if (state === 'PULLBACK_ACTIVE') return { phase: 'PULLBACK_ACTIVE', action: 'WAIT' };
+  if (state === 'PULLBACK_STARTING') return { phase: 'PULLBACK_STARTING', action: 'WAIT' };
+  if (state === 'TREND') return { phase: 'TREND', action: 'WATCH' };
+  if (state === 'REVERSAL_RISK') return { phase: 'REVERSAL_RISK', action: 'AVOID' };
+  return { phase: 'NO TRADE', action: '—' };
+}
+
 // ─── Entry status ─────────────────────────────────────────────────────────────
 function entryStatus(state, confidence) {
-  if (state === 'CONTINUATION' && confidence >= 75) return 'READY_TO_ENTER';
-  if (state === 'PULLBACK') return 'WAIT_CONFIRMATION';
+  if (state === 'READY_TO_ENTER' && confidence >= 75) return 'READY_TO_ENTER';
+  if (state === 'READY_TO_ENTER') return 'WAIT_CONFIRMATION';
+  if (state === 'PULLBACK_ACTIVE') return 'WAIT_CONFIRMATION';
+  if (state === 'PULLBACK_STARTING') return 'WAIT_PULLBACK';
   if (state === 'TREND') return 'WAIT_PULLBACK';
   return 'NO_TRADE';
 }
 
-// ─── Phase / action ───────────────────────────────────────────────────────────
-function phaseAction(state, confidence) {
-  if (state === 'CONTINUATION' && confidence >= 75) return { phase: 'READY', action: 'ENTER' };
-  if (state === 'CONTINUATION') return { phase: 'READY', action: 'WATCH' };
-  if (state === 'PULLBACK') return { phase: 'PULLBACK', action: 'WAIT' };
-  if (state === 'TREND') return { phase: 'TREND', action: 'WATCH' };
-  if (state === 'REVERSAL') return { phase: 'REVERSAL', action: 'WATCH' };
-  return { phase: 'NO TRADE', action: '—' };
-}
-
 // ─── Next action ─────────────────────────────────────────────────────────────
-// PULLBACK does NOT require 3H to go negative — 3H weakening (compressing) is enough.
-// A healthy pullback often keeps 3H positive but decreasing. Entry is when 3H re-expands.
 function nextAction(state, bias, confidence) {
-  if (state === 'CONTINUATION' && confidence >= 75) return 'ENTER NOW';
-  if (state === 'CONTINUATION') return 'Confirm: confidence building';
-  // Pullback entry: watch for 3H momentum to re-expand (c3h turning positive again)
-  if (state === 'PULLBACK') return 'Watch: 3H momentum must re-expand → ENTER';
-  // Trend: watch for 3H to start weakening/compressing (not necessarily go negative)
-  if (state === 'TREND') return 'Watch: 3H momentum weakens (compression zone)';
+  if (state === 'READY_TO_ENTER' && confidence >= 75) return 'ENTER NOW';
+  if (state === 'READY_TO_ENTER') return 'Watch: 3H re-expanding — confidence building';
+  if (state === 'PULLBACK_ACTIVE') return 'Watch: 3H must re-expand → ENTRY';
+  if (state === 'PULLBACK_STARTING') return 'Watch: 3H momentum weakening (compression zone)';
+  if (state === 'TREND') return 'Watch: 3H must start compressing (pullback forming)';
   return 'No setup forming';
 }
 
-// ─── Invalidation ────────────────────────────────────────────────────────────
-// Real invalidation is STRUCTURAL breakdown, NOT a normal pullback:
-//   - 6H collapses (spread shrinks below minimum) → bias is gone
-//   - 12H flips direction → macro reversal
-// A 3H going negative during TREND is NOT invalidation — it is the pullback itself.
-// A 3H re-expanding during PULLBACK is NOT invalidation — it is the entry trigger.
+// ─── Invalidation ─────────────────────────────────────────────────────────────
+// Structural failures only — not normal pullback compression
 function invalidationWarning(state, bias) {
   if (!state || state === 'NO_TRADE' || !bias || bias === 'NONE') return null;
-  if (state === 'CONTINUATION') return '6H spread collapses → entry cancelled';
-  if (state === 'TREND' || state === 'PULLBACK') return '6H collapses OR 12H direction flips → reversal risk';
+  if (state === 'READY_TO_ENTER') return '6H spread collapses → entry cancelled';
+  if (state === 'PULLBACK_STARTING' || state === 'PULLBACK_ACTIVE') return '6H collapses OR 12H direction flips → reversal risk';
+  if (state === 'TREND') return '6H collapses below MIN threshold → trend invalid';
   return null;
 }
 
 // ─── Pullback depth ───────────────────────────────────────────────────────────
-// Light: 3H is still in trend direction (positive for BUY) — healthy compression
-// Moderate: 3H near zero — deeper compression, still within normal range
-// Deep: 3H went against trend direction — stronger correction, but valid if 6H/12H hold
 function pullbackDepth(state, s3, bias) {
-  if (state !== 'PULLBACK') return null;
-  const inDir = s3 * (bias === 'BUY' ? 1 : -1); // positive = still in trend direction
-  if (inDir > 0.001)  return 'LIGHT';    // 3H still bullish/bearish, just compressing
-  if (inDir > -0.001) return 'MODERATE'; // 3H near zero
-  return 'DEEP';                          // 3H moved against trend (deeper but still valid)
+  if (state !== 'PULLBACK_STARTING' && state !== 'PULLBACK_ACTIVE') return null;
+  const inDir = s3 * (bias === 'BUY' ? 1 : -1);
+  if (inDir > 0.001)  return 'LIGHT';    // 3H still in trend direction, just slowing
+  if (inDir > -0.001) return 'MODERATE'; // 3H near zero (compression floor)
+  return 'DEEP';                          // 3H moved against trend (still valid)
 }
 
 // ─── Confidence breakdown ─────────────────────────────────────────────────────
@@ -103,12 +113,11 @@ function confBreakdown(s3, s6, s12, bias, state) {
   if (s12 * dir > 0 && s6 * dir > 0) out.push('12H & 6H aligned');
   if (Math.abs(s6) >= 0.004) out.push('6H strong');
   else if (Math.abs(s6) >= 0.002) out.push('6H moderate');
-  // 3H label depends on context: in pullback, being in trend dir = "light pullback"
-  if (s3 * dir > 0 && state === 'PULLBACK') out.push('Light pullback (3H still bullish)');
+  if (s3 * dir > 0 && (state === 'PULLBACK_STARTING' || state === 'PULLBACK_ACTIVE')) out.push('Light pullback (3H still in trend direction)');
   else if (s3 * dir > 0) out.push('3H aligned with trend');
-  if (state === 'CONTINUATION') out.push('Pullback completed');
-  if (Math.abs(s3) > Math.abs(s6) && state !== 'PULLBACK') out.push('Spread expanding');
-  if (state === 'PULLBACK' && Math.abs(s3) < Math.abs(s6)) out.push('3H compressing (pullback forming)');
+  if (state === 'READY_TO_ENTER') out.push('Pullback completed');
+  if (Math.abs(s3) < Math.abs(s6) && (state === 'PULLBACK_STARTING' || state === 'PULLBACK_ACTIVE')) out.push('3H compressing (pullback forming)');
+  if (Math.abs(s3) > Math.abs(s6) && state === 'READY_TO_ENTER') out.push('Spread re-expanding');
   return out;
 }
 
@@ -132,21 +141,20 @@ module.exports = async function handler(req, res) {
       const s6  = parseFloat(s.spread_6h)  || 0;
       const s12 = parseFloat(s.spread_12h) || 0;
       const { phase, action } = phaseAction(state, confidence);
-      const sb      = spreadBehavior(s3, s6, s12);
-      const sbDisp  = spreadBehaviorDisplay(sb, state);
+      const lifecycle = spreadLifecycle(state, s3, s6, s12);
       return {
         ...s,
-        pipeline_stage:        pipelineStage(state, confidence),
-        entry_status:          entryStatus(state, confidence),
+        pipeline_stage:       pipelineStage(state, confidence),
+        entry_status:         entryStatus(state, confidence),
         phase,
         action,
-        tf_alignment:          { h12: tfArrow(s12, bias), h6: tfArrow(s6, bias), h3: tfArrow(s3, bias) },
-        spread_behavior:       sbDisp,
-        spread_behavior_text:  spreadBehaviorInterpret(sbDisp),
-        confidence_breakdown:  confBreakdown(s3, s6, s12, bias, state),
-        next_action:           nextAction(state, bias, confidence),
-        invalidation:          invalidationWarning(state, bias),
-        pullback_depth:        pullbackDepth(state, s3, bias),
+        tf_alignment:         { h12: tfArrow(s12, bias), h6: tfArrow(s6, bias), h3: tfArrow(s3, bias) },
+        spread_behavior:      lifecycle,
+        spread_behavior_text: LIFECYCLE_TEXT[lifecycle] || '',
+        confidence_breakdown: confBreakdown(s3, s6, s12, bias, state),
+        next_action:          nextAction(state, bias, confidence),
+        invalidation:         invalidationWarning(state, bias),
+        pullback_depth:       pullbackDepth(state, s3, bias),
       };
     });
 
