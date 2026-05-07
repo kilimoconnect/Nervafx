@@ -118,8 +118,8 @@ async function checkSignal(signal, dailyState) {
   }
 
   // Market state gate
-  if (signal.market_state !== 'CONTINUATION') {
-    return reject(signal, `Market state is ${signal.market_state}, not CONTINUATION.`);
+  if (signal.market_state !== 'READY_TO_ENTER') {
+    return reject(signal, `Market state is ${signal.market_state}, not READY_TO_ENTER.`);
   }
 
   // Entry / stop validity
