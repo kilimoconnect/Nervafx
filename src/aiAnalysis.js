@@ -65,7 +65,7 @@ async function analyzeSetup(instrument, state) {
 
   const response = await client.chat.completions.create({
     model: 'gpt-4o-mini',
-    max_tokens: 700,
+    max_tokens: 1200,
     temperature: 0.1,
     response_format: { type: 'json_object' },
     messages: [
@@ -75,7 +75,7 @@ async function analyzeSetup(instrument, state) {
       },
       {
         role: 'user',
-        content: `Analyze ${instrument.replace('_', '/')} — ${state.bias} bias, state: ${state.state}, confidence: ${state.confidence}%, spread behavior: ${state.spread_behavior || '?'}.
+        content: `Analyze ${instrument.replace('_', '/')} — ${state.bias} bias, state: ${state.state}, confidence: ${state.confidence}%, spreads: 3H=${(+state.spread_3h||0).toFixed(5)} 6H=${(+state.spread_6h||0).toFixed(5)} 12H=${(+state.spread_12h||0).toFixed(5)}.
 
 Last 24 smoothed H1 values (oldest → newest):
 ${base} strength: ${JSON.stringify(baseArr)}
@@ -142,7 +142,7 @@ async function analyzeActiveSetups() {
 
   const { data: states, error: sErr } = await supabase
     .from('market_states')
-    .select('instrument, state, bias, confidence, spread_behavior')
+    .select('instrument, state, bias, confidence, spread_3h, spread_6h, spread_12h')
     .eq('time', latest.time);
 
   if (sErr) throw sErr;
