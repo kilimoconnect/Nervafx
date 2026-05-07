@@ -2,12 +2,10 @@ name: NervaFX Hourly Update
 
 on:
   schedule:
-    # Run every 30 minutes, all days — isMarketOpen() in src/index.js handles
-    # skipping when market is actually closed (Sat all day, Sun before 21:00,
-    # Fri from 21:00). Running 2x/hour means even a 20-min GitHub delay still
-    # covers every market hour.
-    - cron: '5 * * * *'    # :05 past every hour
-    - cron: '35 * * * *'   # :35 past every hour (backup / redundancy)
+    # :01 past every hour, Monday–Friday only
+    # isMarketOpen() in src/index.js skips if market is actually closed
+    # (e.g. Friday after 21:00 UTC, Sunday before 21:00 UTC)
+    - cron: '1 * * * 1-5'
   workflow_dispatch:        # manual trigger from GitHub UI or external cron
     inputs:
       reason:
