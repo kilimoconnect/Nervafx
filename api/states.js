@@ -77,12 +77,29 @@ function entryStatus(state, confidence) {
 }
 
 // ─── Next action ─────────────────────────────────────────────────────────────
-function nextAction(state, bias, confidence) {
+function nextAction(state, bias, confidence, lifecycle) {
   if (state === 'READY_TO_ENTER' && confidence >= 75) return 'ENTER NOW';
-  if (state === 'READY_TO_ENTER') return 'Watch: 3H re-expanding — confidence building';
-  if (state === 'PULLBACK_ACTIVE') return 'Watch: 3H must re-expand → ENTRY';
-  if (state === 'PULLBACK_STARTING') return 'Watch: 3H momentum weakening (compression zone)';
-  if (state === 'TREND') return 'Watch: 3H must start compressing (pullback forming)';
+  if (state === 'READY_TO_ENTER') {
+    if (lifecycle === 'BREAKING')    return 'Structural warning — re-expansion interrupted';
+    if (lifecycle === 'COMPRESSING') return 'Wait: 3H stalling — re-expansion must confirm';
+    return 'Watch: 3H re-expanding — confidence building';
+  }
+  if (state === 'PULLBACK_ACTIVE') {
+    if (lifecycle === 'BREAKING')    return 'Structural breakdown risk — avoid entry';
+    if (lifecycle === 'BASE_FORMING') return 'Base coiling — re-expansion entry approaching';
+    return 'Watch: 3H must re-expand → ENTRY';
+  }
+  if (state === 'PULLBACK_STARTING') {
+    if (lifecycle === 'BREAKING')    return 'Structural warning: 6H/12H conflict — wait';
+    if (lifecycle === 'COMPRESSING') return '3H compressing — pullback deepening';
+    return 'Watch: 3H momentum weakening (compression zone)';
+  }
+  if (state === 'TREND') {
+    if (lifecycle === 'BREAKING')    return 'Structural warning: 6H/12H conflict — avoid';
+    if (lifecycle === 'COMPRESSING') return 'Pullback beginning — watch for PULLBACK_STARTING';
+    if (lifecycle === 'EXPANDING')   return 'Trend expanding — wait for 3H to start compressing';
+    return 'Watch: 3H must start compressing (pullback forming)';
+  }
   return 'No setup forming';
 }
 
@@ -152,7 +169,7 @@ module.exports = async function handler(req, res) {
         spread_behavior:      lifecycle,
         spread_behavior_text: LIFECYCLE_TEXT[lifecycle] || '',
         confidence_breakdown: confBreakdown(s3, s6, s12, bias, state),
-        next_action:          nextAction(state, bias, confidence),
+        next_action:          nextAction(state, bias, confidence, lifecycle),
         invalidation:         invalidationWarning(state, bias),
         pullback_depth:       pullbackDepth(state, s3, bias),
       };
