@@ -17,16 +17,31 @@
   --text-muted: #64748b;
   --text-dim:   #94a3b8;
   --radius:     8px;
-  --font:       'SF Mono', 'Fira Code', 'Consolas', monospace;
+  --font-ui:    'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-data:  'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  --font:       var(--font-ui);
 }
 
 html, body {
   background: var(--bg);
   color: var(--text);
-  font-family: var(--font);
+  font-family: var(--font-ui);
   font-size: 13px;
-  line-height: 1.5;
+  line-height: 1.55;
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Data font — monospace for all prices, codes, numbers ──────────────── */
+.signal-pair, .top-pair, .live-pair, .risk-pair, .state-pair, .spread-pair,
+.live-conf-num, .conf-num, .spread-val, .quality-val,
+.signal-prices, .risk-prices, .signal-price-item,
+.tf-item, .tfa, .sb-behavior,
+.ai-modal-score-num, .ai-modal-pair-name,
+.mom-item, .strength-time, .last-update, .ai-modal-footer,
+.sess-hours-utc, .sent-comp-val, .stat-pill {
+  font-family: var(--font-data);
 }
 
 /* ─── Header ───────────────────────────────────────────────────────────────── */
@@ -43,17 +58,21 @@ html, body {
 }
 
 .logo {
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 2px;
+  font-family: var(--font-ui);
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 3px;
   color: var(--accent);
   text-transform: uppercase;
 }
 
 .tagline {
+  font-family: var(--font-ui);
   color: var(--text-muted);
   font-size: 11px;
+  font-weight: 400;
   margin-left: 12px;
+  letter-spacing: 0.2px;
 }
 
 .header-right {
@@ -106,18 +125,27 @@ html, body {
 .span-3 { grid-column: span 3; }
 
 .card-title {
+  font-family: var(--font-ui);
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 1.5px;
-  color: var(--text-muted);
+  letter-spacing: 0.8px;
+  color: var(--text-dim);
   margin-bottom: 14px;
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.sub { font-size: 10px; color: var(--text-muted); font-weight: 400; letter-spacing: 0; text-transform: none; }
+.sub {
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  color: var(--text-muted);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  opacity: 0.8;
+}
 
 /* ─── Signal board ─────────────────────────────────────────────────────────── */
 .signal-grid {
@@ -325,15 +353,17 @@ html, body {
   display: flex;
   align-items: flex-start;
   gap: 6px;
-  font-size: 10px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 500;
   color: #fbbf24;
   background: rgba(251,191,36,0.08);
   border: 1px solid rgba(251,191,36,0.25);
   border-left: 3px solid #fbbf24;
   border-radius: 4px;
-  padding: 6px 8px;
+  padding: 8px 10px;
   margin: 6px 0;
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
 /* Neutral sentiment — approved trades block */
@@ -353,9 +383,10 @@ html, body {
   flex-shrink: 0;
 }
 .risk-neutral-msg {
-  font-size: 11px;
+  font-family: var(--font-ui);
+  font-size: 12px;
   color: #cbd5e1;
-  line-height: 1.55;
+  line-height: 1.6;
 }
 .risk-neutral-msg b {
   color: #fbbf24;
@@ -388,10 +419,13 @@ html, body {
 .risk-price-item span:first-child { color: var(--text-muted); display: block; font-size: 9px; }
 
 .empty-state {
+  font-family: var(--font-ui);
   color: var(--text-muted);
-  font-size: 11px;
-  padding: 12px 0;
+  font-size: 12px;
+  font-weight: 400;
+  padding: 14px 0;
   text-align: center;
+  line-height: 1.5;
 }
 
 /* ─── Actions log ──────────────────────────────────────────────────────────── */
@@ -493,7 +527,7 @@ html, body {
 .live-signal { font-size: 22px; font-weight: 800; margin: 4px 0; }
 .live-signal.buy  { color: #4ade80; }
 .live-signal.sell { color: #f87171; }
-.live-reason { font-size: 10px; color: var(--text-dim); margin: 4px 0; font-style: italic; }
+.live-reason { font-family: var(--font-ui); font-size: 11px; color: var(--text-dim); margin: 4px 0; line-height: 1.5; }
 
 .live-conf-row {
   display: flex;
@@ -794,9 +828,11 @@ html, body {
 
 /* ─── Next action ──────────────────────────────────────────────────────────── */
 .next-action {
-  font-size: 10px;
+  font-family: var(--font-ui);
+  font-size: 11px;
   font-weight: 600;
   margin-top: 5px;
+  letter-spacing: 0.1px;
 }
 .next-action.enter { color: #4ade80; }
 .next-action.wait  { color: #fbbf24; }
@@ -975,8 +1011,9 @@ html, body {
   display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
 }
 .ai-modal-lc-label {
-  font-size: 9px; color: var(--text-muted); text-transform: uppercase;
-  letter-spacing: 0.7px; flex: 1;
+  font-family: var(--font-ui);
+  font-size: 9.5px; color: var(--text-muted); text-transform: uppercase;
+  letter-spacing: 0.7px; flex: 1; font-weight: 600;
 }
 .ai-modal-lc-pct {
   font-size: 11px; font-weight: 700; color: var(--text-dim);
@@ -1004,8 +1041,9 @@ html, body {
   border-radius: 7px; padding: 9px 10px;
 }
 .ai-modal-score-label {
-  font-size: 9px; color: var(--text-muted); text-transform: uppercase;
-  letter-spacing: 0.6px; margin-bottom: 4px;
+  font-family: var(--font-ui);
+  font-size: 9.5px; color: var(--text-muted); text-transform: uppercase;
+  letter-spacing: 0.7px; margin-bottom: 5px; font-weight: 600;
 }
 .ai-modal-score-num {
   font-size: 22px; font-weight: 800; color: var(--text); line-height: 1; margin-bottom: 5px;
@@ -1020,11 +1058,13 @@ html, body {
 .ai-modal-score-fill.clean { background: #22d3ee; }
 
 .ai-modal-summary {
-  font-size: 12px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 400;
   color: var(--text-dim);
-  font-style: italic;
+  line-height: 1.6;
   margin-bottom: 16px;
-  padding: 10px 14px;
+  padding: 12px 14px;
   background: var(--bg);
   border-radius: 6px;
   border-left: 3px solid var(--accent);
@@ -1038,17 +1078,19 @@ html, body {
   padding: 10px 14px;
 }
 .ai-modal-section-title {
+  font-family: var(--font-ui);
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.8px;
+  letter-spacing: 1px;
   color: var(--text-muted);
-  margin-bottom: 5px;
+  margin-bottom: 6px;
 }
 .ai-modal-section-text {
-  font-size: 11px;
+  font-family: var(--font-ui);
+  font-size: 12.5px;
   color: var(--text);
-  line-height: 1.6;
+  line-height: 1.65;
 }
 
 .ai-modal-factors-row {
@@ -1062,20 +1104,24 @@ html, body {
   padding: 10px 14px;
 }
 .ai-factor {
-  font-size: 10px;
+  font-family: var(--font-ui);
+  font-size: 11.5px;
   padding: 3px 0;
-  line-height: 1.4;
+  line-height: 1.5;
 }
 .ai-factor.support { color: #4ade80; }
 .ai-factor.risk    { color: #f87171; }
 
 .ai-modal-warning {
+  font-family: var(--font-ui);
   margin-top: 12px;
-  padding: 8px 14px;
+  padding: 9px 14px;
   background: var(--yellow-dim);
   border-radius: 6px;
-  font-size: 11px;
+  font-size: 12px;
+  font-weight: 500;
   color: #fbbf24;
+  line-height: 1.5;
 }
 /* ─── Flow of Money block ──────────────────────────────────────────────────── */
 .ai-modal-flow {
@@ -1096,17 +1142,19 @@ html, body {
 }
 
 .ai-modal-flow-title {
+  font-family: var(--font-ui);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 800;
   color: #93c5fd;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.8px;
   text-transform: uppercase;
 }
 
 .ai-modal-flow-text {
-  font-size: 11px;
+  font-family: var(--font-ui);
+  font-size: 12.5px;
   color: var(--text-dim);
-  line-height: 1.6;
+  line-height: 1.65;
 }
 
 /* Macro alignment badge */
@@ -1124,10 +1172,12 @@ html, body {
 .ai-macro-badge.neutral    { background: #1e2128; color: #64748b; border: 1px solid #374151; }
 
 .ai-modal-footer {
+  font-family: var(--font-data);
   margin-top: 14px;
   font-size: 9px;
   color: var(--text-muted);
   text-align: right;
+  letter-spacing: 0.3px;
 }
 
 /* ─── AI Analysis block ────────────────────────────────────────────────────── */
@@ -1173,12 +1223,16 @@ html, body {
 }
 .ai-cont b { color: var(--text); }
 .ai-summary {
-  font-size: 9px;
+  font-family: var(--font-ui);
+  font-size: 10.5px;
   color: var(--text-dim);
-  font-style: italic;
+  line-height: 1.5;
+  margin-top: 3px;
 }
 .ai-warning {
-  font-size: 9px;
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 500;
   color: #fbbf24;
   margin-top: 2px;
 }
@@ -1617,10 +1671,11 @@ html, body {
 }
 
 .sess-qdesc {
-  font-size: 10px;
+  font-family: var(--font-ui);
+  font-size: 11px;
   color: var(--text-muted);
-  line-height: 1.4;
-  max-width: 180px;
+  line-height: 1.5;
+  max-width: 200px;
 }
 
 /* Activity block */
@@ -1834,11 +1889,12 @@ html, body {
 .ai-modal-cont-support.no  { background: #713f12; color: #fde68a; border-color: #ca8a04; }
 
 .ai-modal-session-text {
-  font-size: 11px;
+  font-family: var(--font-ui);
+  font-size: 12px;
   color: var(--text-dim);
-  font-style: italic;
+  line-height: 1.6;
   margin-bottom: 14px;
-  padding: 8px 12px;
+  padding: 9px 12px;
   background: var(--bg);
   border-radius: 5px;
   border-left: 3px solid #374151;
