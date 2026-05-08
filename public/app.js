@@ -320,7 +320,6 @@ function renderLiveOpportunities(states, aiMap = {}, sentimentData = null) {
         <div class="live-reason">${s.spread_behavior_text}</div>
         ${sentNeutral ? `<div class="sent-neutral-warn">⚠ Risk sentiment is NEUTRAL — no clear money flow direction. No edge confirmed. High risk to trade.</div>` : ''}
         ${(s.confidence_breakdown||[]).length ? `<div class="conf-factors" style="align-items:flex-start;margin-top:6px">${s.confidence_breakdown.map(f=>`<span>+ ${f}</span>`).join('')}</div>` : ''}
-        ${s.invalidation ? `<div class="invalidation" style="margin-top:6px">⚠ ${s.invalidation}</div>` : ''}
         ${aiHtml(aiMap[s.instrument], s.instrument)}
       </div>`;
   }).join('');
@@ -378,7 +377,6 @@ function renderTopSetups(states, aiMap = {}, sentimentData = null) {
           </div>
           <div style="font-size:9px;color:var(--text-muted);margin-bottom:3px">${s.spread_behavior_text || ''}</div>
           ${nextActionHtml(s.next_action)}
-          ${s.invalidation ? `<div class="invalidation">⚠ ${s.invalidation}</div>` : ''}
           ${sentNeutral ? `<div class="sent-neutral-warn">⚠ Risk sentiment NEUTRAL — no clear money flow direction. No edge confirmed. High risk to trade.</div>` : ''}
           ${aiHtml(aiMap[s.instrument], s.instrument)}
         </div>
@@ -462,7 +460,6 @@ function signalCard(s, st) {
       ${bd.length ? `<div class="conf-factors" style="align-items:flex-start;margin-top:5px">${bd.map(f => `<span>+ ${f}</span>`).join('')}</div>` : ''}
       ${st?.session_label ? `<div class="sess-inline-badge sq-${(st.session_quality||'').toLowerCase().replace(/_/g,'-')}">${st.session_label}${st.session_delta != null ? ` <span class="sess-inline-delta">${st.session_delta > 0 ? '+' : ''}${st.session_delta}</span>` : ''}</div>` : ''}
       ${st?.next_action ? nextActionHtml(st.next_action) : ''}
-      ${st?.invalidation ? `<div class="invalidation">⚠ ${st.invalidation}</div>` : ''}
     </div>`;
 }
 
@@ -484,7 +481,6 @@ function waitCard(s, st) {
         <div class="conf-bar"><div class="conf-fill" style="width:${s.confidence}%;background:var(--yellow)"></div></div>
       </div>
       ${st?.next_action ? nextActionHtml(st.next_action) : ''}
-      ${st?.invalidation ? `<div class="invalidation">⚠ ${st.invalidation}</div>` : ''}
     </div>`;
 }
 
