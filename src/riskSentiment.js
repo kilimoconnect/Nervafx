@@ -353,7 +353,7 @@ async function calculateLatestSentiment() {
   const multiItemGroups = SENTIMENT_GROUPS.filter(g => g.keys.length > 1);
   const confirmedPositive = multiItemGroups.filter(g => groupAlignment[g.name].aligned && groupAlignment[g.name].allOn).length;
   const confirmedNegative = multiItemGroups.filter(g => groupAlignment[g.name].aligned && groupAlignment[g.name].allOff).length;
-  const MIN_GROUPS = 2; // minimum aligned multi-item groups required
+  const MIN_GROUPS = 3; // all multi-item groups (Growth, Carry, Haven) must align
 
   let sentiment;
   if      (net_score >  15 && confirmedPositive >= MIN_GROUPS) sentiment = 'RISK_ON';
