@@ -152,6 +152,20 @@ function openAiModal(instrument) {
 
     ${ai.summary ? `<div class="ai-modal-summary">${ai.summary}</div>` : ''}
 
+    ${d.flow_of_money ? (() => {
+      const ma    = d.macro_alignment || 'NEUTRAL';
+      const maCls = ma === 'ALIGNED' ? 'aligned' : ma === 'CONFLICTED' ? 'conflicted' : 'neutral';
+      const maIcon = ma === 'ALIGNED' ? '✦' : ma === 'CONFLICTED' ? '✕' : '○';
+      return `
+    <div class="ai-modal-flow">
+      <div class="ai-modal-flow-header">
+        <span class="ai-modal-flow-title">💸 Flow of Money</span>
+        <span class="ai-macro-badge ${maCls}">${maIcon} MACRO ${ma.replace(/_/g,' ')}</span>
+      </div>
+      <div class="ai-modal-flow-text">${d.flow_of_money}</div>
+    </div>`;
+    })() : ''}
+
     <div class="ai-modal-sections">
       ${d.structure_analysis ? `
         <div class="ai-modal-section">
