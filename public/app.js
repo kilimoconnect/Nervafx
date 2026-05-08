@@ -861,8 +861,8 @@ function renderSentiment(data) {
       ${groups.map(g => {
         // Alignment: requires 2+ items all pointing the same direction (threshold ±5)
         const vals   = g.items.map(c => c.val).filter(v => v != null).map(Number);
-        const allOn  = vals.length >= 2 && vals.every(v => v > 5);
-        const allOff = vals.length >= 2 && vals.every(v => v < -5);
+        const allOn  = vals.length >= 2 && vals.every(v => v >= 5);
+        const allOff = vals.length >= 2 && vals.every(v => v <= -5);
         const badge  = allOn  ? '<span class="sent-align-badge risk-on">↑ ALIGNED</span>'
                      : allOff ? '<span class="sent-align-badge risk-off">↓ ALIGNED</span>'
                      : '';

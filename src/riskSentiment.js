@@ -333,8 +333,8 @@ async function calculateLatestSentiment() {
 
   for (const g of SENTIMENT_GROUPS) {
     const vals  = g.keys.map(k => scoreMap[k]);
-    const allOn  = vals.every(v => v >  ALIGN_THRESHOLD);
-    const allOff = vals.every(v => v < -ALIGN_THRESHOLD);
+    const allOn  = vals.every(v => v >=  ALIGN_THRESHOLD);
+    const allOff = vals.every(v => v <= -ALIGN_THRESHOLD);
     const single  = g.keys.length === 1;
     const aligned = single || allOn || allOff;
 
