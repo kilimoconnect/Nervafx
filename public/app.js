@@ -362,7 +362,7 @@ function tfRow(ta, sb, sbText) {
     <span class="tf-item ${ta.h12}">12H ${ta.h12 || '→'}</span>
     <span class="tf-item ${ta.h6}">6H ${ta.h6 || '→'}</span>
     <span class="tf-item ${ta.h3}">3H ${ta.h3 || '→'}</span>
-    ${sb ? `<span class="sb-behavior ${sb}">${sb}</span>` : ''}
+    ${sb ? `<span class="sb-behavior ${sb}">${sb.replace(/_/g,' ')}</span>` : ''}
   </div>
   ${sbText ? `<div style="font-size:9px;color:var(--text-muted);margin-bottom:4px">${sbText}</div>` : ''}`;
 }
@@ -405,7 +405,7 @@ function waitCard(s, st) {
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
         <span class="signal-pair">${pair(s.instrument)}</span>
         <span class="signal-dir ${dir}">${s.direction || 'WAIT'}</span>
-        <span class="phase-badge ${phCls}">${st?.phase || 'WAIT'}</span>
+        <span class="phase-badge ${phCls}">${(st?.phase || 'WAIT').replace(/_/g,' ')}</span>
         <span class="action-badge WAIT">WAIT</span>
       </div>
       ${pipelineHtml(st?.pipeline_stage)}
@@ -574,7 +574,7 @@ function renderActions(actions) {
       <span>${pair(a.instrument)}</span>
       <span class="action-status ${a.status}">${a.status}</span>
       <span style="color:var(--text-muted);font-size:10px">${(a.action_type||'').replace(/_/g,' ')}</span>
-      <span class="action-msg">${a.message?.split('\n')[1] || a.error_message || ''}</span>
+      <span class="action-msg">${(a.message?.split('\n')[1] || a.error_message || '').replace(/([A-Z]{3})_([A-Z]{3})/g,'$1/$2')}</span>
     </div>`).join('');
 }
 
