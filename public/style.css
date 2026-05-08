@@ -1401,19 +1401,21 @@ html, body {
 }
 
 .sent-group-header {
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.6px;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
   text-transform: uppercase;
-  color: #475569;
-  padding: 5px 0 2px;
-  border-top: 1px solid var(--border);
-  margin-top: 3px;
+  color: #94a3b8;
+  padding: 4px 6px 3px;
+  margin-top: 10px;
+  background: rgba(255,255,255,0.03);
+  border-top: 1px solid rgba(255,255,255,0.08);
+  border-left: 2px solid #334155;
+  border-radius: 0 3px 3px 0;
 }
 .sent-group-header:first-child {
-  border-top: none;
   margin-top: 0;
-  padding-top: 0;
+  border-top: none;
 }
 
 .sent-comp-row {
