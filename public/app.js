@@ -251,7 +251,7 @@ function renderLiveOpportunities(states, aiMap = {}) {
   if (!el) return;
 
   const live = (states || []).filter(s =>
-    s.state === 'READY_TO_ENTER' && s.confidence >= 75
+    s.state === 'READY_TO_ENTER' && s.confidence >= 75 && !s.session_blocked
   );
 
   if (!live.length) {
@@ -304,7 +304,7 @@ function renderLiveOpportunities(states, aiMap = {}) {
 function computeTopSetups(states) {
   const priority = { READY: 3, PULLBACK: 2, TREND: 1 };
   return [...states]
-    .filter(s => s.state !== 'NO_TRADE' && s.confidence > 0)
+    .filter(s => s.state !== 'NO_TRADE' && s.confidence > 0 && !s.session_blocked)
     .sort((a, b) => {
       const pa = priority[a.phase] || 0, pb = priority[b.phase] || 0;
       return pa !== pb ? pb - pa : b.confidence - a.confidence;
@@ -429,6 +429,7 @@ function signalCard(s, st) {
         <div class="conf-bar"><div class="conf-fill" style="width:${s.confidence}%"></div></div>
       </div>
       ${bd.length ? `<div class="conf-factors" style="align-items:flex-start;margin-top:5px">${bd.map(f => `<span>+ ${f}</span>`).join('')}</div>` : ''}
+      ${st?.session_label ? `<div class="sess-inline-badge sq-${(st.session_quality||'').toLowerCase().replace(/_/g,'-')}">${st.session_label}${st.session_delta != null ? ` <span class="sess-inline-delta">${st.session_delta > 0 ? '+' : ''}${st.session_delta}</span>` : ''}</div>` : ''}
       ${st?.next_action ? nextActionHtml(st.next_action) : ''}
       ${st?.invalidation ? `<div class="invalidation">⚠ ${st.invalidation}</div>` : ''}
     </div>`;
@@ -616,6 +617,92 @@ function renderActions(actions) {
     </div>`).join('');
 }
 
+// ─── Trading Session ──────────────────────────────────────────────────────────
+
+const SESSION_TIMELINE = [
+  { name: 'ASIA',        label: 'Asia',       hours: '00–06', quality: 'medium'    },
+  { name: 'LONDON_OPEN', label: 'LDN Open',   hours: '07–10', quality: 'high'      },
+  { name: 'LONDON',      label: 'London',     hours: '10–13', quality: 'high'      },
+  { name: 'LONDON_NY',   label: 'LDN/NY',     hours: '13–17', quality: 'very_high' },
+  { name: 'LATE_NY',     label: 'Late NY',    hours: '17–21', quality: 'low'       },
+  { name: 'DEAD_HOURS',  label: 'Dead',       hours: '21–00', quality: 'blocked'   },
+];
+
+function renderSession(data) {
+  const el = document.getElementById('session-display');
+  if (!el) return;
+
+  const s  = data?.session;
+  const tl = data?.timeline || SESSION_TIMELINE;
+
+  if (!s) {
+    el.innerHTML = '<p class="empty-state">Session data unavailable</p>';
+    return;
+  }
+
+  const qCls     = (s.quality || 'BLOCKED').toLowerCase().replace(/_/g, '-');
+  const allowed  = s.trades_allowed;
+  const activity = s.activity_index || 0;
+
+  // Quality label display
+  const qLabel = {
+    VERY_HIGH: '✦ VERY HIGH',
+    HIGH:      '▲ HIGH',
+    MEDIUM:    '● MEDIUM',
+    LOW:       '▼ LOW',
+    BLOCKED:   '⛔ BLOCKED',
+  }[s.quality] || s.quality;
+
+  // Activity bar colour
+  const actCls = activity >= 75 ? 'very-high'
+               : activity >= 55 ? 'high'
+               : activity >= 35 ? 'medium'
+               : 'low';
+
+  // Timeline
+  const timelineHtml = SESSION_TIMELINE.map(t => {
+    const isCurrent = t.name === s.session;
+    return `<div class="sess-tl-item ${t.quality}${isCurrent ? ' current' : ''}">
+      <span class="sess-tl-label">${t.label}</span>
+      <span class="sess-tl-hours">${t.hours}</span>
+    </div>`;
+  }).join('<span class="sess-tl-arrow">›</span>');
+
+  // Session delta text for status line
+  const deltaStr = s.conf_delta > 0 ? `+${s.conf_delta}` : `${s.conf_delta}`;
+  const deltaHtml = s.conf_delta !== null && s.conf_delta !== -999
+    ? `<span class="sess-delta ${s.conf_delta >= 0 ? 'pos' : 'neg'}">${deltaStr} conf</span>`
+    : '';
+
+  el.innerHTML = `
+    <div class="session-main">
+      <div class="session-name-wrap">
+        <div class="sess-name-badge sq-${qCls}">${s.label || s.session}</div>
+        <div class="sess-hours-utc">${String(s.start_hour).padStart(2,'0')}:00 – ${String(s.end_hour).padStart(2,'0')}:00 UTC</div>
+      </div>
+      <div class="session-quality-wrap">
+        <div class="sess-qlabel sq-${qCls}">${qLabel}</div>
+        <div class="sess-qdesc">${s.quality_desc || ''}</div>
+      </div>
+      <div class="session-activity-wrap">
+        <div class="sess-act-header">
+          <span class="sess-act-label">Market Activity</span>
+          <span class="sess-act-pct">${activity}%</span>
+        </div>
+        <div class="sess-act-bar-wrap">
+          <div class="sess-act-bar-fill act-${actCls}" style="width:${activity}%"></div>
+        </div>
+      </div>
+      <div class="session-status-wrap">
+        ${allowed
+          ? `<div class="sess-status allowed">✓ TRADING ACTIVE</div>${deltaHtml}`
+          : `<div class="sess-status blocked">⛔ ${s.block_reason || 'TRADING BLOCKED'}</div>`
+        }
+      </div>
+    </div>
+    <div class="session-timeline">${timelineHtml}</div>`;
+}
+
 // ─── Risk Sentiment ───────────────────────────────────────────────────────────
 
 function renderSentiment(data) {
@@ -719,7 +806,7 @@ function renderQuality(q) {
 
 async function refresh() {
   try {
-    const [strength, signals, states, risk, actions, quality, spreads, aiData, sentimentData] = await Promise.all([
+    const [strength, signals, states, risk, actions, quality, spreads, aiData, sentimentData, sessionData] = await Promise.all([
       api('/api/strength'),
       api('/api/signals'),
       api('/api/states'),
@@ -729,6 +816,7 @@ async function refresh() {
       api('/api/spreads'),
       api('/api/ai').catch(() => ({ analyses: [] })),
       api('/api/sentiment').catch(() => ({ sentiment: null })),
+      api('/api/session').catch(() => ({ session: null })),
     ]);
 
     // Build AI map: instrument → analysis
@@ -737,6 +825,7 @@ async function refresh() {
     _aiMap = aiMap; // store globally for modal access
 
     updateHeader(risk);
+    renderSession(sessionData);
     renderSentiment(sentimentData);
     renderLiveOpportunities(states.states || [], aiMap);
     renderTopSetups(states.states || [], aiMap);

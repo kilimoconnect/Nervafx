@@ -1470,6 +1470,237 @@ html, body {
   .sentiment-components { min-width: 0; width: 100%; }
 }
 
+/* ─── Trading Session card ──────────────────────────────────────────────────── */
+.session-display {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.session-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+/* Session name block */
+.session-name-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 180px;
+}
+
+.sess-name-badge {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  padding: 10px 18px;
+  border-radius: var(--radius);
+  text-align: center;
+  white-space: nowrap;
+  border: 1px solid;
+}
+
+.sess-hours-utc {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-align: center;
+  letter-spacing: 0.5px;
+}
+
+/* Quality block */
+.session-quality-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 160px;
+}
+
+.sess-qlabel {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  padding: 5px 12px;
+  border-radius: 5px;
+  border: 1px solid;
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.sess-qdesc {
+  font-size: 10px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  max-width: 180px;
+}
+
+/* Activity block */
+.session-activity-wrap {
+  flex: 1;
+  min-width: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.sess-act-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sess-act-label {
+  font-size: 9px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+}
+
+.sess-act-pct {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.sess-act-bar-wrap {
+  height: 10px;
+  background: var(--border);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.sess-act-bar-fill {
+  height: 100%;
+  border-radius: 5px;
+  transition: width 0.5s ease;
+}
+.sess-act-bar-fill.act-very-high { background: linear-gradient(90deg, #16a34a, #4ade80); }
+.sess-act-bar-fill.act-high      { background: linear-gradient(90deg, #1d4ed8, #60a5fa); }
+.sess-act-bar-fill.act-medium    { background: linear-gradient(90deg, #92400e, #fbbf24); }
+.sess-act-bar-fill.act-low       { background: #374151; }
+
+/* Status block */
+.session-status-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  justify-content: center;
+}
+
+.sess-status {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 5px 12px;
+  border-radius: 5px;
+  letter-spacing: 0.8px;
+  white-space: nowrap;
+}
+.sess-status.allowed { background: #052e16; color: #4ade80; border: 1px solid #16a34a; }
+.sess-status.blocked { background: #450a0a; color: #f87171; border: 1px solid #dc2626; }
+
+.sess-delta {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+.sess-delta.pos { background: #052e16; color: #4ade80; }
+.sess-delta.neg { background: #450a0a; color: #f87171; }
+
+/* Timeline */
+.session-timeline {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 8px 0 2px;
+  border-top: 1px solid var(--border);
+}
+
+.sess-tl-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  cursor: default;
+  transition: opacity 0.2s;
+  opacity: 0.45;
+}
+.sess-tl-item.current {
+  opacity: 1;
+  border-width: 2px;
+}
+
+.sess-tl-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.sess-tl-hours {
+  font-size: 8px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.sess-tl-arrow {
+  color: var(--border);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+/* ── Session quality colour system (shared by name badge, quality label, timeline) */
+/* VERY HIGH */
+.sq-very-high, .sess-tl-item.very_high       { background: #052e16 !important; color: #4ade80 !important; border-color: #16a34a !important; }
+/* HIGH */
+.sq-high,      .sess-tl-item.high            { background: #1e3a5f !important; color: #93c5fd !important; border-color: #3b82f6 !important; }
+/* MEDIUM */
+.sq-medium,    .sess-tl-item.medium          { background: #1c1917 !important; color: #fbbf24 !important; border-color: #ca8a04 !important; }
+/* LOW */
+.sq-low,       .sess-tl-item.low             { background: #1a1d24 !important; color: #64748b !important; border-color: #374151 !important; }
+/* BLOCKED */
+.sq-blocked,   .sess-tl-item.blocked         { background: #1a0505 !important; color: #7f1d1d !important; border-color: #450a0a !important; }
+
+/* Current highlight overrides colour */
+.sess-tl-item.current.very_high  { color: #4ade80 !important; border-color: #4ade80 !important; box-shadow: 0 0 8px rgba(74,222,128,0.25); }
+.sess-tl-item.current.high       { color: #93c5fd !important; border-color: #60a5fa !important; box-shadow: 0 0 8px rgba(96,165,250,0.25); }
+.sess-tl-item.current.medium     { color: #fbbf24 !important; border-color: #fbbf24 !important; }
+.sess-tl-item.current.low        { color: #94a3b8 !important; border-color: #64748b !important; }
+.sess-tl-item.current.blocked    { color: #f87171 !important; border-color: #dc2626 !important; }
+
+/* ── Inline session badge on signal cards ────────────────────────────────────── */
+.sess-inline-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 3px;
+  margin-top: 4px;
+  letter-spacing: 0.4px;
+  border: 1px solid;
+}
+
+.sess-inline-delta {
+  font-size: 8px;
+  font-weight: 800;
+  opacity: 0.9;
+}
+
+/* Mobile */
+@media (max-width: 700px) {
+  .session-main    { flex-direction: column; gap: 12px; }
+  .session-timeline { gap: 3px; }
+  .sess-tl-item    { padding: 3px 7px; }
+}
+
 /* ─── AI Counter Pressure badge ────────────────────────────────────────────── */
 .ai-cp-badge {
   display: inline-flex;

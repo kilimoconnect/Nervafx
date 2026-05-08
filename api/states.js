@@ -1,4 +1,5 @@
 const { getClient, getLatestTime, cors } = require('./_db');
+const { getCurrentSession, applySessionFilter } = require('../src/sessionEngine');
 
 const MIN_SPREAD = 0.0020;
 
@@ -152,24 +153,45 @@ module.exports = async function handler(req, res) {
       .order('confidence', { ascending: false });
     if (error) throw error;
 
+    const sessionObj = getCurrentSession();
+
     const states = (data || []).map(s => {
-      const { bias, state, confidence } = s;
+      const { bias, state } = s;
+      const rawConf = s.confidence;
       const s3  = parseFloat(s.spread_3h)  || 0;
       const s6  = parseFloat(s.spread_6h)  || 0;
       const s12 = parseFloat(s.spread_12h) || 0;
+
+      const sessionFilter = applySessionFilter(s.instrument, rawConf, sessionObj);
+      const confidence    = sessionFilter.trade_blocked ? rawConf : sessionFilter.adjusted_confidence;
+
       const { phase, action } = phaseAction(state, confidence);
       const lifecycle = spreadLifecycle(state, s3, s6, s12);
+
+      const baseNextAction = nextAction(state, bias, confidence, lifecycle);
+      const displayNextAction = sessionFilter.trade_blocked
+        ? `⛔ ${sessionFilter.block_reason}`
+        : baseNextAction;
+
       return {
         ...s,
+        confidence,
+        confidence_raw:       rawConf,
+        session:              sessionObj.session,
+        session_label:        sessionObj.label,
+        session_quality:      sessionObj.quality,
+        session_blocked:      sessionFilter.trade_blocked,
+        session_delta:        sessionFilter.session_delta,
+        session_block_reason: sessionFilter.block_reason,
         pipeline_stage:       pipelineStage(state, confidence),
         entry_status:         entryStatus(state, confidence),
         phase,
-        action,
+        action:               sessionFilter.trade_blocked ? 'AVOID' : action,
         tf_alignment:         { h12: tfArrow(s12, bias), h6: tfArrow(s6, bias), h3: tfArrow(s3, bias) },
         spread_behavior:      lifecycle,
         spread_behavior_text: LIFECYCLE_TEXT[lifecycle] || '',
         confidence_breakdown: confBreakdown(s3, s6, s12, bias, state),
-        next_action:          nextAction(state, bias, confidence, lifecycle),
+        next_action:          displayNextAction,
         invalidation:         invalidationWarning(state, bias),
         pullback_depth:       pullbackDepth(state, s3, bias),
       };
