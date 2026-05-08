@@ -1,5 +1,6 @@
 const OpenAI = require('openai');
 const { supabase } = require('./supabase');
+const { getCurrentSession, applySessionFilter } = require('./sessionEngine');
 
 function getClient() {
   return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -353,7 +354,24 @@ async function analyzeSetup(instrument, state, sentimentRow) {
   : macroAlignment === 'CONFLICTED' ? 'macro flow is working against this bias'
   :                                    'macro flow is neutral for this pair';
 
-  console.log(`[AI] ${instrument} → ${metrics.phase} ${metrics.completion}% cp:${metrics.counterPressureLabel} clean:${metrics.cleanlinessLabel} macro:${macroAlignment} | comp=${metrics.compressionCycles}cyc depth=${metrics.depthRatio.toFixed(2)} decel=${metrics.decelCycles}/8`);
+  // ── Session context (deterministic) ────────────────────────────────────────
+  const sessionObj    = getCurrentSession();
+  const sessionFilter = applySessionFilter(instrument, state.confidence, sessionObj);
+  const marketParticipation = sessionObj.activity_index >= 75 ? 'STRONG'
+    : sessionObj.activity_index >= 45 ? 'MODERATE'
+    : 'LOW';
+  const continuationSupport = !sessionFilter.trade_blocked
+    && ['VERY_HIGH', 'HIGH'].includes(sessionObj.quality)
+    && (sessionFilter.session_delta ?? 0) >= 0;
+  const sessionDeltaDesc = sessionFilter.trade_blocked
+    ? 'session blocked — trades not permitted'
+    : sessionFilter.session_delta > 0
+      ? `+${sessionFilter.session_delta} pts — ${base}/${quote} is well-suited to this session`
+      : sessionFilter.session_delta < 0
+        ? `${sessionFilter.session_delta} pts — ${base}/${quote} is off-peak this session`
+        : 'neutral — no pair-specific session edge';
+
+  console.log(`[AI] ${instrument} → ${metrics.phase} ${metrics.completion}% cp:${metrics.counterPressureLabel} clean:${metrics.cleanlinessLabel} macro:${macroAlignment} session:${sessionObj.session}(${sessionObj.quality}) participation:${marketParticipation} | comp=${metrics.compressionCycles}cyc depth=${metrics.depthRatio.toFixed(2)} decel=${metrics.decelCycles}/8`);
 
   const client = getClient();
 
@@ -367,6 +385,15 @@ MACRO / FLOW OF MONEY:
 - ${sd.quoteRole}
 - Macro alignment: ${macroAlignment} — ${macroAlignmentDesc}
 ` : '\nMACRO / FLOW OF MONEY: data not available\n';
+
+  const sessionSection = `
+SESSION / MARKET TIMING:
+- Session: ${sessionObj.label} [${sessionObj.quality}] | Activity index: ${sessionObj.activity_index}%
+- Market participation: ${marketParticipation}
+- Pair session fit: ${sessionDeltaDesc}
+- Environment: ${sessionObj.quality_desc}
+- Continuation support: ${continuationSupport ? 'YES — session conditions support continuation trades' : 'REDUCED — session conditions are not optimal for continuation'}
+`;
 
   const response = await client.chat.completions.create({
     model: 'gpt-4o-mini',
@@ -391,7 +418,8 @@ LANGUAGE RULES — most important:
 7. ALWAYS use environment language: "environment remains supportive for", "conditions are consistent with", "flow is currently weighted toward", "regime provides context for", "weight of capital appears toward".
 8. STRICT SEPARATION — structure sections (structure_analysis, trend_assessment, pullback_quality_text, momentum_shift) must contain NO macro references. They describe price structure only.
 9. STRICT SEPARATION — flow_of_money must contain NO cycle counts or spread values. It describes macro capital positioning only.
-10. Write as if briefing a senior analyst — precise, direct, no filler phrases.`,
+10. Write as if briefing a senior analyst — precise, direct, no filler phrases.
+11. session_context describes ONLY market timing and participation — no price structure, no macro regime references, no predictions. Use: "participation environment is", "session conditions are consistent with", "timing environment supports".`,
       },
       {
         role: 'user',
@@ -414,7 +442,7 @@ STRUCTURAL FACTS:
 
 SCORES (engine-computed, use as-is):
 { "continuation": ${metrics.scores.continuation}, "trend_health": ${metrics.scores.trend_health}, "pullback_quality": ${metrics.scores.pullback_quality}, "cleanliness": ${metrics.scores.cleanliness} }
-${macroSection}
+${macroSection}${sessionSection}
 Return this exact JSON. All text: no raw decimals, use cycle counts, engine terminology, environment language only:
 {
   "structure_type": "HEALTHY_PULLBACK"|"WEAK_PULLBACK"|"STRONG_TREND"|"REVERSAL_RISK"|"CHOPPY"|"EXHAUSTED",
@@ -431,6 +459,7 @@ Return this exact JSON. All text: no raw decimals, use cycle counts, engine term
     "pullback_quality_text": <1-2 sentences: characterize compression depth and duration — NO macro references>,
     "momentum_shift": <1-2 sentences: describe compression velocity — fading or building — NO macro references>,
     "flow_of_money": <2-3 sentences: describe where capital weight is currently positioned at the macro level — name which currencies carry the weight and which face pressure — connect the current regime to how it relates to ${base} and ${quote} positioning — NO cycle counts, NO spread values, NO predictions — use: "flow remains supportive for", "conditions are consistent with", "weight of capital appears toward">,
+    "session_context": <1 sentence: describe how current session conditions relate to this pair — timing and participation environment only — no structure references, no predictions>,
     "support_factors": [<up to 3 strings: structural spread facts only — no decimals>],
     "risk_factors": [<up to 3 strings: structural or macro positioning risks — no decimals, no predictions>]
   }
@@ -448,6 +477,11 @@ Return this exact JSON. All text: no raw decimals, use cycle counts, engine term
   parsed.details.counter_pressure       = metrics.counterPressureLabel;
   parsed.details.cleanliness_label      = metrics.cleanlinessLabel;
   parsed.details.macro_alignment        = macroAlignment;
+  parsed.details.session                = sessionObj.session;
+  parsed.details.session_label          = sessionObj.label;
+  parsed.details.session_quality        = sessionObj.quality;
+  parsed.details.market_participation   = marketParticipation;
+  parsed.details.continuation_support   = continuationSupport;
 
   return parsed;
 }

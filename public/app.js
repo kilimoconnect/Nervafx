@@ -124,10 +124,14 @@ function openAiModal(instrument) {
   const lc   = d.lifecycle_completion  || 0;
   const sCls = (ai.structure_type || '').replace(/-/g,'_');
   const lpCls = lp.replace(/-/g,'_').toLowerCase();
-  const cpLabel = d.counter_pressure  || '';
-  const cpCls   = cpLabel.toLowerCase();
-  const clLabel = d.cleanliness_label || '';
-  const clCls   = clLabel.toLowerCase().replace(/ /g,'_');
+  const cpLabel   = d.counter_pressure    || '';
+  const cpCls     = cpLabel.toLowerCase();
+  const clLabel   = d.cleanliness_label   || '';
+  const clCls     = clLabel.toLowerCase().replace(/ /g,'_');
+  const sessLabel = d.session_label       || '';
+  const sessQCls  = (d.session_quality    || '').toLowerCase().replace(/_/g,'-');
+  const partLabel = d.market_participation || '';
+  const contSupp  = d.continuation_support;
 
   document.getElementById('ai-modal-pair').textContent = pair(instrument);
   document.getElementById('ai-modal-dir').innerHTML =
@@ -166,6 +170,15 @@ function openAiModal(instrument) {
         <span class="ai-cl-badge cl-${clCls} ai-modal-cl">${clLabel}</span>
       </div>` : ''}
     </div>` : ''}
+
+    ${sessLabel ? `
+    <div class="ai-modal-session-row">
+      <span class="sess-card-badge sq-${sessQCls}" style="font-size:11px;padding:4px 10px">⏱ ${sessLabel}</span>
+      ${partLabel ? `<span class="ai-modal-participation part-${partLabel.toLowerCase()}">${partLabel} PARTICIPATION</span>` : ''}
+      ${contSupp != null ? `<span class="ai-modal-cont-support ${contSupp ? 'yes' : 'no'}">${contSupp ? '✓ CONTINUATION SUPPORTED' : '⚠ REDUCED CONDITIONS'}</span>` : ''}
+    </div>
+    ${d.session_context ? `<div class="ai-modal-session-text">${d.session_context}</div>` : ''}
+    ` : ''}
 
     <div class="ai-modal-scores">
       ${scoreBlock('Continuation', sc.continuation, 'cont')}
