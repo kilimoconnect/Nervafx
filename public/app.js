@@ -82,6 +82,10 @@ function aiHtml(ai, instrument) {
   const lc   = d.lifecycle_completion || 0;
   const sCls = (ai.structure_type || '').replace(/-/g,'_');
   const lpCls = lp.replace(/-/g,'_').toLowerCase();
+  const cpLabel = d.counter_pressure  || '';
+  const cpCls   = cpLabel.toLowerCase();
+  const clLabel = d.cleanliness_label || '';
+  const clCls   = clLabel.toLowerCase().replace(/ /g,'_');
 
   const scoreBar = (val, cls) =>
     `<div class="ai-mini-score ${cls}"><div class="ai-mini-fill" style="width:${val||0}%"></div></div>`;
@@ -92,6 +96,8 @@ function aiHtml(ai, instrument) {
         ${lp ? `<span class="ai-lp-badge ${lpCls}">${lp.replace(/_/g,' ')}</span>` : ''}
         <span class="ai-badge ai-struct ${sCls}">${(ai.structure_type||'').replace(/_/g,' ')}</span>
         <span class="ai-badge ai-quality ${(ai.market_quality||'').toLowerCase()}">${ai.market_quality||''}</span>
+        ${cpLabel ? `<span class="ai-cp-badge cp-${cpCls}">⚡ ${cpLabel}</span>` : ''}
+        ${clLabel ? `<span class="ai-cl-badge cl-${clCls}">${clLabel}</span>` : ''}
         <button class="ai-bulb-btn" title="Click for full AI structure analysis" onclick="openAiModal('${instrument}')">💡 <span class="ai-bulb-label">AI Analysis</span></button>
       </div>
       ${lp ? `<div class="ai-lc-bar-wrap"><div class="ai-lc-bar-fill ${lpCls}" style="width:${lc}%"></div><span class="ai-lc-pct">${lc}%</span></div>` : ''}
@@ -118,6 +124,10 @@ function openAiModal(instrument) {
   const lc   = d.lifecycle_completion  || 0;
   const sCls = (ai.structure_type || '').replace(/-/g,'_');
   const lpCls = lp.replace(/-/g,'_').toLowerCase();
+  const cpLabel = d.counter_pressure  || '';
+  const cpCls   = cpLabel.toLowerCase();
+  const clLabel = d.cleanliness_label || '';
+  const clCls   = clLabel.toLowerCase().replace(/ /g,'_');
 
   document.getElementById('ai-modal-pair').textContent = pair(instrument);
   document.getElementById('ai-modal-dir').innerHTML =
@@ -141,6 +151,20 @@ function openAiModal(instrument) {
         <span class="ai-modal-lc-pct">${lc}%</span>
       </div>
       <div class="ai-modal-lc-bar"><div class="ai-modal-lc-fill ${lpCls}" style="width:${lc}%"></div></div>
+    </div>` : ''}
+
+    ${(cpLabel || clLabel) ? `
+    <div class="ai-modal-quality-row">
+      ${cpLabel ? `
+      <div class="ai-modal-quality-item">
+        <div class="ai-modal-quality-label">Counter Pressure</div>
+        <span class="ai-cp-badge cp-${cpCls} ai-modal-cp">${cpLabel}</span>
+      </div>` : ''}
+      ${clLabel ? `
+      <div class="ai-modal-quality-item">
+        <div class="ai-modal-quality-label">Market Quality</div>
+        <span class="ai-cl-badge cl-${clCls} ai-modal-cl">${clLabel}</span>
+      </div>` : ''}
     </div>` : ''}
 
     <div class="ai-modal-scores">

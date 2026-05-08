@@ -86,15 +86,15 @@ function computeMetrics(state, spread3h, spread6h, spread12h, baseArr, quoteArr)
     else break;
   }
 
-  const depthRatio   = Math.abs(s6) > 0.000001 ? Math.abs(s3) / Math.abs(s6) : 0;
-  const recentAccel  = accel6h.slice(-8);
-  const decelCycles  = recentAccel.filter(a => a * dir > 0.0000001).length;
+  const depthRatio     = Math.abs(s6) > 0.000001 ? Math.abs(s3) / Math.abs(s6) : 0;
+  const recentAccel    = accel6h.slice(-8);
+  const decelCycles    = recentAccel.filter(a => a * dir > 0.0000001).length;
   const isDecelerating = decelCycles >= 4;
 
   const s6StableCount  = delta6h.slice(-14).filter(d => d * dir >= -0.000005).length;
   const s12StableCount = delta12h.slice(-14).filter(d => d * dir >= -0.000005).length;
 
-  const bEarly = baseArr.slice(-24, -12);  const bLate = baseArr.slice(-12);
+  const bEarly = baseArr.slice(-24, -12); const bLate = baseArr.slice(-12);
   const qEarly = quoteArr.slice(-24, -12); const qLate = quoteArr.slice(-12);
   const bAvgEarly = bEarly.reduce((a, b) => a + b, 0) / (bEarly.length || 1);
   const bAvgLate  = bLate.reduce((a, b) => a + b, 0)  / (bLate.length  || 1);
@@ -104,6 +104,10 @@ function computeMetrics(state, spread3h, spread6h, spread12h, baseArr, quoteArr)
   const baseShift  = (bAvgLate - bAvgEarly) * dir;
   const quoteShift = (qAvgEarly - qAvgLate) * dir;
 
+  // ── Lifecycle: duration is the PRIMARY driver ─────────────────────────────
+  //   1–3 cycles  → EARLY_PULLBACK  (completion ≤33)
+  //   4–8 cycles  → MID_PULLBACK    (completion 34–65)
+  //   slowing     → LATE_PULLBACK   (completion >65)
   let phase, completion;
   if (state.state === 'READY_TO_ENTER') {
     phase = 'RE_EXPANDING';
@@ -112,10 +116,10 @@ function computeMetrics(state, spread3h, spread6h, spread12h, baseArr, quoteArr)
     phase = 'TRENDING';
     completion = 50;
   } else {
-    const durationScore = Math.min(1, compressionCycles / 10) * 50;
-    const depthScore    = (depthRatio > 0.1 && depthRatio < 0.8) ? 20
-                        : (depthRatio >= 0.8 ? 12 : 5);
-    const decelScore    = (decelCycles / 8) * 30;
+    const durationScore = Math.min(1, compressionCycles / 8) * 60; // caps at 8 cycles → 60pts
+    const depthScore    = (depthRatio > 0.1 && depthRatio < 0.8) ? 15
+                        : (depthRatio >= 0.8 ? 10 : 3);
+    const decelScore    = (decelCycles / 8) * 25;
     const raw = durationScore + depthScore + decelScore;
     completion = Math.round(Math.min(95, Math.max(5, raw)));
     phase = completion <= 33 ? 'EARLY_PULLBACK'
@@ -123,22 +127,49 @@ function computeMetrics(state, spread3h, spread6h, spread12h, baseArr, quoteArr)
           : 'LATE_PULLBACK';
   }
 
+  // ── Trend Health: 12H stability now contributes — weakening 12H lowers score ─
+  // Fix: previously s12StableCount was computed but never used in trend_health
   const trend_health = Math.round(Math.min(100,
-    (s6 * dir > 0  ? 30 : 0) +
-    (s12 * dir > 0 ? 25 : 0) +
-    Math.min(Math.abs(s6) / 0.006, 1) * 25 +
-    (s6StableCount / 14) * 20
-  ));
+    (s6  * dir > 0 ? 25 : 0) +               // 6H direction   max 25
+    (s12 * dir > 0 ? 20 : 0) +               // 12H direction  max 20
+    Math.min(Math.abs(s6) / 0.006, 1) * 20 + // 6H magnitude   max 20
+    (s6StableCount  / 14) * 20 +              // 6H stability   max 20
+    (s12StableCount / 14) * 15                // 12H stability  max 15 — key fix
+  ));                                          // total max = 100
 
+  // ── Pullback Quality: healthy, controlled pullbacks reach ≥70% ────────────
+  // Fix: 1–3 cycle pullbacks were unfairly penalized even when clean
   const pullback_quality = Math.round(Math.min(100,
-    (depthRatio > 0.1 && depthRatio < 0.75 ? 40 : 20) +
-    (isDecelerating ? 30 : 10) +
-    (compressionCycles >= 3 && compressionCycles <= 12 ? 15 : 5) +
-    (decelCycles / 8) * 15
+    // Depth: controlled range (0.1–0.75) is the sweet spot
+    (depthRatio > 0.1 && depthRatio < 0.75 ? 35 : 15) +
+    // Deceleration: primary quality signal — is counter-pressure fading?
+    (isDecelerating ? 30 : (decelCycles >= 2 ? 14 : 8)) +
+    // Duration: 1–3 cycles not penalized if other factors are clean
+    (compressionCycles >= 4 && compressionCycles <= 12 ? 20
+     : compressionCycles >= 1 && compressionCycles <= 3 ? 16
+     : 5) +
+    // 6H held direction during compression = clean pullback
+    (s6StableCount / 14) * 15
   ));
 
+  // ── Cleanliness (unchanged formula, new label) ────────────────────────────
   const deltaVar    = delta6h.slice(-12).reduce((sum, v) => sum + v * v, 0) / 12;
   const cleanliness = Math.round(Math.min(100, Math.max(20, 95 - deltaVar * 4000000)));
+  const cleanlinessLabel = cleanliness >= 85 ? 'VERY CLEAN'
+    : cleanliness >= 70 ? 'CLEAN'
+    : cleanliness >= 50 ? 'MODERATE'
+    : 'NOISY';
+
+  // ── Counter Pressure: strength of current counter-trend force ─────────────
+  // Duration + depth drive it up. Deceleration drives it down.
+  // 1 cycle → LOW  |  5–7 cycles not decelerating → HIGH  |  8+ decelerating → MODERATE
+  const rawCounter     = Math.min(compressionCycles / 10, 1) * 65 + depthRatio * 25;
+  const decelReduction = isDecelerating ? Math.round((decelCycles / 8) * 20) : 0;
+  const counterPressure = Math.round(Math.min(100, Math.max(0, rawCounter - decelReduction)));
+  const counterPressureLabel = counterPressure >= 75 ? 'EXTREME'
+    : counterPressure >= 50 ? 'HIGH'
+    : counterPressure >= 25 ? 'MODERATE'
+    : 'LOW';
 
   const continuation = Math.round(
     trend_health     * 0.30 +
@@ -155,6 +186,8 @@ function computeMetrics(state, spread3h, spread6h, spread12h, baseArr, quoteArr)
     s6StableCount, s12StableCount,
     baseShift, quoteShift,
     phase, completion,
+    cleanlinessLabel,
+    counterPressure, counterPressureLabel,
     scores: { continuation, trend_health, pullback_quality, cleanliness },
   };
 }
@@ -164,7 +197,8 @@ function computeMetrics(state, spread3h, spread6h, spread12h, baseArr, quoteArr)
 function describeMetrics(m, state, base, quote) {
   const { dir, compressionCycles, expansionCycles, depthRatio,
           decelCycles, isDecelerating, s6StableCount, s12StableCount,
-          baseShift, quoteShift, phase, completion } = m;
+          baseShift, quoteShift, phase, completion,
+          cleanlinessLabel, counterPressureLabel } = m;
   const bias    = state.bias;
   const biasDir = dir === 1 ? 'bullish' : 'bearish';
 
@@ -172,12 +206,12 @@ function describeMetrics(m, state, base, quote) {
     : depthRatio < 0.40 ? 'light — 3H compressed to roughly a quarter of 6H magnitude'
     : depthRatio < 0.65 ? 'moderate — 3H around half of 6H magnitude, controlled depth'
     : depthRatio < 0.85 ? 'deep — 3H reaching towards 6H magnitude, stronger counter-pressure'
-    : 'aggressive — 3H nearly matching 6H magnitude, heavy counter-trend pressure';
+    : 'aggressive — 3H nearly matching 6H magnitude, heavy counter-trend force';
 
-  const decelDesc = decelCycles >= 6 ? `strongly decelerating — compression velocity fading in ${decelCycles} of last 8 cycles`
+  const decelDesc = decelCycles >= 6 ? `strongly decelerating — counter-trend force fading in ${decelCycles} of last 8 cycles`
     : decelCycles >= 4 ? `decelerating — counter-trend pressure weakening over recent cycles`
     : decelCycles >= 2 ? `mixed signals — some deceleration emerging but not yet dominant`
-    : `still building — counter-trend pressure has not shown clear deceleration`;
+    : `still building — counter-trend force has not shown clear deceleration`;
 
   const s6Desc = s6StableCount >= 12 ? `very stable, held ${biasDir} direction consistently`
     : s6StableCount >= 9 ? `stable, ${s6StableCount} of last 14 cycles held ${biasDir} direction`
@@ -198,84 +232,76 @@ function describeMetrics(m, state, base, quote) {
 
   const phaseDesc = {
     TRENDING:       `Active ${biasDir} trend — 3H and 6H both expanding in bias direction`,
-    EARLY_PULLBACK: `Early pullback stage — 3H compression just started (${compressionCycles} cycles), 6H trend still intact`,
-    MID_PULLBACK:   `Mid pullback — 3H has been compressing for ${compressionCycles} H1 cycles while 6H holds direction`,
-    LATE_PULLBACK:  `Late pullback — ${compressionCycles} cycles of compression with deceleration signals emerging, structure approaching re-expansion`,
-    RE_EXPANDING:   `Re-expansion underway — 3H has turned ${biasDir} again for ${expansionCycles} cycles, spread lifecycle resuming`,
+    EARLY_PULLBACK: `Early stage — 3H compression in first ${compressionCycles} H1 cycle${compressionCycles > 1 ? 's' : ''}, 6H trend structure intact`,
+    MID_PULLBACK:   `Mid pullback — 3H has been compressing for ${compressionCycles} H1 cycles, 6H holding direction`,
+    LATE_PULLBACK:  `Late pullback — ${compressionCycles} cycles of compression, deceleration signals emerging, structure approaching base formation`,
+    RE_EXPANDING:   `Re-expansion active — 3H has turned ${biasDir} for ${expansionCycles} cycle${expansionCycles > 1 ? 's' : ''}, spread lifecycle resuming`,
     EXHAUSTING:     `Structural exhaustion — spread momentum failing to extend, lifecycle deteriorating`,
   }[phase] || '';
+
+  const counterPressureDesc = {
+    LOW:      'counter-trend force is minimal — setup developing freely',
+    MODERATE: 'counter-trend force is present but manageable — continuation possible',
+    HIGH:     'significant counter-trend force active — setup requires more time or deceleration',
+    EXTREME:  'aggressive counter-trend force — lifecycle must show clear deceleration before continuation is viable',
+  }[counterPressureLabel] || '';
 
   return {
     phaseDesc, depthDesc, decelDesc, s6Desc, s12Desc, baseDesc, quoteDesc,
     compressionCycles, expansionCycles, decelCycles, phase, completion,
-    biasDir,
+    biasDir, cleanlinessLabel, counterPressureLabel, counterPressureDesc,
   };
 }
 
-// ─── Risk sentiment — qualitative description for AI context ──────────────────
+// ─── Risk sentiment context ───────────────────────────────────────────────────
 
-// How each currency behaves in each regime:
-// +1 = expected to strengthen, −1 = expected to weaken, 0 = neutral
 const REGIME_STRENGTH = {
   RISK_ON:  { AUD: 1, NZD: 1, GBP: 0.5, CAD: 0.5, EUR: 0, USD: -0.5, CHF: -0.5, JPY: -1 },
   RISK_OFF: { AUD: -1, NZD: -1, GBP: -0.5, CAD: -0.5, EUR: 0, USD: 0.5, CHF: 0.5, JPY: 1 },
 };
 
-// What each currency represents in the global flow-of-money picture
 const CURRENCY_ROLE = {
-  USD: 'the world\'s primary reserve and liquidity currency — aggressively bid during deleveraging, panic, and dollar shortages; weakens when risk appetite returns and capital flows into higher-yielding assets',
-  JPY: 'the primary carry-trade funding and safe-haven currency — strengthens sharply when risk aversion rises as carry trades unwind and capital returns to Japan; weakens when global risk appetite supports carry trade expansion',
-  CHF: 'a European safe-haven and capital-preservation currency — attracted during geopolitical stress and European instability; weakens as fear recedes and capital seeks yield',
-  AUD: 'a high-yielding commodity and risk-sensitive currency — benefits from global growth, commodity demand, and carry appetite; among the first sold when risk aversion rises',
-  NZD: 'a high-yielding risk-sensitive currency closely tied to AUD — flows with global risk appetite and commodity cycles; vulnerable to sharp carry unwinds',
-  GBP: 'a semi-risk-sensitive reserve currency — broadly tracks global risk appetite but also influenced by UK-specific dynamics; tends to weaken modestly in broad risk-off environments',
-  EUR: 'a large global reserve currency — moderately risk-sensitive; behaves defensively during acute global stress as dollar demand rises but does not typically receive direct safe-haven flows',
-  CAD: 'an oil-linked commodity currency tied to North American growth — benefits from rising oil demand and global expansion; pressured when energy prices fall or growth fears dominate',
+  USD: 'primary reserve and liquidity currency — bid during deleveraging and dollar shortages; weight softens when risk appetite returns',
+  JPY: 'primary carry-trade funding and safe-haven currency — weight increases sharply when risk aversion rises; recedes as carry trade appetite returns',
+  CHF: 'European safe-haven — weight increases during geopolitical stress and broad risk-off; recedes as fear subsides',
+  AUD: 'high-yielding risk-sensitive commodity currency — weight supported by global growth and carry appetite; among the first to face pressure when risk aversion rises',
+  NZD: 'high-yielding risk-sensitive currency closely tied to AUD — weight tracks global risk appetite and commodity cycles',
+  GBP: 'semi-risk-sensitive reserve currency — weight broadly tracks global risk appetite',
+  EUR: 'large reserve currency — moderately risk-sensitive; weight defensively positioned during acute global stress',
+  CAD: 'oil-linked commodity currency — weight tied to energy demand and growth expectations',
 };
 
-// Deterministic: does the macro regime support or conflict with this pair's setup?
 function computeMacroAlignment(sentimentRow, state, base, quote) {
   if (!sentimentRow || sentimentRow.sentiment === 'NEUTRAL') return 'NEUTRAL';
   if ((sentimentRow.confidence || 0) < 35) return 'NEUTRAL';
-
-  const regime = sentimentRow.sentiment; // RISK_ON or RISK_OFF
+  const regime = sentimentRow.sentiment;
   const exp    = REGIME_STRENGTH[regime] || {};
-
-  const baseExpect  = exp[base]  ?? 0;
-  const quoteExpect = exp[quote] ?? 0;
-
-  // BUY = want base stronger (+), quote weaker (−)
-  // SELL = want base weaker (−), quote stronger (+)
-  const biasDir = state.bias === 'BUY' ? 1 : -1;
-  const score   = biasDir * (baseExpect - quoteExpect);
-
+  const score  = (state.bias === 'BUY' ? 1 : -1) * ((exp[base] ?? 0) - (exp[quote] ?? 0));
   if (score >  0.5) return 'ALIGNED';
   if (score < -0.5) return 'CONFLICTED';
   return 'NEUTRAL';
 }
 
-// Build qualitative macro context to include in the AI prompt
 function describeSentiment(s, base, quote) {
   if (!s) return null;
 
-  // Identify dominant flow drivers by score magnitude
   const FLOW_SIGNALS = [
-    { key: 'equity_score',  pos: 'global equities expanding — growth demand driving risk appetite',
+    { key: 'equity_score',  pos: 'global equities expanding — institutional risk appetite supported',
                              neg: 'global equities under pressure — institutional risk appetite deteriorating' },
-    { key: 'gold_score',    pos: 'gold demand declining — fear absent, capital leaving safety',
-                             neg: 'gold surging — capital flowing into precious metals, fear elevated' },
-    { key: 'jpy_score',     pos: 'JPY weakening — safe-haven flows receding, carry trade rebuilding',
-                             neg: 'JPY strengthening aggressively — carry trades unwinding, capital rushing to safety' },
-    { key: 'chf_score',     pos: 'CHF weakening — European/global fear receding',
-                             neg: 'CHF strengthening — defensive flows into European safe haven' },
-    { key: 'usd_score',     pos: 'USD softening — dollar liquidity not being hoarded, risk appetite present',
-                             neg: 'USD strengthening — dollar liquidity demand rising, deleveraging pressure building' },
-    { key: 'oil_score',     pos: 'oil rising with equities — global demand signal confirmed, growth expectations intact',
-                             neg: 'oil diverging from equities — growth concern or supply-shock risk signal' },
-    { key: 'audjpy_score',  pos: 'AUD/JPY carry spread recovering — high-yield appetite and risk-on rotation underway',
-                             neg: 'AUD/JPY carry unwinding — risk aversion spreading, carry positions being closed' },
-    { key: 'nzdjpy_score',  pos: 'NZD/JPY carry spread positive — broad risk appetite supported across Pacific currencies',
-                             neg: 'NZD/JPY carry declining — NZD facing structural risk-off pressure' },
+    { key: 'gold_score',    pos: 'gold demand declining — capital not seeking safety',
+                             neg: 'gold in demand — capital weight moving toward safety assets' },
+    { key: 'jpy_score',     pos: 'JPY weight receding — carry trade appetite returning',
+                             neg: 'JPY weight increasing — carry positions being unwound, safety flows active' },
+    { key: 'chf_score',     pos: 'CHF weight receding — European/global fear subsiding',
+                             neg: 'CHF weight increasing — defensive positioning in European safe haven' },
+    { key: 'usd_score',     pos: 'USD weight softening — dollar liquidity not being hoarded',
+                             neg: 'USD weight increasing — dollar liquidity demand rising, deleveraging pressure present' },
+    { key: 'oil_score',     pos: 'oil aligned with equities — global demand signal intact',
+                             neg: 'oil and equity flows diverging — growth or supply concern signal' },
+    { key: 'audjpy_score',  pos: 'AUD/JPY carry spread recovering — risk appetite and carry flows returning',
+                             neg: 'AUD/JPY carry spread declining — carry unwind, risk aversion broadening' },
+    { key: 'nzdjpy_score',  pos: 'NZD/JPY carry spread positive — risk appetite broadly supported',
+                             neg: 'NZD/JPY carry spread declining — NZD facing risk-off pressure' },
   ];
 
   const drivers = FLOW_SIGNALS
@@ -286,25 +312,25 @@ function describeSentiment(s, base, quote) {
 
   const accel = s.accel_composite || 0;
   const accelDesc =
-    accel >  30 ? 'risk-on conditions accelerating sharply — momentum building fast'
-  : accel >  10 ? 'risk-on conditions building gradually — not yet decisive'
-  : accel < -30 ? 'risk-off conditions accelerating sharply — conditions deteriorating rapidly, avoid new risk positions'
-  : accel < -10 ? 'risk-off momentum building — watch for continuation'
-  :               'conditions broadly stable — no sharp directional acceleration';
+    accel >  30 ? 'risk-on conditions building momentum — pace is accelerating'
+  : accel >  10 ? 'risk-on conditions developing gradually'
+  : accel < -30 ? 'risk-off conditions intensifying — pace of deterioration is accelerating'
+  : accel < -10 ? 'risk-off conditions gradually building'
+  :               'cross-asset conditions broadly stable — no sharp directional shift';
 
   const envDesc =
-    s.environment === 'STRESS'   ? 'STRESS — multiple defensive assets moving violently and simultaneously; conditions unstable'
-  : s.environment === 'ELEVATED' ? 'ELEVATED — above-normal cross-asset activity; monitor for escalation'
-  :                                 'CALM — orderly conditions, no panic signals';
+    s.environment === 'STRESS'   ? 'STRESS — multiple defensive assets moving simultaneously, conditions unstable'
+  : s.environment === 'ELEVATED' ? 'ELEVATED — above-normal cross-asset activity, monitor for escalation'
+  :                                 'CALM — orderly cross-asset conditions';
 
   return {
-    sentiment:  s.sentiment,
+    sentiment:   s.sentiment,
     environment: s.environment,
     envDesc,
-    confidence: s.confidence,
-    drivers:    drivers.length ? drivers : ['no dominant directional flow detected — conditions broadly balanced'],
-    baseRole:   CURRENCY_ROLE[base]  || `${base} — broadly tracked`,
-    quoteRole:  CURRENCY_ROLE[quote] || `${quote} — broadly tracked`,
+    confidence:  s.confidence,
+    drivers:     drivers.length ? drivers : ['no dominant directional flow — conditions broadly balanced'],
+    baseRole:    `${base}: ${CURRENCY_ROLE[base] || 'broadly tracked'}`,
+    quoteRole:   `${quote}: ${CURRENCY_ROLE[quote] || 'broadly tracked'}`,
     accelDesc,
   };
 }
@@ -315,7 +341,7 @@ async function analyzeSetup(instrument, state, sentimentRow) {
   const { base, quote, baseArr, quoteArr, spread3h, spread6h, spread12h }
     = await getHistory(instrument);
 
-  const metrics = computeMetrics(state, spread3h, spread6h, spread12h, baseArr, quoteArr);
+  const metrics        = computeMetrics(state, spread3h, spread6h, spread12h, baseArr, quoteArr);
   if (!metrics) throw new Error('Not enough data points');
 
   const desc           = describeMetrics(metrics, state, base, quote);
@@ -323,24 +349,23 @@ async function analyzeSetup(instrument, state, sentimentRow) {
   const sd             = describeSentiment(sentimentRow, base, quote);
 
   const macroAlignmentDesc =
-    macroAlignment === 'ALIGNED'    ? 'macro regime supports this pair\'s directional bias'
-  : macroAlignment === 'CONFLICTED' ? 'macro regime is working against this pair\'s directional bias'
-  :                                    'macro regime is neutral for this pair';
+    macroAlignment === 'ALIGNED'    ? 'macro flow is consistent with this bias'
+  : macroAlignment === 'CONFLICTED' ? 'macro flow is working against this bias'
+  :                                    'macro flow is neutral for this pair';
 
-  console.log(`[AI] ${instrument} → ${metrics.phase} ${metrics.completion}% | macro:${macroAlignment}${sd ? ` [${sd.sentiment}]` : ''} | comp=${metrics.compressionCycles}cyc depth=${metrics.depthRatio.toFixed(2)} decel=${metrics.decelCycles}/8`);
+  console.log(`[AI] ${instrument} → ${metrics.phase} ${metrics.completion}% cp:${metrics.counterPressureLabel} clean:${metrics.cleanlinessLabel} macro:${macroAlignment} | comp=${metrics.compressionCycles}cyc depth=${metrics.depthRatio.toFixed(2)} decel=${metrics.decelCycles}/8`);
 
   const client = getClient();
 
-  // Build macro section for prompt — only included when sentiment data is available
   const macroSection = sd ? `
 MACRO / FLOW OF MONEY:
 - Risk Regime: ${sd.sentiment} [${sd.environment}] | Confidence: ${sd.confidence}%
 - Environment: ${sd.envDesc}
 - Active flows: ${sd.drivers.join('; ')}
 - Momentum: ${sd.accelDesc}
-- ${base} role: ${sd.baseRole}
-- ${quote} role: ${sd.quoteRole}
-- Macro alignment for this setup: ${macroAlignment} — ${macroAlignmentDesc}
+- ${sd.baseRole}
+- ${sd.quoteRole}
+- Macro alignment: ${macroAlignment} — ${macroAlignmentDesc}
 ` : '\nMACRO / FLOW OF MONEY: data not available\n';
 
   const response = await client.chat.completions.create({
@@ -354,14 +379,19 @@ MACRO / FLOW OF MONEY:
         content: `You are the interpretive layer of a currency strength engine.
 The engine computes all numbers deterministically. Your job is to write what the numbers MEAN.
 
-RULES — strictly enforced:
-1. NEVER include raw decimal numbers (e.g. 0.00136, -0.00043). Forbidden entirely.
+STRUCTURAL RULES:
+1. NEVER include raw decimal numbers (e.g. 0.00136, -0.00043). Forbidden.
 2. Cycle counts are allowed (e.g. "6 H1 cycles", "last 8 cycles").
-3. Use engine vocabulary: 3H compression, 6H spread, 12H alignment, spread lifecycle, re-expansion, compression velocity, dominant bias.
-4. Lifecycle phase is engine-determined and FIXED — your text must align with it, never contradict.
-5. No trade recommendations. No entry/exit signals. Pure structure and flow interpretation.
-6. For flow_of_money: explain where capital is moving at the macro level and connect it to this pair's specific currencies — name which currency is being bid or sold and why.
-7. Write as if briefing a senior analyst — professional, precise, no filler phrases.`,
+3. Use engine vocabulary: 3H compression, 6H spread, 12H alignment, spread lifecycle, re-expansion, compression velocity, counter-trend force.
+4. Lifecycle phase and counter_pressure are engine-determined and FIXED — text must align with them.
+5. No trade recommendations. No entry/exit signals.
+
+LANGUAGE RULES — most important:
+6. NEVER use predictive language: "will", "leads to", "must", "should move", "expect to see", "typically results in". These imply future prediction. They are forbidden.
+7. ALWAYS use environment language: "environment remains supportive for", "conditions are consistent with", "flow is currently weighted toward", "regime provides context for", "weight of capital appears toward".
+8. STRICT SEPARATION — structure sections (structure_analysis, trend_assessment, pullback_quality_text, momentum_shift) must contain NO macro references. They describe price structure only.
+9. STRICT SEPARATION — flow_of_money must contain NO cycle counts or spread values. It describes macro capital positioning only.
+10. Write as if briefing a senior analyst — precise, direct, no filler phrases.`,
       },
       {
         role: 'user',
@@ -370,10 +400,12 @@ RULES — strictly enforced:
 ENGINE STATE:
 - Bias: ${state.bias} | Market State: ${state.state} | Confidence: ${state.confidence}%
 - Lifecycle: ${desc.phase} — ${desc.phaseDesc}
-- Phase completion: ${desc.completion}% (deterministic)
+- Phase completion: ${desc.completion}% (engine-determined)
+- Counter Pressure: ${desc.counterPressureLabel} — ${desc.counterPressureDesc}
+- Market Cleanliness: ${desc.cleanlinessLabel} (${metrics.scores.cleanliness}%)
 
 STRUCTURAL FACTS:
-- 3H compression: ${desc.compressionCycles} consecutive H1 cycles | Depth: ${desc.depthDesc}
+- 3H compression: ${desc.compressionCycles} consecutive H1 cycle${desc.compressionCycles !== 1 ? 's' : ''} | Depth: ${desc.depthDesc}
 - Compression velocity (6H acceleration): ${desc.decelDesc}
 - 6H spread: ${desc.s6Desc}
 - 12H spread: ${desc.s12Desc}
@@ -383,23 +415,24 @@ STRUCTURAL FACTS:
 SCORES (engine-computed, use as-is):
 { "continuation": ${metrics.scores.continuation}, "trend_health": ${metrics.scores.trend_health}, "pullback_quality": ${metrics.scores.pullback_quality}, "cleanliness": ${metrics.scores.cleanliness} }
 ${macroSection}
-Return this exact JSON. All text fields: interpret the facts — no raw decimals, use cycle counts and engine terminology:
+Return this exact JSON. All text: no raw decimals, use cycle counts, engine terminology, environment language only:
 {
   "structure_type": "HEALTHY_PULLBACK"|"WEAK_PULLBACK"|"STRONG_TREND"|"REVERSAL_RISK"|"CHOPPY"|"EXHAUSTED",
   "market_quality": "CLEAN"|"NOISY"|"CHOPPY",
-  "warning": <null or one short structural or macro observation — no decimals>,
-  "summary": <one sentence: must name 3H/6H behavior, cycle count, and macro regime — no decimals>,
+  "warning": <null or one short observation — no decimals, no predictions>,
+  "summary": <one sentence: name 3H/6H behavior, cycle count, and whether macro flow is supportive or neutral — no decimals, no predictions>,
   "details": {
     "lifecycle_phase": "${desc.phase}",
     "lifecycle_completion": ${desc.completion},
+    "counter_pressure": "${desc.counterPressureLabel}",
     "scores": { "continuation": ${metrics.scores.continuation}, "trend_health": ${metrics.scores.trend_health}, "pullback_quality": ${metrics.scores.pullback_quality}, "cleanliness": ${metrics.scores.cleanliness} },
-    "structure_analysis": <2 sentences: describe 3H vs 6H spread relationship and what it reveals — no decimals, cite cycle counts>,
-    "trend_assessment": <2 sentences: describe how ${base} and ${quote} strength behaved over 48H — no decimals>,
-    "pullback_quality_text": <1-2 sentences: characterize compression depth and duration>,
-    "momentum_shift": <1-2 sentences: describe compression velocity and acceleration — fading or building>,
-    "flow_of_money": <2-3 sentences: explain where capital is flowing at the macro level — name which currencies are being bid vs sold — connect the macro regime to how it affects ${base} and ${quote} specifically — if macro is ALIGNED state why it supports the setup, if CONFLICTED explain the headwind>,
-    "support_factors": [<up to 3 strings: each references 3H, 6H, or 12H behavior — no decimals>],
-    "risk_factors": [<up to 3 strings: structural or macro risks — no decimals>]
+    "structure_analysis": <2 sentences: pure price structure — describe 3H vs 6H spread relationship, cite cycle counts — NO macro references>,
+    "trend_assessment": <2 sentences: how ${base} and ${quote} strength behaved over 48H — pure structure, NO macro references>,
+    "pullback_quality_text": <1-2 sentences: characterize compression depth and duration — NO macro references>,
+    "momentum_shift": <1-2 sentences: describe compression velocity — fading or building — NO macro references>,
+    "flow_of_money": <2-3 sentences: describe where capital weight is currently positioned at the macro level — name which currencies carry the weight and which face pressure — connect the current regime to how it relates to ${base} and ${quote} positioning — NO cycle counts, NO spread values, NO predictions — use: "flow remains supportive for", "conditions are consistent with", "weight of capital appears toward">,
+    "support_factors": [<up to 3 strings: structural spread facts only — no decimals>],
+    "risk_factors": [<up to 3 strings: structural or macro positioning risks — no decimals, no predictions>]
   }
 }`,
       },
@@ -408,11 +441,13 @@ Return this exact JSON. All text fields: interpret the facts — no raw decimals
 
   const parsed = JSON.parse(response.choices[0].message.content.trim());
 
-  // Enforce deterministic fields — AI cannot override these
-  parsed.details.lifecycle_phase      = metrics.phase;
-  parsed.details.lifecycle_completion = metrics.completion;
-  parsed.details.scores               = metrics.scores;
-  parsed.details.macro_alignment      = macroAlignment;
+  // Enforce all deterministic fields — AI must not override these
+  parsed.details.lifecycle_phase        = metrics.phase;
+  parsed.details.lifecycle_completion   = metrics.completion;
+  parsed.details.scores                 = metrics.scores;
+  parsed.details.counter_pressure       = metrics.counterPressureLabel;
+  parsed.details.cleanliness_label      = metrics.cleanlinessLabel;
+  parsed.details.macro_alignment        = macroAlignment;
 
   return parsed;
 }
@@ -456,12 +491,9 @@ async function analyzeActiveSetups() {
     .eq('time', latest.time);
   if (sErr) throw sErr;
 
-  // Fetch risk sentiment ONCE — shared context for all pair analyses
   const sentimentRow = await getLatestSentiment();
   if (sentimentRow) {
-    console.log(`[AI] Macro regime: ${sentimentRow.sentiment} [${sentimentRow.environment}] conf:${sentimentRow.confidence}% accel:${sentimentRow.accel_composite}`);
-  } else {
-    console.log('[AI] No risk sentiment data — analysis will proceed without macro context');
+    console.log(`[AI] Macro: ${sentimentRow.sentiment} [${sentimentRow.environment}] conf:${sentimentRow.confidence}%`);
   }
 
   const PRIORITY = { READY_TO_ENTER: 4, PULLBACK_ACTIVE: 3, PULLBACK_STARTING: 2, TREND: 1 };
@@ -488,7 +520,8 @@ async function analyzeActiveSetups() {
       await saveAnalysis(state.instrument, latest.time, result);
       const sc = result.details?.scores || {};
       const ma = result.details?.macro_alignment || 'NEUTRAL';
-      console.log(`[AI] ✓ ${state.instrument}: ${result.details?.lifecycle_phase} ${result.details?.lifecycle_completion}% macro:${ma} | cont=${sc.continuation} trend=${sc.trend_health} pbq=${sc.pullback_quality} clean=${sc.cleanliness}`);
+      const cp = result.details?.counter_pressure || '—';
+      console.log(`[AI] ✓ ${state.instrument}: ${result.details?.lifecycle_phase} ${result.details?.lifecycle_completion}% cp:${cp} macro:${ma} | cont=${sc.continuation} trend=${sc.trend_health} pbq=${sc.pullback_quality} clean=${sc.cleanliness}`);
     } catch (err) {
       console.error(`[AI] ✗ ${state.instrument}: ${err.message}`);
     }
