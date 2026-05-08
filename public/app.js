@@ -148,6 +148,10 @@ function openAiModal(instrument) {
     </div>`;
 
   document.getElementById('ai-modal-body').innerHTML = `
+    ${_sentimentData?.sentiment?.sentiment === 'NEUTRAL' ? `
+    <div class="sent-neutral-warn" style="margin-bottom:10px">
+      ⚠ Risk sentiment NEUTRAL — no clear money flow direction. No edge confirmed. High risk to trade.
+    </div>` : ''}
     ${lp ? `
     <div class="ai-modal-lifecycle">
       <div class="ai-modal-lp-header">
@@ -244,10 +248,6 @@ function openAiModal(instrument) {
       </div>
     </div>
 
-    ${_sentimentData?.sentiment?.sentiment === 'NEUTRAL' ? `
-    <div class="sent-neutral-warn" style="margin-top:10px">
-      ⚠ Risk sentiment NEUTRAL — no clear money flow direction. No edge confirmed. High risk to trade.
-    </div>` : ''}
     ${ai.warning ? `<div class="ai-modal-warning">⚠ ${ai.warning}</div>` : ''}
     <div class="ai-modal-footer">48H analysis · updated ${fmtTime(ai.time)} · gpt-4o-mini</div>
   `;
