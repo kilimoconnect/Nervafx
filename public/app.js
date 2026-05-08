@@ -684,12 +684,26 @@ function renderSession(data) {
                : activity >= 35 ? 'medium'
                : 'low';
 
-  // Timeline
-  const timelineHtml = SESSION_TIMELINE.map(t => {
+  // UTC range display — null-safe, with DST badge when offsets differ from winter baseline
+  const hFmt = h => h != null ? String(h).padStart(2, '0') + ':00' : '—';
+  const utcRange = (s.start_hour != null && s.end_hour != null)
+    ? `${hFmt(s.start_hour)} – ${hFmt(s.end_hour)} UTC`
+    : '';
+  const dstBadge = s.dst_active
+    ? ' <span class="sess-dst-badge">DST adjusted</span>'
+    : '';
+
+  // Timeline — prefer dynamic data from API (DST-aware hours); fall back to static
+  const tlSource = tl && tl.length ? tl : SESSION_TIMELINE;
+  const timelineHtml = tlSource.map(t => {
     const isCurrent = t.name === s.session;
+    // Dynamic hours when available (API), static hours string as fallback
+    const hStr = (t.startHour != null && t.endHour != null)
+      ? `${String(t.startHour).padStart(2,'0')}–${String(t.endHour).padStart(2,'0')}`
+      : (t.hours || '');
     return `<div class="sess-tl-item ${t.quality}${isCurrent ? ' current' : ''}">
       <span class="sess-tl-label">${t.label}</span>
-      <span class="sess-tl-hours">${t.hours}</span>
+      <span class="sess-tl-hours">${hStr}</span>
     </div>`;
   }).join('<span class="sess-tl-arrow">›</span>');
 
@@ -703,7 +717,7 @@ function renderSession(data) {
     <div class="session-main">
       <div class="session-name-wrap">
         <div class="sess-name-badge sq-${qCls}">${s.label || s.session}</div>
-        <div class="sess-hours-utc">${String(s.start_hour).padStart(2,'0')}:00 – ${String(s.end_hour).padStart(2,'0')}:00 UTC</div>
+        ${utcRange ? `<div class="sess-hours-utc">${utcRange}${dstBadge}</div>` : ''}
       </div>
       <div class="session-quality-wrap">
         <div class="sess-qlabel sq-${qCls}">${qLabel}</div>
