@@ -578,6 +578,91 @@ function renderActions(actions) {
     </div>`).join('');
 }
 
+// ─── Risk Sentiment ───────────────────────────────────────────────────────────
+
+function renderSentiment(data) {
+  const el = document.getElementById('sentiment-display');
+  if (!el) return;
+
+  const s = data?.sentiment;
+  if (!s) {
+    el.innerHTML = '<p class="empty-state">No sentiment data — runs on next hourly update</p>';
+    return;
+  }
+
+  const sentCls = s.sentiment === 'RISK_ON'  ? 'risk-on'
+               : s.sentiment === 'RISK_OFF' ? 'risk-off'
+               : 'neutral';
+  const sentLabel = (s.sentiment || 'NEUTRAL').replace(/_/g, ' ');
+
+  const envCls = (s.environment || 'CALM').toLowerCase();
+  const envLabel = s.environment || 'CALM';
+
+  const confPct = s.confidence || 0;
+  const accel   = Number(s.accel_composite || 0);
+  const accelCls = accel > 10 ? 'risk-on' : accel < -10 ? 'risk-off' : 'neutral';
+  const accelArrow = accel > 20 ? '↑↑' : accel > 5 ? '↑' : accel < -20 ? '↓↓' : accel < -5 ? '↓' : '→';
+
+  // 8 components — no silver, USD added
+  const components = [
+    { label: 'Equity',  val: s.equity_score,  tip: 'SPX500 + NAS100 smoothed 12/24H momentum' },
+    { label: 'JPY',     val: s.jpy_score,      tip: 'JPY safe haven — weakness = Risk On' },
+    { label: 'CHF',     val: s.chf_score,      tip: 'CHF safe haven — weakness = Risk On' },
+    { label: 'Gold',    val: s.gold_score,      tip: 'Gold — weakness = Risk On (fear absent)' },
+    { label: 'Oil',     val: s.oil_score,       tip: 'Brent Crude — context-aware: spike ≠ always Risk On' },
+    { label: 'USD',     val: s.usd_score,       tip: 'USD pressure — USD strong = liquidity stress = Risk Off' },
+    { label: 'AUD/JPY', val: s.audjpy_score,   tip: 'AUD/JPY carry spread — classic risk barometer' },
+    { label: 'NZD/JPY', val: s.nzdjpy_score,   tip: 'NZD/JPY carry spread — risk barometer' },
+  ];
+
+  function compBar(val) {
+    if (val == null) return '<div class="sent-comp-bar-wrap"><div class="sent-comp-center"></div></div>';
+    const v    = Number(val);
+    const cls  = v > 5 ? 'risk-on' : v < -5 ? 'risk-off' : 'neutral';
+    const pct  = Math.abs(v);
+    const left  = v < 0 ? Math.max(0, 50 - pct / 2) : 50;
+    const width = pct / 2;
+    return `<div class="sent-comp-bar-wrap">
+      <div class="sent-comp-bar-fill ${cls}" style="left:${left}%;width:${width}%"></div>
+      <div class="sent-comp-center"></div>
+    </div>`;
+  }
+
+  function compVal(val) {
+    if (val == null) return '—';
+    const v = Number(val);
+    return (v > 0 ? '+' : '') + v;
+  }
+
+  el.innerHTML = `
+    <div class="sentiment-main">
+      <div class="sent-badge-row">
+        <div class="sentiment-badge ${sentCls}">${sentLabel}</div>
+        <div class="sent-env-badge ${envCls}">${envLabel}</div>
+      </div>
+      <div class="sentiment-meta">
+        <span class="sent-conf-label">Confidence</span>
+        <div class="sent-conf-bar-wrap">
+          <div class="sent-conf-bar-fill ${sentCls}" style="width:${confPct}%"></div>
+        </div>
+        <span class="sent-conf-pct">${confPct}%</span>
+      </div>
+      <div class="sentiment-net">
+        Net <span class="sent-net-val ${sentCls}">${Number(s.net_score || 0).toFixed(1)}</span>
+        <span class="sent-accel ${accelCls}" title="Acceleration: how fast conditions are changing">${accelArrow} ${accel > 0 ? '+' : ''}${accel}</span>
+      </div>
+    </div>
+    <div class="sentiment-components">
+      ${components.map(c => `
+        <div class="sent-comp-row" title="${c.tip}">
+          <span class="sent-comp-label">${c.label}</span>
+          ${compBar(c.val)}
+          <span class="sent-comp-val ${Number(c.val) > 5 ? 'risk-on' : Number(c.val) < -5 ? 'risk-off' : 'neutral'}">${compVal(c.val)}</span>
+        </div>`).join('')}
+    </div>
+    <div class="sentiment-time">${fmtTime(s.time)}</div>`;
+}
+
 // ─── Data quality ─────────────────────────────────────────────────────────────
 
 function renderQuality(q) {
@@ -596,7 +681,7 @@ function renderQuality(q) {
 
 async function refresh() {
   try {
-    const [strength, signals, states, risk, actions, quality, spreads, aiData] = await Promise.all([
+    const [strength, signals, states, risk, actions, quality, spreads, aiData, sentimentData] = await Promise.all([
       api('/api/strength'),
       api('/api/signals'),
       api('/api/states'),
@@ -605,6 +690,7 @@ async function refresh() {
       api('/api/quality'),
       api('/api/spreads'),
       api('/api/ai').catch(() => ({ analyses: [] })),
+      api('/api/sentiment').catch(() => ({ sentiment: null })),
     ]);
 
     // Build AI map: instrument → analysis
@@ -613,6 +699,7 @@ async function refresh() {
     _aiMap = aiMap; // store globally for modal access
 
     updateHeader(risk);
+    renderSentiment(sentimentData);
     renderLiveOpportunities(states.states || [], aiMap);
     renderTopSetups(states.states || [], aiMap);
     renderSignals(signals, states.states || []);

@@ -1217,3 +1217,209 @@ html, body {
   /* TF toggle buttons */
   .tf-toggle { margin-left: 0; }
 }
+
+/* ─── Risk Sentiment ──────────────────────────────────────────────────────── */
+
+.sentiment-display {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+/* Main badge + confidence block */
+.sentiment-main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 170px;
+}
+
+/* Badge row: sentiment + environment side by side */
+.sent-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.sentiment-badge {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  padding: 9px 18px;
+  border-radius: var(--radius);
+  text-align: center;
+  white-space: nowrap;
+}
+.sentiment-badge.risk-on  { background: #052e16; color: #4ade80; border: 1px solid #16a34a; }
+.sentiment-badge.risk-off { background: #450a0a; color: #f87171; border: 1px solid #dc2626; }
+.sentiment-badge.neutral  { background: #1c1917; color: #d4a017; border: 1px solid #ca8a04; }
+
+/* Environment badge */
+.sent-env-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.sent-env-badge.calm     { background: #0f172a; color: #64748b; border: 1px solid #1e293b; }
+.sent-env-badge.elevated { background: #431407; color: #fb923c; border: 1px solid #c2410c; }
+.sent-env-badge.stress   { background: #450a0a; color: #f87171; border: 1px solid #dc2626;
+                            animation: stress-pulse 1.5s ease-in-out infinite; }
+
+@keyframes stress-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.6; }
+}
+
+.sentiment-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.sent-conf-label {
+  font-size: 9px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.sent-conf-bar-wrap {
+  flex: 1;
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+  min-width: 60px;
+}
+
+.sent-conf-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+.sent-conf-bar-fill.risk-on  { background: #4ade80; }
+.sent-conf-bar-fill.risk-off { background: #f87171; }
+.sent-conf-bar-fill.neutral  { background: #d4a017; }
+
+.sent-conf-pct {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-dim);
+  min-width: 28px;
+  text-align: right;
+}
+
+.sentiment-net {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.sent-net-val {
+  font-weight: 700;
+  margin-left: 4px;
+}
+.sent-net-val.risk-on  { color: #4ade80; }
+.sent-net-val.risk-off { color: #f87171; }
+.sent-net-val.neutral  { color: #d4a017; }
+
+/* Acceleration indicator */
+.sent-accel {
+  font-size: 10px;
+  font-weight: 700;
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
+}
+.sent-accel.risk-on  { background: #052e16; color: #4ade80; }
+.sent-accel.risk-off { background: #450a0a; color: #f87171; }
+.sent-accel.neutral  { background: #1e2128; color: #64748b; }
+
+/* Component breakdown bars */
+.sentiment-components {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 220px;
+}
+
+.sent-comp-row {
+  display: grid;
+  grid-template-columns: 60px 1fr 36px;
+  align-items: center;
+  gap: 8px;
+}
+
+.sent-comp-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.sent-comp-bar-wrap {
+  position: relative;
+  height: 8px;
+  background: var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.sent-comp-bar-fill {
+  position: absolute;
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.4s ease, left 0.4s ease;
+}
+.sent-comp-bar-fill.risk-on  { background: #4ade80; }
+.sent-comp-bar-fill.risk-off { background: #f87171; }
+.sent-comp-bar-fill.neutral  { background: #475569; }
+
+/* Center tick line */
+.sent-comp-center {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 1px;
+  height: 100%;
+  background: #374151;
+  transform: translateX(-50%);
+}
+
+.sent-comp-val {
+  font-size: 10px;
+  font-weight: 700;
+  text-align: right;
+}
+.sent-comp-val.risk-on  { color: #4ade80; }
+.sent-comp-val.risk-off { color: #f87171; }
+.sent-comp-val.neutral  { color: var(--text-muted); }
+
+.sent-comp-na {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.sentiment-time {
+  width: 100%;
+  font-size: 9px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  letter-spacing: 0.3px;
+}
+
+/* Mobile: stack sentiment layout */
+@media (max-width: 600px) {
+  .sentiment-display { flex-direction: column; }
+  .sentiment-components { min-width: 0; width: 100%; }
+}

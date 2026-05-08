@@ -21,6 +21,7 @@ const { backfillStates, printLatestStates } = require('./stateDetect');
 const { backfillSignals, printLatestSignals } = require('./signals');
 const { backfillRiskChecks, printRiskReport } = require('./risk');
 const { analyzeActiveSetups } = require('./aiAnalysis');
+const { calculateLatestSentiment } = require('./riskSentiment');
 
 async function phase1() {
   validate();
@@ -190,6 +191,15 @@ if (command === 'load') {
 } else if (command === 'risk') {
   validate();
   printRiskReport().then(() => process.exit(0)).catch(err => { console.error(err); process.exit(1); });
+} else if (command === 'sentiment') {
+  validate();
+  calculateLatestSentiment().then(r => {
+    console.log(`\nRisk Sentiment: ${r.sentiment} (net: ${r.net_score}, conf: ${r.confidence}%)`);
+    console.log(`  Equity: ${r.equity_score}  JPY: ${r.jpy_score}  CHF: ${r.chf_score}`);
+    console.log(`  Gold: ${r.gold_score}  Silver: ${r.silver_score}  Oil: ${r.oil_score}`);
+    console.log(`  AUD/JPY: ${r.audjpy_score}  NZD/JPY: ${r.nzdjpy_score}`);
+    process.exit(0);
+  }).catch(err => { console.error(err); process.exit(1); });
 } else if (command === 'analyze') {
   validate();
   runAnalysis().then(() => process.exit(0)).catch(err => { console.error(err); process.exit(1); });

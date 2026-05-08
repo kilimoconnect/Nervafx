@@ -11,6 +11,7 @@ const { calculateLatestSignals } = require('./signals');
 const { checkLatestSignals } = require('./risk');
 const { processLatestActions } = require('./actions');
 const { analyzeActiveSetups } = require('./aiAnalysis');
+const { calculateLatestSentiment } = require('./riskSentiment');
 
 async function step(name, fn) {
   try {
@@ -71,6 +72,7 @@ async function hourlyUpdate() {
   await step('strength',      () => calculateLatestStrength());
   await step('smooth',        () => smoothLatest());
   await step('spreads',       () => calculateLatestSpreads());
+  await step('sentiment',     () => calculateLatestSentiment());
   await step('states',        () => calculateLatestStates());
   await step('signals',       () => calculateLatestSignals());
   await step('risk',          () => checkLatestSignals());
@@ -83,10 +85,11 @@ async function hourlyUpdate() {
 
 async function runAnalysis() {
   console.log(`[ANALYZE] ${new Date().toISOString()} - Running engine on current data...`);
-  await step('strength', () => calculateLatestStrength());
-  await step('smooth',   () => smoothLatest());
-  await step('spreads',  () => calculateLatestSpreads());
-  await step('states',   () => calculateLatestStates());
+  await step('strength',  () => calculateLatestStrength());
+  await step('smooth',    () => smoothLatest());
+  await step('spreads',   () => calculateLatestSpreads());
+  await step('sentiment', () => calculateLatestSentiment());
+  await step('states',    () => calculateLatestStates());
   await step('signals',  () => calculateLatestSignals());
   await step('risk',     () => checkLatestSignals());
   await step('actions',  () => processLatestActions());
