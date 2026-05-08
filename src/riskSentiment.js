@@ -308,17 +308,44 @@ async function calculateLatestSentiment() {
     norm(-jpyAccelRaw, CAPS.usd / 5) * 0.30
   );
 
-  // ─── Weighted net score ───────────────────────────────────────────────────
-  const net_score = parseFloat((
-    equity_score * WEIGHTS.equity  +
-    jpy_score    * WEIGHTS.jpy     +
-    chf_score    * WEIGHTS.chf     +
-    gold_score   * WEIGHTS.gold    +
-    oil_score    * WEIGHTS.oil     +
-    audjpy_score * WEIGHTS.audjpy  +
-    nzdjpy_score * WEIGHTS.nzdjpy  +
-    usd_score    * WEIGHTS.usd
-  ).toFixed(2));
+  // ─── Group-aligned net score ─────────────────────────────────────────────
+  // A group only contributes when ALL its components agree on direction
+  // (all > +5 or all < -5). Mixed groups contribute 0 — no confirmed edge.
+  // Single-item groups (USD) always contribute — nothing to misalign with.
+  const ALIGN_THRESHOLD = 5;
+
+  const scoreMap = {
+    equity: equity_score, jpy: jpy_score, chf: chf_score,
+    gold:   gold_score,   oil: oil_score, usd: usd_score,
+    audjpy: audjpy_score, nzdjpy: nzdjpy_score,
+  };
+
+  const SENTIMENT_GROUPS = [
+    { name: 'growth', keys: ['equity', 'oil'] },
+    { name: 'carry',  keys: ['audjpy', 'nzdjpy'] },
+    { name: 'haven',  keys: ['jpy', 'chf', 'gold'] },
+    { name: 'usd',    keys: ['usd'] },
+  ];
+
+  // Compute per-group alignment and accumulate net score
+  const groupAlignment = {};
+  let net_score_sum = 0;
+
+  for (const g of SENTIMENT_GROUPS) {
+    const vals  = g.keys.map(k => scoreMap[k]);
+    const allOn  = vals.every(v => v >  ALIGN_THRESHOLD);
+    const allOff = vals.every(v => v < -ALIGN_THRESHOLD);
+    const single  = g.keys.length === 1;
+    const aligned = single || allOn || allOff;
+
+    groupAlignment[g.name] = { aligned, allOn, allOff, single };
+
+    if (aligned) {
+      for (const k of g.keys) net_score_sum += scoreMap[k] * WEIGHTS[k];
+    }
+  }
+
+  const net_score = parseFloat(net_score_sum.toFixed(2));
 
   // ─── Sentiment classification ─────────────────────────────────────────────
   let sentiment;
@@ -331,17 +358,30 @@ async function calculateLatestSentiment() {
     sentiment = 'RISK_OFF';
   }
 
-  // ─── Confidence: component agreement × signal strength ───────────────────
+  // ─── Confidence: group alignment agreement × signal strength ─────────────
   const dir = net_score > 0 ? 1 : net_score < 0 ? -1 : 0;
-  const allScores = [equity_score, jpy_score, chf_score, gold_score, oil_score, usd_score, audjpy_score, nzdjpy_score];
-  const agreeing  = dir === 0 ? 4 : allScores.filter(v => (dir > 0 ? v > 0 : v < 0)).length;
+
+  // Count aligned groups that confirm the net direction
+  const confirmedGroups = SENTIMENT_GROUPS.filter(g => {
+    const { aligned, allOn, allOff, single } = groupAlignment[g.name];
+    if (!aligned) return false;
+    if (single) return dir > 0 ? scoreMap[g.keys[0]] > 0 : dir < 0 ? scoreMap[g.keys[0]] < 0 : true;
+    return dir > 0 ? allOn : dir < 0 ? allOff : true;
+  }).length;
+
+  // Max achievable = sum of aligned-group weights × 100
+  const maxAchievable = Math.max(15, SENTIMENT_GROUPS.reduce((sum, g) => {
+    return groupAlignment[g.name].aligned
+      ? sum + g.keys.reduce((ws, k) => ws + WEIGHTS[k], 0) * 100
+      : sum;
+  }, 0));
 
   let confidence = Math.min(100, Math.round(
-    (agreeing / allScores.length) * 50 +
-    (Math.abs(net_score) / 100) * 50
+    (dir === 0 ? 0 : confirmedGroups / SENTIMENT_GROUPS.length) * 50 +
+    (Math.abs(net_score) / maxAchievable) * 50
   ));
 
-  // Reduce confidence when environment is unstable (contradictory / violent signals)
+  // Reduce confidence when environment is unstable
   if (environment === 'STRESS')   confidence = Math.round(confidence * 0.70);
   if (environment === 'ELEVATED') confidence = Math.round(confidence * 0.85);
 
