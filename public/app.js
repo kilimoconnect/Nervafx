@@ -767,16 +767,36 @@ function renderSentiment(data) {
   const accelCls = accel > 10 ? 'risk-on' : accel < -10 ? 'risk-off' : 'neutral';
   const accelArrow = accel > 20 ? '↑↑' : accel > 5 ? '↑' : accel < -20 ? '↓↓' : accel < -5 ? '↓' : '→';
 
-  // 8 components — no silver, USD added
-  const components = [
-    { label: 'Equity',  val: s.equity_score,  tip: 'SPX500 + NAS100 smoothed 12/24H momentum' },
-    { label: 'JPY',     val: s.jpy_score,      tip: 'JPY safe haven — weakness = Risk On' },
-    { label: 'CHF',     val: s.chf_score,      tip: 'CHF safe haven — weakness = Risk On' },
-    { label: 'Gold',    val: s.gold_score,      tip: 'Gold — weakness = Risk On (fear absent)' },
-    { label: 'Oil',     val: s.oil_score,       tip: 'Brent Crude — context-aware: spike ≠ always Risk On' },
-    { label: 'USD',     val: s.usd_score,       tip: 'USD pressure — USD strong = liquidity stress = Risk Off' },
-    { label: 'AUD/JPY', val: s.audjpy_score,   tip: 'AUD/JPY carry spread — classic risk barometer' },
-    { label: 'NZD/JPY', val: s.nzdjpy_score,   tip: 'NZD/JPY carry spread — risk barometer' },
+  // Components grouped for display — calculation unchanged
+  const groups = [
+    {
+      title: 'Growth / Risk Assets',
+      items: [
+        { label: 'Equity', val: s.equity_score, tip: 'SPX500 + NAS100 smoothed 12/24H momentum' },
+        { label: 'Oil',    val: s.oil_score,    tip: 'Brent Crude — context-aware: spike ≠ always Risk On' },
+      ],
+    },
+    {
+      title: 'Carry / Risk FX',
+      items: [
+        { label: 'AUD/JPY', val: s.audjpy_score, tip: 'AUD/JPY carry spread — classic risk barometer' },
+        { label: 'NZD/JPY', val: s.nzdjpy_score, tip: 'NZD/JPY carry spread — risk barometer' },
+      ],
+    },
+    {
+      title: 'Safe Havens',
+      items: [
+        { label: 'JPY',  val: s.jpy_score,  tip: 'JPY safe haven — weakness = Risk On' },
+        { label: 'CHF',  val: s.chf_score,  tip: 'CHF safe haven — weakness = Risk On' },
+        { label: 'Gold', val: s.gold_score, tip: 'Gold — weakness = Risk On (fear absent)' },
+      ],
+    },
+    {
+      title: 'USD Liquidity',
+      items: [
+        { label: 'USD', val: s.usd_score, tip: 'USD pressure — USD strong = liquidity stress = Risk Off' },
+      ],
+    },
   ];
 
   function compBar(val) {
@@ -817,12 +837,15 @@ function renderSentiment(data) {
       </div>
     </div>
     <div class="sentiment-components">
-      ${components.map(c => `
-        <div class="sent-comp-row" title="${c.tip}">
-          <span class="sent-comp-label">${c.label}</span>
-          ${compBar(c.val)}
-          <span class="sent-comp-val ${Number(c.val) > 5 ? 'risk-on' : Number(c.val) < -5 ? 'risk-off' : 'neutral'}">${compVal(c.val)}</span>
-        </div>`).join('')}
+      ${groups.map(g => `
+        <div class="sent-group-header">${g.title}</div>
+        ${g.items.map(c => `
+          <div class="sent-comp-row" title="${c.tip}">
+            <span class="sent-comp-label">${c.label}</span>
+            ${compBar(c.val)}
+            <span class="sent-comp-val ${Number(c.val) > 5 ? 'risk-on' : Number(c.val) < -5 ? 'risk-off' : 'neutral'}">${compVal(c.val)}</span>
+          </div>`).join('')}
+      `).join('')}
     </div>
     <div class="sentiment-time">${fmtTime(s.time)}</div>`;
 }
