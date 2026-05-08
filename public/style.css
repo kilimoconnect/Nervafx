@@ -1401,6 +1401,9 @@ html, body {
 }
 
 .sent-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   font-size: 9.5px;
   font-weight: 800;
   letter-spacing: 0.8px;
@@ -1417,6 +1420,16 @@ html, body {
   margin-top: 0;
   border-top: none;
 }
+.sent-align-badge {
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  text-transform: uppercase;
+}
+.sent-align-badge.risk-on  { background: rgba(74,222,128,0.12); color: #4ade80; border: 1px solid rgba(74,222,128,0.25); }
+.sent-align-badge.risk-off { background: rgba(248,113,113,0.12); color: #f87171; border: 1px solid rgba(248,113,113,0.25); }
 
 .sent-comp-row {
   display: grid;
