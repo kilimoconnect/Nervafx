@@ -251,7 +251,7 @@ function renderLiveOpportunities(states, aiMap = {}) {
           <span class="tf-item ${ta.h12}">12H ${ta.h12||'→'}</span>
           <span class="tf-item ${ta.h6}">6H ${ta.h6||'→'}</span>
           <span class="tf-item ${ta.h3}">3H ${ta.h3||'→'}</span>
-          <span class="sb-behavior ${s.spread_behavior}">${s.spread_behavior}</span>
+          <span class="sb-behavior ${s.spread_behavior}">${(s.spread_behavior||'').replace(/_/g,' ')}</span>
         </div>
         <div class="live-reason">${s.spread_behavior_text}</div>
         ${(s.confidence_breakdown||[]).length ? `<div class="conf-factors" style="align-items:flex-start;margin-top:6px">${s.confidence_breakdown.map(f=>`<span>+ ${f}</span>`).join('')}</div>` : ''}
@@ -294,7 +294,7 @@ function renderTopSetups(states, aiMap = {}) {
           <div class="top-header">
             <span class="top-pair">${pair(s.instrument)}</span>
             <span class="signal-dir ${dir}">${s.bias}</span>
-            <span class="phase-badge ${phCls}">${s.phase}</span>
+            <span class="phase-badge ${phCls}">${(s.phase||'').replace(/_/g,' ')}</span>
             <span class="action-badge ${s.action}">${s.action}</span>
           </div>
           ${pipelineHtml(s.pipeline_stage)}
@@ -306,7 +306,7 @@ function renderTopSetups(states, aiMap = {}) {
             <span class="tf-item ${ta.h12}">12H ${ta.h12 || '→'}</span>
             <span class="tf-item ${ta.h6}">6H ${ta.h6 || '→'}</span>
             <span class="tf-item ${ta.h3}">3H ${ta.h3 || '→'}</span>
-            <span class="sb-behavior ${s.spread_behavior}">${s.spread_behavior || ''}</span>
+            <span class="sb-behavior ${s.spread_behavior}">${(s.spread_behavior||'').replace(/_/g,' ')}</span>
           </div>
           <div style="font-size:9px;color:var(--text-muted);margin-bottom:3px">${s.spread_behavior_text || ''}</div>
           ${nextActionHtml(s.next_action)}
@@ -377,7 +377,7 @@ function signalCard(s, st) {
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
         <span class="signal-pair">${pair(s.instrument)}</span>
         <span class="signal-dir ${cls}">${s.signal}</span>
-        ${st?.phase ? `<span class="phase-badge ${phCls}">${st.phase}</span>` : ''}
+        ${st?.phase ? `<span class="phase-badge ${phCls}">${(st.phase||'').replace(/_/g,' ')}</span>` : ''}
         ${st?.action === 'ENTER' ? `<span class="action-badge ENTER">ENTER</span>` : ''}
       </div>
       ${pipelineHtml(st?.pipeline_stage)}
@@ -498,7 +498,7 @@ function renderStates(data) {
       <div class="state-row-v2">
         <div class="state-row-top">
           <span class="state-pair">${pair(s.instrument)}</span>
-          <span class="phase-badge ${phCls}">${s.phase || s.state.replace(/_/g,' ')}</span>
+          <span class="phase-badge ${phCls}">${(s.phase || s.state || '').replace(/_/g,' ')}</span>
           <span class="action-badge ${s.action}">${s.action || '—'}</span>
           <div class="state-conf-mini" style="width:36px;margin-left:auto">
             <div class="state-conf-mini-fill" style="width:${s.confidence}%"></div>
@@ -509,7 +509,7 @@ function renderStates(data) {
           <span class="tfa ${ta.h12}">12H${ta.h12||'→'}</span>
           <span class="tfa ${ta.h6}">6H${ta.h6||'→'}</span>
           <span class="tfa ${ta.h3}">3H${ta.h3||'→'}</span>
-          <span class="sb-behavior ${s.spread_behavior}">${s.spread_behavior||''}</span>
+          <span class="sb-behavior ${s.spread_behavior}">${(s.spread_behavior||'').replace(/_/g,' ')}</span>
           ${s.pullback_depth ? `<span class="pb-depth ${s.pullback_depth}">${s.pullback_depth}</span>` : ''}
           ${s.next_action && s.next_action !== 'No setup forming' ? `<span style="font-size:9px;color:var(--text-muted)">→ ${s.next_action}</span>` : ''}
         </div>
@@ -573,7 +573,7 @@ function renderActions(actions) {
     <div class="action-row">
       <span>${pair(a.instrument)}</span>
       <span class="action-status ${a.status}">${a.status}</span>
-      <span style="color:var(--text-muted);font-size:10px">${a.action_type}</span>
+      <span style="color:var(--text-muted);font-size:10px">${(a.action_type||'').replace(/_/g,' ')}</span>
       <span class="action-msg">${a.message?.split('\n')[1] || a.error_message || ''}</span>
     </div>`).join('');
 }
