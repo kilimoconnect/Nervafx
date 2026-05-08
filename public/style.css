@@ -1674,6 +1674,19 @@ html, body {
 .sess-tl-item.current.low        { color: #94a3b8 !important; border-color: #64748b !important; }
 .sess-tl-item.current.blocked    { color: #f87171 !important; border-color: #dc2626 !important; }
 
+/* ── Session badge on Live Opportunity and Top Setup cards ───────────────────── */
+.sess-card-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 3px;
+  letter-spacing: 0.4px;
+  border: 1px solid;
+  white-space: nowrap;
+}
+
 /* ── Inline session badge on signal cards ────────────────────────────────────── */
 .sess-inline-badge {
   display: inline-flex;

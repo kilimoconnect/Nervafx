@@ -244,6 +244,16 @@ function closeAiModal() {
 // Close on Escape key
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAiModal(); });
 
+// ─── Session badge helper ─────────────────────────────────────────────────────
+
+function sessionBadgeHtml(s) {
+  if (!s.session_label) return '';
+  const qCls  = (s.session_quality || 'BLOCKED').toLowerCase().replace(/_/g, '-');
+  const delta = s.session_delta;
+  const dStr  = delta != null ? (delta > 0 ? ` +${delta}` : ` ${delta}`) : '';
+  return `<span class="sess-card-badge sq-${qCls}">⏱ ${s.session_label}${dStr}</span>`;
+}
+
 // ─── Live Opportunities ───────────────────────────────────────────────────────
 
 function renderLiveOpportunities(states, aiMap = {}) {
@@ -275,9 +285,10 @@ function renderLiveOpportunities(states, aiMap = {}) {
           <div>
             <div class="live-pair">${pair(s.instrument)}</div>
             <div class="live-signal ${dir}">${s.bias}</div>
-            <div style="display:flex;gap:5px;margin-bottom:6px">
+            <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px">
               <span class="phase-badge ENTRY_ACTIVE">ENTRY ACTIVE</span>
               ${s.pullback_depth ? `<span class="pb-depth ${s.pullback_depth}">${s.pullback_depth} PB</span>` : ''}
+              ${sessionBadgeHtml(s)}
             </div>
           </div>
           <div style="text-align:right">
@@ -335,6 +346,7 @@ function renderTopSetups(states, aiMap = {}) {
             <span class="phase-badge ${phCls}">${(s.phase||'').replace(/_/g,' ')}</span>
             <span class="action-badge ${s.action}">${s.action}</span>
           </div>
+          ${sessionBadgeHtml(s)}
           ${pipelineHtml(s.pipeline_stage)}
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
             <div class="top-entry-status entry-${s.entry_status}">${(s.entry_status || '').replace(/_/g, ' ')}</div>
