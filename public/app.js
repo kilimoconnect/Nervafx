@@ -269,9 +269,11 @@ function sessionBadgeHtml(s) {
 
 // ─── Live Opportunities ───────────────────────────────────────────────────────
 
-function renderLiveOpportunities(states, aiMap = {}) {
+function renderLiveOpportunities(states, aiMap = {}, sentimentData = null) {
   const el = document.getElementById('live-opportunities');
   if (!el) return;
+
+  const sentNeutral = sentimentData?.sentiment?.sentiment === 'NEUTRAL';
 
   const live = (states || []).filter(s =>
     s.state === 'READY_TO_ENTER' && s.confidence >= 75 && !s.session_blocked
@@ -316,6 +318,7 @@ function renderLiveOpportunities(states, aiMap = {}) {
           <span class="sb-behavior ${s.spread_behavior}">${(s.spread_behavior||'').replace(/_/g,' ')}</span>
         </div>
         <div class="live-reason">${s.spread_behavior_text}</div>
+        ${sentNeutral ? `<div class="sent-neutral-warn">⚠ Risk sentiment is NEUTRAL — no clear money flow direction. No edge confirmed. High risk to trade.</div>` : ''}
         ${(s.confidence_breakdown||[]).length ? `<div class="conf-factors" style="align-items:flex-start;margin-top:6px">${s.confidence_breakdown.map(f=>`<span>+ ${f}</span>`).join('')}</div>` : ''}
         ${s.invalidation ? `<div class="invalidation" style="margin-top:6px">⚠ ${s.invalidation}</div>` : ''}
         ${aiHtml(aiMap[s.instrument], s.instrument)}
@@ -336,9 +339,11 @@ function computeTopSetups(states) {
     .slice(0, 3);
 }
 
-function renderTopSetups(states, aiMap = {}) {
+function renderTopSetups(states, aiMap = {}, sentimentData = null) {
   const el = document.getElementById('top-setups');
   if (!states?.length) { el.innerHTML = '<p class="empty-state">No setups forming</p>'; return; }
+
+  const sentNeutral = sentimentData?.sentiment?.sentiment === 'NEUTRAL';
 
   const setups = computeTopSetups(states);
   if (!setups.length) { el.innerHTML = '<p class="empty-state">No setups forming</p>'; return; }
@@ -374,6 +379,7 @@ function renderTopSetups(states, aiMap = {}) {
           <div style="font-size:9px;color:var(--text-muted);margin-bottom:3px">${s.spread_behavior_text || ''}</div>
           ${nextActionHtml(s.next_action)}
           ${s.invalidation ? `<div class="invalidation">⚠ ${s.invalidation}</div>` : ''}
+          ${sentNeutral ? `<div class="sent-neutral-warn">⚠ Risk sentiment NEUTRAL — no clear money flow direction. No edge confirmed. High risk to trade.</div>` : ''}
           ${aiHtml(aiMap[s.instrument], s.instrument)}
         </div>
         <div class="top-conf">
@@ -605,10 +611,24 @@ function renderSpreads(data) {
 
 // ─── Risk / approved trades ───────────────────────────────────────────────────
 
-function renderRisk(data) {
+function renderRisk(data, sentimentData = null) {
   if (!data) return;
   const el       = document.getElementById('risk-list');
   const approved = data.approved || [];
+
+  if (sentimentData?.sentiment?.sentiment === 'NEUTRAL') {
+    el.innerHTML = `
+      <div class="risk-neutral-block">
+        <div class="risk-neutral-icon">⛔</div>
+        <div class="risk-neutral-msg">
+          <b>Trades not approved</b><br>
+          Risk sentiment is <b>NEUTRAL</b> — markets show no clear money flow direction.<br>
+          Wait for sentiment to confirm Risk On or Risk Off before taking trades.
+        </div>
+      </div>`;
+    return;
+  }
+
   if (approved.length === 0) { el.innerHTML = '<p class="empty-state">No approved trades today</p>'; return; }
   el.innerHTML = approved.map(r => {
     const dir = parseFloat(r.stop_loss) < parseFloat(r.entry_price) ? 'buy' : 'sell';
@@ -897,13 +917,13 @@ async function refresh() {
     updateHeader(risk);
     renderSession(sessionData);
     renderSentiment(sentimentData);
-    renderLiveOpportunities(states.states || [], aiMap);
-    renderTopSetups(states.states || [], aiMap);
+    renderLiveOpportunities(states.states || [], aiMap, sentimentData);
+    renderTopSetups(states.states || [], aiMap, sentimentData);
     renderSignals(signals, states.states || []);
     buildChart(strength, activeTF);
     renderStates(states);
     renderSpreads(spreads);
-    renderRisk(risk);
+    renderRisk(risk, sentimentData);
     renderActions(actions);
     renderQuality(quality);
 

@@ -320,6 +320,48 @@ html, body {
   overflow-y: auto;
 }
 
+/* Neutral sentiment — inline warning on trade cards */
+.sent-neutral-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 10px;
+  color: #fbbf24;
+  background: rgba(251,191,36,0.08);
+  border: 1px solid rgba(251,191,36,0.25);
+  border-left: 3px solid #fbbf24;
+  border-radius: 4px;
+  padding: 6px 8px;
+  margin: 6px 0;
+  line-height: 1.4;
+}
+
+/* Neutral sentiment — approved trades block */
+.risk-neutral-block {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 12px;
+  background: rgba(251,191,36,0.06);
+  border: 1px solid rgba(251,191,36,0.2);
+  border-left: 3px solid #fbbf24;
+  border-radius: 6px;
+}
+.risk-neutral-icon {
+  font-size: 18px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.risk-neutral-msg {
+  font-size: 11px;
+  color: #cbd5e1;
+  line-height: 1.55;
+}
+.risk-neutral-msg b {
+  color: #fbbf24;
+  font-weight: 700;
+}
+
 .risk-row {
   background: var(--bg);
   border: 1px solid var(--border);
