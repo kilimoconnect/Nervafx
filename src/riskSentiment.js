@@ -348,10 +348,17 @@ async function calculateLatestSentiment() {
   const net_score = parseFloat(net_score_sum.toFixed(2));
 
   // ─── Sentiment classification ─────────────────────────────────────────────
+  // Require BOTH a strong net score AND at least 2 multi-item groups aligned
+  // in the same direction. A single group confirming is not conviction.
+  const multiItemGroups = SENTIMENT_GROUPS.filter(g => g.keys.length > 1);
+  const confirmedPositive = multiItemGroups.filter(g => groupAlignment[g.name].aligned && groupAlignment[g.name].allOn).length;
+  const confirmedNegative = multiItemGroups.filter(g => groupAlignment[g.name].aligned && groupAlignment[g.name].allOff).length;
+  const MIN_GROUPS = 2; // minimum aligned multi-item groups required
+
   let sentiment;
-  if      (net_score >  15) sentiment = 'RISK_ON';
-  else if (net_score < -15) sentiment = 'RISK_OFF';
-  else                       sentiment = 'NEUTRAL';
+  if      (net_score >  15 && confirmedPositive >= MIN_GROUPS) sentiment = 'RISK_ON';
+  else if (net_score < -15 && confirmedNegative >= MIN_GROUPS) sentiment = 'RISK_OFF';
+  else                                                          sentiment = 'NEUTRAL';
 
   // STRESS override: violent multi-asset panic → force RISK_OFF unless strongly RISK_ON
   if (environment === 'STRESS' && net_score < 30) {
