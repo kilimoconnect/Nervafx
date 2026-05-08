@@ -71,8 +71,9 @@ function updateHeader(risk) {
 
 // ─── AI Analysis ─────────────────────────────────────────────────────────────
 
-// Stores latest aiMap so modal can access it
+// Stores latest aiMap + sentiment so modal can access them
 let _aiMap = {};
+let _sentimentData = null;
 
 function aiHtml(ai, instrument) {
   if (!ai) return '';
@@ -243,6 +244,10 @@ function openAiModal(instrument) {
       </div>
     </div>
 
+    ${_sentimentData?.sentiment?.sentiment === 'NEUTRAL' ? `
+    <div class="sent-neutral-warn" style="margin-top:10px">
+      ⚠ Risk sentiment NEUTRAL — no clear money flow direction. No edge confirmed. High risk to trade.
+    </div>` : ''}
     ${ai.warning ? `<div class="ai-modal-warning">⚠ ${ai.warning}</div>` : ''}
     <div class="ai-modal-footer">48H analysis · updated ${fmtTime(ai.time)} · gpt-4o-mini</div>
   `;
@@ -908,7 +913,8 @@ async function refresh() {
     // Build AI map: instrument → analysis
     const aiMap = {};
     (aiData.analyses || []).forEach(a => { aiMap[a.instrument] = a; });
-    _aiMap = aiMap; // store globally for modal access
+    _aiMap = aiMap;                 // store globally for modal access
+    _sentimentData = sentimentData; // store for modal neutral check
 
     updateHeader(risk);
     renderSession(sessionData);
