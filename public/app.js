@@ -893,6 +893,38 @@ function renderQuality(q) {
     <div class="quality-row"><span class="quality-label">Checked</span><span class="quality-val" style="font-size:10px">${fmtTime(q.check_time)}</span></div>`;
 }
 
+// ─── Journal sentiment groups (collapsed — no individual components) ──────────
+
+function journalSentimentGroupsHtml(d) {
+  if (!d) return '';
+  const groups = [
+    { title: 'Growth / Risk Assets', vals: [d.equity_score, d.oil_score] },
+    { title: 'Carry / Risk FX',      vals: [d.audjpy_score, d.nzdjpy_score] },
+    { title: 'Safe Havens',          vals: [d.jpy_score, d.chf_score, d.gold_score] },
+    { title: 'USD Liquidity',        vals: [d.usd_score] },
+  ];
+  return `
+    <div class="jrn-sent-groups">
+      ${groups.map(g => {
+        const vals   = g.vals.filter(v => v != null).map(Number);
+        const allOn  = vals.length >= 2 && vals.every(v => v >= 5);
+        const allOff = vals.length >= 2 && vals.every(v => v <= -5);
+        const badge  = allOn  ? '<span class="sent-align-badge risk-on">↑ ALIGNED</span>'
+                     : allOff ? '<span class="sent-align-badge risk-off">↓ ALIGNED</span>'
+                     : vals.length === 1 ? ''
+                     : '<span class="sent-align-badge not-aligned">✕ NOT ALIGNED</span>';
+        const sum    = vals.reduce((a, b) => a + b, 0);
+        const sumStr = (sum > 0 ? '+' : '') + sum.toFixed(0);
+        const sumCls = sum > 5 ? 'risk-on' : sum < -5 ? 'risk-off' : 'neutral';
+        return `
+          <div class="sent-group-row">
+            <div class="sent-group-header">${g.title}${badge}</div>
+            <span class="sent-group-sum ${sumCls}">${sumStr}</span>
+          </div>`;
+      }).join('')}
+    </div>`;
+}
+
 // ─── Market Journal ───────────────────────────────────────────────────────────
 
 function renderJournal(data) {
@@ -951,6 +983,7 @@ function renderJournal(data) {
 
         <div class="jrn-body" id="jrn-body-${e.id}" style="display:none">
           <div class="jrn-summary">${e.summary || ''}</div>
+          ${journalSentimentGroupsHtml(e.risk_sentiment_details)}
 
           ${topSetups.length ? `
           <div class="jrn-setups">
