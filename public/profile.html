@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NervaFX — Profile Settings</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #080b12; --card: rgba(11,14,22,0.92); --border: rgba(255,255,255,0.07);
+      --accent: #3b82f6; --text: #f1f5f9; --muted: #64748b; --green: #22c55e;
+      --red: #ef4444; --red-muted: rgba(239,68,68,0.12);
+    }
+    html, body { min-height: 100%; background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+
+    /* ── Background ── */
+    .orb { position: fixed; border-radius: 50%; filter: blur(110px); animation: drift 26s ease-in-out infinite alternate; pointer-events: none; z-index: 0; }
+    .orb-1 { width: 600px; height: 600px; background: radial-gradient(circle, rgba(37,99,235,0.28), transparent 70%); top: -200px; left: -200px; }
+    .orb-2 { width: 500px; height: 500px; background: radial-gradient(circle, rgba(139,92,246,0.22), transparent 70%); bottom: -150px; right: -150px; animation-delay: -13s; }
+    @keyframes drift { 0% { transform: translate(0,0); } 100% { transform: translate(30px,-25px); } }
+    .dot-grid { position: fixed; inset: 0; z-index: 0; background-image: radial-gradient(rgba(255,255,255,0.045) 1px, transparent 1px); background-size: 28px 28px; mask-image: radial-gradient(ellipse 65% 65% at 50% 50%, black 20%, transparent 90%); pointer-events: none; }
+
+    /* ── Top bar ── */
+    .topbar {
+      position: sticky; top: 0; z-index: 50;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 32px; height: 60px;
+      background: rgba(8,11,18,0.82); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .topbar-left { display: flex; align-items: center; gap: 10px; }
+    .topbar-logo { font-size: 16px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; background: linear-gradient(135deg, #60a5fa, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .topbar-sep { color: rgba(255,255,255,0.12); font-size: 18px; font-weight: 300; }
+    .topbar-page { font-size: 13px; font-weight: 600; color: var(--muted); }
+    .back-btn {
+      display: flex; align-items: center; gap: 6px;
+      padding: 7px 14px; border-radius: 9px;
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--muted); font-size: 12px; font-weight: 600;
+      cursor: pointer; text-decoration: none; transition: all 0.15s;
+    }
+    .back-btn:hover { background: rgba(255,255,255,0.08); color: var(--text); border-color: rgba(255,255,255,0.14); }
+
+    /* ── Page layout ── */
+    .page { position: relative; z-index: 2; max-width: 680px; margin: 0 auto; padding: 44px 24px 80px; }
+
+    .page-header { margin-bottom: 36px; }
+    .page-title { font-size: 24px; font-weight: 800; letter-spacing: -0.4px; margin-bottom: 6px; }
+    .page-desc { font-size: 13px; color: var(--muted); }
+
+    /* ── Section ── */
+    .section { margin-bottom: 20px; }
+    .section-label {
+      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+      color: var(--muted); opacity: 0.7; margin-bottom: 10px; padding-left: 2px;
+    }
+
+    /* ── Card ── */
+    .pcard {
+      background: var(--card); border: 1px solid var(--border); border-radius: 18px;
+      padding: 28px 28px; backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      box-shadow: 0 16px 48px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.03) inset;
+    }
+    .pcard.danger { border-color: rgba(239,68,68,0.2); background: rgba(10,6,8,0.92); }
+
+    /* ── Row layout inside cards ── */
+    .fields-row { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+
+    /* ── Field ── */
+    .field { margin-bottom: 20px; }
+    .field:last-child { margin-bottom: 0; }
+    .field-label {
+      font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase;
+      letter-spacing: 0.8px; margin-bottom: 7px; display: flex; align-items: center; justify-content: space-between;
+    }
+    .field-hint { font-size: 10px; font-weight: 400; color: rgba(100,116,139,0.55); text-transform: none; letter-spacing: 0; }
+
+    .input-wrap { position: relative; }
+    .input-prefix { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); font-size: 15px; font-weight: 700; color: rgba(100,116,139,0.5); pointer-events: none; }
+    .input-wrap input {
+      width: 100%; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 11px; color: var(--text); font-family: 'Inter', sans-serif;
+      font-size: 14px; padding: 12px 14px; outline: none;
+      transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+    }
+    .input-wrap.has-prefix input { padding-left: 30px; }
+    .input-wrap input:focus { border-color: rgba(59,130,246,0.55); background: rgba(59,130,246,0.06); box-shadow: 0 0 0 3px rgba(59,130,246,0.12); }
+    .input-wrap input::placeholder { color: rgba(100,116,139,0.35); }
+    .input-wrap input:disabled { opacity: 0.45; cursor: not-allowed; }
+    .input-wrap input.pw-match   { border-color: rgba(34,197,94,0.55) !important; background: rgba(34,197,94,0.05) !important; }
+    .input-wrap input.pw-nomatch { border-color: rgba(239,68,68,0.55) !important;  background: rgba(239,68,68,0.04) !important; }
+
+    /* Strength bar */
+    .pw-strength-wrap { margin-top: 7px; display: flex; gap: 4px; align-items: center; }
+    .pw-strength-bar { flex: 1; height: 3px; border-radius: 3px; background: rgba(255,255,255,0.06); overflow: hidden; }
+    .pw-strength-fill { height: 100%; border-radius: 3px; transition: width 0.3s, background 0.3s; width: 0%; }
+    .pw-strength-label { font-size: 10px; font-weight: 600; min-width: 44px; text-align: right; color: var(--muted); transition: color 0.3s; }
+
+    /* Chips */
+    .chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 9px; }
+    .chip { padding: 4px 13px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 20px; font-size: 11px; font-weight: 600; color: var(--muted); cursor: pointer; transition: all 0.15s; }
+    .chip:hover { background: rgba(59,130,246,0.1); border-color: rgba(59,130,246,0.3); color: #60a5fa; }
+    .chip.active { background: rgba(59,130,246,0.15); border-color: rgba(59,130,246,0.45); color: #60a5fa; }
+
+    /* Slider */
+    .slider-row { display: flex; align-items: center; gap: 14px; margin-top: 7px; }
+    .slider-track { flex: 1; }
+    input[type=range] { -webkit-appearance: none; width: 100%; height: 4px; border-radius: 4px; background: rgba(255,255,255,0.08); outline: none; cursor: pointer; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: linear-gradient(135deg,#2563eb,#4f46e5); box-shadow: 0 2px 8px rgba(37,99,235,0.4); cursor: pointer; }
+    .slider-val { font-size: 18px; font-weight: 800; color: var(--text); min-width: 46px; text-align: right; font-variant-numeric: tabular-nums; }
+    .slider-unit { font-size: 11px; font-weight: 500; color: var(--muted); }
+
+    /* Divider */
+    .divider { height: 1px; background: rgba(255,255,255,0.05); margin: 22px 0; }
+
+    /* Save button */
+    .btn-save {
+      padding: 11px 28px; background: linear-gradient(135deg,#2563eb,#4f46e5);
+      color: #fff; border: none; border-radius: 10px; font-family: 'Inter', sans-serif;
+      font-size: 13px; font-weight: 700; cursor: pointer; position: relative; overflow: hidden;
+      transition: transform 0.12s, box-shadow 0.2s; box-shadow: 0 4px 20px rgba(37,99,235,0.35);
+    }
+    .btn-save::before { content: ''; position: absolute; inset: 0; background: linear-gradient(105deg,transparent 35%,rgba(255,255,255,0.18) 50%,transparent 65%); transform: translateX(-100%); transition: transform 0.5s; }
+    .btn-save:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(37,99,235,0.45); }
+    .btn-save:hover::before { transform: translateX(100%); }
+    .btn-save:active { transform: scale(0.99); }
+    .btn-save:disabled { opacity: 0.4; cursor: default; pointer-events: none; }
+
+    /* Danger zone */
+    .danger-title { font-size: 14px; font-weight: 700; color: #fca5a5; margin-bottom: 4px; }
+    .danger-desc { font-size: 12px; color: rgba(252,165,165,0.55); margin-bottom: 18px; line-height: 1.6; }
+    .btn-danger {
+      padding: 11px 24px; background: transparent;
+      color: #ef4444; border: 1px solid rgba(239,68,68,0.35); border-radius: 10px;
+      font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 700;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .btn-danger:hover { background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.6); }
+    .btn-danger:active { transform: scale(0.99); }
+
+    /* Footer row (save + status) */
+    .card-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+    .save-msg { font-size: 12px; font-weight: 600; display: none; }
+    .save-msg.ok  { display: block; color: #86efac; }
+    .save-msg.err { display: block; color: #fca5a5; }
+
+    /* Spinner */
+    .spinner { display: inline-block; width: 13px; height: 13px; border: 2px solid rgba(255,255,255,0.25); border-top-color: #fff; border-radius: 50%; animation: spin 0.65s linear infinite; vertical-align: middle; margin-right: 6px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Modal (delete confirm) ── */
+    .modal-overlay {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(0,0,0,0.7); backdrop-filter: blur(6px);
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none; transition: opacity 0.22s;
+      padding: 24px;
+    }
+    .modal-overlay.open { opacity: 1; pointer-events: auto; }
+    .modal {
+      background: #0d1019; border: 1px solid rgba(239,68,68,0.25);
+      border-radius: 18px; padding: 32px; width: 100%; max-width: 380px;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.7);
+      transform: scale(0.95); transition: transform 0.22s;
+    }
+    .modal-overlay.open .modal { transform: scale(1); }
+    .modal-icon { font-size: 32px; margin-bottom: 14px; }
+    .modal-title { font-size: 17px; font-weight: 800; margin-bottom: 8px; color: #fca5a5; }
+    .modal-body { font-size: 13px; color: var(--muted); line-height: 1.65; margin-bottom: 24px; }
+    .modal-body strong { color: var(--text); }
+    .modal-confirm-wrap { margin-bottom: 20px; }
+    .modal-confirm-label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.7px; margin-bottom: 7px; display: block; }
+    .modal-confirm-input {
+      width: 100%; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px; color: var(--text); font-family: 'Inter', sans-serif; font-size: 14px;
+      padding: 11px 14px; outline: none; transition: border-color 0.2s;
+    }
+    .modal-confirm-input:focus { border-color: rgba(239,68,68,0.5); box-shadow: 0 0 0 3px rgba(239,68,68,0.1); }
+    .modal-actions { display: flex; gap: 10px; }
+    .modal-btn-cancel { flex: 1; padding: 11px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; color: var(--muted); font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+    .modal-btn-cancel:hover { background: rgba(255,255,255,0.08); color: var(--text); }
+    .modal-btn-delete { flex: 1; padding: 11px; background: #ef4444; border: none; border-radius: 10px; color: #fff; font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
+    .modal-btn-delete:hover { background: #dc2626; }
+    .modal-btn-delete:disabled { opacity: 0.4; cursor: default; }
+    .modal-err { margin-top: 12px; font-size: 12px; font-weight: 500; color: #fca5a5; display: none; }
+    .modal-err.show { display: block; }
+
+    @media (max-width: 560px) {
+      .topbar { padding: 0 18px; }
+      .page { padding: 28px 16px 60px; }
+      .pcard { padding: 22px 20px; }
+      .fields-row { grid-template-columns: 1fr; gap: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="dot-grid"></div>
+
+  <!-- Top Bar -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <span class="topbar-logo">NervaFX</span>
+      <span class="topbar-sep">/</span>
+      <span class="topbar-page">Profile Settings</span>
+    </div>
+    <a href="/" class="back-btn">← Dashboard</a>
+  </div>
+
+  <div class="page">
+
+    <div class="page-header">
+      <div class="page-title">Account Settings</div>
+      <div class="page-desc">Manage your personal info, trading parameters, and security.</div>
+    </div>
+
+    <!-- ── Personal Info ── -->
+    <div class="section">
+      <div class="section-label">Personal Info</div>
+      <div class="pcard" id="card-personal">
+        <div class="fields-row">
+          <div class="field" style="margin-bottom:0">
+            <div class="field-label">First Name</div>
+            <div class="input-wrap">
+              <input id="first-name" type="text" placeholder="John" autocomplete="given-name" />
+            </div>
+          </div>
+          <div class="field" style="margin-bottom:0">
+            <div class="field-label">Last Name</div>
+            <div class="input-wrap">
+              <input id="last-name" type="text" placeholder="Doe" autocomplete="family-name" />
+            </div>
+          </div>
+        </div>
+        <div class="divider"></div>
+        <div class="field" style="margin-bottom:0">
+          <div class="field-label">Email Address <span class="field-hint">Cannot be changed here</span></div>
+          <div class="input-wrap">
+            <input id="email-display" type="email" disabled />
+          </div>
+        </div>
+        <div class="divider"></div>
+        <div class="card-footer">
+          <button class="btn-save" onclick="savePersonal()">Save Changes</button>
+          <span class="save-msg" id="msg-personal"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Trading Account ── -->
+    <div class="section">
+      <div class="section-label">Trading Account</div>
+      <div class="pcard" id="card-trading">
+
+        <!-- Account Size -->
+        <div class="field">
+          <div class="field-label">Account Size <span class="field-hint">Your total trading capital</span></div>
+          <div class="input-wrap has-prefix">
+            <span class="input-prefix">$</span>
+            <input id="account-size" type="number" min="100" step="100" placeholder="10,000" />
+          </div>
+          <div class="chips" id="size-chips">
+            <div class="chip" onclick="setSize(1000)">$1,000</div>
+            <div class="chip" onclick="setSize(5000)">$5,000</div>
+            <div class="chip" onclick="setSize(10000)">$10,000</div>
+            <div class="chip" onclick="setSize(25000)">$25,000</div>
+            <div class="chip" onclick="setSize(50000)">$50,000</div>
+            <div class="chip" onclick="setSize(100000)">$100K</div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Max Daily Risk -->
+        <div class="field">
+          <div class="field-label">Max Daily Risk <span class="field-hint">% of account per day</span></div>
+          <div class="slider-row">
+            <div class="slider-track">
+              <input type="range" id="risk-slider" min="0.5" max="5" step="0.5" value="2" oninput="updateRisk(this.value)" />
+            </div>
+            <span class="slider-val" id="risk-val">2.0</span>
+            <span class="slider-unit">%</span>
+          </div>
+        </div>
+
+        <!-- Max Concurrent Trades -->
+        <div class="field" style="margin-bottom:0">
+          <div class="field-label">Max Concurrent Trades <span class="field-hint">Open positions at once</span></div>
+          <div class="slider-row">
+            <div class="slider-track">
+              <input type="range" id="trades-slider" min="1" max="10" step="1" value="3" oninput="updateTrades(this.value)" />
+            </div>
+            <span class="slider-val" id="trades-val">3</span>
+            <span class="slider-unit">trades</span>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+        <div class="card-footer">
+          <button class="btn-save" onclick="saveTrading()">Save Changes</button>
+          <span class="save-msg" id="msg-trading"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Change Password ── -->
+    <div class="section">
+      <div class="section-label">Security</div>
+      <div class="pcard" id="card-password">
+        <div class="field">
+          <div class="field-label">New Password</div>
+          <div class="input-wrap">
+            <input id="new-password" type="password" placeholder="Minimum 6 characters" autocomplete="new-password" oninput="onNewPwInput(this.value)" />
+          </div>
+          <div class="pw-strength-wrap">
+            <div class="pw-strength-bar"><div class="pw-strength-fill" id="pw-fill"></div></div>
+            <span class="pw-strength-label" id="pw-label">—</span>
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:0">
+          <div class="field-label">Confirm New Password</div>
+          <div class="input-wrap">
+            <input id="confirm-password" type="password" placeholder="••••••••" autocomplete="new-password" oninput="onConfirmPwInput(this.value)" />
+          </div>
+        </div>
+        <div class="divider"></div>
+        <div class="card-footer">
+          <button class="btn-save" onclick="savePassword()">Update Password</button>
+          <span class="save-msg" id="msg-password"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Danger Zone ── -->
+    <div class="section">
+      <div class="section-label">Danger Zone</div>
+      <div class="pcard danger" id="card-danger">
+        <div class="danger-title">Delete Account</div>
+        <div class="danger-desc">
+          Permanently delete your NervaFX account and all associated data. This action is <strong>irreversible</strong> — your profile, settings, and access will be removed immediately.
+        </div>
+        <button class="btn-danger" onclick="openDeleteModal()">Delete My Account</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Delete Confirmation Modal -->
+  <div class="modal-overlay" id="delete-modal-overlay">
+    <div class="modal">
+      <div class="modal-icon">⚠️</div>
+      <div class="modal-title">Delete Account</div>
+      <div class="modal-body">
+        This will permanently delete your account and all data. There is <strong>no undo</strong>.<br><br>
+        To confirm, type <strong>DELETE</strong> below:
+      </div>
+      <div class="modal-confirm-wrap">
+        <label class="modal-confirm-label" for="delete-confirm-input">Confirmation</label>
+        <input id="delete-confirm-input" class="modal-confirm-input" type="text" placeholder='Type "DELETE"' oninput="onDeleteConfirmInput()" />
+      </div>
+      <div class="modal-actions">
+        <button class="modal-btn-cancel" onclick="closeDeleteModal()">Cancel</button>
+        <button class="modal-btn-delete" id="btn-confirm-delete" onclick="confirmDelete()" disabled>Delete Account</button>
+      </div>
+      <div class="modal-err" id="delete-err"></div>
+    </div>
+  </div>
+
+  <script>
+    // ── Auth guard ──
+    const token = localStorage.getItem('nfx_token');
+    if (!token) location.replace('/login.html');
+
+    // ── Entrance animation ──
+    window.addEventListener('DOMContentLoaded', () => {
+      loadProfile();
+      if (typeof gsap === 'undefined') return;
+      gsap.timeline({ defaults: { ease: 'power3.out' } })
+        .from('.page-header', { y: -14, opacity: 0, duration: 0.5 })
+        .from('.section',     { y:  16, opacity: 0, duration: 0.5, stagger: 0.1 }, '-=0.3');
+    });
+
+    // ── Load profile from API ──
+    async function loadProfile() {
+      try {
+        const res  = await fetch('/api/profile', { headers: { 'Authorization': 'Bearer ' + token } });
+        const data = await res.json();
+        if (!res.ok) { console.error('Profile load error:', data.error); return; }
+
+        document.getElementById('first-name').value     = data.first_name    || '';
+        document.getElementById('last-name').value      = data.last_name     || '';
+        document.getElementById('email-display').value  = data.email         || '';
+        document.getElementById('account-size').value   = data.account_size  || 10000;
+        document.getElementById('risk-slider').value    = data.max_daily_risk_pct || 2;
+        document.getElementById('trades-slider').value  = data.max_trades    || 3;
+
+        updateRisk(data.max_daily_risk_pct   || 2);
+        updateTrades(data.max_trades         || 3);
+        syncSizeChips(data.account_size      || 10000);
+      } catch(e) { console.error('loadProfile:', e); }
+    }
+
+    // ── Slider helpers ──
+    function updateRisk(val)   { document.getElementById('risk-val').textContent = parseFloat(val).toFixed(1); }
+    function updateTrades(val) { document.getElementById('trades-val').textContent = val; }
+
+    // ── Size chips ──
+    function setSize(val) {
+      document.getElementById('account-size').value = val;
+      syncSizeChips(val);
+    }
+    function syncSizeChips(val) {
+      const presets = [1000, 5000, 10000, 25000, 50000, 100000];
+      document.querySelectorAll('#size-chips .chip').forEach((chip, i) => {
+        chip.classList.toggle('active', presets[i] === Number(val));
+      });
+    }
+
+    // ── Password strength ──
+    function onNewPwInput(val) {
+      const fill  = document.getElementById('pw-fill');
+      const label = document.getElementById('pw-label');
+      let score = 0;
+      if (val.length >= 8)           score++;
+      if (/[A-Z]/.test(val))         score++;
+      if (/[0-9]/.test(val))         score++;
+      if (/[^A-Za-z0-9]/.test(val))  score++;
+      const levels = [
+        { pct: '20%',  color: '#ef4444', text: 'Weak'   },
+        { pct: '40%',  color: '#f97316', text: 'Fair'   },
+        { pct: '65%',  color: '#eab308', text: 'Good'   },
+        { pct: '85%',  color: '#22c55e', text: 'Strong' },
+        { pct: '100%', color: '#10b981', text: 'Great'  },
+      ];
+      const lvl = val.length === 0 ? null : levels[score];
+      fill.style.width      = lvl ? lvl.pct   : '0%';
+      fill.style.background = lvl ? lvl.color : '';
+      label.textContent     = lvl ? lvl.text  : '—';
+      label.style.color     = lvl ? lvl.color : 'var(--muted)';
+      onConfirmPwInput(document.getElementById('confirm-password').value);
+    }
+    function onConfirmPwInput(val) {
+      const pw = document.getElementById('new-password').value;
+      const el = document.getElementById('confirm-password');
+      if (!val) { el.className = ''; return; }
+      el.className = val === pw ? 'pw-match' : 'pw-nomatch';
+    }
+
+    // ── Save helpers ──
+    function showSaveMsg(id, text, type) {
+      const el = document.getElementById(id);
+      el.textContent = text;
+      el.className   = 'save-msg ' + type;
+      clearTimeout(el._t);
+      el._t = setTimeout(() => { el.className = 'save-msg'; }, 3500);
+    }
+
+    async function patchProfile(payload) {
+      const res = await fetch('/api/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify(payload),
+      });
+      return res.json();
+    }
+
+    // ── Save Personal ──
+    async function savePersonal() {
+      const btn = document.querySelector('#card-personal .btn-save');
+      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Saving…';
+      try {
+        const data = await patchProfile({
+          first_name: document.getElementById('first-name').value.trim(),
+          last_name:  document.getElementById('last-name').value.trim(),
+        });
+        if (data.error) { showSaveMsg('msg-personal', data.error, 'err'); return; }
+        showSaveMsg('msg-personal', '✓ Saved', 'ok');
+        // Update cached user
+        try {
+          const u = JSON.parse(localStorage.getItem('nfx_user') || '{}');
+          u.first_name = document.getElementById('first-name').value.trim();
+          u.last_name  = document.getElementById('last-name').value.trim();
+          u.full_name  = `${u.first_name} ${u.last_name}`.trim();
+          localStorage.setItem('nfx_user', JSON.stringify(u));
+        } catch(_) {}
+      } catch(e) {
+        showSaveMsg('msg-personal', 'Network error', 'err');
+      } finally {
+        btn.disabled = false; btn.textContent = 'Save Changes';
+      }
+    }
+
+    // ── Save Trading ──
+    async function saveTrading() {
+      const size = parseFloat(document.getElementById('account-size').value);
+      if (!size || size < 100) {
+        showSaveMsg('msg-trading', 'Account size must be ≥ $100', 'err');
+        return;
+      }
+      const btn = document.querySelector('#card-trading .btn-save');
+      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Saving…';
+      try {
+        const data = await patchProfile({
+          account_size:       size,
+          max_daily_risk_pct: parseFloat(document.getElementById('risk-slider').value),
+          max_trades:         parseInt(document.getElementById('trades-slider').value),
+        });
+        if (data.error) { showSaveMsg('msg-trading', data.error, 'err'); return; }
+        showSaveMsg('msg-trading', '✓ Saved', 'ok');
+      } catch(e) {
+        showSaveMsg('msg-trading', 'Network error', 'err');
+      } finally {
+        btn.disabled = false; btn.textContent = 'Save Changes';
+      }
+    }
+
+    // ── Save Password ──
+    async function savePassword() {
+      const newPw  = document.getElementById('new-password').value;
+      const confPw = document.getElementById('confirm-password').value;
+      if (!newPw) { showSaveMsg('msg-password', 'Enter a new password.', 'err'); return; }
+      if (newPw.length < 6) { showSaveMsg('msg-password', 'Minimum 6 characters.', 'err'); return; }
+      if (newPw !== confPw) { showSaveMsg('msg-password', 'Passwords do not match.', 'err'); return; }
+
+      const btn = document.querySelector('#card-password .btn-save');
+      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Updating…';
+      try {
+        const data = await patchProfile({ new_password: newPw });
+        if (data.error) { showSaveMsg('msg-password', data.error, 'err'); return; }
+        showSaveMsg('msg-password', '✓ Password updated', 'ok');
+        document.getElementById('new-password').value     = '';
+        document.getElementById('confirm-password').value = '';
+        document.getElementById('confirm-password').className = '';
+        document.getElementById('pw-fill').style.width = '0%';
+        document.getElementById('pw-label').textContent = '—';
+        document.getElementById('pw-label').style.color = 'var(--muted)';
+      } catch(e) {
+        showSaveMsg('msg-password', 'Network error', 'err');
+      } finally {
+        btn.disabled = false; btn.textContent = 'Update Password';
+      }
+    }
+
+    // ── Delete Modal ──
+    function openDeleteModal() {
+      document.getElementById('delete-confirm-input').value = '';
+      document.getElementById('btn-confirm-delete').disabled = true;
+      const errEl = document.getElementById('delete-err');
+      errEl.className = 'modal-err'; errEl.textContent = '';
+      document.getElementById('delete-modal-overlay').classList.add('open');
+      setTimeout(() => document.getElementById('delete-confirm-input').focus(), 220);
+    }
+
+    function closeDeleteModal() {
+      document.getElementById('delete-modal-overlay').classList.remove('open');
+    }
+
+    // Close on overlay click
+    document.getElementById('delete-modal-overlay').addEventListener('click', function(e) {
+      if (e.target === this) closeDeleteModal();
+    });
+
+    function onDeleteConfirmInput() {
+      const val = document.getElementById('delete-confirm-input').value;
+      document.getElementById('btn-confirm-delete').disabled = (val !== 'DELETE');
+    }
+
+    async function confirmDelete() {
+      const btn    = document.getElementById('btn-confirm-delete');
+      const errEl  = document.getElementById('delete-err');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>Deleting…';
+      errEl.className = 'modal-err';
+
+      try {
+        const res  = await fetch('/api/delete-account', {
+          method:  'DELETE',
+          headers: { 'Authorization': 'Bearer ' + token },
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          errEl.textContent = data.error || 'Something went wrong.';
+          errEl.className   = 'modal-err show';
+          btn.disabled = false; btn.textContent = 'Delete Account';
+          return;
+        }
+        // Wipe local state and redirect
+        localStorage.clear();
+        location.replace('/login.html');
+      } catch(e) {
+        errEl.textContent = 'Network error. Please try again.';
+        errEl.className   = 'modal-err show';
+        btn.disabled = false; btn.textContent = 'Delete Account';
+      }
+    }
+  </script>
+</body>
+</html>

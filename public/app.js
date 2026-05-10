@@ -12,6 +12,10 @@
       localStorage.removeItem('nfx_user');
       return location.replace('/login.html');
     }
+    // If user just signed up and hasn't done setup, redirect them
+    if (localStorage.getItem('nfx_needs_setup') === 'true') {
+      return location.replace('/setup');
+    }
     // Show logged-in user name (or email fallback) in header
     const user = JSON.parse(localStorage.getItem('nfx_user') || '{}');
     const el = document.getElementById('header-user');

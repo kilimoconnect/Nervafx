@@ -643,11 +643,17 @@
 
         showMsg(
           currentTab === 'signup'
-            ? `✓ Welcome, ${body.firstName}! Redirecting…`
+            ? `✓ Welcome, ${body.firstName}! Setting up your account…`
             : '✓ Welcome back — redirecting…',
           'success'
         );
-        setTimeout(() => location.replace('/'), 800);
+
+        if (currentTab === 'signup') {
+          localStorage.setItem('nfx_needs_setup', 'true');
+          setTimeout(() => location.replace('/setup'), 800);
+        } else {
+          setTimeout(() => location.replace('/'), 800);
+        }
 
       } catch (err) {
         showMsg('Network error — check your connection and try again.', 'error');
