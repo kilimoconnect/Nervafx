@@ -22,6 +22,7 @@ const { backfillSignals, printLatestSignals } = require('./signals');
 const { backfillRiskChecks, printRiskReport } = require('./risk');
 const { analyzeActiveSetups } = require('./aiAnalysis');
 const { calculateLatestSentiment } = require('./riskSentiment');
+const { writeJournalEntry } = require('./journalEngine');
 
 async function phase1() {
   validate();
@@ -203,6 +204,12 @@ if (command === 'load') {
 } else if (command === 'analyze') {
   validate();
   runAnalysis().then(() => process.exit(0)).catch(err => { console.error(err); process.exit(1); });
+} else if (command === 'journal') {
+  validate();
+  writeJournalEntry().then(r => {
+    console.log(`\n[JOURNAL] Summary: ${r.summary}`);
+    process.exit(0);
+  }).catch(err => { console.error(err); process.exit(1); });
 } else if (command === 'rank') {
   validate();
   rankPairs().then(pairs => {
