@@ -68,7 +68,7 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      transition: background 0.3s, border-color 0.3s, backdrop-filter 0.3s;
+      transition: background 0.3s, border-color 0.3s;
       border-bottom: 1px solid transparent;
     }
     nav.scrolled {
@@ -131,6 +131,7 @@
       align-items: center;
       overflow: hidden;
       padding-top: 68px;
+      contain: layout style;
     }
 
     /* Dot grid */
@@ -148,6 +149,7 @@
     .hero-orb {
       position: absolute;
       border-radius: 50%;
+      will-change: transform;
       filter: blur(100px);
       pointer-events: none;
       z-index: 0;
@@ -172,10 +174,10 @@
     }
 
     @keyframes orb-drift {
-      0%   { transform: translate(0, 0) scale(1); }
-      33%  { transform: translate(40px, -30px) scale(1.05); }
-      66%  { transform: translate(-20px, 25px) scale(0.96); }
-      100% { transform: translate(20px, -15px) scale(1.02); }
+      0%   { transform: translate(0, 0); }
+      33%  { transform: translate(40px, -30px); }
+      66%  { transform: translate(-20px, 25px); }
+      100% { transform: translate(20px, -15px); }
     }
 
     /* Flow lines */
@@ -189,6 +191,7 @@
     .flow-line {
       position: absolute;
       height: 1px;
+      will-change: transform;
       width: 60%;
       left: -60%;
       border-radius: 1px;
@@ -518,7 +521,8 @@
     }
 
     /* ── SECTIONS ── */
-    section { padding: 100px 0; }
+    section { padding: 100px 0; content-visibility: auto; contain-intrinsic-size: 0 600px; }
+    section.hero { content-visibility: visible; }
 
     .section-badge {
       display: inline-flex;
@@ -2095,7 +2099,7 @@
       const display = [...currencies].sort((a, b) => b.value - a.value).slice(0, 8);
       const maxAbs  = Math.max(...display.map(c => Math.abs(c.value))) || 1;
 
-      rows.innerHTML = display.map(c => {
+      const html = display.map(c => {
         const barWidth = Math.round((Math.abs(c.value) / maxAbs) * 100);
         const sign     = c.value > 0 ? '+' : '';
         const iso      = CURRENCY_ISO[c.currency] || 'un';
@@ -2115,6 +2119,7 @@
             </div>
           </div>`;
       }).join('');
+      requestAnimationFrame(() => { rows.innerHTML = html; });
 
       if (time) {
         const d       = new Date(time);
