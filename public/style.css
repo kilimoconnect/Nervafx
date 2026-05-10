@@ -2163,22 +2163,24 @@ html, body {
   display: flex;
   align-items: center;
   gap: 4px;
-  flex-wrap: wrap;
   padding: 8px 0 2px;
   border-top: 1px solid var(--border);
 }
 
 .sess-tl-item {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 4px 10px;
+  padding: 6px 4px;
   border-radius: 5px;
   border: 1px solid var(--border);
   background: var(--bg);
   cursor: default;
   transition: opacity 0.2s;
   opacity: 0.45;
+  min-width: 0;
+  text-align: center;
 }
 .sess-tl-item.current {
   opacity: 1;
@@ -2190,6 +2192,10 @@ html, body {
   font-weight: 700;
   letter-spacing: 0.5px;
   text-transform: uppercase;
+  text-align: center;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.3;
 }
 
 .sess-tl-hours {
