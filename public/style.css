@@ -102,6 +102,34 @@ html, body {
 
 .last-update { color: var(--text-muted); font-size: 11px; }
 
+.header-user-email {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--text-muted);
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logout-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.logout-btn:hover {
+  border-color: #f87171;
+  color: #f87171;
+}
+
 /* ─── Grid layout ──────────────────────────────────────────────────────────── */
 .grid {
   display: grid;

@@ -1,5 +1,35 @@
 // NervaFX Dashboard — app.js
 
+// ─── Auth guard ───────────────────────────────────────────────────────────────
+(function guardAuth() {
+  const token = localStorage.getItem('nfx_token');
+  if (!token) return location.replace('/login.html');
+  try {
+    const pay = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    if (pay.exp * 1000 < Date.now()) {
+      localStorage.removeItem('nfx_token');
+      localStorage.removeItem('nfx_user');
+      return location.replace('/login.html');
+    }
+    // Show logged-in user email in header
+    const user = JSON.parse(localStorage.getItem('nfx_user') || '{}');
+    if (user.email) {
+      const el = document.getElementById('header-user');
+      if (el) el.textContent = user.email;
+    }
+  } catch (_) {
+    localStorage.removeItem('nfx_token');
+    localStorage.removeItem('nfx_user');
+    return location.replace('/login.html');
+  }
+})();
+
+function logout() {
+  localStorage.removeItem('nfx_token');
+  localStorage.removeItem('nfx_user');
+  location.replace('/login.html');
+}
+
 const REFRESH_MS = 60000;
 let strengthChart = null;
 let activeTF = '6';
