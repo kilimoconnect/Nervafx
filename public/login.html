@@ -611,7 +611,7 @@
       if (!token) return;
       try {
         const pay = JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
-        if (pay.exp * 1000 > Date.now()) location.replace('/');
+        if (pay.exp * 1000 > Date.now()) location.replace('/app');
       } catch (_) {}
     })();
 
@@ -826,7 +826,7 @@
           localStorage.setItem('nfx_needs_setup', 'true');
           setTimeout(() => location.replace('/setup'), 800);
         } else {
-          setTimeout(() => location.replace('/'), 800);
+          setTimeout(() => location.replace('/app'), 800);
         }
 
       } catch (err) {

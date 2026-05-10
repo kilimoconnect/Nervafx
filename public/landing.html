@@ -1,0 +1,1978 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NervaFX — AI-Powered Currency Flow Intelligence</title>
+  <meta name="description" content="Institutional-grade forex intelligence. AI structure analysis, cross-asset risk sentiment, and personalized risk management — built for disciplined traders." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #050810;
+      --bg2:       #080c14;
+      --card:      rgba(10, 13, 22, 0.85);
+      --card-solid: #0a0d16;
+      --border:    rgba(255, 255, 255, 0.07);
+      --border2:   rgba(255, 255, 255, 0.04);
+      --blue:      #3b82f6;
+      --blue-dim:  rgba(59, 130, 246, 0.15);
+      --green:     #22c55e;
+      --green-dim: rgba(34, 197, 94, 0.12);
+      --gold:      #c9a84c;
+      --gold-dim:  rgba(201, 168, 76, 0.12);
+      --purple:    #8b5cf6;
+      --text:      #f1f5f9;
+      --text2:     #94a3b8;
+      --text3:     #64748b;
+      --muted:     #475569;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      background: var(--bg);
+    }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+      line-height: 1.6;
+    }
+
+    a { color: inherit; text-decoration: none; }
+
+    /* ── CONTAINER ── */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      padding: 0 24px;
+      height: 68px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: background 0.3s, border-color 0.3s, backdrop-filter 0.3s;
+      border-bottom: 1px solid transparent;
+    }
+    nav.scrolled {
+      background: rgba(5, 8, 16, 0.92);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-color: rgba(255, 255, 255, 0.06);
+    }
+    .nav-inner {
+      max-width: 1200px;
+      width: 100%;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .nav-logo {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .nav-link {
+      font-size: 13.5px;
+      font-weight: 500;
+      color: var(--text2);
+      padding: 7px 14px;
+      border-radius: 8px;
+      transition: color 0.15s, background 0.15s;
+    }
+    .nav-link:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+    .nav-btn {
+      font-size: 13px;
+      font-weight: 600;
+      color: #fff;
+      background: linear-gradient(135deg, #2563eb, #4f46e5);
+      padding: 8px 18px;
+      border-radius: 9px;
+      border: none;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.12s, box-shadow 0.2s;
+      box-shadow: 0 2px 14px rgba(37, 99, 235, 0.35);
+      display: inline-block;
+    }
+    .nav-btn:hover { opacity: 0.9; transform: translateY(-1px); box-shadow: 0 4px 20px rgba(37, 99, 235, 0.5); }
+
+    /* ── HERO ── */
+    .hero {
+      position: relative;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+      padding-top: 68px;
+    }
+
+    /* Dot grid */
+    .hero-dots {
+      position: absolute;
+      inset: 0;
+      background-image: radial-gradient(rgba(255,255,255,0.055) 1px, transparent 1px);
+      background-size: 30px 30px;
+      mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 30%, transparent 100%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Orbs */
+    .hero-orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(100px);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .orb-blue {
+      width: 700px; height: 700px;
+      background: radial-gradient(circle, rgba(37,99,235,0.28), transparent 70%);
+      top: -200px; left: -200px;
+      animation: orb-drift 28s ease-in-out infinite alternate;
+    }
+    .orb-purple {
+      width: 600px; height: 600px;
+      background: radial-gradient(circle, rgba(139,92,246,0.22), transparent 70%);
+      bottom: -150px; right: -100px;
+      animation: orb-drift 36s ease-in-out infinite alternate-reverse;
+    }
+    .orb-small {
+      width: 300px; height: 300px;
+      background: radial-gradient(circle, rgba(59,130,246,0.15), transparent 70%);
+      top: 40%; left: 55%;
+      animation: orb-drift 22s ease-in-out infinite alternate;
+    }
+
+    @keyframes orb-drift {
+      0%   { transform: translate(0, 0) scale(1); }
+      33%  { transform: translate(40px, -30px) scale(1.05); }
+      66%  { transform: translate(-20px, 25px) scale(0.96); }
+      100% { transform: translate(20px, -15px) scale(1.02); }
+    }
+
+    /* Flow lines */
+    .flow-lines {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .flow-line {
+      position: absolute;
+      height: 1px;
+      width: 60%;
+      left: -60%;
+      border-radius: 1px;
+      animation: flow-across linear infinite;
+    }
+    .flow-line:nth-child(1) {
+      top: 18%; width: 55%;
+      background: linear-gradient(90deg, transparent, rgba(59,130,246,0.18), transparent);
+      animation-duration: 14s; animation-delay: 0s;
+    }
+    .flow-line:nth-child(2) {
+      top: 32%; width: 45%;
+      background: linear-gradient(90deg, transparent, rgba(139,92,246,0.12), transparent);
+      animation-duration: 18s; animation-delay: -5s;
+    }
+    .flow-line:nth-child(3) {
+      top: 47%; width: 65%;
+      background: linear-gradient(90deg, transparent, rgba(59,130,246,0.10), transparent);
+      animation-duration: 22s; animation-delay: -9s;
+    }
+    .flow-line:nth-child(4) {
+      top: 62%; width: 40%;
+      background: linear-gradient(90deg, transparent, rgba(139,92,246,0.14), transparent);
+      animation-duration: 16s; animation-delay: -3s;
+    }
+    .flow-line:nth-child(5) {
+      top: 76%; width: 50%;
+      background: linear-gradient(90deg, transparent, rgba(59,130,246,0.09), transparent);
+      animation-duration: 20s; animation-delay: -12s;
+    }
+    .flow-line:nth-child(6) {
+      top: 88%; width: 58%;
+      background: linear-gradient(90deg, transparent, rgba(201,168,76,0.08), transparent);
+      animation-duration: 25s; animation-delay: -7s;
+    }
+    .flow-line:nth-child(7) {
+      top: 8%; width: 42%;
+      background: linear-gradient(90deg, transparent, rgba(59,130,246,0.07), transparent);
+      animation-duration: 30s; animation-delay: -15s;
+    }
+    .flow-line:nth-child(8) {
+      top: 55%; width: 35%;
+      background: linear-gradient(90deg, transparent, rgba(139,92,246,0.09), transparent);
+      animation-duration: 12s; animation-delay: -2s;
+    }
+
+    @keyframes flow-across {
+      0%   { transform: translateX(0); }
+      100% { transform: translateX(calc(100vw / 0.6 + 100%)); }
+    }
+
+    /* Hero content */
+    .hero-content {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 64px;
+      align-items: center;
+      padding: 80px 0;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border: 1px solid rgba(59,130,246,0.25);
+      border-radius: 100px;
+      background: rgba(59,130,246,0.07);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      color: #93c5fd;
+      margin-bottom: 24px;
+    }
+    .hero-badge-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: #3b82f6;
+      box-shadow: 0 0 6px rgba(59,130,246,0.8);
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .hero-h1 {
+      font-size: 52px;
+      font-weight: 800;
+      line-height: 1.08;
+      letter-spacing: -2px;
+      color: var(--text);
+      margin-bottom: 20px;
+    }
+    .hero-h1 span {
+      background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-sub {
+      font-size: 17px;
+      font-weight: 400;
+      color: var(--text2);
+      line-height: 1.65;
+      margin-bottom: 28px;
+      max-width: 520px;
+    }
+
+    .hero-bullets {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px 16px;
+      margin-bottom: 36px;
+    }
+    .hero-bullet {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text2);
+    }
+    .hero-bullet-check {
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .hero-ctas {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .cta-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 28px;
+      background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      border-radius: 11px;
+      border: none;
+      cursor: pointer;
+      transition: transform 0.12s, box-shadow 0.2s, opacity 0.15s;
+      box-shadow: 0 4px 24px rgba(37, 99, 235, 0.4);
+      letter-spacing: -0.1px;
+    }
+    .cta-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(37, 99, 235, 0.55); }
+
+    .cta-ghost {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 13px 24px;
+      background: transparent;
+      color: var(--text2);
+      font-size: 14px;
+      font-weight: 600;
+      border-radius: 11px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+    .cta-ghost:hover { color: var(--text); border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.04); }
+
+    /* Hero right — strength card */
+    .strength-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 28px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,0.03) inset,
+        0 24px 64px rgba(0,0,0,0.5);
+    }
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 22px;
+    }
+    .card-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text3);
+    }
+    .live-badge {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 9px;
+      background: rgba(34, 197, 94, 0.12);
+      border: 1px solid rgba(34, 197, 94, 0.25);
+      border-radius: 100px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      color: #4ade80;
+    }
+    .live-dot {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: #22c55e;
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+
+    .currency-rows { display: flex; flex-direction: column; gap: 10px; }
+    .currency-row {
+      display: grid;
+      grid-template-columns: 44px 1fr 56px;
+      align-items: center;
+      gap: 10px;
+    }
+    .currency-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: 0.3px;
+    }
+    .currency-flag { font-size: 14px; line-height: 1; }
+    .currency-bar-wrap {
+      position: relative;
+      height: 6px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .currency-bar {
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      border-radius: 4px;
+      transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .currency-bar.up   { background: linear-gradient(90deg, rgba(34,197,94,0.4), rgba(34,197,94,0.8)); }
+    .currency-bar.down { background: linear-gradient(90deg, rgba(239,68,68,0.4), rgba(239,68,68,0.8)); }
+    .currency-bar.flat { background: linear-gradient(90deg, rgba(100,116,139,0.3), rgba(100,116,139,0.5)); }
+
+    .currency-value {
+      font-size: 12px;
+      font-weight: 700;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .currency-value.up   { color: #4ade80; }
+    .currency-value.down { color: #f87171; }
+    .currency-value.flat { color: var(--text3); }
+
+    .card-time {
+      margin-top: 16px;
+      font-size: 10px;
+      color: var(--text3);
+      text-align: right;
+    }
+
+    /* ── STATS BAR ── */
+    .stats-bar {
+      background: rgba(8, 12, 20, 0.95);
+      border-top: 1px solid var(--border2);
+      border-bottom: 1px solid var(--border2);
+      padding: 28px 0;
+    }
+    .stats-inner {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0;
+    }
+    .stat-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 0 32px;
+      border-right: 1px solid var(--border2);
+    }
+    .stat-item:first-child { padding-left: 0; }
+    .stat-item:last-child { border-right: none; padding-right: 0; }
+    .stat-icon {
+      width: 40px; height: 40px;
+      border-radius: 10px;
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+    .stat-num {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--text);
+      letter-spacing: -0.5px;
+      line-height: 1.1;
+    }
+    .stat-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text3);
+      margin-top: 2px;
+    }
+
+    /* ── SECTIONS ── */
+    section { padding: 100px 0; }
+
+    .section-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 100px;
+      background: rgba(255,255,255,0.03);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      color: var(--text3);
+      margin-bottom: 16px;
+    }
+    .section-badge.blue {
+      border-color: rgba(59,130,246,0.25);
+      background: rgba(59,130,246,0.07);
+      color: #93c5fd;
+    }
+    .section-badge.green {
+      border-color: rgba(34,197,94,0.25);
+      background: rgba(34,197,94,0.07);
+      color: #86efac;
+    }
+    .section-badge.gold {
+      border-color: rgba(201,168,76,0.25);
+      background: rgba(201,168,76,0.07);
+      color: #e9c97c;
+    }
+
+    .section-title {
+      font-size: 40px;
+      font-weight: 800;
+      letter-spacing: -1.5px;
+      color: var(--text);
+      line-height: 1.1;
+      margin-bottom: 14px;
+    }
+    .section-sub {
+      font-size: 17px;
+      font-weight: 400;
+      color: var(--text2);
+      line-height: 1.65;
+      max-width: 560px;
+    }
+    .section-header { margin-bottom: 56px; }
+    .section-header.center { text-align: center; }
+    .section-header.center .section-sub { margin: 0 auto; }
+
+    /* Dark tinted section */
+    .section-dark {
+      background: var(--bg2);
+      border-top: 1px solid var(--border2);
+      border-bottom: 1px solid var(--border2);
+    }
+
+    /* ── HOW IT WORKS ── */
+    .how-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+    .how-grid .feature-card:nth-child(4),
+    .how-grid .feature-card:nth-child(5) {
+      grid-column: span 1;
+    }
+    /* Center last two cards */
+    .how-grid-row2 {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+      max-width: 800px;
+      margin: 20px auto 0;
+    }
+
+    .feature-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px;
+      transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+    .feature-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(59,130,246,0.03) 0%, transparent 60%);
+      pointer-events: none;
+    }
+    .feature-card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(59, 130, 246, 0.2);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.4), 0 0 0 1px rgba(59,130,246,0.08);
+    }
+
+    .feature-icon {
+      width: 44px; height: 44px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      margin-bottom: 18px;
+      background: rgba(59,130,246,0.1);
+      border: 1px solid rgba(59,130,246,0.2);
+    }
+    .feature-icon.purple { background: rgba(139,92,246,0.1); border-color: rgba(139,92,246,0.2); }
+    .feature-icon.green  { background: rgba(34,197,94,0.1);  border-color: rgba(34,197,94,0.2); }
+    .feature-icon.gold   { background: rgba(201,168,76,0.1); border-color: rgba(201,168,76,0.2); }
+
+    .feature-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 10px;
+      letter-spacing: -0.2px;
+    }
+    .feature-desc {
+      font-size: 13.5px;
+      font-weight: 400;
+      color: var(--text2);
+      line-height: 1.65;
+    }
+
+    /* ── LIVE MARKET INTELLIGENCE ── */
+    .market-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+
+    .pair-card {
+      background: var(--card-solid);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 24px;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .pair-card:hover { border-color: rgba(255,255,255,0.12); transform: translateY(-2px); }
+
+    .pair-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .pair-name {
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--text);
+      letter-spacing: -0.3px;
+    }
+    .pair-badge {
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+    }
+    .badge-amber { background: rgba(201,168,76,0.15); color: #e9c97c; border: 1px solid rgba(201,168,76,0.3); }
+    .badge-green { background: rgba(34,197,94,0.15); color: #4ade80; border: 1px solid rgba(34,197,94,0.3); }
+    .badge-blue  { background: rgba(59,130,246,0.15); color: #93c5fd; border: 1px solid rgba(59,130,246,0.3); }
+
+    .pair-metrics {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .metric-item { }
+    .metric-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+      color: var(--text3);
+      margin-bottom: 4px;
+    }
+    .metric-value {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--text);
+      letter-spacing: -0.3px;
+    }
+    .metric-value.green { color: #4ade80; }
+    .metric-value.amber { color: #e9c97c; }
+
+    .structure-bars { margin-bottom: 18px; }
+    .structure-bar-row {
+      display: grid;
+      grid-template-columns: 40px 1fr 80px;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .sb-label {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text3);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .sb-track {
+      height: 5px;
+      background: rgba(255,255,255,0.06);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .sb-fill {
+      height: 100%;
+      border-radius: 3px;
+    }
+    .sb-fill.bullish   { background: #22c55e; width: 78%; }
+    .sb-fill.pullback  { background: #c9a84c; width: 45%; }
+    .sb-fill.stabilize { background: #60a5fa; width: 60%; }
+    .sb-fill.strong    { background: #22c55e; width: 88%; }
+    .sb-fill.moderate  { background: #4ade80; width: 62%; }
+    .sb-fill.confirm   { background: #86efac; width: 72%; }
+    .sb-tag {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text3);
+      text-align: right;
+    }
+
+    .pair-ai-text {
+      font-size: 12px;
+      line-height: 1.7;
+      color: var(--text2);
+      padding: 12px 14px;
+      background: rgba(59,130,246,0.06);
+      border: 1px solid rgba(59,130,246,0.1);
+      border-radius: 10px;
+      margin-bottom: 14px;
+    }
+
+    .pair-sentiment {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #4ade80;
+    }
+    .pair-sentiment-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: #22c55e;
+    }
+
+    /* ── RISK SENTIMENT ── */
+    .sentiment-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 36px;
+    }
+    .sentiment-card {
+      background: var(--card-solid);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: border-color 0.2s;
+    }
+    .sentiment-card:hover { border-color: rgba(255,255,255,0.12); }
+    .sentiment-card-left { }
+    .sentiment-group-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .sentiment-group-desc {
+      font-size: 11px;
+      color: var(--text3);
+    }
+    .sentiment-status {
+      padding: 5px 12px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .status-aligned { background: rgba(34,197,94,0.12); color: #4ade80; border: 1px solid rgba(34,197,94,0.25); }
+    .status-neutral { background: rgba(201,168,76,0.12); color: #e9c97c; border: 1px solid rgba(201,168,76,0.25); }
+
+    .regime-block {
+      text-align: center;
+      padding: 32px;
+      background: var(--card-solid);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+    }
+    .regime-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text3);
+      margin-bottom: 14px;
+    }
+    .regime-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 24px;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      background: rgba(59,130,246,0.12);
+      border: 1px solid rgba(59,130,246,0.3);
+      color: #93c5fd;
+      margin-bottom: 16px;
+    }
+    .regime-desc {
+      font-size: 13px;
+      color: var(--text2);
+      max-width: 520px;
+      margin: 0 auto;
+      line-height: 1.7;
+    }
+
+    /* ── WHY DIFFERENT ── */
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+    .comparison-col {
+      border-radius: 18px;
+      overflow: hidden;
+    }
+    .comparison-col.dim {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+    .comparison-col.bright {
+      background: rgba(59,130,246,0.05);
+      border: 1px solid rgba(59,130,246,0.2);
+    }
+    .comparison-col-header {
+      padding: 18px 24px;
+      border-bottom: 1px solid var(--border2);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+    }
+    .comparison-col.dim .comparison-col-header { color: var(--text3); }
+    .comparison-col.bright .comparison-col-header { color: #93c5fd; }
+    .comparison-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 24px;
+      border-bottom: 1px solid var(--border2);
+      font-size: 13.5px;
+      font-weight: 500;
+    }
+    .comparison-row:last-child { border-bottom: none; }
+    .comparison-col.dim  .comparison-row { color: var(--text3); }
+    .comparison-col.bright .comparison-row { color: var(--text); }
+    .comparison-icon { font-size: 14px; flex-shrink: 0; }
+
+    /* ── SESSION INTELLIGENCE ── */
+    .session-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 64px;
+      align-items: start;
+    }
+    .session-text p {
+      font-size: 15px;
+      color: var(--text2);
+      line-height: 1.75;
+      margin-bottom: 24px;
+    }
+    .session-bullets { display: flex; flex-direction: column; gap: 10px; }
+    .session-bullet {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text2);
+    }
+    .session-bullet-check { color: var(--green); font-weight: 700; }
+
+    .session-timeline-wrap {
+      background: var(--card-solid);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 28px;
+    }
+    .session-timeline-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text3);
+      margin-bottom: 18px;
+    }
+    .session-pills {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .session-pill-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .session-pill {
+      flex: 1;
+      padding: 9px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .session-pill.low     { background: rgba(100,116,139,0.08); border: 1px solid rgba(100,116,139,0.15); color: var(--text3); }
+    .session-pill.medium  { background: rgba(201,168,76,0.08);  border: 1px solid rgba(201,168,76,0.2); color: #e9c97c; }
+    .session-pill.high    { background: rgba(34,197,94,0.1);    border: 1px solid rgba(34,197,94,0.25); color: #4ade80; }
+    .session-pill.highest { background: rgba(59,130,246,0.1);   border: 1px solid rgba(59,130,246,0.25); color: #93c5fd; }
+    .session-pill-name { font-size: 12px; }
+    .session-pill-quality { font-size: 10px; font-weight: 600; opacity: 0.7; }
+    .session-dst-note {
+      margin-top: 16px;
+      font-size: 11px;
+      color: var(--text3);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* ── MARKET JOURNAL ── */
+    .journal-layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 48px;
+      align-items: start;
+    }
+    .journal-card {
+      background: var(--card-solid);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 24px;
+    }
+    .journal-entry-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .journal-ts {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text3);
+      font-family: 'Inter', monospace;
+    }
+    .journal-pair-badge {
+      padding: 3px 9px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      background: rgba(59,130,246,0.12);
+      color: #93c5fd;
+      border: 1px solid rgba(59,130,246,0.2);
+    }
+    .journal-body {
+      font-size: 13px;
+      line-height: 1.75;
+      color: var(--text2);
+      margin-bottom: 16px;
+    }
+    .journal-outcome {
+      padding: 10px 14px;
+      background: rgba(34,197,94,0.07);
+      border: 1px solid rgba(34,197,94,0.15);
+      border-radius: 10px;
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--text2);
+      margin-bottom: 14px;
+    }
+    .journal-outcome span { color: #4ade80; font-weight: 700; }
+    .journal-footer {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 10px;
+      color: var(--text3);
+    }
+    .journal-footer-dot { width: 3px; height: 3px; border-radius: 50%; background: var(--muted); }
+
+    .journal-features {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+    .journal-feature {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      padding: 20px 0;
+      border-bottom: 1px solid var(--border2);
+    }
+    .journal-feature:last-child { border-bottom: none; }
+    .jf-icon {
+      width: 36px; height: 36px;
+      border-radius: 10px;
+      background: rgba(59,130,246,0.08);
+      border: 1px solid rgba(59,130,246,0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .jf-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .jf-desc {
+      font-size: 13px;
+      color: var(--text2);
+      line-height: 1.6;
+    }
+
+    /* ── PRICING ── */
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: 1fr 1.1fr 1fr;
+      gap: 20px;
+      align-items: start;
+    }
+    .pricing-card {
+      background: var(--card-solid);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 32px 28px;
+      transition: transform 0.2s;
+      position: relative;
+    }
+    .pricing-card:hover { transform: translateY(-3px); }
+    .pricing-card.pro {
+      background: rgba(10, 13, 22, 0.98);
+      border-color: rgba(59,130,246,0.35);
+      box-shadow:
+        0 0 0 1px rgba(59,130,246,0.1) inset,
+        0 24px 64px rgba(37, 99, 235, 0.15),
+        0 0 80px rgba(59,130,246,0.06);
+    }
+    .pricing-popular {
+      position: absolute;
+      top: -12px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 4px 16px;
+      background: linear-gradient(135deg, #2563eb, #4f46e5);
+      border-radius: 100px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #fff;
+      white-space: nowrap;
+      letter-spacing: 0.3px;
+    }
+    .pricing-tier {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text3);
+      margin-bottom: 10px;
+    }
+    .pricing-card.pro .pricing-tier { color: #93c5fd; }
+    .pricing-price {
+      font-size: 42px;
+      font-weight: 800;
+      letter-spacing: -2px;
+      color: var(--text);
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+    .pricing-price sup { font-size: 20px; letter-spacing: 0; vertical-align: super; margin-right: 2px; }
+    .pricing-period {
+      font-size: 12px;
+      color: var(--text3);
+      margin-bottom: 28px;
+    }
+    .pricing-divider { height: 1px; background: var(--border2); margin: 24px 0; }
+    .pricing-features { display: flex; flex-direction: column; gap: 12px; margin-bottom: 28px; }
+    .pricing-feature {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13.5px;
+      font-weight: 500;
+      color: var(--text2);
+    }
+    .pricing-check { color: var(--green); font-weight: 700; font-size: 12px; flex-shrink: 0; }
+    .btn-pricing {
+      width: 100%;
+      padding: 13px;
+      border-radius: 11px;
+      font-size: 14px;
+      font-weight: 700;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      transition: all 0.15s;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: transparent;
+      color: var(--text2);
+      display: block;
+      text-align: center;
+    }
+    .btn-pricing:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+    .btn-pricing.primary {
+      background: linear-gradient(135deg, #2563eb, #4f46e5);
+      border-color: transparent;
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(37,99,235,0.4);
+    }
+    .btn-pricing.primary:hover { box-shadow: 0 8px 28px rgba(37,99,235,0.55); transform: translateY(-1px); }
+
+    /* ── FINAL CTA ── */
+    .final-cta {
+      padding: 120px 0;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .final-cta::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 60% 60% at 50% 0%, rgba(37,99,235,0.12), transparent),
+        radial-gradient(ellipse 40% 40% at 80% 80%, rgba(139,92,246,0.08), transparent);
+      pointer-events: none;
+    }
+    .final-cta-content { position: relative; z-index: 1; }
+    .final-cta h2 {
+      font-size: 48px;
+      font-weight: 800;
+      letter-spacing: -2px;
+      margin-bottom: 16px;
+      color: var(--text);
+    }
+    .final-cta p {
+      font-size: 17px;
+      color: var(--text2);
+      max-width: 540px;
+      margin: 0 auto 36px;
+      line-height: 1.65;
+    }
+    .final-cta-note {
+      margin-top: 16px;
+      font-size: 12px;
+      color: var(--text3);
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      border-top: 1px solid var(--border2);
+      padding: 36px 0;
+    }
+    .footer-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .footer-logo {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .footer-links {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .footer-link {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text3);
+      padding: 6px 12px;
+      border-radius: 7px;
+      transition: color 0.15s, background 0.15s;
+    }
+    .footer-link:hover { color: var(--text2); background: rgba(255,255,255,0.04); }
+    .footer-copy {
+      font-size: 12px;
+      color: var(--text3);
+      opacity: 0.6;
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 1024px) {
+      .hero-h1 { font-size: 44px; }
+      .hero-content { gap: 40px; }
+      .how-grid { grid-template-columns: 1fr 1fr; }
+      .how-grid-row2 { grid-template-columns: 1fr 1fr; max-width: 100%; }
+      .pricing-grid { grid-template-columns: 1fr; max-width: 440px; margin: 0 auto; }
+      .pricing-card.pro { margin-top: 8px; }
+    }
+
+    @media (max-width: 768px) {
+      section { padding: 80px 0; }
+      .hero-content { grid-template-columns: 1fr; gap: 48px; }
+      .strength-card { max-width: 420px; }
+      .hero-h1 { font-size: 38px; letter-spacing: -1.5px; }
+      .hero-bullets { grid-template-columns: 1fr; }
+      .section-title { font-size: 30px; }
+      .stats-inner { grid-template-columns: 1fr 1fr; gap: 20px; }
+      .stat-item { padding: 0; border-right: none; }
+      .how-grid { grid-template-columns: 1fr; }
+      .how-grid-row2 { grid-template-columns: 1fr; }
+      .market-grid { grid-template-columns: 1fr; }
+      .sentiment-grid { grid-template-columns: 1fr; }
+      .comparison-grid { grid-template-columns: 1fr; }
+      .session-grid { grid-template-columns: 1fr; gap: 40px; }
+      .journal-layout { grid-template-columns: 1fr; gap: 32px; }
+      .nav-links .nav-link { display: none; }
+      .final-cta h2 { font-size: 32px; }
+      .footer-inner { flex-direction: column; align-items: flex-start; gap: 12px; }
+      .footer-links { flex-wrap: wrap; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav id="main-nav">
+    <div class="nav-inner">
+      <a href="/" class="nav-logo">NervaFX</a>
+      <div class="nav-links">
+        <a href="#how" class="nav-link">How It Works</a>
+        <a href="#pricing" class="nav-link">Pricing</a>
+        <a href="/login" class="nav-link">Sign In</a>
+        <a href="/login" class="nav-btn">Start Free Trial</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-dots"></div>
+    <div class="hero-orb orb-blue"></div>
+    <div class="hero-orb orb-purple"></div>
+    <div class="hero-orb orb-small"></div>
+    <div class="flow-lines">
+      <div class="flow-line"></div>
+      <div class="flow-line"></div>
+      <div class="flow-line"></div>
+      <div class="flow-line"></div>
+      <div class="flow-line"></div>
+      <div class="flow-line"></div>
+      <div class="flow-line"></div>
+      <div class="flow-line"></div>
+    </div>
+
+    <div class="container">
+      <div class="hero-content">
+
+        <!-- Left -->
+        <div class="hero-left">
+          <div class="hero-badge">
+            <div class="hero-badge-dot"></div>
+            Institutional Grade · AI-Powered
+          </div>
+          <h1 class="hero-h1">
+            AI-Powered<br>
+            <span>Currency Flow</span><br>
+            Intelligence
+          </h1>
+          <p class="hero-sub">
+            NervaFX scans all 28 major forex pairs every hour to surface institutional-grade currency strength, AI structure analysis, and cross-asset risk intelligence — so you trade with clarity, not guesswork.
+          </p>
+          <div class="hero-bullets">
+            <div class="hero-bullet">
+              <span class="hero-bullet-check">✓</span>
+              12H, 6H & 3H structure analysis
+            </div>
+            <div class="hero-bullet">
+              <span class="hero-bullet-check">✓</span>
+              Cross-asset risk sentiment
+            </div>
+            <div class="hero-bullet">
+              <span class="hero-bullet-check">✓</span>
+              AI continuation probability
+            </div>
+            <div class="hero-bullet">
+              <span class="hero-bullet-check">✓</span>
+              Personalized lot sizing
+            </div>
+            <div class="hero-bullet">
+              <span class="hero-bullet-check">✓</span>
+              Session & regime awareness
+            </div>
+            <div class="hero-bullet">
+              <span class="hero-bullet-check">✓</span>
+              Automatic market journal
+            </div>
+          </div>
+          <div class="hero-ctas">
+            <a href="/login" class="cta-primary">Start Free Trial</a>
+            <a href="/app" class="cta-ghost">View Live Dashboard →</a>
+          </div>
+        </div>
+
+        <!-- Right — Live Strength Card -->
+        <div class="hero-right">
+          <div class="strength-card">
+            <div class="card-header">
+              <div class="card-title">12H Currency Strength</div>
+              <div class="live-badge">
+                <div class="live-dot"></div>
+                LIVE
+              </div>
+            </div>
+            <div class="currency-rows" id="strength-rows">
+              <!-- Populated by JS -->
+            </div>
+            <div class="card-time" id="strength-time"></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- STATS BAR -->
+  <div class="stats-bar">
+    <div class="container">
+      <div class="stats-inner">
+        <div class="stat-item">
+          <div class="stat-icon">📊</div>
+          <div>
+            <div class="stat-num" data-count="28">0</div>
+            <div class="stat-label">Pairs Tracked</div>
+          </div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-icon">⏱</div>
+          <div>
+            <div class="stat-num">Hourly</div>
+            <div class="stat-label">Updates</div>
+          </div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-icon">💱</div>
+          <div>
+            <div class="stat-num" data-count="8">0</div>
+            <div class="stat-label">Currencies Scored</div>
+          </div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-icon">🤖</div>
+          <div>
+            <div class="stat-num">AI</div>
+            <div class="stat-label">Analyzed Structure</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HOW IT WORKS -->
+  <section id="how">
+    <div class="container">
+      <div class="section-header center">
+        <div class="section-badge blue">How It Works</div>
+        <h2 class="section-title">Five Engines, One Platform</h2>
+        <p class="section-sub">Every analysis layer is built to give you a clearer, more disciplined view of the market.</p>
+      </div>
+      <div class="how-grid">
+        <div class="feature-card">
+          <div class="feature-icon">📡</div>
+          <div class="feature-title">Currency Flow Engine</div>
+          <p class="feature-desc">NervaFX scans all 28 major forex pairs every hour to calculate real-time currency strength and institutional-style flow dynamics.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon" style="background:rgba(139,92,246,0.1);border-color:rgba(139,92,246,0.2)">🧱</div>
+          <div class="feature-title">Multi-Horizon Structure</div>
+          <p class="feature-desc">12H detects direction, 6H tracks trend strength, and 3H monitors pullbacks and continuation behavior across every session.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon" style="background:rgba(59,130,246,0.1);border-color:rgba(59,130,246,0.2)">🧠</div>
+          <div class="feature-title">AI Structure Analysis</div>
+          <p class="feature-desc">AI analyzes the last 48 hours of smoothed market structure to evaluate trend health, pullback quality, and continuation probability.</p>
+        </div>
+      </div>
+      <div class="how-grid-row2">
+        <div class="feature-card">
+          <div class="feature-icon" style="background:rgba(34,197,94,0.1);border-color:rgba(34,197,94,0.2)">🛡️</div>
+          <div class="feature-title">Risk Sentiment Engine</div>
+          <p class="feature-desc">Cross-asset risk analysis tracks equities, carry trades, safe havens, and liquidity conditions to detect strong risk-on and risk-off environments.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon" style="background:rgba(201,168,76,0.1);border-color:rgba(201,168,76,0.2)">🎛️</div>
+          <div class="feature-title">Personalized Risk Management</div>
+          <p class="feature-desc">Every approved trade automatically calculates stop loss, take profit, risk exposure, and suggested lot size based on your account profile.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- LIVE MARKET INTELLIGENCE -->
+  <section class="section-dark">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-badge blue">Live Analysis</div>
+        <h2 class="section-title">Live Market Intelligence</h2>
+        <p class="section-sub">Real-time structure analysis across 28 pairs — updated every hour.</p>
+      </div>
+      <div class="market-grid">
+
+        <!-- USD/CAD Card -->
+        <div class="pair-card">
+          <div class="pair-header">
+            <div class="pair-name">USD/CAD</div>
+            <div class="pair-badge badge-amber">Healthy Pullback</div>
+          </div>
+          <div class="pair-metrics">
+            <div class="metric-item">
+              <div class="metric-label">Continuation Prob.</div>
+              <div class="metric-value amber">72%</div>
+            </div>
+            <div class="metric-item">
+              <div class="metric-label">Trend Health</div>
+              <div class="metric-value green">81%</div>
+            </div>
+            <div class="metric-item">
+              <div class="metric-label">Market Quality</div>
+              <div class="metric-value">CLEAN</div>
+            </div>
+            <div class="metric-item">
+              <div class="metric-label">Session</div>
+              <div class="metric-value">LONDON</div>
+            </div>
+          </div>
+          <div class="structure-bars">
+            <div class="structure-bar-row">
+              <div class="sb-label">12H</div>
+              <div class="sb-track"><div class="sb-fill bullish"></div></div>
+              <div class="sb-tag">Bullish</div>
+            </div>
+            <div class="structure-bar-row">
+              <div class="sb-label">6H</div>
+              <div class="sb-track"><div class="sb-fill pullback"></div></div>
+              <div class="sb-tag">Pullback</div>
+            </div>
+            <div class="structure-bar-row">
+              <div class="sb-label">3H</div>
+              <div class="sb-track"><div class="sb-fill stabilize"></div></div>
+              <div class="sb-tag">Stabilizing</div>
+            </div>
+          </div>
+          <div class="pair-ai-text">
+            Structure shows healthy institutional accumulation. 12H trend intact, 6H pullback within normal range. Waiting for 3H continuation confirmation before entry signal.
+          </div>
+          <div class="pair-sentiment">
+            <div class="pair-sentiment-dot"></div>
+            Risk On — Aligned
+          </div>
+        </div>
+
+        <!-- EUR/JPY Card -->
+        <div class="pair-card">
+          <div class="pair-header">
+            <div class="pair-name">EUR/JPY</div>
+            <div class="pair-badge badge-green">Entry Active</div>
+          </div>
+          <div class="pair-metrics">
+            <div class="metric-item">
+              <div class="metric-label">Continuation Prob.</div>
+              <div class="metric-value green">88%</div>
+            </div>
+            <div class="metric-item">
+              <div class="metric-label">Trend Health</div>
+              <div class="metric-value green">91%</div>
+            </div>
+            <div class="metric-item">
+              <div class="metric-label">Market Quality</div>
+              <div class="metric-value">STRONG</div>
+            </div>
+            <div class="metric-item">
+              <div class="metric-label">Session</div>
+              <div class="metric-value">LDN/NY</div>
+            </div>
+          </div>
+          <div class="structure-bars">
+            <div class="structure-bar-row">
+              <div class="sb-label">12H</div>
+              <div class="sb-track"><div class="sb-fill strong"></div></div>
+              <div class="sb-tag">Strong</div>
+            </div>
+            <div class="structure-bar-row">
+              <div class="sb-label">6H</div>
+              <div class="sb-track"><div class="sb-fill moderate"></div></div>
+              <div class="sb-tag">Moderate</div>
+            </div>
+            <div class="structure-bar-row">
+              <div class="sb-label">3H</div>
+              <div class="sb-track"><div class="sb-fill confirm"></div></div>
+              <div class="sb-tag">Confirming</div>
+            </div>
+          </div>
+          <div class="pair-ai-text">
+            All three horizons aligned bullish with strong 12H momentum. 6H holding above structure. 3H showing continuation candle pattern. Risk-reward favorable for entry.
+          </div>
+          <div class="pair-sentiment">
+            <div class="pair-sentiment-dot"></div>
+            Risk On — Strong Alignment
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- RISK SENTIMENT -->
+  <section>
+    <div class="container">
+      <div class="section-header center">
+        <div class="section-badge gold">Risk Intelligence</div>
+        <h2 class="section-title">Cross-Asset Risk Intelligence</h2>
+        <p class="section-sub">NervaFX monitors the global risk environment — not just forex price action.</p>
+      </div>
+      <div class="sentiment-grid">
+        <div class="sentiment-card">
+          <div class="sentiment-card-left">
+            <div class="sentiment-group-name">Growth Assets</div>
+            <div class="sentiment-group-desc">Equities, risk currencies, cyclicals</div>
+          </div>
+          <div class="sentiment-status status-aligned">Aligned</div>
+        </div>
+        <div class="sentiment-card">
+          <div class="sentiment-card-left">
+            <div class="sentiment-group-name">Carry FX</div>
+            <div class="sentiment-group-desc">High-yielders vs. funding currencies</div>
+          </div>
+          <div class="sentiment-status status-aligned">Aligned</div>
+        </div>
+        <div class="sentiment-card">
+          <div class="sentiment-card-left">
+            <div class="sentiment-group-name">Safe Havens</div>
+            <div class="sentiment-group-desc">Gold, JPY, CHF positioning</div>
+          </div>
+          <div class="sentiment-status status-neutral">Neutral</div>
+        </div>
+        <div class="sentiment-card">
+          <div class="sentiment-card-left">
+            <div class="sentiment-group-name">USD Liquidity</div>
+            <div class="sentiment-group-desc">DXY and USD pairs flow</div>
+          </div>
+          <div class="sentiment-status status-neutral">Neutral</div>
+        </div>
+      </div>
+      <div class="regime-block">
+        <div class="regime-label">Current Market Regime</div>
+        <div>
+          <span class="regime-badge">
+            <span>🔷</span>
+            Cautious Risk On
+          </span>
+        </div>
+        <p class="regime-desc">
+          Growth assets and carry FX are aligned risk-on, but safe havens and USD liquidity remain neutral — signaling a measured, selective risk appetite. High-probability setups favor risk-positive pairs with confirmed multi-horizon structure.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- WHY DIFFERENT -->
+  <section class="section-dark">
+    <div class="container">
+      <div class="section-header center">
+        <div class="section-badge">Comparison</div>
+        <h2 class="section-title">Not Another Trading Tool</h2>
+        <p class="section-sub">NervaFX is a market intelligence platform, not a signal service or indicator pack.</p>
+      </div>
+      <div class="comparison-grid">
+        <div class="comparison-col dim">
+          <div class="comparison-col-header">Traditional Tools</div>
+          <div class="comparison-row"><span class="comparison-icon">—</span> Indicators only</div>
+          <div class="comparison-row"><span class="comparison-icon">—</span> Chart-based guessing</div>
+          <div class="comparison-row"><span class="comparison-icon">—</span> Static signals</div>
+          <div class="comparison-row"><span class="comparison-icon">—</span> Fixed lot sizes</div>
+          <div class="comparison-row"><span class="comparison-icon">—</span> No market context</div>
+          <div class="comparison-row"><span class="comparison-icon">—</span> Manual journaling</div>
+        </div>
+        <div class="comparison-col bright">
+          <div class="comparison-col-header">NervaFX</div>
+          <div class="comparison-row"><span class="comparison-icon" style="color:#4ade80">✓</span> Currency flow intelligence</div>
+          <div class="comparison-row"><span class="comparison-icon" style="color:#4ade80">✓</span> Cross-market structure analysis</div>
+          <div class="comparison-row"><span class="comparison-icon" style="color:#4ade80">✓</span> AI structure interpretation</div>
+          <div class="comparison-row"><span class="comparison-icon" style="color:#4ade80">✓</span> Personalized risk sizing</div>
+          <div class="comparison-row"><span class="comparison-icon" style="color:#4ade80">✓</span> Regime & session awareness</div>
+          <div class="comparison-row"><span class="comparison-icon" style="color:#4ade80">✓</span> Automatic hourly market journal</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SESSION INTELLIGENCE -->
+  <section>
+    <div class="container">
+      <div class="section-header">
+        <div class="section-badge blue">Session Engine</div>
+        <h2 class="section-title">Trade During Active Markets Only</h2>
+      </div>
+      <div class="session-grid">
+        <div class="session-text">
+          <p>Most trading losses happen in the wrong session — low liquidity, erratic moves, and stop hunts dominate dead hours. NervaFX detects session quality in real time and filters setups accordingly.</p>
+          <div class="session-bullets">
+            <div class="session-bullet">
+              <span class="session-bullet-check">✓</span>
+              Avoid low-liquidity dead hours
+            </div>
+            <div class="session-bullet">
+              <span class="session-bullet-check">✓</span>
+              Detect strong continuation sessions
+            </div>
+            <div class="session-bullet">
+              <span class="session-bullet-check">✓</span>
+              Filter out unstable trading environments
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="session-timeline-wrap">
+            <div class="session-timeline-label">24H Session Quality Map</div>
+            <div class="session-pills">
+              <div class="session-pill low">
+                <span class="session-pill-name">Asia</span>
+                <span class="session-pill-quality">Low Activity</span>
+              </div>
+              <div class="session-pill medium">
+                <span class="session-pill-name">LDN Open</span>
+                <span class="session-pill-quality">Rising Liquidity</span>
+              </div>
+              <div class="session-pill highest">
+                <span class="session-pill-name">London</span>
+                <span class="session-pill-quality">Prime Session</span>
+              </div>
+              <div class="session-pill highest">
+                <span class="session-pill-name">LDN / NY Overlap</span>
+                <span class="session-pill-quality">Highest Volume</span>
+              </div>
+              <div class="session-pill medium">
+                <span class="session-pill-name">Late NY</span>
+                <span class="session-pill-quality">Declining</span>
+              </div>
+              <div class="session-pill low">
+                <span class="session-pill-name">Dead Hours</span>
+                <span class="session-pill-quality">Avoid — No Filter</span>
+              </div>
+            </div>
+            <div class="session-dst-note">
+              ⏰ Session quality automatically adjusts for DST
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MARKET JOURNAL -->
+  <section class="section-dark">
+    <div class="container">
+      <div class="section-header center">
+        <div class="section-badge green">Market Journal</div>
+        <h2 class="section-title">Automatic Market Journal</h2>
+        <p class="section-sub">Every hourly analysis stored. Every setup reviewed. Nothing lost.</p>
+      </div>
+      <div class="journal-layout">
+        <div class="journal-card">
+          <div class="journal-entry-header">
+            <div class="journal-ts">2025-01-15 · 14:00 UTC</div>
+            <div class="journal-pair-badge">EUR/USD</div>
+          </div>
+          <div class="journal-body">
+            12H structure: bullish with high momentum. 6H consolidating above key structure zone. 3H showing decreasing volatility — compression before potential expansion. Risk sentiment: risk-on confirmed across 3 of 4 asset groups. Session: London active with above-average volume.
+          </div>
+          <div class="journal-outcome">
+            <span>AI Outcome:</span> Structure held cleanly. 3H expansion materialized 2 hours post-journal. Continuation met 1:2.4 R:R target. Model confidence: High.
+          </div>
+          <div class="journal-footer">
+            <span>48H analysis window</span>
+            <div class="journal-footer-dot"></div>
+            <span>GPT-4o powered</span>
+            <div class="journal-footer-dot"></div>
+            <span>Auto-generated</span>
+          </div>
+        </div>
+        <div class="journal-features">
+          <div class="journal-feature">
+            <div class="jf-icon">📝</div>
+            <div>
+              <div class="jf-title">Auto-Generated Hourly</div>
+              <p class="jf-desc">Every hour, NervaFX writes a structured market journal entry for every active pair — no manual input required.</p>
+            </div>
+          </div>
+          <div class="journal-feature">
+            <div class="jf-icon">🤖</div>
+            <div>
+              <div class="jf-title">AI-Reviewed Outcomes</div>
+              <p class="jf-desc">The AI revisits past entries and evaluates whether structure predictions played out — building a trackable accuracy record.</p>
+            </div>
+          </div>
+          <div class="journal-feature">
+            <div class="jf-icon">📈</div>
+            <div>
+              <div class="jf-title">Performance Tracking</div>
+              <p class="jf-desc">See which setups, sessions, and regimes produce the cleanest outcomes — and which environments to avoid.</p>
+            </div>
+          </div>
+          <div class="journal-feature">
+            <div class="jf-icon">🔬</div>
+            <div>
+              <div class="jf-title">Future Model Improvement</div>
+              <p class="jf-desc">Historical journal data feeds model improvement — the longer you use NervaFX, the sharper the analysis becomes.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRICING -->
+  <section id="pricing">
+    <div class="container">
+      <div class="section-header center">
+        <div class="section-badge">Pricing</div>
+        <h2 class="section-title">Simple, Transparent Pricing</h2>
+        <p class="section-sub">Start free. Upgrade when you need the full intelligence stack.</p>
+      </div>
+      <div class="pricing-grid">
+
+        <!-- Free -->
+        <div class="pricing-card">
+          <div class="pricing-tier">Free</div>
+          <div class="pricing-price"><sup>$</sup>0</div>
+          <div class="pricing-period">forever</div>
+          <div class="pricing-divider"></div>
+          <div class="pricing-features">
+            <div class="pricing-feature"><span class="pricing-check">✓</span> Basic dashboard</div>
+            <div class="pricing-feature"><span class="pricing-check">✓</span> 28-pair strength data</div>
+            <div class="pricing-feature"><span class="pricing-check">✓</span> Session intelligence</div>
+          </div>
+          <a href="/login" class="btn-pricing">Get Started</a>
+        </div>
+
+        <!-- Pro (highlighted) -->
+        <div class="pricing-card pro">
+          <div class="pricing-popular">Most Popular</div>
+          <div class="pricing-tier">Pro</div>
+          <div class="pricing-price"><sup>$</sup>39</div>
+          <div class="pricing-period">per month</div>
+          <div class="pricing-divider"></div>
+          <div class="pricing-features">
+            <div class="pricing-feature"><span class="pricing-check">✓</span> Everything in Free</div>
+            <div class="pricing-feature"><span class="pricing-check">✓</span> AI structure analysis</div>
+            <div class="pricing-feature"><span class="pricing-check">✓</span> Risk sentiment engine</div>
+            <div class="pricing-feature"><span class="pricing-check">✓</span> Personalized risk management</div>
+            <div class="pricing-feature"><span class="pricing-check">✓</span> Automatic market journal</div>
+          </div>
+          <a href="/login" class="btn-pricing primary">Get Started</a>
+        </div>
+
+        <!-- Premium -->
+        <div class="pricing-card">
+          <div class="pricing-tier">Premium</div>
+          <div class="pricing-price"><sup>$</sup>59</div>
+          <div class="pricing-period">per month</div>
+          <div class="pricing-divider"></div>
+          <div class="pricing-features">
+            <div class="pricing-feature"><span class="pricing-check">✓</span> Everything in Pro</div>
+            <div class="pricing-feature"><span class="pricing-check">✓</span> Priority updates</div>
+            <div class="pricing-feature"><span class="pricing-check">✓</span> Advanced AI analysis</div>
+            <div class="pricing-feature"><span class="pricing-check">✓</span> Early access features</div>
+          </div>
+          <a href="/login" class="btn-pricing">Get Started</a>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- FINAL CTA -->
+  <section class="section-dark">
+    <div class="container">
+      <div class="final-cta">
+        <div class="final-cta-content">
+          <div class="section-badge blue" style="margin: 0 auto 20px; display: inline-flex;">Ready to Start</div>
+          <h2>Trade With Structure,<br>Not Emotion</h2>
+          <p>Built for traders who want cleaner market intelligence, stronger continuation setups, and disciplined risk management.</p>
+          <a href="/login" class="cta-primary" style="font-size:16px; padding:16px 36px;">Start Free Trial →</a>
+          <div class="final-cta-note">No credit card required · Free plan available</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="container">
+      <div class="footer-inner">
+        <div class="footer-logo">NervaFX</div>
+        <div class="footer-links">
+          <a href="#how" class="footer-link">How It Works</a>
+          <a href="#pricing" class="footer-link">Pricing</a>
+          <a href="/login" class="footer-link">Sign In</a>
+          <a href="/login" class="footer-link">Sign Up</a>
+        </div>
+        <div class="footer-copy">© 2025 NervaFX. For educational purposes only.</div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // ── NAV SCROLL ────────────────────────────────────────────────────────────
+    const nav = document.getElementById('main-nav');
+    window.addEventListener('scroll', () => {
+      nav.classList.toggle('scrolled', window.scrollY > 20);
+    }, { passive: true });
+
+    // ── SMOOTH SCROLL FOR ANCHOR LINKS ───────────────────────────────────────
+    document.querySelectorAll('a[href^="#"]').forEach(el => {
+      el.addEventListener('click', e => {
+        const id = el.getAttribute('href').slice(1);
+        const target = document.getElementById(id);
+        if (target) {
+          e.preventDefault();
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    });
+
+    // ── CURRENCY STRENGTH ─────────────────────────────────────────────────────
+    const CURRENCY_FLAGS = {
+      USD: '🇺🇸', EUR: '🇪🇺', GBP: '🇬🇧', JPY: '🇯🇵',
+      CHF: '🇨🇭', AUD: '🇦🇺', NZD: '🇳🇿', CAD: '🇨🇦',
+    };
+    const ORDERED = ['CHF','USD','EUR','GBP','AUD','NZD','CAD','JPY'];
+
+    const DEMO_DATA = [
+      { currency: 'CHF', value:  0.82, direction: 'up'   },
+      { currency: 'USD', value:  0.61, direction: 'up'   },
+      { currency: 'EUR', value:  0.29, direction: 'up'   },
+      { currency: 'GBP', value:  0.08, direction: 'flat' },
+      { currency: 'AUD', value: -0.14, direction: 'down' },
+      { currency: 'NZD', value: -0.33, direction: 'down' },
+      { currency: 'CAD', value: -0.55, direction: 'down' },
+      { currency: 'JPY', value: -0.78, direction: 'down' },
+    ];
+
+    function renderStrength(currencies, time) {
+      const rows = document.getElementById('strength-rows');
+      const timeEl = document.getElementById('strength-time');
+
+      // Sort by ORDERED list if present, otherwise use API sort
+      const sorted = ORDERED.map(code => currencies.find(c => c.currency === code)).filter(Boolean);
+      const remaining = currencies.filter(c => !ORDERED.includes(c.currency));
+      const display = [...sorted, ...remaining].slice(0, 8);
+
+      const maxAbs = Math.max(...display.map(c => Math.abs(c.value)), 0.01);
+
+      rows.innerHTML = display.map(c => {
+        const barWidth = Math.round((Math.abs(c.value) / maxAbs) * 100);
+        const sign = c.value > 0 ? '+' : '';
+        const flag = CURRENCY_FLAGS[c.currency] || '🌐';
+        return `
+          <div class="currency-row">
+            <div class="currency-label">
+              <span class="currency-flag">${flag}</span>
+              ${c.currency}
+            </div>
+            <div class="currency-bar-wrap">
+              <div class="currency-bar ${c.direction}" style="width:${barWidth}%"></div>
+            </div>
+            <div class="currency-value ${c.direction}">${sign}${c.value.toFixed(2)}</div>
+          </div>`;
+      }).join('');
+
+      if (time) {
+        const d = new Date(time);
+        timeEl.textContent = 'Updated ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' });
+      } else {
+        timeEl.textContent = 'Demo data';
+      }
+    }
+
+    async function fetchStrength() {
+      try {
+        const res = await fetch('/api/public-strength');
+        if (!res.ok) throw new Error('API error');
+        const data = await res.json();
+        if (data.currencies && data.currencies.length > 0) {
+          renderStrength(data.currencies, data.time);
+        } else {
+          renderStrength(DEMO_DATA, null);
+        }
+      } catch (e) {
+        renderStrength(DEMO_DATA, null);
+      }
+    }
+
+    // Initial render with demo data immediately (before API responds)
+    renderStrength(DEMO_DATA, null);
+    fetchStrength();
+    setInterval(fetchStrength, 60000);
+
+    // ── STATS COUNTER ANIMATION ───────────────────────────────────────────────
+    const counters = document.querySelectorAll('[data-count]');
+    let countersStarted = false;
+
+    function animateCounters() {
+      if (countersStarted) return;
+      countersStarted = true;
+      counters.forEach(el => {
+        const target = parseInt(el.dataset.count);
+        const duration = 1200;
+        const start = performance.now();
+        function update(now) {
+          const elapsed = now - start;
+          const progress = Math.min(elapsed / duration, 1);
+          const eased = 1 - Math.pow(1 - progress, 3); // ease-out-cubic
+          el.textContent = Math.round(eased * target);
+          if (progress < 1) requestAnimationFrame(update);
+        }
+        requestAnimationFrame(update);
+      });
+    }
+
+    const statsObserver = new IntersectionObserver((entries) => {
+      if (entries.some(e => e.isIntersecting)) {
+        animateCounters();
+        statsObserver.disconnect();
+      }
+    }, { threshold: 0.3 });
+
+    const statsBar = document.querySelector('.stats-bar');
+    if (statsBar) statsObserver.observe(statsBar);
+  </script>
+</body>
+</html>
