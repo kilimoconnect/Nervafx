@@ -5,18 +5,21 @@ module.exports = async function handler(req, res) {
   try {
     const sb = getClient();
 
-    // ── Resolve user profile (balance / limits) ──────────────────────────────
-    let accountSize    = parseFloat(process.env.ACCOUNT_BALANCE) || 1000;
-    let maxDailyRiskPct = 2;
-    let maxTrades       = 3;
-
+    // ── Authenticate user ────────────────────────────────────────────────────
     const auth  = req.headers.authorization || '';
     const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
+
+    let userId          = null;
+    let accountSize     = parseFloat(process.env.ACCOUNT_BALANCE) || 1000;
+    let maxDailyRiskPct = 2;
+    let maxTrades       = 3;
 
     if (token) {
       try {
         const { data: { user } } = await sb.auth.getUser(token);
         if (user) {
+          userId = user.id;
+
           const { data: profile } = await sb
             .from('profiles')
             .select('account_size, max_daily_risk_pct, max_trades')
@@ -29,12 +32,10 @@ module.exports = async function handler(req, res) {
             if (profile.max_trades)         maxTrades       = parseInt(profile.max_trades);
           }
         }
-      } catch (_) {
-        // token lookup failed — fall back to env defaults, don't crash
-      }
+      } catch (_) { /* fall back to defaults */ }
     }
 
-    // ── Fetch today's risk checks ────────────────────────────────────────────
+    // ── Fetch today's risk checks for this user ──────────────────────────────
     const t = await getLatestTime('risk_checks');
     if (!t) {
       return res.json({
@@ -52,21 +53,25 @@ module.exports = async function handler(req, res) {
       today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()
     )).toISOString();
 
-    const { data, error } = await sb
+    let query = sb
       .from('risk_checks')
       .select('*')
       .gte('time', dayStart)
       .order('time', { ascending: false });
 
+    // Filter by this user's records only
+    if (userId) query = query.eq('user_id', userId);
+
+    const { data, error } = await query;
     if (error) throw error;
 
     const approved  = (data || []).filter(r => r.status === 'APPROVED');
     const rejected  = (data || []).filter(r => r.status === 'REJECTED');
     const totalRisk = approved.reduce((s, r) => s + parseFloat(r.risk_amount || 0), 0);
 
-    // Use account_balance from the latest risk_check as a live override if available
+    // Use live account_balance from the latest risk_check if available
     const liveBalance = parseFloat(approved[0]?.account_balance ?? null);
-    const balance = liveBalance > 0 ? liveBalance : accountSize;
+    const balance     = liveBalance > 0 ? liveBalance : accountSize;
 
     res.json({
       approved,
