@@ -596,6 +596,11 @@
   <script>
     // ── GSAP entrance animations ──────────────────────────────────────────────
     window.addEventListener('DOMContentLoaded', () => {
+      /* Auto-switch to signup tab if ?tab=signup in URL */
+      if (new URLSearchParams(location.search).get('tab') === 'signup') {
+        switchTab('signup');
+      }
+
       if (typeof gsap === 'undefined') return;
       const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
       tl.from('.logo-wrap',  { y: -24, opacity: 0, duration: 0.65 })
