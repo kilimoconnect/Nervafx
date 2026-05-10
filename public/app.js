@@ -105,7 +105,9 @@ function gsapModalClose(el, onComplete) {
 // ─── Fetch helpers ────────────────────────────────────────────────────────────
 
 async function api(path) {
-  const r = await fetch(path);
+  const tok = localStorage.getItem('nfx_token');
+  const headers = tok ? { 'Authorization': 'Bearer ' + tok } : {};
+  const r = await fetch(path, { headers });
   if (!r.ok) throw new Error(`${path} ${r.status}`);
   return r.json();
 }
