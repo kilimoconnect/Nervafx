@@ -8,7 +8,7 @@ async function loadAllProfiles() {
   try {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, account_size, max_daily_risk_pct, max_trades');
+      .select('id, account_size, max_daily_risk_pct, max_trades, min_rr');
 
     if (error || !data || data.length === 0) return [];
     return data;
@@ -22,14 +22,15 @@ function buildRiskConfig(profile) {
   const accountBalance      = parseFloat(profile?.account_size)       || config.risk.accountBalance;
   const maxDailyLossPercent = (parseFloat(profile?.max_daily_risk_pct) / 100) || config.risk.maxDailyLossPercent;
   const maxOpenTrades       = parseInt(profile?.max_trades)            || config.risk.maxOpenTrades;
+  const minRR               = parseFloat(profile?.min_rr)              || config.risk.minRR;
 
   return {
     userId:              profile?.id ?? null,
     accountBalance:      accountBalance      > 0 ? accountBalance      : config.risk.accountBalance,
     maxDailyLossPercent: maxDailyLossPercent > 0 ? maxDailyLossPercent : config.risk.maxDailyLossPercent,
     maxOpenTrades:       maxOpenTrades       > 0 ? maxOpenTrades       : config.risk.maxOpenTrades,
+    minRR:               minRR              > 0 ? minRR               : config.risk.minRR,
     riskPercent:         config.risk.riskPercent,
-    minRR:               config.risk.minRR,
     minConfidence:       config.risk.minConfidence,
   };
 }

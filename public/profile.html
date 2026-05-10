@@ -289,7 +289,7 @@
         </div>
 
         <!-- Max Concurrent Trades -->
-        <div class="field" style="margin-bottom:0">
+        <div class="field">
           <div class="field-label">Max Concurrent Trades <span class="field-hint">Open positions at once</span></div>
           <div class="slider-row">
             <div class="slider-track">
@@ -297,6 +297,17 @@
             </div>
             <span class="slider-val" id="trades-val">3</span>
             <span class="slider-unit">trades</span>
+          </div>
+        </div>
+
+        <!-- Min Risk:Reward -->
+        <div class="field" style="margin-bottom:0">
+          <div class="field-label">Min Risk : Reward <span class="field-hint">Minimum RR to approve a trade</span></div>
+          <div class="slider-row">
+            <div class="slider-track">
+              <input type="range" id="rr-slider" min="1" max="5" step="0.5" value="2" oninput="updateRR(this.value)" />
+            </div>
+            <span class="slider-val" id="rr-val">1 : 2</span>
           </div>
         </div>
 
@@ -398,9 +409,11 @@
         document.getElementById('account-size').value   = data.account_size  || 10000;
         document.getElementById('risk-slider').value    = data.max_daily_risk_pct || 2;
         document.getElementById('trades-slider').value  = data.max_trades    || 3;
+        document.getElementById('rr-slider').value      = data.min_rr        || 2;
 
         updateRisk(data.max_daily_risk_pct   || 2);
         updateTrades(data.max_trades         || 3);
+        updateRR(data.min_rr                 || 2);
         syncSizeChips(data.account_size      || 10000);
       } catch(e) { console.error('loadProfile:', e); }
     }
@@ -408,6 +421,7 @@
     // ── Slider helpers ──
     function updateRisk(val)   { document.getElementById('risk-val').textContent = parseFloat(val).toFixed(1); }
     function updateTrades(val) { document.getElementById('trades-val').textContent = val; }
+    function updateRR(val)     { document.getElementById('rr-val').textContent = '1 : ' + parseFloat(val).toFixed(1).replace('.0',''); }
 
     // ── Size chips ──
     function setSize(val) {
@@ -509,6 +523,7 @@
           account_size:       size,
           max_daily_risk_pct: parseFloat(document.getElementById('risk-slider').value),
           max_trades:         parseInt(document.getElementById('trades-slider').value),
+          min_rr:             parseFloat(document.getElementById('rr-slider').value),
         });
         if (data.error) { showSaveMsg('msg-trading', data.error, 'err'); return; }
         showSaveMsg('msg-trading', '✓ Saved', 'ok');

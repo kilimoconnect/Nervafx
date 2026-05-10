@@ -22,7 +22,7 @@ module.exports = async function handler(req, res) {
 
           const { data: profile } = await sb
             .from('profiles')
-            .select('account_size, max_daily_risk_pct, max_trades')
+            .select('account_size, max_daily_risk_pct, max_trades, min_rr')
             .eq('id', user.id)
             .single();
 

@@ -43,6 +43,7 @@ module.exports = async function handler(req, res) {
           account_size:       10000,
           max_daily_risk_pct: 2,
           max_trades:         3,
+          min_rr:             2,
         });
       }
       if (error) throw error;
@@ -65,6 +66,7 @@ module.exports = async function handler(req, res) {
         account_size,
         max_daily_risk_pct,
         max_trades,
+        min_rr,
         new_password,
         current_password,
       } = req.body || {};
@@ -76,6 +78,7 @@ module.exports = async function handler(req, res) {
       if (account_size       !== undefined) profileUpdate.account_size       = Number(account_size);
       if (max_daily_risk_pct !== undefined) profileUpdate.max_daily_risk_pct = Number(max_daily_risk_pct);
       if (max_trades         !== undefined) profileUpdate.max_trades         = Number(max_trades);
+      if (min_rr             !== undefined) profileUpdate.min_rr             = Number(min_rr);
 
       const { error: upsertErr } = await sb
         .from('profiles')

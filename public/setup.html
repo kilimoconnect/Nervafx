@@ -154,7 +154,7 @@
       </div>
 
       <!-- Max Concurrent Trades -->
-      <div class="field" style="margin-bottom:0">
+      <div class="field">
         <div class="field-label">
           Max Concurrent Trades
           <span class="field-hint">Open positions at once</span>
@@ -165,6 +165,20 @@
           </div>
           <span class="slider-val" id="trades-val">3</span>
           <span class="slider-unit">trades</span>
+        </div>
+      </div>
+
+      <!-- Min Risk:Reward -->
+      <div class="field" style="margin-bottom:0">
+        <div class="field-label">
+          Min Risk : Reward
+          <span class="field-hint">Minimum RR to approve a trade</span>
+        </div>
+        <div class="slider-row">
+          <div class="slider-track">
+            <input type="range" id="rr-slider" min="1" max="5" step="0.5" value="2" oninput="updateRR(this.value)" />
+          </div>
+          <span class="slider-val" id="rr-val">1 : 2</span>
         </div>
       </div>
 
@@ -207,6 +221,10 @@
       document.getElementById('trades-val').textContent = val;
     }
 
+    function updateRR(val) {
+      document.getElementById('rr-val').textContent = '1 : ' + parseFloat(val).toFixed(1).replace('.0','');
+    }
+
     function showMsg(text, type) {
       const el = document.getElementById('msg');
       el.textContent = text; el.className = 'msg ' + type;
@@ -227,6 +245,7 @@
           account_size:       accountSize,
           max_daily_risk_pct: riskPct,
           max_trades:         trades,
+          min_rr:             parseFloat(document.getElementById('rr-slider').value),
           first_name:         user.first_name || '',
           last_name:          user.last_name  || '',
         }),
