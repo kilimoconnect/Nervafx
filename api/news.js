@@ -19,8 +19,22 @@ module.exports = async function handler(req, res) {
 
   const sb = getClient();
 
-  // ── GET — upcoming events (next 48h), public ────────────────────────────────
+  // ── GET ─────────────────────────────────────────────────────────────────────
   if (req.method === 'GET') {
+    // Admin: ?all=1  →  full dataset with optional from/to filters
+    if (req.query?.all === '1') {
+      if (!(await verifyAdmin(sb, req))) return res.status(403).json({ error: 'Admin only' });
+      const from = req.query.from; // YYYY-MM-DD
+      const to   = req.query.to;   // YYYY-MM-DD
+      let q = sb.from('forex_news').select('*').order('event_time', { ascending: true }).limit(2000);
+      if (from) q = q.gte('event_time', from + 'T00:00:00Z');
+      if (to)   q = q.lte('event_time', to   + 'T23:59:59Z');
+      const { data, error } = await q;
+      if (error) return res.status(500).json({ error: error.message });
+      return res.json({ events: data || [] });
+    }
+
+    // Public: next 48h only
     const now    = new Date().toISOString();
     const cutoff = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
     const { data, error } = await sb
@@ -29,18 +43,6 @@ module.exports = async function handler(req, res) {
       .gte('event_time', now)
       .lte('event_time', cutoff)
       .order('event_time', { ascending: true });
-    if (error) return res.status(500).json({ error: error.message });
-    return res.json({ events: data || [] });
-  }
-
-  // ── GET all — admin only (includes past events) ─────────────────────────────
-  if (req.method === 'GET' && req.query?.all === '1') {
-    if (!(await verifyAdmin(sb, req))) return res.status(403).json({ error: 'Admin only' });
-    const { data, error } = await sb
-      .from('forex_news')
-      .select('*')
-      .order('event_time', { ascending: true })
-      .limit(500);
     if (error) return res.status(500).json({ error: error.message });
     return res.json({ events: data || [] });
   }

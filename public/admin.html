@@ -504,14 +504,11 @@ Mon May 12 2026
       const fromDate = from || new Date().toISOString().slice(0,10);
       const toDate   = to   || new Date(Date.now() + 14*86400000).toISOString().slice(0,10);
 
-      const r = await fetch(`/api/news`, {
+      const r = await fetch(`/api/news?all=1&from=${fromDate}&to=${toDate}`, {
         headers: { 'Authorization':'Bearer '+token }
       });
       const d = await r.json();
-      const events = (d.events || []).filter(e => {
-        const dt = e.event_time.slice(0,10);
-        return dt >= fromDate && dt <= toDate;
-      });
+      const events = d.events || [];
 
       if (!events.length) {
         el.innerHTML = '<div class="no-data"><span class="no-data-icon">📅</span>No events in this range</div>';
@@ -586,7 +583,7 @@ Mon May 12 2026
   // ── Stats ─────────────────────────────────────────────────────────────────────
   async function loadStats() {
     try {
-      const r = await fetch('/api/news', { headers:{ 'Authorization':'Bearer '+token } });
+      const r = await fetch('/api/news?all=1', { headers:{ 'Authorization':'Bearer '+token } });
       const d = await r.json();
       const events = d.events || [];
       const high = events.filter(e => e.impact === 'HIGH').length;
