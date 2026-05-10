@@ -306,6 +306,16 @@
       max-width: 520px;
       line-height: 1.5;
     }
+    .hero-credibility {
+      font-size: 12px;
+      color: var(--text3);
+      opacity: 0.65;
+      margin-top: -16px;
+      margin-bottom: 24px;
+      max-width: 500px;
+      line-height: 1.55;
+      letter-spacing: 0.1px;
+    }
 
     .hero-sub {
       font-size: 17px;
@@ -1397,14 +1407,15 @@
             Institutional Grade · AI-Powered
           </div>
           <h1 class="hero-h1">
-            AI-Powered<br>
-            <span>Currency Flow</span><br>
+            Institutional-Style<br>
+            <span>Forex Market</span><br>
             Intelligence
           </h1>
-          <p class="hero-position">Built for continuation traders who want cleaner trends, healthier pullbacks, and disciplined market participation.</p>
+          <p class="hero-position">Powered by AI currency flow and market structure analysis.</p>
           <p class="hero-sub">
             NervaFX scans all 28 major forex pairs every hour to surface institutional-grade currency strength, AI structure analysis, and cross-asset risk intelligence — so you trade with clarity, not guesswork.
           </p>
+          <p class="hero-credibility">Built using cross-market structure analysis, currency flow modeling, and AI-assisted continuation intelligence.</p>
           <div class="hero-bullets">
             <div class="hero-bullet">
               <span class="hero-bullet-check">✓</span>
@@ -1465,29 +1476,29 @@
         <div class="stat-item">
           <div class="stat-icon">📊</div>
           <div>
-            <div class="stat-num" data-count="28">0</div>
+            <div class="stat-num">28</div>
             <div class="stat-label">Pairs Tracked</div>
-          </div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-icon">⏱</div>
-          <div>
-            <div class="stat-num">Hourly</div>
-            <div class="stat-label">Updates</div>
           </div>
         </div>
         <div class="stat-item">
           <div class="stat-icon">💱</div>
           <div>
-            <div class="stat-num" data-count="8">0</div>
+            <div class="stat-num">8</div>
             <div class="stat-label">Currencies Scored</div>
+          </div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-icon">⏱</div>
+          <div>
+            <div class="stat-num">24H</div>
+            <div class="stat-label">Session Monitoring</div>
           </div>
         </div>
         <div class="stat-item">
           <div class="stat-icon">🤖</div>
           <div>
             <div class="stat-num">AI</div>
-            <div class="stat-label">Analyzed Structure</div>
+            <div class="stat-label">Structure Analysis</div>
           </div>
         </div>
       </div>
@@ -2164,37 +2175,7 @@
     fetchStrength();
     setInterval(fetchStrength, 60000);
 
-    // ── STATS COUNTER ANIMATION ───────────────────────────────────────────────
-    const counters = document.querySelectorAll('[data-count]');
-    let countersStarted = false;
-
-    function animateCounters() {
-      if (countersStarted) return;
-      countersStarted = true;
-      counters.forEach(el => {
-        const target = parseInt(el.dataset.count);
-        const duration = 1200;
-        const start = performance.now();
-        function update(now) {
-          const elapsed = now - start;
-          const progress = Math.min(elapsed / duration, 1);
-          const eased = 1 - Math.pow(1 - progress, 3); // ease-out-cubic
-          el.textContent = Math.round(eased * target);
-          if (progress < 1) requestAnimationFrame(update);
-        }
-        requestAnimationFrame(update);
-      });
-    }
-
-    const statsObserver = new IntersectionObserver((entries) => {
-      if (entries.some(e => e.isIntersecting)) {
-        animateCounters();
-        statsObserver.disconnect();
-      }
-    }, { threshold: 0.3 });
-
-    const statsBar = document.querySelector('.stats-bar');
-    if (statsBar) statsObserver.observe(statsBar);
+    // Stats are static — no counter animation needed
   </script>
 </body>
 </html>
