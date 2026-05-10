@@ -1094,7 +1094,7 @@ const SESSION_TIMELINE = [
   { name: 'LONDON',      label: 'London',     hours: '10–13', quality: 'high'      },
   { name: 'LONDON_NY',   label: 'LDN/NY',     hours: '13–17', quality: 'very_high' },
   { name: 'LATE_NY',     label: 'Late NY',    hours: '17–21', quality: 'low'       },
-  { name: 'DEAD_HOURS',  label: 'Dead',       hours: '21–00', quality: 'blocked'   },
+  { name: 'DEAD_HOURS',  label: 'Low Liq.',   hours: '21–00', quality: 'blocked'   },
 ];
 
 function renderSession(data) {

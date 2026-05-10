@@ -70,7 +70,7 @@ const QUALITY_DESC = {
 // localOpen/localClose = hours in the session's primary timezone
 
 const SESSION_META = {
-  DEAD_HOURS:  { label: 'Dead Hours',        quality: 'BLOCKED',   tradesAllowed: false, baseActivity: 5,  tz: null,                 localOpen: null, localClose: null },
+  DEAD_HOURS:  { label: 'Low Liquidity',      quality: 'BLOCKED',   tradesAllowed: false, baseActivity: 5,  tz: null,                 localOpen: null, localClose: null },
   PRE_LONDON:  { label: 'Pre-London',         quality: 'LOW',       tradesAllowed: true,  baseActivity: 22, tz: 'Europe/London',       localOpen: 6,    localClose: 8    },
   ASIA:        { label: 'Asia',               quality: 'MEDIUM',    tradesAllowed: true,  baseActivity: 48, tz: 'Asia/Tokyo',          localOpen: 9,    localClose: 18   },
   LONDON_OPEN: { label: 'London Open',        quality: 'HIGH',      tradesAllowed: true,  baseActivity: 80, tz: 'Europe/London',       localOpen: 8,    localClose: 10   },
