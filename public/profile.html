@@ -81,14 +81,16 @@
 
     .input-wrap { position: relative; }
     .input-prefix { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); font-size: 15px; font-weight: 700; color: rgba(100,116,139,0.5); pointer-events: none; }
-    .input-wrap input {
+    .input-wrap input, .input-wrap select {
       width: 100%; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
       border-radius: 11px; color: var(--text); font-family: 'Inter', sans-serif;
       font-size: 14px; padding: 12px 14px; outline: none;
       transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
     }
+    .input-wrap select { cursor: pointer; -webkit-appearance: none; appearance: none; padding-right: 36px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2364748b' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; }
+    .input-wrap select option, .input-wrap select optgroup { background: #0d1019; }
     .input-wrap.has-prefix input { padding-left: 30px; }
-    .input-wrap input:focus { border-color: rgba(59,130,246,0.55); background: rgba(59,130,246,0.06); box-shadow: 0 0 0 3px rgba(59,130,246,0.12); }
+    .input-wrap input:focus, .input-wrap select:focus { border-color: rgba(59,130,246,0.55); background: rgba(59,130,246,0.06); box-shadow: 0 0 0 3px rgba(59,130,246,0.12); }
     .input-wrap input::placeholder { color: rgba(100,116,139,0.35); }
     .input-wrap input:disabled { opacity: 0.45; cursor: not-allowed; }
     .input-wrap input.pw-match   { border-color: rgba(34,197,94,0.55) !important; background: rgba(34,197,94,0.05) !important; }
@@ -238,10 +240,77 @@
           </div>
         </div>
         <div class="divider"></div>
-        <div class="field" style="margin-bottom:0">
+        <div class="field">
           <div class="field-label">Email Address <span class="field-hint">Cannot be changed here</span></div>
           <div class="input-wrap">
             <input id="email-display" type="email" disabled />
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:0">
+          <div class="field-label">Timezone <span class="field-hint">All times on the dashboard</span></div>
+          <div class="input-wrap">
+            <select id="timezone-select">
+              <option value="auto">Auto — Browser timezone</option>
+              <optgroup label="UTC">
+                <option value="UTC">UTC</option>
+              </optgroup>
+              <optgroup label="Africa">
+                <option value="Africa/Cairo">Cairo (EET / EEST)</option>
+                <option value="Africa/Johannesburg">Johannesburg (SAST)</option>
+                <option value="Africa/Lagos">Lagos (WAT)</option>
+                <option value="Africa/Nairobi">Nairobi (EAT)</option>
+              </optgroup>
+              <optgroup label="Americas">
+                <option value="Pacific/Honolulu">Honolulu (HST)</option>
+                <option value="America/Anchorage">Anchorage (AKST/AKDT)</option>
+                <option value="America/Los_Angeles">Los Angeles / Pacific (PST/PDT)</option>
+                <option value="America/Vancouver">Vancouver (PST/PDT)</option>
+                <option value="America/Denver">Denver / Mountain (MST/MDT)</option>
+                <option value="America/Mexico_City">Mexico City (CST/CDT)</option>
+                <option value="America/Chicago">Chicago / Central (CST/CDT)</option>
+                <option value="America/New_York">New York / Eastern (EST/EDT)</option>
+                <option value="America/Toronto">Toronto (EST/EDT)</option>
+                <option value="America/Sao_Paulo">São Paulo (BRT/BRST)</option>
+                <option value="America/Argentina/Buenos_Aires">Buenos Aires (ART)</option>
+              </optgroup>
+              <optgroup label="Europe">
+                <option value="Europe/London">London (GMT/BST)</option>
+                <option value="Europe/Lisbon">Lisbon (WET/WEST)</option>
+                <option value="Europe/Paris">Paris / Amsterdam / Berlin (CET/CEST)</option>
+                <option value="Europe/Zurich">Zurich (CET/CEST)</option>
+                <option value="Europe/Stockholm">Stockholm (CET/CEST)</option>
+                <option value="Europe/Helsinki">Helsinki (EET/EEST)</option>
+                <option value="Europe/Istanbul">Istanbul (TRT)</option>
+                <option value="Europe/Moscow">Moscow (MSK)</option>
+              </optgroup>
+              <optgroup label="Middle East">
+                <option value="Asia/Riyadh">Riyadh (AST)</option>
+                <option value="Asia/Dubai">Dubai (GST)</option>
+                <option value="Asia/Tehran">Tehran (IRST/IRDT)</option>
+              </optgroup>
+              <optgroup label="Asia">
+                <option value="Asia/Karachi">Karachi (PKT)</option>
+                <option value="Asia/Kolkata">Mumbai / Kolkata (IST)</option>
+                <option value="Asia/Colombo">Colombo (IST)</option>
+                <option value="Asia/Dhaka">Dhaka (BST)</option>
+                <option value="Asia/Bangkok">Bangkok / Jakarta (WIB)</option>
+                <option value="Asia/Singapore">Singapore (SGT)</option>
+                <option value="Asia/Kuala_Lumpur">Kuala Lumpur (MYT)</option>
+                <option value="Asia/Shanghai">Beijing / Shanghai (CST)</option>
+                <option value="Asia/Hong_Kong">Hong Kong (HKT)</option>
+                <option value="Asia/Manila">Manila (PHT)</option>
+                <option value="Asia/Seoul">Seoul (KST)</option>
+                <option value="Asia/Tokyo">Tokyo (JST)</option>
+              </optgroup>
+              <optgroup label="Australia &amp; Pacific">
+                <option value="Australia/Perth">Perth (AWST)</option>
+                <option value="Australia/Brisbane">Brisbane (AEST)</option>
+                <option value="Australia/Sydney">Sydney (AEST/AEDT)</option>
+                <option value="Australia/Melbourne">Melbourne (AEST/AEDT)</option>
+                <option value="Pacific/Auckland">Auckland (NZST/NZDT)</option>
+                <option value="Pacific/Fiji">Fiji (FJT)</option>
+              </optgroup>
+            </select>
           </div>
         </div>
         <div class="divider"></div>
@@ -406,6 +475,7 @@
         document.getElementById('first-name').value     = data.first_name    || '';
         document.getElementById('last-name').value      = data.last_name     || '';
         document.getElementById('email-display').value  = data.email         || '';
+        document.getElementById('timezone-select').value = data.timezone     || 'UTC';
         document.getElementById('account-size').value   = data.account_size  || 10000;
         document.getElementById('risk-slider').value    = data.max_daily_risk_pct || 2;
         document.getElementById('trades-slider').value  = data.max_trades    || 3;
@@ -491,6 +561,7 @@
         const data = await patchProfile({
           first_name: document.getElementById('first-name').value.trim(),
           last_name:  document.getElementById('last-name').value.trim(),
+          timezone:   document.getElementById('timezone-select').value,
         });
         if (data.error) { showSaveMsg('msg-personal', data.error, 'err'); return; }
         showSaveMsg('msg-personal', '✓ Saved', 'ok');

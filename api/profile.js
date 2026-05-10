@@ -44,6 +44,7 @@ module.exports = async function handler(req, res) {
           max_daily_risk_pct: 2,
           max_trades:         3,
           min_rr:             2,
+          timezone:           'UTC',
         });
       }
       if (error) throw error;
@@ -67,6 +68,7 @@ module.exports = async function handler(req, res) {
         max_daily_risk_pct,
         max_trades,
         min_rr,
+        timezone,
         new_password,
         current_password,
       } = req.body || {};
@@ -79,6 +81,7 @@ module.exports = async function handler(req, res) {
       if (max_daily_risk_pct !== undefined) profileUpdate.max_daily_risk_pct = Number(max_daily_risk_pct);
       if (max_trades         !== undefined) profileUpdate.max_trades         = Number(max_trades);
       if (min_rr             !== undefined) profileUpdate.min_rr             = Number(min_rr);
+      if (timezone           !== undefined) profileUpdate.timezone           = String(timezone);
 
       const { error: upsertErr } = await sb
         .from('profiles')

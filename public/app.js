@@ -118,7 +118,41 @@ function fmt(n, d = 5) { return n != null ? Number(n).toFixed(d) : '—'; }
 function pair(s) { return s ? s.replace('_', '/') : s; }
 function fmtTime(iso) {
   if (!iso) return '—';
-  return new Date(iso).toUTCString().replace('GMT', 'UTC');
+  try {
+    const tz = (_userTz === 'auto')
+      ? Intl.DateTimeFormat().resolvedOptions().timeZone
+      : (_userTz || 'UTC');
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone:     tz,
+      day:          '2-digit',
+      month:        'short',
+      year:         'numeric',
+      hour:         '2-digit',
+      minute:       '2-digit',
+      hour12:       false,
+      timeZoneName: 'short',
+    }).format(new Date(iso));
+  } catch (_) {
+    return new Date(iso).toUTCString().replace('GMT', 'UTC');
+  }
+}
+
+function fmtNow() {
+  try {
+    const tz = (_userTz === 'auto')
+      ? Intl.DateTimeFormat().resolvedOptions().timeZone
+      : (_userTz || 'UTC');
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone:     tz,
+      hour:         '2-digit',
+      minute:       '2-digit',
+      second:       '2-digit',
+      hour12:       false,
+      timeZoneName: 'short',
+    }).format(new Date());
+  } catch (_) {
+    return new Date().toLocaleTimeString();
+  }
 }
 function timeAgo(iso) {
   if (!iso) return null;
@@ -176,7 +210,7 @@ function updateHeader(risk) {
   document.getElementById('stat-risk').textContent    = `Daily Risk: ${riskPct.toFixed(2)}% / ${maxPct}%`;
   document.getElementById('stat-trades').textContent  = `Open: ${open} / ${maxTr}`;
   document.getElementById('status-dot').className     = 'status-dot online';
-  document.getElementById('last-update').textContent  = 'Updated ' + new Date().toLocaleTimeString();
+  document.getElementById('last-update').textContent  = 'Updated ' + fmtNow();
 }
 
 // ─── AI Analysis ─────────────────────────────────────────────────────────────
@@ -185,6 +219,7 @@ function updateHeader(risk) {
 let _aiMap = {};
 let _sentimentData = null;
 let _profile = { account_size: null, max_daily_risk_pct: null, max_trades: null };
+let _userTz = 'UTC'; // overridden from profile on every refresh
 
 function aiHtml(ai, instrument) {
   if (!ai) return '';
@@ -1220,9 +1255,11 @@ async function refresh() {
 
     // Cache profile — used by updateHeader and any section needing user settings
     if (profileData && !profileData.error) {
-      _profile.account_size      = parseFloat(profileData.account_size)      || null;
+      _profile.account_size       = parseFloat(profileData.account_size)       || null;
       _profile.max_daily_risk_pct = parseFloat(profileData.max_daily_risk_pct) || null;
-      _profile.max_trades        = parseInt(profileData.max_trades)           || null;
+      _profile.max_trades         = parseInt(profileData.max_trades)            || null;
+      // Timezone: 'auto' = browser local, anything else = IANA name, fallback = UTC
+      _userTz = profileData.timezone || 'UTC';
     }
 
     // Build AI map: instrument → analysis
