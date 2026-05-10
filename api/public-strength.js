@@ -7,15 +7,18 @@ module.exports = async function handler(req, res) {
     if (!t) return res.json({ currencies: [], time: null });
     const { data, error } = await getClient()
       .from('currency_strength')
-      .select('currency, normalized_12h, normalized_6h, normalized_3h')
+      .select('currency, smooth_12h, smooth_6h, smooth_3h')
       .eq('time', t);
     if (error) throw error;
     const currencies = (data || [])
-      .map(c => ({
-        currency: c.currency,
-        value: Math.round(parseFloat(c.normalized_12h || 0) * 100) / 100,
-        direction: parseFloat(c.normalized_12h) > 0.1 ? 'up' : parseFloat(c.normalized_12h) < -0.1 ? 'down' : 'flat',
-      }))
+      .map(c => {
+        const v = parseFloat(c.smooth_12h) || 0;
+        return {
+          currency: c.currency,
+          value: Math.round(v * 1000000) / 1000000,   // 6dp — same precision dashboard uses
+          direction: v > 0.01 ? 'up' : v < -0.01 ? 'down' : 'flat',
+        };
+      })
       .sort((a, b) => b.value - a.value);
     res.json({ currencies, time: t });
   } catch(e) { res.status(500).json({ error: e.message }); }

@@ -1934,14 +1934,14 @@
     const ORDERED = ['CHF','USD','EUR','GBP','AUD','NZD','CAD','JPY'];
 
     const DEMO_DATA = [
-      { currency: 'CHF', value:  0.82, direction: 'up'   },
-      { currency: 'USD', value:  0.61, direction: 'up'   },
-      { currency: 'EUR', value:  0.29, direction: 'up'   },
-      { currency: 'GBP', value:  0.08, direction: 'flat' },
-      { currency: 'AUD', value: -0.14, direction: 'down' },
-      { currency: 'NZD', value: -0.33, direction: 'down' },
-      { currency: 'CAD', value: -0.55, direction: 'down' },
-      { currency: 'JPY', value: -0.78, direction: 'down' },
+      { currency: 'CHF', value:  0.0821, direction: 'up'   },
+      { currency: 'USD', value:  0.0613, direction: 'up'   },
+      { currency: 'EUR', value:  0.0294, direction: 'up'   },
+      { currency: 'GBP', value:  0.0083, direction: 'flat' },
+      { currency: 'AUD', value: -0.0147, direction: 'down' },
+      { currency: 'NZD', value: -0.0332, direction: 'down' },
+      { currency: 'CAD', value: -0.0558, direction: 'down' },
+      { currency: 'JPY', value: -0.0784, direction: 'down' },
     ];
 
     function renderStrength(currencies, time) {
@@ -1968,13 +1968,15 @@
             <div class="currency-bar-wrap">
               <div class="currency-bar ${c.direction}" style="width:${barWidth}%"></div>
             </div>
-            <div class="currency-value ${c.direction}">${sign}${c.value.toFixed(2)}</div>
+            <div class="currency-value ${c.direction}">${sign}${c.value.toFixed(4)}</div>
           </div>`;
       }).join('');
 
       if (time) {
         const d = new Date(time);
-        timeEl.textContent = 'Updated ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC', timeZoneName: 'short' });
+        const dateStr = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', timeZone: 'UTC' });
+        const timeStr = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC', timeZoneName: 'short' });
+        timeEl.textContent = 'Updated ' + dateStr + ' ' + timeStr;
       } else {
         timeEl.textContent = 'Demo data';
       }
