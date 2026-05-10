@@ -61,6 +61,9 @@
       <a href="/profile" class="logout-btn" style="text-decoration:none">
         <i data-lucide="settings" style="width:12px;height:12px;vertical-align:middle;margin-right:4px"></i>Settings
       </a>
+      <a href="/admin" id="admin-nav-btn" class="logout-btn" style="display:none;text-decoration:none;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;border-color:transparent">
+        <i data-lucide="shield" style="width:12px;height:12px;vertical-align:middle;margin-right:4px"></i>Admin
+      </a>
       <button class="logout-btn" onclick="logout()">
         <i data-lucide="log-out" style="width:12px;height:12px;vertical-align:middle;margin-right:4px"></i>Sign Out
       </button>
@@ -321,6 +324,21 @@
   </div>
 
   <script src="app.js"></script>
+
+  <script>
+    // Show Admin button only for the admin user (checked via JWT sub claim)
+    (function() {
+      const ADMIN_ID = '140f3854-2c85-488c-8e0a-0f965d562654';
+      try {
+        const tok = localStorage.getItem('nfx_token');
+        if (!tok) return;
+        const pay = JSON.parse(atob(tok.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+        if (pay.sub === ADMIN_ID) {
+          document.getElementById('admin-nav-btn').style.display = '';
+        }
+      } catch (_) {}
+    })();
+  </script>
 
   <script>
     // ── PLAN SWITCHER ─────────────────────────────────────────────────────────
