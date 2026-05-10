@@ -94,9 +94,7 @@ html, body {
   margin-left: auto;
 }
 
-/* ─── Plan Lock Overlay ──────────────────────────────────────────────────────── */
-
-/* Mobile: clean centered stack */
+/* ─── Plan Lock Overlay — two-column on all sizes ───────────────────────────── */
 .plan-lock-overlay {
   display: none;
   position: absolute;
@@ -106,21 +104,27 @@ html, body {
   backdrop-filter: blur(5px);
   -webkit-backdrop-filter: blur(5px);
   border-radius: inherit;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  text-align: center;
-  padding: 20px 16px;
+  /* two-column: padlock | text */
+  grid-template-columns: 48px 1fr;
+  grid-template-rows: auto auto auto auto;
+  align-items: start;
+  justify-items: start;
+  column-gap: 14px;
+  row-gap: 5px;
+  text-align: left;
+  padding: 16px;
 }
-.plan-lock-overlay.visible { display: flex; }
+.plan-lock-overlay.visible { display: grid; }
 
+/* padlock circle — spans all 4 rows, vertically centered */
 .plan-lock-overlay.visible::before {
   content: '';
-  display: block;
   width: 40px;
   height: 40px;
-  flex-shrink: 0;
+  grid-column: 1;
+  grid-row: 1 / 5;
+  align-self: center;
+  justify-self: center;
   border-radius: 50%;
   background-color: rgba(79, 70, 229, 0.12);
   border: 1.5px solid rgba(99, 102, 241, 0.35);
@@ -128,43 +132,23 @@ html, body {
   background-repeat: no-repeat;
   background-position: center;
   background-size: 20px;
-  margin-bottom: 4px;
+  flex-shrink: 0;
 }
 
 .plan-lock-icon  { display: none; }
-.plan-lock-title { font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.3; }
-.plan-lock-desc  { font-size: 11px; color: var(--text-muted); max-width: 240px; line-height: 1.5; margin: 0; }
-.plan-lock-features {
-  list-style: none;
-  padding: 0;
-  margin: 2px 0 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  max-width: 240px;
-  text-align: left;
-  width: 100%;
-}
-.plan-lock-features li {
-  font-size: 11px;
-  color: var(--text-muted);
-  padding-left: 14px;
-  position: relative;
-  line-height: 1.5;
-}
-.plan-lock-features li::before {
-  content: '✓';
-  position: absolute;
-  left: 0;
-  color: #818cf8;
-  font-weight: 700;
-}
+.plan-lock-title { grid-column: 2; grid-row: 1; font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.3; }
+.plan-lock-desc  { grid-column: 2; grid-row: 2; font-size: 11px; color: var(--text-muted); line-height: 1.5; margin: 0; }
+
+/* bullets hidden on mobile to prevent overflow */
+.plan-lock-features { display: none; }
+
 .plan-lock-btn {
-  margin-top: 8px;
-  flex-shrink: 0;
+  grid-column: 2;
+  grid-row: 3;
+  margin-top: 6px;
   font-size: 11px;
   font-weight: 600;
-  padding: 6px 14px;
+  padding: 5px 14px;
   border-radius: 8px;
   background: linear-gradient(135deg, #2563eb, #4f46e5);
   color: #fff;
@@ -173,40 +157,52 @@ html, body {
 }
 .plan-lock-btn:hover { opacity: 0.85; }
 
-/* Desktop: two-column grid — padlock left, all text right */
+/* Desktop: show bullets, larger fonts, more padding */
 @media (min-width: 700px) {
   .plan-lock-overlay {
-    display: none;
     grid-template-columns: 56px 1fr;
-    grid-template-rows: auto auto auto auto;
-    align-items: start;
-    justify-items: start;
     column-gap: 24px;
     row-gap: 6px;
-    text-align: left;
     padding: 24px 40px;
   }
-  .plan-lock-overlay.visible { display: grid !important; }
   .plan-lock-overlay.visible::before {
-    display: block;
-    width: 44px;
-    height: 44px;
-    grid-column: 1;
-    grid-row: 1 / 5;
-    align-self: center;
-    justify-self: center;
-    margin-bottom: 0;
+    width: 46px;
+    height: 46px;
     background-size: 22px;
+    grid-row: 1 / 5;
   }
-  .plan-lock-title { grid-column: 2; grid-row: 1; font-size: 15px; }
-  .plan-lock-desc  { grid-column: 2; grid-row: 2; font-size: 12.5px; max-width: none; }
-  .plan-lock-features { grid-column: 2; grid-row: 3; max-width: none; font-size: 12px; }
-  .plan-lock-features li { font-size: 12px; }
-  .plan-lock-btn   { grid-column: 2; grid-row: 4; font-size: 12px; padding: 7px 18px; }
+  .plan-lock-title { font-size: 15px; }
+  .plan-lock-desc  { font-size: 12.5px; }
+  .plan-lock-features {
+    grid-column: 2;
+    grid-row: 3;
+    display: flex;
+    flex-direction: column;
+    list-style: none;
+    padding: 0;
+    margin: 2px 0 0;
+    gap: 3px;
+    width: 100%;
+  }
+  .plan-lock-features li {
+    font-size: 12px;
+    color: var(--text-muted);
+    padding-left: 15px;
+    position: relative;
+    line-height: 1.5;
+  }
+  .plan-lock-features li::before {
+    content: '✓';
+    position: absolute;
+    left: 0;
+    color: #818cf8;
+    font-weight: 700;
+  }
+  .plan-lock-btn { grid-row: 4; font-size: 12px; padding: 7px 18px; }
 }
 
-/* ensure cards are tall enough for overlay content */
-section.card:has(.plan-lock-overlay.visible) { min-height: 200px; overflow: hidden; }
+/* ensure cards are tall enough for overlay */
+section.card:has(.plan-lock-overlay.visible) { min-height: 160px; overflow: hidden; }
 
 /* Free plan: dim the tf buttons that are disabled */
 .tf-btn:disabled { opacity: 0.3; cursor: not-allowed; }
