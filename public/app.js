@@ -178,7 +178,11 @@ async function fetchNews() {
 
 async function fetchTodayNews() {
   try {
-    const today = new Date().toISOString().slice(0, 10);
+    const tz = (_userTz === 'auto')
+      ? Intl.DateTimeFormat().resolvedOptions().timeZone
+      : (_userTz || 'UTC');
+    // Get today's date string in the user's timezone (en-CA gives YYYY-MM-DD)
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: tz });
     const d = await api(`/api/news?date=${today}`);
     renderTodayNews(d.events || []);
   } catch (e) { console.warn('[today-news]', e.message); }
@@ -188,10 +192,14 @@ function renderTodayNews(events) {
   const el = document.getElementById('today-news-list');
   if (!el) return;
 
-  // Update date sub-label
+  const tz = (_userTz === 'auto')
+    ? Intl.DateTimeFormat().resolvedOptions().timeZone
+    : (_userTz || 'UTC');
+
+  // Update date sub-label in user's timezone
   const dateEl = document.getElementById('today-news-date');
   if (dateEl) dateEl.textContent = new Date().toLocaleDateString('en-GB', {
-    weekday:'short', day:'2-digit', month:'short', year:'numeric', timeZone:'UTC'
+    weekday:'short', day:'2-digit', month:'short', year:'numeric', timeZone: tz
   });
 
   if (!events.length) {
@@ -231,9 +239,6 @@ function renderTodayNews(events) {
     const isSoon = !isPast && (t - now) < 3600000; // < 1 hour
 
     const rowCls = isPast ? 'tnr past' : isNext ? 'tnr next-up' : isSoon ? 'tnr soon' : 'tnr';
-    const tz = (_userTz === 'auto')
-      ? Intl.DateTimeFormat().resolvedOptions().timeZone
-      : (_userTz || 'UTC');
     const timeStr = new Date(e.event_time).toLocaleTimeString('en-GB',
       { hour:'2-digit', minute:'2-digit', timeZone: tz });
 
@@ -1494,9 +1499,8 @@ async function refresh() {
       api('/api/profile').catch(() => ({})),
     ]);
 
-    // Fetch news calendar — populates _newsMap (pair warnings) + today's news card
+    // Fetch news calendar (non-blocking) — must run AFTER _userTz is set
     fetchNews();
-    fetchTodayNews();
 
     // Cache profile — used by updateHeader and any section needing user settings
     if (profileData && !profileData.error) {
@@ -1506,6 +1510,9 @@ async function refresh() {
       // Timezone: 'auto' = browser local, anything else = IANA name, fallback = UTC
       _userTz = profileData.timezone || 'UTC';
     }
+
+    // Today's news — called after _userTz is set so date is in user's timezone
+    fetchTodayNews();
 
     // Build AI map: instrument → analysis
     const aiMap = {};
