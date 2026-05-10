@@ -349,32 +349,82 @@ Mon May 12 2026
     await parseText(_csvText, 'parse-csv-btn');
   }
 
+  // Split calendar text at day-name boundaries so each chunk is self-contained
+  function chunkCalendar(text, maxLen) {
+    if (text.length <= maxLen) return [text];
+
+    // Try splitting at day-of-week boundaries (Mon\nMay 12 style)
+    const parts = text.split(/(?=\n(?:Sun|Mon|Tue|Wed|Thu|Fri|Sat)\n)/i).filter(p => p.trim());
+    if (parts.length > 1) {
+      const chunks = [];
+      let cur = '';
+      for (const p of parts) {
+        if (cur.length + p.length > maxLen && cur.length > 0) {
+          chunks.push(cur.trim());
+          cur = p;
+        } else {
+          cur += p;
+        }
+      }
+      if (cur.trim()) chunks.push(cur.trim());
+      return chunks;
+    }
+
+    // Fallback: split at newlines near maxLen boundary
+    const chunks = [];
+    let start = 0;
+    while (start < text.length) {
+      let end = Math.min(start + maxLen, text.length);
+      if (end < text.length) {
+        const nl = text.lastIndexOf('\n', end);
+        if (nl > start + 300) end = nl;
+      }
+      const slice = text.slice(start, end).trim();
+      if (slice.length > 50) chunks.push(slice);
+      start = end + 1;
+    }
+    return chunks;
+  }
+
   async function parseText(text, btnId) {
     const btn = document.getElementById(btnId);
     const orig = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> Parsing…';
 
     const timezone = document.getElementById('tz-select').value || _userTz;
+    const chunks = chunkCalendar(text, 3500);
 
-    try {
-      const r = await fetch('/api/news-parse', {
-        method: 'POST',
-        headers: { 'Content-Type':'application/json', 'Authorization':'Bearer '+token },
-        body: JSON.stringify({ text, timezone }),
-      });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || 'Parse failed');
-      if (!d.events?.length) throw new Error('No events found in the calendar data');
+    _parsedEvents = [];
+    let failed = 0;
 
-      _parsedEvents = d.events;
-      renderPreview(_parsedEvents);
-      notyf.success(`Parsed ${d.events.length} events — review and save`);
-    } catch (e) {
-      notyf.error(e.message);
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = orig;
+    for (let i = 0; i < chunks.length; i++) {
+      btn.innerHTML = `<span class="spinner"></span> Parsing ${i + 1}/${chunks.length}…`;
+      try {
+        const r = await fetch('/api/news-parse', {
+          method: 'POST',
+          headers: { 'Content-Type':'application/json', 'Authorization':'Bearer '+token },
+          body: JSON.stringify({ text: chunks[i], timezone }),
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Parse failed');
+        if (d.events?.length) {
+          _parsedEvents.push(...d.events);
+          renderPreview(_parsedEvents);
+        }
+      } catch (e) {
+        failed++;
+        console.warn(`Chunk ${i + 1} failed:`, e.message);
+      }
+    }
+
+    btn.disabled = false;
+    btn.innerHTML = orig;
+
+    if (_parsedEvents.length) {
+      const warn = failed ? ` (${failed} chunk${failed > 1 ? 's' : ''} skipped)` : '';
+      notyf.success(`Parsed ${_parsedEvents.length} events${warn} — review and save`);
+    } else {
+      notyf.error('No events found — check the calendar format');
     }
   }
 
