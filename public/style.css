@@ -100,9 +100,9 @@ html, body {
   position: absolute;
   inset: 0;
   z-index: 10;
-  background: rgba(8, 11, 18, 0.97);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: rgba(8, 11, 18, 0.80);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
   border-radius: inherit;
   flex-direction: column;
   align-items: center;
@@ -110,12 +110,30 @@ html, body {
   gap: 8px;
   text-align: center;
   padding: 24px;
-  overflow: hidden;
 }
 .plan-lock-overlay.visible {
   display: flex;
 }
-.plan-lock-icon   { font-size: 28px; }
+
+/* padlock badge at top of every locked overlay */
+.plan-lock-overlay.visible::before {
+  content: '';
+  display: block;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background-color: rgba(79, 70, 229, 0.12);
+  border: 1.5px solid rgba(99, 102, 241, 0.35);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23a5b4fc' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='18' height='11' x='3' y='11' rx='2' ry='2'/%3E%3Cpath d='M7 11V7a5 5 0 0 1 10 0v4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 26px;
+  flex-shrink: 0;
+  margin-bottom: 2px;
+}
+
+/* hide feature emoji — padlock badge + title already communicate enough */
+.plan-lock-icon   { display: none; }
 .plan-lock-title  { font-size: 14px; font-weight: 700; color: var(--text); }
 .plan-lock-desc   { font-size: 12px; color: var(--text-muted); max-width: 240px; line-height: 1.5; }
 .plan-lock-features {
