@@ -7,14 +7,14 @@ module.exports = async function handler(req, res) {
     if (!t) return res.json({ currencies: [], time: null });
     const { data, error } = await getClient()
       .from('currency_strength')
-      .select('currency, smooth_12h, smooth_6h, smooth_3h')
+      .select('currency, normalized_12h, normalized_6h, normalized_3h')
       .eq('time', t);
     if (error) throw error;
     const currencies = (data || [])
       .map(c => ({
         currency: c.currency,
-        value: Math.round(parseFloat(c.smooth_12h || 0) * 100) / 100,
-        direction: parseFloat(c.smooth_12h) > 0.02 ? 'up' : parseFloat(c.smooth_12h) < -0.02 ? 'down' : 'flat',
+        value: Math.round(parseFloat(c.normalized_12h || 0) * 100) / 100,
+        direction: parseFloat(c.normalized_12h) > 0.1 ? 'up' : parseFloat(c.normalized_12h) < -0.1 ? 'down' : 'flat',
       }))
       .sort((a, b) => b.value - a.value);
     res.json({ currencies, time: t });

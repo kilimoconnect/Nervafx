@@ -1974,7 +1974,7 @@
 
       if (time) {
         const d = new Date(time);
-        timeEl.textContent = 'Updated ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' });
+        timeEl.textContent = 'Updated ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC', timeZoneName: 'short' });
       } else {
         timeEl.textContent = 'Demo data';
       }
