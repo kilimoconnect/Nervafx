@@ -20,9 +20,11 @@ module.exports = async function handler(req, res) {
       return res.status(403).json({ error: 'Admin only' });
   } catch { return res.status(403).json({ error: 'Admin only' }); }
 
-  const { text } = req.body || {};
+  const { text, timezone } = req.body || {};
   if (!text || text.trim().length < 5)
     return res.status(400).json({ error: 'text required' });
+
+  const tz = timezone || 'UTC';
 
   try {
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -37,9 +39,9 @@ Each event object must have exactly these fields:
   - forecast: string or null
   - previous: string or null
 
-Rules:
+TIMEZONE RULE (important): The times in this calendar are in "${tz}". You MUST convert every event_time from ${tz} to UTC before writing the ISO string. For example, if the calendar shows 08:30 and the timezone is America/New_York (UTC-4 in summer), store "T12:30:00Z".
+Other rules:
 - If impact is shown as stars (***=HIGH, **=MEDIUM, *=LOW), red/orange/yellow colors, or words like "high","medium","low", map accordingly
-- If the source timezone is not UTC, convert to UTC. Assume EST (UTC-5) or EDT (UTC-4) if unclear
 - If year is missing, assume the current or next upcoming year
 - Skip any non-event rows (headers, separators, totals)
 - Return ONLY the JSON array — no markdown, no explanation, no \`\`\`json fences`;

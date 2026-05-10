@@ -170,6 +170,39 @@
     <div class="adm-section">
       <div class="adm-section-title"><span>📰</span> Upload News Calendar</div>
 
+      <!-- Timezone selector — shared by both tabs -->
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;padding:12px 14px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px">
+        <span style="font-size:13px;font-weight:600;color:var(--text-dim);white-space:nowrap">🕐 Calendar Timezone:</span>
+        <select class="adm-input" id="tz-select" style="flex:1;max-width:320px">
+          <option value="UTC">UTC (Universal Time)</option>
+          <optgroup label="Americas">
+            <option value="America/New_York">EST / EDT — New York (UTC-5/4)</option>
+            <option value="America/Chicago">CST / CDT — Chicago (UTC-6/5)</option>
+            <option value="America/Denver">MST / MDT — Denver (UTC-7/6)</option>
+            <option value="America/Los_Angeles">PST / PDT — Los Angeles (UTC-8/7)</option>
+            <option value="America/Sao_Paulo">BRT — São Paulo (UTC-3)</option>
+          </optgroup>
+          <optgroup label="Europe">
+            <option value="Europe/London">GMT / BST — London (UTC+0/1)</option>
+            <option value="Europe/Paris">CET / CEST — Paris/Frankfurt (UTC+1/2)</option>
+            <option value="Europe/Helsinki">EET / EEST — Helsinki (UTC+2/3)</option>
+            <option value="Europe/Moscow">MSK — Moscow (UTC+3)</option>
+            <option value="Africa/Nairobi">EAT — Nairobi (UTC+3)</option>
+          </optgroup>
+          <optgroup label="Asia / Pacific">
+            <option value="Asia/Dubai">GST — Dubai (UTC+4)</option>
+            <option value="Asia/Karachi">PKT — Karachi (UTC+5)</option>
+            <option value="Asia/Kolkata">IST — India (UTC+5:30)</option>
+            <option value="Asia/Bangkok">ICT — Bangkok (UTC+7)</option>
+            <option value="Asia/Singapore">SGT — Singapore (UTC+8)</option>
+            <option value="Asia/Tokyo">JST — Tokyo (UTC+9)</option>
+            <option value="Australia/Sydney">AEST/AEDT — Sydney (UTC+10/11)</option>
+            <option value="Pacific/Auckland">NZST/NZDT — Auckland (UTC+12/13)</option>
+          </optgroup>
+        </select>
+        <span style="font-size:11px;color:var(--text-muted)">Times in your calendar will be converted to UTC before saving</span>
+      </div>
+
       <div class="tab-bar">
         <button class="tab-btn active" onclick="switchTab('paste',this)">Paste Calendar</button>
         <button class="tab-btn" onclick="switchTab('csv',this)">Upload CSV</button>
@@ -320,11 +353,13 @@ Mon May 12 2026
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span> Parsing…';
 
+    const timezone = document.getElementById('tz-select').value;
+
     try {
       const r = await fetch('/api/news-parse', {
         method: 'POST',
         headers: { 'Content-Type':'application/json', 'Authorization':'Bearer '+token },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, timezone }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Parse failed');
