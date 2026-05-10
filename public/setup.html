@@ -90,6 +90,27 @@
 
     .skip-link { margin-top: 16px; text-align: center; font-size: 12px; color: var(--muted); cursor: pointer; text-decoration: underline; opacity: 0.6; transition: opacity 0.15s; }
     .skip-link:hover { opacity: 1; }
+
+    /* Timezone widget */
+    .tz-widget { display: flex; flex-direction: column; gap: 0; }
+    .tz-search {
+      width: 100%; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      border-bottom: none; border-radius: 12px 12px 0 0; color: var(--text);
+      font-family: 'Inter', sans-serif; font-size: 13px; padding: 10px 14px; outline: none;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .tz-search:focus { border-color: rgba(59,130,246,0.6); background: rgba(59,130,246,0.06); }
+    .tz-search::placeholder { color: rgba(100,116,139,0.4); }
+    .tz-select {
+      width: 100%; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 0 0 12px 12px; color: var(--text); font-family: 'Inter', sans-serif;
+      font-size: 13px; outline: none; height: 120px; overflow-y: auto;
+      transition: border-color 0.2s;
+    }
+    .tz-select:focus { border-color: rgba(59,130,246,0.6); }
+    .tz-select option { padding: 6px 14px; background: #0d1019; font-size: 13px; font-weight: 400; }
+    .tz-select option:checked { background: rgba(59,130,246,0.25); }
+    .tz-current { margin-top: 6px; font-size: 11px; color: var(--muted); }
   </style>
 </head>
 <body>
@@ -169,7 +190,7 @@
       </div>
 
       <!-- Min Risk:Reward -->
-      <div class="field" style="margin-bottom:0">
+      <div class="field">
         <div class="field-label">
           Min Risk : Reward
           <span class="field-hint">Minimum RR to approve a trade</span>
@@ -179,6 +200,21 @@
             <input type="range" id="rr-slider" min="1" max="5" step="0.5" value="2" oninput="updateRR(this.value)" />
           </div>
           <span class="slider-val" id="rr-val">1 : 2</span>
+        </div>
+      </div>
+
+      <!-- Timezone -->
+      <div class="field" style="margin-bottom:0">
+        <div class="field-label">
+          Timezone
+          <span class="field-hint">All times on the dashboard</span>
+        </div>
+        <div class="tz-widget">
+          <input id="tz-search" class="tz-search" type="text"
+                 placeholder="Search — city, country or zone name…"
+                 autocomplete="off" oninput="filterTz(this.value)" />
+          <select id="timezone-select" class="tz-select" size="5"></select>
+          <div class="tz-current" id="tz-current"></div>
         </div>
       </div>
 
@@ -197,8 +233,12 @@
     const token = localStorage.getItem('nfx_token');
     if (!token) location.replace('/login.html');
 
-    // ── GSAP entrance ──
+    // ── GSAP entrance + timezone init ──
     window.addEventListener('DOMContentLoaded', () => {
+      buildTzList('UTC');
+      document.getElementById('timezone-select')?.addEventListener('change', e => {
+        updateTzCurrent(e.target.value);
+      });
       if (typeof gsap === 'undefined') return;
       gsap.timeline({ defaults: { ease: 'power3.out' } })
         .from('.steps',       { y: -16, opacity: 0, duration: 0.5 })
@@ -206,6 +246,76 @@
         .from('.setup-card',  { y:  20, opacity: 0, duration: 0.6, scale: 0.97 }, '-=0.35')
         .from('.skip-link',   { opacity: 0, duration: 0.4 }, '-=0.2');
     });
+
+    // ── Timezone widget ──
+    let _tzAll = [];
+
+    function buildTzList(savedValue) {
+      const base = [{ value: 'UTC', label: 'UTC' }];
+      let zones = [];
+      try {
+        zones = Intl.supportedValuesOf('timeZone');
+      } catch(_) {
+        zones = [
+          'Africa/Abidjan','Africa/Accra','Africa/Addis_Ababa','Africa/Algiers',
+          'Africa/Cairo','Africa/Casablanca','Africa/Dar_es_Salaam','Africa/Johannesburg',
+          'Africa/Lagos','Africa/Nairobi','Africa/Tripoli','Africa/Tunis',
+          'America/Anchorage','America/Bogota','America/Buenos_Aires','America/Chicago',
+          'America/Denver','America/Guayaquil','America/Halifax','America/Havana',
+          'America/Lima','America/Los_Angeles','America/Mexico_City','America/New_York',
+          'America/Sao_Paulo','America/Santiago','America/Toronto','America/Vancouver',
+          'Asia/Baghdad','Asia/Bangkok','Asia/Colombo','Asia/Dhaka','Asia/Dubai',
+          'Asia/Hong_Kong','Asia/Jakarta','Asia/Karachi','Asia/Kathmandu','Asia/Kolkata',
+          'Asia/Kuala_Lumpur','Asia/Kuwait','Asia/Manila','Asia/Riyadh',
+          'Asia/Seoul','Asia/Shanghai','Asia/Singapore','Asia/Tehran','Asia/Tokyo',
+          'Australia/Adelaide','Australia/Brisbane','Australia/Melbourne',
+          'Australia/Perth','Australia/Sydney','Europe/Amsterdam','Europe/Athens',
+          'Europe/Berlin','Europe/Brussels','Europe/Bucharest','Europe/Budapest',
+          'Europe/Copenhagen','Europe/Dublin','Europe/Helsinki','Europe/Istanbul',
+          'Europe/Kiev','Europe/Lisbon','Europe/London','Europe/Madrid',
+          'Europe/Moscow','Europe/Oslo','Europe/Paris','Europe/Rome',
+          'Europe/Stockholm','Europe/Vienna','Europe/Warsaw','Europe/Zurich',
+          'Pacific/Auckland','Pacific/Fiji','Pacific/Guam','Pacific/Honolulu',
+          'Pacific/Marquesas','Pacific/Tongatapu',
+        ];
+      }
+      _tzAll = [
+        ...base,
+        ...zones.map(tz => ({
+          value: tz,
+          label: tz.replace(/_/g, ' '),
+          search: tz.replace(/[_/]/g, ' ').toLowerCase(),
+        })),
+      ].map(o => ({ ...o, search: (o.search || o.label.toLowerCase()) }));
+      renderTzOptions(_tzAll, savedValue || 'UTC');
+    }
+
+    function renderTzOptions(list, selectedVal) {
+      const sel = document.getElementById('timezone-select');
+      sel.innerHTML = list.map(o =>
+        `<option value="${o.value}"${o.value === selectedVal ? ' selected' : ''}>${o.label}</option>`
+      ).join('');
+      updateTzCurrent(selectedVal);
+    }
+
+    function filterTz(query) {
+      const q = query.trim().toLowerCase();
+      const filtered = q ? _tzAll.filter(o => o.search.includes(q)) : _tzAll;
+      const current = document.getElementById('timezone-select').value;
+      renderTzOptions(filtered, current);
+    }
+
+    function updateTzCurrent(tz) {
+      const el = document.getElementById('tz-current');
+      if (!el) return;
+      try {
+        const now = new Intl.DateTimeFormat('en-GB', {
+          timeZone: tz || 'UTC', hour: '2-digit', minute: '2-digit',
+          timeZoneName: 'longOffset', hour12: false,
+        }).format(new Date());
+        el.textContent = `Current time in selected zone: ${now}`;
+      } catch(_) { el.textContent = ''; }
+    }
 
     function setSize(val) {
       document.getElementById('account-size').value = val;
@@ -246,6 +356,7 @@
           max_daily_risk_pct: riskPct,
           max_trades:         trades,
           min_rr:             parseFloat(document.getElementById('rr-slider').value),
+          timezone:           document.getElementById('timezone-select').value || 'UTC',
           first_name:         user.first_name || '',
           last_name:          user.last_name  || '',
         }),
