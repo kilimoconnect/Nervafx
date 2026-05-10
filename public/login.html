@@ -27,7 +27,8 @@
       color: var(--text);
       font-family: 'Inter', system-ui, sans-serif;
       -webkit-font-smoothing: antialiased;
-      overflow: hidden;
+      overflow-x: hidden;
+      overflow-y: auto;
     }
 
     /* ── Animated background ── */
@@ -343,6 +344,89 @@
     }
     .auth-footer-dot { width: 3px; height: 3px; border-radius: 50%; background: rgba(100,116,139,0.3); }
 
+    /* ── Risk Disclaimer ── */
+    .disclaimer-box {
+      background: rgba(239,68,68,0.04);
+      border: 1px solid rgba(239,68,68,0.18);
+      border-radius: 11px;
+      margin-bottom: 4px;
+      overflow: hidden;
+    }
+    .disclaimer-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .disclaimer-header:hover { background: rgba(239,68,68,0.06); }
+    .disc-title {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #fca5a5;
+    }
+    .disc-title svg { flex-shrink: 0; }
+    .disc-read-btn {
+      font-size: 10px;
+      font-weight: 600;
+      color: rgba(252,165,165,0.55);
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      transition: color 0.15s;
+    }
+    .disclaimer-header:hover .disc-read-btn { color: rgba(252,165,165,0.85); }
+    .disc-arrow {
+      display: inline-block;
+      transition: transform 0.22s;
+      font-style: normal;
+    }
+    .disc-arrow.open { transform: rotate(90deg); }
+    .disclaimer-content {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.35s ease;
+    }
+    .disclaimer-content.open { max-height: 500px; }
+    .disclaimer-text {
+      padding: 2px 14px 14px;
+      font-size: 11px;
+      color: rgba(241,245,249,0.5);
+      line-height: 1.75;
+      border-top: 1px solid rgba(239,68,68,0.1);
+    }
+    .disclaimer-text p { margin-bottom: 9px; }
+    .disclaimer-text p:last-child { margin-bottom: 0; }
+    .disclaimer-text b { color: rgba(241,245,249,0.72); }
+    .disclaimer-text em { color: rgba(100,116,139,0.7); font-style: italic; }
+    .disclaimer-text ul { padding-left: 16px; margin: 6px 0 9px; }
+    .disclaimer-text li { margin-bottom: 3px; }
+    .disc-sep { height: 1px; background: rgba(239,68,68,0.12); margin: 0 14px; }
+    .disc-checkbox-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 11px 14px;
+      cursor: pointer;
+    }
+    .disc-checkbox-row input[type=checkbox] {
+      width: 15px; height: 15px; min-width: 15px;
+      accent-color: #3b82f6;
+      cursor: pointer;
+      margin-top: 1px;
+    }
+    .disc-checkbox-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: rgba(241,245,249,0.6);
+      line-height: 1.55;
+      cursor: pointer;
+    }
+
     @media (max-width: 480px) {
       .auth-card { padding: 28px 22px 24px; border-radius: 16px; }
       .logo { font-size: 28px; }
@@ -444,6 +528,46 @@
           <div style="height:18px"></div>
         </div>
 
+        <!-- ── Signup-only: Risk Disclaimer ── -->
+        <div class="signup-fields" id="signup-fields-disclaimer">
+          <div style="height:8px"></div>
+          <div class="disclaimer-box">
+            <!-- Header (always visible) -->
+            <div class="disclaimer-header" onclick="toggleDisclaimer()">
+              <div class="disc-title">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fca5a5" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                Risk Disclaimer
+              </div>
+              <div class="disc-read-btn">
+                Read full <i class="disc-arrow" id="disc-arrow">›</i>
+              </div>
+            </div>
+            <!-- Expandable full text -->
+            <div class="disclaimer-content" id="disc-content">
+              <div class="disclaimer-text">
+                <p>NervaFX provides market analysis, currency strength data, AI-assisted structure analysis, and risk management tools for <b>educational and informational purposes only</b>. Nothing on this platform constitutes financial, investment, or trading advice. No content should be interpreted as a recommendation to buy or sell any financial instrument.</p>
+                <p><b>Trading involves significant risk.</b> Forex, CFDs, commodities, indices, and other leveraged products carry a high level of risk and may not be suitable for all investors. You may lose part or all of your invested capital. Past performance is not indicative of future results.</p>
+                <p>You are solely responsible for your own trading decisions, risk management, account activity, and financial outcomes. NervaFX accepts no liability for losses, damages, or financial decisions made based on information provided by this platform.</p>
+                <p>By creating an account you confirm that:</p>
+                <ul>
+                  <li>You understand the risks of trading leveraged financial instruments</li>
+                  <li>You are solely responsible for all trading and investment decisions</li>
+                  <li>NervaFX does not guarantee profitability, signal accuracy, or future performance</li>
+                  <li>Market conditions can change rapidly and all analysis may become invalid at any time</li>
+                </ul>
+                <p><em>If you are unsure about trading risks, seek independent financial advice before trading.</em></p>
+              </div>
+            </div>
+            <!-- Checkbox (always visible) -->
+            <div class="disc-sep"></div>
+            <label class="disc-checkbox-row" for="disc-agreed">
+              <input type="checkbox" id="disc-agreed" />
+              <span class="disc-checkbox-label">I have read and understand the Risk Disclaimer. I accept full responsibility for my own trading decisions and outcomes.</span>
+            </label>
+          </div>
+          <div style="height:6px"></div>
+        </div>
+
         <div class="divider"></div>
 
         <button class="btn-submit" type="submit" id="btn-submit">Sign In</button>
@@ -535,6 +659,10 @@
         // Reset states
         document.getElementById('confirm-password').className = '';
         document.getElementById('confirm-password').value = '';
+        // Reset disclaimer
+        document.getElementById('disc-agreed').checked = false;
+        document.getElementById('disc-content').classList.remove('open');
+        document.getElementById('disc-arrow').classList.remove('open');
       }
 
       clearMsg();
@@ -564,6 +692,14 @@
       label.style.color     = lvl ? lvl.color : 'var(--muted)';
       // Re-validate confirm
       onConfirmInput(document.getElementById('confirm-password').value);
+    }
+
+    // ── Disclaimer toggle ─────────────────────────────────────────────────────
+    function toggleDisclaimer() {
+      const content = document.getElementById('disc-content');
+      const arrow   = document.getElementById('disc-arrow');
+      const isOpen  = content.classList.toggle('open');
+      arrow.classList.toggle('open', isOpen);
     }
 
     // ── Confirm password match indicator ─────────────────────────────────────
@@ -612,6 +748,13 @@
         }
         if (password.length < 6) {
           showMsg('Password must be at least 6 characters.', 'error');
+          return;
+        }
+        if (!document.getElementById('disc-agreed').checked) {
+          showMsg('Please read and accept the Risk Disclaimer to continue.', 'error');
+          // Auto-expand so it's visible
+          document.getElementById('disc-content').classList.add('open');
+          document.getElementById('disc-arrow').classList.add('open');
           return;
         }
       }
