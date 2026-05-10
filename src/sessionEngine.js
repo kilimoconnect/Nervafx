@@ -120,7 +120,7 @@ function getCurrentSession(now = new Date()) {
   if (day === 0) {
     const utcHour = now.getUTCHours();
     if (utcHour < 22) {
-      return _build('DEAD_HOURS', now, { blocked: true, blockReason: 'Market not yet open — Sydney opens ~22:00 UTC' });
+      return _build('DEAD_HOURS', now, { blocked: true });
     }
     // 22:00+ Sunday: Sydney thin open (counts as low-quality Asia)
     return _build('ASIA', now, { qualityOverride: 'LOW', activityOverride: 18 });
