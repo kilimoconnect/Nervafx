@@ -3,8 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NervaFX — AI-Powered Currency Flow Intelligence</title>
+  <title>NervaFX — Institutional Currency Flow Intelligence</title>
   <meta name="description" content="Institutional-grade forex intelligence. AI structure analysis, cross-asset risk sentiment, and personalized risk management — built for disciplined traders." />
+  <meta property="og:title" content="NervaFX — Institutional Currency Flow Intelligence" />
+  <meta property="og:description" content="Track institutional-style currency strength, market structure, and risk sentiment across all 28 major forex pairs." />
+  <meta property="og:type" content="website" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&display=swap" rel="stylesheet">
@@ -1121,7 +1124,39 @@
       font-weight: 500;
       color: var(--text2);
     }
-    .pricing-check { color: var(--green); font-weight: 700; font-size: 12px; flex-shrink: 0; }
+    .pricing-check  { color: var(--green); font-weight: 700; font-size: 12px; flex-shrink: 0; }
+    .pricing-cross  { color: rgba(100,116,139,0.45); font-weight: 700; font-size: 12px; flex-shrink: 0; }
+    .pricing-feature.dim { color: rgba(100,116,139,0.45); }
+    .pricing-best-for {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text3);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 4px;
+    }
+    .pricing-best-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text2);
+      margin-bottom: 20px;
+    }
+    .pricing-features-sep {
+      height: 1px;
+      background: var(--border2);
+      margin: 14px 0;
+    }
+    .pricing-star {
+      font-size: 10px;
+      font-weight: 700;
+      color: #f59e0b;
+      background: rgba(245,158,11,0.1);
+      border: 1px solid rgba(245,158,11,0.2);
+      border-radius: 4px;
+      padding: 2px 6px;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
     .btn-pricing {
       width: 100%;
       padding: 13px;
@@ -1768,48 +1803,71 @@
       </div>
       <div class="pricing-grid">
 
-        <!-- Free -->
+        <!-- FREE -->
         <div class="pricing-card">
           <div class="pricing-tier">Free</div>
           <div class="pricing-price"><sup>$</sup>0</div>
           <div class="pricing-period">forever</div>
           <div class="pricing-divider"></div>
+          <div class="pricing-best-for">Best for</div>
+          <div class="pricing-best-label">Exploration &amp; discovery</div>
           <div class="pricing-features">
-            <div class="pricing-feature"><span class="pricing-check">✓</span> Basic dashboard</div>
-            <div class="pricing-feature"><span class="pricing-check">✓</span> 28-pair strength data</div>
+            <div class="pricing-feature"><span class="pricing-check">✓</span> Live 12H currency strength</div>
             <div class="pricing-feature"><span class="pricing-check">✓</span> Session intelligence</div>
+            <div class="pricing-feature"><span class="pricing-check">✓</span> Limited dashboard access</div>
+            <div class="pricing-feature"><span class="pricing-check">✓</span> 12H pair ranking</div>
+            <div class="pricing-features-sep"></div>
+            <div class="pricing-feature dim"><span class="pricing-cross">✕</span> Risk sentiment engine</div>
+            <div class="pricing-feature dim"><span class="pricing-cross">✕</span> AI structure analysis</div>
+            <div class="pricing-feature dim"><span class="pricing-cross">✕</span> Historical journal access</div>
+            <div class="pricing-feature dim"><span class="pricing-cross">✕</span> Live entry alerts</div>
+            <div class="pricing-feature dim"><span class="pricing-cross">✕</span> Personalized risk sizing</div>
+            <div class="pricing-feature dim"><span class="pricing-cross">✕</span> Lot size calculation</div>
+            <div class="pricing-feature dim"><span class="pricing-cross">✕</span> Approved trade plans</div>
           </div>
-          <a href="/login" class="btn-pricing">Get Started</a>
+          <a href="/login" class="btn-pricing">Get Started Free</a>
         </div>
 
-        <!-- Pro (highlighted) -->
+        <!-- PRO (highlighted) -->
         <div class="pricing-card pro">
-          <div class="pricing-popular">Most Popular</div>
+          <div class="pricing-popular">⭐ Main Plan</div>
           <div class="pricing-tier">Pro</div>
           <div class="pricing-price"><sup>$</sup>39</div>
           <div class="pricing-period">per month</div>
           <div class="pricing-divider"></div>
+          <div class="pricing-best-for">Best for</div>
+          <div class="pricing-best-label">Active traders</div>
           <div class="pricing-features">
-            <div class="pricing-feature"><span class="pricing-check">✓</span> Everything in Free</div>
-            <div class="pricing-feature"><span class="pricing-check">✓</span> AI structure analysis</div>
+            <div class="pricing-feature"><span class="pricing-check">✓</span> Full live dashboard</div>
+            <div class="pricing-feature"><span class="pricing-check">✓</span> Live H1 structure engine</div>
+            <div class="pricing-feature"><span class="pricing-check">✓</span> 3H / 6H / 12H pair ranking</div>
+            <div class="pricing-feature"><span class="pricing-check">✓</span> 3H / 6H / 12H market analysis</div>
+            <div class="pricing-feature"><span class="pricing-check">✓</span> Healthy pullback detection</div>
+            <div class="pricing-feature"><span class="pricing-check">✓</span> Continuation probability</div>
+            <div class="pricing-feature"><span class="pricing-check">✓</span> Session intelligence</div>
             <div class="pricing-feature"><span class="pricing-check">✓</span> Risk sentiment engine</div>
-            <div class="pricing-feature"><span class="pricing-check">✓</span> Personalized risk management</div>
-            <div class="pricing-feature"><span class="pricing-check">✓</span> Automatic market journal</div>
+            <div class="pricing-feature"><span class="pricing-check">✓</span> Personalized lot sizing</div>
+            <div class="pricing-feature"><span class="pricing-check">✓</span> SL / TP calculation</div>
+            <div class="pricing-feature"><span class="pricing-check">✓</span> Approved trade alerts</div>
+            <div class="pricing-feature"><span class="pricing-check">✓</span> Trade lifecycle tracking</div>
+            <div class="pricing-feature"><span class="pricing-check">✓</span> Email alerts &amp; notifications</div>
           </div>
-          <a href="/login" class="btn-pricing primary">Get Started</a>
+          <a href="/login" class="btn-pricing primary">Get Started →</a>
         </div>
 
-        <!-- Premium -->
+        <!-- PREMIUM -->
         <div class="pricing-card">
           <div class="pricing-tier">Premium</div>
           <div class="pricing-price"><sup>$</sup>59</div>
           <div class="pricing-period">per month</div>
           <div class="pricing-divider"></div>
+          <div class="pricing-best-for">Best for</div>
+          <div class="pricing-best-label">Serious &amp; advanced traders</div>
           <div class="pricing-features">
             <div class="pricing-feature"><span class="pricing-check">✓</span> Everything in Pro</div>
-            <div class="pricing-feature"><span class="pricing-check">✓</span> Priority updates</div>
-            <div class="pricing-feature"><span class="pricing-check">✓</span> Advanced AI analysis</div>
-            <div class="pricing-feature"><span class="pricing-check">✓</span> Early access features</div>
+            <div class="pricing-features-sep"></div>
+            <div class="pricing-feature"><span class="pricing-check">✓</span> Advanced AI market intelligence</div>
+            <div class="pricing-feature"><span class="pricing-check">✓</span> Full historical journal analytics</div>
           </div>
           <a href="/login" class="btn-pricing">Get Started</a>
         </div>
