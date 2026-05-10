@@ -2010,10 +2010,10 @@ html, body {
 }
 
 .session-main {
-  display: flex;
-  align-items: flex-start;
-  gap: 20px;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(150px, 180px) minmax(150px, 180px) 1fr auto;
+  align-items: start;
+  gap: 16px;
 }
 
 /* Session name block */
@@ -2021,7 +2021,7 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  min-width: 180px;
+  min-width: 0;
 }
 
 .sess-name-badge {
@@ -2033,6 +2033,8 @@ html, body {
   text-align: center;
   white-space: nowrap;
   border: 1px solid;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .sess-hours-utc {
@@ -2061,7 +2063,7 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  min-width: 160px;
+  min-width: 0;
 }
 
 .sess-qlabel {
@@ -2085,11 +2087,11 @@ html, body {
 
 /* Activity block */
 .session-activity-wrap {
-  flex: 1;
-  min-width: 160px;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 5px;
+  justify-content: center;
 }
 
 .sess-act-header {
@@ -2256,9 +2258,47 @@ html, body {
 
 /* Mobile */
 @media (max-width: 700px) {
-  .session-main    { flex-direction: column; gap: 12px; }
-  .session-timeline { gap: 3px; }
-  .sess-tl-item    { padding: 3px 7px; }
+  .session-main {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .session-name-wrap,
+  .session-quality-wrap,
+  .session-activity-wrap,
+  .session-status-wrap {
+    width: 100%;
+  }
+  .sess-name-badge {
+    font-size: 16px;
+    padding: 10px 12px;
+  }
+  .sess-qlabel {
+    font-size: 12px;
+  }
+  .session-status-wrap {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+  }
+  .sess-status {
+    flex: 1;
+    text-align: center;
+  }
+  /* Timeline: 3-column grid, hide arrows */
+  .session-timeline {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
+  .sess-tl-arrow { display: none; }
+  .sess-tl-item  {
+    padding: 6px 4px;
+    text-align: center;
+    width: 100%;
+    box-sizing: border-box;
+  }
 }
 
 /* ─── AI Modal session row ──────────────────────────────────────────────────── */
