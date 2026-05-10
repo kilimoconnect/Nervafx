@@ -172,12 +172,13 @@ html, body {
 }
 .plan-lock-btn:hover { opacity: 0.85; }
 
-/* Wide cards (>= 480px): two-column layout — padlock left, text right */
-@container (min-width: 480px) {
+/* Desktop: two-column layout — padlock left, text right */
+@media (min-width: 700px) {
   .plan-lock-overlay.visible {
-    display: grid;
-    grid-template-columns: 52px 1fr;
-    align-items: center;
+    display: grid !important;
+    grid-template-columns: 60px 1fr;
+    grid-template-rows: auto auto auto auto;
+    align-items: start;
     justify-items: start;
     column-gap: 28px;
     row-gap: 6px;
@@ -186,15 +187,15 @@ html, body {
   }
   .plan-lock-overlay.visible::before {
     grid-column: 1;
-    grid-row: 1 / 6;
+    grid-row: 1 / 5;
     align-self: center;
     justify-self: center;
     margin-bottom: 0;
   }
-  .plan-lock-title    { grid-column: 2; }
-  .plan-lock-desc     { grid-column: 2; max-width: none; }
-  .plan-lock-features { grid-column: 2; max-width: none; margin-top: 4px; }
-  .plan-lock-btn      { grid-column: 2; margin-top: 8px; }
+  .plan-lock-title    { grid-column: 2; grid-row: 1; }
+  .plan-lock-desc     { grid-column: 2; grid-row: 2; max-width: none; }
+  .plan-lock-features { grid-column: 2; grid-row: 3; max-width: none; margin-top: 2px; }
+  .plan-lock-btn      { grid-column: 2; grid-row: 4; margin-top: 6px; }
 }
 
 /* ensure cards are tall enough for lock overlay content */
