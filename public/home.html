@@ -424,7 +424,7 @@
       color: var(--text);
       letter-spacing: 0.3px;
     }
-    .currency-flag { font-size: 14px; line-height: 1; }
+    .currency-flag { width: 20px; height: 14px; border-radius: 2px; object-fit: cover; flex-shrink: 0; }
     .currency-bar-wrap {
       position: relative;
       height: 6px;
@@ -1922,42 +1922,27 @@
     });
 
     // ── CURRENCY STRENGTH ─────────────────────────────────────────────────────
-    const CURRENCY_FLAGS = {
-      USD: '🇺🇸', EUR: '🇪🇺', GBP: '🇬🇧', JPY: '🇯🇵',
-      CHF: '🇨🇭', AUD: '🇦🇺', NZD: '🇳🇿', CAD: '🇨🇦',
+    const CURRENCY_ISO = {
+      USD: 'us', EUR: 'eu', GBP: 'gb', JPY: 'jp',
+      CHF: 'ch', AUD: 'au', NZD: 'nz', CAD: 'ca',
     };
-    const ORDERED = ['CHF','USD','EUR','GBP','AUD','NZD','CAD','JPY'];
-
-    const DEMO_DATA = [
-      { currency: 'CHF', value:  0.0821, direction: 'up'   },
-      { currency: 'USD', value:  0.0613, direction: 'up'   },
-      { currency: 'EUR', value:  0.0294, direction: 'up'   },
-      { currency: 'GBP', value:  0.0083, direction: 'flat' },
-      { currency: 'AUD', value: -0.0147, direction: 'down' },
-      { currency: 'NZD', value: -0.0332, direction: 'down' },
-      { currency: 'CAD', value: -0.0558, direction: 'down' },
-      { currency: 'JPY', value: -0.0784, direction: 'down' },
-    ];
 
     function renderStrength(currencies, time) {
-      const rows = document.getElementById('strength-rows');
+      const rows   = document.getElementById('strength-rows');
       const timeEl = document.getElementById('strength-time');
 
-      // Sort by ORDERED list if present, otherwise use API sort
-      const sorted = ORDERED.map(code => currencies.find(c => c.currency === code)).filter(Boolean);
-      const remaining = currencies.filter(c => !ORDERED.includes(c.currency));
-      const display = [...sorted, ...remaining].slice(0, 8);
-
-      const maxAbs = Math.max(...display.map(c => Math.abs(c.value)), 0.01);
+      // Sort strongest → weakest
+      const display = [...currencies].sort((a, b) => b.value - a.value).slice(0, 8);
+      const maxAbs  = Math.max(...display.map(c => Math.abs(c.value))) || 1;
 
       rows.innerHTML = display.map(c => {
         const barWidth = Math.round((Math.abs(c.value) / maxAbs) * 100);
-        const sign = c.value > 0 ? '+' : '';
-        const flag = CURRENCY_FLAGS[c.currency] || '🌐';
+        const sign     = c.value > 0 ? '+' : '';
+        const iso      = CURRENCY_ISO[c.currency] || 'un';
         return `
           <div class="currency-row">
             <div class="currency-label">
-              <span class="currency-flag">${flag}</span>
+              <img class="currency-flag" src="https://flagcdn.com/20x15/${iso}.png" alt="${c.currency}">
               ${c.currency}
             </div>
             <div class="currency-bar-wrap">
@@ -1968,32 +1953,42 @@
       }).join('');
 
       if (time) {
-        const d = new Date(time);
+        const d       = new Date(time);
         const dateStr = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', timeZone: 'UTC' });
         const timeStr = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC', timeZoneName: 'short' });
         timeEl.textContent = 'Updated ' + dateStr + ' ' + timeStr;
       } else {
-        timeEl.textContent = 'Demo data';
+        timeEl.textContent = '';
       }
+    }
+
+    function showStrengthLoading() {
+      const rows = document.getElementById('strength-rows');
+      rows.innerHTML = ['USD','EUR','GBP','JPY','CHF','AUD','NZD','CAD'].map(c => `
+        <div class="currency-row" style="opacity:0.35">
+          <div class="currency-label" style="color:var(--text3)">${c}</div>
+          <div class="currency-bar-wrap"><div class="currency-bar flat" style="width:30%"></div></div>
+          <div class="currency-value flat">—</div>
+        </div>`).join('');
+      document.getElementById('strength-time').textContent = 'Loading…';
     }
 
     async function fetchStrength() {
       try {
-        const res = await fetch('/api/public-strength');
+        const res  = await fetch('/api/public-strength');
         if (!res.ok) throw new Error('API error');
         const data = await res.json();
         if (data.currencies && data.currencies.length > 0) {
           renderStrength(data.currencies, data.time);
         } else {
-          renderStrength(DEMO_DATA, null);
+          document.getElementById('strength-time').textContent = 'No data';
         }
       } catch (e) {
-        renderStrength(DEMO_DATA, null);
+        document.getElementById('strength-time').textContent = 'Unavailable';
       }
     }
 
-    // Initial render with demo data immediately (before API responds)
-    renderStrength(DEMO_DATA, null);
+    showStrengthLoading();
     fetchStrength();
     setInterval(fetchStrength, 60000);
 
