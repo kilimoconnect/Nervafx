@@ -139,6 +139,21 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 200px; overflow: hidd
 /* Free plan: dim the tf buttons that are disabled */
 .tf-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
+/* Free plan: reorder grid so free sections appear directly after Trading Session */
+.plan-free #section-session    { order: 1; }
+.plan-free #section-strength   { order: 2; }
+.plan-free #section-ranking-12h { order: 3; }
+.plan-free #section-live,
+.plan-free #section-top,
+.plan-free #section-sentiment,
+.plan-free #section-signals,
+.plan-free #section-states,
+.plan-free #section-spreads,
+.plan-free #section-risk,
+.plan-free #section-actions,
+.plan-free #section-quality,
+.plan-free #section-journal    { order: 4; }
+
 /* ─── Header ───────────────────────────────────────────────────────────────── */
 .header {
   display: flex;
