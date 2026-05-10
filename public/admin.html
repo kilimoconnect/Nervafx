@@ -617,14 +617,7 @@ Mon May 12 2026
     try {
       const r = await fetch('/api/profile', { headers: { 'Authorization': 'Bearer ' + token } });
       const d = await r.json();
-      if (d.timezone) {
-        _userTz = d.timezone;
-        const sel = document.getElementById('tz-select');
-        // Only sync profile tz to selector if the option exists in the list
-        if (sel && [...sel.options].some(o => o.value === d.timezone)) {
-          sel.value = d.timezone;
-        }
-      }
+      if (d.timezone) _userTz = d.timezone; // keep as fallback only, do not override selector
     } catch (_) {}
   }
 
