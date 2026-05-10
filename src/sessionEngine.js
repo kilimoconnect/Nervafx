@@ -115,12 +115,12 @@ function getCurrentSession(now = new Date()) {
 
   // ── Weekend blocks ───────────────────────────────────────────────────────
   if (day === 6) {
-    return _build('DEAD_HOURS', now, { blocked: true, blockReason: 'Weekend — market closed' });
+    return _build('DEAD_HOURS', now, { blocked: true, blockReason: 'Market closed — weekend' });
   }
   if (day === 0) {
     const utcHour = now.getUTCHours();
     if (utcHour < 22) {
-      return _build('DEAD_HOURS', now, { blocked: true, blockReason: 'Sunday — market not yet open' });
+      return _build('DEAD_HOURS', now, { blocked: true, blockReason: 'Market not yet open — Sydney opens ~22:00 UTC' });
     }
     // 22:00+ Sunday: Sydney thin open (counts as low-quality Asia)
     return _build('ASIA', now, { qualityOverride: 'LOW', activityOverride: 18 });
@@ -140,13 +140,13 @@ function getCurrentSession(now = new Date()) {
   if (nyHour >= 17 && nyHour < 18) {
     return _build('DEAD_HOURS', now, {
       blocked:     true,
-      blockReason: `Rollover — NY ${nyHour}:00 local (${now.getUTCHours()}:00 UTC)`,
+      blockReason: `Rollover — NY close ${nyHour}:00 local`,
     });
   }
 
   // Post-rollover, pre-Tokyo dead zone (NY 18:00+ and nothing else open)
   if (!londonOpen && !nyOpen && !tokyoOpen) {
-    return _build('DEAD_HOURS', now, { blocked: true, blockReason: 'Dead hours — low liquidity' });
+    return _build('DEAD_HOURS', now, { blocked: true, blockReason: 'Low liquidity — all major centres closed' });
   }
 
   // ── Active session priority ──────────────────────────────────────────────

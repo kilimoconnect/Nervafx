@@ -1187,6 +1187,14 @@ function renderSession(data) {
           ? `<div class="sess-status allowed">✓ TRADING ACTIVE</div>${deltaHtml}`
           : `<div class="sess-status blocked">⛔ ${s.block_reason || 'TRADING BLOCKED'}</div>`
         }
+        ${!allowed ? (() => {
+          try {
+            const tz = (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC');
+            const localDay  = new Date().toLocaleDateString('en-GB', { weekday:'long',  timeZone: tz });
+            const localTime = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit', timeZone: tz });
+            return `<div class="sess-local-time">🕐 Your time: ${localDay}, ${localTime}</div>`;
+          } catch(_) { return ''; }
+        })() : ''}
       </div>
     </div>
     <div class="session-timeline">${timelineHtml}</div>`;
