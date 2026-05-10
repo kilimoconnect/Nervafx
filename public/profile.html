@@ -175,7 +175,7 @@
     /* ── Modal (delete confirm) ── */
     .modal-overlay {
       position: fixed; inset: 0; z-index: 200;
-      background: rgba(0,0,0,0.7); backdrop-filter: blur(6px);
+      background: rgba(0,0,0,0.75);
       display: flex; align-items: center; justify-content: center;
       opacity: 0; pointer-events: none; transition: opacity 0.22s;
       padding: 24px;
@@ -201,10 +201,10 @@
     }
     .modal-confirm-input:focus { border-color: rgba(239,68,68,0.5); box-shadow: 0 0 0 3px rgba(239,68,68,0.1); }
     .modal-actions { display: flex; gap: 10px; }
-    .modal-btn-cancel { flex: 1; padding: 11px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; color: var(--muted); font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+    .modal-btn-cancel { flex: 1; padding: 11px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; color: var(--muted); font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; transition: background-color 0.15s, color 0.15s; }
     .modal-btn-cancel:hover { background: rgba(255,255,255,0.08); color: var(--text); }
-    .modal-btn-delete { flex: 1; padding: 11px; background: #ef4444; border: none; border-radius: 10px; color: #fff; font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
-    .modal-btn-delete:hover { background: #dc2626; }
+    .modal-btn-delete { flex: 1; padding: 11px; background: #ef4444; border: none; border-radius: 10px; color: #fff; font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 700; cursor: pointer; transition: background-color 0.15s, opacity 0.15s; will-change: opacity; }
+    .modal-btn-delete:hover:not(:disabled) { background: #dc2626; }
     .modal-btn-delete:disabled { opacity: 0.4; cursor: default; }
     .modal-err { margin-top: 12px; font-size: 12px; font-weight: 500; color: #fca5a5; display: none; }
     .modal-err.show { display: block; }
@@ -615,9 +615,13 @@
       if (e.target === this) closeDeleteModal();
     });
 
+    let _discRaf;
     function onDeleteConfirmInput() {
-      const val = document.getElementById('delete-confirm-input').value;
-      document.getElementById('btn-confirm-delete').disabled = (val !== 'DELETE');
+      cancelAnimationFrame(_discRaf);
+      _discRaf = requestAnimationFrame(() => {
+        const val = document.getElementById('delete-confirm-input').value;
+        document.getElementById('btn-confirm-delete').disabled = (val !== 'DELETE');
+      });
     }
 
     async function confirmDelete() {
