@@ -29,31 +29,20 @@ module.exports = async function handler(req, res) {
   try {
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-    const systemPrompt = `You are a forex economic calendar parser.
-Extract ALL news events from the raw text/CSV provided and return ONLY a valid JSON array.
-Each event object must have exactly these fields:
-  - event_time: ISO 8601 UTC datetime string (e.g. "2026-05-12T08:30:00Z")
-  - currency: 3-letter currency code (USD, EUR, GBP, JPY, CHF, CAD, AUD, NZD, etc.)
-  - event_name: concise event name (e.g. "CPI m/m", "NFP", "Interest Rate Decision")
-  - impact: exactly "HIGH", "MEDIUM", or "LOW"
-  - forecast: string or null
-  - previous: string or null
-
-TIMEZONE RULE (important): The times in this calendar are in "${tz}". You MUST convert every event_time from ${tz} to UTC before writing the ISO string. For example, if the calendar shows 08:30 and the timezone is America/New_York (UTC-4 in summer), store "T12:30:00Z".
-Other rules:
-- If impact is shown as stars (***=HIGH, **=MEDIUM, *=LOW), red/orange/yellow colors, or words like "high","medium","low", map accordingly
-- If year is missing, assume the current or next upcoming year
-- Skip any non-event rows (headers, separators, totals)
-- Return ONLY the JSON array — no markdown, no explanation, no \`\`\`json fences`;
+    const systemPrompt = `You are a forex economic calendar parser. Return ONLY a compact JSON array, no markdown.
+Each object: {"event_time":"<UTC ISO8601>","currency":"<3-letter>","event_name":"<short name>","impact":"HIGH"|"MEDIUM"|"LOW","forecast":<string|null>,"previous":<string|null>}
+TIMEZONE: Input times are in "${tz}". Convert every time to UTC in the ISO string.
+Impact mapping: stars ***=HIGH **=MEDIUM *=LOW; colors red=HIGH orange=MEDIUM yellow=LOW; words map directly.
+Skip headers, bank holidays, separators. If year missing use current/next upcoming. No explanation, no fences.`;
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user',   content: `Parse this forex calendar:\n\n${text.slice(0, 20000)}` },
+        { role: 'user',   content: text.slice(0, 15000) },
       ],
-      temperature: 0.1,
-      max_tokens: 8000,
+      temperature: 0,
+      max_tokens: 6000,
     });
 
     const raw = completion.choices[0].message.content.trim();
