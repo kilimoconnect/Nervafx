@@ -71,7 +71,7 @@ const QUALITY_DESC = {
 
 const SESSION_META = {
   DEAD_HOURS:  { label: 'Low Liquidity',      quality: 'BLOCKED',   tradesAllowed: false, baseActivity: 5,  tz: null,                 localOpen: null, localClose: null },
-  PRE_LONDON:  { label: 'Pre-London',         quality: 'LOW',       tradesAllowed: true,  baseActivity: 22, tz: 'Europe/London',       localOpen: 6,    localClose: 8    },
+  PRE_LONDON:  { label: 'Sydney',             quality: 'LOW',       tradesAllowed: true,  baseActivity: 22, tz: 'Europe/London',       localOpen: 6,    localClose: 8    },
   ASIA:        { label: 'Asia',               quality: 'MEDIUM',    tradesAllowed: true,  baseActivity: 48, tz: 'Asia/Tokyo',          localOpen: 9,    localClose: 18   },
   LONDON_OPEN: { label: 'London Open',        quality: 'HIGH',      tradesAllowed: true,  baseActivity: 80, tz: 'Europe/London',       localOpen: 8,    localClose: 10   },
   LONDON:      { label: 'London',             quality: 'HIGH',      tradesAllowed: true,  baseActivity: 70, tz: 'Europe/London',       localOpen: 10,   localClose: 13   },
@@ -256,7 +256,7 @@ function getSessionTimeline(now = new Date()) {
   const current  = getCurrentSession(now);
 
   return [
-    'ASIA', 'LONDON_OPEN', 'LONDON', 'LONDON_NY', 'LATE_NY', 'DEAD_HOURS',
+    'ASIA', 'PRE_LONDON', 'LONDON_OPEN', 'LONDON', 'LONDON_NY', 'LATE_NY', 'DEAD_HOURS',
   ].map(name => {
     const meta  = SESSION_META[name];
     const range = _computeUTCRange(name, loOffset, nyOffset);
