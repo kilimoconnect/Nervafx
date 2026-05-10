@@ -213,6 +213,10 @@
     }
 
     async function saveProfile(accountSize, riskPct, trades) {
+      // Pull names from cached user so the profile row is always complete
+      let user = {};
+      try { user = JSON.parse(localStorage.getItem('nfx_user') || '{}'); } catch(_) {}
+
       const res = await fetch('/api/profile', {
         method: 'PATCH',
         headers: {
@@ -223,6 +227,8 @@
           account_size:       accountSize,
           max_daily_risk_pct: riskPct,
           max_trades:         trades,
+          first_name:         user.first_name || '',
+          last_name:          user.last_name  || '',
         }),
       });
       return res.json();

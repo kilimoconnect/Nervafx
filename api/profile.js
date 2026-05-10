@@ -34,7 +34,7 @@ module.exports = async function handler(req, res) {
       const meta = user.user_metadata || {};
 
       if (error?.code === 'PGRST116' || !data) {
-        // No profile yet — return defaults
+        // No profile row yet — return auth metadata + hardcoded defaults
         return res.json({
           id:                 user.id,
           email:              user.email,
@@ -47,7 +47,14 @@ module.exports = async function handler(req, res) {
       }
       if (error) throw error;
 
-      return res.json({ ...data, email: user.email });
+      // Profile row exists — always merge auth metadata as fallback for names
+      // (setup.html creates the row without names, so the table columns may be blank)
+      return res.json({
+        ...data,
+        email:      user.email,
+        first_name: data.first_name || meta.first_name || '',
+        last_name:  data.last_name  || meta.last_name  || '',
+      });
     }
 
     // ── PATCH — update profile ─────────────────────────────────────────────
