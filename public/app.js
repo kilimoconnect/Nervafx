@@ -160,6 +160,56 @@ async function api(path) {
   return r.json();
 }
 
+// ─── News calendar ────────────────────────────────────────────────────────────
+
+let _newsMap = {}; // { 'USD': [...events], 'EUR': [...events] }
+
+async function fetchNews() {
+  try {
+    const d = await api('/api/news');
+    const map = {};
+    (d.events || []).forEach(e => {
+      if (!map[e.currency]) map[e.currency] = [];
+      map[e.currency].push(e);
+    });
+    _newsMap = map;
+  } catch (_) {}
+}
+
+function pairCurrencies(instrument) {
+  const s = (instrument || '').replace('/', '').replace('_', '').toUpperCase();
+  return [s.slice(0, 3), s.slice(3, 6)];
+}
+
+// Returns HTML warning strip for upcoming HIGH/MEDIUM news on this pair
+function newsWarnHtml(instrument, hoursAhead = 4) {
+  const [c1, c2] = pairCurrencies(instrument);
+  const now     = Date.now();
+  const cutoff  = now + hoursAhead * 60 * 60 * 1000;
+
+  const hits = [];
+  for (const cur of [c1, c2]) {
+    (_newsMap[cur] || []).forEach(e => {
+      const t = new Date(e.event_time).getTime();
+      if (t >= now && t <= cutoff && e.impact !== 'LOW') {
+        hits.push({ ...e, cur });
+      }
+    });
+  }
+  if (!hits.length) return '';
+
+  hits.sort((a, b) => new Date(a.event_time) - new Date(b.event_time));
+
+  const badges = hits.map(h => {
+    const mins = Math.round((new Date(h.event_time) - now) / 60000);
+    const when = mins < 60 ? `in ${mins}m` : `in ${Math.round(mins / 60)}h`;
+    const cls  = h.impact === 'HIGH' ? 'news-warn-high' : 'news-warn-med';
+    return `<span class="news-warn-badge ${cls}">📰 ${h.cur}: ${h.event_name} ${when}</span>`;
+  }).join('');
+
+  return `<div class="news-warn-row">${badges}</div>`;
+}
+
 // ─── Formatters ───────────────────────────────────────────────────────────────
 
 function fmt(n, d = 5) { return n != null ? Number(n).toFixed(d) : '—'; }
@@ -583,6 +633,7 @@ function renderLiveOpportunities(states, aiMap = {}, sentimentData = null) {
           <span class="sb-behavior ${s.spread_behavior}">${(s.spread_behavior||'').replace(/_/g,' ')}</span>
         </div>
         <div class="live-reason">${s.spread_behavior_text}</div>
+        ${newsWarnHtml(s.instrument)}
         ${sentNeutral ? `<div class="sent-neutral-warn">⚠ Risk sentiment is NEUTRAL — no clear money flow direction. No edge confirmed. High risk to trade.</div>` : ''}
         ${(s.confidence_breakdown||[]).length ? `<div class="conf-factors" style="align-items:flex-start;margin-top:6px">${s.confidence_breakdown.map(f=>`<span>+ ${f}</span>`).join('')}</div>` : ''}
         ${aiHtml(aiMap[s.instrument], s.instrument)}
@@ -642,6 +693,7 @@ function renderTopSetups(states, aiMap = {}, sentimentData = null) {
           </div>
           <div style="font-size:9px;color:var(--text-muted);margin-bottom:3px">${s.spread_behavior_text || ''}</div>
           ${nextActionHtml(s.next_action)}
+          ${newsWarnHtml(s.instrument)}
           ${sentNeutral ? `<div class="sent-neutral-warn">⚠ Risk sentiment NEUTRAL — no clear money flow direction. No edge confirmed. High risk to trade.</div>` : ''}
           ${aiHtml(aiMap[s.instrument], s.instrument)}
         </div>
@@ -725,6 +777,7 @@ function signalCard(s, st) {
       ${bd.length ? `<div class="conf-factors" style="align-items:flex-start;margin-top:5px">${bd.map(f => `<span>+ ${f}</span>`).join('')}</div>` : ''}
       ${st?.session_label ? `<div class="sess-inline-badge sq-${(st.session_quality||'').toLowerCase().replace(/_/g,'-')}">${st.session_label}${st.session_delta != null ? ` <span class="sess-inline-delta">${st.session_delta > 0 ? '+' : ''}${st.session_delta}</span>` : ''}</div>` : ''}
       ${st?.next_action ? nextActionHtml(st.next_action) : ''}
+      ${newsWarnHtml(s.instrument)}
     </div>`;
 }
 
@@ -1368,6 +1421,9 @@ async function refresh() {
       api('/api/journal').catch(() => ({ entries: [] })),
       api('/api/profile').catch(() => ({})),
     ]);
+
+    // Fetch news calendar (non-blocking — runs in parallel, populates _newsMap)
+    fetchNews();
 
     // Cache profile — used by updateHeader and any section needing user settings
     if (profileData && !profileData.error) {

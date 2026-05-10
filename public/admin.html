@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>NervaFX — Admin</title>
+  <link rel="icon" type="image/png" href="/nervafx-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/notyf@3/notyf.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/notyf@3/notyf.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #080b12; --bg2: #0d1117; --bg3: #111827;
+      --border: rgba(255,255,255,0.07); --border2: rgba(255,255,255,0.12);
+      --text: #e2e8f0; --text-muted: #64748b; --text-dim: #94a3b8;
+      --blue: #3b82f6; --indigo: #4f46e5; --green: #22c55e;
+      --amber: #f59e0b; --red: #ef4444; --purple: #a855f7;
+    }
+    body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; min-height: 100vh; }
+
+    /* ── Header ── */
+    .adm-header {
+      background: var(--bg2); border-bottom: 1px solid var(--border2);
+      padding: 12px 24px; display: flex; align-items: center; justify-content: space-between;
+    }
+    .adm-header-left { display: flex; align-items: center; gap: 12px; }
+    .adm-badge {
+      background: linear-gradient(135deg,#4f46e5,#7c3aed); color:#fff;
+      font-size:11px; font-weight:700; padding:3px 8px; border-radius:4px; letter-spacing:.5px;
+    }
+    .adm-nav { display: flex; gap: 6px; }
+    .adm-nav-btn {
+      font-size:12px; font-weight:600; padding:6px 14px; border-radius:7px;
+      border:1px solid var(--border2); background:transparent; color:var(--text-dim);
+      cursor:pointer; text-decoration:none; transition:all .15s;
+    }
+    .adm-nav-btn:hover { background:var(--bg3); color:var(--text); }
+    .adm-nav-btn.danger { border-color:rgba(239,68,68,.3); color:#f87171; }
+    .adm-nav-btn.danger:hover { background:rgba(239,68,68,.1); }
+
+    /* ── Layout ── */
+    .adm-body { max-width: 1100px; margin: 0 auto; padding: 28px 20px; }
+    .adm-section { background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:24px; margin-bottom:24px; }
+    .adm-section-title { font-size:15px; font-weight:700; color:var(--text); margin-bottom:18px; display:flex; align-items:center; gap:8px; }
+    .adm-section-title span { font-size:18px; }
+
+    /* ── Tabs ── */
+    .tab-bar { display:flex; gap:4px; border-bottom:1px solid var(--border); margin-bottom:20px; }
+    .tab-btn {
+      font-size:13px; font-weight:600; padding:8px 16px; border:none; background:none;
+      color:var(--text-muted); cursor:pointer; border-bottom:2px solid transparent;
+      margin-bottom:-1px; transition:all .15s;
+    }
+    .tab-btn.active { color:var(--blue); border-bottom-color:var(--blue); }
+    .tab-panel { display:none; }
+    .tab-panel.active { display:block; }
+
+    /* ── Input area ── */
+    .input-row { display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap; }
+    .adm-textarea {
+      width:100%; min-height:160px; background:var(--bg3); border:1px solid var(--border2);
+      border-radius:8px; padding:12px; color:var(--text); font-family:inherit; font-size:12px;
+      resize:vertical; outline:none; transition:border-color .15s;
+    }
+    .adm-textarea:focus { border-color:var(--blue); }
+    .adm-textarea::placeholder { color:var(--text-muted); }
+
+    .drop-zone {
+      border:2px dashed var(--border2); border-radius:10px; padding:32px;
+      text-align:center; cursor:pointer; transition:all .15s; margin-bottom:16px;
+    }
+    .drop-zone:hover, .drop-zone.drag-over { border-color:var(--blue); background:rgba(59,130,246,.05); }
+    .drop-zone-icon { font-size:32px; margin-bottom:8px; }
+    .drop-zone-text { font-size:13px; color:var(--text-muted); }
+    .drop-zone-text strong { color:var(--blue); cursor:pointer; }
+    #csv-file-input { display:none; }
+
+    /* ── Buttons ── */
+    .btn {
+      font-size:13px; font-weight:600; padding:9px 20px; border-radius:8px; border:none;
+      cursor:pointer; transition:all .15s; display:inline-flex; align-items:center; gap:6px;
+    }
+    .btn-primary { background:linear-gradient(135deg,var(--blue),var(--indigo)); color:#fff; }
+    .btn-primary:hover { opacity:.88; }
+    .btn-primary:disabled { opacity:.4; cursor:not-allowed; }
+    .btn-success { background:linear-gradient(135deg,#16a34a,#15803d); color:#fff; }
+    .btn-success:hover { opacity:.88; }
+    .btn-success:disabled { opacity:.4; cursor:not-allowed; }
+    .btn-danger { background:rgba(239,68,68,.15); color:#f87171; border:1px solid rgba(239,68,68,.2); }
+    .btn-danger:hover { background:rgba(239,68,68,.25); }
+    .btn-sm { font-size:11px; padding:4px 10px; border-radius:5px; }
+
+    /* ── Preview table ── */
+    .preview-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+    .preview-count { font-size:12px; color:var(--text-muted); }
+    .tbl-wrap { overflow-x:auto; border-radius:8px; border:1px solid var(--border); }
+    table { width:100%; border-collapse:collapse; font-size:12px; }
+    thead tr { background:var(--bg3); }
+    th { padding:10px 12px; text-align:left; font-weight:600; color:var(--text-dim); font-size:11px; white-space:nowrap; }
+    tbody tr { border-top:1px solid var(--border); transition:background .1s; }
+    tbody tr:hover { background:rgba(255,255,255,.02); }
+    td { padding:9px 12px; vertical-align:middle; }
+    .td-del { text-align:center; }
+    .del-row-btn { background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:14px; padding:2px 6px; border-radius:4px; }
+    .del-row-btn:hover { background:rgba(239,68,68,.15); color:#f87171; }
+
+    /* ── Impact badges ── */
+    .imp { display:inline-block; font-size:10px; font-weight:700; padding:2px 7px; border-radius:4px; letter-spacing:.4px; }
+    .imp-HIGH   { background:rgba(239,68,68,.15);  color:#f87171; border:1px solid rgba(239,68,68,.2); }
+    .imp-MEDIUM { background:rgba(245,158,11,.12); color:#fbbf24; border:1px solid rgba(245,158,11,.2); }
+    .imp-LOW    { background:rgba(100,116,139,.12); color:#94a3b8; border:1px solid rgba(100,116,139,.2); }
+
+    /* ── Currency pill ── */
+    .cur { display:inline-block; font-size:11px; font-weight:700; padding:2px 7px; border-radius:4px; background:rgba(99,102,241,.15); color:#a5b4fc; border:1px solid rgba(99,102,241,.2); }
+
+    /* ── Manage table ── */
+    .date-filter-row { display:flex; gap:10px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
+    .adm-input {
+      background:var(--bg3); border:1px solid var(--border2); border-radius:7px;
+      padding:7px 12px; color:var(--text); font-size:12px; outline:none;
+    }
+    .adm-input:focus { border-color:var(--blue); }
+    .empty-msg { text-align:center; padding:32px; color:var(--text-muted); font-size:13px; }
+
+    /* ── Stat cards ── */
+    .stat-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin-bottom:20px; }
+    .stat-card { background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:14px 16px; }
+    .stat-card-label { font-size:11px; color:var(--text-muted); margin-bottom:4px; }
+    .stat-card-val { font-size:22px; font-weight:700; color:var(--text); }
+
+    /* ── Spinner ── */
+    .spinner { display:inline-block; width:14px; height:14px; border:2px solid rgba(255,255,255,.2); border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+
+    /* ── Impact select ── */
+    .imp-select { background:var(--bg3); border:1px solid var(--border2); border-radius:4px; color:var(--text); font-size:11px; padding:2px 6px; }
+
+    /* ── Empty state ── */
+    .no-data { text-align:center; padding:40px 20px; color:var(--text-muted); font-size:13px; }
+    .no-data-icon { font-size:36px; display:block; margin-bottom:8px; }
+  </style>
+</head>
+<body>
+
+  <header class="adm-header">
+    <div class="adm-header-left">
+      <img src="/nervafx-logo.png" alt="NervaFX" style="height:22px;display:block;">
+      <span class="adm-badge">ADMIN</span>
+    </div>
+    <nav class="adm-nav">
+      <a href="/app" class="adm-nav-btn">← Dashboard</a>
+      <button class="adm-nav-btn danger" onclick="logout()">Sign Out</button>
+    </nav>
+  </header>
+
+  <div class="adm-body">
+
+    <!-- Stats -->
+    <div class="stat-row" id="stat-row">
+      <div class="stat-card"><div class="stat-card-label">Upcoming Events</div><div class="stat-card-val" id="stat-upcoming">—</div></div>
+      <div class="stat-card"><div class="stat-card-label">HIGH Impact</div><div class="stat-card-val" id="stat-high" style="color:#f87171">—</div></div>
+      <div class="stat-card"><div class="stat-card-label">Next Event</div><div class="stat-card-val" id="stat-next" style="font-size:14px;padding-top:4px">—</div></div>
+      <div class="stat-card"><div class="stat-card-label">Currencies Covered</div><div class="stat-card-val" id="stat-curs">—</div></div>
+    </div>
+
+    <!-- Upload / Paste Section -->
+    <div class="adm-section">
+      <div class="adm-section-title"><span>📰</span> Upload News Calendar</div>
+
+      <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab('paste',this)">Paste Calendar</button>
+        <button class="tab-btn" onclick="switchTab('csv',this)">Upload CSV</button>
+      </div>
+
+      <!-- Paste tab -->
+      <div class="tab-panel active" id="tab-paste">
+        <textarea class="adm-textarea" id="paste-input" placeholder="Paste forex calendar data here — any format supported (Investing.com, Forex Factory, ForexLive, plain text, CSV rows, etc.)
+
+Example:
+Mon May 12 2026
+08:30  USD  HIGH  CPI m/m   Forecast: 0.3%  Previous: 0.4%
+10:00  EUR  MEDIUM  German ZEW Economic Sentiment
+13:30  GBP  HIGH  Interest Rate Decision  Forecast: 4.50%  Previous: 4.75%
+..."></textarea>
+        <div style="display:flex;gap:10px;margin-top:12px">
+          <button class="btn btn-primary" id="parse-paste-btn" onclick="parsePaste()">
+            <span>✨</span> Parse with AI
+          </button>
+          <button class="btn" style="background:var(--bg3);color:var(--text-muted);border:1px solid var(--border2)" onclick="document.getElementById('paste-input').value=''">Clear</button>
+        </div>
+      </div>
+
+      <!-- CSV tab -->
+      <div class="tab-panel" id="tab-csv">
+        <div class="drop-zone" id="drop-zone" onclick="document.getElementById('csv-file-input').click()" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+          <div class="drop-zone-icon">📂</div>
+          <div class="drop-zone-text">Drop CSV file here or <strong>browse</strong></div>
+          <div class="drop-zone-text" style="font-size:11px;margin-top:4px" id="file-name-label">Supports .csv, .txt — any forex calendar format</div>
+        </div>
+        <input type="file" id="csv-file-input" accept=".csv,.txt" onchange="onFileSelect(event)">
+        <button class="btn btn-primary" id="parse-csv-btn" onclick="parseCsv()" disabled>
+          <span>✨</span> Parse with AI
+        </button>
+      </div>
+    </div>
+
+    <!-- Preview Section -->
+    <div class="adm-section" id="preview-section" style="display:none">
+      <div class="preview-header">
+        <div class="adm-section-title" style="margin-bottom:0"><span>👀</span> Preview — <span id="preview-count" style="color:var(--blue)">0 events</span></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-success" id="save-btn" onclick="saveEvents()">
+            <span>💾</span> Save to Dashboard
+          </button>
+        </div>
+      </div>
+      <p style="font-size:11.5px;color:var(--text-muted);margin-bottom:14px">Review parsed events below. You can change impact levels or delete rows before saving.</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Date &amp; Time (UTC)</th>
+              <th>Currency</th>
+              <th>Event</th>
+              <th>Impact</th>
+              <th>Forecast</th>
+              <th>Previous</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="preview-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Manage Events Section -->
+    <div class="adm-section">
+      <div class="adm-section-title"><span>📋</span> Manage Saved Events</div>
+      <div class="date-filter-row">
+        <input type="date" class="adm-input" id="filter-from" onchange="loadManage()">
+        <span style="color:var(--text-muted);font-size:12px">to</span>
+        <input type="date" class="adm-input" id="filter-to" onchange="loadManage()">
+        <button class="btn btn-danger btn-sm" onclick="deleteByDate()" style="margin-left:auto">🗑 Delete Selected Date</button>
+        <button class="btn btn-sm" style="background:var(--bg3);border:1px solid var(--border2);color:var(--text-dim)" onclick="loadManage()">↻ Refresh</button>
+      </div>
+      <div id="manage-content">
+        <div class="no-data"><span class="no-data-icon">📅</span>Loading events…</div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+  // ── Auth guard — admin only ──────────────────────────────────────────────────
+  const ADMIN_ID  = '140f3854-2c85-488c-8e0a-0f965d562654';
+  const token     = localStorage.getItem('nfx_token');
+  const userRaw   = localStorage.getItem('nfx_user');
+
+  if (!token) { location.replace('/login.html'); throw 0; }
+  try {
+    const pay = JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+    if (pay.sub !== ADMIN_ID) { location.replace('/app'); throw 0; }
+  } catch { location.replace('/app'); throw 0; }
+
+  const notyf = new Notyf({ duration: 3500, position:{ x:'right', y:'top' } });
+
+  function logout() {
+    localStorage.removeItem('nfx_token');
+    localStorage.removeItem('nfx_refresh_token');
+    localStorage.removeItem('nfx_user');
+    location.replace('/login.html');
+  }
+
+  // ── Tabs ─────────────────────────────────────────────────────────────────────
+  function switchTab(name, btn) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + name).classList.add('active');
+  }
+
+  // ── CSV drag-drop ─────────────────────────────────────────────────────────────
+  let _csvText = '';
+  function onDragOver(e)  { e.preventDefault(); document.getElementById('drop-zone').classList.add('drag-over'); }
+  function onDragLeave()  { document.getElementById('drop-zone').classList.remove('drag-over'); }
+  function onDrop(e)      { e.preventDefault(); onDragLeave(); readFile(e.dataTransfer.files[0]); }
+  function onFileSelect(e){ readFile(e.target.files[0]); }
+
+  function readFile(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      _csvText = ev.target.result;
+      document.getElementById('file-name-label').textContent = '✓ ' + file.name + ' (' + Math.round(file.size/1024) + ' KB)';
+      document.getElementById('parse-csv-btn').disabled = false;
+    };
+    reader.readAsText(file);
+  }
+
+  // ── Parse ─────────────────────────────────────────────────────────────────────
+  let _parsedEvents = [];
+
+  async function parsePaste() {
+    const text = document.getElementById('paste-input').value.trim();
+    if (!text) { notyf.error('Please paste some calendar data first'); return; }
+    await parseText(text, 'parse-paste-btn');
+  }
+
+  async function parseCsv() {
+    if (!_csvText) { notyf.error('Please select a CSV file first'); return; }
+    await parseText(_csvText, 'parse-csv-btn');
+  }
+
+  async function parseText(text, btnId) {
+    const btn = document.getElementById(btnId);
+    const orig = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Parsing…';
+
+    try {
+      const r = await fetch('/api/news-parse', {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json', 'Authorization':'Bearer '+token },
+        body: JSON.stringify({ text }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Parse failed');
+      if (!d.events?.length) throw new Error('No events found in the calendar data');
+
+      _parsedEvents = d.events;
+      renderPreview(_parsedEvents);
+      notyf.success(`Parsed ${d.events.length} events — review and save`);
+    } catch (e) {
+      notyf.error(e.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = orig;
+    }
+  }
+
+  // ── Preview table ─────────────────────────────────────────────────────────────
+  function renderPreview(events) {
+    if (!events.length) {
+      document.getElementById('preview-section').style.display = 'none';
+      return;
+    }
+    document.getElementById('preview-section').style.display = 'block';
+    document.getElementById('preview-count').textContent = events.length + ' events';
+
+    const tbody = document.getElementById('preview-tbody');
+    tbody.innerHTML = events.map((e, i) => `
+      <tr id="prev-row-${i}">
+        <td>${fmtDt(e.event_time)}</td>
+        <td><span class="cur">${e.currency}</span></td>
+        <td style="max-width:220px">${e.event_name}</td>
+        <td>
+          <select class="imp-select" onchange="_parsedEvents[${i}].impact=this.value;this.className='imp-select imp-sel-'+this.value">
+            <option value="HIGH"   ${e.impact==='HIGH'   ?'selected':''}>HIGH</option>
+            <option value="MEDIUM" ${e.impact==='MEDIUM' ?'selected':''}>MEDIUM</option>
+            <option value="LOW"    ${e.impact==='LOW'    ?'selected':''}>LOW</option>
+          </select>
+        </td>
+        <td style="color:var(--text-muted)">${e.forecast||'—'}</td>
+        <td style="color:var(--text-muted)">${e.previous||'—'}</td>
+        <td class="td-del"><button class="del-row-btn" onclick="removePreviewRow(${i})" title="Remove">✕</button></td>
+      </tr>
+    `).join('');
+  }
+
+  function removePreviewRow(i) {
+    _parsedEvents.splice(i, 1);
+    renderPreview(_parsedEvents);
+  }
+
+  // ── Save ──────────────────────────────────────────────────────────────────────
+  async function saveEvents() {
+    if (!_parsedEvents.length) { notyf.error('Nothing to save'); return; }
+    const btn = document.getElementById('save-btn');
+    const orig = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Saving…';
+
+    try {
+      const r = await fetch('/api/news', {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json', 'Authorization':'Bearer '+token },
+        body: JSON.stringify({ events: _parsedEvents }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Save failed');
+      notyf.success(`✓ Saved ${d.saved} events to the dashboard`);
+      _parsedEvents = [];
+      renderPreview([]);
+      loadManage();
+      loadStats();
+    } catch (e) {
+      notyf.error(e.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = orig;
+    }
+  }
+
+  // ── Manage ────────────────────────────────────────────────────────────────────
+  async function loadManage() {
+    const from = document.getElementById('filter-from').value;
+    const to   = document.getElementById('filter-to').value;
+
+    const el = document.getElementById('manage-content');
+    el.innerHTML = '<div class="no-data"><span class="spinner" style="width:20px;height:20px;border-width:3px"></span></div>';
+
+    try {
+      // Fetch next 14 days or use filters
+      const fromDate = from || new Date().toISOString().slice(0,10);
+      const toDate   = to   || new Date(Date.now() + 14*86400000).toISOString().slice(0,10);
+
+      const r = await fetch(`/api/news`, {
+        headers: { 'Authorization':'Bearer '+token }
+      });
+      const d = await r.json();
+      const events = (d.events || []).filter(e => {
+        const dt = e.event_time.slice(0,10);
+        return dt >= fromDate && dt <= toDate;
+      });
+
+      if (!events.length) {
+        el.innerHTML = '<div class="no-data"><span class="no-data-icon">📅</span>No events in this range</div>';
+        return;
+      }
+
+      // Group by date
+      const byDate = {};
+      events.forEach(e => {
+        const d = e.event_time.slice(0,10);
+        if (!byDate[d]) byDate[d] = [];
+        byDate[d].push(e);
+      });
+
+      el.innerHTML = Object.entries(byDate).map(([date, evts]) => `
+        <div style="margin-bottom:20px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <div style="font-size:12px;font-weight:700;color:var(--text-dim)">${fmtDate(date)} <span style="font-weight:400;color:var(--text-muted)">(${evts.length} events)</span></div>
+            <button class="btn btn-danger btn-sm" onclick="deleteDate('${date}')">🗑 Delete all ${fmtDate(date)}</button>
+          </div>
+          <div class="tbl-wrap">
+            <table>
+              <thead><tr><th>Time (UTC)</th><th>Currency</th><th>Event</th><th>Impact</th><th>Forecast</th><th>Previous</th><th></th></tr></thead>
+              <tbody>
+                ${evts.map(e => `
+                  <tr>
+                    <td>${e.event_time.slice(11,16)}</td>
+                    <td><span class="cur">${e.currency}</span></td>
+                    <td style="max-width:200px">${e.event_name}</td>
+                    <td><span class="imp imp-${e.impact}">${e.impact}</span></td>
+                    <td style="color:var(--text-muted)">${e.forecast||'—'}</td>
+                    <td style="color:var(--text-muted)">${e.previous||'—'}</td>
+                    <td class="td-del"><button class="del-row-btn" onclick="deleteEvent('${e.id}')" title="Delete">🗑</button></td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>`).join('');
+    } catch (e) {
+      el.innerHTML = '<div class="no-data">Failed to load events</div>';
+    }
+  }
+
+  async function deleteEvent(id) {
+    if (!confirm('Delete this event?')) return;
+    const r = await fetch('/api/news', {
+      method: 'DELETE',
+      headers: { 'Content-Type':'application/json', 'Authorization':'Bearer '+token },
+      body: JSON.stringify({ id }),
+    });
+    if (r.ok) { notyf.success('Event deleted'); loadManage(); loadStats(); }
+    else notyf.error('Delete failed');
+  }
+
+  async function deleteDate(date) {
+    if (!confirm(`Delete ALL events on ${fmtDate(date)}?`)) return;
+    const r = await fetch('/api/news', {
+      method: 'DELETE',
+      headers: { 'Content-Type':'application/json', 'Authorization':'Bearer '+token },
+      body: JSON.stringify({ date }),
+    });
+    if (r.ok) { notyf.success('Date cleared'); loadManage(); loadStats(); }
+    else notyf.error('Delete failed');
+  }
+
+  async function deleteByDate() {
+    const date = document.getElementById('filter-from').value;
+    if (!date) { notyf.error('Select a date in the From filter first'); return; }
+    await deleteDate(date);
+  }
+
+  // ── Stats ─────────────────────────────────────────────────────────────────────
+  async function loadStats() {
+    try {
+      const r = await fetch('/api/news', { headers:{ 'Authorization':'Bearer '+token } });
+      const d = await r.json();
+      const events = d.events || [];
+      const high = events.filter(e => e.impact === 'HIGH').length;
+      const curs = [...new Set(events.map(e => e.currency))].length;
+      const next = events[0];
+
+      document.getElementById('stat-upcoming').textContent = events.length;
+      document.getElementById('stat-high').textContent = high;
+      document.getElementById('stat-curs').textContent = curs;
+      document.getElementById('stat-next').textContent = next
+        ? next.currency + ' ' + next.event_name.slice(0,18) + (next.event_name.length>18?'…':'')
+        : 'None';
+    } catch {}
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────────
+  function fmtDt(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric',timeZone:'UTC'})
+      + ' ' + d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'UTC'}) + ' UTC';
+  }
+  function fmtDate(d) {
+    return new Date(d+'T12:00:00Z').toLocaleDateString('en-GB',{weekday:'short',day:'2-digit',month:'short',year:'numeric'});
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────────────────
+  // Set default date filters
+  const today = new Date().toISOString().slice(0,10);
+  const twoWeeks = new Date(Date.now()+14*86400000).toISOString().slice(0,10);
+  document.getElementById('filter-from').value = today;
+  document.getElementById('filter-to').value   = twoWeeks;
+
+  loadStats();
+  loadManage();
+  </script>
+</body>
+</html>

@@ -694,6 +694,34 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
 }
 
 /* Neutral sentiment — inline warning on trade cards */
+/* ─── News Calendar Warning Badges ──────────────────────────────────────────── */
+.news-warn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 6px 0 2px;
+}
+.news-warn-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 5px;
+  white-space: nowrap;
+}
+.news-warn-high {
+  background: rgba(239, 68, 68, 0.12);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+.news-warn-med {
+  background: rgba(245, 158, 11, 0.10);
+  color: #fcd34d;
+  border: 1px solid rgba(245, 158, 11, 0.22);
+}
+
 .sent-neutral-warn {
   display: flex;
   align-items: flex-start;
