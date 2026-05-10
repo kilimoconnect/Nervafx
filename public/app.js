@@ -137,6 +137,22 @@ function fmtTime(iso) {
   }
 }
 
+// Short form: "10 May 14:35 EAT" — used in compact rows
+function fmtShort(iso) {
+  if (!iso) return '—';
+  try {
+    const tz = (_userTz === 'auto')
+      ? Intl.DateTimeFormat().resolvedOptions().timeZone
+      : (_userTz || 'UTC');
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone: tz, day: '2-digit', month: 'short',
+      hour: '2-digit', minute: '2-digit', hour12: false, timeZoneName: 'short',
+    }).format(new Date(iso));
+  } catch (_) {
+    return new Date(iso).toUTCString().slice(5, 22).replace('GMT', 'UTC');
+  }
+}
+
 function fmtNow() {
   try {
     const tz = (_userTz === 'auto')
@@ -822,6 +838,7 @@ function renderRisk(data, sentimentData = null) {
           <span class="risk-pair">${pair(r.instrument)} <span class="signal-dir ${dir}" style="font-size:9px">${dir.toUpperCase()}</span></span>
           <span style="color:var(--text-muted);font-size:10px">$${Number(r.risk_amount).toFixed(2)} risk · ${r.position_size} lots</span>
         </div>
+        <div style="font-size:9px;color:var(--text-muted);opacity:0.6;margin-bottom:6px">${fmtShort(r.time)}</div>
         <div class="risk-prices">
           <div class="risk-price-item"><span>Entry</span>${fmt(r.entry_price)}</div>
           <div class="risk-price-item"><span>SL</span><span style="color:#f87171">${fmt(r.stop_loss)}</span></div>
@@ -843,6 +860,7 @@ function renderActions(actions) {
       <span class="action-status ${a.status}">${a.status}</span>
       <span style="color:var(--text-muted);font-size:10px">${(a.action_type||'').replace(/_/g,' ')}</span>
       <span class="action-msg">${(a.message?.split('\n')[1] || a.error_message || '').replace(/([A-Z]{3})_([A-Z]{3})/g,'$1/$2')}</span>
+      <span class="action-time">${fmtShort(a.time)}</span>
     </div>`).join('');
 }
 
