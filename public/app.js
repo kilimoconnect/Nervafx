@@ -1186,7 +1186,7 @@ function renderSession(data) {
       <div class="session-status-wrap">
         ${allowed
           ? `<div class="sess-status allowed">✓ TRADING ACTIVE</div>${deltaHtml}`
-          : `<div class="sess-status blocked">⛔ ${s.block_reason || 'TRADING BLOCKED'}</div>`
+          : ''
         }
         ${!allowed ? (() => {
           try {
