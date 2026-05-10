@@ -198,8 +198,8 @@ html, body {
   .plan-lock-btn      { grid-column: 2; grid-row: 4; margin-top: 6px; }
 }
 
-/* ensure cards are tall enough for lock overlay content */
-section.card:has(.plan-lock-overlay.visible) { min-height: 220px; }
+/* ensure cards are tall enough for lock overlay content, and clip the overlay within card bounds */
+section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidden; }
 
 /* Free plan: dim the tf buttons that are disabled */
 .tf-btn:disabled { opacity: 0.3; cursor: not-allowed; }
@@ -212,7 +212,7 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; }
 .plan-free .tf-pro-tip::after {
   content: attr(data-tip);
   position: absolute;
-  bottom: calc(100% + 8px);
+  top: calc(100% + 10px);
   left: 50%;
   transform: translateX(-50%);
   background: #1a1f35;
@@ -231,11 +231,11 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; }
 .plan-free .tf-pro-tip::before {
   content: '';
   position: absolute;
-  bottom: calc(100% + 3px);
+  top: calc(100% + 2px);
   left: 50%;
   transform: translateX(-50%);
   border: 4px solid transparent;
-  border-top-color: rgba(99, 102, 241, 0.35);
+  border-bottom-color: rgba(99, 102, 241, 0.35);
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.15s;
