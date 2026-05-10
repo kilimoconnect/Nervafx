@@ -106,15 +106,12 @@ html, body {
   border-radius: inherit;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   gap: 6px;
   text-align: center;
-  padding: 24px 20px 20px;
-  overflow-y: auto;
+  padding: 24px 20px;
 }
-.plan-lock-overlay.visible {
-  display: flex;
-}
+.plan-lock-overlay.visible { display: flex; }
 
 /* padlock badge */
 .plan-lock-overlay.visible::before {
@@ -133,7 +130,6 @@ html, body {
   margin-bottom: 4px;
 }
 
-/* hide feature emoji — padlock + title communicates enough */
 .plan-lock-icon  { display: none; }
 .plan-lock-title { font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.3; }
 .plan-lock-desc  { font-size: 11.5px; color: var(--text-muted); max-width: 260px; line-height: 1.5; margin: 0; }
@@ -176,11 +172,33 @@ html, body {
 }
 .plan-lock-btn:hover { opacity: 0.85; }
 
-/* sections need position:relative for overlay positioning */
-section.card { position: relative; overflow: hidden; }
+/* Wide cards (>= 480px): two-column layout — padlock left, text right */
+@container (min-width: 480px) {
+  .plan-lock-overlay.visible {
+    display: grid;
+    grid-template-columns: 52px 1fr;
+    align-items: center;
+    justify-items: start;
+    column-gap: 28px;
+    row-gap: 6px;
+    padding: 28px 48px;
+    text-align: left;
+  }
+  .plan-lock-overlay.visible::before {
+    grid-column: 1;
+    grid-row: 1 / 6;
+    align-self: center;
+    justify-self: center;
+    margin-bottom: 0;
+  }
+  .plan-lock-title    { grid-column: 2; }
+  .plan-lock-desc     { grid-column: 2; max-width: none; }
+  .plan-lock-features { grid-column: 2; max-width: none; margin-top: 4px; }
+  .plan-lock-btn      { grid-column: 2; margin-top: 8px; }
+}
 
 /* ensure cards are tall enough for lock overlay content */
-section.card:has(.plan-lock-overlay.visible) { min-height: 320px; }
+section.card:has(.plan-lock-overlay.visible) { min-height: 220px; }
 
 /* Free plan: dim the tf buttons that are disabled */
 .tf-btn:disabled { opacity: 0.3; cursor: not-allowed; }
