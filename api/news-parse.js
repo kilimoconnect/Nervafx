@@ -29,12 +29,18 @@ module.exports = async function handler(req, res) {
   try {
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+    const nowUtc = new Date().toISOString().slice(0, 10); // e.g. 2026-05-11
     const systemPrompt = `You are a forex economic calendar parser. Return ONLY a compact JSON array, no markdown.
 Each object: {"event_time":"<UTC ISO8601>","currency":"<3-letter>","event_name":"<short name>","impact":"HIGH"|"MEDIUM"|"LOW","forecast":<string|null>,"previous":<string|null>}
-DATE FORMAT: Numeric dates like 05-11-2026 or 05/11/2026 are MM-DD-YYYY (American format). So 05-11-2026 = May 11 2026, NOT November 5. Always treat the first number as the month.
-TIMEZONE: Input times are in "${tz}". Convert every time to UTC in the ISO string.
-Impact mapping: stars ***=HIGH **=MEDIUM *=LOW; colors red=HIGH orange=MEDIUM yellow=LOW; words map directly.
-Skip headers, bank holidays, separators. If year missing use current/next upcoming. No explanation, no fences.`;
+TODAY is ${nowUtc} (UTC). Use this to resolve ambiguous dates and years.
+DATE RULES: Accept any date format — ISO, US (MM/DD/YYYY), European (DD/MM/YYYY), named months (May 12), CSV numeric (05-11-2026), etc.
+  - Use context clues from the whole calendar (sequence of days, nearby named dates, day-of-week labels) to determine the correct format.
+  - If a numeric date like 05-11-2026 is ambiguous, check whether a value > 12 appears in the first or second position across the dataset to detect the format automatically.
+  - When truly ambiguous prefer the date closest to TODAY that makes sense given the surrounding events.
+  - If year is absent, use the current or next upcoming year.
+TIMEZONE: Input times are in "${tz}". Convert every time to UTC before writing the ISO string.
+IMPACT: ***=HIGH **=MEDIUM *=LOW; red=HIGH orange=MEDIUM yellow=LOW; High/Medium/Low words map directly.
+Skip headers, bank holidays, separators. No explanation, no markdown fences.`;
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
