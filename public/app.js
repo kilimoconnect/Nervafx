@@ -859,21 +859,21 @@ function renderSentiment(data) {
     </div>
     <div class="sentiment-components">
       ${groups.map(g => {
-        // Alignment: requires 2+ items all pointing the same direction (threshold ±5)
         const vals   = g.items.map(c => c.val).filter(v => v != null).map(Number);
         const allOn  = vals.length >= 2 && vals.every(v => v >= 5);
         const allOff = vals.length >= 2 && vals.every(v => v <= -5);
         const badge  = allOn  ? '<span class="sent-align-badge risk-on">↑ ALIGNED</span>'
                      : allOff ? '<span class="sent-align-badge risk-off">↓ ALIGNED</span>'
-                     : '';
+                     : vals.length === 1 ? '' // single-item groups: no alignment badge
+                     : '<span class="sent-align-badge not-aligned">✕ NOT ALIGNED</span>';
+        const sum    = vals.reduce((a, b) => a + b, 0);
+        const sumStr = (sum > 0 ? '+' : '') + sum.toFixed(0);
+        const sumCls = sum > 5 ? 'risk-on' : sum < -5 ? 'risk-off' : 'neutral';
         return `
-          <div class="sent-group-header">${g.title}${badge}</div>
-          ${g.items.map(c => `
-            <div class="sent-comp-row" title="${c.tip}">
-              <span class="sent-comp-label">${c.label}</span>
-              ${compBar(c.val)}
-              <span class="sent-comp-val ${Number(c.val) > 5 ? 'risk-on' : Number(c.val) < -5 ? 'risk-off' : 'neutral'}">${compVal(c.val)}</span>
-            </div>`).join('')}`;
+          <div class="sent-group-row">
+            <div class="sent-group-header">${g.title}${badge}</div>
+            <span class="sent-group-sum ${sumCls}">${sumStr}</span>
+          </div>`;
       }).join('')}
     </div>
     <div class="sentiment-time">${fmtTime(s.time)}</div>`;

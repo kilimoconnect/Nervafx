@@ -40,7 +40,7 @@ html, body {
 .tf-item, .tfa, .sb-behavior,
 .ai-modal-score-num, .ai-modal-pair-name,
 .mom-item, .strength-time, .last-update, .ai-modal-footer,
-.sess-hours-utc, .sent-comp-val, .stat-pill {
+.sess-hours-utc, .sent-comp-val, .sent-group-sum, .stat-pill {
   font-family: var(--font-data);
 }
 
@@ -1496,36 +1496,55 @@ html, body {
   min-width: 220px;
 }
 
-.sent-group-header {
+.sent-group-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 9.5px;
-  font-weight: 800;
-  letter-spacing: 0.8px;
-  text-transform: uppercase;
-  color: #94a3b8;
-  padding: 4px 6px 3px;
-  margin-top: 10px;
+  padding: 5px 8px 4px 6px;
+  margin-top: 8px;
   background: rgba(255,255,255,0.03);
   border-top: 1px solid rgba(255,255,255,0.08);
   border-left: 2px solid #334155;
-  border-radius: 0 3px 3px 0;
+  border-radius: 0 4px 4px 0;
 }
-.sent-group-header:first-child {
+.sent-group-row:first-child {
   margin-top: 0;
   border-top: none;
 }
+
+.sent-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.sent-group-sum {
+  font-family: var(--font-data);
+  font-size: 12px;
+  font-weight: 700;
+  min-width: 36px;
+  text-align: right;
+}
+.sent-group-sum.risk-on  { color: #4ade80; }
+.sent-group-sum.risk-off { color: #f87171; }
+.sent-group-sum.neutral  { color: #64748b; }
+
 .sent-align-badge {
-  font-size: 8.5px;
+  font-size: 8px;
   font-weight: 700;
   letter-spacing: 0.5px;
-  padding: 1px 6px;
+  padding: 1px 5px;
   border-radius: 3px;
   text-transform: uppercase;
 }
-.sent-align-badge.risk-on  { background: rgba(74,222,128,0.12); color: #4ade80; border: 1px solid rgba(74,222,128,0.25); }
-.sent-align-badge.risk-off { background: rgba(248,113,113,0.12); color: #f87171; border: 1px solid rgba(248,113,113,0.25); }
+.sent-align-badge.risk-on      { background: rgba(74,222,128,0.12);  color: #4ade80; border: 1px solid rgba(74,222,128,0.25); }
+.sent-align-badge.risk-off     { background: rgba(248,113,113,0.12); color: #f87171; border: 1px solid rgba(248,113,113,0.25); }
+.sent-align-badge.not-aligned  { background: rgba(100,116,139,0.1);  color: #475569; border: 1px solid rgba(100,116,139,0.2); }
 
 .sent-comp-row {
   display: grid;
