@@ -1126,6 +1126,41 @@ async function refresh() {
   }
 }
 
+// ─── Skeleton loader — shown before first data arrives ────────────────────────
+
+function showSkeletons() {
+  const skels = {
+    'live-opportunities':  3,
+    'top-setups':          3,
+    'signals-active':      2,
+    'spreads-list':        6,
+    'risk-list':           3,
+    'actions-list':        4,
+    'states-table':        8,
+  };
+  Object.entries(skels).forEach(([id, count]) => {
+    const el = document.getElementById(id);
+    if (!el || el.dataset.loaded) return;
+    el.innerHTML = Array(count).fill(0).map(() => `
+      <div class="skeleton-card" style="margin-bottom:8px">
+        <div class="skeleton skeleton-line w-60"></div>
+        <div class="skeleton skeleton-line w-80"></div>
+        <div class="skeleton skeleton-line w-40"></div>
+      </div>`).join('');
+  });
+}
+
+// Flash a stat pill when its value changes
+function flashEl(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.remove('data-updated');
+  void el.offsetWidth; // reflow to restart animation
+  el.classList.add('data-updated');
+  setTimeout(() => el.classList.remove('data-updated'), 950);
+}
+
 // Boot
+showSkeletons();
 refresh();
 setInterval(refresh, REFRESH_MS);
