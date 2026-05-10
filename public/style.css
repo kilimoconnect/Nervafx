@@ -100,9 +100,9 @@ html, body {
   position: absolute;
   inset: 0;
   z-index: 10;
-  background: rgba(8, 11, 18, 0.88);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(8, 11, 18, 0.97);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-radius: inherit;
   flex-direction: column;
   align-items: center;
@@ -110,6 +110,7 @@ html, body {
   gap: 8px;
   text-align: center;
   padding: 24px;
+  overflow: hidden;
 }
 .plan-lock-overlay.visible {
   display: flex;
@@ -131,7 +132,7 @@ html, body {
 .plan-lock-btn:hover { opacity: 0.85; }
 
 /* sections need position:relative for overlay positioning */
-section.card { position: relative; }
+section.card { position: relative; overflow: hidden; }
 
 /* ensure cards are tall enough for lock overlay content to never get clipped */
 section.card:has(.plan-lock-overlay.visible) { min-height: 200px; overflow: hidden; }
