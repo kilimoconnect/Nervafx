@@ -2,16 +2,66 @@
 // Libraries loaded via CDN: GSAP · Lucide Icons · CountUp.js · Notyf
 
 // ─── Auth guard ───────────────────────────────────────────────────────────────
-(function guardAuth() {
+function _clearAuth() {
+  localStorage.removeItem('nfx_token');
+  localStorage.removeItem('nfx_refresh_token');
+  localStorage.removeItem('nfx_user');
+}
+
+async function _refreshToken() {
+  const rt = localStorage.getItem('nfx_refresh_token');
+  if (!rt) return false;
+  try {
+    const r = await fetch('/api/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: rt }),
+    });
+    if (!r.ok) return false;
+    const d = await r.json();
+    if (!d.token) return false;
+    localStorage.setItem('nfx_token',         d.token);
+    localStorage.setItem('nfx_refresh_token', d.refresh_token || rt);
+    return true;
+  } catch (_) { return false; }
+}
+
+function _scheduleRefresh(expMs) {
+  // Refresh 5 minutes before the token actually expires
+  const delay = Math.max(expMs - Date.now() - 5 * 60 * 1000, 10_000);
+  setTimeout(async () => {
+    const ok = await _refreshToken();
+    if (ok) {
+      // Schedule the next refresh based on the new token's expiry
+      try {
+        const tok = localStorage.getItem('nfx_token');
+        const pay = JSON.parse(atob(tok.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+        _scheduleRefresh(pay.exp * 1000);
+      } catch (_) {}
+    }
+    // If refresh failed we simply let the next API call handle the 401
+  }, delay);
+}
+
+(async function guardAuth() {
   const token = localStorage.getItem('nfx_token');
   if (!token) return location.replace('/login.html');
   try {
     const pay = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+
     if (pay.exp * 1000 < Date.now()) {
-      localStorage.removeItem('nfx_token');
-      localStorage.removeItem('nfx_user');
-      return location.replace('/login.html');
+      // Access token expired — try a silent refresh before giving up
+      const ok = await _refreshToken();
+      if (!ok) { _clearAuth(); return location.replace('/login.html'); }
     }
+
+    // Schedule proactive refresh so the token never expires while the tab is open
+    try {
+      const tok = localStorage.getItem('nfx_token');
+      const p   = JSON.parse(atob(tok.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+      _scheduleRefresh(p.exp * 1000);
+    } catch (_) {}
+
     // If user just signed up and hasn't done setup, redirect them
     if (localStorage.getItem('nfx_needs_setup') === 'true') {
       return location.replace('/setup');
@@ -21,15 +71,13 @@
     const el = document.getElementById('header-user');
     if (el) el.textContent = user.full_name || user.first_name || user.email || '';
   } catch (_) {
-    localStorage.removeItem('nfx_token');
-    localStorage.removeItem('nfx_user');
+    _clearAuth();
     return location.replace('/login.html');
   }
 })();
 
 function logout() {
-  localStorage.removeItem('nfx_token');
-  localStorage.removeItem('nfx_user');
+  _clearAuth();
   location.replace('/login.html');
 }
 

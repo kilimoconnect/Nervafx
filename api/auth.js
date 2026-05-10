@@ -41,7 +41,8 @@ module.exports = async function handler(req, res) {
       if (signErr) return res.status(400).json({ error: signErr.message });
 
       return res.json({
-        token: session.session.access_token,
+        token:         session.session.access_token,
+        refresh_token: session.session.refresh_token,
         user:  {
           id:         session.user.id,
           email:      session.user.email,
@@ -59,7 +60,8 @@ module.exports = async function handler(req, res) {
 
       const meta = session.user.user_metadata || {};
       return res.json({
-        token: session.session.access_token,
+        token:         session.session.access_token,
+        refresh_token: session.session.refresh_token,
         user:  {
           id:         session.user.id,
           email:      session.user.email,

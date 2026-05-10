@@ -818,8 +818,9 @@
           return;
         }
 
-        localStorage.setItem('nfx_token', data.token);
-        localStorage.setItem('nfx_user',  JSON.stringify(data.user));
+        localStorage.setItem('nfx_token',         data.token);
+        localStorage.setItem('nfx_refresh_token', data.refresh_token || '');
+        localStorage.setItem('nfx_user',           JSON.stringify(data.user));
 
         showMsg(
           currentTab === 'signup'
