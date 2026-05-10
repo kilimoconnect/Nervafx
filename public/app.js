@@ -153,6 +153,50 @@ function fmtShort(iso) {
   }
 }
 
+// ── Session-hour timezone helpers ─────────────────────────────────────────────
+
+// Minutes the user's timezone is ahead of UTC right now (DST-aware)
+function getTzOffsetMins(tz) {
+  try {
+    const effective = (tz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (tz || 'UTC');
+    const now = new Date();
+    const fmt = zone => new Intl.DateTimeFormat('en-GB', {
+      timeZone: zone, hour: '2-digit', minute: '2-digit', hour12: false,
+    }).format(now).split(':').map(Number);
+    const [uh, um] = fmt('UTC');
+    const [lh, lm] = fmt(effective);
+    let d = (lh * 60 + lm) - (uh * 60 + um);
+    if (d >  720) d -= 1440;
+    if (d < -720) d += 1440;
+    return d;
+  } catch(_) { return 0; }
+}
+
+// Short timezone label, e.g. "EAT", "CET", "EST"
+function getTzAbbr(tz) {
+  try {
+    const effective = (tz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (tz || 'UTC');
+    return new Intl.DateTimeFormat('en-GB', { timeZone: effective, timeZoneName: 'short' })
+      .formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value || 'UTC';
+  } catch(_) { return 'UTC'; }
+}
+
+// Shift a UTC integer hour by offsetMins → "HH" (whole hour) or "HH:MM" (fractional, e.g. IST)
+function fmtSessH(utcH, offsetMins) {
+  const total = ((utcH * 60 + offsetMins) % 1440 + 1440) % 1440;
+  const h = Math.floor(total / 60), m = total % 60;
+  return m === 0
+    ? String(h).padStart(2, '0')
+    : `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+// Always returns "HH:MM" — used in the range label ("10:00 – 13:00 EAT")
+function fmtSessHFull(utcH, offsetMins) {
+  const total = ((utcH * 60 + offsetMins) % 1440 + 1440) % 1440;
+  const h = Math.floor(total / 60), m = total % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
 function fmtNow() {
   try {
     const tz = (_userTz === 'auto')
@@ -906,10 +950,11 @@ function renderSession(data) {
                : activity >= 35 ? 'medium'
                : 'low';
 
-  // UTC range display — null-safe, with DST badge when offsets differ from winter baseline
-  const hFmt = h => h != null ? String(h).padStart(2, '0') + ':00' : '—';
-  const utcRange = (s.start_hour != null && s.end_hour != null)
-    ? `${hFmt(s.start_hour)} – ${hFmt(s.end_hour)} UTC`
+  // Timezone-aware session hour display
+  const offsetMins = getTzOffsetMins(_userTz);
+  const tzLabel    = getTzAbbr(_userTz);
+  const localRange = (s.start_hour != null && s.end_hour != null)
+    ? `${fmtSessHFull(s.start_hour, offsetMins)} – ${fmtSessHFull(s.end_hour, offsetMins)} ${tzLabel}`
     : '';
   const dstBadge = s.dst_active
     ? ' <span class="sess-dst-badge">DST adjusted</span>'
@@ -919,10 +964,15 @@ function renderSession(data) {
   const tlSource = tl && tl.length ? tl : SESSION_TIMELINE;
   const timelineHtml = tlSource.map(t => {
     const isCurrent = t.name === s.session;
-    // Dynamic hours when available (API), static hours string as fallback
-    const hStr = (t.startHour != null && t.endHour != null)
-      ? `${String(t.startHour).padStart(2,'0')}–${String(t.endHour).padStart(2,'0')}`
-      : (t.hours || '');
+    let hStr;
+    if (t.startHour != null && t.endHour != null) {
+      hStr = `${fmtSessH(t.startHour, offsetMins)}–${fmtSessH(t.endHour, offsetMins)}`;
+    } else if (t.hours) {
+      const [a, b] = t.hours.split(/[–\-]/).map(Number);
+      hStr = `${fmtSessH(a, offsetMins)}–${fmtSessH(b, offsetMins)}`;
+    } else {
+      hStr = '';
+    }
     return `<div class="sess-tl-item ${t.quality}${isCurrent ? ' current' : ''}">
       <span class="sess-tl-label">${t.label}</span>
       <span class="sess-tl-hours">${hStr}</span>
@@ -939,7 +989,7 @@ function renderSession(data) {
     <div class="session-main">
       <div class="session-name-wrap">
         <div class="sess-name-badge sq-${qCls}">${s.label || s.session}</div>
-        ${utcRange ? `<div class="sess-hours-utc">${utcRange}${dstBadge}</div>` : ''}
+        ${localRange ? `<div class="sess-hours-utc">${localRange}${dstBadge}</div>` : ''}
       </div>
       <div class="session-quality-wrap">
         <div class="sess-qlabel sq-${qCls}">${qLabel}</div>
