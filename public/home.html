@@ -293,6 +293,16 @@
       background-clip: text;
     }
 
+    .hero-position {
+      font-size: 14px;
+      font-weight: 500;
+      color: #60a5fa;
+      letter-spacing: 0.2px;
+      margin-bottom: 16px;
+      max-width: 520px;
+      line-height: 1.5;
+    }
+
     .hero-sub {
       font-size: 17px;
       font-weight: 400;
@@ -411,7 +421,7 @@
     .currency-rows { display: flex; flex-direction: column; gap: 10px; }
     .currency-row {
       display: grid;
-      grid-template-columns: 44px 1fr 56px;
+      grid-template-columns: 44px 1fr 80px;
       align-items: center;
       gap: 10px;
     }
@@ -1220,6 +1230,46 @@
       color: var(--text3);
     }
 
+    /* ── WHY TRADERS LOSE ── */
+    .why-section { background: rgba(239,68,68,0.03); border-top: 1px solid rgba(239,68,68,0.08); border-bottom: 1px solid rgba(239,68,68,0.08); padding: 80px 0; }
+    .why-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center; }
+    .why-h2 { font-size: 36px; font-weight: 800; letter-spacing: -1px; margin: 16px 0 28px; }
+    .why-list { display: flex; flex-direction: column; gap: 12px; }
+    .why-item { display: flex; align-items: flex-start; gap: 12px; font-size: 15px; color: var(--text2); }
+    .why-item-x { color: #f87171; font-weight: 700; font-size: 13px; flex-shrink: 0; margin-top: 1px; }
+    .why-solution { background: rgba(37,99,235,0.06); border: 1px solid rgba(37,99,235,0.18); border-radius: 18px; padding: 36px; }
+    .why-solution-label { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; color: #60a5fa; text-transform: uppercase; margin-bottom: 16px; }
+    .why-solution-text { font-size: 19px; font-weight: 600; color: var(--text); line-height: 1.55; }
+    .why-solution-sub { font-size: 14px; color: var(--text2); margin-top: 14px; line-height: 1.6; }
+
+    /* ── STRENGTH LABEL ── */
+    .currency-label-tag { font-size: 9px; font-weight: 600; letter-spacing: 0.4px; text-align: right; opacity: 0.75; margin-top: 2px; white-space: nowrap; }
+    .currency-label-tag.up   { color: #4ade80; }
+    .currency-label-tag.down { color: #f87171; }
+    .currency-label-tag.flat { color: var(--text3); }
+    .currency-right { display: flex; flex-direction: column; align-items: flex-end; }
+
+    /* ── PIPELINE ── */
+    .pipeline-wrap { display: flex; flex-direction: column; align-items: center; gap: 0; margin-top: 48px; }
+    .pipeline-step { display: flex; align-items: center; gap: 16px; background: var(--card-solid); border: 1px solid var(--border2); border-radius: 12px; padding: 14px 24px; width: 100%; max-width: 480px; }
+    .pipeline-step-icon { font-size: 18px; width: 36px; text-align: center; flex-shrink: 0; }
+    .pipeline-step-text { font-size: 13px; font-weight: 600; color: var(--text); flex: 1; }
+    .pipeline-step-tag { font-size: 10px; font-weight: 600; letter-spacing: 0.8px; color: var(--text3); }
+    .pipeline-arrow { font-size: 16px; color: var(--text3); opacity: 0.4; margin: 4px 0; }
+
+    /* ── AI SUMMARY ── */
+    .ai-summary-box { background: rgba(37,99,235,0.07); border: 1px solid rgba(37,99,235,0.2); border-radius: 10px; padding: 12px 14px; margin-top: 12px; }
+    .ai-summary-label { font-size: 9px; font-weight: 700; letter-spacing: 1.2px; color: #60a5fa; text-transform: uppercase; margin-bottom: 6px; }
+    .ai-summary-text { font-size: 12px; color: var(--text2); line-height: 1.55; font-style: italic; }
+
+    /* ── FROM NOISE TO STRUCTURE ── */
+    .transform-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; border-radius: 16px; overflow: hidden; border: 1px solid var(--border2); max-width: 680px; margin: 40px auto 0; }
+    .transform-col-header { padding: 16px 24px; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+    .transform-col-header.before { background: rgba(239,68,68,0.08); color: #f87171; }
+    .transform-col-header.after  { background: rgba(34,197,94,0.08); color: #4ade80; }
+    .transform-row-before { background: rgba(239,68,68,0.04); padding: 13px 24px; font-size: 13px; color: rgba(248,113,113,0.8); border-top: 1px solid rgba(239,68,68,0.08); }
+    .transform-row-after  { background: rgba(34,197,94,0.04);  padding: 13px 24px; font-size: 13px; color: rgba(74,222,128,0.9); border-top: 1px solid rgba(34,197,94,0.08); }
+
     /* ── FOOTER ── */
     footer {
       border-top: 1px solid var(--border2);
@@ -1269,6 +1319,9 @@
       .how-grid-row2 { grid-template-columns: 1fr 1fr; max-width: 100%; }
       .pricing-grid { grid-template-columns: 1fr; max-width: 440px; margin: 0 auto; }
       .pricing-card.pro { margin-top: 8px; }
+      .why-grid { grid-template-columns: 1fr; gap: 40px; }
+      .transform-grid { grid-template-columns: 1fr; }
+      .transform-col-header.before { display: none; }
     }
 
     @media (max-width: 768px) {
@@ -1285,6 +1338,9 @@
       .market-grid { grid-template-columns: 1fr; }
       .sentiment-grid { grid-template-columns: 1fr; }
       .comparison-grid { grid-template-columns: 1fr; }
+      .why-grid { grid-template-columns: 1fr; gap: 32px; }
+      .why-h2 { font-size: 28px; }
+      .transform-grid { max-width: 100%; }
       .session-grid { grid-template-columns: 1fr; gap: 40px; }
       .journal-layout { grid-template-columns: 1fr; gap: 32px; }
       .nav-links .nav-link { display: none; }
@@ -1340,6 +1396,7 @@
             <span>Currency Flow</span><br>
             Intelligence
           </h1>
+          <p class="hero-position">Built for continuation traders who want cleaner trends, healthier pullbacks, and disciplined market participation.</p>
           <p class="hero-sub">
             NervaFX scans all 28 major forex pairs every hour to surface institutional-grade currency strength, AI structure analysis, and cross-asset risk intelligence — so you trade with clarity, not guesswork.
           </p>
@@ -1432,6 +1489,30 @@
     </div>
   </div>
 
+  <!-- WHY TRADERS LOSE -->
+  <section class="why-section">
+    <div class="container">
+      <div class="why-grid">
+        <div>
+          <div class="section-badge" style="background:rgba(239,68,68,0.1);color:#f87171;border-color:rgba(239,68,68,0.2);">The Problem</div>
+          <h2 class="why-h2">Why Most Traders Lose</h2>
+          <div class="why-list">
+            <div class="why-item"><span class="why-item-x">✕</span> Trading weak, low-momentum trends</div>
+            <div class="why-item"><span class="why-item-x">✕</span> Entering during dead or volatile sessions</div>
+            <div class="why-item"><span class="why-item-x">✕</span> Chasing false breakouts without structure</div>
+            <div class="why-item"><span class="why-item-x">✕</span> Forcing entries on emotional pullbacks</div>
+            <div class="why-item"><span class="why-item-x">✕</span> Ignoring the broader market environment</div>
+          </div>
+        </div>
+        <div class="why-solution">
+          <div class="why-solution-label">The Solution</div>
+          <div class="why-solution-text">NervaFX filters those environments before you trade.</div>
+          <div class="why-solution-sub">Every setup you see has already been vetted for trend health, session quality, continuation probability, and cross-asset risk regime — so you only act when the environment is genuinely in your favour.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- HOW IT WORKS -->
   <section id="how">
     <div class="container">
@@ -1467,6 +1548,45 @@
           <div class="feature-icon" style="background:rgba(201,168,76,0.1);border-color:rgba(201,168,76,0.2)">🎛️</div>
           <div class="feature-title">Personalized Risk Management</div>
           <p class="feature-desc">Every approved trade automatically calculates stop loss, take profit, risk exposure, and suggested lot size based on your account profile.</p>
+        </div>
+      </div>
+
+      <!-- Pipeline flow -->
+      <div class="pipeline-wrap">
+        <div class="pipeline-step">
+          <div class="pipeline-step-icon">📡</div>
+          <div class="pipeline-step-text">28 Pairs Scanned Hourly</div>
+          <div class="pipeline-step-tag">INPUT</div>
+        </div>
+        <div class="pipeline-arrow">↓</div>
+        <div class="pipeline-step">
+          <div class="pipeline-step-icon">💱</div>
+          <div class="pipeline-step-text">Currency Flow Scored</div>
+          <div class="pipeline-step-tag">STRENGTH</div>
+        </div>
+        <div class="pipeline-arrow">↓</div>
+        <div class="pipeline-step">
+          <div class="pipeline-step-icon">🧱</div>
+          <div class="pipeline-step-text">Market Structure Analyzed (3H / 6H / 12H)</div>
+          <div class="pipeline-step-tag">STRUCTURE</div>
+        </div>
+        <div class="pipeline-arrow">↓</div>
+        <div class="pipeline-step">
+          <div class="pipeline-step-icon">🧠</div>
+          <div class="pipeline-step-text">AI Rates Continuation Probability</div>
+          <div class="pipeline-step-tag">AI ANALYSIS</div>
+        </div>
+        <div class="pipeline-arrow">↓</div>
+        <div class="pipeline-step">
+          <div class="pipeline-step-icon">🛡️</div>
+          <div class="pipeline-step-text">Cross-Asset Risk Regime Confirmed</div>
+          <div class="pipeline-step-tag">RISK FILTER</div>
+        </div>
+        <div class="pipeline-arrow">↓</div>
+        <div class="pipeline-step" style="border-color:rgba(37,99,235,0.4);background:rgba(37,99,235,0.07);">
+          <div class="pipeline-step-icon">✅</div>
+          <div class="pipeline-step-text">Approved Trade Plan Delivered</div>
+          <div class="pipeline-step-tag" style="color:#60a5fa;">OUTPUT</div>
         </div>
       </div>
     </div>
@@ -1523,8 +1643,9 @@
               <div class="sb-tag">Stabilizing</div>
             </div>
           </div>
-          <div class="pair-ai-text">
-            Structure shows healthy institutional accumulation. 12H trend intact, 6H pullback within normal range. Waiting for 3H continuation confirmation before entry signal.
+          <div class="ai-summary-box">
+            <div class="ai-summary-label">AI Summary</div>
+            <div class="ai-summary-text">12H trend intact. 6H pullback within normal range. Waiting for 3H continuation confirmation before entry approval.</div>
           </div>
           <div class="pair-sentiment">
             <div class="pair-sentiment-dot"></div>
@@ -1573,8 +1694,9 @@
               <div class="sb-tag">Confirming</div>
             </div>
           </div>
-          <div class="pair-ai-text">
-            All three horizons aligned bullish with strong 12H momentum. 6H holding above structure. 3H showing continuation candle pattern. Risk-reward favorable for entry.
+          <div class="ai-summary-box">
+            <div class="ai-summary-label">AI Summary</div>
+            <div class="ai-summary-text">All three horizons aligned bullish. 6H holding above structure. 3H showing continuation signal — risk-reward favourable for entry.</div>
           </div>
           <div class="pair-sentiment">
             <div class="pair-sentiment-dot"></div>
@@ -1791,6 +1913,31 @@
     </div>
   </section>
 
+  <!-- FROM NOISE TO STRUCTURE -->
+  <section class="section-dark">
+    <div class="container">
+      <div class="section-header center">
+        <div class="section-badge blue">Transformation</div>
+        <h2 class="section-title">From Noise → Structure</h2>
+        <p class="section-sub">NervaFX doesn't just give you data — it changes how you participate in the market.</p>
+      </div>
+      <div class="transform-grid">
+        <div class="transform-col-header before">Before NervaFX</div>
+        <div class="transform-col-header after">After NervaFX</div>
+        <div class="transform-row-before">Random, impulsive entries</div>
+        <div class="transform-row-after">Structured continuation setups</div>
+        <div class="transform-row-before">Emotional, reactive trading</div>
+        <div class="transform-row-after">Regime-aware, disciplined decisions</div>
+        <div class="transform-row-before">Trading weak or dead sessions</div>
+        <div class="transform-row-after">Active during peak market hours only</div>
+        <div class="transform-row-before">Manual, inconsistent risk sizing</div>
+        <div class="transform-row-after">Automated, personalised position sizing</div>
+        <div class="transform-row-before">No record of what worked</div>
+        <div class="transform-row-after">Automatic hourly market journal</div>
+      </div>
+    </div>
+  </section>
+
   <!-- PRICING -->
   <section id="pricing">
     <div class="container">
@@ -1895,7 +2042,7 @@
           <a href="/login" class="footer-link">Sign In</a>
           <a href="/login?tab=signup" class="footer-link">Sign Up</a>
         </div>
-        <div class="footer-copy">© 2026 NervaFX. A product of Hilty Limited. For educational purposes only.</div>
+        <div class="footer-copy">© 2026 NervaFX. A product of Hilty Limited. Trading leveraged financial instruments involves significant risk. NervaFX provides market intelligence and analytical tools only — not investment advice or guaranteed outcomes.</div>
       </div>
     </div>
   </footer>
@@ -1935,6 +2082,16 @@
       return v.toFixed(6);
     }
 
+    function strengthLabel(ratio) {
+      if (ratio >  0.65) return 'Strong Bullish';
+      if (ratio >  0.25) return 'Bullish';
+      if (ratio >  0)    return 'Stable Bullish';
+      if (ratio === 0)   return 'Neutral';
+      if (ratio > -0.25) return 'Mild Bearish';
+      if (ratio > -0.65) return 'Bearish';
+      return 'Very Weak';
+    }
+
     function renderStrength(currencies, time) {
       const rows   = document.getElementById('strength-rows');
       const timeEl = document.getElementById('strength-time');
@@ -1947,6 +2104,7 @@
         const barWidth = Math.round((Math.abs(c.value) / maxAbs) * 100);
         const sign     = c.value > 0 ? '+' : '';
         const iso      = CURRENCY_ISO[c.currency] || 'un';
+        const label    = strengthLabel(c.value / maxAbs);
         return `
           <div class="currency-row">
             <div class="currency-label">
@@ -1956,7 +2114,10 @@
             <div class="currency-bar-wrap">
               <div class="currency-bar ${c.direction}" style="width:${barWidth}%"></div>
             </div>
-            <div class="currency-value ${c.direction}">${sign}${fmtVal(c.value)}</div>
+            <div class="currency-right">
+              <div class="currency-value ${c.direction}">${sign}${fmtVal(c.value)}</div>
+              <div class="currency-label-tag ${c.direction}">${label}</div>
+            </div>
           </div>`;
       }).join('');
 
@@ -1976,7 +2137,10 @@
         <div class="currency-row" style="opacity:0.35">
           <div class="currency-label" style="color:var(--text3)">${c}</div>
           <div class="currency-bar-wrap"><div class="currency-bar flat" style="width:30%"></div></div>
-          <div class="currency-value flat">—</div>
+          <div class="currency-right">
+            <div class="currency-value flat">—</div>
+            <div class="currency-label-tag flat">Loading</div>
+          </div>
         </div>`).join('');
       document.getElementById('strength-time').textContent = 'Loading…';
     }
