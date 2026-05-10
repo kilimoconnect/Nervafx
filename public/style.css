@@ -300,9 +300,10 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
 .plan-free .tf-pro-tip:hover::before { opacity: 1; }
 
 /* Free plan: reorder grid so free sections appear directly after Trading Session */
-.plan-free #section-session    { order: 1; }
-.plan-free #section-strength   { order: 2; }
-.plan-free #section-ranking-12h { order: 3; }
+.plan-free #section-session     { order: 1; }
+.plan-free #section-news        { order: 2; }
+.plan-free #section-strength    { order: 3; }
+.plan-free #section-ranking-12h { order: 4; }
 .plan-free #section-live,
 .plan-free #section-top,
 .plan-free #section-sentiment,
@@ -312,7 +313,7 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
 .plan-free #section-risk,
 .plan-free #section-actions,
 .plan-free #section-quality,
-.plan-free #section-journal    { order: 4; }
+.plan-free #section-journal     { order: 5; }
 
 /* ─── Header ───────────────────────────────────────────────────────────────── */
 .header {
@@ -2916,5 +2917,63 @@ body::after {
 
 /* --- Disable CSS card-in (GSAP handles it now) --- */
 .card { animation: none !important; }
+
+/* ─── Today's News Section ───────────────────────────────────────────────── */
+.today-news-header-row {
+  display: grid;
+  grid-template-columns: 52px 44px 1fr 76px 74px 74px;
+  gap: 0 10px;
+  padding: 0 12px 7px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 2px;
+}
+.tnr {
+  display: grid;
+  grid-template-columns: 52px 44px 1fr 76px 74px 74px;
+  gap: 0 10px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  align-items: center;
+  font-size: 12px;
+  transition: background .1s;
+  border-left: 3px solid transparent;
+}
+.tnr:hover { background: rgba(255,255,255,.025); }
+.tnr.past  { opacity: .35; }
+.tnr.next-up {
+  background: rgba(99,102,241,.07);
+  border-left-color: #6366f1;
+}
+.tnr.soon  { background: rgba(245,158,11,.05); border-left-color: rgba(245,158,11,.4); }
+.tn-time   { font-size: 11px; font-weight: 600; color: var(--text-dim); }
+.tn-cur    {
+  display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 5px;
+  border-radius: 4px; background: rgba(99,102,241,.15); color: #a5b4fc;
+  border: 1px solid rgba(99,102,241,.2); text-align: center;
+}
+.tn-name   { color: var(--text); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tn-imp    { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; letter-spacing: .3px; }
+.tni-high  { background: rgba(239,68,68,.15);   color: #f87171; border: 1px solid rgba(239,68,68,.2); }
+.tni-med   { background: rgba(245,158,11,.12);  color: #fbbf24; border: 1px solid rgba(245,158,11,.2); }
+.tni-low   { background: rgba(100,116,139,.12); color: #94a3b8; border: 1px solid rgba(100,116,139,.2); }
+.tn-fc, .tn-prev { font-size: 11px; color: var(--text-muted); }
+.today-news-empty { text-align: center; padding: 24px; color: var(--text-muted); font-size: 12px; }
+.today-news-next-badge {
+  font-size: 10px; font-weight: 700; padding: 3px 9px; border-radius: 4px;
+  background: rgba(99,102,241,.15); color: #a5b4fc; border: 1px solid rgba(99,102,241,.25);
+  margin-left: 6px;
+}
+@media (max-width: 699px) {
+  .today-news-header-row,
+  .tnr {
+    grid-template-columns: 48px 40px 1fr 64px;
+  }
+  .h-fc, .h-prev { display: none; }
+}
 
 

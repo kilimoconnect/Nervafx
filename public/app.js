@@ -176,6 +176,75 @@ async function fetchNews() {
   } catch (_) {}
 }
 
+async function fetchTodayNews() {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const d = await api(`/api/news?date=${today}`);
+    renderTodayNews(d.events || []);
+  } catch (e) { console.warn('[today-news]', e.message); }
+}
+
+function renderTodayNews(events) {
+  const el = document.getElementById('today-news-list');
+  if (!el) return;
+
+  // Update date sub-label
+  const dateEl = document.getElementById('today-news-date');
+  if (dateEl) dateEl.textContent = new Date().toLocaleDateString('en-GB', {
+    weekday:'short', day:'2-digit', month:'short', year:'numeric', timeZone:'UTC'
+  });
+
+  if (!events.length) {
+    el.innerHTML = '<div class="today-news-empty">No news events scheduled for today</div>';
+    const b = document.getElementById('today-news-next-badge');
+    if (b) b.style.display = 'none';
+    return;
+  }
+
+  const now = Date.now();
+  events.sort((a, b) => new Date(a.event_time) - new Date(b.event_time));
+
+  // Next upcoming event index
+  const nextIdx = events.findIndex(e => new Date(e.event_time).getTime() > now);
+
+  // "Next in Xm" badge
+  const badge = document.getElementById('today-news-next-badge');
+  if (badge) {
+    if (nextIdx >= 0) {
+      const ms   = new Date(events[nextIdx].event_time) - now;
+      const mins = Math.round(ms / 60000);
+      badge.textContent = mins < 60
+        ? `Next in ${mins}m`
+        : `Next in ${Math.floor(mins/60)}h ${mins%60}m`;
+      badge.style.display = '';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+
+  const impCls = { HIGH:'tni-high', MEDIUM:'tni-med', LOW:'tni-low' };
+
+  el.innerHTML = events.map((e, i) => {
+    const t      = new Date(e.event_time).getTime();
+    const isPast = t < now;
+    const isNext = i === nextIdx;
+    const isSoon = !isPast && (t - now) < 3600000; // < 1 hour
+
+    const rowCls = isPast ? 'tnr past' : isNext ? 'tnr next-up' : isSoon ? 'tnr soon' : 'tnr';
+    const timeStr = new Date(e.event_time).toLocaleTimeString('en-GB',
+      { hour:'2-digit', minute:'2-digit', timeZone:'UTC' });
+
+    return `<div class="${rowCls}">
+      <span class="tn-time">${timeStr}</span>
+      <span class="tn-cur">${e.currency}</span>
+      <span class="tn-name">${e.event_name}</span>
+      <span class="tn-imp ${impCls[e.impact] || 'tni-low'}">${e.impact}</span>
+      <span class="tn-fc h-fc">${e.forecast || '—'}</span>
+      <span class="tn-prev h-prev">${e.previous || '—'}</span>
+    </div>`;
+  }).join('');
+}
+
 function pairCurrencies(instrument) {
   const s = (instrument || '').replace('/', '').replace('_', '').toUpperCase();
   return [s.slice(0, 3), s.slice(3, 6)];
@@ -1422,8 +1491,9 @@ async function refresh() {
       api('/api/profile').catch(() => ({})),
     ]);
 
-    // Fetch news calendar (non-blocking — runs in parallel, populates _newsMap)
+    // Fetch news calendar — populates _newsMap (pair warnings) + today's news card
     fetchNews();
+    fetchTodayNews();
 
     // Cache profile — used by updateHeader and any section needing user settings
     if (profileData && !profileData.error) {

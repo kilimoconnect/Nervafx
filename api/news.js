@@ -34,6 +34,20 @@ module.exports = async function handler(req, res) {
       return res.json({ events: data || [] });
     }
 
+    // Public: specific date (?date=YYYY-MM-DD) — returns full day including past events
+    if (req.query?.date) {
+      const date = req.query.date;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'Invalid date format' });
+      const { data, error } = await sb
+        .from('forex_news')
+        .select('id,event_time,currency,event_name,impact,forecast,previous')
+        .gte('event_time', date + 'T00:00:00Z')
+        .lte('event_time', date + 'T23:59:59Z')
+        .order('event_time', { ascending: true });
+      if (error) return res.status(500).json({ error: error.message });
+      return res.json({ events: data || [] });
+    }
+
     // Public: next 48h only
     const now    = new Date().toISOString();
     const cutoff = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
