@@ -244,9 +244,10 @@ html, body {
   border: 1px solid var(--border);
   color: var(--text-muted);
   font-family: var(--font);
-  font-size: 10px;
-  padding: 2px 8px;
-  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 5px 14px;
+  border-radius: 5px;
   cursor: pointer;
   transition: all 0.15s;
 }
