@@ -1927,6 +1927,16 @@
       CHF: 'ch', AUD: 'au', NZD: 'nz', CAD: 'ca',
     };
 
+    function fmtVal(v) {
+      const a = Math.abs(v);
+      if (a === 0)    return '0';
+      if (a >= 10)    return v.toFixed(2);
+      if (a >= 1)     return v.toFixed(3);
+      if (a >= 0.01)  return v.toFixed(4);
+      if (a >= 0.001) return v.toFixed(5);
+      return v.toFixed(6);
+    }
+
     function renderStrength(currencies, time) {
       const rows   = document.getElementById('strength-rows');
       const timeEl = document.getElementById('strength-time');
@@ -1942,13 +1952,13 @@
         return `
           <div class="currency-row">
             <div class="currency-label">
-              <img class="currency-flag" src="https://flagcdn.com/20x15/${iso}.png" alt="${c.currency}">
+              <img class="currency-flag" src="https://flagcdn.com/20x15/${iso}.png" alt="" onerror="this.style.display='none'">
               ${c.currency}
             </div>
             <div class="currency-bar-wrap">
               <div class="currency-bar ${c.direction}" style="width:${barWidth}%"></div>
             </div>
-            <div class="currency-value ${c.direction}">${sign}${c.value.toFixed(4)}</div>
+            <div class="currency-value ${c.direction}">${sign}${fmtVal(c.value)}</div>
           </div>`;
       }).join('');
 

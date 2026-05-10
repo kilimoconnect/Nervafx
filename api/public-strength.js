@@ -15,8 +15,8 @@ module.exports = async function handler(req, res) {
         const v = parseFloat(c.smooth_12h) || 0;
         return {
           currency: c.currency,
-          value: Math.round(v * 1000000) / 1000000,   // 6dp — same precision dashboard uses
-          direction: v > 0.01 ? 'up' : v < -0.01 ? 'down' : 'flat',
+          value: Math.round(v * 1000000) / 1000000,
+          direction: v > 0 ? 'up' : v < 0 ? 'down' : 'flat',
         };
       })
       .sort((a, b) => b.value - a.value);
