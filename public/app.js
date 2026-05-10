@@ -162,12 +162,15 @@ function updateHeader(risk) {
   if (!risk?.summary) return;
   const s = risk.summary;
 
-  // Plain text fallback (CountUp handles numbers separately)
-  const balance = Number(s.balance) || 0;
-  const riskPct = Number(s.dailyRiskPct ?? 0);
-  const maxPct  = Number(s.maxDailyRiskPct ?? 2);
+  // Profile values take precedence over risk.js defaults
+  const balance = _profile.account_size       ?? Number(s.balance)          ?? 0;
+  const maxPct  = _profile.max_daily_risk_pct ?? Number(s.maxDailyRiskPct)  ?? 2;
+  const maxTr   = _profile.max_trades         ?? Number(s.maxTrades)        ?? 3;
   const open    = Number(s.openTrades ?? 0);
-  const maxTr   = Number(s.maxTrades ?? 3);
+
+  // Recalculate daily risk % against the user's actual account size
+  const dailyRisk = Number(s.dailyRisk ?? 0);
+  const riskPct   = balance > 0 ? (dailyRisk / balance) * 100 : 0;
 
   document.getElementById('stat-balance').textContent = `Balance: $${balance.toLocaleString()}`;
   document.getElementById('stat-risk').textContent    = `Daily Risk: ${riskPct.toFixed(2)}% / ${maxPct}%`;
@@ -181,6 +184,7 @@ function updateHeader(risk) {
 // Stores latest aiMap + sentiment so modal can access them
 let _aiMap = {};
 let _sentimentData = null;
+let _profile = { account_size: null, max_daily_risk_pct: null, max_trades: null };
 
 function aiHtml(ai, instrument) {
   if (!ai) return '';
@@ -1168,7 +1172,7 @@ function openJournalOutcome(id, key) {
 
 async function refresh() {
   try {
-    const [strength, signals, states, risk, actions, quality, spreads, aiData, sentimentData, sessionData, journalData] = await Promise.all([
+    const [strength, signals, states, risk, actions, quality, spreads, aiData, sentimentData, sessionData, journalData, profileData] = await Promise.all([
       api('/api/strength'),
       api('/api/signals'),
       api('/api/states'),
@@ -1180,7 +1184,15 @@ async function refresh() {
       api('/api/sentiment').catch(() => ({ sentiment: null })),
       api('/api/session').catch(() => ({ session: null })),
       api('/api/journal').catch(() => ({ entries: [] })),
+      api('/api/profile').catch(() => ({})),
     ]);
+
+    // Cache profile — used by updateHeader and any section needing user settings
+    if (profileData && !profileData.error) {
+      _profile.account_size      = parseFloat(profileData.account_size)      || null;
+      _profile.max_daily_risk_pct = parseFloat(profileData.max_daily_risk_pct) || null;
+      _profile.max_trades        = parseInt(profileData.max_trades)           || null;
+    }
 
     // Build AI map: instrument → analysis
     const aiMap = {};
