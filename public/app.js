@@ -727,6 +727,68 @@ function renderSpreads(data) {
   }).join('');
 }
 
+// ─── 12H Pair Ranking ────────────────────────────────────────────────────────
+
+function renderRanking12H(spreadsData, statesData) {
+  const el = document.getElementById('ranking-12h-list');
+  if (!el) return;
+
+  // Build state lookup: instrument → { confidence, state }
+  const stateMap = {};
+  (statesData?.states || []).forEach(s => { stateMap[s.instrument] = s; });
+
+  // Sort all pairs by abs(spread_12h) descending — pure 12H strength
+  const ranked = [...(spreadsData?.spreads || [])]
+    .filter(s => s.spread_12h != null)
+    .sort((a, b) => Math.abs(parseFloat(b.spread_12h)) - Math.abs(parseFloat(a.spread_12h)));
+
+  if (!ranked.length) { el.innerHTML = '<p class="empty-state">No 12H data available</p>'; return; }
+
+  const maxVal = Math.abs(parseFloat(ranked[0].spread_12h)) || 0.0001;
+
+  const STATE_SHORT = {
+    'READY_TO_ENTER':    'READY',
+    'PULLBACK_ACTIVE':   'PULLBACK',
+    'PULLBACK_STARTING': 'STARTING',
+    'TREND':             'TREND',
+    'REVERSAL_RISK':     'REVERSAL',
+  };
+  const STATE_CLS = {
+    'READY_TO_ENTER':    'ready',
+    'PULLBACK_ACTIVE':   'pullback',
+    'PULLBACK_STARTING': 'starting',
+    'TREND':             'trend',
+    'REVERSAL_RISK':     'reversal',
+  };
+
+  el.innerHTML = ranked.map((s, i) => {
+    const val12  = parseFloat(s.spread_12h) || 0;
+    const dir    = val12 >= 0 ? 'buy' : 'sell';
+    const pct    = Math.round((Math.abs(val12) / maxVal) * 100);
+    const rank   = i + 1;
+    const rankCls = rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : '';
+
+    const st      = stateMap[s.instrument];
+    const conf    = st?.confidence ?? '—';
+    const mState  = st?.state || '';
+    const stLbl   = STATE_SHORT[mState] || (mState ? mState.replace(/_/g,' ') : '—');
+    const stCls   = STATE_CLS[mState]   || 'notrade';
+
+    return `
+      <div class="rank12-row">
+        <span class="rank12-badge ${rankCls}">#${rank}</span>
+        <span class="rank12-pair">${pair(s.instrument)}</span>
+        <span class="rank12-dir ${dir}">${dir.toUpperCase()}</span>
+        <div class="rank12-bar-wrap">
+          <div class="rank12-bar-fill ${dir}" style="width:${pct}%"></div>
+        </div>
+        <span class="rank12-val">${Math.abs(val12).toFixed(5)}</span>
+        <span class="rank12-state ${stCls}">${stLbl}</span>
+        <span class="rank12-conf">${conf !== '—' ? conf + '%' : '—'}</span>
+      </div>`;
+  }).join('');
+}
+
 // ─── Risk / approved trades ───────────────────────────────────────────────────
 
 function renderRisk(data, sentimentData = null) {
@@ -1209,6 +1271,7 @@ async function refresh() {
     buildChart(strength, activeTF);
     renderStates(states);
     renderSpreads(spreads);
+    renderRanking12H(spreads, states);
     renderRisk(risk, sentimentData);
     renderActions(actions);
     renderQuality(quality);
@@ -1238,6 +1301,7 @@ function showSkeletons() {
     'top-setups':          3,
     'signals-active':      2,
     'spreads-list':        6,
+    'ranking-12h-list':   28,
     'risk-list':           3,
     'actions-list':        4,
     'states-table':        8,
