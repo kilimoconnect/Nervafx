@@ -12,12 +12,10 @@
       localStorage.removeItem('nfx_user');
       return location.replace('/login.html');
     }
-    // Show logged-in user email in header
+    // Show logged-in user name (or email fallback) in header
     const user = JSON.parse(localStorage.getItem('nfx_user') || '{}');
-    if (user.email) {
-      const el = document.getElementById('header-user');
-      if (el) el.textContent = user.email;
-    }
+    const el = document.getElementById('header-user');
+    if (el) el.textContent = user.full_name || user.first_name || user.email || '';
   } catch (_) {
     localStorage.removeItem('nfx_token');
     localStorage.removeItem('nfx_user');

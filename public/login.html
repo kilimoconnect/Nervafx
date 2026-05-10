@@ -179,7 +179,7 @@
     .tab.active { color: #fff; }
 
     /* ── Fields ── */
-    .field { margin-bottom: 18px; }
+    .field { margin-bottom: 16px; }
     .field label {
       display: block;
       font-size: 11px;
@@ -188,6 +188,12 @@
       letter-spacing: 0.7px;
       text-transform: uppercase;
       margin-bottom: 7px;
+    }
+    /* Two fields side by side */
+    .fields-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
     }
     .input-wrap { position: relative; }
     .input-icon {
@@ -217,6 +223,49 @@
       box-shadow: 0 0 0 3px rgba(59,130,246,0.14);
     }
     .input-wrap input::placeholder { color: rgba(100,116,139,0.4); }
+    /* Password match states */
+    .input-wrap input.pw-match   { border-color: rgba(34,197,94,0.6) !important; background: rgba(34,197,94,0.05) !important; }
+    .input-wrap input.pw-nomatch { border-color: rgba(239,68,68,0.6) !important; background: rgba(239,68,68,0.05) !important; }
+
+    /* ── Signup-only fields (animated) ── */
+    .signup-fields {
+      overflow: hidden;
+      height: 0;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .signup-fields.visible {
+      pointer-events: auto;
+    }
+
+    /* ── Password strength bar ── */
+    .pw-strength-wrap {
+      margin-top: 6px;
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+    .pw-strength-bar {
+      flex: 1;
+      height: 3px;
+      border-radius: 3px;
+      background: rgba(255,255,255,0.06);
+      overflow: hidden;
+    }
+    .pw-strength-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.3s, background 0.3s;
+      width: 0%;
+    }
+    .pw-strength-label {
+      font-size: 10px;
+      font-weight: 600;
+      min-width: 44px;
+      text-align: right;
+      color: var(--muted);
+      transition: color 0.3s;
+    }
 
     /* ── Divider ── */
     .divider {
@@ -330,6 +379,30 @@
 
       <!-- Form -->
       <form id="auth-form" onsubmit="handleSubmit(event)" novalidate>
+
+        <!-- ── Signup-only: Name row (animated in) ── -->
+        <div class="signup-fields" id="signup-fields">
+          <div class="fields-row" style="margin-bottom:16px">
+            <div class="field" style="margin-bottom:0">
+              <label for="first-name">First Name</label>
+              <div class="input-wrap">
+                <span class="input-icon">👤</span>
+                <input id="first-name" type="text" placeholder="John"
+                       autocomplete="given-name" />
+              </div>
+            </div>
+            <div class="field" style="margin-bottom:0">
+              <label for="last-name">Last Name</label>
+              <div class="input-wrap">
+                <span class="input-icon">👤</span>
+                <input id="last-name" type="text" placeholder="Doe"
+                       autocomplete="family-name" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Email — always visible -->
         <div class="field">
           <label for="email">Email Address</label>
           <div class="input-wrap">
@@ -338,13 +411,37 @@
                    autocomplete="email" required />
           </div>
         </div>
+
+        <!-- Password — always visible -->
         <div class="field">
           <label for="password">Password</label>
           <div class="input-wrap">
             <span class="input-icon">🔒</span>
             <input id="password" type="password" placeholder="••••••••"
-                   autocomplete="current-password" required minlength="6" />
+                   autocomplete="current-password" required minlength="6"
+                   oninput="onPasswordInput(this.value)" />
           </div>
+          <!-- Strength bar — signup only -->
+          <div class="pw-strength-wrap" id="pw-strength-wrap" style="display:none">
+            <div class="pw-strength-bar">
+              <div class="pw-strength-fill" id="pw-strength-fill"></div>
+            </div>
+            <span class="pw-strength-label" id="pw-strength-label">—</span>
+          </div>
+        </div>
+
+        <!-- ── Signup-only: Confirm password (animated in) ── -->
+        <div class="signup-fields" id="signup-fields-pw">
+          <div class="field" style="margin-bottom:0">
+            <label for="confirm-password">Confirm Password</label>
+            <div class="input-wrap">
+              <span class="input-icon">🔒</span>
+              <input id="confirm-password" type="password" placeholder="••••••••"
+                     autocomplete="new-password"
+                     oninput="onConfirmInput(this.value)" />
+            </div>
+          </div>
+          <div style="height:18px"></div>
         </div>
 
         <div class="divider"></div>
@@ -386,9 +483,11 @@
       } catch (_) {}
     })();
 
+    // ── Tab switching — animate signup fields in/out ──────────────────────────
     function switchTab(tab) {
       currentTab = tab;
       const isSignup = tab === 'signup';
+
       document.getElementById('tab-login').classList.toggle('active',  !isSignup);
       document.getElementById('tab-signup').classList.toggle('active', isSignup);
       document.getElementById('tab-pill').classList.toggle('right',    isSignup);
@@ -396,19 +495,98 @@
         isSignup ? 'Create Account' : 'Sign In';
       document.getElementById('password').autocomplete =
         isSignup ? 'new-password' : 'current-password';
+
+      const signupPanels = document.querySelectorAll('.signup-fields');
+      const strengthWrap = document.getElementById('pw-strength-wrap');
+
+      if (isSignup) {
+        signupPanels.forEach(el => {
+          el.classList.add('visible');
+          if (typeof gsap !== 'undefined') {
+            gsap.to(el, { height: 'auto', opacity: 1, duration: 0.38, ease: 'power2.out' });
+          } else {
+            el.style.height = 'auto';
+            el.style.opacity = '1';
+          }
+        });
+        strengthWrap.style.display = 'flex';
+        // Make required
+        document.getElementById('first-name').required = true;
+        document.getElementById('last-name').required  = true;
+        document.getElementById('confirm-password').required = true;
+      } else {
+        signupPanels.forEach(el => {
+          if (typeof gsap !== 'undefined') {
+            gsap.to(el, {
+              height: 0, opacity: 0, duration: 0.28, ease: 'power2.in',
+              onComplete: () => el.classList.remove('visible'),
+            });
+          } else {
+            el.style.height = '0';
+            el.style.opacity = '0';
+            el.classList.remove('visible');
+          }
+        });
+        strengthWrap.style.display = 'none';
+        // Remove required
+        document.getElementById('first-name').required = false;
+        document.getElementById('last-name').required  = false;
+        document.getElementById('confirm-password').required = false;
+        // Reset states
+        document.getElementById('confirm-password').className = '';
+        document.getElementById('confirm-password').value = '';
+      }
+
       clearMsg();
     }
 
+    // ── Password strength meter ───────────────────────────────────────────────
+    function onPasswordInput(val) {
+      if (currentTab !== 'signup') return;
+      const fill  = document.getElementById('pw-strength-fill');
+      const label = document.getElementById('pw-strength-label');
+      let score = 0;
+      if (val.length >= 8)                score++;
+      if (/[A-Z]/.test(val))             score++;
+      if (/[0-9]/.test(val))             score++;
+      if (/[^A-Za-z0-9]/.test(val))      score++;
+      const levels = [
+        { pct: '20%',  color: '#ef4444', text: 'Weak'   },
+        { pct: '40%',  color: '#f97316', text: 'Fair'   },
+        { pct: '65%',  color: '#eab308', text: 'Good'   },
+        { pct: '85%',  color: '#22c55e', text: 'Strong' },
+        { pct: '100%', color: '#10b981', text: 'Great'  },
+      ];
+      const lvl = val.length === 0 ? null : levels[score];
+      fill.style.width      = lvl ? lvl.pct   : '0%';
+      fill.style.background = lvl ? lvl.color : '';
+      label.textContent     = lvl ? lvl.text  : '—';
+      label.style.color     = lvl ? lvl.color : 'var(--muted)';
+      // Re-validate confirm
+      onConfirmInput(document.getElementById('confirm-password').value);
+    }
+
+    // ── Confirm password match indicator ─────────────────────────────────────
+    function onConfirmInput(val) {
+      if (currentTab !== 'signup') return;
+      const pw  = document.getElementById('password').value;
+      const el  = document.getElementById('confirm-password');
+      if (!val) { el.className = ''; return; }
+      el.className = val === pw ? 'pw-match' : 'pw-nomatch';
+    }
+
+    // ── Messages ─────────────────────────────────────────────────────────────
     function showMsg(text, type) {
       const el = document.getElementById('msg');
-      el.textContent  = text;
-      el.className    = 'msg show-' + type;
+      el.textContent = text;
+      el.className   = 'msg show-' + type;
     }
 
     function clearMsg() {
       document.getElementById('msg').className = 'msg';
     }
 
+    // ── Submit ────────────────────────────────────────────────────────────────
     async function handleSubmit(e) {
       e.preventDefault();
       clearMsg();
@@ -417,14 +595,41 @@
       const password = document.getElementById('password').value;
       const btn      = document.getElementById('btn-submit');
 
+      // Signup-only validation
+      if (currentTab === 'signup') {
+        const firstName = document.getElementById('first-name').value.trim();
+        const lastName  = document.getElementById('last-name').value.trim();
+        const confirm   = document.getElementById('confirm-password').value;
+
+        if (!firstName || !lastName) {
+          showMsg('Please enter your first and last name.', 'error');
+          return;
+        }
+        if (password !== confirm) {
+          showMsg('Passwords do not match.', 'error');
+          document.getElementById('confirm-password').className = 'pw-nomatch';
+          return;
+        }
+        if (password.length < 6) {
+          showMsg('Password must be at least 6 characters.', 'error');
+          return;
+        }
+      }
+
       btn.disabled  = true;
       btn.innerHTML = '<span class="spinner"></span>Please wait…';
 
       try {
+        const body = { action: currentTab, email, password };
+        if (currentTab === 'signup') {
+          body.firstName = document.getElementById('first-name').value.trim();
+          body.lastName  = document.getElementById('last-name').value.trim();
+        }
+
         const res  = await fetch('/api/auth', {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ action: currentTab, email, password }),
+          body:    JSON.stringify(body),
         });
         const data = await res.json();
 
@@ -437,10 +642,12 @@
         localStorage.setItem('nfx_user',  JSON.stringify(data.user));
 
         showMsg(
-          currentTab === 'signup' ? '✓ Account created — redirecting…' : '✓ Welcome back — redirecting…',
+          currentTab === 'signup'
+            ? `✓ Welcome, ${body.firstName}! Redirecting…`
+            : '✓ Welcome back — redirecting…',
           'success'
         );
-        setTimeout(() => location.replace('/'), 700);
+        setTimeout(() => location.replace('/'), 800);
 
       } catch (err) {
         showMsg('Network error — check your connection and try again.', 'error');

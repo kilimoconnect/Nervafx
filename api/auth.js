@@ -20,11 +20,18 @@ module.exports = async function handler(req, res) {
 
     // ── Sign Up ───────────────────────────────────────────────────────────────
     if (action === 'signup') {
+      const { firstName = '', lastName = '' } = req.body;
+
       // Use admin API so email confirmation is skipped (email_confirm: true)
       const { data: created, error: createErr } = await sb.auth.admin.createUser({
         email,
         password,
         email_confirm: true,
+        user_metadata: {
+          first_name: firstName,
+          last_name:  lastName,
+          full_name:  `${firstName} ${lastName}`.trim(),
+        },
       });
 
       if (createErr) return res.status(400).json({ error: createErr.message });
@@ -35,7 +42,13 @@ module.exports = async function handler(req, res) {
 
       return res.json({
         token: session.session.access_token,
-        user:  { id: session.user.id, email: session.user.email },
+        user:  {
+          id:         session.user.id,
+          email:      session.user.email,
+          first_name: firstName,
+          last_name:  lastName,
+          full_name:  `${firstName} ${lastName}`.trim(),
+        },
       });
     }
 
@@ -44,9 +57,16 @@ module.exports = async function handler(req, res) {
       const { data: session, error: signErr } = await sb.auth.signInWithPassword({ email, password });
       if (signErr) return res.status(401).json({ error: signErr.message });
 
+      const meta = session.user.user_metadata || {};
       return res.json({
         token: session.session.access_token,
-        user:  { id: session.user.id, email: session.user.email },
+        user:  {
+          id:         session.user.id,
+          email:      session.user.email,
+          first_name: meta.first_name || '',
+          last_name:  meta.last_name  || '',
+          full_name:  meta.full_name  || '',
+        },
       });
     }
 
