@@ -34,6 +34,17 @@
 </head>
 <body>
 
+  <!-- PLAN SWITCHER (dev preview) -->
+  <div class="plan-switcher-bar" id="plan-switcher-bar">
+    <span class="plan-sw-label">⚡ Plan Preview:</span>
+    <div class="plan-sw-pills">
+      <button class="plan-sw-pill" data-plan="free"    onclick="applyPlan('free')">Free</button>
+      <button class="plan-sw-pill active" data-plan="pro" onclick="applyPlan('pro')">Pro</button>
+      <button class="plan-sw-pill" data-plan="premium" onclick="applyPlan('premium')">Premium</button>
+    </div>
+    <span class="plan-sw-note">Dev preview — not visible to real users</span>
+  </div>
+
   <!-- HEADER -->
   <header class="header">
     <div class="header-left">
@@ -69,6 +80,7 @@
 
     <!-- LIVE OPPORTUNITIES -->
     <section class="card span-3" id="section-live">
+      <div class="plan-lock-overlay" data-require="pro"><span class="plan-lock-icon">🔒</span><span class="plan-lock-title">Pro Feature</span><span class="plan-lock-desc">Live entry opportunities require a Pro plan.</span><a href="/home.html#pricing" class="plan-lock-btn">Upgrade to Pro →</a></div>
       <h2 class="card-title live-title">
         <i data-lucide="zap"></i> Live Opportunities
         <span class="sub">entry active or ready to enter</span>
@@ -78,6 +90,7 @@
 
     <!-- TOP 3 SETUPS -->
     <section class="card span-3" id="section-top">
+      <div class="plan-lock-overlay" data-require="pro"><span class="plan-lock-icon">🔒</span><span class="plan-lock-title">Pro Feature</span><span class="plan-lock-desc">Top setups require multi-timeframe analysis (Pro plan).</span><a href="/home.html#pricing" class="plan-lock-btn">Upgrade to Pro →</a></div>
       <h2 class="card-title">
         <i data-lucide="bar-chart-2"></i> Top Setups
         <span class="sub">all active phases — pullback, forming, watching</span>
@@ -87,6 +100,7 @@
 
     <!-- RISK SENTIMENT -->
     <section class="card span-3" id="section-sentiment">
+      <div class="plan-lock-overlay" data-require="pro"><span class="plan-lock-icon">🔒</span><span class="plan-lock-title">Pro Feature</span><span class="plan-lock-desc">Cross-asset risk sentiment engine requires a Pro plan.</span><a href="/home.html#pricing" class="plan-lock-btn">Upgrade to Pro →</a></div>
       <h2 class="card-title">
         <i data-lucide="activity"></i> Risk Sentiment
       </h2>
@@ -95,6 +109,7 @@
 
     <!-- SIGNAL BOARD -->
     <section class="card span-2" id="section-signals">
+      <div class="plan-lock-overlay" data-require="pro"><span class="plan-lock-icon">🔒</span><span class="plan-lock-title">Pro Feature</span><span class="plan-lock-desc">Approved trade plans & alerts require a Pro plan.</span><a href="/home.html#pricing" class="plan-lock-btn">Upgrade to Pro →</a></div>
       <h2 class="card-title">
         <i data-lucide="radio"></i> Signal Board
         <span class="sub">confirmed entries &amp; watching</span>
@@ -121,6 +136,7 @@
 
     <!-- MARKET STATES -->
     <section class="card" id="section-states">
+      <div class="plan-lock-overlay" data-require="pro"><span class="plan-lock-icon">🔒</span><span class="plan-lock-title">Pro Feature</span><span class="plan-lock-desc">H1 structure engine requires a Pro plan.</span><a href="/home.html#pricing" class="plan-lock-btn">Upgrade →</a></div>
       <h2 class="card-title">
         <i data-lucide="layers"></i> Market States
         <span class="sub">all 28 pairs</span>
@@ -130,6 +146,7 @@
 
     <!-- SPREAD RANKING -->
     <section class="card" id="section-spreads">
+      <div class="plan-lock-overlay" data-require="pro"><span class="plan-lock-icon">🔒</span><span class="plan-lock-title">Pro Feature</span><span class="plan-lock-desc">Multi-timeframe pair ranking requires a Pro plan.</span><a href="/home.html#pricing" class="plan-lock-btn">Upgrade →</a></div>
       <h2 class="card-title">
         <i data-lucide="list-ordered"></i> Pair Ranking
         <span class="sub">by weighted score (12H·6H·3H·accel)</span>
@@ -148,6 +165,7 @@
 
     <!-- RISK SUMMARY -->
     <section class="card" id="section-risk">
+      <div class="plan-lock-overlay" data-require="pro"><span class="plan-lock-icon">🔒</span><span class="plan-lock-title">Pro Feature</span><span class="plan-lock-desc">Approved trade plans require a Pro plan.</span><a href="/home.html#pricing" class="plan-lock-btn">Upgrade →</a></div>
       <h2 class="card-title">
         <i data-lucide="shield-check"></i> Approved Trades
       </h2>
@@ -156,6 +174,7 @@
 
     <!-- ACTIONS LOG -->
     <section class="card" id="section-actions">
+      <div class="plan-lock-overlay" data-require="pro"><span class="plan-lock-icon">🔒</span><span class="plan-lock-title">Pro Feature</span><span class="plan-lock-desc">Trade lifecycle tracking requires a Pro plan.</span><a href="/home.html#pricing" class="plan-lock-btn">Upgrade →</a></div>
       <h2 class="card-title">
         <i data-lucide="scroll-text"></i> Action Log
       </h2>
@@ -164,6 +183,7 @@
 
     <!-- DATA QUALITY -->
     <section class="card quality-card" id="section-quality">
+      <div class="plan-lock-overlay" data-require="pro"><span class="plan-lock-icon">🔒</span><span class="plan-lock-title">Pro Feature</span><span class="plan-lock-desc">Full dashboard access requires a Pro plan.</span><a href="/home.html#pricing" class="plan-lock-btn">Upgrade →</a></div>
       <h2 class="card-title">
         <i data-lucide="database"></i> Data Quality
       </h2>
@@ -172,6 +192,7 @@
 
     <!-- MARKET JOURNAL -->
     <section class="card span-3" id="section-journal">
+      <div class="plan-lock-overlay" data-require="premium"><span class="plan-lock-icon">🔒</span><span class="plan-lock-title">Premium Feature</span><span class="plan-lock-desc">Full historical journal & analytics require a Premium plan.</span><a href="/home.html#pricing" class="plan-lock-btn">Upgrade to Premium →</a></div>
       <h2 class="card-title">
         <i data-lucide="book-open"></i> Market Journal
         <span class="sub">Hourly Snapshot · AI Outcome Review</span>
@@ -200,5 +221,51 @@
   </div>
 
   <script src="app.js"></script>
+
+  <script>
+    // ── PLAN SWITCHER ─────────────────────────────────────────────────────────
+    const PLAN_LEVELS = { free: 0, pro: 1, premium: 2 };
+    const REQUIRE_LEVELS = { pro: 1, premium: 2 };
+
+    function applyPlan(plan) {
+      // Update body class
+      document.body.classList.remove('plan-free', 'plan-pro', 'plan-premium');
+      document.body.classList.add('plan-' + plan);
+
+      // Update pill active state
+      document.querySelectorAll('.plan-sw-pill').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.plan === plan);
+      });
+
+      // Show/hide lock overlays
+      const level = PLAN_LEVELS[plan] ?? 1;
+      document.querySelectorAll('.plan-lock-overlay').forEach(overlay => {
+        const required = REQUIRE_LEVELS[overlay.dataset.require] ?? 1;
+        overlay.classList.toggle('visible', level < required);
+      });
+
+      // For free plan: disable 3H/6H tf buttons, force 12H
+      const tfBtns = document.querySelectorAll('.tf-btn');
+      if (plan === 'free') {
+        tfBtns.forEach(btn => {
+          if (btn.dataset.tf !== '12') {
+            btn.disabled = true;
+            btn.title = 'Upgrade to Pro for multi-timeframe';
+          }
+        });
+        // Force 12H view
+        const tf12 = document.querySelector('.tf-btn[data-tf="12"]');
+        if (tf12 && !tf12.classList.contains('active')) tf12.click();
+      } else {
+        tfBtns.forEach(btn => { btn.disabled = false; btn.title = ''; });
+      }
+
+      localStorage.setItem('nfx_plan_preview', plan);
+    }
+
+    // Init from localStorage or default to pro
+    const savedPlan = localStorage.getItem('nfx_plan_preview') || 'pro';
+    applyPlan(savedPlan);
+  </script>
 </body>
 </html>
