@@ -133,6 +133,9 @@ html, body {
 /* sections need position:relative for overlay positioning */
 section.card { position: relative; }
 
+/* ensure cards are tall enough for lock overlay content to never get clipped */
+section.card:has(.plan-lock-overlay.visible) { min-height: 200px; overflow: hidden; }
+
 /* Free plan: dim the tf buttons that are disabled */
 .tf-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
