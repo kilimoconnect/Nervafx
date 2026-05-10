@@ -1,7 +1,45 @@
 const { config } = require('./config');
 const { supabase } = require('./supabase');
 
-const { riskPercent, maxDailyLossPercent, maxOpenTrades, minRR, minConfidence } = config.risk;
+// ─── Load profile settings from DB ───────────────────────────────────────────
+// Single-user personal dashboard — reads the first (and only) profile row.
+// Falls back gracefully to config defaults when no row exists yet.
+
+async function loadProfileSettings() {
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('account_size, max_daily_risk_pct, max_trades')
+      .limit(1);
+
+    if (error || !data || data.length === 0) return null;
+    const p = data[0];
+
+    const accountBalance = parseFloat(p.account_size);
+    const maxDailyLossPercent = parseFloat(p.max_daily_risk_pct) / 100;
+    const maxOpenTrades = parseInt(p.max_trades);
+
+    return {
+      accountBalance:      accountBalance      > 0 ? accountBalance      : config.risk.accountBalance,
+      maxDailyLossPercent: maxDailyLossPercent > 0 ? maxDailyLossPercent : config.risk.maxDailyLossPercent,
+      maxOpenTrades:       maxOpenTrades       > 0 ? maxOpenTrades       : config.risk.maxOpenTrades,
+    };
+  } catch (_) {
+    return null; // silently fall back to config defaults
+  }
+}
+
+// Merge profile settings over config defaults
+function buildRiskConfig(profile) {
+  return {
+    accountBalance:      profile?.accountBalance      ?? config.risk.accountBalance,
+    maxDailyLossPercent: profile?.maxDailyLossPercent ?? config.risk.maxDailyLossPercent,
+    maxOpenTrades:       profile?.maxOpenTrades       ?? config.risk.maxOpenTrades,
+    riskPercent:         config.risk.riskPercent,      // per-trade %, not user-configurable yet
+    minRR:               config.risk.minRR,
+    minConfidence:       config.risk.minConfidence,
+  };
+}
 
 // ─── Position size ────────────────────────────────────────────────────────────
 
@@ -9,15 +47,13 @@ function getPipSize(instrument) {
   return instrument.includes('JPY') ? 0.01 : 0.0001;
 }
 
-// Approximate pip value in USD per standard lot (100,000 units).
-// Refined per-broker conversion can replace this later.
 function pipValueUSD(instrument, entryPrice) {
   const quote = instrument.split('_')[1];
   const pipSize = getPipSize(instrument);
 
-  if (quote === 'USD') return pipSize * 100000;              // EUR_USD etc: $10/pip/lot
-  if (quote === 'JPY') return (pipSize / entryPrice) * 100000; // USD_JPY etc: ~$9xx/pip/lot
-  return pipSize * 100000; // Cross pairs: approximate, needs FX conversion for precision
+  if (quote === 'USD') return pipSize * 100000;
+  if (quote === 'JPY') return (pipSize / entryPrice) * 100000;
+  return pipSize * 100000;
 }
 
 function calcPositionSize(instrument, riskAmount, stopDistance, entryPrice) {
@@ -27,7 +63,7 @@ function calcPositionSize(instrument, riskAmount, stopDistance, entryPrice) {
 
   const pipVal = pipValueUSD(instrument, entryPrice);
   const lots = riskAmount / (stopPips * pipVal);
-  return Math.max(0.01, Math.round(lots * 100) / 100); // floor at 0.01 micro lots
+  return Math.max(0.01, Math.round(lots * 100) / 100);
 }
 
 // ─── Daily state queries ──────────────────────────────────────────────────────
@@ -61,105 +97,97 @@ async function getDailyState(time) {
 
 // ─── Core check ───────────────────────────────────────────────────────────────
 
-function reject(signal, reason) {
+function reject(signal, reason, rc) {
   return {
-    signal_id: signal.id || null,
-    time: signal.time,
-    instrument: signal.instrument,
-    account_balance: config.risk.accountBalance,
-    risk_percent: riskPercent * 100,
-    risk_amount: config.risk.accountBalance * riskPercent,
-    entry_price: signal.entry_price || 0,
-    stop_loss: signal.stop_loss || 0,
-    take_profit: signal.take_profit || 0,
-    stop_distance: signal.entry_price && signal.stop_loss
+    signal_id:       signal.id || null,
+    time:            signal.time,
+    instrument:      signal.instrument,
+    account_balance: rc.accountBalance,
+    risk_percent:    rc.riskPercent * 100,
+    risk_amount:     rc.accountBalance * rc.riskPercent,
+    entry_price:     signal.entry_price  || 0,
+    stop_loss:       signal.stop_loss    || 0,
+    take_profit:     signal.take_profit  || 0,
+    stop_distance:   signal.entry_price && signal.stop_loss
       ? Math.abs(signal.entry_price - signal.stop_loss) : 0,
-    position_size: null,
-    status: 'REJECTED',
-    reject_reason: reason,
+    position_size:   null,
+    status:          'REJECTED',
+    reject_reason:   reason,
   };
 }
 
-function approve(signal, riskAmount, stopDistance, positionSize) {
+function approve(signal, riskAmount, stopDistance, positionSize, rc) {
   return {
-    signal_id: signal.id || null,
-    time: signal.time,
-    instrument: signal.instrument,
-    account_balance: config.risk.accountBalance,
-    risk_percent: riskPercent * 100,
-    risk_amount: riskAmount,
-    entry_price: signal.entry_price,
-    stop_loss: signal.stop_loss,
-    take_profit: signal.take_profit,
-    stop_distance: stopDistance,
-    position_size: positionSize,
-    status: 'APPROVED',
-    reject_reason: null,
+    signal_id:       signal.id || null,
+    time:            signal.time,
+    instrument:      signal.instrument,
+    account_balance: rc.accountBalance,
+    risk_percent:    rc.riskPercent * 100,
+    risk_amount:     riskAmount,
+    entry_price:     signal.entry_price,
+    stop_loss:       signal.stop_loss,
+    take_profit:     signal.take_profit,
+    stop_distance:   stopDistance,
+    position_size:   positionSize,
+    status:          'APPROVED',
+    reject_reason:   null,
   };
 }
 
-async function checkSignal(signal, dailyState) {
-  const accountBalance = config.risk.accountBalance;
+async function checkSignal(signal, dailyState, rc) {
   const { dailyRiskUsed, openTradesCount, pairsTradedToday } = dailyState;
 
-  // Only process BUY/SELL signals
   if (signal.signal !== 'BUY' && signal.signal !== 'SELL') {
-    return reject(signal, `Signal is ${signal.signal}, not BUY or SELL.`);
+    return reject(signal, `Signal is ${signal.signal}, not BUY or SELL.`, rc);
   }
 
-  // Confidence gate
-  if (signal.confidence < minConfidence) {
-    return reject(signal, `Confidence ${signal.confidence} below minimum ${minConfidence}.`);
+  if (signal.confidence < rc.minConfidence) {
+    return reject(signal, `Confidence ${signal.confidence} below minimum ${rc.minConfidence}.`, rc);
   }
 
-  // Risk:reward gate
-  if (!signal.risk_reward || signal.risk_reward < minRR) {
-    return reject(signal, `RR ${signal.risk_reward} below minimum ${minRR}.`);
+  if (!signal.risk_reward || signal.risk_reward < rc.minRR) {
+    return reject(signal, `RR ${signal.risk_reward} below minimum ${rc.minRR}.`, rc);
   }
 
-  // Market state gate
   if (signal.market_state !== 'READY_TO_ENTER') {
-    return reject(signal, `Market state is ${signal.market_state}, not READY_TO_ENTER.`);
+    return reject(signal, `Market state is ${signal.market_state}, not READY_TO_ENTER.`, rc);
   }
 
-  // Entry / stop validity
   if (!signal.entry_price || !signal.stop_loss || !signal.take_profit) {
-    return reject(signal, 'Missing entry, stop loss, or take profit.');
+    return reject(signal, 'Missing entry, stop loss, or take profit.', rc);
   }
 
   const stopDistance = Math.abs(signal.entry_price - signal.stop_loss);
   if (stopDistance <= 0) {
-    return reject(signal, 'Stop distance is zero or negative.');
+    return reject(signal, 'Stop distance is zero or negative.', rc);
   }
 
-  // Daily loss limit
-  const dailyLossPct = dailyRiskUsed / accountBalance;
-  if (dailyLossPct >= maxDailyLossPercent) {
-    return reject(signal, `Daily risk limit reached: ${(dailyLossPct * 100).toFixed(2)}% of ${maxDailyLossPercent * 100}%.`);
+  // Daily loss limit (from profile max_daily_risk_pct)
+  const dailyLossPct = dailyRiskUsed / rc.accountBalance;
+  if (dailyLossPct >= rc.maxDailyLossPercent) {
+    return reject(signal, `Daily risk limit reached: ${(dailyLossPct * 100).toFixed(2)}% of ${(rc.maxDailyLossPercent * 100).toFixed(1)}%.`, rc);
   }
 
-  // Max open trades
-  if (openTradesCount >= maxOpenTrades) {
-    return reject(signal, `Max open trades (${maxOpenTrades}) already reached today.`);
+  // Max open trades (from profile max_trades)
+  if (openTradesCount >= rc.maxOpenTrades) {
+    return reject(signal, `Max open trades (${rc.maxOpenTrades}) already reached today.`, rc);
   }
 
   // One trade per pair per day
   if (pairsTradedToday.has(signal.instrument)) {
-    return reject(signal, `${signal.instrument} already has an approved trade today.`);
+    return reject(signal, `${signal.instrument} already has an approved trade today.`, rc);
   }
 
-  // Calculate risk
-  const riskAmount = accountBalance * riskPercent;
+  const riskAmount   = rc.accountBalance * rc.riskPercent;
   const positionSize = calcPositionSize(signal.instrument, riskAmount, stopDistance, signal.entry_price);
 
-  return approve(signal, riskAmount, stopDistance, positionSize);
+  return approve(signal, riskAmount, stopDistance, positionSize, rc);
 }
 
 // ─── Batch processing ─────────────────────────────────────────────────────────
 
 async function upsertRiskChecks(rows) {
   if (rows.length === 0) return;
-  // risk_checks has no unique constraint (multiple checks per signal possible), so insert only.
   const { error } = await supabase
     .from('risk_checks')
     .insert(rows);
@@ -169,6 +197,10 @@ async function upsertRiskChecks(rows) {
 // ─── Backfill ─────────────────────────────────────────────────────────────────
 
 async function backfillRiskChecks() {
+  const profile = await loadProfileSettings();
+  const rc = buildRiskConfig(profile);
+  console.log(`[RISK] Profile loaded — balance: $${rc.accountBalance}, maxTrades: ${rc.maxOpenTrades}, maxDailyRisk: ${(rc.maxDailyLossPercent * 100).toFixed(1)}%`);
+
   console.log('[RISK] Fetching BUY/SELL signals...');
 
   const { data: signals, error } = await supabase
@@ -185,8 +217,6 @@ async function backfillRiskChecks() {
 
   console.log(`[RISK] Processing ${signals.length} BUY/SELL signals...`);
 
-  // Group by UTC day and process in order — each day's approvals affect subsequent checks.
-  // We rebuild daily state per signal in chronological order.
   const dailyStateCache = {};
 
   function getDailyKey(time) {
@@ -207,7 +237,7 @@ async function backfillRiskChecks() {
     if (!dailyStateCache[key]) dailyStateCache[key] = initDay();
     const dailyState = dailyStateCache[key];
 
-    const result = await checkSignal(signal, dailyState);
+    const result = await checkSignal(signal, dailyState, rc);
     rows.push(result);
 
     if (result.status === 'APPROVED') {
@@ -228,6 +258,10 @@ async function backfillRiskChecks() {
 // ─── Incremental ──────────────────────────────────────────────────────────────
 
 async function checkLatestSignals() {
+  const profile = await loadProfileSettings();
+  const rc = buildRiskConfig(profile);
+  console.log(`[RISK] Profile — balance: $${rc.accountBalance}, maxTrades: ${rc.maxOpenTrades}, maxDailyRisk: ${(rc.maxDailyLossPercent * 100).toFixed(1)}%`);
+
   const { data: signals, error } = await supabase
     .from('trade_signals')
     .select('*')
@@ -243,13 +277,12 @@ async function checkLatestSignals() {
     return [];
   }
 
-  // Only process signals from the latest candle time
   const latest = signals.filter(s => s.time === latestTime);
   const dailyState = await getDailyState(latestTime);
   const rows = [];
 
   for (const signal of latest) {
-    const result = await checkSignal(signal, dailyState);
+    const result = await checkSignal(signal, dailyState, rc);
     rows.push(result);
 
     if (result.status === 'APPROVED') {
@@ -293,9 +326,8 @@ async function printRiskReport() {
   }
   if (rejected.length > 10) console.log(`  ... and ${rejected.length - 10} more`);
 
-  const totalApproved = approved.length;
   const totalRisk = approved.reduce((s, r) => s + parseFloat(r.risk_amount), 0);
-  console.log(`\nTotal approved: ${totalApproved} | Total risk committed: $${totalRisk.toFixed(2)}`);
+  console.log(`\nTotal approved: ${approved.length} | Total risk committed: $${totalRisk.toFixed(2)}`);
 }
 
 module.exports = { backfillRiskChecks, checkLatestSignals, printRiskReport };
