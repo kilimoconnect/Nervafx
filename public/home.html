@@ -801,8 +801,10 @@
       text-transform: uppercase;
       white-space: nowrap;
     }
-    .status-aligned { background: rgba(34,197,94,0.12); color: #4ade80; border: 1px solid rgba(34,197,94,0.25); }
-    .status-neutral { background: rgba(201,168,76,0.12); color: #e9c97c; border: 1px solid rgba(201,168,76,0.25); }
+    .status-aligned    { background: rgba(34,197,94,0.12);  color: #4ade80; border: 1px solid rgba(34,197,94,0.25); }
+    .status-neutral    { background: rgba(201,168,76,0.12); color: #e9c97c; border: 1px solid rgba(201,168,76,0.25); }
+    .status-retreating { background: rgba(248,113,113,0.12); color: #f87171; border: 1px solid rgba(248,113,113,0.25); }
+    .status-bidding    { background: rgba(96,165,250,0.12);  color: #60a5fa; border: 1px solid rgba(96,165,250,0.25); }
 
     .regime-block {
       text-align: center;
@@ -1612,7 +1614,7 @@
             <div class="sentiment-group-name">Safe Havens</div>
             <div class="sentiment-group-desc">Gold, JPY, CHF positioning</div>
           </div>
-          <div class="sentiment-status status-neutral">Neutral</div>
+          <div class="sentiment-status status-retreating">Retreating</div>
         </div>
         <div class="sentiment-card">
           <div class="sentiment-card-left">
@@ -1626,12 +1628,12 @@
         <div class="regime-label">Current Market Regime</div>
         <div>
           <span class="regime-badge">
-            <span>🔷</span>
-            Cautious Risk On
+            <span>🟢</span>
+            Risk On
           </span>
         </div>
         <p class="regime-desc">
-          Growth assets and carry FX are aligned risk-on, but safe havens and USD liquidity remain neutral — signaling a measured, selective risk appetite. High-probability setups favor risk-positive pairs with confirmed multi-horizon structure.
+          Growth assets, carry FX, and safe havens are all aligned — equities and risk currencies bid, safe havens retreating. USD liquidity remains neutral. High-probability setups favor risk-positive pairs with confirmed multi-horizon structure.
         </p>
       </div>
     </div>
