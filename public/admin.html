@@ -174,9 +174,9 @@
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;padding:12px 14px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;flex-wrap:wrap">
         <span style="font-size:13px;font-weight:600;color:var(--text-dim);white-space:nowrap">🕐 Calendar Timezone:</span>
         <select class="adm-input" id="tz-select" style="flex:1;min-width:200px;max-width:340px">
-          <option value="UTC">UTC (Universal Time)</option>
+          <option value="UTC" selected>UTC (Universal Time)</option>
           <optgroup label="Africa">
-            <option value="Africa/Dar_es_Salaam" selected>EAT — Tanzania / Dar es Salaam (UTC+3)</option>
+            <option value="Africa/Dar_es_Salaam">EAT — Tanzania / Dar es Salaam (UTC+3)</option>
             <option value="Africa/Nairobi">EAT — Nairobi (UTC+3)</option>
             <option value="Africa/Lagos">WAT — Lagos (UTC+1)</option>
             <option value="Africa/Cairo">EET — Cairo (UTC+2)</option>
@@ -611,7 +611,7 @@ Mon May 12 2026
   }
 
   // ── Init ──────────────────────────────────────────────────────────────────────
-  let _userTz = 'Africa/Dar_es_Salaam'; // Tanzania default; overridden by profile
+  let _userTz = 'UTC'; // default UTC; overridden by profile if set
 
   async function loadProfile() {
     try {
