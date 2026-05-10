@@ -268,7 +268,7 @@ function newsWarnHtml(instrument, hoursAhead = 4) {
   for (const cur of [c1, c2]) {
     (_newsMap[cur] || []).forEach(e => {
       const t = new Date(e.event_time).getTime();
-      if (t >= now && t <= cutoff && e.impact !== 'LOW') {
+      if (t >= now && t <= cutoff && (e.impact === 'HIGH' || e.impact === 'MEDIUM')) {
         hits.push({ ...e, cur });
       }
     });
