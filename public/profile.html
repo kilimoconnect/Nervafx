@@ -655,10 +655,8 @@
     let _tzAll = [];
 
     function buildTzList(savedValue) {
-      const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
       const base = [
-        { value: 'auto',  label: `Auto — Browser (${browserTz})` },
-        { value: 'UTC',   label: 'UTC' },
+        { value: 'UTC', label: 'UTC' },
       ];
 
       let zones = [];
@@ -726,11 +724,8 @@
       const el = document.getElementById('tz-current');
       if (!el) return;
       try {
-        const effective = (tz === 'auto')
-          ? Intl.DateTimeFormat().resolvedOptions().timeZone
-          : (tz || 'UTC');
         const now = new Intl.DateTimeFormat('en-GB', {
-          timeZone: effective, hour: '2-digit', minute: '2-digit',
+          timeZone: tz || 'UTC', hour: '2-digit', minute: '2-digit',
           timeZoneName: 'longOffset', hour12: false,
         }).format(new Date());
         el.textContent = `Current time in selected zone: ${now}`;
