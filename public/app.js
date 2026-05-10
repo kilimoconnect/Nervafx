@@ -763,6 +763,54 @@ function renderSession(data) {
     <div class="session-timeline">${timelineHtml}</div>`;
 }
 
+// ─── Sentiment donut chart (CSS conic-gradient) ───────────────────────────────
+
+function sentimentDonutHtml(groups) {
+  // groups: [{title, vals}] — same format used in renderSentiment
+  const GAP = 2; // degrees gap between segments
+
+  const data = groups.map(g => {
+    const vals = g.vals.filter(v => v != null).map(Number);
+    const sum  = vals.reduce((a, b) => a + b, 0);
+    const color = sum > 5 ? '#4ade80' : sum < -5 ? '#f87171' : '#64748b';
+    const shortTitle = g.title.split('/')[0].trim();
+    return { title: shortTitle, sum, absSum: Math.abs(sum), color };
+  });
+
+  const total = data.reduce((a, b) => a + b.absSum, 0) || 1;
+
+  // Build conic-gradient stops
+  let angle = 0;
+  const stops = [];
+  data.forEach(d => {
+    const deg = (d.absSum / total) * 360;
+    if (deg < 0.5) { angle += deg; return; } // skip invisible slivers
+    const end = angle + deg - GAP;
+    stops.push(`${d.color} ${angle.toFixed(2)}deg ${end.toFixed(2)}deg`);
+    stops.push(`#0a0c10 ${end.toFixed(2)}deg ${(angle + deg).toFixed(2)}deg`);
+    angle += deg;
+  });
+
+  const gradient = stops.length
+    ? `conic-gradient(${stops.join(', ')})`
+    : 'conic-gradient(#1e2128 0deg 360deg)';
+
+  return `
+    <div class="sent-donut-wrap">
+      <div class="sent-donut" style="background:${gradient}">
+        <div class="sent-donut-hole"></div>
+      </div>
+      <div class="sent-donut-legend">
+        ${data.map(d => `
+          <div class="sent-legend-item">
+            <span class="sent-legend-dot" style="background:${d.color}"></span>
+            <span class="sent-legend-label">${d.title}</span>
+            <span class="sent-legend-val" style="color:${d.color}">${d.sum > 0 ? '+' : ''}${d.sum.toFixed(0)}</span>
+          </div>`).join('')}
+      </div>
+    </div>`;
+}
+
 // ─── Risk Sentiment ───────────────────────────────────────────────────────────
 
 function renderSentiment(data) {
@@ -789,55 +837,13 @@ function renderSentiment(data) {
   const accelArrow = accel > 20 ? '↑↑' : accel > 5 ? '↑' : accel < -20 ? '↓↓' : accel < -5 ? '↓' : '→';
 
   // Components grouped for display — calculation unchanged
+  // vals array is used for both group rows and the donut chart
   const groups = [
-    {
-      title: 'Growth / Risk Assets',
-      items: [
-        { label: 'Equity', val: s.equity_score, tip: 'SPX500 + NAS100 smoothed 12/24H momentum' },
-        { label: 'Oil',    val: s.oil_score,    tip: 'Brent Crude — context-aware: spike ≠ always Risk On' },
-      ],
-    },
-    {
-      title: 'Carry / Risk FX',
-      items: [
-        { label: 'AUD/JPY', val: s.audjpy_score, tip: 'AUD/JPY carry spread — classic risk barometer' },
-        { label: 'NZD/JPY', val: s.nzdjpy_score, tip: 'NZD/JPY carry spread — risk barometer' },
-      ],
-    },
-    {
-      title: 'Safe Havens',
-      items: [
-        { label: 'JPY',  val: s.jpy_score,  tip: 'JPY safe haven — weakness = Risk On' },
-        { label: 'CHF',  val: s.chf_score,  tip: 'CHF safe haven — weakness = Risk On' },
-        { label: 'Gold', val: s.gold_score, tip: 'Gold — weakness = Risk On (fear absent)' },
-      ],
-    },
-    {
-      title: 'USD Liquidity',
-      items: [
-        { label: 'USD', val: s.usd_score, tip: 'USD pressure — USD strong = liquidity stress = Risk Off' },
-      ],
-    },
+    { title: 'Growth / Risk Assets', vals: [s.equity_score, s.oil_score] },
+    { title: 'Carry / Risk FX',      vals: [s.audjpy_score, s.nzdjpy_score] },
+    { title: 'Safe Havens',          vals: [s.jpy_score, s.chf_score, s.gold_score] },
+    { title: 'USD Liquidity',        vals: [s.usd_score] },
   ];
-
-  function compBar(val) {
-    if (val == null) return '<div class="sent-comp-bar-wrap"><div class="sent-comp-center"></div></div>';
-    const v    = Number(val);
-    const cls  = v > 5 ? 'risk-on' : v < -5 ? 'risk-off' : 'neutral';
-    const pct  = Math.abs(v);
-    const left  = v < 0 ? Math.max(0, 50 - pct / 2) : 50;
-    const width = pct / 2;
-    return `<div class="sent-comp-bar-wrap">
-      <div class="sent-comp-bar-fill ${cls}" style="left:${left}%;width:${width}%"></div>
-      <div class="sent-comp-center"></div>
-    </div>`;
-  }
-
-  function compVal(val) {
-    if (val == null) return '—';
-    const v = Number(val);
-    return (v > 0 ? '+' : '') + v;
-  }
 
   el.innerHTML = `
     <div class="sentiment-main">
@@ -857,24 +863,27 @@ function renderSentiment(data) {
         <span class="sent-accel ${accelCls}" title="Acceleration: how fast conditions are changing">${accelArrow} ${accel > 0 ? '+' : ''}${accel}</span>
       </div>
     </div>
-    <div class="sentiment-components">
-      ${groups.map(g => {
-        const vals   = g.items.map(c => c.val).filter(v => v != null).map(Number);
-        const allOn  = vals.length >= 2 && vals.every(v => v >= 5);
-        const allOff = vals.length >= 2 && vals.every(v => v <= -5);
-        const badge  = allOn  ? '<span class="sent-align-badge risk-on">↑ ALIGNED</span>'
-                     : allOff ? '<span class="sent-align-badge risk-off">↓ ALIGNED</span>'
-                     : vals.length === 1 ? '' // single-item groups: no alignment badge
-                     : '<span class="sent-align-badge not-aligned">✕ NOT ALIGNED</span>';
-        const sum    = vals.reduce((a, b) => a + b, 0);
-        const sumStr = (sum > 0 ? '+' : '') + sum.toFixed(0);
-        const sumCls = sum > 5 ? 'risk-on' : sum < -5 ? 'risk-off' : 'neutral';
-        return `
-          <div class="sent-group-row">
-            <div class="sent-group-header">${g.title}${badge}</div>
-            <span class="sent-group-sum ${sumCls}">${sumStr}</span>
-          </div>`;
-      }).join('')}
+    <div class="sent-groups-and-chart">
+      <div class="sentiment-components">
+        ${groups.map(g => {
+          const vals   = g.vals.filter(v => v != null).map(Number);
+          const allOn  = vals.length >= 2 && vals.every(v => v >= 5);
+          const allOff = vals.length >= 2 && vals.every(v => v <= -5);
+          const badge  = allOn  ? '<span class="sent-align-badge risk-on">↑ ALIGNED</span>'
+                       : allOff ? '<span class="sent-align-badge risk-off">↓ ALIGNED</span>'
+                       : vals.length === 1 ? ''
+                       : '<span class="sent-align-badge not-aligned">✕ NOT ALIGNED</span>';
+          const sum    = vals.reduce((a, b) => a + b, 0);
+          const sumStr = (sum > 0 ? '+' : '') + sum.toFixed(0);
+          const sumCls = sum > 5 ? 'risk-on' : sum < -5 ? 'risk-off' : 'neutral';
+          return `
+            <div class="sent-group-row">
+              <div class="sent-group-header">${g.title}${badge}</div>
+              <span class="sent-group-sum ${sumCls}">${sumStr}</span>
+            </div>`;
+        }).join('')}
+      </div>
+      ${sentimentDonutHtml(groups)}
     </div>
     <div class="sentiment-time">${fmtTime(s.time)}</div>`;
 }
