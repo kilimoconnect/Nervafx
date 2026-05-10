@@ -139,12 +139,35 @@ html, body {
 .plan-lock-title { grid-column: 2; grid-row: 1; font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.3; }
 .plan-lock-desc  { grid-column: 2; grid-row: 2; font-size: 11px; color: var(--text-muted); line-height: 1.5; margin: 0; }
 
-/* bullets hidden on mobile to prevent overflow */
-.plan-lock-features { display: none; }
+.plan-lock-features {
+  grid-column: 2;
+  grid-row: 3;
+  list-style: none;
+  padding: 0;
+  margin: 2px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+}
+.plan-lock-features li {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  padding-left: 14px;
+  position: relative;
+  line-height: 1.5;
+}
+.plan-lock-features li::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  color: #818cf8;
+  font-weight: 700;
+}
 
 .plan-lock-btn {
   grid-column: 2;
-  grid-row: 3;
+  grid-row: 4;
   margin-top: 6px;
   font-size: 11px;
   font-weight: 600;
@@ -202,7 +225,7 @@ html, body {
 }
 
 /* ensure cards are tall enough for overlay */
-section.card:has(.plan-lock-overlay.visible) { min-height: 160px; overflow: hidden; }
+section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidden; }
 
 /* Free plan: dim the tf buttons that are disabled */
 .tf-btn:disabled { opacity: 0.3; cursor: not-allowed; }
