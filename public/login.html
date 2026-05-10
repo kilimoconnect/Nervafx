@@ -480,7 +480,7 @@
               <div class="input-wrap">
                 <span class="input-icon">👤</span>
                 <input id="first-name" type="text" placeholder="John"
-                       autocomplete="given-name" />
+                       autocomplete="given-name" oninput="validateSignupForm()" />
               </div>
             </div>
             <div class="field" style="margin-bottom:0">
@@ -488,7 +488,7 @@
               <div class="input-wrap">
                 <span class="input-icon">👤</span>
                 <input id="last-name" type="text" placeholder="Doe"
-                       autocomplete="family-name" />
+                       autocomplete="family-name" oninput="validateSignupForm()" />
               </div>
             </div>
           </div>
@@ -500,7 +500,7 @@
           <div class="input-wrap">
             <span class="input-icon">✉</span>
             <input id="email" type="email" placeholder="you@example.com"
-                   autocomplete="email" required />
+                   autocomplete="email" required oninput="validateSignupForm()" />
           </div>
         </div>
 
@@ -569,7 +569,7 @@
             <!-- Checkbox (always visible) -->
             <div class="disc-sep"></div>
             <label class="disc-checkbox-row" for="disc-agreed">
-              <input type="checkbox" id="disc-agreed" />
+              <input type="checkbox" id="disc-agreed" onchange="validateSignupForm()" />
               <span class="disc-checkbox-label">I have read and understand the Risk Disclaimer. I accept full responsibility for my own trading decisions and outcomes.</span>
             </label>
           </div>
@@ -625,6 +625,7 @@
       document.getElementById('tab-pill').classList.toggle('right',    isSignup);
       document.getElementById('btn-submit').textContent =
         isSignup ? 'Create Account' : 'Sign In';
+      document.getElementById('btn-submit').disabled = isSignup; // disabled until all fields valid
       document.getElementById('password').autocomplete =
         isSignup ? 'new-password' : 'current-password';
 
@@ -698,8 +699,9 @@
       fill.style.background = lvl ? lvl.color : '';
       label.textContent     = lvl ? lvl.text  : '—';
       label.style.color     = lvl ? lvl.color : 'var(--muted)';
-      // Re-validate confirm
+      // Re-validate confirm + overall form
       onConfirmInput(document.getElementById('confirm-password').value);
+      validateSignupForm();
     }
 
     // ── Disclaimer toggle ─────────────────────────────────────────────────────
@@ -715,8 +717,29 @@
       if (currentTab !== 'signup') return;
       const pw  = document.getElementById('password').value;
       const el  = document.getElementById('confirm-password');
-      if (!val) { el.className = ''; return; }
-      el.className = val === pw ? 'pw-match' : 'pw-nomatch';
+      if (!val) { el.className = ''; } else { el.className = val === pw ? 'pw-match' : 'pw-nomatch'; }
+      validateSignupForm();
+    }
+
+    // ── Live signup form validation ───────────────────────────────────────────
+    function validateSignupForm() {
+      if (currentTab !== 'signup') return;
+      const firstName = document.getElementById('first-name').value.trim();
+      const lastName  = document.getElementById('last-name').value.trim();
+      const email     = document.getElementById('email').value.trim();
+      const password  = document.getElementById('password').value;
+      const confirm   = document.getElementById('confirm-password').value;
+      const agreed    = document.getElementById('disc-agreed').checked;
+
+      const valid =
+        firstName.length > 0 &&
+        lastName.length  > 0 &&
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) &&
+        password.length >= 6 &&
+        password === confirm &&
+        agreed;
+
+      document.getElementById('btn-submit').disabled = !valid;
     }
 
     // ── Messages ─────────────────────────────────────────────────────────────
