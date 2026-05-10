@@ -4,13 +4,35 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>NervaFX — Trading Dashboard</title>
+
+  <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Notyf (toast notifications) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/notyf@3/notyf.min.css">
+
+  <!-- Dashboard styles -->
   <link rel="stylesheet" href="style.css" />
+
+  <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <!-- GSAP (animation engine) -->
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+
+  <!-- Lucide Icons (SVG icon library) -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <!-- CountUp.js (animated number counters) -->
+  <script src="https://cdn.jsdelivr.net/npm/countup.js@2.8.0/dist/countUp.umd.min.js"></script>
+
+  <!-- Notyf JS -->
+  <script src="https://cdn.jsdelivr.net/npm/notyf@3/notyf.min.js"></script>
 </head>
 <body>
+
   <!-- HEADER -->
   <header class="header">
     <div class="header-left">
@@ -24,39 +46,55 @@
       <div class="status-dot" id="status-dot" title="System status"></div>
       <span class="last-update" id="last-update">—</span>
       <span class="header-user-email" id="header-user"></span>
-      <button class="logout-btn" onclick="logout()">Sign Out</button>
+      <button class="logout-btn" onclick="logout()">
+        <i data-lucide="log-out" style="width:12px;height:12px;vertical-align:middle;margin-right:4px"></i>Sign Out
+      </button>
     </div>
   </header>
 
-  <main class="grid">
+  <main class="grid" id="main-grid">
 
     <!-- TRADING SESSION -->
     <section class="card span-3" id="section-session">
-      <h2 class="card-title">⏱ Trading Session <span class="sub">session quality · market activity · pair filter</span></h2>
+      <h2 class="card-title">
+        <i data-lucide="timer"></i> Trading Session
+        <span class="sub">session quality · market activity · pair filter</span>
+      </h2>
       <div id="session-display" class="session-display"></div>
     </section>
 
     <!-- LIVE OPPORTUNITIES -->
     <section class="card span-3" id="section-live">
-      <h2 class="card-title live-title">🔥 Live Opportunities <span class="sub">entry active or ready to enter</span></h2>
+      <h2 class="card-title live-title">
+        <i data-lucide="zap"></i> Live Opportunities
+        <span class="sub">entry active or ready to enter</span>
+      </h2>
       <div id="live-opportunities" class="live-grid"></div>
     </section>
 
     <!-- TOP 3 SETUPS -->
     <section class="card span-3" id="section-top">
-      <h2 class="card-title">Top Setups <span class="sub">all active phases — pullback, forming, watching</span></h2>
+      <h2 class="card-title">
+        <i data-lucide="bar-chart-2"></i> Top Setups
+        <span class="sub">all active phases — pullback, forming, watching</span>
+      </h2>
       <div id="top-setups" class="top-setups-grid"></div>
     </section>
 
     <!-- RISK SENTIMENT -->
     <section class="card span-3" id="section-sentiment">
-      <h2 class="card-title">Risk Sentiment</h2>
+      <h2 class="card-title">
+        <i data-lucide="activity"></i> Risk Sentiment
+      </h2>
       <div id="sentiment-display" class="sentiment-display"></div>
     </section>
 
     <!-- SIGNAL BOARD -->
     <section class="card span-2" id="section-signals">
-      <h2 class="card-title">Signal Board <span class="sub">confirmed entries &amp; watching</span></h2>
+      <h2 class="card-title">
+        <i data-lucide="radio"></i> Signal Board
+        <span class="sub">confirmed entries &amp; watching</span>
+      </h2>
       <div id="signals-active" class="signal-grid"></div>
       <div id="signals-wait" class="signal-grid wait-grid"></div>
       <div id="signals-notrade" class="notrade-row"></div>
@@ -64,11 +102,14 @@
 
     <!-- CURRENCY STRENGTH CHART -->
     <section class="card" id="section-strength">
-      <h2 class="card-title">Currency Strength <span class="tf-toggle">
-        <button class="tf-btn active" data-tf="6">6H</button>
-        <button class="tf-btn" data-tf="3">3H</button>
-        <button class="tf-btn" data-tf="12">12H</button>
-      </span></h2>
+      <h2 class="card-title">
+        <i data-lucide="trending-up"></i> Currency Strength
+        <span class="tf-toggle">
+          <button class="tf-btn active" data-tf="6">6H</button>
+          <button class="tf-btn" data-tf="3">3H</button>
+          <button class="tf-btn" data-tf="12">12H</button>
+        </span>
+      </h2>
       <div class="chart-wrap"><canvas id="strengthChart"></canvas></div>
       <div id="strength-momentum" class="mom-strip"></div>
       <div class="strength-time" id="strength-time"></div>
@@ -76,38 +117,50 @@
 
     <!-- MARKET STATES -->
     <section class="card" id="section-states">
-      <h2 class="card-title">Market States <span class="sub">all 28 pairs</span></h2>
+      <h2 class="card-title">
+        <i data-lucide="layers"></i> Market States
+        <span class="sub">all 28 pairs</span>
+      </h2>
       <div id="states-table" class="states-table"></div>
     </section>
 
     <!-- SPREAD RANKING -->
     <section class="card" id="section-spreads">
-      <h2 class="card-title">Pair Ranking <span class="sub">by weighted score (12H·6H·3H·accel)</span></h2>
+      <h2 class="card-title">
+        <i data-lucide="list-ordered"></i> Pair Ranking
+        <span class="sub">by weighted score (12H·6H·3H·accel)</span>
+      </h2>
       <div id="spreads-list" class="spreads-list"></div>
     </section>
 
     <!-- RISK SUMMARY -->
     <section class="card" id="section-risk">
-      <h2 class="card-title">Approved Trades</h2>
+      <h2 class="card-title">
+        <i data-lucide="shield-check"></i> Approved Trades
+      </h2>
       <div id="risk-list" class="risk-list"></div>
     </section>
 
     <!-- ACTIONS LOG -->
     <section class="card" id="section-actions">
-      <h2 class="card-title">Action Log</h2>
+      <h2 class="card-title">
+        <i data-lucide="scroll-text"></i> Action Log
+      </h2>
       <div id="actions-list" class="actions-list"></div>
     </section>
 
     <!-- DATA QUALITY -->
     <section class="card quality-card" id="section-quality">
-      <h2 class="card-title">Data Quality</h2>
+      <h2 class="card-title">
+        <i data-lucide="database"></i> Data Quality
+      </h2>
       <div id="quality-info" class="quality-info"></div>
     </section>
 
     <!-- MARKET JOURNAL -->
     <section class="card span-3" id="section-journal">
       <h2 class="card-title">
-        📓 Market Journal
+        <i data-lucide="book-open"></i> Market Journal
         <span class="sub">Hourly Snapshot · AI Outcome Review</span>
         <span class="journal-live-badge">LIVE</span>
       </h2>
@@ -125,7 +178,9 @@
           <span id="ai-modal-dir"></span>
           <span id="ai-modal-struct-badge"></span>
         </div>
-        <button class="ai-modal-close" onclick="closeAiModal()">✕</button>
+        <button class="ai-modal-close" onclick="closeAiModal()">
+          <i data-lucide="x" style="width:16px;height:16px"></i>
+        </button>
       </div>
       <div id="ai-modal-body" class="ai-modal-body"></div>
     </div>

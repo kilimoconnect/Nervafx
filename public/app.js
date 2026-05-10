@@ -1,4 +1,5 @@
 // NervaFX Dashboard — app.js
+// Libraries loaded via CDN: GSAP · Lucide Icons · CountUp.js · Notyf
 
 // ─── Auth guard ───────────────────────────────────────────────────────────────
 (function guardAuth() {
@@ -34,6 +35,70 @@ const REFRESH_MS = 60000;
 let strengthChart = null;
 let activeTF = '6';
 let strengthData = null;
+let _firstLoad = true;
+
+// ─── Notyf (toast notifications) ─────────────────────────────────────────────
+const notyf = typeof Notyf !== 'undefined'
+  ? new Notyf({
+      duration: 3500,
+      ripple: true,
+      position: { x: 'right', y: 'top' },
+      types: [
+        { type: 'success', background: 'linear-gradient(135deg,#16a34a,#22c55e)', icon: false },
+        { type: 'error',   background: 'linear-gradient(135deg,#dc2626,#ef4444)', icon: false },
+        { type: 'warning', background: 'linear-gradient(135deg,#ca8a04,#eab308)', icon: false },
+      ],
+    })
+  : { success: () => {}, error: () => {}, open: () => {} };
+
+// ─── Lucide icon hydration ────────────────────────────────────────────────────
+function hydrateIcons() {
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+// ─── CountUp helper ───────────────────────────────────────────────────────────
+function countTo(elementId, value, options = {}) {
+  if (typeof CountUp === 'undefined') return;
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  const cu = new CountUp.CountUp(elementId, value, {
+    duration: 1.2,
+    useEasing: true,
+    useGrouping: true,
+    ...options,
+  });
+  if (!cu.error) cu.start();
+}
+
+// ─── GSAP helpers ─────────────────────────────────────────────────────────────
+function gsapCardEntrance() {
+  if (typeof gsap === 'undefined') return;
+  gsap.from('#main-grid .card', {
+    y: 16,
+    opacity: 0,
+    duration: 0.55,
+    stagger: 0.045,
+    ease: 'power2.out',
+    clearProps: 'all',
+  });
+}
+
+function gsapModalOpen(el) {
+  if (typeof gsap === 'undefined') return;
+  gsap.fromTo(el,
+    { opacity: 0, scale: 0.95, y: 12 },
+    { opacity: 1, scale: 1,    y: 0,  duration: 0.28, ease: 'power2.out' }
+  );
+}
+
+function gsapModalClose(el, onComplete) {
+  if (typeof gsap === 'undefined') { onComplete(); return; }
+  gsap.to(el, {
+    opacity: 0, scale: 0.97, y: 8,
+    duration: 0.18, ease: 'power2.in',
+    onComplete,
+  });
+}
 
 // ─── Fetch helpers ────────────────────────────────────────────────────────────
 
@@ -92,11 +157,19 @@ function nextActionHtml(text) {
 function updateHeader(risk) {
   if (!risk?.summary) return;
   const s = risk.summary;
-  document.getElementById('stat-balance').textContent  = `Balance: $${(Number(s.balance) || 0).toLocaleString()}`;
-  document.getElementById('stat-risk').textContent     = `Daily Risk: ${s.dailyRiskPct ?? '0.00'}% / ${s.maxDailyRiskPct ?? 2}%`;
-  document.getElementById('stat-trades').textContent   = `Open: ${s.openTrades ?? 0} / ${s.maxTrades ?? 3}`;
-  document.getElementById('status-dot').className      = 'status-dot online';
-  document.getElementById('last-update').textContent   = 'Updated ' + new Date().toLocaleTimeString();
+
+  // Plain text fallback (CountUp handles numbers separately)
+  const balance = Number(s.balance) || 0;
+  const riskPct = Number(s.dailyRiskPct ?? 0);
+  const maxPct  = Number(s.maxDailyRiskPct ?? 2);
+  const open    = Number(s.openTrades ?? 0);
+  const maxTr   = Number(s.maxTrades ?? 3);
+
+  document.getElementById('stat-balance').textContent = `Balance: $${balance.toLocaleString()}`;
+  document.getElementById('stat-risk').textContent    = `Daily Risk: ${riskPct.toFixed(2)}% / ${maxPct}%`;
+  document.getElementById('stat-trades').textContent  = `Open: ${open} / ${maxTr}`;
+  document.getElementById('status-dot').className     = 'status-dot online';
+  document.getElementById('last-update').textContent  = 'Updated ' + new Date().toLocaleTimeString();
 }
 
 // ─── AI Analysis ─────────────────────────────────────────────────────────────
@@ -282,11 +355,17 @@ function openAiModal(instrument) {
     <div class="ai-modal-footer">48H analysis · updated ${fmtTime(ai.time)} · gpt-4o-mini</div>
   `;
 
-  document.getElementById('ai-modal-overlay').classList.add('open');
+  const overlay = document.getElementById('ai-modal-overlay');
+  const modal   = overlay.querySelector('.ai-modal');
+  overlay.classList.add('open');
+  gsapModalOpen(modal);
+  hydrateIcons();
 }
 
 function closeAiModal() {
-  document.getElementById('ai-modal-overlay').classList.remove('open');
+  const overlay = document.getElementById('ai-modal-overlay');
+  const modal   = overlay.querySelector('.ai-modal');
+  gsapModalClose(modal, () => overlay.classList.remove('open'));
 }
 
 // Close on Escape key
@@ -1120,9 +1199,18 @@ async function refresh() {
     renderJournal(journalData);
 
     document.getElementById('status-dot').className = 'status-dot online';
+
+    // First load: run GSAP entrance + hydrate icons
+    if (_firstLoad) {
+      _firstLoad = false;
+      gsapCardEntrance();
+    }
+    hydrateIcons();
+
   } catch (err) {
     console.error('Refresh error:', err);
     document.getElementById('status-dot').className = 'status-dot stale';
+    notyf.error('Data refresh failed — retrying next cycle');
   }
 }
 
