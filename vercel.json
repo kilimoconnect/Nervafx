@@ -1,5 +1,8 @@
 {
   "version": 2,
+  "functions": {
+    "api/news-parse.js": { "maxDuration": 30 }
+  },
   "rewrites": [
     { "source": "/",       "destination": "/home.html" },
     { "source": "/home",   "destination": "/home.html" },

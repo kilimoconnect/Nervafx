@@ -50,10 +50,10 @@ Other rules:
       model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user',   content: `Parse this forex calendar:\n\n${text.slice(0, 12000)}` },
+        { role: 'user',   content: `Parse this forex calendar:\n\n${text.slice(0, 20000)}` },
       ],
       temperature: 0.1,
-      max_tokens: 4000,
+      max_tokens: 8000,
     });
 
     const raw = completion.choices[0].message.content.trim();
@@ -66,6 +66,7 @@ Other rules:
 
     return res.json({ events, count: events.length });
   } catch (e) {
+    console.error('[news-parse] error:', e.message, e?.status, e?.code);
     return res.status(500).json({ error: 'AI parse failed: ' + e.message });
   }
 };
