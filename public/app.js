@@ -231,8 +231,11 @@ function renderTodayNews(events) {
     const isSoon = !isPast && (t - now) < 3600000; // < 1 hour
 
     const rowCls = isPast ? 'tnr past' : isNext ? 'tnr next-up' : isSoon ? 'tnr soon' : 'tnr';
+    const tz = (_userTz === 'auto')
+      ? Intl.DateTimeFormat().resolvedOptions().timeZone
+      : (_userTz || 'UTC');
     const timeStr = new Date(e.event_time).toLocaleTimeString('en-GB',
-      { hour:'2-digit', minute:'2-digit', timeZone:'UTC' });
+      { hour:'2-digit', minute:'2-digit', timeZone: tz });
 
     return `<div class="${rowCls}">
       <span class="tn-time">${timeStr}</span>
