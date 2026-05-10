@@ -227,6 +227,18 @@ html, body {
 /* ensure cards are tall enough for overlay */
 section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidden; }
 
+/* desktop: taller min-height for wide feature cards */
+@media (min-width: 700px) {
+  #section-live:has(.plan-lock-overlay.visible),
+  #section-top:has(.plan-lock-overlay.visible),
+  #section-journal:has(.plan-lock-overlay.visible) { min-height: 320px; }
+}
+
+/* taller min-height for wide feature cards */
+#section-live:has(.plan-lock-overlay.visible),
+#section-top:has(.plan-lock-overlay.visible),
+#section-journal:has(.plan-lock-overlay.visible) { min-height: 320px; }
+
 /* Free plan: dim the tf buttons that are disabled */
 .tf-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
