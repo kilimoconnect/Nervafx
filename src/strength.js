@@ -186,27 +186,35 @@ async function backfillStrength() {
 }
 
 // Calculate and store strength for the latest common closed candle only.
-// Uses buildRecentCandleLookup (50 rows/instrument) — avoids the 1000-row Supabase cap.
-// Walks back up to 48H from the latest common time to skip weekend/holiday gaps.
+// Uses buildRecentCandleLookup (100 rows/instrument) — avoids the 1000-row Supabase cap.
+// Uses intersection-based timestamp search to skip weekend/holiday gaps naturally.
 async function calculateLatestStrength() {
-  const lookup = await buildRecentCandleLookup(50);
+  const lookup = await buildRecentCandleLookup(100);
 
-  // Start from the minimum of each instrument's latest candle time, then
-  // walk back 1H at a time until all instruments have full 12H lookback data.
-  let time = latestCommonTime(lookup);
-  if (!time) throw new Error('[STRENGTH] No common candle time found across all instruments');
+  // Build intersection: timestamps present in ALL instruments, sorted most-recent-first.
+  // This naturally skips Sat/Sun gaps — no candles exist then, so no intersection there.
+  const sets = config.instruments.map(inst => new Set(Object.keys(lookup[inst] || {})));
+  const commonTimestamps = [...sets[0]]
+    .filter(t => sets.every(s => s.has(t)))
+    .sort()
+    .reverse();
 
-  let found = false;
-  for (let attempt = 0; attempt < 48; attempt++) {
-    const rows = calculateAtTime(lookup, time);
-    if (rows) { found = true; break; }
-    // Move back one hour
-    const t = new Date(time);
-    t.setUTCHours(t.getUTCHours() - 1);
-    time = t.toISOString();
+  if (!commonTimestamps.length) throw new Error('[STRENGTH] No timestamps common to all instruments');
+
+  // Find the most recent common timestamp where every instrument also has all 3/6/12H lookback candles.
+  let time = null;
+  outer:
+  for (const t of commonTimestamps) {
+    for (const inst of config.instruments) {
+      for (const lb of LOOKBACKS) {
+        if (lookup[inst][offsetISO(t, lb)] === undefined) continue outer;
+      }
+    }
+    time = t;
+    break;
   }
 
-  if (!found) throw new Error(`[STRENGTH] Could not find a timestamp with complete lookback data (last tried: ${time})`);
+  if (!time) throw new Error('[STRENGTH] Could not find a timestamp with complete lookback data across all instruments');
 
   const rows = calculateAtTime(lookup, time);
   await upsertStrengthRows(rows);

@@ -62,7 +62,7 @@ async function runStrength(sb) {
       .eq('timeframe', 'H1')
       .eq('complete', true)
       .order('time', { ascending: false })
-      .limit(50); // 12H lookback + up to ~24H lag in latestCommonTime + buffer
+      .limit(100); // need enough to cover weekend gap: ~12 Mon + ~3 Sun + ~22 Fri + ~24 Thu = 61
     if (error) throw new Error(`candle fetch ${inst}: ${error.message}`);
     lookup[inst] = {};
     for (const c of data || []) {
@@ -70,30 +70,31 @@ async function runStrength(sb) {
     }
   }
 
-  // Find the latest common time where ALL instruments have data
-  const latestPerInstrument = {};
+  // Build intersection: only timestamps where ALL 28 instruments have a candle
+  const sets = INSTRUMENTS.map(inst => new Set(Object.keys(lookup[inst] || {})));
   for (const inst of INSTRUMENTS) {
-    const times = Object.keys(lookup[inst] || {}).sort();
-    if (!times.length) throw new Error(`No candles for ${inst}`);
-    latestPerInstrument[inst] = times[times.length - 1];
+    if (!sets[INSTRUMENTS.indexOf(inst)].size) throw new Error(`No candles for ${inst}`);
   }
-  // Start from the minimum of latest times, then walk back until all 12H lookbacks exist
-  let common = Object.values(latestPerInstrument).sort()[0]; // minimum = most restrictive
-  let found  = false;
-  for (let attempt = 0; attempt < 48; attempt++) {
-    let ok = true;
+  const commonTimestamps = [...sets[0]]
+    .filter(t => sets.every(s => s.has(t)))
+    .sort()
+    .reverse(); // most recent first
+
+  if (!commonTimestamps.length) throw new Error('No timestamps common to all instruments');
+
+  // Find most recent common time where every instrument also has all 12H lookback candles
+  let common = null;
+  outer:
+  for (const t of commonTimestamps) {
     for (const inst of INSTRUMENTS) {
-      if (!lookup[inst][common]) { ok = false; break; }
       for (const lb of LOOKBACKS) {
-        if (!lookup[inst][offsetISO(common, lb)]) { ok = false; break; }
+        if (lookup[inst][offsetISO(t, lb)] === undefined) continue outer;
       }
-      if (!ok) break;
     }
-    if (ok) { found = true; break; }
-    // Go back 1 hour and try again
-    common = offsetISO(common, 1);
+    common = t;
+    break;
   }
-  if (!found) throw new Error('Could not find a timestamp with complete 12H lookback data across all instruments');
+  if (!common) throw new Error('Could not find a timestamp with complete 12H lookback data across all instruments');
 
   // Calculate raw strength at that time
   const raw = {
