@@ -71,7 +71,6 @@ const QUALITY_DESC = {
 
 const SESSION_META = {
   DEAD_HOURS:  { label: 'Low Liquidity',      quality: 'BLOCKED',   tradesAllowed: false, baseActivity: 5,  tz: null,                 localOpen: null, localClose: null },
-  PRE_LONDON:  { label: 'Sydney',             quality: 'LOW',       tradesAllowed: true,  baseActivity: 22, tz: 'Europe/London',       localOpen: 6,    localClose: 8    },
   ASIA:        { label: 'Asia',               quality: 'MEDIUM',    tradesAllowed: true,  baseActivity: 48, tz: 'Asia/Tokyo',          localOpen: 9,    localClose: 18   },
   LONDON_OPEN: { label: 'London Open',        quality: 'HIGH',      tradesAllowed: true,  baseActivity: 80, tz: 'Europe/London',       localOpen: 8,    localClose: 10   },
   LONDON:      { label: 'London',             quality: 'HIGH',      tradesAllowed: true,  baseActivity: 70, tz: 'Europe/London',       localOpen: 10,   localClose: 13   },
@@ -82,7 +81,7 @@ const SESSION_META = {
 // ─── Pair-session deltas ───────────────────────────────────────────────────────
 
 const PAIR_SESSION_DELTA = {
-  GBP_USD: { LONDON_OPEN: +8, LONDON: +5, LONDON_NY: +8, LATE_NY: -5, ASIA: -5, PRE_LONDON: -3 },
+  GBP_USD: { LONDON_OPEN: +8, LONDON: +5, LONDON_NY: +8, LATE_NY: -5, ASIA: -5 },
   GBP_JPY: { LONDON_OPEN: +8, LONDON: +5, LONDON_NY: +8, ASIA: +3,   LATE_NY: -5 },
   GBP_CHF: { LONDON_OPEN: +8, LONDON: +5, LONDON_NY: +5, ASIA: -3 },
   GBP_CAD: { LONDON_OPEN: +8, LONDON: +5, LONDON_NY: +8, ASIA: -3 },
@@ -170,11 +169,6 @@ function getCurrentSession(now = new Date()) {
     return _build('ASIA', now);
   }
 
-  // London approaching (pre-session warm-up)
-  if (londonHour >= 6 && londonHour < 8) {
-    return _build('PRE_LONDON', now);
-  }
-
   // Fallback
   return _build('DEAD_HOURS', now, { blocked: true, blockReason: 'Dead hours — low liquidity' });
 }
@@ -233,7 +227,6 @@ function _computeUTCRange(sessName, loOffset, nyOffset) {
 
   switch (sessName) {
     case 'ASIA':        return { open: 0,           close: 9 };           // Tokyo UTC+9, no DST
-    case 'PRE_LONDON':  return { open: n(6 - loOffset),  close: n(8  - loOffset) };
     case 'LONDON_OPEN': return { open: n(8 - loOffset),  close: n(10 - loOffset) };
     case 'LONDON':      return { open: n(10 - loOffset), close: n(13 - loOffset) };
     case 'LONDON_NY':   return {
@@ -256,7 +249,7 @@ function getSessionTimeline(now = new Date()) {
   const current  = getCurrentSession(now);
 
   return [
-    'ASIA', 'PRE_LONDON', 'LONDON_OPEN', 'LONDON', 'LONDON_NY', 'LATE_NY', 'DEAD_HOURS',
+    'ASIA', 'LONDON_OPEN', 'LONDON', 'LONDON_NY', 'LATE_NY', 'DEAD_HOURS',
   ].map(name => {
     const meta  = SESSION_META[name];
     const range = _computeUTCRange(name, loOffset, nyOffset);

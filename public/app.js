@@ -1090,7 +1090,6 @@ function renderActions(actions) {
 
 const SESSION_TIMELINE = [
   { name: 'ASIA',        label: 'Asia',       hours: '00–06', quality: 'medium'    },
-  { name: 'PRE_LONDON',  label: 'Sydney',     hours: '05–07', quality: 'low'       },
   { name: 'LONDON_OPEN', label: 'LDN Open',   hours: '07–10', quality: 'high'      },
   { name: 'LONDON',      label: 'London',     hours: '10–13', quality: 'high'      },
   { name: 'LONDON_NY',   label: 'LDN/NY',     hours: '13–17', quality: 'very_high' },
