@@ -186,21 +186,29 @@ async function backfillStrength() {
 }
 
 // Calculate and store strength for the latest common closed candle only.
-// Uses buildRecentCandleLookup (25 rows/instrument) — avoids the 1000-row Supabase cap.
+// Uses buildRecentCandleLookup (50 rows/instrument) — avoids the 1000-row Supabase cap.
+// Walks back up to 48H from the latest common time to skip weekend/holiday gaps.
 async function calculateLatestStrength() {
   const lookup = await buildRecentCandleLookup(50);
-  const time = latestCommonTime(lookup);
 
-  if (!time) {
-    throw new Error('[STRENGTH] No common candle time found across all instruments');
+  // Start from the minimum of each instrument's latest candle time, then
+  // walk back 1H at a time until all instruments have full 12H lookback data.
+  let time = latestCommonTime(lookup);
+  if (!time) throw new Error('[STRENGTH] No common candle time found across all instruments');
+
+  let found = false;
+  for (let attempt = 0; attempt < 48; attempt++) {
+    const rows = calculateAtTime(lookup, time);
+    if (rows) { found = true; break; }
+    // Move back one hour
+    const t = new Date(time);
+    t.setUTCHours(t.getUTCHours() - 1);
+    time = t.toISOString();
   }
+
+  if (!found) throw new Error(`[STRENGTH] Could not find a timestamp with complete lookback data (last tried: ${time})`);
 
   const rows = calculateAtTime(lookup, time);
-
-  if (!rows) {
-    throw new Error(`[STRENGTH] Missing lookback candles at ${time}. Cannot calculate.`);
-  }
-
   await upsertStrengthRows(rows);
   console.log(`[STRENGTH] Stored 8 currency scores for ${time}`);
   return { time, rows };

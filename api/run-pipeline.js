@@ -70,14 +70,30 @@ async function runStrength(sb) {
     }
   }
 
-  // Latest common closed candle across all instruments
-  let common = null;
+  // Find the latest common time where ALL instruments have data
+  const latestPerInstrument = {};
   for (const inst of INSTRUMENTS) {
     const times = Object.keys(lookup[inst] || {}).sort();
     if (!times.length) throw new Error(`No candles for ${inst}`);
-    const latest = times[times.length - 1];
-    if (!common || latest < common) common = latest;
+    latestPerInstrument[inst] = times[times.length - 1];
   }
+  // Start from the minimum of latest times, then walk back until all 12H lookbacks exist
+  let common = Object.values(latestPerInstrument).sort()[0]; // minimum = most restrictive
+  let found  = false;
+  for (let attempt = 0; attempt < 48; attempt++) {
+    let ok = true;
+    for (const inst of INSTRUMENTS) {
+      if (!lookup[inst][common]) { ok = false; break; }
+      for (const lb of LOOKBACKS) {
+        if (!lookup[inst][offsetISO(common, lb)]) { ok = false; break; }
+      }
+      if (!ok) break;
+    }
+    if (ok) { found = true; break; }
+    // Go back 1 hour and try again
+    common = offsetISO(common, 1);
+  }
+  if (!found) throw new Error('Could not find a timestamp with complete 12H lookback data across all instruments');
 
   // Calculate raw strength at that time
   const raw = {
@@ -89,12 +105,8 @@ async function runStrength(sb) {
   for (const inst of INSTRUMENTS) {
     const [base, quote] = inst.split('_');
     const closeNow = lookup[inst][common];
-    if (closeNow === undefined) throw new Error(`Missing close at ${common} for ${inst}`);
-
     for (const lb of LOOKBACKS) {
-      const pastTime  = offsetISO(common, lb);
-      const pastClose = lookup[inst][pastTime];
-      if (pastClose === undefined) throw new Error(`Missing lookback ${lb}H for ${inst} at ${pastTime}`);
+      const pastClose = lookup[inst][offsetISO(common, lb)];
       const mv = (closeNow - pastClose) / pastClose;
       raw[lb][base]  += mv;
       raw[lb][quote] -= mv;
@@ -193,13 +205,15 @@ async function runSpreads(sb) {
     const s3h  = (parseFloat(b.smooth_3h)  || 0) - (parseFloat(q.smooth_3h)  || 0);
     const s6h  = (parseFloat(b.smooth_6h)  || 0) - (parseFloat(q.smooth_6h)  || 0);
     const s12h = (parseFloat(b.smooth_12h) || 0) - (parseFloat(q.smooth_12h) || 0);
-    const ws   = s12h * 0.40 + s6h * 0.35 + s3h * 0.15;
-
     rows.push({
-      time: latestTime, instrument: inst,
-      base_currency: base, quote_currency: quote,
-      spread_3h: s3h, spread_6h: s6h, spread_12h: s12h,
-      weighted_score: ws,
+      time:           latestTime,
+      instrument:     inst,
+      base_currency:  base,
+      quote_currency: quote,
+      spread_3h:      s3h,
+      spread_6h:      s6h,
+      spread_12h:     s12h,
+      // weighted_score and bias are computed at read time in api/spreads.js, not stored
     });
   }
 
