@@ -60,20 +60,22 @@ async function collectStates() {
 
 async function collectStrength() {
   // Get the latest strength snapshot — one row per currency at the latest time
-  const { data: latest } = await supabase
+  const { data: latest, error: latestErr } = await supabase
     .from('currency_strength')
     .select('time')
     .order('time', { ascending: false })
     .limit(1)
     .single();
 
+  if (latestErr) { console.warn('[JOURNAL] collectStrength latest time:', latestErr.message); return []; }
   if (!latest) return [];
 
-  const { data: rows } = await supabase
+  const { data: rows, error: rowsErr } = await supabase
     .from('currency_strength')
-    .select('currency, smooth_3h, smooth_6h, smooth_12h, normalized_3h, normalized_6h, normalized_12h, momentum, accel_label')
+    .select('currency, smooth_3h, smooth_6h, smooth_12h, normalized_3h, normalized_6h, normalized_12h')
     .eq('time', latest.time);
 
+  if (rowsErr) { console.warn('[JOURNAL] collectStrength rows:', rowsErr.message); return []; }
   return rows || [];
 }
 
@@ -292,8 +294,6 @@ async function writeJournalEntry() {
     normalized_3h:  r.normalized_3h,
     normalized_6h:  r.normalized_6h,
     normalized_12h: r.normalized_12h,
-    momentum:      r.momentum,
-    accel_label:   r.accel_label,
   }));
 
   // Signals summary for storage

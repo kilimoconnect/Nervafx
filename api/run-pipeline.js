@@ -4,8 +4,8 @@
  * POST /api/run-pipeline
  *
  * Manually triggers the analysis pipeline using candle data already in Supabase.
- * Runs: strength → smooth → spreads → states → signals
- * Skips: OANDA fetch (candles must already be CLEAN), AI analysis, journal, outcomes.
+ * Runs: strength → smooth → spreads → journal
+ * Skips: OANDA fetch (candles must already be CLEAN), AI analysis, outcomes.
  *
  * Protected: requires admin JWT (same ID check as the dashboard Admin button).
  *
@@ -13,6 +13,7 @@
  */
 
 const { createClient } = require('@supabase/supabase-js');
+const { writeJournalEntry } = require('../src/journalEngine');
 
 const ADMIN_ID = '140f3854-2c85-488c-8e0a-0f965d562654';
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
@@ -244,6 +245,7 @@ module.exports = async function handler(req, res) {
   await step('strength', async () => { strengthTime = await runStrength(sb); });
   await step('smooth',   () => runSmooth(sb));
   await step('spreads',  () => runSpreads(sb));
+  await step('journal',  () => writeJournalEntry());
 
   return res.json({
     ok:           true,
