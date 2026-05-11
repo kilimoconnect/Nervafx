@@ -1344,9 +1344,13 @@ function renderQuality(q) {
 let _journalEntries = {}; // id → entry, populated in renderJournal
 
 function renderJrnStrengthSection(cs) {
-  if (!cs) return '<div class="jrn-cs-section"><div class="jrn-cs-header">💹 Currency Strength — Snapshot</div><p class="jrn-cs-nodata">No strength data for this entry.</p></div>';
-  const currencies = cs.currencies || (Array.isArray(cs) ? cs : null);
-  if (!currencies?.length) return '<div class="jrn-cs-section"><div class="jrn-cs-header">💹 Currency Strength — Snapshot</div><p class="jrn-cs-nodata">No strength data for this entry.</p></div>';
+  // Handle old (plain array) and new ({ as_of, currencies }) formats
+  const currencies = Array.isArray(cs) ? cs : (cs?.currencies || null);
+  const asOf       = Array.isArray(cs) ? null : (cs?.as_of || null);
+  const asOfLabel  = asOf ? `<span class="jrn-as-of">as of ${fmtTime(asOf)}</span>` : '';
+  const header     = `💹 Currency Strength ${asOfLabel}`;
+  if (!cs)             return `<div class="jrn-cs-section"><div class="jrn-cs-header">${header}</div><p class="jrn-cs-nodata">No strength data for this entry.</p></div>`;
+  if (!currencies?.length) return `<div class="jrn-cs-section"><div class="jrn-cs-header">${header}</div><p class="jrn-cs-nodata">No strength data for this entry.</p></div>`;
 
   const tfs = [
     { keys: ['smooth_3h',  'normalized_3h'],  label: '3H Strength' },
@@ -1356,7 +1360,7 @@ function renderJrnStrengthSection(cs) {
 
   return `
     <div class="jrn-cs-section">
-      <div class="jrn-cs-header">💹 Currency Strength — Snapshot</div>
+      <div class="jrn-cs-header">${header}</div>
       <div class="jrn-cs-grid">
         ${tfs.map(tf => {
           const vals = currencies.map(c => {
@@ -1432,8 +1436,10 @@ function renderJrnCalendarSection(events, entryTime) {
 }
 
 function renderJrnAiSection(marketStates, aiAnalysis) {
-  const states = (marketStates || []);
-  const ai     = (aiAnalysis   || []);
+  // Handle both old (plain array) and new ({ as_of, pairs }) formats
+  const states  = Array.isArray(marketStates) ? marketStates : (marketStates?.pairs || []);
+  const asOf    = Array.isArray(marketStates) ? null : (marketStates?.as_of || null);
+  const ai      = (aiAnalysis || []);
   if (!states.length && !ai.length) return '';
 
   // Map AI data by instrument for quick lookup
@@ -1454,7 +1460,8 @@ function renderJrnAiSection(marketStates, aiAnalysis) {
   const stateCls   = s => s === 'TREND' ? 'trend' : s?.startsWith('PULLBACK') ? 'pb' : s === 'READY_TO_ENTER' ? 'ready' : 'notrade';
   const biasCls    = b => b === 'BUY' ? 'buy' : b === 'SELL' ? 'sell' : '';
 
-  return _jrnSection('📊 Market States', `
+  const asOfLabel = asOf ? `<span class="jrn-as-of">as of ${fmtTime(asOf)}</span>` : '';
+  return _jrnSection(`📊 Market States ${asOfLabel}`, `
     ${warnings.length ? `<div class="jrn-ai-warnings">${warnings.map(a =>
       `<div class="jrn-ai-warn-row"><span class="jrn-ai-warn-pair">${pair(a.instrument)}</span><span class="jrn-ai-warn-text">⚠ ${a.warning}</span></div>`
     ).join('')}</div>` : ''}

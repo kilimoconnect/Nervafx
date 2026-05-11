@@ -1501,6 +1501,15 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
   margin: 0;
 }
 .jrn-loading { opacity: 0.5; font-style: italic; }
+.jrn-as-of {
+  font-size: 9px;
+  font-weight: 400;
+  color: var(--text-dim);
+  text-transform: none;
+  letter-spacing: 0;
+  margin-left: 6px;
+  opacity: 0.7;
+}
 
 /* ── Economic calendar ───────────────────────────────────────────────────── */
 .jrn-cal-list { display: flex; flex-direction: column; gap: 4px; }

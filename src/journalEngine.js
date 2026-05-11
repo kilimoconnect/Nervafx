@@ -48,14 +48,14 @@ async function collectStates() {
     .limit(1)
     .single();
 
-  if (!latest) return [];
+  if (!latest) return { as_of: null, pairs: [] };
 
   const { data: rows } = await supabase
     .from('market_states')
     .select('instrument, state, bias, confidence, spread_3h, spread_6h, spread_12h, reason')
     .eq('time', latest.time);
 
-  return rows || [];
+  return { as_of: latest.time, pairs: rows || [] };
 }
 
 async function collectStrength() {
@@ -67,16 +67,16 @@ async function collectStrength() {
     .limit(1)
     .single();
 
-  if (latestErr) { console.warn('[JOURNAL] collectStrength latest time:', latestErr.message); return []; }
-  if (!latest) return [];
+  if (latestErr) { console.warn('[JOURNAL] collectStrength latest time:', latestErr.message); return { as_of: null, currencies: [] }; }
+  if (!latest) return { as_of: null, currencies: [] };
 
   const { data: rows, error: rowsErr } = await supabase
     .from('currency_strength')
     .select('currency, smooth_3h, smooth_6h, smooth_12h, normalized_3h, normalized_6h, normalized_12h')
     .eq('time', latest.time);
 
-  if (rowsErr) { console.warn('[JOURNAL] collectStrength rows:', rowsErr.message); return []; }
-  return rows || [];
+  if (rowsErr) { console.warn('[JOURNAL] collectStrength rows:', rowsErr.message); return { as_of: null, currencies: [] }; }
+  return { as_of: latest.time, currencies: rows || [] };
 }
 
 async function collectPairRankings() {
@@ -238,7 +238,7 @@ async function writeJournalEntry() {
   const session = getCurrentSession(now);
 
   // Collect everything in parallel
-  const [sentiment, states, currencyStrength, pairRankings, signals, aiAnalysis] = await Promise.all([
+  const [sentiment, statesResult, strengthResult, pairRankings, signals, aiAnalysis] = await Promise.all([
     collectSentiment(),
     collectStates(),
     collectStrength(),
@@ -246,6 +246,12 @@ async function writeJournalEntry() {
     collectSignals(),
     collectAiAnalysis(),
   ]);
+
+  // Unwrap timestamped results
+  const states           = statesResult.pairs;
+  const statesAsOf       = statesResult.as_of;
+  const currencyStrength = strengthResult.currencies;
+  const strengthAsOf     = strengthResult.as_of;
 
   // State counts
   const trend_pairs    = states.filter(s => s.state === 'TREND').length;
@@ -319,8 +325,8 @@ async function writeJournalEntry() {
     ready_pairs,
     no_trade_pairs,
     top_setups:              topSetups,
-    market_states:           states,
-    currency_strength,
+    market_states:           { as_of: statesAsOf,   pairs: states },
+    currency_strength:       { as_of: strengthAsOf, currencies: currency_strength },
     risk_sentiment_details,
     ai_analysis:             aiAnalysis,
     signals_summary,
