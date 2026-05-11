@@ -186,40 +186,72 @@ async function backfillStrength() {
 }
 
 // Calculate and store strength for the latest common closed candle only.
-// Uses buildRecentCandleLookup (100 rows/instrument) — avoids the 1000-row Supabase cap.
-// Uses intersection-based timestamp search to skip weekend/holiday gaps naturally.
+// Uses positional (candle-count) lookbacks — no calendar-hour arithmetic.
+// "3H" = 3 completed H1 candles back. Weekend gaps are invisible because
+// there are no candles then; the 12th candle from Monday morning is Friday.
 async function calculateLatestStrength() {
-  const lookup = await buildRecentCandleLookup(100);
+  const MIN_CANDLES = 13; // current (index 0) + max lookback (12)
+  const FETCH       = 20; // a little extra headroom
 
-  // Build intersection: timestamps present in ALL instruments, sorted most-recent-first.
-  // This naturally skips Sat/Sun gaps — no candles exist then, so no intersection there.
-  const sets = config.instruments.map(inst => new Set(Object.keys(lookup[inst] || {})));
-  const commonTimestamps = [...sets[0]]
-    .filter(t => sets.every(s => s.has(t)))
-    .sort()
-    .reverse();
-
-  if (!commonTimestamps.length) throw new Error('[STRENGTH] No timestamps common to all instruments');
-
-  // Find the most recent common timestamp where every instrument also has all 3/6/12H lookback candles.
-  let time = null;
-  outer:
-  for (const t of commonTimestamps) {
-    for (const inst of config.instruments) {
-      for (const lb of LOOKBACKS) {
-        if (lookup[inst][offsetISO(t, lb)] === undefined) continue outer;
-      }
-    }
-    time = t;
-    break;
+  // Fetch last FETCH complete H1 candles per instrument, newest first
+  const arrays = {};
+  for (const instrument of config.instruments) {
+    const { data, error } = await supabase
+      .from('market_candles')
+      .select('time, close')
+      .eq('instrument', instrument)
+      .eq('timeframe', config.granularity)
+      .eq('complete', true)
+      .order('time', { ascending: false })
+      .limit(FETCH);
+    if (error) throw new Error(`Candle fetch error (${instrument}): ${error.message}`);
+    if (!data || data.length < MIN_CANDLES)
+      throw new Error(`[STRENGTH] Not enough candles for ${instrument}: need ${MIN_CANDLES}, got ${data?.length ?? 0}`);
+    arrays[instrument] = data.map(c => ({ time: new Date(c.time).toISOString(), close: parseFloat(c.close) }));
   }
 
-  if (!time) throw new Error('[STRENGTH] Could not find a timestamp with complete lookback data across all instruments');
+  // Reference time = oldest "most recent candle" across all instruments
+  const refTime = config.instruments.map(inst => arrays[inst][0].time).sort()[0];
 
-  const rows = calculateAtTime(lookup, time);
+  const raw = {
+    3:  Object.fromEntries(CURRENCIES.map(c => [c, 0])),
+    6:  Object.fromEntries(CURRENCIES.map(c => [c, 0])),
+    12: Object.fromEntries(CURRENCIES.map(c => [c, 0])),
+  };
+
+  for (const instrument of config.instruments) {
+    const arr = arrays[instrument];
+    const [base, quote] = instrument.split('_');
+
+    // First candle at or before refTime (normally index 0)
+    const refIdx = arr.findIndex(c => c.time <= refTime);
+    if (refIdx === -1) throw new Error(`[STRENGTH] ${instrument}: no candle at or before ${refTime}`);
+
+    const closeNow = arr[refIdx].close;
+    for (const lb of LOOKBACKS) {
+      const pastIdx = refIdx + lb;
+      if (pastIdx >= arr.length)
+        throw new Error(`[STRENGTH] ${instrument}: not enough candles for ${lb}-candle lookback`);
+      const mv = (closeNow - arr[pastIdx].close) / arr[pastIdx].close;
+      raw[lb][base]  += mv;
+      raw[lb][quote] -= mv;
+    }
+  }
+
+  const rows = CURRENCIES.map(currency => ({
+    time:           refTime,
+    currency,
+    raw_3h:         raw[3][currency],
+    raw_6h:         raw[6][currency],
+    raw_12h:        raw[12][currency],
+    normalized_3h:  raw[3][currency]  / PAIRS_PER_CURRENCY,
+    normalized_6h:  raw[6][currency]  / PAIRS_PER_CURRENCY,
+    normalized_12h: raw[12][currency] / PAIRS_PER_CURRENCY,
+  }));
+
   await upsertStrengthRows(rows);
-  console.log(`[STRENGTH] Stored 8 currency scores for ${time}`);
-  return { time, rows };
+  console.log(`[STRENGTH] Stored 8 currency scores for ${refTime}`);
+  return { time: refTime, rows };
 }
 
 module.exports = { backfillStrength, calculateLatestStrength, buildCandleLookup, buildRecentCandleLookup, calculateAtTime };

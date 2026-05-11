@@ -46,14 +46,17 @@ async function verifyAdmin(sb, req) {
 }
 
 // ── Strength ──────────────────────────────────────────────────────────────────
-function offsetISO(iso, hoursBack) {
-  const t = new Date(iso);
-  t.setUTCHours(t.getUTCHours() - hoursBack);
-  return t.toISOString();
-}
+// Uses positional (candle-count) lookbacks instead of calendar-hour arithmetic.
+// This means "3H" = 3 completed H1 candles back, not "now - 3 hours".
+// Weekend gaps are invisible — there are simply no candles then, so the 12th
+// candle back from Monday morning lands on Friday, not a dead Saturday slot.
 
 async function runStrength(sb) {
-  const lookup = {};
+  const MIN_CANDLES = 13; // current (0) + max lookback (12) = 13 minimum
+  const FETCH       = 20; // a little extra headroom
+
+  // Fetch last FETCH complete H1 candles per instrument, newest first
+  const arrays = {};
   for (const inst of INSTRUMENTS) {
     const { data, error } = await sb
       .from('market_candles')
@@ -62,41 +65,18 @@ async function runStrength(sb) {
       .eq('timeframe', 'H1')
       .eq('complete', true)
       .order('time', { ascending: false })
-      .limit(100); // need enough to cover weekend gap: ~12 Mon + ~3 Sun + ~22 Fri + ~24 Thu = 61
+      .limit(FETCH);
     if (error) throw new Error(`candle fetch ${inst}: ${error.message}`);
-    lookup[inst] = {};
-    for (const c of data || []) {
-      lookup[inst][new Date(c.time).toISOString()] = parseFloat(c.close);
-    }
+    if (!data || data.length < MIN_CANDLES)
+      throw new Error(`Not enough candles for ${inst}: need ${MIN_CANDLES}, got ${data?.length ?? 0}`);
+    arrays[inst] = data.map(c => ({ time: new Date(c.time).toISOString(), close: parseFloat(c.close) }));
   }
 
-  // Build intersection: only timestamps where ALL 28 instruments have a candle
-  const sets = INSTRUMENTS.map(inst => new Set(Object.keys(lookup[inst] || {})));
-  for (const inst of INSTRUMENTS) {
-    if (!sets[INSTRUMENTS.indexOf(inst)].size) throw new Error(`No candles for ${inst}`);
-  }
-  const commonTimestamps = [...sets[0]]
-    .filter(t => sets.every(s => s.has(t)))
-    .sort()
-    .reverse(); // most recent first
+  // Reference time = the oldest "most recent candle" across all instruments
+  // (guards against one instrument being one candle ahead of the rest)
+  const refTime = INSTRUMENTS.map(inst => arrays[inst][0].time).sort()[0];
 
-  if (!commonTimestamps.length) throw new Error('No timestamps common to all instruments');
-
-  // Find most recent common time where every instrument also has all 12H lookback candles
-  let common = null;
-  outer:
-  for (const t of commonTimestamps) {
-    for (const inst of INSTRUMENTS) {
-      for (const lb of LOOKBACKS) {
-        if (lookup[inst][offsetISO(t, lb)] === undefined) continue outer;
-      }
-    }
-    common = t;
-    break;
-  }
-  if (!common) throw new Error('Could not find a timestamp with complete 12H lookback data across all instruments');
-
-  // Calculate raw strength at that time
+  // Compute raw strength using positional offsets — no timestamp arithmetic
   const raw = {
     3:  Object.fromEntries(CURRENCIES.map(c => [c, 0])),
     6:  Object.fromEntries(CURRENCIES.map(c => [c, 0])),
@@ -104,24 +84,32 @@ async function runStrength(sb) {
   };
 
   for (const inst of INSTRUMENTS) {
+    const arr = arrays[inst];
     const [base, quote] = inst.split('_');
-    const closeNow = lookup[inst][common];
+
+    // Starting index: first candle at or before refTime (normally 0, may be 1 if inst is 1 ahead)
+    const refIdx = arr.findIndex(c => c.time <= refTime);
+    if (refIdx === -1) throw new Error(`${inst}: no candle at or before ${refTime}`);
+
+    const closeNow = arr[refIdx].close;
     for (const lb of LOOKBACKS) {
-      const pastClose = lookup[inst][offsetISO(common, lb)];
-      const mv = (closeNow - pastClose) / pastClose;
+      const pastIdx = refIdx + lb;
+      if (pastIdx >= arr.length)
+        throw new Error(`${inst}: not enough candles for ${lb}-candle lookback`);
+      const mv = (closeNow - arr[pastIdx].close) / arr[pastIdx].close;
       raw[lb][base]  += mv;
       raw[lb][quote] -= mv;
     }
   }
 
   const rows = CURRENCIES.map(currency => ({
-    time:          common,
+    time:           refTime,
     currency,
-    raw_3h:        raw[3][currency],
-    raw_6h:        raw[6][currency],
-    raw_12h:       raw[12][currency],
-    normalized_3h: raw[3][currency]  / PAIRS_PER_CURRENCY,
-    normalized_6h: raw[6][currency]  / PAIRS_PER_CURRENCY,
+    raw_3h:         raw[3][currency],
+    raw_6h:         raw[6][currency],
+    raw_12h:        raw[12][currency],
+    normalized_3h:  raw[3][currency]  / PAIRS_PER_CURRENCY,
+    normalized_6h:  raw[6][currency]  / PAIRS_PER_CURRENCY,
     normalized_12h: raw[12][currency] / PAIRS_PER_CURRENCY,
   }));
 
@@ -130,7 +118,7 @@ async function runStrength(sb) {
     .upsert(rows, { onConflict: 'time,currency', ignoreDuplicates: false });
   if (upsErr) throw new Error(`strength upsert: ${upsErr.message}`);
 
-  return common;
+  return refTime;
 }
 
 // ── Smooth ────────────────────────────────────────────────────────────────────
