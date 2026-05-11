@@ -158,6 +158,20 @@
 
   <div class="adm-body">
 
+    <!-- Pipeline control -->
+    <div class="adm-section" style="padding:16px 20px;margin-bottom:18px">
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <div style="flex:1;min-width:200px">
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">⚙️ Analysis Pipeline</div>
+          <div style="font-size:11px;color:var(--text-muted)">Runs strength → smooth → spreads using existing clean candle data</div>
+        </div>
+        <button class="btn btn-primary" id="run-pipeline-btn" onclick="runPipeline()" style="white-space:nowrap">
+          ▶ Run Now
+        </button>
+        <div id="pipeline-result" style="font-size:11px;color:var(--text-muted);display:none"></div>
+      </div>
+    </div>
+
     <!-- Stats -->
     <div class="stat-row" id="stat-row">
       <div class="stat-card"><div class="stat-card-label">Upcoming Events</div><div class="stat-card-val" id="stat-upcoming">—</div></div>
@@ -578,6 +592,37 @@ Mon May 12 2026
     const date = document.getElementById('filter-from').value;
     if (!date) { notyf.error('Select a date in the From filter first'); return; }
     await deleteDate(date);
+  }
+
+  // ── Pipeline trigger ──────────────────────────────────────────────────────────
+  async function runPipeline() {
+    const btn = document.getElementById('run-pipeline-btn');
+    const res = document.getElementById('pipeline-result');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Running…';
+    res.style.display = 'none';
+    try {
+      const r = await fetch('/api/run-pipeline', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token },
+      });
+      const d = await r.json();
+      if (d.ok) {
+        const steps = (d.steps || []).join(' · ');
+        res.innerHTML = `✓ Done in ${d.elapsed_ms}ms · strength @ ${d.strength_time ? new Date(d.strength_time).toUTCString().slice(5,22) : '?'} UTC<br><span style="opacity:0.7">${steps}</span>`;
+        res.style.color = '#4ade80';
+        notyf.success('Pipeline complete — refresh the dashboard');
+      } else {
+        res.innerHTML = `✗ ${d.error || 'Unknown error'}`;
+        res.style.color = '#f87171';
+      }
+    } catch (e) {
+      res.innerHTML = `✗ ${e.message}`;
+      res.style.color = '#f87171';
+    }
+    res.style.display = 'block';
+    btn.disabled = false;
+    btn.innerHTML = '▶ Run Now';
   }
 
   // ── Stats ─────────────────────────────────────────────────────────────────────

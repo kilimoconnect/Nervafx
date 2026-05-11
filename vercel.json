@@ -1,7 +1,8 @@
 {
   "version": 2,
   "functions": {
-    "api/news-parse.js": { "maxDuration": 30 }
+    "api/news-parse.js":   { "maxDuration": 30 },
+    "api/run-pipeline.js": { "maxDuration": 60 }
   },
   "rewrites": [
     { "source": "/",       "destination": "/home.html" },

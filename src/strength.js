@@ -78,12 +78,13 @@ async function buildRecentCandleLookup(recentCount = 25) {
 }
 
 // Find the latest time that all 28 instruments share.
+// Sorts keys so this works whether the lookup was built ascending or descending.
 function latestCommonTime(lookup) {
   let common = null;
   for (const instrument of config.instruments) {
-    const times = Object.keys(lookup[instrument] || {});
+    const times = Object.keys(lookup[instrument] || {}).sort(); // sort ascending
     if (times.length === 0) return null;
-    const latest = times[times.length - 1];
+    const latest = times[times.length - 1]; // last = newest
     if (!common || latest < common) common = latest;
   }
   return common;
