@@ -1340,6 +1340,156 @@ function renderQuality(q) {
     <div class="quality-row"><span class="quality-label">Checked</span><span class="quality-val" style="font-size:10px">${fmtTime(q.check_time)}</span></div>`;
 }
 
+// ─── Journal Modal ────────────────────────────────────────────────────────────
+
+let _journalEntries = {}; // id → entry, populated in renderJournal
+
+function renderJrnStrengthSection(cs) {
+  if (!cs) return '';
+  const currencies = cs.currencies || (Array.isArray(cs) ? cs : null);
+  if (!currencies?.length) return '';
+
+  const tfs = [
+    { key: 'smooth_3h',  fb: 'normalized_3h',  label: '3H Strength' },
+    { key: 'smooth_6h',  fb: 'normalized_6h',  label: '6H Strength' },
+    { key: 'smooth_12h', fb: 'normalized_12h', label: '12H Strength' },
+  ];
+
+  return `
+    <div class="jrn-cs-section">
+      <div class="jrn-cs-header">💹 Currency Strength — Snapshot</div>
+      <div class="jrn-cs-grid">
+        ${tfs.map(tf => {
+          const vals = currencies
+            .map(c => ({ cur: c.currency, val: parseFloat(c[tf.key] ?? c[tf.fb] ?? 0) || 0 }))
+            .sort((a, b) => b.val - a.val);
+          const maxAbs = Math.max(...vals.map(v => Math.abs(v.val)), 0.0001);
+          return `
+            <div class="jrn-cs-tf-block">
+              <div class="jrn-cs-tf-label">${tf.label}</div>
+              ${vals.map(v => {
+                const pct = Math.round((Math.abs(v.val) / maxAbs) * 100);
+                const cls = v.val >= 0 ? 'pos' : 'neg';
+                return `
+                  <div class="jrn-cs-row">
+                    <span class="jrn-cs-cur">${v.cur}</span>
+                    <div class="jrn-cs-bar-wrap">
+                      <div class="jrn-cs-bar ${cls}" style="width:${pct}%"></div>
+                    </div>
+                    <span class="jrn-cs-num ${cls}">${v.val >= 0 ? '+' : ''}${v.val.toFixed(5)}</span>
+                  </div>`;
+              }).join('')}
+            </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+}
+
+function openJournalModal(id) {
+  const e = _journalEntries[id];
+  if (!e) return;
+
+  const sentCls  = e.risk_sentiment === 'RISK_ON'  ? 'risk-on'
+                 : e.risk_sentiment === 'RISK_OFF' ? 'risk-off'
+                 : 'neutral';
+  const sessCls  = (e.session_quality || 'BLOCKED').toLowerCase().replace(/_/g, '-');
+  const topSetups = (e.top_setups || []).slice(0, 10);
+  const signals   = e.signals_summary || {};
+  const enteredCount = (signals.entered || []).length;
+
+  // Outcome blocks
+  const outcomes = [
+    { key: 'outcome_6h',  label: '6H',  data: e.outcome_6h  },
+    { key: 'outcome_12h', label: '12H', data: e.outcome_12h },
+    { key: 'outcome_24h', label: '24H', data: e.outcome_24h },
+  ];
+
+  const outcomeBlocksHtml = outcomes.filter(o => o.data).map(o => {
+    const d = o.data;
+    const scoreCls = (d.accuracy_score ?? 0) >= 70 ? 'good' : (d.accuracy_score ?? 0) >= 40 ? 'mid' : 'bad';
+    return `
+      <div class="jrn-outcome-block">
+        <div class="jrn-outcome-header">
+          <span class="jrn-outcome-label">${o.label} Outcome</span>
+          <span class="jrn-outcome-score ${scoreCls}">${d.accuracy_score ?? '—'}%</span>
+          <span class="jrn-outcome-tally">${d.correct_count ?? 0} correct · ${d.incorrect_count ?? 0} wrong · ${d.flat_count ?? 0} flat</span>
+        </div>
+        ${d.verdict ? `<div class="jrn-verdict">${d.verdict}</div>` : ''}
+        ${d.sentiment_assessment ? `<div class="jrn-sent-assess">Sentiment: ${d.sentiment_assessment}</div>` : ''}
+        ${(d.setups || []).map(s => {
+          const oCls  = s.outcome === 'CORRECT' ? 'correct' : s.outcome === 'INCORRECT' ? 'wrong' : 'flat';
+          const oIcon = s.outcome === 'CORRECT' ? '✓' : s.outcome === 'INCORRECT' ? '✕' : '→';
+          return `<div class="jrn-setup-outcome ${oCls}">${oIcon} ${pair(s.instrument)} ${s.bias} · ${(s.outcome||'').replace(/_/g,' ')}</div>`;
+        }).join('')}
+      </div>`;
+  }).join('');
+
+  const pendingOutcomes = outcomes.filter(o => !o.data).map(o =>
+    `<span class="jrn-outcome-pill pending">⏳ ${o.label} pending</span>`
+  ).join('');
+
+  // Header
+  document.getElementById('jrn-modal-time').textContent = fmtTime(e.time);
+  document.getElementById('jrn-modal-badges').innerHTML = `
+    <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${e.session_name || '—'}</span>
+    <span class="jrn-sent sent-${sentCls}">${(e.risk_sentiment || '—').replace('_',' ')}</span>
+    <span class="jrn-conf">${e.risk_confidence ?? '—'}%</span>
+    <div class="jrn-counts">
+      <span class="jrn-count trend" title="Trend">${e.trend_pairs}T</span>
+      <span class="jrn-count pb"    title="Pullback">${e.pullback_pairs}PB</span>
+      <span class="jrn-count ready" title="Ready">${e.ready_pairs}R</span>
+      ${enteredCount ? `<span class="jrn-count sig">${enteredCount}✦</span>` : ''}
+    </div>`;
+
+  // Body
+  document.getElementById('jrn-modal-body').innerHTML = `
+    ${e.summary ? `<div class="jrn-modal-summary">${e.summary}</div>` : ''}
+
+    ${renderJrnStrengthSection(e.currency_strength)}
+
+    ${e.risk_sentiment_details ? `
+      <div class="jrn-modal-section-title">📊 Market Sentiment Groups</div>
+      ${journalSentimentGroupsHtml(e.risk_sentiment_details)}
+    ` : ''}
+
+    ${topSetups.length ? `
+      <div class="jrn-modal-section-title">🎯 Top Setups</div>
+      <div class="jrn-setups">
+        ${topSetups.map(s => {
+          const dir = s.bias === 'BUY' ? 'buy' : 'sell';
+          return `
+            <div class="jrn-setup-row">
+              <span class="jrn-setup-pair">${pair(s.instrument)}</span>
+              <span class="signal-dir ${dir}" style="font-size:9px">${s.bias}</span>
+              <span class="jrn-setup-state">${(s.state||'').replace(/_/g,' ')}</span>
+              <span class="jrn-setup-conf">${s.confidence}%</span>
+            </div>`;
+        }).join('')}
+      </div>
+    ` : ''}
+
+    ${outcomeBlocksHtml ? `
+      <div class="jrn-modal-section-title">📈 Outcomes</div>
+      ${outcomeBlocksHtml}
+    ` : ''}
+
+    ${pendingOutcomes ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">${pendingOutcomes}</div>` : ''}
+  `;
+
+  const overlay = document.getElementById('jrn-modal-overlay');
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  hydrateIcons();
+}
+
+function closeJournalModal() {
+  document.getElementById('jrn-modal-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+// Close journal modal on Escape
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeJournalModal(); });
+
 // ─── Journal sentiment groups (collapsed — no individual components) ──────────
 
 function journalSentimentGroupsHtml(d) {
@@ -1378,6 +1528,11 @@ function renderJournal(data) {
   const el = document.getElementById('journal-list');
   if (!el) return;
   const entries = data?.entries || [];
+
+  // Store globally for modal access
+  _journalEntries = {};
+  entries.forEach(e => { _journalEntries[e.id] = e; });
+
   if (!entries.length) {
     el.innerHTML = '<p class="empty-state">No journal entries yet — runs after first hourly update</p>';
     return;
@@ -1388,32 +1543,27 @@ function renderJournal(data) {
                    : e.risk_sentiment === 'RISK_OFF' ? 'risk-off'
                    : 'neutral';
     const sessCls  = (e.session_quality || 'BLOCKED').toLowerCase().replace(/_/g, '-');
-    const topSetups = (e.top_setups || []).slice(0, 3);
-    const signals   = e.signals_summary || {};
+    const signals  = e.signals_summary || {};
     const enteredCount = (signals.entered || []).length;
 
-    // Outcome windows
     const outcomes = [
-      { key: 'outcome_6h',  label: '6H',  data: e.outcome_6h  },
-      { key: 'outcome_12h', label: '12H', data: e.outcome_12h },
-      { key: 'outcome_24h', label: '24H', data: e.outcome_24h },
+      { label: '6H',  data: e.outcome_6h  },
+      { label: '12H', data: e.outcome_12h },
+      { label: '24H', data: e.outcome_24h },
     ];
 
     const outcomeHtml = outcomes.map(o => {
-      if (!o.data) return `<span class="jrn-outcome-pill pending" title="${o.label} outcome pending">⏳ ${o.label}</span>`;
-      const score = o.data.accuracy_score;
+      if (!o.data) return `<span class="jrn-outcome-pill pending">⏳ ${o.label}</span>`;
+      const score    = o.data.accuracy_score;
       const scoreCls = score >= 70 ? 'good' : score >= 40 ? 'mid' : 'bad';
-      const correct = o.data.correct_count ?? 0;
-      const total   = o.data.total_setups  ?? 0;
-      return `
-        <span class="jrn-outcome-pill ${scoreCls}" title="${o.data.verdict || ''}" onclick="openJournalOutcome('${e.id}','${o.key}')">
-          ${o.label} · ${correct}/${total} · ${score ?? '—'}%
-        </span>`;
+      const correct  = o.data.correct_count ?? 0;
+      const total    = o.data.total_setups  ?? 0;
+      return `<span class="jrn-outcome-pill ${scoreCls}" title="${o.data.verdict || ''}">${o.label} · ${correct}/${total} · ${score ?? '—'}%</span>`;
     }).join('');
 
     return `
-      <div class="jrn-entry" id="jrn-${e.id}">
-        <div class="jrn-header" onclick="toggleJournalEntry('${e.id}')">
+      <div class="jrn-entry" id="jrn-${e.id}" onclick="openJournalModal('${e.id}')">
+        <div class="jrn-header">
           <span class="jrn-time">${fmtTime(e.time)}</span>
           <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${e.session_name || '—'}</span>
           <span class="jrn-sent sent-${sentCls}">${(e.risk_sentiment || '—').replace('_',' ')}</span>
@@ -1422,71 +1572,13 @@ function renderJournal(data) {
             <span class="jrn-count trend" title="Trend">${e.trend_pairs}T</span>
             <span class="jrn-count pb"    title="Pullback">${e.pullback_pairs}PB</span>
             <span class="jrn-count ready" title="Ready">${e.ready_pairs}R</span>
-            ${enteredCount ? `<span class="jrn-count sig" title="Signals">${enteredCount}✦</span>` : ''}
+            ${enteredCount ? `<span class="jrn-count sig">${enteredCount}✦</span>` : ''}
           </div>
           <div class="jrn-outcomes">${outcomeHtml}</div>
           <span class="jrn-chevron">›</span>
         </div>
-
-        <div class="jrn-body" id="jrn-body-${e.id}" style="display:none">
-          <div class="jrn-summary">${e.summary || ''}</div>
-          ${journalSentimentGroupsHtml(e.risk_sentiment_details)}
-
-          ${topSetups.length ? `
-          <div class="jrn-setups">
-            ${topSetups.map(s => {
-              const dir = s.bias === 'BUY' ? 'buy' : 'sell';
-              return `
-                <div class="jrn-setup-row">
-                  <span class="jrn-setup-pair">${pair(s.instrument)}</span>
-                  <span class="signal-dir ${dir}" style="font-size:9px">${s.bias}</span>
-                  <span class="jrn-setup-state">${(s.state||'').replace(/_/g,' ')}</span>
-                  <span class="jrn-setup-conf">${s.confidence}%</span>
-                </div>`;
-            }).join('')}
-          </div>` : ''}
-
-          ${outcomes.filter(o => o.data).map(o => {
-            const d = o.data;
-            const scoreCls = (d.accuracy_score ?? 0) >= 70 ? 'good' : (d.accuracy_score ?? 0) >= 40 ? 'mid' : 'bad';
-            return `
-              <div class="jrn-outcome-block">
-                <div class="jrn-outcome-header">
-                  <span class="jrn-outcome-label">${o.label} Outcome</span>
-                  <span class="jrn-outcome-score ${scoreCls}">${d.accuracy_score ?? '—'}%</span>
-                  <span class="jrn-outcome-tally">${d.correct_count ?? 0} correct · ${d.incorrect_count ?? 0} wrong · ${d.flat_count ?? 0} flat</span>
-                </div>
-                ${d.verdict ? `<div class="jrn-verdict">${d.verdict}</div>` : ''}
-                ${d.sentiment_assessment ? `<div class="jrn-sent-assess">Sentiment: ${d.sentiment_assessment}</div>` : ''}
-                ${(d.setups || []).map(s => {
-                  const oCls = s.outcome === 'CORRECT' ? 'correct' : s.outcome === 'INCORRECT' ? 'wrong' : 'flat';
-                  const oIcon = s.outcome === 'CORRECT' ? '✓' : s.outcome === 'INCORRECT' ? '✕' : '→';
-                  return `<div class="jrn-setup-outcome ${oCls}">
-                    ${oIcon} ${pair(s.instrument)} ${s.bias} · ${(s.outcome||'').replace(/_/g,' ')}
-                  </div>`;
-                }).join('')}
-              </div>`;
-          }).join('')}
-        </div>
       </div>`;
   }).join('');
-}
-
-function toggleJournalEntry(id) {
-  const body = document.getElementById(`jrn-body-${id}`);
-  const entry = document.getElementById(`jrn-${id}`);
-  if (!body) return;
-  const open = body.style.display !== 'none';
-  body.style.display = open ? 'none' : 'block';
-  entry.classList.toggle('open', !open);
-}
-
-function openJournalOutcome(id, key) {
-  // Stop propagation from pill click opening the full entry too
-  event.stopPropagation();
-  const body = document.getElementById(`jrn-body-${id}`);
-  const entry = document.getElementById(`jrn-${id}`);
-  if (body) { body.style.display = 'block'; entry.classList.add('open'); }
 }
 
 // ─── Main refresh ─────────────────────────────────────────────────────────────

@@ -324,6 +324,22 @@
 
   </main>
 
+  <!-- JOURNAL DETAIL MODAL -->
+  <div id="jrn-modal-overlay" class="jrn-modal-overlay" onclick="closeJournalModal()">
+    <div class="jrn-modal" onclick="event.stopPropagation()">
+      <div class="jrn-modal-header">
+        <div class="jrn-modal-title">
+          <span id="jrn-modal-time" class="jrn-modal-time"></span>
+          <span id="jrn-modal-badges" class="jrn-modal-badges"></span>
+        </div>
+        <button class="ai-modal-close" onclick="closeJournalModal()">
+          <i data-lucide="x" style="width:16px;height:16px"></i>
+        </button>
+      </div>
+      <div id="jrn-modal-body" class="jrn-modal-body"></div>
+    </div>
+  </div>
+
   <!-- AI ANALYSIS MODAL -->
   <div id="ai-modal-overlay" class="ai-modal-overlay" onclick="closeAiModal()">
     <div class="ai-modal" onclick="event.stopPropagation()">
