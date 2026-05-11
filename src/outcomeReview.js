@@ -184,18 +184,18 @@ function evaluateSentimentCorrectness(journalEntry, setupOutcomes) {
 // ─── Review one window ────────────────────────────────────────────────────────
 
 async function reviewWindow(hours, column) {
-  // Find journal entries from exactly {hours} hours ago that haven't been reviewed yet
-  const targetTime = new Date(Date.now() - hours * 60 * 60 * 1000);
-  // Look within a ±35 minute window around the target hour
-  const windowStart = new Date(targetTime.getTime() - 35 * 60 * 1000).toISOString();
-  const windowEnd   = new Date(targetTime.getTime() + 35 * 60 * 1000).toISOString();
+  // Find ALL journal entries that are at least {hours} hours old and not yet reviewed.
+  // Using a cutoff (rather than a narrow ±window) means entries are never permanently
+  // missed if the server was down or slow when the original window passed.
+  const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
 
   const { data: entries, error } = await supabase
     .from('hourly_market_journal')
     .select('id, time, session_name, session_quality, risk_sentiment, risk_confidence, risk_sentiment_details, trend_pairs, pullback_pairs, ready_pairs, no_trade_pairs, top_setups, summary')
-    .gte('time', windowStart)
-    .lte('time', windowEnd)
-    .is(column, null); // only entries not yet reviewed for this window
+    .lte('time', cutoff)   // entry must be old enough for this window
+    .is(column, null)      // not yet reviewed for this window
+    .order('time', { ascending: false })
+    .limit(12);            // cap per run so the step doesn't time-out
 
   if (error) {
     console.error(`[OUTCOME-${hours}H] Query error: ${error.message}`);

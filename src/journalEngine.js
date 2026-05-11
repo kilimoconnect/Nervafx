@@ -71,7 +71,7 @@ async function collectStrength() {
 
   const { data: rows } = await supabase
     .from('currency_strength')
-    .select('currency, smooth_3h, smooth_6h, smooth_12h, normalized_6h, momentum, accel_label')
+    .select('currency, smooth_3h, smooth_6h, smooth_12h, normalized_3h, normalized_6h, normalized_12h, momentum, accel_label')
     .eq('time', latest.time);
 
   return rows || [];
@@ -281,9 +281,10 @@ async function writeJournalEntry() {
     nzdjpy_score:    sentiment.nzdjpy_score,
   } : null;
 
-  // Compact currency strength
+  // Compact currency strength (all three TFs so dashboard modal can render 3H/6H/12H bars)
   const currency_strength = currencyStrength.map(r => ({
     currency:    r.currency,
+    smooth_3h:   r.smooth_3h,
     smooth_6h:   r.smooth_6h,
     smooth_12h:  r.smooth_12h,
     momentum:    r.momentum,
