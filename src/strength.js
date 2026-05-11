@@ -12,9 +12,48 @@ function offsetISO(isoTime, hoursBack) {
 }
 
 // Fetch all H1 candles for all instruments into a fast in-memory lookup.
-// Fetches per instrument to avoid Supabase's 1000-row default cap.
+// Uses pagination (PAGE_SIZE rows at a time) to avoid Supabase's 1000-row default cap.
 // Returns: { EUR_USD: { '2026-05-06T10:00:00.000Z': 1.0842, ... }, ... }
+const PAGE_SIZE = 1000;
+
 async function buildCandleLookup() {
+  const lookup = {};
+
+  for (const instrument of config.instruments) {
+    lookup[instrument] = {};
+    let page = 0;
+
+    while (true) {
+      const from = page * PAGE_SIZE;
+      const to   = from + PAGE_SIZE - 1;
+
+      const { data, error } = await supabase
+        .from('market_candles')
+        .select('time, close')
+        .eq('instrument', instrument)
+        .eq('timeframe', config.granularity)
+        .eq('complete', true)
+        .order('time', { ascending: true })
+        .range(from, to);
+
+      if (error) throw new Error(`Candle fetch error (${instrument}): ${error.message}`);
+      if (!data || data.length === 0) break;
+
+      for (const c of data) {
+        lookup[instrument][new Date(c.time).toISOString()] = parseFloat(c.close);
+      }
+
+      if (data.length < PAGE_SIZE) break; // last page
+      page++;
+    }
+  }
+
+  return lookup;
+}
+
+// Fetch only the most recent N candles per instrument — sufficient for calculateLatestStrength()
+// (max lookback is 12H, so 25 rows gives a safe buffer without hitting the row cap).
+async function buildRecentCandleLookup(recentCount = 25) {
   const lookup = {};
 
   for (const instrument of config.instruments) {
@@ -24,7 +63,8 @@ async function buildCandleLookup() {
       .eq('instrument', instrument)
       .eq('timeframe', config.granularity)
       .eq('complete', true)
-      .order('time', { ascending: true });
+      .order('time', { ascending: false })
+      .limit(recentCount);
 
     if (error) throw new Error(`Candle fetch error (${instrument}): ${error.message}`);
 
@@ -145,8 +185,9 @@ async function backfillStrength() {
 }
 
 // Calculate and store strength for the latest common closed candle only.
+// Uses buildRecentCandleLookup (25 rows/instrument) — avoids the 1000-row Supabase cap.
 async function calculateLatestStrength() {
-  const lookup = await buildCandleLookup();
+  const lookup = await buildRecentCandleLookup(25);
   const time = latestCommonTime(lookup);
 
   if (!time) {
@@ -164,4 +205,4 @@ async function calculateLatestStrength() {
   return { time, rows };
 }
 
-module.exports = { backfillStrength, calculateLatestStrength, buildCandleLookup, calculateAtTime };
+module.exports = { backfillStrength, calculateLatestStrength, buildCandleLookup, buildRecentCandleLookup, calculateAtTime };
