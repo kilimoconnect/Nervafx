@@ -1398,26 +1398,131 @@ function renderJrnStrengthSection(cs) {
     </div>`;
 }
 
-function openJournalModal(id) {
-  const e = _journalEntries[id];
-  if (!e) return;
+// ─── Journal modal helpers ────────────────────────────────────────────────────
 
-  const sentCls  = e.risk_sentiment === 'RISK_ON'  ? 'risk-on'
-                 : e.risk_sentiment === 'RISK_OFF' ? 'risk-off'
-                 : 'neutral';
-  const sessCls  = (e.session_quality || 'BLOCKED').toLowerCase().replace(/_/g, '-');
-  const topSetups = (e.top_setups || []).slice(0, 10);
-  const signals   = e.signals_summary || {};
-  const enteredCount = (signals.entered || []).length;
+function _jrnSection(title, content) {
+  return `<div class="jrn-section"><div class="jrn-section-title">${title}</div>${content}</div>`;
+}
 
-  // Outcome blocks
+function renderJrnCalendarSection(events, entryTime) {
+  const ts = new Date(entryTime).getTime();
+  const nearby = (events || []).filter(ev => Math.abs(new Date(ev.event_time).getTime() - ts) <= 3 * 60 * 60 * 1000);
+  if (!nearby.length) return _jrnSection('📅 Economic Calendar', '<p class="jrn-empty">No events in this window.</p>');
+  const order = { HIGH: 0, MEDIUM: 1, LOW: 2 };
+  const sorted = [...nearby].sort((a, b) =>
+    (order[a.impact] ?? 2) - (order[b.impact] ?? 2) || a.event_time.localeCompare(b.event_time)
+  );
+  return _jrnSection('📅 Economic Calendar', `
+    <div class="jrn-cal-list">
+      ${sorted.map(ev => {
+        const imp = (ev.impact || 'LOW').toUpperCase();
+        const act = ev.actual   != null ? `<span class="jrn-cal-actual">${ev.actual}</span>` : '';
+        const fct = ev.forecast != null ? `<span class="jrn-cal-fct">Est ${ev.forecast}</span>` : '';
+        const prv = ev.previous != null ? `<span class="jrn-cal-prv">Prev ${ev.previous}</span>` : '';
+        return `
+          <div class="jrn-cal-row">
+            <span class="jrn-cal-impact imp-${imp.toLowerCase()}">${imp}</span>
+            <span class="jrn-cal-time">${fmtTime(ev.event_time)}</span>
+            <span class="jrn-cal-cur">${ev.currency}</span>
+            <span class="jrn-cal-name">${ev.event_name}</span>
+            <span class="jrn-cal-vals">${act}${fct}${prv}</span>
+          </div>`;
+      }).join('')}
+    </div>`);
+}
+
+function renderJrnAiSection(aiAnalysis) {
+  const rows = (aiAnalysis || []);
+  if (!rows.length) return '';
+  const warnings = rows.filter(a => a.warning);
+  return _jrnSection('🤖 AI Market Analysis', `
+    ${warnings.length ? `<div class="jrn-ai-warnings">${warnings.map(a =>
+      `<div class="jrn-ai-warn-row"><span class="jrn-ai-warn-pair">${pair(a.instrument)}</span><span class="jrn-ai-warn-text">⚠ ${a.warning}</span></div>`
+    ).join('')}</div>` : ''}
+    <div class="jrn-ai-grid">
+      <div class="jrn-ai-head"><span>Pair</span><span>Structure</span><span>Health</span><span>Quality</span></div>
+      ${rows.map(a => {
+        const hcls = a.trend_health === 'STRONG' ? 'strong' : a.trend_health === 'WEAKENING' ? 'weakening' : 'weak';
+        const scls = (a.structure_type || '').includes('EXPAND') ? 'expanding' : (a.structure_type || '').includes('CONTRACT') ? 'contracting' : '';
+        return `
+          <div class="jrn-ai-row">
+            <span class="jrn-ai-pair">${pair(a.instrument)}</span>
+            <span class="jrn-ai-struct ${scls}">${(a.structure_type || '—').replace(/_/g,' ')}</span>
+            <span class="jrn-ai-health ${hcls}">${a.trend_health || '—'}</span>
+            <span class="jrn-ai-qual">${(a.market_quality || '—').replace(/_/g,' ')}</span>
+          </div>`;
+      }).join('')}
+    </div>`);
+}
+
+function renderJrnSessionPerfSection(e, sessionEntries) {
+  if (!sessionEntries || sessionEntries.length <= 1) {
+    return _jrnSection(`📊 Session: ${e.session_name}`, '<p class="jrn-empty">First snapshot of this session.</p>');
+  }
+  const first = sessionEntries[0];
+  const sentFlow = [...sessionEntries.reduce((m, x) => { m.set(x.risk_sentiment, 1); return m; }, new Map()).keys()]
+    .map(s => s.replace('_',' ')).join(' → ');
+  const allSignals = sessionEntries.flatMap(x => (x.signals_summary?.entered || []));
+  const trendDelta = e.trend_pairs - first.trend_pairs;
+  const readyDelta = e.ready_pairs - first.ready_pairs;
+  const delta = v => v > 0 ? `<span style="color:#4ade80">+${v}</span>` : v < 0 ? `<span style="color:#f87171">${v}</span>` : `<span style="color:var(--text-dim)">±0</span>`;
+  return _jrnSection(`📊 Session: ${e.session_name} · ${sessionEntries.length} snapshots`, `
+    <div class="jrn-sess-stats">
+      <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Duration</span><span class="jrn-sess-val">${sessionEntries.length}H</span></div>
+      <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Sentiment flow</span><span class="jrn-sess-val">${sentFlow}</span></div>
+      <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Trend pairs</span><span class="jrn-sess-val">${first.trend_pairs} → ${e.trend_pairs} ${delta(trendDelta)}</span></div>
+      <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Ready pairs</span><span class="jrn-sess-val">${first.ready_pairs} → ${e.ready_pairs} ${delta(readyDelta)}</span></div>
+      ${allSignals.length ? `<div class="jrn-sess-stat jrn-sess-full"><span class="jrn-sess-lbl">Signals</span><span class="jrn-sess-val">${allSignals.map(s => `${pair(s.instrument)} ${s.signal}`).join(', ')}</span></div>` : ''}
+    </div>`);
+}
+
+function renderJrnPrevSessionSection(prevEntry) {
+  if (!prevEntry) return _jrnSection('📋 Previous Session', '<p class="jrn-empty">No previous session in loaded history.</p>');
+  const sentCls = prevEntry.risk_sentiment === 'RISK_ON' ? 'risk-on' : prevEntry.risk_sentiment === 'RISK_OFF' ? 'risk-off' : 'neutral';
+  const sessCls = (prevEntry.session_quality || 'BLOCKED').toLowerCase().replace(/_/g, '-');
+  const entered = (prevEntry.signals_summary?.entered || []);
+  return _jrnSection(`📋 Previous Session: ${prevEntry.session_name}`, `
+    <div class="jrn-prev-meta">
+      <span class="jrn-prev-time">${fmtTime(prevEntry.time)}</span>
+      <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${prevEntry.session_name}</span>
+      <span class="jrn-sent sent-${sentCls}">${(prevEntry.risk_sentiment || '—').replace('_',' ')}</span>
+      <span class="jrn-conf">${prevEntry.risk_confidence ?? '—'}%</span>
+      <span class="jrn-prev-pairs">${prevEntry.trend_pairs}T · ${prevEntry.pullback_pairs}PB · ${prevEntry.ready_pairs}R</span>
+    </div>
+    ${prevEntry.summary ? `<p class="jrn-prev-summary">${prevEntry.summary}</p>` : ''}
+    ${entered.length ? `<div class="jrn-prev-sigs">${entered.map(s => {
+      const d = s.signal === 'BUY' ? 'buy' : 'sell';
+      return `<span class="jrn-prev-sig signal-dir ${d}" style="font-size:9px">${pair(s.instrument)} ${s.signal}</span>`;
+    }).join('')}</div>` : ''}
+    ${(prevEntry.top_setups || []).slice(0,5).map(s => {
+      const dir = s.bias === 'BUY' ? 'buy' : 'sell';
+      return `<div class="jrn-setup-row"><span class="jrn-setup-pair">${pair(s.instrument)}</span><span class="signal-dir ${dir}" style="font-size:9px">${s.bias}</span><span class="jrn-setup-state">${(s.state||'').replace(/_/g,' ')}</span><span class="jrn-setup-conf">${s.confidence}%</span></div>`;
+    }).join('')}`);
+}
+
+function renderJrnSetupsSection(topSetups, signals) {
+  const entered = signals?.entered || [];
+  const waiting = signals?.waiting || [];
+  if (!topSetups.length && !entered.length) return '';
+  return _jrnSection('🎯 Top Setups & Signals', `
+    ${entered.length ? `<div class="jrn-sig-entered">${entered.map(s => {
+      const d = s.signal === 'BUY' ? 'buy' : 'sell';
+      return `<div class="jrn-sig-row"><span class="signal-dir ${d}" style="font-size:10px;padding:2px 7px">${s.signal}</span><span class="jrn-sig-pair">${pair(s.instrument)}</span><span class="jrn-sig-conf">${s.confidence ?? '—'}%</span>${s.reason ? `<span class="jrn-sig-reason">${s.reason}</span>` : ''}</div>`;
+    }).join('')}</div>` : ''}
+    ${topSetups.length ? `<div class="jrn-setups">${topSetups.map(s => {
+      const dir = s.bias === 'BUY' ? 'buy' : 'sell';
+      return `<div class="jrn-setup-row"><span class="jrn-setup-pair">${pair(s.instrument)}</span><span class="signal-dir ${dir}" style="font-size:9px">${s.bias}</span><span class="jrn-setup-state">${(s.state||'').replace(/_/g,' ')}</span><span class="jrn-setup-conf">${s.confidence}%</span></div>`;
+    }).join('')}</div>` : ''}
+    ${waiting.length ? `<p class="jrn-waiting">${waiting.length} pair${waiting.length>1?'s':''} waiting for confirmation</p>` : ''}`);
+}
+
+function renderJrnOutcomesSection(e) {
   const outcomes = [
-    { key: 'outcome_6h',  label: '6H',  data: e.outcome_6h  },
-    { key: 'outcome_12h', label: '12H', data: e.outcome_12h },
-    { key: 'outcome_24h', label: '24H', data: e.outcome_24h },
+    { label: '6H',  data: e.outcome_6h  },
+    { label: '12H', data: e.outcome_12h },
+    { label: '24H', data: e.outcome_24h },
   ];
-
-  const outcomeBlocksHtml = outcomes.filter(o => o.data).map(o => {
+  const blocks = outcomes.filter(o => o.data).map(o => {
     const d = o.data;
     const scoreCls = (d.accuracy_score ?? 0) >= 70 ? 'good' : (d.accuracy_score ?? 0) >= 40 ? 'mid' : 'bad';
     return `
@@ -1436,10 +1541,40 @@ function openJournalModal(id) {
         }).join('')}
       </div>`;
   }).join('');
+  const pending = outcomes.filter(o => !o.data).map(o => `<span class="jrn-outcome-pill pending">⏳ ${o.label} pending</span>`).join('');
+  if (!blocks && !pending) return '';
+  return _jrnSection('📈 Outcomes', `${blocks}${pending ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">${pending}</div>` : ''}`);
+}
 
-  const pendingOutcomes = outcomes.filter(o => !o.data).map(o =>
-    `<span class="jrn-outcome-pill pending">⏳ ${o.label} pending</span>`
-  ).join('');
+// ─── Journal modal open/close ─────────────────────────────────────────────────
+
+async function openJournalModal(id) {
+  const e = _journalEntries[id];
+  if (!e) return;
+
+  // Open immediately with data we already have — no waiting
+  _renderJournalModal(e, null, null, null);
+
+  // Compute session context from already-loaded entries (no extra API call)
+  const all = Object.values(_journalEntries).sort((a, b) => a.time.localeCompare(b.time));
+  const sessionEntries = all.filter(x => x.session_name === e.session_name && x.time <= e.time);
+  const prevEntry = [...all].reverse().find(x => x.session_name !== e.session_name && x.time < e.time) || null;
+
+  // Fetch news events for this date async, then re-render
+  let newsEvents = [];
+  try {
+    const r = await api(`/api/news?date=${e.time.slice(0, 10)}`);
+    newsEvents = r.events || [];
+  } catch {}
+
+  _renderJournalModal(e, newsEvents, sessionEntries, prevEntry);
+}
+
+function _renderJournalModal(e, newsEvents, sessionEntries, prevEntry) {
+  const sentCls = e.risk_sentiment === 'RISK_ON' ? 'risk-on' : e.risk_sentiment === 'RISK_OFF' ? 'risk-off' : 'neutral';
+  const sessCls = (e.session_quality || 'BLOCKED').toLowerCase().replace(/_/g, '-');
+  const signals  = e.signals_summary || {};
+  const enteredCount = (signals.entered || []).length;
 
   // Header
   document.getElementById('jrn-modal-time').textContent = fmtTime(e.time);
@@ -1454,40 +1589,18 @@ function openJournalModal(id) {
       ${enteredCount ? `<span class="jrn-count sig">${enteredCount}✦</span>` : ''}
     </div>`;
 
-  // Body
-  document.getElementById('jrn-modal-body').innerHTML = `
-    ${e.summary ? `<div class="jrn-modal-summary">${e.summary}</div>` : ''}
-
-    ${renderJrnStrengthSection(e.currency_strength)}
-
-    ${e.risk_sentiment_details ? `
-      <div class="jrn-modal-section-title">📊 Market Sentiment Groups</div>
-      ${journalSentimentGroupsHtml(e.risk_sentiment_details)}
-    ` : ''}
-
-    ${topSetups.length ? `
-      <div class="jrn-modal-section-title">🎯 Top Setups</div>
-      <div class="jrn-setups">
-        ${topSetups.map(s => {
-          const dir = s.bias === 'BUY' ? 'buy' : 'sell';
-          return `
-            <div class="jrn-setup-row">
-              <span class="jrn-setup-pair">${pair(s.instrument)}</span>
-              <span class="signal-dir ${dir}" style="font-size:9px">${s.bias}</span>
-              <span class="jrn-setup-state">${(s.state||'').replace(/_/g,' ')}</span>
-              <span class="jrn-setup-conf">${s.confidence}%</span>
-            </div>`;
-        }).join('')}
-      </div>
-    ` : ''}
-
-    ${outcomeBlocksHtml ? `
-      <div class="jrn-modal-section-title">📈 Outcomes</div>
-      ${outcomeBlocksHtml}
-    ` : ''}
-
-    ${pendingOutcomes ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">${pendingOutcomes}</div>` : ''}
-  `;
+  // Body — sections in order
+  document.getElementById('jrn-modal-body').innerHTML = [
+    e.summary ? `<div class="jrn-modal-summary">${e.summary}</div>` : '',
+    newsEvents !== null ? renderJrnCalendarSection(newsEvents, e.time) : _jrnSection('📅 Economic Calendar', '<p class="jrn-empty jrn-loading">Loading…</p>'),
+    e.risk_sentiment_details ? _jrnSection('🌍 Risk Sentiment', journalSentimentGroupsHtml(e.risk_sentiment_details)) : '',
+    renderJrnStrengthSection(e.currency_strength),
+    renderJrnAiSection(e.ai_analysis),
+    sessionEntries ? renderJrnSessionPerfSection(e, sessionEntries) : '',
+    prevEntry !== undefined ? renderJrnPrevSessionSection(prevEntry) : '',
+    renderJrnSetupsSection(e.top_setups || [], signals),
+    renderJrnOutcomesSection(e),
+  ].join('');
 
   const overlay = document.getElementById('jrn-modal-overlay');
   overlay.classList.add('open');

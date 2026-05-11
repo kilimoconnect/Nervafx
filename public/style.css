@@ -1331,7 +1331,7 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
   border: 1px solid var(--border);
   border-radius: 12px;
   width: 100%;
-  max-width: 860px;
+  max-width: 960px;
   box-shadow: 0 24px 64px rgba(0,0,0,0.6);
   display: flex;
   flex-direction: column;
@@ -1418,6 +1418,8 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
   color: var(--text-muted);
   margin-bottom: 12px;
 }
+/* Also used as the jrn-section-title inside a jrn-cs-section */
+.jrn-cs-section .jrn-section-title { margin-bottom: 12px; }
 .jrn-cs-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -1476,6 +1478,129 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
 .jrn-cs-num.pos { color: #4ade80; }
 .jrn-cs-num.neg { color: #f87171; }
 .jrn-cs-nodata { color: var(--text-dim); font-size: 12px; padding: 8px 0; margin: 0; }
+
+/* ── Generic journal section wrapper ────────────────────────────────────── */
+.jrn-section {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+.jrn-section-title {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+.jrn-empty {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin: 0;
+}
+.jrn-loading { opacity: 0.5; font-style: italic; }
+
+/* ── Economic calendar ───────────────────────────────────────────────────── */
+.jrn-cal-list { display: flex; flex-direction: column; gap: 4px; }
+.jrn-cal-row {
+  display: grid;
+  grid-template-columns: 54px 90px 32px 1fr auto;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-ui);
+  font-size: 11px;
+}
+.jrn-cal-row:last-child { border-bottom: none; }
+.jrn-cal-impact {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  border-radius: 3px;
+  padding: 1px 5px;
+  text-align: center;
+}
+.imp-high    { background: rgba(220,38,38,0.18); color: #f87171; border: 1px solid rgba(220,38,38,0.3); }
+.imp-medium  { background: rgba(234,88,12,0.15); color: #fb923c; border: 1px solid rgba(234,88,12,0.25); }
+.imp-low     { background: rgba(100,116,139,0.12); color: var(--text-dim); border: 1px solid var(--border); }
+.jrn-cal-time { font-family: var(--font-data); font-size: 10px; color: var(--text-dim); white-space: nowrap; }
+.jrn-cal-cur  { font-family: var(--font-data); font-size: 10px; font-weight: 700; color: var(--text-muted); }
+.jrn-cal-name { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jrn-cal-vals { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.jrn-cal-actual { font-family: var(--font-data); font-size: 10px; color: #4ade80; font-weight: 700; }
+.jrn-cal-fct    { font-family: var(--font-data); font-size: 10px; color: var(--text-dim); }
+.jrn-cal-prv    { font-family: var(--font-data); font-size: 10px; color: var(--text-dim); }
+
+/* ── AI analysis grid ────────────────────────────────────────────────────── */
+.jrn-ai-warnings { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+.jrn-ai-warn-row {
+  display: flex; gap: 8px; align-items: baseline;
+  background: rgba(220,38,38,0.08); border: 1px solid rgba(220,38,38,0.2);
+  border-radius: 5px; padding: 4px 8px;
+}
+.jrn-ai-warn-pair { font-family: var(--font-data); font-size: 10px; font-weight: 700; color: var(--text-muted); white-space: nowrap; }
+.jrn-ai-warn-text { font-family: var(--font-ui); font-size: 11px; color: #f87171; }
+.jrn-ai-grid { display: flex; flex-direction: column; gap: 0; }
+.jrn-ai-head {
+  display: grid;
+  grid-template-columns: 52px 1fr 80px 90px;
+  gap: 6px;
+  padding: 3px 4px 5px;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-ui);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+}
+.jrn-ai-row {
+  display: grid;
+  grid-template-columns: 52px 1fr 80px 90px;
+  gap: 6px;
+  align-items: center;
+  padding: 4px 4px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  font-family: var(--font-ui);
+  font-size: 11px;
+}
+.jrn-ai-row:last-child { border-bottom: none; }
+.jrn-ai-pair   { font-family: var(--font-data); font-size: 10.5px; font-weight: 700; color: var(--text); }
+.jrn-ai-struct { color: var(--text-dim); font-size: 10.5px; }
+.jrn-ai-struct.expanding  { color: #a78bfa; }
+.jrn-ai-struct.contracting{ color: #fb923c; }
+.jrn-ai-health { font-size: 10px; text-transform: uppercase; letter-spacing: 0.3px; }
+.jrn-ai-health.strong    { color: #4ade80; }
+.jrn-ai-health.weakening { color: #fb923c; }
+.jrn-ai-health.weak      { color: var(--text-dim); }
+.jrn-ai-qual { font-size: 10px; color: var(--text-dim); }
+
+/* ── Session performance ─────────────────────────────────────────────────── */
+.jrn-sess-stats { display: flex; flex-direction: column; gap: 6px; }
+.jrn-sess-stat  { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.jrn-sess-full  { flex-wrap: wrap; }
+.jrn-sess-lbl { font-family: var(--font-ui); font-size: 11px; color: var(--text-dim); white-space: nowrap; }
+.jrn-sess-val { font-family: var(--font-data); font-size: 11px; color: var(--text-muted); text-align: right; }
+
+/* ── Previous session ────────────────────────────────────────────────────── */
+.jrn-prev-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.jrn-prev-time { font-family: var(--font-data); font-size: 10px; color: var(--text-dim); }
+.jrn-prev-pairs { font-family: var(--font-data); font-size: 10px; color: var(--text-dim); }
+.jrn-prev-summary { font-family: var(--font-ui); font-size: 11.5px; color: var(--text-dim); line-height: 1.6; margin: 0 0 8px; }
+.jrn-prev-sigs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+.jrn-prev-sig { border-radius: 4px; padding: 2px 7px; font-size: 10px; }
+
+/* ── Setups & signals ────────────────────────────────────────────────────── */
+.jrn-sig-entered { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.jrn-sig-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.jrn-sig-pair { font-family: var(--font-data); font-size: 11px; font-weight: 700; color: var(--text); }
+.jrn-sig-conf { font-family: var(--font-data); font-size: 11px; color: var(--text-muted); }
+.jrn-sig-reason { font-family: var(--font-ui); font-size: 10px; color: var(--text-dim); }
+.jrn-waiting { font-family: var(--font-ui); font-size: 11px; color: var(--text-dim); margin: 6px 0 0; }
 
 /* ── Journal list row — click to open ───────────────────────────────────── */
 .jrn-entry { cursor: pointer; }
