@@ -62,7 +62,7 @@ async function runStrength(sb) {
       .eq('timeframe', 'H1')
       .eq('complete', true)
       .order('time', { ascending: false })
-      .limit(25);
+      .limit(50); // 12H lookback + up to ~24H lag in latestCommonTime + buffer
     if (error) throw new Error(`candle fetch ${inst}: ${error.message}`);
     lookup[inst] = {};
     for (const c of data || []) {
@@ -200,7 +200,6 @@ async function runSpreads(sb) {
       base_currency: base, quote_currency: quote,
       spread_3h: s3h, spread_6h: s6h, spread_12h: s12h,
       weighted_score: ws,
-      bias: ws >= 0 ? 'BUY' : 'SELL',
     });
   }
 

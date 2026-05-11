@@ -52,8 +52,8 @@ async function buildCandleLookup() {
 }
 
 // Fetch only the most recent N candles per instrument — sufficient for calculateLatestStrength()
-// (max lookback is 12H, so 25 rows gives a safe buffer without hitting the row cap).
-async function buildRecentCandleLookup(recentCount = 25) {
+// 12H lookback + up to ~24H lag in latestCommonTime + buffer = 50 rows minimum.
+async function buildRecentCandleLookup(recentCount = 50) {
   const lookup = {};
 
   for (const instrument of config.instruments) {
@@ -188,7 +188,7 @@ async function backfillStrength() {
 // Calculate and store strength for the latest common closed candle only.
 // Uses buildRecentCandleLookup (25 rows/instrument) — avoids the 1000-row Supabase cap.
 async function calculateLatestStrength() {
-  const lookup = await buildRecentCandleLookup(25);
+  const lookup = await buildRecentCandleLookup(50);
   const time = latestCommonTime(lookup);
 
   if (!time) {
