@@ -1547,7 +1547,7 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
 .jrn-ai-grid { display: flex; flex-direction: column; gap: 0; }
 .jrn-ai-head {
   display: grid;
-  grid-template-columns: 52px 1fr 80px 90px;
+  grid-template-columns: 52px 1fr 44px 40px 1fr;
   gap: 6px;
   padding: 3px 4px 5px;
   border-bottom: 1px solid var(--border);
@@ -1560,7 +1560,7 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
 }
 .jrn-ai-row {
   display: grid;
-  grid-template-columns: 52px 1fr 80px 90px;
+  grid-template-columns: 52px 1fr 44px 40px 1fr;
   gap: 6px;
   align-items: center;
   padding: 4px 4px;
@@ -1578,6 +1578,12 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
 .jrn-ai-health.weakening { color: #fb923c; }
 .jrn-ai-health.weak      { color: var(--text-dim); }
 .jrn-ai-qual { font-size: 10px; color: var(--text-dim); }
+.jrn-ai-conf { font-family: var(--font-data); font-size: 10px; color: var(--text-dim); }
+.jrn-ai-state { font-size: 10px; text-transform: uppercase; letter-spacing: 0.2px; }
+.jrn-ai-state.trend   { color: #4ade80; }
+.jrn-ai-state.pb      { color: #fb923c; }
+.jrn-ai-state.ready   { color: #a78bfa; }
+.jrn-ai-state.notrade { color: var(--text-dim); }
 
 /* ── Session performance ─────────────────────────────────────────────────── */
 .jrn-sess-stats { display: flex; flex-direction: column; gap: 6px; }

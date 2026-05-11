@@ -1431,25 +1431,45 @@ function renderJrnCalendarSection(events, entryTime) {
     </div>`);
 }
 
-function renderJrnAiSection(aiAnalysis) {
-  const rows = (aiAnalysis || []);
-  if (!rows.length) return '';
-  const warnings = rows.filter(a => a.warning);
-  return _jrnSection('🤖 AI Market Analysis', `
+function renderJrnAiSection(marketStates, aiAnalysis) {
+  const states = (marketStates || []);
+  const ai     = (aiAnalysis   || []);
+  if (!states.length && !ai.length) return '';
+
+  // Map AI data by instrument for quick lookup
+  const aiMap = {};
+  for (const a of ai) aiMap[a.instrument] = a;
+
+  // Sort: active states first (READY_TO_ENTER, PULLBACK_*, TREND), then NO_TRADE
+  const ORDER = { READY_TO_ENTER: 0, PULLBACK_ACTIVE: 1, PULLBACK_STARTING: 2, TREND: 3, NO_TRADE: 99 };
+  const sorted = [...states].sort((a, b) => {
+    const oa = ORDER[a.state] ?? 50, ob = ORDER[b.state] ?? 50;
+    return oa !== ob ? oa - ob : (b.confidence || 0) - (a.confidence || 0);
+  });
+
+  // AI warnings from the deep analysis
+  const warnings = ai.filter(a => a.warning);
+
+  const stateLabel = s => (s || '—').replace(/_/g, ' ');
+  const stateCls   = s => s === 'TREND' ? 'trend' : s?.startsWith('PULLBACK') ? 'pb' : s === 'READY_TO_ENTER' ? 'ready' : 'notrade';
+  const biasCls    = b => b === 'BUY' ? 'buy' : b === 'SELL' ? 'sell' : '';
+
+  return _jrnSection('📊 Market States', `
     ${warnings.length ? `<div class="jrn-ai-warnings">${warnings.map(a =>
       `<div class="jrn-ai-warn-row"><span class="jrn-ai-warn-pair">${pair(a.instrument)}</span><span class="jrn-ai-warn-text">⚠ ${a.warning}</span></div>`
     ).join('')}</div>` : ''}
     <div class="jrn-ai-grid">
-      <div class="jrn-ai-head"><span>Pair</span><span>Structure</span><span>Health</span><span>Quality</span></div>
-      ${rows.map(a => {
-        const hcls = a.trend_health === 'STRONG' ? 'strong' : a.trend_health === 'WEAKENING' ? 'weakening' : 'weak';
-        const scls = (a.structure_type || '').includes('EXPAND') ? 'expanding' : (a.structure_type || '').includes('CONTRACT') ? 'contracting' : '';
+      <div class="jrn-ai-head"><span>Pair</span><span>State</span><span>Bias</span><span>Conf</span><span>AI Structure</span></div>
+      ${sorted.map(s => {
+        const a = aiMap[s.instrument];
+        const scls = (a?.structure_type || '').includes('EXPAND') ? 'expanding' : (a?.structure_type || '').includes('CONTRACT') ? 'contracting' : '';
         return `
           <div class="jrn-ai-row">
-            <span class="jrn-ai-pair">${pair(a.instrument)}</span>
-            <span class="jrn-ai-struct ${scls}">${(a.structure_type || '—').replace(/_/g,' ')}</span>
-            <span class="jrn-ai-health ${hcls}">${a.trend_health || '—'}</span>
-            <span class="jrn-ai-qual">${(a.market_quality || '—').replace(/_/g,' ')}</span>
+            <span class="jrn-ai-pair">${pair(s.instrument)}</span>
+            <span class="jrn-ai-state ${stateCls(s.state)}">${stateLabel(s.state)}</span>
+            <span class="signal-dir ${biasCls(s.bias)}" style="font-size:8px;padding:1px 5px">${s.bias || '—'}</span>
+            <span class="jrn-ai-conf">${s.confidence ?? '—'}%</span>
+            <span class="jrn-ai-struct ${scls}">${a ? (a.structure_type || '—').replace(/_/g,' ') : '—'}</span>
           </div>`;
       }).join('')}
     </div>`);
@@ -1595,7 +1615,7 @@ function _renderJournalModal(e, newsEvents, sessionEntries, prevEntry) {
     newsEvents !== null ? renderJrnCalendarSection(newsEvents, e.time) : _jrnSection('📅 Economic Calendar', '<p class="jrn-empty jrn-loading">Loading…</p>'),
     e.risk_sentiment_details ? _jrnSection('🌍 Risk Sentiment', journalSentimentGroupsHtml(e.risk_sentiment_details)) : '',
     renderJrnStrengthSection(e.currency_strength),
-    renderJrnAiSection(e.ai_analysis),
+    renderJrnAiSection(e.market_states, e.ai_analysis),
     sessionEntries ? renderJrnSessionPerfSection(e, sessionEntries) : '',
     prevEntry !== undefined ? renderJrnPrevSessionSection(prevEntry) : '',
     renderJrnSetupsSection(e.top_setups || [], signals),
