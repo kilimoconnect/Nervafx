@@ -44,7 +44,7 @@ module.exports = async function handler(req, res) {
           max_daily_risk_pct: 2,
           max_trades:         3,
           min_rr:             2,
-          timezone:           'UTC',
+          timezone:           null,
         });
       }
       if (error) throw error;

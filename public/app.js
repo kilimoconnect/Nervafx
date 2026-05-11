@@ -1516,8 +1516,8 @@ async function refresh() {
       _profile.account_size       = parseFloat(profileData.account_size)       || null;
       _profile.max_daily_risk_pct = parseFloat(profileData.max_daily_risk_pct) || null;
       _profile.max_trades         = parseInt(profileData.max_trades)            || null;
-      // Timezone: 'auto' = browser local, anything else = IANA name, fallback = UTC
-      _userTz = profileData.timezone || 'UTC';
+      // Timezone: 'auto' = browser local, anything else = IANA name, fallback = auto (browser)
+      _userTz = profileData.timezone || 'auto';
     }
 
     // Today's news — called after _userTz is set so date is in user's timezone
