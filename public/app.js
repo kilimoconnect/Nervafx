@@ -1622,7 +1622,6 @@ function _renderJournalModal(e, newsEvents, sessionEntries, prevEntry) {
     newsEvents !== null ? renderJrnCalendarSection(newsEvents, e.time) : _jrnSection('📅 Economic Calendar', '<p class="jrn-empty jrn-loading">Loading…</p>'),
     e.risk_sentiment_details ? _jrnSection('🌍 Risk Sentiment', journalSentimentGroupsHtml(e.risk_sentiment_details)) : '',
     renderJrnStrengthSection(e.currency_strength),
-    renderJrnAiSection(e.market_states, e.ai_analysis),
     sessionEntries ? renderJrnSessionPerfSection(e, sessionEntries) : '',
     prevEntry !== undefined ? renderJrnPrevSessionSection(prevEntry) : '',
     renderJrnSetupsSection(e.top_setups || [], signals),
