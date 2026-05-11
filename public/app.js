@@ -1692,27 +1692,12 @@ function renderJournal(data) {
   }
 
   el.innerHTML = entries.map(e => {
-    const sentCls  = e.risk_sentiment === 'RISK_ON'  ? 'risk-on'
-                   : e.risk_sentiment === 'RISK_OFF' ? 'risk-off'
-                   : 'neutral';
-    const sessCls  = (e.session_quality || 'BLOCKED').toLowerCase().replace(/_/g, '-');
-    const signals  = e.signals_summary || {};
+    const sentCls = e.risk_sentiment === 'RISK_ON'  ? 'risk-on'
+                  : e.risk_sentiment === 'RISK_OFF' ? 'risk-off'
+                  : 'neutral';
+    const sessCls = (e.session_quality || 'BLOCKED').toLowerCase().replace(/_/g, '-');
+    const signals = e.signals_summary || {};
     const enteredCount = (signals.entered || []).length;
-
-    const outcomes = [
-      { label: '6H',  data: e.outcome_6h  },
-      { label: '12H', data: e.outcome_12h },
-      { label: '24H', data: e.outcome_24h },
-    ];
-
-    const outcomeHtml = outcomes.map(o => {
-      if (!o.data) return `<span class="jrn-outcome-pill pending">⏳ ${o.label}</span>`;
-      const score    = o.data.accuracy_score;
-      const scoreCls = score >= 70 ? 'good' : score >= 40 ? 'mid' : 'bad';
-      const correct  = o.data.correct_count ?? 0;
-      const total    = o.data.total_setups  ?? 0;
-      return `<span class="jrn-outcome-pill ${scoreCls}" title="${o.data.verdict || ''}">${o.label} · ${correct}/${total} · ${score ?? '—'}%</span>`;
-    }).join('');
 
     return `
       <div class="jrn-entry" id="jrn-${e.id}" onclick="openJournalModal('${e.id}')">
@@ -1727,7 +1712,6 @@ function renderJournal(data) {
             <span class="jrn-count ready" title="Ready">${e.ready_pairs}R</span>
             ${enteredCount ? `<span class="jrn-count sig">${enteredCount}✦</span>` : ''}
           </div>
-          <div class="jrn-outcomes">${outcomeHtml}</div>
           <span class="jrn-chevron">›</span>
         </div>
       </div>`;
