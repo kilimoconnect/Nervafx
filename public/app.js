@@ -1599,7 +1599,6 @@ function _renderJournalModal(e, newsEvents, sessionEntries, prevEntry) {
     sessionEntries ? renderJrnSessionPerfSection(e, sessionEntries) : '',
     prevEntry !== undefined ? renderJrnPrevSessionSection(prevEntry) : '',
     renderJrnSetupsSection(e.top_setups || [], signals),
-    renderJrnOutcomesSection(e),
   ].join('');
 
   const overlay = document.getElementById('jrn-modal-overlay');
