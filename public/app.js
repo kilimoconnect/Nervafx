@@ -1484,7 +1484,8 @@ function renderJrnAiSection(marketStates, aiAnalysis) {
 
 function renderJrnSessionPerfSection(e, sessionEntries) {
   if (!sessionEntries || sessionEntries.length <= 1) {
-    return _jrnSection(`📊 Session: ${e.session_name}`, '<p class="jrn-empty">First snapshot of this session.</p>');
+    return _jrnSection(`📊 Session: ${e.session_name.replace(/_/g,' ')}`, '<p class="jrn-empty">First snapshot of this session.</p>');
+
   }
   const first = sessionEntries[0];
   const sentFlow = [...sessionEntries.reduce((m, x) => { m.set(x.risk_sentiment, 1); return m; }, new Map()).keys()]
@@ -1493,7 +1494,7 @@ function renderJrnSessionPerfSection(e, sessionEntries) {
   const trendDelta = e.trend_pairs - first.trend_pairs;
   const readyDelta = e.ready_pairs - first.ready_pairs;
   const delta = v => v > 0 ? `<span style="color:#4ade80">+${v}</span>` : v < 0 ? `<span style="color:#f87171">${v}</span>` : `<span style="color:var(--text-dim)">±0</span>`;
-  return _jrnSection(`📊 Session: ${e.session_name} · ${sessionEntries.length} snapshots`, `
+  return _jrnSection(`📊 Session: ${e.session_name.replace(/_/g,' ')} · ${sessionEntries.length} snapshots`, `
     <div class="jrn-sess-stats">
       <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Duration</span><span class="jrn-sess-val">${sessionEntries.length}H</span></div>
       <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Sentiment flow</span><span class="jrn-sess-val">${sentFlow}</span></div>
@@ -1508,10 +1509,11 @@ function renderJrnPrevSessionSection(prevEntry) {
   const sentCls = prevEntry.risk_sentiment === 'RISK_ON' ? 'risk-on' : prevEntry.risk_sentiment === 'RISK_OFF' ? 'risk-off' : 'neutral';
   const sessCls = (prevEntry.session_quality || 'BLOCKED').toLowerCase().replace(/_/g, '-');
   const entered = (prevEntry.signals_summary?.entered || []);
-  return _jrnSection(`📋 Previous Session: ${prevEntry.session_name}`, `
+  const sessLabel = s => (s || '—').replace(/_/g,' ');
+  return _jrnSection(`📋 Previous Session: ${sessLabel(prevEntry.session_name)}`, `
     <div class="jrn-prev-meta">
       <span class="jrn-prev-time">${fmtTime(prevEntry.time)}</span>
-      <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${prevEntry.session_name}</span>
+      <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${sessLabel(prevEntry.session_name)}</span>
       <span class="jrn-sent sent-${sentCls}">${(prevEntry.risk_sentiment || '—').replace('_',' ')}</span>
       <span class="jrn-conf">${prevEntry.risk_confidence ?? '—'}%</span>
       <span class="jrn-prev-pairs">${prevEntry.trend_pairs}T · ${prevEntry.pullback_pairs}PB · ${prevEntry.ready_pairs}R</span>
@@ -1606,7 +1608,7 @@ function _renderJournalModal(e, newsEvents, sessionEntries, prevEntry) {
   // Header
   document.getElementById('jrn-modal-time').textContent = fmtTime(e.time);
   document.getElementById('jrn-modal-badges').innerHTML = `
-    <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${e.session_name || '—'}</span>
+    <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${(e.session_name || '—').replace(/_/g,' ')}</span>
     <span class="jrn-sent sent-${sentCls}">${(e.risk_sentiment || '—').replace('_',' ')}</span>
     <span class="jrn-conf">${e.risk_confidence ?? '—'}%</span>
     <div class="jrn-counts">
@@ -1716,7 +1718,7 @@ function renderJournal(data) {
       <div class="jrn-entry" id="jrn-${e.id}" onclick="openJournalModal('${e.id}')">
         <div class="jrn-header">
           <span class="jrn-time">${fmtTime(e.time)}</span>
-          <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${e.session_name || '—'}</span>
+          <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${(e.session_name || '—').replace(/_/g,' ')}</span>
           <span class="jrn-sent sent-${sentCls}">${(e.risk_sentiment || '—').replace('_',' ')}</span>
           <span class="jrn-conf">${e.risk_confidence ?? '—'}%</span>
           <div class="jrn-counts">
