@@ -281,14 +281,19 @@ async function writeJournalEntry() {
     nzdjpy_score:    sentiment.nzdjpy_score,
   } : null;
 
-  // Compact currency strength (all three TFs so dashboard modal can render 3H/6H/12H bars)
+  // Compact currency strength (all three TFs so dashboard modal can render 3H/6H/12H bars).
+  // Store smooth_* as primary and normalized_* as fallback — normalized is always available
+  // immediately after strength calculation even if the smooth step hasn't run yet.
   const currency_strength = currencyStrength.map(r => ({
-    currency:    r.currency,
-    smooth_3h:   r.smooth_3h,
-    smooth_6h:   r.smooth_6h,
-    smooth_12h:  r.smooth_12h,
-    momentum:    r.momentum,
-    accel_label: r.accel_label,
+    currency:      r.currency,
+    smooth_3h:     r.smooth_3h,
+    smooth_6h:     r.smooth_6h,
+    smooth_12h:    r.smooth_12h,
+    normalized_3h:  r.normalized_3h,
+    normalized_6h:  r.normalized_6h,
+    normalized_12h: r.normalized_12h,
+    momentum:      r.momentum,
+    accel_label:   r.accel_label,
   }));
 
   // Signals summary for storage

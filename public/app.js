@@ -1345,14 +1345,14 @@ function renderQuality(q) {
 let _journalEntries = {}; // id → entry, populated in renderJournal
 
 function renderJrnStrengthSection(cs) {
-  if (!cs) return '';
+  if (!cs) return '<div class="jrn-cs-section"><div class="jrn-cs-header">💹 Currency Strength — Snapshot</div><p class="jrn-cs-nodata">No strength data for this entry.</p></div>';
   const currencies = cs.currencies || (Array.isArray(cs) ? cs : null);
-  if (!currencies?.length) return '';
+  if (!currencies?.length) return '<div class="jrn-cs-section"><div class="jrn-cs-header">💹 Currency Strength — Snapshot</div><p class="jrn-cs-nodata">No strength data for this entry.</p></div>';
 
   const tfs = [
-    { key: 'smooth_3h',  fb: 'normalized_3h',  label: '3H Strength' },
-    { key: 'smooth_6h',  fb: 'normalized_6h',  label: '6H Strength' },
-    { key: 'smooth_12h', fb: 'normalized_12h', label: '12H Strength' },
+    { keys: ['smooth_3h',  'normalized_3h'],  label: '3H Strength' },
+    { keys: ['smooth_6h',  'normalized_6h'],  label: '6H Strength' },
+    { keys: ['smooth_12h', 'normalized_12h'], label: '12H Strength' },
   ];
 
   return `
@@ -1360,9 +1360,23 @@ function renderJrnStrengthSection(cs) {
       <div class="jrn-cs-header">💹 Currency Strength — Snapshot</div>
       <div class="jrn-cs-grid">
         ${tfs.map(tf => {
-          const vals = currencies
-            .map(c => ({ cur: c.currency, val: parseFloat(c[tf.key] ?? c[tf.fb] ?? 0) || 0 }))
-            .sort((a, b) => b.val - a.val);
+          const vals = currencies.map(c => {
+            // Use first non-null value from the key list
+            let val = 0;
+            for (const k of tf.keys) {
+              const v = parseFloat(c[k]);
+              if (!isNaN(v) && v !== 0) { val = v; break; }
+            }
+            // Last resort: try any non-null key even if 0
+            if (val === 0) {
+              for (const k of tf.keys) {
+                const v = parseFloat(c[k]);
+                if (!isNaN(v)) { val = v; break; }
+              }
+            }
+            return { cur: c.currency, val };
+          }).sort((a, b) => b.val - a.val);
+
           const maxAbs = Math.max(...vals.map(v => Math.abs(v.val)), 0.0001);
           return `
             <div class="jrn-cs-tf-block">
