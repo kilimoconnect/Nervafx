@@ -1358,55 +1358,69 @@ function renderJrnStrengthSection(cs) {
   const asOf       = Array.isArray(cs) ? null : (cs?.as_of || null);
   const asOfLabel  = asOf ? `<span class="jrn-as-of">as of ${fmtTime(asOf)}</span>` : '';
   const header     = `💹 Currency Strength ${asOfLabel}`;
-  if (!cs)             return `<div class="jrn-cs-section"><div class="jrn-cs-header">${header}</div><p class="jrn-cs-nodata">No strength data for this entry.</p></div>`;
-  if (!currencies?.length) return `<div class="jrn-cs-section"><div class="jrn-cs-header">${header}</div><p class="jrn-cs-nodata">No strength data for this entry.</p></div>`;
+  if (!cs || !currencies?.length)
+    return `<div class="jrn-cs-section"><div class="jrn-cs-header">${header}</div><p class="jrn-cs-nodata">No strength data for this entry.</p></div>`;
+
+  // Helper: pick the first non-zero value from a list of keys on a currency row
+  function pickVal(c, keys) {
+    for (const k of keys) { const v = parseFloat(c[k]); if (!isNaN(v) && v !== 0) return v; }
+    for (const k of keys) { const v = parseFloat(c[k]); if (!isNaN(v)) return v; }
+    return 0;
+  }
 
   const tfs = [
-    { keys: ['smooth_3h',  'normalized_3h'],  label: '3H Strength' },
-    { keys: ['smooth_6h',  'normalized_6h'],  label: '6H Strength' },
-    { keys: ['smooth_12h', 'normalized_12h'], label: '12H Strength' },
+    { label: '3H',  keys: ['smooth_3h',  'normalized_3h']  },
+    { label: '6H',  keys: ['smooth_6h',  'normalized_6h']  },
+    { label: '12H', keys: ['smooth_12h', 'normalized_12h'] },
   ];
+
+  // Build combined (equal-weight average of 3H + 6H + 12H)
+  const combinedVals = currencies.map(c => ({
+    cur: c.currency,
+    val: tfs.reduce((sum, tf) => sum + pickVal(c, tf.keys), 0) / tfs.length,
+  })).sort((a, b) => b.val - a.val);
+  const combinedMax = Math.max(...combinedVals.map(v => Math.abs(v.val)), 0.0001);
+
+  const comboBlock = `
+    <div class="jrn-cs-tf-block combined">
+      <div class="jrn-cs-tf-label">Combined ∑</div>
+      ${combinedVals.map(v => {
+        const pct = Math.round((Math.abs(v.val) / combinedMax) * 100);
+        const cls = v.val >= 0 ? 'combo-pos' : 'combo-neg';
+        return `
+          <div class="jrn-cs-row">
+            <span class="jrn-cs-cur">${v.cur}</span>
+            <div class="jrn-cs-bar-wrap"><div class="jrn-cs-bar ${cls}" style="width:${pct}%"></div></div>
+            <span class="jrn-cs-num ${cls}">${v.val >= 0 ? '+' : ''}${v.val.toFixed(5)}</span>
+          </div>`;
+      }).join('')}
+    </div>`;
+
+  const tfBlocks = tfs.map(tf => {
+    const vals = currencies.map(c => ({ cur: c.currency, val: pickVal(c, tf.keys) }))
+      .sort((a, b) => b.val - a.val);
+    const maxAbs = Math.max(...vals.map(v => Math.abs(v.val)), 0.0001);
+    return `
+      <div class="jrn-cs-tf-block">
+        <div class="jrn-cs-tf-label">${tf.label} Strength</div>
+        ${vals.map(v => {
+          const pct = Math.round((Math.abs(v.val) / maxAbs) * 100);
+          const cls = v.val >= 0 ? 'pos' : 'neg';
+          return `
+            <div class="jrn-cs-row">
+              <span class="jrn-cs-cur">${v.cur}</span>
+              <div class="jrn-cs-bar-wrap"><div class="jrn-cs-bar ${cls}" style="width:${pct}%"></div></div>
+              <span class="jrn-cs-num ${cls}">${v.val >= 0 ? '+' : ''}${v.val.toFixed(5)}</span>
+            </div>`;
+        }).join('')}
+      </div>`;
+  }).join('');
 
   return `
     <div class="jrn-cs-section">
       <div class="jrn-cs-header">${header}</div>
       <div class="jrn-cs-grid">
-        ${tfs.map(tf => {
-          const vals = currencies.map(c => {
-            // Use first non-null value from the key list
-            let val = 0;
-            for (const k of tf.keys) {
-              const v = parseFloat(c[k]);
-              if (!isNaN(v) && v !== 0) { val = v; break; }
-            }
-            // Last resort: try any non-null key even if 0
-            if (val === 0) {
-              for (const k of tf.keys) {
-                const v = parseFloat(c[k]);
-                if (!isNaN(v)) { val = v; break; }
-              }
-            }
-            return { cur: c.currency, val };
-          }).sort((a, b) => b.val - a.val);
-
-          const maxAbs = Math.max(...vals.map(v => Math.abs(v.val)), 0.0001);
-          return `
-            <div class="jrn-cs-tf-block">
-              <div class="jrn-cs-tf-label">${tf.label}</div>
-              ${vals.map(v => {
-                const pct = Math.round((Math.abs(v.val) / maxAbs) * 100);
-                const cls = v.val >= 0 ? 'pos' : 'neg';
-                return `
-                  <div class="jrn-cs-row">
-                    <span class="jrn-cs-cur">${v.cur}</span>
-                    <div class="jrn-cs-bar-wrap">
-                      <div class="jrn-cs-bar ${cls}" style="width:${pct}%"></div>
-                    </div>
-                    <span class="jrn-cs-num ${cls}">${v.val >= 0 ? '+' : ''}${v.val.toFixed(5)}</span>
-                  </div>`;
-              }).join('')}
-            </div>`;
-        }).join('')}
+        ${comboBlock}${tfBlocks}
       </div>
     </div>`;
 }
