@@ -34,13 +34,26 @@ module.exports = async function handler(req, res) {
       return res.json({ events: data || [] });
     }
 
-    // Public: specific date (?date=YYYY-MM-DD) — returns full day including past events
+    // Public: timezone-aware range (?from=ISO&to=ISO) — preferred, used by dashboard
+    if (req.query?.from || req.query?.to) {
+      let q = sb
+        .from('forex_news')
+        .select('id,event_time,currency,event_name,impact,forecast,previous,actual')
+        .order('event_time', { ascending: true });
+      if (req.query.from) q = q.gte('event_time', req.query.from);
+      if (req.query.to)   q = q.lte('event_time', req.query.to);
+      const { data, error } = await q;
+      if (error) return res.status(500).json({ error: error.message });
+      return res.json({ events: data || [] });
+    }
+
+    // Public: specific date (?date=YYYY-MM-DD) — UTC day boundaries (legacy fallback)
     if (req.query?.date) {
       const date = req.query.date;
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'Invalid date format' });
       const { data, error } = await sb
         .from('forex_news')
-        .select('id,event_time,currency,event_name,impact,forecast,previous')
+        .select('id,event_time,currency,event_name,impact,forecast,previous,actual')
         .gte('event_time', date + 'T00:00:00Z')
         .lte('event_time', date + 'T23:59:59Z')
         .order('event_time', { ascending: true });

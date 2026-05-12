@@ -181,9 +181,18 @@ async function fetchTodayNews() {
     const tz = (_userTz === 'auto')
       ? Intl.DateTimeFormat().resolvedOptions().timeZone
       : (_userTz || 'UTC');
-    // Get today's date string in the user's timezone (en-CA gives YYYY-MM-DD)
-    const today = new Date().toLocaleDateString('en-CA', { timeZone: tz });
-    const d = await api(`/api/news?date=${today}`);
+
+    // Get today's date string in the user's local timezone
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: tz }); // YYYY-MM-DD
+
+    // Convert the user's local midnight → UTC so the API returns events that
+    // fall within the actual local calendar day, not the UTC calendar day.
+    // e.g. EAT (UTC+3): local midnight 00:00 = UTC 21:00 the previous day
+    const offsetMs    = getTzOffsetMins(tz) * 60 * 1000;
+    const dayStartUTC = new Date(new Date(today + 'T00:00:00Z').getTime() - offsetMs).toISOString();
+    const dayEndUTC   = new Date(new Date(today + 'T23:59:59Z').getTime() - offsetMs).toISOString();
+
+    const d = await api(`/api/news?from=${encodeURIComponent(dayStartUTC)}&to=${encodeURIComponent(dayEndUTC)}`);
     renderTodayNews(d.events || []);
   } catch (e) { console.warn('[today-news]', e.message); }
 }
