@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NervaFX — Market Journal</title>
+  <link rel="icon" type="image/png" href="/nervafx-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/notyf@3/notyf.min.css">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/notyf@3/notyf.min.js"></script>
+  <!-- Inherits all .jrn-*, .sess-card-badge, .signal-dir, modal styles etc. -->
+  <link rel="stylesheet" href="style.css" />
+
+  <style>
+    /* ─── Page-level layout (journal.html only) ────────────────────────────── */
+
+    /* Suppress the main dashboard grid — not needed here */
+    .grid { display: block !important; }
+
+    /* ── Top bar ──────────────────────────────────────────────────────────── */
+    .jpage-topbar {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 28px; height: 56px;
+      background: rgba(8,11,18,0.92);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+    .jpage-topbar-left  { display: flex; align-items: center; gap: 12px; }
+    .jpage-topbar-right { display: flex; align-items: center; gap: 10px; }
+
+    .jpage-logo {
+      font-size: 15px; font-weight: 800; letter-spacing: 1.5px;
+      text-transform: uppercase;
+      background: linear-gradient(135deg, #60a5fa, #a78bfa);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text; text-decoration: none;
+    }
+    .jpage-sep { color: rgba(255,255,255,0.1); font-size: 20px; font-weight: 200; }
+    .jpage-title-text {
+      font-size: 13px; font-weight: 600; color: var(--text-muted);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .jpage-count-badge {
+      font-family: var(--font-data);
+      font-size: 10px; color: var(--text-muted);
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 5px; padding: 3px 9px;
+    }
+    .jpage-back-btn {
+      display: flex; align-items: center; gap: 5px;
+      padding: 6px 12px; border-radius: 8px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); font-size: 11px; font-weight: 600;
+      cursor: pointer; text-decoration: none;
+      transition: all 0.15s;
+    }
+    .jpage-back-btn:hover { background: rgba(255,255,255,0.09); color: var(--text); border-color: rgba(255,255,255,0.14); }
+
+    /* ── Filter bar ───────────────────────────────────────────────────────── */
+    .jpage-filters {
+      position: sticky; top: 56px; z-index: 90;
+      background: rgba(8,11,18,0.95);
+      backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 28px;
+      display: flex; align-items: center; gap: 18px;
+      flex-wrap: wrap;
+    }
+    .jpage-filter-group { display: flex; align-items: center; gap: 7px; }
+    .jpage-filter-label {
+      font-size: 9px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.8px;
+      color: var(--text-dim); white-space: nowrap;
+    }
+    .jpage-pills { display: flex; gap: 3px; flex-wrap: wrap; }
+    .jpage-pill {
+      font-size: 10px; font-weight: 600;
+      padding: 4px 10px; border-radius: 5px;
+      border: 1px solid var(--border);
+      background: transparent; color: var(--text-muted);
+      cursor: pointer; transition: all 0.12s; white-space: nowrap;
+    }
+    .jpage-pill:hover  { background: var(--bg-hover); color: var(--text); border-color: #334155; }
+    .jpage-pill.active { background: rgba(59,130,246,0.14); border-color: rgba(59,130,246,0.38); color: #93c5fd; }
+    /* Sentiment-specific active colours */
+    .jpage-pill.active[data-val="RISK_ON"]  { background: rgba(74,222,128,0.1);  border-color: rgba(74,222,128,0.3);  color: #4ade80; }
+    .jpage-pill.active[data-val="RISK_OFF"] { background: rgba(248,113,113,0.1); border-color: rgba(248,113,113,0.3); color: #f87171; }
+    .jpage-pill.active[data-val="NEUTRAL"]  { background: rgba(100,116,139,0.1); border-color: rgba(100,116,139,0.3); color: #94a3b8; }
+
+    .jpage-filter-sep { width: 1px; height: 22px; background: var(--border); flex-shrink: 0; }
+
+    .jpage-search-wrap {
+      display: flex; align-items: center; gap: 6px; margin-left: auto;
+    }
+    .jpage-search {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 5px 10px;
+      font-size: 11px; color: var(--text);
+      font-family: var(--font-ui);
+      outline: none; width: 180px;
+      transition: border-color 0.15s;
+    }
+    .jpage-search::placeholder { color: var(--text-dim); }
+    .jpage-search:focus { border-color: #334155; }
+    .jpage-clear-btn {
+      font-size: 10px; font-weight: 600;
+      color: var(--text-dim); background: none;
+      border: none; cursor: pointer; padding: 4px 6px;
+      border-radius: 4px; transition: color 0.12s;
+    }
+    .jpage-clear-btn:hover { color: var(--text); }
+
+    /* ── Main content ─────────────────────────────────────────────────────── */
+    .jpage-main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 20px 28px 80px;
+    }
+
+    /* ── Entry list ───────────────────────────────────────────────────────── */
+    .jpage-list {
+      display: flex; flex-direction: column; gap: 4px;
+    }
+
+    /* Summary visible on the dedicated page (not the dashboard compact widget) */
+    .jrn-entry .jrn-summary {
+      padding: 6px 14px 10px;
+      font-size: 11px; line-height: 1.6;
+      color: var(--text-muted);
+      border-top: 1px solid var(--border);
+    }
+
+    /* ── States ───────────────────────────────────────────────────────────── */
+    .jpage-loading, .jpage-empty {
+      text-align: center; padding: 60px 20px;
+      color: var(--text-muted); font-size: 13px;
+    }
+    .jpage-spinner {
+      display: inline-block; width: 22px; height: 22px;
+      border: 2px solid var(--border); border-top-color: var(--accent);
+      border-radius: 50%; animation: jp-spin 0.8s linear infinite;
+      margin-bottom: 10px;
+    }
+    @keyframes jp-spin { to { transform: rotate(360deg); } }
+
+    /* ── Stats bar ────────────────────────────────────────────────────────── */
+    .jpage-stats-bar {
+      display: flex; align-items: center; gap: 16px;
+      margin-bottom: 12px;
+      padding: 8px 12px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      flex-wrap: wrap;
+    }
+    .jpage-stat {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 10px; color: var(--text-muted);
+    }
+    .jpage-stat-val {
+      font-family: var(--font-data);
+      font-size: 11px; font-weight: 700;
+      color: var(--text);
+    }
+    .jpage-stat-sep { color: var(--border); }
+  </style>
+</head>
+<body>
+
+  <!-- Top bar -->
+  <header class="jpage-topbar">
+    <div class="jpage-topbar-left">
+      <a href="/app" class="jpage-logo">NervaFX</a>
+      <span class="jpage-sep">|</span>
+      <span class="jpage-title-text">
+        <i data-lucide="book-open" style="width:14px;height:14px;flex-shrink:0"></i>
+        Market Journal
+      </span>
+    </div>
+    <div class="jpage-topbar-right">
+      <span id="jpage-count" class="jpage-count-badge">Loading…</span>
+      <span class="journal-live-badge">LIVE</span>
+      <a href="/app" class="jpage-back-btn">
+        <i data-lucide="arrow-left" style="width:11px;height:11px"></i>
+        Dashboard
+      </a>
+    </div>
+  </header>
+
+  <!-- Filter bar -->
+  <div class="jpage-filters">
+    <div class="jpage-filter-group">
+      <span class="jpage-filter-label">Session</span>
+      <div class="jpage-pills" id="filter-session">
+        <button class="jpage-pill active" data-val="">All</button>
+        <button class="jpage-pill" data-val="ASIA">Asia</button>
+        <button class="jpage-pill" data-val="LONDON_OPEN">London Open</button>
+        <button class="jpage-pill" data-val="LONDON">London</button>
+        <button class="jpage-pill" data-val="LONDON_NY">London/NY</button>
+        <button class="jpage-pill" data-val="LATE_NY">Late NY</button>
+      </div>
+    </div>
+
+    <div class="jpage-filter-sep"></div>
+
+    <div class="jpage-filter-group">
+      <span class="jpage-filter-label">Sentiment</span>
+      <div class="jpage-pills" id="filter-sentiment">
+        <button class="jpage-pill active" data-val="">All</button>
+        <button class="jpage-pill" data-val="RISK_ON">Risk On</button>
+        <button class="jpage-pill" data-val="RISK_OFF">Risk Off</button>
+        <button class="jpage-pill" data-val="NEUTRAL">Neutral</button>
+      </div>
+    </div>
+
+    <div class="jpage-filter-sep"></div>
+
+    <div class="jpage-filter-group">
+      <span class="jpage-filter-label">Period</span>
+      <div class="jpage-pills" id="filter-date">
+        <button class="jpage-pill active" data-val="">All</button>
+        <button class="jpage-pill" data-val="today">Today</button>
+        <button class="jpage-pill" data-val="7d">7 Days</button>
+        <button class="jpage-pill" data-val="30d">30 Days</button>
+      </div>
+    </div>
+
+    <div class="jpage-search-wrap">
+      <input
+        type="search"
+        id="jpage-search"
+        class="jpage-search"
+        placeholder="Search summary…"
+        oninput="onSearchInput(this.value)"
+      />
+      <button class="jpage-clear-btn" onclick="clearFilters()" title="Clear all filters">✕ Clear</button>
+    </div>
+  </div>
+
+  <!-- Main content -->
+  <main class="jpage-main">
+    <div id="jpage-stats" class="jpage-stats-bar" style="display:none"></div>
+    <div id="jpage-list" class="jpage-list">
+      <div class="jpage-loading">
+        <div class="jpage-spinner"></div>
+        <p>Loading journal…</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- Journal Detail Modal (same structure as dashboard) -->
+  <div id="jrn-modal-overlay" class="jrn-modal-overlay" onclick="closeJournalModal()">
+    <div class="jrn-modal" onclick="event.stopPropagation()">
+      <div class="jrn-modal-header">
+        <div class="jrn-modal-title">
+          <span id="jrn-modal-time"  class="jrn-modal-time"></span>
+          <span id="jrn-modal-badges" class="jrn-modal-badges"></span>
+        </div>
+        <button class="ai-modal-close" onclick="closeJournalModal()">
+          <i data-lucide="x" style="width:16px;height:16px"></i>
+        </button>
+      </div>
+      <div id="jrn-modal-body" class="jrn-modal-body"></div>
+    </div>
+  </div>
+
+  <script>
+  // ─── Auth guard ───────────────────────────────────────────────────────────────
+  (function () {
+    const token = localStorage.getItem('nfx_token');
+    if (!token) return location.replace('/login.html');
+    try {
+      const pay = JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+      if (pay.exp && pay.exp * 1000 < Date.now()) {
+        localStorage.removeItem('nfx_token');
+        return location.replace('/login.html');
+      }
+    } catch (_) { return location.replace('/login.html'); }
+  })();
+
+  // ─── Globals ──────────────────────────────────────────────────────────────────
+  let _allEntries     = [];
+  let _journalEntries = {}; // id → entry, for modal
+  let _filterSession   = '';
+  let _filterSentiment = '';
+  let _filterDate      = '';
+  let _filterSearch    = '';
+  const _userTz = localStorage.getItem('nfx_tz') || 'auto';
+
+  // ─── API helper ───────────────────────────────────────────────────────────────
+  async function api(path) {
+    const token = localStorage.getItem('nfx_token');
+    const r = await fetch(path, { headers: { Authorization: `Bearer ${token}` } });
+    if (r.status === 401) { location.replace('/login.html'); throw new Error('Unauthorized'); }
+    if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+    return r.json();
+  }
+
+  // ─── Formatters ───────────────────────────────────────────────────────────────
+  function fmtTime(iso) {
+    if (!iso) return '—';
+    try {
+      const tz = _userTz === 'auto' ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC');
+      return new Intl.DateTimeFormat('en-GB', {
+        timeZone: tz, day: '2-digit', month: 'short', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', hour12: false, timeZoneName: 'short',
+      }).format(new Date(iso));
+    } catch (_) { return new Date(iso).toUTCString().replace('GMT', 'UTC'); }
+  }
+  function fmtShort(iso) {
+    if (!iso) return '—';
+    try {
+      const tz = _userTz === 'auto' ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC');
+      return new Intl.DateTimeFormat('en-GB', {
+        timeZone: tz, day: '2-digit', month: 'short',
+        hour: '2-digit', minute: '2-digit', hour12: false, timeZoneName: 'short',
+      }).format(new Date(iso));
+    } catch (_) { return new Date(iso).toUTCString().slice(5,22).replace('GMT','UTC'); }
+  }
+  function pair(s) { return s ? s.replace('_', '/') : s; }
+
+  // ─── Filter logic ─────────────────────────────────────────────────────────────
+  function getDateRange(val) {
+    const now = new Date();
+    if (val === 'today') {
+      const s = new Date(now); s.setHours(0,0,0,0);
+      const e = new Date(now); e.setHours(23,59,59,999);
+      return { from: s.toISOString(), to: e.toISOString() };
+    }
+    if (val === '7d')  return { from: new Date(now - 7 * 864e5).toISOString(),  to: now.toISOString() };
+    if (val === '30d') return { from: new Date(now - 30 * 864e5).toISOString(), to: now.toISOString() };
+    return null;
+  }
+
+  function applyFilters() {
+    let entries = _allEntries;
+    if (_filterSession)   entries = entries.filter(e => e.session_name   === _filterSession);
+    if (_filterSentiment) entries = entries.filter(e => e.risk_sentiment === _filterSentiment);
+    if (_filterDate) {
+      const range = getDateRange(_filterDate);
+      if (range) entries = entries.filter(e => e.time >= range.from && e.time <= range.to);
+    }
+    if (_filterSearch) {
+      const q = _filterSearch.toLowerCase();
+      entries = entries.filter(e =>
+        (e.summary || '').toLowerCase().includes(q) ||
+        (e.session_name || '').toLowerCase().includes(q) ||
+        (e.risk_sentiment || '').toLowerCase().includes(q)
+      );
+    }
+    return entries;
+  }
+
+  // ─── Render list ──────────────────────────────────────────────────────────────
+  function renderList() {
+    const entries = applyFilters();
+    const total   = _allEntries.length;
+    const shown   = entries.length;
+
+    // Count badge
+    document.getElementById('jpage-count').textContent =
+      shown === total ? `${total} entries` : `${shown} / ${total}`;
+
+    // Stats bar
+    const statsEl = document.getElementById('jpage-stats');
+    if (entries.length) {
+      const riskOn  = entries.filter(e => e.risk_sentiment === 'RISK_ON').length;
+      const riskOff = entries.filter(e => e.risk_sentiment === 'RISK_OFF').length;
+      const neutral = entries.filter(e => e.risk_sentiment === 'NEUTRAL').length;
+      const sigs    = entries.reduce((n, e) => n + ((e.signals_summary?.entered || []).length), 0);
+      statsEl.style.display = 'flex';
+      statsEl.innerHTML = `
+        <div class="jpage-stat"><span class="jpage-stat-val" style="color:#4ade80">${riskOn}</span><span>Risk On</span></div>
+        <span class="jpage-stat-sep">·</span>
+        <div class="jpage-stat"><span class="jpage-stat-val" style="color:#f87171">${riskOff}</span><span>Risk Off</span></div>
+        <span class="jpage-stat-sep">·</span>
+        <div class="jpage-stat"><span class="jpage-stat-val">${neutral}</span><span>Neutral</span></div>
+        <span class="jpage-stat-sep">·</span>
+        <div class="jpage-stat"><span class="jpage-stat-val" style="color:#4ade80">${sigs}</span><span>Signals entered</span></div>`;
+    } else {
+      statsEl.style.display = 'none';
+    }
+
+    const el = document.getElementById('jpage-list');
+    if (!entries.length) {
+      el.innerHTML = '<div class="jpage-empty">No entries match the current filters.</div>';
+      return;
+    }
+
+    el.innerHTML = entries.map(e => {
+      const sentCls = e.risk_sentiment === 'RISK_ON'  ? 'risk-on'
+                    : e.risk_sentiment === 'RISK_OFF' ? 'risk-off'
+                    : 'neutral';
+      const sessCls = (e.session_quality || 'BLOCKED').toLowerCase().replace(/_/g, '-');
+      const signals = e.signals_summary || {};
+      const enteredCount = (signals.entered || []).length;
+
+      return `
+        <div class="jrn-entry" id="jrn-${e.id}" onclick="openJournalModal('${e.id}')">
+          <div class="jrn-header">
+            <span class="jrn-time">${fmtShort(e.time)}</span>
+            <span class="sess-card-badge sq-${sessCls}">${(e.session_name || '—').replace(/_/g,' ')}</span>
+            <span class="jrn-sent sent-${sentCls}">${(e.risk_sentiment || '—').replace('_',' ')}</span>
+            <span class="jrn-conf">${e.risk_confidence ?? '—'}%</span>
+            <div class="jrn-counts">
+              <span class="jrn-count trend" title="Trend">${e.trend_pairs}T</span>
+              <span class="jrn-count pb"    title="Pullback">${e.pullback_pairs}PB</span>
+              <span class="jrn-count ready" title="Ready">${e.ready_pairs}R</span>
+              ${enteredCount ? `<span class="jrn-count sig">${enteredCount}✦</span>` : ''}
+            </div>
+            <span class="jrn-chevron">›</span>
+          </div>
+          ${e.summary ? `<div class="jrn-summary">${e.summary}</div>` : ''}
+        </div>`;
+    }).join('');
+  }
+
+  // ─── Filter pill wiring ───────────────────────────────────────────────────────
+  function setupFilterPills(groupId, setter) {
+    document.getElementById(groupId).addEventListener('click', ev => {
+      const pill = ev.target.closest('.jpage-pill');
+      if (!pill) return;
+      document.querySelectorAll(`#${groupId} .jpage-pill`).forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      setter(pill.dataset.val);
+      renderList();
+    });
+  }
+  function onSearchInput(val) { _filterSearch = val.trim(); renderList(); }
+  function clearFilters() {
+    _filterSession = ''; _filterSentiment = ''; _filterDate = ''; _filterSearch = '';
+    document.querySelectorAll('.jpage-pill').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('#filter-session .jpage-pill[data-val=""], #filter-sentiment .jpage-pill[data-val=""], #filter-date .jpage-pill[data-val=""]')
+      .forEach(p => p.classList.add('active'));
+    const si = document.getElementById('jpage-search'); if (si) si.value = '';
+    renderList();
+  }
+
+  // ─── Modal helpers ────────────────────────────────────────────────────────────
+  function _jrnSection(title, content) {
+    return `<div class="jrn-section"><div class="jrn-section-title">${title}</div>${content}</div>`;
+  }
+
+  function renderJrnStrengthSection(cs) {
+    const currencies = Array.isArray(cs) ? cs : (cs?.currencies || null);
+    const asOf       = Array.isArray(cs) ? null : (cs?.as_of || null);
+    const asOfLabel  = asOf ? `<span class="jrn-as-of">as of ${fmtTime(asOf)}</span>` : '';
+    const header     = `💹 Currency Strength ${asOfLabel}`;
+    if (!cs || !currencies?.length)
+      return `<div class="jrn-cs-section"><div class="jrn-cs-header">${header}</div><p class="jrn-cs-nodata">No strength data for this entry.</p></div>`;
+    const tfs = [
+      { keys: ['smooth_3h',  'normalized_3h'],  label: '3H Strength' },
+      { keys: ['smooth_6h',  'normalized_6h'],  label: '6H Strength' },
+      { keys: ['smooth_12h', 'normalized_12h'], label: '12H Strength' },
+    ];
+    return `
+      <div class="jrn-cs-section">
+        <div class="jrn-cs-header">${header}</div>
+        <div class="jrn-cs-grid">
+          ${tfs.map(tf => {
+            const vals = currencies.map(c => {
+              let val = 0;
+              for (const k of tf.keys) { const v = parseFloat(c[k]); if (!isNaN(v) && v !== 0) { val = v; break; } }
+              if (val === 0) for (const k of tf.keys) { const v = parseFloat(c[k]); if (!isNaN(v)) { val = v; break; } }
+              return { cur: c.currency, val };
+            }).sort((a, b) => b.val - a.val);
+            const maxAbs = Math.max(...vals.map(v => Math.abs(v.val)), 0.0001);
+            return `
+              <div class="jrn-cs-tf-block">
+                <div class="jrn-cs-tf-label">${tf.label}</div>
+                ${vals.map(v => {
+                  const pct = Math.round((Math.abs(v.val) / maxAbs) * 100);
+                  const cls = v.val >= 0 ? 'pos' : 'neg';
+                  return `
+                    <div class="jrn-cs-row">
+                      <span class="jrn-cs-cur">${v.cur}</span>
+                      <div class="jrn-cs-bar-wrap"><div class="jrn-cs-bar ${cls}" style="width:${pct}%"></div></div>
+                      <span class="jrn-cs-num ${cls}">${v.val >= 0 ? '+' : ''}${v.val.toFixed(5)}</span>
+                    </div>`;
+                }).join('')}
+              </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+  }
+
+  function renderJrnCalendarSection(events, entryTime) {
+    const ts = new Date(entryTime).getTime();
+    const nearby = (events || []).filter(ev => Math.abs(new Date(ev.event_time).getTime() - ts) <= 3 * 60 * 60 * 1000);
+    if (!nearby.length) return _jrnSection('📅 Economic Calendar', '<p class="jrn-empty">No events in this window.</p>');
+    const order = { HIGH: 0, MEDIUM: 1, LOW: 2 };
+    const sorted = [...nearby].sort((a, b) =>
+      (order[a.impact] ?? 2) - (order[b.impact] ?? 2) || a.event_time.localeCompare(b.event_time)
+    );
+    return _jrnSection('📅 Economic Calendar', `
+      <div class="jrn-cal-list">
+        ${sorted.map(ev => {
+          const imp = (ev.impact || 'LOW').toUpperCase();
+          const act = ev.actual   != null ? `<span class="jrn-cal-actual">${ev.actual}</span>` : '';
+          const fct = ev.forecast != null ? `<span class="jrn-cal-fct">Est ${ev.forecast}</span>` : '';
+          const prv = ev.previous != null ? `<span class="jrn-cal-prv">Prev ${ev.previous}</span>` : '';
+          return `
+            <div class="jrn-cal-row">
+              <span class="jrn-cal-impact imp-${imp.toLowerCase()}">${imp}</span>
+              <span class="jrn-cal-time">${fmtTime(ev.event_time)}</span>
+              <span class="jrn-cal-cur">${ev.currency}</span>
+              <span class="jrn-cal-name">${ev.event_name}</span>
+              <span class="jrn-cal-vals">${act}${fct}${prv}</span>
+            </div>`;
+        }).join('')}
+      </div>`);
+  }
+
+  function renderJrnSentimentSection(e) {
+    const d = e.risk_sentiment_details;
+    if (!d) return _jrnSection('📡 Risk Sentiment', '<p class="jrn-empty">No detail data.</p>');
+    const items = [
+      { label: 'Net Score',   val: d.net_score,    fmt: v => Number(v).toFixed(2) },
+      { label: 'Confidence',  val: d.confidence,   fmt: v => `${v}%` },
+      { label: 'Environment', val: d.environment,  fmt: v => v },
+      { label: 'Equity',      val: d.equity_score, fmt: v => Number(v).toFixed(2) },
+      { label: 'JPY',         val: d.jpy_score,    fmt: v => Number(v).toFixed(2) },
+      { label: 'CHF',         val: d.chf_score,    fmt: v => Number(v).toFixed(2) },
+      { label: 'Gold',        val: d.gold_score,   fmt: v => Number(v).toFixed(2) },
+      { label: 'USD',         val: d.usd_score,    fmt: v => Number(v).toFixed(2) },
+      { label: 'AUD/JPY',    val: d.audjpy_score, fmt: v => Number(v).toFixed(2) },
+    ];
+    return _jrnSection('📡 Risk Sentiment', `
+      <div class="jrn-sent-grid">
+        ${items.map(i => {
+          const fmtd = i.val != null ? i.fmt(i.val) : '—';
+          const num  = parseFloat(i.val);
+          const cls  = !isNaN(num) && i.label !== 'Confidence' && i.label !== 'Environment'
+            ? (num > 0 ? 'pos' : num < 0 ? 'neg' : '') : '';
+          return `<div class="jrn-sent-item"><span class="jrn-sent-label">${i.label}</span><span class="jrn-sent-val ${cls}">${fmtd}</span></div>`;
+        }).join('')}
+      </div>`);
+  }
+
+  function renderJrnSetupsSection(topSetups, signals) {
+    const entered = signals?.entered || [];
+    const waiting = signals?.waiting || [];
+    if (!topSetups.length && !entered.length) return '';
+    return _jrnSection('🎯 Top Setups & Signals', `
+      ${entered.length ? `<div class="jrn-sig-entered">${entered.map(s => {
+        const d = s.signal === 'BUY' ? 'buy' : 'sell';
+        return `<div class="jrn-sig-row"><span class="signal-dir ${d}" style="font-size:10px;padding:2px 7px">${s.signal}</span><span class="jrn-sig-pair">${pair(s.instrument)}</span><span class="jrn-sig-conf">${s.confidence ?? '—'}%</span>${s.reason ? `<span class="jrn-sig-reason">${s.reason}</span>` : ''}</div>`;
+      }).join('')}</div>` : ''}
+      ${topSetups.length ? `<div class="jrn-setups">${topSetups.map(s => {
+        const dir = s.bias === 'BUY' ? 'buy' : 'sell';
+        return `<div class="jrn-setup-row"><span class="jrn-setup-pair">${pair(s.instrument)}</span><span class="signal-dir ${dir}" style="font-size:9px">${s.bias}</span><span class="jrn-setup-state">${(s.state||'').replace(/_/g,' ')}</span><span class="jrn-setup-conf">${s.confidence}%</span></div>`;
+      }).join('')}</div>` : ''}
+      ${waiting.length ? `<p class="jrn-waiting">${waiting.length} pair${waiting.length>1?'s':''} waiting for confirmation</p>` : ''}`);
+  }
+
+  function renderJrnSessionPerfSection(e, sessionEntries) {
+    if (!sessionEntries || sessionEntries.length <= 1)
+      return _jrnSection(`📊 Session: ${(e.session_name||'').replace(/_/g,' ')}`, '<p class="jrn-empty">First snapshot of this session.</p>');
+    const first = sessionEntries[0];
+    const sentFlow = [...sessionEntries.reduce((m, x) => { m.set(x.risk_sentiment, 1); return m; }, new Map()).keys()]
+      .map(s => s.replace('_',' ')).join(' → ');
+    const allSignals = sessionEntries.flatMap(x => (x.signals_summary?.entered || []));
+    const trendDelta = e.trend_pairs - first.trend_pairs;
+    const readyDelta = e.ready_pairs - first.ready_pairs;
+    const delta = v => v > 0 ? `<span style="color:#4ade80">+${v}</span>` : v < 0 ? `<span style="color:#f87171">${v}</span>` : `<span style="color:var(--text-dim)">±0</span>`;
+    return _jrnSection(`📊 Session: ${(e.session_name||'').replace(/_/g,' ')} · ${sessionEntries.length} snapshots`, `
+      <div class="jrn-sess-stats">
+        <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Duration</span><span class="jrn-sess-val">${sessionEntries.length}H</span></div>
+        <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Sentiment flow</span><span class="jrn-sess-val">${sentFlow}</span></div>
+        <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Trend pairs</span><span class="jrn-sess-val">${first.trend_pairs} → ${e.trend_pairs} ${delta(trendDelta)}</span></div>
+        <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Ready pairs</span><span class="jrn-sess-val">${first.ready_pairs} → ${e.ready_pairs} ${delta(readyDelta)}</span></div>
+        ${allSignals.length ? `<div class="jrn-sess-stat jrn-sess-full"><span class="jrn-sess-lbl">Signals</span><span class="jrn-sess-val">${allSignals.map(s => `${pair(s.instrument)} ${s.signal}`).join(', ')}</span></div>` : ''}
+      </div>`);
+  }
+
+  function renderJrnPrevSessionSection(prevEntry) {
+    if (!prevEntry)
+      return _jrnSection('📋 Previous Session', '<p class="jrn-empty">No previous session in loaded history.</p>');
+    const sentCls  = prevEntry.risk_sentiment === 'RISK_ON' ? 'risk-on' : prevEntry.risk_sentiment === 'RISK_OFF' ? 'risk-off' : 'neutral';
+    const sessCls  = (prevEntry.session_quality || 'BLOCKED').toLowerCase().replace(/_/g, '-');
+    const entered  = (prevEntry.signals_summary?.entered || []);
+    const sessLabel = s => (s || '—').replace(/_/g,' ');
+    return _jrnSection(`📋 Previous Session: ${sessLabel(prevEntry.session_name)}`, `
+      <div class="jrn-prev-meta">
+        <span class="jrn-prev-time">${fmtTime(prevEntry.time)}</span>
+        <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${sessLabel(prevEntry.session_name)}</span>
+        <span class="jrn-sent sent-${sentCls}">${(prevEntry.risk_sentiment || '—').replace('_',' ')}</span>
+        <span class="jrn-conf">${prevEntry.risk_confidence ?? '—'}%</span>
+        <span class="jrn-prev-pairs">${prevEntry.trend_pairs}T · ${prevEntry.pullback_pairs}PB · ${prevEntry.ready_pairs}R</span>
+      </div>
+      ${prevEntry.summary ? `<p class="jrn-prev-summary">${prevEntry.summary}</p>` : ''}
+      ${entered.length ? `<div class="jrn-prev-sigs">${entered.map(s => {
+        const d = s.signal === 'BUY' ? 'buy' : 'sell';
+        return `<span class="jrn-prev-sig signal-dir ${d}" style="font-size:9px">${pair(s.instrument)} ${s.signal}</span>`;
+      }).join('')}</div>` : ''}
+      ${(prevEntry.top_setups || []).slice(0,5).map(s => {
+        const dir = s.bias === 'BUY' ? 'buy' : 'sell';
+        return `<div class="jrn-setup-row"><span class="jrn-setup-pair">${pair(s.instrument)}</span><span class="signal-dir ${dir}" style="font-size:9px">${s.bias}</span><span class="jrn-setup-state">${(s.state||'').replace(/_/g,' ')}</span><span class="jrn-setup-conf">${s.confidence}%</span></div>`;
+      }).join('')}`);
+  }
+
+  // ─── Modal open/close ─────────────────────────────────────────────────────────
+  function _renderJournalModal(e, newsEvents, sessionEntries, prevEntry) {
+    const sentCls      = e.risk_sentiment === 'RISK_ON' ? 'risk-on' : e.risk_sentiment === 'RISK_OFF' ? 'risk-off' : 'neutral';
+    const sessCls      = (e.session_quality || 'BLOCKED').toLowerCase().replace(/_/g, '-');
+    const signals      = e.signals_summary || {};
+    const enteredCount = (signals.entered || []).length;
+
+    document.getElementById('jrn-modal-time').textContent = fmtTime(e.time);
+    document.getElementById('jrn-modal-badges').innerHTML = `
+      <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${(e.session_name||'—').replace(/_/g,' ')}</span>
+      <span class="jrn-sent sent-${sentCls}">${(e.risk_sentiment||'—').replace('_',' ')}</span>
+      <span class="jrn-conf">${e.risk_confidence ?? '—'}%</span>
+      ${enteredCount ? `<span class="jrn-count sig" style="font-size:9px">${enteredCount} signal${enteredCount>1?'s':''}</span>` : ''}`;
+
+    document.getElementById('jrn-modal-body').innerHTML = [
+      renderJrnCalendarSection(newsEvents, e.time),
+      renderJrnSentimentSection(e),
+      renderJrnSetupsSection(e.top_setups || [], signals),
+      renderJrnStrengthSection(e.currency_strength),
+      renderJrnSessionPerfSection(e, sessionEntries),
+      renderJrnPrevSessionSection(prevEntry),
+    ].filter(Boolean).join('');
+
+    document.getElementById('jrn-modal-overlay').classList.add('open');
+    document.body.style.overflow = 'hidden';
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  }
+
+  async function openJournalModal(id) {
+    const e = _journalEntries[id];
+    if (!e) return;
+    _renderJournalModal(e, null, null, null);
+
+    const all = Object.values(_journalEntries).sort((a, b) => a.time.localeCompare(b.time));
+    const sessionEntries = all.filter(x => x.session_name === e.session_name && x.time <= e.time);
+    const prevEntry = [...all].reverse().find(x => x.session_name !== e.session_name && x.time < e.time) || null;
+
+    let newsEvents = [];
+    try {
+      const dateStr = e.time.slice(0, 10);
+      const r = await fetch(`/api/news?date=${dateStr}`);
+      if (r.ok) { const j = await r.json(); newsEvents = j.events || []; }
+    } catch {}
+
+    _renderJournalModal(e, newsEvents, sessionEntries, prevEntry);
+  }
+
+  function closeJournalModal() {
+    document.getElementById('jrn-modal-overlay').classList.remove('open');
+    document.body.style.overflow = '';
+  }
+
+  document.addEventListener('keydown', ev => { if (ev.key === 'Escape') closeJournalModal(); });
+
+  // ─── Init ─────────────────────────────────────────────────────────────────────
+  setupFilterPills('filter-session',   v => { _filterSession   = v; });
+  setupFilterPills('filter-sentiment', v => { _filterSentiment = v; });
+  setupFilterPills('filter-date',      v => { _filterDate      = v; });
+
+  (async function init() {
+    try {
+      const data = await api('/api/journal?limit=200');
+      _allEntries = data.entries || [];
+      _allEntries.forEach(e => { _journalEntries[e.id] = e; });
+      renderList();
+    } catch (err) {
+      document.getElementById('jpage-list').innerHTML =
+        `<div class="jpage-empty">Failed to load journal: ${err.message}</div>`;
+      document.getElementById('jpage-count').textContent = 'Error';
+    }
+  })();
+
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+  </script>
+
+  <script>
+    // Init icons after DOM is ready
+    document.addEventListener('DOMContentLoaded', () => {
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+    });
+  </script>
+</body>
+</html>

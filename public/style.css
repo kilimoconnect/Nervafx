@@ -2378,8 +2378,6 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
 
 /* ─── Market Journal ────────────────────────────────────────────────────────── */
 
-/* Allow the journal card to grow with its scrollable list */
-#section-journal { overflow: visible; }
 
 .journal-live-badge {
   font-size: 9px;
@@ -2402,25 +2400,29 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-height: 420px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding-right: 4px;
-  scrollbar-width: thin;
-  scrollbar-color: #334155 transparent;
 }
-.journal-list::-webkit-scrollbar {
-  width: 4px;
+
+.jrn-view-all-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin-top: 6px;
+  padding: 9px 16px;
+  border-radius: 7px;
+  background: rgba(59,130,246,0.07);
+  border: 1px solid rgba(59,130,246,0.2);
+  color: #60a5fa;
+  font-size: 11px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.15s;
+  letter-spacing: 0.2px;
 }
-.journal-list::-webkit-scrollbar-track {
-  background: transparent;
-}
-.journal-list::-webkit-scrollbar-thumb {
-  background: #334155;
-  border-radius: 2px;
-}
-.journal-list::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+.jrn-view-all-btn:hover {
+  background: rgba(59,130,246,0.13);
+  border-color: rgba(59,130,246,0.35);
+  color: #93c5fd;
 }
 
 .jrn-entry {

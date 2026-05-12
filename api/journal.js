@@ -3,7 +3,7 @@ const { getClient, cors } = require('./_db');
 module.exports = async function handler(req, res) {
   cors(res);
   try {
-    const limit = parseInt(req.query?.limit || '48', 10);
+    const limit = parseInt(req.query?.limit || '200', 10);
 
     const { data, error } = await getClient()
       .from('hourly_market_journal')

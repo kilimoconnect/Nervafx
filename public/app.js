@@ -1691,7 +1691,7 @@ function renderJournal(data) {
     return;
   }
 
-  el.innerHTML = entries.map(e => {
+  const rows = entries.map(e => {
     const sentCls = e.risk_sentiment === 'RISK_ON'  ? 'risk-on'
                   : e.risk_sentiment === 'RISK_OFF' ? 'risk-off'
                   : 'neutral';
@@ -1716,6 +1716,15 @@ function renderJournal(data) {
         </div>
       </div>`;
   }).join('');
+
+  el.innerHTML = rows + `
+    <a href="/journal" class="jrn-view-all-btn">
+      <i data-lucide="book-open" style="width:12px;height:12px"></i>
+      View Full Journal
+      <i data-lucide="arrow-right" style="width:12px;height:12px"></i>
+    </a>`;
+
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 // ─── Main refresh ─────────────────────────────────────────────────────────────
@@ -1733,7 +1742,7 @@ async function refresh() {
       api('/api/ai').catch(() => ({ analyses: [] })),
       api('/api/sentiment').catch(() => ({ sentiment: null })),
       api('/api/session').catch(() => ({ session: null })),
-      api('/api/journal').catch(() => ({ entries: [] })),
+      api('/api/journal?limit=5').catch(() => ({ entries: [] })),
       api('/api/profile').catch(() => ({})),
     ]);
 
