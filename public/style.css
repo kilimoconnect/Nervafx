@@ -2378,6 +2378,9 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
 
 /* ─── Market Journal ────────────────────────────────────────────────────────── */
 
+/* Allow the journal card to grow with its scrollable list */
+#section-journal { overflow: visible; }
+
 .journal-live-badge {
   font-size: 9px;
   font-weight: 700;
@@ -2399,8 +2402,25 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-height: 520px;
+  max-height: 420px;
   overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: #334155 transparent;
+}
+.journal-list::-webkit-scrollbar {
+  width: 4px;
+}
+.journal-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.journal-list::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 2px;
+}
+.journal-list::-webkit-scrollbar-thumb:hover {
+  background: #475569;
 }
 
 .jrn-entry {
@@ -2418,7 +2438,8 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
   padding: 8px 12px;
   background: var(--bg);
   cursor: pointer;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow: hidden;
   transition: background 0.15s;
 }
 .jrn-header:hover { background: var(--bg-hover); }
@@ -2429,7 +2450,7 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
   font-size: 10px;
   color: var(--text-muted);
   white-space: nowrap;
-  min-width: 160px;
+  flex-shrink: 0;
 }
 
 .jrn-sent {
@@ -2454,6 +2475,7 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
   display: flex;
   gap: 4px;
   margin-left: 2px;
+  flex-shrink: 0;
 }
 .jrn-count {
   font-size: 9px;
@@ -2492,7 +2514,8 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
   font-size: 14px;
   color: var(--text-muted);
   transition: transform 0.15s;
-  margin-left: 4px;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 .jrn-entry.open .jrn-chevron { transform: rotate(90deg); }
 

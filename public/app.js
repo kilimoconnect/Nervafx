@@ -1702,7 +1702,7 @@ function renderJournal(data) {
     return `
       <div class="jrn-entry" id="jrn-${e.id}" onclick="openJournalModal('${e.id}')">
         <div class="jrn-header">
-          <span class="jrn-time">${fmtTime(e.time)}</span>
+          <span class="jrn-time">${fmtShort(e.time)}</span>
           <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${(e.session_name || '—').replace(/_/g,' ')}</span>
           <span class="jrn-sent sent-${sentCls}">${(e.risk_sentiment || '—').replace('_',' ')}</span>
           <span class="jrn-conf">${e.risk_confidence ?? '—'}%</span>
