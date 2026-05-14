@@ -46,7 +46,7 @@ function avgRange(candles) {
 // ─── Signal logic ─────────────────────────────────────────────────────────────
 
 function buildSignal(state, candles) {
-  const { time, instrument, bias, state: mktState, confidence, spread_6h, spread_12h } = state;
+  const { time, instrument, bias, state: mktState, confidence, spread_3h, spread_6h, spread_12h } = state;
 
   // NO_TRADE conditions
   if (mktState === 'NO_TRADE' || mktState === 'REVERSAL_RISK') {
@@ -86,6 +86,16 @@ function buildSignal(state, candles) {
   if (mktState !== 'READY_TO_ENTER') {
     return noTrade(time, instrument, confidence, mktState,
       `State ${mktState} does not meet signal criteria.`);
+  }
+
+  // Gate on 3H re-expansion: only enter when |3H| > |6H| × 0.9 (momentum re-expanding).
+  // If 3H is still stalling/compressing, emit WAIT so the risk engine sees no signal until
+  // the next candle confirms re-expansion.
+  const a3 = Math.abs(spread_3h || 0);
+  const a6 = Math.abs(spread_6h || 0);
+  if (a6 > 0 && a3 <= a6 * 0.9) {
+    return wait(time, instrument, confidence, mktState, bias,
+      '3H stalling — re-expansion must confirm before entry.');
   }
 
   if (!candles || candles.length < 2) {
@@ -185,7 +195,7 @@ async function backfillSignals() {
   for (const instrument of config.instruments) {
     const { data: states, error } = await supabase
       .from('market_states')
-      .select('time, instrument, bias, state, confidence, spread_6h, spread_12h')
+      .select('time, instrument, bias, state, confidence, spread_3h, spread_6h, spread_12h')
       .eq('instrument', instrument)
       .order('time', { ascending: true });
 
@@ -226,7 +236,7 @@ async function calculateLatestSignals() {
   for (const instrument of config.instruments) {
     const { data: states } = await supabase
       .from('market_states')
-      .select('time, instrument, bias, state, confidence, spread_6h, spread_12h')
+      .select('time, instrument, bias, state, confidence, spread_3h, spread_6h, spread_12h')
       .eq('instrument', instrument)
       .order('time', { ascending: false })
       .limit(1);
