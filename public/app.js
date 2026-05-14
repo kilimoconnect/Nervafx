@@ -1914,6 +1914,7 @@ function renderJrnM15Section(impulses) {
           <div class="jrn-m15-row">
             <span class="jrn-m15-pair">${pair(r.instrument)}</span>
             <span class="signal-dir ${cls}" style="font-size:9px;padding:2px 6px">${r.bias}</span>
+            ${r.state ? `<span class="sb-behavior ${r.state}" style="font-size:8px">${clean(r.state)}</span>` : ''}
             <span class="jrn-m15-val">${vStr}</span>
             <div class="jrn-m15-bar-wrap"><div class="jrn-m15-bar-fill ${cls}" style="width:${pct}%"></div></div>
           </div>`;

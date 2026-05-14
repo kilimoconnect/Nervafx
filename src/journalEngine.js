@@ -128,6 +128,8 @@ async function collectTrackedPullbacks() {
 }
 
 async function collectM15Impulses() {
+  // Matches getM15AllActive() on the dashboard: all non-FLAT states, |smooth_45m| >= threshold.
+  // The notification bar uses a stricter filter (EXPANDING + TF-aligned) separately.
   const CS_THRESHOLD = 0.00100;
 
   const { data: latest } = await supabase
@@ -143,21 +145,15 @@ async function collectM15Impulses() {
     .from('m15_pair_spreads')
     .select('instrument, smooth_45m, smooth_90m, smooth_180m, state')
     .eq('time', latest.time)
-    .eq('state', 'EXPANDING');
+    .neq('state', 'FLAT');
 
   return (rows || [])
-    .filter(r => {
-      const s45  = parseFloat(r.smooth_45m)  || 0;
-      const s90  = parseFloat(r.smooth_90m)  || 0;
-      const s180 = parseFloat(r.smooth_180m) || 0;
-      if (Math.sign(s45) !== Math.sign(s90))  return false;
-      if (Math.sign(s45) !== Math.sign(s180)) return false;
-      return Math.abs(s45) >= CS_THRESHOLD;
-    })
+    .filter(r => Math.abs(parseFloat(r.smooth_45m) || 0) >= CS_THRESHOLD)
     .sort((a, b) => Math.abs(parseFloat(b.smooth_45m)) - Math.abs(parseFloat(a.smooth_45m)))
     .map(r => ({
       instrument:  r.instrument,
       bias:        parseFloat(r.smooth_45m) >= 0 ? 'BUY' : 'SELL',
+      state:       r.state,
       smooth_45m:  parseFloat(r.smooth_45m),
       smooth_90m:  parseFloat(r.smooth_90m),
       smooth_180m: parseFloat(r.smooth_180m),
