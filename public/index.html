@@ -449,6 +449,20 @@
       const m15Bar = document.getElementById('m15-impulse-bar');
       if (m15Bar && plan === 'free') m15Bar.style.display = 'none';
 
+      // Reorder locked teaser cards for free plan:
+      // free  → move m15 above live (so both teasers sit above live opps)
+      // pro/+ → restore m15 after 12H ranking (its natural position)
+      const m15Sec  = document.getElementById('section-m15-spreads');
+      const liveSec = document.getElementById('section-live');
+      const rank12h = document.getElementById('section-ranking-12h');
+      if (plan === 'free') {
+        if (m15Sec && liveSec && m15Sec.previousElementSibling !== liveSec.previousElementSibling)
+          liveSec.parentNode.insertBefore(m15Sec, liveSec);
+      } else {
+        if (m15Sec && rank12h && m15Sec !== rank12h.nextElementSibling)
+          rank12h.parentNode.insertBefore(m15Sec, rank12h.nextSibling);
+      }
+
       // For free plan: disable 3H/6H tf buttons, force 12H
       const tfBtns = document.querySelectorAll('.tf-btn');
       if (plan === 'free') {

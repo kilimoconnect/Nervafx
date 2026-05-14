@@ -262,6 +262,12 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
 #section-journal:has(.plan-lock-overlay.visible),
 #section-currency-signals:has(.plan-lock-overlay.visible) { min-height: 320px; }
 
+/* Free plan: upgrade teaser cards appear as full-width rows so they
+   don't leave awkward empty columns when pulled out of their normal pairs */
+.plan-free #section-strength,
+.plan-free #section-currency-signals,
+.plan-free #section-m15-spreads { grid-column: 1 / -1; }
+
 /* Free plan: dim the tf buttons that are disabled */
 .tf-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
