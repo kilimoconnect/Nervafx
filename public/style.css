@@ -1080,6 +1080,14 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
 .sb-behavior.RE-EXPANDING  { background: #4ade80; color: #052e16; font-weight:800; }
 .sb-behavior.BREAKING      { background: var(--red-dim); color: #f87171; }
 .sb-behavior.STABLE        { background: #1a1d24; color: var(--text-muted); }
+.sb-behavior.REVERSING     { background: #2d1f4e; color: #c4b5fd; }
+.sb-behavior.FLAT          { background: #1a1d24; color: #4b5563; }
+.sb-behavior.STEADY        { background: #1a2230; color: #60a5fa; }
+
+/* M15 row — extra column for state badge */
+.m15-row {
+  grid-template-columns: 6px 72px 38px 86px 58px 1fr;
+}
 
 /* ─── Invalidation warning ─────────────────────────────────────────────────── */
 .invalidation {

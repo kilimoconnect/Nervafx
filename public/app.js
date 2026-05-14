@@ -1183,6 +1183,38 @@ function renderRanking12H(spreadsData) {
   }).join('');
 }
 
+// ─── M15 Pair Ranking ─────────────────────────────────────────────────────────
+
+function renderM15Spreads(data) {
+  const el = document.getElementById('m15-spreads-list');
+  if (!el) return;
+  if (!data?.spreads?.length) {
+    el.innerHTML = '<p class="empty-state">No M15 data yet</p>';
+    return;
+  }
+
+  // Pre-sorted by weighted score from the API (180M·90M·45M·accel)
+  const sorted   = data.spreads;
+  const maxScore = Math.max(...sorted.map(s => s.weighted_score || 0), 0.0001);
+
+  el.innerHTML = sorted.map(s => {
+    const bias  = s.bias || ((parseFloat(s.smooth_180m) || 0) >= 0 ? 'BUY' : 'SELL');
+    const cls   = bias === 'BUY' ? 'buy' : 'sell';
+    const v45   = parseFloat(s.smooth_45m) || 0;
+    const pct   = Math.round(((s.weighted_score || 0) / maxScore) * 100);
+    const state = s.state || 'FLAT';
+    return `
+      <div class="spread-row m15-row">
+        <div class="spread-accent ${cls}"></div>
+        <span class="spread-pair">${pair(s.instrument)}</span>
+        <span class="spread-bias ${cls}">${bias}</span>
+        <span class="sb-behavior ${state}">${state}</span>
+        <span class="spread-val">${fmt(v45, 5)}</span>
+        <div class="spread-bar-wrap"><div class="spread-bar-fill ${cls}" style="width:${pct}%"></div></div>
+      </div>`;
+  }).join('');
+}
+
 // ─── Risk / approved trades ───────────────────────────────────────────────────
 
 function renderRisk(data, sentimentData = null) {
@@ -1925,7 +1957,7 @@ function renderJournal(data) {
 
 async function refresh() {
   try {
-    const [strength, signals, states, risk, actions, quality, spreads, aiData, sentimentData, sessionData, journalData, profileData] = await Promise.all([
+    const [strength, signals, states, risk, actions, quality, spreads, m15Data, aiData, sentimentData, sessionData, journalData, profileData] = await Promise.all([
       api('/api/strength'),
       api('/api/signals'),
       api('/api/states'),
@@ -1933,6 +1965,7 @@ async function refresh() {
       api('/api/actions'),
       api('/api/quality'),
       api('/api/spreads'),
+      api('/api/m15-spreads').catch(() => ({ spreads: [] })),
       api('/api/ai').catch(() => ({ analyses: [] })),
       api('/api/sentiment').catch(() => ({ sentiment: null })),
       api('/api/session').catch(() => ({ session: null })),
@@ -1972,6 +2005,7 @@ async function refresh() {
     renderStates(states);
     renderSpreads(spreads);
     renderRanking12H(spreads);
+    renderM15Spreads(m15Data);
     renderRisk(risk, sentimentData);
     renderActions(actions);
     renderQuality(quality);
@@ -2002,6 +2036,7 @@ function showSkeletons() {
     'signals-active':      2,
     'spreads-list':        6,
     'ranking-12h-list':    6,
+    'm15-spreads-list':    6,
     'risk-list':           3,
     'actions-list':        4,
     'states-table':        8,
