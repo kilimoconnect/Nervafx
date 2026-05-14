@@ -198,7 +198,7 @@ function buildSummary({ session, sentiment, states, signals, aiAnalysis, topSetu
   // 1. Session
   const sessionStr = session.trades_allowed
     ? `${session.label} (${session.quality.replace('_', ' ')} quality)`
-    : `${session.label} — trading blocked (${session.block_reason || 'dead hours'})`;
+    : `${session.label} — trading blocked (${session.block_reason || 'low liquidity'})`;
   lines.push(`H1 analysis completed. Session: ${sessionStr}.`);
 
   // 2. Sentiment
