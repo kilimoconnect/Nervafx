@@ -269,7 +269,7 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
    All 16 sections need explicit order values — default order:0 floats items to the top. */
 .plan-free #section-session          { order: 1; }
 .plan-free #section-news             { order: 2; }
-.plan-free #section-strength         { order: 3; grid-column: span 2; }
+.plan-free #section-strength         { order: 3; }
 .plan-free #section-ranking-12h      { order: 3; }
 .plan-free #section-currency-signals { order: 4; }
 .plan-free #section-m15-spreads      { order: 4; }
