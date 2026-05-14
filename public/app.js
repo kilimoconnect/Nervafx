@@ -1839,28 +1839,23 @@ function renderJrnSessionPerfSection(e, sessionEntries) {
 }
 
 function renderJrnPrevSessionSection(prevEntry) {
-  if (!prevEntry) return _jrnSection('📋 Previous Session', '<p class="jrn-empty">No previous session in loaded history.</p>');
+  if (!prevEntry) return _jrnSection('📋 Previous Journal', '<p class="jrn-empty">No previous entry in loaded history.</p>');
   const sentCls = prevEntry.risk_sentiment === 'RISK_ON' ? 'risk-on' : prevEntry.risk_sentiment === 'RISK_OFF' ? 'risk-off' : 'neutral';
   const sessCls = (prevEntry.session_quality || 'BLOCKED').toLowerCase().replace(/_/g, '-');
   const entered = (prevEntry.signals_summary?.entered || []);
-  const sessLabel = s => clean(s || '—');
-  return _jrnSection(`📋 Previous Session: ${sessLabel(prevEntry.session_name)}`, `
+  return _jrnSection('📋 Previous Journal', `
     <div class="jrn-prev-meta">
       <span class="jrn-prev-time">${fmtTime(prevEntry.time)}</span>
-      <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${sessLabel(prevEntry.session_name)}</span>
+      <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${clean(prevEntry.session_name || '—')}</span>
       <span class="jrn-sent sent-${sentCls}">${clean(prevEntry.risk_sentiment || '—')}</span>
       <span class="jrn-conf">${prevEntry.risk_confidence ?? '—'}%</span>
       <span class="jrn-prev-pairs">${prevEntry.trend_pairs}T · ${prevEntry.pullback_pairs}PB · ${prevEntry.ready_pairs}R</span>
     </div>
-    ${prevEntry.summary ? `<p class="jrn-prev-summary">${clean(prevEntry.summary)}</p>` : ''}
+    ${prevEntry.summary ? `<p class="jrn-prev-summary">${clean(prevEntry.summary)}</p>` : '<p class="jrn-empty">No summary recorded.</p>'}
     ${entered.length ? `<div class="jrn-prev-sigs">${entered.map(s => {
       const d = s.signal === 'BUY' ? 'buy' : 'sell';
       return `<span class="jrn-prev-sig signal-dir ${d}" style="font-size:9px">${pair(s.instrument)} ${s.signal}</span>`;
-    }).join('')}</div>` : ''}
-    ${(prevEntry.top_setups || []).slice(0,5).map(s => {
-      const dir = s.bias === 'BUY' ? 'buy' : 'sell';
-      return `<div class="jrn-setup-row"><span class="jrn-setup-pair">${pair(s.instrument)}</span><span class="signal-dir ${dir}" style="font-size:9px">${s.bias}</span><span class="jrn-setup-state">${clean(s.state||'')}</span><span class="jrn-setup-conf">${s.confidence}%</span></div>`;
-    }).join('')}`);
+    }).join('')}</div>` : ''}`);
 }
 
 function renderJrnSetupsSection(topSetups, signals, csigFilter) {
@@ -1948,7 +1943,7 @@ async function openJournalModal(id) {
   // Compute session context from already-loaded entries (no extra API call)
   const all = Object.values(_journalEntries).sort((a, b) => a.time.localeCompare(b.time));
   const sessionEntries = all.filter(x => x.session_name === e.session_name && x.time <= e.time);
-  const prevEntry = [...all].reverse().find(x => x.session_name !== e.session_name && x.time < e.time) || null;
+  const prevEntry = [...all].reverse().find(x => x.time < e.time) || null; // immediately preceding entry (any session)
 
   // Fetch news events for this date async, then re-render
   let newsEvents = [];
