@@ -530,7 +530,14 @@ async function analyzeActiveSetups() {
     console.log(`[AI] Macro: ${sentimentRow.sentiment} [${sentimentRow.environment}] conf:${sentimentRow.confidence}%`);
   }
 
-  const PRIORITY = { READY_TO_ENTER: 4, PULLBACK_ACTIVE: 3, PULLBACK_STARTING: 2, TREND: 1 };
+  const PRIORITY = {
+    READY_TO_ENTER:    5,
+    PULLBACK_ACTIVE:   4,
+    BASE_FORMING:      3,
+    PULLBACK_STARTING: 2,
+    REVERSAL_CONFIRMED: 2,
+    TREND:             1,
+  };
 
   console.log(`[AI] States: ${JSON.stringify(
     (states || []).reduce((a, s) => { a[s.state] = (a[s.state] || 0) + 1; return a; }, {})
@@ -542,7 +549,7 @@ async function analyzeActiveSetups() {
       const pa = PRIORITY[a.state] || 0, pb = PRIORITY[b.state] || 0;
       return pa !== pb ? pb - pa : b.confidence - a.confidence;
     })
-    .slice(0, 6);
+    .slice(0, 10);
 
   if (!targets.length) { console.log('[AI] No active setups'); return; }
 
