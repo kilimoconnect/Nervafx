@@ -330,6 +330,77 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
   z-index: 100;
 }
 
+/* ─── M15 Impulse notification bar ─────────────────────────────────────────── */
+.m15-impulse-bar {
+  position: sticky;
+  top: 48px; /* overridden by JS to match actual header height */
+  z-index: 99;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 24px;
+  background: rgba(5, 46, 22, 0.97);
+  border-bottom: 1px solid rgba(74, 222, 128, 0.45);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  overflow: hidden;
+}
+.m15-bar-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #4ade80;
+  flex-shrink: 0;
+  animation: m15-pulse 1.6s ease-in-out infinite;
+}
+@keyframes m15-pulse {
+  0%, 100% { opacity: 1;   box-shadow: 0 0 0 0 rgba(74,222,128,0.5); }
+  50%       { opacity: 0.7; box-shadow: 0 0 0 5px rgba(74,222,128,0);  }
+}
+.m15-bar-label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #4ade80;
+  flex-shrink: 0;
+}
+.m15-bar-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  scrollbar-width: none;
+}
+.m15-bar-chips::-webkit-scrollbar { display: none; }
+.m15-bar-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(74,222,128,0.25);
+  border-radius: 5px;
+  padding: 3px 8px;
+  font-size: 10px;
+}
+.m15-bar-chip .chip-pair { font-family: var(--font-data); font-weight: 700; color: #fff; }
+.m15-bar-chip .chip-buy  { font-weight: 700; font-size: 9px; color: #4ade80; }
+.m15-bar-chip .chip-sell { font-weight: 700; font-size: 9px; color: #f87171; }
+.m15-bar-chip .chip-val  { font-family: var(--font-data); font-size: 9px; color: rgba(255,255,255,0.45); }
+.m15-bar-time {
+  font-size: 9px;
+  color: rgba(74,222,128,0.5);
+  flex-shrink: 0;
+  margin-left: auto;
+}
+@media (max-width: 700px) {
+  .m15-impulse-bar { padding: 6px 14px; top: 46px; }
+  .m15-bar-time    { display: none; }
+}
+
 .logo {
   font-family: var(--font-ui);
   font-size: 16px;

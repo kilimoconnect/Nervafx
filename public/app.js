@@ -1185,6 +1185,21 @@ function renderRanking12H(spreadsData) {
 
 // ─── M15 Pair Ranking ─────────────────────────────────────────────────────────
 
+// Shared impulse filter — EXPANDING · all TFs same sign · |smooth_45m| >= CS_THRESHOLD
+function getM15Impulses(data) {
+  return (data?.spreads || [])
+    .filter(s => {
+      if (s.state !== 'EXPANDING') return false;
+      const s45  = parseFloat(s.smooth_45m)  || 0;
+      const s90  = parseFloat(s.smooth_90m)  || 0;
+      const s180 = parseFloat(s.smooth_180m) || 0;
+      if (Math.sign(s45) !== Math.sign(s90))  return false;
+      if (Math.sign(s45) !== Math.sign(s180)) return false;
+      return Math.abs(s45) >= CS_THRESHOLD;
+    })
+    .sort((a, b) => Math.abs(parseFloat(b.smooth_45m)) - Math.abs(parseFloat(a.smooth_45m)));
+}
+
 function renderM15Spreads(data) {
   const el = document.getElementById('m15-spreads-list');
   if (!el) return;
@@ -1193,28 +1208,12 @@ function renderM15Spreads(data) {
     return;
   }
 
-  // ── Impulse filter ────────────────────────────────────────────────────────
-  // A real impulse requires ALL THREE conditions:
-  //   1. State is EXPANDING   (45M momentum actively accelerating vs 90M)
-  //   2. All timeframes agree  (45M, 90M, 180M all point the same direction)
-  //   3. Above noise floor     (|smooth_45m| > 0.00005)
-  const impulse = data.spreads.filter(s => {
-    if (s.state !== 'EXPANDING') return false;
-    const s45  = parseFloat(s.smooth_45m)  || 0;
-    const s90  = parseFloat(s.smooth_90m)  || 0;
-    const s180 = parseFloat(s.smooth_180m) || 0;
-    if (Math.sign(s45) !== Math.sign(s90))  return false;
-    if (Math.sign(s45) !== Math.sign(s180)) return false;
-    return Math.abs(s45) >= CS_THRESHOLD;
-  });
+  const impulse = getM15Impulses(data);
 
   if (!impulse.length) {
     el.innerHTML = '<p class="empty-state">No active impulse moves</p>';
     return;
   }
-
-  // Sort by strongest current momentum (|smooth_45m| descending)
-  impulse.sort((a, b) => Math.abs(parseFloat(b.smooth_45m)) - Math.abs(parseFloat(a.smooth_45m)));
 
   const maxVal = Math.abs(parseFloat(impulse[0].smooth_45m)) || 0.0001;
 
@@ -1233,6 +1232,41 @@ function renderM15Spreads(data) {
         <div class="spread-bar-wrap"><div class="spread-bar-fill ${cls}" style="width:${pct}%"></div></div>
       </div>`;
   }).join('');
+}
+
+// ─── M15 Impulse notification bar ─────────────────────────────────────────────
+
+function updateM15Bar(data) {
+  const bar = document.getElementById('m15-impulse-bar');
+  if (!bar) return;
+
+  const impulse = getM15Impulses(data);
+
+  if (!impulse.length) {
+    bar.style.display = 'none';
+    return;
+  }
+
+  // Snap top to actual header height so the bar sticks right underneath
+  const header = document.querySelector('.header');
+  if (header) bar.style.top = header.offsetHeight + 'px';
+
+  document.getElementById('m15-bar-chips').innerHTML = impulse.map(s => {
+    const v45  = parseFloat(s.smooth_45m) || 0;
+    const bias = v45 >= 0 ? 'BUY' : 'SELL';
+    const dir  = v45 >= 0 ? 'buy' : 'sell';
+    const vStr = (v45 >= 0 ? '+' : '') + v45.toFixed(5);
+    return `<span class="m15-bar-chip">
+      <span class="chip-pair">${pair(s.instrument)}</span>
+      <span class="chip-${dir}">${bias}</span>
+      <span class="chip-val">${vStr}</span>
+    </span>`;
+  }).join('');
+
+  const timeEl = document.getElementById('m15-bar-time');
+  if (timeEl && data.time) timeEl.textContent = fmtTime(data.time);
+
+  bar.style.display = 'flex';
 }
 
 // ─── Risk / approved trades ───────────────────────────────────────────────────
@@ -2050,6 +2084,7 @@ async function refresh() {
     renderSpreads(spreads);
     renderRanking12H(spreads);
     renderM15Spreads(m15Data);
+    updateM15Bar(m15Data);
     renderRisk(risk, sentimentData);
     renderActions(actions);
     renderQuality(quality);
