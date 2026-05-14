@@ -1193,22 +1193,42 @@ function renderM15Spreads(data) {
     return;
   }
 
-  // Pre-sorted by weighted score from the API (180M·90M·45M·accel)
-  const sorted   = data.spreads;
-  const maxScore = Math.max(...sorted.map(s => s.weighted_score || 0), 0.0001);
+  // ── Impulse filter ────────────────────────────────────────────────────────
+  // A real impulse requires ALL THREE conditions:
+  //   1. State is EXPANDING   (45M momentum actively accelerating vs 90M)
+  //   2. All timeframes agree  (45M, 90M, 180M all point the same direction)
+  //   3. Above noise floor     (|smooth_45m| > 0.00005)
+  const impulse = data.spreads.filter(s => {
+    if (s.state !== 'EXPANDING') return false;
+    const s45  = parseFloat(s.smooth_45m)  || 0;
+    const s90  = parseFloat(s.smooth_90m)  || 0;
+    const s180 = parseFloat(s.smooth_180m) || 0;
+    if (Math.sign(s45) !== Math.sign(s90))  return false;
+    if (Math.sign(s45) !== Math.sign(s180)) return false;
+    return Math.abs(s45) > 0.00005;
+  });
 
-  el.innerHTML = sorted.map(s => {
-    const bias  = s.bias || ((parseFloat(s.smooth_180m) || 0) >= 0 ? 'BUY' : 'SELL');
-    const cls   = bias === 'BUY' ? 'buy' : 'sell';
-    const v45   = parseFloat(s.smooth_45m) || 0;
-    const pct   = Math.round(((s.weighted_score || 0) / maxScore) * 100);
-    const state = s.state || 'FLAT';
+  if (!impulse.length) {
+    el.innerHTML = '<p class="empty-state">No active impulse moves</p>';
+    return;
+  }
+
+  // Sort by strongest current momentum (|smooth_45m| descending)
+  impulse.sort((a, b) => Math.abs(parseFloat(b.smooth_45m)) - Math.abs(parseFloat(a.smooth_45m)));
+
+  const maxVal = Math.abs(parseFloat(impulse[0].smooth_45m)) || 0.0001;
+
+  el.innerHTML = impulse.map(s => {
+    const v45  = parseFloat(s.smooth_45m) || 0;
+    const cls  = v45 >= 0 ? 'buy' : 'sell';
+    const bias = cls === 'buy' ? 'BUY' : 'SELL';
+    const pct  = Math.round((Math.abs(v45) / maxVal) * 100);
     return `
       <div class="spread-row m15-row">
         <div class="spread-accent ${cls}"></div>
         <span class="spread-pair">${pair(s.instrument)}</span>
         <span class="spread-bias ${cls}">${bias}</span>
-        <span class="sb-behavior ${state}">${state}</span>
+        <span class="sb-behavior EXPANDING">EXPANDING</span>
         <span class="spread-val">${fmt(v45, 5)}</span>
         <div class="spread-bar-wrap"><div class="spread-bar-fill ${cls}" style="width:${pct}%"></div></div>
       </div>`;
