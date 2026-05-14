@@ -1764,7 +1764,13 @@ function _renderJournalModal(e, newsEvents, sessionEntries, prevEntry) {
       <span class="jrn-count pb"    title="Pullback">${e.pullback_pairs}PB</span>
       <span class="jrn-count ready" title="Ready">${e.ready_pairs}R</span>
       ${enteredCount ? `<span class="jrn-count sig">${enteredCount}✦</span>` : ''}
-    </div>`;
+    </div>
+    ${(({ strong, weak }) => {
+      const parts = [];
+      if (strong.length) parts.push(`<span class="jrn-csig-tag strong">💪 ${strong.join(' ')}</span>`);
+      if (weak.length)   parts.push(`<span class="jrn-csig-tag weak">🔻 ${weak.join(' ')}</span>`);
+      return parts.join('');
+    })(computeEntryCsig(e))}`;
 
   // Body — sections in order
   document.getElementById('jrn-modal-body').innerHTML = [

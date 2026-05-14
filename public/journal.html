@@ -707,7 +707,13 @@
       <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${(e.session_name||'—').replace(/_/g,' ')}</span>
       <span class="jrn-sent sent-${sentCls}">${(e.risk_sentiment||'—').replace('_',' ')}</span>
       <span class="jrn-conf">${e.risk_confidence ?? '—'}%</span>
-      ${enteredCount ? `<span class="jrn-count sig" style="font-size:9px">${enteredCount} signal${enteredCount>1?'s':''}</span>` : ''}`;
+      ${enteredCount ? `<span class="jrn-count sig" style="font-size:9px">${enteredCount} signal${enteredCount>1?'s':''}</span>` : ''}
+      ${(({ strong, weak }) => {
+        const parts = [];
+        if (strong.length) parts.push(`<span class="jrn-csig-tag strong">💪 ${strong.join(' ')}</span>`);
+        if (weak.length)   parts.push(`<span class="jrn-csig-tag weak">🔻 ${weak.join(' ')}</span>`);
+        return parts.join('');
+      })(computeEntryCsig(e))}`;
 
     document.getElementById('jrn-modal-body').innerHTML = [
       renderJrnCalendarSection(newsEvents, e.time),
