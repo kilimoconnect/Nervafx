@@ -660,7 +660,7 @@ function openAiModal(instrument) {
   document.getElementById('ai-modal-body').innerHTML = `
     ${_sentimentData?.sentiment?.sentiment === 'NEUTRAL' ? `
     <div class="sent-neutral-warn" style="margin-bottom:10px">
-      ⚠ Risk sentiment NEUTRAL — no clear money flow direction. No edge confirmed. High risk to trade.
+      ⚠ Risk sentiment neutral — trade with caution.
     </div>` : ''}
     ${lp ? `
     <div class="ai-modal-lifecycle">
@@ -837,7 +837,7 @@ function renderLiveOpportunities(states, aiMap = {}, sentimentData = null) {
         </div>
         <div class="live-reason">${s.spread_behavior_text}</div>
         ${newsWarnHtml(s.instrument)}
-        ${sentNeutral ? `<div class="sent-neutral-warn">⚠ Risk sentiment NEUTRAL — no clear money flow direction. High risk to trade.</div>` : ''}
+        ${sentNeutral ? `<div class="sent-neutral-warn">⚠ Risk sentiment neutral — trade with caution.</div>` : ''}
         ${s.session_blocked ? `<div class="sent-neutral-warn">⚠ ${s.next_action || 'Outside active session'}</div>` : ''}
         ${(s.confidence_breakdown||[]).length ? `<div class="conf-factors" style="align-items:flex-start;margin-top:6px">${s.confidence_breakdown.map(f=>`<span>+ ${f}</span>`).join('')}</div>` : ''}
         ${aiHtml(aiMap[s.instrument], s.instrument)}
@@ -898,7 +898,7 @@ function renderTopSetups(states, aiMap = {}, sentimentData = null) {
           <div style="font-size:9px;color:var(--text-muted);margin-bottom:3px">${s.spread_behavior_text || ''}</div>
           ${nextActionHtml(s.next_action)}
           ${newsWarnHtml(s.instrument)}
-          ${sentNeutral ? `<div class="sent-neutral-warn">⚠ Risk sentiment NEUTRAL — no clear money flow direction. No edge confirmed. High risk to trade.</div>` : ''}
+          ${sentNeutral ? `<div class="sent-neutral-warn">⚠ Risk sentiment neutral — trade with caution.</div>` : ''}
           ${aiHtml(aiMap[s.instrument], s.instrument)}
         </div>
         <div class="top-conf">
@@ -1365,19 +1365,18 @@ function renderRisk(data, sentimentData = null, statesArr = []) {
     const candidates = (statesArr || []).filter(s => s.state === 'READY_TO_ENTER');
     el.innerHTML = `
       <div class="risk-neutral-block">
-        <div class="risk-neutral-icon">⛔</div>
+        <div class="risk-neutral-icon">⚠</div>
         <div class="risk-neutral-msg">
-          <b>Trades not approved</b><br>
-          Risk sentiment is <b>NEUTRAL</b> — markets show no clear money flow direction.<br>
-          Wait for sentiment to confirm Risk On or Risk Off before taking trades.
+          <b>Risk sentiment neutral</b> — trade with caution.<br>
+          No clear money flow direction confirmed. Setups below are valid — manage risk carefully.
         </div>
       </div>
       ${candidates.length ? `
-        <div style="margin-top:10px;font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Blocked candidates</div>
+        <div style="margin-top:10px;font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Active setups</div>
         ${candidates.map(s => {
           const dir = s.bias === 'BUY' ? 'buy' : 'sell';
           const ta  = s.tf_alignment || {};
-          return `<div class="risk-row" style="opacity:0.5;pointer-events:none">
+          return `<div class="risk-row">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
               <span class="signal-dir ${dir}">${s.bias}</span>
               <span style="font-weight:600;font-size:12px">${pair(s.instrument)}</span>
