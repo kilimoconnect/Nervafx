@@ -205,6 +205,17 @@
 
     <!-- CURRENCY SIGNALS -->
     <section class="card span-2" id="section-currency-signals">
+      <div class="plan-lock-overlay" data-require="pro">
+        <span class="plan-lock-icon">⚡</span>
+        <span class="plan-lock-title">Currency Signals</span>
+        <span class="plan-lock-desc">Multi-timeframe currency strength filtered to only the pairs where 3H and 6H momentum both push the same direction above the signal threshold. No guesswork — only confirmed directional pressure.</span>
+        <ul class="plan-lock-features">
+          <li>Combined 3H + 6H + 12H strength filter</li>
+          <li>Strong &amp; weak currency rankings</li>
+          <li>Automatically highlights highest-conviction pairs</li>
+        </ul>
+        <a href="/home.html#pricing" class="plan-lock-btn">Upgrade to Pro →</a>
+      </div>
       <h2 class="card-title">
         <i data-lucide="zap"></i> Currency Signals
         <span class="sub">combined &gt; ±0.00100 &amp; 3H confirms</span>
@@ -264,6 +275,17 @@
 
     <!-- M15 PAIR RANKING -->
     <section class="card" id="section-m15-spreads">
+      <div class="plan-lock-overlay" data-require="pro">
+        <span class="plan-lock-icon">📈</span>
+        <span class="plan-lock-title">M15 Impulse Detection</span>
+        <span class="plan-lock-desc">Identifies pairs where 45M, 90M, and 180M momentum are all expanding in the same direction — the clearest short-term pressure moves, confirmed across all three M15 timeframes.</span>
+        <ul class="plan-lock-features">
+          <li>45M / 90M / 180M alignment filter</li>
+          <li>EXPANDING state detection only</li>
+          <li>Live impulse notification bar at top of screen</li>
+        </ul>
+        <a href="/home.html#pricing" class="plan-lock-btn">Upgrade to Pro →</a>
+      </div>
       <h2 class="card-title">
         <i data-lucide="activity"></i> M15 Impulse Moves
         <span class="sub">EXPANDING · all timeframes aligned</span>
@@ -422,6 +444,10 @@
         const required = REQUIRE_LEVELS[overlay.dataset.require] ?? 1;
         overlay.classList.toggle('visible', level < required);
       });
+
+      // For free plan: hide M15 impulse notification bar
+      const m15Bar = document.getElementById('m15-impulse-bar');
+      if (m15Bar && plan === 'free') m15Bar.style.display = 'none';
 
       // For free plan: disable 3H/6H tf buttons, force 12H
       const tfBtns = document.querySelectorAll('.tf-btn');

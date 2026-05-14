@@ -1240,6 +1240,12 @@ function updateM15Bar(data) {
   const bar = document.getElementById('m15-impulse-bar');
   if (!bar) return;
 
+  // M15 impulse bar is a Pro+ feature — never show on free plan
+  if (document.body.classList.contains('plan-free')) {
+    bar.style.display = 'none';
+    return;
+  }
+
   const impulse = getM15Impulses(data);
 
   if (!impulse.length) {
