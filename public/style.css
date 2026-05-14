@@ -2395,6 +2395,99 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
   letter-spacing: 0.3px;
 }
 
+/* ─── Currency Signals widget ───────────────────────────────────────────────── */
+
+.cs-sig-body { padding-top: 4px; }
+
+/* Two-column grid: strong left, weak right */
+.cs-sig-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+@media (max-width: 600px) {
+  .cs-sig-grid { grid-template-columns: 1fr; }
+}
+
+.cs-sig-col {
+  border-radius: 7px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.cs-sig-col.strong {
+  background: rgba(74,222,128,0.04);
+  border: 1px solid rgba(74,222,128,0.14);
+}
+.cs-sig-col.weak {
+  background: rgba(248,113,113,0.04);
+  border: 1px solid rgba(248,113,113,0.14);
+}
+
+.cs-sig-col-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-bottom: 4px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.cs-sig-col.strong .cs-sig-col-title { color: #4ade80; }
+.cs-sig-col.weak   .cs-sig-col-title { color: #f87171; }
+
+.cs-sig-head {
+  display: grid;
+  grid-template-columns: 30px 1fr 1fr 1fr 1fr;
+  gap: 4px;
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  padding-bottom: 3px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  margin-bottom: 2px;
+}
+
+.cs-sig-row {
+  display: grid;
+  grid-template-columns: 30px 1fr 1fr 1fr 1fr;
+  gap: 4px;
+  align-items: center;
+  padding: 2px 0;
+}
+.cs-sig-row:hover { background: rgba(255,255,255,0.02); border-radius: 3px; }
+
+.cs-sig-cur {
+  font-family: var(--font-data);
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--text);
+}
+.cs-sig-combo {
+  font-family: var(--font-data);
+  font-size: 10px;
+  font-weight: 700;
+}
+.cs-sig-val {
+  font-family: var(--font-data);
+  font-size: 9px;
+  color: var(--text-muted);
+}
+
+/* colour overrides */
+.cs-sig-combo.pos, .cs-sig-val.pos { color: #4ade80; }
+.cs-sig-combo.neg, .cs-sig-val.neg { color: #f87171; }
+
+.cs-sig-empty {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-style: italic;
+  padding: 6px 0;
+}
+
 /* ─── Market Journal ────────────────────────────────────────────────────────── */
 
 

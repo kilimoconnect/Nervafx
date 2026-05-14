@@ -888,6 +888,73 @@ function waitCard(s, st) {
     </div>`;
 }
 
+// ─── Currency Signals (strong / weak filter) ──────────────────────────────────
+
+const CS_THRESHOLD = 0.00100; // 0.00100 combined AND 3H must both exceed this
+
+function renderCurrencySignals(data) {
+  const el = document.getElementById('currency-signals-body');
+  if (!el) return;
+
+  const currencies = data?.currencies || [];
+  if (!currencies.length) {
+    el.innerHTML = '<p class="empty-state">No strength data</p>';
+    return;
+  }
+
+  // Update timestamp
+  const timeEl = document.getElementById('cs-sig-time');
+  if (timeEl && data.time) timeEl.textContent = 'as of ' + fmtShort(data.time);
+
+  // Compute combined (equal-weight avg 3H+6H+12H) + extract 3H for each currency
+  const scored = currencies.map(c => {
+    const v3  = parseFloat(c.smooth_3h  ?? c.normalized_3h)  || 0;
+    const v6  = parseFloat(c.smooth_6h  ?? c.normalized_6h)  || 0;
+    const v12 = parseFloat(c.smooth_12h ?? c.normalized_12h) || 0;
+    return { cur: c.currency, combined: (v3 + v6 + v12) / 3, h3: v3, h6: v6, h12: v12 };
+  });
+
+  const strong = scored
+    .filter(c => c.combined > CS_THRESHOLD && c.h3 > CS_THRESHOLD)
+    .sort((a, b) => b.combined - a.combined);
+
+  const weak = scored
+    .filter(c => c.combined < -CS_THRESHOLD && c.h3 < -CS_THRESHOLD)
+    .sort((a, b) => a.combined - b.combined);
+
+  function scoreBar(val, max) {
+    const pct = Math.round((Math.abs(val) / max) * 100);
+    return `<div class="cs-sig-bar-wrap"><div class="cs-sig-bar ${val >= 0 ? 'pos' : 'neg'}" style="width:${pct}%"></div></div>`;
+  }
+
+  function col(list, side) {
+    const isStrong = side === 'strong';
+    const maxAbs   = Math.max(...list.map(c => Math.abs(c.combined)), 0.0001);
+    if (!list.length) return `
+      <div class="cs-sig-col ${side}">
+        <div class="cs-sig-col-title">${isStrong ? '💪 Strong' : '🔻 Weak'}</div>
+        <div class="cs-sig-empty">No confirmed ${isStrong ? 'bullish' : 'bearish'} signal</div>
+      </div>`;
+    return `
+      <div class="cs-sig-col ${side}">
+        <div class="cs-sig-col-title">${isStrong ? '💪 Strong' : '🔻 Weak'}</div>
+        <div class="cs-sig-head">
+          <span>CCY</span><span>Combined</span><span>3H</span><span>6H</span><span>12H</span>
+        </div>
+        ${list.map(c => `
+          <div class="cs-sig-row">
+            <span class="cs-sig-cur">${c.cur}</span>
+            <span class="cs-sig-combo ${isStrong ? 'pos' : 'neg'}">${c.combined >= 0 ? '+' : ''}${c.combined.toFixed(5)}</span>
+            <span class="cs-sig-val ${c.h3  >= 0 ? 'pos' : 'neg'}">${c.h3  >= 0 ? '+' : ''}${c.h3.toFixed(5)}</span>
+            <span class="cs-sig-val ${c.h6  >= 0 ? 'pos' : 'neg'}">${c.h6  >= 0 ? '+' : ''}${c.h6.toFixed(5)}</span>
+            <span class="cs-sig-val ${c.h12 >= 0 ? 'pos' : 'neg'}">${c.h12 >= 0 ? '+' : ''}${c.h12.toFixed(5)}</span>
+          </div>`).join('')}
+      </div>`;
+  }
+
+  el.innerHTML = `<div class="cs-sig-grid">${col(strong, 'strong')}${col(weak, 'weak')}</div>`;
+}
+
 // ─── Currency strength chart ──────────────────────────────────────────────────
 
 function buildChart(data, tf) {
@@ -1797,6 +1864,7 @@ async function refresh() {
     renderTopSetups(states.states || [], aiMap, sentimentData);
     renderSignals(signals, states.states || []);
     buildChart(strength, activeTF);
+    renderCurrencySignals(strength);
     renderStates(states);
     renderSpreads(spreads);
     renderRanking12H(spreads);
