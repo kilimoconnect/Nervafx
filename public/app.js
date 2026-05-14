@@ -249,6 +249,26 @@ async function fetchTodayNews() {
   } catch (e) { console.warn('[today-news]', e.message); }
 }
 
+// ─── Today's News collapse toggle ─────────────────────────────────────────
+function toggleNewsCard() {
+  const body = document.getElementById('news-body');
+  const btn  = document.getElementById('news-collapse-btn');
+  if (!body || !btn) return;
+  const collapsed = body.classList.toggle('collapsed');
+  btn.classList.toggle('collapsed', collapsed);
+  localStorage.setItem('nfx_news_collapsed', collapsed ? '1' : '0');
+}
+
+function initNewsCollapse() {
+  if (localStorage.getItem('nfx_news_collapsed') === '1') {
+    const body = document.getElementById('news-body');
+    const btn  = document.getElementById('news-collapse-btn');
+    if (body) body.classList.add('collapsed');
+    if (btn)  btn.classList.add('collapsed');
+  }
+}
+initNewsCollapse();
+
 function renderTodayNews(events) {
   const el = document.getElementById('today-news-list');
   if (!el) return;

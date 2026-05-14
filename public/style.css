@@ -3556,6 +3556,35 @@ body::after {
 /* --- Disable CSS card-in (GSAP handles it now) --- */
 .card { animation: none !important; }
 
+/* ─── Card collapse toggle ───────────────────────────────────────────────── */
+.card-collapse-btn {
+  margin-left: auto;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 3px 5px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  line-height: 1;
+  transition: color .15s, background .15s;
+}
+.card-collapse-btn:hover { color: var(--text); background: rgba(255,255,255,.06); }
+.card-collapse-btn svg   { transition: transform .25s ease; }
+.card-collapse-btn.collapsed svg { transform: rotate(-90deg); }
+
+.news-body {
+  overflow: hidden;
+  max-height: 3000px;
+  transition: max-height .35s ease, opacity .25s ease;
+  opacity: 1;
+}
+.news-body.collapsed {
+  max-height: 0;
+  opacity: 0;
+}
+
 /* ─── Today's News Section ───────────────────────────────────────────────── */
 .today-news-header-row {
   display: grid;
