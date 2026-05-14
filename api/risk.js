@@ -48,9 +48,11 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    const today    = new Date(t);
+    // Always use the actual current UTC date so the counter resets at midnight
+    // regardless of when the last risk_check record was written.
+    const now      = new Date();
     const dayStart = new Date(Date.UTC(
-      today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()
+      now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()
     )).toISOString();
 
     let query = sb
