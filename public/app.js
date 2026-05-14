@@ -373,6 +373,22 @@ function fmtTime(iso) {
   }
 }
 
+// Calendar form: "14:35 GMT+3" — time + TZ only, no date (used in calendar rows)
+function fmtCalTime(iso) {
+  if (!iso) return '—';
+  try {
+    const tz = (_userTz === 'auto')
+      ? Intl.DateTimeFormat().resolvedOptions().timeZone
+      : (_userTz || 'UTC');
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone: tz, hour: '2-digit', minute: '2-digit',
+      hour12: false, timeZoneName: 'short',
+    }).format(new Date(iso));
+  } catch (_) {
+    return new Date(iso).toUTCString().slice(17, 22) + ' UTC';
+  }
+}
+
 // Short form: "10 May 14:35 EAT" — used in compact rows
 function fmtShort(iso) {
   if (!iso) return '—';
@@ -1573,7 +1589,7 @@ function renderJrnCalendarSection(events, entryTime) {
         return `
           <div class="jrn-cal-row">
             <span class="jrn-cal-impact imp-${imp.toLowerCase()}">${imp}</span>
-            <span class="jrn-cal-time">${fmtTime(ev.event_time)}</span>
+            <span class="jrn-cal-time">${fmtCalTime(ev.event_time)}</span>
             <span class="jrn-cal-cur">${ev.currency}</span>
             <span class="jrn-cal-name">${ev.event_name}</span>
             <span class="jrn-cal-vals">${act}${fct}${prv}</span>

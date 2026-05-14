@@ -1534,7 +1534,7 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
 .jrn-cal-list { display: flex; flex-direction: column; gap: 4px; }
 .jrn-cal-row {
   display: grid;
-  grid-template-columns: 54px 90px 32px 1fr auto;
+  grid-template-columns: 54px 100px 32px 1fr auto;
   align-items: center;
   gap: 6px;
   padding: 4px 0;
