@@ -1205,7 +1205,7 @@ function renderM15Spreads(data) {
     const s180 = parseFloat(s.smooth_180m) || 0;
     if (Math.sign(s45) !== Math.sign(s90))  return false;
     if (Math.sign(s45) !== Math.sign(s180)) return false;
-    return Math.abs(s45) > 0.00005;
+    return Math.abs(s45) >= CS_THRESHOLD;
   });
 
   if (!impulse.length) {
