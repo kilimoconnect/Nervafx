@@ -50,8 +50,10 @@ function detectState({ spread_3h, spread_6h, spread_12h }, changes, prevState, b
     if (inPullback && c3h > 0) return 'READY_TO_ENTER';
     if (inReady && c3h > 0) return 'READY_TO_ENTER';
     if (c3h < 0) {
-      if (prevState === 'TREND' || prevState === 'READY_TO_ENTER' || !prevState)
-        return 'PULLBACK_STARTING';
+      if (prevState === 'TREND' || !prevState)
+        // 3H already counter-trend (negative) → pullback already active; skip PB_STARTING
+        return spread_3h < 0 ? 'PULLBACK_ACTIVE' : 'PULLBACK_STARTING';
+      if (prevState === 'READY_TO_ENTER') return 'PULLBACK_STARTING';
       if ((prevState === 'PULLBACK_ACTIVE' || prevState === 'BASE_FORMING') &&
           Math.abs(spread_3h) < Math.abs(spread_6h) * 0.40)
         return 'BASE_FORMING';
@@ -64,8 +66,10 @@ function detectState({ spread_3h, spread_6h, spread_12h }, changes, prevState, b
     if (inPullback && c3h < 0) return 'READY_TO_ENTER';
     if (inReady && c3h < 0) return 'READY_TO_ENTER';
     if (c3h > 0) {
-      if (prevState === 'TREND' || prevState === 'READY_TO_ENTER' || !prevState)
-        return 'PULLBACK_STARTING';
+      if (prevState === 'TREND' || !prevState)
+        // 3H already counter-trend (positive) → pullback already active; skip PB_STARTING
+        return spread_3h > 0 ? 'PULLBACK_ACTIVE' : 'PULLBACK_STARTING';
+      if (prevState === 'READY_TO_ENTER') return 'PULLBACK_STARTING';
       if ((prevState === 'PULLBACK_ACTIVE' || prevState === 'BASE_FORMING') &&
           Math.abs(spread_3h) < Math.abs(spread_6h) * 0.40)
         return 'BASE_FORMING';
