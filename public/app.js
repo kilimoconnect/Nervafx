@@ -249,28 +249,20 @@ async function fetchTodayNews() {
   } catch (e) { console.warn('[today-news]', e.message); }
 }
 
-// ─── Today's News collapse toggle ─────────────────────────────────────────
-function toggleNewsCard() {
-  const body = document.getElementById('news-body');
-  const btn  = document.getElementById('news-collapse-btn');
-  if (!body || !btn) return;
-  const collapsed = body.classList.toggle('collapsed');
-  btn.classList.toggle('collapsed', collapsed);
-  localStorage.setItem('nfx_news_collapsed', collapsed ? '1' : '0');
-}
+// ─── Today's News — preview + show more ───────────────────────────────────
+const NEWS_PREVIEW = 4; // upcoming events shown by default
+let _todayNewsCache = [];
 
-function initNewsCollapse() {
-  if (localStorage.getItem('nfx_news_collapsed') === '1') {
-    const body = document.getElementById('news-body');
-    const btn  = document.getElementById('news-collapse-btn');
-    if (body) body.classList.add('collapsed');
-    if (btn)  btn.classList.add('collapsed');
-  }
+function toggleNewsExpand() {
+  const expanded = localStorage.getItem('nfx_news_expanded') === '1';
+  localStorage.setItem('nfx_news_expanded', expanded ? '0' : '1');
+  renderTodayNews(_todayNewsCache);
 }
-initNewsCollapse();
 
 function renderTodayNews(events) {
+  _todayNewsCache = events;
   const el = document.getElementById('today-news-list');
+  const moreWrap = document.getElementById('news-more-row');
   if (!el) return;
 
   const tz = (_userTz === 'auto')
@@ -287,6 +279,7 @@ function renderTodayNews(events) {
     el.innerHTML = '<div class="today-news-empty">No news events scheduled for today</div>';
     const b = document.getElementById('today-news-next-badge');
     if (b) b.style.display = 'none';
+    if (moreWrap) moreWrap.innerHTML = '';
     return;
   }
 
@@ -311,15 +304,24 @@ function renderTodayNews(events) {
     }
   }
 
+  // Decide which events to show
+  const expanded   = localStorage.getItem('nfx_news_expanded') === '1';
+  // Preview: upcoming events only (from nextIdx), capped at NEWS_PREVIEW
+  const previewStart  = nextIdx >= 0 ? nextIdx : events.length;
+  const previewEvents = events.slice(previewStart, previewStart + NEWS_PREVIEW);
+  const displayEvents = expanded ? events : previewEvents;
+  const hiddenCount   = expanded ? 0 : (events.length - previewEvents.length);
+
   const impCls = { HIGH:'tni-high', MEDIUM:'tni-med', LOW:'tni-low' };
 
-  el.innerHTML = events.map((e, i) => {
-    const t      = new Date(e.event_time).getTime();
-    const isPast = t < now;
-    const isNext = i === nextIdx;
-    const isSoon = !isPast && (t - now) < 3600000; // < 1 hour
+  const renderRow = (e, i) => {
+    const t       = new Date(e.event_time).getTime();
+    const isPast  = t < now;
+    const origIdx = events.indexOf(e);
+    const isNext  = origIdx === nextIdx;
+    const isSoon  = !isPast && (t - now) < 3600000;
 
-    const rowCls = isPast ? 'tnr past' : isNext ? 'tnr next-up' : isSoon ? 'tnr soon' : 'tnr';
+    const rowCls  = isPast ? 'tnr past' : isNext ? 'tnr next-up' : isSoon ? 'tnr soon' : 'tnr';
     const timeStr = new Date(e.event_time).toLocaleTimeString('en-GB',
       { hour:'2-digit', minute:'2-digit', timeZone: tz });
 
@@ -331,7 +333,28 @@ function renderTodayNews(events) {
       <span class="tn-fc h-fc">${e.forecast || '—'}</span>
       <span class="tn-prev h-prev">${e.previous || '—'}</span>
     </div>`;
-  }).join('');
+  };
+
+  el.innerHTML = displayEvents.length
+    ? displayEvents.map(renderRow).join('')
+    : '<div class="today-news-empty">No upcoming events — all done for today</div>';
+
+  // Show more / Show less button
+  if (moreWrap) {
+    if (!expanded && hiddenCount > 0) {
+      moreWrap.innerHTML = `<button class="news-show-more" onclick="toggleNewsExpand()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        Show ${hiddenCount} more event${hiddenCount !== 1 ? 's' : ''}
+      </button>`;
+    } else if (expanded) {
+      moreWrap.innerHTML = `<button class="news-show-more" onclick="toggleNewsExpand()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+        Show less
+      </button>`;
+    } else {
+      moreWrap.innerHTML = '';
+    }
+  }
 }
 
 function pairCurrencies(instrument) {
