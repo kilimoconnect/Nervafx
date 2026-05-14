@@ -796,26 +796,22 @@ function renderLiveOpportunities(states, aiMap = {}, sentimentData = null) {
 
   const sentNeutral = sentimentData?.sentiment?.sentiment === 'NEUTRAL';
 
-  const live = (states || []).filter(s =>
-    s.state === 'READY_TO_ENTER' && s.confidence >= 75 && !s.session_blocked &&
-    hasCsigCurrency(s.instrument)
-  );
+  const live = (states || []).filter(s => s.state === 'READY_TO_ENTER');
 
   if (!live.length) {
     el.innerHTML = '<p class="empty-state" style="color:var(--text-muted)">No live opportunities right now — monitoring active setups</p>';
-    // Hide the section header glow when no entries
     const sec = document.getElementById('section-live');
     if (sec) sec.style.borderColor = 'var(--border)';
     return;
   }
 
-  // Make section glow green when live entries exist
   const sec = document.getElementById('section-live');
   if (sec) sec.style.borderColor = '#4ade80';
 
   el.innerHTML = live.map(s => {
-    const dir = s.bias === 'BUY' ? 'buy' : 'sell';
-    const ta  = s.tf_alignment || {};
+    const dir     = s.bias === 'BUY' ? 'buy' : 'sell';
+    const ta      = s.tf_alignment || {};
+    const isEntry = s.phase === 'ENTRY_ACTIVE';
     return `
       <div class="live-card ${dir}">
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
@@ -823,7 +819,7 @@ function renderLiveOpportunities(states, aiMap = {}, sentimentData = null) {
             <div class="live-pair">${pair(s.instrument)}</div>
             <div class="live-signal ${dir}">${s.bias}</div>
             <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px">
-              <span class="phase-badge ENTRY_ACTIVE">ENTRY ACTIVE</span>
+              <span class="phase-badge ${isEntry ? 'ENTRY_ACTIVE' : 'READY_TO_ENTER'}">${isEntry ? 'ENTRY ACTIVE' : 'READY TO ENTER'}</span>
               ${s.pullback_depth ? `<span class="pb-depth ${s.pullback_depth}">${s.pullback_depth} PB</span>` : ''}
               ${sessionBadgeHtml(s)}
             </div>
@@ -841,7 +837,8 @@ function renderLiveOpportunities(states, aiMap = {}, sentimentData = null) {
         </div>
         <div class="live-reason">${s.spread_behavior_text}</div>
         ${newsWarnHtml(s.instrument)}
-        ${sentNeutral ? `<div class="sent-neutral-warn">⚠ Risk sentiment is NEUTRAL — no clear money flow direction. No edge confirmed. High risk to trade.</div>` : ''}
+        ${sentNeutral ? `<div class="sent-neutral-warn">⚠ Risk sentiment NEUTRAL — no clear money flow direction. High risk to trade.</div>` : ''}
+        ${s.session_blocked ? `<div class="sent-neutral-warn">⚠ ${s.next_action || 'Outside active session'}</div>` : ''}
         ${(s.confidence_breakdown||[]).length ? `<div class="conf-factors" style="align-items:flex-start;margin-top:6px">${s.confidence_breakdown.map(f=>`<span>+ ${f}</span>`).join('')}</div>` : ''}
         ${aiHtml(aiMap[s.instrument], s.instrument)}
       </div>`;
@@ -1359,12 +1356,13 @@ function updateM15Bar(data) {
 
 // ─── Risk / approved trades ───────────────────────────────────────────────────
 
-function renderRisk(data, sentimentData = null) {
+function renderRisk(data, sentimentData = null, statesArr = []) {
   if (!data) return;
   const el       = document.getElementById('risk-list');
   const approved = data.approved || [];
 
   if (sentimentData?.sentiment?.sentiment === 'NEUTRAL') {
+    const candidates = (statesArr || []).filter(s => s.state === 'READY_TO_ENTER');
     el.innerHTML = `
       <div class="risk-neutral-block">
         <div class="risk-neutral-icon">⛔</div>
@@ -1373,7 +1371,24 @@ function renderRisk(data, sentimentData = null) {
           Risk sentiment is <b>NEUTRAL</b> — markets show no clear money flow direction.<br>
           Wait for sentiment to confirm Risk On or Risk Off before taking trades.
         </div>
-      </div>`;
+      </div>
+      ${candidates.length ? `
+        <div style="margin-top:10px;font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Blocked candidates</div>
+        ${candidates.map(s => {
+          const dir = s.bias === 'BUY' ? 'buy' : 'sell';
+          const ta  = s.tf_alignment || {};
+          return `<div class="risk-row" style="opacity:0.5;pointer-events:none">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <span class="signal-dir ${dir}">${s.bias}</span>
+              <span style="font-weight:600;font-size:12px">${pair(s.instrument)}</span>
+              <span class="phase-badge READY_TO_ENTER">READY TO ENTER</span>
+              <span style="color:var(--text-muted);font-size:10px">${s.confidence}%</span>
+              <span class="tf-item ${ta.h12}" style="font-size:9px">12H ${ta.h12||'→'}</span>
+              <span class="tf-item ${ta.h6}" style="font-size:9px">6H ${ta.h6||'→'}</span>
+            </div>
+          </div>`;
+        }).join('')}
+      ` : ''}`;
     return;
   }
 
@@ -2200,7 +2215,7 @@ async function refresh() {
     renderRanking12H(spreads);
     renderM15Spreads(m15Data);
     updateM15Bar(m15Data);
-    renderRisk(risk, sentimentData);
+    renderRisk(risk, sentimentData, states.states || []);
     renderActions(actions);
     renderQuality(quality);
     renderJournal(journalData);

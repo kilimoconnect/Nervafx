@@ -255,6 +255,13 @@ function buildSummary({ session, sentiment, states, signals, aiAnalysis, topSetu
   if (signals.entered.length > 0) {
     const sigStr = signals.entered.map(s => `${pairLabel(s.instrument)} ${s.signal}`).join(', ');
     lines.push(`Entry signals generated: ${sigStr}.`);
+  } else if (ready_pairs > 0) {
+    const readyStr = trackedPullbacks
+      .filter(t => t.latest_state === 'READY_TO_ENTER')
+      .map(t => `${pairLabel(t.instrument)} ${t.bias} ${t.latest_conf}%`)
+      .join(', ');
+    const waitSuffix = signals.waiting.length > 0 ? ` ${signals.waiting.length} pairs in waiting state.` : '';
+    lines.push(`No entry signals — ${ready_pairs} pair${ready_pairs > 1 ? 's' : ''} at READY_TO_ENTER: ${readyStr}.${waitSuffix}`);
   } else if (signals.waiting.length > 0) {
     lines.push(`No entry signals. ${signals.waiting.length} pairs in waiting state.`);
   } else {
