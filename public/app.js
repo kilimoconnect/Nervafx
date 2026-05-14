@@ -1169,10 +1169,12 @@ function renderStates(data) {
           <span class="phase-badge NO_TRADE">NO TRADE</span>
         </div>
       </div>`;
+    const dir = s.bias === 'BUY' ? 'buy' : s.bias === 'SELL' ? 'sell' : '';
     return `
       <div class="state-row-v2">
         <div class="state-row-top">
           <span class="state-pair">${pair(s.instrument)}</span>
+          ${dir ? `<span class="signal-dir ${dir}" style="font-size:9px;padding:2px 6px">${s.bias}</span>` : ''}
           <span class="phase-badge ${phCls}">${clean(s.phase || s.state || '')}</span>
           <span class="action-badge ${s.action}">${clean(s.action) || '—'}</span>
           <div class="state-conf-mini" style="width:36px;margin-left:auto">
