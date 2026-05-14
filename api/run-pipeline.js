@@ -13,7 +13,10 @@
  */
 
 const { createClient } = require('@supabase/supabase-js');
-const { writeJournalEntry } = require('../src/journalEngine');
+const { calculateLatestStates }  = require('../src/stateDetect');
+const { calculateLatestSignals } = require('../src/signals');
+const { checkLatestSignals }     = require('../src/risk');
+const { writeJournalEntry }      = require('../src/journalEngine');
 
 const ADMIN_ID = '140f3854-2c85-488c-8e0a-0f965d562654';
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
@@ -245,6 +248,9 @@ module.exports = async function handler(req, res) {
   await step('strength', async () => { strengthTime = await runStrength(sb); });
   await step('smooth',   () => runSmooth(sb));
   await step('spreads',  () => runSpreads(sb));
+  await step('states',   () => calculateLatestStates());
+  await step('signals',  () => calculateLatestSignals());
+  await step('risk',     () => checkLatestSignals());
   await step('journal',  () => writeJournalEntry());
 
   return res.json({
