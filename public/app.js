@@ -1863,10 +1863,13 @@ function renderJrnPrevSessionSection(prevEntry) {
     }).join('')}`);
 }
 
-function renderJrnSetupsSection(topSetups, signals) {
-  const entered  = (signals?.entered || []).filter(s => hasCsigCurrency(s.instrument));
-  const waiting  = (signals?.waiting || []).filter(s => hasCsigCurrency(s.instrument));
-  const setups   = (topSetups || []).filter(s => hasCsigCurrency(s.instrument));
+function renderJrnSetupsSection(topSetups, signals, csigFilter) {
+  // csigFilter: entry-specific fn(instrument) → bool built from the entry's own CS snapshot.
+  // Falls back to live hasCsigCurrency only when no per-entry filter is provided.
+  const filter   = csigFilter || hasCsigCurrency;
+  const entered  = (signals?.entered || []).filter(s => filter(s.instrument));
+  const waiting  = (signals?.waiting || []).filter(s => filter(s.instrument));
+  const setups   = (topSetups || []).filter(s => filter(s.instrument));
   if (!setups.length && !entered.length) return '';
   return _jrnSection('🎯 Top Setups & Signals', `
     ${entered.length ? `<div class="jrn-sig-entered">${entered.map(s => {
@@ -1963,6 +1966,18 @@ function _renderJournalModal(e, newsEvents, sessionEntries, prevEntry) {
   const signals  = e.signals_summary || {};
   const enteredCount = (signals.entered || []).length;
 
+  // Build a per-entry CS filter from the entry's own stored snapshot.
+  // If strong + weak are both empty → filter returns false for everything
+  // → setups/signals/market-state sections show nothing for that hour.
+  const { strong: _csStrong, weak: _csWeak } = computeEntryCsig(e);
+  const _entryCsSet = new Set([..._csStrong, ..._csWeak]);
+  const entryCsigFilter = instr => {
+    if (!_entryCsSet.size) return false;
+    const base  = (instr || '').slice(0, 3).toUpperCase();
+    const quote = (instr || '').slice(4, 7).toUpperCase();
+    return _entryCsSet.has(base) || _entryCsSet.has(quote);
+  };
+
   // Header
   document.getElementById('jrn-modal-time').textContent = fmtTime(e.time);
   document.getElementById('jrn-modal-badges').innerHTML = `
@@ -1991,7 +2006,7 @@ function _renderJournalModal(e, newsEvents, sessionEntries, prevEntry) {
     e.m15_impulses != null ? renderJrnM15Section(e.m15_impulses) : '',
     sessionEntries ? renderJrnSessionPerfSection(e, sessionEntries) : '',
     prevEntry !== undefined ? renderJrnPrevSessionSection(prevEntry) : '',
-    renderJrnSetupsSection(e.top_setups || [], signals),
+    renderJrnSetupsSection(e.top_setups || [], signals, entryCsigFilter),
   ].join('');
 
   const overlay = document.getElementById('jrn-modal-overlay');
