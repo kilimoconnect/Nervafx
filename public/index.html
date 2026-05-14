@@ -107,6 +107,42 @@
       <div id="today-news-list"></div>
     </section>
 
+    <!-- CURRENCY STRENGTH CHART -->
+    <section class="card" id="section-strength">
+      <h2 class="card-title">
+        <i data-lucide="trending-up"></i> Currency Strength
+        <span class="tf-toggle">
+          <span class="tf-pro-tip" data-tip="Upgrade to Pro to unlock"><button class="tf-btn active" data-tf="6">6H</button></span>
+          <span class="tf-pro-tip" data-tip="Upgrade to Pro to unlock"><button class="tf-btn" data-tf="3">3H</button></span>
+          <button class="tf-btn" data-tf="12">12H</button>
+        </span>
+      </h2>
+      <div class="chart-wrap"><canvas id="strengthChart"></canvas></div>
+      <div id="strength-momentum" class="mom-strip"></div>
+      <div class="strength-time" id="strength-time"></div>
+    </section>
+
+    <!-- CURRENCY SIGNALS -->
+    <section class="card span-2" id="section-currency-signals">
+      <div class="plan-lock-overlay" data-require="pro">
+        <span class="plan-lock-icon">⚡</span>
+        <span class="plan-lock-title">Currency Signals</span>
+        <span class="plan-lock-desc">Multi-timeframe currency strength filtered to only the pairs where 3H and 6H momentum both push the same direction above the signal threshold. No guesswork — only confirmed directional pressure.</span>
+        <ul class="plan-lock-features">
+          <li>Combined 3H + 6H + 12H strength filter</li>
+          <li>Strong &amp; weak currency rankings</li>
+          <li>Automatically highlights highest-conviction pairs</li>
+        </ul>
+        <a href="/home.html#pricing" class="plan-lock-btn">Upgrade to Pro →</a>
+      </div>
+      <h2 class="card-title">
+        <i data-lucide="zap"></i> Currency Signals
+        <span class="sub">combined &gt; ±0.00100 &amp; 3H confirms</span>
+        <span id="cs-sig-time" class="strength-time" style="margin-left:auto;font-size:9px"></span>
+      </h2>
+      <div id="currency-signals-body" class="cs-sig-body"></div>
+    </section>
+
     <!-- LIVE OPPORTUNITIES -->
     <section class="card span-3" id="section-live">
       <div class="plan-lock-overlay" data-require="pro">
@@ -186,42 +222,6 @@
       <div id="signals-active" class="signal-grid"></div>
       <div id="signals-wait" class="signal-grid wait-grid"></div>
       <div id="signals-notrade" class="notrade-row"></div>
-    </section>
-
-    <!-- CURRENCY STRENGTH CHART -->
-    <section class="card" id="section-strength">
-      <h2 class="card-title">
-        <i data-lucide="trending-up"></i> Currency Strength
-        <span class="tf-toggle">
-          <span class="tf-pro-tip" data-tip="Upgrade to Pro to unlock"><button class="tf-btn active" data-tf="6">6H</button></span>
-          <span class="tf-pro-tip" data-tip="Upgrade to Pro to unlock"><button class="tf-btn" data-tf="3">3H</button></span>
-          <button class="tf-btn" data-tf="12">12H</button>
-        </span>
-      </h2>
-      <div class="chart-wrap"><canvas id="strengthChart"></canvas></div>
-      <div id="strength-momentum" class="mom-strip"></div>
-      <div class="strength-time" id="strength-time"></div>
-    </section>
-
-    <!-- CURRENCY SIGNALS -->
-    <section class="card span-2" id="section-currency-signals">
-      <div class="plan-lock-overlay" data-require="pro">
-        <span class="plan-lock-icon">⚡</span>
-        <span class="plan-lock-title">Currency Signals</span>
-        <span class="plan-lock-desc">Multi-timeframe currency strength filtered to only the pairs where 3H and 6H momentum both push the same direction above the signal threshold. No guesswork — only confirmed directional pressure.</span>
-        <ul class="plan-lock-features">
-          <li>Combined 3H + 6H + 12H strength filter</li>
-          <li>Strong &amp; weak currency rankings</li>
-          <li>Automatically highlights highest-conviction pairs</li>
-        </ul>
-        <a href="/home.html#pricing" class="plan-lock-btn">Upgrade to Pro →</a>
-      </div>
-      <h2 class="card-title">
-        <i data-lucide="zap"></i> Currency Signals
-        <span class="sub">combined &gt; ±0.00100 &amp; 3H confirms</span>
-        <span id="cs-sig-time" class="strength-time" style="margin-left:auto;font-size:9px"></span>
-      </h2>
-      <div id="currency-signals-body" class="cs-sig-body"></div>
     </section>
 
     <!-- MARKET STATES -->
