@@ -233,6 +233,16 @@
       </div>
     </div>
 
+    <div class="jpage-filter-sep"></div>
+
+    <div class="jpage-filter-group">
+      <span class="jpage-filter-label">Signals</span>
+      <div class="jpage-pills" id="filter-csig">
+        <button class="jpage-pill active" data-val="">All</button>
+        <button class="jpage-pill" data-val="cs" title="Only entries that had a Currency Signals pair">CS Only</button>
+      </div>
+    </div>
+
     <div class="jpage-search-wrap">
       <input
         type="search"
@@ -293,6 +303,8 @@
   let _filterSentiment = '';
   let _filterDate      = '';
   let _filterSearch    = '';
+  let _filterCsig      = false;
+  let _csigCurrencies  = new Set(); // populated from live strength data
   const _userTz = localStorage.getItem('nfx_tz') || 'auto';
 
   // ─── API helper ───────────────────────────────────────────────────────────────
@@ -327,6 +339,23 @@
   }
   function pair(s) { return s ? s.replace('_', '/') : s; }
 
+  // ─── Currency Signals helpers ─────────────────────────────────────────────────
+  function hasCsigCurrency(instrument) {
+    if (!_csigCurrencies.size) return true;
+    const base  = (instrument || '').slice(0, 3).toUpperCase();
+    const quote = (instrument || '').slice(4, 7).toUpperCase();
+    return _csigCurrencies.has(base) || _csigCurrencies.has(quote);
+  }
+  function entryHasCsigPair(e) {
+    if (!_csigCurrencies.size) return true;
+    const instruments = [
+      ...(e.signals_summary?.entered || []),
+      ...(e.signals_summary?.waiting || []),
+      ...(e.top_setups || []),
+    ].map(s => s.instrument).filter(Boolean);
+    return instruments.some(i => hasCsigCurrency(i));
+  }
+
   // ─── Filter logic ─────────────────────────────────────────────────────────────
   function getDateRange(val) {
     const now = new Date();
@@ -356,6 +385,7 @@
         (e.risk_sentiment || '').toLowerCase().includes(q)
       );
     }
+    if (_filterCsig) entries = entries.filter(entryHasCsigPair);
     return entries;
   }
 
@@ -436,10 +466,11 @@
   }
   function onSearchInput(val) { _filterSearch = val.trim(); renderList(); }
   function clearFilters() {
-    _filterSession = ''; _filterSentiment = ''; _filterDate = ''; _filterSearch = '';
+    _filterSession = ''; _filterSentiment = ''; _filterDate = ''; _filterSearch = ''; _filterCsig = false;
     document.querySelectorAll('.jpage-pill').forEach(p => p.classList.remove('active'));
-    document.querySelectorAll('#filter-session .jpage-pill[data-val=""], #filter-sentiment .jpage-pill[data-val=""], #filter-date .jpage-pill[data-val=""]')
-      .forEach(p => p.classList.add('active'));
+    document.querySelectorAll(
+      '#filter-session .jpage-pill[data-val=""], #filter-sentiment .jpage-pill[data-val=""], #filter-date .jpage-pill[data-val=""], #filter-csig .jpage-pill[data-val=""]'
+    ).forEach(p => p.classList.add('active'));
     const si = document.getElementById('jpage-search'); if (si) si.value = '';
     renderList();
   }
@@ -573,15 +604,16 @@
   }
 
   function renderJrnSetupsSection(topSetups, signals) {
-    const entered = signals?.entered || [];
-    const waiting = signals?.waiting || [];
-    if (!topSetups.length && !entered.length) return '';
+    const entered = (signals?.entered || []).filter(s => hasCsigCurrency(s.instrument));
+    const waiting = (signals?.waiting || []).filter(s => hasCsigCurrency(s.instrument));
+    const setups  = (topSetups || []).filter(s => hasCsigCurrency(s.instrument));
+    if (!setups.length && !entered.length) return '';
     return _jrnSection('🎯 Top Setups & Signals', `
       ${entered.length ? `<div class="jrn-sig-entered">${entered.map(s => {
         const d = s.signal === 'BUY' ? 'buy' : 'sell';
         return `<div class="jrn-sig-row"><span class="signal-dir ${d}" style="font-size:10px;padding:2px 7px">${s.signal}</span><span class="jrn-sig-pair">${pair(s.instrument)}</span><span class="jrn-sig-conf">${s.confidence ?? '—'}%</span>${s.reason ? `<span class="jrn-sig-reason">${s.reason}</span>` : ''}</div>`;
       }).join('')}</div>` : ''}
-      ${topSetups.length ? `<div class="jrn-setups">${topSetups.map(s => {
+      ${setups.length ? `<div class="jrn-setups">${setups.map(s => {
         const dir = s.bias === 'BUY' ? 'buy' : 'sell';
         return `<div class="jrn-setup-row"><span class="jrn-setup-pair">${pair(s.instrument)}</span><span class="signal-dir ${dir}" style="font-size:9px">${s.bias}</span><span class="jrn-setup-state">${(s.state||'').replace(/_/g,' ')}</span><span class="jrn-setup-conf">${s.confidence}%</span></div>`;
       }).join('')}</div>` : ''}
@@ -692,12 +724,49 @@
   setupFilterPills('filter-session',   v => { _filterSession   = v; });
   setupFilterPills('filter-sentiment', v => { _filterSentiment = v; });
   setupFilterPills('filter-date',      v => { _filterDate      = v; });
+  setupFilterPills('filter-csig',      v => { _filterCsig      = v === 'cs'; });
 
   (async function init() {
     try {
-      const data = await api('/api/journal?limit=200');
+      // Fetch journal entries and live strength data in parallel
+      const [data, strengthData] = await Promise.all([
+        api('/api/journal?limit=200'),
+        api('/api/strength').catch(() => null),
+      ]);
+
       _allEntries = data.entries || [];
       _allEntries.forEach(e => { _journalEntries[e.id] = e; });
+
+      // Compute Currency Signals set from live strength (same logic as dashboard)
+      const CS_THRESHOLD  = 0.00100;
+      const rawCurrencies = Array.isArray(strengthData)
+        ? strengthData
+        : (strengthData?.currencies || []);
+      const tfsKeys = [
+        ['smooth_3h',  'normalized_3h' ],
+        ['smooth_6h',  'normalized_6h' ],
+        ['smooth_12h', 'normalized_12h'],
+      ];
+      function _pickVal(c, keys) {
+        for (const k of keys) { const v = parseFloat(c[k]); if (!isNaN(v) && v !== 0) return v; }
+        for (const k of keys) { const v = parseFloat(c[k]); if (!isNaN(v)) return v; }
+        return 0;
+      }
+      rawCurrencies.forEach(c => {
+        const combined = tfsKeys.reduce((sum, keys) => sum + _pickVal(c, keys), 0) / tfsKeys.length;
+        const h3       = _pickVal(c, tfsKeys[0]);
+        if ((combined >  CS_THRESHOLD && h3 >  CS_THRESHOLD) ||
+            (combined < -CS_THRESHOLD && h3 < -CS_THRESHOLD)) {
+          _csigCurrencies.add(c.currency);
+        }
+      });
+
+      // Show CS signal count in the filter pill label when currencies are found
+      if (_csigCurrencies.size) {
+        const csPill = document.querySelector('#filter-csig .jpage-pill[data-val="cs"]');
+        if (csPill) csPill.textContent = `CS Only (${_csigCurrencies.size})`;
+      }
+
       renderList();
     } catch (err) {
       document.getElementById('jpage-list').innerHTML =

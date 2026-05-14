@@ -99,6 +99,18 @@ function hasCsigCurrency(instrument) {
   return _csigCurrencies.has(base) || _csigCurrencies.has(quote);
 }
 
+// Returns true if a journal entry snapshot contains at least one entered/
+// waiting signal or top-setup whose base or quote currency is in the CS set.
+function entryHasCsigPair(e) {
+  if (!_csigCurrencies.size) return true;
+  const instruments = [
+    ...(e.signals_summary?.entered || []),
+    ...(e.signals_summary?.waiting || []),
+    ...(e.top_setups || []),
+  ].map(s => s.instrument).filter(Boolean);
+  return instruments.some(i => hasCsigCurrency(i));
+}
+
 // ─── Notyf (toast notifications) ─────────────────────────────────────────────
 const notyf = typeof Notyf !== 'undefined'
   ? new Notyf({
@@ -1636,15 +1648,16 @@ function renderJrnPrevSessionSection(prevEntry) {
 }
 
 function renderJrnSetupsSection(topSetups, signals) {
-  const entered = signals?.entered || [];
-  const waiting = signals?.waiting || [];
-  if (!topSetups.length && !entered.length) return '';
+  const entered  = (signals?.entered || []).filter(s => hasCsigCurrency(s.instrument));
+  const waiting  = (signals?.waiting || []).filter(s => hasCsigCurrency(s.instrument));
+  const setups   = (topSetups || []).filter(s => hasCsigCurrency(s.instrument));
+  if (!setups.length && !entered.length) return '';
   return _jrnSection('🎯 Top Setups & Signals', `
     ${entered.length ? `<div class="jrn-sig-entered">${entered.map(s => {
       const d = s.signal === 'BUY' ? 'buy' : 'sell';
       return `<div class="jrn-sig-row"><span class="signal-dir ${d}" style="font-size:10px;padding:2px 7px">${s.signal}</span><span class="jrn-sig-pair">${pair(s.instrument)}</span><span class="jrn-sig-conf">${s.confidence ?? '—'}%</span>${s.reason ? `<span class="jrn-sig-reason">${s.reason}</span>` : ''}</div>`;
     }).join('')}</div>` : ''}
-    ${topSetups.length ? `<div class="jrn-setups">${topSetups.map(s => {
+    ${setups.length ? `<div class="jrn-setups">${setups.map(s => {
       const dir = s.bias === 'BUY' ? 'buy' : 'sell';
       return `<div class="jrn-setup-row"><span class="jrn-setup-pair">${pair(s.instrument)}</span><span class="signal-dir ${dir}" style="font-size:9px">${s.bias}</span><span class="jrn-setup-state">${(s.state||'').replace(/_/g,' ')}</span><span class="jrn-setup-conf">${s.confidence}%</span></div>`;
     }).join('')}</div>` : ''}
@@ -1788,16 +1801,19 @@ function renderJournal(data) {
   if (!el) return;
   const entries = data?.entries || [];
 
-  // Store globally for modal access
+  // Store ALL entries globally so modal access works regardless of filter
   _journalEntries = {};
   entries.forEach(e => { _journalEntries[e.id] = e; });
 
-  if (!entries.length) {
+  // Filter to only entries that have at least one CS-matched pair
+  const visible = entries.filter(entryHasCsigPair);
+
+  if (!visible.length) {
     el.innerHTML = '<p class="empty-state">No journal entries yet — runs after first hourly update</p>';
     return;
   }
 
-  const rows = entries.map(e => {
+  const rows = visible.map(e => {
     const sentCls = e.risk_sentiment === 'RISK_ON'  ? 'risk-on'
                   : e.risk_sentiment === 'RISK_OFF' ? 'risk-off'
                   : 'neutral';
