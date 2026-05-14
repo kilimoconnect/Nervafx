@@ -132,9 +132,12 @@ async function collectM15Impulses() {
   // The notification bar uses a stricter filter (EXPANDING + TF-aligned) separately.
   const CS_THRESHOLD = 0.00100;
 
+  // Use latest timestamp that has non-FLAT rows — avoids the top-of-hour window
+  // where the M15 pipeline may have just written fresh FLAT candles for all pairs.
   const { data: latest } = await supabase
     .from('m15_pair_spreads')
     .select('time')
+    .neq('state', 'FLAT')
     .order('time', { ascending: false })
     .limit(1)
     .single();
