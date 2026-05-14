@@ -265,6 +265,7 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
 /* Free plan: upgrade teaser cards appear as full-width rows so they
    don't leave awkward empty columns when pulled out of their normal pairs */
 .plan-free #section-strength,
+.plan-free #section-ranking-12h,
 .plan-free #section-currency-signals,
 .plan-free #section-m15-spreads { grid-column: 1 / -1; }
 
@@ -311,11 +312,13 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
 .plan-free .tf-pro-tip:hover::after,
 .plan-free .tf-pro-tip:hover::before { opacity: 1; }
 
-/* Free plan: reorder grid so free sections appear directly after Trading Session */
-.plan-free #section-session     { order: 1; }
-.plan-free #section-news        { order: 2; }
-.plan-free #section-strength    { order: 3; }
-.plan-free #section-ranking-12h { order: 4; }
+/* Free plan: reorder grid so cards appear in correct visual sequence */
+.plan-free #section-session          { order: 1; }
+.plan-free #section-news             { order: 2; }
+.plan-free #section-strength         { order: 3; }
+.plan-free #section-ranking-12h      { order: 4; }
+.plan-free #section-currency-signals { order: 5; }
+.plan-free #section-m15-spreads      { order: 6; }
 .plan-free #section-live,
 .plan-free #section-top,
 .plan-free #section-sentiment,
@@ -325,7 +328,7 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
 .plan-free #section-risk,
 .plan-free #section-actions,
 .plan-free #section-quality,
-.plan-free #section-journal     { order: 5; }
+.plan-free #section-journal          { order: 7; }
 
 /* ─── Header ───────────────────────────────────────────────────────────────── */
 .header {
