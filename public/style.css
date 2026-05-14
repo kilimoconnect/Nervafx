@@ -717,7 +717,14 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
   display: flex;
   flex-direction: column;
   gap: 3px;
+  max-height: 640px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,.1) transparent;
 }
+.states-table::-webkit-scrollbar { width: 4px; }
+.states-table::-webkit-scrollbar-track { background: transparent; }
+.states-table::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 2px; }
 
 .state-row {
   display: grid;
