@@ -848,7 +848,7 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
 
 .scanner-row {
   display: grid;
-  grid-template-columns: 52px 32px minmax(80px,1fr) minmax(48px,auto) 34px auto minmax(68px,1fr);
+  grid-template-columns: 52px 30px max-content max-content 32px auto 1fr;
   align-items: center;
   gap: 4px;
   padding: 4px 6px;
