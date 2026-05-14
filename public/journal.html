@@ -620,28 +620,47 @@
 
   function renderJrnSentimentSection(e) {
     const d = e.risk_sentiment_details;
-    if (!d) return _jrnSection('📡 Risk Sentiment', '<p class="jrn-empty">No detail data.</p>');
-    const items = [
-      { label: 'Net Score',   val: d.net_score,    fmt: v => Number(v).toFixed(2) },
-      { label: 'Confidence',  val: d.confidence,   fmt: v => `${v}%` },
-      { label: 'Environment', val: d.environment,  fmt: v => v },
-      { label: 'Equity',      val: d.equity_score, fmt: v => Number(v).toFixed(2) },
-      { label: 'JPY',         val: d.jpy_score,    fmt: v => Number(v).toFixed(2) },
-      { label: 'CHF',         val: d.chf_score,    fmt: v => Number(v).toFixed(2) },
-      { label: 'Gold',        val: d.gold_score,   fmt: v => Number(v).toFixed(2) },
-      { label: 'USD',         val: d.usd_score,    fmt: v => Number(v).toFixed(2) },
-      { label: 'AUD/JPY',    val: d.audjpy_score, fmt: v => Number(v).toFixed(2) },
+    if (!d) return _jrnSection('🌍 Risk Sentiment', '<p class="jrn-empty">No detail data.</p>');
+
+    // Summary bar
+    const netScore = d.net_score != null ? Number(d.net_score).toFixed(2) : '—';
+    const netCls   = d.net_score > 0 ? 'risk-on' : d.net_score < 0 ? 'risk-off' : 'neutral';
+    const meta = `
+      <div class="jrn-sent-meta">
+        <div class="jrn-sent-meta-item">Net Score <b class="${netCls}">${netScore}</b></div>
+        <div class="jrn-sent-meta-item">Confidence <b>${d.confidence != null ? d.confidence + '%' : '—'}</b></div>
+        <div class="jrn-sent-meta-item">Environment <b>${d.environment || '—'}</b></div>
+      </div>`;
+
+    // Groups
+    const groups = [
+      { title: 'Growth / Risk Assets', vals: [d.equity_score, d.oil_score] },
+      { title: 'Carry / Risk FX',      vals: [d.audjpy_score, d.nzdjpy_score] },
+      { title: 'Safe Havens',          vals: [d.jpy_score, d.chf_score, d.gold_score] },
+      { title: 'USD Liquidity',        vals: [d.usd_score] },
     ];
-    return _jrnSection('📡 Risk Sentiment', `
-      <div class="jrn-sent-grid">
-        ${items.map(i => {
-          const fmtd = i.val != null ? i.fmt(i.val) : '—';
-          const num  = parseFloat(i.val);
-          const cls  = !isNaN(num) && i.label !== 'Confidence' && i.label !== 'Environment'
-            ? (num > 0 ? 'pos' : num < 0 ? 'neg' : '') : '';
-          return `<div class="jrn-sent-item"><span class="jrn-sent-label">${i.label}</span><span class="jrn-sent-val ${cls}">${fmtd}</span></div>`;
+    const groupsHtml = `
+      <div class="jrn-sent-groups">
+        ${groups.map(g => {
+          const vals   = g.vals.filter(v => v != null).map(Number);
+          const allOn  = vals.length >= 2 && vals.every(v => v >= 5);
+          const allOff = vals.length >= 2 && vals.every(v => v <= -5);
+          const badge  = allOn  ? '<span class="sent-align-badge risk-on">↑ ALIGNED</span>'
+                       : allOff ? '<span class="sent-align-badge risk-off">↓ ALIGNED</span>'
+                       : vals.length === 1 ? ''
+                       : '<span class="sent-align-badge not-aligned">✕ NOT ALIGNED</span>';
+          const sum    = vals.reduce((a, b) => a + b, 0);
+          const sumStr = (sum > 0 ? '+' : '') + sum.toFixed(0);
+          const sumCls = sum > 5 ? 'risk-on' : sum < -5 ? 'risk-off' : 'neutral';
+          return `
+            <div class="sent-group-row">
+              <div class="sent-group-header">${g.title}${badge}</div>
+              <span class="sent-group-sum ${sumCls}">${sumStr}</span>
+            </div>`;
         }).join('')}
-      </div>`);
+      </div>`;
+
+    return _jrnSection('🌍 Risk Sentiment', meta + groupsHtml);
   }
 
   function renderJrnSetupsSection(topSetups, signals) {

@@ -1817,13 +1817,27 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeJournal
 
 function journalSentimentGroupsHtml(d) {
   if (!d) return '';
+
+  // Summary bar: Net Score, Confidence, Environment
+  const netScore   = d.net_score   != null ? Number(d.net_score).toFixed(2) : '—';
+  const netCls     = d.net_score   > 0 ? 'risk-on' : d.net_score < 0 ? 'risk-off' : 'neutral';
+  const confidence = d.confidence  != null ? `${d.confidence}%` : '—';
+  const env        = d.environment || '—';
+
+  const meta = `
+    <div class="jrn-sent-meta">
+      <div class="jrn-sent-meta-item">Net Score <b class="${netCls}">${netScore}</b></div>
+      <div class="jrn-sent-meta-item">Confidence <b>${confidence}</b></div>
+      <div class="jrn-sent-meta-item">Environment <b>${env}</b></div>
+    </div>`;
+
   const groups = [
     { title: 'Growth / Risk Assets', vals: [d.equity_score, d.oil_score] },
     { title: 'Carry / Risk FX',      vals: [d.audjpy_score, d.nzdjpy_score] },
     { title: 'Safe Havens',          vals: [d.jpy_score, d.chf_score, d.gold_score] },
     { title: 'USD Liquidity',        vals: [d.usd_score] },
   ];
-  return `
+  const groupsHtml = `
     <div class="jrn-sent-groups">
       ${groups.map(g => {
         const vals   = g.vals.filter(v => v != null).map(Number);
@@ -1843,6 +1857,8 @@ function journalSentimentGroupsHtml(d) {
           </div>`;
       }).join('')}
     </div>`;
+
+  return meta + groupsHtml;
 }
 
 // ─── Market Journal ───────────────────────────────────────────────────────────

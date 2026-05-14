@@ -2671,6 +2671,30 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
   gap: 2px;
 }
 
+/* Summary bar above the sentiment groups */
+.jrn-sent-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 6px 10px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  font-size: 10px;
+}
+.jrn-sent-meta-item {
+  display: flex; align-items: center; gap: 5px;
+  color: var(--text-muted);
+}
+.jrn-sent-meta-item b {
+  font-family: var(--font-data);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text);
+}
+
 .jrn-summary {
   font-family: var(--font-ui);
   font-size: 12px;
