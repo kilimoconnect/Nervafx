@@ -550,7 +550,7 @@ function nextActionHtml(text) {
             : text.startsWith('3H') ? 'wait'
             : 'watch';
   const icon = text === 'ENTER NOW' ? '▶ ' : '→ ';
-  return `<div class="next-action ${cls}">${icon}${text}</div>`;
+  return `<div class="next-action ${cls}">${icon}${clean(text)}</div>`;
 }
 
 // ─── Header ───────────────────────────────────────────────────────────────────
