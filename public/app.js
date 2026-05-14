@@ -86,6 +86,18 @@ let strengthChart = null;
 let activeTF = '6';
 let strengthData = null;
 let _firstLoad = true;
+// Currencies that currently meet the Currency Signals threshold (strong + weak combined).
+// Set<string> — populated by renderCurrencySignals() before the section renderers run.
+let _csigCurrencies = new Set();
+
+// Returns true if no signals are loaded yet (pass-through) OR if either the
+// base or quote currency of `instrument` (e.g. "EUR_USD") is in the set.
+function hasCsigCurrency(instrument) {
+  if (!_csigCurrencies.size) return true;
+  const base  = (instrument || '').slice(0, 3).toUpperCase();
+  const quote = (instrument || '').slice(4, 7).toUpperCase();
+  return _csigCurrencies.has(base) || _csigCurrencies.has(quote);
+}
 
 // ─── Notyf (toast notifications) ─────────────────────────────────────────────
 const notyf = typeof Notyf !== 'undefined'
@@ -677,7 +689,8 @@ function renderLiveOpportunities(states, aiMap = {}, sentimentData = null) {
   const sentNeutral = sentimentData?.sentiment?.sentiment === 'NEUTRAL';
 
   const live = (states || []).filter(s =>
-    s.state === 'READY_TO_ENTER' && s.confidence >= 75 && !s.session_blocked
+    s.state === 'READY_TO_ENTER' && s.confidence >= 75 && !s.session_blocked &&
+    hasCsigCurrency(s.instrument)
   );
 
   if (!live.length) {
@@ -732,7 +745,7 @@ function renderLiveOpportunities(states, aiMap = {}, sentimentData = null) {
 function computeTopSetups(states) {
   const priority = { READY: 3, PULLBACK: 2, TREND: 1 };
   return [...states]
-    .filter(s => s.state !== 'NO_TRADE' && s.confidence > 0 && !s.session_blocked)
+    .filter(s => s.state !== 'NO_TRADE' && s.confidence > 0 && !s.session_blocked && hasCsigCurrency(s.instrument))
     .sort((a, b) => {
       const pa = priority[a.phase] || 0, pb = priority[b.phase] || 0;
       return pa !== pb ? pb - pa : b.confidence - a.confidence;
@@ -797,8 +810,8 @@ function renderTopSetups(states, aiMap = {}, sentimentData = null) {
 function renderSignals(data, statesArr) {
   if (!data?.signals) return;
   const sigs    = data.signals;
-  const active  = sigs.filter(s => s.signal === 'BUY' || s.signal === 'SELL');
-  const waiting = sigs.filter(s => s.signal === 'WAIT');
+  const active  = sigs.filter(s => (s.signal === 'BUY' || s.signal === 'SELL') && hasCsigCurrency(s.instrument));
+  const waiting = sigs.filter(s => s.signal === 'WAIT' && hasCsigCurrency(s.instrument));
   const notrade = sigs.filter(s => s.signal === 'NO_TRADE');
 
   const stateMap = {};
@@ -921,6 +934,9 @@ function renderCurrencySignals(data) {
   const weak = scored
     .filter(c => c.combined < -CS_THRESHOLD && c.h3 < -CS_THRESHOLD)
     .sort((a, b) => a.combined - b.combined);
+
+  // Expose flagged currencies globally so section renderers can filter pairs
+  _csigCurrencies = new Set([...strong.map(c => c.cur), ...weak.map(c => c.cur)]);
 
   function scoreBar(val, max) {
     const pct = Math.round((Math.abs(val) / max) * 100);
@@ -1860,11 +1876,11 @@ async function refresh() {
     updateHeader(risk);
     renderSession(sessionData);
     renderSentiment(sentimentData);
+    buildChart(strength, activeTF);
+    renderCurrencySignals(strength);          // must run first — populates _csigCurrencies
     renderLiveOpportunities(states.states || [], aiMap, sentimentData);
     renderTopSetups(states.states || [], aiMap, sentimentData);
     renderSignals(signals, states.states || []);
-    buildChart(strength, activeTF);
-    renderCurrencySignals(strength);
     renderStates(states);
     renderSpreads(spreads);
     renderRanking12H(spreads);
