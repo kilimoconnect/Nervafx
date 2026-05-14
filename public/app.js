@@ -89,11 +89,16 @@ let _firstLoad = true;
 // Currencies that currently meet the Currency Signals threshold (strong + weak combined).
 // Set<string> — populated by renderCurrencySignals() before the section renderers run.
 let _csigCurrencies = new Set();
+// True once renderCurrencySignals() has processed real strength data.
+// Distinguishes "still loading" (pass-through) from "loaded but nothing qualifies" (filter out).
+let _csigDataLoaded = false;
 
-// Returns true if no signals are loaded yet (pass-through) OR if either the
+// Returns true if strength data isn't loaded yet (pass-through) OR if either the
 // base or quote currency of `instrument` (e.g. "EUR_USD") is in the set.
+// Returns false when data IS loaded but no currencies meet the threshold.
 function hasCsigCurrency(instrument) {
-  if (!_csigCurrencies.size) return true;
+  if (!_csigDataLoaded) return true;          // still loading → show everything
+  if (!_csigCurrencies.size) return false;    // loaded, nothing qualifies → hide
   const base  = (instrument || '').slice(0, 3).toUpperCase();
   const quote = (instrument || '').slice(4, 7).toUpperCase();
   return _csigCurrencies.has(base) || _csigCurrencies.has(quote);
@@ -911,6 +916,13 @@ function renderTopSetups(states, aiMap = {}, sentimentData = null) {
 
 function renderSignals(data, statesArr) {
   if (!data?.signals) return;
+  // When CS data is loaded but no currencies qualify, clear the whole board
+  if (_csigDataLoaded && !_csigCurrencies.size) {
+    document.getElementById('signals-active').innerHTML = '<p class="empty-state">No active signals</p>';
+    document.getElementById('signals-wait').innerHTML   = '';
+    document.getElementById('signals-notrade').innerHTML = '';
+    return;
+  }
   const sigs    = data.signals;
   const active  = sigs.filter(s => (s.signal === 'BUY' || s.signal === 'SELL') && hasCsigCurrency(s.instrument));
   const waiting = sigs.filter(s => s.signal === 'WAIT' && hasCsigCurrency(s.instrument));
@@ -1013,7 +1025,8 @@ function renderCurrencySignals(data) {
 
   const currencies = data?.currencies || [];
   if (!currencies.length) {
-    _csigCurrencies = new Set(); // always reset so stale data never leaks
+    _csigCurrencies = new Set();
+    _csigDataLoaded = false; // no source data — keep pass-through
     el.innerHTML = '<p class="empty-state">No strength data</p>';
     return;
   }
@@ -1040,6 +1053,7 @@ function renderCurrencySignals(data) {
 
   // Expose flagged currencies globally so section renderers can filter pairs
   _csigCurrencies = new Set([...strong.map(c => c.cur), ...weak.map(c => c.cur)]);
+  _csigDataLoaded = true; // strength data processed — empty set now means "no signals"
 
   function scoreBar(val, max) {
     const pct = Math.round((Math.abs(val) / max) * 100);
@@ -1140,6 +1154,10 @@ document.querySelectorAll('.tf-btn').forEach(btn => {
 function renderStates(data) {
   if (!data?.states) return;
   const el = document.getElementById('states-table');
+  if (_csigDataLoaded && !_csigCurrencies.size) {
+    el.innerHTML = '<p class="empty-state">No active currency signals</p>';
+    return;
+  }
   el.innerHTML = data.states.map(s => {
     const ta    = s.tf_alignment || {};
     const phCls = (s.phase || '').replace(' ', '_');
