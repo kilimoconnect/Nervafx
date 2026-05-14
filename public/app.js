@@ -1244,7 +1244,7 @@ function renderRanking12H(spreadsData) {
 function getM15Impulses(data) {
   return (data?.spreads || [])
     .filter(s => {
-      if (s.state !== 'EXPANDING' && s.state !== 'COMPRESSING') return false;
+      if (s.state !== 'EXPANDING' && s.state !== 'COMPRESSING' && s.state !== 'STEADY') return false;
       const s45  = parseFloat(s.smooth_45m)  || 0;
       const s90  = parseFloat(s.smooth_90m)  || 0;
       const s180 = parseFloat(s.smooth_180m) || 0;
