@@ -6,6 +6,7 @@ const { repairAll } = require('./repair');
 const { calculateLatestStrength } = require('./strength');
 const { smoothLatest } = require('./smooth');
 const { calculateLatestSpreads } = require('./spread');
+const { calculateLatestM15Spreads } = require('./m15');
 const { calculateLatestStates } = require('./stateDetect');
 const { calculateLatestSignals } = require('./signals');
 const { checkLatestSignals } = require('./risk');
@@ -74,6 +75,7 @@ async function hourlyUpdate() {
   await step('strength',      () => calculateLatestStrength());
   await step('smooth',        () => smoothLatest());
   await step('spreads',       () => calculateLatestSpreads());
+  await step('m15_spreads',   () => calculateLatestM15Spreads());
   await step('sentiment',     () => calculateLatestSentiment());
   await step('states',        () => calculateLatestStates());
   await step('signals',       () => calculateLatestSignals());

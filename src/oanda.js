@@ -2,9 +2,10 @@ const { config } = require('./config');
 
 const RATE_LIMIT_DELAY = 200;
 
-async function fetchCandles(instrument, { count, from, to } = {}) {
+async function fetchCandles(instrument, { count, from, to, granularity } = {}) {
+  const gran = granularity || config.granularity;
   const params = new URLSearchParams({
-    granularity: config.granularity,
+    granularity: gran,
     price: 'M',
   });
 
