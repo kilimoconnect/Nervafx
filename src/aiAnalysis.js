@@ -549,7 +549,7 @@ async function analyzeActiveSetups() {
       const pa = PRIORITY[a.state] || 0, pb = PRIORITY[b.state] || 0;
       return pa !== pb ? pb - pa : b.confidence - a.confidence;
     })
-    .slice(0, 10);
+    // no cap — analyse every active pair that qualifies
 
   if (!targets.length) { console.log('[AI] No active setups'); return; }
 
