@@ -1246,12 +1246,12 @@ function renderRanking12H(spreadsData) {
 
 // ─── M15 Pair Ranking ─────────────────────────────────────────────────────────
 
-// Notification bar filter — EXPANDING only · all TFs same sign · |smooth_45m| >= CS_THRESHOLD
-// Used by updateM15Bar() — these are the most actionable, alert-worthy moves.
+// Notification bar filter — EXPANDING + COMPRESSING · all TFs same sign · |smooth_45m| >= CS_THRESHOLD
+// Used by updateM15Bar() — shows active momentum (building or fading but still directional).
 function getM15Impulses(data) {
   return (data?.spreads || [])
     .filter(s => {
-      if (s.state !== 'EXPANDING') return false;
+      if (s.state !== 'EXPANDING' && s.state !== 'COMPRESSING') return false;
       const s45  = parseFloat(s.smooth_45m)  || 0;
       const s90  = parseFloat(s.smooth_90m)  || 0;
       const s180 = parseFloat(s.smooth_180m) || 0;
@@ -1337,9 +1337,10 @@ function updateM15Bar(data) {
     const bias = v45 >= 0 ? 'BUY' : 'SELL';
     const dir  = v45 >= 0 ? 'buy' : 'sell';
     const vStr = (v45 >= 0 ? '+' : '') + v45.toFixed(5);
+    const stateLabel = s.state === 'COMPRESSING' ? ' ▾' : ' ▲';
     return `<span class="m15-bar-chip">
       <span class="chip-pair">${pair(s.instrument)}</span>
-      <span class="chip-${dir}">${bias}</span>
+      <span class="chip-${dir}">${bias}${stateLabel}</span>
       <span class="chip-val">${vStr}</span>
     </span>`;
   }).join('');
