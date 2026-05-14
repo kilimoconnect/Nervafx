@@ -68,13 +68,24 @@ function buildSignal(state, candles) {
     return wait(time, instrument, confidence, mktState, bias,
       `${bias} trend active. Watch for 3H momentum to weaken (compression zone = pullback entry forming).`);
   }
-
-  // Only READY_TO_ENTER with sufficient confidence triggers BUY/SELL
-  if (mktState !== 'READY_TO_ENTER' || confidence < MIN_CONFIDENCE) {
+  if (mktState === 'BASE_FORMING') {
+    return wait(time, instrument, confidence, mktState, bias,
+      `${bias} deep pullback at floor — coiling. Wait for 3H re-expansion.`);
+  }
+  if (mktState === 'REVERSAL_CONFIRMED') {
+    return wait(time, instrument, confidence, mktState, bias,
+      `Reversal confirmed ${bias}. Await first pullback before entry.`);
+  }
+  if (mktState === 'REVERSAL_DEVELOPING' || mktState === 'REVERSAL_RISK') {
     return noTrade(time, instrument, confidence, mktState,
-      confidence < MIN_CONFIDENCE
-        ? `Confidence ${confidence} below minimum ${MIN_CONFIDENCE}.`
-        : `State ${mktState} does not meet signal criteria.`);
+      `${mktState}: structural uncertainty — no entry.`);
+  }
+
+  // READY_TO_ENTER triggers BUY/SELL — state machine is the quality gate,
+  // not a confidence floor. User profile (min_rr, max_trades, etc.) is the filter.
+  if (mktState !== 'READY_TO_ENTER') {
+    return noTrade(time, instrument, confidence, mktState,
+      `State ${mktState} does not meet signal criteria.`);
   }
 
   if (!candles || candles.length < 2) {

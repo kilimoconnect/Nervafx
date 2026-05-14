@@ -137,9 +137,6 @@ async function checkSignal(signal, dailyState, rc) {
   if (signal.signal !== 'BUY' && signal.signal !== 'SELL')
     return reject(signal, `Signal is ${signal.signal}, not BUY or SELL.`, rc);
 
-  if (signal.confidence < rc.minConfidence)
-    return reject(signal, `Confidence ${signal.confidence} below minimum ${rc.minConfidence}.`, rc);
-
   if (!signal.risk_reward || signal.risk_reward < rc.minRR)
     return reject(signal, `RR ${signal.risk_reward} below minimum ${rc.minRR}.`, rc);
 
