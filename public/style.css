@@ -1880,6 +1880,7 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
 .jrn-sig-pair { font-family: var(--font-data); font-size: 11px; font-weight: 700; color: var(--text); }
 .jrn-sig-conf { font-family: var(--font-data); font-size: 11px; color: var(--text-muted); }
 .jrn-sig-reason { font-family: var(--font-ui); font-size: 10px; color: var(--text-dim); }
+.jrn-sig-levels { display: flex; gap: 10px; flex-basis: 100%; margin-top: 3px; font-family: var(--font-data); font-size: 10px; color: var(--text-muted); }
 .jrn-waiting { font-family: var(--font-ui); font-size: 11px; color: var(--text-dim); margin: 6px 0 0; }
 
 /* ── Journal list row — click to open ───────────────────────────────────── */

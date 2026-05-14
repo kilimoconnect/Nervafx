@@ -1875,7 +1875,10 @@ function renderJrnSetupsSection(topSetups, signals, csigFilter) {
   return _jrnSection('🎯 Top Setups & Signals', `
     ${entered.length ? `<div class="jrn-sig-entered">${entered.map(s => {
       const d = s.signal === 'BUY' ? 'buy' : 'sell';
-      return `<div class="jrn-sig-row"><span class="signal-dir ${d}" style="font-size:10px;padding:2px 7px">${s.signal}</span><span class="jrn-sig-pair">${pair(s.instrument)}</span><span class="jrn-sig-conf">${s.confidence ?? '—'}%</span>${s.reason ? `<span class="jrn-sig-reason">${s.reason}</span>` : ''}</div>`;
+      const levels = s.entry_price
+        ? `<div class="jrn-sig-levels"><span><span class="wl-lbl">Entry</span>${fmt(s.entry_price)}</span><span><span class="wl-lbl">SL</span><span class="wl-sl">${fmt(s.stop_loss)}</span></span><span><span class="wl-lbl">TP</span><span class="wl-tp">${fmt(s.take_profit)}</span></span>${s.position_size ? `<span><span class="wl-lbl">Size</span>${s.position_size} lots</span>` : ''}</div>`
+        : '';
+      return `<div class="jrn-sig-row"><span class="signal-dir ${d}" style="font-size:10px;padding:2px 7px">${s.signal}</span><span class="jrn-sig-pair">${pair(s.instrument)}</span><span class="jrn-sig-conf">${s.confidence ?? '—'}%</span>${s.reason ? `<span class="jrn-sig-reason">${s.reason}</span>` : ''}${levels}</div>`;
     }).join('')}</div>` : ''}
     ${setups.length ? `<div class="jrn-setups">${setups.map(s => {
       const dir = s.bias === 'BUY' ? 'buy' : 'sell';
