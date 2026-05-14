@@ -585,6 +585,7 @@ let _profile = { account_size: null, max_daily_risk_pct: null, max_trades: null 
 let _userTz = 'UTC'; // overridden from profile on every refresh
 
 function aiHtml(ai, instrument) {
+  if (!document.body.classList.contains('plan-premium')) return '';
   if (!ai) return '';
   const d    = ai.details || {};
   const sc   = d.scores   || {};
@@ -883,7 +884,7 @@ function renderTopSetups(states, aiMap = {}, sentimentData = null) {
             <span class="top-pair">${pair(s.instrument)}</span>
             <span class="signal-dir ${dir}">${s.bias}</span>
             <span class="phase-badge ${phCls}">${clean(s.phase||'')}</span>
-            <span class="action-badge ${s.action}">${s.action}</span>
+            <span class="action-badge ${s.action}">${clean(s.action)}</span>
           </div>
           ${sessionBadgeHtml(s)}
           ${pipelineHtml(s.pipeline_stage)}
@@ -1173,7 +1174,7 @@ function renderStates(data) {
         <div class="state-row-top">
           <span class="state-pair">${pair(s.instrument)}</span>
           <span class="phase-badge ${phCls}">${clean(s.phase || s.state || '')}</span>
-          <span class="action-badge ${s.action}">${s.action || '—'}</span>
+          <span class="action-badge ${s.action}">${clean(s.action) || '—'}</span>
           <div class="state-conf-mini" style="width:36px;margin-left:auto">
             <div class="state-conf-mini-fill" style="width:${s.confidence}%"></div>
           </div>
