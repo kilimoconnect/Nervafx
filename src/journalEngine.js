@@ -322,7 +322,7 @@ async function writeJournalEntry() {
   for (const t of prevTracked) {
     const cur = stateMap[t.instrument];
     if (!cur) { carried.push(t); continue; }                       // no current data → keep
-    if (cur.state === 'REVERSAL_RISK') continue;                   // structural reversal
+    if (cur.state === 'REVERSAL_DEVELOPING') continue;             // medium-term flip confirmed
     if (cur.state === 'NO_TRADE') continue;                        // fell out of tradeable range
     if (!cur.bias || cur.bias === 'NONE') continue;                // lost directional bias
     if (cur.bias !== t.bias) continue;                             // direction flipped
@@ -334,7 +334,7 @@ async function writeJournalEntry() {
   const trackedSet = new Set(carried.map(t => t.instrument));
   const newEntries = [];
   for (const s of states) {
-    if (['PULLBACK_STARTING', 'PULLBACK_ACTIVE'].includes(s.state) && !trackedSet.has(s.instrument)) {
+    if (['PULLBACK_STARTING', 'PULLBACK_ACTIVE', 'BASE_FORMING'].includes(s.state) && !trackedSet.has(s.instrument)) {
       newEntries.push({
         instrument:   s.instrument,
         bias:         s.bias,
@@ -351,7 +351,7 @@ async function writeJournalEntry() {
   // Derive counts from tracked set (pullback/ready) + raw current-hour (trend/no-trade)
   const trend_pairs    = states.filter(s => s.state === 'TREND').length;
   const no_trade_pairs = states.filter(s => s.state === 'NO_TRADE').length;
-  const pullback_pairs = tracked_pullback_pairs.filter(t => ['PULLBACK_STARTING', 'PULLBACK_ACTIVE'].includes(t.latest_state)).length;
+  const pullback_pairs = tracked_pullback_pairs.filter(t => ['PULLBACK_STARTING', 'PULLBACK_ACTIVE', 'BASE_FORMING'].includes(t.latest_state)).length;
   const ready_pairs    = tracked_pullback_pairs.filter(t => t.latest_state === 'READY_TO_ENTER').length;
 
   // Top 5 setups by confidence

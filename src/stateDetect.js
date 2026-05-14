@@ -5,12 +5,19 @@ const MIN_SPREAD   = 0.0020;
 const STRONG_SPREAD = 0.0040;
 
 // ─── States ───────────────────────────────────────────────────────────────────
-// TREND            — 12H/6H aligned, 3H expanding with trend
-// PULLBACK_STARTING — first candle of 3H weakening (compression begins)
-// PULLBACK_ACTIVE   — sustained 3H compression (6H/12H still intact)
-// READY_TO_ENTER    — after pullback: 3H starts re-expanding (entry trigger)
-// REVERSAL_RISK     — 12H/6H directional disagreement
-// NO_TRADE          — spread too small, no tradeable bias
+// TREND               — 12H + 6H aligned, 3H expanding with trend
+// PULLBACK_STARTING   — first candle of 3H weakening (compression begins)
+// PULLBACK_ACTIVE     — sustained 3H compression, 6H + 12H still intact
+// BASE_FORMING        — pullback at floor: compression slowing, counter-pressure
+//                       stabilizing, 3H momentum no longer expanding
+// READY_TO_ENTER      — after pullback: 3H re-expanding (continuation trigger)
+// REVERSAL_RISK       — 6H spread near flat (< MIN_SPREAD): medium-term direction
+//                       losing control; NOT a reversal yet — might recover
+// REVERSAL_DEVELOPING — 6H has flipped against 12H (bias = NONE, 6H meaningful):
+//                       medium-term trend control lost, wait for 12H confirmation
+// REVERSAL_CONFIRMED  — 12H also flipped; 12H + 6H now agree in new direction:
+//                       full trend reversal confirmed, treat as early-stage new TREND
+// NO_TRADE            — spread too small, no tradeable bias
 
 function detectBias(spread_6h, spread_12h) {
   if (spread_12h > 0 && spread_6h > 0) return 'BUY';
@@ -21,26 +28,35 @@ function detectBias(spread_6h, spread_12h) {
 function detectState({ spread_3h, spread_6h, spread_12h }, changes, prevState, bias) {
   const { c3h, c6h } = changes;
 
+  // No valid directional bias (12H/6H disagree)
   if (bias === 'NONE') {
-    return Math.abs(spread_6h) >= MIN_SPREAD ? 'REVERSAL_RISK' : 'NO_TRADE';
+    if (Math.abs(spread_6h) < MIN_SPREAD) return 'REVERSAL_RISK';    // 6H going flat
+    return 'REVERSAL_DEVELOPING';                                      // 6H clearly flipped
   }
+
   if (Math.abs(spread_6h) < MIN_SPREAD) return 'NO_TRADE';
 
-  const inPullback = prevState === 'PULLBACK_STARTING' || prevState === 'PULLBACK_ACTIVE';
+  // Coming out of REVERSAL_DEVELOPING with a valid new bias → 12H aligned → confirmed
+  if (prevState === 'REVERSAL_DEVELOPING') return 'REVERSAL_CONFIRMED';
+  if (prevState === 'REVERSAL_CONFIRMED') {
+    const dir = bias === 'BUY' ? 1 : -1;
+    return c3h * dir > 0 ? 'TREND' : 'REVERSAL_CONFIRMED';
+  }
+
+  const inPullback = prevState === 'PULLBACK_STARTING' || prevState === 'PULLBACK_ACTIVE' || prevState === 'BASE_FORMING';
   const inReady    = prevState === 'READY_TO_ENTER';
 
   if (bias === 'BUY') {
-    // After pullback: 3H starts re-expanding → entry trigger
     if (inPullback && c3h > 0) return 'READY_TO_ENTER';
-    // Stay READY while 3H continues expanding
     if (inReady && c3h > 0) return 'READY_TO_ENTER';
-    // 3H weakening → pullback entering
     if (c3h < 0) {
-      return (prevState === 'TREND' || prevState === 'READY_TO_ENTER' || !prevState)
-        ? 'PULLBACK_STARTING'
-        : 'PULLBACK_ACTIVE';
+      if (prevState === 'TREND' || prevState === 'READY_TO_ENTER' || !prevState)
+        return 'PULLBACK_STARTING';
+      if ((prevState === 'PULLBACK_ACTIVE' || prevState === 'BASE_FORMING') &&
+          Math.abs(spread_3h) < Math.abs(spread_6h) * 0.40)
+        return 'BASE_FORMING';
+      return 'PULLBACK_ACTIVE';
     }
-    // 3H flat/positive with BUY bias → trend
     if (spread_6h > 0 && spread_12h > 0) return 'TREND';
   }
 
@@ -48,9 +64,12 @@ function detectState({ spread_3h, spread_6h, spread_12h }, changes, prevState, b
     if (inPullback && c3h < 0) return 'READY_TO_ENTER';
     if (inReady && c3h < 0) return 'READY_TO_ENTER';
     if (c3h > 0) {
-      return (prevState === 'TREND' || prevState === 'READY_TO_ENTER' || !prevState)
-        ? 'PULLBACK_STARTING'
-        : 'PULLBACK_ACTIVE';
+      if (prevState === 'TREND' || prevState === 'READY_TO_ENTER' || !prevState)
+        return 'PULLBACK_STARTING';
+      if ((prevState === 'PULLBACK_ACTIVE' || prevState === 'BASE_FORMING') &&
+          Math.abs(spread_3h) < Math.abs(spread_6h) * 0.40)
+        return 'BASE_FORMING';
+      return 'PULLBACK_ACTIVE';
     }
     if (spread_6h < 0 && spread_12h < 0) return 'TREND';
   }
@@ -65,27 +84,25 @@ function detectState({ spread_3h, spread_6h, spread_12h }, changes, prevState, b
 //   PULLBACK_ACTIVE:   67–73
 //   READY_TO_ENTER:    75–85
 function scoreConfidence({ spread_6h, spread_12h }, changes, state, bias) {
-  if (bias === 'NONE' || state === 'NO_TRADE' || state === 'REVERSAL_RISK') return 0;
+  if (bias === 'NONE' || state === 'NO_TRADE' || state === 'REVERSAL_RISK' || state === 'REVERSAL_DEVELOPING') return 0;
 
   const dir = bias === 'BUY' ? 1 : -1;
-  let score = 20; // base: valid directional bias exists
+  let score = 20;
 
-  // Structural alignment: 12H + 6H both in bias direction
   if (spread_12h * dir > 0 && spread_6h * dir > 0) score += 20;
 
-  // 6H spread magnitude
   if (Math.abs(spread_6h) >= STRONG_SPREAD) score += 12;
   else if (Math.abs(spread_6h) >= MIN_SPREAD) score += 7;
 
-  // 6H trending in right direction (momentum)
   if (changes.c6h * dir > 0) score += 8;
 
-  // State lifecycle bonus
   switch (state) {
-    case 'TREND':             score += 0;  break;
-    case 'PULLBACK_STARTING': score += 7;  break;
-    case 'PULLBACK_ACTIVE':   score += 12; break;
-    case 'READY_TO_ENTER':    score += 20; break;
+    case 'TREND':              score += 0;  break;
+    case 'PULLBACK_STARTING':  score += 7;  break;
+    case 'PULLBACK_ACTIVE':    score += 12; break;
+    case 'BASE_FORMING':       score += 15; break;
+    case 'READY_TO_ENTER':     score += 20; break;
+    case 'REVERSAL_CONFIRMED': return Math.min(score, 65); // early new trend — cautious cap
   }
 
   return Math.min(score, 85);
@@ -98,13 +115,19 @@ function buildReason(bias, state, spread_3h, spread_6h, spread_12h, changes) {
     return `Spread too small (${Math.abs(spread_6h).toFixed(5)} < ${MIN_SPREAD}); no tradeable bias.`;
   }
   if (state === 'REVERSAL_RISK') {
-    return `12H (${spread_12h >= 0 ? '+' : ''}${spread_12h.toFixed(5)}) conflicts with 6H (${spread_6h >= 0 ? '+' : ''}${spread_6h.toFixed(5)}). Possible reversal forming.`;
+    return `6H losing direction (${Math.abs(spread_6h).toFixed(5)} < ${MIN_SPREAD} vs 12H ${spread_12h >= 0 ? '+' : ''}${spread_12h.toFixed(5)}). Structure weakening — not a reversal yet. Stand aside.`;
+  }
+  if (state === 'REVERSAL_DEVELOPING') {
+    return `6H has flipped against 12H (${spread_6h >= 0 ? '+' : ''}${spread_6h.toFixed(5)} vs ${spread_12h >= 0 ? '+' : ''}${spread_12h.toFixed(5)}). Medium-term trend control lost. Avoid entries — await 12H confirmation.`;
+  }
+  if (state === 'REVERSAL_CONFIRMED') {
+    return `Full reversal confirmed: 12H + 6H now agree ${bias} (${spread_12h >= 0 ? '+' : ''}${spread_12h.toFixed(5)}, ${spread_6h >= 0 ? '+' : ''}${spread_6h.toFixed(5)}). Treat as early-stage new ${bias} trend. Watch for 3H re-expansion.`;
   }
 
-  const dir    = bias === 'BUY' ? 'bullish' : 'bearish';
+  const dir    = bias === 'BUY' ? 1 : -1;
   const strong = Math.abs(spread_6h) >= STRONG_SPREAD ? ' (strong)' : '';
-  const depth  = spread_3h * (bias === 'BUY' ? 1 : -1) > 0.001 ? 'Light' :
-                 spread_3h * (bias === 'BUY' ? 1 : -1) > -0.001 ? 'Moderate' : 'Deep';
+  const depth  = spread_3h * dir > 0.001 ? 'Light' :
+                 spread_3h * dir > -0.001 ? 'Moderate' : 'Deep';
 
   switch (state) {
     case 'TREND':
@@ -115,6 +138,9 @@ function buildReason(bias, state, spread_3h, spread_6h, spread_12h, changes) {
 
     case 'PULLBACK_ACTIVE':
       return `${bias} bias intact (6H + 12H). ${depth} pullback active: 3H compressing (${changes.c3h.toFixed(5)}). Wait for 3H re-expansion → entry trigger.`;
+
+    case 'BASE_FORMING':
+      return `${bias} bias intact (6H + 12H). Deep pullback stabilizing: 3H compressed near floor (${Math.abs(spread_3h).toFixed(5)} vs 6H ${Math.abs(spread_6h).toFixed(5)}). Coiling — re-expansion entry approaching.`;
 
     case 'READY_TO_ENTER':
       return `${bias} continuation: pullback ended, 3H re-expanding (+${changes.c3h.toFixed(5)}). 6H + 12H remain aligned. Entry condition met.`;

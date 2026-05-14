@@ -50,11 +50,11 @@ const LIFECYCLE_TEXT = {
 
 // ─── Pipeline stage 0–5 ───────────────────────────────────────────────────────
 function pipelineStage(state, confidence) {
-  if (state === 'READY_TO_ENTER' && confidence >= 75) return 5; // ENTRY_ACTIVE
+  if (state === 'READY_TO_ENTER' && confidence >= 75) return 5;
   if (state === 'READY_TO_ENTER') return 4;
-  if (state === 'PULLBACK_ACTIVE') return 3;
+  if (state === 'PULLBACK_ACTIVE' || state === 'BASE_FORMING') return 3;
   if (state === 'PULLBACK_STARTING') return 2;
-  if (state === 'TREND') return 1;
+  if (state === 'TREND' || state === 'REVERSAL_CONFIRMED') return 1;
   return 0;
 }
 
@@ -62,9 +62,12 @@ function pipelineStage(state, confidence) {
 function phaseAction(state, confidence) {
   if (state === 'READY_TO_ENTER' && confidence >= 75) return { phase: 'ENTRY_ACTIVE', action: 'ENTER' };
   if (state === 'READY_TO_ENTER') return { phase: 'READY_TO_ENTER', action: 'WATCH' };
+  if (state === 'BASE_FORMING') return { phase: 'BASE_FORMING', action: 'WAIT' };
   if (state === 'PULLBACK_ACTIVE') return { phase: 'PULLBACK_ACTIVE', action: 'WAIT' };
   if (state === 'PULLBACK_STARTING') return { phase: 'PULLBACK_STARTING', action: 'WAIT' };
   if (state === 'TREND') return { phase: 'TREND', action: 'WATCH' };
+  if (state === 'REVERSAL_CONFIRMED') return { phase: 'REVERSAL_CONFIRMED', action: 'WATCH' };
+  if (state === 'REVERSAL_DEVELOPING') return { phase: 'REVERSAL_DEVELOPING', action: 'AVOID' };
   if (state === 'REVERSAL_RISK') return { phase: 'REVERSAL_RISK', action: 'AVOID' };
   return { phase: 'NO TRADE', action: '—' };
 }
@@ -73,9 +76,9 @@ function phaseAction(state, confidence) {
 function entryStatus(state, confidence) {
   if (state === 'READY_TO_ENTER' && confidence >= 75) return 'READY_TO_ENTER';
   if (state === 'READY_TO_ENTER') return 'WAIT_CONFIRMATION';
-  if (state === 'PULLBACK_ACTIVE') return 'WAIT_CONFIRMATION';
+  if (state === 'BASE_FORMING' || state === 'PULLBACK_ACTIVE') return 'WAIT_CONFIRMATION';
   if (state === 'PULLBACK_STARTING') return 'WAIT_PULLBACK';
-  if (state === 'TREND') return 'WAIT_PULLBACK';
+  if (state === 'TREND' || state === 'REVERSAL_CONFIRMED') return 'WAIT_PULLBACK';
   return 'NO_TRADE';
 }
 
@@ -87,6 +90,7 @@ function nextAction(state, bias, confidence, lifecycle) {
     if (lifecycle === 'COMPRESSING') return 'Wait: 3H stalling — re-expansion must confirm';
     return 'Watch: 3H re-expanding — confidence building';
   }
+  if (state === 'BASE_FORMING') return 'Base coiling — watch for 3H re-expansion → entry trigger';
   if (state === 'PULLBACK_ACTIVE') {
     if (lifecycle === 'BREAKING')    return 'Structural breakdown risk — avoid entry';
     if (lifecycle === 'BASE_FORMING') return 'Base coiling — re-expansion entry approaching';
@@ -103,6 +107,9 @@ function nextAction(state, bias, confidence, lifecycle) {
     if (lifecycle === 'EXPANDING')   return 'Trend expanding — wait for 3H to start compressing';
     return 'Watch: 3H must start compressing (pullback forming)';
   }
+  if (state === 'REVERSAL_DEVELOPING') return 'Structural flip in progress — avoid all entries';
+  if (state === 'REVERSAL_CONFIRMED')  return 'New trend direction confirmed — await first pullback';
+  if (state === 'REVERSAL_RISK')       return 'Direction weakening — stand aside';
   return 'No setup forming';
 }
 

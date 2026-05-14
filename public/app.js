@@ -916,10 +916,10 @@ function renderTopSetups(states, aiMap = {}, sentimentData = null) {
 // ─── Signal board ─────────────────────────────────────────────────────────────
 
 // ─── Trade Watchlist ──────────────────────────────────────────────────────────
-// Shows only actionable pairs: PULLBACK_STARTING, PULLBACK_ACTIVE, READY_TO_ENTER
+// Shows only actionable pairs: PULLBACK_STARTING, PULLBACK_ACTIVE, BASE_FORMING, READY_TO_ENTER, REVERSAL_CONFIRMED
 // Sorted by pipeline priority then confidence. CS-filtered.
 
-const WATCHLIST_STATES = new Set(['PULLBACK_STARTING', 'PULLBACK_ACTIVE', 'READY_TO_ENTER']);
+const WATCHLIST_STATES = new Set(['PULLBACK_STARTING', 'PULLBACK_ACTIVE', 'BASE_FORMING', 'READY_TO_ENTER', 'REVERSAL_CONFIRMED']);
 
 function watchlistCard(s, sig) {
   const dir     = s.bias === 'BUY' ? 'buy' : s.bias === 'SELL' ? 'sell' : '';
@@ -962,8 +962,9 @@ function watchlistCard(s, sig) {
 }
 
 // States that a tracked pair must NOT be in to stay on the watchlist.
-// REVERSAL_RISK = structural breakdown. NO_TRADE = spread too small to trade.
-const WATCHLIST_REMOVE = new Set(['REVERSAL_RISK', 'NO_TRADE']);
+// REVERSAL_DEVELOPING = medium-term flip confirmed. NO_TRADE = spread too small to trade.
+// REVERSAL_RISK is NOT here — 6H just going flat, might recover, keep pair visible.
+const WATCHLIST_REMOVE = new Set(['REVERSAL_DEVELOPING', 'NO_TRADE']);
 
 function renderSignals(data, statesArr, journalEntries) {
   const el = document.getElementById('watchlist-list');
