@@ -2602,6 +2602,28 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
 .jrn-count.ready { background: #14532d; color: #4ade80; }
 .jrn-count.sig   { background: #4ade80; color: #052e16; }
 
+/* ── Per-entry historical Currency Signal badges ─────────────────────────── */
+.jrn-csig-row {
+  padding: 0 12px 7px;
+  display: flex; gap: 5px; align-items: center; flex-wrap: wrap;
+}
+.jrn-csig-tag {
+  font-size: 9px; font-weight: 700;
+  font-family: var(--font-data);
+  padding: 1px 7px; border-radius: 3px;
+  white-space: nowrap; letter-spacing: 0.3px;
+}
+.jrn-csig-tag.strong {
+  background: rgba(74,222,128,0.08);
+  border: 1px solid rgba(74,222,128,0.22);
+  color: #4ade80;
+}
+.jrn-csig-tag.weak {
+  background: rgba(248,113,113,0.08);
+  border: 1px solid rgba(248,113,113,0.22);
+  color: #f87171;
+}
+
 .jrn-outcomes {
   display: flex;
   gap: 4px;

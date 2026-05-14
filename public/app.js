@@ -111,6 +111,34 @@ function entryHasCsigPair(e) {
   return instruments.some(i => hasCsigCurrency(i));
 }
 
+// Compute strong/weak currencies FROM a journal entry's own stored
+// currency_strength snapshot — historically accurate, no live data needed.
+function computeEntryCsig(e) {
+  const cs   = e.currency_strength;
+  const list = Array.isArray(cs) ? cs : (cs?.currencies || []);
+  const strong = [], weak = [];
+  list.forEach(c => {
+    const v3  = parseFloat(c.smooth_3h  ?? c.normalized_3h)  || 0;
+    const v6  = parseFloat(c.smooth_6h  ?? c.normalized_6h)  || 0;
+    const v12 = parseFloat(c.smooth_12h ?? c.normalized_12h) || 0;
+    const combined = (v3 + v6 + v12) / 3;
+    if (combined >  CS_THRESHOLD && v3 >  CS_THRESHOLD) strong.push(c.currency);
+    else if (combined < -CS_THRESHOLD && v3 < -CS_THRESHOLD) weak.push(c.currency);
+  });
+  return { strong, weak };
+}
+
+// Returns inline HTML badge row for a journal entry's historical CS currencies.
+// Empty string when neither strong nor weak.
+function csigBadgeHtml(e) {
+  const { strong, weak } = computeEntryCsig(e);
+  if (!strong.length && !weak.length) return '';
+  const parts = [];
+  if (strong.length) parts.push(`<span class="jrn-csig-tag strong">💪 ${strong.join(' ')}</span>`);
+  if (weak.length)   parts.push(`<span class="jrn-csig-tag weak">🔻 ${weak.join(' ')}</span>`);
+  return `<div class="jrn-csig-row">${parts.join('')}</div>`;
+}
+
 // ─── Notyf (toast notifications) ─────────────────────────────────────────────
 const notyf = typeof Notyf !== 'undefined'
   ? new Notyf({
@@ -1834,6 +1862,7 @@ function renderJournal(data) {
           </div>
           <span class="jrn-chevron">›</span>
         </div>
+        ${csigBadgeHtml(e)}
       </div>`;
   }).join('');
 

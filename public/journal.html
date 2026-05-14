@@ -33,12 +33,10 @@
     .jpage-topbar-right { display: flex; align-items: center; gap: 10px; }
 
     .jpage-logo {
-      font-size: 15px; font-weight: 800; letter-spacing: 1.5px;
-      text-transform: uppercase;
-      background: linear-gradient(135deg, #60a5fa, #a78bfa);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-      background-clip: text; text-decoration: none;
+      display: flex; align-items: center;
+      text-decoration: none; flex-shrink: 0;
     }
+    .jpage-logo img { height: 24px; display: block; }
     .jpage-sep { color: rgba(255,255,255,0.1); font-size: 20px; font-weight: 200; }
     .jpage-title-text {
       font-size: 13px; font-weight: 600; color: var(--text-muted);
@@ -178,7 +176,9 @@
   <!-- Top bar -->
   <header class="jpage-topbar">
     <div class="jpage-topbar-left">
-      <a href="/app" class="jpage-logo">NervaFX</a>
+      <a href="/app" class="jpage-logo">
+        <img src="/nervafx-logo.png" alt="NervaFX">
+      </a>
       <span class="jpage-sep">|</span>
       <span class="jpage-title-text">
         <i data-lucide="book-open" style="width:14px;height:14px;flex-shrink:0"></i>
@@ -230,6 +230,16 @@
         <button class="jpage-pill" data-val="today">Today</button>
         <button class="jpage-pill" data-val="7d">7 Days</button>
         <button class="jpage-pill" data-val="30d">30 Days</button>
+      </div>
+    </div>
+
+    <div class="jpage-filter-sep"></div>
+
+    <div class="jpage-filter-group">
+      <span class="jpage-filter-label">Signals</span>
+      <div class="jpage-pills" id="filter-csig">
+        <button class="jpage-pill active" data-val="">All</button>
+        <button class="jpage-pill" data-val="cs" title="Entries that had confirmed CS currencies at that time">Has CS</button>
       </div>
     </div>
 
@@ -293,7 +303,9 @@
   let _filterSentiment = '';
   let _filterDate      = '';
   let _filterSearch    = '';
+  let _filterCsig      = false;
   let _csigCurrencies  = new Set(); // populated from live strength data — used by modal setup filter
+  const CS_THRESHOLD   = 0.00100;
   const _userTz = localStorage.getItem('nfx_tz') || 'auto';
 
   // ─── API helper ───────────────────────────────────────────────────────────────
@@ -329,20 +341,40 @@
   function pair(s) { return s ? s.replace('_', '/') : s; }
 
   // ─── Currency Signals helpers ─────────────────────────────────────────────────
+
+  // Compute strong/weak from an entry's OWN stored currency_strength snapshot.
+  // Historically accurate — no live API needed.
+  function computeEntryCsig(e) {
+    const cs   = e.currency_strength;
+    const list = Array.isArray(cs) ? cs : (cs?.currencies || []);
+    const strong = [], weak = [];
+    list.forEach(c => {
+      const v3  = parseFloat(c.smooth_3h  ?? c.normalized_3h)  || 0;
+      const v6  = parseFloat(c.smooth_6h  ?? c.normalized_6h)  || 0;
+      const v12 = parseFloat(c.smooth_12h ?? c.normalized_12h) || 0;
+      const combined = (v3 + v6 + v12) / 3;
+      if (combined >  CS_THRESHOLD && v3 >  CS_THRESHOLD) strong.push(c.currency);
+      else if (combined < -CS_THRESHOLD && v3 < -CS_THRESHOLD) weak.push(c.currency);
+    });
+    return { strong, weak };
+  }
+
+  // Inline badge HTML for an entry's historical CS currencies.
+  function csigBadgeHtml(e) {
+    const { strong, weak } = computeEntryCsig(e);
+    if (!strong.length && !weak.length) return '';
+    const parts = [];
+    if (strong.length) parts.push(`<span class="jrn-csig-tag strong">💪 ${strong.join(' ')}</span>`);
+    if (weak.length)   parts.push(`<span class="jrn-csig-tag weak">🔻 ${weak.join(' ')}</span>`);
+    return `<div class="jrn-csig-row">${parts.join('')}</div>`;
+  }
+
+  // For modal pair filtering — uses live _csigCurrencies (pass-through when empty)
   function hasCsigCurrency(instrument) {
     if (!_csigCurrencies.size) return true;
     const base  = (instrument || '').slice(0, 3).toUpperCase();
     const quote = (instrument || '').slice(4, 7).toUpperCase();
     return _csigCurrencies.has(base) || _csigCurrencies.has(quote);
-  }
-  function entryHasCsigPair(e) {
-    if (!_csigCurrencies.size) return true;
-    const instruments = [
-      ...(e.signals_summary?.entered || []),
-      ...(e.signals_summary?.waiting || []),
-      ...(e.top_setups || []),
-    ].map(s => s.instrument).filter(Boolean);
-    return instruments.some(i => hasCsigCurrency(i));
   }
 
   // ─── Filter logic ─────────────────────────────────────────────────────────────
@@ -373,6 +405,14 @@
         (e.session_name || '').toLowerCase().includes(q) ||
         (e.risk_sentiment || '').toLowerCase().includes(q)
       );
+    }
+    if (_filterCsig) {
+      // Historically accurate: filter entries that had confirmed CS currencies
+      // at the time of the snapshot, computed from their own stored data.
+      entries = entries.filter(e => {
+        const { strong, weak } = computeEntryCsig(e);
+        return strong.length > 0 || weak.length > 0;
+      });
     }
     return entries;
   }
@@ -436,6 +476,7 @@
             </div>
             <span class="jrn-chevron">›</span>
           </div>
+          ${csigBadgeHtml(e)}
           ${e.summary ? `<div class="jrn-summary">${e.summary}</div>` : ''}
         </div>`;
     }).join('');
@@ -454,10 +495,10 @@
   }
   function onSearchInput(val) { _filterSearch = val.trim(); renderList(); }
   function clearFilters() {
-    _filterSession = ''; _filterSentiment = ''; _filterDate = ''; _filterSearch = '';
+    _filterSession = ''; _filterSentiment = ''; _filterDate = ''; _filterSearch = ''; _filterCsig = false;
     document.querySelectorAll('.jpage-pill').forEach(p => p.classList.remove('active'));
     document.querySelectorAll(
-      '#filter-session .jpage-pill[data-val=""], #filter-sentiment .jpage-pill[data-val=""], #filter-date .jpage-pill[data-val=""]'
+      '#filter-session .jpage-pill[data-val=""], #filter-sentiment .jpage-pill[data-val=""], #filter-date .jpage-pill[data-val=""], #filter-csig .jpage-pill[data-val=""]'
     ).forEach(p => p.classList.add('active'));
     const si = document.getElementById('jpage-search'); if (si) si.value = '';
     renderList();
@@ -712,6 +753,7 @@
   setupFilterPills('filter-session',   v => { _filterSession   = v; });
   setupFilterPills('filter-sentiment', v => { _filterSentiment = v; });
   setupFilterPills('filter-date',      v => { _filterDate      = v; });
+  setupFilterPills('filter-csig',      v => { _filterCsig      = v === 'cs'; });
 
   (async function init() {
     try {
