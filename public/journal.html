@@ -351,6 +351,7 @@
       }).format(new Date(iso));
     } catch (_) { return new Date(iso).toUTCString().slice(17,22) + ' UTC'; }
   }
+  function clean(s) { return s ? s.replace(/_/g, ' ') : s; }
 
   // ─── Currency Signals helpers ─────────────────────────────────────────────────
 
@@ -477,8 +478,8 @@
         <div class="jrn-entry" id="jrn-${e.id}" onclick="openJournalModal('${e.id}')">
           <div class="jrn-header">
             <span class="jrn-time">${fmtShort(e.time)}</span>
-            <span class="sess-card-badge sq-${sessCls}">${(e.session_name || '—').replace(/_/g,' ')}</span>
-            <span class="jrn-sent sent-${sentCls}">${(e.risk_sentiment || '—').replace('_',' ')}</span>
+            <span class="sess-card-badge sq-${sessCls}">${clean(e.session_name || '—')}</span>
+            <span class="jrn-sent sent-${sentCls}">${clean(e.risk_sentiment || '—')}</span>
             <span class="jrn-conf">${e.risk_confidence ?? '—'}%</span>
             <div class="jrn-counts">
               <span class="jrn-count trend" title="Trend">${e.trend_pairs}T</span>
@@ -489,7 +490,7 @@
             <span class="jrn-chevron">›</span>
           </div>
           ${csigBadgeHtml(e)}
-          ${e.summary ? `<div class="jrn-summary">${e.summary}</div>` : ''}
+          ${e.summary ? `<div class="jrn-summary">${clean(e.summary)}</div>` : ''}
         </div>`;
     }).join('');
   }
@@ -675,22 +676,22 @@
       }).join('')}</div>` : ''}
       ${setups.length ? `<div class="jrn-setups">${setups.map(s => {
         const dir = s.bias === 'BUY' ? 'buy' : 'sell';
-        return `<div class="jrn-setup-row"><span class="jrn-setup-pair">${pair(s.instrument)}</span><span class="signal-dir ${dir}" style="font-size:9px">${s.bias}</span><span class="jrn-setup-state">${(s.state||'').replace(/_/g,' ')}</span><span class="jrn-setup-conf">${s.confidence}%</span></div>`;
+        return `<div class="jrn-setup-row"><span class="jrn-setup-pair">${pair(s.instrument)}</span><span class="signal-dir ${dir}" style="font-size:9px">${s.bias}</span><span class="jrn-setup-state">${clean(s.state||'')}</span><span class="jrn-setup-conf">${s.confidence}%</span></div>`;
       }).join('')}</div>` : ''}
       ${waiting.length ? `<p class="jrn-waiting">${waiting.length} pair${waiting.length>1?'s':''} waiting for confirmation</p>` : ''}`);
   }
 
   function renderJrnSessionPerfSection(e, sessionEntries) {
     if (!sessionEntries || sessionEntries.length <= 1)
-      return _jrnSection(`📊 Session: ${(e.session_name||'').replace(/_/g,' ')}`, '<p class="jrn-empty">First snapshot of this session.</p>');
+      return _jrnSection(`📊 Session: ${clean(e.session_name||'')}`, '<p class="jrn-empty">First snapshot of this session.</p>');
     const first = sessionEntries[0];
     const sentFlow = [...sessionEntries.reduce((m, x) => { m.set(x.risk_sentiment, 1); return m; }, new Map()).keys()]
-      .map(s => s.replace('_',' ')).join(' → ');
+      .map(s => clean(s)).join(' → ');
     const allSignals = sessionEntries.flatMap(x => (x.signals_summary?.entered || []));
     const trendDelta = e.trend_pairs - first.trend_pairs;
     const readyDelta = e.ready_pairs - first.ready_pairs;
     const delta = v => v > 0 ? `<span style="color:#4ade80">+${v}</span>` : v < 0 ? `<span style="color:#f87171">${v}</span>` : `<span style="color:var(--text-dim)">±0</span>`;
-    return _jrnSection(`📊 Session: ${(e.session_name||'').replace(/_/g,' ')} · ${sessionEntries.length} snapshots`, `
+    return _jrnSection(`📊 Session: ${clean(e.session_name||'')} · ${sessionEntries.length} snapshots`, `
       <div class="jrn-sess-stats">
         <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Duration</span><span class="jrn-sess-val">${sessionEntries.length}H</span></div>
         <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Sentiment flow</span><span class="jrn-sess-val">${sentFlow}</span></div>
@@ -706,23 +707,23 @@
     const sentCls  = prevEntry.risk_sentiment === 'RISK_ON' ? 'risk-on' : prevEntry.risk_sentiment === 'RISK_OFF' ? 'risk-off' : 'neutral';
     const sessCls  = (prevEntry.session_quality || 'BLOCKED').toLowerCase().replace(/_/g, '-');
     const entered  = (prevEntry.signals_summary?.entered || []);
-    const sessLabel = s => (s || '—').replace(/_/g,' ');
+    const sessLabel = s => clean(s || '—');
     return _jrnSection(`📋 Previous Session: ${sessLabel(prevEntry.session_name)}`, `
       <div class="jrn-prev-meta">
         <span class="jrn-prev-time">${fmtTime(prevEntry.time)}</span>
         <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${sessLabel(prevEntry.session_name)}</span>
-        <span class="jrn-sent sent-${sentCls}">${(prevEntry.risk_sentiment || '—').replace('_',' ')}</span>
+        <span class="jrn-sent sent-${sentCls}">${clean(prevEntry.risk_sentiment || '—')}</span>
         <span class="jrn-conf">${prevEntry.risk_confidence ?? '—'}%</span>
         <span class="jrn-prev-pairs">${prevEntry.trend_pairs}T · ${prevEntry.pullback_pairs}PB · ${prevEntry.ready_pairs}R</span>
       </div>
-      ${prevEntry.summary ? `<p class="jrn-prev-summary">${prevEntry.summary}</p>` : ''}
+      ${prevEntry.summary ? `<p class="jrn-prev-summary">${clean(prevEntry.summary)}</p>` : ''}
       ${entered.length ? `<div class="jrn-prev-sigs">${entered.map(s => {
         const d = s.signal === 'BUY' ? 'buy' : 'sell';
         return `<span class="jrn-prev-sig signal-dir ${d}" style="font-size:9px">${pair(s.instrument)} ${s.signal}</span>`;
       }).join('')}</div>` : ''}
       ${(prevEntry.top_setups || []).slice(0,5).map(s => {
         const dir = s.bias === 'BUY' ? 'buy' : 'sell';
-        return `<div class="jrn-setup-row"><span class="jrn-setup-pair">${pair(s.instrument)}</span><span class="signal-dir ${dir}" style="font-size:9px">${s.bias}</span><span class="jrn-setup-state">${(s.state||'').replace(/_/g,' ')}</span><span class="jrn-setup-conf">${s.confidence}%</span></div>`;
+        return `<div class="jrn-setup-row"><span class="jrn-setup-pair">${pair(s.instrument)}</span><span class="signal-dir ${dir}" style="font-size:9px">${s.bias}</span><span class="jrn-setup-state">${clean(s.state||'')}</span><span class="jrn-setup-conf">${s.confidence}%</span></div>`;
       }).join('')}`);
   }
 
@@ -735,8 +736,8 @@
 
     document.getElementById('jrn-modal-time').textContent = fmtTime(e.time);
     document.getElementById('jrn-modal-badges').innerHTML = `
-      <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${(e.session_name||'—').replace(/_/g,' ')}</span>
-      <span class="jrn-sent sent-${sentCls}">${(e.risk_sentiment||'—').replace('_',' ')}</span>
+      <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${clean(e.session_name||'—')}</span>
+      <span class="jrn-sent sent-${sentCls}">${clean(e.risk_sentiment||'—')}</span>
       <span class="jrn-conf">${e.risk_confidence ?? '—'}%</span>
       ${enteredCount ? `<span class="jrn-count sig" style="font-size:9px">${enteredCount} signal${enteredCount>1?'s':''}</span>` : ''}
       ${(({ strong, weak }) => {

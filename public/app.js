@@ -405,6 +405,9 @@ function fmtShort(iso) {
   }
 }
 
+// Replace underscores with spaces for display (e.g. READY_TO_ENTER → READY TO ENTER)
+function clean(s) { return s ? s.replace(/_/g, ' ') : s; }
+
 // ── Session-hour timezone helpers ─────────────────────────────────────────────
 
 // Minutes the user's timezone is ahead of UTC right now (DST-aware)
@@ -1652,7 +1655,7 @@ function renderJrnSessionPerfSection(e, sessionEntries) {
   }
   const first = sessionEntries[0];
   const sentFlow = [...sessionEntries.reduce((m, x) => { m.set(x.risk_sentiment, 1); return m; }, new Map()).keys()]
-    .map(s => s.replace('_',' ')).join(' → ');
+    .map(s => clean(s)).join(' → ');
   const allSignals = sessionEntries.flatMap(x => (x.signals_summary?.entered || []));
   const trendDelta = e.trend_pairs - first.trend_pairs;
   const readyDelta = e.ready_pairs - first.ready_pairs;
@@ -1681,7 +1684,7 @@ function renderJrnPrevSessionSection(prevEntry) {
       <span class="jrn-conf">${prevEntry.risk_confidence ?? '—'}%</span>
       <span class="jrn-prev-pairs">${prevEntry.trend_pairs}T · ${prevEntry.pullback_pairs}PB · ${prevEntry.ready_pairs}R</span>
     </div>
-    ${prevEntry.summary ? `<p class="jrn-prev-summary">${prevEntry.summary}</p>` : ''}
+    ${prevEntry.summary ? `<p class="jrn-prev-summary">${clean(prevEntry.summary)}</p>` : ''}
     ${entered.length ? `<div class="jrn-prev-sigs">${entered.map(s => {
       const d = s.signal === 'BUY' ? 'buy' : 'sell';
       return `<span class="jrn-prev-sig signal-dir ${d}" style="font-size:9px">${pair(s.instrument)} ${s.signal}</span>`;
@@ -1790,7 +1793,7 @@ function _renderJournalModal(e, newsEvents, sessionEntries, prevEntry) {
 
   // Body — sections in order
   document.getElementById('jrn-modal-body').innerHTML = [
-    e.summary ? `<div class="jrn-modal-summary">${e.summary}</div>` : '',
+    e.summary ? `<div class="jrn-modal-summary">${clean(e.summary)}</div>` : '',
     newsEvents !== null ? renderJrnCalendarSection(newsEvents, e.time) : _jrnSection('📅 Economic Calendar', '<p class="jrn-empty jrn-loading">Loading…</p>'),
     e.risk_sentiment_details ? _jrnSection('🌍 Risk Sentiment', journalSentimentGroupsHtml(e.risk_sentiment_details)) : '',
     renderJrnStrengthSection(e.currency_strength),
