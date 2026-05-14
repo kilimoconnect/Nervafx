@@ -1300,7 +1300,12 @@ function updateM15Bar(data) {
   const header = document.querySelector('.header');
   if (header) bar.style.top = header.offsetHeight + 'px';
 
-  document.getElementById('m15-bar-chips').innerHTML = impulse.map(s => {
+  // Show max 2 chips; surface hidden count via +N badge
+  const MAX_BAR_CHIPS = 2;
+  const visible     = impulse.slice(0, MAX_BAR_CHIPS);
+  const hiddenCount = impulse.length - visible.length;
+
+  document.getElementById('m15-bar-chips').innerHTML = visible.map(s => {
     const v45  = parseFloat(s.smooth_45m) || 0;
     const bias = v45 >= 0 ? 'BUY' : 'SELL';
     const dir  = v45 >= 0 ? 'buy' : 'sell';
@@ -1311,6 +1316,16 @@ function updateM15Bar(data) {
       <span class="chip-val">${vStr}</span>
     </span>`;
   }).join('');
+
+  const moreEl = document.getElementById('m15-bar-more');
+  if (moreEl) {
+    if (hiddenCount > 0) {
+      moreEl.textContent = `+${hiddenCount} more`;
+      moreEl.style.display = '';
+    } else {
+      moreEl.style.display = 'none';
+    }
+  }
 
   const timeEl = document.getElementById('m15-bar-time');
   if (timeEl && data.time) timeEl.textContent = fmtTime(data.time);
