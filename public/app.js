@@ -1356,40 +1356,11 @@ function updateM15Bar(data) {
 
 // ─── Risk / approved trades ───────────────────────────────────────────────────
 
-function renderRisk(data, sentimentData = null, statesArr = []) {
+function renderRisk(data, sentimentData = null) {
   if (!data) return;
   const el       = document.getElementById('risk-list');
   const approved = data.approved || [];
 
-  if (sentimentData?.sentiment?.sentiment === 'NEUTRAL') {
-    const candidates = (statesArr || []).filter(s => s.state === 'READY_TO_ENTER');
-    el.innerHTML = `
-      <div class="risk-neutral-block">
-        <div class="risk-neutral-icon">⚠</div>
-        <div class="risk-neutral-msg">
-          <b>Risk sentiment neutral</b> — trade with caution.<br>
-          No clear money flow direction confirmed. Setups below are valid — manage risk carefully.
-        </div>
-      </div>
-      ${candidates.length ? `
-        <div style="margin-top:10px;font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Active setups</div>
-        ${candidates.map(s => {
-          const dir = s.bias === 'BUY' ? 'buy' : 'sell';
-          const ta  = s.tf_alignment || {};
-          return `<div class="risk-row">
-            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-              <span class="signal-dir ${dir}">${s.bias}</span>
-              <span style="font-weight:600;font-size:12px">${pair(s.instrument)}</span>
-              <span class="phase-badge READY_TO_ENTER">READY TO ENTER</span>
-              <span style="color:var(--text-muted);font-size:10px">${s.confidence}%</span>
-              <span class="tf-item ${ta.h12}" style="font-size:9px">12H ${ta.h12||'→'}</span>
-              <span class="tf-item ${ta.h6}" style="font-size:9px">6H ${ta.h6||'→'}</span>
-            </div>
-          </div>`;
-        }).join('')}
-      ` : ''}`;
-    return;
-  }
 
   if (approved.length === 0) { el.innerHTML = '<p class="empty-state">No approved trades today</p>'; return; }
   el.innerHTML = approved.map(r => {
@@ -2214,7 +2185,7 @@ async function refresh() {
     renderRanking12H(spreads);
     renderM15Spreads(m15Data);
     updateM15Bar(m15Data);
-    renderRisk(risk, sentimentData, states.states || []);
+    renderRisk(risk, sentimentData);
     renderActions(actions);
     renderQuality(quality);
     renderJournal(journalData);
