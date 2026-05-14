@@ -961,7 +961,11 @@ function watchlistCard(s, sig) {
     </div>`;
 }
 
-function renderSignals(data, statesArr) {
+// States that a tracked pair must NOT be in to stay on the watchlist.
+// REVERSAL_RISK = structural breakdown. NO_TRADE = spread too small to trade.
+const WATCHLIST_REMOVE = new Set(['REVERSAL_RISK', 'NO_TRADE']);
+
+function renderSignals(data, statesArr, journalEntries) {
   const el = document.getElementById('watchlist-list');
   if (!el) return;
 
@@ -969,12 +973,35 @@ function renderSignals(data, statesArr) {
   const sigMap = {};
   (data?.signals || []).forEach(s => { sigMap[s.instrument] = s; });
 
-  // Filter statesArr to actionable states only (no CS filter)
-  const actionable = (statesArr || [])
+  // State map for fast lookup by instrument
+  const stateMap = {};
+  (statesArr || []).forEach(s => { stateMap[s.instrument] = s; });
+
+  // Seed watchlist with pairs currently in an actionable state
+  const watchlist = new Map();
+  (statesArr || [])
     .filter(s => WATCHLIST_STATES.has(s.state))
+    .forEach(s => watchlist.set(s.instrument, s));
+
+  // Augment with pairs tracked by the journal (cross-session persistence).
+  // The tracked set carries pairs from the last completed hourly cycle that
+  // entered pullback and haven't reversed. Add any tracked pair not already
+  // in the watchlist, provided its current state is still tradeable.
+  const latestEntry = (journalEntries || [])[0];
+  for (const t of (latestEntry?.tracked_pullback_pairs || [])) {
+    if (watchlist.has(t.instrument)) continue;          // already shown
+    const cur = stateMap[t.instrument];
+    if (!cur) continue;
+    if (WATCHLIST_REMOVE.has(cur.state)) continue;      // reversed or dead spread
+    if (!cur.bias || cur.bias === 'NONE') continue;     // lost directional bias
+    watchlist.set(t.instrument, cur);
+  }
+
+  const actionable = [...watchlist.values()]
     .sort((a, b) => {
-      if (b.pipeline_stage !== a.pipeline_stage) return b.pipeline_stage - a.pipeline_stage;
-      return b.confidence - a.confidence;
+      if ((b.pipeline_stage || 0) !== (a.pipeline_stage || 0))
+        return (b.pipeline_stage || 0) - (a.pipeline_stage || 0);
+      return (b.confidence || 0) - (a.confidence || 0);
     });
 
   el.innerHTML = actionable.length
@@ -2165,7 +2192,7 @@ async function refresh() {
     renderCurrencySignals(strength);          // must run first — populates _csigCurrencies
     renderLiveOpportunities(states.states || [], aiMap, sentimentData);
     renderTopSetups(states.states || [], aiMap, sentimentData);
-    renderSignals(signals, states.states || []);
+    renderSignals(signals, states.states || [], journalData?.entries || []);
     renderStates(states);
     renderSpreads(spreads);
     renderRanking12H(spreads);
