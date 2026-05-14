@@ -1764,6 +1764,29 @@ function renderJrnSetupsSection(topSetups, signals) {
     ${waiting.length ? `<p class="jrn-waiting">${waiting.length} pair${waiting.length>1?'s':''} waiting for confirmation</p>` : ''}`);
 }
 
+function renderJrnM15Section(impulses) {
+  if (!impulses || !impulses.length) {
+    return _jrnSection('⚡ M15 Impulse Moves', '<p class="jrn-empty">No active impulse moves at this hour.</p>');
+  }
+  const maxVal = Math.abs(impulses[0].smooth_45m) || 0.0001; // already sorted desc
+  return _jrnSection('⚡ M15 Impulse Moves', `
+    <div class="jrn-m15-list">
+      ${impulses.map(r => {
+        const cls  = r.bias === 'BUY' ? 'buy' : 'sell';
+        const v    = r.smooth_45m;
+        const pct  = Math.round((Math.abs(v) / maxVal) * 100);
+        const vStr = (v >= 0 ? '+' : '') + Number(v).toFixed(5);
+        return `
+          <div class="jrn-m15-row">
+            <span class="jrn-m15-pair">${pair(r.instrument)}</span>
+            <span class="signal-dir ${cls}" style="font-size:9px;padding:2px 6px">${r.bias}</span>
+            <span class="jrn-m15-val">${vStr}</span>
+            <div class="jrn-m15-bar-wrap"><div class="jrn-m15-bar-fill ${cls}" style="width:${pct}%"></div></div>
+          </div>`;
+      }).join('')}
+    </div>`);
+}
+
 function renderJrnOutcomesSection(e) {
   const outcomes = [
     { label: '6H',  data: e.outcome_6h  },
@@ -1849,6 +1872,7 @@ function _renderJournalModal(e, newsEvents, sessionEntries, prevEntry) {
     newsEvents !== null ? renderJrnCalendarSection(newsEvents, e.time) : _jrnSection('📅 Economic Calendar', '<p class="jrn-empty jrn-loading">Loading…</p>'),
     e.risk_sentiment_details ? _jrnSection('🌍 Risk Sentiment', journalSentimentGroupsHtml(e.risk_sentiment_details)) : '',
     renderJrnStrengthSection(e.currency_strength),
+    e.m15_impulses != null ? renderJrnM15Section(e.m15_impulses) : '',
     sessionEntries ? renderJrnSessionPerfSection(e, sessionEntries) : '',
     prevEntry !== undefined ? renderJrnPrevSessionSection(prevEntry) : '',
     renderJrnSetupsSection(e.top_setups || [], signals),

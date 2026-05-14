@@ -115,6 +115,43 @@ async function collectSignals() {
   };
 }
 
+async function collectM15Impulses() {
+  const CS_THRESHOLD = 0.00100;
+
+  const { data: latest } = await supabase
+    .from('m15_pair_spreads')
+    .select('time')
+    .order('time', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (!latest) return [];
+
+  const { data: rows } = await supabase
+    .from('m15_pair_spreads')
+    .select('instrument, smooth_45m, smooth_90m, smooth_180m, state')
+    .eq('time', latest.time)
+    .eq('state', 'EXPANDING');
+
+  return (rows || [])
+    .filter(r => {
+      const s45  = parseFloat(r.smooth_45m)  || 0;
+      const s90  = parseFloat(r.smooth_90m)  || 0;
+      const s180 = parseFloat(r.smooth_180m) || 0;
+      if (Math.sign(s45) !== Math.sign(s90))  return false;
+      if (Math.sign(s45) !== Math.sign(s180)) return false;
+      return Math.abs(s45) >= CS_THRESHOLD;
+    })
+    .sort((a, b) => Math.abs(parseFloat(b.smooth_45m)) - Math.abs(parseFloat(a.smooth_45m)))
+    .map(r => ({
+      instrument:  r.instrument,
+      bias:        parseFloat(r.smooth_45m) >= 0 ? 'BUY' : 'SELL',
+      smooth_45m:  parseFloat(r.smooth_45m),
+      smooth_90m:  parseFloat(r.smooth_90m),
+      smooth_180m: parseFloat(r.smooth_180m),
+    }));
+}
+
 async function collectAiAnalysis() {
   // Latest AI row per instrument — AI runs after state detection, so latest batch
   const { data: latest } = await supabase
@@ -155,7 +192,7 @@ async function collectAiAnalysis() {
 
 // ─── Summary builder ──────────────────────────────────────────────────────────
 
-function buildSummary({ session, sentiment, states, signals, aiAnalysis, topSetups }) {
+function buildSummary({ session, sentiment, states, signals, aiAnalysis, topSetups, m15Impulses }) {
   const lines = [];
 
   // 1. Session
@@ -218,7 +255,13 @@ function buildSummary({ session, sentiment, states, signals, aiAnalysis, topSetu
     lines.push(`AI flags: ${aiStr}.`);
   }
 
-  // 7. No-trade reason summary
+  // 7. M15 impulse moves
+  if (m15Impulses && m15Impulses.length > 0) {
+    const m15Str = m15Impulses.map(r => `${pairLabel(r.instrument)} ${r.bias}`).join(', ');
+    lines.push(`M15 impulses active: ${m15Str}.`);
+  }
+
+  // 8. No-trade reason summary
   if (!session.trades_allowed) {
     lines.push('No trades approved — outside active session hours.');
   } else if (sentiment?.sentiment === 'NEUTRAL') {
@@ -238,13 +281,14 @@ async function writeJournalEntry() {
   const session = getCurrentSession(now);
 
   // Collect everything in parallel
-  const [sentiment, statesResult, strengthResult, pairRankings, signals, aiAnalysis] = await Promise.all([
+  const [sentiment, statesResult, strengthResult, pairRankings, signals, aiAnalysis, m15Impulses] = await Promise.all([
     collectSentiment(),
     collectStates(),
     collectStrength(),
     collectPairRankings(),
     collectSignals(),
     collectAiAnalysis(),
+    collectM15Impulses().catch(() => []),
   ]);
 
   // Unwrap timestamped results
@@ -310,7 +354,7 @@ async function writeJournalEntry() {
   };
 
   // Build narrative summary
-  const summary = buildSummary({ session, sentiment, states, signals, aiAnalysis, topSetups });
+  const summary = buildSummary({ session, sentiment, states, signals, aiAnalysis, topSetups, m15Impulses });
 
   // Compose journal row
   const row = {
@@ -331,6 +375,7 @@ async function writeJournalEntry() {
     ai_analysis:             aiAnalysis,
     signals_summary,
     pair_rankings:           pairRankings.slice(0, 28),
+    m15_impulses:            m15Impulses,
     summary,
   };
 

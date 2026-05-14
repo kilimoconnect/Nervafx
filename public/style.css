@@ -2767,6 +2767,22 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
 .jrn-setup-state { color: var(--text-muted); font-size: 10px; flex: 1; }
 .jrn-setup-conf  { font-family: var(--font-data); font-size: 10px; color: var(--text-dim); }
 
+/* M15 impulse section inside journal modal */
+.jrn-m15-list { display: flex; flex-direction: column; gap: 5px; }
+.jrn-m15-row {
+  display: grid;
+  grid-template-columns: 64px 38px 70px 1fr;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+.jrn-m15-pair { font-family: var(--font-data); font-weight: 700; }
+.jrn-m15-val  { font-family: var(--font-data); color: var(--text-dim); font-size: 10px; }
+.jrn-m15-bar-wrap { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+.jrn-m15-bar-fill { height: 100%; border-radius: 2px; }
+.jrn-m15-bar-fill.buy  { background: var(--green); }
+.jrn-m15-bar-fill.sell { background: var(--red); }
+
 /* Outcome blocks */
 .jrn-outcome-block {
   background: var(--bg);
