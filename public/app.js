@@ -1262,11 +1262,11 @@ function getM15Impulses(data) {
     .sort((a, b) => Math.abs(parseFloat(b.smooth_45m)) - Math.abs(parseFloat(a.smooth_45m)));
 }
 
-// Card filter — all active states (not FLAT) · any direction · minimum noise floor
-// Used by renderM15Spreads() — shows the full M15 momentum picture.
+// Card filter — all active states (not FLAT) · |smooth_45m| >= CS_THRESHOLD (±0.00100)
+// Used by renderM15Spreads() — same threshold as bar, all states shown.
 function getM15AllActive(data) {
   return (data?.spreads || [])
-    .filter(s => s.state !== 'FLAT' && Math.abs(parseFloat(s.smooth_45m) || 0) >= 0.00005)
+    .filter(s => s.state !== 'FLAT' && Math.abs(parseFloat(s.smooth_45m) || 0) >= CS_THRESHOLD)
     .sort((a, b) => Math.abs(parseFloat(b.smooth_45m)) - Math.abs(parseFloat(a.smooth_45m)));
 }
 
