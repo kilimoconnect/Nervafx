@@ -2072,6 +2072,26 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
 
   /* TF toggle buttons */
   .tf-toggle { margin-left: 0; }
+
+  /* ── Journal entry list ── */
+  /* Two-row header: [time + session + chevron] / [sentiment + conf + counts] */
+  .jrn-header { flex-wrap: wrap; gap: 2px 0; padding: 7px 10px; }
+  .jrn-hdr-top { flex: 1; }
+  .jrn-hdr-bot { width: 100%; padding-top: 3px; }
+  .jrn-chevron { margin-left: 0; }
+  .jrn-csig-row { padding: 0 10px 6px; }
+  .jrn-summary  { padding: 6px 10px; font-size: 11px; }
+
+  /* ── Journal modal — full-screen on mobile ── */
+  .jrn-modal-overlay { padding: 0; align-items: stretch; }
+  .jrn-modal {
+    border-radius: 0;
+    max-width: 100%;
+    min-height: 100dvh;
+    margin: 0;
+  }
+  .jrn-modal-header { padding: 10px 12px; }
+  .jrn-modal-body   { padding: 12px 14px 24px; gap: 14px; }
 }
 
 /* ─── Risk Sentiment ──────────────────────────────────────────────────────── */
@@ -2553,11 +2573,19 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
   background: var(--bg);
   cursor: pointer;
   flex-wrap: nowrap;
-  overflow: hidden;
   transition: background 0.15s;
 }
 .jrn-header:hover { background: var(--bg-hover); }
 .jrn-entry.open .jrn-header { background: var(--bg-hover); }
+
+/* Two-row subgroups inside the header */
+.jrn-hdr-top {
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0; min-width: 0;
+}
+.jrn-hdr-bot {
+  display: flex; align-items: center; gap: 6px;
+  flex: 1; min-width: 0; flex-wrap: wrap;
+}
 
 .jrn-time {
   font-family: var(--font-data);

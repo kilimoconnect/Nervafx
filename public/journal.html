@@ -169,6 +169,39 @@
       color: var(--text);
     }
     .jpage-stat-sep { color: var(--border); }
+
+    /* ── Mobile ────────────────────────────────────────────────────────────── */
+    @media (max-width: 700px) {
+      /* Top bar: reduce padding; hide page title (logo identifies the page) */
+      .jpage-topbar  { padding: 0 14px; }
+      .jpage-sep, .jpage-title-text { display: none; }
+      .jpage-count-badge { font-size: 9px; padding: 2px 7px; }
+      .jpage-back-btn { font-size: 10px; padding: 5px 10px; }
+
+      /* Filter bar: single-row, horizontally scrollable; search pinned to its own row */
+      .jpage-filters {
+        top: 56px;
+        padding: 6px 14px;
+        gap: 8px;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+      }
+      .jpage-filters::-webkit-scrollbar { display: none; }
+      .jpage-filter-sep { display: none; }
+      .jpage-filter-group { flex-shrink: 0; }
+      .jpage-filter-label { font-size: 8px; letter-spacing: 0.5px; }
+      .jpage-pill { font-size: 9px; padding: 3px 8px; }
+      .jpage-search-wrap { flex-shrink: 0; margin-left: 0; }
+      .jpage-search { width: 120px; font-size: 10px; }
+
+      /* Main content: tighter horizontal padding */
+      .jpage-main { padding: 12px 12px 60px; }
+
+      /* Stats bar: tighten */
+      .jpage-stats-bar { gap: 8px; padding: 6px 10px; font-size: 9px; }
+    }
   </style>
 </head>
 <body>
@@ -477,15 +510,19 @@
       return `
         <div class="jrn-entry" id="jrn-${e.id}" onclick="openJournalModal('${e.id}')">
           <div class="jrn-header">
-            <span class="jrn-time">${fmtShort(e.time)}</span>
-            <span class="sess-card-badge sq-${sessCls}">${clean(e.session_name || '—')}</span>
-            <span class="jrn-sent sent-${sentCls}">${clean(e.risk_sentiment || '—')}</span>
-            <span class="jrn-conf">${e.risk_confidence ?? '—'}%</span>
-            <div class="jrn-counts">
-              <span class="jrn-count trend" title="Trend">${e.trend_pairs}T</span>
-              <span class="jrn-count pb"    title="Pullback">${e.pullback_pairs}PB</span>
-              <span class="jrn-count ready" title="Ready">${e.ready_pairs}R</span>
-              ${enteredCount ? `<span class="jrn-count sig">${enteredCount}✦</span>` : ''}
+            <div class="jrn-hdr-top">
+              <span class="jrn-time">${fmtShort(e.time)}</span>
+              <span class="sess-card-badge sq-${sessCls}">${clean(e.session_name || '—')}</span>
+            </div>
+            <div class="jrn-hdr-bot">
+              <span class="jrn-sent sent-${sentCls}">${clean(e.risk_sentiment || '—')}</span>
+              <span class="jrn-conf">${e.risk_confidence ?? '—'}%</span>
+              <div class="jrn-counts">
+                <span class="jrn-count trend" title="Trend">${e.trend_pairs}T</span>
+                <span class="jrn-count pb"    title="Pullback">${e.pullback_pairs}PB</span>
+                <span class="jrn-count ready" title="Ready">${e.ready_pairs}R</span>
+                ${enteredCount ? `<span class="jrn-count sig">${enteredCount}✦</span>` : ''}
+              </div>
             </div>
             <span class="jrn-chevron">›</span>
           </div>

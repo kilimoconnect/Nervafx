@@ -1891,15 +1891,19 @@ function renderJournal(data) {
     return `
       <div class="jrn-entry" id="jrn-${e.id}" onclick="openJournalModal('${e.id}')">
         <div class="jrn-header">
-          <span class="jrn-time">${fmtShort(e.time)}</span>
-          <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${(e.session_name || '—').replace(/_/g,' ')}</span>
-          <span class="jrn-sent sent-${sentCls}">${(e.risk_sentiment || '—').replace('_',' ')}</span>
-          <span class="jrn-conf">${e.risk_confidence ?? '—'}%</span>
-          <div class="jrn-counts">
-            <span class="jrn-count trend" title="Trend">${e.trend_pairs}T</span>
-            <span class="jrn-count pb"    title="Pullback">${e.pullback_pairs}PB</span>
-            <span class="jrn-count ready" title="Ready">${e.ready_pairs}R</span>
-            ${enteredCount ? `<span class="jrn-count sig">${enteredCount}✦</span>` : ''}
+          <div class="jrn-hdr-top">
+            <span class="jrn-time">${fmtShort(e.time)}</span>
+            <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${clean(e.session_name || '—')}</span>
+          </div>
+          <div class="jrn-hdr-bot">
+            <span class="jrn-sent sent-${sentCls}">${clean(e.risk_sentiment || '—')}</span>
+            <span class="jrn-conf">${e.risk_confidence ?? '—'}%</span>
+            <div class="jrn-counts">
+              <span class="jrn-count trend" title="Trend">${e.trend_pairs}T</span>
+              <span class="jrn-count pb"    title="Pullback">${e.pullback_pairs}PB</span>
+              <span class="jrn-count ready" title="Ready">${e.ready_pairs}R</span>
+              ${enteredCount ? `<span class="jrn-count sig">${enteredCount}✦</span>` : ''}
+            </div>
           </div>
           <span class="jrn-chevron">›</span>
         </div>
