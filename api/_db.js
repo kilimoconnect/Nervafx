@@ -18,7 +18,7 @@ async function getLatestTime(table) {
 
 function cors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', 's-maxage=55, stale-while-revalidate');
+  res.setHeader('Cache-Control', 's-maxage=55, stale-while-revalidate=30');
 }
 
 module.exports = { getClient, getLatestTime, cors };
