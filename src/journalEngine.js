@@ -327,16 +327,19 @@ async function writeJournalEntry() {
   const stateMap = {};
   states.forEach(s => { stateMap[s.instrument] = s; });
 
-  // Carry forward existing tracked pairs — drop only on reversal/bias-flip/no-trade/trend-complete
+  // Carry forward existing tracked pairs — drop only on confirmed reversal/bias-flip/trend-complete.
+  // NO_TRADE with matching bias = 6H spread temporarily collapsed but 12H still intact → keep
+  // tracking; the setup may recover. Only drop when direction is structurally gone.
   const carried = [];
   for (const t of prevTracked) {
     const cur = stateMap[t.instrument];
     if (!cur) { carried.push(t); continue; }                       // no current data → keep
-    if (cur.state === 'REVERSAL_DEVELOPING') continue;             // medium-term flip confirmed
-    if (cur.state === 'NO_TRADE') continue;                        // fell out of tradeable range
+    if (cur.state === 'REVERSAL_DEVELOPING') continue;             // 6H flipped against 12H
+    if (cur.state === 'REVERSAL_CONFIRMED') continue;              // full reversal — 12H also flipped
     if (!cur.bias || cur.bias === 'NONE') continue;                // lost directional bias
     if (cur.bias !== t.bias) continue;                             // direction flipped
     if (cur.state === 'TREND') continue;                           // episode completed
+    // NO_TRADE with same bias: 6H spread too small but 12H intact → pause, don't evict
     carried.push({ ...t, latest_state: cur.state, latest_conf: cur.confidence });
   }
 
