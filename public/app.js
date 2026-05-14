@@ -1318,13 +1318,13 @@ function updateM15Bar(data) {
   }).join('');
 
   const moreEl = document.getElementById('m15-bar-more');
-  if (moreEl) {
-    if (hiddenCount > 0) {
-      moreEl.textContent = `+${hiddenCount} more`;
-      moreEl.style.display = '';
-    } else {
-      moreEl.style.display = 'none';
-    }
+  const linkEl = document.getElementById('m15-bar-link');
+  if (hiddenCount > 0) {
+    if (moreEl) { moreEl.textContent = `+${hiddenCount} more`; moreEl.style.display = ''; }
+    if (linkEl) linkEl.style.display = '';
+  } else {
+    if (moreEl) moreEl.style.display = 'none';
+    if (linkEl) linkEl.style.display = 'none';
   }
 
   const timeEl = document.getElementById('m15-bar-time');
