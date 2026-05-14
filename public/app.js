@@ -923,6 +923,7 @@ function renderCurrencySignals(data) {
 
   const currencies = data?.currencies || [];
   if (!currencies.length) {
+    _csigCurrencies = new Set(); // always reset so stale data never leaks
     el.innerHTML = '<p class="empty-state">No strength data</p>';
     return;
   }
@@ -1801,19 +1802,16 @@ function renderJournal(data) {
   if (!el) return;
   const entries = data?.entries || [];
 
-  // Store ALL entries globally so modal access works regardless of filter
+  // Store all entries globally so modal access works
   _journalEntries = {};
   entries.forEach(e => { _journalEntries[e.id] = e; });
 
-  // Filter to only entries that have at least one CS-matched pair
-  const visible = entries.filter(entryHasCsigPair);
-
-  if (!visible.length) {
+  if (!entries.length) {
     el.innerHTML = '<p class="empty-state">No journal entries yet — runs after first hourly update</p>';
     return;
   }
 
-  const rows = visible.map(e => {
+  const rows = entries.map(e => {
     const sentCls = e.risk_sentiment === 'RISK_ON'  ? 'risk-on'
                   : e.risk_sentiment === 'RISK_OFF' ? 'risk-off'
                   : 'neutral';

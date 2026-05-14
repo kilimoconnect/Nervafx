@@ -233,16 +233,6 @@
       </div>
     </div>
 
-    <div class="jpage-filter-sep"></div>
-
-    <div class="jpage-filter-group">
-      <span class="jpage-filter-label">Signals</span>
-      <div class="jpage-pills" id="filter-csig">
-        <button class="jpage-pill active" data-val="">All</button>
-        <button class="jpage-pill" data-val="cs" title="Only entries that had a Currency Signals pair">CS Only</button>
-      </div>
-    </div>
-
     <div class="jpage-search-wrap">
       <input
         type="search"
@@ -303,8 +293,7 @@
   let _filterSentiment = '';
   let _filterDate      = '';
   let _filterSearch    = '';
-  let _filterCsig      = false;
-  let _csigCurrencies  = new Set(); // populated from live strength data
+  let _csigCurrencies  = new Set(); // populated from live strength data — used by modal setup filter
   const _userTz = localStorage.getItem('nfx_tz') || 'auto';
 
   // ─── API helper ───────────────────────────────────────────────────────────────
@@ -385,7 +374,6 @@
         (e.risk_sentiment || '').toLowerCase().includes(q)
       );
     }
-    if (_filterCsig) entries = entries.filter(entryHasCsigPair);
     return entries;
   }
 
@@ -466,10 +454,10 @@
   }
   function onSearchInput(val) { _filterSearch = val.trim(); renderList(); }
   function clearFilters() {
-    _filterSession = ''; _filterSentiment = ''; _filterDate = ''; _filterSearch = ''; _filterCsig = false;
+    _filterSession = ''; _filterSentiment = ''; _filterDate = ''; _filterSearch = '';
     document.querySelectorAll('.jpage-pill').forEach(p => p.classList.remove('active'));
     document.querySelectorAll(
-      '#filter-session .jpage-pill[data-val=""], #filter-sentiment .jpage-pill[data-val=""], #filter-date .jpage-pill[data-val=""], #filter-csig .jpage-pill[data-val=""]'
+      '#filter-session .jpage-pill[data-val=""], #filter-sentiment .jpage-pill[data-val=""], #filter-date .jpage-pill[data-val=""]'
     ).forEach(p => p.classList.add('active'));
     const si = document.getElementById('jpage-search'); if (si) si.value = '';
     renderList();
@@ -724,7 +712,6 @@
   setupFilterPills('filter-session',   v => { _filterSession   = v; });
   setupFilterPills('filter-sentiment', v => { _filterSentiment = v; });
   setupFilterPills('filter-date',      v => { _filterDate      = v; });
-  setupFilterPills('filter-csig',      v => { _filterCsig      = v === 'cs'; });
 
   (async function init() {
     try {
@@ -760,12 +747,6 @@
           _csigCurrencies.add(c.currency);
         }
       });
-
-      // Show CS signal count in the filter pill label when currencies are found
-      if (_csigCurrencies.size) {
-        const csPill = document.querySelector('#filter-csig .jpage-pill[data-val="cs"]');
-        if (csPill) csPill.textContent = `CS Only (${_csigCurrencies.size})`;
-      }
 
       renderList();
     } catch (err) {
