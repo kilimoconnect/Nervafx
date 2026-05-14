@@ -717,8 +717,6 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
   display: flex;
   flex-direction: column;
   gap: 3px;
-  max-height: 320px;
-  overflow-y: auto;
 }
 
 .state-row {
