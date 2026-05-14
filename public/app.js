@@ -555,8 +555,8 @@ function aiHtml(ai, instrument) {
   return `
     <div class="ai-block">
       <div class="ai-row">
-        ${lp ? `<span class="ai-lp-badge ${lpCls}">${lp.replace(/_/g,' ')}</span>` : ''}
-        <span class="ai-badge ai-struct ${sCls}">${(ai.structure_type||'').replace(/_/g,' ')}</span>
+        ${lp ? `<span class="ai-lp-badge ${lpCls}">${clean(lp)}</span>` : ''}
+        <span class="ai-badge ai-struct ${sCls}">${clean(ai.structure_type||'')}</span>
         <span class="ai-badge ai-quality ${(ai.market_quality||'').toLowerCase()}">${ai.market_quality||''}</span>
         ${cpLabel ? `<span class="ai-cp-badge cp-${cpCls}">⚡ ${cpLabel}</span>` : ''}
         ${clLabel ? `<span class="ai-cl-badge cl-${clCls}">${clLabel}</span>` : ''}
@@ -599,7 +599,7 @@ function openAiModal(instrument) {
   document.getElementById('ai-modal-dir').innerHTML =
     `<span class="ai-badge ai-health ${(ai.trend_health||'').toLowerCase()}">${ai.trend_health||''}</span>`;
   document.getElementById('ai-modal-struct-badge').innerHTML =
-    `<span class="ai-badge ai-struct ${sCls}">${(ai.structure_type||'').replace(/_/g,' ')}</span>`;
+    `<span class="ai-badge ai-struct ${sCls}">${clean(ai.structure_type||'')}</span>`;
 
   const scoreBlock = (label, val, cls) => `
     <div class="ai-modal-score-block">
@@ -616,7 +616,7 @@ function openAiModal(instrument) {
     ${lp ? `
     <div class="ai-modal-lifecycle">
       <div class="ai-modal-lp-header">
-        <span class="ai-lp-badge ${lpCls}">${lp.replace(/_/g,' ')}</span>
+        <span class="ai-lp-badge ${lpCls}">${clean(lp)}</span>
         <span class="ai-modal-lc-label">Phase completion</span>
         <span class="ai-modal-lc-pct">${lc}%</span>
       </div>
@@ -663,7 +663,7 @@ function openAiModal(instrument) {
     <div class="ai-modal-flow">
       <div class="ai-modal-flow-header">
         <span class="ai-modal-flow-title">💸 Flow of Money</span>
-        <span class="ai-macro-badge ${maCls}">${maIcon} MACRO ${ma.replace(/_/g,' ')}</span>
+        <span class="ai-macro-badge ${maCls}">${maIcon} MACRO ${clean(ma)}</span>
       </div>
       <div class="ai-modal-flow-text">${d.flow_of_money}</div>
     </div>`;
@@ -788,7 +788,7 @@ function renderLiveOpportunities(states, aiMap = {}, sentimentData = null) {
           <span class="tf-item ${ta.h12}">12H ${ta.h12||'→'}</span>
           <span class="tf-item ${ta.h6}">6H ${ta.h6||'→'}</span>
           <span class="tf-item ${ta.h3}">3H ${ta.h3||'→'}</span>
-          <span class="sb-behavior ${s.spread_behavior}">${(s.spread_behavior||'').replace(/_/g,' ')}</span>
+          <span class="sb-behavior ${s.spread_behavior}">${clean(s.spread_behavior||'')}</span>
         </div>
         <div class="live-reason">${s.spread_behavior_text}</div>
         ${newsWarnHtml(s.instrument)}
@@ -834,20 +834,20 @@ function renderTopSetups(states, aiMap = {}, sentimentData = null) {
           <div class="top-header">
             <span class="top-pair">${pair(s.instrument)}</span>
             <span class="signal-dir ${dir}">${s.bias}</span>
-            <span class="phase-badge ${phCls}">${(s.phase||'').replace(/_/g,' ')}</span>
+            <span class="phase-badge ${phCls}">${clean(s.phase||'')}</span>
             <span class="action-badge ${s.action}">${s.action}</span>
           </div>
           ${sessionBadgeHtml(s)}
           ${pipelineHtml(s.pipeline_stage)}
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-            <div class="top-entry-status entry-${s.entry_status}">${(s.entry_status || '').replace(/_/g, ' ')}</div>
+            <div class="top-entry-status entry-${s.entry_status}">${clean(s.entry_status || '')}</div>
             ${s.pullback_depth ? `<span class="pb-depth ${s.pullback_depth}">${s.pullback_depth} PULLBACK</span>` : ''}
           </div>
           <div class="top-tf">
             <span class="tf-item ${ta.h12}">12H ${ta.h12 || '→'}</span>
             <span class="tf-item ${ta.h6}">6H ${ta.h6 || '→'}</span>
             <span class="tf-item ${ta.h3}">3H ${ta.h3 || '→'}</span>
-            <span class="sb-behavior ${s.spread_behavior}">${(s.spread_behavior||'').replace(/_/g,' ')}</span>
+            <span class="sb-behavior ${s.spread_behavior}">${clean(s.spread_behavior||'')}</span>
           </div>
           <div style="font-size:9px;color:var(--text-muted);margin-bottom:3px">${s.spread_behavior_text || ''}</div>
           ${nextActionHtml(s.next_action)}
@@ -904,7 +904,7 @@ function tfRow(ta, sb, sbText) {
     <span class="tf-item ${ta.h12}">12H ${ta.h12 || '→'}</span>
     <span class="tf-item ${ta.h6}">6H ${ta.h6 || '→'}</span>
     <span class="tf-item ${ta.h3}">3H ${ta.h3 || '→'}</span>
-    ${sb ? `<span class="sb-behavior ${sb}">${sb.replace(/_/g,' ')}</span>` : ''}
+    ${sb ? `<span class="sb-behavior ${sb}">${clean(sb)}</span>` : ''}
   </div>
   ${sbText ? `<div style="font-size:9px;color:var(--text-muted);margin-bottom:4px">${sbText}</div>` : ''}`;
 }
@@ -919,7 +919,7 @@ function signalCard(s, st) {
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
         <span class="signal-pair">${pair(s.instrument)}</span>
         <span class="signal-dir ${cls}">${s.signal}</span>
-        ${st?.phase ? `<span class="phase-badge ${phCls}">${(st.phase||'').replace(/_/g,' ')}</span>` : ''}
+        ${st?.phase ? `<span class="phase-badge ${phCls}">${clean(st.phase||'')}</span>` : ''}
         ${st?.action === 'ENTER' ? `<span class="action-badge ENTER">ENTER</span>` : ''}
       </div>
       ${pipelineHtml(st?.pipeline_stage)}
@@ -948,7 +948,7 @@ function waitCard(s, st) {
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
         <span class="signal-pair">${pair(s.instrument)}</span>
         <span class="signal-dir ${dir}">${s.direction || 'WAIT'}</span>
-        <span class="phase-badge ${phCls}">${(st?.phase || 'WAIT').replace(/_/g,' ')}</span>
+        <span class="phase-badge ${phCls}">${clean(st?.phase || 'WAIT')}</span>
         <span class="action-badge WAIT">WAIT</span>
       </div>
       ${pipelineHtml(st?.pipeline_stage)}
@@ -1111,7 +1111,7 @@ function renderStates(data) {
       <div class="state-row-v2">
         <div class="state-row-top">
           <span class="state-pair">${pair(s.instrument)}</span>
-          <span class="phase-badge ${phCls}">${(s.phase || s.state || '').replace(/_/g,' ')}</span>
+          <span class="phase-badge ${phCls}">${clean(s.phase || s.state || '')}</span>
           <span class="action-badge ${s.action}">${s.action || '—'}</span>
           <div class="state-conf-mini" style="width:36px;margin-left:auto">
             <div class="state-conf-mini-fill" style="width:${s.confidence}%"></div>
@@ -1122,7 +1122,7 @@ function renderStates(data) {
           <span class="tfa ${ta.h12}">12H${ta.h12||'→'}</span>
           <span class="tfa ${ta.h6}">6H${ta.h6||'→'}</span>
           <span class="tfa ${ta.h3}">3H${ta.h3||'→'}</span>
-          <span class="sb-behavior ${s.spread_behavior}">${(s.spread_behavior||'').replace(/_/g,' ')}</span>
+          <span class="sb-behavior ${s.spread_behavior}">${clean(s.spread_behavior||'')}</span>
           ${s.pullback_depth ? `<span class="pb-depth ${s.pullback_depth}">${s.pullback_depth}</span>` : ''}
           ${s.next_action && s.next_action !== 'No setup forming' ? `<span style="font-size:9px;color:var(--text-muted)">→ ${s.next_action}</span>` : ''}
         </div>
@@ -1232,7 +1232,7 @@ function renderActions(actions) {
     <div class="action-row">
       <span>${pair(a.instrument)}</span>
       <span class="action-status ${a.status}">${a.status}</span>
-      <span style="color:var(--text-muted);font-size:10px">${(a.action_type||'').replace(/_/g,' ')}</span>
+      <span style="color:var(--text-muted);font-size:10px">${clean(a.action_type||'')}</span>
       <span class="action-msg">${(a.message?.split('\n')[1] || a.error_message || '').replace(/([A-Z]{3})_([A-Z]{3})/g,'$1/$2')}</span>
       <span class="action-time">${fmtShort(a.time)}</span>
     </div>`).join('');
@@ -1415,7 +1415,7 @@ function renderSentiment(data) {
   const sentCls = s.sentiment === 'RISK_ON'  ? 'risk-on'
                : s.sentiment === 'RISK_OFF' ? 'risk-off'
                : 'neutral';
-  const sentLabel = (s.sentiment || 'NEUTRAL').replace(/_/g, ' ');
+  const sentLabel = clean(s.sentiment || 'NEUTRAL');
 
   const envCls = (s.environment || 'CALM').toLowerCase();
   const envLabel = s.environment || 'CALM';
@@ -1622,7 +1622,7 @@ function renderJrnAiSection(marketStates, aiAnalysis) {
   // AI warnings from the deep analysis
   const warnings = ai.filter(a => a.warning);
 
-  const stateLabel = s => (s || '—').replace(/_/g, ' ');
+  const stateLabel = s => clean(s || '—');
   const stateCls   = s => s === 'TREND' ? 'trend' : s?.startsWith('PULLBACK') ? 'pb' : s === 'READY_TO_ENTER' ? 'ready' : 'notrade';
   const biasCls    = b => b === 'BUY' ? 'buy' : b === 'SELL' ? 'sell' : '';
 
@@ -1642,7 +1642,7 @@ function renderJrnAiSection(marketStates, aiAnalysis) {
             <span class="jrn-ai-state ${stateCls(s.state)}">${stateLabel(s.state)}</span>
             <span class="signal-dir ${biasCls(s.bias)}" style="font-size:8px;padding:1px 5px">${s.bias || '—'}</span>
             <span class="jrn-ai-conf">${s.confidence ?? '—'}%</span>
-            <span class="jrn-ai-struct ${scls}">${a ? (a.structure_type || '—').replace(/_/g,' ') : '—'}</span>
+            <span class="jrn-ai-struct ${scls}">${a ? clean(a.structure_type || '—') : '—'}</span>
           </div>`;
       }).join('')}
     </div>`);
@@ -1650,7 +1650,7 @@ function renderJrnAiSection(marketStates, aiAnalysis) {
 
 function renderJrnSessionPerfSection(e, sessionEntries) {
   if (!sessionEntries || sessionEntries.length <= 1) {
-    return _jrnSection(`📊 Session: ${e.session_name.replace(/_/g,' ')}`, '<p class="jrn-empty">First snapshot of this session.</p>');
+    return _jrnSection(`📊 Session: ${clean(e.session_name)}`, '<p class="jrn-empty">First snapshot of this session.</p>');
 
   }
   const first = sessionEntries[0];
@@ -1660,7 +1660,7 @@ function renderJrnSessionPerfSection(e, sessionEntries) {
   const trendDelta = e.trend_pairs - first.trend_pairs;
   const readyDelta = e.ready_pairs - first.ready_pairs;
   const delta = v => v > 0 ? `<span style="color:#4ade80">+${v}</span>` : v < 0 ? `<span style="color:#f87171">${v}</span>` : `<span style="color:var(--text-dim)">±0</span>`;
-  return _jrnSection(`📊 Session: ${e.session_name.replace(/_/g,' ')} · ${sessionEntries.length} snapshots`, `
+  return _jrnSection(`📊 Session: ${clean(e.session_name)} · ${sessionEntries.length} snapshots`, `
     <div class="jrn-sess-stats">
       <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Duration</span><span class="jrn-sess-val">${sessionEntries.length}H</span></div>
       <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Sentiment flow</span><span class="jrn-sess-val">${sentFlow}</span></div>
@@ -1675,12 +1675,12 @@ function renderJrnPrevSessionSection(prevEntry) {
   const sentCls = prevEntry.risk_sentiment === 'RISK_ON' ? 'risk-on' : prevEntry.risk_sentiment === 'RISK_OFF' ? 'risk-off' : 'neutral';
   const sessCls = (prevEntry.session_quality || 'BLOCKED').toLowerCase().replace(/_/g, '-');
   const entered = (prevEntry.signals_summary?.entered || []);
-  const sessLabel = s => (s || '—').replace(/_/g,' ');
+  const sessLabel = s => clean(s || '—');
   return _jrnSection(`📋 Previous Session: ${sessLabel(prevEntry.session_name)}`, `
     <div class="jrn-prev-meta">
       <span class="jrn-prev-time">${fmtTime(prevEntry.time)}</span>
       <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${sessLabel(prevEntry.session_name)}</span>
-      <span class="jrn-sent sent-${sentCls}">${(prevEntry.risk_sentiment || '—').replace('_',' ')}</span>
+      <span class="jrn-sent sent-${sentCls}">${clean(prevEntry.risk_sentiment || '—')}</span>
       <span class="jrn-conf">${prevEntry.risk_confidence ?? '—'}%</span>
       <span class="jrn-prev-pairs">${prevEntry.trend_pairs}T · ${prevEntry.pullback_pairs}PB · ${prevEntry.ready_pairs}R</span>
     </div>
@@ -1691,7 +1691,7 @@ function renderJrnPrevSessionSection(prevEntry) {
     }).join('')}</div>` : ''}
     ${(prevEntry.top_setups || []).slice(0,5).map(s => {
       const dir = s.bias === 'BUY' ? 'buy' : 'sell';
-      return `<div class="jrn-setup-row"><span class="jrn-setup-pair">${pair(s.instrument)}</span><span class="signal-dir ${dir}" style="font-size:9px">${s.bias}</span><span class="jrn-setup-state">${(s.state||'').replace(/_/g,' ')}</span><span class="jrn-setup-conf">${s.confidence}%</span></div>`;
+      return `<div class="jrn-setup-row"><span class="jrn-setup-pair">${pair(s.instrument)}</span><span class="signal-dir ${dir}" style="font-size:9px">${s.bias}</span><span class="jrn-setup-state">${clean(s.state||'')}</span><span class="jrn-setup-conf">${s.confidence}%</span></div>`;
     }).join('')}`);
 }
 
@@ -1707,7 +1707,7 @@ function renderJrnSetupsSection(topSetups, signals) {
     }).join('')}</div>` : ''}
     ${setups.length ? `<div class="jrn-setups">${setups.map(s => {
       const dir = s.bias === 'BUY' ? 'buy' : 'sell';
-      return `<div class="jrn-setup-row"><span class="jrn-setup-pair">${pair(s.instrument)}</span><span class="signal-dir ${dir}" style="font-size:9px">${s.bias}</span><span class="jrn-setup-state">${(s.state||'').replace(/_/g,' ')}</span><span class="jrn-setup-conf">${s.confidence}%</span></div>`;
+      return `<div class="jrn-setup-row"><span class="jrn-setup-pair">${pair(s.instrument)}</span><span class="signal-dir ${dir}" style="font-size:9px">${s.bias}</span><span class="jrn-setup-state">${clean(s.state||'')}</span><span class="jrn-setup-conf">${s.confidence}%</span></div>`;
     }).join('')}</div>` : ''}
     ${waiting.length ? `<p class="jrn-waiting">${waiting.length} pair${waiting.length>1?'s':''} waiting for confirmation</p>` : ''}`);
 }
@@ -1733,7 +1733,7 @@ function renderJrnOutcomesSection(e) {
         ${(d.setups || []).map(s => {
           const oCls  = s.outcome === 'CORRECT' ? 'correct' : s.outcome === 'INCORRECT' ? 'wrong' : 'flat';
           const oIcon = s.outcome === 'CORRECT' ? '✓' : s.outcome === 'INCORRECT' ? '✕' : '→';
-          return `<div class="jrn-setup-outcome ${oCls}">${oIcon} ${pair(s.instrument)} ${s.bias} · ${(s.outcome||'').replace(/_/g,' ')}</div>`;
+          return `<div class="jrn-setup-outcome ${oCls}">${oIcon} ${pair(s.instrument)} ${s.bias} · ${clean(s.outcome||'')}</div>`;
         }).join('')}
       </div>`;
   }).join('');
@@ -1775,8 +1775,8 @@ function _renderJournalModal(e, newsEvents, sessionEntries, prevEntry) {
   // Header
   document.getElementById('jrn-modal-time').textContent = fmtTime(e.time);
   document.getElementById('jrn-modal-badges').innerHTML = `
-    <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${(e.session_name || '—').replace(/_/g,' ')}</span>
-    <span class="jrn-sent sent-${sentCls}">${(e.risk_sentiment || '—').replace('_',' ')}</span>
+    <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${clean(e.session_name || '—')}</span>
+    <span class="jrn-sent sent-${sentCls}">${clean(e.risk_sentiment || '—')}</span>
     <span class="jrn-conf">${e.risk_confidence ?? '—'}%</span>
     <div class="jrn-counts">
       <span class="jrn-count trend" title="Trend">${e.trend_pairs}T</span>
