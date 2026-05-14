@@ -34,8 +34,6 @@ function detectState({ spread_3h, spread_6h, spread_12h }, changes, prevState, b
     return 'REVERSAL_DEVELOPING';                                      // 6H clearly flipped
   }
 
-  if (Math.abs(spread_6h) < MIN_SPREAD) return 'NO_TRADE';
-
   // Coming out of REVERSAL_DEVELOPING with a valid new bias → 12H aligned → confirmed
   if (prevState === 'REVERSAL_DEVELOPING') return 'REVERSAL_CONFIRMED';
   if (prevState === 'REVERSAL_CONFIRMED') {
@@ -115,8 +113,7 @@ function scoreConfidence({ spread_6h, spread_12h }, changes, state, bias) {
 // ─── Reason text ──────────────────────────────────────────────────────────────
 function buildReason(bias, state, spread_3h, spread_6h, spread_12h, changes) {
   if (state === 'NO_TRADE') {
-    if (bias === 'NONE') return '12H and 6H spreads disagree; no clear directional bias.';
-    return `Spread too small (${Math.abs(spread_6h).toFixed(5)} < ${MIN_SPREAD}); no tradeable bias.`;
+    return '12H and 6H spreads disagree — no clear directional bias.';
   }
   if (state === 'REVERSAL_RISK') {
     return `6H losing direction (${Math.abs(spread_6h).toFixed(5)} < ${MIN_SPREAD} vs 12H ${spread_12h >= 0 ? '+' : ''}${spread_12h.toFixed(5)}). Structure weakening — not a reversal yet. Stand aside.`;

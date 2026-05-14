@@ -119,7 +119,7 @@ function invalidationWarning(state, bias) {
   if (!state || state === 'NO_TRADE' || !bias || bias === 'NONE') return null;
   if (state === 'READY_TO_ENTER') return '6H spread collapses → entry cancelled';
   if (state === 'PULLBACK_STARTING' || state === 'PULLBACK_ACTIVE') return '6H collapses OR 12H direction flips → reversal risk';
-  if (state === 'TREND') return '6H collapses below MIN threshold → trend invalid';
+  if (state === 'TREND') return '6H flips against 12H → reversal risk';
   return null;
 }
 
