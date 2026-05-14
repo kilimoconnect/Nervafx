@@ -79,11 +79,12 @@ module.exports = async function handler(req, res) {
       approved,
       rejected,
       summary: {
-        openTrades:     approved.length,
+        openTrades:       approved.length,
         maxTrades,
-        dailyRisk:      totalRisk,
-        dailyRiskPct:   ((totalRisk / balance) * 100).toFixed(2),
+        dailyRisk:        totalRisk,
+        dailyRiskPct:     ((totalRisk / balance) * 100).toFixed(2),
         maxDailyRiskPct,
+        riskPerTradePct:  (maxDailyRiskPct / maxTrades).toFixed(2),
         balance,
       },
     });

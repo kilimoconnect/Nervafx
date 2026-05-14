@@ -24,13 +24,20 @@ function buildRiskConfig(profile) {
   const maxOpenTrades       = parseInt(profile?.max_trades)            || config.risk.maxOpenTrades;
   const minRR               = parseFloat(profile?.min_rr)              || config.risk.minRR;
 
+  const resolvedBalance     = accountBalance      > 0 ? accountBalance      : config.risk.accountBalance;
+  const resolvedDailyLoss   = maxDailyLossPercent > 0 ? maxDailyLossPercent : config.risk.maxDailyLossPercent;
+  const resolvedMaxTrades   = maxOpenTrades       > 0 ? maxOpenTrades       : config.risk.maxOpenTrades;
+  const resolvedMinRR       = minRR               > 0 ? minRR               : config.risk.minRR;
+  // Per-trade risk = daily budget ÷ max trades (e.g. 2% / 10 = 0.2% per trade)
+  const resolvedRiskPercent = resolvedDailyLoss / resolvedMaxTrades;
+
   return {
     userId:              profile?.id ?? null,
-    accountBalance:      accountBalance      > 0 ? accountBalance      : config.risk.accountBalance,
-    maxDailyLossPercent: maxDailyLossPercent > 0 ? maxDailyLossPercent : config.risk.maxDailyLossPercent,
-    maxOpenTrades:       maxOpenTrades       > 0 ? maxOpenTrades       : config.risk.maxOpenTrades,
-    minRR:               minRR              > 0 ? minRR               : config.risk.minRR,
-    riskPercent:         config.risk.riskPercent,
+    accountBalance:      resolvedBalance,
+    maxDailyLossPercent: resolvedDailyLoss,
+    maxOpenTrades:       resolvedMaxTrades,
+    minRR:               resolvedMinRR,
+    riskPercent:         resolvedRiskPercent,
     minConfidence:       config.risk.minConfidence,
   };
 }
