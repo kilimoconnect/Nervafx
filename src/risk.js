@@ -113,6 +113,10 @@ function reject(signal, reason, rc) {
 }
 
 function approve(signal, riskAmount, stopDistance, positionSize, rc) {
+  // TP is personal: recompute from user's minRR so each account gets their target
+  const dir        = signal.signal === 'BUY' ? 1 : -1;
+  const takeProfit = signal.entry_price + (dir * stopDistance * rc.minRR);
+
   return {
     user_id:         rc.userId,
     signal_id:       signal.id || null,
@@ -123,9 +127,10 @@ function approve(signal, riskAmount, stopDistance, positionSize, rc) {
     risk_amount:     riskAmount,
     entry_price:     signal.entry_price,
     stop_loss:       signal.stop_loss,
-    take_profit:     signal.take_profit,
+    take_profit:     takeProfit,
     stop_distance:   stopDistance,
     position_size:   positionSize,
+    risk_reward:     rc.minRR,
     status:          'APPROVED',
     reject_reason:   null,
   };
