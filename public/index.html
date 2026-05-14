@@ -208,46 +208,44 @@
       <div id="sentiment-display" class="sentiment-display"></div>
     </section>
 
-    <!-- SIGNAL BOARD -->
+    <!-- TRADE WATCHLIST -->
     <section class="card span-2" id="section-signals">
       <div class="plan-lock-overlay" data-require="pro">
-        <span class="plan-lock-icon">📡</span>
-        <span class="plan-lock-title">Signal Board</span>
-        <span class="plan-lock-desc">Confirmed trade entries with direction, structure context, and confidence score. Only signals where strength, structure, and sentiment all align.</span>
+        <span class="plan-lock-icon">🎯</span>
+        <span class="plan-lock-title">Trade Watchlist</span>
+        <span class="plan-lock-desc">Pairs that need your attention right now — in pullback, ready to enter, or entry active. Filtered by currency strength alignment.</span>
         <ul class="plan-lock-features">
-          <li>BUY / SELL direction with pair name</li>
-          <li>Structure state — trending, pullback, reversal</li>
-          <li>Waiting setups flagged separately</li>
+          <li>Only PULLBACK · READY · ENTRY states shown</li>
+          <li>BUY / SELL direction &amp; confidence score</li>
+          <li>Next action &amp; TF alignment per pair</li>
         </ul>
         <a href="/home.html#pricing" class="plan-lock-btn">Upgrade to Pro →</a>
       </div>
       <h2 class="card-title">
-        <i data-lucide="radio"></i> Signal Board
-        <span class="sub">confirmed entries &amp; watching</span>
+        <i data-lucide="crosshair"></i> Trade Watchlist
+        <span class="sub">pullback · ready · entry active</span>
       </h2>
-      <div id="signals-active" class="signal-grid"></div>
-      <div id="signals-wait" class="signal-grid wait-grid"></div>
-      <div id="signals-notrade" class="notrade-row"></div>
+      <div id="watchlist-list"></div>
     </section>
 
-    <!-- MARKET STATES -->
+    <!-- FULL MARKET SCANNER -->
     <section class="card" id="section-states">
       <div class="plan-lock-overlay" data-require="pro">
         <span class="plan-lock-icon">🗺️</span>
-        <span class="plan-lock-title">Market States — All 28 Pairs</span>
-        <span class="plan-lock-desc">H1 trend structure analysis for every pair. Know whether each market is trending, ranging, or reversing before you place any trade.</span>
+        <span class="plan-lock-title">Full Market Scanner</span>
+        <span class="plan-lock-desc">All 28 pairs at a glance — phase, direction, confidence, and timeframe alignment in one compact view. Know the state of every market instantly.</span>
         <ul class="plan-lock-features">
-          <li>Trend, range, reversal &amp; pullback states</li>
+          <li>All 28 pairs sorted by opportunity priority</li>
+          <li>Phase, direction &amp; TF arrows per row</li>
           <li>Updated on every hourly candle close</li>
-          <li>Filters out low-quality market conditions</li>
         </ul>
         <a href="/home.html#pricing" class="plan-lock-btn">Upgrade to Pro →</a>
       </div>
       <h2 class="card-title">
-        <i data-lucide="layers"></i> Market States
-        <span class="sub">all 28 pairs</span>
+        <i data-lucide="table-2"></i> Full Market Scanner
+        <span class="sub">all 28 pairs · phase &amp; direction</span>
       </h2>
-      <div id="states-table" class="states-table"></div>
+      <div id="states-table" class="states-table scanner-table"></div>
     </section>
 
     <!-- SPREAD RANKING -->

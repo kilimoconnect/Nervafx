@@ -915,105 +915,77 @@ function renderTopSetups(states, aiMap = {}, sentimentData = null) {
 
 // ─── Signal board ─────────────────────────────────────────────────────────────
 
-function renderSignals(data, statesArr) {
-  if (!data?.signals) return;
-  // When CS data is loaded but no currencies qualify, clear the whole board
-  if (_csigDataLoaded && !_csigCurrencies.size) {
-    document.getElementById('signals-active').innerHTML = '<p class="empty-state">No active signals</p>';
-    document.getElementById('signals-wait').innerHTML   = '';
-    document.getElementById('signals-notrade').innerHTML = '';
-    return;
-  }
-  const sigs    = data.signals;
-  const active  = sigs.filter(s => (s.signal === 'BUY' || s.signal === 'SELL') && hasCsigCurrency(s.instrument));
-  const waiting = sigs.filter(s => s.signal === 'WAIT' && hasCsigCurrency(s.instrument));
-  const notrade = sigs.filter(s => s.signal === 'NO_TRADE');
+// ─── Trade Watchlist ──────────────────────────────────────────────────────────
+// Shows only actionable pairs: PULLBACK_STARTING, PULLBACK_ACTIVE, READY_TO_ENTER
+// Sorted by pipeline priority then confidence. CS-filtered.
 
-  const stateMap = {};
-  (statesArr || []).forEach(st => { stateMap[st.instrument] = st; });
+const WATCHLIST_STATES = new Set(['PULLBACK_STARTING', 'PULLBACK_ACTIVE', 'READY_TO_ENTER']);
 
-  document.getElementById('signals-active').innerHTML =
-    active.length
-      ? active.map(s => signalCard(s, stateMap[s.instrument])).join('')
-      : '<p class="empty-state">No active signals</p>';
+function watchlistCard(s, sig) {
+  const dir     = s.bias === 'BUY' ? 'buy' : s.bias === 'SELL' ? 'sell' : '';
+  const ta      = s.tf_alignment || {};
+  const phCls   = (s.phase || s.state || '').replace(/ /g, '_');
+  const isEntry = s.phase === 'ENTRY_ACTIVE';
+  const bd      = s.confidence_breakdown || [];
 
-  document.getElementById('signals-wait').innerHTML =
-    waiting.length ? waiting.map(s => waitCard(s, stateMap[s.instrument])).join('') : '';
-
-  // Last signal time
-  const ago = data.lastSignalTime ? timeAgo(data.lastSignalTime) : null;
-  const lastBar = ago
-    ? `<div class="last-signal-bar">Last signal: <b>${data.lastSignalInstrument?.replace('_','/')}</b> — ${ago}</div>`
+  const priceLine = sig?.entry_price
+    ? `<div class="wl-prices">
+        <span><span class="wl-lbl">Entry</span>${fmt(sig.entry_price)}</span>
+        <span><span class="wl-lbl">SL</span><span class="wl-sl">${fmt(sig.stop_loss)}</span></span>
+        <span><span class="wl-lbl">TP</span><span class="wl-tp">${fmt(sig.take_profit)}</span></span>
+       </div>`
     : '';
 
-  // NO TRADE — cleaner label
-  document.getElementById('signals-notrade').innerHTML =
-    `<div style="color:var(--text-muted);font-size:10px;margin-bottom:6px">Filtered out: ${notrade.length} pairs (low quality / no alignment)</div>` +
-    `<div style="display:flex;flex-wrap:wrap;gap:4px">` +
-    notrade.map(s => `<span style="background:var(--bg-card);color:var(--text-muted);border:1px solid var(--border);border-radius:4px;padding:2px 7px;font-size:10px;font-family:monospace">${pair(s.instrument)}</span>`).join('') +
-    `</div>` + lastBar;
-}
-
-function tfRow(ta, sb, sbText) {
-  if (!ta) return '';
-  return `<div class="signal-tf-row">
-    <span class="tf-item ${ta.h12}">12H ${ta.h12 || '→'}</span>
-    <span class="tf-item ${ta.h6}">6H ${ta.h6 || '→'}</span>
-    <span class="tf-item ${ta.h3}">3H ${ta.h3 || '→'}</span>
-    ${sb ? `<span class="sb-behavior ${sb}">${clean(sb)}</span>` : ''}
-  </div>
-  ${sbText ? `<div style="font-size:9px;color:var(--text-muted);margin-bottom:4px">${sbText}</div>` : ''}`;
-}
-
-function signalCard(s, st) {
-  const cls   = s.signal.toLowerCase();
-  const ta    = st?.tf_alignment;
-  const phCls = (st?.phase || '').replace(' ', '_');
-  const bd    = st?.confidence_breakdown || [];
   return `
-    <div class="signal-card ${cls}">
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-        <span class="signal-pair">${pair(s.instrument)}</span>
-        <span class="signal-dir ${cls}">${s.signal}</span>
-        ${st?.phase ? `<span class="phase-badge ${phCls}">${clean(st.phase||'')}</span>` : ''}
-        ${st?.action === 'ENTER' ? `<span class="action-badge ENTER">ENTER</span>` : ''}
+    <div class="wl-card ${dir}${isEntry ? ' wl-entry' : ''}">
+      <div class="wl-top">
+        <span class="wl-pair">${pair(s.instrument)}</span>
+        ${dir ? `<span class="signal-dir ${dir}">${s.bias}</span>` : ''}
+        <span class="phase-badge ${phCls}">${clean(s.phase || s.state || '')}</span>
+        <span class="action-badge ${s.action}">${clean(s.action) || '—'}</span>
+        <span class="wl-conf">${s.confidence}%</span>
       </div>
-      ${pipelineHtml(st?.pipeline_stage)}
-      ${tfRow(ta, st?.spread_behavior, st?.spread_behavior_text)}
-      <div class="signal-prices">
-        <div class="signal-price-item"><span>Entry</span>${fmt(s.entry_price)}</div>
-        <div class="signal-price-item"><span>Stop</span><span style="color:#f87171">${fmt(s.stop_loss)}</span></div>
-        <div class="signal-price-item"><span>Target</span><span style="color:#4ade80">${fmt(s.take_profit)}</span></div>
+      <div class="wl-tf">
+        <span class="tfa ${ta.h12}">12H ${ta.h12||'→'}</span>
+        <span class="tfa ${ta.h6}">6H ${ta.h6||'→'}</span>
+        <span class="tfa ${ta.h3}">3H ${ta.h3||'→'}</span>
+        <span class="sb-behavior ${s.spread_behavior}">${clean(s.spread_behavior||'')}</span>
+        ${s.pullback_depth ? `<span class="pb-depth ${s.pullback_depth}">${s.pullback_depth}</span>` : ''}
       </div>
-      <div class="signal-conf">Confidence ${s.confidence}%
-        <div class="conf-bar"><div class="conf-fill" style="width:${s.confidence}%"></div></div>
-      </div>
-      ${bd.length ? `<div class="conf-factors" style="align-items:flex-start;margin-top:5px">${bd.map(f => `<span>+ ${f}</span>`).join('')}</div>` : ''}
-      ${st?.session_label ? `<div class="sess-inline-badge sq-${(st.session_quality||'').toLowerCase().replace(/_/g,'-')}">${st.session_label}${st.session_delta != null ? ` <span class="sess-inline-delta">${st.session_delta > 0 ? '+' : ''}${st.session_delta}</span>` : ''}</div>` : ''}
-      ${st?.next_action ? nextActionHtml(st.next_action) : ''}
+      <div class="wl-conf-bar"><div class="wl-conf-fill" style="width:${s.confidence}%"></div></div>
+      ${bd.length ? `<div class="conf-factors" style="margin-top:3px">${bd.map(f => `<span>+ ${f}</span>`).join('')}</div>` : ''}
+      ${priceLine}
+      ${s.session_label ? `<div class="sess-inline-badge sq-${(s.session_quality||'').toLowerCase().replace(/_/g,'-')}">${s.session_label}${s.session_delta != null ? ` <span class="sess-inline-delta">${s.session_delta > 0 ? '+' : ''}${s.session_delta}</span>` : ''}</div>` : ''}
+      ${nextActionHtml(s.next_action)}
       ${newsWarnHtml(s.instrument)}
     </div>`;
 }
 
-function waitCard(s, st) {
-  const dir   = s.direction === 'LONG' ? 'buy' : 'sell';
-  const ta    = st?.tf_alignment;
-  const phCls = (st?.phase || 'PULLBACK').replace(' ', '_');
-  return `
-    <div class="signal-card wait">
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-        <span class="signal-pair">${pair(s.instrument)}</span>
-        <span class="signal-dir ${dir}">${s.direction || 'WAIT'}</span>
-        <span class="phase-badge ${phCls}">${clean(st?.phase || 'WAIT')}</span>
-        <span class="action-badge WAIT">WAIT</span>
-      </div>
-      ${pipelineHtml(st?.pipeline_stage)}
-      ${tfRow(ta, st?.spread_behavior, st?.spread_behavior_text)}
-      <div class="signal-conf" style="margin-top:4px">Confidence ${s.confidence}%
-        <div class="conf-bar"><div class="conf-fill" style="width:${s.confidence}%;background:var(--yellow)"></div></div>
-      </div>
-      ${st?.next_action ? nextActionHtml(st.next_action) : ''}
-    </div>`;
+function renderSignals(data, statesArr) {
+  const el = document.getElementById('watchlist-list');
+  if (!el) return;
+
+  // CS gate: loaded but no qualifying currencies → show empty
+  if (_csigDataLoaded && !_csigCurrencies.size) {
+    el.innerHTML = '<p class="empty-state">No active currency signals</p>';
+    return;
+  }
+
+  // Signal map for entry/stop/target price lookup
+  const sigMap = {};
+  (data?.signals || []).forEach(s => { sigMap[s.instrument] = s; });
+
+  // Filter statesArr to actionable states + CS-qualifying pairs only
+  const actionable = (statesArr || [])
+    .filter(s => WATCHLIST_STATES.has(s.state) && hasCsigCurrency(s.instrument))
+    .sort((a, b) => {
+      if (b.pipeline_stage !== a.pipeline_stage) return b.pipeline_stage - a.pipeline_stage;
+      return b.confidence - a.confidence;
+    });
+
+  el.innerHTML = actionable.length
+    ? actionable.map(s => watchlistCard(s, sigMap[s.instrument])).join('')
+    : '<p class="empty-state">No actionable setups — waiting for pullback or entry signal</p>';
 }
 
 // ─── Currency Signals (strong / weak filter) ──────────────────────────────────
@@ -1152,45 +1124,44 @@ document.querySelectorAll('.tf-btn').forEach(btn => {
 
 // ─── Market states ────────────────────────────────────────────────────────────
 
+// ─── Full Market Scanner ──────────────────────────────────────────────────────
+// Compact single-line rows for all 28 pairs. Sorted: actionable first (by
+// pipeline_stage desc), NO_TRADE at bottom. TF arrows show raw spread direction.
+
 function renderStates(data) {
   if (!data?.states) return;
   const el = document.getElementById('states-table');
-  if (_csigDataLoaded && !_csigCurrencies.size) {
-    el.innerHTML = '<p class="empty-state">No active currency signals</p>';
-    return;
-  }
-  el.innerHTML = data.states.map(s => {
-    const ta    = s.tf_alignment || {};
-    const phCls = (s.phase || '').replace(' ', '_');
-    if (s.state === 'NO_TRADE') return `
-      <div class="state-row-v2" style="opacity:0.45">
-        <div class="state-row-top">
-          <span class="state-pair">${pair(s.instrument)}</span>
-          <span class="phase-badge NO_TRADE">NO TRADE</span>
-        </div>
-      </div>`;
-    const dir = s.bias === 'BUY' ? 'buy' : s.bias === 'SELL' ? 'sell' : '';
-    return `
-      <div class="state-row-v2">
-        <div class="state-row-top">
-          <span class="state-pair">${pair(s.instrument)}</span>
-          ${dir ? `<span class="signal-dir ${dir}" style="font-size:9px;padding:2px 6px">${s.bias}</span>` : ''}
-          <span class="phase-badge ${phCls}">${clean(s.phase || s.state || '')}</span>
-          <span class="action-badge ${s.action}">${clean(s.action) || '—'}</span>
-          <div class="state-conf-mini" style="width:36px;margin-left:auto">
-            <div class="state-conf-mini-fill" style="width:${s.confidence}%"></div>
-          </div>
-          <span style="font-size:10px;color:var(--text-muted)">${s.confidence}%</span>
-        </div>
-        <div class="state-row-bottom">
-          <span class="tfa ${ta.h12}">12H${ta.h12||'→'}</span>
-          <span class="tfa ${ta.h6}">6H${ta.h6||'→'}</span>
-          <span class="tfa ${ta.h3}">3H${ta.h3||'→'}</span>
-          <span class="sb-behavior ${s.spread_behavior}">${clean(s.spread_behavior||'')}</span>
-          ${s.pullback_depth ? `<span class="pb-depth ${s.pullback_depth}">${s.pullback_depth}</span>` : ''}
-        </div>
-        ${nextActionHtml(s.next_action)}
-      </div>`;
+  if (!el) return;
+
+  // Sort: pipeline_stage desc → confidence desc → NO_TRADE last
+  const sorted = [...data.states].sort((a, b) => {
+    const pa = (a.state === 'NO_TRADE' || !a.bias || a.bias === 'NONE') ? -1 : (a.pipeline_stage || 0);
+    const pb = (b.state === 'NO_TRADE' || !b.bias || b.bias === 'NONE') ? -1 : (b.pipeline_stage || 0);
+    if (pb !== pa) return pb - pa;
+    return (b.confidence || 0) - (a.confidence || 0);
+  });
+
+  el.innerHTML = sorted.map(s => {
+    const ta       = s.tf_alignment || {};
+    const dir      = s.bias === 'BUY' ? 'buy' : s.bias === 'SELL' ? 'sell' : '';
+    const isNoTrade = s.state === 'NO_TRADE' || !s.bias || s.bias === 'NONE';
+    const phCls    = (s.phase || s.state || '').replace(/ /g, '_');
+
+    return `<div class="scanner-row${isNoTrade ? ' no-trade' : ''}">
+      <span class="scanner-pair">${pair(s.instrument)}</span>
+      ${dir
+        ? `<span class="signal-dir ${dir}" style="font-size:8px;padding:1px 5px;margin:0">${s.bias}</span>`
+        : `<span class="scanner-no-dir">—</span>`}
+      <span class="phase-badge ${phCls}" style="font-size:8px;padding:1px 5px;white-space:nowrap">${clean(s.phase || s.state || '')}</span>
+      <span class="action-badge ${s.action}" style="font-size:8px;padding:1px 5px;white-space:nowrap">${clean(s.action) || '—'}</span>
+      <span class="scanner-conf">${s.confidence}%</span>
+      <span class="scanner-tf">
+        <span class="tfa ${ta.h12}">12H${ta.h12||'→'}</span>
+        <span class="tfa ${ta.h6}">6H${ta.h6||'→'}</span>
+        <span class="tfa ${ta.h3}">3H${ta.h3||'→'}</span>
+      </span>
+      <span class="sb-behavior ${s.spread_behavior}" style="font-size:8px;white-space:nowrap">${clean(s.spread_behavior||'')}</span>
+    </div>`;
   }).join('');
 }
 
@@ -2217,7 +2188,7 @@ function showSkeletons() {
   const skels = {
     'live-opportunities':  3,
     'top-setups':          3,
-    'signals-active':      2,
+    'watchlist-list':      2,
     'spreads-list':        6,
     'ranking-12h-list':    6,
     'm15-spreads-list':    6,

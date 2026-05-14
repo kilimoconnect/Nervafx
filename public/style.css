@@ -766,6 +766,125 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
 }
 .state-conf-mini-fill { height: 100%; background: var(--accent); border-radius: 2px; }
 
+/* ─── Trade Watchlist ───────────────────────────────────────────────────────── */
+#watchlist-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.wl-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  transition: background 0.15s;
+}
+.wl-card:last-child { margin-bottom: 0; }
+.wl-card:hover { background: var(--bg-hover); }
+.wl-card.buy  { border-left-color: var(--green); }
+.wl-card.sell { border-left-color: var(--red); }
+.wl-card.wl-entry {
+  box-shadow: 0 0 0 1px rgba(74,222,128,0.15);
+  background: rgba(22,163,74,0.04);
+}
+
+.wl-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 5px;
+}
+.wl-pair {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.wl-conf {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.wl-tf {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.wl-conf-bar {
+  height: 2px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+  margin: 4px 0;
+}
+.wl-conf-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.4s;
+}
+.wl-prices {
+  display: flex;
+  gap: 14px;
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-top: 5px;
+  font-family: var(--font);
+}
+.wl-lbl { color: var(--text-muted); margin-right: 3px; }
+.wl-sl  { color: #f87171; }
+.wl-tp  { color: #4ade80; }
+
+/* ─── Full Market Scanner ───────────────────────────────────────────────────── */
+.scanner-table {
+  gap: 2px;
+}
+
+.scanner-row {
+  display: grid;
+  grid-template-columns: 52px 32px minmax(80px,1fr) minmax(48px,auto) 34px auto minmax(68px,1fr);
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  border-radius: 3px;
+  background: var(--bg);
+  font-size: 10px;
+  transition: background 0.15s;
+  min-width: 0;
+}
+.scanner-row:hover { background: var(--bg-hover); }
+.scanner-row.no-trade { opacity: 0.38; }
+
+.scanner-pair {
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+.scanner-conf {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-align: right;
+  white-space: nowrap;
+  font-family: var(--font);
+}
+.scanner-tf {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+}
+.scanner-no-dir {
+  color: var(--text-muted);
+  font-size: 10px;
+  text-align: center;
+}
+
 /* ─── Spread ranking ───────────────────────────────────────────────────────── */
 .spreads-list {
   display: flex;

@@ -3,10 +3,12 @@ const { getCurrentSession, applySessionFilter } = require('../src/sessionEngine'
 
 const MIN_SPREAD = 0.0020;
 
-// ─── TF arrow ─────────────────────────────────────────────────────────────────
-function tfArrow(val, bias) {
+// ─── TF arrow — raw spread direction (positive = ↑, negative = ↓) ────────────
+// For SHORT pairs: negative spread is bearish — arrow shows the spread value
+// direction so traders always read: ↑ = positive spread, ↓ = negative spread.
+function tfArrow(val) {
   if (Math.abs(val) < 0.0003) return '→';
-  return (bias === 'BUY' ? val > 0 : val < 0) ? '↑' : '↓';
+  return val > 0 ? '↑' : '↓';
 }
 
 // ─── Spread lifecycle ─────────────────────────────────────────────────────────
@@ -187,7 +189,7 @@ module.exports = async function handler(req, res) {
         entry_status:         entryStatus(state, confidence),
         phase,
         action:               sessionFilter.trade_blocked ? 'AVOID' : action,
-        tf_alignment:         { h12: tfArrow(s12, bias), h6: tfArrow(s6, bias), h3: tfArrow(s3, bias) },
+        tf_alignment:         { h12: tfArrow(s12), h6: tfArrow(s6), h3: tfArrow(s3) },
         spread_behavior:      lifecycle,
         spread_behavior_text: LIFECYCLE_TEXT[lifecycle] || '',
         confidence_breakdown: confBreakdown(s3, s6, s12, bias, state),
