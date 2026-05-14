@@ -853,7 +853,7 @@ function renderLiveOpportunities(states, aiMap = {}, sentimentData = null) {
 function computeTopSetups(states) {
   const priority = { READY: 3, PULLBACK: 2, TREND: 1 };
   return [...states]
-    .filter(s => s.state !== 'NO_TRADE' && s.confidence > 0 && !s.session_blocked && hasCsigCurrency(s.instrument))
+    .filter(s => s.state !== 'NO_TRADE' && s.confidence > 0 && !s.session_blocked)
     .sort((a, b) => {
       const pa = priority[a.phase] || 0, pb = priority[b.phase] || 0;
       return pa !== pb ? pb - pa : b.confidence - a.confidence;
@@ -965,19 +965,13 @@ function renderSignals(data, statesArr) {
   const el = document.getElementById('watchlist-list');
   if (!el) return;
 
-  // CS gate: loaded but no qualifying currencies → show empty
-  if (_csigDataLoaded && !_csigCurrencies.size) {
-    el.innerHTML = '<p class="empty-state">No active currency signals</p>';
-    return;
-  }
-
   // Signal map for entry/stop/target price lookup
   const sigMap = {};
   (data?.signals || []).forEach(s => { sigMap[s.instrument] = s; });
 
-  // Filter statesArr to actionable states + CS-qualifying pairs only
+  // Filter statesArr to actionable states only (no CS filter)
   const actionable = (statesArr || [])
-    .filter(s => WATCHLIST_STATES.has(s.state) && hasCsigCurrency(s.instrument))
+    .filter(s => WATCHLIST_STATES.has(s.state))
     .sort((a, b) => {
       if (b.pipeline_stage !== a.pipeline_stage) return b.pipeline_stage - a.pipeline_stage;
       return b.confidence - a.confidence;
