@@ -1395,6 +1395,21 @@ const SESSION_TIMELINE = [
   { name: 'DEAD_HOURS',  label: 'Low Liq.',   hours: '21–00', quality: 'blocked'   },
 ];
 
+// Maps stored session_name keys (e.g. DEAD_HOURS) to human display labels.
+// Falls back to clean() for any unknown key.
+const SESSION_LABEL_MAP = {
+  ASIA:        'Asia',
+  LONDON_OPEN: 'LDN Open',
+  LONDON:      'London',
+  LONDON_NY:   'LDN/NY',
+  LATE_NY:     'Late NY',
+  DEAD_HOURS:  'Low Liquidity',
+};
+function sessionLabel(name) {
+  if (!name) return '—';
+  return SESSION_LABEL_MAP[name] || clean(name);
+}
+
 function renderSession(data) {
   const el = document.getElementById('session-display');
   if (!el) return;
@@ -1796,7 +1811,7 @@ function renderJrnAiSection(marketStates, aiAnalysis) {
 
 function renderJrnSessionPerfSection(e, sessionEntries) {
   if (!sessionEntries || sessionEntries.length <= 1) {
-    return _jrnSection(`📊 Session: ${clean(e.session_name)}`, '<p class="jrn-empty">First snapshot of this session.</p>');
+    return _jrnSection(`📊 Session: ${sessionLabel(e.session_name)}`, '<p class="jrn-empty">First snapshot of this session.</p>');
 
   }
   const first = sessionEntries[0];
@@ -1806,7 +1821,7 @@ function renderJrnSessionPerfSection(e, sessionEntries) {
   const trendDelta = e.trend_pairs - first.trend_pairs;
   const readyDelta = e.ready_pairs - first.ready_pairs;
   const delta = v => v > 0 ? `<span style="color:#4ade80">+${v}</span>` : v < 0 ? `<span style="color:#f87171">${v}</span>` : `<span style="color:var(--text-dim)">±0</span>`;
-  return _jrnSection(`📊 Session: ${clean(e.session_name)} · ${sessionEntries.length} snapshots`, `
+  return _jrnSection(`📊 Session: ${sessionLabel(e.session_name)} · ${sessionEntries.length} snapshots`, `
     <div class="jrn-sess-stats">
       <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Duration</span><span class="jrn-sess-val">${sessionEntries.length}H</span></div>
       <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Sentiment flow</span><span class="jrn-sess-val">${sentFlow}</span></div>
@@ -1824,7 +1839,7 @@ function renderJrnPrevSessionSection(prevEntry) {
   return _jrnSection('📋 Previous Journal', `
     <div class="jrn-prev-meta">
       <span class="jrn-prev-time">${fmtTime(prevEntry.time)}</span>
-      <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${clean(prevEntry.session_name || '—')}</span>
+      <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${sessionLabel(prevEntry.session_name)}</span>
       <span class="jrn-sent sent-${sentCls}">${clean(prevEntry.risk_sentiment || '—')}</span>
       <span class="jrn-conf">${prevEntry.risk_confidence ?? '—'}%</span>
       <span class="jrn-prev-pairs">${prevEntry.trend_pairs}T · ${prevEntry.pullback_pairs}PB · ${prevEntry.ready_pairs}R</span>
@@ -1954,7 +1969,7 @@ function _renderJournalModal(e, newsEvents, sessionEntries, prevEntry) {
   // Header
   document.getElementById('jrn-modal-time').textContent = fmtTime(e.time);
   document.getElementById('jrn-modal-badges').innerHTML = `
-    <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${clean(e.session_name || '—')}</span>
+    <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${sessionLabel(e.session_name)}</span>
     <span class="jrn-sent sent-${sentCls}">${clean(e.risk_sentiment || '—')}</span>
     <span class="jrn-conf">${e.risk_confidence ?? '—'}%</span>
     <div class="jrn-counts">
@@ -2073,7 +2088,7 @@ function renderJournal(data) {
         <div class="jrn-header">
           <div class="jrn-hdr-top">
             <span class="jrn-time">${fmtShort(e.time)}</span>
-            <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${clean(e.session_name || '—')}</span>
+            <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${sessionLabel(e.session_name)}</span>
           </div>
           <div class="jrn-hdr-bot">
             <span class="jrn-sent sent-${sentCls}">${clean(e.risk_sentiment || '—')}</span>
