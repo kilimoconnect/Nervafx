@@ -1186,8 +1186,8 @@ function renderStates(data) {
           <span class="tfa ${ta.h3}">3H${ta.h3||'→'}</span>
           <span class="sb-behavior ${s.spread_behavior}">${clean(s.spread_behavior||'')}</span>
           ${s.pullback_depth ? `<span class="pb-depth ${s.pullback_depth}">${s.pullback_depth}</span>` : ''}
-          ${s.next_action && s.next_action !== 'No setup forming' ? `<span style="font-size:9px;color:var(--text-muted)">→ ${s.next_action}</span>` : ''}
         </div>
+        ${nextActionHtml(s.next_action)}
       </div>`;
   }).join('');
 }
