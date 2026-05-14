@@ -2968,7 +2968,7 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
 
 .session-main {
   display: grid;
-  grid-template-columns: minmax(150px, 180px) minmax(150px, 180px) 1fr auto;
+  grid-template-columns: minmax(180px, max-content) minmax(150px, 180px) 1fr auto;
   align-items: start;
   gap: 16px;
 }
