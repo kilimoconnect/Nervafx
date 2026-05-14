@@ -2095,8 +2095,9 @@ function renderJournal(data) {
             <span class="jrn-conf">${e.risk_confidence ?? '—'}%</span>
             <div class="jrn-counts">
               <span class="jrn-count trend" title="Trend">${e.trend_pairs}T</span>
-              <span class="jrn-count pb"    title="Pullback">${e.pullback_pairs}PB</span>
-              <span class="jrn-count ready" title="Ready">${e.ready_pairs}R</span>
+              <span class="jrn-count pb"    title="Pullback (tracked)">${e.pullback_pairs}PB</span>
+              <span class="jrn-count ready" title="Ready to enter">${e.ready_pairs}R</span>
+              ${e.new_pullback_pairs ? `<span class="jrn-count new-pb" title="New pullback pairs this cycle">+${e.new_pullback_pairs}</span>` : ''}
               ${enteredCount ? `<span class="jrn-count sig">${enteredCount}✦</span>` : ''}
             </div>
           </div>

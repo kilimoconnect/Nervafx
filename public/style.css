@@ -2877,10 +2877,11 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
   padding: 1px 5px;
   border-radius: 3px;
 }
-.jrn-count.trend { background: #1e3a5f; color: #60a5fa; }
-.jrn-count.pb    { background: #713f12; color: #fbbf24; }
-.jrn-count.ready { background: #14532d; color: #4ade80; }
-.jrn-count.sig   { background: #4ade80; color: #052e16; }
+.jrn-count.trend  { background: #1e3a5f; color: #60a5fa; }
+.jrn-count.pb     { background: #713f12; color: #fbbf24; }
+.jrn-count.ready  { background: #14532d; color: #4ade80; }
+.jrn-count.sig    { background: #4ade80; color: #052e16; }
+.jrn-count.new-pb { background: #1e1b4b; color: #a5b4fc; border: 1px solid #4338ca; }
 
 /* ── Per-entry historical Currency Signal badges ─────────────────────────── */
 .jrn-csig-row {

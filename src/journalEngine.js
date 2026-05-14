@@ -115,6 +115,18 @@ async function collectSignals() {
   };
 }
 
+// Returns the tracked_pullback_pairs array from the most recent journal entry.
+// Shape per element: { instrument, bias, entered_at, latest_state, latest_conf }
+async function collectTrackedPullbacks() {
+  const { data } = await supabase
+    .from('hourly_market_journal')
+    .select('tracked_pullback_pairs')
+    .order('time', { ascending: false })
+    .limit(1)
+    .single();
+  return data?.tracked_pullback_pairs || [];
+}
+
 async function collectM15Impulses() {
   const CS_THRESHOLD = 0.00100;
 
@@ -192,7 +204,7 @@ async function collectAiAnalysis() {
 
 // ─── Summary builder ──────────────────────────────────────────────────────────
 
-function buildSummary({ session, sentiment, states, signals, aiAnalysis, topSetups, m15Impulses }) {
+function buildSummary({ session, sentiment, states, signals, aiAnalysis, topSetups, m15Impulses, trackedPullbacks, newPullbackCount }) {
   const lines = [];
 
   // 1. Session
@@ -214,13 +226,19 @@ function buildSummary({ session, sentiment, states, signals, aiAnalysis, topSetu
     lines.push('Risk sentiment: unavailable.');
   }
 
-  // 3. Market overview
+  // 3. Market overview — use tracked counts for pullback/ready
   const trend_pairs    = states.filter(s => s.state === 'TREND').length;
-  const pullback_pairs = states.filter(s => ['PULLBACK_STARTING', 'PULLBACK_ACTIVE'].includes(s.state)).length;
-  const ready_pairs    = states.filter(s => s.state === 'READY_TO_ENTER').length;
   const no_trade_pairs = states.filter(s => s.state === 'NO_TRADE').length;
+  const tracked_total  = trackedPullbacks.length;
+  const pullback_pairs = trackedPullbacks.filter(t => ['PULLBACK_STARTING', 'PULLBACK_ACTIVE'].includes(t.latest_state)).length;
+  const ready_pairs    = trackedPullbacks.filter(t => t.latest_state === 'READY_TO_ENTER').length;
+
+  let pbStr = `${pullback_pairs} pullback`;
+  if (tracked_total > pullback_pairs) pbStr += ` (${tracked_total} tracked)`;
+  if (newPullbackCount > 0) pbStr += ` [+${newPullbackCount} new]`;
+
   lines.push(
-    `Market scan across 28 pairs: ${trend_pairs} trend, ${pullback_pairs} pullback, ` +
+    `Market scan across 28 pairs: ${trend_pairs} trend, ${pbStr}, ` +
     `${ready_pairs} ready-to-enter, ${no_trade_pairs} no-trade.`
   );
 
@@ -281,7 +299,7 @@ async function writeJournalEntry() {
   const session = getCurrentSession(now);
 
   // Collect everything in parallel
-  const [sentiment, statesResult, strengthResult, pairRankings, signals, aiAnalysis, m15Impulses] = await Promise.all([
+  const [sentiment, statesResult, strengthResult, pairRankings, signals, aiAnalysis, m15Impulses, prevTracked] = await Promise.all([
     collectSentiment(),
     collectStates(),
     collectStrength(),
@@ -289,6 +307,7 @@ async function writeJournalEntry() {
     collectSignals(),
     collectAiAnalysis(),
     collectM15Impulses().catch(() => []),
+    collectTrackedPullbacks(),
   ]);
 
   // Unwrap timestamped results
@@ -297,11 +316,47 @@ async function writeJournalEntry() {
   const currencyStrength = strengthResult.currencies;
   const strengthAsOf     = strengthResult.as_of;
 
-  // State counts
+  // ── Cumulative pullback tracker ────────────────────────────────────────────
+  // Build a state map for fast lookup
+  const stateMap = {};
+  states.forEach(s => { stateMap[s.instrument] = s; });
+
+  // Carry forward existing tracked pairs — drop only on reversal/bias-flip/no-trade/trend-complete
+  const carried = [];
+  for (const t of prevTracked) {
+    const cur = stateMap[t.instrument];
+    if (!cur) { carried.push(t); continue; }                       // no current data → keep
+    if (cur.state === 'REVERSAL_RISK') continue;                   // structural reversal
+    if (cur.state === 'NO_TRADE') continue;                        // fell out of tradeable range
+    if (!cur.bias || cur.bias === 'NONE') continue;                // lost directional bias
+    if (cur.bias !== t.bias) continue;                             // direction flipped
+    if (cur.state === 'TREND') continue;                           // episode completed
+    carried.push({ ...t, latest_state: cur.state, latest_conf: cur.confidence });
+  }
+
+  // Add pairs entering pullback for the first time this cycle
+  const trackedSet = new Set(carried.map(t => t.instrument));
+  const newEntries = [];
+  for (const s of states) {
+    if (['PULLBACK_STARTING', 'PULLBACK_ACTIVE'].includes(s.state) && !trackedSet.has(s.instrument)) {
+      newEntries.push({
+        instrument:   s.instrument,
+        bias:         s.bias,
+        entered_at:   hourTs.toISOString(),
+        latest_state: s.state,
+        latest_conf:  s.confidence,
+      });
+    }
+  }
+
+  const tracked_pullback_pairs = [...carried, ...newEntries];
+  const new_pullback_pairs     = newEntries.length;
+
+  // Derive counts from tracked set (pullback/ready) + raw current-hour (trend/no-trade)
   const trend_pairs    = states.filter(s => s.state === 'TREND').length;
-  const pullback_pairs = states.filter(s => ['PULLBACK_STARTING', 'PULLBACK_ACTIVE'].includes(s.state)).length;
-  const ready_pairs    = states.filter(s => s.state === 'READY_TO_ENTER').length;
   const no_trade_pairs = states.filter(s => s.state === 'NO_TRADE').length;
+  const pullback_pairs = tracked_pullback_pairs.filter(t => ['PULLBACK_STARTING', 'PULLBACK_ACTIVE'].includes(t.latest_state)).length;
+  const ready_pairs    = tracked_pullback_pairs.filter(t => t.latest_state === 'READY_TO_ENTER').length;
 
   // Top 5 setups by confidence
   const topSetups = [...states]
@@ -354,7 +409,11 @@ async function writeJournalEntry() {
   };
 
   // Build narrative summary
-  const summary = buildSummary({ session, sentiment, states, signals, aiAnalysis, topSetups, m15Impulses });
+  const summary = buildSummary({
+    session, sentiment, states, signals, aiAnalysis, topSetups, m15Impulses,
+    trackedPullbacks: tracked_pullback_pairs,
+    newPullbackCount: new_pullback_pairs,
+  });
 
   // Compose journal row
   const row = {
@@ -376,6 +435,8 @@ async function writeJournalEntry() {
     signals_summary,
     pair_rankings:           pairRankings.slice(0, 28),
     m15_impulses:            m15Impulses,
+    tracked_pullback_pairs,
+    new_pullback_pairs,
     summary,
   };
 
