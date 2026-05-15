@@ -1526,33 +1526,16 @@ function renderSession(data) {
     <div class="session-timeline">${timelineHtml}</div>`;
 }
 
-// ─── Market Activity ──────────────────────────────────────────────────────────
+// ─── Market Energy ────────────────────────────────────────────────────────────
 
-let _maData         = null; // cached fetch result
-let _maActiveTab    = 'timeline';
-let _maCharts       = {};   // { timeline, session, breadth } Chart instances
+let _maData      = null;
+let _maActiveTab = 'timeline';
+let _maCharts    = {};
 
-const MA_SESSION_SHORT = {
-  ASIA:      'AS',
-  LONDON:    'LO',
-  LONDON_NY: 'OV',
-  LATE_NY:   'NY',
-};
+const MA_SESSION_SHORT = { ASIA: 'AS', LONDON: 'LO', LONDON_NY: 'OV', LATE_NY: 'NY' };
+const MA_SESSION_LABEL = { ASIA: 'Asia', LONDON: 'London', LONDON_NY: 'London/NY Overlap', LATE_NY: 'Late NY' };
 
-const MA_SESSION_COLORS = {
-  LONDON_NY: 'rgba(234,179,8,0.85)',
-  LONDON:    'rgba(59,130,246,0.85)',
-  ASIA:      'rgba(16,185,129,0.85)',
-  LATE_NY:   'rgba(168,85,247,0.85)',
-  DEAD_HOURS:'rgba(100,116,139,0.5)',
-};
-const MA_SESSION_BORDER = {
-  LONDON_NY: '#eab308',
-  LONDON:    '#3b82f6',
-  ASIA:      '#10b981',
-  LATE_NY:   '#a855f7',
-  DEAD_HOURS:'#64748b',
-};
+const MA_SESSION_BORDER = { LONDON_NY: '#eab308', LONDON: '#3b82f6', ASIA: '#10b981', LATE_NY: '#a855f7', DEAD_HOURS: '#64748b' };
 
 function maSessionColor(name, alpha) {
   const hex = MA_SESSION_BORDER[name] || '#64748b';
@@ -1561,13 +1544,242 @@ function maSessionColor(name, alpha) {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-const MA_STATE_COLOR = {
-  HIGH_EXPANSION: '#4ade80',
-  EXPANSION:      '#86efac',
-  MIXED:          '#fbbf24',
-  COMPRESSION:    '#f87171',
-  QUIET:          '#94a3b8',
-};
+const MA_STATE_COLOR = { HIGH_EXPANSION: '#4ade80', EXPANSION: '#86efac', MIXED: '#fbbf24', COMPRESSION: '#f87171', QUIET: '#94a3b8' };
+
+function _maFmtHour(isoTime) {
+  const tz = (!_userTz || _userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : _userTz;
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date(isoTime));
+  const h = parts.find(p => p.type === 'hour')?.value   || '00';
+  const m = parts.find(p => p.type === 'minute')?.value || '00';
+  return `${h}:${m}`;
+}
+
+function _maChartDefaults() {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: true, labels: { color: '#94a3b8', font: { family: 'monospace', size: 10 }, boxWidth: 10, padding: 8 } }, tooltip: { mode: 'index', intersect: false } },
+    scales: {
+      x: { ticks: { color: '#94a3b8', font: { family: 'monospace', size: 9 }, maxRotation: 45 }, grid: { color: '#1e2128' } },
+      y: { ticks: { color: '#94a3b8', font: { family: 'monospace', size: 10 } }, grid: { color: '#1e2128' }, min: 0, max: 100 },
+    },
+  };
+}
+
+// ── Market Regime ─────────────────────────────────────────────────────────────
+function _computeMarketRegime(rows) {
+  const last = rows.slice(-4);
+  if (!last.length) return { label: 'NEUTRAL', cls: 'neutral' };
+  const avgMov = last.reduce((s,r) => s + parseFloat(r.movement_score), 0) / last.length;
+  const avgBrd = last.reduce((s,r) => s + parseFloat(r.breadth_score),  0) / last.length;
+  const states = last.map(r => r.market_state);
+  const hasExp  = states.some(s => s === 'HIGH_EXPANSION' || s === 'EXPANSION');
+  const hasComp = states.some(s => s === 'COMPRESSION'   || s === 'QUIET');
+  if (avgMov >= 55 && avgBrd >= 50)  return { label: 'RISK ON',       cls: 'risk-on'  };
+  if (avgMov <= 20 || avgBrd <= 20)  return { label: 'CAUTIOUS',      cls: 'risk-off' };
+  if (hasExp && hasComp)             return { label: 'TRANSITIONING', cls: 'neutral'  };
+  return                                    { label: 'NEUTRAL',       cls: 'neutral'  };
+}
+
+// ── Expansion Release detection ───────────────────────────────────────────────
+function _detectExpansionReleases(rows) {
+  const releases = [];
+  let compressionRun = 0;
+  for (let i = 0; i < rows.length; i++) {
+    const s = rows[i].market_state;
+    if (s === 'COMPRESSION' || s === 'QUIET') {
+      compressionRun++;
+    } else if ((s === 'EXPANSION' || s === 'HIGH_EXPANSION') && compressionRun >= 2) {
+      releases.push({ idx: i, compressedFor: compressionRun });
+      compressionRun = 0;
+    } else {
+      compressionRun = 0;
+    }
+  }
+  return releases;
+}
+
+// ── Hourly timeline ───────────────────────────────────────────────────────────
+function renderMaTimeline(el, hourly) {
+  const rows    = hourly.slice(-48);
+  const labels  = rows.map(r => _maFmtHour(r.time_utc));
+  const regime  = _computeMarketRegime(rows);
+  const releases = _detectExpansionReleases(rows);
+
+  el.innerHTML = `
+    <div class="ma-regime-row">
+      <span class="ma-regime-badge sent-${regime.cls}">${regime.label}</span>
+      <span class="ma-regime-lbl">Current Regime</span>
+      ${releases.length ? `<span class="ma-release-count">⚡ ${releases.length} expansion release${releases.length > 1 ? 's' : ''} detected</span>` : ''}
+    </div>
+    <div class="ma-chart-wrap">
+      <canvas id="maChartTimeline"></canvas>
+    </div>
+    <div class="ma-state-legend">
+      ${Object.entries(MA_STATE_COLOR).map(([s,c]) => `<span class="ma-state-dot" style="background:${c}"></span><span class="ma-state-lbl">${s.replace(/_/g,' ')}</span>`).join('')}
+    </div>`;
+
+  // Plugin: state transition labels + expansion release markers
+  const maEnergyOverlay = {
+    id: 'maEnergyOverlay',
+    afterDatasetsDraw(chart) {
+      const ctx2  = chart.ctx;
+      const area  = chart.chartArea;
+      const meta0 = chart.getDatasetMeta(0);
+
+      // State transition labels — only on change, only for key states
+      const SHOW_STATES = new Set(['HIGH_EXPANSION','EXPANSION','COMPRESSION','QUIET']);
+      let prevState = null;
+      rows.forEach((row, i) => {
+        const state = row.market_state;
+        if (state === prevState || !SHOW_STATES.has(state)) { prevState = state; return; }
+        prevState = state;
+        const bar = meta0.data[i];
+        if (!bar) return;
+        const color = MA_STATE_COLOR[state] || '#94a3b8';
+        const label = state.replace(/_/g,' ');
+        ctx2.save();
+        ctx2.fillStyle = color;
+        ctx2.font = '7px monospace';
+        ctx2.textAlign = 'center';
+        ctx2.globalAlpha = 0.85;
+        ctx2.fillText(label, bar.x, area.top + 8);
+        ctx2.restore();
+      });
+
+      // Expansion release markers
+      releases.forEach(({ idx, compressedFor }) => {
+        const bar = meta0.data[idx];
+        if (!bar) return;
+        const x = bar.x;
+        ctx2.save();
+        // Vertical dashed line
+        ctx2.strokeStyle = '#4ade80';
+        ctx2.lineWidth   = 1.5;
+        ctx2.setLineDash([3, 3]);
+        ctx2.globalAlpha = 0.8;
+        ctx2.beginPath();
+        ctx2.moveTo(x, area.top + 12);
+        ctx2.lineTo(x, area.bottom);
+        ctx2.stroke();
+        // Label
+        ctx2.setLineDash([]);
+        ctx2.fillStyle = '#4ade80';
+        ctx2.font = 'bold 8px monospace';
+        ctx2.textAlign = 'center';
+        ctx2.globalAlpha = 1;
+        ctx2.fillText('⚡ RELEASE', x, area.top + 22);
+        ctx2.font = '7px monospace';
+        ctx2.fillStyle = '#94a3b8';
+        ctx2.fillText(`(${compressedFor}h compressed)`, x, area.top + 32);
+        ctx2.restore();
+      });
+    },
+  };
+
+  const ctx = document.getElementById('maChartTimeline').getContext('2d');
+  _maCharts.timeline = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Movement', data: rows.map(r => parseFloat(r.movement_score)), borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.08)', borderWidth: 2, pointRadius: 2, tension: 0.3, fill: true },
+        { label: 'Breadth',  data: rows.map(r => parseFloat(r.breadth_score)),  borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.08)', borderWidth: 2, pointRadius: 2, tension: 0.3, fill: true },
+      ],
+    },
+    options: _maChartDefaults(),
+    plugins: [maEnergyOverlay],
+  });
+}
+
+// ── Session Leader ────────────────────────────────────────────────────────────
+function renderMaSession(el, summaries) {
+  if (!summaries.length) {
+    el.innerHTML = '<p class="empty-state">No session summary data yet.</p>';
+    return;
+  }
+
+  const ORDER = ['ASIA', 'LONDON', 'LONDON_NY', 'LATE_NY'];
+  const statMap = {};
+  for (const s of summaries) {
+    if (!statMap[s.session_name]) statMap[s.session_name] = { movs: [], breadths: [], expH: 0, compH: 0 };
+    statMap[s.session_name].movs.push(parseFloat(s.avg_movement_score) || 0);
+    statMap[s.session_name].breadths.push(parseFloat(s.avg_breadth_score) || 0);
+    statMap[s.session_name].expH  += parseInt(s.expansion_hours)   || 0;
+    statMap[s.session_name].compH += parseInt(s.compression_hours) || 0;
+  }
+
+  const avg = arr => arr.length ? arr.reduce((a,b) => a+b,0) / arr.length : 0;
+  const stats = ORDER.map(sess => {
+    const d = statMap[sess];
+    if (!d) return null;
+    return { sess, avgMov: avg(d.movs), avgBreadth: avg(d.breadths), expH: d.expH, compH: d.compH };
+  }).filter(Boolean).sort((a,b) => b.avgMov - a.avgMov);
+
+  if (!stats.length) { el.innerHTML = '<p class="empty-state">No session data yet.</p>'; return; }
+
+  const leader  = stats[0];
+  const maxMov  = leader.avgMov;
+  const pairsAvg = Math.round(leader.avgBreadth * 28 / 100);
+
+  const dominantState = leader.expH >= leader.compH ? 'EXPANSION' : 'COMPRESSION';
+  const domColor = dominantState === 'EXPANSION' ? '#4ade80' : '#f87171';
+
+  el.innerHTML = `
+    <div class="ma-leader-card" style="border-color:${maSessionColor(leader.sess, 0.5)}">
+      <div class="ma-leader-crown">👑 Session Leader · This Week</div>
+      <div class="ma-leader-name" style="color:${MA_SESSION_BORDER[leader.sess]}">${MA_SESSION_LABEL[leader.sess]}</div>
+      <div class="ma-leader-stats">
+        <div class="ma-leader-stat"><span class="ma-lstat-lbl">Avg Activity</span><span class="ma-lstat-val">${leader.avgMov.toFixed(0)}%</span></div>
+        <div class="ma-leader-stat"><span class="ma-lstat-lbl">Avg Breadth</span><span class="ma-lstat-val">${pairsAvg} pairs</span></div>
+        <div class="ma-leader-stat"><span class="ma-lstat-lbl">Dominant State</span><span class="ma-lstat-val" style="color:${domColor}">${dominantState}</span></div>
+      </div>
+    </div>
+    <div class="ma-sess-compare">
+      ${stats.map(s => {
+        const pct    = maxMov > 0 ? (s.avgMov / maxMov * 100).toFixed(0) : 0;
+        const isLead = s.sess === leader.sess;
+        return `
+          <div class="ma-sess-row${isLead ? ' ma-sess-leader' : ''}">
+            <span class="ma-sess-short" style="color:${MA_SESSION_BORDER[s.sess]}">${MA_SESSION_SHORT[s.sess]}</span>
+            <div class="ma-sess-bar-outer">
+              <div class="ma-sess-bar-inner" style="width:${pct}%;background:${maSessionColor(s.sess, isLead ? 0.85 : 0.5)}"></div>
+            </div>
+            <span class="ma-sess-pct">${s.avgMov.toFixed(0)}%</span>
+            <span class="ma-sess-breadth">${Math.round(s.avgBreadth * 28 / 100)}p</span>
+          </div>`;
+      }).join('')}
+    </div>`;
+}
+
+// ── Breadth chart ─────────────────────────────────────────────────────────────
+function renderMaBreadth(el, hourly) {
+  const rows   = hourly.slice(-48);
+  const labels = rows.map(r => _maFmtHour(r.time_utc));
+
+  el.innerHTML = `<div class="ma-chart-wrap"><canvas id="maChartBreadth"></canvas></div>`;
+
+  const ctx  = document.getElementById('maChartBreadth').getContext('2d');
+  const opts = _maChartDefaults();
+  opts.scales.y.max = 28;
+  opts.scales.y.title = { display: true, text: 'Pairs Moving', color: '#64748b', font: { size: 10 } };
+  opts.plugins.tooltip.callbacks = { label: c => ` ${c.raw} / 28 pairs` };
+  opts.plugins.legend.display = false;
+
+  _maCharts.breadth = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        data:            rows.map(r => parseInt(r.pairs_moving)),
+        backgroundColor: rows.map(r => maSessionColor(r.session_name, 0.7)),
+        borderColor:     rows.map(r => MA_SESSION_BORDER[r.session_name] || '#64748b'),
+        borderWidth: 1, borderRadius: 2,
+      }],
+    },
+    options: opts,
+  });
+}
 
 async function fetchMarketActivity() {
   try {
@@ -1592,158 +1804,10 @@ function renderMaTab(tab, data) {
   if (!el) return;
   data = data || _maData;
   if (!data) return;
-
-  // Destroy stale chart for this tab
   if (_maCharts[tab]) { _maCharts[tab].destroy(); _maCharts[tab] = null; }
-
-  if (tab === 'timeline') {
-    renderMaTimeline(el, data.hourly || []);
-  } else if (tab === 'session') {
-    renderMaSession(el, data.summaries || []);
-  } else if (tab === 'breadth') {
-    renderMaBreadth(el, data.hourly || []);
-  }
-}
-
-function _maChartDefaults() {
-  return {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: { legend: { display: true, labels: { color: '#94a3b8', font: { family: 'monospace', size: 10 }, boxWidth: 10, padding: 8 } }, tooltip: { mode: 'index', intersect: false } },
-    scales: {
-      x: { ticks: { color: '#94a3b8', font: { family: 'monospace', size: 9 }, maxRotation: 45 }, grid: { color: '#1e2128' } },
-      y: { ticks: { color: '#94a3b8', font: { family: 'monospace', size: 10 } }, grid: { color: '#1e2128' }, min: 0, max: 100 },
-    },
-  };
-}
-
-function _maFmtHour(isoTime) {
-  const tz = (!_userTz || _userTz === 'auto')
-    ? Intl.DateTimeFormat().resolvedOptions().timeZone
-    : _userTz;
-  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date(isoTime));
-  const h = parts.find(p => p.type === 'hour')?.value   || '00';
-  const m = parts.find(p => p.type === 'minute')?.value || '00';
-  return `${h}:${m}`;
-}
-
-// Hourly timeline: movement_score + breadth_score line chart (last 48 rows)
-function renderMaTimeline(el, hourly) {
-  const rows   = hourly.slice(-48);
-  const labels = rows.map(r => _maFmtHour(r.time_utc));
-  const bgColors = rows.map(r => maSessionColor(r.session_name, 0.15));
-
-  el.innerHTML = `
-    <div class="ma-chart-wrap">
-      <canvas id="maChartTimeline"></canvas>
-    </div>
-    <div class="ma-state-legend">
-      ${Object.entries(MA_STATE_COLOR).map(([s,c]) => `<span class="ma-state-dot" style="background:${c}"></span><span class="ma-state-lbl">${s.replace(/_/g,' ')}</span>`).join('')}
-    </div>`;
-
-  const ctx = document.getElementById('maChartTimeline').getContext('2d');
-  _maCharts.timeline = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [
-        { label: 'Movement', data: rows.map(r => parseFloat(r.movement_score)), borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.08)', borderWidth: 2, pointRadius: 2, tension: 0.3, fill: true },
-        { label: 'Breadth',  data: rows.map(r => parseFloat(r.breadth_score)),  borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.08)', borderWidth: 2, pointRadius: 2, tension: 0.3, fill: true },
-      ],
-    },
-    options: _maChartDefaults(),
-  });
-}
-
-// Session comparison: avg movement per session per day (grouped bar)
-function renderMaSession(el, summaries) {
-  if (!summaries.length) {
-    el.innerHTML = '<p class="empty-state">No session summary data yet.</p>';
-    return;
-  }
-  // Group by session_name, take last 7 days per session
-  const sessions = ['ASIA', 'LONDON', 'LONDON_NY', 'LATE_NY'];
-  const allDates  = [...new Set(summaries.map(s => s.session_date_utc))]
-    .filter(d => { const day = new Date(d).getUTCDay(); return day !== 0 && day !== 6; })
-    .sort().slice(-7);
-
-  el.innerHTML = `<div class="ma-chart-wrap"><canvas id="maChartSession"></canvas></div>`;
-
-  const datasets = sessions.map(sess => {
-    const byDate = {};
-    summaries.filter(s => s.session_name === sess).forEach(s => { byDate[s.session_date_utc] = parseFloat(s.avg_movement_score); });
-    return {
-      label:    sess.replace(/_/g,' '),
-      _sessKey: sess,
-      data:     allDates.map(d => byDate[d] ?? null),
-      backgroundColor: maSessionColor(sess, 0.75),
-      borderColor:     MA_SESSION_BORDER[sess] || '#64748b',
-      borderWidth: 1,
-      borderRadius: 3,
-    };
-  });
-
-  const maSessionBarLabels = {
-    id: 'maSessionBarLabels',
-    afterDatasetsDraw(chart) {
-      const ctx2 = chart.ctx;
-      chart.data.datasets.forEach((ds, i) => {
-        const short = MA_SESSION_SHORT[ds._sessKey] || '';
-        chart.getDatasetMeta(i).data.forEach(bar => {
-          const { x, y, base } = bar.getProps(['x','y','base'], true);
-          const h = base - y;
-          if (h < 14) return;
-          ctx2.save();
-          ctx2.fillStyle = 'rgba(255,255,255,0.9)';
-          ctx2.font = 'bold 8px monospace';
-          ctx2.textAlign = 'center';
-          ctx2.textBaseline = 'middle';
-          ctx2.fillText(short, x, y + h / 2);
-          ctx2.restore();
-        });
-      });
-    },
-  };
-
-  const ctx = document.getElementById('maChartSession').getContext('2d');
-  const opts = _maChartDefaults();
-  opts.scales.x.ticks.maxRotation = 30;
-  _maCharts.session = new Chart(ctx, {
-    type: 'bar',
-    data: { labels: allDates.map(d => d.slice(5)), datasets },
-    options: opts,
-    plugins: [maSessionBarLabels],
-  });
-}
-
-// Breadth chart: pairs_moving per hour (bar, coloured by session)
-function renderMaBreadth(el, hourly) {
-  const rows   = hourly.slice(-48);
-  const labels = rows.map(r => _maFmtHour(r.time_utc));
-
-  el.innerHTML = `<div class="ma-chart-wrap"><canvas id="maChartBreadth"></canvas></div>`;
-
-  const ctx = document.getElementById('maChartBreadth').getContext('2d');
-  const opts = _maChartDefaults();
-  opts.scales.y.max = 28;
-  opts.scales.y.title = { display: true, text: 'Pairs Moving', color: '#64748b', font: { size: 10 } };
-  opts.plugins.tooltip.callbacks = { label: c => ` ${c.raw} / 28 pairs` };
-  opts.plugins.legend.display = false;
-
-  _maCharts.breadth = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [{
-        data:            rows.map(r => parseInt(r.pairs_moving)),
-        backgroundColor: rows.map(r => maSessionColor(r.session_name, 0.7)),
-        borderColor:     rows.map(r => MA_SESSION_BORDER[r.session_name] || '#64748b'),
-        borderWidth: 1,
-        borderRadius: 2,
-      }],
-    },
-    options: opts,
-  });
+  if (tab === 'timeline')    renderMaTimeline(el, data.hourly   || []);
+  else if (tab === 'session') renderMaSession(el,  data.summaries || []);
+  else if (tab === 'breadth') renderMaBreadth(el,  data.hourly   || []);
 }
 
 // Tab click handler
