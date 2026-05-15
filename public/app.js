@@ -1838,6 +1838,9 @@ function renderMaSession(el, summaries) {
   }
 
   const ORDER = ['ASIA', 'LONDON', 'LONDON_NY', 'LATE_NY'];
+  const DISP_ORDER = ['ASIA', 'LONDON', 'NEW_YORK'];
+  const DISP_SHORT = { ASIA: 'AS', LONDON: 'LO', NEW_YORK: 'NY' };
+  const DISP_COLOR = { ASIA: MA_SESSION_BORDER['ASIA'], LONDON: MA_SESSION_BORDER['LONDON'], NEW_YORK: MA_SESSION_BORDER['LATE_NY'] };
 
   const allDates = [...new Set(summaries.map(s => s.session_date_utc))]
     .filter(d => { const day = new Date(d).getUTCDay(); return day !== 0 && day !== 6; })
@@ -1858,25 +1861,49 @@ function renderMaSession(el, summaries) {
     };
   }
 
+  // Merge two session entries by averaging scores; take max CS signal
+  function mergeEntry(e1, e2) {
+    if (!e1 && !e2) return null;
+    if (!e1) return e2;
+    if (!e2) return e1;
+    const score    = Math.round((e1.score + e2.score) / 2);
+    const rawScore = Math.round((e1.rawScore + e2.rawScore) / 2);
+    const csBonus  = Math.round((e1.csBonus + e2.csBonus) / 2);
+    const cs1 = e1.csScore ?? -1, cs2 = e2.csScore ?? -1;
+    const csScore  = Math.max(cs1, cs2);
+    const state    = score <= 15 ? 'DEAD' : score <= 35 ? 'COMPRESSION' : score <= 55 ? 'STABLE' : score <= 75 ? 'EXPANSION' : 'EXPLOSIVE';
+    return { score, rawScore, csBonus, csScore: csScore === -1 ? null : csScore, state };
+  }
+
+  // Display map: 3 sessions — LONDON_NY overlap split between London and New York
+  const displayMap = {};
+  for (const date of allDates) {
+    displayMap[date] = {
+      ASIA:     energyMap[date]?.['ASIA'],
+      LONDON:   mergeEntry(energyMap[date]?.['LONDON'], energyMap[date]?.['LONDON_NY']),
+      NEW_YORK: mergeEntry(energyMap[date]?.['LATE_NY'], energyMap[date]?.['LONDON_NY']),
+    };
+  }
+
   // Chronological session sequence for pattern detection
   const sequence = [];
   for (const date of allDates) {
-    for (const sess of ORDER) {
-      const e = energyMap[date]?.[sess];
+    for (const sess of DISP_ORDER) {
+      const e = displayMap[date]?.[sess];
       if (e) sequence.push({ date, sess, ...e });
     }
   }
 
   const forecast     = _maExpansionForecast(sequence);
-  const lastSessions = sequence.slice(-4);
+  const lastSessions = sequence.slice(-3);
 
-  // Datasets: one per session, each bar colored by energy state
-  const datasets = ORDER.map(sess => ({
-    label:           MA_SESSION_SHORT[sess],
+  // Datasets: one per display session (3), each bar colored by energy state
+  const datasets = DISP_ORDER.map(sess => ({
+    label:           DISP_SHORT[sess],
     _sessKey:        sess,
-    data:            allDates.map(d => energyMap[d]?.[sess]?.score ?? null),
-    backgroundColor: allDates.map(d => MA_ENERGY_BG[energyMap[d]?.[sess]?.state]     || 'rgba(0,0,0,0)'),
-    borderColor:     allDates.map(d => MA_ENERGY_BORDER[energyMap[d]?.[sess]?.state]  || 'transparent'),
+    data:            allDates.map(d => displayMap[d]?.[sess]?.score ?? null),
+    backgroundColor: allDates.map(d => MA_ENERGY_BG[displayMap[d]?.[sess]?.state]    || 'rgba(0,0,0,0)'),
+    borderColor:     allDates.map(d => MA_ENERGY_BORDER[displayMap[d]?.[sess]?.state] || 'transparent'),
     borderWidth: 1,
     borderRadius: 3,
   }));
@@ -1887,13 +1914,13 @@ function renderMaSession(el, summaries) {
     afterDatasetsDraw(chart) {
       const c2 = chart.ctx;
       chart.data.datasets.forEach((ds, i) => {
-        const short = MA_SESSION_SHORT[ds._sessKey] || '';
+        const short = DISP_SHORT[ds._sessKey] || '';
         chart.getDatasetMeta(i).data.forEach((bar, j) => {
           const { x, y, base } = bar.getProps(['x','y','base'], true);
           const h = base - y;
           if (h < 12) return;
           const date  = allDates[j];
-          const state = energyMap[date]?.[ds._sessKey]?.state;
+          const state = displayMap[date]?.[ds._sessKey]?.state;
           const color = MA_ENERGY_TEXT[state] || 'rgba(255,255,255,0.8)';
           c2.save();
           c2.fillStyle  = color;
@@ -1920,7 +1947,7 @@ function renderMaSession(el, summaries) {
           return `
           ${i > 0 ? '<span class="ma-seq-arrow">→</span>' : ''}
           <div class="ma-seq-item">
-            <span class="ma-seq-sess" style="color:${MA_SESSION_BORDER[s.sess]}">${MA_SESSION_SHORT[s.sess]}</span>
+            <span class="ma-seq-sess" style="color:${DISP_COLOR[s.sess]}">${DISP_SHORT[s.sess]}</span>
             <span class="ma-seq-state" style="color:${MA_ENERGY_BORDER[s.state]}">${s.state}</span>
             ${csCls ? `<span class="ma-seq-cs ${csCls}">${csLabel}</span>` : ''}
           </div>`;
@@ -1941,11 +1968,11 @@ function renderMaSession(el, summaries) {
   opts.plugins.tooltip.callbacks = {
     label: c => {
       const date = allDates[c.dataIndex];
-      const sess = ORDER[c.datasetIndex];
-      const e    = energyMap[date]?.[sess];
+      const sess = DISP_ORDER[c.datasetIndex];
+      const e    = displayMap[date]?.[sess];
       if (!e) return '';
       const csPart = e.csBonus !== 0 ? ` CS${e.csBonus > 0 ? '+' : ''}${e.csBonus}` : '';
-      return ` ${MA_SESSION_SHORT[sess]}  ${e.state}  (${e.rawScore.toFixed(0)}${csPart} = ${e.score.toFixed(0)})`;
+      return ` ${DISP_SHORT[sess]}  ${e.state}  (${e.rawScore.toFixed(0)}${csPart} = ${e.score.toFixed(0)})`;
     },
   };
   _maCharts.session = new Chart(ctx, {
