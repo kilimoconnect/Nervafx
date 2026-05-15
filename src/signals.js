@@ -17,6 +17,7 @@ async function buildCandleLookup() {
       .select('time, high, low, close')
       .eq('instrument', instrument)
       .eq('timeframe', config.granularity)
+      .eq('complete', true)
       .order('time', { ascending: true });
 
     if (error) throw new Error(`Candle fetch (${instrument}): ${error.message}`);
