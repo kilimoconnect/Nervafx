@@ -16,7 +16,7 @@
 const OpenAI         = require('openai');
 const { getClient, cors } = require('./_db');
 
-const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
+const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour (invalidated each new session)
 const _cache = new Map(); // fingerprint → { ts, result }
 
 function getOpenAI() {
@@ -70,10 +70,10 @@ function buildContext(enriched) {
     return `${date}:\n${sessions.join('\n')}`;
   });
 
-  // Last 6 sessions in sequence for pattern summary
-  const sequence = enriched.slice(-6).map(e =>
+  // Full 5-day sequence (up to 20 sessions: 5 days × 4 sessions)
+  const sequence = enriched.slice(-20).map(e =>
     `${e.date} ${ORDER_LABEL[e.session] || e.session}: ${e.state} (${e.score.toFixed(0)})`
-  ).join(' → ');
+  ).join('\n');
 
   // Compression streak
   let compStreak = 0;
@@ -157,10 +157,10 @@ Energy states: DEAD (0-20) / COMPRESSION (20-40) / STABLE (40-60) / EXPANSION (6
 SESSION DATA — last 5 trading days (chronological):
 ${days}
 
-RECENT SEQUENCE (last 6 sessions):
+FULL 5-DAY SEQUENCE (chronological, oldest → newest, one line per session):
 ${sequence}
 
-COMPRESSION STREAK: ${compStreak} consecutive sessions compressed (ending on latest session)
+COMPRESSION STREAK INTO LATEST SESSION: ${compStreak} consecutive sessions compressed (0 = latest session is NOT compressed)
 LATEST SESSION: ${latest ? `${latest.date} ${latest.session} → ${latest.state} (score ${latest.score.toFixed(0)})` : 'unknown'}
 NEXT EXPECTED SESSION: ${nextSession}
 
