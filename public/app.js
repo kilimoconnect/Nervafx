@@ -1870,20 +1870,22 @@ function renderMaSession(el, summaries) {
   const DISP_SHORT = { ASIA: 'AS', LONDON: 'LO', NEW_YORK: 'NY' };
   const DISP_COLOR = { ASIA: MA_SESSION_BORDER['ASIA'], LONDON: MA_SESSION_BORDER['LONDON'], NEW_YORK: MA_SESSION_BORDER['LATE_NY'] };
 
-  const allDates = [...new Set(summaries.map(s => s.session_date_utc))]
-    .filter(d => { const day = new Date(d).getUTCDay(); return day !== 0 && day !== 6; })
+  const allDates = [...new Set(summaries.map(s => (s.session_date_utc || '').slice(0, 10)).filter(Boolean))]
+    .filter(d => { const day = new Date(d + 'T00:00:00Z').getUTCDay(); return day !== 0 && day !== 6; })
     .sort().slice(-7);
 
   // Energy map: date → session → { score, rawScore, csBonus, csScore, state }
   // CS bonus: 2+ signals on dominant side = +5, 1 signal = +2, 0 signals = -2 (when journal data exists)
   const energyMap = {};
   for (const s of summaries) {
-    if (!energyMap[s.session_date_utc]) energyMap[s.session_date_utc] = {};
+    const dateKey = (s.session_date_utc || '').slice(0, 10);
+    if (!dateKey) continue;
+    if (!energyMap[dateKey]) energyMap[dateKey] = {};
     const rawScore = _maEnergyScore(s);
-    const cs       = _maCsMap[`${s.session_date_utc}:${s.session_name}`];
+    const cs       = _maCsMap[`${dateKey}:${s.session_name}`];
     const csBonus  = cs != null ? (cs.score >= 2 ? 5 : cs.score === 1 ? 2 : -2) : 0;
     const score    = Math.min(100, Math.max(0, rawScore + csBonus));
-    energyMap[s.session_date_utc][s.session_name] = {
+    energyMap[dateKey][s.session_name] = {
       score, rawScore, csBonus, csScore: cs?.score ?? null,
       state: _maEnergyState(score, s),
     };
