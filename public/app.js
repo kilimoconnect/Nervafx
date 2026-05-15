@@ -1662,15 +1662,15 @@ function _maEnergyState(score, s) {
   return state;
 }
 
-// Returns next-session prediction: 3 consecutive low → EXPANSION; high → COMPRESSION
+// Returns next-session prediction: 3 consecutive low → EXPANSION; high → COMPRESSION; else STABLE
 function _maNextPrediction(sequence) {
-  if (sequence.length < 1) return null;
+  if (sequence.length < 3) return null;
   const isLow  = s => s === 'DEAD' || s === 'COMPRESSION';
   const isHigh = s => s === 'EXPANSION' || s === 'EXPLOSIVE';
   const last3  = sequence.slice(-3);
-  if (last3.length === 3 && last3.every(s => isLow(s.state)))  return { state: 'EXPANSION',    reason: '3 consecutive low energy' };
-  if (isHigh(sequence[sequence.length - 1].state))              return { state: 'COMPRESSION',  reason: 'following expansion' };
-  return null;
+  if (last3.every(s => isLow(s.state)))            return { state: 'EXPANSION',   reason: '3 consecutive low energy' };
+  if (isHigh(sequence[sequence.length - 1].state)) return { state: 'COMPRESSION', reason: 'following expansion' };
+  return { state: 'STABLE', reason: 'mixed pattern' };
 }
 
 function _maExpansionForecast(recent) {
@@ -1917,7 +1917,7 @@ function renderMaSession(el, summaries) {
     predInfo = {
       sess:  DISP_ORDER[nextIdx],
       state: nextPred.state,
-      score: nextPred.state === 'EXPANSION' ? 65 : 25,
+      score: nextPred.state === 'EXPANSION' ? 65 : nextPred.state === 'COMPRESSION' ? 25 : 45,
       reason: nextPred.reason,
     };
   }
@@ -1932,9 +1932,10 @@ function renderMaSession(el, summaries) {
     const bgCol  = allDates.map(d => MA_ENERGY_BG[displayMap[d]?.[sess]?.state]    || 'rgba(0,0,0,0)');
     const bdCol  = allDates.map(d => MA_ENERGY_BORDER[displayMap[d]?.[sess]?.state] || 'transparent');
     if (predInfo) {
+      const PRED_BG = { DEAD: 'rgba(30,33,40,0.55)', COMPRESSION: 'rgba(127,29,29,0.45)', STABLE: 'rgba(120,53,15,0.4)', EXPANSION: 'rgba(20,83,45,0.5)', EXPLOSIVE: 'rgba(74,222,128,0.4)' };
       const isPredSess = predInfo.sess === sess;
       data.push(isPredSess ? predInfo.score : null);
-      bgCol.push(isPredSess ? (MA_ENERGY_BG[predInfo.state]     || 'rgba(0,0,0,0)').replace(/[\d.]+\)$/, '0.18)') : 'rgba(0,0,0,0)');
+      bgCol.push(isPredSess ? (PRED_BG[predInfo.state] || 'rgba(30,33,40,0.45)') : 'rgba(0,0,0,0)');
       bdCol.push(isPredSess ? (MA_ENERGY_BORDER[predInfo.state] || 'transparent') : 'transparent');
     }
     return { label: DISP_SHORT[sess], _sessKey: sess, data, backgroundColor: bgCol, borderColor: bdCol, borderWidth: 1, borderRadius: 3 };
