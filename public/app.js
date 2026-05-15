@@ -1662,33 +1662,6 @@ function _maEnergyState(score, s) {
   return state;
 }
 
-function _nextWeekday(dateStr) {
-  const d = new Date(dateStr + 'T00:00:00Z');
-  do { d.setUTCDate(d.getUTCDate() + 1); } while ([0, 6].includes(d.getUTCDay()));
-  return d.toISOString().slice(0, 10);
-}
-
-// Builds n predicted sessions forward: after 3 consecutive non-high → EXPANSION; else → COMPRESSION
-function _maPredChain(sequence, dispOrder, n = 3) {
-  if (sequence.length < 3) return [];
-  const isHigh = s => s === 'EXPANSION' || s === 'EXPLOSIVE';
-  const synth  = [...sequence];
-  const chain  = [];
-  for (let i = 0; i < n; i++) {
-    const last     = synth[synth.length - 1];
-    const lastIdx  = dispOrder.indexOf(last.sess);
-    const nextIdx  = (lastIdx + 1) % dispOrder.length;
-    const nextSess = dispOrder[nextIdx];
-    const nextDate = nextIdx === 0 ? _nextWeekday(last.date) : last.date;
-    const last3    = synth.slice(-3);
-    const state    = last3.every(e => !isHigh(e.state)) ? 'EXPANSION' : 'COMPRESSION';
-    const score    = state === 'EXPANSION' ? 65 : 25;
-    const entry    = { date: nextDate, sess: nextSess, state, score };
-    chain.push(entry);
-    synth.push(entry);
-  }
-  return chain;
-}
 
 function _maExpansionForecast(recent) {
   if (recent.length < 2) return null;
@@ -1927,38 +1900,18 @@ function renderMaSession(el, summaries) {
   const forecast     = _maExpansionForecast(sequence);
   const lastSessions = sequence.slice(-3);
 
-  // Multi-step prediction chain: fills today's remaining sessions + tomorrow's sessions
-  const predChain = _maPredChain(sequence, DISP_ORDER, 3);
+  // Datasets: one per display session
+  const datasets = DISP_ORDER.map(sess => ({
+    label:           DISP_SHORT[sess],
+    _sessKey:        sess,
+    data:            allDates.map(d => displayMap[d]?.[sess]?.score ?? null),
+    backgroundColor: allDates.map(d => MA_ENERGY_BG[displayMap[d]?.[sess]?.state]    || 'rgba(0,0,0,0)'),
+    borderColor:     allDates.map(d => MA_ENERGY_BORDER[displayMap[d]?.[sess]?.state] || 'transparent'),
+    borderWidth: 1,
+    borderRadius: 3,
+  }));
 
-  // Ghost map: date → sess → { state, score }
-  const ghostMap = {};
-  for (const p of predChain) {
-    if (!ghostMap[p.date]) ghostMap[p.date] = {};
-    ghostMap[p.date][p.sess] = { state: p.state, score: p.score };
-  }
-
-  // Chart dates: allDates + any new future dates from predChain (marked with '?')
-  const predFutureDates = [...new Set(predChain.map(p => p.date).filter(d => !allDates.includes(d)))];
-  const chartDates  = [...allDates, ...predFutureDates];
-  const chartLabels = [...allDates.map(d => d.slice(5)), ...predFutureDates.map(d => d.slice(5) + '?')];
-
-  const PRED_BG = { DEAD: 'rgba(30,33,40,0.12)', COMPRESSION: 'rgba(127,29,29,0.10)', STABLE: 'rgba(120,53,15,0.10)', EXPANSION: 'rgba(20,83,45,0.12)', EXPLOSIVE: 'rgba(74,222,128,0.10)' };
-
-  // Datasets: ghost bars fill empty real-data slots (remaining today + tomorrow)
-  const datasets = DISP_ORDER.map(sess => {
-    const data  = chartDates.map(d => displayMap[d]?.[sess]?.score ?? ghostMap[d]?.[sess]?.score ?? null);
-    const bgCol = chartDates.map(d => {
-      const r = displayMap[d]?.[sess], g = ghostMap[d]?.[sess];
-      return r ? (MA_ENERGY_BG[r.state] || 'rgba(0,0,0,0)') : g ? (PRED_BG[g.state] || 'rgba(0,0,0,0)') : 'rgba(0,0,0,0)';
-    });
-    const bdCol = chartDates.map(d => {
-      const r = displayMap[d]?.[sess], g = ghostMap[d]?.[sess];
-      return r ? (MA_ENERGY_BORDER[r.state] || 'transparent') : g ? (MA_ENERGY_BORDER[g.state] || 'transparent') : 'transparent';
-    });
-    return { label: DISP_SHORT[sess], _sessKey: sess, data, backgroundColor: bgCol, borderColor: bdCol, borderWidth: 1, borderRadius: 3 };
-  });
-
-  // Bar label plugin — writes short code + state in white
+  // Bar label plugin — writes short session code inside each bar
   const maEnergyBarLabels = {
     id: 'maEnergyBarLabels',
     afterDatasetsDraw(chart) {
@@ -1969,40 +1922,14 @@ function renderMaSession(el, summaries) {
           const { x, y, base } = bar.getProps(['x','y','base'], true);
           const h = base - y;
           if (h < 12) return;
-          const date   = chartDates[j];
-          const isGhost = !displayMap[date]?.[ds._sessKey] && !!ghostMap[date]?.[ds._sessKey];
-          const state  = displayMap[date]?.[ds._sessKey]?.state || ghostMap[date]?.[ds._sessKey]?.state;
-          const color  = MA_ENERGY_TEXT[state] || 'rgba(255,255,255,0.8)';
+          const state = displayMap[allDates[j]]?.[ds._sessKey]?.state;
+          const color = MA_ENERGY_TEXT[state] || 'rgba(255,255,255,0.8)';
           c2.save();
-          c2.fillStyle  = color;
-          c2.font       = `bold ${h >= 22 ? 8 : 7}px monospace`;
-          c2.textAlign  = 'center';
+          c2.fillStyle    = color;
+          c2.font         = `bold ${h >= 22 ? 8 : 7}px monospace`;
+          c2.textAlign    = 'center';
           c2.textBaseline = 'middle';
-          c2.fillText(isGhost ? `${short}?` : short, x, y + h / 2);
-          c2.restore();
-        });
-      });
-    },
-  };
-
-  // Dashed border overlay on predicted bars
-  const maGhostBorderPlugin = {
-    id: 'maGhostBorderPlugin',
-    afterDatasetsDraw(chart) {
-      const c2 = chart.ctx;
-      chart.data.datasets.forEach((ds, i) => {
-        chart.getDatasetMeta(i).data.forEach((bar, j) => {
-          const date = chartDates[j];
-          if (displayMap[date]?.[ds._sessKey] || !ghostMap[date]?.[ds._sessKey]) return;
-          const { x, y, base, width } = bar.getProps(['x','y','base','width'], true);
-          const h = base - y;
-          if (h < 2) return;
-          const state = ghostMap[date][ds._sessKey].state;
-          c2.save();
-          c2.setLineDash([3, 3]);
-          c2.strokeStyle = MA_ENERGY_BORDER[state] || '#334155';
-          c2.lineWidth   = 1.5;
-          c2.strokeRect(x - width / 2, y, width, h);
+          c2.fillText(short, x, y + h / 2);
           c2.restore();
         });
       });
@@ -2027,13 +1954,6 @@ function renderMaSession(el, summaries) {
             ${csCls ? `<span class="ma-seq-cs ${csCls}">${csLabel}</span>` : ''}
           </div>`;
         }).join('')}
-        ${predChain.map(p => `
-          <span class="ma-seq-arrow ma-seq-arrow-pred">→</span>
-          <div class="ma-seq-item ma-seq-pred${p.state === 'EXPANSION' ? ' ma-seq-pred-exp' : ''}">
-            <span class="ma-seq-sess" style="color:${DISP_COLOR[p.sess]}">${DISP_SHORT[p.sess]}</span>
-            <span class="ma-seq-state" style="color:${MA_ENERGY_BORDER[p.state]}">${p.state}</span>
-            <span class="ma-seq-pred-tag">PRED</span>
-          </div>`).join('')}
       </div>
     </div>
     <div class="ma-chart-wrap" style="height:160px; margin-top:10px">
@@ -2049,23 +1969,19 @@ function renderMaSession(el, summaries) {
   opts.plugins.legend.display = false;
   opts.plugins.tooltip.callbacks = {
     label: c => {
-      const date  = chartDates[c.dataIndex];
-      const sess  = DISP_ORDER[c.datasetIndex];
-      const real  = displayMap[date]?.[sess];
-      const ghost = ghostMap[date]?.[sess];
-      if (real) {
-        const csPart = real.csBonus !== 0 ? ` CS${real.csBonus > 0 ? '+' : ''}${real.csBonus}` : '';
-        return ` ${DISP_SHORT[sess]}  ${real.state}  (${real.rawScore.toFixed(0)}${csPart} = ${real.score.toFixed(0)})`;
-      }
-      if (ghost) return ` ${DISP_SHORT[sess]}  ${ghost.state}  (PREDICTED)`;
-      return '';
+      const date = allDates[c.dataIndex];
+      const sess = DISP_ORDER[c.datasetIndex];
+      const e    = displayMap[date]?.[sess];
+      if (!e) return '';
+      const csPart = e.csBonus !== 0 ? ` CS${e.csBonus > 0 ? '+' : ''}${e.csBonus}` : '';
+      return ` ${DISP_SHORT[sess]}  ${e.state}  (${e.rawScore.toFixed(0)}${csPart} = ${e.score.toFixed(0)})`;
     },
   };
   _maCharts.session = new Chart(ctx, {
     type: 'bar',
-    data: { labels: chartLabels, datasets },
+    data: { labels: allDates.map(d => d.slice(5)), datasets },
     options: opts,
-    plugins: [maEnergyBarLabels, maGhostBorderPlugin],
+    plugins: [maEnergyBarLabels],
   });
 
   // AI analysis — non-blocking, updates panel when ready
@@ -2151,9 +2067,7 @@ async function fetchMarketActivity() {
     }
 
     renderMarketActivity(data);
-  } catch (_) {
-    if (_maData) renderMarketActivity(_maData);
-  }
+  } catch (_) { /* non-critical */ }
 }
 
 function renderMarketActivity(data) {
@@ -2743,5 +2657,3 @@ function flashEl(id) {
 showSkeletons();
 refresh();
 setInterval(refresh, REFRESH_MS);
-// Market activity has its own refresh so predictions update even if main refresh fails
-setInterval(fetchMarketActivity, REFRESH_MS);
