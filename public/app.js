@@ -1666,14 +1666,37 @@ function renderMaSession(el, summaries) {
     const byDate = {};
     summaries.filter(s => s.session_name === sess).forEach(s => { byDate[s.session_date_utc] = parseFloat(s.avg_movement_score); });
     return {
-      label: MA_SESSION_SHORT[sess] || sess,
-      data:  allDates.map(d => byDate[d] ?? null),
+      label:    sess.replace(/_/g,' '),
+      _sessKey: sess,
+      data:     allDates.map(d => byDate[d] ?? null),
       backgroundColor: maSessionColor(sess, 0.75),
       borderColor:     MA_SESSION_BORDER[sess] || '#64748b',
       borderWidth: 1,
       borderRadius: 3,
     };
   });
+
+  const maSessionBarLabels = {
+    id: 'maSessionBarLabels',
+    afterDatasetsDraw(chart) {
+      const ctx2 = chart.ctx;
+      chart.data.datasets.forEach((ds, i) => {
+        const short = MA_SESSION_SHORT[ds._sessKey] || '';
+        chart.getDatasetMeta(i).data.forEach(bar => {
+          const { x, y, base } = bar.getProps(['x','y','base'], true);
+          const h = base - y;
+          if (h < 14) return;
+          ctx2.save();
+          ctx2.fillStyle = 'rgba(255,255,255,0.9)';
+          ctx2.font = 'bold 8px monospace';
+          ctx2.textAlign = 'center';
+          ctx2.textBaseline = 'middle';
+          ctx2.fillText(short, x, y + h / 2);
+          ctx2.restore();
+        });
+      });
+    },
+  };
 
   const ctx = document.getElementById('maChartSession').getContext('2d');
   const opts = _maChartDefaults();
@@ -1682,6 +1705,7 @@ function renderMaSession(el, summaries) {
     type: 'bar',
     data: { labels: allDates.map(d => d.slice(5)), datasets },
     options: opts,
+    plugins: [maSessionBarLabels],
   });
 }
 
