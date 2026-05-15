@@ -3389,6 +3389,53 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
   padding: 4px 8px;
   border-radius: 4px;
 }
+.ma-ai-pred-block {
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ma-ai-pred-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ma-ai-pred-lbl {
+  font-family: var(--font-data);
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #64748b;
+}
+.ma-ai-pred-session {
+  font-family: var(--font-data);
+  font-size: 9px;
+  color: #94a3b8;
+  margin-left: auto;
+}
+.ma-ai-pred-state {
+  font-family: var(--font-data);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  line-height: 1;
+}
+.ma-ai-pred-dominant {
+  font-size: 10px;
+  color: #94a3b8;
+}
+.ma-ai-pred-dominant strong {
+  color: #cbd5e1;
+}
+.ma-ai-pred-reason {
+  font-size: 10px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0;
+}
 
 /* Session Leader card */
 .ma-leader-card {

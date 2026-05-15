@@ -3,195 +3,178 @@
 /**
  * POST /api/session-energy-ai
  *
- * Accepts the last N session energy rows (summaries) from the client,
- * computes energy scores server-side, builds a multi-session pattern
- * description, and calls OpenAI to project upcoming market movement.
+ * Receives the full stacked-bar chart data from the client (sequence of
+ * sessions with component contributions), builds a structured prompt, and
+ * calls OpenAI to read the energy pattern and predict the next session.
  *
- * Returns JSON: { read, upcoming_session, regime, confidence, pattern, warning }
+ * Body: { chartData: [{ date, session, state, score, csBonus,
+ *                       movementPart, breadthPart, directionPart, expansionPart }] }
  *
- * Result is cached in-memory by sequence fingerprint (15-min TTL) to avoid
- * redundant AI calls when the user switches tabs.
+ * Returns: { read, prediction, regime, confidence, pattern, warning }
  */
 
 const OpenAI         = require('openai');
-const { getClient, cors } = require('./_db');
+const { cors }       = require('./_db');
 
-const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour (invalidated each new session)
-const _cache = new Map(); // fingerprint → { ts, result }
+const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+const _cache = new Map();
 
 function getOpenAI() {
   return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 }
 
-// ── Energy helpers (mirrors client-side logic) ────────────────────────────────
-function energyScore(s) {
-  if (s.session_energy_score != null) return parseFloat(s.session_energy_score);
-  const mov = parseFloat(s.avg_movement_score) || 0;
-  const brd = parseFloat(s.avg_breadth_score)  || 0;
-  const exp = parseFloat(s.expansion_score)    || 50;
-  const dir = parseFloat(s.avg_directional_agreement) || 50;
-  return Math.min(100, Math.round(0.40 * mov + 0.35 * brd + 0.15 * exp + 0.10 * dir));
+function fingerprint(chartData) {
+  return chartData.map(e => `${e.date}:${e.session}:${e.score}`).join('|');
 }
 
-function energyState(score, s) {
-  if (s?.session_state) return s.session_state;
-  const brd = parseFloat(s?.avg_breadth_score) || 100;
-  let state;
-  if (score <= 15) state = 'DEAD';
-  else if (score <= 35) state = 'COMPRESSION';
-  else if (score <= 55) state = 'STABLE';
-  else if (score <= 75) state = 'EXPANSION';
-  else state = 'EXPLOSIVE';
-  if (brd < 50 && (state === 'EXPANSION' || state === 'EXPLOSIVE')) state = 'STABLE';
-  return state;
-}
+function pad(v, n) { return String(v ?? '').padEnd(n); }
+function padL(v, n) { return String(v ?? '').padStart(n); }
 
-// ── Sequence fingerprint (changes when data changes) ─────────────────────────
-function fingerprint(rows) {
-  return rows.map(r => `${r.session_date_utc}:${r.session_name}:${r.avg_movement_score}`).join('|');
-}
-
-// ── Build structured prompt context ──────────────────────────────────────────
-function buildContext(enriched) {
-  const ORDER    = ['ASIA', 'LONDON', 'LONDON_NY', 'LATE_NY'];
-  const ORDER_LABEL = { ASIA: 'Asia', LONDON: 'London', LONDON_NY: 'London/NY Overlap', LATE_NY: 'Late NY' };
-
-  // Group by date
-  const byDate = {};
-  for (const e of enriched) {
-    if (!byDate[e.date]) byDate[e.date] = {};
-    byDate[e.date][e.session] = e;
+function buildPrompt(chartData) {
+  // Dedupe (keep last entry per date+session in case of duplicates)
+  const seen = new Set();
+  const rows = [];
+  for (const e of chartData) {
+    const k = `${e.date}:${e.session}`;
+    if (!seen.has(k)) { seen.add(k); rows.push(e); }
   }
 
-  const dates = Object.keys(byDate).sort().slice(-5);
-
-  const days = dates.map(date => {
-    const sessions = ORDER.map(sess => {
-      const e = byDate[date][sess];
-      if (!e) return null;
-      return `  ${ORDER_LABEL[sess].padEnd(22)} ${e.state.padEnd(12)} score=${e.score.toFixed(0).padStart(3)}  mov=${e.avgMov.toFixed(0)}%  breadth=${e.avgBreadth.toFixed(0)}%  expH=${e.expH}  compH=${e.compH}`;
-    }).filter(Boolean);
-    return `${date}:\n${sessions.join('\n')}`;
-  });
-
-  // Full 5-day sequence (up to 20 sessions: 5 days × 4 sessions)
-  const sequence = enriched.slice(-20).map(e =>
-    `${e.date} ${ORDER_LABEL[e.session] || e.session}: ${e.state} (${e.score.toFixed(0)})`
-  ).join('\n');
-
-  // Compression streak
+  // Compression streak into latest
   let compStreak = 0;
-  for (let i = enriched.length - 1; i >= 0; i--) {
-    if (enriched[i].state === 'COMPRESSION' || enriched[i].state === 'DEAD') compStreak++;
+  for (let i = rows.length - 1; i >= 0; i--) {
+    if (rows[i].state === 'COMPRESSION' || rows[i].state === 'DEAD') compStreak++;
     else break;
   }
 
-  const latest = enriched[enriched.length - 1];
+  const latest = rows[rows.length - 1];
 
-  return { days: days.join('\n\n'), sequence, compStreak, latest };
+  // Readiness per row: non-expansion streak × 25, capped 100
+  const isHigh = s => s === 'EXPANSION' || s === 'EXPLOSIVE';
+  const withReadiness = rows.map((e, i) => {
+    let streak = 0;
+    for (let j = i; j >= 0 && !isHigh(rows[j].state); j--) streak++;
+    return { ...e, readiness: Math.min(100, streak * 25) };
+  });
+
+  // Next session label
+  const SESS_AFTER = { ASIA: 'London', LONDON: 'New York', NEW_YORK: 'Asia (next day)' };
+  const nextSession = SESS_AFTER[latest?.session] || 'next session';
+
+  // Chart table (exactly what the user sees)
+  const header = `DATE        SESSION    STATE          SCR  MOV   BRD   AGR   EXP   CS  READY`;
+  const divider = `─`.repeat(header.length);
+  const tableRows = withReadiness.map(e => {
+    const cs = e.csBonus > 0 ? `+${e.csBonus}` : e.csBonus < 0 ? `${e.csBonus}` : ` 0`;
+    return [
+      pad(e.date, 11),
+      pad(e.session, 10),
+      pad(e.state, 14),
+      padL(e.score, 4),
+      padL((+e.movementPart).toFixed(1),  5),
+      padL((+e.breadthPart).toFixed(1),   5),
+      padL((+e.directionPart).toFixed(1), 5),
+      padL((+e.expansionPart).toFixed(1), 5),
+      padL(cs, 4),
+      padL(e.readiness, 5),
+    ].join('  ');
+  });
+
+  const dominant = e => {
+    const parts = [
+      { name: 'Movement',  v: +e.movementPart  },
+      { name: 'Breadth',   v: +e.breadthPart   },
+      { name: 'Agreement', v: +e.directionPart },
+      { name: 'Expansion', v: +e.expansionPart },
+    ];
+    return parts.sort((a,b) => b.v - a.v)[0].name;
+  };
+
+  // Pattern narrative per date
+  const byDate = {};
+  for (const e of withReadiness) {
+    if (!byDate[e.date]) byDate[e.date] = [];
+    byDate[e.date].push(e);
+  }
+  const narrative = Object.entries(byDate).sort(([a],[b]) => a.localeCompare(b)).map(([date, sessions]) => {
+    const parts = sessions.map(e => `${e.session}:${e.state}(${e.score},dom=${dominant(e)})`).join(' → ');
+    return `  ${date}: ${parts}`;
+  }).join('\n');
+
+  return { header, divider, tableRows, narrative, compStreak, latest, nextSession };
 }
 
-// ── Handler ───────────────────────────────────────────────────────────────────
 module.exports = async function handler(req, res) {
   cors(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST')    return res.status(405).json({ error: 'POST only' });
 
   try {
-    // Fetch last 7 days of session summaries
-    const sb = getClient();
-    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    const { data: summaries, error } = await sb
-      .from('session_performance_summary')
-      .select('session_date_utc, session_name, avg_movement_score, avg_breadth_score, expansion_hours, compression_hours, dominant_state, pairs_moving_avg')
-      .gte('session_date_utc', since)
-      .order('session_date_utc', { ascending: true });
-    if (error) throw error;
-    if (!summaries?.length) return res.json({ read: null });
-
-    // Filter weekends
-    const rows = summaries.filter(s => {
-      const d = new Date(s.session_date_utc).getUTCDay();
-      return d !== 0 && d !== 6;
-    });
+    const chartData = req.body?.chartData;
+    if (!chartData?.length) return res.json({ read: null });
 
     // Cache check
-    const fp = fingerprint(rows);
+    const fp = fingerprint(chartData);
     const cached = _cache.get(fp);
     if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
       return res.json(cached.result);
     }
 
-    // Enrich with energy scores
-    const ORDER = ['ASIA', 'LONDON', 'LONDON_NY', 'LATE_NY'];
-    const enriched = [];
-    const byDate = {};
-    for (const s of rows) {
-      if (!byDate[s.session_date_utc]) byDate[s.session_date_utc] = {};
-      byDate[s.session_date_utc][s.session_name] = s;
-    }
-    for (const date of Object.keys(byDate).sort()) {
-      for (const sess of ORDER) {
-        const s = byDate[date][sess];
-        if (!s) continue;
-        const score = energyScore(s);
-        enriched.push({
-          date, session: sess,
-          score,
-          state:       energyState(score, s),
-          avgMov:      parseFloat(s.avg_movement_score) || 0,
-          avgBreadth:  parseFloat(s.avg_breadth_score)  || 0,
-          expH:        parseInt(s.expansion_hours)       || 0,
-          compH:       parseInt(s.compression_hours)     || 0,
-          dominant:    s.dominant_state,
-        });
-      }
-    }
+    const { header, divider, tableRows, narrative, compStreak, latest, nextSession } = buildPrompt(chartData);
 
-    const { days, sequence, compStreak, latest } = buildContext(enriched);
+    const prompt = `You are the AI pattern-recognition layer of a professional forex session energy system.
+The system measures real market energy per trading session using 4 components:
+  MOV  = Movement contribution  (pair avg % move × 0.40 weight)
+  BRD  = Breadth contribution   (% of 28 pairs moving × 0.35 weight)
+  AGR  = Agreement contribution (directional agreement × 0.10 weight)
+  EXP  = Expansion contribution (acceleration vs historical × 0.15 weight)
+  SCR  = Total energy score (sum of components, 0–100)
+  READY = Coiling pressure: consecutive non-expansion sessions × 25, capped 100
 
-    // Determine next session label
-    const SESSION_AFTER = { ASIA: 'London', LONDON: 'London/NY Overlap', LONDON_NY: 'Late NY', LATE_NY: 'Asia (next day)' };
-    const nextSession = SESSION_AFTER[latest?.session] || 'next session';
+Energy states: DEAD(0–20) / COMPRESSION(20–40) / STABLE(40–60) / EXPANSION(60–80) / EXPLOSIVE(80–100)
+CS = Currency Signal bonus (±2 for strong CS, 0 otherwise)
 
-    const prompt = `You are the pattern-recognition layer of a session energy engine.
-The engine measures real forex market energy (movement, pair participation, expansion/compression hours) per trading session.
-Energy states: DEAD (0-20) / COMPRESSION (20-40) / STABLE (40-60) / EXPANSION (60-80) / EXPLOSIVE (80-100).
+STACKED BAR CHART — full session history (exactly what the user sees):
+${header}
+${divider}
+${tableRows.join('\n')}
 
-SESSION DATA — last 5 trading days (chronological):
-${days}
+SESSION FLOW (date: session transitions with dominant component):
+${narrative}
 
-FULL 5-DAY SEQUENCE (chronological, oldest → newest, one line per session):
-${sequence}
+KEY CONTEXT:
+  Compression streak (consecutive sessions at COMPRESSION or lower): ${compStreak}
+  Latest session: ${latest ? `${latest.date} ${latest.session} → ${latest.state} (score ${latest.score})` : 'unknown'}
+  Next expected session: ${nextSession}
 
-COMPRESSION STREAK INTO LATEST SESSION: ${compStreak} consecutive sessions compressed (0 = latest session is NOT compressed)
-LATEST SESSION: ${latest ? `${latest.date} ${latest.session} → ${latest.state} (score ${latest.score.toFixed(0)})` : 'unknown'}
-NEXT EXPECTED SESSION: ${nextSession}
+ANALYSIS RULES:
+1. Read the COMPONENT BREAKDOWN — not just the total score. Two sessions with score=50 can be structurally opposite.
+2. HIGH breadth + HIGH movement = real coordinated expansion. HIGH movement + LOW breadth = noise/false move.
+3. HIGH agreement + rising breadth = trend confirmation. LOW agreement = directionless churn.
+4. READY line rising → coiling pressure building → expansion more probable. Dropping after EXPANSION = release.
+5. CS bonus presence on the leading component = institutional confirmation.
+6. Use environmental language: "conditions are consistent with", "pressure has been accumulating", "participation suggests". NEVER use "will", "must", "expect", "should".
 
-Your task: analyze the multi-session energy cycle to project upcoming market conditions.
-
-RULES:
-1. Use environment language only: "conditions are consistent with", "energy flow is weighted toward", "participation environment suggests", "pressure has been accumulating".
-2. NEVER use predictive language: "will", "must", "expect", "should", "leads to".
-3. Reference compression streaks, expansion releases, and session-to-session transitions — these are the core pattern signals.
-4. Be direct and precise — one insight per field, no padding.
-5. confidence is your assessment of how clear the pattern is (0–100).
-
-Return ONLY this JSON:
+Return ONLY this JSON (no markdown, no explanation):
 {
   "pattern": "COMPRESSION_BUILDING"|"EXPANSION_RELEASING"|"TREND_REGIME"|"EXHAUSTION"|"TRANSITIONING"|"MIXED",
-  "read": "<2 sentences: what the multi-session energy pattern shows right now>",
-  "upcoming_session": "<1–2 sentences: what the energy context suggests for ${nextSession}>",
+  "read": "<2 sentences: what the component breakdown and session flow shows — be specific about which components dominated and why it matters>",
   "regime": "RISK_ON"|"RISK_OFF"|"CAUTIOUS"|"NEUTRAL"|"TRANSITIONING",
-  "confidence": <0-100>,
-  "warning": <null or one short caution — only if a clear structural risk is visible>
+  "confidence": <0–100>,
+  "prediction": {
+    "session": "${nextSession}",
+    "state": "DEAD"|"COMPRESSION"|"STABLE"|"EXPANSION"|"EXPLOSIVE",
+    "dominant_component": "Movement"|"Breadth"|"Agreement"|"Expansion",
+    "reasoning": "<1–2 sentences: what in the chart supports this prediction — cite specific components or pattern>",
+    "confidence": <0–100>
+  },
+  "warning": <null or one short caution — only if a clear structural risk is visible in the component data>
 }`;
 
     const ai = getOpenAI();
     const completion = await ai.chat.completions.create({
       model:           'gpt-4o-mini',
-      max_tokens:      500,
-      temperature:     0.2,
+      max_tokens:      600,
+      temperature:     0.15,
       response_format: { type: 'json_object' },
       messages: [{ role: 'user', content: prompt }],
     });

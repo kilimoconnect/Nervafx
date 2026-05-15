@@ -2061,24 +2061,60 @@ function renderMaSession(el, summaries) {
     plugins: [maZoneBg, maStackLabels],
   });
 
-  // AI analysis — non-blocking, updates panel when ready
-  _fetchSessionEnergyAI();
+  // AI analysis — non-blocking, passes full chart data so AI reads the bars
+  _fetchSessionEnergyAI(sequence);
 }
 
-async function _fetchSessionEnergyAI() {
+async function _fetchSessionEnergyAI(sequence = []) {
   const panel = document.getElementById('ma-ai-panel');
   if (!panel) return;
+
+  panel.innerHTML = '<span class="ma-ai-label">AI Pattern Analysis</span><span class="ma-ai-body" style="color:var(--text-dim)">Analysing…</span>';
+
   try {
-    const result = await api('/api/session-energy-ai', { method: 'POST' });
+    const chartData = sequence.map(e => ({
+      date:          e.date,
+      session:       e.sess,
+      state:         e.state,
+      score:         e.score,
+      csBonus:       e.csBonus ?? 0,
+      movementPart:  e.movementPart  ?? 0,
+      breadthPart:   e.breadthPart   ?? 0,
+      directionPart: e.directionPart ?? 0,
+      expansionPart: e.expansionPart ?? 0,
+    }));
+
+    const result = await api('/api/session-energy-ai', {
+      method: 'POST',
+      body: JSON.stringify({ chartData }),
+    });
     if (!result || result.error) throw new Error(result?.error || 'no result');
 
-    const regimeCls  = result.regime === 'RISK_ON'  ? 'risk-on'
-                     : result.regime === 'RISK_OFF' || result.regime === 'CAUTIOUS' ? 'risk-off'
-                     : 'neutral';
-    const patternBadge = result.pattern ? `<span class="ma-ai-pattern">${result.pattern.replace(/_/g,' ')}</span>` : '';
+    const regimeCls = result.regime === 'RISK_ON'  ? 'risk-on'
+                    : result.regime === 'RISK_OFF' || result.regime === 'CAUTIOUS' ? 'risk-off'
+                    : 'neutral';
+
+    const patternBadge = result.pattern
+      ? `<span class="ma-ai-pattern">${result.pattern.replace(/_/g,' ')}</span>` : '';
+
     const confBar = result.confidence != null
       ? `<div class="ma-ai-conf-wrap"><div class="ma-ai-conf-fill" style="width:${result.confidence}%"></div><span class="ma-ai-conf-label">${result.confidence}% confidence</span></div>`
       : '';
+
+    // Prediction block
+    const pred = result.prediction;
+    const predStateColor = { DEAD: '#475569', COMPRESSION: '#7c3aed', STABLE: '#0ea5e9', EXPANSION: '#22c55e', EXPLOSIVE: '#f59e0b' };
+    const predHtml = pred ? `
+      <div class="ma-ai-pred-block">
+        <div class="ma-ai-pred-header">
+          <span class="ma-ai-pred-lbl">NEXT SESSION PREDICTION</span>
+          <span class="ma-ai-pred-session">${pred.session || ''}</span>
+        </div>
+        <div class="ma-ai-pred-state" style="color:${predStateColor[pred.state] || '#94a3b8'}">${pred.state || '—'}</div>
+        ${pred.dominant_component ? `<div class="ma-ai-pred-dominant">Dominant driver: <strong>${pred.dominant_component}</strong></div>` : ''}
+        <p class="ma-ai-pred-reason">${pred.reasoning || ''}</p>
+        ${pred.confidence != null ? `<div class="ma-ai-conf-wrap" style="margin-top:4px"><div class="ma-ai-conf-fill" style="width:${pred.confidence}%;background:${predStateColor[pred.state]||'#64748b'}40;border-right:2px solid ${predStateColor[pred.state]||'#64748b'}"></div><span class="ma-ai-conf-label">${pred.confidence}% confidence</span></div>` : ''}
+      </div>` : '';
 
     panel.className = 'ma-ai-panel';
     panel.innerHTML = `
@@ -2089,7 +2125,7 @@ async function _fetchSessionEnergyAI() {
       </div>
       ${confBar}
       <p class="ma-ai-read">${result.read || ''}</p>
-      ${result.upcoming_session ? `<div class="ma-ai-upcoming"><span class="ma-ai-upcoming-lbl">Next Session</span>${result.upcoming_session}</div>` : ''}
+      ${predHtml}
       ${result.warning ? `<div class="ma-ai-warning">⚠ ${result.warning}</div>` : ''}`;
   } catch (_) {
     if (panel) panel.innerHTML = '<span class="ma-ai-label">AI Pattern Analysis</span><span class="ma-ai-body" style="color:var(--text-dim)">Unavailable</span>';
