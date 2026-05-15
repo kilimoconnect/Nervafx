@@ -1598,6 +1598,7 @@ function renderSession(data) {
 // ─── Market Energy ────────────────────────────────────────────────────────────
 
 let _maData      = null;
+let _maCsMap     = {}; // "date:session" → { strong, weak, score }
 let _maActiveTab = 'session';
 let _maCharts    = {};
 
@@ -1842,12 +1843,19 @@ function renderMaSession(el, summaries) {
     .filter(d => { const day = new Date(d).getUTCDay(); return day !== 0 && day !== 6; })
     .sort().slice(-7);
 
-  // Energy map: date → session → { score, state }
+  // Energy map: date → session → { score, rawScore, csBonus, csScore, state }
+  // CS bonus: 2+ signals on dominant side = +5, 1 signal = +2, 0 signals = -2 (when journal data exists)
   const energyMap = {};
   for (const s of summaries) {
     if (!energyMap[s.session_date_utc]) energyMap[s.session_date_utc] = {};
-    const score = _maEnergyScore(s);
-    energyMap[s.session_date_utc][s.session_name] = { score, state: _maEnergyState(score, s) };
+    const rawScore = _maEnergyScore(s);
+    const cs       = _maCsMap[`${s.session_date_utc}:${s.session_name}`];
+    const csBonus  = cs != null ? (cs.score >= 2 ? 5 : cs.score === 1 ? 2 : -2) : 0;
+    const score    = Math.min(100, Math.max(0, rawScore + csBonus));
+    energyMap[s.session_date_utc][s.session_name] = {
+      score, rawScore, csBonus, csScore: cs?.score ?? null,
+      state: _maEnergyState(score, s),
+    };
   }
 
   // Chronological session sequence for pattern detection
@@ -1906,12 +1914,17 @@ function renderMaSession(el, summaries) {
     <div class="ma-sequence-panel">
       <div class="ma-sequence-title">Session Sequence</div>
       <div class="ma-sequence-row">
-        ${lastSessions.map((s, i) => `
+        ${lastSessions.map((s, i) => {
+          const csCls   = s.csScore >= 2 ? 'exp' : s.csScore === 1 ? 'pos' : s.csScore === -1 ? 'neg' : '';
+          const csLabel = s.csScore >= 2 ? 'CS+2' : s.csScore === 1 ? 'CS+1' : s.csScore === -1 ? 'CS-' : '';
+          return `
           ${i > 0 ? '<span class="ma-seq-arrow">→</span>' : ''}
           <div class="ma-seq-item">
             <span class="ma-seq-sess" style="color:${MA_SESSION_BORDER[s.sess]}">${MA_SESSION_SHORT[s.sess]}</span>
             <span class="ma-seq-state" style="color:${MA_ENERGY_BORDER[s.state]}">${s.state}</span>
-          </div>`).join('')}
+            ${csCls ? `<span class="ma-seq-cs ${csCls}">${csLabel}</span>` : ''}
+          </div>`;
+        }).join('')}
       </div>
     </div>
     <div class="ma-chart-wrap" style="height:160px; margin-top:10px">
@@ -1927,10 +1940,12 @@ function renderMaSession(el, summaries) {
   opts.plugins.legend.display = false;
   opts.plugins.tooltip.callbacks = {
     label: c => {
-      const date  = allDates[c.dataIndex];
-      const sess  = ORDER[c.datasetIndex];
-      const e     = energyMap[date]?.[sess];
-      return e ? ` ${MA_SESSION_SHORT[sess]}  ${e.state}  (score ${e.score.toFixed(0)})` : '';
+      const date = allDates[c.dataIndex];
+      const sess = ORDER[c.datasetIndex];
+      const e    = energyMap[date]?.[sess];
+      if (!e) return '';
+      const csPart = e.csBonus !== 0 ? ` CS${e.csBonus > 0 ? '+' : ''}${e.csBonus}` : '';
+      return ` ${MA_SESSION_SHORT[sess]}  ${e.state}  (${e.rawScore.toFixed(0)}${csPart} = ${e.score.toFixed(0)})`;
     },
   };
   _maCharts.session = new Chart(ctx, {
@@ -2006,8 +2021,22 @@ function renderMaBreadth(el, hourly) {
 
 async function fetchMarketActivity() {
   try {
-    const data = await api('/api/session-activity?days=7&type=both');
+    const [data, jrnData] = await Promise.all([
+      api('/api/session-activity?days=7&type=both'),
+      api('/api/journal?limit=200').catch(() => ({ entries: [] })),
+    ]);
     _maData = data;
+
+    // Build CS map from journal entries — use last entry per session (entries arrive desc)
+    _maCsMap = {};
+    for (const e of (jrnData?.entries || [])) {
+      if (!e.time || !e.session_name) continue;
+      const key = `${e.time.slice(0, 10)}:${e.session_name}`;
+      if (_maCsMap[key]) continue; // already have a (later) reading for this session
+      const { strong, weak } = computeEntryCsig(e);
+      _maCsMap[key] = { strong, weak, score: _csigScore(strong.length, weak.length) };
+    }
+
     renderMarketActivity(data);
   } catch (_) { /* non-critical */ }
 }
