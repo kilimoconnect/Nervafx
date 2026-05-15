@@ -1861,10 +1861,10 @@ function renderMaSession(el, summaries) {
     energyMap[dateKey][s.session_name] = {
       score, rawScore, csBonus, csScore: cs?.score ?? null,
       state: _maEnergyState(score, s),
-      movPart: +(0.40 * parseFloat(s.avg_movement_score        || 0)).toFixed(1),
-      brdPart: +(0.35 * parseFloat(s.avg_breadth_score         || 0)).toFixed(1),
-      dirPart: +(0.10 * parseFloat(s.avg_directional_agreement || 0)).toFixed(1),
-      expPart: +(0.15 * parseFloat(s.expansion_score           || 0)).toFixed(1),
+      movementPart:  +(0.40 * parseFloat(s.avg_movement_score        || 0)).toFixed(1),
+      breadthPart:   +(0.35 * parseFloat(s.avg_breadth_score         || 0)).toFixed(1),
+      directionPart: +(0.10 * parseFloat(s.avg_directional_agreement || 0)).toFixed(1),
+      expansionPart: +(0.15 * parseFloat(s.expansion_score           || 0)).toFixed(1),
     };
   }
 
@@ -1879,11 +1879,11 @@ function renderMaSession(el, summaries) {
     const cs1 = e1.csScore ?? -1, cs2 = e2.csScore ?? -1;
     const csScore  = Math.max(cs1, cs2);
     const state    = score <= 15 ? 'DEAD' : score <= 35 ? 'COMPRESSION' : score <= 55 ? 'STABLE' : score <= 75 ? 'EXPANSION' : 'EXPLOSIVE';
-    const movPart = +((e1.movPart + e2.movPart) / 2).toFixed(1);
-    const brdPart = +((e1.brdPart + e2.brdPart) / 2).toFixed(1);
-    const dirPart = +((e1.dirPart + e2.dirPart) / 2).toFixed(1);
-    const expPart = +((e1.expPart + e2.expPart) / 2).toFixed(1);
-    return { score, rawScore, csBonus, csScore: csScore === -1 ? null : csScore, state, movPart, brdPart, dirPart, expPart };
+    const movementPart  = +((e1.movementPart  + e2.movementPart)  / 2).toFixed(1);
+    const breadthPart   = +((e1.breadthPart   + e2.breadthPart)   / 2).toFixed(1);
+    const directionPart = +((e1.directionPart + e2.directionPart) / 2).toFixed(1);
+    const expansionPart = +((e1.expansionPart + e2.expansionPart) / 2).toFixed(1);
+    return { score, rawScore, csBonus, csScore: csScore === -1 ? null : csScore, state, movementPart, breadthPart, directionPart, expansionPart };
   }
 
   // Display map: 3 sessions — LONDON_NY overlap split between London and New York
@@ -1911,7 +1911,7 @@ function renderMaSession(el, summaries) {
   // Component colors (consistent across sessions — reveals energy composition)
   const COMP_BG     = { movement: 'rgba(251,146,60,0.78)', breadth: 'rgba(56,189,248,0.75)', direction: 'rgba(192,132,252,0.75)', expansion: 'rgba(74,222,128,0.82)' };
   const COMP_BORDER = { movement: 'rgba(251,146,60,0.95)', breadth: 'rgba(56,189,248,0.95)', direction: 'rgba(192,132,252,0.95)', expansion: 'rgba(74,222,128,0.95)' };
-  const COMP_LABEL  = { movement: 'Movement 40%', breadth: 'Breadth 35%', direction: 'Agreement 10%', expansion: 'Expansion 15%' };
+  const COMP_LABEL  = { movement: 'Movement', breadth: 'Breadth', direction: 'Agreement', expansion: 'Expansion' };
 
   // Expansion readiness line: non-expansion streak → coiling pressure
   const isHighState = st => st === 'EXPANSION' || st === 'EXPLOSIVE';
@@ -1951,6 +1951,30 @@ function renderMaSession(el, summaries) {
     pointRadius: 2, pointBackgroundColor: 'rgba(250,204,21,0.9)',
     tension: 0.4, order: -1,
   });
+
+  // Background zones: dead / compression / stable / expansion / explosive
+  const maZoneBg = {
+    id: 'maZoneBg',
+    beforeDraw(chart) {
+      const { ctx, chartArea: { left, right }, scales: { y } } = chart;
+      if (!y) return;
+      const zones = [
+        { from: 80, to: 100, color: 'rgba(250,204,21,0.07)'  },
+        { from: 60, to: 80,  color: 'rgba(74,222,128,0.07)'  },
+        { from: 40, to: 60,  color: 'rgba(56,189,248,0.05)'  },
+        { from: 20, to: 40,  color: 'rgba(192,132,252,0.06)' },
+        { from: 0,  to: 20,  color: 'rgba(100,100,120,0.09)' },
+      ];
+      ctx.save();
+      for (const z of zones) {
+        const yTop    = y.getPixelForValue(z.to);
+        const yBottom = y.getPixelForValue(z.from);
+        ctx.fillStyle = z.color;
+        ctx.fillRect(left, yTop, right - left, yBottom - yTop);
+      }
+      ctx.restore();
+    },
+  };
 
   // Bar label plugin — draws session code centred on the full stacked bar height
   const maStackLabels = {
@@ -2034,7 +2058,7 @@ function renderMaSession(el, summaries) {
     type: 'bar',
     data: { labels: allDates.map(d => d.slice(5)), datasets },
     options: opts,
-    plugins: [maStackLabels],
+    plugins: [maZoneBg, maStackLabels],
   });
 
   // AI analysis — non-blocking, updates panel when ready
