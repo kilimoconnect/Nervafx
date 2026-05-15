@@ -1546,6 +1546,69 @@ function maSessionColor(name, alpha) {
 
 const MA_STATE_COLOR = { HIGH_EXPANSION: '#4ade80', EXPANSION: '#86efac', MIXED: '#fbbf24', COMPRESSION: '#f87171', QUIET: '#94a3b8' };
 
+// Session Energy State — scored 0-100 from movement + breadth + expansion ratio
+const MA_ENERGY_BG = {
+  DEAD:        'rgba(30,33,40,0.9)',
+  COMPRESSION: 'rgba(127,29,29,0.7)',
+  STABLE:      'rgba(120,53,15,0.7)',
+  EXPANSION:   'rgba(20,83,45,0.8)',
+  EXPLOSIVE:   'rgba(74,222,128,0.85)',
+};
+const MA_ENERGY_BORDER = {
+  DEAD:        '#334155',
+  COMPRESSION: '#ef4444',
+  STABLE:      '#f59e0b',
+  EXPANSION:   '#22c55e',
+  EXPLOSIVE:   '#4ade80',
+};
+const MA_ENERGY_TEXT = {
+  DEAD:        '#64748b',
+  COMPRESSION: '#fca5a5',
+  STABLE:      '#fde68a',
+  EXPANSION:   '#86efac',
+  EXPLOSIVE:   '#ffffff',
+};
+
+function _maEnergyScore(s) {
+  const mov     = parseFloat(s.avg_movement_score) || 0;
+  const brd     = parseFloat(s.avg_breadth_score)  || 0;
+  const expH    = parseInt(s.expansion_hours)       || 0;
+  const compH   = parseInt(s.compression_hours)     || 0;
+  const total   = expH + compH;
+  const expRatio = total > 0 ? expH / total : 0.5;
+  return Math.min(100, mov * 0.5 + brd * 0.3 + expRatio * 20);
+}
+
+function _maEnergyState(score) {
+  if (score < 20) return 'DEAD';
+  if (score < 40) return 'COMPRESSION';
+  if (score < 60) return 'STABLE';
+  if (score < 80) return 'EXPANSION';
+  return 'EXPLOSIVE';
+}
+
+function _maExpansionForecast(recent) {
+  if (recent.length < 2) return null;
+  const last = recent.slice(-5);
+  const isComp = s => s === 'COMPRESSION' || s === 'DEAD';
+  const isExp  = s => s === 'EXPANSION'   || s === 'EXPLOSIVE';
+
+  let compStreak = 0;
+  for (let i = last.length - 1; i >= 0; i--) {
+    if (isComp(last[i].state)) compStreak++;
+    else break;
+  }
+
+  const latestState = last[last.length - 1].state;
+  const prevState   = last.length >= 2 ? last[last.length - 2].state : null;
+
+  if (compStreak >= 3) return { type: 'warning', text: `${compStreak} consecutive sessions compressed. High expansion probability — watch for release at next active session.` };
+  if (compStreak >= 2) return { type: 'warning', text: `${compStreak} sessions compressed back-to-back. Expansion pressure increasing.` };
+  if (isExp(latestState) && prevState && isComp(prevState)) return { type: 'release', text: 'Stored pressure released. Energy now expanding — continuation likely this session.' };
+  if (last.filter(s => isExp(s.state)).length >= 3) return { type: 'strong', text: 'Strong trend regime — energy expanding across multiple sessions.' };
+  return { type: 'neutral', text: 'Mixed session energy — no clear accumulation pattern detected.' };
+}
+
 function _maFmtHour(isoTime) {
   const tz = (!_userTz || _userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : _userTz;
   const parts = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date(isoTime));
@@ -1692,7 +1755,7 @@ function renderMaTimeline(el, hourly) {
   });
 }
 
-// ── Session Leader ────────────────────────────────────────────────────────────
+// ── Session Expansion Cycles ──────────────────────────────────────────────────
 function renderMaSession(el, summaries) {
   if (!summaries.length) {
     el.innerHTML = '<p class="empty-state">No session summary data yet.</p>';
@@ -1700,56 +1763,112 @@ function renderMaSession(el, summaries) {
   }
 
   const ORDER = ['ASIA', 'LONDON', 'LONDON_NY', 'LATE_NY'];
-  const statMap = {};
+
+  const allDates = [...new Set(summaries.map(s => s.session_date_utc))]
+    .filter(d => { const day = new Date(d).getUTCDay(); return day !== 0 && day !== 6; })
+    .sort().slice(-7);
+
+  // Energy map: date → session → { score, state }
+  const energyMap = {};
   for (const s of summaries) {
-    if (!statMap[s.session_name]) statMap[s.session_name] = { movs: [], breadths: [], expH: 0, compH: 0 };
-    statMap[s.session_name].movs.push(parseFloat(s.avg_movement_score) || 0);
-    statMap[s.session_name].breadths.push(parseFloat(s.avg_breadth_score) || 0);
-    statMap[s.session_name].expH  += parseInt(s.expansion_hours)   || 0;
-    statMap[s.session_name].compH += parseInt(s.compression_hours) || 0;
+    if (!energyMap[s.session_date_utc]) energyMap[s.session_date_utc] = {};
+    const score = _maEnergyScore(s);
+    energyMap[s.session_date_utc][s.session_name] = { score, state: _maEnergyState(score) };
   }
 
-  const avg = arr => arr.length ? arr.reduce((a,b) => a+b,0) / arr.length : 0;
-  const stats = ORDER.map(sess => {
-    const d = statMap[sess];
-    if (!d) return null;
-    return { sess, avgMov: avg(d.movs), avgBreadth: avg(d.breadths), expH: d.expH, compH: d.compH };
-  }).filter(Boolean).sort((a,b) => b.avgMov - a.avgMov);
+  // Chronological session sequence for pattern detection
+  const sequence = [];
+  for (const date of allDates) {
+    for (const sess of ORDER) {
+      const e = energyMap[date]?.[sess];
+      if (e) sequence.push({ date, sess, ...e });
+    }
+  }
 
-  if (!stats.length) { el.innerHTML = '<p class="empty-state">No session data yet.</p>'; return; }
+  const forecast     = _maExpansionForecast(sequence);
+  const lastSessions = sequence.slice(-4);
 
-  const leader  = stats[0];
-  const maxMov  = leader.avgMov;
-  const pairsAvg = Math.round(leader.avgBreadth * 28 / 100);
+  // Datasets: one per session, each bar colored by energy state
+  const datasets = ORDER.map(sess => ({
+    label:           MA_SESSION_SHORT[sess],
+    _sessKey:        sess,
+    data:            allDates.map(d => energyMap[d]?.[sess]?.score ?? null),
+    backgroundColor: allDates.map(d => MA_ENERGY_BG[energyMap[d]?.[sess]?.state]     || 'rgba(0,0,0,0)'),
+    borderColor:     allDates.map(d => MA_ENERGY_BORDER[energyMap[d]?.[sess]?.state]  || 'transparent'),
+    borderWidth: 1,
+    borderRadius: 3,
+  }));
 
-  const dominantState = leader.expH >= leader.compH ? 'EXPANSION' : 'COMPRESSION';
-  const domColor = dominantState === 'EXPANSION' ? '#4ade80' : '#f87171';
+  // Bar label plugin — writes short code + state in white
+  const maEnergyBarLabels = {
+    id: 'maEnergyBarLabels',
+    afterDatasetsDraw(chart) {
+      const c2 = chart.ctx;
+      chart.data.datasets.forEach((ds, i) => {
+        const short = MA_SESSION_SHORT[ds._sessKey] || '';
+        chart.getDatasetMeta(i).data.forEach((bar, j) => {
+          const { x, y, base } = bar.getProps(['x','y','base'], true);
+          const h = base - y;
+          if (h < 12) return;
+          const date  = allDates[j];
+          const state = energyMap[date]?.[ds._sessKey]?.state;
+          const color = MA_ENERGY_TEXT[state] || 'rgba(255,255,255,0.8)';
+          c2.save();
+          c2.fillStyle  = color;
+          c2.font       = `bold ${h >= 22 ? 8 : 7}px monospace`;
+          c2.textAlign  = 'center';
+          c2.textBaseline = 'middle';
+          c2.fillText(short, x, y + h / 2);
+          c2.restore();
+        });
+      });
+    },
+  };
+
+  const forecastIcon = { release: '⚡', warning: '⚠', strong: '🔥', neutral: '○' };
+  const forecastCls  = { release: 'release', warning: 'warning', strong: 'strong', neutral: 'neutral' };
 
   el.innerHTML = `
-    <div class="ma-leader-card" style="border-color:${maSessionColor(leader.sess, 0.5)}">
-      <div class="ma-leader-crown">👑 Session Leader · This Week</div>
-      <div class="ma-leader-name" style="color:${MA_SESSION_BORDER[leader.sess]}">${MA_SESSION_LABEL[leader.sess]}</div>
-      <div class="ma-leader-stats">
-        <div class="ma-leader-stat"><span class="ma-lstat-lbl">Avg Activity</span><span class="ma-lstat-val">${leader.avgMov.toFixed(0)}%</span></div>
-        <div class="ma-leader-stat"><span class="ma-lstat-lbl">Avg Breadth</span><span class="ma-lstat-val">${pairsAvg} pairs</span></div>
-        <div class="ma-leader-stat"><span class="ma-lstat-lbl">Dominant State</span><span class="ma-lstat-val" style="color:${domColor}">${dominantState}</span></div>
+    <div class="ma-sequence-panel">
+      <div class="ma-sequence-title">Session Sequence</div>
+      <div class="ma-sequence-row">
+        ${lastSessions.map((s, i) => `
+          ${i > 0 ? '<span class="ma-seq-arrow">→</span>' : ''}
+          <div class="ma-seq-item">
+            <span class="ma-seq-sess" style="color:${MA_SESSION_BORDER[s.sess]}">${MA_SESSION_SHORT[s.sess]}</span>
+            <span class="ma-seq-state" style="color:${MA_ENERGY_BORDER[s.state]}">${s.state}</span>
+          </div>`).join('')}
       </div>
     </div>
-    <div class="ma-sess-compare">
-      ${stats.map(s => {
-        const pct    = maxMov > 0 ? (s.avgMov / maxMov * 100).toFixed(0) : 0;
-        const isLead = s.sess === leader.sess;
-        return `
-          <div class="ma-sess-row${isLead ? ' ma-sess-leader' : ''}">
-            <span class="ma-sess-short" style="color:${MA_SESSION_BORDER[s.sess]}">${MA_SESSION_SHORT[s.sess]}</span>
-            <div class="ma-sess-bar-outer">
-              <div class="ma-sess-bar-inner" style="width:${pct}%;background:${maSessionColor(s.sess, isLead ? 0.85 : 0.5)}"></div>
-            </div>
-            <span class="ma-sess-pct">${s.avgMov.toFixed(0)}%</span>
-            <span class="ma-sess-breadth">${Math.round(s.avgBreadth * 28 / 100)}p</span>
-          </div>`;
-      }).join('')}
+    ${forecast ? `<div class="ma-forecast-panel ma-forecast-${forecastCls[forecast.type]}">
+      <span class="ma-forecast-icon">${forecastIcon[forecast.type]}</span>
+      <span class="ma-forecast-text">${forecast.text}</span>
+    </div>` : ''}
+    <div class="ma-chart-wrap" style="height:160px; margin-top:10px">
+      <canvas id="maChartSession"></canvas>
+    </div>
+    <div class="ma-state-legend" style="margin-top:8px">
+      ${Object.entries(MA_ENERGY_BORDER).map(([s,c]) => `<span class="ma-state-dot" style="background:${c}"></span><span class="ma-state-lbl">${s}</span>`).join('')}
     </div>`;
+
+  const ctx  = document.getElementById('maChartSession').getContext('2d');
+  const opts = _maChartDefaults();
+  opts.scales.x.ticks.maxRotation = 30;
+  opts.plugins.legend.display = false;
+  opts.plugins.tooltip.callbacks = {
+    label: c => {
+      const date  = allDates[c.dataIndex];
+      const sess  = ORDER[c.datasetIndex];
+      const e     = energyMap[date]?.[sess];
+      return e ? ` ${MA_SESSION_SHORT[sess]}  ${e.state}  (score ${e.score.toFixed(0)})` : '';
+    },
+  };
+  _maCharts.session = new Chart(ctx, {
+    type: 'bar',
+    data: { labels: allDates.map(d => d.slice(5)), datasets },
+    options: opts,
+    plugins: [maEnergyBarLabels],
+  });
 }
 
 // ── Breadth chart ─────────────────────────────────────────────────────────────
