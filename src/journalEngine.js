@@ -424,6 +424,18 @@ async function writeJournalEntry() {
     newPullbackCount: new_pullback_pairs,
   });
 
+  // Preserve existing m15_impulses if fresh collection came back empty
+  // (top-of-hour FLAT window can blank out m15 data and overwrite a good snapshot)
+  let m15ImpulsesFinal = m15Impulses;
+  if (!m15ImpulsesFinal.length) {
+    const { data: existing } = await supabase
+      .from('hourly_market_journal')
+      .select('m15_impulses')
+      .eq('time', hourTs.toISOString())
+      .maybeSingle();
+    if (existing?.m15_impulses?.length) m15ImpulsesFinal = existing.m15_impulses;
+  }
+
   // Compose journal row
   const row = {
     time:                    hourTs.toISOString(),
@@ -443,7 +455,7 @@ async function writeJournalEntry() {
     ai_analysis:             aiAnalysis,
     signals_summary,
     pair_rankings:           pairRankings.slice(0, 28),
-    m15_impulses:            m15Impulses,
+    m15_impulses:            m15ImpulsesFinal,
     tracked_pullback_pairs,
     new_pullback_pairs,
     summary,
