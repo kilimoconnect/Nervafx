@@ -1531,7 +1531,7 @@ function renderSession(data) {
 // ─── Market Energy ────────────────────────────────────────────────────────────
 
 let _maData      = null;
-let _maActiveTab = 'timeline';
+let _maActiveTab = 'session';
 let _maCharts    = {};
 
 const MA_SESSION_SHORT = { ASIA: 'AS', LONDON: 'LO', LONDON_NY: 'OV', LATE_NY: 'NY' };
