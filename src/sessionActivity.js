@@ -99,6 +99,8 @@ async function computeSessionSummaries() {
   const groups = {};
   for (const r of rows) {
     const date = r.time_utc.slice(0, 10);
+    const dow  = new Date(date).getUTCDay(); // 0=Sun, 6=Sat
+    if (dow === 0 || dow === 6) continue;    // skip weekend rows
     const key  = `${date}:${r.session_name}`;
     if (!groups[key]) groups[key] = { date, session: r.session_name, hrs: [] };
     groups[key].hrs.push(r);

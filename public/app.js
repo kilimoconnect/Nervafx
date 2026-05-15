@@ -1656,7 +1656,9 @@ function renderMaSession(el, summaries) {
   }
   // Group by session_name, take last 7 days per session
   const sessions = ['ASIA', 'LONDON', 'LONDON_NY', 'LATE_NY'];
-  const allDates  = [...new Set(summaries.map(s => s.session_date_utc))].sort().slice(-7);
+  const allDates  = [...new Set(summaries.map(s => s.session_date_utc))]
+    .filter(d => { const day = new Date(d).getUTCDay(); return day !== 0 && day !== 6; })
+    .sort().slice(-7);
 
   el.innerHTML = `<div class="ma-chart-wrap"><canvas id="maChartSession"></canvas></div>`;
 
