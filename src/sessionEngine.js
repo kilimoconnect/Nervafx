@@ -72,8 +72,7 @@ const QUALITY_DESC = {
 const SESSION_META = {
   DEAD_HOURS:  { label: 'Low Liquidity',      quality: 'BLOCKED',   tradesAllowed: false, baseActivity: 5,  tz: null,                 localOpen: null, localClose: null },
   ASIA:        { label: 'Asia',               quality: 'MEDIUM',    tradesAllowed: true,  baseActivity: 48, tz: 'Asia/Tokyo',          localOpen: 9,    localClose: 18   },
-  LONDON_OPEN: { label: 'London Open',        quality: 'HIGH',      tradesAllowed: true,  baseActivity: 80, tz: 'Europe/London',       localOpen: 8,    localClose: 10   },
-  LONDON:      { label: 'London',             quality: 'HIGH',      tradesAllowed: true,  baseActivity: 70, tz: 'Europe/London',       localOpen: 10,   localClose: 13   },
+  LONDON:      { label: 'London',             quality: 'HIGH',      tradesAllowed: true,  baseActivity: 80, tz: 'Europe/London',       localOpen: 8,    localClose: 13   },
   LONDON_NY:   { label: 'London/NY Overlap',  quality: 'VERY_HIGH', tradesAllowed: true,  baseActivity: 92, tz: 'Europe/London',       localOpen: 13,   localClose: 17   },
   LATE_NY:     { label: 'Late NY',            quality: 'LOW',       tradesAllowed: true,  baseActivity: 28, tz: 'America/New_York',    localOpen: 8,    localClose: 17   },
 };
@@ -81,16 +80,16 @@ const SESSION_META = {
 // ─── Pair-session deltas ───────────────────────────────────────────────────────
 
 const PAIR_SESSION_DELTA = {
-  GBP_USD: { LONDON_OPEN: +8, LONDON: +5, LONDON_NY: +8, LATE_NY: -5, ASIA: -5 },
-  GBP_JPY: { LONDON_OPEN: +8, LONDON: +5, LONDON_NY: +8, ASIA: +3,   LATE_NY: -5 },
-  GBP_CHF: { LONDON_OPEN: +8, LONDON: +5, LONDON_NY: +5, ASIA: -3 },
-  GBP_CAD: { LONDON_OPEN: +8, LONDON: +5, LONDON_NY: +8, ASIA: -3 },
-  GBP_AUD: { LONDON_OPEN: +8, LONDON: +5, ASIA: -5 },
-  GBP_NZD: { LONDON_OPEN: +8, LONDON: +5, ASIA: -5 },
-  EUR_USD:  { LONDON: +5, LONDON_NY: +10, LONDON_OPEN: +5, ASIA: -3 },
-  EUR_JPY:  { LONDON: +5, LONDON_NY:  +8, LONDON_OPEN: +5 },
-  EUR_GBP:  { LONDON: +8, LONDON_OPEN: +8, LONDON_NY: +5, ASIA: -5 },
-  EUR_CHF:  { LONDON: +5, LONDON_OPEN: +5 },
+  GBP_USD: { LONDON: +8, LONDON_NY: +8, LATE_NY: -5, ASIA: -5 },
+  GBP_JPY: { LONDON: +8, LONDON_NY: +8, ASIA: +3,   LATE_NY: -5 },
+  GBP_CHF: { LONDON: +8, LONDON_NY: +5, ASIA: -3 },
+  GBP_CAD: { LONDON: +8, LONDON_NY: +8, ASIA: -3 },
+  GBP_AUD: { LONDON: +8, ASIA: -5 },
+  GBP_NZD: { LONDON: +8, ASIA: -5 },
+  EUR_USD:  { LONDON: +5, LONDON_NY: +10, ASIA: -3 },
+  EUR_JPY:  { LONDON: +5, LONDON_NY:  +8 },
+  EUR_GBP:  { LONDON: +8, LONDON_NY: +5, ASIA: -5 },
+  EUR_CHF:  { LONDON: +5 },
   EUR_CAD:  { LONDON_NY: +8, LONDON: +5 },
   EUR_AUD:  { LONDON: +5, LONDON_NY: +5 },
   EUR_NZD:  { LONDON: +5, LONDON_NY: +5 },
@@ -104,7 +103,7 @@ const PAIR_SESSION_DELTA = {
   NZD_JPY:  { ASIA: +8,  LONDON: +5, LONDON_NY: +5 },
   CAD_CHF:  { LONDON_NY: +8, LONDON: +3 },
   CAD_JPY:  { LONDON_NY: +8, LONDON: +3, ASIA: +3 },
-  CHF_JPY:  { LONDON: +5, LONDON_OPEN: +5, ASIA: +3 },
+  CHF_JPY:  { LONDON: +5, ASIA: +3 },
 };
 
 // ─── Core session detection ───────────────────────────────────────────────────
@@ -156,7 +155,7 @@ function getCurrentSession(now = new Date()) {
 
   // London only
   if (londonOpen) {
-    return _build(londonHour < 10 ? 'LONDON_OPEN' : 'LONDON', now);
+    return _build('LONDON', now);
   }
 
   // NY only (London already closed)
@@ -227,8 +226,7 @@ function _computeUTCRange(sessName, loOffset, nyOffset) {
 
   switch (sessName) {
     case 'ASIA':        return { open: 0,           close: 9 };           // Tokyo UTC+9, no DST
-    case 'LONDON_OPEN': return { open: n(8 - loOffset),  close: n(10 - loOffset) };
-    case 'LONDON':      return { open: n(10 - loOffset), close: n(13 - loOffset) };
+    case 'LONDON':      return { open: n(8 - loOffset),  close: n(13 - loOffset) };
     case 'LONDON_NY':   return {
       open:  n(Math.max(8 - loOffset, 8 - nyOffset)),   // later  of London & NY open
       close: n(Math.min(17 - loOffset, 17 - nyOffset)), // earlier of London & NY close
@@ -249,7 +247,7 @@ function getSessionTimeline(now = new Date()) {
   const current  = getCurrentSession(now);
 
   return [
-    'ASIA', 'LONDON_OPEN', 'LONDON', 'LONDON_NY', 'LATE_NY', 'DEAD_HOURS',
+    'ASIA', 'LONDON', 'LONDON_NY', 'LATE_NY', 'DEAD_HOURS',
   ].map(name => {
     const meta  = SESSION_META[name];
     const range = _computeUTCRange(name, loOffset, nyOffset);
