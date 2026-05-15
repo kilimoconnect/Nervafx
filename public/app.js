@@ -1532,6 +1532,13 @@ let _maData         = null; // cached fetch result
 let _maActiveTab    = 'timeline';
 let _maCharts       = {};   // { timeline, session, breadth } Chart instances
 
+const MA_SESSION_SHORT = {
+  ASIA:      'AS',
+  LONDON:    'LO',
+  LONDON_NY: 'OV',
+  LATE_NY:   'NY',
+};
+
 const MA_SESSION_COLORS = {
   LONDON_NY: 'rgba(234,179,8,0.85)',
   LONDON:    'rgba(59,130,246,0.85)',
@@ -1657,7 +1664,7 @@ function renderMaSession(el, summaries) {
     const byDate = {};
     summaries.filter(s => s.session_name === sess).forEach(s => { byDate[s.session_date_utc] = parseFloat(s.avg_movement_score); });
     return {
-      label: sess.replace(/_/g,' '),
+      label: MA_SESSION_SHORT[sess] || sess,
       data:  allDates.map(d => byDate[d] ?? null),
       backgroundColor: maSessionColor(sess, 0.75),
       borderColor:     MA_SESSION_BORDER[sess] || '#64748b',
