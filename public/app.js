@@ -2149,7 +2149,9 @@ async function fetchMarketActivity() {
     }
 
     renderMarketActivity(data);
-  } catch (_) { /* non-critical */ }
+  } catch (_) {
+    if (_maData) renderMarketActivity(_maData);
+  }
 }
 
 function renderMarketActivity(data) {
@@ -2739,3 +2741,5 @@ function flashEl(id) {
 showSkeletons();
 refresh();
 setInterval(refresh, REFRESH_MS);
+// Market activity has its own refresh so predictions update even if main refresh fails
+setInterval(fetchMarketActivity, REFRESH_MS);
