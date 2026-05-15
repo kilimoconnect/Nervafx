@@ -22,10 +22,33 @@ function classifyMarketState(movementScore, breadthScore) {
   return 'MIXED';
 }
 
+// Session Energy Score: 40% movement + 35% breadth + 15% expansion + 10% directional
+// expansion component: current avg movement vs last-10 same-session avg, normalised 0-100
+// (ratio 1.0 = 50pts, 2.0+ = 100pts, 0 = 0pts)
+function sessionEnergyScore(avgMov, avgBrd, expansionComponent, avgDir) {
+  return Math.min(100, Math.round(
+    0.40 * avgMov +
+    0.35 * avgBrd +
+    0.15 * expansionComponent +
+    0.10 * avgDir
+  ));
+}
+
+function sessionEnergyState(score, avgBrd) {
+  let state;
+  if (score <= 15) state = 'DEAD';
+  else if (score <= 35) state = 'COMPRESSION';
+  else if (score <= 55) state = 'STABLE';
+  else if (score <= 75) state = 'EXPANSION';
+  else state = 'EXPLOSIVE';
+  // Breadth protection: low participation cannot be EXPANSION or EXPLOSIVE
+  if (avgBrd < 50 && (state === 'EXPANSION' || state === 'EXPLOSIVE')) state = 'STABLE';
+  return state;
+}
+
 function round1(v) { return Math.round(v * 10) / 10; }
 
 // ─── Candle fetch ─────────────────────────────────────────────────────────────
-// Returns { timeISO: { INSTRUMENT: { open, close } } }
 
 async function fetchHourlyCandles(limit = 210) {
   const byTime = {};
@@ -49,19 +72,23 @@ async function fetchHourlyCandles(limit = 210) {
 }
 
 // ─── Per-hour calculation ─────────────────────────────────────────────────────
-// sessionOpenPrices: { INSTRUMENT: open_price_at_session_start }
 
 function computeRow(hourKey, candles, sessionOpenPrices) {
   const session = getCurrentSession(new Date(hourKey));
   if (session.session === 'DEAD_HOURS') return null;
-  const total   = config.instruments.length; // 28
+  const total = config.instruments.length; // 28
 
+  let bullish = 0, bearish = 0;
   const movements = [];
+
   for (const instrument of config.instruments) {
-    const c     = candles[instrument];
-    const open  = sessionOpenPrices[instrument];
+    const c    = candles[instrument];
+    const open = sessionOpenPrices[instrument];
     if (!c || !open) continue;
-    movements.push(Math.abs(c.close - open) / open);
+    const move = (c.close - open) / open;
+    movements.push(Math.abs(move));
+    if (move > 0)      bullish++;
+    else if (move < 0) bearish++;
   }
   if (movements.length === 0) return null;
 
@@ -69,21 +96,23 @@ function computeRow(hourKey, candles, sessionOpenPrices) {
   const pairsMoving  = movements.filter(m => m >= STRONG_MOVEMENT_THRESHOLD).length;
   const pairsQuiet   = total - pairsMoving;
 
-  const movementScore    = round1(normalizeMovement(avgMovement));
-  const breadthScore     = round1((pairsMoving / total) * 100);
-  const compressionScore = round1(((100 - movementScore) * (100 - breadthScore)) / 100);
-  const expansionScore   = round1((movementScore * breadthScore) / 100);
+  const movementScore          = round1(normalizeMovement(avgMovement));
+  const breadthScore           = round1((pairsMoving / total) * 100);
+  const compressionScore       = round1(((100 - movementScore) * (100 - breadthScore)) / 100);
+  const expansionScore         = round1((movementScore * breadthScore) / 100);
+  const directionalAgreement   = round1((Math.max(bullish, bearish) / total) * 100);
 
   return {
-    time_utc:          hourKey,
-    session_name:      session.session,
-    movement_score:    movementScore,
-    breadth_score:     breadthScore,
-    compression_score: compressionScore,
-    expansion_score:   expansionScore,
-    pairs_moving:      pairsMoving,
-    pairs_quiet:       pairsQuiet,
-    market_state:      classifyMarketState(movementScore, breadthScore),
+    time_utc:              hourKey,
+    session_name:          session.session,
+    movement_score:        movementScore,
+    breadth_score:         breadthScore,
+    compression_score:     compressionScore,
+    expansion_score:       expansionScore,
+    directional_agreement: directionalAgreement,
+    pairs_moving:          pairsMoving,
+    pairs_quiet:           pairsQuiet,
+    market_state:          classifyMarketState(movementScore, breadthScore),
   };
 }
 
@@ -92,16 +121,17 @@ function computeRow(hourKey, candles, sessionOpenPrices) {
 async function computeSessionSummaries() {
   const { data: rows, error } = await supabase
     .from('hourly_session_activity')
-    .select('time_utc, session_name, movement_score, breadth_score, market_state, pairs_moving')
+    .select('time_utc, session_name, movement_score, breadth_score, market_state, pairs_moving, directional_agreement')
     .order('time_utc', { ascending: true });
   if (error || !rows?.length) return;
 
+  // Build groups keyed date:session, skipping weekends
   const groups = {};
   for (const r of rows) {
     const date = r.time_utc.slice(0, 10);
-    const dow  = new Date(date).getUTCDay(); // 0=Sun, 6=Sat
-    if (dow === 0 || dow === 6) continue;    // skip weekend rows
-    const key  = `${date}:${r.session_name}`;
+    const dow  = new Date(date).getUTCDay();
+    if (dow === 0 || dow === 6) continue;
+    const key = `${date}:${r.session_name}`;
     if (!groups[key]) groups[key] = { date, session: r.session_name, hrs: [] };
     groups[key].hrs.push(r);
   }
@@ -109,26 +139,55 @@ async function computeSessionSummaries() {
   const avg = arr => arr.reduce((a, b) => a + b, 0) / arr.length;
   const max = arr => Math.max(...arr);
 
-  const summaries = Object.values(groups).map(g => {
+  // Process in chronological order so each session can look back at its own history
+  const sortedKeys = Object.keys(groups).sort();
+  const sessionHistory = {}; // session_name → [avg_movement_scores in chronological order]
+
+  const summaries = sortedKeys.map(key => {
+    const g          = groups[key];
     const movements  = g.hrs.map(h => parseFloat(h.movement_score));
     const breadths   = g.hrs.map(h => parseFloat(h.breadth_score));
     const movingNums = g.hrs.map(h => parseInt(h.pairs_moving));
+    const dirAgrees  = g.hrs.map(h => parseFloat(h.directional_agreement) || 0);
+
+    const avgMov = avg(movements);
+    const avgBrd = avg(breadths);
+    const avgDir = avg(dirAgrees);
+
+    // Expansion score: compare this session's movement to last 10 of same session type
+    const hist    = sessionHistory[g.session] || [];
+    const last10  = hist.slice(-10);
+    const histAvg = last10.length > 0 ? avg(last10) : avgMov;
+    const expRatio = histAvg > 0 ? avgMov / histAvg : 1.0;
+    // Normalise: ratio 1.0 → 50pts, 2.0+ → 100pts, 0 → 0pts
+    const expansionComponent = round1(Math.min(100, expRatio * 50));
+
+    // Update history AFTER computing score (so this session isn't in its own baseline)
+    if (!sessionHistory[g.session]) sessionHistory[g.session] = [];
+    sessionHistory[g.session].push(avgMov);
+
+    const energyScore = sessionEnergyScore(avgMov, avgBrd, expansionComponent, avgDir);
+    const energyState = sessionEnergyState(energyScore, avgBrd);
 
     const stateCounts = {};
     for (const h of g.hrs) stateCounts[h.market_state] = (stateCounts[h.market_state] || 0) + 1;
     const dominant = Object.entries(stateCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'MIXED';
 
     return {
-      session_date_utc:    g.date,
-      session_name:        g.session,
-      avg_movement_score:  round1(avg(movements)),
-      max_movement_score:  round1(max(movements)),
-      avg_breadth_score:   round1(avg(breadths)),
-      max_breadth_score:   round1(max(breadths)),
-      dominant_state:      dominant,
-      pairs_moving_avg:    round1(avg(movingNums)),
-      expansion_hours:     g.hrs.filter(h => h.market_state === 'EXPANSION' || h.market_state === 'HIGH_EXPANSION').length,
-      compression_hours:   g.hrs.filter(h => h.market_state === 'COMPRESSION' || h.market_state === 'QUIET').length,
+      session_date_utc:           g.date,
+      session_name:               g.session,
+      avg_movement_score:         round1(avgMov),
+      max_movement_score:         round1(max(movements)),
+      avg_breadth_score:          round1(avgBrd),
+      max_breadth_score:          round1(max(breadths)),
+      avg_directional_agreement:  round1(avgDir),
+      expansion_score:            expansionComponent,
+      session_energy_score:       energyScore,
+      session_state:              energyState,
+      dominant_state:             dominant,
+      pairs_moving_avg:           round1(avg(movingNums)),
+      expansion_hours:            g.hrs.filter(h => h.market_state === 'EXPANSION' || h.market_state === 'HIGH_EXPANSION').length,
+      compression_hours:          g.hrs.filter(h => h.market_state === 'COMPRESSION' || h.market_state === 'QUIET').length,
     };
   });
 
@@ -180,14 +239,13 @@ async function backfillSessionActivity() {
 // ─── Incremental ──────────────────────────────────────────────────────────────
 
 async function calculateLatestSessionActivity() {
-  const byTime   = await fetchHourlyCandles(30); // enough to find session start
+  const byTime   = await fetchHourlyCandles(30);
   const hourKeys = Object.keys(byTime).sort();
   if (hourKeys.length < 2) return;
 
   const latestHk      = hourKeys[hourKeys.length - 1];
   const latestSession = getCurrentSession(new Date(latestHk)).session;
 
-  // Walk back to find first hour of current session → session open prices
   let sessionOpenPrices = {};
   for (let i = hourKeys.length - 1; i >= 0; i--) {
     const s = getCurrentSession(new Date(hourKeys[i])).session;
@@ -208,7 +266,7 @@ async function calculateLatestSessionActivity() {
     .upsert([row], { onConflict: 'time_utc', ignoreDuplicates: false });
   if (error) throw new Error(`Hourly upsert: ${error.message}`);
 
-  console.log(`[SESSION_ACTIVITY] ✓ ${latestHk} | ${row.session_name} | ${row.market_state} | mov:${row.movement_score} breadth:${row.breadth_score}`);
+  console.log(`[SESSION_ACTIVITY] ✓ ${latestHk} | ${row.session_name} | ${row.market_state} | mov:${row.movement_score} breadth:${row.breadth_score} dir:${row.directional_agreement}`);
   return row;
 }
 

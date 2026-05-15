@@ -35,7 +35,7 @@ module.exports = async function handler(req, res) {
       const sinceDateStr = since.slice(0, 10);
       const { data, error } = await sb
         .from('session_performance_summary')
-        .select('session_date_utc, session_name, avg_movement_score, max_movement_score, avg_breadth_score, max_breadth_score, dominant_state, pairs_moving_avg, expansion_hours, compression_hours')
+        .select('session_date_utc, session_name, avg_movement_score, max_movement_score, avg_breadth_score, max_breadth_score, avg_directional_agreement, expansion_score, session_energy_score, session_state, dominant_state, pairs_moving_avg, expansion_hours, compression_hours')
         .gte('session_date_utc', sinceDateStr)
         .order('session_date_utc', { ascending: true });
       if (error) throw error;

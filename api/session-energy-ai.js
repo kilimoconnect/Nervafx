@@ -25,21 +25,25 @@ function getOpenAI() {
 
 // ── Energy helpers (mirrors client-side logic) ────────────────────────────────
 function energyScore(s) {
-  const mov      = parseFloat(s.avg_movement_score) || 0;
-  const brd      = parseFloat(s.avg_breadth_score)  || 0;
-  const expH     = parseInt(s.expansion_hours)       || 0;
-  const compH    = parseInt(s.compression_hours)     || 0;
-  const total    = expH + compH;
-  const expRatio = total > 0 ? expH / total : 0.5;
-  return Math.min(100, mov * 0.5 + brd * 0.3 + expRatio * 20);
+  if (s.session_energy_score != null) return parseFloat(s.session_energy_score);
+  const mov = parseFloat(s.avg_movement_score) || 0;
+  const brd = parseFloat(s.avg_breadth_score)  || 0;
+  const exp = parseFloat(s.expansion_score)    || 50;
+  const dir = parseFloat(s.avg_directional_agreement) || 50;
+  return Math.min(100, Math.round(0.40 * mov + 0.35 * brd + 0.15 * exp + 0.10 * dir));
 }
 
-function energyState(score) {
-  if (score < 20) return 'DEAD';
-  if (score < 40) return 'COMPRESSION';
-  if (score < 60) return 'STABLE';
-  if (score < 80) return 'EXPANSION';
-  return 'EXPLOSIVE';
+function energyState(score, s) {
+  if (s?.session_state) return s.session_state;
+  const brd = parseFloat(s?.avg_breadth_score) || 100;
+  let state;
+  if (score <= 15) state = 'DEAD';
+  else if (score <= 35) state = 'COMPRESSION';
+  else if (score <= 55) state = 'STABLE';
+  else if (score <= 75) state = 'EXPANSION';
+  else state = 'EXPLOSIVE';
+  if (brd < 50 && (state === 'EXPANSION' || state === 'EXPLOSIVE')) state = 'STABLE';
+  return state;
 }
 
 // ── Sequence fingerprint (changes when data changes) ─────────────────────────
@@ -134,7 +138,7 @@ module.exports = async function handler(req, res) {
         enriched.push({
           date, session: sess,
           score,
-          state:       energyState(score),
+          state:       energyState(score, s),
           avgMov:      parseFloat(s.avg_movement_score) || 0,
           avgBreadth:  parseFloat(s.avg_breadth_score)  || 0,
           expH:        parseInt(s.expansion_hours)       || 0,
