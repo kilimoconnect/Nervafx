@@ -1618,7 +1618,9 @@ function _maChartDefaults() {
 }
 
 function _maFmtHour(isoTime) {
-  const tz = (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC');
+  const tz = (!_userTz || _userTz === 'auto')
+    ? Intl.DateTimeFormat().resolvedOptions().timeZone
+    : _userTz;
   const parts = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date(isoTime));
   const h = parts.find(p => p.type === 'hour')?.value   || '00';
   const m = parts.find(p => p.type === 'minute')?.value || '00';
