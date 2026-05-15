@@ -53,6 +53,7 @@ async function fetchHourlyCandles(limit = 210) {
 
 function computeRow(hourKey, candles, sessionOpenPrices) {
   const session = getCurrentSession(new Date(hourKey));
+  if (session.session === 'DEAD_HOURS') return null;
   const total   = config.instruments.length; // 28
 
   const movements = [];
