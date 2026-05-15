@@ -1662,15 +1662,32 @@ function _maEnergyState(score, s) {
   return state;
 }
 
-// Returns next-session prediction: 3 consecutive low → EXPANSION; high → COMPRESSION; else STABLE
-function _maNextPrediction(sequence) {
-  if (sequence.length < 3) return null;
-  const isLow  = s => s === 'DEAD' || s === 'COMPRESSION';
+function _nextWeekday(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00Z');
+  do { d.setUTCDate(d.getUTCDate() + 1); } while ([0, 6].includes(d.getUTCDay()));
+  return d.toISOString().slice(0, 10);
+}
+
+// Builds n predicted sessions forward: after 3 consecutive non-high → EXPANSION; else → COMPRESSION
+function _maPredChain(sequence, dispOrder, n = 3) {
+  if (sequence.length < 3) return [];
   const isHigh = s => s === 'EXPANSION' || s === 'EXPLOSIVE';
-  const last3  = sequence.slice(-3);
-  if (last3.every(s => isLow(s.state)))            return { state: 'EXPANSION',   reason: '3 consecutive low energy' };
-  if (isHigh(sequence[sequence.length - 1].state)) return { state: 'COMPRESSION', reason: 'following expansion' };
-  return { state: 'STABLE', reason: 'mixed pattern' };
+  const synth  = [...sequence];
+  const chain  = [];
+  for (let i = 0; i < n; i++) {
+    const last     = synth[synth.length - 1];
+    const lastIdx  = dispOrder.indexOf(last.sess);
+    const nextIdx  = (lastIdx + 1) % dispOrder.length;
+    const nextSess = dispOrder[nextIdx];
+    const nextDate = nextIdx === 0 ? _nextWeekday(last.date) : last.date;
+    const last3    = synth.slice(-3);
+    const state    = last3.every(e => !isHigh(e.state)) ? 'EXPANSION' : 'COMPRESSION';
+    const score    = state === 'EXPANSION' ? 65 : 25;
+    const entry    = { date: nextDate, sess: nextSess, state, score };
+    chain.push(entry);
+    synth.push(entry);
+  }
+  return chain;
 }
 
 function _maExpansionForecast(recent) {
@@ -1908,36 +1925,34 @@ function renderMaSession(el, summaries) {
   const forecast     = _maExpansionForecast(sequence);
   const lastSessions = sequence.slice(-3);
 
-  // Next-session prediction
-  const nextPred = _maNextPrediction(sequence);
-  let predInfo   = null;
-  if (nextPred) {
-    const lastSess = sequence[sequence.length - 1]?.sess;
-    const nextIdx  = lastSess != null ? (DISP_ORDER.indexOf(lastSess) + 1) % DISP_ORDER.length : 0;
-    predInfo = {
-      sess:  DISP_ORDER[nextIdx],
-      state: nextPred.state,
-      score: nextPred.state === 'EXPANSION' ? 65 : nextPred.state === 'COMPRESSION' ? 25 : 45,
-      reason: nextPred.reason,
-    };
+  // Multi-step prediction chain: fills today's remaining sessions + tomorrow's sessions
+  const predChain = _maPredChain(sequence, DISP_ORDER, 3);
+
+  // Ghost map: date → sess → { state, score }
+  const ghostMap = {};
+  for (const p of predChain) {
+    if (!ghostMap[p.date]) ghostMap[p.date] = {};
+    ghostMap[p.date][p.sess] = { state: p.state, score: p.score };
   }
 
-  // Chart labels — add 'NEXT' slot when prediction exists
-  const chartLabels = [...allDates.map(d => d.slice(5))];
-  if (predInfo) chartLabels.push('NEXT');
+  // Chart dates: allDates + any new future dates from predChain (marked with '?')
+  const predFutureDates = [...new Set(predChain.map(p => p.date).filter(d => !allDates.includes(d)))];
+  const chartDates  = [...allDates, ...predFutureDates];
+  const chartLabels = [...allDates.map(d => d.slice(5)), ...predFutureDates.map(d => d.slice(5) + '?')];
 
-  // Datasets: one per display session (3), each bar colored by energy state
+  const PRED_BG = { DEAD: 'rgba(30,33,40,0.55)', COMPRESSION: 'rgba(127,29,29,0.45)', STABLE: 'rgba(120,53,15,0.4)', EXPANSION: 'rgba(20,83,45,0.5)', EXPLOSIVE: 'rgba(74,222,128,0.4)' };
+
+  // Datasets: ghost bars fill empty real-data slots (remaining today + tomorrow)
   const datasets = DISP_ORDER.map(sess => {
-    const data   = allDates.map(d => displayMap[d]?.[sess]?.score ?? null);
-    const bgCol  = allDates.map(d => MA_ENERGY_BG[displayMap[d]?.[sess]?.state]    || 'rgba(0,0,0,0)');
-    const bdCol  = allDates.map(d => MA_ENERGY_BORDER[displayMap[d]?.[sess]?.state] || 'transparent');
-    if (predInfo) {
-      const PRED_BG = { DEAD: 'rgba(30,33,40,0.55)', COMPRESSION: 'rgba(127,29,29,0.45)', STABLE: 'rgba(120,53,15,0.4)', EXPANSION: 'rgba(20,83,45,0.5)', EXPLOSIVE: 'rgba(74,222,128,0.4)' };
-      const isPredSess = predInfo.sess === sess;
-      data.push(isPredSess ? predInfo.score : null);
-      bgCol.push(isPredSess ? (PRED_BG[predInfo.state] || 'rgba(30,33,40,0.45)') : 'rgba(0,0,0,0)');
-      bdCol.push(isPredSess ? (MA_ENERGY_BORDER[predInfo.state] || 'transparent') : 'transparent');
-    }
+    const data  = chartDates.map(d => displayMap[d]?.[sess]?.score ?? ghostMap[d]?.[sess]?.score ?? null);
+    const bgCol = chartDates.map(d => {
+      const r = displayMap[d]?.[sess], g = ghostMap[d]?.[sess];
+      return r ? (MA_ENERGY_BG[r.state] || 'rgba(0,0,0,0)') : g ? (PRED_BG[g.state] || 'rgba(0,0,0,0)') : 'rgba(0,0,0,0)';
+    });
+    const bdCol = chartDates.map(d => {
+      const r = displayMap[d]?.[sess], g = ghostMap[d]?.[sess];
+      return r ? (MA_ENERGY_BORDER[r.state] || 'transparent') : g ? (MA_ENERGY_BORDER[g.state] || 'transparent') : 'transparent';
+    });
     return { label: DISP_SHORT[sess], _sessKey: sess, data, backgroundColor: bgCol, borderColor: bdCol, borderWidth: 1, borderRadius: 3 };
   });
 
@@ -1952,16 +1967,16 @@ function renderMaSession(el, summaries) {
           const { x, y, base } = bar.getProps(['x','y','base'], true);
           const h = base - y;
           if (h < 12) return;
-          const isPred = j === allDates.length;
-          const date   = isPred ? null : allDates[j];
-          const state  = isPred ? (predInfo?.sess === ds._sessKey ? predInfo?.state : null) : displayMap[date]?.[ds._sessKey]?.state;
+          const date   = chartDates[j];
+          const isGhost = !displayMap[date]?.[ds._sessKey] && !!ghostMap[date]?.[ds._sessKey];
+          const state  = displayMap[date]?.[ds._sessKey]?.state || ghostMap[date]?.[ds._sessKey]?.state;
           const color  = MA_ENERGY_TEXT[state] || 'rgba(255,255,255,0.8)';
           c2.save();
           c2.fillStyle  = color;
           c2.font       = `bold ${h >= 22 ? 8 : 7}px monospace`;
           c2.textAlign  = 'center';
           c2.textBaseline = 'middle';
-          c2.fillText(isPred ? `${short}?` : short, x, y + h / 2);
+          c2.fillText(isGhost ? `${short}?` : short, x, y + h / 2);
           c2.restore();
         });
       });
@@ -1986,13 +2001,13 @@ function renderMaSession(el, summaries) {
             ${csCls ? `<span class="ma-seq-cs ${csCls}">${csLabel}</span>` : ''}
           </div>`;
         }).join('')}
-        ${predInfo ? `
+        ${predChain.map(p => `
           <span class="ma-seq-arrow ma-seq-arrow-pred">→</span>
-          <div class="ma-seq-item ma-seq-pred">
-            <span class="ma-seq-sess" style="color:${DISP_COLOR[predInfo.sess]}">${DISP_SHORT[predInfo.sess]}</span>
-            <span class="ma-seq-state" style="color:${MA_ENERGY_BORDER[predInfo.state]}">${predInfo.state}</span>
+          <div class="ma-seq-item ma-seq-pred${p.state === 'EXPANSION' ? ' ma-seq-pred-exp' : ''}">
+            <span class="ma-seq-sess" style="color:${DISP_COLOR[p.sess]}">${DISP_SHORT[p.sess]}</span>
+            <span class="ma-seq-state" style="color:${MA_ENERGY_BORDER[p.state]}">${p.state}</span>
             <span class="ma-seq-pred-tag">PRED</span>
-          </div>` : ''}
+          </div>`).join('')}
       </div>
     </div>
     <div class="ma-chart-wrap" style="height:160px; margin-top:10px">
@@ -2008,18 +2023,16 @@ function renderMaSession(el, summaries) {
   opts.plugins.legend.display = false;
   opts.plugins.tooltip.callbacks = {
     label: c => {
-      const isPred = c.dataIndex === allDates.length;
-      if (isPred) {
-        const sess = DISP_ORDER[c.datasetIndex];
-        if (!predInfo || predInfo.sess !== sess) return '';
-        return ` ${DISP_SHORT[sess]}  ${predInfo.state}  (PREDICTED — ${predInfo.reason})`;
+      const date  = chartDates[c.dataIndex];
+      const sess  = DISP_ORDER[c.datasetIndex];
+      const real  = displayMap[date]?.[sess];
+      const ghost = ghostMap[date]?.[sess];
+      if (real) {
+        const csPart = real.csBonus !== 0 ? ` CS${real.csBonus > 0 ? '+' : ''}${real.csBonus}` : '';
+        return ` ${DISP_SHORT[sess]}  ${real.state}  (${real.rawScore.toFixed(0)}${csPart} = ${real.score.toFixed(0)})`;
       }
-      const date = allDates[c.dataIndex];
-      const sess = DISP_ORDER[c.datasetIndex];
-      const e    = displayMap[date]?.[sess];
-      if (!e) return '';
-      const csPart = e.csBonus !== 0 ? ` CS${e.csBonus > 0 ? '+' : ''}${e.csBonus}` : '';
-      return ` ${DISP_SHORT[sess]}  ${e.state}  (${e.rawScore.toFixed(0)}${csPart} = ${e.score.toFixed(0)})`;
+      if (ghost) return ` ${DISP_SHORT[sess]}  ${ghost.state}  (PREDICTED)`;
+      return '';
     },
   };
   _maCharts.session = new Chart(ctx, {
