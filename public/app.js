@@ -1617,13 +1617,18 @@ function _maChartDefaults() {
   };
 }
 
+function _maFmtHour(isoTime) {
+  const tz = (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC');
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date(isoTime));
+  const h = parts.find(p => p.type === 'hour')?.value   || '00';
+  const m = parts.find(p => p.type === 'minute')?.value || '00';
+  return `${h}:${m}`;
+}
+
 // Hourly timeline: movement_score + breadth_score line chart (last 48 rows)
 function renderMaTimeline(el, hourly) {
-  const rows  = hourly.slice(-48);
-  const labels = rows.map(r => {
-    const d = new Date(r.time_utc);
-    return `${String(d.getUTCHours()).padStart(2,'0')}:00`;
-  });
+  const rows   = hourly.slice(-48);
+  const labels = rows.map(r => _maFmtHour(r.time_utc));
   const bgColors = rows.map(r => maSessionColor(r.session_name, 0.15));
 
   el.innerHTML = `
@@ -1712,10 +1717,7 @@ function renderMaSession(el, summaries) {
 // Breadth chart: pairs_moving per hour (bar, coloured by session)
 function renderMaBreadth(el, hourly) {
   const rows   = hourly.slice(-48);
-  const labels = rows.map(r => {
-    const d = new Date(r.time_utc);
-    return `${String(d.getUTCHours()).padStart(2,'0')}:00`;
-  });
+  const labels = rows.map(r => _maFmtHour(r.time_utc));
 
   el.innerHTML = `<div class="ma-chart-wrap"><canvas id="maChartBreadth"></canvas></div>`;
 
