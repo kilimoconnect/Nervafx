@@ -1842,14 +1842,6 @@ function renderMaSession(el, summaries) {
           </div>`).join('')}
       </div>
     </div>
-    ${forecast ? `<div class="ma-forecast-panel ma-forecast-${forecastCls[forecast.type]}">
-      <span class="ma-forecast-icon">${forecastIcon[forecast.type]}</span>
-      <span class="ma-forecast-text">${forecast.text}</span>
-    </div>` : ''}
-    <div id="ma-ai-panel" class="ma-ai-panel ma-ai-loading">
-      <span class="ma-ai-label">AI Pattern Analysis</span>
-      <span class="ma-ai-body">Analysing session energy cycles…</span>
-    </div>
     <div class="ma-chart-wrap" style="height:160px; margin-top:10px">
       <canvas id="maChartSession"></canvas>
     </div>
