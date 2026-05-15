@@ -209,10 +209,12 @@ function gsapModalClose(el, onComplete) {
 
 // ─── Fetch helpers ────────────────────────────────────────────────────────────
 
-async function api(path) {
+async function api(path, opts = {}) {
   const tok = localStorage.getItem('nfx_token');
-  const headers = tok ? { 'Authorization': 'Bearer ' + tok } : {};
-  const r = await fetch(path, { headers });
+  const headers = { ...(tok ? { 'Authorization': 'Bearer ' + tok } : {}), ...(opts.headers || {}) };
+  if (opts.method === 'POST' && opts.body == null) opts.body = '{}';
+  if (opts.method === 'POST') headers['Content-Type'] = 'application/json';
+  const r = await fetch(path, { ...opts, headers });
   if (!r.ok) throw new Error(`${path} ${r.status}`);
   return r.json();
 }
@@ -1844,6 +1846,10 @@ function renderMaSession(el, summaries) {
       <span class="ma-forecast-icon">${forecastIcon[forecast.type]}</span>
       <span class="ma-forecast-text">${forecast.text}</span>
     </div>` : ''}
+    <div id="ma-ai-panel" class="ma-ai-panel ma-ai-loading">
+      <span class="ma-ai-label">AI Pattern Analysis</span>
+      <span class="ma-ai-body">Analysing session energy cycles…</span>
+    </div>
     <div class="ma-chart-wrap" style="height:160px; margin-top:10px">
       <canvas id="maChartSession"></canvas>
     </div>
@@ -1869,6 +1875,40 @@ function renderMaSession(el, summaries) {
     options: opts,
     plugins: [maEnergyBarLabels],
   });
+
+  // AI analysis — non-blocking, updates panel when ready
+  _fetchSessionEnergyAI();
+}
+
+async function _fetchSessionEnergyAI() {
+  const panel = document.getElementById('ma-ai-panel');
+  if (!panel) return;
+  try {
+    const result = await api('/api/session-energy-ai', { method: 'POST' });
+    if (!result || result.error) throw new Error(result?.error || 'no result');
+
+    const regimeCls  = result.regime === 'RISK_ON'  ? 'risk-on'
+                     : result.regime === 'RISK_OFF' || result.regime === 'CAUTIOUS' ? 'risk-off'
+                     : 'neutral';
+    const patternBadge = result.pattern ? `<span class="ma-ai-pattern">${result.pattern.replace(/_/g,' ')}</span>` : '';
+    const confBar = result.confidence != null
+      ? `<div class="ma-ai-conf-wrap"><div class="ma-ai-conf-fill" style="width:${result.confidence}%"></div><span class="ma-ai-conf-label">${result.confidence}% confidence</span></div>`
+      : '';
+
+    panel.className = 'ma-ai-panel';
+    panel.innerHTML = `
+      <div class="ma-ai-header">
+        <span class="ma-ai-label">AI Pattern Analysis</span>
+        ${patternBadge}
+        <span class="ma-regime-badge sent-${regimeCls}" style="margin-left:auto">${result.regime || ''}</span>
+      </div>
+      ${confBar}
+      <p class="ma-ai-read">${result.read || ''}</p>
+      ${result.upcoming_session ? `<div class="ma-ai-upcoming"><span class="ma-ai-upcoming-lbl">Next Session</span>${result.upcoming_session}</div>` : ''}
+      ${result.warning ? `<div class="ma-ai-warning">⚠ ${result.warning}</div>` : ''}`;
+  } catch (_) {
+    if (panel) panel.innerHTML = '<span class="ma-ai-label">AI Pattern Analysis</span><span class="ma-ai-body" style="color:var(--text-dim)">Unavailable</span>';
+  }
 }
 
 // ── Breadth chart ─────────────────────────────────────────────────────────────
