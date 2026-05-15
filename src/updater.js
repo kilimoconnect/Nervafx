@@ -15,6 +15,7 @@ const { analyzeActiveSetups } = require('./aiAnalysis');
 const { calculateLatestSentiment } = require('./riskSentiment');
 const { writeJournalEntry } = require('./journalEngine');
 const { runOutcomeReviews } = require('./outcomeReview');
+const { calculateLatestSessionActivity } = require('./sessionActivity');
 
 async function step(name, fn) {
   try {
@@ -82,8 +83,9 @@ async function hourlyUpdate() {
   await step('risk',          () => checkLatestSignals());
   await step('actions',       () => processLatestActions());
   await step('ai_analysis',   () => analyzeActiveSetups());
-  await step('journal',       () => writeJournalEntry());
-  await step('outcomes',      () => runOutcomeReviews());
+  await step('session_activity', () => calculateLatestSessionActivity());
+  await step('journal',          () => writeJournalEntry());
+  await step('outcomes',         () => runOutcomeReviews());
 
   console.log('[UPDATE] Complete.');
   return { status: 'CLEAN', check };

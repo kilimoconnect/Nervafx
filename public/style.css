@@ -3088,6 +3088,59 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
   .sentiment-components { min-width: 0; width: 100%; }
 }
 
+/* ─── Market Activity card ──────────────────────────────────────────────────── */
+.ma-tabs {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+  margin-top: 0;
+}
+.ma-tab {
+  padding: 3px 10px;
+  font-size: 10px;
+  font-family: var(--font-data);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.ma-tab.active,
+.ma-tab:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.ma-display {
+  padding-top: 6px;
+}
+.ma-chart-wrap {
+  position: relative;
+  height: 180px;
+  width: 100%;
+}
+.ma-state-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-top: 8px;
+  font-size: 9px;
+  color: var(--text-muted);
+  font-family: var(--font-data);
+}
+.ma-state-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  vertical-align: middle;
+  margin-right: 3px;
+}
+.ma-state-lbl {
+  vertical-align: middle;
+}
+
 /* ─── Trading Session card ──────────────────────────────────────────────────── */
 .session-display {
   display: flex;

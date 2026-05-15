@@ -24,6 +24,7 @@ const { analyzeActiveSetups } = require('./aiAnalysis');
 const { calculateLatestSentiment } = require('./riskSentiment');
 const { writeJournalEntry } = require('./journalEngine');
 const { runOutcomeReviews } = require('./outcomeReview');
+const { backfillSessionActivity } = require('./sessionActivity');
 
 async function phase1() {
   validate();
@@ -215,6 +216,12 @@ if (command === 'load') {
   validate();
   runOutcomeReviews().then(() => {
     console.log('[OUTCOMES] Review complete.');
+    process.exit(0);
+  }).catch(err => { console.error(err); process.exit(1); });
+} else if (command === 'session-activity') {
+  validate();
+  backfillSessionActivity().then(r => {
+    console.log(`[SESSION_ACTIVITY] Backfill complete: ${r?.rows ?? 0} hourly rows.`);
     process.exit(0);
   }).catch(err => { console.error(err); process.exit(1); });
 } else if (command === 'rank') {

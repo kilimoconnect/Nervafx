@@ -1526,6 +1526,199 @@ function renderSession(data) {
     <div class="session-timeline">${timelineHtml}</div>`;
 }
 
+// ─── Market Activity ──────────────────────────────────────────────────────────
+
+let _maData         = null; // cached fetch result
+let _maActiveTab    = 'timeline';
+let _maCharts       = {};   // { timeline, session, breadth } Chart instances
+
+const MA_SESSION_COLORS = {
+  LONDON_NY: 'rgba(234,179,8,0.85)',
+  LONDON:    'rgba(59,130,246,0.85)',
+  ASIA:      'rgba(16,185,129,0.85)',
+  LATE_NY:   'rgba(168,85,247,0.85)',
+  DEAD_HOURS:'rgba(100,116,139,0.5)',
+};
+const MA_SESSION_BORDER = {
+  LONDON_NY: '#eab308',
+  LONDON:    '#3b82f6',
+  ASIA:      '#10b981',
+  LATE_NY:   '#a855f7',
+  DEAD_HOURS:'#64748b',
+};
+
+function maSessionColor(name, alpha) {
+  const hex = MA_SESSION_BORDER[name] || '#64748b';
+  if (!alpha) return hex;
+  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+const MA_STATE_COLOR = {
+  HIGH_EXPANSION: '#4ade80',
+  EXPANSION:      '#86efac',
+  MIXED:          '#fbbf24',
+  COMPRESSION:    '#f87171',
+  QUIET:          '#94a3b8',
+};
+
+async function fetchMarketActivity() {
+  try {
+    const data = await api('/api/session-activity?days=7&type=both');
+    _maData = data;
+    renderMarketActivity(data);
+  } catch (_) { /* non-critical */ }
+}
+
+function renderMarketActivity(data) {
+  const el = document.getElementById('market-activity-display');
+  if (!el) return;
+  if (!data?.hourly?.length && !data?.summaries?.length) {
+    el.innerHTML = '<p class="empty-state">No session activity data yet — run backfill first</p>';
+    return;
+  }
+  renderMaTab(_maActiveTab, data);
+}
+
+function renderMaTab(tab, data) {
+  const el = document.getElementById('market-activity-display');
+  if (!el) return;
+  data = data || _maData;
+  if (!data) return;
+
+  // Destroy stale chart for this tab
+  if (_maCharts[tab]) { _maCharts[tab].destroy(); _maCharts[tab] = null; }
+
+  if (tab === 'timeline') {
+    renderMaTimeline(el, data.hourly || []);
+  } else if (tab === 'session') {
+    renderMaSession(el, data.summaries || []);
+  } else if (tab === 'breadth') {
+    renderMaBreadth(el, data.hourly || []);
+  }
+}
+
+function _maChartDefaults() {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: true, labels: { color: '#94a3b8', font: { family: 'monospace', size: 10 }, boxWidth: 10, padding: 8 } }, tooltip: { mode: 'index', intersect: false } },
+    scales: {
+      x: { ticks: { color: '#94a3b8', font: { family: 'monospace', size: 9 }, maxRotation: 45 }, grid: { color: '#1e2128' } },
+      y: { ticks: { color: '#94a3b8', font: { family: 'monospace', size: 10 } }, grid: { color: '#1e2128' }, min: 0, max: 100 },
+    },
+  };
+}
+
+// Hourly timeline: movement_score + breadth_score line chart (last 48 rows)
+function renderMaTimeline(el, hourly) {
+  const rows  = hourly.slice(-48);
+  const labels = rows.map(r => {
+    const d = new Date(r.time_utc);
+    return `${String(d.getUTCHours()).padStart(2,'0')}:00`;
+  });
+  const bgColors = rows.map(r => maSessionColor(r.session_name, 0.15));
+
+  el.innerHTML = `
+    <div class="ma-chart-wrap">
+      <canvas id="maChartTimeline"></canvas>
+    </div>
+    <div class="ma-state-legend">
+      ${Object.entries(MA_STATE_COLOR).map(([s,c]) => `<span class="ma-state-dot" style="background:${c}"></span><span class="ma-state-lbl">${s.replace(/_/g,' ')}</span>`).join('')}
+    </div>`;
+
+  const ctx = document.getElementById('maChartTimeline').getContext('2d');
+  _maCharts.timeline = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Movement', data: rows.map(r => parseFloat(r.movement_score)), borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.08)', borderWidth: 2, pointRadius: 2, tension: 0.3, fill: true },
+        { label: 'Breadth',  data: rows.map(r => parseFloat(r.breadth_score)),  borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.08)', borderWidth: 2, pointRadius: 2, tension: 0.3, fill: true },
+      ],
+    },
+    options: _maChartDefaults(),
+  });
+}
+
+// Session comparison: avg movement per session per day (grouped bar)
+function renderMaSession(el, summaries) {
+  if (!summaries.length) {
+    el.innerHTML = '<p class="empty-state">No session summary data yet.</p>';
+    return;
+  }
+  // Group by session_name, take last 7 days per session
+  const sessions = ['LONDON_NY', 'LONDON', 'ASIA', 'LATE_NY'];
+  const allDates  = [...new Set(summaries.map(s => s.session_date_utc))].sort().slice(-7);
+
+  el.innerHTML = `<div class="ma-chart-wrap"><canvas id="maChartSession"></canvas></div>`;
+
+  const datasets = sessions.map(sess => {
+    const byDate = {};
+    summaries.filter(s => s.session_name === sess).forEach(s => { byDate[s.session_date_utc] = parseFloat(s.avg_movement_score); });
+    return {
+      label: sess.replace(/_/g,' '),
+      data:  allDates.map(d => byDate[d] ?? null),
+      backgroundColor: maSessionColor(sess, 0.75),
+      borderColor:     MA_SESSION_BORDER[sess] || '#64748b',
+      borderWidth: 1,
+      borderRadius: 3,
+    };
+  });
+
+  const ctx = document.getElementById('maChartSession').getContext('2d');
+  const opts = _maChartDefaults();
+  opts.scales.x.ticks.maxRotation = 30;
+  _maCharts.session = new Chart(ctx, {
+    type: 'bar',
+    data: { labels: allDates.map(d => d.slice(5)), datasets },
+    options: opts,
+  });
+}
+
+// Breadth chart: pairs_moving per hour (bar, coloured by session)
+function renderMaBreadth(el, hourly) {
+  const rows   = hourly.slice(-48);
+  const labels = rows.map(r => {
+    const d = new Date(r.time_utc);
+    return `${String(d.getUTCHours()).padStart(2,'0')}:00`;
+  });
+
+  el.innerHTML = `<div class="ma-chart-wrap"><canvas id="maChartBreadth"></canvas></div>`;
+
+  const ctx = document.getElementById('maChartBreadth').getContext('2d');
+  const opts = _maChartDefaults();
+  opts.scales.y.max = 28;
+  opts.scales.y.title = { display: true, text: 'Pairs Moving', color: '#64748b', font: { size: 10 } };
+  opts.plugins.tooltip.callbacks = { label: c => ` ${c.raw} / 28 pairs` };
+  opts.plugins.legend.display = false;
+
+  _maCharts.breadth = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        data:            rows.map(r => parseInt(r.pairs_moving)),
+        backgroundColor: rows.map(r => maSessionColor(r.session_name, 0.7)),
+        borderColor:     rows.map(r => MA_SESSION_BORDER[r.session_name] || '#64748b'),
+        borderWidth: 1,
+        borderRadius: 2,
+      }],
+    },
+    options: opts,
+  });
+}
+
+// Tab click handler
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.ma-tab');
+  if (!btn) return;
+  document.querySelectorAll('.ma-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  _maActiveTab = btn.dataset.tab;
+  renderMaTab(_maActiveTab);
+});
+
 // ─── Sentiment donut chart (CSS conic-gradient) ───────────────────────────────
 
 function sentimentDonutHtml(groups) {
@@ -2177,6 +2370,7 @@ async function refresh() {
 
     updateHeader(risk);
     renderSession(sessionData);
+    fetchMarketActivity(); // non-blocking — separate fetch, renders independently
     renderSentiment(sentimentData);
     buildChart(strength, activeTF);
     renderCurrencySignals(strength);          // must run first — populates _csigCurrencies
