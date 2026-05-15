@@ -133,15 +133,93 @@ function computeEntryCsig(e) {
   return { strong, weak };
 }
 
+// Score CS availability: +2 when 2+ currencies on dominant side (expansion likely),
+// +1 for a single qualifying currency, -1 when none.
+function _csigScore(strongLen, weakLen) {
+  const dominant = Math.max(strongLen, weakLen);
+  if (dominant >= 2) return 2;
+  if (dominant >= 1) return 1;
+  return -1;
+}
+
+function _csigPointHtml(score) {
+  const cls   = score >= 2 ? 'exp' : score === 1 ? 'pos' : 'neg';
+  const label = score >= 2 ? '+2' : score === 1 ? '+1' : '-1';
+  return `<span class="jrn-csig-point ${cls}">${label}</span>`;
+}
+
 // Returns inline HTML badge row for a journal entry's historical CS currencies.
-// Empty string when neither strong nor weak.
+// Always rendered — shows scored point indicator + currency names (or "No CS" when empty).
 function csigBadgeHtml(e) {
   const { strong, weak } = computeEntryCsig(e);
-  if (!strong.length && !weak.length) return '';
+  const score = _csigScore(strong.length, weak.length);
+  const pt    = _csigPointHtml(score);
+  if (score === -1) return `<div class="jrn-csig-row">${pt}<span class="jrn-csig-tag no-cs">No CS</span></div>`;
   const parts = [];
   if (strong.length) parts.push(`<span class="jrn-csig-tag strong">💪 ${strong.join(' ')}</span>`);
   if (weak.length)   parts.push(`<span class="jrn-csig-tag weak">🔻 ${weak.join(' ')}</span>`);
-  return `<div class="jrn-csig-row">${parts.join('')}</div>`;
+  return `<div class="jrn-csig-row">${pt}${parts.join('')}</div>`;
+}
+
+// Full CS availability card for journal modal — shows qualifying currencies with values.
+function renderJrnCsigSection(e) {
+  const cs = e.currency_strength;
+  const currencies = Array.isArray(cs) ? cs : (cs?.currencies || []);
+  const asOf       = Array.isArray(cs) ? null : (cs?.as_of || null);
+
+  const scored = currencies.map(c => {
+    const v3  = parseFloat(c.smooth_3h  ?? c.normalized_3h)  || 0;
+    const v6  = parseFloat(c.smooth_6h  ?? c.normalized_6h)  || 0;
+    const v12 = parseFloat(c.smooth_12h ?? c.normalized_12h) || 0;
+    return { cur: c.currency, combined: (v3 + v6 + v12) / 3, h3: v3, h6: v6, h12: v12 };
+  });
+
+  const strong = scored.filter(c => c.combined >  CS_THRESHOLD && c.h3 >  CS_THRESHOLD).sort((a, b) => b.combined - a.combined);
+  const weak   = scored.filter(c => c.combined < -CS_THRESHOLD && c.h3 < -CS_THRESHOLD).sort((a, b) => a.combined - b.combined);
+  const score  = _csigScore(strong.length, weak.length);
+
+  const expansionNote = score >= 2
+    ? `<span class="jrn-csig-exp-note">Expansion likely</span>`
+    : '';
+
+  function fv(n) { return (n >= 0 ? '+' : '') + n.toFixed(5); }
+
+  function colHtml(list, side) {
+    const isStrong = side === 'strong';
+    const cls      = isStrong ? 'pos' : 'neg';
+    if (!list.length) return `
+      <div class="cs-sig-col ${side}">
+        <div class="cs-sig-col-title">${isStrong ? '💪 Strong' : '🔻 Weak'}</div>
+        <div class="cs-sig-empty">No confirmed ${isStrong ? 'bullish' : 'bearish'} signal</div>
+      </div>`;
+    return `
+      <div class="cs-sig-col ${side}">
+        <div class="cs-sig-col-title">${isStrong ? '💪 Strong' : '🔻 Weak'}</div>
+        <div class="cs-sig-head"><span>CCY</span><span>Combined</span><span>3H</span><span>6H</span><span>12H</span></div>
+        ${list.map(c => `
+          <div class="cs-sig-row">
+            <span class="cs-sig-cur">${c.cur}</span>
+            <span class="cs-sig-combo ${cls}">${fv(c.combined)}</span>
+            <span class="cs-sig-val ${cls}">${fv(c.h3)}</span>
+            <span class="cs-sig-val ${cls}">${fv(c.h6)}</span>
+            <span class="cs-sig-val ${cls}">${fv(c.h12)}</span>
+          </div>`).join('')}
+      </div>`;
+  }
+
+  const headerContent = `
+    <div class="jrn-csig-avail-header">
+      ${_csigPointHtml(score)}
+      <span class="jrn-csig-criteria">combined > ±${CS_THRESHOLD.toFixed(5)} & 3H confirms</span>
+      ${expansionNote}
+      ${asOf ? `<span class="jrn-csig-as-of">${fmtTime(asOf)}</span>` : ''}
+    </div>
+    <div class="cs-sig-grid">
+      ${colHtml(strong, 'strong')}
+      ${colHtml(weak, 'weak')}
+    </div>`;
+
+  return _jrnSection('📶 Currency Signals', headerContent);
 }
 
 // ─── Notyf (toast notifications) ─────────────────────────────────────────────
@@ -580,9 +658,8 @@ function updateHeader(risk) {
 
 // ─── AI Analysis ─────────────────────────────────────────────────────────────
 
-// Stores latest aiMap + sentiment so modal can access them
+// Stores latest aiMap so modal can access it
 let _aiMap = {};
-let _sentimentData = null;
 let _profile = { account_size: null, max_daily_risk_pct: null, max_trades: null };
 let _userTz = 'UTC'; // overridden from profile on every refresh
 
@@ -660,10 +737,6 @@ function openAiModal(instrument) {
     </div>`;
 
   document.getElementById('ai-modal-body').innerHTML = `
-    ${_sentimentData?.sentiment?.sentiment === 'NEUTRAL' ? `
-    <div class="sent-neutral-warn" style="margin-bottom:10px">
-      ⚠ Risk sentiment neutral — trade with caution.
-    </div>` : ''}
     ${lp ? `
     <div class="ai-modal-lifecycle">
       <div class="ai-modal-lp-header">
@@ -792,11 +865,9 @@ function sessionBadgeHtml(s) {
 
 // ─── Live Opportunities ───────────────────────────────────────────────────────
 
-function renderLiveOpportunities(states, aiMap = {}, sentimentData = null) {
+function renderLiveOpportunities(states, aiMap = {}) {
   const el = document.getElementById('live-opportunities');
   if (!el) return;
-
-  const sentNeutral = sentimentData?.sentiment?.sentiment === 'NEUTRAL';
 
   const live = (states || []).filter(s => s.state === 'READY_TO_ENTER');
 
@@ -839,7 +910,6 @@ function renderLiveOpportunities(states, aiMap = {}, sentimentData = null) {
         </div>
         <div class="live-reason">${s.spread_behavior_text}</div>
         ${newsWarnHtml(s.instrument)}
-        ${sentNeutral ? `<div class="sent-neutral-warn">⚠ Risk sentiment neutral — trade with caution.</div>` : ''}
         ${s.session_blocked ? `<div class="sent-neutral-warn">⚠ ${s.next_action || 'Outside active session'}</div>` : ''}
         ${(s.confidence_breakdown||[]).length ? `<div class="conf-factors" style="align-items:flex-start;margin-top:6px">${s.confidence_breakdown.map(f=>`<span>+ ${f}</span>`).join('')}</div>` : ''}
         ${aiHtml(aiMap[s.instrument], s.instrument)}
@@ -860,11 +930,9 @@ function computeTopSetups(states) {
     .slice(0, 3);
 }
 
-function renderTopSetups(states, aiMap = {}, sentimentData = null) {
+function renderTopSetups(states, aiMap = {}) {
   const el = document.getElementById('top-setups');
   if (!states?.length) { el.innerHTML = '<p class="empty-state">No setups forming</p>'; return; }
-
-  const sentNeutral = sentimentData?.sentiment?.sentiment === 'NEUTRAL';
 
   const setups = computeTopSetups(states);
   if (!setups.length) { el.innerHTML = '<p class="empty-state">No setups forming</p>'; return; }
@@ -900,7 +968,6 @@ function renderTopSetups(states, aiMap = {}, sentimentData = null) {
           <div style="font-size:9px;color:var(--text-muted);margin-bottom:3px">${s.spread_behavior_text || ''}</div>
           ${nextActionHtml(s.next_action)}
           ${newsWarnHtml(s.instrument)}
-          ${sentNeutral ? `<div class="sent-neutral-warn">⚠ Risk sentiment neutral — trade with caution.</div>` : ''}
           ${aiHtml(aiMap[s.instrument], s.instrument)}
         </div>
         <div class="top-conf">
@@ -1358,7 +1425,7 @@ function updateM15Bar(data) {
 
 // ─── Risk / approved trades ───────────────────────────────────────────────────
 
-function renderRisk(data, sentimentData = null) {
+function renderRisk(data) {
   if (!data) return;
   const el       = document.getElementById('risk-list');
   const approved = data.approved || [];
@@ -1976,130 +2043,9 @@ document.addEventListener('click', e => {
   renderMaTab(_maActiveTab);
 });
 
-// ─── Sentiment donut chart (CSS conic-gradient) ───────────────────────────────
 
-function sentimentDonutHtml(groups) {
-  // groups: [{title, vals}] — same format used in renderSentiment
-  const GAP = 2; // degrees gap between segments
-
-  const data = groups.map(g => {
-    const vals = g.vals.filter(v => v != null).map(Number);
-    const sum  = vals.reduce((a, b) => a + b, 0);
-    const color = sum > 5 ? '#4ade80' : sum < -5 ? '#f87171' : '#64748b';
-    const shortTitle = g.title.split('/')[0].trim();
-    return { title: shortTitle, sum, absSum: Math.abs(sum), color };
-  });
-
-  const total = data.reduce((a, b) => a + b.absSum, 0) || 1;
-
-  // Build conic-gradient stops
-  let angle = 0;
-  const stops = [];
-  data.forEach(d => {
-    const deg = (d.absSum / total) * 360;
-    if (deg < 0.5) { angle += deg; return; } // skip invisible slivers
-    const end = angle + deg - GAP;
-    stops.push(`${d.color} ${angle.toFixed(2)}deg ${end.toFixed(2)}deg`);
-    stops.push(`#0a0c10 ${end.toFixed(2)}deg ${(angle + deg).toFixed(2)}deg`);
-    angle += deg;
-  });
-
-  const gradient = stops.length
-    ? `conic-gradient(${stops.join(', ')})`
-    : 'conic-gradient(#1e2128 0deg 360deg)';
-
-  return `
-    <div class="sent-donut-wrap">
-      <div class="sent-donut" style="background:${gradient}">
-        <div class="sent-donut-hole"></div>
-      </div>
-      <div class="sent-donut-legend">
-        ${data.map(d => `
-          <div class="sent-legend-item">
-            <span class="sent-legend-dot" style="background:${d.color}"></span>
-            <span class="sent-legend-label">${d.title}</span>
-            <span class="sent-legend-val" style="color:${d.color}">${d.sum > 0 ? '+' : ''}${d.sum.toFixed(0)}</span>
-          </div>`).join('')}
-      </div>
-    </div>`;
-}
 
 // ─── Risk Sentiment ───────────────────────────────────────────────────────────
-
-function renderSentiment(data) {
-  const el = document.getElementById('sentiment-display');
-  if (!el) return;
-
-  const s = data?.sentiment;
-  if (!s) {
-    el.innerHTML = '<p class="empty-state">No sentiment data — runs on next hourly update</p>';
-    return;
-  }
-
-  const sentCls = s.sentiment === 'RISK_ON'  ? 'risk-on'
-               : s.sentiment === 'RISK_OFF' ? 'risk-off'
-               : 'neutral';
-  const sentLabel = clean(s.sentiment || 'NEUTRAL');
-
-  const envCls = (s.environment || 'CALM').toLowerCase();
-  const envLabel = s.environment || 'CALM';
-
-  const confPct = s.confidence || 0;
-  const accel   = Number(s.accel_composite || 0);
-  const accelCls = accel > 10 ? 'risk-on' : accel < -10 ? 'risk-off' : 'neutral';
-  const accelArrow = accel > 20 ? '↑↑' : accel > 5 ? '↑' : accel < -20 ? '↓↓' : accel < -5 ? '↓' : '→';
-
-  // Components grouped for display — calculation unchanged
-  // vals array is used for both group rows and the donut chart
-  const groups = [
-    { title: 'Growth / Risk Assets', vals: [s.equity_score, s.oil_score] },
-    { title: 'Carry / Risk FX',      vals: [s.audjpy_score, s.nzdjpy_score] },
-    { title: 'Safe Havens',          vals: [s.jpy_score, s.chf_score, s.gold_score] },
-    { title: 'USD Liquidity',        vals: [s.usd_score] },
-  ];
-
-  el.innerHTML = `
-    <div class="sentiment-main">
-      <div class="sent-badge-row">
-        <div class="sentiment-badge ${sentCls}">${sentLabel}</div>
-        <div class="sent-env-badge ${envCls}">${envLabel}</div>
-      </div>
-      <div class="sentiment-meta">
-        <span class="sent-conf-label">Confidence</span>
-        <div class="sent-conf-bar-wrap">
-          <div class="sent-conf-bar-fill ${sentCls}" style="width:${confPct}%"></div>
-        </div>
-        <span class="sent-conf-pct">${confPct}%</span>
-      </div>
-      <div class="sentiment-net">
-        Net <span class="sent-net-val ${sentCls}">${Number(s.net_score || 0).toFixed(1)}</span>
-        <span class="sent-accel ${accelCls}" title="Acceleration: how fast conditions are changing">${accelArrow} ${accel > 0 ? '+' : ''}${accel}</span>
-      </div>
-    </div>
-    <div class="sent-groups-and-chart">
-      <div class="sentiment-components">
-        ${groups.map(g => {
-          const vals   = g.vals.filter(v => v != null).map(Number);
-          const allOn  = vals.length >= 2 && vals.every(v => v >= 5);
-          const allOff = vals.length >= 2 && vals.every(v => v <= -5);
-          const badge  = allOn  ? '<span class="sent-align-badge risk-on">↑ ALIGNED</span>'
-                       : allOff ? '<span class="sent-align-badge risk-off">↓ ALIGNED</span>'
-                       : vals.length === 1 ? ''
-                       : '<span class="sent-align-badge not-aligned">✕ NOT ALIGNED</span>';
-          const sum    = vals.reduce((a, b) => a + b, 0);
-          const sumStr = (sum > 0 ? '+' : '') + sum.toFixed(0);
-          const sumCls = sum > 5 ? 'risk-on' : sum < -5 ? 'risk-off' : 'neutral';
-          return `
-            <div class="sent-group-row">
-              <div class="sent-group-header">${g.title}${badge}</div>
-              <span class="sent-group-sum ${sumCls}">${sumStr}</span>
-            </div>`;
-        }).join('')}
-      </div>
-      ${sentimentDonutHtml(groups)}
-    </div>
-    <div class="sentiment-time">${fmtTime(s.time)}</div>`;
-}
 
 // ─── Data quality ─────────────────────────────────────────────────────────────
 
@@ -2272,14 +2218,25 @@ function renderJrnAiSection(marketStates, aiAnalysis) {
     </div>`);
 }
 
+function _jrnEnergyBadge(entryTime, sessionName) {
+  const date = entryTime?.slice(0, 10);
+  const s = _maData?.summaries?.find(x => x.session_date_utc === date && x.session_name === sessionName);
+  if (!s) return '';
+  const score = _maEnergyScore(s);
+  const state = _maEnergyState(score, s);
+  const bg  = MA_ENERGY_BG[state]  || 'rgba(30,33,40,0.9)';
+  const col = MA_ENERGY_TEXT[state] || '#64748b';
+  const bdr = MA_ENERGY_BORDER[state] || '#334155';
+  return `<span class="jrn-energy-badge" style="background:${bg};color:${col};border:1px solid ${bdr}">${state}</span>`;
+}
+
 function renderJrnSessionPerfSection(e, sessionEntries) {
   if (!sessionEntries || sessionEntries.length <= 1) {
     return _jrnSection(`📊 Session: ${sessionLabel(e.session_name)}`, '<p class="jrn-empty">First snapshot of this session.</p>');
 
   }
   const first = sessionEntries[0];
-  const sentFlow = [...sessionEntries.reduce((m, x) => { m.set(x.risk_sentiment, 1); return m; }, new Map()).keys()]
-    .map(s => clean(s)).join(' → ');
+  const energyBadge = _jrnEnergyBadge(e.time, e.session_name);
   const allSignals = sessionEntries.flatMap(x => (x.signals_summary?.entered || []));
   const trendDelta = e.trend_pairs - first.trend_pairs;
   const readyDelta = e.ready_pairs - first.ready_pairs;
@@ -2287,7 +2244,7 @@ function renderJrnSessionPerfSection(e, sessionEntries) {
   return _jrnSection(`📊 Session: ${sessionLabel(e.session_name)} · ${sessionEntries.length} snapshots`, `
     <div class="jrn-sess-stats">
       <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Duration</span><span class="jrn-sess-val">${sessionEntries.length}H</span></div>
-      <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Sentiment flow</span><span class="jrn-sess-val">${sentFlow}</span></div>
+      ${energyBadge ? `<div class="jrn-sess-stat"><span class="jrn-sess-lbl">Energy</span><span class="jrn-sess-val">${energyBadge}</span></div>` : ''}
       <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Trend pairs</span><span class="jrn-sess-val">${first.trend_pairs} → ${e.trend_pairs} ${delta(trendDelta)}</span></div>
       <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Ready pairs</span><span class="jrn-sess-val">${first.ready_pairs} → ${e.ready_pairs} ${delta(readyDelta)}</span></div>
       ${allSignals.length ? `<div class="jrn-sess-stat jrn-sess-full"><span class="jrn-sess-lbl">Signals</span><span class="jrn-sess-val">${allSignals.map(s => `${pair(s.instrument)} ${s.signal}`).join(', ')}</span></div>` : ''}
@@ -2296,15 +2253,14 @@ function renderJrnSessionPerfSection(e, sessionEntries) {
 
 function renderJrnPrevSessionSection(prevEntry) {
   if (!prevEntry) return _jrnSection('📋 Previous Journal', '<p class="jrn-empty">No previous entry in loaded history.</p>');
-  const sentCls = prevEntry.risk_sentiment === 'RISK_ON' ? 'risk-on' : prevEntry.risk_sentiment === 'RISK_OFF' ? 'risk-off' : 'neutral';
   const sessCls = (prevEntry.session_quality || 'BLOCKED').toLowerCase().replace(/_/g, '-');
   const entered = (prevEntry.signals_summary?.entered || []);
+  const prevEnergyBadge = _jrnEnergyBadge(prevEntry.time, prevEntry.session_name);
   return _jrnSection('📋 Previous Journal', `
     <div class="jrn-prev-meta">
       <span class="jrn-prev-time">${fmtTime(prevEntry.time)}</span>
       <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${sessionLabel(prevEntry.session_name)}</span>
-      <span class="jrn-sent sent-${sentCls}">${clean(prevEntry.risk_sentiment || '—')}</span>
-      <span class="jrn-conf">${prevEntry.risk_confidence ?? '—'}%</span>
+      ${prevEnergyBadge}
       <span class="jrn-prev-pairs">${prevEntry.trend_pairs}T · ${prevEntry.pullback_pairs}PB · ${prevEntry.ready_pairs}R</span>
     </div>
     ${prevEntry.summary ? `<p class="jrn-prev-summary">${clean(prevEntry.summary)}</p>` : '<p class="jrn-empty">No summary recorded.</p>'}
@@ -2416,7 +2372,6 @@ async function openJournalModal(id) {
 }
 
 function _renderJournalModal(e, newsEvents, sessionEntries, prevEntry) {
-  const sentCls = e.risk_sentiment === 'RISK_ON' ? 'risk-on' : e.risk_sentiment === 'RISK_OFF' ? 'risk-off' : 'neutral';
   const sessCls = (e.session_quality || 'BLOCKED').toLowerCase().replace(/_/g, '-');
   const signals  = e.signals_summary || {};
   const enteredCount = (signals.entered || []).length;
@@ -2437,8 +2392,7 @@ function _renderJournalModal(e, newsEvents, sessionEntries, prevEntry) {
   document.getElementById('jrn-modal-time').textContent = fmtTime(e.time);
   document.getElementById('jrn-modal-badges').innerHTML = `
     <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${sessionLabel(e.session_name)}</span>
-    <span class="jrn-sent sent-${sentCls}">${clean(e.risk_sentiment || '—')}</span>
-    <span class="jrn-conf">${e.risk_confidence ?? '—'}%</span>
+    ${_jrnEnergyBadge(e.time, e.session_name)}
     <div class="jrn-counts">
       <span class="jrn-count trend" title="Trend">${e.trend_pairs}T</span>
       <span class="jrn-count pb"    title="Pullback">${e.pullback_pairs}PB</span>
@@ -2456,7 +2410,7 @@ function _renderJournalModal(e, newsEvents, sessionEntries, prevEntry) {
   document.getElementById('jrn-modal-body').innerHTML = [
     e.summary ? `<div class="jrn-modal-summary">${clean(e.summary)}</div>` : '',
     newsEvents !== null ? renderJrnCalendarSection(newsEvents, e.time) : _jrnSection('📅 Economic Calendar', '<p class="jrn-empty jrn-loading">Loading…</p>'),
-    e.risk_sentiment_details ? _jrnSection('🌍 Risk Sentiment', journalSentimentGroupsHtml(e.risk_sentiment_details)) : '',
+    renderJrnCsigSection(e),
     renderJrnStrengthSection(e.currency_strength),
     e.m15_impulses != null ? renderJrnM15Section(e.m15_impulses) : '',
     sessionEntries ? renderJrnSessionPerfSection(e, sessionEntries) : '',
@@ -2478,54 +2432,6 @@ function closeJournalModal() {
 // Close journal modal on Escape
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeJournalModal(); });
 
-// ─── Journal sentiment groups (collapsed — no individual components) ──────────
-
-function journalSentimentGroupsHtml(d) {
-  if (!d) return '';
-
-  // Summary bar: Net Score, Confidence, Environment
-  const netScore   = d.net_score   != null ? Number(d.net_score).toFixed(2) : '—';
-  const netCls     = d.net_score   > 0 ? 'risk-on' : d.net_score < 0 ? 'risk-off' : 'neutral';
-  const confidence = d.confidence  != null ? `${d.confidence}%` : '—';
-  const env        = d.environment || '—';
-
-  const meta = `
-    <div class="jrn-sent-meta">
-      <div class="jrn-sent-meta-item">Net Score <b class="${netCls}">${netScore}</b></div>
-      <div class="jrn-sent-meta-item">Confidence <b>${confidence}</b></div>
-      <div class="jrn-sent-meta-item">Environment <b>${env}</b></div>
-    </div>`;
-
-  const groups = [
-    { title: 'Growth / Risk Assets', vals: [d.equity_score, d.oil_score] },
-    { title: 'Carry / Risk FX',      vals: [d.audjpy_score, d.nzdjpy_score] },
-    { title: 'Safe Havens',          vals: [d.jpy_score, d.chf_score, d.gold_score] },
-    { title: 'USD Liquidity',        vals: [d.usd_score] },
-  ];
-  const groupsHtml = `
-    <div class="jrn-sent-groups">
-      ${groups.map(g => {
-        const vals   = g.vals.filter(v => v != null).map(Number);
-        const allOn  = vals.length >= 2 && vals.every(v => v >= 5);
-        const allOff = vals.length >= 2 && vals.every(v => v <= -5);
-        const badge  = allOn  ? '<span class="sent-align-badge risk-on">↑ ALIGNED</span>'
-                     : allOff ? '<span class="sent-align-badge risk-off">↓ ALIGNED</span>'
-                     : vals.length === 1 ? ''
-                     : '<span class="sent-align-badge not-aligned">✕ NOT ALIGNED</span>';
-        const sum    = vals.reduce((a, b) => a + b, 0);
-        const sumStr = (sum > 0 ? '+' : '') + sum.toFixed(0);
-        const sumCls = sum > 5 ? 'risk-on' : sum < -5 ? 'risk-off' : 'neutral';
-        return `
-          <div class="sent-group-row">
-            <div class="sent-group-header">${g.title}${badge}</div>
-            <span class="sent-group-sum ${sumCls}">${sumStr}</span>
-          </div>`;
-      }).join('')}
-    </div>`;
-
-  return meta + groupsHtml;
-}
-
 // ─── Market Journal ───────────────────────────────────────────────────────────
 
 function renderJournal(data) {
@@ -2543,9 +2449,6 @@ function renderJournal(data) {
   }
 
   const rows = entries.map(e => {
-    const sentCls = e.risk_sentiment === 'RISK_ON'  ? 'risk-on'
-                  : e.risk_sentiment === 'RISK_OFF' ? 'risk-off'
-                  : 'neutral';
     const sessCls = (e.session_quality || 'BLOCKED').toLowerCase().replace(/_/g, '-');
     const signals = e.signals_summary || {};
     const enteredCount = (signals.entered || []).length;
@@ -2558,8 +2461,7 @@ function renderJournal(data) {
             <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${sessionLabel(e.session_name)}</span>
           </div>
           <div class="jrn-hdr-bot">
-            <span class="jrn-sent sent-${sentCls}">${clean(e.risk_sentiment || '—')}</span>
-            <span class="jrn-conf">${e.risk_confidence ?? '—'}%</span>
+            ${_jrnEnergyBadge(e.time, e.session_name)}
             <div class="jrn-counts">
               <span class="jrn-count trend" title="Trend">${e.trend_pairs}T</span>
               <span class="jrn-count pb"    title="Pullback (tracked)">${e.pullback_pairs}PB</span>
@@ -2588,7 +2490,7 @@ function renderJournal(data) {
 
 async function refresh() {
   try {
-    const [strength, signals, states, risk, actions, quality, spreads, m15Data, aiData, sentimentData, sessionData, journalData, profileData] = await Promise.all([
+    const [strength, signals, states, risk, actions, quality, spreads, m15Data, aiData, sessionData, journalData, profileData] = await Promise.all([
       api('/api/strength'),
       api('/api/signals'),
       api('/api/states'),
@@ -2598,7 +2500,6 @@ async function refresh() {
       api('/api/spreads'),
       api('/api/m15-spreads').catch(() => ({ spreads: [] })),
       api('/api/ai').catch(() => ({ analyses: [] })),
-      api('/api/sentiment').catch(() => ({ sentiment: null })),
       api('/api/session').catch(() => ({ session: null })),
       api('/api/journal?limit=5').catch(() => ({ entries: [] })),
       api('/api/profile').catch(() => ({})),
@@ -2623,23 +2524,21 @@ async function refresh() {
     const aiMap = {};
     (aiData.analyses || []).forEach(a => { aiMap[a.instrument] = a; });
     _aiMap = aiMap;                 // store globally for modal access
-    _sentimentData = sentimentData; // store for modal neutral check
 
     updateHeader(risk);
     renderSession(sessionData);
     fetchMarketActivity(); // non-blocking — separate fetch, renders independently
-    renderSentiment(sentimentData);
     buildChart(strength, activeTF);
     renderCurrencySignals(strength);          // must run first — populates _csigCurrencies
-    renderLiveOpportunities(states.states || [], aiMap, sentimentData);
-    renderTopSetups(states.states || [], aiMap, sentimentData);
+    renderLiveOpportunities(states.states || [], aiMap);
+    renderTopSetups(states.states || [], aiMap);
     renderSignals(signals, states.states || [], journalData?.entries || []);
     renderStates(states);
     renderSpreads(spreads);
     renderRanking12H(spreads);
     renderM15Spreads(m15Data);
     updateM15Bar(m15Data);
-    renderRisk(risk, sentimentData);
+    renderRisk(risk);
     renderActions(actions);
     renderQuality(quality);
     renderJournal(journalData);
