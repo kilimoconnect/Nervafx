@@ -1662,6 +1662,17 @@ function _maEnergyState(score, s) {
   return state;
 }
 
+// Returns next-session prediction: 3 consecutive low → EXPANSION; high → COMPRESSION
+function _maNextPrediction(sequence) {
+  if (sequence.length < 1) return null;
+  const isLow  = s => s === 'DEAD' || s === 'COMPRESSION';
+  const isHigh = s => s === 'EXPANSION' || s === 'EXPLOSIVE';
+  const last3  = sequence.slice(-3);
+  if (last3.length === 3 && last3.every(s => isLow(s.state)))  return { state: 'EXPANSION',    reason: '3 consecutive low energy' };
+  if (isHigh(sequence[sequence.length - 1].state))              return { state: 'COMPRESSION',  reason: 'following expansion' };
+  return null;
+}
+
 function _maExpansionForecast(recent) {
   if (recent.length < 2) return null;
   const last = recent.slice(-5);
@@ -1897,16 +1908,37 @@ function renderMaSession(el, summaries) {
   const forecast     = _maExpansionForecast(sequence);
   const lastSessions = sequence.slice(-3);
 
+  // Next-session prediction
+  const nextPred = _maNextPrediction(sequence);
+  let predInfo   = null;
+  if (nextPred) {
+    const lastSess = sequence[sequence.length - 1]?.sess;
+    const nextIdx  = lastSess != null ? (DISP_ORDER.indexOf(lastSess) + 1) % DISP_ORDER.length : 0;
+    predInfo = {
+      sess:  DISP_ORDER[nextIdx],
+      state: nextPred.state,
+      score: nextPred.state === 'EXPANSION' ? 65 : 25,
+      reason: nextPred.reason,
+    };
+  }
+
+  // Chart labels — add 'NEXT' slot when prediction exists
+  const chartLabels = [...allDates.map(d => d.slice(5))];
+  if (predInfo) chartLabels.push('NEXT');
+
   // Datasets: one per display session (3), each bar colored by energy state
-  const datasets = DISP_ORDER.map(sess => ({
-    label:           DISP_SHORT[sess],
-    _sessKey:        sess,
-    data:            allDates.map(d => displayMap[d]?.[sess]?.score ?? null),
-    backgroundColor: allDates.map(d => MA_ENERGY_BG[displayMap[d]?.[sess]?.state]    || 'rgba(0,0,0,0)'),
-    borderColor:     allDates.map(d => MA_ENERGY_BORDER[displayMap[d]?.[sess]?.state] || 'transparent'),
-    borderWidth: 1,
-    borderRadius: 3,
-  }));
+  const datasets = DISP_ORDER.map(sess => {
+    const data   = allDates.map(d => displayMap[d]?.[sess]?.score ?? null);
+    const bgCol  = allDates.map(d => MA_ENERGY_BG[displayMap[d]?.[sess]?.state]    || 'rgba(0,0,0,0)');
+    const bdCol  = allDates.map(d => MA_ENERGY_BORDER[displayMap[d]?.[sess]?.state] || 'transparent');
+    if (predInfo) {
+      const isPredSess = predInfo.sess === sess;
+      data.push(isPredSess ? predInfo.score : null);
+      bgCol.push(isPredSess ? (MA_ENERGY_BG[predInfo.state]     || 'rgba(0,0,0,0)').replace(/[\d.]+\)$/, '0.18)') : 'rgba(0,0,0,0)');
+      bdCol.push(isPredSess ? (MA_ENERGY_BORDER[predInfo.state] || 'transparent') : 'transparent');
+    }
+    return { label: DISP_SHORT[sess], _sessKey: sess, data, backgroundColor: bgCol, borderColor: bdCol, borderWidth: 1, borderRadius: 3 };
+  });
 
   // Bar label plugin — writes short code + state in white
   const maEnergyBarLabels = {
@@ -1919,15 +1951,16 @@ function renderMaSession(el, summaries) {
           const { x, y, base } = bar.getProps(['x','y','base'], true);
           const h = base - y;
           if (h < 12) return;
-          const date  = allDates[j];
-          const state = displayMap[date]?.[ds._sessKey]?.state;
-          const color = MA_ENERGY_TEXT[state] || 'rgba(255,255,255,0.8)';
+          const isPred = j === allDates.length;
+          const date   = isPred ? null : allDates[j];
+          const state  = isPred ? (predInfo?.sess === ds._sessKey ? predInfo?.state : null) : displayMap[date]?.[ds._sessKey]?.state;
+          const color  = MA_ENERGY_TEXT[state] || 'rgba(255,255,255,0.8)';
           c2.save();
           c2.fillStyle  = color;
           c2.font       = `bold ${h >= 22 ? 8 : 7}px monospace`;
           c2.textAlign  = 'center';
           c2.textBaseline = 'middle';
-          c2.fillText(short, x, y + h / 2);
+          c2.fillText(isPred ? `${short}?` : short, x, y + h / 2);
           c2.restore();
         });
       });
@@ -1952,6 +1985,13 @@ function renderMaSession(el, summaries) {
             ${csCls ? `<span class="ma-seq-cs ${csCls}">${csLabel}</span>` : ''}
           </div>`;
         }).join('')}
+        ${predInfo ? `
+          <span class="ma-seq-arrow ma-seq-arrow-pred">→</span>
+          <div class="ma-seq-item ma-seq-pred">
+            <span class="ma-seq-sess" style="color:${DISP_COLOR[predInfo.sess]}">${DISP_SHORT[predInfo.sess]}</span>
+            <span class="ma-seq-state" style="color:${MA_ENERGY_BORDER[predInfo.state]}">${predInfo.state}</span>
+            <span class="ma-seq-pred-tag">PRED</span>
+          </div>` : ''}
       </div>
     </div>
     <div class="ma-chart-wrap" style="height:160px; margin-top:10px">
@@ -1967,6 +2007,12 @@ function renderMaSession(el, summaries) {
   opts.plugins.legend.display = false;
   opts.plugins.tooltip.callbacks = {
     label: c => {
+      const isPred = c.dataIndex === allDates.length;
+      if (isPred) {
+        const sess = DISP_ORDER[c.datasetIndex];
+        if (!predInfo || predInfo.sess !== sess) return '';
+        return ` ${DISP_SHORT[sess]}  ${predInfo.state}  (PREDICTED — ${predInfo.reason})`;
+      }
       const date = allDates[c.dataIndex];
       const sess = DISP_ORDER[c.datasetIndex];
       const e    = displayMap[date]?.[sess];
@@ -1977,7 +2023,7 @@ function renderMaSession(el, summaries) {
   };
   _maCharts.session = new Chart(ctx, {
     type: 'bar',
-    data: { labels: allDates.map(d => d.slice(5)), datasets },
+    data: { labels: chartLabels, datasets },
     options: opts,
     plugins: [maEnergyBarLabels],
   });

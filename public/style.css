@@ -3263,6 +3263,9 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
 .ma-seq-cs.exp { background: rgba(74,222,128,0.2);  color: #ffffff;  border: 1px solid rgba(74,222,128,0.5); }
 .ma-seq-cs.pos { background: rgba(74,222,128,0.1);  color: #4ade80;  border: 1px solid rgba(74,222,128,0.25); }
 .ma-seq-cs.neg { background: rgba(248,113,113,0.08); color: #f87171; border: 1px solid rgba(248,113,113,0.2); }
+.ma-seq-arrow-pred { opacity: 0.5; }
+.ma-seq-item.ma-seq-pred { opacity: 0.65; border: 1px dashed rgba(148,163,184,0.25); border-radius: 4px; padding: 2px 5px; }
+.ma-seq-pred-tag { font-size: 7px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; color: #94a3b8; background: rgba(148,163,184,0.1); border: 1px solid rgba(148,163,184,0.2); border-radius: 2px; padding: 1px 3px; }
 
 /* Expansion Forecast panel */
 .ma-forecast-panel {
