@@ -1940,7 +1940,7 @@ function renderMaSession(el, summaries) {
   const chartDates  = [...allDates, ...predFutureDates];
   const chartLabels = [...allDates.map(d => d.slice(5)), ...predFutureDates.map(d => d.slice(5) + '?')];
 
-  const PRED_BG = { DEAD: 'rgba(30,33,40,0.55)', COMPRESSION: 'rgba(127,29,29,0.45)', STABLE: 'rgba(120,53,15,0.4)', EXPANSION: 'rgba(20,83,45,0.5)', EXPLOSIVE: 'rgba(74,222,128,0.4)' };
+  const PRED_BG = { DEAD: 'rgba(30,33,40,0.12)', COMPRESSION: 'rgba(127,29,29,0.10)', STABLE: 'rgba(120,53,15,0.10)', EXPANSION: 'rgba(20,83,45,0.12)', EXPLOSIVE: 'rgba(74,222,128,0.10)' };
 
   // Datasets: ghost bars fill empty real-data slots (remaining today + tomorrow)
   const datasets = DISP_ORDER.map(sess => {
@@ -1977,6 +1977,30 @@ function renderMaSession(el, summaries) {
           c2.textAlign  = 'center';
           c2.textBaseline = 'middle';
           c2.fillText(isGhost ? `${short}?` : short, x, y + h / 2);
+          c2.restore();
+        });
+      });
+    },
+  };
+
+  // Dashed border overlay on predicted bars
+  const maGhostBorderPlugin = {
+    id: 'maGhostBorderPlugin',
+    afterDatasetsDraw(chart) {
+      const c2 = chart.ctx;
+      chart.data.datasets.forEach((ds, i) => {
+        chart.getDatasetMeta(i).data.forEach((bar, j) => {
+          const date = chartDates[j];
+          if (displayMap[date]?.[ds._sessKey] || !ghostMap[date]?.[ds._sessKey]) return;
+          const { x, y, base, width } = bar.getProps(['x','y','base','width'], true);
+          const h = base - y;
+          if (h < 2) return;
+          const state = ghostMap[date][ds._sessKey].state;
+          c2.save();
+          c2.setLineDash([3, 3]);
+          c2.strokeStyle = MA_ENERGY_BORDER[state] || '#334155';
+          c2.lineWidth   = 1.5;
+          c2.strokeRect(x - width / 2, y, width, h);
           c2.restore();
         });
       });
@@ -2039,7 +2063,7 @@ function renderMaSession(el, summaries) {
     type: 'bar',
     data: { labels: chartLabels, datasets },
     options: opts,
-    plugins: [maEnergyBarLabels],
+    plugins: [maEnergyBarLabels, maGhostBorderPlugin],
   });
 
   // AI analysis — non-blocking, updates panel when ready
