@@ -267,6 +267,8 @@ async function calculateLatestSessionActivity() {
   if (error) throw new Error(`Hourly upsert: ${error.message}`);
 
   console.log(`[SESSION_ACTIVITY] ✓ ${latestHk} | ${row.session_name} | ${row.market_state} | mov:${row.movement_score} breadth:${row.breadth_score} dir:${row.directional_agreement}`);
+
+  await computeSessionSummaries();
   return row;
 }
 
