@@ -1861,6 +1861,10 @@ function renderMaSession(el, summaries) {
     energyMap[dateKey][s.session_name] = {
       score, rawScore, csBonus, csScore: cs?.score ?? null,
       state: _maEnergyState(score, s),
+      movPart: +(0.40 * parseFloat(s.avg_movement_score        || 0)).toFixed(1),
+      brdPart: +(0.35 * parseFloat(s.avg_breadth_score         || 0)).toFixed(1),
+      dirPart: +(0.10 * parseFloat(s.avg_directional_agreement || 0)).toFixed(1),
+      expPart: +(0.15 * parseFloat(s.expansion_score           || 0)).toFixed(1),
     };
   }
 
@@ -1875,7 +1879,11 @@ function renderMaSession(el, summaries) {
     const cs1 = e1.csScore ?? -1, cs2 = e2.csScore ?? -1;
     const csScore  = Math.max(cs1, cs2);
     const state    = score <= 15 ? 'DEAD' : score <= 35 ? 'COMPRESSION' : score <= 55 ? 'STABLE' : score <= 75 ? 'EXPANSION' : 'EXPLOSIVE';
-    return { score, rawScore, csBonus, csScore: csScore === -1 ? null : csScore, state };
+    const movPart = +((e1.movPart + e2.movPart) / 2).toFixed(1);
+    const brdPart = +((e1.brdPart + e2.brdPart) / 2).toFixed(1);
+    const dirPart = +((e1.dirPart + e2.dirPart) / 2).toFixed(1);
+    const expPart = +((e1.expPart + e2.expPart) / 2).toFixed(1);
+    return { score, rawScore, csBonus, csScore: csScore === -1 ? null : csScore, state, movPart, brdPart, dirPart, expPart };
   }
 
   // Display map: 3 sessions — LONDON_NY overlap split between London and New York
@@ -1900,36 +1908,69 @@ function renderMaSession(el, summaries) {
   const forecast     = _maExpansionForecast(sequence);
   const lastSessions = sequence.slice(-3);
 
-  // Datasets: one per display session
-  const datasets = DISP_ORDER.map(sess => ({
-    label:           DISP_SHORT[sess],
-    _sessKey:        sess,
-    data:            allDates.map(d => displayMap[d]?.[sess]?.score ?? null),
-    backgroundColor: allDates.map(d => MA_ENERGY_BG[displayMap[d]?.[sess]?.state]    || 'rgba(0,0,0,0)'),
-    borderColor:     allDates.map(d => MA_ENERGY_BORDER[displayMap[d]?.[sess]?.state] || 'transparent'),
-    borderWidth: 1,
-    borderRadius: 3,
-  }));
+  // Component colors (consistent across sessions — reveals energy composition)
+  const COMP_BG     = { movement: 'rgba(251,146,60,0.78)', breadth: 'rgba(56,189,248,0.75)', direction: 'rgba(192,132,252,0.75)', expansion: 'rgba(74,222,128,0.82)' };
+  const COMP_BORDER = { movement: 'rgba(251,146,60,0.95)', breadth: 'rgba(56,189,248,0.95)', direction: 'rgba(192,132,252,0.95)', expansion: 'rgba(74,222,128,0.95)' };
+  const COMP_LABEL  = { movement: 'Movement 40%', breadth: 'Breadth 35%', direction: 'Agreement 10%', expansion: 'Expansion 15%' };
 
-  // Bar label plugin — writes short session code inside each bar
-  const maEnergyBarLabels = {
-    id: 'maEnergyBarLabels',
+  // Expansion readiness line: non-expansion streak → coiling pressure
+  const isHighState = st => st === 'EXPANSION' || st === 'EXPLOSIVE';
+  const dateRead = {};
+  for (let i = 0; i < sequence.length; i++) {
+    let streak = 0;
+    for (let j = i; j >= 0 && !isHighState(sequence[j].state); j--) streak++;
+    if (!dateRead[sequence[i].date]) dateRead[sequence[i].date] = [];
+    dateRead[sequence[i].date].push(Math.min(100, streak * 25));
+  }
+  const readinessLine = allDates.map(d => {
+    const v = dateRead[d];
+    return v?.length ? Math.round(v.reduce((s,x) => s+x, 0) / v.length) : null;
+  });
+
+  // 12 stacked bar datasets (4 components × 3 sessions) + 1 readiness line
+  const COMPS = ['movement', 'breadth', 'direction', 'expansion'];
+  const datasets = [];
+  for (const sess of DISP_ORDER) {
+    for (const comp of COMPS) {
+      datasets.push({
+        label: COMP_LABEL[comp],
+        _sessKey: sess, _comp: comp,
+        stack: sess,
+        data:        allDates.map(d => displayMap[d]?.[sess]?.[comp + 'Part'] ?? null),
+        backgroundColor: allDates.map(d => displayMap[d]?.[sess] ? COMP_BG[comp] : 'rgba(0,0,0,0)'),
+        borderColor:     allDates.map(d => displayMap[d]?.[sess] ? COMP_BORDER[comp] : 'transparent'),
+        borderWidth: 0, borderRadius: comp === 'expansion' ? 3 : 0,
+      });
+    }
+  }
+  datasets.push({
+    type: 'line', label: 'Readiness', _comp: 'readiness',
+    data: readinessLine,
+    borderColor: 'rgba(250,204,21,0.85)', backgroundColor: 'transparent',
+    borderWidth: 1.5, borderDash: [4, 3],
+    pointRadius: 2, pointBackgroundColor: 'rgba(250,204,21,0.9)',
+    tension: 0.4, order: -1,
+  });
+
+  // Bar label plugin — draws session code centred on the full stacked bar height
+  const maStackLabels = {
+    id: 'maStackLabels',
     afterDatasetsDraw(chart) {
       const c2 = chart.ctx;
-      chart.data.datasets.forEach((ds, i) => {
-        const short = DISP_SHORT[ds._sessKey] || '';
-        chart.getDatasetMeta(i).data.forEach((bar, j) => {
-          const { x, y, base } = bar.getProps(['x','y','base'], true);
-          const h = base - y;
-          if (h < 12) return;
-          const state = displayMap[allDates[j]]?.[ds._sessKey]?.state;
-          const color = MA_ENERGY_TEXT[state] || 'rgba(255,255,255,0.8)';
+      DISP_ORDER.forEach((sess, si) => {
+        const movMeta = chart.getDatasetMeta(si * 4);
+        const expMeta = chart.getDatasetMeta(si * 4 + 3);
+        if (!movMeta || !expMeta) return;
+        movMeta.data.forEach((movBar, j) => {
+          const { base }      = movBar.getProps(['base'], true);
+          const { x, y: top } = expMeta.data[j].getProps(['x','y'], true);
+          const h = base - top;
+          if (h < 10) return;
           c2.save();
-          c2.fillStyle    = color;
-          c2.font         = `bold ${h >= 22 ? 8 : 7}px monospace`;
-          c2.textAlign    = 'center';
-          c2.textBaseline = 'middle';
-          c2.fillText(short, x, y + h / 2);
+          c2.fillStyle = 'rgba(255,255,255,0.92)';
+          c2.font = `bold ${h >= 20 ? 8 : 7}px monospace`;
+          c2.textAlign = 'center'; c2.textBaseline = 'middle';
+          c2.fillText(DISP_SHORT[sess], x, top + h / 2);
           c2.restore();
         });
       });
@@ -1956,32 +1997,44 @@ function renderMaSession(el, summaries) {
         }).join('')}
       </div>
     </div>
-    <div class="ma-chart-wrap" style="height:160px; margin-top:10px">
+    <div class="ma-chart-wrap" style="height:180px; margin-top:10px">
       <canvas id="maChartSession"></canvas>
     </div>
     <div class="ma-state-legend" style="margin-top:8px">
-      ${Object.entries(MA_ENERGY_BORDER).map(([s,c]) => `<span class="ma-state-dot" style="background:${c}"></span><span class="ma-state-lbl">${s}</span>`).join('')}
+      ${Object.entries(COMP_BG).map(([k,c]) => `<span class="ma-state-dot" style="background:${c}"></span><span class="ma-state-lbl">${COMP_LABEL[k]}</span>`).join('')}
+      <span class="ma-state-dot" style="background:rgba(250,204,21,0.85);width:16px;height:2px;border-radius:1px"></span><span class="ma-state-lbl">Readiness</span>
     </div>`;
 
   const ctx  = document.getElementById('maChartSession').getContext('2d');
   const opts = _maChartDefaults();
   opts.scales.x.ticks.maxRotation = 30;
+  opts.scales.y.stacked = true;
   opts.plugins.legend.display = false;
+  opts.plugins.tooltip.mode = 'index';
   opts.plugins.tooltip.callbacks = {
-    label: c => {
+    title: cs => {
+      const c = cs.find(x => x.dataset._sessKey && x.dataset._comp === 'movement');
+      if (!c) return cs[0]?.label || '';
       const date = allDates[c.dataIndex];
-      const sess = DISP_ORDER[c.datasetIndex];
-      const e    = displayMap[date]?.[sess];
-      if (!e) return '';
+      const sess = c.dataset._sessKey;
+      const e = displayMap[date]?.[sess];
+      if (!e) return date;
       const csPart = e.csBonus !== 0 ? ` CS${e.csBonus > 0 ? '+' : ''}${e.csBonus}` : '';
-      return ` ${DISP_SHORT[sess]}  ${e.state}  (${e.rawScore.toFixed(0)}${csPart} = ${e.score.toFixed(0)})`;
+      return `${DISP_SHORT[sess]}  ${e.state}  ${e.score}${csPart}`;
+    },
+    label: c => {
+      if (c.dataset._comp === 'readiness') return ` Readiness: ${c.parsed.y ?? '—'}`;
+      const e = displayMap[allDates[c.dataIndex]]?.[c.dataset._sessKey];
+      if (!e || c.parsed.y == null) return null;
+      const names = { movement: 'Mov', breadth: 'Brd', direction: 'Dir', expansion: 'Exp' };
+      return ` ${names[c.dataset._comp]}: ${c.parsed.y}`;
     },
   };
   _maCharts.session = new Chart(ctx, {
     type: 'bar',
     data: { labels: allDates.map(d => d.slice(5)), datasets },
     options: opts,
-    plugins: [maEnergyBarLabels],
+    plugins: [maStackLabels],
   });
 
   // AI analysis — non-blocking, updates panel when ready
