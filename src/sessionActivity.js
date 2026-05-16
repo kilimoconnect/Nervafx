@@ -249,21 +249,15 @@ function processHours(hourKeys, byTime, onlyLast = false) {
     // ── Currency strength (Step 8) ──────────────────────────────────────────
     const ccyStrength = computeCurrencyStrengths(candles, sessionOpenPrices);
 
-    // ── Issue 10: Currency dominance concentration ──────────────────────────
-    // Herfindahl-style: (HHI - uniform) / (max - uniform) → 0–100
-    // High score = one or two currencies dominating cleanly.
-    // Low score = many currencies of similar strength (chaotic rotation).
-    let dominanceScore = 0, strongestCcy = null, weakestCcy = null;
+    // ── Currency dispersion (for dominance — computed after ccyStrength) ───────
+    // Dominance is finalised after breadthScore + rawAgreementRatio are known.
+    let strongestCcy = null, weakestCcy = null, _dispersion = 0;
     {
-      const ccyEntries = Object.entries(ccyStrength);
-      const ccyTotal   = ccyEntries.reduce((s, [, v]) => s + Math.abs(v), 0);
-      if (ccyTotal > 0) {
-        const shares = ccyEntries.map(([, v]) => Math.abs(v) / ccyTotal);
-        const hhi    = shares.reduce((s, v) => s + v * v, 0); // 1/8 to 1.0
-        dominanceScore = round1(Math.min(100, Math.max(0, (hhi - 1/8) / (1 - 1/8) * 100)));
-        const sorted   = [...ccyEntries].sort((a, b) => b[1] - a[1]);
-        strongestCcy   = sorted[0][0];                        // highest positive strength
-        weakestCcy     = sorted[sorted.length - 1][0];        // lowest (most negative)
+      const sorted = Object.entries(ccyStrength).sort((a, b) => b[1] - a[1]);
+      if (sorted.length) {
+        strongestCcy  = sorted[0][0];
+        weakestCcy    = sorted[sorted.length - 1][0];
+        _dispersion   = sorted[0][1] - sorted[sorted.length - 1][1]; // max − min
       }
     }
 
@@ -324,8 +318,20 @@ function processHours(hourKeys, byTime, onlyLast = false) {
     const activePairs  = smoothMoveVals.filter(m => m >= 1.0).length;
     const breadthScore = round1((activePairs / TOTAL) * 100);
 
-    // Step 8: agreement score
-    const agreementScore = totalActive > 0 ? round1((alignedActive / totalActive) * 100) : 0;
+    // Step 8: agreement score — weighted by participation to prevent inflation.
+    // Raw ratio from a tiny active sample (e.g. 5 pairs) produces misleadingly
+    // high agreement. Multiplying by sqrt(breadth/100) penalises low participation:
+    //   breadth=18%, raw=86% → effective = 86 × sqrt(0.18) ≈ 36
+    //   breadth=70%, raw=86% → effective = 86 × sqrt(0.70) ≈ 72
+    const rawAgreementRatio = totalActive > 0 ? alignedActive / totalActive : 0;
+    const agreementScore    = round1(rawAgreementRatio * Math.sqrt(breadthScore / 100) * 100);
+
+    // Dominance: dispersion × participation × agreement → clean directional market.
+    // High dispersion with low breadth = weak signal; broad participation required.
+    // Normalised to 0–100 (reference dispersion 1% = 0.010 as full scale).
+    const dominanceScore = round1(Math.min(100,
+      (_dispersion / 0.010) * (breadthScore / 100) * rawAgreementRatio * 100
+    ));
 
     // Step 9: volatility score
     const volatilityScore = normalizedRanges.length > 0
