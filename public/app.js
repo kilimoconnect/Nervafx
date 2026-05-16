@@ -1609,10 +1609,61 @@ const ME_CYCLE_COLOR   = {
   EXHAUSTION:  '#ef4444',
 };
 
-function _meCycleBar(value, color) {
-  const pct = Math.min(100, Math.max(0, parseFloat(value) || 0));
-  return `<div class="me-bar-track">
-    <div class="me-bar-fill" style="width:${pct}%;background:${color}"></div>
+function _meCompBar(value) {
+  const v   = Math.min(100, Math.max(0, parseFloat(value) || 0));
+  const col = v >= 60 ? '#22c55e' : v >= 40 ? '#0ea5e9' : v >= 20 ? '#f59e0b' : '#475569';
+  return `<div class="me-comp-bar-track">
+    <div class="me-comp-bar-fill" style="width:${v}%;background:${col}"></div>
+  </div>`;
+}
+
+function _meSessionCard(name, s) {
+  const sessColor  = ME_SESSION_COLOR[name];
+  const label      = ME_SESSION_LABEL[name];
+  const cycle      = s?.energy_cycle || 'DEAD';
+  const cycleColor = ME_CYCLE_COLOR[cycle] || '#64748b';
+
+  if (!s) {
+    return `<div class="me-card">
+      <div class="me-card-head">
+        <span class="me-card-sess" style="color:${sessColor}">${label}</span>
+        <span class="me-card-cycle" style="--bc:${cycleColor}">—</span>
+      </div>
+      <div class="me-card-comps me-card-empty">No data</div>
+    </div>`;
+  }
+
+  const comps = [
+    { label: 'Movement',  val: s.movement_score  },
+    { label: 'Breadth',   val: s.breadth_score   },
+    { label: 'Agreement', val: s.agreement_score  },
+    { label: 'Volatility',val: s.volatility_score },
+  ];
+
+  const compRows = comps.map(c => {
+    const v = Math.round(parseFloat(c.val) || 0);
+    return `<div class="me-comp-row">
+      <span class="me-comp-label">${c.label}</span>
+      ${_meCompBar(c.val)}
+      <span class="me-comp-val">${v}</span>
+    </div>`;
+  }).join('');
+
+  const energy   = Math.round(parseFloat(s.market_energy)       || 0);
+  const ready    = Math.round(parseFloat(s.expansion_readiness) || 0);
+  const rColor   = ready >= 75 ? '#f59e0b' : ready >= 50 ? '#22c55e' : ready >= 25 ? '#0ea5e9' : '#475569';
+
+  return `<div class="me-card">
+    <div class="me-card-head">
+      <span class="me-card-sess" style="color:${sessColor}">${label}</span>
+      <span class="me-card-cycle" style="--bc:${cycleColor}">${cycle}</span>
+    </div>
+    <div class="me-card-comps">${compRows}</div>
+    <div class="me-card-foot">
+      <span class="me-foot-item">Energy <strong>${energy}</strong></span>
+      <span class="me-foot-sep">·</span>
+      <span class="me-foot-item" style="color:${rColor}">Readiness <strong>${ready}</strong></span>
+    </div>
   </div>`;
 }
 
@@ -1625,60 +1676,12 @@ function renderMarketEnergy(sessions) {
     return;
   }
 
-  // Pad to include all 4 sessions in fixed order
-  const ORDER = ['ASIA', 'LONDON', 'NEW_YORK', 'LOW_LIQUIDITY'];
+  const ORDER  = ['ASIA', 'LONDON', 'NEW_YORK', 'LOW_LIQUIDITY'];
   const byName = Object.fromEntries(sessions.map(s => [s.session_name, s]));
 
-  function energyRow(name) {
-    const s     = byName[name];
-    const color = ME_SESSION_COLOR[name];
-    const label = ME_SESSION_LABEL[name];
-    if (!s) {
-      return `<div class="me-row">
-        <span class="me-sess" style="color:${color}">${label}</span>
-        <span class="me-cycle-badge" style="--bc:${ME_CYCLE_COLOR.DEAD}">—</span>
-        ${_meCycleBar(0, color)}
-        <span class="me-num">—</span>
-      </div>`;
-    }
-    const cycleColor = ME_CYCLE_COLOR[s.energy_cycle] || '#64748b';
-    return `<div class="me-row">
-      <span class="me-sess" style="color:${color}">${label}</span>
-      <span class="me-cycle-badge" style="--bc:${cycleColor}">${s.energy_cycle}</span>
-      ${_meCycleBar(s.market_energy, cycleColor)}
-      <span class="me-num">${Math.round(s.market_energy ?? 0)}</span>
-    </div>`;
-  }
-
-  function readinessRow(name) {
-    const s     = byName[name];
-    const color = ME_SESSION_COLOR[name];
-    const label = ME_SESSION_LABEL[name];
-    const val   = s ? Math.round(s.expansion_readiness ?? 0) : null;
-    // Readiness colour: high = amber (pressure), low = slate
-    const rColor = val == null ? '#475569'
-                 : val >= 75  ? '#f59e0b'
-                 : val >= 50  ? '#22c55e'
-                 : val >= 25  ? '#0ea5e9'
-                 : '#475569';
-    return `<div class="me-row">
-      <span class="me-sess" style="color:${color}">${label}</span>
-      ${_meCycleBar(val ?? 0, rColor)}
-      <span class="me-num">${val ?? '—'}</span>
-    </div>`;
-  }
-
-  el.innerHTML = `
-    <div class="me-grid">
-      <div class="me-panel">
-        <div class="me-panel-hd">Current Energy Cycle</div>
-        ${ORDER.map(energyRow).join('')}
-      </div>
-      <div class="me-panel">
-        <div class="me-panel-hd">Expansion Readiness</div>
-        ${ORDER.map(readinessRow).join('')}
-      </div>
-    </div>`;
+  el.innerHTML = `<div class="me-card-grid">
+    ${ORDER.map(name => _meSessionCard(name, byName[name] || null)).join('')}
+  </div>`;
 }
 
 async function fetchMarketActivity() {

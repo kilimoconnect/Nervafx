@@ -3828,7 +3828,7 @@ body::after {
   .h-fc, .h-prev { display: none; }
 }
 
-/* ─── Market Energy — Steps 15–16 ─────────────────────────────────────────── */
+/* ─── Market Energy — session cards ───────────────────────────────────────── */
 
 .ma-display { padding: 4px 0 8px; }
 
@@ -3839,92 +3839,119 @@ body::after {
   font-size: 12px;
 }
 
-/* Two-panel grid */
-.me-grid {
+/* 4-card grid: 2×2 desktop, 1-col mobile */
+.me-card-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  padding: 4px 2px;
+  gap: 12px;
+  padding: 2px 0;
 }
 
-@media (max-width: 799px) {
-  .me-grid { grid-template-columns: 1fr; }
+@media (max-width: 699px) {
+  .me-card-grid { grid-template-columns: 1fr; }
 }
 
-/* Individual panel */
-.me-panel {
+/* Individual session card */
+.me-card {
+  background: rgba(255,255,255,.03);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px 10px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
 }
 
-.me-panel-hd {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: .6px;
-  text-transform: uppercase;
-  color: var(--text-dim);
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 2px;
-}
-
-/* Session row */
-.me-row {
-  display: grid;
-  grid-template-columns: 68px auto 1fr 32px;
+/* Card header: session name + cycle badge */
+.me-card-head {
+  display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 28px;
 }
 
-/* Session name pill */
-.me-sess {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: .2px;
+.me-card-sess {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .3px;
 }
 
-/* Cycle badge — Panel 1 only */
-.me-cycle-badge {
+.me-card-cycle {
   font-size: 9px;
   font-weight: 800;
   letter-spacing: .5px;
   text-transform: uppercase;
-  padding: 2px 6px;
+  padding: 2px 7px;
   border-radius: 4px;
-  background: color-mix(in srgb, var(--bc) 15%, transparent);
+  background: color-mix(in srgb, var(--bc) 14%, transparent);
   color: var(--bc);
-  border: 1px solid color-mix(in srgb, var(--bc) 30%, transparent);
-  white-space: nowrap;
+  border: 1px solid color-mix(in srgb, var(--bc) 28%, transparent);
 }
 
-/* Bar track */
-.me-bar-track {
-  height: 6px;
+/* Component rows */
+.me-card-comps {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.me-card-empty {
+  color: var(--text-dim);
+  font-size: 11px;
+  padding: 4px 0;
+}
+
+.me-comp-row {
+  display: grid;
+  grid-template-columns: 68px 1fr 28px;
+  align-items: center;
+  gap: 7px;
+}
+
+.me-comp-label {
+  font-size: 10px;
+  color: var(--text-dim);
+  font-weight: 500;
+}
+
+.me-comp-bar-track {
+  height: 5px;
   border-radius: 3px;
-  background: var(--border);
+  background: rgba(255,255,255,.07);
   overflow: hidden;
 }
 
-.me-bar-fill {
+.me-comp-bar-fill {
   height: 100%;
   border-radius: 3px;
   transition: width .4s ease;
 }
 
-/* Numeric value */
-.me-num {
+.me-comp-val {
   font-size: 11px;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
   color: var(--text);
   text-align: right;
-  font-variant-numeric: tabular-nums;
 }
 
-/* Readiness row has no badge — 3-col grid */
-.me-panel:last-child .me-row {
-  grid-template-columns: 68px 1fr 32px;
+/* Card footer: Energy · Readiness */
+.me-card-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.me-foot-item strong {
+  font-weight: 800;
+  color: var(--text);
+}
+
+.me-foot-sep {
+  color: var(--border);
 }
 
 
