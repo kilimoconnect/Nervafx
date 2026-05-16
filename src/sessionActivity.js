@@ -125,19 +125,23 @@ function classifyEnergyCycle(mov, brd, agr, vol, streak, accel, prev) {
   const brdFalling = prev ? brd < prev.breadth   : false;
   const agrFalling = prev ? agr < prev.agreement : false;
 
-  if (mov < 20 && brd < 20 && vol < 25)                           return 'DEAD';
-  if (mov >= 75 && brd >= 70 && agr >= 70 && vol >= 70)           return 'EXPLOSIVE';
-  if (mov >= 60 && brd >= 55 && agr >= 60)                        return 'EXPANSION';
-  if (mov >= 50 && brdFalling && agrFalling && accel < 0)         return 'EXHAUSTION';
-  if (mov < 35 && brd < 35 && vol < 40 && streak >= 1)            return 'COMPRESSION';
+  if (mov < 20 && brd < 20 && vol < 25)                              return 'DEAD';
+  if (mov >= 75 && brd >= 70 && agr >= 70 && vol >= 70)              return 'EXPLOSIVE';
+  if (mov >= 60 && brd >= 55 && agr >= 60)                           return 'EXPANSION';
+  // EXHAUSTION: expansion dying — elevated movement but breadth or agreement
+  // retreating with meaningful negative acceleration (accel < −3 avoids noise).
+  // Threshold lowered to mov ≥ 40 to catch post-expansion fade before it
+  // drops all the way to COMPRESSION.
+  if (mov >= 40 && accel < -3 && (brdFalling || agrFalling))         return 'EXHAUSTION';
+  if (mov < 35 && brd < 35 && vol < 40 && streak >= 1)               return 'COMPRESSION';
   // Compression streak accumulating but not yet at full thresholds
-  if (streak >= 1 && mov < 50 && brd < 50)                        return 'PRESSURE_BUILDING';
+  if (streak >= 1 && mov < 50 && brd < 50)                           return 'PRESSURE_BUILDING';
   // Movement and breadth both rising — energy loading
-  if (movRising && brdRising)                                      return 'TRANSITION';
+  if (movRising && brdRising)                                         return 'TRANSITION';
   // High agreement with moderate movement — organized, directional market
-  if (agr >= 60 && mov >= 35)                                      return 'CONTROLLED';
+  if (agr >= 60 && mov >= 35)                                         return 'CONTROLLED';
   // Decent movement and breadth, no compression — healthy participation
-  if (mov >= 35 && brd >= 35)                                      return 'BALANCED';
+  if (mov >= 35 && brd >= 35)                                         return 'BALANCED';
   return 'CONTROLLED';
 }
 
@@ -326,14 +330,19 @@ function processHours(hourKeys, byTime, onlyLast = false) {
     const marketEnergy = round1(Math.min(100, rawEnergy * qualityMult));
 
     // Step 13: expansion readiness (separate from energy)
+    // accelScore captures the "waking signal" — positive acceleration means energy
+    // is starting to shift even while compression streak remains elevated.
+    // Maps: accel = +25 → 100, accel = 0 → 50, accel = −25 → 0
     const streakScore      = Math.min(100, compressionStreak * 25);
     const compressionScore = round1(((100 - movementScore) * (100 - breadthScore)) / 100);
     const sessQualScore    = SESSION_QUALITY_SCORE[session] || 50;
+    const accelScore       = Math.min(100, Math.max(0, 50 + acceleration * 2));
     const expansionReadiness = round1(Math.min(100,
-      0.40 * streakScore
-      + 0.25 * compressionScore
-      + 0.20 * sessQualScore
-      + 0.15 * agreementScore
+      0.35 * streakScore       // compression persistence (main driver)
+      + 0.20 * compressionScore // depth of current compression
+      + 0.15 * sessQualScore    // session quality bonus
+      + 0.10 * agreementScore   // directional organization
+      + 0.20 * accelScore       // acceleration shift — first signs of waking activity
     ));
 
     // Step 14: energy cycle classification

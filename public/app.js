@@ -1712,26 +1712,40 @@ function _meSessionCard(name, s) {
 }
 
 function _meExpansionPressurePanel(ep) {
-  if (!ep) return '';
-  const { streak, risk, chain } = ep;
-
-  const riskColor = risk === 'HIGH'     ? '#f59e0b'
-                  : risk === 'BUILDING' ? '#f97316'
-                  : risk === 'LOW'      ? '#0ea5e9'
+  const riskColor = ep?.risk === 'HIGH'     ? '#f59e0b'
+                  : ep?.risk === 'BUILDING' ? '#f97316'
+                  : ep?.risk === 'LOW'      ? '#0ea5e9'
                   : '#475569';
 
+  const streak = ep?.streak || 0;
   const body = streak === 0
     ? `<span class="me-press-none">No compression sequence — market is active or expanding.</span>`
-    : `<span class="me-press-chain">${chain.join(' → ')}</span>
+    : `<span class="me-press-chain">${ep.chain.join(' → ')}</span>
        <span class="me-press-count">${streak} session${streak !== 1 ? 's' : ''}</span>`;
 
   return `<div class="me-pressure-panel">
     <div class="me-pressure-head">
       <span class="me-pressure-title">Expansion Pressure</span>
-      <span class="me-pressure-badge" style="--bc:${riskColor}">${risk}</span>
+      <span class="me-pressure-badge" style="--bc:${riskColor}">${ep?.risk || 'NONE'}</span>
     </div>
     <div class="me-pressure-body">${body}</div>
+    <p class="me-narrative" id="me-narrative">Reading market structure…</p>
   </div>`;
+}
+
+async function fetchMarketEnergyNarrative(sessions, expansionPressure) {
+  const el = document.getElementById('me-narrative');
+  if (!el) return;
+  try {
+    const data = await api('/api/market-energy-narrative', {
+      method: 'POST',
+      body:   JSON.stringify({ sessions, expansionPressure }),
+    });
+    el.textContent = data.narrative || '';
+    el.style.display = data.narrative ? '' : 'none';
+  } catch (_) {
+    el.style.display = 'none';
+  }
 }
 
 function renderMarketEnergy(sessions, expansionPressure) {
@@ -1751,6 +1765,9 @@ function renderMarketEnergy(sessions, expansionPressure) {
       ${ORDER.map(name => _meSessionCard(name, byName[name] || null)).join('')}
     </div>
     ${_meExpansionPressurePanel(expansionPressure)}`;
+
+  // Narrative is slow (AI) — fire async after DOM is painted
+  fetchMarketEnergyNarrative(sessions, expansionPressure);
 }
 
 async function fetchMarketActivity() {
