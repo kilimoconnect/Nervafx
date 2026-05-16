@@ -1,30 +1,40 @@
 'use strict';
 
 /**
- * Session Activity Engine — Steps 4–11
+ * Session Activity Engine — Steps 4–14
  *
- * Step 4   Normalize:   normalized_move = pair_session_move / rolling-20-session avg
- * Step 5   EMA:         smooth_move = (prev_smooth + normalized_move) / 2
- * Step 6   Movement:    movement_score = clamp(avg(smooth_move) × 50, 0–100)
- * Step 7   Breadth:     active = smooth_move >= 1.0 → breadth_score = active/28 × 100
- * Step 8   Agreement:   based on currency strength vs actual pair direction (active pairs only)
- * Step 9   Volatility:  session_range normalized by 20-session avg → volatility_score
+ * Step 4   Normalize:    normalized_move = pair_session_move / rolling-20-session avg
+ * Step 5   EMA:          smooth_move = (prev_smooth + normalized_move) / 2
+ * Step 6   Movement:     movement_score = clamp(avg(smooth_move) × 50, 0–100)
+ * Step 7   Breadth:      active = smooth_move >= 1.0 → breadth_score = active/28 × 100
+ * Step 8   Agreement:    aligned active pairs / total active pairs × 100
+ * Step 9   Volatility:   normalized session range → volatility_score 0–100
  * Step 10  Acceleration: energy_base delta vs previous session
- * Step 11  Compression persistence: consecutive compressed sessions
+ * Step 11  Compression:  consecutive compressed session streak
+ * Step 12  Market energy: weighted composite × quality multiplier (agreement penalises chaos)
+ * Step 13  Expansion readiness: streak + compression + session quality + alignment (separate)
+ * Step 14  Energy cycle: DEAD / COMPRESSION / TRANSITION / EXPANSION / EXPLOSIVE / EXHAUSTION
  *
- * DB migration required — add to hourly_session_activity:
+ * DB migration required — new columns in hourly_session_activity:
  *   agreement_score    NUMERIC(5,1)
  *   volatility_score   NUMERIC(5,1)
  *   energy_base        NUMERIC(5,1)
  *   acceleration       NUMERIC(6,1)
  *   compression_streak INTEGER DEFAULT 0
  *   movement_magnitude NUMERIC(6,1)
+ *   market_energy      NUMERIC(5,1)
+ *   expansion_readiness NUMERIC(5,1)
+ *   energy_cycle       VARCHAR(20)
  *
- * Add to session_performance_summary:
- *   avg_agreement_score   NUMERIC(5,1)
- *   avg_volatility_score  NUMERIC(5,1)
- *   avg_energy_base       NUMERIC(5,1)
- *   avg_acceleration      NUMERIC(6,1)
+ * New columns in session_performance_summary:
+ *   avg_agreement_score    NUMERIC(5,1)
+ *   avg_volatility_score   NUMERIC(5,1)
+ *   avg_energy_base        NUMERIC(5,1)
+ *   avg_acceleration       NUMERIC(6,1)
+ *   avg_market_energy      NUMERIC(5,1)
+ *   avg_expansion_readiness NUMERIC(5,1)
+ *   dominant_cycle         VARCHAR(20)
+ *   compression_streak     INTEGER DEFAULT 0
  */
 
 const { supabase }          = require('./supabase');
@@ -36,9 +46,16 @@ const { config }            = require('./config');
 function round1(v) { return Math.round(v * 10) / 10; }
 function arrAvg(arr) { return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0; }
 
+// ─── Session quality scores (for expansion readiness) ─────────────────────────
+
+const SESSION_QUALITY_SCORE = {
+  LOW_LIQUIDITY: 0,
+  ASIA:          45,
+  LONDON:        80,
+  NEW_YORK:      80,
+};
+
 // ─── Candle fetch ─────────────────────────────────────────────────────────────
-// Fetch high, low, close — 300 candles ensures ~20 sessions of warmup for
-// rolling averages and EMA initialisation.
 
 async function fetchHourlyCandles(limit = 300) {
   const byTime = {};
@@ -71,27 +88,23 @@ function classifyHour(isoTime) {
   return getCurrentSession(new Date(isoTime)).session;
 }
 
-// ─── Currency strength (inline, from session-open moves) ─────────────────────
-// Computes a simple composite strength for each of 8 currencies using the
-// same candle data already loaded — no extra DB fetch needed.
+// ─── Currency strength (Step 8) ──────────────────────────────────────────────
+// Derived from same session-open candles — no extra DB fetch needed.
 
 const CURRENCIES = ['GBP', 'EUR', 'USD', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
 
 function computeCurrencyStrengths(candles, sessionOpenPrices) {
-  const sums  = {};
-  const counts = {};
+  const sums  = {}, counts = {};
   for (const ccy of CURRENCIES) { sums[ccy] = 0; counts[ccy] = 0; }
-
   for (const inst of config.instruments) {
     const [base, quote] = inst.split('_');
     const c    = candles[inst];
     const open = sessionOpenPrices[inst];
-    if (!c || open == null || open === 0) continue;
+    if (!c || !open || open === 0) continue;
     const move = (c.close - open) / open;
     sums[base]  += move;  counts[base]++;
     sums[quote] -= move;  counts[quote]++;
   }
-
   const strength = {};
   for (const ccy of CURRENCIES) {
     strength[ccy] = counts[ccy] > 0 ? sums[ccy] / counts[ccy] : 0;
@@ -99,34 +112,55 @@ function computeCurrencyStrengths(candles, sessionOpenPrices) {
   return strength;
 }
 
+// ─── Step 14: Energy cycle classification ────────────────────────────────────
+// Priority order: DEAD → EXPLOSIVE → EXPANSION → EXHAUSTION → COMPRESSION → TRANSITION → STABLE
+
+function classifyEnergyCycle(mov, brd, agr, vol, streak, accel, prev) {
+  const movRising  = prev ? mov > prev.movement   : false;
+  const brdRising  = prev ? brd > prev.breadth    : false;
+  const brdFalling = prev ? brd < prev.breadth    : false;
+  const agrFalling = prev ? agr < prev.agreement  : false;
+
+  if (mov < 20 && brd < 20 && vol < 25)                                         return 'DEAD';
+  if (mov >= 75 && brd >= 70 && agr >= 70 && vol >= 70)                         return 'EXPLOSIVE';
+  if (mov >= 60 && brd >= 55 && agr >= 60)                                       return 'EXPANSION';
+  if (mov >= 50 && brdFalling && agrFalling && accel < 0)                        return 'EXHAUSTION';
+  if (mov < 35 && brd < 35 && vol < 40 && streak >= 1)                           return 'COMPRESSION';
+  if (movRising && brdRising && agr < 60)                                        return 'TRANSITION';
+  return 'STABLE';
+}
+
 // ─── Core computation engine ──────────────────────────────────────────────────
 
 function processHours(hourKeys, byTime, onlyLast = false) {
   const TOTAL = config.instruments.length; // 28
-  const HIST  = 20;                        // rolling sessions for normalization
+  const HIST  = 20;
 
-  // Per-pair per-session rolling histories
-  const moveHistory  = {}; // inst → session → [final pair_session_move per past session]
-  const rangeHistory = {}; // inst → session → [final session_range per past session]
+  // Rolling per-pair per-session histories
+  const moveHistory  = {}; // inst → session → [final pair_session_move per completed session]
+  const rangeHistory = {}; // inst → session → [final session_range per completed session]
 
-  // EMA state per pair per session type (persists across hours and sessions)
+  // EMA state
   const pairEma = {}; // inst → session → smooth_move
 
-  // Current session state
+  // Current session tracking
   let currentSession    = null;
-  let sessionOpenPrices = {}; // inst → close of first H1 of this session
-  let sessionHigh       = {}; // inst → running max high
-  let sessionLow        = {}; // inst → running min low
-  let sessionFinalMove  = {}; // inst → latest pair_session_move (abs)
+  let sessionOpenPrices = {};
+  let sessionHigh       = {};
+  let sessionLow        = {};
+  let sessionFinalMove  = {};
 
-  // Cross-session state
-  let prevEnergyBase    = null; // avg energy_base of the previous completed session
-  let compressionStreak = 0;   // consecutive completed compressed sessions
-  let sessionEBList     = [];  // energy_base values within current session (for avg at close)
-  // Track running session averages for compression check at close
-  let sessionMovList    = [];
-  let sessionBrdList    = [];
-  let sessionVolList    = [];
+  // Cross-session carry-over
+  let prevEnergyBase    = null;
+  let prevSessionScores = null; // { movement, breadth, agreement, volatility } of previous session
+  let compressionStreak = 0;
+
+  // Running session accumulators (reset each new session)
+  let sessionEBList  = [];
+  let sessionMovList = [];
+  let sessionBrdList = [];
+  let sessionAgrList = [];
+  let sessionVolList = [];
 
   const rows = [];
 
@@ -138,7 +172,7 @@ function processHours(hourKeys, byTime, onlyLast = false) {
     if (session !== currentSession) {
       if (currentSession && currentSession !== 'LOW_LIQUIDITY') {
 
-        // Finalise move history for previous session
+        // Finalise move + range histories for completed session
         for (const inst of config.instruments) {
           const finalMove = sessionFinalMove[inst];
           if (finalMove != null) {
@@ -147,8 +181,6 @@ function processHours(hourKeys, byTime, onlyLast = false) {
             moveHistory[inst][currentSession].push(finalMove);
             if (moveHistory[inst][currentSession].length > HIST) moveHistory[inst][currentSession].shift();
           }
-
-          // Finalise range history for previous session
           const high = sessionHigh[inst];
           const low  = sessionLow[inst];
           const open = sessionOpenPrices[inst];
@@ -161,20 +193,21 @@ function processHours(hourKeys, byTime, onlyLast = false) {
           }
         }
 
-        // Compute session averages for compression check and energy base carry-over
+        // Capture session averages before resetting
         const avgMov = arrAvg(sessionMovList);
         const avgBrd = arrAvg(sessionBrdList);
+        const avgAgr = arrAvg(sessionAgrList);
         const avgVol = arrAvg(sessionVolList);
 
-        // Step 11: compressed session detection
-        if (avgMov < 35 && avgBrd < 35 && avgVol < 40) {
-          compressionStreak++;
-        } else {
-          compressionStreak = 0;
-        }
+        // Step 11: update compression streak
+        if (avgMov < 35 && avgBrd < 35 && avgVol < 40) compressionStreak++;
+        else compressionStreak = 0;
 
         // Step 10: carry energy base forward
         if (sessionEBList.length) prevEnergyBase = arrAvg(sessionEBList);
+
+        // Step 14: carry session scores forward for "rising/falling" detection
+        prevSessionScores = { movement: avgMov, breadth: avgBrd, agreement: avgAgr, volatility: avgVol };
       }
 
       // Reset for new session
@@ -185,6 +218,7 @@ function processHours(hourKeys, byTime, onlyLast = false) {
       sessionEBList     = [];
       sessionMovList    = [];
       sessionBrdList    = [];
+      sessionAgrList    = [];
       sessionVolList    = [];
 
       for (const [inst, c] of Object.entries(candles)) {
@@ -197,7 +231,7 @@ function processHours(hourKeys, byTime, onlyLast = false) {
 
     if (session === 'LOW_LIQUIDITY') continue;
 
-    // ── Running session high/low ────────────────────────────────────────────
+    // ── Update running session high/low ────────────────────────────────────
     for (const [inst, c] of Object.entries(candles)) {
       if (c.high != null && (sessionHigh[inst] == null || c.high > sessionHigh[inst])) sessionHigh[inst] = c.high;
       if (c.low  != null && (sessionLow[inst]  == null || c.low  < sessionLow[inst]))  sessionLow[inst]  = c.low;
@@ -206,11 +240,10 @@ function processHours(hourKeys, byTime, onlyLast = false) {
     // ── Currency strength (Step 8) ──────────────────────────────────────────
     const ccyStrength = computeCurrencyStrengths(candles, sessionOpenPrices);
 
-    // ── Per-pair calculations ───────────────────────────────────────────────
-    const smoothMoveVals    = [];
-    const normalizedRanges  = [];
-    let alignedActive = 0;
-    let totalActive   = 0;
+    // ── Per-pair calculations (Steps 3–9) ──────────────────────────────────
+    const smoothMoveVals   = [];
+    const normalizedRanges = [];
+    let alignedActive = 0, totalActive = 0;
     let bullish = 0, bearish = 0;
 
     for (const inst of config.instruments) {
@@ -218,13 +251,13 @@ function processHours(hourKeys, byTime, onlyLast = false) {
       const open = sessionOpenPrices[inst];
       if (!c || open == null || open === 0) continue;
 
-      // Step 3: raw pair session move (cumulative from session open)
+      // Step 3: raw pair session move
       const rawDir  = (c.close - open) / open;
       const rawMove = Math.abs(rawDir);
       sessionFinalMove[inst] = rawMove;
       if (rawDir > 0) bullish++; else if (rawDir < 0) bearish++;
 
-      // Step 4: normalize against rolling-20 avg for this pair × session
+      // Step 4: normalize against rolling-20 avg
       const mhist  = moveHistory[inst]?.[session] || [];
       const mhAvg  = mhist.length > 0 ? arrAvg(mhist) : rawMove;
       const normMov = mhAvg > 0 ? rawMove / mhAvg : 1.0;
@@ -236,21 +269,20 @@ function processHours(hourKeys, byTime, onlyLast = false) {
       pairEma[inst][session] = smoothMove;
       smoothMoveVals.push(smoothMove);
 
-      // Step 8: directional agreement — only for active pairs (smooth_move >= 1.0)
+      // Step 8: directional agreement (active pairs only)
       if (smoothMove >= 1.0) {
         totalActive++;
         const [base, quote] = inst.split('_');
-        const expectedDir = (ccyStrength[base] || 0) - (ccyStrength[quote] || 0);
+        const expectedDir   = (ccyStrength[base] || 0) - (ccyStrength[quote] || 0);
         if ((expectedDir > 0 && rawDir > 0) || (expectedDir < 0 && rawDir < 0)) alignedActive++;
       }
 
-      // Step 9: session range normalized by rolling-20 avg
-      const high = sessionHigh[inst];
-      const low  = sessionLow[inst];
+      // Step 9: session range normalized
+      const high = sessionHigh[inst], low = sessionLow[inst];
       if (high != null && low != null) {
-        const range  = (high - low) / open;
-        const rhist  = rangeHistory[inst]?.[session] || [];
-        const rhAvg  = rhist.length > 0 ? arrAvg(rhist) : range;
+        const range = (high - low) / open;
+        const rhist = rangeHistory[inst]?.[session] || [];
+        const rhAvg = rhist.length > 0 ? arrAvg(rhist) : range;
         normalizedRanges.push(rhAvg > 0 ? range / rhAvg : 1.0);
       }
     }
@@ -258,8 +290,8 @@ function processHours(hourKeys, byTime, onlyLast = false) {
     if (!smoothMoveVals.length) continue;
 
     // Step 6: movement score
-    const moveMagnitude = arrAvg(smoothMoveVals);
-    const movementScore = round1(Math.min(100, moveMagnitude * 50));
+    const moveMagnitude  = arrAvg(smoothMoveVals);
+    const movementScore  = round1(Math.min(100, moveMagnitude * 50));
 
     // Step 7: breadth score
     const activePairs  = smoothMoveVals.filter(m => m >= 1.0).length;
@@ -277,28 +309,60 @@ function processHours(hourKeys, byTime, onlyLast = false) {
     const energyBase   = round1(0.45 * movementScore + 0.35 * breadthScore + 0.20 * volatilityScore);
     const acceleration = prevEnergyBase != null ? round1(energyBase - prevEnergyBase) : 0;
 
-    // Accumulate session-level tracking lists
+    // Step 12: final market energy (agreement acts as quality multiplier — punishes chaos)
+    const rawEnergy    = 0.40 * movementScore + 0.30 * breadthScore + 0.20 * agreementScore + 0.10 * volatilityScore;
+    const qualityMult  = 0.5 + agreementScore / 200; // 0.5 (agr=0) → 1.0 (agr=100)
+    const marketEnergy = round1(Math.min(100, rawEnergy * qualityMult));
+
+    // Step 13: expansion readiness (separate from energy)
+    const streakScore      = Math.min(100, compressionStreak * 25);
+    const compressionScore = round1(((100 - movementScore) * (100 - breadthScore)) / 100);
+    const sessQualScore    = SESSION_QUALITY_SCORE[session] || 50;
+    const expansionReadiness = round1(Math.min(100,
+      0.40 * streakScore
+      + 0.25 * compressionScore
+      + 0.20 * sessQualScore
+      + 0.15 * agreementScore
+    ));
+
+    // Step 14: energy cycle classification
+    const energyCycle = classifyEnergyCycle(
+      movementScore, breadthScore, agreementScore, volatilityScore,
+      compressionStreak, acceleration, prevSessionScores
+    );
+
+    // Accumulate session lists for boundary calculations
     sessionEBList.push(energyBase);
     sessionMovList.push(movementScore);
     sessionBrdList.push(breadthScore);
+    sessionAgrList.push(agreementScore);
     sessionVolList.push(volatilityScore);
 
     rows.push({
-      time_utc:              hk,
-      session_name:          session,
-      movement_score:        movementScore,
-      breadth_score:         breadthScore,
-      agreement_score:       agreementScore,
-      volatility_score:      volatilityScore,
-      energy_base:           energyBase,
-      acceleration:          acceleration,
-      compression_streak:    compressionStreak,
-      compression_score:     round1(((100 - movementScore) * (100 - breadthScore)) / 100),
-      expansion_score:       round1((movementScore * breadthScore) / 100),
-      directional_agreement: agreementScore, // backward compat alias
-      pairs_moving:          activePairs,
-      pairs_quiet:           TOTAL - activePairs,
-      movement_magnitude:    round1(moveMagnitude * 100),
+      time_utc:             hk,
+      session_name:         session,
+      // Component scores
+      movement_score:       movementScore,
+      breadth_score:        breadthScore,
+      agreement_score:      agreementScore,
+      volatility_score:     volatilityScore,
+      // Derived
+      energy_base:          energyBase,
+      acceleration:         acceleration,
+      compression_score:    compressionScore,
+      expansion_score:      round1((movementScore * breadthScore) / 100),
+      // Final outputs
+      market_energy:        marketEnergy,
+      expansion_readiness:  expansionReadiness,
+      energy_cycle:         energyCycle,
+      // Persistence
+      compression_streak:   compressionStreak,
+      // Pair stats
+      pairs_moving:         activePairs,
+      pairs_quiet:          TOTAL - activePairs,
+      movement_magnitude:   round1(moveMagnitude * 100),
+      // Backward compat alias
+      directional_agreement: agreementScore,
     });
   }
 
@@ -310,7 +374,12 @@ function processHours(hourKeys, byTime, onlyLast = false) {
 async function computeSessionSummaries() {
   const { data: rawRows, error } = await supabase
     .from('hourly_session_activity')
-    .select('time_utc, session_name, movement_score, breadth_score, agreement_score, volatility_score, energy_base, acceleration, pairs_moving, directional_agreement, expansion_score, compression_streak')
+    .select([
+      'time_utc', 'session_name',
+      'movement_score', 'breadth_score', 'agreement_score', 'volatility_score',
+      'energy_base', 'acceleration', 'market_energy', 'expansion_readiness',
+      'energy_cycle', 'compression_streak', 'pairs_moving', 'expansion_score',
+    ].join(', '))
     .order('time_utc', { ascending: true });
   if (error || !rawRows?.length) return;
 
@@ -327,46 +396,59 @@ async function computeSessionSummaries() {
   const sessionHistory = {};
 
   const summaries = sortedKeys.map(key => {
-    const g         = groups[key];
-    const movements = g.hrs.map(h => parseFloat(h.movement_score)   || 0);
-    const breadths  = g.hrs.map(h => parseFloat(h.breadth_score)    || 0);
-    const agreements= g.hrs.map(h => parseFloat(h.agreement_score   ?? h.directional_agreement) || 0);
-    const vols      = g.hrs.map(h => parseFloat(h.volatility_score) || 0);
-    const ebs       = g.hrs.map(h => parseFloat(h.energy_base)      || 0);
-    const accels    = g.hrs.map(h => parseFloat(h.acceleration)     || 0);
-    const movingN   = g.hrs.map(h => parseInt(h.pairs_moving)       || 0);
+    const g   = groups[key];
+    const num = field => g.hrs.map(h => parseFloat(h[field]) || 0);
 
-    const avgMov  = arrAvg(movements);
-    const avgBrd  = arrAvg(breadths);
-    const avgAgr  = arrAvg(agreements);
-    const avgVol  = arrAvg(vols);
-    const avgEB   = arrAvg(ebs);
-    const avgAcc  = arrAvg(accels);
+    const movements = num('movement_score');
+    const breadths  = num('breadth_score');
+    const agrs      = num('agreement_score');
+    const vols      = num('volatility_score');
+    const ebs       = num('energy_base');
+    const accels    = num('acceleration');
+    const energies  = num('market_energy');
+    const readiness = num('expansion_readiness');
+    const movingN   = g.hrs.map(h => parseInt(h.pairs_moving) || 0);
 
-    // Expansion component vs last-10 same-session history
+    const avgMov     = arrAvg(movements);
+    const avgBrd     = arrAvg(breadths);
+    const avgAgr     = arrAvg(agrs);
+    const avgVol     = arrAvg(vols);
+    const avgEB      = arrAvg(ebs);
+    const avgAcc     = arrAvg(accels);
+    const avgEnergy  = arrAvg(energies);
+    const avgReady   = arrAvg(readiness);
+
+    // Expansion component vs last-10 same-session history (for session_energy_score)
     const hist    = sessionHistory[g.session] || [];
     const histAvg = hist.slice(-10).length > 0 ? arrAvg(hist.slice(-10)) : avgMov;
     const expComp = round1(Math.min(100, (histAvg > 0 ? avgMov / histAvg : 1.0) * 50));
     if (!sessionHistory[g.session]) sessionHistory[g.session] = [];
     sessionHistory[g.session].push(avgMov);
 
-    // Energy score: 40% movement + 35% breadth + 15% expansion + 10% agreement
+    // Legacy energy score (for existing code that reads session_energy_score)
     const energyScore = Math.min(100, Math.round(
       0.40 * avgMov + 0.35 * avgBrd + 0.15 * expComp + 0.10 * avgAgr
     ));
-
     let energyState = energyScore <= 15 ? 'DEAD'
                     : energyScore <= 35 ? 'COMPRESSION'
                     : energyScore <= 55 ? 'STABLE'
                     : energyScore <= 75 ? 'EXPANSION' : 'EXPLOSIVE';
     if (avgBrd < 50 && (energyState === 'EXPANSION' || energyState === 'EXPLOSIVE')) energyState = 'STABLE';
 
-    // Session-level compression persistence (max streak in this session's hours)
+    // Dominant energy cycle for this session
+    const cycleCounts = {};
+    for (const h of g.hrs) {
+      const c = h.energy_cycle || 'STABLE';
+      cycleCounts[c] = (cycleCounts[c] || 0) + 1;
+    }
+    const dominantCycle = Object.entries(cycleCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'STABLE';
+
     const maxStreak = g.hrs.reduce((m, h) => Math.max(m, parseInt(h.compression_streak) || 0), 0);
 
     return {
       session_date_utc:          g.date,
       session_name:              g.session,
+      // Component averages
       avg_movement_score:        round1(avgMov),
       avg_breadth_score:         round1(avgBrd),
       avg_directional_agreement: round1(avgAgr),
@@ -374,9 +456,16 @@ async function computeSessionSummaries() {
       avg_volatility_score:      round1(avgVol),
       avg_energy_base:           round1(avgEB),
       avg_acceleration:          round1(avgAcc),
+      // Final energy outputs
+      avg_market_energy:         round1(avgEnergy),
+      avg_expansion_readiness:   round1(avgReady),
+      // Legacy
       expansion_score:           expComp,
       session_energy_score:      energyScore,
       session_state:             energyState,
+      // Cycle
+      dominant_cycle:            dominantCycle,
+      // Stats
       pairs_moving_avg:          round1(arrAvg(movingN)),
       expansion_hours:           g.hrs.filter(h => parseFloat(h.expansion_score) >= 40).length,
       compression_hours:         g.hrs.filter(h => parseFloat(h.expansion_score) <  20).length,
@@ -430,11 +519,10 @@ async function calculateLatestSessionActivity() {
   if (error) throw new Error(`Hourly upsert: ${error.message}`);
 
   console.log(
-    `[SESSION_ACTIVITY] ✓ ${row.time_utc} | ${row.session_name}` +
-    ` | mov:${row.movement_score} brd:${row.breadth_score}` +
-    ` | agr:${row.agreement_score} vol:${row.volatility_score}` +
-    ` | eb:${row.energy_base} acc:${row.acceleration > 0 ? '+' : ''}${row.acceleration}` +
-    ` | streak:${row.compression_streak}`
+    `[SESSION_ACTIVITY] ✓ ${row.time_utc} | ${row.session_name} | ${row.energy_cycle}` +
+    ` | energy:${row.market_energy} ready:${row.expansion_readiness}` +
+    ` | mov:${row.movement_score} brd:${row.breadth_score} agr:${row.agreement_score} vol:${row.volatility_score}` +
+    ` | acc:${row.acceleration >= 0 ? '+' : ''}${row.acceleration} streak:${row.compression_streak}`
   );
 
   await computeSessionSummaries();
