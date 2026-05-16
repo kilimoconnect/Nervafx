@@ -1600,13 +1600,26 @@ function renderSession(data) {
 const ME_SESSION_COLOR = { ASIA: '#10b981', LONDON: '#3b82f6', NEW_YORK: '#a855f7', LOW_LIQUIDITY: '#475569' };
 const ME_SESSION_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York', LOW_LIQUIDITY: 'Low Liq.' };
 const ME_CYCLE_COLOR   = {
-  DEAD:        '#475569',
-  COMPRESSION: '#7c3aed',
-  TRANSITION:  '#f59e0b',
-  STABLE:      '#0ea5e9',
-  EXPANSION:   '#22c55e',
-  EXPLOSIVE:   '#f97316',
-  EXHAUSTION:  '#ef4444',
+  DEAD:             '#475569',
+  COMPRESSION:      '#7c3aed',
+  PRESSURE_BUILDING:'#f59e0b',
+  TRANSITION:       '#10b981',
+  CONTROLLED:       '#06b6d4',
+  BALANCED:         '#3b82f6',
+  EXPANSION:        '#22c55e',
+  EXPLOSIVE:        '#f97316',
+  EXHAUSTION:       '#ef4444',
+};
+const ME_CYCLE_LABEL = {
+  DEAD:             'Dead',
+  COMPRESSION:      'Compression',
+  PRESSURE_BUILDING:'Pressure Building',
+  TRANSITION:       'Transition',
+  CONTROLLED:       'Controlled',
+  BALANCED:         'Balanced',
+  EXPANSION:        'Expansion',
+  EXPLOSIVE:        'Explosive',
+  EXHAUSTION:       'Exhaustion',
 };
 
 function _meCompBar(value) {
@@ -1621,7 +1634,8 @@ function _meSessionCard(name, s) {
   const sessColor  = ME_SESSION_COLOR[name];
   const label      = ME_SESSION_LABEL[name];
   const cycle      = s?.energy_cycle || 'DEAD';
-  const cycleColor = ME_CYCLE_COLOR[cycle] || '#64748b';
+  const cycleColor = ME_CYCLE_COLOR[cycle]  || '#64748b';
+  const cycleLabel = ME_CYCLE_LABEL[cycle]  || cycle;
 
   if (!s) {
     return `<div class="me-card">
@@ -1634,10 +1648,10 @@ function _meSessionCard(name, s) {
   }
 
   const comps = [
-    { label: 'Movement',  val: s.movement_score  },
-    { label: 'Breadth',   val: s.breadth_score   },
-    { label: 'Agreement', val: s.agreement_score  },
-    { label: 'Volatility',val: s.volatility_score },
+    { label: 'Movement',   val: s.movement_score  },
+    { label: 'Breadth',    val: s.breadth_score   },
+    { label: 'Agreement',  val: s.agreement_score  },
+    { label: 'Volatility', val: s.volatility_score },
   ];
 
   const compRows = comps.map(c => {
@@ -1649,25 +1663,44 @@ function _meSessionCard(name, s) {
     </div>`;
   }).join('');
 
-  const energy   = Math.round(parseFloat(s.market_energy)       || 0);
-  const ready    = Math.round(parseFloat(s.expansion_readiness) || 0);
-  const rColor   = ready >= 75 ? '#f59e0b' : ready >= 50 ? '#22c55e' : ready >= 25 ? '#0ea5e9' : '#475569';
+  const energy = Math.round(parseFloat(s.market_energy) || 0);
 
   return `<div class="me-card">
     <div class="me-card-head">
       <span class="me-card-sess" style="color:${sessColor}">${label}</span>
-      <span class="me-card-cycle" style="--bc:${cycleColor}">${cycle}</span>
+      <span class="me-card-cycle" style="--bc:${cycleColor}">${cycleLabel}</span>
     </div>
     <div class="me-card-comps">${compRows}</div>
     <div class="me-card-foot">
       <span class="me-foot-item">Energy <strong>${energy}</strong></span>
-      <span class="me-foot-sep">·</span>
-      <span class="me-foot-item" style="color:${rColor}">Readiness <strong>${ready}</strong></span>
     </div>
   </div>`;
 }
 
-function renderMarketEnergy(sessions) {
+function _meExpansionPressurePanel(ep) {
+  if (!ep) return '';
+  const { streak, risk, chain } = ep;
+
+  const riskColor = risk === 'HIGH'     ? '#f59e0b'
+                  : risk === 'BUILDING' ? '#f97316'
+                  : risk === 'LOW'      ? '#0ea5e9'
+                  : '#475569';
+
+  const body = streak === 0
+    ? `<span class="me-press-none">No compression sequence — market is active or expanding.</span>`
+    : `<span class="me-press-chain">${chain.join(' → ')}</span>
+       <span class="me-press-count">${streak} session${streak !== 1 ? 's' : ''}</span>`;
+
+  return `<div class="me-pressure-panel">
+    <div class="me-pressure-head">
+      <span class="me-pressure-title">Expansion Pressure</span>
+      <span class="me-pressure-badge" style="--bc:${riskColor}">${risk}</span>
+    </div>
+    <div class="me-pressure-body">${body}</div>
+  </div>`;
+}
+
+function renderMarketEnergy(sessions, expansionPressure) {
   const el = document.getElementById('market-activity-display');
   if (!el) return;
 
@@ -1679,15 +1712,17 @@ function renderMarketEnergy(sessions) {
   const ORDER  = ['ASIA', 'LONDON', 'NEW_YORK', 'LOW_LIQUIDITY'];
   const byName = Object.fromEntries(sessions.map(s => [s.session_name, s]));
 
-  el.innerHTML = `<div class="me-card-grid">
-    ${ORDER.map(name => _meSessionCard(name, byName[name] || null)).join('')}
-  </div>`;
+  el.innerHTML = `
+    <div class="me-card-grid">
+      ${ORDER.map(name => _meSessionCard(name, byName[name] || null)).join('')}
+    </div>
+    ${_meExpansionPressurePanel(expansionPressure)}`;
 }
 
 async function fetchMarketActivity() {
   try {
     const data = await api('/api/market-energy');
-    renderMarketEnergy(data.sessions || []);
+    renderMarketEnergy(data.sessions || [], data.expansionPressure || null);
   } catch (_) {
     const el = document.getElementById('market-activity-display');
     if (el) el.innerHTML = '<p class="me-empty">Market Energy unavailable.</p>';

@@ -115,19 +115,30 @@ function computeCurrencyStrengths(candles, sessionOpenPrices) {
 // ─── Step 14: Energy cycle classification ────────────────────────────────────
 // Priority order: DEAD → EXPLOSIVE → EXPANSION → EXHAUSTION → COMPRESSION → TRANSITION → STABLE
 
+// Step 14 — Energy cycle classification
+// Priority: DEAD → EXPLOSIVE → EXPANSION → EXHAUSTION → COMPRESSION
+//           → PRESSURE_BUILDING → TRANSITION → CONTROLLED → BALANCED
+// STABLE has been removed — every output maps to a meaningful structural state.
 function classifyEnergyCycle(mov, brd, agr, vol, streak, accel, prev) {
-  const movRising  = prev ? mov > prev.movement   : false;
-  const brdRising  = prev ? brd > prev.breadth    : false;
-  const brdFalling = prev ? brd < prev.breadth    : false;
-  const agrFalling = prev ? agr < prev.agreement  : false;
+  const movRising  = prev ? mov > prev.movement  : false;
+  const brdRising  = prev ? brd > prev.breadth   : false;
+  const brdFalling = prev ? brd < prev.breadth   : false;
+  const agrFalling = prev ? agr < prev.agreement : false;
 
-  if (mov < 20 && brd < 20 && vol < 25)                                         return 'DEAD';
-  if (mov >= 75 && brd >= 70 && agr >= 70 && vol >= 70)                         return 'EXPLOSIVE';
-  if (mov >= 60 && brd >= 55 && agr >= 60)                                       return 'EXPANSION';
-  if (mov >= 50 && brdFalling && agrFalling && accel < 0)                        return 'EXHAUSTION';
-  if (mov < 35 && brd < 35 && vol < 40 && streak >= 1)                           return 'COMPRESSION';
-  if (movRising && brdRising && agr < 60)                                        return 'TRANSITION';
-  return 'STABLE';
+  if (mov < 20 && brd < 20 && vol < 25)                           return 'DEAD';
+  if (mov >= 75 && brd >= 70 && agr >= 70 && vol >= 70)           return 'EXPLOSIVE';
+  if (mov >= 60 && brd >= 55 && agr >= 60)                        return 'EXPANSION';
+  if (mov >= 50 && brdFalling && agrFalling && accel < 0)         return 'EXHAUSTION';
+  if (mov < 35 && brd < 35 && vol < 40 && streak >= 1)            return 'COMPRESSION';
+  // Compression streak accumulating but not yet at full thresholds
+  if (streak >= 1 && mov < 50 && brd < 50)                        return 'PRESSURE_BUILDING';
+  // Movement and breadth both rising — energy loading
+  if (movRising && brdRising)                                      return 'TRANSITION';
+  // High agreement with moderate movement — organized, directional market
+  if (agr >= 60 && mov >= 35)                                      return 'CONTROLLED';
+  // Decent movement and breadth, no compression — healthy participation
+  if (mov >= 35 && brd >= 35)                                      return 'BALANCED';
+  return 'CONTROLLED';
 }
 
 // ─── Core computation engine ──────────────────────────────────────────────────

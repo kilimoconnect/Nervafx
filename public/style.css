@@ -3954,4 +3954,66 @@ body::after {
   color: var(--border);
 }
 
+/* Expansion Pressure panel */
+.me-pressure-panel {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255,255,255,.02);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.me-pressure-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.me-pressure-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .6px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.me-pressure-badge {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--bc) 14%, transparent);
+  color: var(--bc);
+  border: 1px solid color-mix(in srgb, var(--bc) 28%, transparent);
+}
+
+.me-pressure-body {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.me-press-chain {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: .2px;
+}
+
+.me-press-count {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.me-press-none {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
 
