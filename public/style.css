@@ -4050,9 +4050,65 @@ body::after {
   color: var(--text-dim);
 }
 
+.me-press-score {
+  font-size: 11px;
+  color: var(--text-dim);
+  background: rgba(255,255,255,0.05);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
 .me-press-none {
   font-size: 11px;
   color: var(--text-dim);
+}
+
+/* Session-to-session delta indicators */
+.me-delta {
+  font-size: 10px;
+  font-weight: 700;
+  margin-left: 4px;
+  letter-spacing: -0.02em;
+}
+
+/* Energy flow row in pressure panel */
+.me-flow-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.me-flow-label {
+  font-size: 10px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-right: 4px;
+}
+.me-flow-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+.me-flow-sess {
+  font-size: 9px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.me-flow-val {
+  font-size: 12px;
+  font-weight: 700;
+}
+.me-flow-arrow {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin: 0 2px;
+  align-self: center;
 }
 
 /* AI narrative */

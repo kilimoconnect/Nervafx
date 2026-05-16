@@ -1639,6 +1639,16 @@ function _meCompBar(value) {
   </div>`;
 }
 
+function _meDelta(val) {
+  if (val == null) return '';
+  const n = Math.round(parseFloat(val) || 0);
+  if (n === 0) return '';
+  const sign  = n > 0 ? '+' : '';
+  const color = n > 0 ? '#22c55e' : '#ef4444';
+  const arrow = n > 0 ? '↑' : '↓';
+  return `<span class="me-delta" style="color:${color}">${sign}${n}${arrow}</span>`;
+}
+
 function _meDirBar(pct, color) {
   const v = Math.min(100, Math.max(0, parseFloat(pct) || 0));
   return `<div class="me-comp-bar-track">
@@ -1676,10 +1686,10 @@ function _meSessionCard(name, s) {
   const cycleLabel = ME_CYCLE_LABEL[cycle] || cycle;
 
   const comps = [
-    { label: 'Movement',   val: s.movement_score  },
-    { label: 'Breadth',    val: s.breadth_score   },
-    { label: 'Agreement',  val: s.agreement_score  },
-    { label: 'Volatility', val: s.volatility_score },
+    { label: 'Movement',   val: s.movement_score,   delta: s.delta_movement  },
+    { label: 'Breadth',    val: s.breadth_score,    delta: s.delta_breadth   },
+    { label: 'Agreement',  val: s.agreement_score,  delta: s.delta_agreement },
+    { label: 'Volatility', val: s.volatility_score, delta: null              },
   ];
 
   const compRows = comps.map(c => {
@@ -1687,7 +1697,7 @@ function _meSessionCard(name, s) {
     return `<div class="me-comp-row">
       <span class="me-comp-label">${c.label}</span>
       ${_meCompBar(c.val)}
-      <span class="me-comp-val">${v}</span>
+      <span class="me-comp-val">${v}${_meDelta(c.delta)}</span>
     </div>`;
   }).join('');
 
@@ -1728,7 +1738,8 @@ function _meSessionCard(name, s) {
       </div>
     </div>`;
 
-  const energy = Math.round(parseFloat(s.market_energy) || 0);
+  const energy    = Math.round(parseFloat(s.market_energy) || 0);
+  const readiness = Math.round(parseFloat(s.expansion_readiness) || 0);
 
   return `<div class="me-card">
     <div class="me-card-head">
@@ -1737,29 +1748,48 @@ function _meSessionCard(name, s) {
     </div>
     <div class="me-card-comps">${compRows}${dirRows}</div>
     <div class="me-card-foot">
-      <span class="me-foot-item">Energy <strong>${energy}</strong></span>
+      <span class="me-foot-item">Energy <strong>${energy}</strong>${_meDelta(s.delta_energy)}</span>
+      <span class="me-foot-item">Readiness <strong>${readiness}</strong></span>
     </div>
   </div>`;
 }
 
 function _meExpansionPressurePanel(ep) {
-  const riskColor = ep?.risk === 'HIGH'     ? '#f59e0b'
-                  : ep?.risk === 'BUILDING' ? '#f97316'
+  const riskColor = ep?.risk === 'HIGH'     ? '#ef4444'
+                  : ep?.risk === 'BUILDING' ? '#f59e0b'
                   : ep?.risk === 'LOW'      ? '#0ea5e9'
                   : '#475569';
 
   const streak = ep?.streak || 0;
-  const body = streak === 0
-    ? `<span class="me-press-none">No compression sequence — market is active or expanding.</span>`
-    : `<span class="me-press-chain">${ep.chain.join(' → ')}</span>
-       <span class="me-press-count">${streak} session${streak !== 1 ? 's' : ''}</span>`;
+  const score  = ep?.score  || 0;
+
+  // Compression sequence block
+  let compressionBlock;
+  if (streak === 0) {
+    compressionBlock = `<span class="me-press-none">No compression sequence — market is active or expanding.</span>`;
+  } else {
+    compressionBlock = `<span class="me-press-chain">${ep.chain.join(' → ')}</span>
+       <span class="me-press-count">${streak} session${streak !== 1 ? 's' : ''}</span>
+       <span class="me-press-score">Score ${score}</span>`;
+  }
+
+  // Carry-over energy flow (last 3–5 sessions)
+  let flowBlock = '';
+  if (ep?.carryOver?.length > 1) {
+    const flowItems = ep.carryOver.map(c => {
+      const col = c.energy >= 60 ? '#22c55e' : c.energy >= 35 ? '#0ea5e9' : c.energy >= 15 ? '#f59e0b' : '#475569';
+      return `<span class="me-flow-item"><span class="me-flow-sess">${c.session}</span><span class="me-flow-val" style="color:${col}">${c.energy}</span></span>`;
+    }).join('<span class="me-flow-arrow">→</span>');
+    flowBlock = `<div class="me-flow-row"><span class="me-flow-label">Energy flow</span>${flowItems}</div>`;
+  }
 
   return `<div class="me-pressure-panel">
     <div class="me-pressure-head">
       <span class="me-pressure-title">Expansion Pressure</span>
       <span class="me-pressure-badge" style="--bc:${riskColor}">${ep?.risk || 'NONE'}</span>
     </div>
-    <div class="me-pressure-body">${body}</div>
+    <div class="me-pressure-body">${compressionBlock}</div>
+    ${flowBlock}
     <p class="me-narrative" id="me-narrative">Reading market structure…</p>
   </div>`;
 }
