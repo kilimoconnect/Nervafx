@@ -372,12 +372,32 @@ function processHours(hourKeys, byTime, onlyLast = false) {
       pairs_moving:         activePairs,
       pairs_quiet:          TOTAL - activePairs,
       movement_magnitude:   round1(moveMagnitude * 100),
+      // Directional breadth — NOT a column in hourly_session_activity; used only for session aggregation
+      bullish_breadth:      round1((bullish / TOTAL) * 100),
+      bearish_breadth:      round1((bearish / TOTAL) * 100),
       // Backward compat alias
       directional_agreement: agreementScore,
     });
   }
 
   return onlyLast ? rows.slice(-1) : rows;
+}
+
+// ─── Hourly upsert column filter ─────────────────────────────────────────────
+// bullish_breadth / bearish_breadth are in-memory only — not columns in
+// hourly_session_activity. Strip them before upserting to that table.
+
+const HOURLY_COLS = new Set([
+  'time_utc', 'session_name',
+  'movement_score', 'breadth_score', 'agreement_score', 'volatility_score',
+  'energy_base', 'acceleration', 'compression_score', 'expansion_score',
+  'market_energy', 'expansion_readiness', 'energy_cycle',
+  'compression_streak', 'pairs_moving', 'pairs_quiet',
+  'movement_magnitude', 'directional_agreement',
+]);
+
+function toHourlyRow(r) {
+  return Object.fromEntries(Object.entries(r).filter(([k]) => HOURLY_COLS.has(k)));
 }
 
 // ─── Step 15: Build per-session rows for market_energy_sessions ──────────────
@@ -397,10 +417,10 @@ function buildSessionRows(hourRows) {
 
     const cycleCounts = {};
     for (const r of g.rows) {
-      const c = r.energy_cycle || 'STABLE';
+      const c = r.energy_cycle || 'BALANCED';
       cycleCounts[c] = (cycleCounts[c] || 0) + 1;
     }
-    const dominantCycle = Object.entries(cycleCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'STABLE';
+    const dominantCycle = Object.entries(cycleCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'BALANCED';
 
     const firstRow = g.rows[0];
     const lastRow  = g.rows[g.rows.length - 1];
@@ -427,6 +447,8 @@ function buildSessionRows(hourRows) {
       energy_cycle:        dominantCycle,
       active_pairs:        Math.round(avg(n('pairs_moving'))),
       aligned_pairs:       null,
+      bullish_breadth:     round1(avg(n('bullish_breadth'))),
+      bearish_breadth:     round1(avg(n('bearish_breadth'))),
       details: {
         hours: g.rows.length,
         hourly: g.rows.map(r => ({
@@ -575,7 +597,7 @@ async function backfillSessionActivity() {
 
   const { error } = await supabase
     .from('hourly_session_activity')
-    .upsert(rows, { onConflict: 'time_utc', ignoreDuplicates: false });
+    .upsert(rows.map(toHourlyRow), { onConflict: 'time_utc', ignoreDuplicates: false });
   if (error) throw new Error(`Hourly upsert: ${error.message}`);
   console.log(`[SESSION_ACTIVITY] Backfilled ${rows.length} rows.`);
 
@@ -596,10 +618,10 @@ async function calculateLatestSessionActivity() {
   const row = allRows[allRows.length - 1];
   if (!row) return;
 
-  // Upsert the latest hourly row
+  // Upsert the latest hourly row (strip in-memory-only fields)
   const { error } = await supabase
     .from('hourly_session_activity')
-    .upsert([row], { onConflict: 'time_utc', ignoreDuplicates: false });
+    .upsert([toHourlyRow(row)], { onConflict: 'time_utc', ignoreDuplicates: false });
   if (error) throw new Error(`Hourly upsert: ${error.message}`);
 
   // Upsert current + recent sessions (last 4 to cover today's full cycle)

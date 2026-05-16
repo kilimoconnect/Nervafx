@@ -1630,22 +1630,41 @@ function _meCompBar(value) {
   </div>`;
 }
 
+function _meDirBar(pct, color) {
+  const v = Math.min(100, Math.max(0, parseFloat(pct) || 0));
+  return `<div class="me-comp-bar-track">
+    <div class="me-comp-bar-fill" style="width:${v}%;background:${color}"></div>
+  </div>`;
+}
+
 function _meSessionCard(name, s) {
   const sessColor  = ME_SESSION_COLOR[name];
   const label      = ME_SESSION_LABEL[name];
-  const cycle      = s?.energy_cycle || 'DEAD';
-  const cycleColor = ME_CYCLE_COLOR[cycle]  || '#64748b';
-  const cycleLabel = ME_CYCLE_LABEL[cycle]  || cycle;
 
-  if (!s) {
-    return `<div class="me-card">
+  // LOW_LIQUIDITY with no DB row: show structural DEAD card — no fake numbers
+  if (!s && name === 'LOW_LIQUIDITY') {
+    return `<div class="me-card me-card--dim">
       <div class="me-card-head">
         <span class="me-card-sess" style="color:${sessColor}">${label}</span>
-        <span class="me-card-cycle" style="--bc:${cycleColor}">—</span>
+        <span class="me-card-cycle" style="--bc:${ME_CYCLE_COLOR.DEAD}">Dead</span>
+      </div>
+      <div class="me-card-comps me-card-empty">Rollover zone · market closed</div>
+    </div>`;
+  }
+
+  if (!s) {
+    return `<div class="me-card me-card--dim">
+      <div class="me-card-head">
+        <span class="me-card-sess" style="color:${sessColor}">${label}</span>
+        <span class="me-card-cycle" style="--bc:#475569">—</span>
       </div>
       <div class="me-card-comps me-card-empty">No data</div>
     </div>`;
   }
+
+  const cycle      = s.energy_cycle || 'BALANCED';
+  const cycleColor = ME_CYCLE_COLOR[cycle] || '#64748b';
+  const cycleLabel = ME_CYCLE_LABEL[cycle] || cycle;
 
   const comps = [
     { label: 'Movement',   val: s.movement_score  },
@@ -1663,6 +1682,21 @@ function _meSessionCard(name, s) {
     </div>`;
   }).join('');
 
+  const bull = Math.round(parseFloat(s.bullish_breadth) || 0);
+  const bear = Math.round(parseFloat(s.bearish_breadth) || 0);
+  const dirRows = `
+    <div class="me-dir-sep"></div>
+    <div class="me-comp-row">
+      <span class="me-comp-label me-comp-bull">Bullish</span>
+      ${_meDirBar(bull, '#22c55e')}
+      <span class="me-comp-val">${bull}%</span>
+    </div>
+    <div class="me-comp-row">
+      <span class="me-comp-label me-comp-bear">Bearish</span>
+      ${_meDirBar(bear, '#ef4444')}
+      <span class="me-comp-val">${bear}%</span>
+    </div>`;
+
   const energy = Math.round(parseFloat(s.market_energy) || 0);
 
   return `<div class="me-card">
@@ -1670,7 +1704,7 @@ function _meSessionCard(name, s) {
       <span class="me-card-sess" style="color:${sessColor}">${label}</span>
       <span class="me-card-cycle" style="--bc:${cycleColor}">${cycleLabel}</span>
     </div>
-    <div class="me-card-comps">${compRows}</div>
+    <div class="me-card-comps">${compRows}${dirRows}</div>
     <div class="me-card-foot">
       <span class="me-foot-item">Energy <strong>${energy}</strong></span>
     </div>

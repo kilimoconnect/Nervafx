@@ -3950,9 +3950,20 @@ body::after {
   color: var(--text);
 }
 
-.me-foot-sep {
-  color: var(--border);
+.me-foot-sep { color: var(--border); }
+
+/* Directional breadth separator */
+.me-dir-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0 2px;
 }
+
+.me-comp-bull { color: #22c55e !important; }
+.me-comp-bear { color: #ef4444 !important; }
+
+/* Dimmed card for no-data / LOW_LIQUIDITY */
+.me-card--dim { opacity: .55; }
 
 /* Expansion Pressure panel */
 .me-pressure-panel {

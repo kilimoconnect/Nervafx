@@ -48,7 +48,8 @@ module.exports = async function handler(req, res) {
       'session_date, session_name, session_start, session_end, ' +
       'movement_score, breadth_score, agreement_score, volatility_score, ' +
       'acceleration_score, compression_score, compression_streak, ' +
-      'expansion_readiness, market_energy, energy_cycle, active_pairs';
+      'expansion_readiness, market_energy, energy_cycle, active_pairs, ' +
+      'bullish_breadth, bearish_breadth';
 
     // Fetch last 7 days, all rows, newest first
     const { data, error } = await sb
