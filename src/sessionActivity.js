@@ -369,6 +369,75 @@ function processHours(hourKeys, byTime, onlyLast = false) {
   return onlyLast ? rows.slice(-1) : rows;
 }
 
+// ─── Step 15: Build per-session rows for market_energy_sessions ──────────────
+
+function buildSessionRows(hourRows) {
+  const groups = {};
+  for (const r of hourRows) {
+    const date = r.time_utc.slice(0, 10);
+    const key  = `${date}:${r.session_name}`;
+    if (!groups[key]) groups[key] = { date, session: r.session_name, rows: [] };
+    groups[key].rows.push(r);
+  }
+
+  return Object.values(groups).map(g => {
+    const n   = field => g.rows.map(r => parseFloat(r[field]) || 0);
+    const avg = arr   => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+
+    const cycleCounts = {};
+    for (const r of g.rows) {
+      const c = r.energy_cycle || 'STABLE';
+      cycleCounts[c] = (cycleCounts[c] || 0) + 1;
+    }
+    const dominantCycle = Object.entries(cycleCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'STABLE';
+
+    const firstRow = g.rows[0];
+    const lastRow  = g.rows[g.rows.length - 1];
+
+    const sessionStart = new Date(firstRow.time_utc);
+    const sessionEnd   = new Date(lastRow.time_utc);
+    sessionEnd.setUTCHours(sessionEnd.getUTCHours() + 1);
+
+    return {
+      session_date:        g.date,
+      session_name:        g.session,
+      session_zone:        null,
+      session_start:       sessionStart.toISOString(),
+      session_end:         sessionEnd.toISOString(),
+      movement_score:      round1(avg(n('movement_score'))),
+      breadth_score:       round1(avg(n('breadth_score'))),
+      agreement_score:     round1(avg(n('agreement_score'))),
+      volatility_score:    round1(avg(n('volatility_score'))),
+      acceleration_score:  round1(avg(n('acceleration'))),
+      compression_score:   round1(avg(n('compression_score'))),
+      compression_streak:  lastRow.compression_streak || 0,
+      expansion_readiness: round1(avg(n('expansion_readiness'))),
+      market_energy:       round1(avg(n('market_energy'))),
+      energy_cycle:        dominantCycle,
+      active_pairs:        Math.round(avg(n('pairs_moving'))),
+      aligned_pairs:       null,
+      details: {
+        hours: g.rows.length,
+        hourly: g.rows.map(r => ({
+          time:                r.time_utc,
+          energy_cycle:        r.energy_cycle,
+          market_energy:       r.market_energy,
+          expansion_readiness: r.expansion_readiness,
+        })),
+      },
+    };
+  });
+}
+
+async function upsertMarketEnergySessions(sessionRows) {
+  if (!sessionRows.length) return;
+  const { error } = await supabase
+    .from('market_energy_sessions')
+    .upsert(sessionRows, { onConflict: 'session_date,session_name', ignoreDuplicates: false });
+  if (error) throw new Error(`market_energy_sessions upsert: ${error.message}`);
+  console.log(`[SESSION_ACTIVITY] ${sessionRows.length} market_energy_sessions rows stored.`);
+}
+
 // ─── Session summaries ────────────────────────────────────────────────────────
 
 async function computeSessionSummaries() {
@@ -499,6 +568,7 @@ async function backfillSessionActivity() {
   if (error) throw new Error(`Hourly upsert: ${error.message}`);
   console.log(`[SESSION_ACTIVITY] Backfilled ${rows.length} rows.`);
 
+  await upsertMarketEnergySessions(buildSessionRows(rows));
   await computeSessionSummaries();
   return { rows: rows.length };
 }
@@ -510,13 +580,20 @@ async function calculateLatestSessionActivity() {
   const hourKeys = Object.keys(byTime).sort();
   if (hourKeys.length < 2) return;
 
-  const [row] = processHours(hourKeys, byTime, true);
+  // Full compute — need all rows to build accurate session aggregates
+  const allRows = processHours(hourKeys, byTime);
+  const row = allRows[allRows.length - 1];
   if (!row) return;
 
+  // Upsert the latest hourly row
   const { error } = await supabase
     .from('hourly_session_activity')
     .upsert([row], { onConflict: 'time_utc', ignoreDuplicates: false });
   if (error) throw new Error(`Hourly upsert: ${error.message}`);
+
+  // Upsert current + recent sessions (last 4 to cover today's full cycle)
+  const sessionRows = buildSessionRows(allRows);
+  await upsertMarketEnergySessions(sessionRows.slice(-4));
 
   console.log(
     `[SESSION_ACTIVITY] ✓ ${row.time_utc} | ${row.session_name} | ${row.energy_cycle}` +

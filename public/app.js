@@ -1597,19 +1597,98 @@ function renderSession(data) {
 
 // ─── Market Energy ────────────────────────────────────────────────────────────
 
-let _maData = null;
+const ME_SESSION_COLOR = { ASIA: '#10b981', LONDON: '#3b82f6', NEW_YORK: '#a855f7', LOW_LIQUIDITY: '#475569' };
+const ME_SESSION_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York', LOW_LIQUIDITY: 'Low Liq.' };
+const ME_CYCLE_COLOR   = {
+  DEAD:        '#475569',
+  COMPRESSION: '#7c3aed',
+  TRANSITION:  '#f59e0b',
+  STABLE:      '#0ea5e9',
+  EXPANSION:   '#22c55e',
+  EXPLOSIVE:   '#f97316',
+  EXHAUSTION:  '#ef4444',
+};
 
-// Market Energy constants — rebuilt per new session spec
-const ME_SESSION_COLOR = { LOW_LIQUIDITY: '#475569', ASIA: '#10b981', LONDON: '#3b82f6', NEW_YORK: '#a855f7' };
-const ME_STATE_COLOR   = { DEAD: '#475569', COMPRESSION: '#7c3aed', STABLE: '#0ea5e9', EXPANSION: '#22c55e', EXPLOSIVE: '#f59e0b' };
+function _meCycleBar(value, color) {
+  const pct = Math.min(100, Math.max(0, parseFloat(value) || 0));
+  return `<div class="me-bar-track">
+    <div class="me-bar-fill" style="width:${pct}%;background:${color}"></div>
+  </div>`;
+}
+
+function renderMarketEnergy(sessions) {
+  const el = document.getElementById('market-activity-display');
+  if (!el) return;
+
+  if (!sessions || !sessions.length) {
+    el.innerHTML = '<p class="me-empty">No energy data — run pipeline to populate.</p>';
+    return;
+  }
+
+  // Pad to include all 4 sessions in fixed order
+  const ORDER = ['ASIA', 'LONDON', 'NEW_YORK', 'LOW_LIQUIDITY'];
+  const byName = Object.fromEntries(sessions.map(s => [s.session_name, s]));
+
+  function energyRow(name) {
+    const s     = byName[name];
+    const color = ME_SESSION_COLOR[name];
+    const label = ME_SESSION_LABEL[name];
+    if (!s) {
+      return `<div class="me-row">
+        <span class="me-sess" style="color:${color}">${label}</span>
+        <span class="me-cycle-badge" style="--bc:${ME_CYCLE_COLOR.DEAD}">—</span>
+        ${_meCycleBar(0, color)}
+        <span class="me-num">—</span>
+      </div>`;
+    }
+    const cycleColor = ME_CYCLE_COLOR[s.energy_cycle] || '#64748b';
+    return `<div class="me-row">
+      <span class="me-sess" style="color:${color}">${label}</span>
+      <span class="me-cycle-badge" style="--bc:${cycleColor}">${s.energy_cycle}</span>
+      ${_meCycleBar(s.market_energy, cycleColor)}
+      <span class="me-num">${Math.round(s.market_energy ?? 0)}</span>
+    </div>`;
+  }
+
+  function readinessRow(name) {
+    const s     = byName[name];
+    const color = ME_SESSION_COLOR[name];
+    const label = ME_SESSION_LABEL[name];
+    const val   = s ? Math.round(s.expansion_readiness ?? 0) : null;
+    // Readiness colour: high = amber (pressure), low = slate
+    const rColor = val == null ? '#475569'
+                 : val >= 75  ? '#f59e0b'
+                 : val >= 50  ? '#22c55e'
+                 : val >= 25  ? '#0ea5e9'
+                 : '#475569';
+    return `<div class="me-row">
+      <span class="me-sess" style="color:${color}">${label}</span>
+      ${_meCycleBar(val ?? 0, rColor)}
+      <span class="me-num">${val ?? '—'}</span>
+    </div>`;
+  }
+
+  el.innerHTML = `
+    <div class="me-grid">
+      <div class="me-panel">
+        <div class="me-panel-hd">Current Energy Cycle</div>
+        ${ORDER.map(energyRow).join('')}
+      </div>
+      <div class="me-panel">
+        <div class="me-panel-hd">Expansion Readiness</div>
+        ${ORDER.map(readinessRow).join('')}
+      </div>
+    </div>`;
+}
 
 async function fetchMarketActivity() {
   try {
-    const data = await api('/api/session-activity?days=7');
-    _maData = data;
+    const data = await api('/api/market-energy');
+    renderMarketEnergy(data.sessions || []);
+  } catch (_) {
     const el = document.getElementById('market-activity-display');
-    if (el) el.innerHTML = '<p class="empty-state" style="color:var(--text-dim);font-size:11px">Market Energy rebuilding…</p>';
-  } catch (_) { /* non-critical */ }
+    if (el) el.innerHTML = '<p class="me-empty">Market Energy unavailable.</p>';
+  }
 }
 
 
