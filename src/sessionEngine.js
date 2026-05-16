@@ -1,54 +1,48 @@
 'use strict';
 
 /**
- * Phase 10 — Trading Session Engine (DST-aware)
+ * Session Engine — fixed UTC boundaries, 4 sessions
  *
- * Sessions are defined in LOCAL timezone hours (Europe/London, America/New_York).
- * UTC ranges are computed dynamically via Intl, so London BST/GMT and NY EDT/EST
- * shifts are handled automatically — including the weeks where they diverge.
+ * LOW_LIQUIDITY : 21:00–00:00 UTC   (dead / rollover zone)
+ * ASIA          : 00:00–07:00 UTC
+ * LONDON        : 07:00–13:00 UTC
+ * NEW_YORK      : 13:00–21:00 UTC
  *
- * Standard overlap (both winter):  13:00–17:00 UTC
- * NY switches to EDT before London: 12:00–17:00 UTC
- * Both on summer time:              12:00–16:00 UTC
- * London reverts before NY:         13:00–16:00 UTC  ← the "weird week"
+ * Overlaps are NOT separate sessions — they are annotated zones inside
+ * the containing session:
+ *   London Open / Transition zone : 07:00–09:00 UTC  (inside LONDON)
+ *   London/NY Overlap zone        : 13:00–16:00 UTC  (inside NEW_YORK)
+ *
+ * Weekend rule:
+ *   Saturday 00:00 → Sunday 21:00 UTC  = LOW_LIQUIDITY (market closed)
+ *   Sunday   21:00+ UTC                = LOW_LIQUIDITY (thin open, not tradeable)
  */
 
-// ─── Timezone helpers ─────────────────────────────────────────────────────────
+// ─── Session boundaries (UTC hours, inclusive open, exclusive close) ──────────
 
-/**
- * Returns the current local hour (0–23) in a given IANA timezone.
- */
-function getLocalHour(timezone, date = new Date()) {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: timezone,
-    hour:     '2-digit',
-    hour12:   false,
-  }).formatToParts(date);
-  const h = parseInt(parts.find(p => p.type === 'hour').value, 10);
-  return h === 24 ? 0 : h; // some engines return 24 for midnight
-}
+const SESSION_BOUNDARIES = [
+  { session: 'ASIA',          open: 0,  close: 7  },
+  { session: 'LONDON',        open: 7,  close: 13 },
+  { session: 'NEW_YORK',      open: 13, close: 21 },
+  { session: 'LOW_LIQUIDITY', open: 21, close: 24 }, // 21:00–00:00
+];
 
-/**
- * Returns the UTC offset in whole hours for a timezone at a given moment.
- * e.g. BST → +1,  GMT → 0,  EDT → -4,  EST → -5
- */
-function getUTCOffset(timezone, date = new Date()) {
-  const utcHour   = date.getUTCHours();
-  const localHour = getLocalHour(timezone, date);
-  let offset = localHour - utcHour;
-  if (offset >  12) offset -= 24;
-  if (offset < -12) offset += 24;
-  return offset;
-}
+// Zones annotated inside their parent session (informational only)
+const SESSION_ZONES = {
+  LONDON:   [{ name: 'LONDON_OPEN',  open: 7,  close: 9  }],
+  NEW_YORK: [{ name: 'NY_OVERLAP',   open: 13, close: 16 }],
+};
 
-/**
- * Converts a local session hour to its UTC equivalent for today.
- */
-function localToUTC(localHour, utcOffset) {
-  return ((localHour - utcOffset) % 24 + 24) % 24;
-}
+// ─── Session metadata ─────────────────────────────────────────────────────────
 
-// ─── Quality definitions ──────────────────────────────────────────────────────
+const SESSION_META = {
+  LOW_LIQUIDITY: { label: 'Low Liquidity', quality: 'BLOCKED',   tradesAllowed: false, baseActivity: 5  },
+  ASIA:          { label: 'Asia',          quality: 'MEDIUM',    tradesAllowed: true,  baseActivity: 48 },
+  LONDON:        { label: 'London',        quality: 'HIGH',      tradesAllowed: true,  baseActivity: 80 },
+  NEW_YORK:      { label: 'New York',      quality: 'HIGH',      tradesAllowed: true,  baseActivity: 85 },
+};
+
+// ─── Quality config ───────────────────────────────────────────────────────────
 
 const QUALITY_CONF_DELTA = {
   VERY_HIGH: +10,
@@ -66,139 +60,83 @@ const QUALITY_DESC = {
   BLOCKED:   'Trading not permitted this session',
 };
 
-// ─── Session static metadata ──────────────────────────────────────────────────
-// localOpen/localClose = hours in the session's primary timezone
-
-const SESSION_META = {
-  DEAD_HOURS:  { label: 'Low Liquidity',      quality: 'BLOCKED',   tradesAllowed: false, baseActivity: 5,  tz: null,                 localOpen: null, localClose: null },
-  ASIA:        { label: 'Asia',               quality: 'MEDIUM',    tradesAllowed: true,  baseActivity: 48, tz: 'Asia/Tokyo',          localOpen: 9,    localClose: 18   },
-  LONDON:      { label: 'London',             quality: 'HIGH',      tradesAllowed: true,  baseActivity: 80, tz: 'Europe/London',       localOpen: 8,    localClose: 13   },
-  LONDON_NY:   { label: 'London/NY Overlap',  quality: 'VERY_HIGH', tradesAllowed: true,  baseActivity: 92, tz: 'Europe/London',       localOpen: 13,   localClose: 17   },
-  LATE_NY:     { label: 'Late NY',            quality: 'LOW',       tradesAllowed: true,  baseActivity: 28, tz: 'America/New_York',    localOpen: 8,    localClose: 17   },
-};
-
-// ─── Pair-session deltas ───────────────────────────────────────────────────────
+// ─── Pair-session activity deltas (kept for signal confidence adjustment) ─────
 
 const PAIR_SESSION_DELTA = {
-  GBP_USD: { LONDON: +8, LONDON_NY: +8, LATE_NY: -5, ASIA: -5 },
-  GBP_JPY: { LONDON: +8, LONDON_NY: +8, ASIA: +3,   LATE_NY: -5 },
-  GBP_CHF: { LONDON: +8, LONDON_NY: +5, ASIA: -3 },
-  GBP_CAD: { LONDON: +8, LONDON_NY: +8, ASIA: -3 },
+  GBP_USD: { LONDON: +8, NEW_YORK: +6, ASIA: -5 },
+  GBP_JPY: { LONDON: +8, NEW_YORK: +5, ASIA: +3 },
+  GBP_CHF: { LONDON: +8, NEW_YORK: +4, ASIA: -3 },
+  GBP_CAD: { LONDON: +8, NEW_YORK: +6, ASIA: -3 },
   GBP_AUD: { LONDON: +8, ASIA: -5 },
   GBP_NZD: { LONDON: +8, ASIA: -5 },
-  EUR_USD:  { LONDON: +5, LONDON_NY: +10, ASIA: -3 },
-  EUR_JPY:  { LONDON: +5, LONDON_NY:  +8 },
-  EUR_GBP:  { LONDON: +8, LONDON_NY: +5, ASIA: -5 },
+  EUR_USD:  { LONDON: +5, NEW_YORK: +8, ASIA: -3 },
+  EUR_JPY:  { LONDON: +5, NEW_YORK: +6 },
+  EUR_GBP:  { LONDON: +8, NEW_YORK: +4, ASIA: -5 },
   EUR_CHF:  { LONDON: +5 },
-  EUR_CAD:  { LONDON_NY: +8, LONDON: +5 },
-  EUR_AUD:  { LONDON: +5, LONDON_NY: +5 },
-  EUR_NZD:  { LONDON: +5, LONDON_NY: +5 },
-  USD_JPY:  { LONDON_NY: +8, LONDON: +3, ASIA: +5 },
-  USD_CHF:  { LONDON_NY: +8, LONDON: +3 },
-  USD_CAD:  { LONDON_NY: +10, LATE_NY: +3 },
-  AUD_USD:  { ASIA: +8, LONDON_NY: +5 },
-  NZD_USD:  { ASIA: +8, LONDON_NY: +5 },
-  AUD_NZD:  { ASIA: +10, LONDON: -3, LONDON_NY: -3 },
-  AUD_JPY:  { ASIA: +8,  LONDON: +5, LONDON_NY: +5 },
-  NZD_JPY:  { ASIA: +8,  LONDON: +5, LONDON_NY: +5 },
-  CAD_CHF:  { LONDON_NY: +8, LONDON: +3 },
-  CAD_JPY:  { LONDON_NY: +8, LONDON: +3, ASIA: +3 },
+  EUR_CAD:  { NEW_YORK: +7, LONDON: +5 },
+  EUR_AUD:  { LONDON: +5, NEW_YORK: +4 },
+  EUR_NZD:  { LONDON: +5, NEW_YORK: +4 },
+  USD_JPY:  { NEW_YORK: +7, LONDON: +3, ASIA: +5 },
+  USD_CHF:  { NEW_YORK: +7, LONDON: +3 },
+  USD_CAD:  { NEW_YORK: +9 },
+  AUD_USD:  { ASIA: +8, NEW_YORK: +4 },
+  NZD_USD:  { ASIA: +8, NEW_YORK: +4 },
+  AUD_NZD:  { ASIA: +10, LONDON: -3, NEW_YORK: -3 },
+  AUD_JPY:  { ASIA: +8, LONDON: +5, NEW_YORK: +4 },
+  NZD_JPY:  { ASIA: +8, LONDON: +5, NEW_YORK: +4 },
+  CAD_CHF:  { NEW_YORK: +7, LONDON: +3 },
+  CAD_JPY:  { NEW_YORK: +7, LONDON: +3, ASIA: +3 },
   CHF_JPY:  { LONDON: +5, ASIA: +3 },
 };
 
 // ─── Core session detection ───────────────────────────────────────────────────
 
 function getCurrentSession(now = new Date()) {
-  const day = now.getUTCDay(); // 0=Sun … 6=Sat
+  const utcHour = now.getUTCHours();
+  const day     = now.getUTCDay(); // 0=Sun … 6=Sat
 
-  // ── Weekend blocks ───────────────────────────────────────────────────────
-  if (day === 6) {
-    return _build('DEAD_HOURS', now, { blocked: true, blockReason: 'Market closed — weekend' });
-  }
-  if (day === 0) {
-    const utcHour = now.getUTCHours();
-    if (utcHour < 22) {
-      return _build('DEAD_HOURS', now, { blocked: true });
-    }
-    // 22:00+ Sunday: Sydney thin open — low liquidity, Asia proper hasn't started
-    return _build('DEAD_HOURS', now, { blocked: true, blockReason: 'Low liquidity — Sydney thin open' });
+  // Weekend: Saturday all day + Sunday before 21:00 UTC
+  if (day === 6 || (day === 0 && utcHour < 21)) {
+    return _build('LOW_LIQUIDITY', now, { blocked: true, blockReason: 'Market closed — weekend' });
   }
 
-  // ── Live local hours for key centres ────────────────────────────────────
-  const londonHour = getLocalHour('Europe/London',    now);
-  const nyHour     = getLocalHour('America/New_York', now);
-  const tokyoHour  = getLocalHour('Asia/Tokyo',       now);
+  const sessName = _sessionForHour(utcHour);
+  const blocked  = sessName === 'LOW_LIQUIDITY';
+  return _build(sessName, now, blocked ? { blocked: true, blockReason: 'Low liquidity — rollover zone' } : {});
+}
 
-  const londonOpen = londonHour >= 8  && londonHour < 17;
-  const nyOpen     = nyHour     >= 8  && nyHour     < 17;
-  const tokyoOpen  = tokyoHour  >= 9  && tokyoHour  < 18;
-
-  // ── Rollover: first hour after NY close (DST-aware: ~21 or 22 UTC) ──────
-  // Defined as NY 17:00–18:00 local, regardless of season.
-  if (nyHour >= 17 && nyHour < 18) {
-    return _build('DEAD_HOURS', now, {
-      blocked:     true,
-      blockReason: `Rollover — NY close ${nyHour}:00 local`,
-    });
+function _sessionForHour(utcHour) {
+  for (const b of SESSION_BOUNDARIES) {
+    if (utcHour >= b.open && utcHour < b.close) return b.session;
   }
+  return 'LOW_LIQUIDITY'; // 00:00 wraps from 23:00
+}
 
-  // Post-rollover, pre-Tokyo dead zone (NY 18:00+ and nothing else open)
-  if (!londonOpen && !nyOpen && !tokyoOpen) {
-    return _build('DEAD_HOURS', now, { blocked: true, blockReason: 'Low liquidity — all major centres closed' });
-  }
-
-  // ── Active session priority ──────────────────────────────────────────────
-  // LONDON + NY both open → best window (DST-aware overlap)
-  if (londonOpen && nyOpen) {
-    return _build('LONDON_NY', now);
-  }
-
-  // London only
-  if (londonOpen) {
-    return _build('LONDON', now);
-  }
-
-  // NY only (London already closed)
-  if (nyOpen) {
-    return _build('LATE_NY', now);
-  }
-
-  // Asia (Tokyo)
-  if (tokyoOpen) {
-    return _build('ASIA', now);
-  }
-
-  // Fallback
-  return _build('DEAD_HOURS', now, { blocked: true, blockReason: 'Dead hours — low liquidity' });
+// Returns the active zone name within a session (or null)
+function getSessionZone(session, utcHour) {
+  const zones = SESSION_ZONES[session] || [];
+  const z = zones.find(z => utcHour >= z.open && utcHour < z.close);
+  return z?.name || null;
 }
 
 // ─── Build session result ─────────────────────────────────────────────────────
 
 function _build(sessName, now, opts = {}) {
-  const meta         = SESSION_META[sessName] || SESSION_META.DEAD_HOURS;
-  const quality      = opts.qualityOverride  || meta.quality;
-  const baseActivity = opts.activityOverride ?? meta.baseActivity;
+  const meta          = SESSION_META[sessName] || SESSION_META.LOW_LIQUIDITY;
+  const quality       = meta.quality;
   const tradesAllowed = opts.blocked != null ? !opts.blocked : meta.tradesAllowed;
+  const utcHour       = now.getUTCHours();
+  const zone          = tradesAllowed ? getSessionZone(sessName, utcHour) : null;
 
-  // DST-aware UTC range for display
-  const loOffset = getUTCOffset('Europe/London',    now);
-  const nyOffset = getUTCOffset('America/New_York', now);
+  const b = SESSION_BOUNDARIES.find(x => x.session === sessName);
 
-  const utcRange = _computeUTCRange(sessName, loOffset, nyOffset);
-
-  // Detect whether DST is in effect (differs from canonical winter times)
-  const canonicalLoOffset = 0;  // London winter = UTC+0
-  const canonicalNyOffset = -5; // NY winter = UTC-5
-  const dstActive = loOffset !== canonicalLoOffset || nyOffset !== canonicalNyOffset;
-
-  // Activity ramp (sin arc within session window)
-  let activityIndex = tradesAllowed ? baseActivity : 0;
-  if (tradesAllowed && utcRange) {
-    const duration = ((utcRange.close - utcRange.open) + 24) % 24 || 1;
-    const elapsed  = ((now.getUTCHours() - utcRange.open) + 24) % 24;
+  let activityIndex = tradesAllowed ? meta.baseActivity : 0;
+  if (tradesAllowed && b) {
+    const duration = b.close - b.open || 1;
+    const elapsed  = utcHour - b.open;
     const progress = Math.max(0, Math.min(1, elapsed / duration));
     const ramp     = Math.sin(progress * Math.PI);
-    activityIndex  = Math.round(Math.max(5, baseActivity * 0.75 + baseActivity * 0.25 * ramp));
+    activityIndex  = Math.round(Math.max(5, meta.baseActivity * 0.75 + meta.baseActivity * 0.25 * ramp));
   }
 
   return {
@@ -210,56 +148,27 @@ function _build(sessName, now, opts = {}) {
     block_reason:    opts.blockReason || null,
     activity_index:  activityIndex,
     conf_delta:      tradesAllowed ? (QUALITY_CONF_DELTA[quality] ?? 0) : -999,
-    start_hour:      utcRange?.open  ?? null,
-    end_hour:        utcRange?.close ?? null,
-    dst_active:      dstActive,
-    london_offset:   loOffset,
-    ny_offset:       nyOffset,
-    utc_hour:        now.getUTCHours(),
+    zone,                            // e.g. 'NY_OVERLAP', 'LONDON_OPEN', or null
+    start_hour:      b?.open  ?? null,
+    end_hour:        b?.close ?? null,
+    utc_hour:        utcHour,
     utc_day:         now.getUTCDay(),
     time:            now.toISOString(),
   };
 }
 
-function _computeUTCRange(sessName, loOffset, nyOffset) {
-  const n = h => ((Math.round(h) % 24 + 24) % 24); // normalize to 0–23
-
-  switch (sessName) {
-    case 'ASIA':        return { open: 0,           close: 9 };           // Tokyo UTC+9, no DST
-    case 'LONDON':      return { open: n(8 - loOffset),  close: n(13 - loOffset) };
-    case 'LONDON_NY':   return {
-      open:  n(Math.max(8 - loOffset, 8 - nyOffset)),   // later  of London & NY open
-      close: n(Math.min(17 - loOffset, 17 - nyOffset)), // earlier of London & NY close
-    };
-    case 'LATE_NY':     return { open: n(13 - nyOffset), close: n(17 - nyOffset) };
-    default:            return null;
-  }
-}
-
 // ─── Session timeline for dashboard ──────────────────────────────────────────
-/**
- * Returns an array of display sessions with dynamic UTC ranges.
- * Used by the dashboard timeline and api/session.js.
- */
-function getSessionTimeline(now = new Date()) {
-  const loOffset = getUTCOffset('Europe/London',    now);
-  const nyOffset = getUTCOffset('America/New_York', now);
-  const current  = getCurrentSession(now);
 
-  return [
-    'ASIA', 'LONDON', 'LONDON_NY', 'LATE_NY', 'DEAD_HOURS',
-  ].map(name => {
-    const meta  = SESSION_META[name];
-    const range = _computeUTCRange(name, loOffset, nyOffset);
-    return {
-      name,
-      label:     meta.label,
-      quality:   meta.quality.toLowerCase().replace(/_/g, '-'),
-      startHour: range?.open  ?? null,
-      endHour:   range?.close ?? null,
-      isCurrent: name === current.session,
-    };
-  });
+function getSessionTimeline(now = new Date()) {
+  const current = getCurrentSession(now);
+  return SESSION_BOUNDARIES.map(b => ({
+    name:      b.session,
+    label:     SESSION_META[b.session]?.label || b.session,
+    quality:   (SESSION_META[b.session]?.quality || 'MEDIUM').toLowerCase().replace(/_/g, '-'),
+    startHour: b.open,
+    endHour:   b.close,
+    isCurrent: b.session === current.session,
+  }));
 }
 
 // ─── Apply session filter to a pair ──────────────────────────────────────────
@@ -286,4 +195,4 @@ function applySessionFilter(instrument, rawConfidence, sessionObj) {
   };
 }
 
-module.exports = { getCurrentSession, applySessionFilter, getSessionTimeline };
+module.exports = { getCurrentSession, applySessionFilter, getSessionTimeline, getSessionZone, SESSION_BOUNDARIES, SESSION_META };
