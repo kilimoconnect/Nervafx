@@ -25,10 +25,11 @@ function avgField(arr, field) {
   return arr.reduce((s, row) => s + (parseFloat(row[field]) || 0), 0) / arr.length;
 }
 
-/** % deviation of current value from historical average. Null if no baseline. */
-function pctVsAvg(current, avgVal) {
-  if (!avgVal) return null;
-  return Math.round((current / avgVal - 1) * 100);
+/** % deviation of current value from a reference (avg or prev). Null if no reference or extreme. */
+function pctVsRef(current, ref) {
+  if (!ref) return null;
+  const pct = Math.round((current / ref - 1) * 100);
+  return Math.abs(pct) > 200 ? null : pct; // cap: near-zero ref produces meaningless extremes
 }
 
 /**
@@ -169,20 +170,20 @@ module.exports = async function handler(req, res) {
       let rel   = {};
 
       if (bl) {
-        // % vs historical session average
-        rel.norm_movement   = pctVsAvg(row.movement_score,  bl.avg_movement);
-        rel.norm_breadth    = pctVsAvg(row.breadth_score,   bl.avg_breadth);
-        rel.norm_agreement  = pctVsAvg(row.agreement_score, bl.avg_agreement);
-        rel.norm_volatility = pctVsAvg(row.volatility_score,bl.avg_volatility);
-        rel.norm_energy     = pctVsAvg(row.market_energy,   bl.avg_energy);
+        // % vs historical session average (this session vs its own typical behavior)
+        rel.norm_movement   = pctVsRef(row.movement_score,  bl.avg_movement);
+        rel.norm_breadth    = pctVsRef(row.breadth_score,   bl.avg_breadth);
+        rel.norm_agreement  = pctVsRef(row.agreement_score, bl.avg_agreement);
+        rel.norm_volatility = pctVsRef(row.volatility_score,bl.avg_volatility);
+        rel.norm_energy     = pctVsRef(row.market_energy,   bl.avg_energy);
         rel.baseline_n      = bl.n;
 
-        // Delta vs PREVIOUS occurrence of the SAME session (not cross-session)
+        // % vs previous occurrence of the SAME session (Asia vs last Asia, not vs London)
         if (bl.prev_row) {
-          rel.prev_movement  = r(row.movement_score  - bl.prev_row.movement_score);
-          rel.prev_breadth   = r(row.breadth_score   - bl.prev_row.breadth_score);
-          rel.prev_agreement = r(row.agreement_score - bl.prev_row.agreement_score);
-          rel.prev_energy    = r(row.market_energy   - bl.prev_row.market_energy);
+          rel.prev_movement  = pctVsRef(row.movement_score,  bl.prev_row.movement_score);
+          rel.prev_breadth   = pctVsRef(row.breadth_score,   bl.prev_row.breadth_score);
+          rel.prev_agreement = pctVsRef(row.agreement_score, bl.prev_row.agreement_score);
+          rel.prev_energy    = pctVsRef(row.market_energy,   bl.prev_row.market_energy);
         }
       }
 

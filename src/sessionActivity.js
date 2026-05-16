@@ -136,8 +136,11 @@ function classifyEnergyCycle(mov, brd, agr, vol, streak, accel, prev) {
   // 4. Active broad organized move
   if (mov >= 50 && brd >= 45 && agr >= 45)         return 'EXPANSION';
 
-  // 5. Waking up: both movement and breadth rising from a low base
-  if (movRising && brdRising && mov >= 25)         return 'TRANSITION';
+  // 5. TRUE TRANSITION: breadth and movement rising AND already at meaningful levels.
+  // Breadth 18 + Agreement 34 rising is still compression/low-participation, not transition.
+  // Requires: brd > 35 (enough pairs active), agr > 45 (organized), accel > 0 (accelerating).
+  if (movRising && brdRising && accel > 0 && brd > 35 && agr > 45 && mov >= 30)
+    return 'TRANSITION';
 
   // 6. Energy coiling: suppressed volatility + thin breadth + streak of compression
   if (brd < 35 && vol < 40 && streak >= 1)         return 'COMPRESSION';

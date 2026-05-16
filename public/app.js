@@ -1652,13 +1652,24 @@ function _meDelta(val) {
   return `<span class="me-delta" style="color:${color}">${sign}${n}${arrow}</span>`;
 }
 
-/** % vs historical session average — green when above avg, amber when near, slate when below */
-function _mePct(pct) {
+/** Color for a % deviation: green = above avg, amber = near, slate = below */
+function _meRelColor(pct) {
+  return pct >= 20 ? '#22c55e' : pct >= -10 ? '#f59e0b' : '#94a3b8';
+}
+
+/** Labeled % vs avg — stacked below the raw value */
+function _meNormLine(pct) {
   if (pct == null) return '';
-  const n     = Math.round(pct);
-  const sign  = n >= 0 ? '+' : '';
-  const color = n >= 20 ? '#22c55e' : n >= -10 ? '#f59e0b' : '#94a3b8';
-  return `<span class="me-norm-pct" style="color:${color}">${sign}${n}%</span>`;
+  const sign = pct >= 0 ? '+' : '';
+  return `<span class="me-comp-norm" style="color:${_meRelColor(pct)}">${sign}${pct}% vs avg</span>`;
+}
+
+/** Labeled % vs previous same session — stacked below norm */
+function _mePrevLine(pct) {
+  if (pct == null) return '';
+  const sign  = pct >= 0 ? '+' : '';
+  const color = pct >= 10 ? '#22c55e' : pct >= -10 ? '#f59e0b' : '#94a3b8';
+  return `<span class="me-comp-prev" style="color:${color}">${sign}${pct}% vs prev</span>`;
 }
 
 function _meDirBar(pct, color) {
@@ -1709,7 +1720,11 @@ function _meSessionCard(name, s) {
     return `<div class="me-comp-row">
       <span class="me-comp-label">${c.label}</span>
       ${_meCompBar(c.val)}
-      <span class="me-comp-val">${v}${_mePct(c.norm)}${_meDelta(c.prev)}</span>
+      <div class="me-comp-right">
+        <span class="me-comp-val">${v}</span>
+        ${_meNormLine(c.norm)}
+        ${_mePrevLine(c.prev)}
+      </div>
     </div>`;
   }).join('');
 
@@ -1760,7 +1775,10 @@ function _meSessionCard(name, s) {
     </div>
     <div class="me-card-comps">${compRows}${dirRows}</div>
     <div class="me-card-foot">
-      <span class="me-foot-item">Energy <strong>${energy}</strong>${_mePct(s.norm_energy)}${_meDelta(s.prev_energy)}</span>
+      <div class="me-foot-energy">
+        <span class="me-foot-item">Energy <strong>${energy}</strong></span>
+        ${_meNormLine(s.norm_energy)}${_mePrevLine(s.prev_energy)}
+      </div>
       <span class="me-foot-item">Readiness <strong>${readiness}</strong></span>
     </div>
   </div>`;
