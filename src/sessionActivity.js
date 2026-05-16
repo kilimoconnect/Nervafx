@@ -341,6 +341,9 @@ function processHours(hourKeys, byTime, onlyLast = false) {
     const qualityMult  = 0.5 + agreementScore / 200; // 0.5 (agr=0) → 1.0 (agr=100)
     const marketEnergy = round1(Math.min(100, rawEnergy * qualityMult));
 
+    // Step 12b: compression score stored for history (not used in readiness formula)
+    const compressionScore = round1(((100 - movementScore) * (100 - breadthScore)) / 100);
+
     // Step 13: expansion readiness — designed to LEAD energy, not follow it.
     // Key: energyPressure = 100 − marketEnergy.
     //   During COMPRESSION: energy is low → energyPressure high → readiness elevated.
