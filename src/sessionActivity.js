@@ -44,7 +44,19 @@ const { config }            = require('./config');
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function round1(v) { return Math.round(v * 10) / 10; }
+function ri(v)     { return Math.round(parseFloat(v) || 0); }
 function arrAvg(arr) { return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0; }
+
+function pctVsRef(current, ref) {
+  if (!ref) return null;
+  const pct = Math.round((current / ref - 1) * 100);
+  return Math.abs(pct) > 200 ? null : pct;
+}
+
+function avgField(arr, field) {
+  if (!arr.length) return 0;
+  return arr.reduce((s, row) => s + (parseFloat(row[field]) || 0), 0) / arr.length;
+}
 
 // ─── Session quality scores (for expansion readiness) ─────────────────────────
 
@@ -475,6 +487,155 @@ function toHourlyRow(r) {
   return Object.fromEntries(Object.entries(r).filter(([k]) => HOURLY_COLS.has(k)));
 }
 
+// ─── Market energy analysis (in-memory — no DB re-read required) ─────────────
+
+const SESSION_ORDER    = ['ASIA', 'LONDON', 'NEW_YORK', 'LOW_LIQUIDITY'];
+const SESS_LABEL       = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York' };
+const SESS_NEXT        = { ASIA: 'LONDON', LONDON: 'NEW_YORK', NEW_YORK: 'ASIA' };
+const COMPRESSED_CYCLE = new Set(['DEAD', 'COMPRESSION', 'LOW_PARTICIPATION']);
+
+function buildFlowNarrative(carryOver) {
+  if (!carryOver || carryOver.length < 2) return null;
+
+  const comp  = c => COMPRESSED_CYCLE.has(c);
+  const exp   = c => c === 'EXPANSION' || c === 'EXPLOSIVE';
+  const trans = c => c === 'TRANSITION';
+
+  const n        = carryOver.length;
+  const last     = carryOver[n - 1];
+  const prev     = carryOver[n - 2];
+  const energies = carryOver.map(c => c.energy);
+  const sessions = carryOver.map(c => c.session);
+  const cycles   = carryOver.map(c => c.cycle);
+
+  const eStart    = energies[0];
+  const eLast     = energies[n - 1];
+  const ePeak     = Math.max(...energies);
+  const peakIdx   = energies.lastIndexOf(ePeak);
+  const peakSess  = sessions[peakIdx];
+
+  const allComp   = cycles.every(comp);
+  const wasPeaked = exp(cycles[peakIdx]) && peakIdx < n - 1;
+  const risingNow = eLast > prev.energy + 3;
+  const fallingNow= eLast < prev.energy - 3;
+  const stateOf   = c => (c || '').toLowerCase().replace(/_/g, ' ');
+  const avgE      = Math.round(energies.reduce((a, b) => a + b, 0) / n);
+
+  if (wasPeaked && comp(last.cycle)) {
+    return `${peakSess} expansion (energy ${ePeak}) has weakened into ${last.session} ${stateOf(last.cycle)} — energy retreated to ${eLast}. No directional pressure developing in the current session.`;
+  }
+  if (allComp && risingNow) {
+    return `Compression persisting through ${sessions.slice(0, -1).join(', ')}, with mild energy accumulation into ${last.session} (${eStart} → ${eLast}). Conditions approaching inflection but breadth remains suppressed.`;
+  }
+  if (allComp) {
+    return `Participation remains broadly suppressed — energy averaged ${avgE} across ${sessions.join(', ')}. No structural shift in session flow detected.`;
+  }
+  if (exp(last.cycle) && eLast > eStart) {
+    return `Energy building from ${eStart} to ${eLast} through ${sessions.join(' → ')} — ${last.session} showing ${stateOf(last.cycle)} conditions with broad directional follow-through.`;
+  }
+  if (trans(last.cycle)) {
+    return `${prev.session} ${stateOf(prev.cycle)} giving way to early ${last.session} movement (energy ${eLast}, breadth ${last.breadth}%). Transition structure forming — not yet confirmed.`;
+  }
+  if (fallingNow) {
+    return `Energy declining from ${eStart} to ${eLast} — ${last.session} ${stateOf(last.cycle)} as participation contracts. Session flow suggests caution on directional exposure.`;
+  }
+  const trend = eLast > eStart + 5 ? 'gaining ground' : eLast < eStart - 5 ? 'losing ground' : 'holding flat';
+  return `Mixed session flow across ${sessions.join(' → ')} — energy ${trend} (${eStart} → ${eLast}), currently ${stateOf(last.cycle)} in ${last.session}.`;
+}
+
+function classifyMarketCycle(sequence) {
+  if (!sequence.length) return null;
+
+  const recent   = sequence.slice(-4);
+  const cycles   = recent.map(s => s.energy_cycle);
+  const energies = recent.map(s => parseFloat(s.market_energy) || 0);
+  const eLast    = energies[energies.length - 1];
+  const eFirst   = energies[0];
+  const eTrend   = eLast - eFirst;
+  const avgE     = energies.reduce((a, b) => a + b, 0) / energies.length;
+
+  const comp  = c => COMPRESSED_CYCLE.has(c);
+  const exp   = c => c === 'EXPANSION' || c === 'EXPLOSIVE';
+  const lastC = cycles[cycles.length - 1];
+
+  const recentAllComp = cycles.slice(-2).every(comp);
+  const anyExp        = cycles.some(exp);
+  const nowExp        = exp(lastC);
+  const nowTrans      = lastC === 'TRANSITION';
+  const nowExhaust    = lastC === 'EXHAUSTION';
+
+  if (nowExhaust)                        return 'CYCLE_EXHAUSTION';
+  if (nowExp && eTrend >= 0)             return 'ACTIVE_EXPANSION';
+  if (anyExp && recentAllComp)           return 'POST_EXPANSION_RESET';
+  if (nowTrans && eTrend > 0)            return 'TRANSITION_BUILD_UP';
+  if (recentAllComp && avgE < 20)        return 'DEEP_COMPRESSION';
+  if (recentAllComp)                     return 'LOW_PARTICIPATION_COMPRESSION';
+  return 'MIXED_ACTIVITY';
+}
+
+const COMP_BRD_MAX = 40;
+const COMP_AGR_MAX = 45;
+
+function computeExpansionPressure(sequence) {
+  const trailing = [];
+  for (let i = sequence.length - 1; i >= 0; i--) {
+    if (COMPRESSED_CYCLE.has(sequence[i].energy_cycle)) trailing.unshift(sequence[i]);
+    else break;
+  }
+
+  const carryOver = sequence.slice(-5).map(s => ({
+    session: SESS_LABEL[s.session_name] || s.session_name,
+    energy:  ri(s.market_energy),
+    breadth: ri(s.breadth_score),
+    cycle:   s.energy_cycle,
+  }));
+
+  const flowNarrative = buildFlowNarrative(carryOver);
+  const streak        = trailing.length;
+  const chain         = trailing.map(s => SESS_LABEL[s.session_name] || s.session_name);
+
+  if (streak < 2) {
+    return { streak, score: 0, risk: 'NONE', chain, cycles: trailing.map(s => s.energy_cycle), carryOver, flowNarrative, factors: null };
+  }
+
+  const avgBrd = avgField(trailing, 'breadth_score');
+  const avgAgr = avgField(trailing, 'agreement_score');
+  if (avgBrd > COMP_BRD_MAX || avgAgr > COMP_AGR_MAX) {
+    return { streak, score: 0, risk: 'NONE', chain, cycles: trailing.map(s => s.energy_cycle), carryOver, flowNarrative, factors: null };
+  }
+
+  const streakScore    = Math.min(100, streak * 34);
+  const volSuppression = Math.max(0, 100 - avgField(trailing, 'volatility_score'));
+  const lastSessName   = trailing[trailing.length - 1]?.session_name;
+  const nextSessName   = SESS_NEXT[lastSessName] || 'LONDON';
+  const transitionBonus= nextSessName === 'LONDON'   ? 80
+                       : nextSessName === 'NEW_YORK'  ? 65 : 30;
+
+  const score = Math.round(
+    0.35 * streakScore    +
+    0.25 * avgAgr         +
+    0.25 * volSuppression +
+    0.15 * transitionBonus
+  );
+
+  const risk = score >= 70 ? 'HIGH'
+             : score >= 50 ? 'BUILDING'
+             : score >= 25 ? 'LOW'
+             :               'MINIMAL';
+
+  return {
+    streak, score, risk, chain,
+    cycles:  trailing.map(s => s.energy_cycle),
+    carryOver, flowNarrative,
+    factors: {
+      streakScore:    Math.round(streakScore),
+      agrPersistence: Math.round(avgAgr),
+      volSuppression: Math.round(volSuppression),
+      transitionBonus,
+    },
+  };
+}
+
 // ─── Step 15: Build per-session rows for market_energy_sessions ──────────────
 
 function buildSessionRows(hourRows) {
@@ -486,7 +647,12 @@ function buildSessionRows(hourRows) {
     groups[key].rows.push(r);
   }
 
-  return Object.values(groups).map(g => {
+  // Must iterate chronologically so each session can reference the previous same-session
+  const sortedKeys  = Object.keys(groups).sort();
+  const sessHistory = {}; // session_name → [{movement, breadth, agreement, volatility, energy}]
+
+  return sortedKeys.map(key => {
+    const g   = groups[key];
     const n   = field => g.rows.map(r => parseFloat(r[field]) || 0);
     const avg = arr   => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
 
@@ -504,21 +670,27 @@ function buildSessionRows(hourRows) {
     const sessionEnd   = new Date(lastRow.time_utc);
     sessionEnd.setUTCHours(sessionEnd.getUTCHours() + 1);
 
-    return {
+    const mov = round1(avg(n('movement_score')));
+    const brd = round1(avg(n('breadth_score')));
+    const agr = round1(avg(n('agreement_score')));
+    const vol = round1(avg(n('volatility_score')));
+    const eng = round1(avg(n('market_energy')));
+
+    const row = {
       session_date:        g.date,
       session_name:        g.session,
       session_zone:        null,
       session_start:       sessionStart.toISOString(),
       session_end:         sessionEnd.toISOString(),
-      movement_score:      round1(avg(n('movement_score'))),
-      breadth_score:       round1(avg(n('breadth_score'))),
-      agreement_score:     round1(avg(n('agreement_score'))),
-      volatility_score:    round1(avg(n('volatility_score'))),
+      movement_score:      mov,
+      breadth_score:       brd,
+      agreement_score:     agr,
+      volatility_score:    vol,
       acceleration_score:  round1(avg(n('acceleration'))),
       compression_score:   round1(avg(n('compression_score'))),
       compression_streak:  lastRow.compression_streak || 0,
       expansion_readiness: round1(avg(n('expansion_readiness'))),
-      market_energy:       round1(avg(n('market_energy'))),
+      market_energy:       eng,
       energy_cycle:        dominantCycle,
       active_pairs:        Math.round(avg(n('pairs_moving'))),
       aligned_pairs:       null,
@@ -537,6 +709,41 @@ function buildSessionRows(hourRows) {
         })),
       },
     };
+
+    // ── In-memory session-relative normalization ──────────────────────────────
+    // Compare this session against all previous occurrences of the SAME session.
+    // 200 candles ≈ 8 days = 8 prior Asia, 8 London, 8 NY — enough for a stable baseline.
+    const hist = sessHistory[g.session] || [];
+    if (hist.length >= 1) {
+      const hMov = avg(hist.map(h => h.movement));
+      const hBrd = avg(hist.map(h => h.breadth));
+      const hAgr = avg(hist.map(h => h.agreement));
+      const hVol = avg(hist.map(h => h.volatility));
+      const hEng = avg(hist.map(h => h.energy));
+      row.norm_movement   = pctVsRef(mov, hMov);
+      row.norm_breadth    = pctVsRef(brd, hBrd);
+      row.norm_agreement  = pctVsRef(agr, hAgr);
+      row.norm_volatility = pctVsRef(vol, hVol);
+      row.norm_energy     = pctVsRef(eng, hEng);
+      row.baseline_n      = hist.length;
+    }
+    const prevHist = hist[hist.length - 1];
+    if (prevHist) {
+      row.prev_movement  = pctVsRef(mov, prevHist.movement);
+      row.prev_breadth   = pctVsRef(brd, prevHist.breadth);
+      row.prev_agreement = pctVsRef(agr, prevHist.agreement);
+      row.prev_energy    = pctVsRef(eng, prevHist.energy);
+      const pe = row.prev_energy;
+      row.energy_momentum = pe == null ? null
+        : pe > 10  ? 'ACCELERATING'
+        : pe < -10 ? 'DECELERATING'
+        :            'STABLE';
+    }
+
+    if (!sessHistory[g.session]) sessHistory[g.session] = [];
+    sessHistory[g.session].push({ movement: mov, breadth: brd, agreement: agr, volatility: vol, energy: eng });
+
+    return row;
   });
 }
 
@@ -717,4 +924,30 @@ async function calculateLatestSessionActivity() {
   return row;
 }
 
-module.exports = { backfillSessionActivity, calculateLatestSessionActivity, computeSessionSummaries };
+// ─── Market energy report (in-memory — called by api/market-energy.js) ────────
+
+async function getMarketEnergyData() {
+  const byTime   = await fetchHourlyCandles(200);
+  const hourKeys = Object.keys(byTime).sort();
+  if (!hourKeys.length) return null;
+
+  const hourRows    = processHours(hourKeys, byTime);
+  const sessionRows = buildSessionRows(hourRows);
+
+  // Most recent occurrence per session for the dashboard cards
+  const bySession = {};
+  for (const row of sessionRows) bySession[row.session_name] = row;
+  const sessions = SESSION_ORDER.map(n => bySession[n]).filter(Boolean);
+
+  // Chronological sequence (exclude LOW_LIQUIDITY) for cross-session analysis
+  const sequence = sessionRows
+    .filter(r => r.session_name !== 'LOW_LIQUIDITY')
+    .slice(-8);
+
+  const expansionPressure = computeExpansionPressure(sequence);
+  const marketCycle       = classifyMarketCycle(sequence);
+
+  return { sessions, expansionPressure, marketCycle };
+}
+
+module.exports = { backfillSessionActivity, calculateLatestSessionActivity, computeSessionSummaries, getMarketEnergyData };
