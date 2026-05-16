@@ -124,19 +124,33 @@ function classifyEnergyCycle(mov, brd, agr, vol, streak, accel, prev) {
   const brdFalling = prev ? brd < prev.breadth   : false;
   const agrFalling = prev ? agr < prev.agreement : false;
 
+  // Absolute floor — no market participation
   if (mov < 20 && brd < 20 && vol < 25)                               return 'DEAD';
+
+  // Peak — all dimensions simultaneously high
   if (mov >= 75 && brd >= 70 && agr >= 70 && vol >= 70)               return 'EXPLOSIVE';
-  if (mov >= 60 && brd >= 55 && agr >= 60)                            return 'EXPANSION';
-  // EXHAUSTION: all four signs present simultaneously — movement still elevated
-  // while breadth AND agreement are both retreating with negative acceleration.
-  // Requires all four conditions to avoid false positives.
+
+  // High movement + broad participation but directional chaos — not a clean trend
+  // (checked before ACTIVE_EXPANSION so chaotic markets don't fall through)
+  if (mov >= 55 && brd >= 50 && agr < 45)                             return 'CHAOTIC_EXPANSION';
+
+  // Strong organized move — broad participation with directional agreement
+  if (mov >= 60 && brd >= 55 && agr >= 55)                            return 'ACTIVE_EXPANSION';
+
+  // All four exhaustion signals present simultaneously
   if (mov >= 50 && accel < 0 && brdFalling && agrFalling)             return 'EXHAUSTION';
+
   if (mov < 35 && brd < 35 && vol < 40 && streak >= 1)                return 'COMPRESSION';
   if (streak >= 1 && mov < 50 && brd < 50)                            return 'PRESSURE_BUILDING';
+
+  // Energy loading — both movement and breadth rising toward expansion
   if (movRising && brdRising)                                          return 'TRANSITION';
-  if (agr >= 60 && mov >= 35)                                          return 'CONTROLLED';
-  if (mov >= 35 && brd >= 35)                                          return 'BALANCED';
-  return 'CONTROLLED';
+
+  // Organized directional market — good agreement with reasonable participation
+  if (agr >= 50 && mov >= 35 && brd >= 30)                            return 'CONTROLLED_TREND';
+
+  // Default — low activity, no directional pressure, no compression
+  return 'QUIET_BALANCE';
 }
 
 // ─── Core computation engine ──────────────────────────────────────────────────
@@ -466,7 +480,7 @@ function buildSessionRows(hourRows) {
       const c = r.energy_cycle || 'BALANCED';
       cycleCounts[c] = (cycleCounts[c] || 0) + 1;
     }
-    const dominantCycle = Object.entries(cycleCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'BALANCED';
+    const dominantCycle = Object.entries(cycleCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'QUIET_BALANCE';
 
     const firstRow = g.rows[0];
     const lastRow  = g.rows[g.rows.length - 1];

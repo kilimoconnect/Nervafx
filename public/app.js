@@ -1599,27 +1599,36 @@ function renderSession(data) {
 
 const ME_SESSION_COLOR = { ASIA: '#10b981', LONDON: '#3b82f6', NEW_YORK: '#a855f7', LOW_LIQUIDITY: '#475569' };
 const ME_SESSION_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York', LOW_LIQUIDITY: 'Low Liq.' };
-const ME_CYCLE_COLOR   = {
-  DEAD:             '#475569',
-  COMPRESSION:      '#7c3aed',
-  PRESSURE_BUILDING:'#f59e0b',
-  TRANSITION:       '#10b981',
-  CONTROLLED:       '#06b6d4',
-  BALANCED:         '#3b82f6',
-  EXPANSION:        '#22c55e',
-  EXPLOSIVE:        '#f97316',
-  EXHAUSTION:       '#ef4444',
+const ME_CYCLE_COLOR = {
+  DEAD:              '#475569',
+  COMPRESSION:       '#7c3aed',
+  PRESSURE_BUILDING: '#f59e0b',
+  TRANSITION:        '#10b981',
+  CONTROLLED_TREND:  '#06b6d4',
+  QUIET_BALANCE:     '#64748b',
+  ACTIVE_EXPANSION:  '#22c55e',
+  CHAOTIC_EXPANSION: '#f97316',
+  EXPLOSIVE:         '#fbbf24',
+  EXHAUSTION:        '#ef4444',
+  // legacy aliases in case old DB rows surface
+  EXPANSION:         '#22c55e',
+  CONTROLLED:        '#06b6d4',
+  BALANCED:          '#64748b',
 };
 const ME_CYCLE_LABEL = {
-  DEAD:             'Dead',
-  COMPRESSION:      'Compression',
-  PRESSURE_BUILDING:'Pressure Building',
-  TRANSITION:       'Transition',
-  CONTROLLED:       'Controlled',
-  BALANCED:         'Balanced',
-  EXPANSION:        'Expansion',
-  EXPLOSIVE:        'Explosive',
-  EXHAUSTION:       'Exhaustion',
+  DEAD:              'Dead',
+  COMPRESSION:       'Compression',
+  PRESSURE_BUILDING: 'Pressure Building',
+  TRANSITION:        'Transition',
+  CONTROLLED_TREND:  'Controlled Trend',
+  QUIET_BALANCE:     'Quiet Balance',
+  ACTIVE_EXPANSION:  'Active Expansion',
+  CHAOTIC_EXPANSION: 'Chaotic Expansion',
+  EXPLOSIVE:         'Explosive',
+  EXHAUSTION:        'Exhaustion',
+  EXPANSION:         'Active Expansion',
+  CONTROLLED:        'Controlled Trend',
+  BALANCED:          'Quiet Balance',
 };
 
 function _meCompBar(value) {
@@ -1682,8 +1691,9 @@ function _meSessionCard(name, s) {
     </div>`;
   }).join('');
 
-  const bull = Math.round(parseFloat(s.bullish_breadth) || 0);
-  const bear = Math.round(parseFloat(s.bearish_breadth) || 0);
+  const bull    = Math.round(parseFloat(s.bullish_breadth) || 0);
+  const bear    = Math.round(parseFloat(s.bearish_breadth) || 0);
+  const neutral = Math.max(0, 100 - bull - bear);
   const domScore = Math.round(parseFloat(s.dominance_score) || 0);
   const strongCcy = s.strongest_ccy || null;
   const weakCcy   = s.weakest_ccy   || null;
@@ -1702,6 +1712,11 @@ function _meSessionCard(name, s) {
       <span class="me-comp-label me-comp-bear">Bearish</span>
       ${_meDirBar(bear, '#ef4444')}
       <span class="me-comp-val">${bear}%</span>
+    </div>
+    <div class="me-comp-row">
+      <span class="me-comp-label" style="color:var(--text-dim)">Inactive</span>
+      ${_meDirBar(neutral, '#334155')}
+      <span class="me-comp-val" style="color:var(--text-dim)">${neutral}%</span>
     </div>
     <div class="me-dir-sep"></div>
     <div class="me-dom-row">
