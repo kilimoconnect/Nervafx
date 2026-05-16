@@ -4063,11 +4063,20 @@ body::after {
   color: var(--text-dim);
 }
 
-/* Session-to-session delta indicators */
+/* Session-to-session delta indicators (vs previous SAME session) */
 .me-delta {
   font-size: 10px;
   font-weight: 700;
   margin-left: 4px;
+  letter-spacing: -0.02em;
+}
+
+/* % vs historical session average — shows if this session is behaving unusually */
+.me-norm-pct {
+  font-size: 9.5px;
+  font-weight: 600;
+  margin-left: 4px;
+  opacity: 0.85;
   letter-spacing: -0.02em;
 }
 

@@ -1601,34 +1601,37 @@ const ME_SESSION_COLOR = { ASIA: '#10b981', LONDON: '#3b82f6', NEW_YORK: '#a855f
 const ME_SESSION_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York', LOW_LIQUIDITY: 'Low Liq.' };
 const ME_CYCLE_COLOR = {
   DEAD:              '#475569',
+  LOW_PARTICIPATION: '#64748b',
   COMPRESSION:       '#7c3aed',
-  PRESSURE_BUILDING: '#f59e0b',
   TRANSITION:        '#10b981',
+  EXPANSION:         '#22c55e',
+  EXPLOSIVE:         '#fbbf24',
+  EXHAUSTION:        '#ef4444',
+  // legacy aliases for old DB rows
+  PRESSURE_BUILDING: '#7c3aed',
   CONTROLLED_TREND:  '#06b6d4',
   QUIET_BALANCE:     '#64748b',
   ACTIVE_EXPANSION:  '#22c55e',
   CHAOTIC_EXPANSION: '#f97316',
-  EXPLOSIVE:         '#fbbf24',
-  EXHAUSTION:        '#ef4444',
-  // legacy aliases in case old DB rows surface
-  EXPANSION:         '#22c55e',
   CONTROLLED:        '#06b6d4',
   BALANCED:          '#64748b',
 };
 const ME_CYCLE_LABEL = {
   DEAD:              'Dead',
+  LOW_PARTICIPATION: 'Low Participation',
   COMPRESSION:       'Compression',
-  PRESSURE_BUILDING: 'Pressure Building',
   TRANSITION:        'Transition',
-  CONTROLLED_TREND:  'Controlled Trend',
-  QUIET_BALANCE:     'Quiet Balance',
-  ACTIVE_EXPANSION:  'Active Expansion',
-  CHAOTIC_EXPANSION: 'Chaotic Expansion',
+  EXPANSION:         'Expansion',
   EXPLOSIVE:         'Explosive',
   EXHAUSTION:        'Exhaustion',
-  EXPANSION:         'Active Expansion',
-  CONTROLLED:        'Controlled Trend',
-  BALANCED:          'Quiet Balance',
+  // legacy
+  PRESSURE_BUILDING: 'Compression',
+  CONTROLLED_TREND:  'Expansion',
+  QUIET_BALANCE:     'Low Participation',
+  ACTIVE_EXPANSION:  'Expansion',
+  CHAOTIC_EXPANSION: 'Expansion',
+  CONTROLLED:        'Expansion',
+  BALANCED:          'Low Participation',
 };
 
 function _meCompBar(value) {
@@ -1647,6 +1650,15 @@ function _meDelta(val) {
   const color = n > 0 ? '#22c55e' : '#ef4444';
   const arrow = n > 0 ? '↑' : '↓';
   return `<span class="me-delta" style="color:${color}">${sign}${n}${arrow}</span>`;
+}
+
+/** % vs historical session average — green when above avg, amber when near, slate when below */
+function _mePct(pct) {
+  if (pct == null) return '';
+  const n     = Math.round(pct);
+  const sign  = n >= 0 ? '+' : '';
+  const color = n >= 20 ? '#22c55e' : n >= -10 ? '#f59e0b' : '#94a3b8';
+  return `<span class="me-norm-pct" style="color:${color}">${sign}${n}%</span>`;
 }
 
 function _meDirBar(pct, color) {
@@ -1686,10 +1698,10 @@ function _meSessionCard(name, s) {
   const cycleLabel = ME_CYCLE_LABEL[cycle] || cycle;
 
   const comps = [
-    { label: 'Movement',   val: s.movement_score,   delta: s.delta_movement  },
-    { label: 'Breadth',    val: s.breadth_score,    delta: s.delta_breadth   },
-    { label: 'Agreement',  val: s.agreement_score,  delta: s.delta_agreement },
-    { label: 'Volatility', val: s.volatility_score, delta: null              },
+    { label: 'Movement',   val: s.movement_score,   norm: s.norm_movement,   prev: s.prev_movement   },
+    { label: 'Breadth',    val: s.breadth_score,    norm: s.norm_breadth,    prev: s.prev_breadth    },
+    { label: 'Agreement',  val: s.agreement_score,  norm: s.norm_agreement,  prev: s.prev_agreement  },
+    { label: 'Volatility', val: s.volatility_score, norm: s.norm_volatility, prev: null              },
   ];
 
   const compRows = comps.map(c => {
@@ -1697,7 +1709,7 @@ function _meSessionCard(name, s) {
     return `<div class="me-comp-row">
       <span class="me-comp-label">${c.label}</span>
       ${_meCompBar(c.val)}
-      <span class="me-comp-val">${v}${_meDelta(c.delta)}</span>
+      <span class="me-comp-val">${v}${_mePct(c.norm)}${_meDelta(c.prev)}</span>
     </div>`;
   }).join('');
 
@@ -1748,7 +1760,7 @@ function _meSessionCard(name, s) {
     </div>
     <div class="me-card-comps">${compRows}${dirRows}</div>
     <div class="me-card-foot">
-      <span class="me-foot-item">Energy <strong>${energy}</strong>${_meDelta(s.delta_energy)}</span>
+      <span class="me-foot-item">Energy <strong>${energy}</strong>${_mePct(s.norm_energy)}${_meDelta(s.prev_energy)}</span>
       <span class="me-foot-item">Readiness <strong>${readiness}</strong></span>
     </div>
   </div>`;

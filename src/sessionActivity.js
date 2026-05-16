@@ -116,41 +116,34 @@ function computeCurrencyStrengths(candles, sessionOpenPrices) {
 // Priority order: DEAD → EXPLOSIVE → EXPANSION → EXHAUSTION → COMPRESSION → TRANSITION → STABLE
 
 // Step 14 — Energy cycle classification
-// Priority: DEAD → EXPLOSIVE → EXPANSION → EXHAUSTION → COMPRESSION
-//           → PRESSURE_BUILDING → TRANSITION → CONTROLLED → BALANCED
+// 7-state lifecycle: DEAD → LOW_PARTICIPATION → COMPRESSION → TRANSITION
+//                            → EXPANSION → EXPLOSIVE → EXHAUSTION
+// Each state is mutually exclusive and ordered by priority.
 function classifyEnergyCycle(mov, brd, agr, vol, streak, accel, prev) {
-  const movRising  = prev ? mov > prev.movement  : false;
-  const brdRising  = prev ? brd > prev.breadth   : false;
-  const brdFalling = prev ? brd < prev.breadth   : false;
-  const agrFalling = prev ? agr < prev.agreement : false;
+  const movRising  = prev ? mov > prev.movement : false;
+  const brdRising  = prev ? brd > prev.breadth  : false;
+  const brdFalling = prev ? brd < prev.breadth  : false;
 
-  // Absolute floor — no market participation
-  if (mov < 20 && brd < 20 && vol < 25)                               return 'DEAD';
+  // 1. No market participation at all
+  if (mov < 20 && brd < 20 && vol < 25)           return 'DEAD';
 
-  // Peak — all dimensions simultaneously high
-  if (mov >= 75 && brd >= 70 && agr >= 70 && vol >= 70)               return 'EXPLOSIVE';
+  // 2. Peak — every dimension simultaneously maxed
+  if (mov >= 75 && brd >= 70 && agr >= 70)         return 'EXPLOSIVE';
 
-  // High movement + broad participation but directional chaos — not a clean trend
-  // (checked before ACTIVE_EXPANSION so chaotic markets don't fall through)
-  if (mov >= 55 && brd >= 50 && agr < 45)                             return 'CHAOTIC_EXPANSION';
+  // 3. Expansion fading: still high movement, breadth retreating, decelerating
+  if (mov >= 50 && accel < 0 && brdFalling)        return 'EXHAUSTION';
 
-  // Strong organized move — broad participation with directional agreement
-  if (mov >= 60 && brd >= 55 && agr >= 55)                            return 'ACTIVE_EXPANSION';
+  // 4. Active broad organized move
+  if (mov >= 50 && brd >= 45 && agr >= 45)         return 'EXPANSION';
 
-  // All four exhaustion signals present simultaneously
-  if (mov >= 50 && accel < 0 && brdFalling && agrFalling)             return 'EXHAUSTION';
+  // 5. Waking up: both movement and breadth rising from a low base
+  if (movRising && brdRising && mov >= 25)         return 'TRANSITION';
 
-  if (mov < 35 && brd < 35 && vol < 40 && streak >= 1)                return 'COMPRESSION';
-  if (streak >= 1 && mov < 50 && brd < 50)                            return 'PRESSURE_BUILDING';
+  // 6. Energy coiling: suppressed volatility + thin breadth + streak of compression
+  if (brd < 35 && vol < 40 && streak >= 1)         return 'COMPRESSION';
 
-  // Energy loading — both movement and breadth rising toward expansion
-  if (movRising && brdRising)                                          return 'TRANSITION';
-
-  // Organized directional market — good agreement with reasonable participation
-  if (agr >= 50 && mov >= 35 && brd >= 30)                            return 'CONTROLLED_TREND';
-
-  // Default — low activity, no directional pressure, no compression
-  return 'QUIET_BALANCE';
+  // 7. Active but thin / disorganized — catch-all for low participation
+  return 'LOW_PARTICIPATION';
 }
 
 // ─── Core computation engine ──────────────────────────────────────────────────
@@ -279,7 +272,10 @@ function processHours(hourKeys, byTime, onlyLast = false) {
     const smoothMoveVals   = [];
     const normalizedRanges = [];
     let alignedActive = 0, totalActive = 0;
+    // bullish/bearish count ALL 28 pairs for breadth% display
     let bullish = 0, bearish = 0;
+    // activeBullish/activeBearish count ACTIVE pairs only for dominance index
+    let activeBullish = 0, activeBearish = 0;
 
     for (const inst of config.instruments) {
       const c    = candles[inst];
@@ -304,9 +300,10 @@ function processHours(hourKeys, byTime, onlyLast = false) {
       pairEma[inst][session] = smoothMove;
       smoothMoveVals.push(smoothMove);
 
-      // Step 8: directional agreement (active pairs only)
+      // Step 8: directional agreement + active-pair direction (active pairs only)
       if (smoothMove >= 1.0) {
         totalActive++;
+        if (rawDir > 0) activeBullish++; else activeBearish++;
         const [base, quote] = inst.split('_');
         const expectedDir   = (ccyStrength[base] || 0) - (ccyStrength[quote] || 0);
         if ((expectedDir > 0 && rawDir > 0) || (expectedDir < 0 && rawDir < 0)) alignedActive++;
@@ -340,12 +337,14 @@ function processHours(hourKeys, byTime, onlyLast = false) {
     const rawAgreementRatio = totalActive > 0 ? alignedActive / totalActive : 0;
     const agreementScore    = round1(rawAgreementRatio * Math.sqrt(breadthScore / 100) * 100);
 
-    // Dominance: dispersion × participation × agreement → clean directional market.
-    // High dispersion with low breadth = weak signal; broad participation required.
-    // Normalised to 0–100 (reference dispersion 1% = 0.010 as full scale).
-    const dominanceScore = round1(Math.min(100,
-      (_dispersion / 0.010) * (breadthScore / 100) * rawAgreementRatio * 100
-    ));
+    // Dominance index: abs(active_bullish − active_bearish) / active_pairs.
+    // Captures directional imbalance among participating pairs only.
+    // High energy with low dominance = chaotic rotation, not clean expansion.
+    // Example: bull=18, bear=4, active=22 → |18−4|/22 = 64% (strong control)
+    //          bull=11, bear=10, active=21 → |11−10|/21 =  5% (chaotic)
+    const dominanceScore = activePairs > 0
+      ? round1(Math.abs(activeBullish - activeBearish) / activePairs * 100)
+      : 0;
 
     // Step 9: volatility score
     const volatilityScore = normalizedRanges.length > 0

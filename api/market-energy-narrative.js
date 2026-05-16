@@ -19,7 +19,7 @@ const _cache       = new Map();
 
 function fingerprint(sessions, ep) {
   return sessions.map(s =>
-    `${s.session_name}:${s.energy_cycle}:${Math.round(s.market_energy || 0)}:${Math.round(s.expansion_readiness || 0)}:${Math.round(s.breadth_score || 0)}`
+    `${s.session_name}:${s.energy_cycle}:${Math.round(s.market_energy || 0)}:${Math.round(s.norm_energy ?? 999)}:${Math.round(s.breadth_score || 0)}`
   ).join('|') + `|${ep?.risk || 'NONE'}:${ep?.score || 0}`;
 }
 
@@ -33,20 +33,24 @@ function fdelta(v) {
 function buildPrompt(sessions, ep) {
   const active = sessions.filter(s => s.session_name !== 'LOW_LIQUIDITY');
 
-  // Per-session detailed line with actual values and deltas
+  // Per-session detailed line with absolute values, % vs session avg, and prev same-session delta
   const lines = active.map(s => {
-    const name = s.session_name.replace('_', ' ');
-    const hasDelta = s.delta_movement != null;
-    const deltaStr = hasDelta
-      ? ` [Δ Mov:${fdelta(s.delta_movement)} Brd:${fdelta(s.delta_breadth)} Agr:${fdelta(s.delta_agreement)} Egy:${fdelta(s.delta_energy)}]`
+    const name    = s.session_name.replace('_', ' ');
+    const normStr = s.norm_energy != null
+      ? ` [${s.norm_energy >= 0 ? '+' : ''}${s.norm_energy}% vs avg ${name}]`
       : '';
+    const prevStr = s.prev_energy != null
+      ? ` [${s.prev_energy >= 0 ? '+' : ''}${s.prev_energy} vs prev ${name}]`
+      : '';
+    const movNorm = s.norm_movement != null ? ` (${s.norm_movement >= 0 ? '+' : ''}${s.norm_movement}%avg)` : '';
+    const brdNorm = s.norm_breadth  != null ? ` (${s.norm_breadth  >= 0 ? '+' : ''}${s.norm_breadth}%avg)`  : '';
+    const agrNorm = s.norm_agreement!= null ? ` (${s.norm_agreement>= 0 ? '+' : ''}${s.norm_agreement}%avg)`: '';
     return (
       `  ${name.padEnd(10)} ${(s.energy_cycle || '').padEnd(18)} ` +
-      `Mov:${fv(s.movement_score)} Brd:${fv(s.breadth_score)} ` +
-      `Agr:${fv(s.agreement_score)} Vol:${fv(s.volatility_score)} | ` +
-      `Bull:${fv(s.bullish_breadth)}% Bear:${fv(s.bearish_breadth)}% | ` +
-      `Energy:${fv(s.market_energy)} Ready:${fv(s.expansion_readiness)}` +
-      deltaStr
+      `Mov:${fv(s.movement_score)}${movNorm} Brd:${fv(s.breadth_score)}${brdNorm} ` +
+      `Agr:${fv(s.agreement_score)}${agrNorm} Vol:${fv(s.volatility_score)} | ` +
+      `Bull:${fv(s.bullish_breadth)}% Bear:${fv(s.bearish_breadth)}% Dom:${fv(s.dominance_score)}% | ` +
+      `Energy:${fv(s.market_energy)}${normStr}${prevStr}`
     );
   }).join('\n');
 
@@ -84,13 +88,15 @@ ENERGY CYCLE DEFINITIONS:
   EXPLOSIVE = max participation | EXHAUSTION = expansion fading, breadth retreating
 
 METRIC RANGES: all scores 0–100. Breadth<30 = thin; Agr<40 = disorganized; Energy>60 = active.
-Delta values show change vs the immediately preceding active session.
+%avg = how unusual this session is vs its own historical average (not vs other sessions).
+Positive %avg means this session is running hotter than its own norm — significant regardless of absolute level.
 
 Write exactly 2 sentences of institutional market narrative using the specific numbers above.
 Rules:
-  - Sentence 1: cite at least 2 concrete metric values (e.g. "Breadth remained below 20% across Asia…" or "agreement rose ${fdelta(active[active.length-1]?.delta_agreement || 0)} to ${fv(active[active.length-1]?.agreement_score)} in New York")
-  - Sentence 2: interpret what the session structure and deltas suggest about near-term market conditions
-  - Permitted phrases: "participation remained subdued", "breadth expanding", "directional agreement elevated", "pressure accumulating", "conditions consistent with", "suggests"
+  - Sentence 1: cite at least 2 metric values AND reference at least one %avg figure to convey whether the session is behaving unusually
+    Example: "Asia breadth reached ${fv(active[0]?.breadth_score)} — running ${active[0]?.norm_breadth >= 0 ? '+' : ''}${active[0]?.norm_breadth ?? '?'}% above its historical session average"
+  - Sentence 2: interpret what the combined session structure and session-relative anomalies suggest about near-term conditions
+  - Permitted phrases: "participation remained subdued", "breadth expanding", "above its historical session average", "below typical session norms", "directional agreement elevated", "pressure accumulating", "conditions consistent with", "suggests"
   - Forbidden words: "will", "must", "expect", "predict"
   - No markdown. No labels. No intro. Output only the 2 sentences.`;
 }
