@@ -1680,19 +1680,27 @@ function _meRelColor(pct) {
   return pct >= 20 ? '#22c55e' : pct >= -10 ? '#f59e0b' : '#94a3b8';
 }
 
-/** Labeled % vs avg — stacked below the raw value */
-function _meNormLine(pct) {
-  if (pct == null) return '';
-  const sign = pct >= 0 ? '+' : '';
-  return `<span class="me-comp-norm" style="color:${_meRelColor(pct)}">${sign}${pct}% vs avg</span>`;
-}
-
-/** Labeled % vs previous same session — stacked below norm */
-function _mePrevLine(pct) {
-  if (pct == null) return '';
-  const sign  = pct >= 0 ? '+' : '';
-  const color = pct >= 10 ? '#22c55e' : pct >= -10 ? '#f59e0b' : '#94a3b8';
-  return `<span class="me-comp-prev" style="color:${color}">${sign}${pct}% vs prev</span>`;
+/**
+ * Compact inline norm · prev line — both % on one row.
+ * Uses title attributes for full labels (hover to read).
+ * norm = % vs historical session avg; prev = % vs previous same session.
+ */
+function _meRelLine(norm, prev) {
+  if (norm == null && prev == null) return '';
+  const parts = [];
+  if (norm != null) {
+    const sign = norm >= 0 ? '+' : '';
+    parts.push(`<span class="me-comp-norm" style="color:${_meRelColor(norm)}" title="${sign}${norm}% vs historical avg">${sign}${norm}%</span>`);
+  }
+  if (prev != null) {
+    const sign  = prev >= 0 ? '+' : '';
+    const color = prev >= 10 ? '#22c55e' : prev >= -10 ? '#f59e0b' : '#94a3b8';
+    parts.push(`<span class="me-comp-prev" style="color:${color}" title="${sign}${prev}% vs prev session">${sign}${prev}%</span>`);
+  }
+  const inner = parts.length === 2
+    ? parts[0] + '<span class="me-pct-sep">·</span>' + parts[1]
+    : parts[0] || '';
+  return `<div class="me-comp-pcts">${inner}</div>`;
 }
 
 function _meDirBar(pct, color) {
@@ -1745,8 +1753,7 @@ function _meSessionCard(name, s) {
       ${_meCompBar(c.val)}
       <div class="me-comp-right">
         <span class="me-comp-val">${v}</span>
-        ${_meNormLine(c.norm)}
-        ${_mePrevLine(c.prev)}
+        ${_meRelLine(c.norm, c.prev)}
       </div>
     </div>`;
   }).join('');
@@ -1821,7 +1828,7 @@ function _meSessionCard(name, s) {
     <div class="me-card-foot">
       <div class="me-foot-energy">
         <span class="me-foot-item">Energy <strong>${energy}</strong></span>
-        ${_meNormLine(s.norm_energy)}${_mePrevLine(s.prev_energy)}
+        ${_meRelLine(s.norm_energy, s.prev_energy)}
       </div>
       <span class="me-foot-item">Readiness <strong>${readiness}</strong></span>
     </div>

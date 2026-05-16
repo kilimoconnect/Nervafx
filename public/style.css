@@ -3885,6 +3885,7 @@ body::after {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  overflow: hidden; /* prevent norm/prev % from bleeding into adjacent cards */
 }
 
 /* Card header: session name + cycle badge */
@@ -3944,7 +3945,7 @@ body::after {
 
 .me-comp-row {
   display: grid;
-  grid-template-columns: 68px 1fr 28px;
+  grid-template-columns: 68px 1fr 54px;
   align-items: center;
   gap: 7px;
 }
@@ -4105,37 +4106,53 @@ body::after {
   color: var(--text-dim);
 }
 
-/* Right column of a comp row: stacks absolute value, % vs avg, % vs prev */
+/* Right column of a comp row: value on top, norm·prev on bottom */
 .me-comp-right {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 1px;
-  min-width: 72px;
+  gap: 2px;
+  /* exactly matches the 54px third column — no overflow possible */
+  width: 54px;
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+/* Compact inline norm · prev pct pair */
+.me-comp-pcts {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  line-height: 1;
 }
 
 /* % vs historical session average */
 .me-comp-norm {
-  font-size: 9.5px;
+  font-size: 9px;
   font-weight: 600;
   letter-spacing: -0.02em;
-  line-height: 1.2;
+  white-space: nowrap;
 }
 
 /* % vs previous same session */
 .me-comp-prev {
   font-size: 9px;
-  color: var(--text-dim);
   letter-spacing: -0.02em;
-  line-height: 1.2;
+  white-space: nowrap;
+}
+
+/* dot separator between norm and prev */
+.me-pct-sep {
+  font-size: 8px;
+  color: var(--text-dim);
+  opacity: 0.4;
 }
 
 /* Energy row in card footer: groups energy + its relative labels */
 .me-foot-energy {
   display: flex;
-  flex-direction: column;
-  gap: 1px;
+  align-items: center;
+  gap: 6px;
 }
 
 /* Legacy — keep for any remaining inline delta use */
