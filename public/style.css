@@ -3830,6 +3830,31 @@ body::after {
 
 /* ─── Market Energy — session cards ───────────────────────────────────────── */
 
+/* Top-level market cycle banner — the "brain" */
+.me-cycle-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  margin-bottom: 10px;
+  background: rgba(255,255,255,.03);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.me-cycle-banner-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.me-cycle-banner-val {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--bc, #64748b);
+  letter-spacing: .02em;
+}
+
 .ma-display { padding: 4px 0 8px; }
 
 .me-empty {
@@ -3885,6 +3910,23 @@ body::after {
   background: color-mix(in srgb, var(--bc) 14%, transparent);
   color: var(--bc);
   border: 1px solid color-mix(in srgb, var(--bc) 28%, transparent);
+}
+
+/* Energy momentum badge (↑ Accel / ↓ Decel / — Stable) */
+.me-momentum {
+  font-size: 9px;
+  font-weight: 700;
+  margin-left: auto;
+  letter-spacing: .02em;
+}
+
+/* Section header inside dir rows (Directional Pressure / Participation) */
+.me-dir-header {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--text-dim);
+  margin-top: 2px;
 }
 
 /* Component rows */
@@ -4104,7 +4146,7 @@ body::after {
   letter-spacing: -0.02em;
 }
 
-/* Energy flow row in pressure panel */
+/* Energy flow chip chain in pressure panel */
 .me-flow-row {
   display: flex;
   align-items: center;
@@ -4114,18 +4156,21 @@ body::after {
   padding-top: 8px;
   border-top: 1px solid var(--border);
 }
-.me-flow-label {
-  font-size: 10px;
-  color: var(--text-dim);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-right: 4px;
-}
-.me-flow-item {
+.me-flow-chip {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 1px;
+}
+
+/* Rule-based flow narrative text */
+.me-flow-narrative {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
 }
 .me-flow-sess {
   font-size: 9px;

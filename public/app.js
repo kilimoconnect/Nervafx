@@ -1599,6 +1599,29 @@ function renderSession(data) {
 
 const ME_SESSION_COLOR = { ASIA: '#10b981', LONDON: '#3b82f6', NEW_YORK: '#a855f7', LOW_LIQUIDITY: '#475569' };
 const ME_SESSION_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York', LOW_LIQUIDITY: 'Low Liq.' };
+
+// Top-level market cycle — the "brain" classification across sessions
+const ME_MARKET_CYCLE_COLOR = {
+  ACTIVE_EXPANSION:              '#22c55e',
+  TRANSITION_BUILD_UP:           '#10b981',
+  LOW_PARTICIPATION_COMPRESSION: '#7c3aed',
+  DEEP_COMPRESSION:              '#4c1d95',
+  POST_EXPANSION_RESET:          '#f59e0b',
+  CYCLE_EXHAUSTION:              '#ef4444',
+  MIXED_ACTIVITY:                '#0ea5e9',
+};
+const ME_MARKET_CYCLE_LABEL = {
+  ACTIVE_EXPANSION:              'Active Expansion',
+  TRANSITION_BUILD_UP:           'Transition Build-Up',
+  LOW_PARTICIPATION_COMPRESSION: 'Low Participation Compression',
+  DEEP_COMPRESSION:              'Deep Compression',
+  POST_EXPANSION_RESET:          'Post-Expansion Reset',
+  CYCLE_EXHAUSTION:              'Cycle Exhaustion',
+  MIXED_ACTIVITY:                'Mixed Activity',
+};
+const ME_MOMENTUM_COLOR = { ACCELERATING: '#22c55e', DECELERATING: '#ef4444', STABLE: '#64748b' };
+const ME_MOMENTUM_LABEL = { ACCELERATING: '↑ Accel', DECELERATING: '↓ Decel', STABLE: '— Stable' };
+
 const ME_CYCLE_COLOR = {
   DEAD:              '#475569',
   LOW_PARTICIPATION: '#64748b',
@@ -1728,10 +1751,15 @@ function _meSessionCard(name, s) {
     </div>`;
   }).join('');
 
-  const bull    = Math.round(parseFloat(s.bullish_breadth) || 0);
-  const bear    = Math.round(parseFloat(s.bearish_breadth) || 0);
-  const neutral = Math.max(0, 100 - bull - bear);
-  const domScore = Math.round(parseFloat(s.dominance_score) || 0);
+  // Magnitude-weighted pressure (bullish_breadth/bearish_breadth now store pressure %)
+  const bull     = Math.round(parseFloat(s.bullish_breadth) || 0);
+  const bear     = Math.round(parseFloat(s.bearish_breadth) || 0);
+  // Inactive = pairs not participating (derived from active_pairs count)
+  const totalPairs = 28;
+  const activePct  = Math.min(100, Math.round((parseFloat(s.active_pairs) || 0) / totalPairs * 100));
+  const neutral    = Math.max(0, 100 - activePct);
+
+  const domScore  = Math.round(parseFloat(s.dominance_score) || 0);
   const strongCcy = s.strongest_ccy || null;
   const weakCcy   = s.weakest_ccy   || null;
   const domLabel  = (strongCcy && weakCcy && strongCcy !== weakCcy)
@@ -1740,19 +1768,27 @@ function _meSessionCard(name, s) {
 
   const dirRows = `
     <div class="me-dir-sep"></div>
+    <div class="me-dir-header">Directional Pressure</div>
     <div class="me-comp-row">
-      <span class="me-comp-label me-comp-bull">Bullish</span>
+      <span class="me-comp-label me-comp-bull">Bull Press</span>
       ${_meDirBar(bull, '#22c55e')}
       <span class="me-comp-val">${bull}%</span>
     </div>
     <div class="me-comp-row">
-      <span class="me-comp-label me-comp-bear">Bearish</span>
+      <span class="me-comp-label me-comp-bear">Bear Press</span>
       ${_meDirBar(bear, '#ef4444')}
       <span class="me-comp-val">${bear}%</span>
     </div>
+    <div class="me-dir-sep"></div>
+    <div class="me-dir-header">Participation</div>
+    <div class="me-comp-row">
+      <span class="me-comp-label" style="color:var(--text-muted)">Active</span>
+      ${_meDirBar(activePct, '#0ea5e9')}
+      <span class="me-comp-val">${activePct}%</span>
+    </div>
     <div class="me-comp-row">
       <span class="me-comp-label" style="color:var(--text-dim)">Inactive</span>
-      ${_meDirBar(neutral, '#334155')}
+      ${_meDirBar(neutral, '#1e293b')}
       <span class="me-comp-val" style="color:var(--text-dim)">${neutral}%</span>
     </div>
     <div class="me-dir-sep"></div>
@@ -1761,17 +1797,25 @@ function _meSessionCard(name, s) {
       <div class="me-comp-row me-dom-bar-row">
         <span class="me-comp-label" style="color:var(--text-dim)">Dominance</span>
         ${_meDirBar(domScore, '#a855f7')}
-        <span class="me-comp-val">${domScore}</span>
+        <span class="me-comp-val">${domScore}%</span>
       </div>
     </div>`;
 
   const energy    = Math.round(parseFloat(s.market_energy) || 0);
   const readiness = Math.round(parseFloat(s.expansion_readiness) || 0);
 
+  const momentum      = s.energy_momentum;
+  const momColor      = ME_MOMENTUM_COLOR[momentum] || '#64748b';
+  const momLabel      = ME_MOMENTUM_LABEL[momentum]  || '';
+  const momentumHtml  = momentum
+    ? `<span class="me-momentum" style="color:${momColor}">${momLabel}</span>`
+    : '';
+
   return `<div class="me-card">
     <div class="me-card-head">
       <span class="me-card-sess" style="color:${sessColor}">${label}</span>
       <span class="me-card-cycle" style="--bc:${cycleColor}">${cycleLabel}</span>
+      ${momentumHtml}
     </div>
     <div class="me-card-comps">${compRows}${dirRows}</div>
     <div class="me-card-foot">
@@ -1803,15 +1847,21 @@ function _meExpansionPressurePanel(ep) {
        <span class="me-press-score">Score ${score}</span>`;
   }
 
-  // Carry-over energy flow (last 3–5 sessions)
-  let flowBlock = '';
+  // Compact energy chip chain (always shown)
+  let flowChain = '';
   if (ep?.carryOver?.length > 1) {
-    const flowItems = ep.carryOver.map(c => {
+    const chips = ep.carryOver.map(c => {
       const col = c.energy >= 60 ? '#22c55e' : c.energy >= 35 ? '#0ea5e9' : c.energy >= 15 ? '#f59e0b' : '#475569';
-      return `<span class="me-flow-item"><span class="me-flow-sess">${c.session}</span><span class="me-flow-val" style="color:${col}">${c.energy}</span></span>`;
+      return `<span class="me-flow-chip"><span class="me-flow-sess">${c.session}</span><span class="me-flow-val" style="color:${col}">${c.energy}</span></span>`;
     }).join('<span class="me-flow-arrow">→</span>');
-    flowBlock = `<div class="me-flow-row"><span class="me-flow-label">Energy flow</span>${flowItems}</div>`;
+    flowChain = `<div class="me-flow-row">${chips}</div>`;
   }
+
+  // Rule-based flow narrative
+  const narrative  = ep?.flowNarrative;
+  const narrativeBlock = narrative
+    ? `<p class="me-flow-narrative">${narrative}</p>`
+    : '';
 
   return `<div class="me-pressure-panel">
     <div class="me-pressure-head">
@@ -1819,7 +1869,8 @@ function _meExpansionPressurePanel(ep) {
       <span class="me-pressure-badge" style="--bc:${riskColor}">${ep?.risk || 'NONE'}</span>
     </div>
     <div class="me-pressure-body">${compressionBlock}</div>
-    ${flowBlock}
+    ${flowChain}
+    ${narrativeBlock}
     <p class="me-narrative" id="me-narrative">Reading market structure…</p>
   </div>`;
 }
@@ -1839,7 +1890,17 @@ async function fetchMarketEnergyNarrative(sessions, expansionPressure) {
   }
 }
 
-function renderMarketEnergy(sessions, expansionPressure) {
+function _meMarketCycleBanner(cycle) {
+  if (!cycle) return '';
+  const color = ME_MARKET_CYCLE_COLOR[cycle] || '#64748b';
+  const label = ME_MARKET_CYCLE_LABEL[cycle]  || cycle.replace(/_/g, ' ');
+  return `<div class="me-cycle-banner">
+    <span class="me-cycle-banner-label">Market Cycle</span>
+    <span class="me-cycle-banner-val" style="--bc:${color}">${label}</span>
+  </div>`;
+}
+
+function renderMarketEnergy(sessions, expansionPressure, marketCycle) {
   const el = document.getElementById('market-activity-display');
   if (!el) return;
 
@@ -1852,19 +1913,19 @@ function renderMarketEnergy(sessions, expansionPressure) {
   const byName = Object.fromEntries(sessions.map(s => [s.session_name, s]));
 
   el.innerHTML = `
+    ${_meMarketCycleBanner(marketCycle)}
     <div class="me-card-grid">
       ${ORDER.map(name => _meSessionCard(name, byName[name] || null)).join('')}
     </div>
     ${_meExpansionPressurePanel(expansionPressure)}`;
 
-  // Narrative is slow (AI) — fire async after DOM is painted
   fetchMarketEnergyNarrative(sessions, expansionPressure);
 }
 
 async function fetchMarketActivity() {
   try {
     const data = await api('/api/market-energy');
-    renderMarketEnergy(data.sessions || [], data.expansionPressure || null);
+    renderMarketEnergy(data.sessions || [], data.expansionPressure || null, data.marketCycle || null);
   } catch (_) {
     const el = document.getElementById('market-activity-display');
     if (el) el.innerHTML = '<p class="me-empty">Market Energy unavailable.</p>';

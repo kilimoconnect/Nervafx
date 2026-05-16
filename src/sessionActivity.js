@@ -275,10 +275,10 @@ function processHours(hourKeys, byTime, onlyLast = false) {
     const smoothMoveVals   = [];
     const normalizedRanges = [];
     let alignedActive = 0, totalActive = 0;
-    // bullish/bearish count ALL 28 pairs for breadth% display
-    let bullish = 0, bearish = 0;
-    // activeBullish/activeBearish count ACTIVE pairs only for dominance index
-    let activeBullish = 0, activeBearish = 0;
+    // Magnitude-weighted pressure: sum of smoothMove per direction.
+    // More scientifically correct than counting pairs — 3 pairs moving 2× avg
+    // outweighs 10 pairs barely moving.
+    let bullishMagnitude = 0, bearishMagnitude = 0;
 
     for (const inst of config.instruments) {
       const c    = candles[inst];
@@ -289,7 +289,6 @@ function processHours(hourKeys, byTime, onlyLast = false) {
       const rawDir  = (c.close - open) / open;
       const rawMove = Math.abs(rawDir);
       sessionFinalMove[inst] = rawMove;
-      if (rawDir > 0) bullish++; else if (rawDir < 0) bearish++;
 
       // Step 4: normalize against rolling-20 avg
       const mhist  = moveHistory[inst]?.[session] || [];
@@ -303,10 +302,13 @@ function processHours(hourKeys, byTime, onlyLast = false) {
       pairEma[inst][session] = smoothMove;
       smoothMoveVals.push(smoothMove);
 
-      // Step 8: directional agreement + active-pair direction (active pairs only)
+      // Accumulate directional magnitude across ALL pairs with any movement
+      if (rawDir > 0) bullishMagnitude += smoothMove;
+      else if (rawDir < 0) bearishMagnitude += smoothMove;
+
+      // Step 8: directional agreement (active pairs only)
       if (smoothMove >= 1.0) {
         totalActive++;
-        if (rawDir > 0) activeBullish++; else activeBearish++;
         const [base, quote] = inst.split('_');
         const expectedDir   = (ccyStrength[base] || 0) - (ccyStrength[quote] || 0);
         if ((expectedDir > 0 && rawDir > 0) || (expectedDir < 0 && rawDir < 0)) alignedActive++;
@@ -340,13 +342,16 @@ function processHours(hourKeys, byTime, onlyLast = false) {
     const rawAgreementRatio = totalActive > 0 ? alignedActive / totalActive : 0;
     const agreementScore    = round1(rawAgreementRatio * Math.sqrt(breadthScore / 100) * 100);
 
-    // Dominance index: abs(active_bullish − active_bearish) / active_pairs.
-    // Captures directional imbalance among participating pairs only.
-    // High energy with low dominance = chaotic rotation, not clean expansion.
-    // Example: bull=18, bear=4, active=22 → |18−4|/22 = 64% (strong control)
-    //          bull=11, bear=10, active=21 → |11−10|/21 =  5% (chaotic)
-    const dominanceScore = activePairs > 0
-      ? round1(Math.abs(activeBullish - activeBearish) / activePairs * 100)
+    // Magnitude-weighted directional pressure: % of total smoothMove on each side.
+    // bull=62% means 62% of all pair movement is bullish in nature.
+    // Dominance = how skewed that split is (bull=75%, bear=25% → dominance 50%).
+    const totalMagnitude    = bullishMagnitude + bearishMagnitude;
+    const bullishPressurePct = totalMagnitude > 0
+      ? round1(bullishMagnitude / totalMagnitude * 100) : 50;
+    const bearishPressurePct = totalMagnitude > 0
+      ? round1(bearishMagnitude / totalMagnitude * 100) : 50;
+    const dominanceScore = totalMagnitude > 0
+      ? round1(Math.abs(bullishMagnitude - bearishMagnitude) / totalMagnitude * 100)
       : 0;
 
     // Step 9: volatility score
@@ -420,9 +425,10 @@ function processHours(hourKeys, byTime, onlyLast = false) {
       pairs_moving:         activePairs,
       pairs_quiet:          TOTAL - activePairs,
       movement_magnitude:   round1(moveMagnitude * 100),
-      // Directional + dominance — NOT columns in hourly_session_activity; session aggregation only
-      bullish_breadth:      round1((bullish / TOTAL) * 100),
-      bearish_breadth:      round1((bearish / TOTAL) * 100),
+      // Directional pressure (magnitude-weighted) — NOT columns in hourly_session_activity
+      // bullish_breadth / bearish_breadth now store % of total movement magnitude per side
+      bullish_breadth:      bullishPressurePct,
+      bearish_breadth:      bearishPressurePct,
       dominance_score:      dominanceScore,
       strongest_ccy:        strongestCcy,
       weakest_ccy:          weakestCcy,
