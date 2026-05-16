@@ -118,30 +118,24 @@ function computeCurrencyStrengths(candles, sessionOpenPrices) {
 // Step 14 — Energy cycle classification
 // Priority: DEAD → EXPLOSIVE → EXPANSION → EXHAUSTION → COMPRESSION
 //           → PRESSURE_BUILDING → TRANSITION → CONTROLLED → BALANCED
-// STABLE has been removed — every output maps to a meaningful structural state.
 function classifyEnergyCycle(mov, brd, agr, vol, streak, accel, prev) {
   const movRising  = prev ? mov > prev.movement  : false;
   const brdRising  = prev ? brd > prev.breadth   : false;
   const brdFalling = prev ? brd < prev.breadth   : false;
   const agrFalling = prev ? agr < prev.agreement : false;
 
-  if (mov < 20 && brd < 20 && vol < 25)                              return 'DEAD';
-  if (mov >= 75 && brd >= 70 && agr >= 70 && vol >= 70)              return 'EXPLOSIVE';
-  if (mov >= 60 && brd >= 55 && agr >= 60)                           return 'EXPANSION';
-  // EXHAUSTION: expansion dying — elevated movement but breadth or agreement
-  // retreating with meaningful negative acceleration (accel < −3 avoids noise).
-  // Threshold lowered to mov ≥ 40 to catch post-expansion fade before it
-  // drops all the way to COMPRESSION.
-  if (mov >= 40 && accel < -3 && (brdFalling || agrFalling))         return 'EXHAUSTION';
-  if (mov < 35 && brd < 35 && vol < 40 && streak >= 1)               return 'COMPRESSION';
-  // Compression streak accumulating but not yet at full thresholds
-  if (streak >= 1 && mov < 50 && brd < 50)                           return 'PRESSURE_BUILDING';
-  // Movement and breadth both rising — energy loading
-  if (movRising && brdRising)                                         return 'TRANSITION';
-  // High agreement with moderate movement — organized, directional market
-  if (agr >= 60 && mov >= 35)                                         return 'CONTROLLED';
-  // Decent movement and breadth, no compression — healthy participation
-  if (mov >= 35 && brd >= 35)                                         return 'BALANCED';
+  if (mov < 20 && brd < 20 && vol < 25)                               return 'DEAD';
+  if (mov >= 75 && brd >= 70 && agr >= 70 && vol >= 70)               return 'EXPLOSIVE';
+  if (mov >= 60 && brd >= 55 && agr >= 60)                            return 'EXPANSION';
+  // EXHAUSTION: all four signs present simultaneously — movement still elevated
+  // while breadth AND agreement are both retreating with negative acceleration.
+  // Requires all four conditions to avoid false positives.
+  if (mov >= 50 && accel < 0 && brdFalling && agrFalling)             return 'EXHAUSTION';
+  if (mov < 35 && brd < 35 && vol < 40 && streak >= 1)                return 'COMPRESSION';
+  if (streak >= 1 && mov < 50 && brd < 50)                            return 'PRESSURE_BUILDING';
+  if (movRising && brdRising)                                          return 'TRANSITION';
+  if (agr >= 60 && mov >= 35)                                          return 'CONTROLLED';
+  if (mov >= 35 && brd >= 35)                                          return 'BALANCED';
   return 'CONTROLLED';
 }
 
@@ -255,6 +249,24 @@ function processHours(hourKeys, byTime, onlyLast = false) {
     // ── Currency strength (Step 8) ──────────────────────────────────────────
     const ccyStrength = computeCurrencyStrengths(candles, sessionOpenPrices);
 
+    // ── Issue 10: Currency dominance concentration ──────────────────────────
+    // Herfindahl-style: (HHI - uniform) / (max - uniform) → 0–100
+    // High score = one or two currencies dominating cleanly.
+    // Low score = many currencies of similar strength (chaotic rotation).
+    let dominanceScore = 0, strongestCcy = null, weakestCcy = null;
+    {
+      const ccyEntries = Object.entries(ccyStrength);
+      const ccyTotal   = ccyEntries.reduce((s, [, v]) => s + Math.abs(v), 0);
+      if (ccyTotal > 0) {
+        const shares = ccyEntries.map(([, v]) => Math.abs(v) / ccyTotal);
+        const hhi    = shares.reduce((s, v) => s + v * v, 0); // 1/8 to 1.0
+        dominanceScore = round1(Math.min(100, Math.max(0, (hhi - 1/8) / (1 - 1/8) * 100)));
+        const sorted   = [...ccyEntries].sort((a, b) => b[1] - a[1]);
+        strongestCcy   = sorted[0][0];                        // highest positive strength
+        weakestCcy     = sorted[sorted.length - 1][0];        // lowest (most negative)
+      }
+    }
+
     // ── Per-pair calculations (Steps 3–9) ──────────────────────────────────
     const smoothMoveVals   = [];
     const normalizedRanges = [];
@@ -329,20 +341,22 @@ function processHours(hourKeys, byTime, onlyLast = false) {
     const qualityMult  = 0.5 + agreementScore / 200; // 0.5 (agr=0) → 1.0 (agr=100)
     const marketEnergy = round1(Math.min(100, rawEnergy * qualityMult));
 
-    // Step 13: expansion readiness (separate from energy)
-    // accelScore captures the "waking signal" — positive acceleration means energy
-    // is starting to shift even while compression streak remains elevated.
-    // Maps: accel = +25 → 100, accel = 0 → 50, accel = −25 → 0
-    const streakScore      = Math.min(100, compressionStreak * 25);
-    const compressionScore = round1(((100 - movementScore) * (100 - breadthScore)) / 100);
-    const sessQualScore    = SESSION_QUALITY_SCORE[session] || 50;
-    const accelScore       = Math.min(100, Math.max(0, 50 + acceleration * 2));
+    // Step 13: expansion readiness — designed to LEAD energy, not follow it.
+    // Key: energyPressure = 100 − marketEnergy.
+    //   During COMPRESSION: energy is low → energyPressure high → readiness elevated.
+    //   During EXPANSION:   energy is high → energyPressure low → readiness falls.
+    //   accelScore peaks at TRANSITION (waking signal) then tapers.
+    // Result: readiness peaks at COMPRESSION/TRANSITION and drops into EXPANSION.
+    const streakScore    = Math.min(100, compressionStreak * 25);
+    const energyPressure = Math.max(0, 100 - marketEnergy); // inverse of energy level
+    const sessQualScore  = SESSION_QUALITY_SCORE[session] || 50;
+    const accelScore     = Math.min(100, Math.max(0, 50 + acceleration * 2));
     const expansionReadiness = round1(Math.min(100,
-      0.35 * streakScore       // compression persistence (main driver)
-      + 0.20 * compressionScore // depth of current compression
-      + 0.15 * sessQualScore    // session quality bonus
-      + 0.10 * agreementScore   // directional organization
-      + 0.20 * accelScore       // acceleration shift — first signs of waking activity
+      0.35 * streakScore    // compression persistence — main driver
+      + 0.25 * energyPressure // potential energy (high when market suppressed)
+      + 0.20 * accelScore   // waking signal — peaks at transition
+      + 0.10 * sessQualScore // session quality bonus
+      + 0.10 * agreementScore // directional organization
     ));
 
     // Step 14: energy cycle classification
@@ -381,9 +395,12 @@ function processHours(hourKeys, byTime, onlyLast = false) {
       pairs_moving:         activePairs,
       pairs_quiet:          TOTAL - activePairs,
       movement_magnitude:   round1(moveMagnitude * 100),
-      // Directional breadth — NOT a column in hourly_session_activity; used only for session aggregation
+      // Directional + dominance — NOT columns in hourly_session_activity; session aggregation only
       bullish_breadth:      round1((bullish / TOTAL) * 100),
       bearish_breadth:      round1((bearish / TOTAL) * 100),
+      dominance_score:      dominanceScore,
+      strongest_ccy:        strongestCcy,
+      weakest_ccy:          weakestCcy,
       // Backward compat alias
       directional_agreement: agreementScore,
     });
@@ -396,6 +413,17 @@ function processHours(hourKeys, byTime, onlyLast = false) {
 // bullish_breadth / bearish_breadth are in-memory only — not columns in
 // hourly_session_activity. Strip them before upserting to that table.
 
+// Most-frequent value in an array (used for currency labels across session hours)
+function _modal(arr) {
+  if (!arr.length) return null;
+  const counts = {};
+  for (const v of arr) counts[v] = (counts[v] || 0) + 1;
+  return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+}
+
+// Fields that exist as columns in hourly_session_activity.
+// bullish_breadth / bearish_breadth / dominance_score / strongest_ccy / weakest_ccy
+// are computed in-memory and aggregated at session level only — not stored hourly.
 const HOURLY_COLS = new Set([
   'time_utc', 'session_name',
   'movement_score', 'breadth_score', 'agreement_score', 'volatility_score',
@@ -458,6 +486,9 @@ function buildSessionRows(hourRows) {
       aligned_pairs:       null,
       bullish_breadth:     round1(avg(n('bullish_breadth'))),
       bearish_breadth:     round1(avg(n('bearish_breadth'))),
+      dominance_score:     round1(avg(n('dominance_score'))),
+      strongest_ccy:       _modal(g.rows.map(r => r.strongest_ccy).filter(Boolean)),
+      weakest_ccy:         _modal(g.rows.map(r => r.weakest_ccy).filter(Boolean)),
       details: {
         hours: g.rows.length,
         hourly: g.rows.map(r => ({

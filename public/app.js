@@ -1684,6 +1684,13 @@ function _meSessionCard(name, s) {
 
   const bull = Math.round(parseFloat(s.bullish_breadth) || 0);
   const bear = Math.round(parseFloat(s.bearish_breadth) || 0);
+  const domScore = Math.round(parseFloat(s.dominance_score) || 0);
+  const strongCcy = s.strongest_ccy || null;
+  const weakCcy   = s.weakest_ccy   || null;
+  const domLabel  = (strongCcy && weakCcy && strongCcy !== weakCcy)
+    ? `<span class="me-dom-strong">${strongCcy} ↑</span><span class="me-dom-weak">${weakCcy} ↓</span>`
+    : '';
+
   const dirRows = `
     <div class="me-dir-sep"></div>
     <div class="me-comp-row">
@@ -1695,6 +1702,15 @@ function _meSessionCard(name, s) {
       <span class="me-comp-label me-comp-bear">Bearish</span>
       ${_meDirBar(bear, '#ef4444')}
       <span class="me-comp-val">${bear}%</span>
+    </div>
+    <div class="me-dir-sep"></div>
+    <div class="me-dom-row">
+      <div class="me-dom-ccys">${domLabel}</div>
+      <div class="me-comp-row me-dom-bar-row">
+        <span class="me-comp-label" style="color:var(--text-dim)">Dominance</span>
+        ${_meDirBar(domScore, '#a855f7')}
+        <span class="me-comp-val">${domScore}</span>
+      </div>
     </div>`;
 
   const energy = Math.round(parseFloat(s.market_energy) || 0);

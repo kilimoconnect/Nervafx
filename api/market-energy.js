@@ -49,7 +49,8 @@ module.exports = async function handler(req, res) {
       'movement_score, breadth_score, agreement_score, volatility_score, ' +
       'acceleration_score, compression_score, compression_streak, ' +
       'expansion_readiness, market_energy, energy_cycle, active_pairs, ' +
-      'bullish_breadth, bearish_breadth';
+      'bullish_breadth, bearish_breadth, ' +
+      'dominance_score, strongest_ccy, weakest_ccy';
 
     // Fetch last 7 days, all rows, newest first
     const { data, error } = await sb

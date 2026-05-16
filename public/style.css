@@ -3965,6 +3965,34 @@ body::after {
 /* Dimmed card for no-data / LOW_LIQUIDITY */
 .me-card--dim { opacity: .55; }
 
+/* Currency dominance row */
+.me-dom-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.me-dom-ccys {
+  display: flex;
+  gap: 8px;
+}
+
+.me-dom-strong {
+  font-size: 10px;
+  font-weight: 800;
+  color: #22c55e;
+  letter-spacing: .3px;
+}
+
+.me-dom-weak {
+  font-size: 10px;
+  font-weight: 800;
+  color: #ef4444;
+  letter-spacing: .3px;
+}
+
+.me-dom-bar-row { margin: 0; }
+
 /* Expansion Pressure panel */
 .me-pressure-panel {
   margin-top: 12px;
