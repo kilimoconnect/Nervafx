@@ -119,33 +119,40 @@ function computeCurrencyStrengths(candles, sessionOpenPrices) {
 // 7-state lifecycle: DEAD → LOW_PARTICIPATION → COMPRESSION → TRANSITION
 //                            → EXPANSION → EXPLOSIVE → EXHAUSTION
 // Each state is mutually exclusive and ordered by priority.
-function classifyEnergyCycle(mov, brd, agr, vol, streak, accel, prev) {
+// Session-specific thresholds: Asia naturally runs quieter than London/NY.
+
+const SESS_PROFILE = {
+  ASIA: {
+    deadMov: 12, deadBrd: 10, deadVol: 15,
+    exMov: 55, exBrd: 48, exAgr: 55,
+    expMov: 38, expBrd: 25, expAgr: 35,
+    exhMov: 38,
+    trBrd: 20, trAgr: 28, trMov: 22,
+    cmpBrd: 20, cmpVol: 28,
+  },
+  DEFAULT: {
+    deadMov: 20, deadBrd: 20, deadVol: 25,
+    exMov: 75, exBrd: 70, exAgr: 70,
+    expMov: 50, expBrd: 45, expAgr: 45,
+    exhMov: 50,
+    trBrd: 35, trAgr: 45, trMov: 30,
+    cmpBrd: 35, cmpVol: 40,
+  },
+};
+
+function classifyEnergyCycle(mov, brd, agr, vol, streak, accel, prev, session) {
+  const p = SESS_PROFILE[session] || SESS_PROFILE.DEFAULT;
   const movRising  = prev ? mov > prev.movement : false;
   const brdRising  = prev ? brd > prev.breadth  : false;
   const brdFalling = prev ? brd < prev.breadth  : false;
 
-  // 1. No market participation at all
-  if (mov < 20 && brd < 20 && vol < 25)           return 'DEAD';
-
-  // 2. Peak — every dimension simultaneously maxed
-  if (mov >= 75 && brd >= 70 && agr >= 70)         return 'EXPLOSIVE';
-
-  // 3. Expansion fading: still high movement, breadth retreating, decelerating
-  if (mov >= 50 && accel < 0 && brdFalling)        return 'EXHAUSTION';
-
-  // 4. Active broad organized move
-  if (mov >= 50 && brd >= 45 && agr >= 45)         return 'EXPANSION';
-
-  // 5. TRUE TRANSITION: breadth and movement rising AND already at meaningful levels.
-  // Breadth 18 + Agreement 34 rising is still compression/low-participation, not transition.
-  // Requires: brd > 35 (enough pairs active), agr > 45 (organized), accel > 0 (accelerating).
-  if (movRising && brdRising && accel > 0 && brd > 35 && agr > 45 && mov >= 30)
+  if (mov < p.deadMov && brd < p.deadBrd && vol < p.deadVol)                      return 'DEAD';
+  if (mov >= p.exMov  && brd >= p.exBrd  && agr >= p.exAgr)                       return 'EXPLOSIVE';
+  if (mov >= p.exhMov && accel < 0 && brdFalling)                                 return 'EXHAUSTION';
+  if (mov >= p.expMov && brd >= p.expBrd && agr >= p.expAgr)                      return 'EXPANSION';
+  if (movRising && brdRising && accel > 0 && brd > p.trBrd && agr > p.trAgr && mov >= p.trMov)
     return 'TRANSITION';
-
-  // 6. Energy coiling: suppressed volatility + thin breadth + streak of compression
-  if (brd < 35 && vol < 40 && streak >= 1)         return 'COMPRESSION';
-
-  // 7. Active but thin / disorganized — catch-all for low participation
+  if (brd < p.cmpBrd && vol < p.cmpVol && streak >= 1)                            return 'COMPRESSION';
   return 'LOW_PARTICIPATION';
 }
 
@@ -171,7 +178,7 @@ function processHours(hourKeys, byTime, onlyLast = false) {
 
   // Cross-session carry-over
   let prevEnergyBase    = null;
-  let prevSessionScores = null; // { movement, breadth, agreement, volatility } of previous session
+  const prevSameSessionScores = {}; // session_name → { movement, breadth, agreement, volatility } of previous occurrence
   let compressionStreak = 0;
 
   // Running session accumulators (reset each new session)
@@ -225,8 +232,8 @@ function processHours(hourKeys, byTime, onlyLast = false) {
         // Step 10: carry energy base forward
         if (sessionEBList.length) prevEnergyBase = arrAvg(sessionEBList);
 
-        // Step 14: carry session scores forward for "rising/falling" detection
-        prevSessionScores = { movement: avgMov, breadth: avgBrd, agreement: avgAgr, volatility: avgVol };
+        // Step 14: store per-session scores so Asia compares against previous Asia (not NY)
+        prevSameSessionScores[currentSession] = { movement: avgMov, breadth: avgBrd, agreement: avgAgr, volatility: avgVol };
       }
 
       // Reset for new session
@@ -392,7 +399,7 @@ function processHours(hourKeys, byTime, onlyLast = false) {
     // Step 14: energy cycle classification
     const energyCycle = classifyEnergyCycle(
       movementScore, breadthScore, agreementScore, volatilityScore,
-      compressionStreak, acceleration, prevSessionScores
+      compressionStreak, acceleration, prevSameSessionScores[session] || null, session
     );
 
     // Accumulate session lists for boundary calculations

@@ -1692,7 +1692,7 @@ function _meRelLine(norm, prev) {
     const sign = norm >= 0 ? '+' : '';
     parts.push(`<span class="me-comp-norm" style="color:${_meRelColor(norm)}" title="${sign}${norm}% vs historical avg">${sign}${norm}%</span>`);
   }
-  if (prev != null) {
+  if (prev != null && (norm == null || Math.abs(prev - norm) > 5)) {
     const sign  = prev >= 0 ? '+' : '';
     const color = prev >= 10 ? '#22c55e' : prev >= -10 ? '#f59e0b' : '#94a3b8';
     parts.push(`<span class="me-comp-prev" style="color:${color}" title="${sign}${prev}% vs prev session">${sign}${prev}%</span>`);
@@ -1700,7 +1700,7 @@ function _meRelLine(norm, prev) {
   const inner = parts.length === 2
     ? parts[0] + '<span class="me-pct-sep">·</span>' + parts[1]
     : parts[0] || '';
-  return `<div class="me-comp-pcts">${inner}</div>`;
+  return inner ? `<div class="me-comp-pcts">${inner}</div>` : '';
 }
 
 function _meDirBar(pct, color) {
