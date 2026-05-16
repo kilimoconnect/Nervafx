@@ -747,11 +747,23 @@ function buildSessionRows(hourRows) {
   });
 }
 
+// Fields computed in-memory for the API — not stored in market_energy_sessions
+const SESSION_INMEM_FIELDS = new Set([
+  'norm_movement', 'norm_breadth', 'norm_agreement', 'norm_volatility', 'norm_energy',
+  'baseline_n',
+  'prev_movement', 'prev_breadth', 'prev_agreement', 'prev_energy',
+  'energy_momentum',
+]);
+
+function toSessionRow(r) {
+  return Object.fromEntries(Object.entries(r).filter(([k]) => !SESSION_INMEM_FIELDS.has(k)));
+}
+
 async function upsertMarketEnergySessions(sessionRows) {
   if (!sessionRows.length) return;
   const { error } = await supabase
     .from('market_energy_sessions')
-    .upsert(sessionRows, { onConflict: 'session_date,session_name', ignoreDuplicates: false });
+    .upsert(sessionRows.map(toSessionRow), { onConflict: 'session_date,session_name', ignoreDuplicates: false });
   if (error) throw new Error(`market_energy_sessions upsert: ${error.message}`);
   console.log(`[SESSION_ACTIVITY] ${sessionRows.length} market_energy_sessions rows stored.`);
 }
