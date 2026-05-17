@@ -17,6 +17,7 @@ const { calculateLatestStates }          = require('../src/stateDetect');
 const { calculateLatestSignals }         = require('../src/signals');
 const { checkLatestSignals }             = require('../src/risk');
 const { calculateLatestSessionActivity } = require('../src/sessionActivity');
+const { generateMarketNarrative }        = require('../src/narrativeEngine');
 const { writeJournalEntry }              = require('../src/journalEngine');
 
 const ADMIN_ID = '140f3854-2c85-488c-8e0a-0f965d562654';
@@ -252,8 +253,9 @@ module.exports = async function handler(req, res) {
   await step('states',   () => calculateLatestStates());
   await step('signals',  () => calculateLatestSignals());
   await step('risk',             () => checkLatestSignals());
-  await step('session_activity', () => calculateLatestSessionActivity());
-  await step('journal',          () => writeJournalEntry());
+  await step('session_activity',  () => calculateLatestSessionActivity());
+  await step('market_narrative',  () => generateMarketNarrative());
+  await step('journal',           () => writeJournalEntry());
 
   return res.json({
     ok:           true,
