@@ -3980,7 +3980,7 @@ body::after {
   to { transform: rotate(360deg); }
 }
 
-/* ─── Breadth Chart Modal ─────────────────────────────────────────────────── */
+/* ─── Momentum Chart Modal ────────────────────────────────────────────────── */
 .bc-chart-wrap {
   display: flex;
   flex-direction: column;
@@ -4089,7 +4089,7 @@ body::after {
   margin: 0 1px;
 }
 
-/* Breadth chart guide & per-day explanations */
+/* Momentum chart guide & per-day explanations */
 .bc-guide {
   margin: 16px 0 12px;
   padding: 12px 14px;
@@ -4329,7 +4329,7 @@ body::after {
 
 .me-foot-sep { color: var(--border); }
 
-/* Directional breadth separator */
+/* Directional momentum separator */
 .me-dir-sep {
   height: 1px;
   background: var(--border);

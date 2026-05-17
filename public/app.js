@@ -1554,10 +1554,10 @@ function _meSessionExplain(s, label) {
   else if (mov >= 35) lines.push(`Moderate price movement (${mov}/100) — some pairs are active.`);
   else lines.push(`Low price movement (${mov}/100) — most pairs are quiet.`);
 
-  // Breadth
-  if (brd >= 60) lines.push(`Wide breadth (${brd}/100) — many pairs moving together, signalling a broad market move.`);
-  else if (brd >= 35) lines.push(`Moderate breadth (${brd}/100) — some pairs participating, others flat.`);
-  else lines.push(`Narrow breadth (${brd}/100) — only a few pairs are moving.`);
+  // Momentum
+  if (brd >= 60) lines.push(`Wide momentum (${brd}/100) — many pairs moving together, signalling a broad market move.`);
+  else if (brd >= 35) lines.push(`Moderate momentum (${brd}/100) — some pairs participating, others flat.`);
+  else lines.push(`Narrow momentum (${brd}/100) — only a few pairs are moving.`);
 
   // Agreement
   if (agr >= 60) lines.push(`High agreement (${agr}/100) — timeframes are aligned, trends are consistent.`);
@@ -1633,7 +1633,7 @@ function _meSessionCard(name, s, status) {
 
   const comps = [
     { label: 'Movement',   val: s.movement_score,   norm: s.norm_movement,   prev: s.prev_movement   },
-    { label: 'Breadth',    val: s.breadth_score,    norm: s.norm_breadth,    prev: s.prev_breadth    },
+    { label: 'Momentum',   val: s.breadth_score,    norm: s.norm_breadth,    prev: s.prev_breadth    },
     { label: 'Agreement',  val: s.agreement_score,  norm: s.norm_agreement,  prev: s.prev_agreement  },
     { label: 'Volatility', val: s.volatility_score, norm: s.norm_volatility, prev: null              },
   ];
@@ -1825,7 +1825,7 @@ function closeMeAiAnalysis() {
   document.body.style.overflow = '';
 }
 
-// ─── Breadth Chart Modal ─────────────────────────────────────────────────────
+// ─── Momentum Chart Modal ────────────────────────────────────────────────────
 
 function openBreadthChart() {
   let modal = document.getElementById('breadth-chart-modal');
@@ -1841,11 +1841,11 @@ function openBreadthChart() {
     .formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value || '';
   modal.innerHTML = `<div class="me-modal-panel">
     <div class="me-modal-header">
-      <div class="me-modal-title"><span class="me-modal-title-label">Hourly Session Breadth</span><span style="font-size:10px;color:var(--text-muted);margin-left:8px">${_bcTzLabel}</span></div>
+      <div class="me-modal-title"><span class="me-modal-title-label">Hourly Session Momentum</span><span style="font-size:10px;color:var(--text-muted);margin-left:8px">${_bcTzLabel}</span></div>
       <button class="me-modal-close" onclick="closeBreadthChart()">✕</button>
     </div>
     <div class="me-modal-body" style="padding:16px 20px">
-      <div class="me-loading"><span class="spinner"></span> Loading breadth data…</div>
+      <div class="me-loading"><span class="spinner"></span> Loading momentum data…</div>
     </div>
   </div>`;
   modal.style.display = 'flex';
@@ -1864,7 +1864,7 @@ async function _fetchAndRenderBreadthChart(modal) {
     const data = await api('/api/session-activity?type=hourly&days=7');
     const rows = data.hourly || [];
     if (!rows.length) {
-      modal.querySelector('.me-modal-body').innerHTML = '<p class="me-empty">No hourly breadth data available.</p>';
+      modal.querySelector('.me-modal-body').innerHTML = '<p class="me-empty">No hourly momentum data available.</p>';
       return;
     }
     _renderBreadthBars(modal.querySelector('.me-modal-body'), rows);
@@ -1911,7 +1911,7 @@ function _renderBreadthBars(container, rows) {
     const d = new Date(date + 'T12:00:00Z');
     const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz });
 
-    // Detect 3+ consecutive breadth increases (both values must be ≥10)
+    // Detect 3+ consecutive momentum increases (both values must be ≥10)
     const breadths = bars.map(b => b.breadth);
     const streaks = new Set();
     let streak = 0;
@@ -1993,10 +1993,10 @@ function _renderBreadthBars(container, rows) {
     else if (dayAvg >= 20) dayLines.push(`Moderate participation (avg ${dayAvg}) — some sessions were active, others quiet.`);
     else dayLines.push(`Low participation (avg ${dayAvg}) — most of the day was quiet with few pairs moving.`);
 
-    dayLines.push(`Peak breadth of ${dayMax} hit at ${peakTime} during ${peakSess} — this was when the most pairs were moving together.`);
+    dayLines.push(`Peak momentum of ${dayMax} hit at ${peakTime} during ${peakSess} — this was when the most pairs were moving together.`);
 
     if (streakCount >= 3) dayLines.push(`Continuation signal detected (${streakCount} bars in streak) — sustained momentum buildup during this day.`);
-    else dayLines.push('No continuation signal — breadth did not sustain 3+ consecutive increases above 10.');
+    else dayLines.push('No continuation signal — momentum did not sustain 3+ consecutive increases above 10.');
 
     // Session-level summaries
     for (const g of sessGroups) {
@@ -2020,12 +2020,12 @@ function _renderBreadthBars(container, rows) {
   html += `<div class="bc-guide">
     <div class="bc-guide-title">How to read this chart</div>
     <ul class="bc-guide-list">
-      <li><strong>Breadth</strong> measures how many of the 28 currency pairs are moving in the same direction during each hour. Higher = more pairs participating.</li>
+      <li><strong>Momentum</strong> measures how many of the 28 currency pairs are moving in the same direction during each hour. Higher = more pairs participating.</li>
       <li><strong>Rising bars</strong> mean more pairs are joining the move — the market is building momentum and trends are more likely to continue.</li>
       <li><strong>Falling bars</strong> mean pairs are dropping out — momentum is fading and reversals or ranging conditions may follow.</li>
       <li><strong>Green bars</strong> highlight 3+ consecutive hourly increases (both ≥10) — a continuation signal suggesting the move has broad support and is likely to persist.</li>
-      <li><strong>Low breadth</strong> (under 15) means very few pairs are active — avoid trading as moves lack conviction.</li>
-      <li><strong>High breadth</strong> (above 50) with agreement means strong trending conditions — ideal for trend-following entries.</li>
+      <li><strong>Low momentum</strong> (under 15) means very few pairs are active — avoid trading as moves lack conviction.</li>
+      <li><strong>High momentum</strong> (above 50) with agreement means strong trending conditions — ideal for trend-following entries.</li>
     </ul>
   </div>`;
 
@@ -2091,7 +2091,7 @@ function _renderMeAnalysisModal() {
     const metrics = `
       <div class="me-modal-metrics">
         <div class="me-modal-metric"><span>Mov</span><strong>${Math.round(s.movement_score||0)}</strong>${pct(s.norm_movement)}</div>
-        <div class="me-modal-metric"><span>Brd</span><strong>${Math.round(s.breadth_score||0)}</strong>${pct(s.norm_breadth)}</div>
+        <div class="me-modal-metric"><span>Mom</span><strong>${Math.round(s.breadth_score||0)}</strong>${pct(s.norm_breadth)}</div>
         <div class="me-modal-metric"><span>Agr</span><strong>${Math.round(s.agreement_score||0)}</strong>${pct(s.norm_agreement)}</div>
         <div class="me-modal-metric"><span>Vol</span><strong>${Math.round(s.volatility_score||0)}</strong>${pct(s.norm_volatility)}</div>
         <div class="me-modal-metric"><span>Energy</span><strong>${Math.round(s.market_energy||0)}</strong>${pct(s.norm_energy)}</div>
@@ -2215,7 +2215,7 @@ function _meMarketCycleBanner(cycle) {
   return `<div class="me-cycle-banner">
     <span class="me-cycle-banner-label">Market Cycle</span>
     <span class="me-cycle-banner-val" style="--bc:${color}">${label}</span>
-    <button class="me-ai-toggle me-btn-breadth premium-only" onclick="openBreadthChart()">Breadth Chart</button>
+    <button class="me-ai-toggle me-btn-breadth premium-only" onclick="openBreadthChart()">Momentum Chart</button>
     <button class="me-ai-toggle me-btn-ai premium-only" onclick="openMeAiAnalysis()">AI Analysis</button>
   </div>`;
 }
@@ -2609,7 +2609,7 @@ function renderJrnSessionPerfSection(e, sessionEntries) {
     return _jrnSection(`📊 ${sessionLabel(e.session_name)} · ${cycle}`, `
       <div class="jrn-sess-stats">
         <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Energy</span><span class="jrn-sess-val" style="color:${cycleColor}">${eng}</span></div>
-        <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Breadth</span><span class="jrn-sess-val">${brd}</span></div>
+        <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Momentum</span><span class="jrn-sess-val">${brd}</span></div>
         <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Liquidity</span><span class="jrn-sess-val" style="color:${liqColor}">${liq}</span></div>
         <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Pressure</span><span class="jrn-sess-val">▲${bull}% ▼${bear}%</span></div>
         <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Flow</span><span class="jrn-sess-val"><span style="color:#22c55e">${me.strongest_ccy||'—'}↑</span> <span style="color:#ef4444">${me.weakest_ccy||'—'}↓</span></span></div>
