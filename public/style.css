@@ -4845,14 +4845,11 @@ body::after {
   .me-hist-day { flex-direction: column; gap: 4px; }
   .me-hist-date { width: auto; padding-top: 0; }
   .me-hist-sessions {
-    display: flex;
-    overflow-x: auto;
-    gap: 8px;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
   }
-  .me-hist-sessions::-webkit-scrollbar { display: none; }
-  .me-hist-cell { min-width: 140px; flex-shrink: 0; }
+  .me-hist-cell { font-size: 9px; }
 }
 
 /* Session analyses — 3-column grid below the card row */
