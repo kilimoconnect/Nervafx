@@ -1510,6 +1510,74 @@ function _meDirBar(pct, color) {
   </div>`;
 }
 
+function _meSessionExplain(s, label) {
+  if (!s) return '';
+  const mov = Math.round(parseFloat(s.movement_score) || 0);
+  const brd = Math.round(parseFloat(s.breadth_score) || 0);
+  const agr = Math.round(parseFloat(s.agreement_score) || 0);
+  const vol = Math.round(parseFloat(s.volatility_score) || 0);
+  const energy = Math.round(parseFloat(s.market_energy) || 0);
+  const bull = Math.round(parseFloat(s.bullish_breadth) || 0);
+  const bear = Math.round(parseFloat(s.bearish_breadth) || 0);
+  const activePct = Math.min(100, Math.round((parseFloat(s.active_pairs) || 0) / 28 * 100));
+  const readiness = Math.round(parseFloat(s.expansion_readiness) || 0);
+  const liq = Math.round(parseFloat(s.liquidity_score) || 0);
+  const dom = Math.round(parseFloat(s.dominance_score) || 0);
+  const strong = s.strongest_ccy || null;
+  const weak = s.weakest_ccy || null;
+
+  const lines = [];
+
+  // Movement
+  if (mov >= 60) lines.push(`Prices are moving strongly (${mov}/100) — high pip activity across pairs.`);
+  else if (mov >= 35) lines.push(`Moderate price movement (${mov}/100) — some pairs are active.`);
+  else lines.push(`Low price movement (${mov}/100) — most pairs are quiet.`);
+
+  // Breadth
+  if (brd >= 60) lines.push(`Wide breadth (${brd}/100) — many pairs moving together, signalling a broad market move.`);
+  else if (brd >= 35) lines.push(`Moderate breadth (${brd}/100) — some pairs participating, others flat.`);
+  else lines.push(`Narrow breadth (${brd}/100) — only a few pairs are moving.`);
+
+  // Agreement
+  if (agr >= 60) lines.push(`High agreement (${agr}/100) — timeframes are aligned, trends are consistent.`);
+  else if (agr >= 35) lines.push(`Mixed agreement (${agr}/100) — some timeframe conflict.`);
+  else lines.push(`Low agreement (${agr}/100) — timeframes are giving conflicting signals.`);
+
+  // Volatility
+  if (vol >= 60) lines.push(`Volatility is elevated (${vol}/100) — expect larger candles and wider swings.`);
+  else if (vol >= 35) lines.push(`Normal volatility (${vol}/100).`);
+  else lines.push(`Low volatility (${vol}/100) — tight ranges, small candles.`);
+
+  // Directional pressure
+  if (Math.abs(bull - bear) >= 20) {
+    const dominant = bull > bear ? 'buyers' : 'sellers';
+    const pct = bull > bear ? bull : bear;
+    lines.push(`${dominant.charAt(0).toUpperCase() + dominant.slice(1)} dominate at ${pct}% — clear directional bias.`);
+  } else {
+    lines.push(`Bulls (${bull}%) and bears (${bear}%) are evenly matched — no clear direction.`);
+  }
+
+  // Participation
+  if (activePct >= 50) lines.push(`${activePct}% of pairs are actively moving — strong market participation.`);
+  else if (activePct >= 25) lines.push(`${activePct}% of pairs active — moderate participation.`);
+  else lines.push(`Only ${activePct}% of pairs are active — thin market.`);
+
+  // Currency dominance
+  if (strong && weak && strong !== weak && dom >= 15) {
+    lines.push(`${strong} is the strongest currency and ${weak} is the weakest — ${strong}/${weak} pairs are likely trending.`);
+  }
+
+  // Overall energy verdict
+  if (energy >= 60) lines.push(`Overall energy is high (${energy}) — conditions favour trend-following.`);
+  else if (energy >= 35) lines.push(`Moderate energy (${energy}) — be selective, not all setups will follow through.`);
+  else lines.push(`Low energy (${energy}) — range-bound conditions, avoid forcing trades.`);
+
+  return `<div class="me-explain">
+    <div class="me-explain-title">What this means</div>
+    <ul class="me-explain-list">${lines.map(l => `<li>${l}</li>`).join('')}</ul>
+  </div>`;
+}
+
 function _meSessionCard(name, s, status) {
   const sessColor  = ME_SESSION_COLOR[name];
   const label      = ME_SESSION_LABEL[name];
@@ -1645,6 +1713,7 @@ function _meSessionCard(name, s, status) {
       <span class="me-foot-item">Readiness <strong>${readiness}</strong></span>
       <span class="me-foot-item" style="color:${liqColor}">Liquidity <strong>${liqScore}</strong></span>
     </div>
+    ${_meSessionExplain(s, label)}
   </div>`;
 }
 

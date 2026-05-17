@@ -4199,6 +4199,46 @@ body::after {
 .me-comp-bull { color: #22c55e !important; }
 .me-comp-bear { color: #ef4444 !important; }
 
+/* Session explanation block */
+.me-explain {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+
+.me-explain-title {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  margin-bottom: 5px;
+}
+
+.me-explain-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.me-explain-list li {
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  padding-left: 12px;
+  position: relative;
+}
+
+.me-explain-list li::before {
+  content: '•';
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+}
+
 /* Dimmed card for no-data / LOW_LIQUIDITY */
 .me-card--dim { opacity: .55; }
 
