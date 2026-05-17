@@ -674,6 +674,7 @@ function buildSessionRows(hourRows) {
   // Must iterate chronologically so each session can reference the previous same-session
   const sortedKeys  = Object.keys(groups).sort();
   const sessHistory = {}; // session_name → [{movement, breadth, agreement, volatility, energy}]
+  let prevFlowBullPct = 50; // tracks preceding session's bullPct (intraday flow: Asia→London→NY)
 
   return sortedKeys.map(key => {
     const g   = groups[key];
@@ -715,28 +716,31 @@ function buildSessionRows(hourRows) {
     // ── Liquidity score ──────────────────────────────────────────────────────
     // Identifies sessions with genuine directional liquidity (real moves) vs noise.
     // Components:
-    //   breadthCoherence: Brd/E ratio — how unified the movement is (scattered = low)
-    //   eMagnitude:       raw expansion level — needs critical mass to matter
-    //   directionalPersistence: same bull/bear bias as prior session = institutional flow
+    //   breadthCoherence:  Brd/Mov ratio — pairs moving together vs scattered
+    //   eMagnitude:        market energy — the composite strength of the session
+    //   directionalBias:   how skewed bull/bear pressure is (50/50 = no conviction)
+    //   flowPersistence:   same bias as preceding session today = institutional carry
     const bullPct  = round1(avg(n('bullish_breadth')));
     const bearPct  = round1(avg(n('bearish_breadth')));
 
     const breadthCoherence = mov > 0 ? Math.min(1, brd / mov) : 0;
-    const eMagnitude       = Math.min(100, mov);
-    const prevBull         = prevHist?.bullPct ?? 50;
+    const eMagnitude       = Math.min(100, eng);
+    const directionalBias  = Math.abs(bullPct - 50) / 50; // 0 = split, 1 = one-sided
     const currDominant     = bullPct >= bearPct ? 'bull' : 'bear';
-    const prevDominant     = prevBull >= 50 ? 'bull' : 'bear';
-    const directionalPersistence = currDominant === prevDominant ? 1.0 : 0.5;
+    const prevFlowDominant = prevFlowBullPct >= 50 ? 'bull' : 'bear';
+    const flowPersistence  = currDominant === prevFlowDominant ? 1.0 : 0.6;
 
+    // Weighted composite: energy is the base, coherence and bias amplify it
     const liquidityScore = round1(Math.min(100,
-      breadthCoherence * eMagnitude * directionalPersistence
+      eMagnitude * (0.35 + 0.30 * breadthCoherence + 0.20 * directionalBias + 0.15 * flowPersistence)
     ));
 
-    // Classification: how tradeable is this session?
-    const liquidityGrade = liquidityScore >= 50 ? 'HIGH'
-                         : liquidityScore >= 30 ? 'MODERATE'
-                         : liquidityScore >= 15 ? 'LOW'
+    const liquidityGrade = liquidityScore >= 40 ? 'HIGH'
+                         : liquidityScore >= 25 ? 'MODERATE'
+                         : liquidityScore >= 12 ? 'LOW'
                          :                        'DEAD';
+
+    prevFlowBullPct = bullPct;
 
     const row = {
       session_date:        g.date,
