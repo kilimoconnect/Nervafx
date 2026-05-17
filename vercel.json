@@ -1,7 +1,7 @@
 {
   "version": 2,
   "crons": [
-    { "path": "/api/run-pipeline?force=1", "schedule": "5 * * * *" }
+    { "path": "/api/run-pipeline?force=1", "schedule": "1 * * * *" }
   ],
   "functions": {
     "api/news-parse.js":   { "maxDuration": 30 },
