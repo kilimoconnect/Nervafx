@@ -1930,13 +1930,22 @@ async function fetchMarketEnergyNarrative(sessions, expansionPressure, marketCyc
 }
 
 function _meMarketCycleBanner(cycle) {
-  if (!cycle) return '';
-  const color = ME_MARKET_CYCLE_COLOR[cycle] || '#64748b';
-  const label = ME_MARKET_CYCLE_LABEL[cycle]  || cycle.replace(/_/g, ' ');
+  const color = cycle ? (ME_MARKET_CYCLE_COLOR[cycle] || '#64748b') : '#64748b';
+  const label = cycle ? (ME_MARKET_CYCLE_LABEL[cycle]  || cycle.replace(/_/g, ' ')) : '—';
   return `<div class="me-cycle-banner">
     <span class="me-cycle-banner-label">Market Cycle</span>
     <span class="me-cycle-banner-val" style="--bc:${color}">${label}</span>
+    <button class="me-ai-toggle" id="me-ai-toggle" onclick="toggleMeAiAnalysis(this)">AI Analysis</button>
   </div>`;
+}
+
+function toggleMeAiAnalysis(btn) {
+  const ids = ['me-cycle-analysis', 'me-session-analyses', 'me-footer-analysis'];
+  const open = btn.classList.toggle('active');
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = open ? '' : 'none';
+  });
 }
 
 function renderMarketEnergy(sessions, expansionPressure, marketCycle) {
@@ -1961,16 +1970,16 @@ function renderMarketEnergy(sessions, expansionPressure, marketCycle) {
 
   el.innerHTML = `
     ${_meMarketCycleBanner(marketCycle)}
-    <div class="me-ai-block me-cycle-analysis-block" id="me-cycle-analysis">
+    <div class="me-ai-block me-cycle-analysis-block" id="me-cycle-analysis" style="display:none">
       <span class="me-ai-label">Market Cycle Analysis</span>
       <p class="me-ai-text"><span class="me-ai-loading">Analyzing…</span></p>
     </div>
     <div class="me-card-grid">
       ${ORDER.map(name => _meSessionCard(name, byName[name] || null)).join('')}
     </div>
-    <div class="me-session-analyses" id="me-session-analyses">${sessLoading}</div>
+    <div class="me-session-analyses" id="me-session-analyses" style="display:none">${sessLoading}</div>
     ${_meExpansionPressurePanel(expansionPressure)}
-    <div class="me-ai-block me-footer-analysis-block" id="me-footer-analysis">
+    <div class="me-ai-block me-footer-analysis-block" id="me-footer-analysis" style="display:none">
       <span class="me-ai-label">Market Intelligence Summary</span>
       <p class="me-ai-text"><span class="me-ai-loading">Analyzing…</span></p>
     </div>`;

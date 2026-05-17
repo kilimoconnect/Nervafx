@@ -3841,6 +3841,29 @@ body::after {
   border: 1px solid var(--border);
   border-radius: 8px;
 }
+
+.me-ai-toggle {
+  margin-left: auto;
+  padding: 3px 10px;
+  border-radius: 5px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.me-ai-toggle:hover {
+  border-color: rgba(255,255,255,0.25);
+  color: var(--text-secondary);
+}
+.me-ai-toggle.active {
+  background: rgba(99,102,241,0.15);
+  border-color: rgba(99,102,241,0.4);
+  color: #818cf8;
+}
 .me-cycle-banner-label {
   font-size: 10px;
   text-transform: uppercase;
