@@ -23,7 +23,10 @@ module.exports = async function handler(req, res) {
       .eq('id', 1)
       .single();
 
-    if (data?.result) return res.json(data.result);
+    if (data?.result) {
+      const result = typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
+      return res.json(result);
+    }
 
     // Nothing stored yet — generate live and persist for subsequent requests
     const result = await generateMarketNarrative();

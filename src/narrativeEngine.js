@@ -143,11 +143,12 @@ async function generateMarketNarrative() {
     messages:        [{ role: 'user', content: prompt }],
   });
 
-  const result = JSON.parse(completion.choices[0].message.content.trim());
+  const raw    = completion.choices[0].message.content.trim();
+  const result = JSON.parse(raw);
 
   const { error } = await supabase
     .from(TABLE)
-    .upsert({ id: 1, computed_at: new Date().toISOString(), result }, { onConflict: 'id' });
+    .upsert({ id: 1, computed_at: new Date().toISOString(), result: raw }, { onConflict: 'id' });
 
   if (error) throw new Error(`narrative upsert: ${error.message}`);
 
