@@ -675,7 +675,15 @@ function renderLiveOpportunities(states) {
   const el = document.getElementById('live-opportunities');
   if (!el) return;
 
-  const live = (states || []).filter(s => s.state === 'READY_TO_ENTER');
+  const noSignal = _csigDataLoaded && !_csigCurrencies.size;
+  if (noSignal) {
+    el.innerHTML = '<p class="empty-state">No currency signal — at least two currencies must qualify before opportunities appear</p>';
+    const sec = document.getElementById('section-live');
+    if (sec) sec.style.borderColor = 'var(--border)';
+    return;
+  }
+
+  const live = (states || []).filter(s => s.state === 'READY_TO_ENTER' && hasCsigCurrency(s.instrument));
 
   if (!live.length) {
     el.innerHTML = '<p class="empty-state" style="color:var(--text-muted)">No live opportunities right now — monitoring active setups</p>';
@@ -737,9 +745,11 @@ function computeTopSetups(states) {
 
 function renderTopSetups(states) {
   const el = document.getElementById('top-setups');
+  const noSignal = _csigDataLoaded && !_csigCurrencies.size;
+  if (noSignal) { el.innerHTML = '<p class="empty-state">No currency signal — at least two currencies must qualify before setups appear</p>'; return; }
   if (!states?.length) { el.innerHTML = '<p class="empty-state">No setups forming</p>'; return; }
 
-  const setups = computeTopSetups(states);
+  const setups = computeTopSetups(states).filter(s => hasCsigCurrency(s.instrument));
   if (!setups.length) { el.innerHTML = '<p class="empty-state">No setups forming</p>'; return; }
 
   const rankCls = ['hot', 'warm', 'cool'];
@@ -840,6 +850,12 @@ function renderSignals(data, statesArr, journalEntries) {
   const el = document.getElementById('watchlist-list');
   if (!el) return;
 
+  const noSignal = _csigDataLoaded && !_csigCurrencies.size;
+  if (noSignal) {
+    el.innerHTML = '<p class="empty-state">No currency signal — at least two currencies must qualify before watchlist populates</p>';
+    return;
+  }
+
   // Signal map for entry/stop/target price lookup
   const sigMap = {};
   (data?.signals || []).forEach(s => { sigMap[s.instrument] = s; });
@@ -869,6 +885,7 @@ function renderSignals(data, statesArr, journalEntries) {
   }
 
   const actionable = [...watchlist.values()]
+    .filter(s => hasCsigCurrency(s.instrument))
     .sort((a, b) => {
       if ((b.pipeline_stage || 0) !== (a.pipeline_stage || 0))
         return (b.pipeline_stage || 0) - (a.pipeline_stage || 0);
@@ -916,8 +933,10 @@ function renderCurrencySignals(data) {
     .filter(c => c.combined < -CS_THRESHOLD && c.h3 < -CS_THRESHOLD)
     .sort((a, b) => a.combined - b.combined);
 
-  // Expose flagged currencies globally so section renderers can filter pairs
-  _csigCurrencies = new Set([...strong.map(c => c.cur), ...weak.map(c => c.cur)]);
+  // Expose flagged currencies globally so section renderers can filter pairs.
+  // At least 2 currencies must qualify for signals to be considered valid.
+  const allQualified = [...strong.map(c => c.cur), ...weak.map(c => c.cur)];
+  _csigCurrencies = allQualified.length >= 2 ? new Set(allQualified) : new Set();
   _csigDataLoaded = true; // strength data processed — empty set now means "no signals"
 
   function scoreBar(val, max) {
@@ -1228,8 +1247,10 @@ function updateM15Bar(data) {
 function renderRisk(data) {
   if (!data) return;
   const el       = document.getElementById('risk-list');
-  const approved = data.approved || [];
+  const noSignal = _csigDataLoaded && !_csigCurrencies.size;
+  if (noSignal) { el.innerHTML = '<p class="empty-state">No currency signal — at least two currencies must qualify before trades are approved</p>'; return; }
 
+  const approved = (data.approved || []).filter(r => hasCsigCurrency(r.instrument));
 
   if (approved.length === 0) { el.innerHTML = '<p class="empty-state">No approved trades today</p>'; return; }
   el.innerHTML = approved.map(r => {
@@ -2662,7 +2683,8 @@ function _renderJournalModal(e, newsEvents, sessionEntries, prevEntry) {
   // If strong + weak are both empty → filter returns false for everything
   // → setups/signals/market-state sections show nothing for that hour.
   const { strong: _csStrong, weak: _csWeak } = computeEntryCsig(e);
-  const _entryCsSet = new Set([..._csStrong, ..._csWeak]);
+  const _allEntryCsig = [..._csStrong, ..._csWeak];
+  const _entryCsSet = _allEntryCsig.length >= 2 ? new Set(_allEntryCsig) : new Set();
   const entryCsigFilter = instr => {
     if (!_entryCsSet.size) return false;
     const base  = (instr || '').slice(0, 3).toUpperCase();
