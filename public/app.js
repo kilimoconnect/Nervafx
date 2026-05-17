@@ -2005,7 +2005,7 @@ function _meHistoryPanel(rows, liveSessions) {
         <span class="me-hist-cycle"><span class="me-hist-dot" style="background:${dot}"></span>${cycle}</span>
         <span class="me-hist-energy">E:${Math.round(r.market_energy||0)}</span>
         <span class="me-hist-brd">Brd:${Math.round(r.breadth_score||0)}</span>
-        <span class="me-hist-dir ${dir}">${r.strongest_ccy||'—'} vs ${r.weakest_ccy||'—'}</span>
+        <span class="me-hist-dir ${dir}"><span class="me-hist-strong">${r.strongest_ccy||'—'} ↑</span> <span class="me-hist-weak">${r.weakest_ccy||'—'} ↓</span></span>
       </div>`;
     }).join('');
 

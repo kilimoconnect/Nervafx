@@ -4817,10 +4817,11 @@ body::after {
 .me-hist-dir {
   font-size: 10px;
   font-weight: 600;
+  display: flex;
+  gap: 4px;
 }
-.me-hist-dir.bull    { color: #22c55e; }
-.me-hist-dir.bear    { color: #ef4444; }
-.me-hist-dir.neutral { color: #64748b; }
+.me-hist-strong { color: #22c55e; }
+.me-hist-weak   { color: #ef4444; }
 .me-hist-na {
   font-size: 11px;
   color: var(--text-dim);
