@@ -3983,16 +3983,25 @@ body::after {
   border-top: 1px solid rgba(255,255,255,0.06);
 }
 
-.bc-sess-tag {
-  position: absolute;
-  top: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 7px;
+.bc-label-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0 0 4px;
+}
+
+.bc-label-span {
+  font-size: 9px;
   font-weight: 700;
-  white-space: nowrap;
-  letter-spacing: 0.03em;
   text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.bc-label-spacer {
+  width: 5px;
+  flex-shrink: 0;
 }
 
 .bc-sess-divider {

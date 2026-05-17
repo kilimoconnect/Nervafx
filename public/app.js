@@ -1839,8 +1839,31 @@ function _renderBreadthBars(container, rows) {
       }
     }
 
+    // Build session groups to count spans for label row
+    const sessGroups = [];
+    let curGroup = null;
+    for (const b of bars) {
+      if (!curGroup || curGroup.session !== b.session) {
+        curGroup = { session: b.session, count: 0 };
+        sessGroups.push(curGroup);
+      }
+      curGroup.count++;
+    }
+    // Dividers between groups add 1 unit each (except before first)
+    const totalCols = bars.length + Math.max(0, sessGroups.length - 1);
+
+    // Session label row
+    let labelRow = '<div class="bc-label-row">';
+    sessGroups.forEach((g, gi) => {
+      if (gi > 0) labelRow += '<div class="bc-label-spacer"></div>';
+      const color = SESS_COLOR[g.session] || '#64748b';
+      labelRow += `<div class="bc-label-span" style="flex:${g.count};color:${color}">${SESS_LABEL[g.session] || g.session}</div>`;
+    });
+    labelRow += '</div>';
+
     html += `<div class="bc-day-block">
       <div class="bc-date-header">${dayLabel}</div>
+      ${labelRow}
       <div class="bc-unified-chart">`;
 
     let prevSess = '';
@@ -1854,17 +1877,12 @@ function _renderBreadthBars(container, rows) {
       const barColor = highlighted ? '#22c55e' : color;
       const cls = highlighted ? 'bc-bar bc-bar-streak' : 'bc-bar';
 
-      // Session divider
       if (b.session !== prevSess && prevSess !== '') {
         html += '<div class="bc-sess-divider"></div>';
       }
-
-      // Session label on first bar of each session
-      const showLabel = b.session !== prevSess;
       prevSess = b.session;
 
       html += `<div class="${cls}" title="${SESS_LABEL[b.session] || b.session}: ${b.breadth}% at ${localTime} ${tzLabel}">
-        ${showLabel ? `<span class="bc-sess-tag" style="color:${color}">${SESS_LABEL[b.session] || b.session}</span>` : ''}
         <span class="bc-bar-val">${b.breadth}</span>
         <div class="bc-bar-inner">
           <div class="bc-bar-fill" style="height:${pct}%;background:${barColor}"></div>
