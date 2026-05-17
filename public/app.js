@@ -1957,10 +1957,57 @@ function _renderBreadthBars(container, rows) {
       </div>`;
     }
 
-    html += `</div></div>`;
+    html += `</div>`;
+
+    // Per-day explanation
+    const dayMax = Math.max(...breadths);
+    const dayAvg = Math.round(breadths.reduce((a, b) => a + b, 0) / breadths.length);
+    const streakCount = streaks.size;
+    const peakHour = bars[breadths.indexOf(dayMax)];
+    const peakTime = new Date(peakHour.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
+    const peakSess = SESS_LABEL[peakHour.session] || peakHour.session;
+
+    const dayLines = [];
+    if (dayAvg >= 40) dayLines.push(`Strong overall participation (avg ${dayAvg}) — broad market activity throughout the day.`);
+    else if (dayAvg >= 20) dayLines.push(`Moderate participation (avg ${dayAvg}) — some sessions were active, others quiet.`);
+    else dayLines.push(`Low participation (avg ${dayAvg}) — most of the day was quiet with few pairs moving.`);
+
+    dayLines.push(`Peak breadth of ${dayMax} hit at ${peakTime} during ${peakSess} — this was when the most pairs were moving together.`);
+
+    if (streakCount >= 3) dayLines.push(`Continuation signal detected (${streakCount} bars in streak) — sustained momentum buildup during this day.`);
+    else dayLines.push('No continuation signal — breadth did not sustain 3+ consecutive increases above 10.');
+
+    // Session-level summaries
+    for (const g of sessGroups) {
+      const sBars = bars.filter(b => b.session === g.session);
+      const sAvg = Math.round(sBars.reduce((a, b) => a + b.breadth, 0) / sBars.length);
+      const sMax = Math.max(...sBars.map(b => b.breadth));
+      const sLabel = SESS_LABEL[g.session] || g.session;
+      if (sAvg >= 35) dayLines.push(`${sLabel}: active session (avg ${sAvg}, peak ${sMax}) — good trading conditions.`);
+      else if (sAvg >= 15) dayLines.push(`${sLabel}: moderate activity (avg ${sAvg}, peak ${sMax}) — selective opportunities.`);
+      else dayLines.push(`${sLabel}: quiet session (avg ${sAvg}, peak ${sMax}) — limited opportunities.`);
+    }
+
+    html += `<div class="bc-day-explain">
+      <ul class="bc-explain-list">${dayLines.map(l => `<li>${l}</li>`).join('')}</ul>
+    </div></div>`;
   }
 
   html += '</div>';
+
+  // Guide box
+  html += `<div class="bc-guide">
+    <div class="bc-guide-title">How to read this chart</div>
+    <ul class="bc-guide-list">
+      <li><strong>Breadth</strong> measures how many of the 28 currency pairs are moving in the same direction during each hour. Higher = more pairs participating.</li>
+      <li><strong>Rising bars</strong> mean more pairs are joining the move — the market is building momentum and trends are more likely to continue.</li>
+      <li><strong>Falling bars</strong> mean pairs are dropping out — momentum is fading and reversals or ranging conditions may follow.</li>
+      <li><strong>Green bars</strong> highlight 3+ consecutive hourly increases (both ≥10) — a continuation signal suggesting the move has broad support and is likely to persist.</li>
+      <li><strong>Low breadth</strong> (under 15) means very few pairs are active — avoid trading as moves lack conviction.</li>
+      <li><strong>High breadth</strong> (above 50) with agreement means strong trending conditions — ideal for trend-following entries.</li>
+    </ul>
+  </div>`;
+
   html += `<div class="bc-legend">
     <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#f59e0b"></span> Asia</span>
     <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#0ea5e9"></span> London</span>

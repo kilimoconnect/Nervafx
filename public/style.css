@@ -4037,6 +4037,84 @@ body::after {
   margin: 0 1px;
 }
 
+/* Breadth chart guide & per-day explanations */
+.bc-guide {
+  margin: 16px 0 12px;
+  padding: 12px 14px;
+  background: rgba(59, 130, 246, 0.06);
+  border: 1px solid rgba(59, 130, 246, 0.15);
+  border-radius: var(--radius-sm);
+}
+
+.bc-guide-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+
+.bc-guide-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.bc-guide-list li {
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--text-muted);
+  padding-left: 14px;
+  position: relative;
+}
+
+.bc-guide-list li::before {
+  content: '•';
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+}
+
+.bc-guide-list li strong {
+  color: var(--text);
+}
+
+.bc-day-explain {
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 4px;
+  border-left: 2px solid var(--accent);
+}
+
+.bc-explain-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.bc-explain-list li {
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  padding-left: 12px;
+  position: relative;
+}
+
+.bc-explain-list li::before {
+  content: '–';
+  position: absolute;
+  left: 0;
+  color: var(--text-dim);
+}
+
 .bc-legend {
   display: flex;
   align-items: center;
