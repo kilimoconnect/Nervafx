@@ -4844,7 +4844,15 @@ body::after {
 @media (max-width: 600px) {
   .me-hist-day { flex-direction: column; gap: 4px; }
   .me-hist-date { width: auto; padding-top: 0; }
-  .me-hist-sessions { grid-template-columns: 1fr; }
+  .me-hist-sessions {
+    display: flex;
+    overflow-x: auto;
+    gap: 8px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .me-hist-sessions::-webkit-scrollbar { display: none; }
+  .me-hist-cell { min-width: 140px; flex-shrink: 0; }
 }
 
 /* Session analyses — 3-column grid below the card row */
