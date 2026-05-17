@@ -1653,13 +1653,15 @@ function _meSessionCard(name, s, status) {
 }
 
 function _meExpansionPressurePanel(ep) {
+  const score  = ep?.score  || 0;
+  if (score === 0) return '';
+
   const riskColor = ep?.risk === 'HIGH'     ? '#ef4444'
                   : ep?.risk === 'BUILDING' ? '#f59e0b'
                   : ep?.risk === 'LOW'      ? '#0ea5e9'
                   : '#475569';
 
   const streak = ep?.streak || 0;
-  const score  = ep?.score  || 0;
 
   // Compression sequence block
   let compressionBlock;
