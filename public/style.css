@@ -4908,7 +4908,7 @@ body::after {
 
 .sh-row {
   display: grid;
-  grid-template-columns: 90px 70px 1fr 36px 36px 36px 90px 110px;
+  grid-template-columns: 90px 70px minmax(100px,180px) 36px 36px 36px 80px 100px;
   align-items: center;
   gap: 0;
   padding: 0 4px;
@@ -5037,7 +5037,7 @@ body::after {
 
 @media (max-width: 768px) {
   .sh-row {
-    grid-template-columns: 72px 56px 1fr 30px 30px 30px 72px 88px;
+    grid-template-columns: 72px 56px minmax(80px,140px) 30px 30px 30px 66px 80px;
     font-size: 9px;
     min-height: 24px;
     padding: 0 2px;
