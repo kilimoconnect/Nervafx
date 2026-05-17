@@ -2384,6 +2384,81 @@ async function fetchMarketActivity() {
 
 
 
+// ─── Momentum Continuation Signal ────────────────────────────────────────────
+// Detects 3+ consecutive hourly increases (both ≥10) in today's session data.
+
+let _momentumSignal = null; // { session, streak, peakVal }
+
+async function fetchMomentumSignal() {
+  try {
+    const data = await api('/api/session-activity?type=hourly&days=1');
+    const rows = data.hourly || [];
+    if (!rows.length) { _momentumSignal = null; updateMomentumBar(); return; }
+
+    const SKIP = new Set(['LOW_LIQUIDITY', 'DEAD_HOURS']);
+    const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York' };
+    const valid = rows.filter(r => !SKIP.has(r.session_name))
+      .sort((a, b) => a.time_utc.localeCompare(b.time_utc));
+
+    // Check for 3+ consecutive increases (both ≥10) across today's bars
+    const breadths = valid.map(r => Math.round(parseFloat(r.breadth_score) || 0));
+    let bestStreak = 0, bestEnd = -1, streak = 0;
+    for (let i = 1; i < breadths.length; i++) {
+      if (breadths[i] > breadths[i - 1] && breadths[i] >= 10 && breadths[i - 1] >= 10) {
+        streak++;
+        if (streak >= 2 && streak > bestStreak) {
+          bestStreak = streak;
+          bestEnd = i;
+        }
+      } else {
+        streak = 0;
+      }
+    }
+
+    if (bestStreak >= 2 && bestEnd >= 0) {
+      const peakRow = valid[bestEnd];
+      _momentumSignal = {
+        session: SESS_LABEL[peakRow.session_name] || peakRow.session_name,
+        streak: bestStreak + 1,
+        peakVal: breadths[bestEnd],
+      };
+    } else {
+      _momentumSignal = null;
+    }
+    updateMomentumBar();
+  } catch (_) {
+    _momentumSignal = null;
+    updateMomentumBar();
+  }
+}
+
+function updateMomentumBar() {
+  const bar = document.getElementById('momentum-signal-bar');
+  if (!bar) return;
+
+  if (document.body.classList.contains('plan-free')) {
+    bar.style.display = 'none';
+    return;
+  }
+
+  if (!_momentumSignal) {
+    bar.style.display = 'none';
+    return;
+  }
+
+  const text = document.getElementById('mom-bar-text');
+  if (text) text.textContent = `${_momentumSignal.streak} consecutive rises in ${_momentumSignal.session} — continuation likely`;
+  bar.style.display = 'flex';
+}
+
+function _renderJrnMomentumSignal() {
+  if (!_momentumSignal) return '';
+  return _jrnSection('🚀 Momentum Continuation', `
+    <p style="margin:0;line-height:1.5"><strong>${_momentumSignal.streak} consecutive rises in ${_momentumSignal.session}</strong> — broad participation supports continuation. Peak value: ${_momentumSignal.peakVal}.</p>
+    <p style="margin:6px 0 0;opacity:.75;font-size:.85em">Multiple currencies moving together suggests the trend has structural support and is likely to persist.</p>
+  `);
+}
+
 // ─── Risk Sentiment ───────────────────────────────────────────────────────────
 
 // ─── Data quality ─────────────────────────────────────────────────────────────
@@ -2710,6 +2785,7 @@ function _renderJournalModal(e, newsEvents, sessionEntries, prevEntry) {
     newsEvents !== null ? renderJrnCalendarSection(newsEvents, e.time) : _jrnSection('📅 Economic Calendar', '<p class="jrn-empty jrn-loading">Loading…</p>'),
     renderJrnCsigSection(e),
     renderJrnStrengthSection(e.currency_strength),
+    _renderJrnMomentumSignal(),
     e.m15_impulses != null ? renderJrnM15Section(e.m15_impulses) : '',
     renderJrnSetupsSection(e.top_setups || [], signals, entryCsigFilter),
     prevEntry !== undefined ? renderJrnPrevSessionSection(prevEntry) : '',
@@ -2810,6 +2886,7 @@ async function refresh() {
     updateHeader(risk);
     renderSession(sessionData);
     fetchMarketActivity(); // non-blocking — separate fetch, renders independently
+    fetchMomentumSignal(); // non-blocking — checks for continuation signal
     buildChart(strength, activeTF);
     renderCurrencySignals(strength);          // must run first — populates _csigCurrencies
     renderLiveOpportunities(states.states || []);

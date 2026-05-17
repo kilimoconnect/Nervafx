@@ -3884,6 +3884,58 @@ body::after {
 .plan-pro .premium-only {
   display: none !important;
 }
+
+/* ─── Momentum continuation signal bar (inline in header) ─────────────────── */
+.momentum-signal-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  background: rgba(22, 163, 74, 0.12);
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  max-width: 340px;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.mom-bar-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #22c55e;
+  flex-shrink: 0;
+  animation: mom-pulse 2s ease-in-out infinite;
+}
+
+@keyframes mom-pulse {
+  0%, 100% { opacity: 1;   box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
+  50%       { opacity: 0.7; box-shadow: 0 0 0 6px rgba(34,197,94,0);  }
+}
+
+.mom-bar-label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #22c55e;
+  flex-shrink: 0;
+}
+
+.mom-bar-text {
+  font-size: 10px;
+  font-weight: 600;
+  color: #86efac;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 700px) {
+  .momentum-signal-bar { max-width: 180px; padding: 3px 8px; }
+  .mom-bar-label { display: none; }
+}
 .me-ai-toggle.active {
   background: rgba(99,102,241,0.15);
   border-color: rgba(99,102,241,0.4);
