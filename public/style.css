@@ -4137,6 +4137,27 @@ body::after {
   padding: 4px 0;
 }
 
+.me-comp-header {
+  display: grid;
+  grid-template-columns: 68px 1fr 72px;
+  gap: 7px;
+  margin-bottom: 2px;
+}
+
+.me-comp-hdr-right {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.me-comp-hdr-lbl {
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+
 .me-comp-row {
   display: grid;
   grid-template-columns: 68px 1fr 72px;
