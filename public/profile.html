@@ -380,6 +380,47 @@
       </div>
     </div>
 
+    <!-- ── Email Notifications ── -->
+    <div class="section">
+      <div class="section-label">Email Notifications</div>
+      <div class="pcard" id="card-email">
+        <div class="field">
+          <label style="display:flex;align-items:center;gap:12px;cursor:pointer">
+            <input type="checkbox" id="pref-signal-alerts" checked style="width:18px;height:18px;accent-color:#3b82f6;cursor:pointer">
+            <div>
+              <div style="font-size:14px;font-weight:600;color:var(--text)">Signal Alerts</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px">Get notified when new trade signals fire (BUY/SELL with 65%+ confidence)</div>
+            </div>
+          </label>
+        </div>
+        <div class="divider"></div>
+        <div class="field">
+          <label style="display:flex;align-items:center;gap:12px;cursor:pointer">
+            <input type="checkbox" id="pref-daily-digest" checked style="width:18px;height:18px;accent-color:#3b82f6;cursor:pointer">
+            <div>
+              <div style="font-size:14px;font-weight:600;color:var(--text)">Daily Digest</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px">End-of-day summary with session energy, top setups, and market conditions</div>
+            </div>
+          </label>
+        </div>
+        <div class="divider"></div>
+        <div class="field">
+          <label style="display:flex;align-items:center;gap:12px;cursor:pointer">
+            <input type="checkbox" id="pref-upgrade-prompts" checked style="width:18px;height:18px;accent-color:#3b82f6;cursor:pointer">
+            <div>
+              <div style="font-size:14px;font-weight:600;color:var(--text)">Product Updates</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px">Feature announcements and plan upgrade opportunities</div>
+            </div>
+          </label>
+        </div>
+        <div class="divider"></div>
+        <div class="card-footer">
+          <button class="btn-save" onclick="saveEmailPrefs()">Save Preferences</button>
+          <span class="save-msg" id="msg-email"></span>
+        </div>
+      </div>
+    </div>
+
     <!-- ── Danger Zone ── -->
     <div class="section">
       <div class="section-label">Danger Zone</div>
@@ -424,6 +465,7 @@
     window.addEventListener('DOMContentLoaded', () => {
       buildTzList('UTC'); // immediate population; overridden once loadProfile() resolves
       loadProfile();
+      loadEmailPrefs();
       if (typeof gsap === 'undefined') return;
       gsap.timeline({ defaults: { ease: 'power3.out' } })
         .from('.page-header', { y: -14, opacity: 0, duration: 0.5 })
@@ -651,6 +693,40 @@
         errEl.textContent = 'Network error. Please try again.';
         errEl.className   = 'modal-err show';
         btn.disabled = false; btn.textContent = 'Delete Account';
+      }
+    }
+
+    // ── Email Preferences ──
+    async function loadEmailPrefs() {
+      try {
+        const res  = await fetch('/api/email-preferences', { headers: { 'Authorization': 'Bearer ' + token } });
+        const data = await res.json();
+        if (data.signal_alerts !== undefined)   document.getElementById('pref-signal-alerts').checked   = data.signal_alerts;
+        if (data.daily_digest !== undefined)    document.getElementById('pref-daily-digest').checked    = data.daily_digest;
+        if (data.upgrade_prompts !== undefined) document.getElementById('pref-upgrade-prompts').checked = data.upgrade_prompts;
+      } catch(e) { console.error('loadEmailPrefs:', e); }
+    }
+
+    async function saveEmailPrefs() {
+      const btn = document.querySelector('#card-email .btn-save');
+      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Saving…';
+      try {
+        const res = await fetch('/api/email-preferences', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({
+            signal_alerts:   document.getElementById('pref-signal-alerts').checked,
+            daily_digest:    document.getElementById('pref-daily-digest').checked,
+            upgrade_prompts: document.getElementById('pref-upgrade-prompts').checked,
+          }),
+        });
+        const data = await res.json();
+        if (data.error) { showSaveMsg('msg-email', data.error, 'err'); return; }
+        showSaveMsg('msg-email', '✓ Saved', 'ok');
+      } catch(e) {
+        showSaveMsg('msg-email', 'Network error', 'err');
+      } finally {
+        btn.disabled = false; btn.textContent = 'Save Preferences';
       }
     }
 

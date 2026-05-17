@@ -1,6 +1,11 @@
 require('dotenv').config();
 
 const config = {
+  brevo: {
+    apiKey:      process.env.BREVO_API_KEY,
+    senderName:  process.env.BREVO_SENDER_NAME  || 'NervaFX',
+    senderEmail: process.env.BREVO_SENDER_EMAIL || 'noreply@nervafx.com',
+  },
   oanda: {
     apiKey: process.env.OANDA_API_KEY,
     accountId: process.env.OANDA_ACCOUNT_ID,

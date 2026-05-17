@@ -1,4 +1,5 @@
 const { getClient } = require('./_db');
+const { sendEmail, welcomeEmail } = require('../src/emailService');
 
 module.exports = async function handler(req, res) {
   // CORS
@@ -39,6 +40,11 @@ module.exports = async function handler(req, res) {
       // Auto sign-in right after signup
       const { data: session, error: signErr } = await sb.auth.signInWithPassword({ email, password });
       if (signErr) return res.status(400).json({ error: signErr.message });
+
+      // Send welcome email (non-blocking)
+      sendEmail(email, welcomeEmail(firstName)).catch(e =>
+        console.error('[welcome-email]', e.message)
+      );
 
       return res.json({
         token:         session.session.access_token,
