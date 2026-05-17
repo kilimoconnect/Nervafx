@@ -2206,25 +2206,43 @@ function renderJrnCalendarSection(events, entryTime) {
     </div>`);
 }
 
-function _jrnEnergyBadge() { return ''; }
-
 function renderJrnSessionPerfSection(e, sessionEntries) {
   if (!sessionEntries || sessionEntries.length <= 1) {
     return _jrnSection(`📊 Session: ${sessionLabel(e.session_name)}`, '<p class="jrn-empty">First snapshot of this session.</p>');
-
   }
-  const first = sessionEntries[0];
-  const energyBadge = _jrnEnergyBadge(e.time, e.session_name);
+
   const allSignals = sessionEntries.flatMap(x => (x.signals_summary?.entered || []));
-  const trendDelta = e.trend_pairs - first.trend_pairs;
-  const readyDelta = e.ready_pairs - first.ready_pairs;
-  const delta = v => v > 0 ? `<span style="color:#4ade80">+${v}</span>` : v < 0 ? `<span style="color:#f87171">${v}</span>` : `<span style="color:var(--text-dim)">±0</span>`;
-  return _jrnSection(`📊 Session: ${sessionLabel(e.session_name)} · ${sessionEntries.length} snapshots`, `
+
+  // Use market energy from the stored summary if available
+  const me = _jrnCachedEnergy?.sessions?.find(s => s.session_name === e.session_name);
+  if (me) {
+    const cycle = (me.energy_cycle || '').replace(/_/g, ' ');
+    const eng   = Math.round(me.market_energy || 0);
+    const brd   = Math.round(me.breadth_score || 0);
+    const liq   = Math.round(me.liquidity_score || 0);
+    const bull  = Math.round(me.bullish_breadth || 0);
+    const bear  = Math.round(me.bearish_breadth || 0);
+    const liqColor = liq >= 40 ? '#22c55e' : liq >= 25 ? '#eab308' : liq >= 12 ? '#f97316' : '#64748b';
+    const cycleColor = cycle.includes('EXPAN') || cycle.includes('EXPLOSIVE') ? '#22c55e'
+                     : cycle.includes('TRANS') ? '#0ea5e9'
+                     : cycle.includes('COMP') || cycle.includes('DEAD') ? '#f59e0b' : '#64748b';
+
+    return _jrnSection(`📊 ${sessionLabel(e.session_name)} · ${cycle}`, `
+      <div class="jrn-sess-stats">
+        <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Energy</span><span class="jrn-sess-val" style="color:${cycleColor}">${eng}</span></div>
+        <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Breadth</span><span class="jrn-sess-val">${brd}</span></div>
+        <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Liquidity</span><span class="jrn-sess-val" style="color:${liqColor}">${liq}</span></div>
+        <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Pressure</span><span class="jrn-sess-val">▲${bull}% ▼${bear}%</span></div>
+        <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Flow</span><span class="jrn-sess-val"><span style="color:#22c55e">${me.strongest_ccy||'—'}↑</span> <span style="color:#ef4444">${me.weakest_ccy||'—'}↓</span></span></div>
+        ${allSignals.length ? `<div class="jrn-sess-stat jrn-sess-full"><span class="jrn-sess-lbl">Signals</span><span class="jrn-sess-val">${allSignals.map(s => `${pair(s.instrument)} ${s.signal}`).join(', ')}</span></div>` : ''}
+      </div>`);
+  }
+
+  // Fallback if no market energy data
+  const first = sessionEntries[0];
+  return _jrnSection(`📊 ${sessionLabel(e.session_name)} · ${sessionEntries.length}H`, `
     <div class="jrn-sess-stats">
       <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Duration</span><span class="jrn-sess-val">${sessionEntries.length}H</span></div>
-      ${energyBadge ? `<div class="jrn-sess-stat"><span class="jrn-sess-lbl">Energy</span><span class="jrn-sess-val">${energyBadge}</span></div>` : ''}
-      <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Trend pairs</span><span class="jrn-sess-val">${first.trend_pairs} → ${e.trend_pairs} ${delta(trendDelta)}</span></div>
-      <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Ready pairs</span><span class="jrn-sess-val">${first.ready_pairs} → ${e.ready_pairs} ${delta(readyDelta)}</span></div>
       ${allSignals.length ? `<div class="jrn-sess-stat jrn-sess-full"><span class="jrn-sess-lbl">Signals</span><span class="jrn-sess-val">${allSignals.map(s => `${pair(s.instrument)} ${s.signal}`).join(', ')}</span></div>` : ''}
     </div>`);
 }
@@ -2233,13 +2251,10 @@ function renderJrnPrevSessionSection(prevEntry) {
   if (!prevEntry) return _jrnSection('📋 Previous Journal', '<p class="jrn-empty">No previous entry in loaded history.</p>');
   const sessCls = (prevEntry.session_quality || 'BLOCKED').toLowerCase().replace(/_/g, '-');
   const entered = (prevEntry.signals_summary?.entered || []);
-  const prevEnergyBadge = _jrnEnergyBadge(prevEntry.time, prevEntry.session_name);
   return _jrnSection('📋 Previous Journal', `
     <div class="jrn-prev-meta">
       <span class="jrn-prev-time">${fmtTime(prevEntry.time)}</span>
       <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${sessionLabel(prevEntry.session_name)}</span>
-      ${prevEnergyBadge}
-      <span class="jrn-prev-pairs">${prevEntry.trend_pairs}T · ${prevEntry.pullback_pairs}PB · ${prevEntry.ready_pairs}R</span>
     </div>
     ${prevEntry.summary ? `<p class="jrn-prev-summary">${clean(prevEntry.summary)}</p>` : '<p class="jrn-empty">No summary recorded.</p>'}
     ${entered.length ? `<div class="jrn-prev-sigs">${entered.map(s => {
@@ -2327,6 +2342,8 @@ function renderJrnOutcomesSection(e) {
 
 // ─── Journal modal open/close ─────────────────────────────────────────────────
 
+let _jrnCachedEnergy = null;
+
 async function openJournalModal(id) {
   const e = _journalEntries[id];
   if (!e) return;
@@ -2339,11 +2356,15 @@ async function openJournalModal(id) {
   const sessionEntries = all.filter(x => x.session_name === e.session_name && x.time <= e.time);
   const prevEntry = [...all].reverse().find(x => x.time < e.time) || null; // immediately preceding entry (any session)
 
-  // Fetch news events for this date async, then re-render
+  // Fetch market energy + news in parallel
   let newsEvents = [];
   try {
-    const r = await api(`/api/news?date=${e.time.slice(0, 10)}`);
-    newsEvents = r.events || [];
+    const [newsR, energyR] = await Promise.all([
+      api(`/api/news?date=${e.time.slice(0, 10)}`).catch(() => ({})),
+      api('/api/market-energy').catch(() => null),
+    ]);
+    newsEvents = newsR.events || [];
+    _jrnCachedEnergy = energyR;
   } catch {}
 
   _renderJournalModal(e, newsEvents, sessionEntries, prevEntry);
