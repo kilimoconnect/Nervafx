@@ -15,6 +15,7 @@
 
 const { supabase } = require('./supabase');
 const { getCurrentSession } = require('./sessionEngine');
+const { getMarketEnergyData } = require('./sessionActivity');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -203,95 +204,53 @@ async function collectAiAnalysis() {
 
 // ─── Summary builder ──────────────────────────────────────────────────────────
 
-function buildSummary({ session, sentiment, states, signals, aiAnalysis, topSetups, m15Impulses, trackedPullbacks, newPullbackCount }) {
+function buildSummary({ session, sentiment, states, signals, aiAnalysis, topSetups, m15Impulses, trackedPullbacks, newPullbackCount, marketEnergy }) {
   const lines = [];
 
-  // 1. Session
-  const sessionStr = session.trades_allowed
-    ? `${session.label} (${session.quality.replace('_', ' ')} quality)`
-    : `${session.label} — trading blocked (${session.block_reason || 'low liquidity'})`;
-  lines.push(`H1 analysis completed. Session: ${sessionStr}.`);
+  // 1. Market Energy Analysis (primary)
+  if (marketEnergy?.sessions?.length) {
+    const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York' };
+    const sessLines = marketEnergy.sessions
+      .filter(s => s.session_name !== 'LOW_LIQUIDITY')
+      .map(s => {
+        const name = SESS_LABEL[s.session_name] || s.session_name;
+        const cycle = (s.energy_cycle || '').replace(/_/g, ' ');
+        const eng   = Math.round(s.market_energy || 0);
+        const brd   = Math.round(s.breadth_score || 0);
+        const liq   = Math.round(s.liquidity_score || 0);
+        const bull  = Math.round(s.bullish_breadth || 0);
+        const bear  = Math.round(s.bearish_breadth || 0);
+        const strong = s.strongest_ccy || '—';
+        const weak   = s.weakest_ccy || '—';
+        return `${name}: ${cycle} E:${eng} Brd:${brd} Liq:${liq} ▲${bull}%/▼${bear}% ${strong}↑ ${weak}↓`;
+      });
+    lines.push(sessLines.join(' | '));
 
-  // 2. Sentiment
-  if (sentiment) {
-    const sent = sentiment.sentiment === 'RISK_ON'  ? 'risk-on'
-               : sentiment.sentiment === 'RISK_OFF' ? 'risk-off'
-               : 'neutral';
-    lines.push(
-      `Risk sentiment: ${sent} (${(sentiment.environment || 'CALM').toLowerCase()}, ` +
-      `confidence ${sentiment.confidence}%, net ${sentiment.net_score}).`
-    );
+    if (marketEnergy.marketCycle) {
+      lines.push(`Market cycle: ${marketEnergy.marketCycle.replace(/_/g, ' ')}.`);
+    }
   } else {
-    lines.push('Risk sentiment: unavailable.');
+    lines.push(`${session.label}: No market energy data available.`);
   }
 
-  // 3. Market overview — use tracked counts for pullback/ready
-  const trend_pairs    = states.filter(s => s.state === 'TREND').length;
-  const no_trade_pairs = states.filter(s => s.state === 'NO_TRADE').length;
-  const tracked_total  = trackedPullbacks.length;
-  const pullback_pairs = trackedPullbacks.filter(t => ['PULLBACK_STARTING', 'PULLBACK_ACTIVE'].includes(t.latest_state)).length;
-  const ready_pairs    = trackedPullbacks.filter(t => t.latest_state === 'READY_TO_ENTER').length;
-
-  let pbStr = `${pullback_pairs} pullback`;
-  if (tracked_total > pullback_pairs) pbStr += ` (${tracked_total} tracked)`;
-  if (newPullbackCount > 0) pbStr += ` [+${newPullbackCount} new]`;
-
-  lines.push(
-    `Market scan across 28 pairs: ${trend_pairs} trend, ${pbStr}, ` +
-    `${ready_pairs} ready-to-enter, ${no_trade_pairs} no-trade.`
-  );
-
-  // 4. Top setups
+  // 2. Top setups (if any)
   if (topSetups.length > 0) {
-    const setStr = topSetups.map(s =>
-      `${pairLabel(s.instrument)} ${s.bias} ${s.confidence}% [${s.state}]`
+    const setStr = topSetups.slice(0, 3).map(s =>
+      `${pairLabel(s.instrument)} ${s.bias} ${s.confidence}%`
     ).join(', ');
     lines.push(`Top setups: ${setStr}.`);
-  } else {
-    lines.push('No active setups identified this cycle.');
   }
 
-  // 5. Signals
+  // 3. Signals
   if (signals.entered.length > 0) {
     const sigStr = signals.entered.map(s => `${pairLabel(s.instrument)} ${s.signal}`).join(', ');
-    lines.push(`Entry signals generated: ${sigStr}.`);
-  } else if (ready_pairs > 0) {
-    const readyStr = trackedPullbacks
-      .filter(t => t.latest_state === 'READY_TO_ENTER')
-      .map(t => `${pairLabel(t.instrument)} ${t.bias} ${t.latest_conf}%`)
-      .join(', ');
-    const waitSuffix = signals.waiting.length > 0 ? ` ${signals.waiting.length} pairs in waiting state.` : '';
-    lines.push(`No entry signals — ${ready_pairs} pair${ready_pairs > 1 ? 's' : ''} at READY_TO_ENTER: ${readyStr}.${waitSuffix}`);
-  } else if (signals.waiting.length > 0) {
-    lines.push(`No entry signals. ${signals.waiting.length} pairs in waiting state.`);
-  } else {
-    lines.push('No signals generated this cycle.');
+    lines.push(`Entries: ${sigStr}.`);
   }
 
-  // 6. AI highlights — warnings and notable structure
-  const notable = aiAnalysis.filter(a => a.warning || a.structure_type === 'RE-EXPANDING');
-  if (notable.length > 0) {
-    const aiStr = notable.map(a => {
-      const parts = [`${pairLabel(a.instrument)}: ${a.structure_type}`];
-      if (a.warning) parts.push(`⚠ ${a.warning}`);
-      return parts.join(' — ');
-    }).join('; ');
-    lines.push(`AI flags: ${aiStr}.`);
-  }
-
-  // 7. M15 impulse moves
+  // 4. M15 impulse moves
   if (m15Impulses && m15Impulses.length > 0) {
     const m15Str = m15Impulses.map(r => `${pairLabel(r.instrument)} ${r.bias}`).join(', ');
-    lines.push(`M15 impulses active: ${m15Str}.`);
-  }
-
-  // 8. No-trade reason summary
-  if (!session.trades_allowed) {
-    lines.push('No trades approved — outside active session hours.');
-  } else if (sentiment?.sentiment === 'NEUTRAL') {
-    lines.push('No trades approved — risk sentiment neutral, no clear money flow direction.');
-  } else if (ready_pairs === 0) {
-    lines.push('No trades approved — no pairs reached READY_TO_ENTER state.');
+    lines.push(`M15 impulses: ${m15Str}.`);
   }
 
   return lines.join(' ');
@@ -417,11 +376,16 @@ async function writeJournalEntry() {
     no_trade:  signals.no_trade.map(s => ({ instrument: s.instrument })),
   };
 
+  // Fetch market energy for summary
+  let marketEnergy = null;
+  try { marketEnergy = await getMarketEnergyData(); } catch (_) {}
+
   // Build narrative summary
   const summary = buildSummary({
     session, sentiment, states, signals, aiAnalysis, topSetups, m15Impulses,
     trackedPullbacks: tracked_pullback_pairs,
     newPullbackCount: new_pullback_pairs,
+    marketEnergy,
   });
 
   // Preserve existing m15_impulses if fresh collection came back empty
