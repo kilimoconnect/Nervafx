@@ -4660,8 +4660,66 @@ body::after {
   line-height: 1.65;
   color: var(--text-secondary);
 }
+/* ── AI analysis modal — mobile ─────────────────────────────────────────────── */
 @media (max-width: 700px) {
-  .me-di-ccy-grid { grid-template-columns: 1fr; }
+  .me-analysis-overlay {
+    padding: 0;
+    align-items: flex-end;
+  }
+  .me-modal-panel {
+    max-width: 100%;
+    border-radius: 18px 18px 0 0;
+    max-height: 92dvh;
+    overflow-y: auto;
+  }
+  .me-modal-header {
+    padding: 14px 16px 12px;
+    position: sticky;
+    top: 0;
+    background: #0d1526;
+    z-index: 1;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+  }
+  .me-modal-title-label { font-size: 12px; }
+  .me-modal-body {
+    padding: 16px 14px 32px;
+    gap: 22px;
+  }
+  .me-modal-sess-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .me-modal-metrics {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .me-di-ccy-grid {
+    grid-template-columns: 1fr;
+  }
+  .me-di-cycle-row {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .me-di-trigger-row {
+    flex-direction: column;
+    gap: 4px;
+  }
+  .me-di-sum-row {
+    flex-direction: column;
+    gap: 3px;
+  }
+  .me-di-row-label {
+    min-width: unset;
+  }
+  .me-di-summary-rows {
+    gap: 14px;
+  }
+  .me-di-narrative,
+  .me-di-playbook {
+    font-size: 12px;
+  }
+  .me-modal-section-title {
+    font-size: 9px;
+  }
 }
 
 /* Session analyses — 3-column grid below the card row */

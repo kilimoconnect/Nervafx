@@ -1926,8 +1926,7 @@ function renderMarketEnergy(sessions, expansionPressure, marketCycle) {
     ${_meMarketCycleBanner(marketCycle)}
     <div class="me-card-grid">
       ${ORDER.map(name => _meSessionCard(name, byName[name] || null)).join('')}
-    </div>
-    ${_meExpansionPressurePanel(expansionPressure)}`;
+    </div>`;
 
   fetchMarketEnergyNarrative(sessions, expansionPressure, marketCycle);
 }
