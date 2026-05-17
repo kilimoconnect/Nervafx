@@ -656,202 +656,8 @@ function updateHeader(risk) {
   document.getElementById('last-update').textContent  = 'Updated ' + fmtNow();
 }
 
-// ─── AI Analysis ─────────────────────────────────────────────────────────────
-
-// Stores latest aiMap so modal can access it
-let _aiMap = {};
 let _profile = { account_size: null, max_daily_risk_pct: null, max_trades: null };
 let _userTz = 'UTC'; // overridden from profile on every refresh
-
-function aiHtml(ai, instrument) {
-  if (!document.body.classList.contains('plan-premium')) return '';
-  if (!ai) return '';
-  const d    = ai.details || {};
-  const sc   = d.scores   || {};
-  const lp   = d.lifecycle_phase || '';
-  const lc   = d.lifecycle_completion || 0;
-  const sCls = (ai.structure_type || '').replace(/-/g,'_');
-  const lpCls = lp.replace(/-/g,'_').toLowerCase();
-  const cpLabel = d.counter_pressure  || '';
-  const cpCls   = cpLabel.toLowerCase();
-  const clLabel = d.cleanliness_label || '';
-  const clCls   = clLabel.toLowerCase().replace(/ /g,'_');
-
-  const scoreBar = (val, cls) =>
-    `<div class="ai-mini-score ${cls}"><div class="ai-mini-fill" style="width:${val||0}%"></div></div>`;
-
-  return `
-    <div class="ai-block">
-      <div class="ai-row">
-        ${lp ? `<span class="ai-lp-badge ${lpCls}">${clean(lp)}</span>` : ''}
-        <span class="ai-badge ai-struct ${sCls}">${clean(ai.structure_type||'')}</span>
-        <span class="ai-badge ai-quality ${(ai.market_quality||'').toLowerCase()}">${ai.market_quality||''}</span>
-        ${cpLabel ? `<span class="ai-cp-badge cp-${cpCls}">⚡ ${cpLabel}</span>` : ''}
-        ${clLabel ? `<span class="ai-cl-badge cl-${clCls}">${clLabel}</span>` : ''}
-        <button class="ai-bulb-btn" title="Click for full AI structure analysis" onclick="openAiModal('${instrument}')">💡 <span class="ai-bulb-label">AI Analysis</span></button>
-      </div>
-      ${lp ? `<div class="ai-lc-bar-wrap"><div class="ai-lc-bar-fill ${lpCls}" style="width:${lc}%"></div><span class="ai-lc-pct">${lc}%</span></div>` : ''}
-      <div class="ai-scores-row">
-        <div class="ai-score-item"><span>Cont</span>${scoreBar(sc.continuation,'cont')}<b>${sc.continuation??'—'}%</b></div>
-        <div class="ai-score-item"><span>Trend</span>${scoreBar(sc.trend_health,'trend')}<b>${sc.trend_health??'—'}%</b></div>
-        <div class="ai-score-item"><span>PBQ</span>${scoreBar(sc.pullback_quality,'pbq')}<b>${sc.pullback_quality??'—'}%</b></div>
-        <div class="ai-score-item"><span>Clean</span>${scoreBar(sc.cleanliness,'clean')}<b>${sc.cleanliness??'—'}%</b></div>
-      </div>
-      ${ai.summary  ? `<div class="ai-summary">${ai.summary}</div>` : ''}
-      ${ai.warning  ? `<div class="ai-warning">⚠ ${ai.warning}</div>` : ''}
-    </div>`;
-}
-
-// ─── AI Modal ─────────────────────────────────────────────────────────────────
-
-function openAiModal(instrument) {
-  const ai = _aiMap[instrument];
-  if (!ai) return;
-
-  const d    = ai.details || {};
-  const sc   = d.scores  || {};
-  const lp   = d.lifecycle_phase       || '';
-  const lc   = d.lifecycle_completion  || 0;
-  const sCls = (ai.structure_type || '').replace(/-/g,'_');
-  const lpCls = lp.replace(/-/g,'_').toLowerCase();
-  const cpLabel   = d.counter_pressure    || '';
-  const cpCls     = cpLabel.toLowerCase();
-  const clLabel   = d.cleanliness_label   || '';
-  const clCls     = clLabel.toLowerCase().replace(/ /g,'_');
-  const sessLabel = d.session_label       || '';
-  const sessQCls  = (d.session_quality    || '').toLowerCase().replace(/_/g,'-');
-  const partLabel = d.market_participation || '';
-  const contSupp  = d.continuation_support;
-
-  document.getElementById('ai-modal-pair').textContent = pair(instrument);
-  document.getElementById('ai-modal-dir').innerHTML =
-    `<span class="ai-badge ai-health ${(ai.trend_health||'').toLowerCase()}">${ai.trend_health||''}</span>`;
-  document.getElementById('ai-modal-struct-badge').innerHTML =
-    `<span class="ai-badge ai-struct ${sCls}">${clean(ai.structure_type||'')}</span>`;
-
-  const scoreBlock = (label, val, cls) => `
-    <div class="ai-modal-score-block">
-      <div class="ai-modal-score-label">${label}</div>
-      <div class="ai-modal-score-num">${val ?? '—'}%</div>
-      <div class="ai-modal-score-bar"><div class="ai-modal-score-fill ${cls}" style="width:${val??0}%"></div></div>
-    </div>`;
-
-  document.getElementById('ai-modal-body').innerHTML = `
-    ${lp ? `
-    <div class="ai-modal-lifecycle">
-      <div class="ai-modal-lp-header">
-        <span class="ai-lp-badge ${lpCls}">${clean(lp)}</span>
-        <span class="ai-modal-lc-label">Phase completion</span>
-        <span class="ai-modal-lc-pct">${lc}%</span>
-      </div>
-      <div class="ai-modal-lc-bar"><div class="ai-modal-lc-fill ${lpCls}" style="width:${lc}%"></div></div>
-    </div>` : ''}
-
-    ${(cpLabel || clLabel) ? `
-    <div class="ai-modal-quality-row">
-      ${cpLabel ? `
-      <div class="ai-modal-quality-item">
-        <div class="ai-modal-quality-label">Counter Pressure</div>
-        <span class="ai-cp-badge cp-${cpCls} ai-modal-cp">${cpLabel}</span>
-      </div>` : ''}
-      ${clLabel ? `
-      <div class="ai-modal-quality-item">
-        <div class="ai-modal-quality-label">Market Quality</div>
-        <span class="ai-cl-badge cl-${clCls} ai-modal-cl">${clLabel}</span>
-      </div>` : ''}
-    </div>` : ''}
-
-    ${sessLabel ? `
-    <div class="ai-modal-session-row">
-      <span class="sess-card-badge sq-${sessQCls}" style="font-size:11px;padding:4px 10px">⏱ ${sessLabel}</span>
-      ${partLabel ? `<span class="ai-modal-participation part-${partLabel.toLowerCase()}">${partLabel} PARTICIPATION</span>` : ''}
-      ${contSupp != null ? `<span class="ai-modal-cont-support ${contSupp ? 'yes' : 'no'}">${contSupp ? '✓ CONTINUATION SUPPORTED' : '⚠ REDUCED CONDITIONS'}</span>` : ''}
-    </div>
-    ${d.session_context ? `<div class="ai-modal-session-text">${d.session_context}</div>` : ''}
-    ` : ''}
-
-    <div class="ai-modal-scores">
-      ${scoreBlock('Continuation', sc.continuation, 'cont')}
-      ${scoreBlock('Trend Health', sc.trend_health,  'trend')}
-      ${scoreBlock('Pullback Quality', sc.pullback_quality, 'pbq')}
-      ${scoreBlock('Cleanliness', sc.cleanliness, 'clean')}
-    </div>
-
-    ${ai.summary ? `<div class="ai-modal-summary">${ai.summary}</div>` : ''}
-
-    ${d.flow_of_money ? (() => {
-      const ma    = d.macro_alignment || 'NEUTRAL';
-      const maCls = ma === 'ALIGNED' ? 'aligned' : ma === 'CONFLICTED' ? 'conflicted' : 'neutral';
-      const maIcon = ma === 'ALIGNED' ? '✦' : ma === 'CONFLICTED' ? '✕' : '○';
-      return `
-    <div class="ai-modal-flow">
-      <div class="ai-modal-flow-header">
-        <span class="ai-modal-flow-title">💸 Flow of Money</span>
-        <span class="ai-macro-badge ${maCls}">${maIcon} MACRO ${clean(ma)}</span>
-      </div>
-      <div class="ai-modal-flow-text">${d.flow_of_money}</div>
-    </div>`;
-    })() : ''}
-
-    <div class="ai-modal-sections">
-      ${d.structure_analysis ? `
-        <div class="ai-modal-section">
-          <div class="ai-modal-section-title">📊 Structure Analysis</div>
-          <div class="ai-modal-section-text">${d.structure_analysis}</div>
-        </div>` : ''}
-
-      ${d.trend_assessment ? `
-        <div class="ai-modal-section">
-          <div class="ai-modal-section-title">📈 Trend Assessment</div>
-          <div class="ai-modal-section-text">${d.trend_assessment}</div>
-        </div>` : ''}
-
-      ${d.pullback_quality_text ? `
-        <div class="ai-modal-section">
-          <div class="ai-modal-section-title">🔄 Pullback Quality</div>
-          <div class="ai-modal-section-text">${d.pullback_quality_text}</div>
-        </div>` : ''}
-
-      ${d.momentum_shift ? `
-        <div class="ai-modal-section">
-          <div class="ai-modal-section-title">⚡ Momentum Shift</div>
-          <div class="ai-modal-section-text">${d.momentum_shift}</div>
-        </div>` : ''}
-
-      <div class="ai-modal-factors-row">
-        ${(d.support_factors||[]).length ? `
-          <div class="ai-modal-factors">
-            <div class="ai-modal-section-title">✅ Structure Support</div>
-            ${d.support_factors.map(f=>`<div class="ai-factor support">+ ${f}</div>`).join('')}
-          </div>` : ''}
-
-        ${(d.risk_factors||[]).length ? `
-          <div class="ai-modal-factors">
-            <div class="ai-modal-section-title">⚠ Structure Risks</div>
-            ${d.risk_factors.map(f=>`<div class="ai-factor risk">− ${f}</div>`).join('')}
-          </div>` : ''}
-      </div>
-    </div>
-
-    ${ai.warning ? `<div class="ai-modal-warning">⚠ ${ai.warning}</div>` : ''}
-    <div class="ai-modal-footer">48H analysis · updated ${fmtTime(ai.time)} · gpt-4o-mini</div>
-  `;
-
-  const overlay = document.getElementById('ai-modal-overlay');
-  const modal   = overlay.querySelector('.ai-modal');
-  overlay.classList.add('open');
-  gsapModalOpen(modal);
-  hydrateIcons();
-}
-
-function closeAiModal() {
-  const overlay = document.getElementById('ai-modal-overlay');
-  const modal   = overlay.querySelector('.ai-modal');
-  gsapModalClose(modal, () => overlay.classList.remove('open'));
-}
-
-// Close on Escape key
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAiModal(); });
 
 // ─── Session badge helper ─────────────────────────────────────────────────────
 
@@ -865,7 +671,7 @@ function sessionBadgeHtml(s) {
 
 // ─── Live Opportunities ───────────────────────────────────────────────────────
 
-function renderLiveOpportunities(states, aiMap = {}) {
+function renderLiveOpportunities(states) {
   const el = document.getElementById('live-opportunities');
   if (!el) return;
 
@@ -912,7 +718,6 @@ function renderLiveOpportunities(states, aiMap = {}) {
         ${newsWarnHtml(s.instrument)}
         ${s.session_blocked ? `<div class="sent-neutral-warn">⚠ ${s.next_action || 'Outside active session'}</div>` : ''}
         ${(s.confidence_breakdown||[]).length ? `<div class="conf-factors" style="align-items:flex-start;margin-top:6px">${s.confidence_breakdown.map(f=>`<span>+ ${f}</span>`).join('')}</div>` : ''}
-        ${aiHtml(aiMap[s.instrument], s.instrument)}
       </div>`;
   }).join('');
 }
@@ -930,7 +735,7 @@ function computeTopSetups(states) {
     .slice(0, 3);
 }
 
-function renderTopSetups(states, aiMap = {}) {
+function renderTopSetups(states) {
   const el = document.getElementById('top-setups');
   if (!states?.length) { el.innerHTML = '<p class="empty-state">No setups forming</p>'; return; }
 
@@ -968,7 +773,6 @@ function renderTopSetups(states, aiMap = {}) {
           <div style="font-size:9px;color:var(--text-muted);margin-bottom:3px">${s.spread_behavior_text || ''}</div>
           ${nextActionHtml(s.next_action)}
           ${newsWarnHtml(s.instrument)}
-          ${aiHtml(aiMap[s.instrument], s.instrument)}
         </div>
         <div class="top-conf">
           <div class="conf-num">${s.confidence}%</div>
@@ -2249,53 +2053,6 @@ function renderJrnCalendarSection(events, entryTime) {
     </div>`);
 }
 
-function renderJrnAiSection(marketStates, aiAnalysis) {
-  // Handle both old (plain array) and new ({ as_of, pairs }) formats
-  const states  = Array.isArray(marketStates) ? marketStates : (marketStates?.pairs || []);
-  const asOf    = Array.isArray(marketStates) ? null : (marketStates?.as_of || null);
-  const ai      = (aiAnalysis || []);
-  if (!states.length && !ai.length) return '';
-
-  // Map AI data by instrument for quick lookup
-  const aiMap = {};
-  for (const a of ai) aiMap[a.instrument] = a;
-
-  // Sort: active states first (READY_TO_ENTER, PULLBACK_*, TREND), then NO_TRADE
-  const ORDER = { READY_TO_ENTER: 0, PULLBACK_ACTIVE: 1, PULLBACK_STARTING: 2, TREND: 3, NO_TRADE: 99 };
-  const sorted = [...states].sort((a, b) => {
-    const oa = ORDER[a.state] ?? 50, ob = ORDER[b.state] ?? 50;
-    return oa !== ob ? oa - ob : (b.confidence || 0) - (a.confidence || 0);
-  });
-
-  // AI warnings from the deep analysis
-  const warnings = ai.filter(a => a.warning);
-
-  const stateLabel = s => clean(s || '—');
-  const stateCls   = s => s === 'TREND' ? 'trend' : s?.startsWith('PULLBACK') ? 'pb' : s === 'READY_TO_ENTER' ? 'ready' : 'notrade';
-  const biasCls    = b => b === 'BUY' ? 'buy' : b === 'SELL' ? 'sell' : '';
-
-  const asOfLabel = asOf ? `<span class="jrn-as-of">as of ${fmtTime(asOf)}</span>` : '';
-  return _jrnSection(`📊 Market States ${asOfLabel}`, `
-    ${warnings.length ? `<div class="jrn-ai-warnings">${warnings.map(a =>
-      `<div class="jrn-ai-warn-row"><span class="jrn-ai-warn-pair">${pair(a.instrument)}</span><span class="jrn-ai-warn-text">⚠ ${a.warning}</span></div>`
-    ).join('')}</div>` : ''}
-    <div class="jrn-ai-grid">
-      <div class="jrn-ai-head"><span>Pair</span><span>State</span><span>Bias</span><span>Conf</span><span>AI Structure</span></div>
-      ${sorted.map(s => {
-        const a = aiMap[s.instrument];
-        const scls = (a?.structure_type || '').includes('EXPAND') ? 'expanding' : (a?.structure_type || '').includes('CONTRACT') ? 'contracting' : '';
-        return `
-          <div class="jrn-ai-row">
-            <span class="jrn-ai-pair">${pair(s.instrument)}</span>
-            <span class="jrn-ai-state ${stateCls(s.state)}">${stateLabel(s.state)}</span>
-            <span class="signal-dir ${biasCls(s.bias)}" style="font-size:8px;padding:1px 5px">${s.bias || '—'}</span>
-            <span class="jrn-ai-conf">${s.confidence ?? '—'}%</span>
-            <span class="jrn-ai-struct ${scls}">${a ? clean(a.structure_type || '—') : '—'}</span>
-          </div>`;
-      }).join('')}
-    </div>`);
-}
-
 function _jrnEnergyBadge() { return ''; }
 
 function renderJrnSessionPerfSection(e, sessionEntries) {
@@ -2558,7 +2315,7 @@ function renderJournal(data) {
 
 async function refresh() {
   try {
-    const [strength, signals, states, risk, actions, quality, spreads, m15Data, aiData, sessionData, journalData, profileData] = await Promise.all([
+    const [strength, signals, states, risk, actions, quality, spreads, m15Data, sessionData, journalData, profileData] = await Promise.all([
       api('/api/strength'),
       api('/api/signals'),
       api('/api/states'),
@@ -2567,7 +2324,6 @@ async function refresh() {
       api('/api/quality'),
       api('/api/spreads'),
       api('/api/m15-spreads').catch(() => ({ spreads: [] })),
-      api('/api/ai').catch(() => ({ analyses: [] })),
       api('/api/session').catch(() => ({ session: null })),
       api('/api/journal?limit=5').catch(() => ({ entries: [] })),
       api('/api/profile').catch(() => ({})),
@@ -2588,18 +2344,13 @@ async function refresh() {
     // Today's news — called after _userTz is set so date is in user's timezone
     fetchTodayNews();
 
-    // Build AI map: instrument → analysis
-    const aiMap = {};
-    (aiData.analyses || []).forEach(a => { aiMap[a.instrument] = a; });
-    _aiMap = aiMap;                 // store globally for modal access
-
     updateHeader(risk);
     renderSession(sessionData);
     fetchMarketActivity(); // non-blocking — separate fetch, renders independently
     buildChart(strength, activeTF);
     renderCurrencySignals(strength);          // must run first — populates _csigCurrencies
-    renderLiveOpportunities(states.states || [], aiMap);
-    renderTopSetups(states.states || [], aiMap);
+    renderLiveOpportunities(states.states || []);
+    renderTopSetups(states.states || []);
     renderSignals(signals, states.states || [], journalData?.entries || []);
     renderStates(states);
     renderSpreads(spreads);
