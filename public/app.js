@@ -258,7 +258,7 @@ function countTo(elementId, value, options = {}) {
 // ─── GSAP helpers ─────────────────────────────────────────────────────────────
 function gsapCardEntrance() {
   if (typeof gsap === 'undefined') return;
-  gsap.from('#main-grid .card', {
+  gsap.from('.tab-panel.active .card', {
     y: 16,
     opacity: 0,
     duration: 0.55,
@@ -2741,6 +2741,30 @@ function flashEl(id) {
   el.classList.add('data-updated');
   setTimeout(() => el.classList.remove('data-updated'), 950);
 }
+
+// ─── Tab Navigation ──────────────────────────────────────────────────────────
+(function initTabs() {
+  const nav = document.getElementById('dash-tabs');
+  if (!nav) return;
+  const tabs = nav.querySelectorAll('.dash-tab');
+  const panels = document.querySelectorAll('.tab-panel');
+
+  const saved = localStorage.getItem('nfx_active_tab');
+  if (saved && document.querySelector(`.dash-tab[data-tab="${saved}"]`)) {
+    tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === saved));
+    panels.forEach(p => p.classList.toggle('active', p.dataset.tab === saved));
+  }
+
+  nav.addEventListener('click', (e) => {
+    const btn = e.target.closest('.dash-tab');
+    if (!btn) return;
+    const tab = btn.dataset.tab;
+    tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+    panels.forEach(p => p.classList.toggle('active', p.dataset.tab === tab));
+    localStorage.setItem('nfx_active_tab', tab);
+    gsapCardEntrance();
+  });
+})();
 
 // Boot
 showSkeletons();

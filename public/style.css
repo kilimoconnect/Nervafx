@@ -5087,4 +5087,47 @@ body::after {
   color: var(--text-secondary);
 }
 
+/* ─── Dashboard Tabs ──────────────────────────────────────────────────────── */
+.dash-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 6px 16px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 56px;
+  z-index: 90;
+}
+
+.dash-tab {
+  padding: 8px 18px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.dash-tab:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.dash-tab.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.tab-panel {
+  display: none;
+}
+
+.tab-panel.active {
+  display: grid;
+}
+
 
