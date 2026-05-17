@@ -1757,26 +1757,23 @@ function _renderMeAnalysisModal() {
 
   const loading = '<span class="me-ai-loading">Analyzing…</span>';
 
-  // Cycle section
-  const cycleBias      = d?.cycle?.bias;
-  const cycleCondition = d?.cycle?.condition;
-  const cycleTrigger   = d?.cycle?.trigger;
-
+  // ── Cycle section ────────────────────────────────────────────────────────────
   const cycleHtml = d
     ? `<div class="me-di-cycle-row">
-        ${biasBadge(cycleBias)}
-        <span class="me-di-cycle-condition">${cycleCondition || '—'}</span>
+        ${biasBadge(d.cycle?.bias)}
+        <span class="me-di-cycle-condition">${d.cycle?.condition || '—'}</span>
       </div>
+      ${d.cycle?.narrative ? `<p class="me-di-narrative">${d.cycle.narrative}</p>` : ''}
       <div class="me-di-trigger-row">
         <span class="me-di-row-label">Trigger</span>
-        <span class="me-di-trigger-text">${cycleTrigger || '—'}</span>
+        <span class="me-di-trigger-text">${d.cycle?.trigger || '—'}</span>
       </div>`
     : loading;
 
-  // Session cards
+  // ── Session cards ─────────────────────────────────────────────────────────────
   const sessCards = ['ASIA', 'LONDON', 'NEW_YORK'].map(key => {
-    const s    = byName[key] || {};
-    const ai   = d?.sessions?.[key] || null;
+    const s     = byName[key] || {};
+    const ai    = d?.sessions?.[key] || null;
     const color = SESS_COLOR[key];
     const cycle = s.energy_cycle || '';
     const mom   = s.energy_momentum;
@@ -1795,12 +1792,13 @@ function _renderMeAnalysisModal() {
       ? `<span class="me-modal-momentum" style="color:${ME_MOMENTUM_COLOR[mom]||'#64748b'}">${ME_MOMENTUM_LABEL[mom]||''}</span>`
       : '';
 
-    const aiHtml = ai
+    const sessAiHtml = ai
       ? `<div class="me-di-sess-ai">
           <div class="me-di-ai-row">
             <span class="me-di-row-label">Flow</span>
             <span class="me-di-flow-text">${ai.flow || '—'}</span>
           </div>
+          ${ai.analysis ? `<p class="me-di-sess-analysis">${ai.analysis}</p>` : ''}
           <div class="me-di-ai-row me-di-signal-row">
             <span class="me-di-row-label">Signal</span>
             <span class="me-di-signal-text">${ai.signal || '—'}</span>
@@ -1820,33 +1818,47 @@ function _renderMeAnalysisModal() {
         <span class="me-di-tc-wrap">${tcChip(ai?.trade_condition)}</span>
       </div>
       ${metrics}
-      ${aiHtml}
+      ${sessAiHtml}
     </div>`;
   }).join('');
 
-  // Summary section
-  const sumBias        = d?.summary?.bias;
-  const sumPriority    = d?.summary?.priority;
-  const sumRisk        = d?.summary?.risk;
-  const sumOpportunity = d?.summary?.opportunity;
+  // ── Currency leadership ───────────────────────────────────────────────────────
+  const currencyHtml = d?.currencies
+    ? `<div class="me-di-ccy-grid">
+        <div class="me-di-ccy-card me-di-ccy-leader">
+          <span class="me-di-ccy-label">Leader</span>
+          <p class="me-di-ccy-text">${d.currencies.leader || '—'}</p>
+        </div>
+        <div class="me-di-ccy-card me-di-ccy-laggard">
+          <span class="me-di-ccy-label">Laggard</span>
+          <p class="me-di-ccy-text">${d.currencies.laggard || '—'}</p>
+        </div>
+        <div class="me-di-ccy-card me-di-ccy-theme">
+          <span class="me-di-ccy-label">Theme</span>
+          <p class="me-di-ccy-text">${d.currencies.theme || '—'}</p>
+        </div>
+      </div>`
+    : loading;
 
-  const summaryHtml = d
+  // ── Summary ───────────────────────────────────────────────────────────────────
+  const summaryHtml = d?.summary
     ? `<div class="me-di-summary-head">
-        ${biasBadge(sumBias)}
+        ${biasBadge(d.summary.bias)}
         <span class="me-di-summary-label">Overall Bias</span>
       </div>
+      ${d.summary.playbook ? `<p class="me-di-playbook">${d.summary.playbook}</p>` : ''}
       <div class="me-di-summary-rows">
         <div class="me-di-sum-row">
           <span class="me-di-row-label">Priority</span>
-          <span class="me-di-sum-text me-di-priority-text">${sumPriority || '—'}</span>
+          <span class="me-di-sum-text me-di-priority-text">${d.summary.priority || '—'}</span>
         </div>
         <div class="me-di-sum-row">
           <span class="me-di-row-label">Risk</span>
-          <span class="me-di-sum-text me-di-risk-text">${sumRisk || '—'}</span>
+          <span class="me-di-sum-text me-di-risk-text">${d.summary.risk || '—'}</span>
         </div>
         <div class="me-di-sum-row">
           <span class="me-di-row-label">Opportunity</span>
-          <span class="me-di-sum-text me-di-opp-text">${sumOpportunity || '—'}</span>
+          <span class="me-di-sum-text me-di-opp-text">${d.summary.opportunity || '—'}</span>
         </div>
       </div>`
     : loading;
@@ -1876,7 +1888,12 @@ function _renderMeAnalysisModal() {
         </section>
 
         <section class="me-modal-section">
-          <h3 class="me-modal-section-title">Summary</h3>
+          <h3 class="me-modal-section-title">Currency Leadership</h3>
+          ${currencyHtml}
+        </section>
+
+        <section class="me-modal-section">
+          <h3 class="me-modal-section-title">Summary & Playbook</h3>
           ${summaryHtml}
         </section>
       </div>
