@@ -2147,8 +2147,8 @@ function _meMarketCycleBanner(cycle) {
   return `<div class="me-cycle-banner">
     <span class="me-cycle-banner-label">Market Cycle</span>
     <span class="me-cycle-banner-val" style="--bc:${color}">${label}</span>
-    <button class="me-ai-toggle" onclick="openBreadthChart()">Breadth Chart</button>
-    <button class="me-ai-toggle" onclick="openMeAiAnalysis()">AI Analysis</button>
+    <button class="me-ai-toggle me-btn-breadth premium-only" onclick="openBreadthChart()">Breadth Chart</button>
+    <button class="me-ai-toggle me-btn-ai premium-only" onclick="openMeAiAnalysis()">AI Analysis</button>
   </div>`;
 }
 
