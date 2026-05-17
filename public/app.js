@@ -1793,44 +1793,31 @@ function _renderBreadthBars(container, rows) {
   const tzLabel = new Intl.DateTimeFormat('en-GB', { timeZone: tz, timeZoneName: 'short' })
     .formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value || '';
 
-  // Group rows by date then session
-  const grouped = {};
+  // Group all rows by date (single timeline per day)
+  const byDate = {};
   for (const r of rows) {
     const date = r.time_utc.slice(0, 10);
-    const sess = r.session_name;
-    const key = `${date}|${sess}`;
-    if (!grouped[key]) grouped[key] = { date, session: sess, hours: [] };
-    grouped[key].hours.push({ time: r.time_utc, breadth: Math.round(parseFloat(r.breadth_score) || 0) });
+    if (!byDate[date]) byDate[date] = [];
+    byDate[date].push({
+      time: r.time_utc,
+      session: r.session_name,
+      breadth: Math.round(parseFloat(r.breadth_score) || 0),
+    });
   }
 
-  // Sort by date desc, then session order
-  const sessOrder = { ASIA: 0, LONDON: 1, NEW_YORK: 2, LOW_LIQUIDITY: 3 };
-  const entries = Object.values(grouped).sort((a, b) => {
-    if (a.date !== b.date) return b.date.localeCompare(a.date);
-    return (sessOrder[a.session] ?? 9) - (sessOrder[b.session] ?? 9);
-  });
-
+  // Sort dates descending
+  const dates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
   const maxBreadth = Math.max(80, ...rows.map(r => parseFloat(r.breadth_score) || 0));
 
   let html = '<div class="bc-chart-wrap">';
-  let prevDate = '';
 
-  for (const entry of entries) {
-    if (entry.date !== prevDate) {
-      const d = new Date(entry.date + 'T12:00:00Z');
-      const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz });
-      html += `<div class="bc-date-header">${dayLabel}</div>`;
-      prevDate = entry.date;
-    }
+  for (const date of dates) {
+    const bars = byDate[date].sort((a, b) => a.time.localeCompare(b.time));
+    const d = new Date(date + 'T12:00:00Z');
+    const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz });
 
-    const color = SESS_COLOR[entry.session] || '#64748b';
-    const label = SESS_LABEL[entry.session] || entry.session;
-    html += `<div class="bc-session-block">
-      <div class="bc-session-label" style="color:${color}">${label}</div>
-      <div class="bc-bars">`;
-
-    // Detect 3+ consecutive increases
-    const breadths = entry.hours.map(h => h.breadth);
+    // Detect 3+ consecutive breadth increases across the whole day
+    const breadths = bars.map(b => b.breadth);
     const streaks = new Set();
     let streak = 0;
     for (let i = 1; i < breadths.length; i++) {
@@ -1844,17 +1831,36 @@ function _renderBreadthBars(container, rows) {
       }
     }
 
-    for (let i = 0; i < entry.hours.length; i++) {
-      const h = entry.hours[i];
-      const pct = Math.round((h.breadth / maxBreadth) * 100);
-      const localTime = new Date(h.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
+    html += `<div class="bc-day-block">
+      <div class="bc-date-header">${dayLabel}</div>
+      <div class="bc-unified-chart">`;
+
+    let prevSess = '';
+    for (let i = 0; i < bars.length; i++) {
+      const b = bars[i];
+      const color = SESS_COLOR[b.session] || '#64748b';
+      const pct = Math.round((b.breadth / maxBreadth) * 100);
+      const localTime = new Date(b.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
       const localHour = localTime.slice(0, 2);
       const highlighted = streaks.has(i);
       const barColor = highlighted ? '#22c55e' : color;
       const cls = highlighted ? 'bc-bar bc-bar-streak' : 'bc-bar';
-      html += `<div class="${cls}" title="${h.breadth}% at ${localTime} ${tzLabel}">
-        <div class="bc-bar-fill" style="height:${pct}%;background:${barColor}"></div>
-        <span class="bc-bar-val">${h.breadth}</span>
+
+      // Session divider
+      if (b.session !== prevSess && prevSess !== '') {
+        html += '<div class="bc-sess-divider"></div>';
+      }
+
+      // Session label on first bar of each session
+      const showLabel = b.session !== prevSess;
+      prevSess = b.session;
+
+      html += `<div class="${cls}" title="${SESS_LABEL[b.session] || b.session}: ${b.breadth}% at ${localTime} ${tzLabel}">
+        ${showLabel ? `<span class="bc-sess-tag" style="color:${color}">${SESS_LABEL[b.session] || b.session}</span>` : ''}
+        <div class="bc-bar-inner">
+          <div class="bc-bar-fill" style="height:${pct}%;background:${barColor}"></div>
+        </div>
+        <span class="bc-bar-val">${b.breadth}</span>
         <span class="bc-bar-hour">${localHour}</span>
       </div>`;
     }
@@ -1864,7 +1870,10 @@ function _renderBreadthBars(container, rows) {
 
   html += '</div>';
   html += `<div class="bc-legend">
-    <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#22c55e"></span> 3+ consecutive increases (continuation signal)</span>
+    <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#f59e0b"></span> Asia</span>
+    <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#0ea5e9"></span> London</span>
+    <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#a855f7"></span> New York</span>
+    <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#22c55e"></span> 3+ rises = continuation</span>
   </div>`;
 
   container.innerHTML = html;
