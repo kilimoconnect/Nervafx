@@ -891,8 +891,10 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
   display: flex;
   flex-direction: column;
   gap: 3px;
-  max-height: 320px;
+  max-height: 640px;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,.1) transparent;
 }
 
 .spread-row {
