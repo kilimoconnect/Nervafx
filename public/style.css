@@ -4822,6 +4822,14 @@ body::after {
 }
 .me-hist-strong { color: #22c55e; }
 .me-hist-weak   { color: #ef4444; }
+.me-hist-pressure {
+  display: flex;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 600;
+}
+.me-hist-bull { color: #22c55e; }
+.me-hist-bear { color: #ef4444; }
 .me-hist-na {
   font-size: 11px;
   color: var(--text-dim);

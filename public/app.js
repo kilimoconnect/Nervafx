@@ -2000,11 +2000,18 @@ function _meHistoryPanel(rows, liveSessions) {
       const bear  = Math.round(r.bearish_breadth || 0);
       const dir   = bull > bear ? 'bull' : bear > bull ? 'bear' : 'neutral';
 
+      const bullPct = Math.round(r.bullish_breadth || 0);
+      const bearPct = Math.round(r.bearish_breadth || 0);
+
       return `<div class="me-hist-cell">
         <span class="me-hist-sess" style="color:${SESS_COLOR[key]}">${SESS_LABEL[key]}</span>
         <span class="me-hist-cycle"><span class="me-hist-dot" style="background:${dot}"></span>${cycle}</span>
         <span class="me-hist-energy">E:${Math.round(r.market_energy||0)}</span>
         <span class="me-hist-brd">Brd:${Math.round(r.breadth_score||0)}</span>
+        <span class="me-hist-pressure">
+          <span class="me-hist-bull">▲${bullPct}%</span>
+          <span class="me-hist-bear">▼${bearPct}%</span>
+        </span>
         <span class="me-hist-dir ${dir}"><span class="me-hist-strong">${r.strongest_ccy||'—'} ↑</span> <span class="me-hist-weak">${r.weakest_ccy||'—'} ↓</span></span>
       </div>`;
     }).join('');
