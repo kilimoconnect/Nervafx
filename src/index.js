@@ -126,11 +126,12 @@ if (command === 'load') {
 } else if (command === 'update') {
   validate();
   if (!isMarketOpen()) {
-    // Market closed — skip OANDA fetch but still run session backfill + narrative
-    console.log(`[UPDATE] Market closed (${new Date().toUTCString()}). Running backfill + narrative.`);
+    // Market closed — skip OANDA fetch but still run backfill + narrative + journal
+    console.log(`[UPDATE] Market closed (${new Date().toUTCString()}). Running backfill + narrative + journal.`);
     Promise.resolve()
       .then(() => backfillSessionActivity())
       .then(() => { const { generateMarketNarrative } = require('./narrativeEngine'); return generateMarketNarrative(); })
+      .then(() => writeJournalEntry())
       .then(() => process.exit(0))
       .catch(err => { console.error(err); process.exit(1); });
   } else {
