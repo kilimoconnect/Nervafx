@@ -1647,7 +1647,7 @@ function _meSessionCard(name, s, status) {
         ${_meRelLine(s.norm_energy, s.prev_energy)}
       </div>
       <span class="me-foot-item">Readiness <strong>${readiness}</strong></span>
-      <span class="me-foot-item" style="color:${liqColor}">Liquidity <strong>${liqScore}</strong> <small>${liqGrade}</small></span>
+      <span class="me-foot-item" style="color:${liqColor}">Liquidity <strong>${liqScore}</strong></span>
     </div>
   </div>`;
 }
