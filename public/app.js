@@ -1738,6 +1738,131 @@ function closeMeAiAnalysis() {
   document.body.style.overflow = '';
 }
 
+// ─── Breadth Chart Modal ─────────────────────────────────────────────────────
+
+function openBreadthChart() {
+  let modal = document.getElementById('breadth-chart-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'breadth-chart-modal';
+    modal.className = 'me-analysis-overlay';
+    modal.addEventListener('click', e => { if (e.target === modal) closeBreadthChart(); });
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML = `<div class="me-modal-panel">
+    <div class="me-modal-header">
+      <div class="me-modal-title"><span class="me-modal-title-label">Hourly Session Breadth</span></div>
+      <button class="me-modal-close" onclick="closeBreadthChart()">✕</button>
+    </div>
+    <div class="me-modal-body" style="padding:16px 20px">
+      <div class="me-loading"><span class="spinner"></span> Loading breadth data…</div>
+    </div>
+  </div>`;
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  _fetchAndRenderBreadthChart(modal);
+}
+
+function closeBreadthChart() {
+  const modal = document.getElementById('breadth-chart-modal');
+  if (modal) modal.style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+async function _fetchAndRenderBreadthChart(modal) {
+  try {
+    const data = await api('/api/session-activity?type=hourly&days=5');
+    const rows = data.hourly || [];
+    if (!rows.length) {
+      modal.querySelector('.me-modal-body').innerHTML = '<p class="me-empty">No hourly breadth data available.</p>';
+      return;
+    }
+    _renderBreadthBars(modal.querySelector('.me-modal-body'), rows);
+  } catch (e) {
+    modal.querySelector('.me-modal-body').innerHTML = `<p class="me-empty">Failed to load: ${e.message}</p>`;
+  }
+}
+
+function _renderBreadthBars(container, rows) {
+  const SESS_COLOR = { ASIA: '#f59e0b', LONDON: '#0ea5e9', NEW_YORK: '#a855f7', LOW_LIQUIDITY: '#475569' };
+  const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York', LOW_LIQUIDITY: 'Low Liq.' };
+
+  // Group rows by date then session
+  const grouped = {};
+  for (const r of rows) {
+    const date = r.time_utc.slice(0, 10);
+    const sess = r.session_name;
+    const key = `${date}|${sess}`;
+    if (!grouped[key]) grouped[key] = { date, session: sess, hours: [] };
+    grouped[key].hours.push({ time: r.time_utc, breadth: Math.round(parseFloat(r.breadth_score) || 0) });
+  }
+
+  // Sort by date desc, then session order
+  const sessOrder = { ASIA: 0, LONDON: 1, NEW_YORK: 2, LOW_LIQUIDITY: 3 };
+  const entries = Object.values(grouped).sort((a, b) => {
+    if (a.date !== b.date) return b.date.localeCompare(a.date);
+    return (sessOrder[a.session] ?? 9) - (sessOrder[b.session] ?? 9);
+  });
+
+  const maxBreadth = Math.max(80, ...rows.map(r => parseFloat(r.breadth_score) || 0));
+
+  let html = '<div class="bc-chart-wrap">';
+  let prevDate = '';
+
+  for (const entry of entries) {
+    if (entry.date !== prevDate) {
+      const d = new Date(entry.date + 'T12:00:00Z');
+      const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+      html += `<div class="bc-date-header">${dayLabel}</div>`;
+      prevDate = entry.date;
+    }
+
+    const color = SESS_COLOR[entry.session] || '#64748b';
+    const label = SESS_LABEL[entry.session] || entry.session;
+    html += `<div class="bc-session-block">
+      <div class="bc-session-label" style="color:${color}">${label}</div>
+      <div class="bc-bars">`;
+
+    // Detect 3+ consecutive increases
+    const breadths = entry.hours.map(h => h.breadth);
+    const streaks = new Set();
+    let streak = 0;
+    for (let i = 1; i < breadths.length; i++) {
+      if (breadths[i] > breadths[i - 1]) {
+        streak++;
+        if (streak >= 2) {
+          for (let j = i - streak; j <= i; j++) streaks.add(j);
+        }
+      } else {
+        streak = 0;
+      }
+    }
+
+    for (let i = 0; i < entry.hours.length; i++) {
+      const h = entry.hours[i];
+      const pct = Math.round((h.breadth / maxBreadth) * 100);
+      const hour = new Date(h.time).getUTCHours();
+      const highlighted = streaks.has(i);
+      const barColor = highlighted ? '#22c55e' : color;
+      const cls = highlighted ? 'bc-bar bc-bar-streak' : 'bc-bar';
+      html += `<div class="${cls}" title="${h.breadth}% at ${String(hour).padStart(2,'0')}:00 UTC">
+        <div class="bc-bar-fill" style="height:${pct}%;background:${barColor}"></div>
+        <span class="bc-bar-val">${h.breadth}</span>
+        <span class="bc-bar-hour">${String(hour).padStart(2,'0')}</span>
+      </div>`;
+    }
+
+    html += `</div></div>`;
+  }
+
+  html += '</div>';
+  html += `<div class="bc-legend">
+    <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#22c55e"></span> 3+ consecutive increases (continuation signal)</span>
+  </div>`;
+
+  container.innerHTML = html;
+}
+
 function _renderMeAnalysisModal() {
   const modal = document.getElementById('me-analysis-modal');
   if (!modal) return;
@@ -1914,6 +2039,7 @@ function _meMarketCycleBanner(cycle) {
   return `<div class="me-cycle-banner">
     <span class="me-cycle-banner-label">Market Cycle</span>
     <span class="me-cycle-banner-val" style="--bc:${color}">${label}</span>
+    <button class="me-ai-toggle" onclick="openBreadthChart()">Breadth Chart</button>
     <button class="me-ai-toggle" onclick="openMeAiAnalysis()">AI Analysis</button>
   </div>`;
 }
