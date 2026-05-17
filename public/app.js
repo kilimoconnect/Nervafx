@@ -1549,10 +1549,13 @@ function _meSessionExplain(s, label) {
   else lines.push(`Low volatility (${vol}/100) — tight ranges, small candles.`);
 
   // Directional pressure
-  if (Math.abs(bull - bear) >= 20) {
-    const dominant = bull > bear ? 'buyers' : 'sellers';
-    const pct = bull > bear ? bull : bear;
-    lines.push(`${dominant.charAt(0).toUpperCase() + dominant.slice(1)} dominate at ${pct}% — clear directional bias.`);
+  const pressGap = Math.abs(bull - bear);
+  const dominant = bull > bear ? 'buyers' : 'sellers';
+  const dominantPct = bull > bear ? bull : bear;
+  if (pressGap >= 20) {
+    lines.push(`${dominant.charAt(0).toUpperCase() + dominant.slice(1)} dominate at ${dominantPct}% — strong directional bias.`);
+  } else if (pressGap >= 8) {
+    lines.push(`${dominant.charAt(0).toUpperCase() + dominant.slice(1)} have the edge at ${dominantPct}% vs ${100 - dominantPct}% — moderate directional lean.`);
   } else {
     lines.push(`Bulls (${bull}%) and bears (${bear}%) are evenly matched — no clear direction.`);
   }
