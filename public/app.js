@@ -1932,15 +1932,19 @@ function _meSessionStatus(sessionName, currentSession) {
 }
 
 function _meHistoryPanel(rows, liveSessions) {
-  // Inject today's live sessions into the row list, replacing any DB snapshot for today
-  const todayKey = new Date().toISOString().slice(0, 10);
-  const liveRows = (liveSessions || [])
+  const now      = new Date();
+  const dayOfWeek = now.getUTCDay(); // 0=Sun, 6=Sat
+  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+  const todayKey  = now.toISOString().slice(0, 10);
+
+  // Only inject live sessions as "Today" on weekdays — market is closed on weekends
+  const liveRows = isWeekend ? [] : (liveSessions || [])
     .filter(s => s.session_name !== 'LOW_LIQUIDITY')
     .map(s => ({ ...s, session_date: todayKey }));
 
-  // Remove any DB rows for today, then prepend live rows
-  const dbRows    = (rows || []).filter(r => (r.session_date || '').slice(0, 10) !== todayKey);
-  const allRows   = [...liveRows, ...dbRows];
+  // Remove any DB rows for today (weekend snapshot from Friday's memory), then prepend live rows
+  const dbRows  = (rows || []).filter(r => (r.session_date || '').slice(0, 10) !== todayKey);
+  const allRows = [...liveRows, ...dbRows];
 
   if (!allRows.length) return '';
 
