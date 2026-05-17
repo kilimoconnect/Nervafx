@@ -1595,6 +1595,7 @@ function _meSessionExplain(s, label) {
   // Overall energy verdict
   if (energy >= 60) lines.push(`Overall energy is high (${energy}) — conditions favour trend-following.`);
   else if (energy >= 35) lines.push(`Moderate energy (${energy}) — be selective, not all setups will follow through.`);
+  else if (energy >= 25) lines.push(`Moderate energy (${energy}) — building conditions, wait for confirmation.`);
   else lines.push(`Low energy (${energy}) — range-bound conditions, avoid forcing trades.`);
 
   return `<div class="me-explain">
