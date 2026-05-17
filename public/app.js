@@ -1943,11 +1943,10 @@ function _meHistoryPanel(rows, liveSessions) {
     (utcDay === 5 && utcHour >= 21)          // Friday after 21:00: closed
   );
 
-  // Only inject live sessions when market is open.
-  // Keep their real session_date from the candle timestamps — do NOT override with today.
-  const liveRows = marketOpen
-    ? (liveSessions || []).filter(s => s.session_name !== 'LOW_LIQUIDITY' && s.session_date)
-    : [];
+  // Always inject live sessions — they carry their real session_date from candle timestamps
+  // (Friday's date when market is closed), so they represent the final accurate state of
+  // the last trading day and should always override the stale DB snapshot for that date.
+  const liveRows = (liveSessions || []).filter(s => s.session_name !== 'LOW_LIQUIDITY' && s.session_date);
 
   // Dates already covered by live data — exclude matching DB rows to avoid duplicates
   const liveDateKeys = new Set(liveRows.map(r => (r.session_date || '').slice(0, 10)));
