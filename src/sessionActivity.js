@@ -733,8 +733,8 @@ function buildSessionRows(hourRows) {
       bullish_breadth:     round1(avg(n('bullish_breadth'))),
       bearish_breadth:     round1(avg(n('bearish_breadth'))),
       dominance_score:     round1(avg(n('dominance_score'))),
-      strongest_ccy:       _modal(g.rows.map(r => r.strongest_ccy).filter(Boolean)),
-      weakest_ccy:         _modal(g.rows.map(r => r.weakest_ccy).filter(Boolean)),
+      strongest_ccy:       lastRow.strongest_ccy || null,
+      weakest_ccy:         lastRow.weakest_ccy   || null,
       details: {
         hours: g.rows.length,
         hourly: g.rows.map(r => ({
