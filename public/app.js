@@ -1946,11 +1946,12 @@ function _meHistoryPanel(rows) {
   const SESS_COLOR = { ASIA: '#f59e0b', LONDON: '#0ea5e9', NEW_YORK: '#a855f7' };
   const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York' };
 
-  // Group by session_date
+  // Group by session_date — normalise to YYYY-MM-DD regardless of DB format
   const byDate = {};
   for (const r of rows) {
-    if (!byDate[r.session_date]) byDate[r.session_date] = [];
-    byDate[r.session_date].push(r);
+    const key = (r.session_date || '').slice(0, 10);
+    if (!byDate[key]) byDate[key] = [];
+    byDate[key].push(r);
   }
 
   const days = Object.keys(byDate).sort().reverse(); // most recent first
@@ -2027,8 +2028,9 @@ async function fetchMarketActivity() {
   try {
     const [data, historyRows] = await Promise.all([
       api('/api/market-energy'),
-      api('/api/market-energy-history').catch(() => []),
+      api('/api/market-energy-history').catch(e => { console.warn('[ME-HISTORY]', e.message); return []; }),
     ]);
+    console.log('[ME-HISTORY] rows:', historyRows?.length, historyRows?.[0]);
     renderMarketEnergy(
       data.sessions       || [],
       data.expansionPressure || null,
