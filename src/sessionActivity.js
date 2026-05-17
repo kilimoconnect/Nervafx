@@ -211,9 +211,9 @@ function processHours(hourKeys, byTime, onlyLast = false) {
   let sessionLow        = {};
   let sessionFinalMove  = {};
 
-  // Cross-session carry-over
-  let prevEnergyBase    = null;
-  const prevSameSessionScores = {}; // session_name → { movement, breadth, agreement, volatility } of previous occurrence
+  // Per-session-type carry-over (Asia vs Asia, London vs London, NY vs NY)
+  const prevSameSessionEnergy = {}; // session_name → avg energy base of previous same-session occurrence
+  const prevSameSessionScores = {}; // session_name → { movement, breadth, agreement, volatility }
   let compressionStreak = 0;
 
   // Running session accumulators (reset each new session)
@@ -264,8 +264,8 @@ function processHours(hourKeys, byTime, onlyLast = false) {
         if (avgMov < 35 && avgBrd < 35 && avgVol < 40) compressionStreak++;
         else compressionStreak = 0;
 
-        // Step 10: carry energy base forward
-        if (sessionEBList.length) prevEnergyBase = arrAvg(sessionEBList);
+        // Step 10: carry energy base forward (same-session only)
+        if (sessionEBList.length) prevSameSessionEnergy[currentSession] = arrAvg(sessionEBList);
 
         // Step 14: store per-session scores so Asia compares against previous Asia (not NY)
         prevSameSessionScores[currentSession] = { movement: avgMov, breadth: avgBrd, agreement: avgAgr, volatility: avgVol };
@@ -401,9 +401,10 @@ function processHours(hourKeys, byTime, onlyLast = false) {
       ? round1(Math.min(100, arrAvg(normalizedRanges) * 50))
       : 0;
 
-    // Step 10: energy base and acceleration
+    // Step 10: energy base and acceleration (same-session: Asia vs Asia, London vs London, NY vs NY)
     const energyBase   = round1(0.45 * movementScore + 0.35 * breadthScore + 0.20 * volatilityScore);
-    const acceleration = prevEnergyBase != null ? round1(energyBase - prevEnergyBase) : 0;
+    const prevSessEB   = prevSameSessionEnergy[session] ?? null;
+    const acceleration = prevSessEB != null ? round1(energyBase - prevSessEB) : 0;
 
     // Step 12: final market energy (agreement acts as quality multiplier — punishes chaos)
     const rawEnergy    = 0.40 * movementScore + 0.30 * breadthScore + 0.20 * agreementScore + 0.10 * volatilityScore;
@@ -686,17 +687,20 @@ function buildSessionRows(hourRows) {
     const sessionEnd   = new Date(lastRow.time_utc);
     sessionEnd.setUTCHours(sessionEnd.getUTCHours() + 1);
 
-    const mov   = round1(avg(n('movement_score')));
-    const brd   = round1(avg(n('breadth_score')));
-    const agr   = round1(avg(n('agreement_score')));
-    const vol   = round1(avg(n('volatility_score')));
-    const eng   = round1(avg(n('market_energy')));
-    const accel = round1(avg(n('acceleration')));
+    const mov    = round1(avg(n('movement_score')));
+    const brd    = round1(avg(n('breadth_score')));
+    const agr    = round1(avg(n('agreement_score')));
+    const vol    = round1(avg(n('volatility_score')));
+    const eng    = round1(avg(n('market_energy')));
     const streak = lastRow.compression_streak || 0;
 
-    // Pull session history up front so classifyEnergyCycle can use prevHist
+    // Pull same-session history so Asia compares against Asia, London vs London, NY vs NY
     const hist     = sessHistory[g.session] || [];
     const prevHist = hist[hist.length - 1];
+
+    // Acceleration: current session energy vs previous SAME session energy.
+    // Cross-session accel (hourly rows) compares Asia vs NY which is meaningless.
+    const accel = prevHist ? round1(eng - prevHist.energy) : 0;
 
     // Classify using session-averaged scores instead of modal hourly cycle.
     // Hourly classifications are dominated by low-activity edge hours (start/end
