@@ -1514,7 +1514,7 @@ function _meDirBar(pct, color) {
   </div>`;
 }
 
-function _meSessionCard(name, s) {
+function _meSessionCard(name, s, status) {
   const sessColor  = ME_SESSION_COLOR[name];
   const label      = ME_SESSION_LABEL[name];
 
@@ -1622,11 +1622,20 @@ function _meSessionCard(name, s) {
     ? `<span class="me-momentum" style="color:${momColor}">${momLabel}</span>`
     : '';
 
-  return `<div class="me-card">
+  const statusHtml = status === 'ACTIVE'
+    ? '<span class="me-status-badge me-status-active">Live</span>'
+    : status === 'COMPLETED'
+    ? '<span class="me-status-badge me-status-done">Done</span>'
+    : status === 'UPCOMING'
+    ? '<span class="me-status-badge me-status-upcoming">Next</span>'
+    : '';
+
+  return `<div class="me-card${status === 'ACTIVE' ? ' me-card--active' : status === 'UPCOMING' ? ' me-card--upcoming' : ''}">
     <div class="me-card-head">
       <span class="me-card-sess" style="color:${sessColor}">${label}</span>
       <span class="me-card-cycle" style="--bc:${cycleColor}">${cycleLabel}</span>
       ${momentumHtml}
+      ${statusHtml}
     </div>
     <div class="me-card-comps">${compRows}${dirRows}</div>
     <div class="me-card-foot">
@@ -1910,7 +1919,88 @@ function _meMarketCycleBanner(cycle) {
   </div>`;
 }
 
-function renderMarketEnergy(sessions, expansionPressure, marketCycle) {
+// Session order for status calculation (trading sessions only, chronological)
+const ME_SESSION_ORDER = ['ASIA', 'LONDON', 'NEW_YORK'];
+
+function _meSessionStatus(sessionName, currentSession) {
+  if (sessionName === 'LOW_LIQUIDITY') return null;
+  if (sessionName === currentSession)  return 'ACTIVE';
+  const curIdx  = ME_SESSION_ORDER.indexOf(currentSession);
+  const sessIdx = ME_SESSION_ORDER.indexOf(sessionName);
+  if (curIdx === -1) return 'COMPLETED'; // weekend / low liq active
+  return sessIdx < curIdx ? 'COMPLETED' : 'UPCOMING';
+}
+
+function _meHistoryPanel(rows) {
+  if (!rows || !rows.length) return '';
+
+  const CYCLE_DOT = {
+    EXPLOSIVE:       '#f59e0b',
+    EXPANSION:       '#22c55e',
+    TRANSITION:      '#0ea5e9',
+    COMPRESSION:     '#ef4444',
+    EXHAUSTION:      '#f97316',
+    LOW_PARTICIPATION:'#64748b',
+    DEAD:            '#334155',
+  };
+  const SESS_COLOR = { ASIA: '#f59e0b', LONDON: '#0ea5e9', NEW_YORK: '#a855f7' };
+  const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York' };
+
+  // Group by session_date
+  const byDate = {};
+  for (const r of rows) {
+    if (!byDate[r.session_date]) byDate[r.session_date] = [];
+    byDate[r.session_date].push(r);
+  }
+
+  const days = Object.keys(byDate).sort().reverse(); // most recent first
+
+  const dayBlocks = days.map(date => {
+    const label = (() => {
+      const d    = new Date(date + 'T00:00:00Z');
+      const today = new Date();
+      today.setUTCHours(0,0,0,0);
+      const diff = Math.round((today - d) / 86400000);
+      if (diff === 0) return 'Today';
+      if (diff === 1) return 'Yesterday';
+      return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+    })();
+
+    const sessOrder = ['ASIA', 'LONDON', 'NEW_YORK'];
+    const sessMap   = Object.fromEntries(byDate[date].map(r => [r.session_name, r]));
+
+    const sessCells = sessOrder.map(key => {
+      const r = sessMap[key];
+      if (!r) return `<div class="me-hist-cell me-hist-empty"><span class="me-hist-sess" style="color:${SESS_COLOR[key]}">${SESS_LABEL[key]}</span><span class="me-hist-na">—</span></div>`;
+
+      const dot   = CYCLE_DOT[r.energy_cycle] || '#64748b';
+      const cycle = (ME_CYCLE_LABEL[r.energy_cycle] || r.energy_cycle || '—').replace(/_/g,' ');
+      const bull  = Math.round(r.bullish_breadth || 0);
+      const bear  = Math.round(r.bearish_breadth || 0);
+      const dir   = bull > bear ? 'bull' : bear > bull ? 'bear' : 'neutral';
+
+      return `<div class="me-hist-cell">
+        <span class="me-hist-sess" style="color:${SESS_COLOR[key]}">${SESS_LABEL[key]}</span>
+        <span class="me-hist-cycle"><span class="me-hist-dot" style="background:${dot}"></span>${cycle}</span>
+        <span class="me-hist-energy">E:${Math.round(r.market_energy||0)}</span>
+        <span class="me-hist-brd">Brd:${Math.round(r.breadth_score||0)}</span>
+        <span class="me-hist-dir ${dir}">${r.strongest_ccy||'—'} vs ${r.weakest_ccy||'—'}</span>
+      </div>`;
+    }).join('');
+
+    return `<div class="me-hist-day">
+      <div class="me-hist-date">${label}</div>
+      <div class="me-hist-sessions">${sessCells}</div>
+    </div>`;
+  }).join('');
+
+  return `<div class="me-history-panel">
+    <div class="me-history-title">Session History</div>
+    ${dayBlocks}
+  </div>`;
+}
+
+function renderMarketEnergy(sessions, expansionPressure, marketCycle, currentSession, historyRows) {
   const el = document.getElementById('market-activity-display');
   if (!el) return;
 
@@ -1925,17 +2015,27 @@ function renderMarketEnergy(sessions, expansionPressure, marketCycle) {
   el.innerHTML = `
     ${_meMarketCycleBanner(marketCycle)}
     <div class="me-card-grid">
-      ${ORDER.map(name => _meSessionCard(name, byName[name] || null)).join('')}
+      ${ORDER.map(name => _meSessionCard(name, byName[name] || null, _meSessionStatus(name, currentSession))).join('')}
     </div>
-    ${_meExpansionPressurePanel(expansionPressure)}`;
+    ${_meExpansionPressurePanel(expansionPressure)}
+    ${_meHistoryPanel(historyRows)}`;
 
   fetchMarketEnergyNarrative(sessions, expansionPressure, marketCycle);
 }
 
 async function fetchMarketActivity() {
   try {
-    const data = await api('/api/market-energy');
-    renderMarketEnergy(data.sessions || [], data.expansionPressure || null, data.marketCycle || null);
+    const [data, historyRows] = await Promise.all([
+      api('/api/market-energy'),
+      api('/api/market-energy-history').catch(() => []),
+    ]);
+    renderMarketEnergy(
+      data.sessions       || [],
+      data.expansionPressure || null,
+      data.marketCycle    || null,
+      data.currentSession || null,
+      historyRows,
+    );
   } catch (_) {
     const el = document.getElementById('market-activity-display');
     if (el) el.innerHTML = '<p class="me-empty">Market Energy unavailable.</p>';

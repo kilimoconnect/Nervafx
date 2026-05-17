@@ -988,7 +988,10 @@ async function getMarketEnergyData() {
   const expansionPressure = computeExpansionPressure(sequence);
   const marketCycle       = classifyMarketCycle(sequence);
 
-  return { sessions, expansionPressure, marketCycle };
+  const { getCurrentSession } = require('./sessionEngine');
+  const currentSession = getCurrentSession().session;
+
+  return { sessions, expansionPressure, marketCycle, currentSession };
 }
 
 module.exports = { backfillSessionActivity, calculateLatestSessionActivity, computeSessionSummaries, getMarketEnergyData };

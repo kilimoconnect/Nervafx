@@ -4031,6 +4031,27 @@ body::after {
 /* Dimmed card for no-data / LOW_LIQUIDITY */
 .me-card--dim { opacity: .55; }
 
+/* Active session card — subtle glow border */
+.me-card--active {
+  border-color: rgba(34, 197, 94, 0.4) !important;
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.15);
+}
+/* Upcoming session card — slightly muted */
+.me-card--upcoming { opacity: .75; }
+
+/* Session status badges */
+.me-status-badge {
+  margin-left: auto;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+.me-status-active   { background: rgba(34,197,94,.15);  color: #22c55e; }
+.me-status-done     { background: rgba(100,116,139,.12); color: #94a3b8; }
+.me-status-upcoming { background: rgba(148,163,184,.08); color: #64748b; }
+
 /* Currency dominance row */
 .me-dom-row {
   display: flex;
@@ -4720,6 +4741,94 @@ body::after {
   .me-modal-section-title {
     font-size: 9px;
   }
+}
+
+/* ── Session History Panel ──────────────────────────────────────────────────── */
+.me-history-panel {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.me-history-title {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.me-hist-day {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.me-hist-date {
+  flex-shrink: 0;
+  width: 68px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-dim);
+  padding-top: 4px;
+}
+.me-hist-sessions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  flex: 1;
+}
+.me-hist-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.025);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 7px;
+}
+.me-hist-empty {
+  opacity: .35;
+}
+.me-hist-sess {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+.me-hist-cycle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+.me-hist-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.me-hist-energy,
+.me-hist-brd {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+.me-hist-dir {
+  font-size: 10px;
+  font-weight: 600;
+}
+.me-hist-dir.bull    { color: #22c55e; }
+.me-hist-dir.bear    { color: #ef4444; }
+.me-hist-dir.neutral { color: #64748b; }
+.me-hist-na {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+@media (max-width: 600px) {
+  .me-hist-day { flex-direction: column; gap: 4px; }
+  .me-hist-date { width: auto; padding-top: 0; }
+  .me-hist-sessions { grid-template-columns: 1fr; }
 }
 
 /* Session analyses — 3-column grid below the card row */
