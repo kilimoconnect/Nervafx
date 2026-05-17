@@ -4206,15 +4206,75 @@ body::after {
   align-self: center;
 }
 
-/* AI narrative */
-.me-narrative {
-  margin: 8px 0 0;
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
-  font-size: 11.5px;
-  line-height: 1.6;
-  color: var(--text-muted);
+/* ── AI analysis blocks ───────────────────────────────────────────────────── */
+.me-ai-block {
+  padding: 14px 16px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(255,255,255,0.06);
+  margin-top: 12px;
+}
+
+.me-cycle-analysis-block {
+  margin-bottom: 4px;
+}
+
+.me-footer-analysis-block {
+  margin-top: 14px;
+}
+
+.me-ai-label {
+  display: block;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 7px;
+}
+
+.me-ai-text {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.me-ai-loading {
+  font-size: 11px;
+  color: var(--text-dim);
   font-style: italic;
+}
+
+/* Session analyses — 3-column grid below the card row */
+.me-session-analyses {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.me-session-analysis {
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.me-sa-label {
+  display: block;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 7px;
+}
+
+.me-sa-text {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.68;
+  color: var(--text-secondary);
 }
 
 

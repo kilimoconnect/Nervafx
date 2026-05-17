@@ -3,102 +3,126 @@
 /**
  * POST /api/market-energy-narrative
  *
- * Receives the 4 session cards + expansion pressure object from the client,
- * builds a structured prompt with specific metric values and deltas, and
- * returns a 2-sentence institutional narrative.
+ * Body: { sessions, expansionPressure, marketCycle }
  *
- * Body: { sessions: [...], expansionPressure: { streak, score, risk, chain, carryOver } }
- * Returns: { narrative: "<text>" }
+ * Returns structured JSON with 5 AI-generated sections:
+ *   marketCycle  — 3 sentences on the current regime
+ *   asia         — 3 sentences on the Asia session
+ *   london       — 3 sentences on the London session
+ *   newYork      — 3 sentences on the New York session
+ *   footer       — 5 sentences cross-session synthesis + historical context
  */
 
-const OpenAI       = require('openai');
-const { cors }     = require('./_db');
+const OpenAI   = require('openai');
+const { cors } = require('./_db');
 
-const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+const CACHE_TTL_MS = 60 * 60 * 1000;
 const _cache       = new Map();
 
-function fingerprint(sessions, ep) {
+function fingerprint(sessions, ep, marketCycle) {
   return sessions.map(s =>
     `${s.session_name}:${s.energy_cycle}:${Math.round(s.market_energy || 0)}:${Math.round(s.norm_energy ?? 999)}:${Math.round(s.breadth_score || 0)}`
-  ).join('|') + `|${ep?.risk || 'NONE'}:${ep?.score || 0}`;
+  ).join('|') + `|${ep?.risk || 'NONE'}:${ep?.score || 0}:${marketCycle || 'NONE'}`;
 }
 
 function fv(v) { return Math.round(parseFloat(v) || 0); }
-function fdelta(v) {
-  const n = Math.round(parseFloat(v) || 0);
-  if (n === 0) return '±0';
-  return n > 0 ? `+${n}` : `${n}`;
+
+function pctStr(v, label) {
+  if (v == null) return '';
+  const sign = v >= 0 ? '+' : '';
+  return label ? `(${sign}${v}% vs avg ${label})` : `(${sign}${v}%avg)`;
 }
 
-function buildPrompt(sessions, ep) {
+function buildPrompt(sessions, ep, marketCycle) {
   const active = sessions.filter(s => s.session_name !== 'LOW_LIQUIDITY');
+  const byName = Object.fromEntries(active.map(s => [s.session_name, s]));
 
-  // Per-session detailed line with absolute values, % vs session avg, and prev same-session delta
   const lines = active.map(s => {
-    const name    = s.session_name.replace('_', ' ');
-    const normStr = s.norm_energy != null
-      ? ` [${s.norm_energy >= 0 ? '+' : ''}${s.norm_energy}% vs avg ${name}]`
-      : '';
-    const prevStr = s.prev_energy != null
-      ? ` [${s.prev_energy >= 0 ? '+' : ''}${s.prev_energy} vs prev ${name}]`
-      : '';
-    const movNorm = s.norm_movement != null ? ` (${s.norm_movement >= 0 ? '+' : ''}${s.norm_movement}%avg)` : '';
-    const brdNorm = s.norm_breadth  != null ? ` (${s.norm_breadth  >= 0 ? '+' : ''}${s.norm_breadth}%avg)`  : '';
-    const agrNorm = s.norm_agreement!= null ? ` (${s.norm_agreement>= 0 ? '+' : ''}${s.norm_agreement}%avg)`: '';
+    const name = s.session_name.replace('_', ' ');
+    const prevE = s.prev_energy != null ? `(${s.prev_energy >= 0 ? '+' : ''}${s.prev_energy}%prev)` : '';
     return (
       `  ${name.padEnd(10)} ${(s.energy_cycle || '').padEnd(18)} ` +
-      `Mov:${fv(s.movement_score)}${movNorm} Brd:${fv(s.breadth_score)}${brdNorm} ` +
-      `Agr:${fv(s.agreement_score)}${agrNorm} Vol:${fv(s.volatility_score)} | ` +
-      `Bull:${fv(s.bullish_breadth)}% Bear:${fv(s.bearish_breadth)}% Dom:${fv(s.dominance_score)}% | ` +
-      `Energy:${fv(s.market_energy)}${normStr}${prevStr}`
+      `Mov:${fv(s.movement_score)}${pctStr(s.norm_movement)} ` +
+      `Brd:${fv(s.breadth_score)}${pctStr(s.norm_breadth)} ` +
+      `Agr:${fv(s.agreement_score)}${pctStr(s.norm_agreement)} ` +
+      `Vol:${fv(s.volatility_score)}${pctStr(s.norm_volatility)} | ` +
+      `Energy:${fv(s.market_energy)}${pctStr(s.norm_energy)}${prevE} ` +
+      `Momentum:${s.energy_momentum || 'n/a'} ` +
+      `Bull:${fv(s.bullish_breadth)}% Bear:${fv(s.bearish_breadth)}% Dom:${fv(s.dominance_score)}%`
     );
   }).join('\n');
 
-  // Carry-over energy/breadth progression chain
-  let carryOverStr = '';
+  let flowStr = '';
   if (ep?.carryOver?.length > 1) {
-    const chain = ep.carryOver.map(c => `${c.session}(E:${c.energy} B:${c.breadth})`).join(' → ');
-    carryOverStr = `\nSESSION FLOW (oldest → newest):\n  ${chain}`;
+    flowStr = '\nSESSION FLOW (oldest→newest): ' +
+      ep.carryOver.map(c => `${c.session}(E:${c.energy} Brd:${c.breadth} ${c.cycle})`).join(' → ');
   }
 
-  // Expansion pressure context
-  let epText;
-  if (!ep || ep.streak === 0) {
-    epText = 'No active compression sequence — market is active or expanding.';
-  } else {
-    const factorStr = ep.factors
-      ? ` (streak factor:${ep.factors.streakScore}, agr:${ep.factors.agrPersistence}, vol-suppress:${ep.factors.volSuppression}, transition:${ep.factors.transitionBonus})`
-      : '';
-    epText = `Compression sequence: ${ep.chain.join(' → ')} — ${ep.streak} session${ep.streak !== 1 ? 's' : ''}, pressure score:${ep.score}, risk:${ep.risk}${factorStr}`;
-  }
+  const epText = (!ep || ep.streak === 0)
+    ? 'No compression sequence active.'
+    : `${ep.risk} | streak:${ep.streak} sessions (${ep.chain.join('→')}) | score:${ep.score}` +
+      (ep.factors ? ` [streak:${ep.factors.streakScore} agr:${ep.factors.agrPersistence} volSuppress:${ep.factors.volSuppression} transition:${ep.factors.transitionBonus}]` : '');
 
-  return `You are a professional institutional forex market analyst reading session energy data.
+  const a  = byName['ASIA'];
+  const l  = byName['LONDON'];
+  const ny = byName['NEW_YORK'];
+
+  return `You are a senior institutional forex market analyst writing a structured intelligence report.
 
 SESSION DATA (most recent 24 h):
-${lines}
-${carryOverStr}
-CROSS-SESSION PRESSURE:
-  ${epText}
+${lines}${flowStr}
+EXPANSION PRESSURE: ${epText}
+MARKET CYCLE: ${marketCycle || 'UNKNOWN'}
 
-ENERGY CYCLE DEFINITIONS:
-  DEAD = no participation | COMPRESSION = suppressed, low breadth
-  PRESSURE_BUILDING = compression streak accumulating | TRANSITION = energy rising
-  CONTROLLED_TREND = directional, moderate movement | QUIET_BALANCE = healthy, not expanding
-  ACTIVE_EXPANSION = broad coordinated move | CHAOTIC_EXPANSION = high move, poor agreement
-  EXPLOSIVE = max participation | EXHAUSTION = expansion fading, breadth retreating
+DEFINITIONS:
+  %avg = how this session compares to its OWN historical average (not other sessions)
+  Positive %avg = running hotter than its own norm — significant regardless of absolute value
+  COMPRESSION = suppressed breadth, organised suppression | EXPANSION = broad coordinated move
+  LOW_PARTICIPATION = thin/disorganised | TRANSITION = breadth and move building
+  EXPLOSIVE = peak participation | EXHAUSTION = expansion fading
 
-METRIC RANGES: all scores 0–100. Breadth<30 = thin; Agr<40 = disorganized; Energy>60 = active.
-%avg = how unusual this session is vs its own historical average (not vs other sessions).
-Positive %avg means this session is running hotter than its own norm — significant regardless of absolute level.
+Return a single raw JSON object — no markdown, no code fences, no extra keys:
+{
+  "marketCycle": "...",
+  "asia": "...",
+  "london": "...",
+  "newYork": "...",
+  "footer": "..."
+}
 
-Write exactly 2 sentences of institutional market narrative using the specific numbers above.
-Rules:
-  - Sentence 1: cite at least 2 metric values AND reference at least one %avg figure to convey whether the session is behaving unusually
-    Example: "Asia breadth reached ${fv(active[0]?.breadth_score)} — running ${active[0]?.norm_breadth >= 0 ? '+' : ''}${active[0]?.norm_breadth ?? '?'}% above its historical session average"
-  - Sentence 2: interpret what the combined session structure and session-relative anomalies suggest about near-term conditions
-  - Permitted phrases: "participation remained subdued", "breadth expanding", "above its historical session average", "below typical session norms", "directional agreement elevated", "pressure accumulating", "conditions consistent with", "suggests"
-  - Forbidden words: "will", "must", "expect", "predict"
-  - No markdown. No labels. No intro. Output only the 2 sentences.`;
+SECTION REQUIREMENTS:
+
+marketCycle — exactly 3 sentences:
+  S1: Name the regime (${marketCycle}) and what it means for current directional opportunity
+  S2: Reference the session energy flow to explain how this regime developed (cite specific energy values)
+  S3: What structural conditions would signal a transition to the next regime
+
+asia — exactly 3 sentences:
+  S1: State ${a?.energy_cycle} and cite Mov:${fv(a?.movement_score)} ${pctStr(a?.norm_movement, 'Asia')}, Brd:${fv(a?.breadth_score)} ${pctStr(a?.norm_breadth, 'Asia')}, Energy:${fv(a?.market_energy)} ${pctStr(a?.norm_energy, 'Asia')}
+  S2: Interpret breadth vs agreement — does the pair-level agreement ${fv(a?.agreement_score)} suggest organised flow or scattered moves
+  S3: Explain what ${a?.energy_momentum} momentum means given the historical context and what to watch
+
+london — exactly 3 sentences:
+  S1: State ${l?.energy_cycle} and cite Mov:${fv(l?.movement_score)} ${pctStr(l?.norm_movement, 'London')}, Brd:${fv(l?.breadth_score)} ${pctStr(l?.norm_breadth, 'London')}, Agr:${fv(l?.agreement_score)} ${pctStr(l?.norm_agreement, 'London')}
+  S2: Participation quality — does London's breadth at this level represent structural weakness or normal variation
+  S3: Cross-session link — how does this London read in context of the Asia session that preceded it
+
+newYork — exactly 3 sentences:
+  S1: State ${ny?.energy_cycle} and cite Mov:${fv(ny?.movement_score)} ${pctStr(ny?.norm_movement, 'NY')}, Brd:${fv(ny?.breadth_score)} ${pctStr(ny?.norm_breadth, 'NY')}, Energy:${fv(ny?.market_energy)} ${pctStr(ny?.norm_energy, 'NY')}
+  S2: What does NY breadth at this level historically imply — is this shallow pullback or structural deterioration
+  S3: Interpret the ${ny?.energy_momentum} momentum signal and what follow-through conditions to monitor
+
+footer — exactly 5 sentences:
+  S1: Identify which session deviated most from its own historical norm and explain the structural implication
+  S2: Cross-session narrative — connect Asia → London → NY as one continuous story
+  S3: Expansion pressure: what does ${ep?.risk} pressure with ${ep?.streak || 0}-session streak suggest about timing
+  S4: Identify the single most important leading indicator to watch in the next session
+  S5: One sentence on overall market posture in institutional language
+
+Rules — strictly enforced:
+  - Every sentence citing metrics MUST include at least one %avg figure
+  - Forbidden words: will, must, expect, predict, guarantee, certainly, definitely
+  - Permitted: suggests, indicates, consistent with, conditions favor, pressure accumulating, watching for, historically associated with`;
 }
 
 module.exports = async function handler(req, res) {
@@ -107,28 +131,33 @@ module.exports = async function handler(req, res) {
   if (req.method !== 'POST')   return res.status(405).json({ error: 'POST only' });
 
   try {
-    const { sessions, expansionPressure } = req.body || {};
-    if (!sessions?.length) return res.json({ narrative: null });
+    const { sessions, expansionPressure, marketCycle } = req.body || {};
+    if (!sessions?.length) return res.json({ marketCycle: null, asia: null, london: null, newYork: null, footer: null });
 
-    const fp     = fingerprint(sessions, expansionPressure);
+    const fp     = fingerprint(sessions, expansionPressure, marketCycle);
     const cached = _cache.get(fp);
-    if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
-      return res.json(cached.result);
-    }
+    if (cached && Date.now() - cached.ts < CACHE_TTL_MS) return res.json(cached.result);
 
-    const prompt     = buildPrompt(sessions, expansionPressure);
+    const prompt     = buildPrompt(sessions, expansionPressure, marketCycle);
     const ai         = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const completion = await ai.chat.completions.create({
-      model:       'gpt-4o-mini',
-      max_tokens:  180,
-      temperature: 0.2,
-      messages:    [{ role: 'user', content: prompt }],
+      model:           'gpt-4o-mini',
+      max_tokens:      1000,
+      temperature:     0.25,
+      response_format: { type: 'json_object' },
+      messages:        [{ role: 'user', content: prompt }],
     });
 
-    const narrative = completion.choices[0].message.content.trim();
-    const result    = { narrative };
-    _cache.set(fp, { ts: Date.now(), result });
+    const parsed = JSON.parse(completion.choices[0].message.content.trim());
+    const result = {
+      marketCycle: parsed.marketCycle || null,
+      asia:        parsed.asia        || null,
+      london:      parsed.london      || null,
+      newYork:     parsed.newYork     || null,
+      footer:      parsed.footer      || null,
+    };
 
+    _cache.set(fp, { ts: Date.now(), result });
     res.json(result);
   } catch (e) {
     console.error('[ME-NARRATIVE]', e.message);

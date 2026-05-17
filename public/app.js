@@ -1878,20 +1878,52 @@ function _meExpansionPressurePanel(ep) {
     <div class="me-pressure-body">${compressionBlock}</div>
     ${flowChain}
     ${narrativeBlock}
-    <p class="me-narrative" id="me-narrative">Reading market structure…</p>
   </div>`;
 }
 
-async function fetchMarketEnergyNarrative(sessions, expansionPressure) {
-  const el = document.getElementById('me-narrative');
-  if (!el) return;
+async function fetchMarketEnergyNarrative(sessions, expansionPressure, marketCycle) {
+  const SESS_COLOR = { ASIA: '#f59e0b', LONDON: '#0ea5e9', NEW_YORK: '#a855f7' };
+  const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York' };
+
+  function _aiBlock(id, label, text, color) {
+    const header = label
+      ? `<span class="me-ai-label" style="color:${color || 'var(--text-muted)'}">${label}</span>`
+      : '';
+    return `<div class="me-ai-block" id="${id}">${header}<p class="me-ai-text">${text || '<span class="me-ai-loading">Analyzing…</span>'}</p></div>`;
+  }
+
+  // Set loading placeholders immediately
+  const cycleEl = document.getElementById('me-cycle-analysis');
+  const sessEl  = document.getElementById('me-session-analyses');
+  const footEl  = document.getElementById('me-footer-analysis');
+
   try {
     const data = await api('/api/market-energy-narrative', {
       method: 'POST',
-      body:   JSON.stringify({ sessions, expansionPressure }),
+      body:   JSON.stringify({ sessions, expansionPressure, marketCycle }),
     });
-    el.textContent = data.narrative || '';
-    el.style.display = data.narrative ? '' : 'none';
+
+    if (cycleEl && data.marketCycle) {
+      cycleEl.querySelector('.me-ai-text').textContent = data.marketCycle;
+    }
+
+    if (sessEl) {
+      const analyses = [
+        { key: 'ASIA',     text: data.asia     },
+        { key: 'LONDON',   text: data.london   },
+        { key: 'NEW_YORK', text: data.newYork  },
+      ];
+      sessEl.innerHTML = analyses.map(({ key, text }) =>
+        `<div class="me-session-analysis">
+          <span class="me-sa-label" style="color:${SESS_COLOR[key]}">${SESS_LABEL[key]}</span>
+          <p class="me-sa-text">${text || ''}</p>
+        </div>`
+      ).join('');
+    }
+
+    if (footEl && data.footer) {
+      footEl.querySelector('.me-ai-text').textContent = data.footer;
+    }
   } catch (_) {
     el.style.display = 'none';
   }
@@ -1919,14 +1951,31 @@ function renderMarketEnergy(sessions, expansionPressure, marketCycle) {
   const ORDER  = ['ASIA', 'LONDON', 'NEW_YORK', 'LOW_LIQUIDITY'];
   const byName = Object.fromEntries(sessions.map(s => [s.session_name, s]));
 
+  const loadingBlock = `<div class="me-ai-block"><p class="me-ai-text"><span class="me-ai-loading">Analyzing…</span></p></div>`;
+  const sessLoading  = ['ASIA','LONDON','NEW_YORK'].map(k =>
+    `<div class="me-session-analysis">
+      <span class="me-sa-label" style="color:${k==='ASIA'?'#f59e0b':k==='LONDON'?'#0ea5e9':'#a855f7'}">${k==='NEW_YORK'?'New York':k[0]+k.slice(1).toLowerCase()}</span>
+      <p class="me-sa-text"><span class="me-ai-loading">Analyzing…</span></p>
+    </div>`
+  ).join('');
+
   el.innerHTML = `
     ${_meMarketCycleBanner(marketCycle)}
+    <div class="me-ai-block me-cycle-analysis-block" id="me-cycle-analysis">
+      <span class="me-ai-label">Market Cycle Analysis</span>
+      <p class="me-ai-text"><span class="me-ai-loading">Analyzing…</span></p>
+    </div>
     <div class="me-card-grid">
       ${ORDER.map(name => _meSessionCard(name, byName[name] || null)).join('')}
     </div>
-    ${_meExpansionPressurePanel(expansionPressure)}`;
+    <div class="me-session-analyses" id="me-session-analyses">${sessLoading}</div>
+    ${_meExpansionPressurePanel(expansionPressure)}
+    <div class="me-ai-block me-footer-analysis-block" id="me-footer-analysis">
+      <span class="me-ai-label">Market Intelligence Summary</span>
+      <p class="me-ai-text"><span class="me-ai-loading">Analyzing…</span></p>
+    </div>`;
 
-  fetchMarketEnergyNarrative(sessions, expansionPressure);
+  fetchMarketEnergyNarrative(sessions, expansionPressure, marketCycle);
 }
 
 async function fetchMarketActivity() {
