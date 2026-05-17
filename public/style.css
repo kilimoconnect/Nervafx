@@ -4246,6 +4246,212 @@ body::after {
   margin-top: 14px;
 }
 
+/* ── Market Intelligence modal overlay ───────────────────────────────────── */
+.me-analysis-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(2, 6, 23, 0.82);
+  backdrop-filter: blur(6px);
+  display: none;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 28px 16px 40px;
+  overflow-y: auto;
+}
+
+.me-modal-panel {
+  width: 100%;
+  max-width: 900px;
+  background: #0d1526;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+}
+
+.me-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 22px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  background: rgba(255,255,255,0.03);
+}
+
+.me-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.me-modal-title-label {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text-primary);
+}
+
+.me-modal-cycle-pill {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--bc, #64748b);
+  background: rgba(255,255,255,0.05);
+  padding: 3px 9px;
+  border-radius: 5px;
+  border: 1px solid currentColor;
+  letter-spacing: 0.04em;
+}
+
+.me-modal-ep-badge {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  opacity: 0.85;
+}
+
+.me-modal-close {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+.me-modal-close:hover {
+  background: rgba(255,255,255,0.08);
+  color: var(--text-primary);
+}
+
+.me-modal-body {
+  padding: 24px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.me-modal-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.me-modal-section-title {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.me-modal-analysis-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.78;
+  color: var(--text-secondary);
+}
+
+.me-modal-footer-text {
+  font-size: 13px;
+  line-height: 1.82;
+}
+
+/* Session cards within modal */
+.me-modal-sess-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+.me-modal-sess-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.me-modal-sess-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.me-modal-sess-name {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.me-modal-cycle-badge {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--bc, #64748b);
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.04);
+  letter-spacing: 0.04em;
+}
+
+.me-modal-momentum {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+/* Metric grid inside each session card */
+.me-modal-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.me-modal-metric {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 7px 4px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 6px;
+  text-align: center;
+}
+
+.me-modal-metric span {
+  font-size: 8px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.me-modal-metric strong {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.me-modal-pct {
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 500;
+}
+
 .me-ai-label {
   display: block;
   font-size: 9px;

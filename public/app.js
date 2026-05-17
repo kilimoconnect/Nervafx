@@ -1881,52 +1881,134 @@ function _meExpansionPressurePanel(ep) {
   </div>`;
 }
 
+// ── Market energy AI analysis — modal state ──────────────────────────────────
+let _meNarrative    = null; // latest AI response
+let _meSessSnapshot = [];   // sessions at last fetch
+let _meEpSnapshot   = null;
+let _meMcSnapshot   = null;
+
 async function fetchMarketEnergyNarrative(sessions, expansionPressure, marketCycle) {
-  const SESS_COLOR = { ASIA: '#f59e0b', LONDON: '#0ea5e9', NEW_YORK: '#a855f7' };
-  const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York' };
-
-  function _aiBlock(id, label, text, color) {
-    const header = label
-      ? `<span class="me-ai-label" style="color:${color || 'var(--text-muted)'}">${label}</span>`
-      : '';
-    return `<div class="me-ai-block" id="${id}">${header}<p class="me-ai-text">${text || '<span class="me-ai-loading">Analyzing…</span>'}</p></div>`;
-  }
-
-  // Set loading placeholders immediately
-  const cycleEl = document.getElementById('me-cycle-analysis');
-  const sessEl  = document.getElementById('me-session-analyses');
-  const footEl  = document.getElementById('me-footer-analysis');
-
+  _meSessSnapshot = sessions;
+  _meEpSnapshot   = expansionPressure;
+  _meMcSnapshot   = marketCycle;
   try {
     const data = await api('/api/market-energy-narrative', {
       method: 'POST',
       body:   JSON.stringify({ sessions, expansionPressure, marketCycle }),
     });
+    _meNarrative = data;
+    // Refresh modal if it's already open
+    const modal = document.getElementById('me-analysis-modal');
+    if (modal) _renderMeAnalysisModal();
+  } catch (_) {}
+}
 
-    if (cycleEl && data.marketCycle) {
-      cycleEl.querySelector('.me-ai-text').textContent = data.marketCycle;
-    }
-
-    if (sessEl) {
-      const analyses = [
-        { key: 'ASIA',     text: data.asia     },
-        { key: 'LONDON',   text: data.london   },
-        { key: 'NEW_YORK', text: data.newYork  },
-      ];
-      sessEl.innerHTML = analyses.map(({ key, text }) =>
-        `<div class="me-session-analysis">
-          <span class="me-sa-label" style="color:${SESS_COLOR[key]}">${SESS_LABEL[key]}</span>
-          <p class="me-sa-text">${text || ''}</p>
-        </div>`
-      ).join('');
-    }
-
-    if (footEl && data.footer) {
-      footEl.querySelector('.me-ai-text').textContent = data.footer;
-    }
-  } catch (_) {
-    el.style.display = 'none';
+function openMeAiAnalysis() {
+  let modal = document.getElementById('me-analysis-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id        = 'me-analysis-modal';
+    modal.className = 'me-analysis-overlay';
+    modal.addEventListener('click', e => { if (e.target === modal) closeMeAiAnalysis(); });
+    document.body.appendChild(modal);
   }
+  _renderMeAnalysisModal();
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeMeAiAnalysis() {
+  const modal = document.getElementById('me-analysis-modal');
+  if (modal) modal.style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+function _renderMeAnalysisModal() {
+  const modal = document.getElementById('me-analysis-modal');
+  if (!modal) return;
+
+  const d        = _meNarrative;
+  const sessions = _meSessSnapshot;
+  const ep       = _meEpSnapshot;
+  const mc       = _meMcSnapshot;
+
+  const SESS_COLOR = { ASIA: '#f59e0b', LONDON: '#0ea5e9', NEW_YORK: '#a855f7' };
+  const SESS_LABEL = { ASIA: 'Asia',    LONDON: 'London',  NEW_YORK: 'New York' };
+  const SESS_TEXT  = { ASIA: d?.asia,   LONDON: d?.london, NEW_YORK: d?.newYork };
+  const byName     = Object.fromEntries(sessions.map(s => [s.session_name, s]));
+
+  function pct(v) {
+    if (v == null) return '';
+    return `<em class="me-modal-pct" style="color:${v>=10?'#22c55e':v>=-10?'#f59e0b':'#94a3b8'}">${v>=0?'+':''}${v}%</em>`;
+  }
+
+  const sessCards = ['ASIA', 'LONDON', 'NEW_YORK'].map(key => {
+    const s     = byName[key] || {};
+    const color = SESS_COLOR[key];
+    const text  = SESS_TEXT[key];
+    const cycle = s.energy_cycle || '';
+    const mom   = s.energy_momentum;
+
+    const metrics = `
+      <div class="me-modal-metrics">
+        <div class="me-modal-metric"><span>Movement</span><strong>${Math.round(s.movement_score||0)}</strong>${pct(s.norm_movement)}</div>
+        <div class="me-modal-metric"><span>Breadth</span><strong>${Math.round(s.breadth_score||0)}</strong>${pct(s.norm_breadth)}</div>
+        <div class="me-modal-metric"><span>Agreement</span><strong>${Math.round(s.agreement_score||0)}</strong>${pct(s.norm_agreement)}</div>
+        <div class="me-modal-metric"><span>Volatility</span><strong>${Math.round(s.volatility_score||0)}</strong>${pct(s.norm_volatility)}</div>
+        <div class="me-modal-metric"><span>Energy</span><strong>${Math.round(s.market_energy||0)}</strong>${pct(s.norm_energy)}</div>
+        <div class="me-modal-metric"><span>Readiness</span><strong>${Math.round(s.expansion_readiness||0)}</strong></div>
+      </div>`;
+
+    const momHtml = mom
+      ? `<span class="me-modal-momentum" style="color:${ME_MOMENTUM_COLOR[mom]||'#64748b'}">${ME_MOMENTUM_LABEL[mom]||''}</span>`
+      : '';
+
+    return `<div class="me-modal-sess-card">
+      <div class="me-modal-sess-head">
+        <span class="me-modal-sess-name" style="color:${color}">${SESS_LABEL[key]}</span>
+        <span class="me-modal-cycle-badge" style="--bc:${ME_CYCLE_COLOR[cycle]||'#64748b'}">${ME_CYCLE_LABEL[cycle]||cycle}</span>
+        ${momHtml}
+      </div>
+      ${metrics}
+      <p class="me-modal-analysis-text">${text || '<span class="me-ai-loading">Analyzing…</span>'}</p>
+    </div>`;
+  }).join('');
+
+  const mcColor = ME_MARKET_CYCLE_COLOR[mc] || '#64748b';
+  const mcLabel = ME_MARKET_CYCLE_LABEL[mc] || (mc||'—').replace(/_/g,' ');
+
+  const epBadge = ep?.risk && ep.risk !== 'NONE'
+    ? `<span class="me-modal-ep-badge" style="color:${ep.risk==='HIGH'?'#ef4444':ep.risk==='BUILDING'?'#f59e0b':'#0ea5e9'}">${ep.risk} pressure · ${ep.streak} session${ep.streak!==1?'s':''} · score ${ep.score}</span>`
+    : '';
+
+  modal.innerHTML = `
+    <div class="me-modal-panel" role="dialog" aria-modal="true">
+      <div class="me-modal-header">
+        <div class="me-modal-title">
+          <span class="me-modal-title-label">Market Intelligence</span>
+          <span class="me-modal-cycle-pill" style="--bc:${mcColor}">${mcLabel}</span>
+          ${epBadge}
+        </div>
+        <button class="me-modal-close" onclick="closeMeAiAnalysis()" aria-label="Close">✕</button>
+      </div>
+
+      <div class="me-modal-body">
+        <section class="me-modal-section">
+          <h3 class="me-modal-section-title">Market Cycle</h3>
+          <p class="me-modal-analysis-text">${d?.marketCycle || '<span class="me-ai-loading">Analyzing…</span>'}</p>
+        </section>
+
+        <section class="me-modal-section">
+          <h3 class="me-modal-section-title">Session Analysis</h3>
+          <div class="me-modal-sess-grid">${sessCards}</div>
+        </section>
+
+        <section class="me-modal-section">
+          <h3 class="me-modal-section-title">Market Intelligence Summary</h3>
+          <p class="me-modal-analysis-text me-modal-footer-text">${d?.footer || '<span class="me-ai-loading">Analyzing…</span>'}</p>
+        </section>
+      </div>
+    </div>`;
 }
 
 function _meMarketCycleBanner(cycle) {
@@ -1935,17 +2017,8 @@ function _meMarketCycleBanner(cycle) {
   return `<div class="me-cycle-banner">
     <span class="me-cycle-banner-label">Market Cycle</span>
     <span class="me-cycle-banner-val" style="--bc:${color}">${label}</span>
-    <button class="me-ai-toggle" id="me-ai-toggle" onclick="toggleMeAiAnalysis(this)">AI Analysis</button>
+    <button class="me-ai-toggle" onclick="openMeAiAnalysis()">AI Analysis</button>
   </div>`;
-}
-
-function toggleMeAiAnalysis(btn) {
-  const ids = ['me-cycle-analysis', 'me-session-analyses', 'me-footer-analysis'];
-  const open = btn.classList.toggle('active');
-  ids.forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.style.display = open ? '' : 'none';
-  });
 }
 
 function renderMarketEnergy(sessions, expansionPressure, marketCycle) {
@@ -1960,29 +2033,12 @@ function renderMarketEnergy(sessions, expansionPressure, marketCycle) {
   const ORDER  = ['ASIA', 'LONDON', 'NEW_YORK', 'LOW_LIQUIDITY'];
   const byName = Object.fromEntries(sessions.map(s => [s.session_name, s]));
 
-  const loadingBlock = `<div class="me-ai-block"><p class="me-ai-text"><span class="me-ai-loading">Analyzing…</span></p></div>`;
-  const sessLoading  = ['ASIA','LONDON','NEW_YORK'].map(k =>
-    `<div class="me-session-analysis">
-      <span class="me-sa-label" style="color:${k==='ASIA'?'#f59e0b':k==='LONDON'?'#0ea5e9':'#a855f7'}">${k==='NEW_YORK'?'New York':k[0]+k.slice(1).toLowerCase()}</span>
-      <p class="me-sa-text"><span class="me-ai-loading">Analyzing…</span></p>
-    </div>`
-  ).join('');
-
   el.innerHTML = `
     ${_meMarketCycleBanner(marketCycle)}
-    <div class="me-ai-block me-cycle-analysis-block" id="me-cycle-analysis" style="display:none">
-      <span class="me-ai-label">Market Cycle Analysis</span>
-      <p class="me-ai-text"><span class="me-ai-loading">Analyzing…</span></p>
-    </div>
     <div class="me-card-grid">
       ${ORDER.map(name => _meSessionCard(name, byName[name] || null)).join('')}
     </div>
-    <div class="me-session-analyses" id="me-session-analyses" style="display:none">${sessLoading}</div>
-    ${_meExpansionPressurePanel(expansionPressure)}
-    <div class="me-ai-block me-footer-analysis-block" id="me-footer-analysis" style="display:none">
-      <span class="me-ai-label">Market Intelligence Summary</span>
-      <p class="me-ai-text"><span class="me-ai-loading">Analyzing…</span></p>
-    </div>`;
+    ${_meExpansionPressurePanel(expansionPressure)}`;
 
   fetchMarketEnergyNarrative(sessions, expansionPressure, marketCycle);
 }
