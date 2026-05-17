@@ -1555,9 +1555,9 @@ function _meSessionExplain(s, label) {
   else lines.push(`Low price movement (${mov}/100) — most pairs are quiet.`);
 
   // Momentum
-  if (brd >= 60) lines.push(`Wide momentum (${brd}/100) — many pairs moving together, signalling a broad market move.`);
-  else if (brd >= 35) lines.push(`Moderate momentum (${brd}/100) — some pairs participating, others flat.`);
-  else lines.push(`Narrow momentum (${brd}/100) — only a few pairs are moving.`);
+  if (brd >= 60) lines.push(`Wide momentum (${brd}/100) — strong directional conviction across the market.`);
+  else if (brd >= 35) lines.push(`Moderate momentum (${brd}/100) — partial market participation, mixed conditions.`);
+  else lines.push(`Narrow momentum (${brd}/100) — weak market participation, low conviction.`);
 
   // Agreement
   if (agr >= 60) lines.push(`High agreement (${agr}/100) — timeframes are aligned, trends are consistent.`);
@@ -1991,9 +1991,9 @@ function _renderBreadthBars(container, rows) {
     const dayLines = [];
     if (dayAvg >= 40) dayLines.push(`Strong overall participation (avg ${dayAvg}) — broad market activity throughout the day.`);
     else if (dayAvg >= 20) dayLines.push(`Moderate participation (avg ${dayAvg}) — some sessions were active, others quiet.`);
-    else dayLines.push(`Low participation (avg ${dayAvg}) — most of the day was quiet with few pairs moving.`);
+    else dayLines.push(`Low participation (avg ${dayAvg}) — most of the day was quiet with low momentum.`);
 
-    dayLines.push(`Peak momentum of ${dayMax} hit at ${peakTime} during ${peakSess} — this was when the most pairs were moving together.`);
+    dayLines.push(`Peak momentum of ${dayMax} hit at ${peakTime} during ${peakSess} — this was when momentum peaked.`);
 
     if (streakCount >= 3) dayLines.push(`Continuation signal detected (${streakCount} bars in streak) — sustained momentum buildup during this day.`);
     else dayLines.push('No continuation signal — momentum did not sustain 3+ consecutive increases above 10.');
@@ -2020,11 +2020,11 @@ function _renderBreadthBars(container, rows) {
   html += `<div class="bc-guide">
     <div class="bc-guide-title">How to read this chart</div>
     <ul class="bc-guide-list">
-      <li><strong>Momentum</strong> measures how many of the 28 currency pairs are moving in the same direction during each hour. Higher = more pairs participating.</li>
-      <li><strong>Rising bars</strong> mean more pairs are joining the move — the market is building momentum and trends are more likely to continue.</li>
-      <li><strong>Falling bars</strong> mean pairs are dropping out — momentum is fading and reversals or ranging conditions may follow.</li>
+      <li><strong>Momentum</strong> measures the strength and participation of market movement during each hour. Higher = stronger directional conviction.</li>
+      <li><strong>Rising bars</strong> mean momentum is building — the market is gaining strength and trends are more likely to continue.</li>
+      <li><strong>Falling bars</strong> mean momentum is fading — reversals or ranging conditions may follow.</li>
       <li><strong>Green bars</strong> highlight 3+ consecutive hourly increases (both ≥10) — a continuation signal suggesting the move has broad support and is likely to persist.</li>
-      <li><strong>Low momentum</strong> (under 15) means very few pairs are active — avoid trading as moves lack conviction.</li>
+      <li><strong>Low momentum</strong> (under 15) means weak market activity — avoid trading as moves lack conviction.</li>
       <li><strong>High momentum</strong> (above 50) with agreement means strong trending conditions — ideal for trend-following entries.</li>
     </ul>
   </div>`;
@@ -2455,7 +2455,7 @@ function _renderJrnMomentumSignal() {
   if (!_momentumSignal) return '';
   return _jrnSection('🚀 Momentum Continuation', `
     <p style="margin:0;line-height:1.5"><strong>${_momentumSignal.streak} consecutive rises in ${_momentumSignal.session}</strong> — broad participation supports continuation. Peak value: ${_momentumSignal.peakVal}.</p>
-    <p style="margin:6px 0 0;opacity:.75;font-size:.85em">Multiple currencies moving together suggests the trend has structural support and is likely to persist.</p>
+    <p style="margin:6px 0 0;opacity:.75;font-size:.85em">Sustained momentum buildup suggests the trend has structural support and is likely to persist.</p>
   `);
 }
 
