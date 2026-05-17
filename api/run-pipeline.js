@@ -3,20 +3,23 @@
 /**
  * POST /api/run-pipeline
  *
- * Manually triggers the analysis pipeline using candle data already in Supabase.
- * Runs: strength → smooth → spreads → journal
- * Skips: OANDA fetch (candles must already be CLEAN), AI analysis, outcomes.
+ * Full pipeline: fetches candles from OANDA, then runs analysis + backfill.
+ * Runs: candles → strength → smooth → spreads → states → signals → risk →
+ *       session_backfill → narrative → journal
  *
- * Protected: requires admin JWT (same ID check as the dashboard Admin button).
+ * Protected: requires admin JWT or CRON_SECRET.
  *
- * Usage:  POST /api/run-pipeline   (with Bearer token header)
+ * Usage:  POST /api/run-pipeline?force=1   (with Bearer token header)
  */
 
 const { createClient } = require('@supabase/supabase-js');
+const { fetchAndParseCandles, sleep, RATE_LIMIT_DELAY } = require('../src/oanda');
+const { upsertCandles }                  = require('../src/supabase');
+const { config }                         = require('../src/config');
 const { calculateLatestStates }          = require('../src/stateDetect');
 const { calculateLatestSignals }         = require('../src/signals');
 const { checkLatestSignals }             = require('../src/risk');
-const { calculateLatestSessionActivity } = require('../src/sessionActivity');
+const { backfillSessionActivity }        = require('../src/sessionActivity');
 const { generateMarketNarrative }        = require('../src/narrativeEngine');
 const { writeJournalEntry }              = require('../src/journalEngine');
 
@@ -264,15 +267,24 @@ module.exports = async function handler(req, res) {
   const t0 = Date.now();
   let strengthTime = null;
 
+  // Fetch latest candles from OANDA
+  await step('candles', async () => {
+    for (const instrument of config.instruments) {
+      const candles = await fetchAndParseCandles(instrument, { count: 5 });
+      if (candles.length > 0) await upsertCandles(candles);
+      await sleep(RATE_LIMIT_DELAY);
+    }
+  });
+
   await step('strength', async () => { strengthTime = await runStrength(sb); });
   await step('smooth',   () => runSmooth(sb));
   await step('spreads',  () => runSpreads(sb));
   await step('states',   () => calculateLatestStates());
   await step('signals',  () => calculateLatestSignals());
   await step('risk',             () => checkLatestSignals());
-  await step('session_activity',  () => calculateLatestSessionActivity());
-  await step('market_narrative',  () => generateMarketNarrative());
-  await step('journal',           () => writeJournalEntry());
+  await step('session_backfill', () => backfillSessionActivity());
+  await step('market_narrative', () => generateMarketNarrative());
+  await step('journal',          () => writeJournalEntry());
 
   return res.json({
     ok:           true,
