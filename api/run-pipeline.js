@@ -47,6 +47,8 @@ function cors(res) {
 async function verifyAdmin(sb, req) {
   const auth = (req.headers.authorization || '').replace('Bearer ', '');
   if (!auth) return false;
+  // Accept Vercel Cron secret (no Supabase round-trip needed)
+  if (process.env.CRON_SECRET && auth === process.env.CRON_SECRET) return true;
   const { data: { user } } = await sb.auth.getUser(auth);
   return user?.id === ADMIN_ID;
 }
@@ -223,7 +225,7 @@ async function runSpreads(sb) {
 module.exports = async function handler(req, res) {
   cors(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST')    return res.status(405).json({ error: 'POST only' });
+  if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).json({ error: 'POST/GET only' });
 
   const sb = getDB();
 
