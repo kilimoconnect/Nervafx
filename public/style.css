@@ -4892,23 +4892,24 @@ body::after {
   margin-top: 12px;
 }
 
-.sh-title-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-bottom: 8px;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
-  cursor: pointer;
-  user-select: none;
-}
-.sh-title-bar:hover .sh-title { color: var(--text); }
-
-.sh-title {
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
+.sh-toggle-btn {
+  display: block;
+  width: 100%;
+  padding: 10px 16px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.03);
   color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.sh-toggle-btn:hover {
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(255,255,255,0.15);
+  color: var(--text);
 }
 
 .sh-panel.sh-collapsed .sh-table { display: none; }
@@ -4968,11 +4969,6 @@ body::after {
   font-weight: 600;
   color: var(--text);
   white-space: nowrap;
-}
-
-.sh-chevron {
-  font-size: 10px;
-  color: var(--text-dim);
 }
 
 .sh-col-sess {

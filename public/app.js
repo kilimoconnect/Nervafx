@@ -2196,11 +2196,8 @@ function _meHistoryPanel(rows, liveSessions) {
     return `<div class="sh-day-group">${sessRows}</div>`;
   }).join('');
 
-  return `<div class="sh-panel">
-    <div class="sh-title-bar" onclick="this.parentElement.classList.toggle('sh-collapsed');this.querySelector('.sh-chevron').textContent=this.parentElement.classList.contains('sh-collapsed')?'▸':'▾'">
-      <span class="sh-title">Session History</span>
-      <span class="sh-chevron">▾</span>
-    </div>
+  return `<div class="sh-panel sh-collapsed">
+    <button class="sh-toggle-btn" onclick="var p=this.closest('.sh-panel');p.classList.toggle('sh-collapsed');this.textContent=p.classList.contains('sh-collapsed')?'Show Session History':'Hide Session History'">Show Session History</button>
     <div class="sh-table">
       ${tableHead}
       ${dayBlocks}
