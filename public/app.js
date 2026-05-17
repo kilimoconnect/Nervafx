@@ -1793,9 +1793,12 @@ function _renderBreadthBars(container, rows) {
   const tzLabel = new Intl.DateTimeFormat('en-GB', { timeZone: tz, timeZoneName: 'short' })
     .formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value || '';
 
-  // Group all rows by date (single timeline per day)
+  const SKIP_SESSIONS = new Set(['LOW_LIQUIDITY', 'DEAD_HOURS']);
+
+  // Group all rows by date (single timeline per day), skip off-hours sessions
   const byDate = {};
   for (const r of rows) {
+    if (SKIP_SESSIONS.has(r.session_name)) continue;
     const date = r.time_utc.slice(0, 10);
     if (!byDate[date]) byDate[date] = [];
     byDate[date].push({
@@ -1805,8 +1808,13 @@ function _renderBreadthBars(container, rows) {
     });
   }
 
-  // Sort dates descending
-  const dates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
+  // Sort dates descending, drop incomplete edge days (< 3 sessions represented)
+  const dates = Object.keys(byDate)
+    .filter(d => {
+      const sessions = new Set(byDate[d].map(b => b.session));
+      return sessions.size >= 2;
+    })
+    .sort((a, b) => b.localeCompare(a));
   const maxBreadth = Math.max(80, ...rows.map(r => parseFloat(r.breadth_score) || 0));
 
   let html = '<div class="bc-chart-wrap">';
