@@ -2391,13 +2391,7 @@ function _renderJournalModal(e, newsEvents, sessionEntries, prevEntry) {
   document.getElementById('jrn-modal-time').textContent = fmtTime(e.time);
   document.getElementById('jrn-modal-badges').innerHTML = `
     <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${sessionLabel(e.session_name)}</span>
-    ${_jrnEnergyBadge(e.time, e.session_name)}
-    <div class="jrn-counts">
-      <span class="jrn-count trend" title="Trend">${e.trend_pairs}T</span>
-      <span class="jrn-count pb"    title="Pullback">${e.pullback_pairs}PB</span>
-      <span class="jrn-count ready" title="Ready">${e.ready_pairs}R</span>
-      ${enteredCount ? `<span class="jrn-count sig">${enteredCount}✦</span>` : ''}
-    </div>
+    ${enteredCount ? `<span class="jrn-count sig">${enteredCount}✦</span>` : ''}
     ${(({ strong, weak }) => {
       const parts = [];
       if (strong.length) parts.push(`<span class="jrn-csig-tag strong">💪 ${strong.join(' ')}</span>`);
@@ -2407,14 +2401,13 @@ function _renderJournalModal(e, newsEvents, sessionEntries, prevEntry) {
 
   // Body — sections in order
   document.getElementById('jrn-modal-body').innerHTML = [
-    e.summary ? `<div class="jrn-modal-summary">${clean(e.summary)}</div>` : '',
+    sessionEntries ? renderJrnSessionPerfSection(e, sessionEntries) : '',
     newsEvents !== null ? renderJrnCalendarSection(newsEvents, e.time) : _jrnSection('📅 Economic Calendar', '<p class="jrn-empty jrn-loading">Loading…</p>'),
     renderJrnCsigSection(e),
     renderJrnStrengthSection(e.currency_strength),
     e.m15_impulses != null ? renderJrnM15Section(e.m15_impulses) : '',
-    sessionEntries ? renderJrnSessionPerfSection(e, sessionEntries) : '',
-    prevEntry !== undefined ? renderJrnPrevSessionSection(prevEntry) : '',
     renderJrnSetupsSection(e.top_setups || [], signals, entryCsigFilter),
+    prevEntry !== undefined ? renderJrnPrevSessionSection(prevEntry) : '',
   ].join('');
 
   const overlay = document.getElementById('jrn-modal-overlay');
@@ -2458,16 +2451,7 @@ function renderJournal(data) {
           <div class="jrn-hdr-top">
             <span class="jrn-time">${fmtShort(e.time)}</span>
             <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${sessionLabel(e.session_name)}</span>
-          </div>
-          <div class="jrn-hdr-bot">
-            ${_jrnEnergyBadge(e.time, e.session_name)}
-            <div class="jrn-counts">
-              <span class="jrn-count trend" title="Trend">${e.trend_pairs}T</span>
-              <span class="jrn-count pb"    title="Pullback (tracked)">${e.pullback_pairs}PB</span>
-              <span class="jrn-count ready" title="Ready to enter">${e.ready_pairs}R</span>
-              ${e.new_pullback_pairs ? `<span class="jrn-count new-pb" title="New pullback pairs this cycle">+${e.new_pullback_pairs}</span>` : ''}
-              ${enteredCount ? `<span class="jrn-count sig">${enteredCount}✦</span>` : ''}
-            </div>
+            ${enteredCount ? `<span class="jrn-count sig">${enteredCount}✦</span>` : ''}
           </div>
           <span class="jrn-chevron">›</span>
         </div>
