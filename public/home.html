@@ -869,6 +869,174 @@
       line-height: 1.7;
     }
 
+    /* ── MARKET ENERGY EXAMPLE ── */
+    .me-example-wrap {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+    .me-example-card {
+      background: var(--card-solid);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+    }
+    .me-ex-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .me-ex-sess {
+      font-size: 15px;
+      font-weight: 800;
+    }
+    .me-ex-cycle {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 5px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .me-ex-status {
+      margin-left: auto;
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #22c55e;
+      background: rgba(34,197,94,0.1);
+      border: 1px solid rgba(34,197,94,0.25);
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+    .me-ex-metrics, .me-ex-pressure {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .me-ex-pressure {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+    }
+    .me-ex-row {
+      display: grid;
+      grid-template-columns: 72px 1fr 36px;
+      align-items: center;
+      gap: 8px;
+    }
+    .me-ex-label {
+      font-size: 11px;
+      color: var(--text2);
+    }
+    .me-ex-bar {
+      height: 6px;
+      background: rgba(255,255,255,0.06);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .me-ex-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.5s;
+    }
+    .me-ex-val {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text);
+      text-align: right;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+    }
+    .me-ex-foot {
+      display: flex;
+      gap: 12px;
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--text3);
+    }
+    .me-ex-foot strong { color: var(--text); font-weight: 800; }
+    .me-ex-explain {
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--border);
+    }
+    .me-ex-explain-title {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #3b82f6;
+      margin-bottom: 6px;
+    }
+    .me-ex-explain ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .me-ex-explain li {
+      font-size: 11px;
+      line-height: 1.5;
+      color: var(--text2);
+      padding-left: 14px;
+      position: relative;
+    }
+    .me-ex-explain li::before {
+      content: '•';
+      position: absolute;
+      left: 0;
+      color: #3b82f6;
+    }
+    .me-example-context {
+      padding: 24px;
+      background: var(--card-solid);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+    }
+    .me-example-context h3 {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 18px;
+    }
+    .me-ex-use-cases {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .me-ex-use {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .me-ex-use-icon {
+      font-size: 20px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .me-ex-use strong {
+      display: block;
+      font-size: 13px;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .me-ex-use p {
+      font-size: 12px;
+      color: var(--text2);
+      line-height: 1.6;
+      margin: 0;
+    }
+    @media (max-width: 768px) {
+      .me-example-wrap { grid-template-columns: 1fr; }
+    }
+
     /* ── WHY DIFFERENT ── */
     .comparison-grid {
       display: grid;
@@ -1731,47 +1899,105 @@
   <section>
     <div class="container">
       <div class="section-header center">
-        <div class="section-badge gold">Session Intelligence</div>
-        <h2 class="section-title">Market Energy &amp; Expansion Cycles</h2>
-        <p class="section-sub">NervaFX tracks session-by-session energy flow to detect compression build-up and anticipate expansion releases before they happen.</p>
+        <div class="section-badge gold">Market Energy Engine</div>
+        <h2 class="section-title">Know When the Market Is Really Moving</h2>
+        <p class="section-sub">The Market Energy Engine scans all 28 pairs every hour to measure movement, breadth, agreement, and volatility across Asia, London, and New York sessions. It tells you whether conditions support your next trade — regardless of your strategy or style.</p>
       </div>
-      <div class="sentiment-grid">
-        <div class="sentiment-card">
-          <div class="sentiment-card-left">
-            <div class="sentiment-group-name">Asia Session</div>
+
+      <!-- Example Market Energy Card -->
+      <div class="me-example-wrap">
+        <div class="me-example-card">
+          <div class="me-ex-head">
+            <span class="me-ex-sess" style="color:#0ea5e9">London</span>
+            <span class="me-ex-cycle" style="background:rgba(34,197,94,0.15);color:#22c55e;border:1px solid rgba(34,197,94,0.3)">Expansion</span>
+            <span class="me-ex-status">Live</span>
           </div>
-          <div class="sentiment-status status-aligned">COMPRESSION</div>
-        </div>
-        <div class="sentiment-card">
-          <div class="sentiment-card-left">
-            <div class="sentiment-group-name">London Session</div>
+          <div class="me-ex-metrics">
+            <div class="me-ex-row">
+              <span class="me-ex-label">Movement</span>
+              <div class="me-ex-bar"><div class="me-ex-fill" style="width:64%;background:#22c55e"></div></div>
+              <span class="me-ex-val">64</span>
+            </div>
+            <div class="me-ex-row">
+              <span class="me-ex-label">Breadth</span>
+              <div class="me-ex-bar"><div class="me-ex-fill" style="width:48%;background:#0ea5e9"></div></div>
+              <span class="me-ex-val">48</span>
+            </div>
+            <div class="me-ex-row">
+              <span class="me-ex-label">Agreement</span>
+              <div class="me-ex-bar"><div class="me-ex-fill" style="width:55%;background:#0ea5e9"></div></div>
+              <span class="me-ex-val">55</span>
+            </div>
+            <div class="me-ex-row">
+              <span class="me-ex-label">Volatility</span>
+              <div class="me-ex-bar"><div class="me-ex-fill" style="width:42%;background:#f59e0b"></div></div>
+              <span class="me-ex-val">42</span>
+            </div>
           </div>
-          <div class="sentiment-status status-aligned">EXPANSION</div>
-        </div>
-        <div class="sentiment-card">
-          <div class="sentiment-card-left">
-            <div class="sentiment-group-name">London/NY Overlap</div>
+          <div class="me-ex-pressure">
+            <div class="me-ex-row">
+              <span class="me-ex-label" style="color:#22c55e">Bull Press</span>
+              <div class="me-ex-bar"><div class="me-ex-fill" style="width:61%;background:#22c55e"></div></div>
+              <span class="me-ex-val">61%</span>
+            </div>
+            <div class="me-ex-row">
+              <span class="me-ex-label" style="color:#ef4444">Bear Press</span>
+              <div class="me-ex-bar"><div class="me-ex-fill" style="width:39%;background:#ef4444"></div></div>
+              <span class="me-ex-val">39%</span>
+            </div>
           </div>
-          <div class="sentiment-status status-aligned">EXPLOSIVE</div>
-        </div>
-        <div class="sentiment-card">
-          <div class="sentiment-card-left">
-            <div class="sentiment-group-name">Late NY Session</div>
+          <div class="me-ex-foot">
+            <span>Energy <strong>58</strong></span>
+            <span>Readiness <strong>72</strong></span>
+            <span style="color:#22c55e">Liquidity <strong>45</strong></span>
           </div>
-          <div class="sentiment-status">STABLE</div>
+          <div class="me-ex-explain">
+            <div class="me-ex-explain-title">What this means</div>
+            <ul>
+              <li>Prices are moving strongly — high pip activity across pairs.</li>
+              <li>Wide breadth — many pairs moving together, signalling a broad move.</li>
+              <li>Buyers dominate at 61% — clear directional bias to the upside.</li>
+              <li>GBP is the strongest currency, JPY the weakest — GBP/JPY pairs likely trending.</li>
+              <li>Overall energy is high — conditions favour trend-following entries.</li>
+            </ul>
+          </div>
         </div>
-      </div>
-      <div class="regime-block">
-        <div class="regime-label">Session Energy Score</div>
-        <div>
-          <span class="regime-badge">
-            <span>⚡</span>
-            EXPANSION · score 68 · CS+2
-          </span>
+        <div class="me-example-context">
+          <h3>How traders use this</h3>
+          <div class="me-ex-use-cases">
+            <div class="me-ex-use">
+              <span class="me-ex-use-icon">📈</span>
+              <div>
+                <strong>Trend followers</strong>
+                <p>Enter when energy is high and breadth confirms broad participation — your trend has real backing.</p>
+              </div>
+            </div>
+            <div class="me-ex-use">
+              <span class="me-ex-use-icon">⚡</span>
+              <div>
+                <strong>Scalpers</strong>
+                <p>Trade when movement and volatility are elevated — more pip opportunity per candle, tighter spreads.</p>
+              </div>
+            </div>
+            <div class="me-ex-use">
+              <span class="me-ex-use-icon">🔄</span>
+              <div>
+                <strong>Swing traders</strong>
+                <p>Wait for compression-to-expansion transitions — the energy engine flags when the breakout is building.</p>
+              </div>
+            </div>
+            <div class="me-ex-use">
+              <span class="me-ex-use-icon">🛑</span>
+              <div>
+                <strong>Any style</strong>
+                <p>Stay out when energy is low, breadth is narrow, and participation is weak — protect your capital from dead markets.</p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
       <p style="text-align:center; font-size:11px; color:var(--text3); margin-top:18px; opacity:0.6; letter-spacing:0.3px;">
-        ⓘ Illustrative snapshot — live session energy readings update every hour inside the platform.
+        ⓘ Illustrative example — live energy readings update every hour inside the platform.
       </p>
     </div>
   </section>
@@ -1797,10 +2023,10 @@
         <div class="comparison-col bright">
           <div class="comparison-col-header">NervaFX</div>
           <div class="comparison-row"><span class="comparison-icon" style="color:#4ade80">✓</span> Currency flow intelligence</div>
-          <div class="comparison-row"><span class="comparison-icon" style="color:#4ade80">✓</span> Cross-market structure analysis</div>
-          <div class="comparison-row"><span class="comparison-icon" style="color:#4ade80">✓</span> AI structure interpretation</div>
-          <div class="comparison-row"><span class="comparison-icon" style="color:#4ade80">✓</span> Personalized risk sizing</div>
-          <div class="comparison-row"><span class="comparison-icon" style="color:#4ade80">✓</span> Regime & session awareness</div>
+          <div class="comparison-row"><span class="comparison-icon" style="color:#4ade80">✓</span> Multi-timeframe structure analysis</div>
+          <div class="comparison-row"><span class="comparison-icon" style="color:#4ade80">✓</span> Live Market Energy Engine</div>
+          <div class="comparison-row"><span class="comparison-icon" style="color:#4ade80">✓</span> Risk-managed position sizing</div>
+          <div class="comparison-row"><span class="comparison-icon" style="color:#4ade80">✓</span> Session energy &amp; breadth awareness</div>
           <div class="comparison-row"><span class="comparison-icon" style="color:#4ade80">✓</span> Automatic hourly market journal</div>
         </div>
       </div>
