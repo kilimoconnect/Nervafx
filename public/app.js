@@ -1557,6 +1557,7 @@ function _meSessionExplain(s, label) {
   // Momentum
   if (brd >= 60) lines.push(`Wide momentum (${brd}/100) — strong directional conviction across the market.`);
   else if (brd >= 35) lines.push(`Moderate momentum (${brd}/100) — partial market participation, mixed conditions.`);
+  else if (brd >= 20) lines.push(`Narrow momentum (${brd}/100) — moderate market participation, building conditions.`);
   else lines.push(`Narrow momentum (${brd}/100) — weak market participation, low conviction.`);
 
   // Agreement
