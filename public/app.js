@@ -1932,18 +1932,26 @@ function _meSessionStatus(sessionName, currentSession) {
 }
 
 function _meHistoryPanel(rows, liveSessions) {
-  const now      = new Date();
-  const dayOfWeek = now.getUTCDay(); // 0=Sun, 6=Sat
-  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-  const todayKey  = now.toISOString().slice(0, 10);
+  const now     = new Date();
+  const utcDay  = now.getUTCDay();   // 0=Sun, 6=Sat
+  const utcHour = now.getUTCHours();
 
-  // Only inject live sessions as "Today" on weekdays — market is closed on weekends
-  const liveRows = isWeekend ? [] : (liveSessions || [])
-    .filter(s => s.session_name !== 'LOW_LIQUIDITY')
-    .map(s => ({ ...s, session_date: todayKey }));
+  // Market is open Mon 00:00 → Fri 21:00 UTC, and Sun 21:00+ UTC
+  const marketOpen = !(
+    utcDay === 6 ||                          // Saturday: always closed
+    (utcDay === 0 && utcHour < 21) ||        // Sunday before 21:00: closed
+    (utcDay === 5 && utcHour >= 21)          // Friday after 21:00: closed
+  );
 
-  // Remove any DB rows for today (weekend snapshot from Friday's memory), then prepend live rows
-  const dbRows  = (rows || []).filter(r => (r.session_date || '').slice(0, 10) !== todayKey);
+  // Only inject live sessions when market is open.
+  // Keep their real session_date from the candle timestamps — do NOT override with today.
+  const liveRows = marketOpen
+    ? (liveSessions || []).filter(s => s.session_name !== 'LOW_LIQUIDITY' && s.session_date)
+    : [];
+
+  // Dates already covered by live data — exclude matching DB rows to avoid duplicates
+  const liveDateKeys = new Set(liveRows.map(r => (r.session_date || '').slice(0, 10)));
+  const dbRows  = (rows || []).filter(r => !liveDateKeys.has((r.session_date || '').slice(0, 10)));
   const allRows = [...liveRows, ...dbRows];
 
   if (!allRows.length) return '';
@@ -1970,14 +1978,13 @@ function _meHistoryPanel(rows, liveSessions) {
 
   const days = Object.keys(byDate).sort().reverse(); // most recent first
 
+  // Last market day = most recent date in the data (already sorted desc)
+  const lastMarketDate = days[0];
+
   const dayBlocks = days.map(date => {
     const label = (() => {
+      if (date === lastMarketDate && marketOpen) return 'Today';
       const d    = new Date(date + 'T00:00:00Z');
-      const today = new Date();
-      today.setUTCHours(0,0,0,0);
-      const diff = Math.round((today - d) / 86400000);
-      if (diff === 0) return 'Today';
-      if (diff === 1) return 'Yesterday';
       return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
     })();
 
