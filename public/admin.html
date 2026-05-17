@@ -607,7 +607,10 @@ Mon May 12 2026
         headers: { 'Authorization': 'Bearer ' + token },
       });
       const d = await r.json();
-      if (d.ok) {
+      if (d.ok && d.skipped) {
+        res.innerHTML = `⏭ Skipped — ${d.reason}`;
+        res.style.color = '#94a3b8';
+      } else if (d.ok) {
         const steps = (d.steps || []).join(' · ');
         res.innerHTML = `✓ Done in ${d.elapsed_ms}ms · strength @ ${d.strength_time ? new Date(d.strength_time).toUTCString().slice(5,22) : '?'} UTC<br><span style="opacity:0.7">${steps}</span>`;
         res.style.color = '#4ade80';
