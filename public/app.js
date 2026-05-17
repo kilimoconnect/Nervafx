@@ -1824,12 +1824,12 @@ function _renderBreadthBars(container, rows) {
     const d = new Date(date + 'T12:00:00Z');
     const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz });
 
-    // Detect 3+ consecutive breadth increases across the whole day
+    // Detect 3+ consecutive breadth increases (both values must be ≥10)
     const breadths = bars.map(b => b.breadth);
     const streaks = new Set();
     let streak = 0;
     for (let i = 1; i < breadths.length; i++) {
-      if (breadths[i] > breadths[i - 1] && breadths[i] >= 10) {
+      if (breadths[i] > breadths[i - 1] && breadths[i] >= 10 && breadths[i - 1] >= 10) {
         streak++;
         if (streak >= 2) {
           for (let j = i - streak; j <= i; j++) streaks.add(j);
