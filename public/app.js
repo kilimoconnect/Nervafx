@@ -1749,9 +1749,12 @@ function openBreadthChart() {
     modal.addEventListener('click', e => { if (e.target === modal) closeBreadthChart(); });
     document.body.appendChild(modal);
   }
+  const _bcTz = (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC');
+  const _bcTzLabel = new Intl.DateTimeFormat('en-GB', { timeZone: _bcTz, timeZoneName: 'short' })
+    .formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value || '';
   modal.innerHTML = `<div class="me-modal-panel">
     <div class="me-modal-header">
-      <div class="me-modal-title"><span class="me-modal-title-label">Hourly Session Breadth</span></div>
+      <div class="me-modal-title"><span class="me-modal-title-label">Hourly Session Breadth</span><span style="font-size:10px;color:var(--text-muted);margin-left:8px">${_bcTzLabel}</span></div>
       <button class="me-modal-close" onclick="closeBreadthChart()">✕</button>
     </div>
     <div class="me-modal-body" style="padding:16px 20px">
@@ -1786,6 +1789,9 @@ async function _fetchAndRenderBreadthChart(modal) {
 function _renderBreadthBars(container, rows) {
   const SESS_COLOR = { ASIA: '#f59e0b', LONDON: '#0ea5e9', NEW_YORK: '#a855f7', LOW_LIQUIDITY: '#475569' };
   const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York', LOW_LIQUIDITY: 'Low Liq.' };
+  const tz = (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC');
+  const tzLabel = new Intl.DateTimeFormat('en-GB', { timeZone: tz, timeZoneName: 'short' })
+    .formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value || '';
 
   // Group rows by date then session
   const grouped = {};
@@ -1812,7 +1818,7 @@ function _renderBreadthBars(container, rows) {
   for (const entry of entries) {
     if (entry.date !== prevDate) {
       const d = new Date(entry.date + 'T12:00:00Z');
-      const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+      const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz });
       html += `<div class="bc-date-header">${dayLabel}</div>`;
       prevDate = entry.date;
     }
@@ -1841,14 +1847,15 @@ function _renderBreadthBars(container, rows) {
     for (let i = 0; i < entry.hours.length; i++) {
       const h = entry.hours[i];
       const pct = Math.round((h.breadth / maxBreadth) * 100);
-      const hour = new Date(h.time).getUTCHours();
+      const localTime = new Date(h.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
+      const localHour = localTime.slice(0, 2);
       const highlighted = streaks.has(i);
       const barColor = highlighted ? '#22c55e' : color;
       const cls = highlighted ? 'bc-bar bc-bar-streak' : 'bc-bar';
-      html += `<div class="${cls}" title="${h.breadth}% at ${String(hour).padStart(2,'0')}:00 UTC">
+      html += `<div class="${cls}" title="${h.breadth}% at ${localTime} ${tzLabel}">
         <div class="bc-bar-fill" style="height:${pct}%;background:${barColor}"></div>
         <span class="bc-bar-val">${h.breadth}</span>
-        <span class="bc-bar-hour">${String(hour).padStart(2,'0')}</span>
+        <span class="bc-bar-hour">${localHour}</span>
       </div>`;
     }
 
