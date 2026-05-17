@@ -2273,7 +2273,7 @@ function _meHistoryPanel(rows, liveSessions) {
     <div class="sh-col-sess">Session</div>
     <div class="sh-col-cycle">Cycle</div>
     <div class="sh-col-metric">E</div>
-    <div class="sh-col-metric">Brd</div>
+    <div class="sh-col-metric">Mom</div>
     <div class="sh-col-metric">Liq</div>
     <div class="sh-col-flow">Flow</div>
     <div class="sh-col-ccy">Currencies</div>

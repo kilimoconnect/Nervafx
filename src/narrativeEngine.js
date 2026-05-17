@@ -22,13 +22,13 @@ function buildPrompt(sessions, ep, marketCycle) {
 
   const lines = active.map(s =>
     `  ${s.session_name.padEnd(10)} cycle=${s.energy_cycle||'?'} momentum=${s.energy_momentum||'n/a'}
-    Mov:${fv(s.movement_score)} (${pct(s.norm_movement)})  Brd:${fv(s.breadth_score)} (${pct(s.norm_breadth)})  Agr:${fv(s.agreement_score)} (${pct(s.norm_agreement)})
+    Mov:${fv(s.movement_score)} (${pct(s.norm_movement)})  Mom:${fv(s.breadth_score)} (${pct(s.norm_breadth)})  Agr:${fv(s.agreement_score)} (${pct(s.norm_agreement)})
     Vol:${fv(s.volatility_score)} (${pct(s.norm_volatility)})  Energy:${fv(s.market_energy)} (${pct(s.norm_energy)}${prev(s.prev_energy)})  Dom:${fv(s.dominance_score)}%
     Bull:${fv(s.bullish_breadth)}%  Bear:${fv(s.bearish_breadth)}%  Strong:${s.strongest_ccy||'?'}  Weak:${s.weakest_ccy||'?'}`
   ).join('\n\n');
 
   const flowStr = ep?.carryOver?.length > 1
-    ? '\nSESSION FLOW: ' + ep.carryOver.map(c => `${c.session}(E:${c.energy} Brd:${c.breadth} ${c.cycle})`).join(' → ')
+    ? '\nSESSION FLOW: ' + ep.carryOver.map(c => `${c.session}(E:${c.energy} Mom:${c.breadth} ${c.cycle})`).join(' → ')
     : '';
 
   const epText = (!ep || ep.streak === 0)
@@ -57,9 +57,9 @@ Dom%        = one-sidedness (0=balanced, 100=one direction only)
 Energy      = composite of movement × breadth × agreement
 
 ━━━ DATA SNAPSHOT ━━━
-Asia   — Mov:${fv(a?.movement_score)} Brd:${fv(a?.breadth_score)} Agr:${fv(a?.agreement_score)} Energy:${fv(a?.market_energy)} Bull:${fv(a?.bullish_breadth)}% Bear:${fv(a?.bearish_breadth)}% Dom:${fv(a?.dominance_score)}% Strong:${a?.strongest_ccy||'?'} Weak:${a?.weakest_ccy||'?'}
-London — Mov:${fv(l?.movement_score)} Brd:${fv(l?.breadth_score)} Agr:${fv(l?.agreement_score)} Energy:${fv(l?.market_energy)} Bull:${fv(l?.bullish_breadth)}% Bear:${fv(l?.bearish_breadth)}% Dom:${fv(l?.dominance_score)}% Strong:${l?.strongest_ccy||'?'} Weak:${l?.weakest_ccy||'?'}
-NY     — Mov:${fv(ny?.movement_score)} Brd:${fv(ny?.breadth_score)} Agr:${fv(ny?.agreement_score)} Energy:${fv(ny?.market_energy)} Bull:${fv(ny?.bullish_breadth)}% Bear:${fv(ny?.bearish_breadth)}% Dom:${fv(ny?.dominance_score)}% Strong:${ny?.strongest_ccy||'?'} Weak:${ny?.weakest_ccy||'?'}
+Asia   — Mov:${fv(a?.movement_score)} Mom:${fv(a?.breadth_score)} Agr:${fv(a?.agreement_score)} Energy:${fv(a?.market_energy)} Bull:${fv(a?.bullish_breadth)}% Bear:${fv(a?.bearish_breadth)}% Dom:${fv(a?.dominance_score)}% Strong:${a?.strongest_ccy||'?'} Weak:${a?.weakest_ccy||'?'}
+London — Mov:${fv(l?.movement_score)} Mom:${fv(l?.breadth_score)} Agr:${fv(l?.agreement_score)} Energy:${fv(l?.market_energy)} Bull:${fv(l?.bullish_breadth)}% Bear:${fv(l?.bearish_breadth)}% Dom:${fv(l?.dominance_score)}% Strong:${l?.strongest_ccy||'?'} Weak:${l?.weakest_ccy||'?'}
+NY     — Mov:${fv(ny?.movement_score)} Mom:${fv(ny?.breadth_score)} Agr:${fv(ny?.agreement_score)} Energy:${fv(ny?.market_energy)} Bull:${fv(ny?.bullish_breadth)}% Bear:${fv(ny?.bearish_breadth)}% Dom:${fv(ny?.dominance_score)}% Strong:${ny?.strongest_ccy||'?'} Weak:${ny?.weakest_ccy||'?'}
 
 ━━━ OUTPUT SCHEMA ━━━
 Return exactly this structure:

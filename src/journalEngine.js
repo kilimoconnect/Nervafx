@@ -222,7 +222,7 @@ function buildSummary({ session, sentiment, states, signals, aiAnalysis, topSetu
         const bear  = Math.round(s.bearish_breadth || 0);
         const strong = s.strongest_ccy || '—';
         const weak   = s.weakest_ccy || '—';
-        return `${name}: ${cycle} E:${eng} Brd:${brd} Liq:${liq} ▲${bull}%/▼${bear}% ${strong}↑ ${weak}↓`;
+        return `${name}: ${cycle} E:${eng} Mom:${brd} Liq:${liq} ▲${bull}%/▼${bear}% ${strong}↑ ${weak}↓`;
       });
     lines.push(sessLines.join(' | '));
 
