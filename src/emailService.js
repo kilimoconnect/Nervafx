@@ -217,6 +217,53 @@ function upgradePromptEmail(firstName) {
   };
 }
 
+function momentumAlertEmail(momentum, impulses) {
+  const momHtml = momentum ? `
+    <div class="card" style="border-color:rgba(34,197,94,0.4)">
+      <div class="card-title" style="color:#22c55e">Momentum Continuation</div>
+      <p style="margin:0;color:#cbd5e1"><strong>${momentum.streak} consecutive rises in ${momentum.session}</strong> — sustained momentum buildup suggests the trend has structural support and is likely to persist. Peak value: ${momentum.peakVal}.</p>
+    </div>` : '';
+
+  const impulseRows = (impulses || []).map(imp => {
+    const dir = imp.direction === 'BUY'
+      ? '<span class="signal-buy">▲ Bullish</span>'
+      : '<span class="signal-sell">▼ Bearish</span>';
+    return `<tr>
+      <td style="padding:8px;color:#fff;font-weight:600">${imp.instrument.replace('_', '/')}</td>
+      <td style="padding:8px">${dir}</td>
+      <td style="padding:8px;color:#cbd5e1">${imp.state || 'EXPANDING'}</td>
+    </tr>`;
+  }).join('');
+
+  const impulseHtml = impulseRows ? `
+    <div class="divider"></div>
+    <h2 style="font-size:16px">M15 Impulse Moves</h2>
+    <p style="color:#94a3b8;font-size:13px;margin-bottom:12px">These pairs show expanding momentum on the 15-minute timeframe — price is accelerating.</p>
+    <table style="width:100%;border-collapse:collapse;margin:12px 0">
+      <thead><tr style="border-bottom:1px solid #334155;color:#94a3b8;font-size:13px;text-align:left">
+        <th style="padding:8px">Pair</th><th style="padding:8px">Direction</th><th style="padding:8px">State</th>
+      </tr></thead>
+      <tbody>${impulseRows}</tbody>
+    </table>` : '';
+
+  const subject = momentum && impulseRows
+    ? `Momentum + ${impulses.length} Impulse Move${impulses.length > 1 ? 's' : ''} — NervaFX`
+    : momentum
+      ? `Momentum Continuation in ${momentum.session} — NervaFX`
+      : `${impulses.length} M15 Impulse Move${impulses.length > 1 ? 's' : ''} — NervaFX`;
+
+  return {
+    subject,
+    html: baseLayout(`
+      <h2>Market Activity Alert</h2>
+      ${momHtml}
+      ${impulseHtml}
+      <p style="text-align:center;margin:24px 0"><a class="cta" href="https://nervafx.com">View Live Dashboard →</a></p>
+      <p style="color:#94a3b8;font-size:13px">These are market observations, not trade recommendations. Always apply your own analysis.</p>
+    `),
+  };
+}
+
 // ── Send helpers ─────────────────────────────────────────────────────────────
 
 async function sendEmail(to, template) {
@@ -261,4 +308,5 @@ module.exports = {
   signalAlertEmail,
   dailyDigestEmail,
   upgradePromptEmail,
+  momentumAlertEmail,
 };
