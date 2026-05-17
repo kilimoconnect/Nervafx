@@ -50,6 +50,17 @@
     <div class="header-left">
       <img src="/nervafx-logo.png" alt="NervaFX" style="height:26px;display:block;">
       <span class="tagline">Currency Strength Engine</span>
+      <div id="m15-impulse-bar" class="m15-impulse-bar" style="display:none">
+        <span class="m15-bar-dot"></span>
+        <span class="m15-bar-label">M15 Impulse</span>
+        <div class="m15-bar-chips" id="m15-bar-chips"></div>
+        <span id="m15-bar-more" class="m15-bar-more" style="display:none"></span>
+        <a id="m15-bar-link" class="m15-bar-link" href="#section-m15-spreads"
+           onclick="event.preventDefault();document.querySelector('.dash-tab[data-tab=&quot;signals&quot;]').click();setTimeout(()=>document.getElementById('section-m15-spreads').scrollIntoView({behavior:'smooth'}),100)">
+          View ↓
+        </a>
+        <span class="m15-bar-time" id="m15-bar-time"></span>
+      </div>
     </div>
     <div class="header-right">
       <div class="stat-pill" id="stat-balance">Balance: —</div>
@@ -70,18 +81,7 @@
     </div>
   </header>
 
-  <!-- M15 IMPULSE NOTIFICATION BAR -->
-  <div id="m15-impulse-bar" class="m15-impulse-bar" style="display:none">
-    <span class="m15-bar-dot"></span>
-    <span class="m15-bar-label">M15 Impulse</span>
-    <div class="m15-bar-chips" id="m15-bar-chips"></div>
-    <span id="m15-bar-more" class="m15-bar-more" style="display:none"></span>
-    <a id="m15-bar-link" class="m15-bar-link" href="#section-m15-spreads"
-       onclick="event.preventDefault();document.getElementById('section-m15-spreads').scrollIntoView({behavior:'smooth'})">
-      View all ↓
-    </a>
-    <span class="m15-bar-time" id="m15-bar-time"></span>
-  </div>
+  <!-- M15 impulse bar is now inside the header -->
 
   <!-- TAB BAR -->
   <nav class="dash-tabs" id="dash-tabs">

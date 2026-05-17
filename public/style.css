@@ -344,20 +344,28 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
   z-index: 100;
 }
 
-/* ─── M15 Impulse notification bar ─────────────────────────────────────────── */
-.m15-impulse-bar {
-  position: sticky;
-  top: 48px; /* overridden by JS to match actual header height */
-  z-index: 99;
+/* ─── Header left layout ──────────────────────────────────────────────────── */
+.header-left {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 7px 24px;
-  background: rgba(5, 46, 22, 0.97);
-  border-bottom: 1px solid rgba(74, 222, 128, 0.45);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  flex: 1;
+  min-width: 0;
+}
+
+/* ─── M15 Impulse notification bar (inline in header) ─────────────────────── */
+.m15-impulse-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  background: rgba(5, 46, 22, 0.85);
+  border: 1px solid rgba(74, 222, 128, 0.35);
+  border-radius: var(--radius-sm);
   overflow: hidden;
+  max-width: 420px;
+  flex-shrink: 1;
+  min-width: 0;
 }
 .m15-bar-dot {
   width: 7px;
@@ -438,8 +446,10 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
   margin-left: auto;
 }
 @media (max-width: 700px) {
-  .m15-impulse-bar { padding: 6px 14px; top: 46px; }
+  .m15-impulse-bar { max-width: 200px; padding: 3px 8px; }
+  .m15-bar-label   { display: none; }
   .m15-bar-time    { display: none; }
+  .m15-bar-link    { display: none; }
 }
 
 .logo {
@@ -928,8 +938,10 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 260px;
+  max-height: 640px;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,.1) transparent;
 }
 
 /* Neutral sentiment — inline warning on trade cards */

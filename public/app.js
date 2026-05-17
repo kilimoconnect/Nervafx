@@ -1189,10 +1189,6 @@ function updateM15Bar(data) {
     return;
   }
 
-  // Snap top to actual header height so the bar sticks right underneath
-  const header = document.querySelector('.header');
-  if (header) bar.style.top = header.offsetHeight + 'px';
-
   // Show max 2 chips; surface hidden count via +N badge
   const MAX_BAR_CHIPS = 2;
   const visible     = impulse.slice(0, MAX_BAR_CHIPS);
