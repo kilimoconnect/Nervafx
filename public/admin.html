@@ -13,9 +13,9 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg: #080b12; --bg2: #0d1117; --bg3: #111827;
-      --border: rgba(255,255,255,0.07); --border2: rgba(255,255,255,0.12);
-      --text: #e2e8f0; --text-muted: #64748b; --text-dim: #94a3b8;
+      --bg: #0a0e17; --bg2: #111827; --bg3: #1a2030;
+      --border: rgba(255,255,255,0.10); --border2: rgba(255,255,255,0.15);
+      --text: #f1f5f9; --text-muted: #94a3b8; --text-dim: #b0bec5;
       --blue: #3b82f6; --indigo: #4f46e5; --green: #22c55e;
       --amber: #f59e0b; --red: #ef4444; --purple: #a855f7;
     }
@@ -111,7 +111,7 @@
     .imp { display:inline-block; font-size:10px; font-weight:700; padding:2px 7px; border-radius:4px; letter-spacing:.4px; }
     .imp-HIGH   { background:rgba(239,68,68,.15);  color:#f87171; border:1px solid rgba(239,68,68,.2); }
     .imp-MEDIUM { background:rgba(245,158,11,.12); color:#fbbf24; border:1px solid rgba(245,158,11,.2); }
-    .imp-LOW    { background:rgba(100,116,139,.12); color:#94a3b8; border:1px solid rgba(100,116,139,.2); }
+    .imp-LOW    { background:rgba(100,116,139,.12); color:#b0bec5; border:1px solid rgba(100,116,139,.2); }
 
     /* ── Currency pill ── */
     .cur { display:inline-block; font-size:11px; font-weight:700; padding:2px 7px; border-radius:4px; background:rgba(99,102,241,.15); color:#a5b4fc; border:1px solid rgba(99,102,241,.2); }
@@ -609,7 +609,7 @@ Mon May 12 2026
       const d = await r.json();
       if (d.ok && d.skipped) {
         res.innerHTML = `⏭ Skipped — ${d.reason}`;
-        res.style.color = '#94a3b8';
+        res.style.color = '#b0bec5';
       } else if (d.ok) {
         const steps = (d.steps || []).join(' · ');
         res.innerHTML = `✓ Done in ${d.elapsed_ms}ms · strength @ ${d.strength_time ? new Date(d.strength_time).toUTCString().slice(5,22) : '?'} UTC<br><span style="opacity:0.7">${steps}</span>`;

@@ -2,10 +2,10 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg:         #080b12;
-  --bg-card:    #0e1118;
-  --bg-hover:   #161b24;
-  --border:     #1c2030;
+  --bg:         #0a0e17;
+  --bg-card:    #111827;
+  --bg-hover:   #1e2536;
+  --border:     #2a3148;
   --accent:     #3b82f6;
   --accent2:    #4f46e5;
   --green:      #16a34a;
@@ -14,9 +14,9 @@
   --red-dim:    #450a0a;
   --yellow:     #ca8a04;
   --yellow-dim: #713f12;
-  --text:       #e2e8f0;
-  --text-muted: #64748b;
-  --text-dim:   #94a3b8;
+  --text:       #f1f5f9;
+  --text-muted: #94a3b8;
+  --text-dim:   #b0bec5;
   --radius:     10px;
   --radius-sm:  7px;
   --font-ui:    'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
