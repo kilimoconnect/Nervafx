@@ -4512,20 +4512,6 @@ body::after {
   padding: 3px 9px;
 }
 
-/* Trade condition chip (FAVORABLE / UNFAVORABLE / WAIT) */
-.me-di-tc-wrap { margin-left: auto; }
-.me-di-tc {
-  display: inline-flex;
-  align-items: center;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.07em;
-  color: var(--bc, #64748b);
-  background: color-mix(in srgb, var(--bc, #64748b) 14%, transparent);
-  border: 1px solid color-mix(in srgb, var(--bc, #64748b) 30%, transparent);
-  border-radius: 4px;
-  padding: 2px 7px;
-}
 
 /* Cycle row in Market Cycle section */
 .me-di-cycle-row {

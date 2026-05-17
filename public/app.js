@@ -1748,7 +1748,6 @@ function _renderMeAnalysisModal() {
   const SESS_COLOR = { ASIA: '#f59e0b', LONDON: '#0ea5e9', NEW_YORK: '#a855f7' };
   const SESS_LABEL = { ASIA: 'Asia',    LONDON: 'London',  NEW_YORK: 'New York' };
   const BIAS_COLOR = { BULLISH: '#22c55e', BEARISH: '#ef4444', NEUTRAL: '#64748b', MIXED: '#f59e0b' };
-  const TC_COLOR   = { FAVORABLE: '#22c55e', UNFAVORABLE: '#ef4444', WAIT: '#f59e0b' };
   const byName     = Object.fromEntries(sessions.map(s => [s.session_name, s]));
 
   function pct(v) {
@@ -1762,11 +1761,6 @@ function _renderMeAnalysisModal() {
     return `<span class="me-di-bias" style="--bc:${color}">${bias}</span>`;
   }
 
-  function tcChip(tc) {
-    if (!tc) return '<span class="me-di-tc me-di-tc--wait">—</span>';
-    const color = TC_COLOR[tc] || '#64748b';
-    return `<span class="me-di-tc" style="--bc:${color}">${tc}</span>`;
-  }
 
   const loading = '<span class="me-ai-loading">Analyzing…</span>';
 
@@ -1828,7 +1822,6 @@ function _renderMeAnalysisModal() {
         <span class="me-modal-sess-name" style="color:${color}">${SESS_LABEL[key]}</span>
         <span class="me-modal-cycle-badge" style="--bc:${ME_CYCLE_COLOR[cycle]||'#64748b'}">${ME_CYCLE_LABEL[cycle]||cycle}</span>
         ${momHtml}
-        <span class="me-di-tc-wrap">${tcChip(ai?.trade_condition)}</span>
       </div>
       ${metrics}
       ${sessAiHtml}

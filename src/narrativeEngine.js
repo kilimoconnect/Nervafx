@@ -73,21 +73,18 @@ Return exactly this structure:
   },
   "sessions": {
     "ASIA": {
-      "trade_condition": "WAIT",
       "flow": "≤10 words: dominant ccy and against what",
       "analysis": "2-3 sentences specific to Asia. Reference Asia's actual numbers: its cycle, breadth vs average, dominant currency, bull/bear split, what the momentum means.",
       "signal": "Single most actionable insight citing at least one specific number.",
-      "watch": "Exact metric + number threshold that would change trade_condition."
+      "watch": "Exact metric + number threshold that would shift conditions."
     },
     "LONDON": {
-      "trade_condition": "WAIT",
       "flow": "≤10 words",
       "analysis": "2-3 sentences specific to London data.",
       "signal": "Actionable insight with number.",
       "watch": "Metric + threshold."
     },
     "NEW_YORK": {
-      "trade_condition": "WAIT",
       "flow": "≤10 words",
       "analysis": "2-3 sentences specific to New York data.",
       "signal": "Actionable insight with number.",
@@ -114,11 +111,6 @@ cycle.bias / summary.bias: BULLISH | BEARISH | NEUTRAL | MIXED
   — BEARISH: opposite
   — MIXED: sessions conflict directionally
   — NEUTRAL: Dom% <15 across all sessions, no clear ccy leadership
-
-sessions[X].trade_condition:
-  FAVORABLE  = expansion or transition cycle + agreement >45 + Dom% >20
-  UNFAVORABLE = compression or exhaustion + breadth declining + conflicting flow
-  WAIT        = low participation or thin breadth or no clear bias
 
 analysis, narrative, playbook: write as a professional analyst. Use numbers from the data. Do not use filler phrases like "it is important to note" or "overall". Be direct and specific.`;
 }
