@@ -733,11 +733,12 @@ function buildSessionRows(hourRows) {
       row.prev_breadth   = pctVsRef(brd, prevHist.breadth);
       row.prev_agreement = pctVsRef(agr, prevHist.agreement);
       row.prev_energy    = pctVsRef(eng, prevHist.energy);
-      const pe = row.prev_energy;
-      row.energy_momentum = pe == null ? null
-        : pe > 10  ? 'ACCELERATING'
-        : pe < -10 ? 'DECELERATING'
-        :            'STABLE';
+      // Use absolute delta for momentum — avoids pctVsRef returning null when
+      // a prior session had near-zero energy (e.g. 5 → 26 = 420%, gets capped).
+      const energyDelta = eng - prevHist.energy;
+      row.energy_momentum = energyDelta > 5  ? 'ACCELERATING'
+                          : energyDelta < -5 ? 'DECELERATING'
+                          :                    'STABLE';
     }
 
     if (!sessHistory[g.session]) sessHistory[g.session] = [];
