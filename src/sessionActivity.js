@@ -656,13 +656,6 @@ function buildSessionRows(hourRows) {
     const n   = field => g.rows.map(r => parseFloat(r[field]) || 0);
     const avg = arr   => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
 
-    const cycleCounts = {};
-    for (const r of g.rows) {
-      const c = r.energy_cycle || 'BALANCED';
-      cycleCounts[c] = (cycleCounts[c] || 0) + 1;
-    }
-    const dominantCycle = Object.entries(cycleCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'QUIET_BALANCE';
-
     const firstRow = g.rows[0];
     const lastRow  = g.rows[g.rows.length - 1];
 
@@ -670,11 +663,27 @@ function buildSessionRows(hourRows) {
     const sessionEnd   = new Date(lastRow.time_utc);
     sessionEnd.setUTCHours(sessionEnd.getUTCHours() + 1);
 
-    const mov = round1(avg(n('movement_score')));
-    const brd = round1(avg(n('breadth_score')));
-    const agr = round1(avg(n('agreement_score')));
-    const vol = round1(avg(n('volatility_score')));
-    const eng = round1(avg(n('market_energy')));
+    const mov   = round1(avg(n('movement_score')));
+    const brd   = round1(avg(n('breadth_score')));
+    const agr   = round1(avg(n('agreement_score')));
+    const vol   = round1(avg(n('volatility_score')));
+    const eng   = round1(avg(n('market_energy')));
+    const accel = round1(avg(n('acceleration')));
+    const streak = lastRow.compression_streak || 0;
+
+    // Pull session history up front so classifyEnergyCycle can use prevHist
+    const hist     = sessHistory[g.session] || [];
+    const prevHist = hist[hist.length - 1];
+
+    // Classify using session-averaged scores instead of modal hourly cycle.
+    // Hourly classifications are dominated by low-activity edge hours (start/end
+    // of session) which vote LOW_PARTICIPATION even when peak hours show expansion.
+    // Session averages reflect the true character of the full session.
+    const sessionCycle = classifyEnergyCycle(
+      mov, brd, agr, vol, streak, accel,
+      prevHist ? { movement: prevHist.movement, breadth: prevHist.breadth } : null,
+      g.session
+    );
 
     const row = {
       session_date:        g.date,
@@ -686,12 +695,12 @@ function buildSessionRows(hourRows) {
       breadth_score:       brd,
       agreement_score:     agr,
       volatility_score:    vol,
-      acceleration_score:  round1(avg(n('acceleration'))),
+      acceleration_score:  accel,
       compression_score:   round1(avg(n('compression_score'))),
-      compression_streak:  lastRow.compression_streak || 0,
+      compression_streak:  streak,
       expansion_readiness: round1(avg(n('expansion_readiness'))),
       market_energy:       eng,
-      energy_cycle:        dominantCycle,
+      energy_cycle:        sessionCycle,
       active_pairs:        Math.round(avg(n('pairs_moving'))),
       aligned_pairs:       null,
       bullish_breadth:     round1(avg(n('bullish_breadth'))),
@@ -711,9 +720,6 @@ function buildSessionRows(hourRows) {
     };
 
     // ── In-memory session-relative normalization ──────────────────────────────
-    // Compare this session against all previous occurrences of the SAME session.
-    // 200 candles ≈ 8 days = 8 prior Asia, 8 London, 8 NY — enough for a stable baseline.
-    const hist = sessHistory[g.session] || [];
     if (hist.length >= 1) {
       const hMov = avg(hist.map(h => h.movement));
       const hBrd = avg(hist.map(h => h.breadth));
@@ -727,7 +733,6 @@ function buildSessionRows(hourRows) {
       row.norm_energy     = pctVsRef(eng, hEng);
       row.baseline_n      = hist.length;
     }
-    const prevHist = hist[hist.length - 1];
     if (prevHist) {
       row.prev_movement  = pctVsRef(mov, prevHist.movement);
       row.prev_breadth   = pctVsRef(brd, prevHist.breadth);
