@@ -2074,22 +2074,16 @@ function _meSessionStatus(sessionName, currentSession) {
 
 function _meHistoryPanel(rows, liveSessions) {
   const now     = new Date();
-  const utcDay  = now.getUTCDay();   // 0=Sun, 6=Sat
+  const utcDay  = now.getUTCDay();
   const utcHour = now.getUTCHours();
 
-  // Market is open Mon 00:00 → Fri 21:00 UTC, and Sun 21:00+ UTC
   const marketOpen = !(
-    utcDay === 6 ||                          // Saturday: always closed
-    (utcDay === 0 && utcHour < 21) ||        // Sunday before 21:00: closed
-    (utcDay === 5 && utcHour >= 21)          // Friday after 21:00: closed
+    utcDay === 6 ||
+    (utcDay === 0 && utcHour < 21) ||
+    (utcDay === 5 && utcHour >= 21)
   );
 
-  // Always inject live sessions — they carry their real session_date from candle timestamps
-  // (Friday's date when market is closed), so they represent the final accurate state of
-  // the last trading day and should always override the stale DB snapshot for that date.
   const liveRows = (liveSessions || []).filter(s => s.session_name !== 'LOW_LIQUIDITY' && s.session_date);
-
-  // Dates already covered by live data — exclude matching DB rows to avoid duplicates
   const liveDateKeys = new Set(liveRows.map(r => (r.session_date || '').slice(0, 10)));
   const dbRows  = (rows || []).filter(r => !liveDateKeys.has((r.session_date || '').slice(0, 10)));
   const allRows = [...liveRows, ...dbRows];
@@ -2097,18 +2091,12 @@ function _meHistoryPanel(rows, liveSessions) {
   if (!allRows.length) return '';
 
   const CYCLE_DOT = {
-    EXPLOSIVE:       '#f59e0b',
-    EXPANSION:       '#22c55e',
-    TRANSITION:      '#0ea5e9',
-    COMPRESSION:     '#ef4444',
-    EXHAUSTION:      '#f97316',
-    LOW_PARTICIPATION:'#64748b',
-    DEAD:            '#334155',
+    EXPLOSIVE:       '#f59e0b', EXPANSION:       '#22c55e', TRANSITION:      '#0ea5e9',
+    COMPRESSION:     '#ef4444', EXHAUSTION:      '#f97316', LOW_PARTICIPATION:'#64748b', DEAD: '#334155',
   };
   const SESS_COLOR = { ASIA: '#f59e0b', LONDON: '#0ea5e9', NEW_YORK: '#a855f7' };
   const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York' };
 
-  // Group by session_date — normalise to YYYY-MM-DD regardless of DB format
   const byDate = {};
   for (const r of allRows) {
     const key = (r.session_date || '').slice(0, 10);
@@ -2116,64 +2104,81 @@ function _meHistoryPanel(rows, liveSessions) {
     byDate[key].push(r);
   }
 
-  const days = Object.keys(byDate).sort().reverse(); // most recent first
-
-  // Last market day = most recent date in the data (already sorted desc)
+  const days = Object.keys(byDate).sort().reverse();
   const lastMarketDate = days[0];
 
+  // Table header
+  let tableHead = `<div class="sh-row sh-header">
+    <div class="sh-col-date">Date</div>
+    <div class="sh-col-sess">Session</div>
+    <div class="sh-col-cycle">Cycle</div>
+    <div class="sh-col-metric">E</div>
+    <div class="sh-col-metric">Brd</div>
+    <div class="sh-col-metric">Liq</div>
+    <div class="sh-col-flow">Flow</div>
+    <div class="sh-col-ccy">Currencies</div>
+  </div>`;
+
   const dayBlocks = days.map(date => {
-    const label = (() => {
-      if (date === lastMarketDate && marketOpen) return 'Today';
-      const d    = new Date(date + 'T00:00:00Z');
-      return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
-    })();
+    const isFirst   = date === days[0];
+    const collapsed = isFirst ? '' : ' collapsed';
+
+    const dateLabel = (date === lastMarketDate && marketOpen)
+      ? 'Today'
+      : new Date(date + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
 
     const sessOrder = ['ASIA', 'LONDON', 'NEW_YORK'];
     const sessMap   = Object.fromEntries(byDate[date].map(r => [r.session_name, r]));
 
-    const sessCells = sessOrder.map(key => {
+    const sessRows = sessOrder.map((key, idx) => {
       const r = sessMap[key];
-      if (!r) return `<div class="me-hist-cell me-hist-empty"><span class="me-hist-sess" style="color:${SESS_COLOR[key]}">${SESS_LABEL[key]}</span><span class="me-hist-na">—</span></div>`;
+      const dateCell = idx === 0
+        ? `<div class="sh-col-date sh-date-label" onclick="var p=this.closest('.sh-day-group');p.classList.toggle('collapsed');this.querySelector('.sh-chevron').textContent=p.classList.contains('collapsed')?'▸':'▾'"><span class="sh-chevron">${isFirst ? '▾' : '▸'}</span>${dateLabel}</div>`
+        : '<div class="sh-col-date"></div>';
+
+      if (!r) {
+        return `<div class="sh-row sh-data-row sh-empty">
+          ${dateCell}
+          <div class="sh-col-sess" style="color:${SESS_COLOR[key]}">${SESS_LABEL[key]}</div>
+          <div class="sh-col-cycle"><span class="sh-na">—</span></div>
+          <div class="sh-col-metric sh-na">—</div>
+          <div class="sh-col-metric sh-na">—</div>
+          <div class="sh-col-metric sh-na">—</div>
+          <div class="sh-col-flow sh-na">—</div>
+          <div class="sh-col-ccy sh-na">—</div>
+        </div>`;
+      }
 
       const dot   = CYCLE_DOT[r.energy_cycle] || '#64748b';
       const cycle = (ME_CYCLE_LABEL[r.energy_cycle] || r.energy_cycle || '—').replace(/_/g,' ');
-      const bull  = Math.round(r.bullish_breadth || 0);
-      const bear  = Math.round(r.bearish_breadth || 0);
-      const dir   = bull > bear ? 'bull' : bear > bull ? 'bear' : 'neutral';
-
+      const eng   = Math.round(r.market_energy || 0);
+      const brd   = Math.round(r.breadth_score || 0);
+      const liq   = Math.round(r.liquidity_score || 0);
+      const liqColor = liq >= 50 ? '#22c55e' : liq >= 30 ? '#eab308' : liq >= 15 ? '#f97316' : '#64748b';
       const bullPct = Math.round(r.bullish_breadth || 0);
       const bearPct = Math.round(r.bearish_breadth || 0);
 
-      const liq      = Math.round(r.liquidity_score || 0);
-      const liqGrade = r.liquidity_grade || '—';
-      const liqColor = liq >= 50 ? '#22c55e' : liq >= 30 ? '#eab308' : liq >= 15 ? '#f97316' : '#64748b';
-
-      return `<div class="me-hist-cell">
-        <span class="me-hist-sess" style="color:${SESS_COLOR[key]}">${SESS_LABEL[key]}</span>
-        <span class="me-hist-cycle"><span class="me-hist-dot" style="background:${dot}"></span>${cycle}</span>
-        <span class="me-hist-energy">E:${Math.round(r.market_energy||0)}</span>
-        <span class="me-hist-brd">Brd:${Math.round(r.breadth_score||0)}</span>
-        <span class="me-hist-liq" style="color:${liqColor}" title="Liquidity: ${liqGrade}">Liq:${liq}</span>
-        <span class="me-hist-pressure">
-          <span class="me-hist-bull">▲${bullPct}%</span>
-          <span class="me-hist-bear">▼${bearPct}%</span>
-        </span>
-        <span class="me-hist-dir ${dir}"><span class="me-hist-strong">${r.strongest_ccy||'—'} ↑</span> <span class="me-hist-weak">${r.weakest_ccy||'—'} ↓</span></span>
+      return `<div class="sh-row sh-data-row">
+        ${dateCell}
+        <div class="sh-col-sess" style="color:${SESS_COLOR[key]}">${SESS_LABEL[key]}</div>
+        <div class="sh-col-cycle"><span class="sh-dot" style="background:${dot}"></span>${cycle}</div>
+        <div class="sh-col-metric">${eng}</div>
+        <div class="sh-col-metric">${brd}</div>
+        <div class="sh-col-metric" style="color:${liqColor};font-weight:600">${liq}</div>
+        <div class="sh-col-flow"><span class="sh-bull">▲${bullPct}%</span><span class="sh-bear">▼${bearPct}%</span></div>
+        <div class="sh-col-ccy"><span class="sh-strong">${r.strongest_ccy||'—'} ↑</span><span class="sh-weak">${r.weakest_ccy||'—'} ↓</span></div>
       </div>`;
     }).join('');
 
-    const isFirst = date === days[0];
-    const collapsed = isFirst ? '' : ' collapsed';
-
-    return `<div class="me-hist-day${collapsed}">
-      <div class="me-hist-date" onclick="var p=this.parentElement;p.classList.toggle('collapsed');this.querySelector('.me-hist-chevron').textContent=p.classList.contains('collapsed')?'▸':'▾'"><span class="me-hist-chevron">${isFirst ? '▾' : '▸'}</span>${label}</div>
-      <div class="me-hist-sessions">${sessCells}</div>
-    </div>`;
+    return `<div class="sh-day-group${collapsed}">${sessRows}</div>`;
   }).join('');
 
-  return `<div class="me-history-panel">
-    <div class="me-history-title">Session History</div>
-    ${dayBlocks}
+  return `<div class="sh-panel">
+    <div class="sh-title">Session History</div>
+    <div class="sh-table">
+      ${tableHead}
+      ${dayBlocks}
+    </div>
   </div>`;
 }
 
