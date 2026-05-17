@@ -4891,15 +4891,26 @@ body::after {
   margin-top: 12px;
 }
 
+.sh-title-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  cursor: pointer;
+  user-select: none;
+}
+.sh-title-bar:hover .sh-title { color: var(--text); }
+
 .sh-title {
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--text-dim);
-  padding-bottom: 8px;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
 }
+
+.sh-panel.sh-collapsed .sh-table { display: none; }
 
 .sh-table {
   display: flex;
@@ -4945,13 +4956,6 @@ body::after {
   border-top: none;
 }
 
-.sh-day-group.collapsed .sh-data-row:not(:first-child) {
-  display: none;
-}
-
-.sh-day-group.collapsed .sh-data-row:first-child {
-  opacity: 0.6;
-}
 
 .sh-col-date {
   font-family: var(--font-ui);
@@ -4962,18 +4966,11 @@ body::after {
 .sh-date-label {
   font-weight: 600;
   color: var(--text);
-  cursor: pointer;
-  user-select: none;
   white-space: nowrap;
-}
-.sh-date-label:hover {
-  color: var(--accent);
 }
 
 .sh-chevron {
-  display: inline-block;
-  margin-right: 4px;
-  font-size: 9px;
+  font-size: 10px;
   color: var(--text-dim);
 }
 

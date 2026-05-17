@@ -2146,9 +2146,6 @@ function _meHistoryPanel(rows, liveSessions) {
   </div>`;
 
   const dayBlocks = days.map(date => {
-    const isFirst   = date === days[0];
-    const collapsed = isFirst ? '' : ' collapsed';
-
     const dateLabel = (date === lastMarketDate && marketOpen)
       ? 'Today'
       : new Date(date + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -2159,7 +2156,7 @@ function _meHistoryPanel(rows, liveSessions) {
     const sessRows = sessOrder.map((key, idx) => {
       const r = sessMap[key];
       const dateCell = idx === 0
-        ? `<div class="sh-col-date sh-date-label" onclick="var p=this.closest('.sh-day-group');p.classList.toggle('collapsed');this.querySelector('.sh-chevron').textContent=p.classList.contains('collapsed')?'▸':'▾'"><span class="sh-chevron">${isFirst ? '▾' : '▸'}</span>${dateLabel}</div>`
+        ? `<div class="sh-col-date sh-date-label">${dateLabel}</div>`
         : '<div class="sh-col-date"></div>';
 
       if (!r) {
@@ -2196,11 +2193,14 @@ function _meHistoryPanel(rows, liveSessions) {
       </div>`;
     }).join('');
 
-    return `<div class="sh-day-group${collapsed}">${sessRows}</div>`;
+    return `<div class="sh-day-group">${sessRows}</div>`;
   }).join('');
 
   return `<div class="sh-panel">
-    <div class="sh-title">Session History</div>
+    <div class="sh-title-bar" onclick="this.parentElement.classList.toggle('sh-collapsed');this.querySelector('.sh-chevron').textContent=this.parentElement.classList.contains('sh-collapsed')?'▸':'▾'">
+      <span class="sh-title">Session History</span>
+      <span class="sh-chevron">▾</span>
+    </div>
     <div class="sh-table">
       ${tableHead}
       ${dayBlocks}
