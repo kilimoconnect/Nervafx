@@ -221,6 +221,16 @@ async function runSpreads(sb) {
   if (error) throw new Error(`spreads upsert: ${error.message}`);
 }
 
+function isMarketOpen() {
+  const now  = new Date();
+  const day  = now.getUTCDay();
+  const hour = now.getUTCHours();
+  if (day === 6) return false;
+  if (day === 0 && hour < 21) return false;
+  if (day === 5 && hour >= 21) return false;
+  return true;
+}
+
 // ── Handler ───────────────────────────────────────────────────────────────────
 module.exports = async function handler(req, res) {
   cors(res);
@@ -234,6 +244,10 @@ module.exports = async function handler(req, res) {
     if (!isAdmin) return res.status(403).json({ error: 'Admin only' });
   } catch (_) {
     return res.status(403).json({ error: 'Auth error' });
+  }
+
+  if (!isMarketOpen()) {
+    return res.json({ ok: true, skipped: true, reason: 'market closed' });
   }
 
   const log = [];
