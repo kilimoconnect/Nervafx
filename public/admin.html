@@ -602,7 +602,7 @@ Mon May 12 2026
     btn.innerHTML = '<span class="spinner"></span> Running…';
     res.style.display = 'none';
     try {
-      const r = await fetch('/api/run-pipeline', {
+      const r = await fetch('/api/run-pipeline?force=1', {
         method: 'POST',
         headers: { 'Authorization': 'Bearer ' + token },
       });

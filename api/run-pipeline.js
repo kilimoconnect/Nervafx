@@ -246,7 +246,8 @@ module.exports = async function handler(req, res) {
     return res.status(403).json({ error: 'Auth error' });
   }
 
-  if (!isMarketOpen()) {
+  const force = req.query?.force === '1' || req.query?.force === 'true';
+  if (!isMarketOpen() && !force) {
     return res.json({ ok: true, skipped: true, reason: 'market closed' });
   }
 
