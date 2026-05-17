@@ -1892,12 +1892,8 @@ async function fetchMarketEnergyNarrative(sessions, expansionPressure, marketCyc
   _meEpSnapshot   = expansionPressure;
   _meMcSnapshot   = marketCycle;
   try {
-    const data = await api('/api/market-energy-narrative', {
-      method: 'POST',
-      body:   JSON.stringify({ sessions, expansionPressure, marketCycle }),
-    });
+    const data = await api('/api/market-energy-narrative');
     _meNarrative = data;
-    // Refresh modal if it's already open
     const modal = document.getElementById('me-analysis-modal');
     if (modal) _renderMeAnalysisModal();
   } catch (_) {}
