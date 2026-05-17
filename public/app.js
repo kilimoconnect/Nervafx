@@ -1774,7 +1774,7 @@ function closeBreadthChart() {
 
 async function _fetchAndRenderBreadthChart(modal) {
   try {
-    const data = await api('/api/session-activity?type=hourly&days=5');
+    const data = await api('/api/session-activity?type=hourly&days=7');
     const rows = data.hourly || [];
     if (!rows.length) {
       modal.querySelector('.me-modal-body').innerHTML = '<p class="me-empty">No hourly breadth data available.</p>';
