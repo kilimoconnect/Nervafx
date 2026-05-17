@@ -1865,11 +1865,11 @@ function _renderBreadthBars(container, rows) {
 
       html += `<div class="${cls}" title="${SESS_LABEL[b.session] || b.session}: ${b.breadth}% at ${localTime} ${tzLabel}">
         ${showLabel ? `<span class="bc-sess-tag" style="color:${color}">${SESS_LABEL[b.session] || b.session}</span>` : ''}
+        <span class="bc-bar-val">${b.breadth}</span>
         <div class="bc-bar-inner">
           <div class="bc-bar-fill" style="height:${pct}%;background:${barColor}"></div>
         </div>
-        <span class="bc-bar-val">${b.breadth}</span>
-        <span class="bc-bar-hour">${localHour}</span>
+        <span class="bc-bar-hour">${localHour}:00</span>
       </div>`;
     }
 
