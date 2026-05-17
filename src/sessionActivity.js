@@ -712,6 +712,32 @@ function buildSessionRows(hourRows) {
       g.session
     );
 
+    // ── Liquidity score ──────────────────────────────────────────────────────
+    // Identifies sessions with genuine directional liquidity (real moves) vs noise.
+    // Components:
+    //   breadthCoherence: Brd/E ratio — how unified the movement is (scattered = low)
+    //   eMagnitude:       raw expansion level — needs critical mass to matter
+    //   directionalPersistence: same bull/bear bias as prior session = institutional flow
+    const bullPct  = round1(avg(n('bullish_breadth')));
+    const bearPct  = round1(avg(n('bearish_breadth')));
+
+    const breadthCoherence = mov > 0 ? Math.min(1, brd / mov) : 0;
+    const eMagnitude       = Math.min(100, mov);
+    const prevBull         = prevHist?.bullPct ?? 50;
+    const currDominant     = bullPct >= bearPct ? 'bull' : 'bear';
+    const prevDominant     = prevBull >= 50 ? 'bull' : 'bear';
+    const directionalPersistence = currDominant === prevDominant ? 1.0 : 0.5;
+
+    const liquidityScore = round1(Math.min(100,
+      breadthCoherence * eMagnitude * directionalPersistence
+    ));
+
+    // Classification: how tradeable is this session?
+    const liquidityGrade = liquidityScore >= 50 ? 'HIGH'
+                         : liquidityScore >= 30 ? 'MODERATE'
+                         : liquidityScore >= 15 ? 'LOW'
+                         :                        'DEAD';
+
     const row = {
       session_date:        g.date,
       session_name:        g.session,
@@ -728,10 +754,12 @@ function buildSessionRows(hourRows) {
       expansion_readiness: round1(avg(n('expansion_readiness'))),
       market_energy:       eng,
       energy_cycle:        sessionCycle,
+      liquidity_score:     liquidityScore,
+      liquidity_grade:     liquidityGrade,
       active_pairs:        Math.round(avg(n('pairs_moving'))),
       aligned_pairs:       null,
-      bullish_breadth:     round1(avg(n('bullish_breadth'))),
-      bearish_breadth:     round1(avg(n('bearish_breadth'))),
+      bullish_breadth:     bullPct,
+      bearish_breadth:     bearPct,
       dominance_score:     round1(avg(n('dominance_score'))),
       strongest_ccy:       lastRow.strongest_ccy || null,
       weakest_ccy:         lastRow.weakest_ccy   || null,
@@ -774,7 +802,7 @@ function buildSessionRows(hourRows) {
     }
 
     if (!sessHistory[g.session]) sessHistory[g.session] = [];
-    sessHistory[g.session].push({ movement: mov, breadth: brd, agreement: agr, volatility: vol, energy: eng });
+    sessHistory[g.session].push({ movement: mov, breadth: brd, agreement: agr, volatility: vol, energy: eng, bullPct });
 
     return row;
   });

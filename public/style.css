@@ -4810,9 +4810,13 @@ body::after {
   flex-shrink: 0;
 }
 .me-hist-energy,
-.me-hist-brd {
+.me-hist-brd,
+.me-hist-liq {
   font-size: 10px;
   color: var(--text-dim);
+}
+.me-hist-liq {
+  font-weight: 600;
 }
 .me-hist-dir {
   font-size: 10px;

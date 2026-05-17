@@ -1614,6 +1614,9 @@ function _meSessionCard(name, s, status) {
 
   const energy    = Math.round(parseFloat(s.market_energy) || 0);
   const readiness = Math.round(parseFloat(s.expansion_readiness) || 0);
+  const liqScore  = Math.round(parseFloat(s.liquidity_score) || 0);
+  const liqGrade  = s.liquidity_grade || '—';
+  const liqColor  = liqScore >= 50 ? '#22c55e' : liqScore >= 30 ? '#eab308' : liqScore >= 15 ? '#f97316' : '#64748b';
 
   const momentum      = s.energy_momentum;
   const momColor      = ME_MOMENTUM_COLOR[momentum] || '#64748b';
@@ -1644,6 +1647,7 @@ function _meSessionCard(name, s, status) {
         ${_meRelLine(s.norm_energy, s.prev_energy)}
       </div>
       <span class="me-foot-item">Readiness <strong>${readiness}</strong></span>
+      <span class="me-foot-item" style="color:${liqColor}">Liquidity <strong>${liqScore}</strong> <small>${liqGrade}</small></span>
     </div>
   </div>`;
 }
@@ -2003,11 +2007,16 @@ function _meHistoryPanel(rows, liveSessions) {
       const bullPct = Math.round(r.bullish_breadth || 0);
       const bearPct = Math.round(r.bearish_breadth || 0);
 
+      const liq      = Math.round(r.liquidity_score || 0);
+      const liqGrade = r.liquidity_grade || '—';
+      const liqColor = liq >= 50 ? '#22c55e' : liq >= 30 ? '#eab308' : liq >= 15 ? '#f97316' : '#64748b';
+
       return `<div class="me-hist-cell">
         <span class="me-hist-sess" style="color:${SESS_COLOR[key]}">${SESS_LABEL[key]}</span>
         <span class="me-hist-cycle"><span class="me-hist-dot" style="background:${dot}"></span>${cycle}</span>
         <span class="me-hist-energy">E:${Math.round(r.market_energy||0)}</span>
         <span class="me-hist-brd">Brd:${Math.round(r.breadth_score||0)}</span>
+        <span class="me-hist-liq" style="color:${liqColor}" title="Liquidity: ${liqGrade}">Liq:${liq}</span>
         <span class="me-hist-pressure">
           <span class="me-hist-bull">▲${bullPct}%</span>
           <span class="me-hist-bear">▼${bearPct}%</span>
