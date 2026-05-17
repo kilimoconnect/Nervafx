@@ -2054,17 +2054,12 @@ function _renderMeAnalysisModal() {
   const mcColor = ME_MARKET_CYCLE_COLOR[mc] || '#64748b';
   const mcLabel = ME_MARKET_CYCLE_LABEL[mc] || (mc||'—').replace(/_/g,' ');
 
-  const epBadge = ep?.risk && ep.risk !== 'NONE'
-    ? `<span class="me-modal-ep-badge" style="color:${ep.risk==='HIGH'?'#ef4444':ep.risk==='BUILDING'?'#f59e0b':'#0ea5e9'}">${ep.risk} pressure · ${ep.streak}s · score ${ep.score}</span>`
-    : '';
-
   modal.innerHTML = `
     <div class="me-modal-panel" role="dialog" aria-modal="true">
       <div class="me-modal-header">
         <div class="me-modal-title">
           <span class="me-modal-title-label">Decision Intelligence</span>
           <span class="me-modal-cycle-pill" style="--bc:${mcColor}">${mcLabel}</span>
-          ${epBadge}
         </div>
         <button class="me-modal-close" onclick="closeMeAiAnalysis()" aria-label="Close">✕</button>
       </div>
