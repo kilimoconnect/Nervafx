@@ -17,7 +17,7 @@ module.exports = async function handler(req, res) {
   try {
     const sb = getClient();
     const cutoff = new Date();
-    cutoff.setUTCDate(cutoff.getUTCDate() - 3);
+    cutoff.setUTCDate(cutoff.getUTCDate() - 7);
     const cutoffStr = cutoff.toISOString().slice(0, 10); // YYYY-MM-DD
 
     const { data, error } = await sb

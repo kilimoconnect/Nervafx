@@ -1931,8 +1931,18 @@ function _meSessionStatus(sessionName, currentSession) {
   return sessIdx < curIdx ? 'COMPLETED' : 'UPCOMING';
 }
 
-function _meHistoryPanel(rows) {
-  if (!rows || !rows.length) return '';
+function _meHistoryPanel(rows, liveSessions) {
+  // Inject today's live sessions into the row list, replacing any DB snapshot for today
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const liveRows = (liveSessions || [])
+    .filter(s => s.session_name !== 'LOW_LIQUIDITY')
+    .map(s => ({ ...s, session_date: todayKey }));
+
+  // Remove any DB rows for today, then prepend live rows
+  const dbRows    = (rows || []).filter(r => (r.session_date || '').slice(0, 10) !== todayKey);
+  const allRows   = [...liveRows, ...dbRows];
+
+  if (!allRows.length) return '';
 
   const CYCLE_DOT = {
     EXPLOSIVE:       '#f59e0b',
@@ -1948,7 +1958,7 @@ function _meHistoryPanel(rows) {
 
   // Group by session_date — normalise to YYYY-MM-DD regardless of DB format
   const byDate = {};
-  for (const r of rows) {
+  for (const r of allRows) {
     const key = (r.session_date || '').slice(0, 10);
     if (!byDate[key]) byDate[key] = [];
     byDate[key].push(r);
@@ -2019,7 +2029,7 @@ function renderMarketEnergy(sessions, expansionPressure, marketCycle, currentSes
       ${ORDER.map(name => _meSessionCard(name, byName[name] || null, _meSessionStatus(name, currentSession))).join('')}
     </div>
     ${_meExpansionPressurePanel(expansionPressure)}
-    ${_meHistoryPanel(historyRows)}`;
+    ${_meHistoryPanel(historyRows, sessions)}`;
 
   fetchMarketEnergyNarrative(sessions, expansionPressure, marketCycle);
 }
