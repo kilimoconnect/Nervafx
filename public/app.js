@@ -1621,7 +1621,6 @@ function _meSessionCard(name, s, status) {
       ${_meCompBar(c.val)}
       <div class="me-comp-right">
         <span class="me-comp-val">${v}</span>
-        ${_meRelLine(c.norm, c.prev)}
       </div>
     </div>`;
   }).join('');
@@ -1704,17 +1703,10 @@ function _meSessionCard(name, s, status) {
       ${momentumHtml}
       ${statusHtml}
     </div>
-    <div class="me-card-comps">
-      <div class="me-comp-header">
-        <span></span><span></span>
-        <span class="me-comp-hdr-right"><span class="me-comp-hdr-lbl">Score</span><span class="me-comp-hdr-lbl">vs Avg · vs Prev</span></span>
-      </div>
-      ${compRows}${dirRows}
-    </div>
+    <div class="me-card-comps">${compRows}${dirRows}</div>
     <div class="me-card-foot">
       <div class="me-foot-energy">
         <span class="me-foot-item">Energy <strong>${energy}</strong></span>
-        ${_meRelLine(s.norm_energy, s.prev_energy)}
       </div>
       <span class="me-foot-item">Readiness <strong>${readiness}</strong></span>
       <span class="me-foot-item" style="color:${liqColor}">Liquidity <strong>${liqScore}</strong></span>
