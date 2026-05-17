@@ -1934,7 +1934,8 @@ function _renderMeAnalysisModal() {
 
   const SESS_COLOR = { ASIA: '#f59e0b', LONDON: '#0ea5e9', NEW_YORK: '#a855f7' };
   const SESS_LABEL = { ASIA: 'Asia',    LONDON: 'London',  NEW_YORK: 'New York' };
-  const SESS_TEXT  = { ASIA: d?.asia,   LONDON: d?.london, NEW_YORK: d?.newYork };
+  const BIAS_COLOR = { BULLISH: '#22c55e', BEARISH: '#ef4444', NEUTRAL: '#64748b', MIXED: '#f59e0b' };
+  const TC_COLOR   = { FAVORABLE: '#22c55e', UNFAVORABLE: '#ef4444', WAIT: '#f59e0b' };
   const byName     = Object.fromEntries(sessions.map(s => [s.session_name, s]));
 
   function pct(v) {
@@ -1942,50 +1943,126 @@ function _renderMeAnalysisModal() {
     return `<em class="me-modal-pct" style="color:${v>=10?'#22c55e':v>=-10?'#f59e0b':'#94a3b8'}">${v>=0?'+':''}${v}%</em>`;
   }
 
+  function biasBadge(bias) {
+    if (!bias) return '';
+    const color = BIAS_COLOR[bias] || '#64748b';
+    return `<span class="me-di-bias" style="--bc:${color}">${bias}</span>`;
+  }
+
+  function tcChip(tc) {
+    if (!tc) return '<span class="me-di-tc me-di-tc--wait">—</span>';
+    const color = TC_COLOR[tc] || '#64748b';
+    return `<span class="me-di-tc" style="--bc:${color}">${tc}</span>`;
+  }
+
+  const loading = '<span class="me-ai-loading">Analyzing…</span>';
+
+  // Cycle section
+  const cycleBias      = d?.cycle?.bias;
+  const cycleCondition = d?.cycle?.condition;
+  const cycleTrigger   = d?.cycle?.trigger;
+
+  const cycleHtml = d
+    ? `<div class="me-di-cycle-row">
+        ${biasBadge(cycleBias)}
+        <span class="me-di-cycle-condition">${cycleCondition || '—'}</span>
+      </div>
+      <div class="me-di-trigger-row">
+        <span class="me-di-row-label">Trigger</span>
+        <span class="me-di-trigger-text">${cycleTrigger || '—'}</span>
+      </div>`
+    : loading;
+
+  // Session cards
   const sessCards = ['ASIA', 'LONDON', 'NEW_YORK'].map(key => {
-    const s     = byName[key] || {};
+    const s    = byName[key] || {};
+    const ai   = d?.sessions?.[key] || null;
     const color = SESS_COLOR[key];
-    const text  = SESS_TEXT[key];
     const cycle = s.energy_cycle || '';
     const mom   = s.energy_momentum;
 
     const metrics = `
       <div class="me-modal-metrics">
-        <div class="me-modal-metric"><span>Movement</span><strong>${Math.round(s.movement_score||0)}</strong>${pct(s.norm_movement)}</div>
-        <div class="me-modal-metric"><span>Breadth</span><strong>${Math.round(s.breadth_score||0)}</strong>${pct(s.norm_breadth)}</div>
-        <div class="me-modal-metric"><span>Agreement</span><strong>${Math.round(s.agreement_score||0)}</strong>${pct(s.norm_agreement)}</div>
-        <div class="me-modal-metric"><span>Volatility</span><strong>${Math.round(s.volatility_score||0)}</strong>${pct(s.norm_volatility)}</div>
+        <div class="me-modal-metric"><span>Mov</span><strong>${Math.round(s.movement_score||0)}</strong>${pct(s.norm_movement)}</div>
+        <div class="me-modal-metric"><span>Brd</span><strong>${Math.round(s.breadth_score||0)}</strong>${pct(s.norm_breadth)}</div>
+        <div class="me-modal-metric"><span>Agr</span><strong>${Math.round(s.agreement_score||0)}</strong>${pct(s.norm_agreement)}</div>
+        <div class="me-modal-metric"><span>Vol</span><strong>${Math.round(s.volatility_score||0)}</strong>${pct(s.norm_volatility)}</div>
         <div class="me-modal-metric"><span>Energy</span><strong>${Math.round(s.market_energy||0)}</strong>${pct(s.norm_energy)}</div>
-        <div class="me-modal-metric"><span>Readiness</span><strong>${Math.round(s.expansion_readiness||0)}</strong></div>
+        <div class="me-modal-metric"><span>Dom%</span><strong>${Math.round(s.dominance_score||0)}</strong></div>
       </div>`;
 
     const momHtml = mom
       ? `<span class="me-modal-momentum" style="color:${ME_MOMENTUM_COLOR[mom]||'#64748b'}">${ME_MOMENTUM_LABEL[mom]||''}</span>`
       : '';
 
+    const aiHtml = ai
+      ? `<div class="me-di-sess-ai">
+          <div class="me-di-ai-row">
+            <span class="me-di-row-label">Flow</span>
+            <span class="me-di-flow-text">${ai.flow || '—'}</span>
+          </div>
+          <div class="me-di-ai-row me-di-signal-row">
+            <span class="me-di-row-label">Signal</span>
+            <span class="me-di-signal-text">${ai.signal || '—'}</span>
+          </div>
+          <div class="me-di-ai-row me-di-watch-row">
+            <span class="me-di-row-label">Watch</span>
+            <span class="me-di-watch-text">${ai.watch || '—'}</span>
+          </div>
+        </div>`
+      : `<div class="me-di-sess-ai">${loading}</div>`;
+
     return `<div class="me-modal-sess-card">
       <div class="me-modal-sess-head">
         <span class="me-modal-sess-name" style="color:${color}">${SESS_LABEL[key]}</span>
         <span class="me-modal-cycle-badge" style="--bc:${ME_CYCLE_COLOR[cycle]||'#64748b'}">${ME_CYCLE_LABEL[cycle]||cycle}</span>
         ${momHtml}
+        <span class="me-di-tc-wrap">${tcChip(ai?.trade_condition)}</span>
       </div>
       ${metrics}
-      <p class="me-modal-analysis-text">${text || '<span class="me-ai-loading">Analyzing…</span>'}</p>
+      ${aiHtml}
     </div>`;
   }).join('');
+
+  // Summary section
+  const sumBias        = d?.summary?.bias;
+  const sumPriority    = d?.summary?.priority;
+  const sumRisk        = d?.summary?.risk;
+  const sumOpportunity = d?.summary?.opportunity;
+
+  const summaryHtml = d
+    ? `<div class="me-di-summary-head">
+        ${biasBadge(sumBias)}
+        <span class="me-di-summary-label">Overall Bias</span>
+      </div>
+      <div class="me-di-summary-rows">
+        <div class="me-di-sum-row">
+          <span class="me-di-row-label">Priority</span>
+          <span class="me-di-sum-text me-di-priority-text">${sumPriority || '—'}</span>
+        </div>
+        <div class="me-di-sum-row">
+          <span class="me-di-row-label">Risk</span>
+          <span class="me-di-sum-text me-di-risk-text">${sumRisk || '—'}</span>
+        </div>
+        <div class="me-di-sum-row">
+          <span class="me-di-row-label">Opportunity</span>
+          <span class="me-di-sum-text me-di-opp-text">${sumOpportunity || '—'}</span>
+        </div>
+      </div>`
+    : loading;
 
   const mcColor = ME_MARKET_CYCLE_COLOR[mc] || '#64748b';
   const mcLabel = ME_MARKET_CYCLE_LABEL[mc] || (mc||'—').replace(/_/g,' ');
 
   const epBadge = ep?.risk && ep.risk !== 'NONE'
-    ? `<span class="me-modal-ep-badge" style="color:${ep.risk==='HIGH'?'#ef4444':ep.risk==='BUILDING'?'#f59e0b':'#0ea5e9'}">${ep.risk} pressure · ${ep.streak} session${ep.streak!==1?'s':''} · score ${ep.score}</span>`
+    ? `<span class="me-modal-ep-badge" style="color:${ep.risk==='HIGH'?'#ef4444':ep.risk==='BUILDING'?'#f59e0b':'#0ea5e9'}">${ep.risk} pressure · ${ep.streak}s · score ${ep.score}</span>`
     : '';
 
   modal.innerHTML = `
     <div class="me-modal-panel" role="dialog" aria-modal="true">
       <div class="me-modal-header">
         <div class="me-modal-title">
-          <span class="me-modal-title-label">Market Intelligence</span>
+          <span class="me-modal-title-label">Decision Intelligence</span>
           <span class="me-modal-cycle-pill" style="--bc:${mcColor}">${mcLabel}</span>
           ${epBadge}
         </div>
@@ -1995,17 +2072,17 @@ function _renderMeAnalysisModal() {
       <div class="me-modal-body">
         <section class="me-modal-section">
           <h3 class="me-modal-section-title">Market Cycle</h3>
-          <p class="me-modal-analysis-text">${d?.marketCycle || '<span class="me-ai-loading">Analyzing…</span>'}</p>
+          ${cycleHtml}
         </section>
 
         <section class="me-modal-section">
-          <h3 class="me-modal-section-title">Session Analysis</h3>
+          <h3 class="me-modal-section-title">Session Conditions</h3>
           <div class="me-modal-sess-grid">${sessCards}</div>
         </section>
 
         <section class="me-modal-section">
-          <h3 class="me-modal-section-title">Market Intelligence Summary</h3>
-          <p class="me-modal-analysis-text me-modal-footer-text">${d?.footer || '<span class="me-ai-loading">Analyzing…</span>'}</p>
+          <h3 class="me-modal-section-title">Summary</h3>
+          ${summaryHtml}
         </section>
       </div>
     </div>`;

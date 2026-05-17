@@ -4475,6 +4475,131 @@ body::after {
   font-style: italic;
 }
 
+/* ── Decision Intelligence components ──────────────────────────────────────── */
+
+/* Bias badge (BULLISH / BEARISH / NEUTRAL / MIXED) */
+.me-di-bias {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--bc, #64748b);
+  background: color-mix(in srgb, var(--bc, #64748b) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bc, #64748b) 35%, transparent);
+  border-radius: 5px;
+  padding: 3px 9px;
+}
+
+/* Trade condition chip (FAVORABLE / UNFAVORABLE / WAIT) */
+.me-di-tc-wrap { margin-left: auto; }
+.me-di-tc {
+  display: inline-flex;
+  align-items: center;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  color: var(--bc, #64748b);
+  background: color-mix(in srgb, var(--bc, #64748b) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bc, #64748b) 30%, transparent);
+  border-radius: 4px;
+  padding: 2px 7px;
+}
+
+/* Cycle row in Market Cycle section */
+.me-di-cycle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.me-di-cycle-condition {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.me-di-trigger-row {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  margin-top: 8px;
+}
+
+/* Shared label */
+.me-di-row-label {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  min-width: 60px;
+}
+.me-di-trigger-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+/* AI rows inside session cards */
+.me-di-sess-ai {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  padding-top: 10px;
+}
+.me-di-ai-row {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.me-di-flow-text {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.me-di-signal-row { }
+.me-di-signal-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+.me-di-watch-row { }
+.me-di-watch-text {
+  font-size: 11px;
+  color: #f59e0b;
+  line-height: 1.5;
+}
+
+/* Summary section */
+.me-di-summary-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.me-di-summary-label {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.me-di-summary-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.me-di-sum-row {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+.me-di-sum-text {
+  font-size: 13px;
+  line-height: 1.5;
+}
+.me-di-priority-text { color: var(--text-primary); font-weight: 600; }
+.me-di-risk-text     { color: #ef4444; }
+.me-di-opp-text      { color: #22c55e; }
+
 /* Session analyses — 3-column grid below the card row */
 .me-session-analyses {
   display: grid;
