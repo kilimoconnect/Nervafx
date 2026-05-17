@@ -1829,7 +1829,7 @@ function _renderBreadthBars(container, rows) {
     const streaks = new Set();
     let streak = 0;
     for (let i = 1; i < breadths.length; i++) {
-      if (breadths[i] > breadths[i - 1]) {
+      if (breadths[i] > breadths[i - 1] && breadths[i] >= 10) {
         streak++;
         if (streak >= 2) {
           for (let j = i - streak; j <= i; j++) streaks.add(j);
