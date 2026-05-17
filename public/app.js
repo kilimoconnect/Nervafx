@@ -2025,8 +2025,11 @@ function _meHistoryPanel(rows, liveSessions) {
       </div>`;
     }).join('');
 
-    return `<div class="me-hist-day">
-      <div class="me-hist-date">${label}</div>
+    const isFirst = date === days[0];
+    const collapsed = isFirst ? '' : ' collapsed';
+
+    return `<div class="me-hist-day${collapsed}">
+      <div class="me-hist-date" onclick="var p=this.parentElement;p.classList.toggle('collapsed');this.querySelector('.me-hist-chevron').textContent=p.classList.contains('collapsed')?'▸':'▾'"><span class="me-hist-chevron">${isFirst ? '▾' : '▸'}</span>${label}</div>
       <div class="me-hist-sessions">${sessCells}</div>
     </div>`;
   }).join('');

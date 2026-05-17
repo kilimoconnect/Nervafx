@@ -4764,6 +4764,18 @@ body::after {
   align-items: flex-start;
   gap: 10px;
 }
+.me-hist-day.collapsed .me-hist-sessions {
+  display: none;
+}
+.me-hist-day.collapsed .me-hist-chevron {
+  transform: rotate(0deg);
+}
+.me-hist-chevron {
+  display: inline-block;
+  margin-right: 4px;
+  font-size: 9px;
+  transition: transform 0.15s;
+}
 .me-hist-date {
   flex-shrink: 0;
   width: 68px;
@@ -4771,6 +4783,11 @@ body::after {
   font-weight: 600;
   color: var(--text-dim);
   padding-top: 4px;
+  cursor: pointer;
+  user-select: none;
+}
+.me-hist-date:hover {
+  color: var(--text);
 }
 .me-hist-sessions {
   display: grid;
