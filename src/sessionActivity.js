@@ -133,22 +133,45 @@ function computeCurrencyStrengths(candles, sessionOpenPrices) {
 // Each state is mutually exclusive and ordered by priority.
 // Session-specific thresholds: Asia naturally runs quieter than London/NY.
 
+// Thresholds calibrated to each session's typical activity range.
+// Asia is structurally quieter (7-9 active pairs typical) than London/NY (12-18).
+// COMPRESSION drops the vol requirement — breadth can collapse while vol stays
+// elevated (a few pairs making large moves), which is still compression.
 const SESS_PROFILE = {
   ASIA: {
-    deadMov: 12, deadBrd: 10, deadVol: 15,
-    exMov: 55, exBrd: 48, exAgr: 55,
-    expMov: 38, expBrd: 25, expAgr: 35,
-    exhMov: 38,
-    trBrd: 20, trAgr: 28, trMov: 22,
-    cmpBrd: 20, cmpVol: 28,
+    // Historical avg: mov≈34, brd≈24, agr≈35 — thresholds set so average = EXPANSION
+    deadMov: 10, deadBrd:  8, deadVol: 12,
+    exMov:   52, exBrd:   42, exAgr:   48,   // EXPLOSIVE
+    expMov:  28, expBrd:  18, expAgr:  24,   // EXPANSION
+    exhMov:  28,
+    trBrd:   14, trAgr:   20, trMov:   18,   // TRANSITION
+    cmpBrd:  14,                              // COMPRESSION (breadth-only gate)
+  },
+  LONDON: {
+    // Historical avg: mov≈50, brd≈47, agr≈42 — current session is below average
+    deadMov: 15, deadBrd: 12, deadVol: 18,
+    exMov:   68, exBrd:   62, exAgr:   62,
+    expMov:  42, expBrd:  35, expAgr:  36,
+    exhMov:  42,
+    trBrd:   22, trAgr:   30, trMov:   28,
+    cmpBrd:  22,
+  },
+  NEW_YORK: {
+    // Historical avg: mov≈58, brd≈44, agr≈40 — current session is well below average
+    deadMov: 15, deadBrd: 12, deadVol: 18,
+    exMov:   72, exBrd:   65, exAgr:   65,
+    expMov:  48, expBrd:  38, expAgr:  38,
+    exhMov:  48,
+    trBrd:   24, trAgr:   30, trMov:   32,
+    cmpBrd:  24,
   },
   DEFAULT: {
     deadMov: 20, deadBrd: 20, deadVol: 25,
-    exMov: 75, exBrd: 70, exAgr: 70,
-    expMov: 50, expBrd: 45, expAgr: 45,
-    exhMov: 50,
-    trBrd: 35, trAgr: 45, trMov: 30,
-    cmpBrd: 35, cmpVol: 40,
+    exMov:   75, exBrd:   70, exAgr:   70,
+    expMov:  50, expBrd:  45, expAgr:  45,
+    exhMov:  50,
+    trBrd:   35, trAgr:   45, trMov:   30,
+    cmpBrd:  35,
   },
 };
 
@@ -164,7 +187,7 @@ function classifyEnergyCycle(mov, brd, agr, vol, streak, accel, prev, session) {
   if (mov >= p.expMov && brd >= p.expBrd && agr >= p.expAgr)                      return 'EXPANSION';
   if (movRising && brdRising && accel > 0 && brd > p.trBrd && agr > p.trAgr && mov >= p.trMov)
     return 'TRANSITION';
-  if (brd < p.cmpBrd && vol < p.cmpVol && streak >= 1)                            return 'COMPRESSION';
+  if (brd < p.cmpBrd && streak >= 1)                                               return 'COMPRESSION';
   return 'LOW_PARTICIPATION';
 }
 
