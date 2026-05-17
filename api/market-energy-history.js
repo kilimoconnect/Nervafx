@@ -9,13 +9,6 @@
 
 const { cors, getClient } = require('./_db');
 
-const FIELDS = [
-  'session_date', 'session_name', 'energy_cycle', 'market_energy',
-  'movement_score', 'breadth_score', 'agreement_score', 'dominance_score',
-  'bullish_breadth', 'bearish_breadth', 'strongest_ccy', 'weakest_ccy',
-  'expansion_readiness', 'energy_momentum',
-].join(', ');
-
 module.exports = async function handler(req, res) {
   cors(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -29,7 +22,7 @@ module.exports = async function handler(req, res) {
 
     const { data, error } = await sb
       .from('market_energy_sessions')
-      .select(FIELDS)
+      .select('*')
       .gte('session_date', cutoffStr)
       .neq('session_name', 'LOW_LIQUIDITY')
       .order('session_date', { ascending: false })
