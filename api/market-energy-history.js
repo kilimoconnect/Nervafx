@@ -30,7 +30,16 @@ module.exports = async function handler(req, res) {
       .order('session_name',  { ascending: true });
 
     if (error) throw new Error(error.message);
-    res.json(data || []);
+
+    // Merge computed fields from details JSON back to top-level
+    const rows = (data || []).map(r => {
+      if (r.details && typeof r.details === 'object') {
+        const { hours, hourly, ...computed } = r.details;
+        return { ...r, ...computed, details: { hours, hourly } };
+      }
+      return r;
+    });
+    res.json(rows);
   } catch (e) {
     console.error('[ME-HISTORY]', e.message);
     res.status(500).json({ error: e.message });

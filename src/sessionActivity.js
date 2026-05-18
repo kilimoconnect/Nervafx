@@ -816,7 +816,7 @@ function buildSessionRows(hourRows) {
   });
 }
 
-// Fields computed in-memory for the API — not stored in market_energy_sessions
+// Fields computed in-memory — stored inside the `details` JSON column
 const SESSION_INMEM_FIELDS = new Set([
   'norm_movement', 'norm_breadth', 'norm_agreement', 'norm_volatility', 'norm_energy',
   'baseline_n',
@@ -825,7 +825,15 @@ const SESSION_INMEM_FIELDS = new Set([
 ]);
 
 function toSessionRow(r) {
-  return Object.fromEntries(Object.entries(r).filter(([k]) => !SESSION_INMEM_FIELDS.has(k)));
+  const computed = {};
+  const row = {};
+  for (const [k, v] of Object.entries(r)) {
+    if (SESSION_INMEM_FIELDS.has(k)) computed[k] = v;
+    else row[k] = v;
+  }
+  if (!row.details) row.details = {};
+  row.details = { ...row.details, ...computed };
+  return row;
 }
 
 async function upsertMarketEnergySessions(sessionRows) {
