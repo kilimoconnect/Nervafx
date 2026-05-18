@@ -39,7 +39,7 @@ async function detectMomentum(sb) {
 
   let bestStreak = 0, bestEnd = -1, streak = 0;
   for (let i = 1; i < breadths.length; i++) {
-    if (breadths[i] > breadths[i - 1] && breadths[i] >= 10 && breadths[i - 1] >= 10) {
+    if (breadths[i] >= breadths[i - 1] && breadths[i] >= 10 && breadths[i - 1] >= 10) {
       streak++;
       if (streak >= 2 && streak > bestStreak) {
         bestStreak = streak;
