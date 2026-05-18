@@ -181,7 +181,8 @@ html, body {
 }
 
 /* ensure locked cards are tall enough for overlay content */
-section.card:has(.plan-lock-overlay.visible) { min-height: 280px; overflow: visible; }
+section.card:has(.plan-lock-overlay.visible) { min-height: 400px; }
+.plan-lock-overlay { overflow-y: auto; }
 
 
 /* Free plan: place 12H Pair Ranking next to Currency Strength.
