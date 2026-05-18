@@ -106,9 +106,9 @@ html, body {
   border-radius: inherit;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   text-align: center;
-  padding: 24px 20px;
+  padding: 32px 20px;
   gap: 8px;
 }
 .plan-lock-overlay.visible { display: flex; }
@@ -180,22 +180,8 @@ html, body {
   .plan-lock-btn { font-size: 12px; padding: 7px 18px; }
 }
 
-/* ensure cards are tall enough for overlay */
-section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidden; }
-
-/* desktop: taller min-height for wide feature cards */
-@media (min-width: 700px) {
-  #section-live:has(.plan-lock-overlay.visible),
-  #section-top:has(.plan-lock-overlay.visible),
-  #section-journal:has(.plan-lock-overlay.visible),
-  #section-currency-signals:has(.plan-lock-overlay.visible) { min-height: 320px; }
-}
-
-/* taller min-height for wide feature cards */
-#section-live:has(.plan-lock-overlay.visible),
-#section-top:has(.plan-lock-overlay.visible),
-#section-journal:has(.plan-lock-overlay.visible),
-#section-currency-signals:has(.plan-lock-overlay.visible) { min-height: 320px; }
+/* ensure locked cards are tall enough for overlay content */
+section.card:has(.plan-lock-overlay.visible) { min-height: 280px; overflow: visible; }
 
 
 /* Free plan: place 12H Pair Ranking next to Currency Strength.
