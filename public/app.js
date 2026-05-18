@@ -2245,10 +2245,11 @@ function _meHistoryPanel(rows, liveSessions) {
     (utcDay === 5 && utcHour >= 21)
   );
 
+  // Merge live today sessions with DB history; live rows override DB for same date+session
   const liveRows = (liveSessions || []).filter(s => s.session_name !== 'LOW_LIQUIDITY' && s.session_date);
-  const liveDateKeys = new Set(liveRows.map(r => (r.session_date || '').slice(0, 10)));
-  const dbRows  = (rows || []).filter(r => !liveDateKeys.has((r.session_date || '').slice(0, 10)));
-  const allRows = [...liveRows, ...dbRows];
+  const liveKeys = new Set(liveRows.map(r => `${(r.session_date || '').slice(0, 10)}_${r.session_name}`));
+  const dbRows   = (rows || []).filter(r => !liveKeys.has(`${(r.session_date || '').slice(0, 10)}_${r.session_name}`));
+  const allRows  = [...liveRows, ...dbRows];
 
   if (!allRows.length) return '';
 
@@ -2350,8 +2351,12 @@ function renderMarketEnergy(sessions, expansionPressure, marketCycle, currentSes
     return;
   }
 
+  // Live cards: only show today's sessions, blank if not yet active
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const todaySessions = sessions.filter(s => (s.session_date || '').slice(0, 10) === todayStr);
+  const byName = Object.fromEntries(todaySessions.map(s => [s.session_name, s]));
+
   const ORDER  = ['ASIA', 'LONDON', 'NEW_YORK', 'LOW_LIQUIDITY'];
-  const byName = Object.fromEntries(sessions.map(s => [s.session_name, s]));
 
   el.innerHTML = `
     ${_meMarketCycleBanner(marketCycle)}
@@ -2359,7 +2364,7 @@ function renderMarketEnergy(sessions, expansionPressure, marketCycle, currentSes
       ${ORDER.map(name => _meSessionCard(name, byName[name] || null, _meSessionStatus(name, currentSession))).join('')}
     </div>
     ${_meExpansionPressurePanel(expansionPressure)}
-    ${_meHistoryPanel(historyRows, sessions)}`;
+    ${_meHistoryPanel(historyRows, todaySessions)}`;
 
   fetchMarketEnergyNarrative(sessions, expansionPressure, marketCycle);
 }

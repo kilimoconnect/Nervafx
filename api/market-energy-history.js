@@ -3,7 +3,7 @@
 /**
  * GET /api/market-energy-history
  *
- * Returns the last 3 days of session rows from market_energy_sessions,
+ * Returns the last 14 days of session rows from market_energy_sessions,
  * ordered most-recent first. Used by the history panel on the dashboard.
  */
 
@@ -17,7 +17,7 @@ module.exports = async function handler(req, res) {
   try {
     const sb = getClient();
     const cutoff = new Date();
-    cutoff.setUTCDate(cutoff.getUTCDate() - 7);
+    cutoff.setUTCDate(cutoff.getUTCDate() - 14);
     const cutoffStr = cutoff.toISOString().slice(0, 10); // YYYY-MM-DD
 
     const { data, error } = await sb
