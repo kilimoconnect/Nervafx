@@ -85,12 +85,16 @@ async function detectImpulses(sb) {
 }
 
 async function sendSignalAlerts(sb) {
-  if (!process.env.BREVO_API_KEY) return;
+  if (!process.env.BREVO_API_KEY) {
+    console.log('[email-alert] BREVO_API_KEY not set — skipping');
+    return;
+  }
 
   const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  console.log(`[email-alert] checking signals since ${twoHoursAgo}`);
 
   // Trade signals
-  const { data: signals } = await sb
+  const { data: signals, error: sigErr } = await sb
     .from('trade_signals')
     .select('instrument, direction, confidence, reason')
     .gte('time', twoHoursAgo)
@@ -98,6 +102,9 @@ async function sendSignalAlerts(sb) {
     .gte('confidence', 65)
     .order('confidence', { ascending: false })
     .limit(10);
+
+  if (sigErr) console.error('[email-alert] signal query error:', sigErr.message);
+  console.log(`[email-alert] found ${signals?.length || 0} signals (conf>=65), ${signals?.map(s => s.instrument + ':' + s.confidence).join(', ') || 'none'}`);
 
   // Momentum + M15 impulse
   const [momentum, impulses] = await Promise.all([
@@ -109,9 +116,15 @@ async function sendSignalAlerts(sb) {
   const hasMomentum = !!momentum;
   const hasImpulses = impulses?.length > 0;
 
-  if (!hasTradeSignals && !hasMomentum && !hasImpulses) return;
+  console.log(`[email-alert] signals:${hasTradeSignals} momentum:${hasMomentum} impulses:${hasImpulses}`);
+
+  if (!hasTradeSignals && !hasMomentum && !hasImpulses) {
+    console.log('[email-alert] nothing to send');
+    return;
+  }
 
   const recipients = await getSubscribedUsers(sb);
+  console.log(`[email-alert] ${recipients.length} subscribed users`);
   if (!recipients.length) return;
 
   const emails = [];
