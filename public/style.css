@@ -4059,6 +4059,12 @@ body::after {
   margin-top: 3px;
   padding-top: 3px;
   border-top: 1px solid rgba(255,255,255,0.06);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+}
+@media (max-width: 500px) {
+  .bc-bar:nth-child(even) .bc-bar-hour { visibility: hidden; }
 }
 
 .bc-label-row {

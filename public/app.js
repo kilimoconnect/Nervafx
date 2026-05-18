@@ -1978,7 +1978,7 @@ function _renderBreadthBars(container, rows) {
         <div class="bc-bar-inner">
           <div class="bc-bar-fill" style="height:${pct}%;background:${barColor}"></div>
         </div>
-        <span class="bc-bar-hour">${localHour}:00</span>
+        <span class="bc-bar-hour">${localHour}</span>
       </div>`;
     }
 
