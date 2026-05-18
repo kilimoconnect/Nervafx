@@ -1897,9 +1897,11 @@ function _renderBreadthBars(container, rows) {
     });
   }
 
-  // Sort dates descending, drop incomplete edge days (< 3 sessions represented)
+  // Sort dates descending; always show today even if only 1 session so far
+  const todayStr = new Date().toISOString().slice(0, 10);
   const dates = Object.keys(byDate)
     .filter(d => {
+      if (d === todayStr) return byDate[d].length >= 1;
       const sessions = new Set(byDate[d].map(b => b.session));
       return sessions.size >= 2;
     })
