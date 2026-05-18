@@ -390,12 +390,8 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
   display: flex;
   align-items: center;
   gap: 6px;
-  flex: 1;
-  overflow-x: auto;
-  flex-wrap: nowrap;
-  scrollbar-width: none;
+  flex-wrap: wrap;
 }
-.m15-bar-chips::-webkit-scrollbar { display: none; }
 .m15-bar-chip {
   display: inline-flex;
   align-items: center;
