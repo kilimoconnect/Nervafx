@@ -332,9 +332,7 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
 /* ─── Header ───────────────────────────────────────────────────────────────── */
 .header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 11px 24px;
+  flex-direction: column;
   background: rgba(8,11,18,0.85);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
@@ -342,6 +340,29 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
   position: sticky;
   top: 0;
   z-index: 100;
+}
+.header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+}
+.header-row-top {
+  padding-top: 8px;
+  padding-bottom: 6px;
+}
+.header-row-bottom {
+  padding-top: 4px;
+  padding-bottom: 8px;
+  gap: 10px;
+  border-top: 1px solid rgba(255,255,255,0.04);
+  flex-wrap: wrap;
+}
+.header-stats {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 /* ─── Header left layout ──────────────────────────────────────────────────── */
@@ -2226,16 +2247,12 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
   html, body { font-size: 12px; }
 
   /* Header */
-  .header {
-    padding: 10px 14px;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
+  .header-row { padding-left: 14px; padding-right: 14px; }
+  .header-row-top { padding-top: 6px; padding-bottom: 4px; }
+  .header-row-bottom { padding-top: 4px; padding-bottom: 6px; flex-wrap: wrap; gap: 6px; }
   .tagline { display: none; }
-  .header-right {
-    gap: 6px;
-    flex-wrap: wrap;
-  }
+  .header-right { gap: 6px; flex-wrap: wrap; }
+  .header-stats { flex-wrap: wrap; gap: 4px; }
   .stat-pill {
     font-size: 10px;
     padding: 2px 8px;

@@ -47,9 +47,32 @@
 
   <!-- HEADER -->
   <header class="header">
-    <div class="header-left">
-      <img src="/nervafx-logo.png" alt="NervaFX" style="height:26px;display:block;">
-      <span class="tagline">Currency Strength Engine</span>
+    <div class="header-row header-row-top">
+      <div class="header-left">
+        <img src="/nervafx-logo.png" alt="NervaFX" style="height:26px;display:block;">
+        <span class="tagline">Currency Strength Engine</span>
+      </div>
+      <div class="header-right">
+        <div class="status-dot" id="status-dot" title="System status"></div>
+        <span class="last-update" id="last-update">—</span>
+        <span class="header-user-email" id="header-user"></span>
+        <a href="/profile" class="logout-btn" style="text-decoration:none">
+          <i data-lucide="settings" style="width:12px;height:12px;vertical-align:middle;margin-right:4px"></i>Settings
+        </a>
+        <a href="/admin" id="admin-nav-btn" class="logout-btn" style="display:none;text-decoration:none;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;border-color:transparent">
+          <i data-lucide="shield" style="width:12px;height:12px;vertical-align:middle;margin-right:4px"></i>Admin
+        </a>
+        <button class="logout-btn" onclick="logout()">
+          <i data-lucide="log-out" style="width:12px;height:12px;vertical-align:middle;margin-right:4px"></i>Sign Out
+        </button>
+      </div>
+    </div>
+    <div class="header-row header-row-bottom">
+      <div class="header-stats">
+        <div class="stat-pill" id="stat-balance">Balance: —</div>
+        <div class="stat-pill" id="stat-risk">Daily Risk: — / 2%</div>
+        <div class="stat-pill" id="stat-trades">Open: — / 3</div>
+      </div>
       <div id="m15-impulse-bar" class="m15-impulse-bar" style="display:none">
         <span class="m15-bar-dot"></span>
         <span class="m15-bar-label">M15 Impulse</span>
@@ -67,26 +90,7 @@
         <span class="mom-bar-text" id="mom-bar-text"></span>
       </div>
     </div>
-    <div class="header-right">
-      <div class="stat-pill" id="stat-balance">Balance: —</div>
-      <div class="stat-pill" id="stat-risk">Daily Risk: — / 2%</div>
-      <div class="stat-pill" id="stat-trades">Open: — / 3</div>
-      <div class="status-dot" id="status-dot" title="System status"></div>
-      <span class="last-update" id="last-update">—</span>
-      <span class="header-user-email" id="header-user"></span>
-      <a href="/profile" class="logout-btn" style="text-decoration:none">
-        <i data-lucide="settings" style="width:12px;height:12px;vertical-align:middle;margin-right:4px"></i>Settings
-      </a>
-      <a href="/admin" id="admin-nav-btn" class="logout-btn" style="display:none;text-decoration:none;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;border-color:transparent">
-        <i data-lucide="shield" style="width:12px;height:12px;vertical-align:middle;margin-right:4px"></i>Admin
-      </a>
-      <button class="logout-btn" onclick="logout()">
-        <i data-lucide="log-out" style="width:12px;height:12px;vertical-align:middle;margin-right:4px"></i>Sign Out
-      </button>
-    </div>
   </header>
-
-  <!-- M15 impulse bar is now inside the header -->
 
   <!-- TAB BAR -->
   <nav class="dash-tabs" id="dash-tabs">
