@@ -1846,7 +1846,7 @@ function openBreadthChart() {
     .formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value || '';
   modal.innerHTML = `<div class="me-modal-panel">
     <div class="me-modal-header">
-      <div class="me-modal-title"><span class="me-modal-title-label">Hourly Session Momentum</span><span style="font-size:10px;color:var(--text-muted);margin-left:8px">${_bcTzLabel}</span><a href="/archive.html" style="font-size:10px;color:var(--accent);margin-left:auto;text-decoration:none">Full Archive →</a></div>
+      <div class="me-modal-title"><span class="me-modal-title-label">Hourly Session Momentum</span><span style="font-size:10px;color:var(--text-muted);margin-left:8px">${_bcTzLabel}</span><a href="/archive.html" class="premium-only" style="font-size:10px;color:var(--accent);margin-left:auto;text-decoration:none">Full Archive →</a></div>
       <button class="me-modal-close" onclick="closeBreadthChart()">✕</button>
     </div>
     <div class="me-modal-body" style="padding:16px 20px">
@@ -2364,7 +2364,7 @@ function _meHistoryPanel(rows, liveSessions) {
   return `<div class="sh-panel sh-collapsed">
     <div class="sh-controls">
       <button class="sh-toggle-btn" onclick="var p=this.closest('.sh-panel');p.classList.toggle('sh-collapsed');this.textContent=p.classList.contains('sh-collapsed')?'Show Session History':'Hide Session History'">Show Session History</button>
-      <a href="/archive.html" class="sh-archive-link">View Full Archive →</a>
+      <a href="/archive.html" class="sh-archive-link premium-only">View Full Archive →</a>
     </div>
     <div class="sh-table">
       ${tableHead}
