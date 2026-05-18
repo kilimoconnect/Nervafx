@@ -4419,7 +4419,8 @@ body::after {
 
 .me-dom-ccys {
   display: flex;
-  gap: 8px;
+  gap: 4px 8px;
+  flex-wrap: wrap;
 }
 
 .me-dom-strong {
@@ -5025,6 +5026,48 @@ body::after {
   line-height: 1.65;
   color: var(--text-secondary);
 }
+/* ── Previous sessions section ─────────────────────────────────────────────── */
+.me-di-prev-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.me-di-prev-card {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+.me-di-prev-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.me-di-prev-sess {
+  font-size: 11px;
+  font-weight: 700;
+}
+.me-di-prev-date {
+  font-size: 10px;
+  font-family: var(--font-data);
+  color: var(--text-dim);
+}
+.me-di-prev-summary {
+  margin: 0 0 6px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+.me-di-prev-impact {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.me-di-no-prev {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin: 0;
+}
 /* ── AI analysis modal — mobile ─────────────────────────────────────────────── */
 @media (max-width: 700px) {
   .me-analysis-overlay {
@@ -5093,9 +5136,24 @@ body::after {
   margin-top: 12px;
 }
 
+.sh-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.sh-archive-link {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: opacity 0.15s;
+}
+.sh-archive-link:hover { opacity: 0.8; }
+
 .sh-toggle-btn {
   display: block;
-  width: 100%;
+  flex: 1;
   padding: 10px 16px;
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 8px;
@@ -5213,7 +5271,8 @@ body::after {
 
 .sh-col-ccy {
   display: flex;
-  gap: 6px;
+  gap: 4px 6px;
+  flex-wrap: wrap;
   font-size: 10px;
   font-weight: 600;
 }

@@ -17,7 +17,8 @@ module.exports = async function handler(req, res) {
   try {
     const sb = getClient();
     const cutoff = new Date();
-    cutoff.setUTCDate(cutoff.getUTCDate() - 14);
+    const days = Math.min(30, parseInt(req.query?.days || '5', 10) || 5);
+    cutoff.setUTCDate(cutoff.getUTCDate() - days);
     const cutoffStr = cutoff.toISOString().slice(0, 10); // YYYY-MM-DD
 
     const { data, error } = await sb

@@ -1544,8 +1544,10 @@ function _meSessionExplain(s, label) {
   const readiness = Math.round(parseFloat(s.expansion_readiness) || 0);
   const liq = Math.round(parseFloat(s.liquidity_score) || 0);
   const dom = Math.round(parseFloat(s.dominance_score) || 0);
-  const strong = s.strongest_ccy || null;
-  const weak = s.weakest_ccy || null;
+  const strongCcys = (s.strongest_ccy || '').split(',').filter(Boolean);
+  const weakCcys   = (s.weakest_ccy   || '').split(',').filter(Boolean);
+  const strong = strongCcys[0] || null;
+  const weak   = weakCcys[0]   || null;
 
   const lines = [];
 
@@ -1660,10 +1662,11 @@ function _meSessionCard(name, s, status) {
   const neutral    = Math.max(0, 100 - activePct);
 
   const domScore  = Math.round(parseFloat(s.dominance_score) || 0);
-  const strongCcy = s.strongest_ccy || null;
-  const weakCcy   = s.weakest_ccy   || null;
-  const domLabel  = (strongCcy && weakCcy && strongCcy !== weakCcy)
-    ? `<span class="me-dom-strong">${strongCcy} ↑</span><span class="me-dom-weak">${weakCcy} ↓</span>`
+  const strongCcys = (s.strongest_ccy || '').split(',').filter(Boolean);
+  const weakCcys   = (s.weakest_ccy   || '').split(',').filter(Boolean);
+  const domLabel   = (strongCcys.length || weakCcys.length)
+    ? strongCcys.map(c => `<span class="me-dom-strong">${c} ↑</span>`).join('') +
+      weakCcys.map(c => `<span class="me-dom-weak">${c} ↓</span>`).join('')
     : '';
 
   const dirRows = `
@@ -1843,7 +1846,7 @@ function openBreadthChart() {
     .formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value || '';
   modal.innerHTML = `<div class="me-modal-panel">
     <div class="me-modal-header">
-      <div class="me-modal-title"><span class="me-modal-title-label">Hourly Session Momentum</span><span style="font-size:10px;color:var(--text-muted);margin-left:8px">${_bcTzLabel}</span></div>
+      <div class="me-modal-title"><span class="me-modal-title-label">Hourly Session Momentum</span><span style="font-size:10px;color:var(--text-muted);margin-left:8px">${_bcTzLabel}</span><a href="/archive.html" style="font-size:10px;color:var(--accent);margin-left:auto;text-decoration:none">Full Archive →</a></div>
       <button class="me-modal-close" onclick="closeBreadthChart()">✕</button>
     </div>
     <div class="me-modal-body" style="padding:16px 20px">
@@ -1863,7 +1866,7 @@ function closeBreadthChart() {
 
 async function _fetchAndRenderBreadthChart(modal) {
   try {
-    const data = await api('/api/session-activity?type=hourly&days=7');
+    const data = await api('/api/session-activity?type=hourly&days=5');
     const rows = data.hourly || [];
     if (!rows.length) {
       modal.querySelector('.me-modal-body').innerHTML = '<p class="me-empty">No hourly momentum data available.</p>';
@@ -2153,6 +2156,24 @@ function _renderMeAnalysisModal() {
       </div>`
     : loading;
 
+  // ── Previous Sessions ──────────────────────────────────────────────────────────
+  const PREV_SESS_COLOR = { ASIA: '#f59e0b', LONDON: '#0ea5e9', NEW_YORK: '#a855f7' };
+  const PREV_SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York' };
+  const prevSessHtml = d?.previous_sessions?.length
+    ? `<div class="me-di-prev-list">${d.previous_sessions.map(ps => {
+        const color = PREV_SESS_COLOR[ps.session] || '#64748b';
+        const label = PREV_SESS_LABEL[ps.session] || ps.session;
+        return `<div class="me-di-prev-card">
+          <div class="me-di-prev-head">
+            <span class="me-di-prev-sess" style="color:${color}">${label}</span>
+            <span class="me-di-prev-date">${ps.date || ''}</span>
+          </div>
+          <p class="me-di-prev-summary">${ps.summary || '—'}</p>
+          <div class="me-di-ai-row"><span class="me-di-row-label">Impact</span><span class="me-di-prev-impact">${ps.impact || '—'}</span></div>
+        </div>`;
+      }).join('')}</div>`
+    : '<p class="me-di-no-prev">No previous session data available.</p>';
+
   // ── Summary ───────────────────────────────────────────────────────────────────
   const summaryHtml = d?.summary
     ? `<div class="me-di-summary-head">
@@ -2203,6 +2224,11 @@ function _renderMeAnalysisModal() {
         <section class="me-modal-section">
           <h3 class="me-modal-section-title">Currency Leadership</h3>
           ${currencyHtml}
+        </section>
+
+        <section class="me-modal-section">
+          <h3 class="me-modal-section-title">Previous Sessions</h3>
+          ${prevSessHtml}
         </section>
 
         <section class="me-modal-section">
@@ -2328,7 +2354,7 @@ function _meHistoryPanel(rows, liveSessions) {
         <div class="sh-col-metric">${brd}</div>
         <div class="sh-col-metric" style="color:${liqColor};font-weight:600">${liq}</div>
         <div class="sh-col-flow"><span class="sh-bull">▲${bullPct}%</span><span class="sh-bear">▼${bearPct}%</span></div>
-        <div class="sh-col-ccy"><span class="sh-strong">${r.strongest_ccy||'—'} ↑</span><span class="sh-weak">${r.weakest_ccy||'—'} ↓</span></div>
+        <div class="sh-col-ccy">${(r.strongest_ccy||'—').split(',').map(c => `<span class="sh-strong">${c} ↑</span>`).join('')}${(r.weakest_ccy||'—').split(',').map(c => `<span class="sh-weak">${c} ↓</span>`).join('')}</div>
       </div>`;
     }).join('');
 
@@ -2336,7 +2362,10 @@ function _meHistoryPanel(rows, liveSessions) {
   }).join('');
 
   return `<div class="sh-panel sh-collapsed">
-    <button class="sh-toggle-btn" onclick="var p=this.closest('.sh-panel');p.classList.toggle('sh-collapsed');this.textContent=p.classList.contains('sh-collapsed')?'Show Session History':'Hide Session History'">Show Session History</button>
+    <div class="sh-controls">
+      <button class="sh-toggle-btn" onclick="var p=this.closest('.sh-panel');p.classList.toggle('sh-collapsed');this.textContent=p.classList.contains('sh-collapsed')?'Show Session History':'Hide Session History'">Show Session History</button>
+      <a href="/archive.html" class="sh-archive-link">View Full Archive →</a>
+    </div>
     <div class="sh-table">
       ${tableHead}
       ${dayBlocks}
@@ -2621,7 +2650,7 @@ function renderJrnSessionPerfSection(e, sessionEntries) {
         <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Momentum</span><span class="jrn-sess-val">${brd}</span></div>
         <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Liquidity</span><span class="jrn-sess-val" style="color:${liqColor}">${liq}</span></div>
         <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Pressure</span><span class="jrn-sess-val">▲${bull}% ▼${bear}%</span></div>
-        <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Flow</span><span class="jrn-sess-val"><span style="color:#22c55e">${me.strongest_ccy||'—'}↑</span> <span style="color:#ef4444">${me.weakest_ccy||'—'}↓</span></span></div>
+        <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Flow</span><span class="jrn-sess-val">${(me.strongest_ccy||'—').split(',').map(c => `<span style="color:#22c55e">${c}↑</span>`).join(' ')} ${(me.weakest_ccy||'—').split(',').map(c => `<span style="color:#ef4444">${c}↓</span>`).join(' ')}</span></div>
         ${allSignals.length ? `<div class="jrn-sess-stat jrn-sess-full"><span class="jrn-sess-lbl">Signals</span><span class="jrn-sess-val">${allSignals.map(s => `${pair(s.instrument)} ${s.signal}`).join(', ')}</span></div>` : ''}
       </div>`);
   }

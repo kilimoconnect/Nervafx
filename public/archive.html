@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NervaFX — Archive</title>
+  <link rel="icon" type="image/png" href="/nervafx-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <link rel="stylesheet" href="style.css" />
+
+  <style>
+    .grid { display: block !important; }
+
+    .arc-topbar {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 28px; height: 56px;
+      background: rgba(8,11,18,0.92);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+    .arc-topbar-left  { display: flex; align-items: center; gap: 12px; }
+    .arc-topbar-right { display: flex; align-items: center; gap: 10px; }
+    .arc-logo { display: flex; align-items: center; text-decoration: none; flex-shrink: 0; }
+    .arc-logo img { height: 24px; display: block; }
+    .arc-sep { color: rgba(255,255,255,0.1); font-size: 20px; font-weight: 200; }
+    .arc-title-text {
+      font-size: 13px; font-weight: 600; color: var(--text-muted);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .arc-back-btn {
+      display: flex; align-items: center; gap: 5px;
+      padding: 6px 12px; border-radius: 8px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); font-size: 11px; font-weight: 600;
+      cursor: pointer; text-decoration: none;
+      transition: all 0.15s;
+    }
+    .arc-back-btn:hover { background: rgba(255,255,255,0.09); color: var(--text); border-color: rgba(255,255,255,0.14); }
+
+    .arc-main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px 28px 80px;
+    }
+
+    .arc-section {
+      margin-bottom: 32px;
+    }
+    .arc-section-header {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 14px;
+      font-size: 14px; font-weight: 700; color: var(--text);
+    }
+    .arc-section-header i { width: 18px; height: 18px; color: var(--text-muted); }
+
+    .arc-tabs {
+      display: flex; gap: 4px;
+      margin-bottom: 16px;
+    }
+    .arc-tab {
+      padding: 6px 14px; border-radius: 6px;
+      border: 1px solid var(--border);
+      background: transparent; color: var(--text-muted);
+      font-size: 11px; font-weight: 600; cursor: pointer;
+      transition: all 0.15s;
+    }
+    .arc-tab:hover { background: var(--bg-hover); color: var(--text); }
+    .arc-tab.active { background: rgba(59,130,246,0.14); border-color: rgba(59,130,246,0.38); color: #93c5fd; }
+
+    .arc-loading {
+      text-align: center; padding: 40px 20px;
+      color: var(--text-muted); font-size: 13px;
+    }
+
+    @media (max-width: 700px) {
+      .arc-topbar { padding: 0 14px; }
+      .arc-sep, .arc-title-text { display: none; }
+      .arc-back-btn { font-size: 10px; padding: 5px 10px; }
+      .arc-main { padding: 12px 12px 60px; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="arc-topbar">
+    <div class="arc-topbar-left">
+      <a href="/app" class="arc-logo">
+        <img src="/nervafx-logo.png" alt="NervaFX">
+      </a>
+      <span class="arc-sep">|</span>
+      <span class="arc-title-text">
+        <i data-lucide="archive" style="width:14px;height:14px;flex-shrink:0"></i>
+        Market Archive
+      </span>
+    </div>
+    <div class="arc-topbar-right">
+      <a href="/app" class="arc-back-btn">
+        <i data-lucide="arrow-left" style="width:11px;height:11px"></i>
+        Dashboard
+      </a>
+    </div>
+  </header>
+
+  <main class="arc-main">
+    <div class="arc-tabs">
+      <button class="arc-tab active" data-section="momentum" onclick="switchArchiveTab(this)">Momentum Chart</button>
+      <button class="arc-tab" data-section="history" onclick="switchArchiveTab(this)">Session History</button>
+    </div>
+
+    <section class="arc-section" id="arc-momentum">
+      <div class="arc-section-header">
+        <i data-lucide="bar-chart-3"></i>
+        Hourly Session Momentum — 30 Day Archive
+      </div>
+      <div id="arc-momentum-body">
+        <div class="arc-loading"><span class="spinner"></span> Loading momentum data…</div>
+      </div>
+    </section>
+
+    <section class="arc-section" id="arc-history" style="display:none">
+      <div class="arc-section-header">
+        <i data-lucide="clock"></i>
+        Session Energy History — 30 Day Archive
+      </div>
+      <div id="arc-history-body">
+        <div class="arc-loading"><span class="spinner"></span> Loading history…</div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+  (function () {
+    const token = localStorage.getItem('nfx_token');
+    if (!token) return location.replace('/login.html');
+    try {
+      const pay = JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+      if (pay.exp && pay.exp * 1000 < Date.now()) {
+        localStorage.removeItem('nfx_token');
+        return location.replace('/login.html');
+      }
+    } catch (_) { return location.replace('/login.html'); }
+  })();
+
+  const _userTz = localStorage.getItem('nfx_tz') || 'auto';
+
+  async function api(path) {
+    const token = localStorage.getItem('nfx_token');
+    const r = await fetch(path, { headers: { Authorization: `Bearer ${token}` } });
+    if (r.status === 401) { location.replace('/login.html'); throw new Error('Unauthorized'); }
+    if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+    return r.json();
+  }
+
+  function switchArchiveTab(btn) {
+    document.querySelectorAll('.arc-tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    const section = btn.dataset.section;
+    document.getElementById('arc-momentum').style.display = section === 'momentum' ? '' : 'none';
+    document.getElementById('arc-history').style.display = section === 'history' ? '' : 'none';
+  }
+
+  // ─── Momentum Chart (reuses same rendering as dashboard) ──────────────────
+
+  async function loadMomentumArchive() {
+    try {
+      const data = await api('/api/session-activity?type=hourly&days=30');
+      const rows = data.hourly || [];
+      if (!rows.length) {
+        document.getElementById('arc-momentum-body').innerHTML = '<p class="me-empty">No hourly momentum data available.</p>';
+        return;
+      }
+      renderBreadthBars(document.getElementById('arc-momentum-body'), rows);
+    } catch (e) {
+      document.getElementById('arc-momentum-body').innerHTML = `<p class="me-empty">Failed to load: ${e.message}</p>`;
+    }
+  }
+
+  function renderBreadthBars(container, rows) {
+    const SESS_COLOR = { ASIA: '#f59e0b', LONDON: '#0ea5e9', NEW_YORK: '#a855f7', LOW_LIQUIDITY: '#475569' };
+    const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York', LOW_LIQUIDITY: 'Low Liq.' };
+    const tz = (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC');
+    const tzLabel = new Intl.DateTimeFormat('en-GB', { timeZone: tz, timeZoneName: 'short' })
+      .formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value || '';
+
+    const SKIP = new Set(['LOW_LIQUIDITY', 'DEAD_HOURS']);
+    const byDate = {};
+    for (const r of rows) {
+      if (SKIP.has(r.session_name)) continue;
+      const date = r.time_utc.slice(0, 10);
+      if (!byDate[date]) byDate[date] = [];
+      byDate[date].push({ time: r.time_utc, session: r.session_name, breadth: Math.round(parseFloat(r.breadth_score) || 0) });
+    }
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const dates = Object.keys(byDate)
+      .filter(d => {
+        if (d === todayStr) return byDate[d].length >= 1;
+        return new Set(byDate[d].map(b => b.session)).size >= 2;
+      })
+      .sort((a, b) => b.localeCompare(a));
+    const maxBreadth = Math.max(80, ...rows.map(r => parseFloat(r.breadth_score) || 0));
+
+    let html = '<div class="bc-chart-wrap">';
+
+    for (const date of dates) {
+      const bars = byDate[date].sort((a, b) => a.time.localeCompare(b.time));
+      const d = new Date(date + 'T12:00:00Z');
+      const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz });
+
+      const breadths = bars.map(b => b.breadth);
+      const streaks = new Set();
+      let streak = 0;
+      for (let i = 1; i < breadths.length; i++) {
+        if (breadths[i] >= breadths[i - 1] && breadths[i] >= 10 && breadths[i - 1] >= 10) {
+          streak++;
+          if (streak >= 2) {
+            for (let j = i - streak; j <= i; j++) streaks.add(j);
+          }
+        } else {
+          streak = 0;
+        }
+      }
+
+      const sessGroups = [];
+      let curGroup = null;
+      for (const b of bars) {
+        if (!curGroup || curGroup.session !== b.session) {
+          curGroup = { session: b.session, count: 0 };
+          sessGroups.push(curGroup);
+        }
+        curGroup.count++;
+      }
+
+      let labelRow = '<div class="bc-label-row">';
+      sessGroups.forEach((g, gi) => {
+        if (gi > 0) labelRow += '<div class="bc-label-spacer"></div>';
+        const color = SESS_COLOR[g.session] || '#64748b';
+        labelRow += `<div class="bc-label-span" style="flex:${g.count};color:${color}">${SESS_LABEL[g.session] || g.session}</div>`;
+      });
+      labelRow += '</div>';
+
+      html += `<div class="bc-day-block">
+        <div class="bc-date-header">${dayLabel}</div>
+        ${labelRow}
+        <div class="bc-unified-chart">`;
+
+      let prevSess = '';
+      for (let i = 0; i < bars.length; i++) {
+        const b = bars[i];
+        const color = SESS_COLOR[b.session] || '#64748b';
+        const pct = Math.round((b.breadth / maxBreadth) * 100);
+        const localTime = new Date(b.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
+        const localHour = localTime.slice(0, 2);
+        const highlighted = streaks.has(i);
+        const barColor = highlighted ? '#22c55e' : color;
+        const cls = highlighted ? 'bc-bar bc-bar-streak' : 'bc-bar';
+
+        if (b.session !== prevSess && prevSess !== '') {
+          html += '<div class="bc-sess-divider"></div>';
+        }
+        prevSess = b.session;
+
+        html += `<div class="${cls}" title="${SESS_LABEL[b.session] || b.session}: ${b.breadth}% at ${localTime} ${tzLabel}">
+          <span class="bc-bar-val">${b.breadth}</span>
+          <div class="bc-bar-inner">
+            <div class="bc-bar-fill" style="height:${pct}%;background:${barColor}"></div>
+          </div>
+          <span class="bc-bar-hour">${localHour}</span>
+        </div>`;
+      }
+
+      html += '</div>';
+
+      const dayMax = Math.max(...breadths);
+      const dayAvg = Math.round(breadths.reduce((a, b) => a + b, 0) / breadths.length);
+      const streakCount = streaks.size;
+      const peakHour = bars[breadths.indexOf(dayMax)];
+      const peakTime = new Date(peakHour.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
+      const peakSess = SESS_LABEL[peakHour.session] || peakHour.session;
+
+      const dayLines = [];
+      if (dayAvg >= 40) dayLines.push(`Strong overall participation (avg ${dayAvg}) — broad market activity throughout the day.`);
+      else if (dayAvg >= 20) dayLines.push(`Moderate participation (avg ${dayAvg}) — some sessions were active, others quiet.`);
+      else dayLines.push(`Low participation (avg ${dayAvg}) — most of the day was quiet with low momentum.`);
+      dayLines.push(`Peak momentum of ${dayMax} hit at ${peakTime} during ${peakSess}.`);
+      if (streakCount >= 3) dayLines.push(`Continuation signal detected (${streakCount} bars in streak) — sustained momentum buildup.`);
+      else dayLines.push('No continuation signal — momentum did not sustain 3+ consecutive increases above 10.');
+
+      for (const g of sessGroups) {
+        const sBars = bars.filter(b => b.session === g.session);
+        const sAvg = Math.round(sBars.reduce((a, b) => a + b.breadth, 0) / sBars.length);
+        const sMax = Math.max(...sBars.map(b => b.breadth));
+        const sLabel = SESS_LABEL[g.session] || g.session;
+        if (sAvg >= 35) dayLines.push(`${sLabel}: active session (avg ${sAvg}, peak ${sMax}).`);
+        else if (sAvg >= 15) dayLines.push(`${sLabel}: moderate activity (avg ${sAvg}, peak ${sMax}).`);
+        else dayLines.push(`${sLabel}: quiet session (avg ${sAvg}, peak ${sMax}).`);
+      }
+
+      html += `<div class="bc-day-explain">
+        <ul class="bc-explain-list">${dayLines.map(l => `<li>${l}</li>`).join('')}</ul>
+      </div></div>`;
+    }
+
+    html += '</div>';
+    container.innerHTML = html;
+  }
+
+  // ─── Session History Table (reuses same rendering as dashboard) ────────────
+
+  const ME_CYCLE_LABEL = {
+    EXPLOSIVE: 'Explosive', EXPANSION: 'Expansion', TRANSITION: 'Transition',
+    COMPRESSION: 'Compression', EXHAUSTION: 'Exhaustion',
+    LOW_PARTICIPATION: 'Low Part.', DEAD: 'Dead',
+  };
+
+  async function loadHistoryArchive() {
+    try {
+      const rows = await api('/api/market-energy-history?days=30');
+      if (!rows.length) {
+        document.getElementById('arc-history-body').innerHTML = '<p class="me-empty">No history data available.</p>';
+        return;
+      }
+      renderHistoryTable(document.getElementById('arc-history-body'), rows);
+    } catch (e) {
+      document.getElementById('arc-history-body').innerHTML = `<p class="me-empty">Failed to load: ${e.message}</p>`;
+    }
+  }
+
+  function renderHistoryTable(container, rows) {
+    const CYCLE_DOT = {
+      EXPLOSIVE: '#f59e0b', EXPANSION: '#22c55e', TRANSITION: '#0ea5e9',
+      COMPRESSION: '#ef4444', EXHAUSTION: '#f97316', LOW_PARTICIPATION: '#64748b', DEAD: '#334155',
+    };
+    const SESS_COLOR = { ASIA: '#f59e0b', LONDON: '#0ea5e9', NEW_YORK: '#a855f7' };
+    const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York' };
+
+    const byDate = {};
+    for (const r of rows) {
+      const key = (r.session_date || '').slice(0, 10);
+      if (!byDate[key]) byDate[key] = [];
+      byDate[key].push(r);
+    }
+
+    const days = Object.keys(byDate).sort().reverse();
+    const now = new Date();
+    const utcDay = now.getUTCDay();
+    const utcHour = now.getUTCHours();
+    const marketOpen = !(utcDay === 6 || (utcDay === 0 && utcHour < 21) || (utcDay === 5 && utcHour >= 21));
+    const lastMarketDate = days[0];
+
+    let tableHead = `<div class="sh-row sh-header">
+      <div class="sh-col-date">Date</div>
+      <div class="sh-col-sess">Session</div>
+      <div class="sh-col-cycle">Cycle</div>
+      <div class="sh-col-metric">E</div>
+      <div class="sh-col-metric">Mom</div>
+      <div class="sh-col-metric">Liq</div>
+      <div class="sh-col-flow">Flow</div>
+      <div class="sh-col-ccy">Currencies</div>
+    </div>`;
+
+    const dayBlocks = days.map(date => {
+      const dateLabel = (date === lastMarketDate && marketOpen)
+        ? 'Today'
+        : new Date(date + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+
+      const sessOrder = ['ASIA', 'LONDON', 'NEW_YORK'];
+      const sessMap = Object.fromEntries(byDate[date].map(r => [r.session_name, r]));
+
+      const sessRows = sessOrder.map((key, idx) => {
+        const r = sessMap[key];
+        const dateCell = idx === 0
+          ? `<div class="sh-col-date sh-date-label">${dateLabel}</div>`
+          : '<div class="sh-col-date"></div>';
+
+        if (!r) {
+          return `<div class="sh-row sh-data-row sh-empty">
+            ${dateCell}
+            <div class="sh-col-sess" style="color:${SESS_COLOR[key]}">${SESS_LABEL[key]}</div>
+            <div class="sh-col-cycle"><span class="sh-na">—</span></div>
+            <div class="sh-col-metric sh-na">—</div>
+            <div class="sh-col-metric sh-na">—</div>
+            <div class="sh-col-metric sh-na">—</div>
+            <div class="sh-col-flow sh-na">—</div>
+            <div class="sh-col-ccy sh-na">—</div>
+          </div>`;
+        }
+
+        const dot = CYCLE_DOT[r.energy_cycle] || '#64748b';
+        const cycle = (ME_CYCLE_LABEL[r.energy_cycle] || r.energy_cycle || '—').replace(/_/g, ' ');
+        const eng = Math.round(r.market_energy || 0);
+        const brd = Math.round(r.breadth_score || 0);
+        const liq = Math.round(r.liquidity_score || 0);
+        const liqColor = liq >= 50 ? '#22c55e' : liq >= 30 ? '#eab308' : liq >= 15 ? '#f97316' : '#64748b';
+        const bullPct = Math.round(r.bullish_breadth || 0);
+        const bearPct = Math.round(r.bearish_breadth || 0);
+
+        return `<div class="sh-row sh-data-row">
+          ${dateCell}
+          <div class="sh-col-sess" style="color:${SESS_COLOR[key]}">${SESS_LABEL[key]}</div>
+          <div class="sh-col-cycle"><span class="sh-dot" style="background:${dot}"></span>${cycle}</div>
+          <div class="sh-col-metric">${eng}</div>
+          <div class="sh-col-metric">${brd}</div>
+          <div class="sh-col-metric" style="color:${liqColor};font-weight:600">${liq}</div>
+          <div class="sh-col-flow"><span class="sh-bull">▲${bullPct}%</span><span class="sh-bear">▼${bearPct}%</span></div>
+          <div class="sh-col-ccy">${(r.strongest_ccy||'—').split(',').map(c => `<span class="sh-strong">${c} ↑</span>`).join('')}${(r.weakest_ccy||'—').split(',').map(c => `<span class="sh-weak">${c} ↓</span>`).join('')}</div>
+        </div>`;
+      }).join('');
+
+      return `<div class="sh-day-group">${sessRows}</div>`;
+    }).join('');
+
+    container.innerHTML = `<div class="sh-table">${tableHead}${dayBlocks}</div>`;
+  }
+
+  // ─── Init ─────────────────────────────────────────────────────────────────────
+
+  Promise.all([loadMomentumArchive(), loadHistoryArchive()]);
+
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+  document.addEventListener('DOMContentLoaded', () => {
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  });
+  </script>
+</body>
+</html>

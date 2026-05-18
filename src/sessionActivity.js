@@ -306,10 +306,14 @@ function processHours(hourKeys, byTime, onlyLast = false) {
     let strongestCcy = null, weakestCcy = null, _dispersion = 0;
     {
       const sorted = Object.entries(ccyStrength).sort((a, b) => b[1] - a[1]);
-      if (sorted.length) {
+      if (sorted.length >= 2) {
+        strongestCcy  = sorted.slice(0, 2).map(e => e[0]).join(',');
+        weakestCcy    = sorted.slice(-2).reverse().map(e => e[0]).join(',');
+        _dispersion   = sorted[0][1] - sorted[sorted.length - 1][1];
+      } else if (sorted.length === 1) {
         strongestCcy  = sorted[0][0];
-        weakestCcy    = sorted[sorted.length - 1][0];
-        _dispersion   = sorted[0][1] - sorted[sorted.length - 1][1]; // max − min
+        weakestCcy    = sorted[0][0];
+        _dispersion   = 0;
       }
     }
 
