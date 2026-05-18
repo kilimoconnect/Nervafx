@@ -2259,6 +2259,7 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
   }
   .last-update { display: none; }
   .header-user-email { display: none; }
+  .status-dot { display: none; }
 
   /* Grid */
   .grid {
