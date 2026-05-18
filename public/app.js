@@ -1866,7 +1866,7 @@ function closeBreadthChart() {
 
 async function _fetchAndRenderBreadthChart(modal) {
   try {
-    const data = await api('/api/session-activity?type=hourly&days=5');
+    const data = await api('/api/session-activity?type=hourly&days=9');
     const rows = data.hourly || [];
     if (!rows.length) {
       modal.querySelector('.me-modal-body').innerHTML = '<p class="me-empty">No hourly momentum data available.</p>';
@@ -1900,7 +1900,7 @@ function _renderBreadthBars(container, rows) {
     });
   }
 
-  // Sort dates descending; always show today even if only 1 session so far
+  // Sort dates descending; show today + last 5 working days (6 total)
   const todayStr = new Date().toISOString().slice(0, 10);
   const dates = Object.keys(byDate)
     .filter(d => {
@@ -1908,7 +1908,8 @@ function _renderBreadthBars(container, rows) {
       const sessions = new Set(byDate[d].map(b => b.session));
       return sessions.size >= 2;
     })
-    .sort((a, b) => b.localeCompare(a));
+    .sort((a, b) => b.localeCompare(a))
+    .slice(0, 6);
   const maxBreadth = Math.max(80, ...rows.map(r => parseFloat(r.breadth_score) || 0));
 
   let html = '<div class="bc-chart-wrap">';
