@@ -170,7 +170,7 @@
 
   async function loadMomentumArchive() {
     try {
-      const data = await api('/api/session-activity?type=hourly&days=30');
+      const data = await api('/api/session-activity?type=hourly&days=365');
       const rows = (data.hourly || []).filter(r => r.time_utc >= ARCHIVE_CUTOFF);
       if (!rows.length) {
         document.getElementById('arc-momentum-body').innerHTML = '<p class="me-empty">No hourly momentum data available.</p>';
@@ -322,7 +322,7 @@
 
   async function loadHistoryArchive() {
     try {
-      const rows = (await api('/api/market-energy-history?days=30')).filter(r => (r.session_date || '') >= ARCHIVE_CUTOFF);
+      const rows = (await api('/api/market-energy-history?days=365')).filter(r => (r.session_date || '') >= ARCHIVE_CUTOFF);
       if (!rows.length) {
         document.getElementById('arc-history-body').innerHTML = '<p class="me-empty">No history data available.</p>';
         return;

@@ -14,7 +14,7 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
-    const days    = Math.min(30, parseInt(req.query?.days || '7', 10) || 7);
+    const days    = Math.min(365, parseInt(req.query?.days || '7', 10) || 7);
     const type    = req.query?.type || 'both';
     const sb      = getClient();
     const since   = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
