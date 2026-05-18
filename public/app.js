@@ -1327,7 +1327,12 @@ function renderSession(data) {
 
   const qCls     = (s.quality || 'BLOCKED').toLowerCase().replace(/_/g, '-');
   const allowed  = s.trades_allowed;
-  const activity = s.activity_index || 0;
+
+  // Market Activity = average of Movement, Momentum, Agreement, Volatility from Market Energy
+  const me = (_meSessSnapshot || []).find(m => m.session_name === s.session);
+  const activity = me
+    ? Math.round(((me.movement_score || 0) + (me.breadth_score || 0) + (me.agreement_score || 0) + (me.volatility_score || 0)) / 4)
+    : (s.activity_index || 0);
 
   // Quality label display
   const qLabel = {
