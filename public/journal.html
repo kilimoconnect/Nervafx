@@ -548,8 +548,70 @@
   }
 
   // ─── Modal helpers ────────────────────────────────────────────────────────────
+  let _jrnCachedEnergy = null;
+
+  function fmt(n, d = 5) { return n != null ? Number(n).toFixed(d) : '—'; }
+
   function _jrnSection(title, content) {
     return `<div class="jrn-section"><div class="jrn-section-title">${title}</div>${content}</div>`;
+  }
+
+  function renderJrnCsigSection(e) {
+    const cs = e.currency_strength;
+    const currencies = Array.isArray(cs) ? cs : (cs?.currencies || []);
+    const asOf       = Array.isArray(cs) ? null : (cs?.as_of || null);
+
+    const scored = currencies.map(c => {
+      const v3  = parseFloat(c.smooth_3h  ?? c.normalized_3h)  || 0;
+      const v6  = parseFloat(c.smooth_6h  ?? c.normalized_6h)  || 0;
+      const v12 = parseFloat(c.smooth_12h ?? c.normalized_12h) || 0;
+      return { cur: c.currency, combined: (v3 + v6 + v12) / 3, h3: v3, h6: v6, h12: v12 };
+    });
+
+    const strong = scored.filter(c => c.combined >  CS_THRESHOLD && c.h3 >  CS_THRESHOLD).sort((a, b) => b.combined - a.combined);
+    const weak   = scored.filter(c => c.combined < -CS_THRESHOLD && c.h3 < -CS_THRESHOLD).sort((a, b) => a.combined - b.combined);
+    const score  = _csigScore(strong.length, weak.length);
+
+    const expansionNote = score >= 2 ? `<span class="jrn-csig-exp-note">Expansion likely</span>` : '';
+
+    function fv(n) { return (n >= 0 ? '+' : '') + n.toFixed(5); }
+
+    function colHtml(list, side) {
+      const isStrong = side === 'strong';
+      const cls      = isStrong ? 'pos' : 'neg';
+      if (!list.length) return `
+        <div class="cs-sig-col ${side}">
+          <div class="cs-sig-col-title">${isStrong ? '💪 Strong' : '🔻 Weak'}</div>
+          <div class="cs-sig-empty">No confirmed ${isStrong ? 'bullish' : 'bearish'} signal</div>
+        </div>`;
+      return `
+        <div class="cs-sig-col ${side}">
+          <div class="cs-sig-col-title">${isStrong ? '💪 Strong' : '🔻 Weak'}</div>
+          <div class="cs-sig-head"><span>CCY</span><span>Combined</span><span>3H</span><span>6H</span><span>12H</span></div>
+          ${list.map(c => `
+            <div class="cs-sig-row">
+              <span class="cs-sig-cur">${c.cur}</span>
+              <span class="cs-sig-combo ${cls}">${fv(c.combined)}</span>
+              <span class="cs-sig-val ${cls}">${fv(c.h3)}</span>
+              <span class="cs-sig-val ${cls}">${fv(c.h6)}</span>
+              <span class="cs-sig-val ${cls}">${fv(c.h12)}</span>
+            </div>`).join('')}
+        </div>`;
+    }
+
+    const headerContent = `
+      <div class="jrn-csig-avail-header">
+        ${_csigPointHtml(score)}
+        <span class="jrn-csig-criteria">combined > ±${CS_THRESHOLD.toFixed(5)} & 3H confirms</span>
+        ${expansionNote}
+        ${asOf ? `<span class="jrn-csig-as-of">${fmtTime(asOf)}</span>` : ''}
+      </div>
+      <div class="cs-sig-grid">
+        ${colHtml(strong, 'strong')}
+        ${colHtml(weak, 'weak')}
+      </div>`;
+
+    return _jrnSection('📶 Currency Signals', headerContent);
   }
 
   function renderJrnStrengthSection(cs) {
@@ -649,15 +711,19 @@
       </div>`);
   }
 
-  function renderJrnSetupsSection(topSetups, signals) {
-    const entered = (signals?.entered || []).filter(s => hasCsigCurrency(s.instrument));
-    const waiting = (signals?.waiting || []).filter(s => hasCsigCurrency(s.instrument));
-    const setups  = (topSetups || []).filter(s => hasCsigCurrency(s.instrument));
+  function renderJrnSetupsSection(topSetups, signals, csigFilter) {
+    const filter   = csigFilter || hasCsigCurrency;
+    const entered  = (signals?.entered || []).filter(s => filter(s.instrument));
+    const waiting  = (signals?.waiting || []).filter(s => filter(s.instrument));
+    const setups   = (topSetups || []).filter(s => filter(s.instrument));
     if (!setups.length && !entered.length) return '';
     return _jrnSection('🎯 Top Setups & Signals', `
       ${entered.length ? `<div class="jrn-sig-entered">${entered.map(s => {
         const d = s.signal === 'BUY' ? 'buy' : 'sell';
-        return `<div class="jrn-sig-row"><span class="signal-dir ${d}" style="font-size:10px;padding:2px 7px">${s.signal}</span><span class="jrn-sig-pair">${pair(s.instrument)}</span><span class="jrn-sig-conf">${s.confidence ?? '—'}%</span>${s.reason ? `<span class="jrn-sig-reason">${s.reason}</span>` : ''}</div>`;
+        const levels = s.entry_price
+          ? `<div class="jrn-sig-levels"><span><span class="wl-lbl">Entry</span>${fmt(s.entry_price)}</span><span><span class="wl-lbl">SL</span><span class="wl-sl">${fmt(s.stop_loss)}</span></span><span><span class="wl-lbl">TP</span><span class="wl-tp">${fmt(s.take_profit)}</span></span>${s.position_size ? `<span><span class="wl-lbl">Size</span>${s.position_size} lots</span>` : ''}</div>`
+          : '';
+        return `<div class="jrn-sig-row"><span class="signal-dir ${d}" style="font-size:10px;padding:2px 7px">${s.signal}</span><span class="jrn-sig-pair">${pair(s.instrument)}</span><span class="jrn-sig-conf">${s.confidence ?? '—'}%</span>${s.reason ? `<span class="jrn-sig-reason">${s.reason}</span>` : ''}${levels}</div>`;
       }).join('')}</div>` : ''}
       ${setups.length ? `<div class="jrn-setups">${setups.map(s => {
         const dir = s.bias === 'BUY' ? 'buy' : 'sell';
@@ -666,66 +732,135 @@
       ${waiting.length ? `<p class="jrn-waiting">${waiting.length} pair${waiting.length>1?'s':''} waiting for confirmation</p>` : ''}`);
   }
 
+  function renderJrnM15Section(impulses) {
+    if (!impulses || !impulses.length) {
+      return _jrnSection('⚡ M15 Impulse Moves', '<p class="jrn-empty">No active impulse moves at this hour.</p>');
+    }
+    const maxVal = Math.abs(impulses[0].smooth_45m) || 0.0001;
+    return _jrnSection('⚡ M15 Impulse Moves', `
+      <div class="jrn-m15-list">
+        ${impulses.map(r => {
+          const cls  = r.bias === 'BUY' ? 'buy' : 'sell';
+          const v    = r.smooth_45m;
+          const pct  = Math.round((Math.abs(v) / maxVal) * 100);
+          const vStr = (v >= 0 ? '+' : '') + Number(v).toFixed(5);
+          return `
+            <div class="jrn-m15-row">
+              <span class="jrn-m15-pair">${pair(r.instrument)}</span>
+              <span class="signal-dir ${cls}" style="font-size:9px;padding:2px 6px">${r.bias}</span>
+              ${r.state ? `<span class="sb-behavior ${r.state}" style="font-size:8px">${clean(r.state)}</span>` : ''}
+              <span class="jrn-m15-val">${vStr}</span>
+              <div class="jrn-m15-bar-wrap"><div class="jrn-m15-bar-fill ${cls}" style="width:${pct}%"></div></div>
+            </div>`;
+        }).join('')}
+      </div>`);
+  }
+
+  function renderJrnOutcomesSection(e) {
+    const outcomes = [
+      { label: '6H',  data: e.outcome_6h  },
+      { label: '12H', data: e.outcome_12h },
+      { label: '24H', data: e.outcome_24h },
+    ];
+    const blocks = outcomes.filter(o => o.data).map(o => {
+      const d = o.data;
+      const scoreCls = (d.accuracy_score ?? 0) >= 70 ? 'good' : (d.accuracy_score ?? 0) >= 40 ? 'mid' : 'bad';
+      return `
+        <div class="jrn-outcome-block">
+          <div class="jrn-outcome-header">
+            <span class="jrn-outcome-label">${o.label} Outcome</span>
+            <span class="jrn-outcome-score ${scoreCls}">${d.accuracy_score ?? '—'}%</span>
+            <span class="jrn-outcome-tally">${d.correct_count ?? 0} correct · ${d.incorrect_count ?? 0} wrong · ${d.flat_count ?? 0} flat</span>
+          </div>
+          ${d.verdict ? `<div class="jrn-verdict">${d.verdict}</div>` : ''}
+          ${d.sentiment_assessment ? `<div class="jrn-sent-assess">Sentiment: ${d.sentiment_assessment}</div>` : ''}
+          ${(d.setups || []).map(s => {
+            const oCls  = s.outcome === 'CORRECT' ? 'correct' : s.outcome === 'INCORRECT' ? 'wrong' : 'flat';
+            const oIcon = s.outcome === 'CORRECT' ? '✓' : s.outcome === 'INCORRECT' ? '✕' : '→';
+            return `<div class="jrn-setup-outcome ${oCls}">${oIcon} ${pair(s.instrument)} ${s.bias} · ${clean(s.outcome||'')}</div>`;
+          }).join('')}
+        </div>`;
+    }).join('');
+    const pending = outcomes.filter(o => !o.data).map(o => `<span class="jrn-outcome-pill pending">⏳ ${o.label} pending</span>`).join('');
+    if (!blocks && !pending) return '';
+    return _jrnSection('📈 Outcomes', `${blocks}${pending ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">${pending}</div>` : ''}`);
+  }
+
   function renderJrnSessionPerfSection(e, sessionEntries) {
-    if (!sessionEntries || sessionEntries.length <= 1)
+    if (!sessionEntries || sessionEntries.length <= 1) {
       return _jrnSection(`📊 Session: ${clean(e.session_name||'')}`, '<p class="jrn-empty">First snapshot of this session.</p>');
+    }
+
+    const allSignals = sessionEntries.flatMap(x => (x.signals_summary?.entered || []));
+
+    const me = _jrnCachedEnergy?.sessions?.find(s => s.session_name === e.session_name);
+    if (me) {
+      const cycle = (me.energy_cycle || '').replace(/_/g, ' ');
+      const eng   = Math.round(me.market_energy || 0);
+      const brd   = Math.round(me.breadth_score || 0);
+      const liq   = Math.round(me.liquidity_score || 0);
+      const bull  = Math.round(me.bullish_breadth || 0);
+      const bear  = Math.round(me.bearish_breadth || 0);
+      const liqColor = liq >= 40 ? '#22c55e' : liq >= 25 ? '#eab308' : liq >= 12 ? '#f97316' : '#64748b';
+      const cycleColor = cycle.includes('EXPAN') || cycle.includes('EXPLOSIVE') ? '#22c55e'
+                       : cycle.includes('TRANS') ? '#0ea5e9'
+                       : cycle.includes('COMP') || cycle.includes('DEAD') ? '#f59e0b' : '#64748b';
+
+      return _jrnSection(`📊 ${clean(e.session_name||'')} · ${cycle}`, `
+        <div class="jrn-sess-stats">
+          <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Energy</span><span class="jrn-sess-val" style="color:${cycleColor}">${eng}</span></div>
+          <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Momentum</span><span class="jrn-sess-val">${brd}</span></div>
+          <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Liquidity</span><span class="jrn-sess-val" style="color:${liqColor}">${liq}</span></div>
+          <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Pressure</span><span class="jrn-sess-val">▲${bull}% ▼${bear}%</span></div>
+          <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Flow</span><span class="jrn-sess-val">${(me.strongest_ccy||'—').split(',').map(c => `<span style="color:#22c55e">${c}↑</span>`).join(' ')} ${(me.weakest_ccy||'—').split(',').map(c => `<span style="color:#ef4444">${c}↓</span>`).join(' ')}</span></div>
+          ${allSignals.length ? `<div class="jrn-sess-stat jrn-sess-full"><span class="jrn-sess-lbl">Signals</span><span class="jrn-sess-val">${allSignals.map(s => `${pair(s.instrument)} ${s.signal}`).join(', ')}</span></div>` : ''}
+        </div>`);
+    }
+
     const first = sessionEntries[0];
-    const { strong: csStrong, weak: csWeak } = computeEntryCsig(e);
-    const csScore     = _csigScore(csStrong.length, csWeak.length);
-    const csPointBadge = _csigPointHtml(csScore);
-    const allSignals  = sessionEntries.flatMap(x => (x.signals_summary?.entered || []));
-    const trendDelta  = e.trend_pairs - first.trend_pairs;
-    const readyDelta  = e.ready_pairs - first.ready_pairs;
-    const delta = v => v > 0 ? `<span style="color:#4ade80">+${v}</span>` : v < 0 ? `<span style="color:#f87171">${v}</span>` : `<span style="color:var(--text-dim)">±0</span>`;
-    return _jrnSection(`📊 Session: ${clean(e.session_name||'')} · ${sessionEntries.length} snapshots`, `
+    return _jrnSection(`📊 ${clean(e.session_name||'')} · ${sessionEntries.length}H`, `
       <div class="jrn-sess-stats">
         <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Duration</span><span class="jrn-sess-val">${sessionEntries.length}H</span></div>
-        <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Market Energy</span><span class="jrn-sess-val">${csPointBadge}${csScore >= 2 ? ' <span style="color:#4ade80;font-size:9px">Expansion likely</span>' : ''}</span></div>
-        <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Trend pairs</span><span class="jrn-sess-val">${first.trend_pairs} → ${e.trend_pairs} ${delta(trendDelta)}</span></div>
-        <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Ready pairs</span><span class="jrn-sess-val">${first.ready_pairs} → ${e.ready_pairs} ${delta(readyDelta)}</span></div>
         ${allSignals.length ? `<div class="jrn-sess-stat jrn-sess-full"><span class="jrn-sess-lbl">Signals</span><span class="jrn-sess-val">${allSignals.map(s => `${pair(s.instrument)} ${s.signal}`).join(', ')}</span></div>` : ''}
       </div>`);
   }
 
   function renderJrnPrevSessionSection(prevEntry) {
-    if (!prevEntry)
-      return _jrnSection('📋 Previous Session', '<p class="jrn-empty">No previous session in loaded history.</p>');
-    const sessCls  = (prevEntry.session_quality || 'BLOCKED').toLowerCase().replace(/_/g, '-');
-    const entered  = (prevEntry.signals_summary?.entered || []);
-    const sessLabel = s => clean(s || '—');
-    const { strong: pStrong, weak: pWeak } = computeEntryCsig(prevEntry);
-    const prevCsPt = _csigPointHtml(_csigScore(pStrong.length, pWeak.length));
-    return _jrnSection(`📋 Previous Session: ${sessLabel(prevEntry.session_name)}`, `
+    if (!prevEntry) return _jrnSection('📋 Previous Journal', '<p class="jrn-empty">No previous entry in loaded history.</p>');
+    const sessCls = (prevEntry.session_quality || 'BLOCKED').toLowerCase().replace(/_/g, '-');
+    const entered = (prevEntry.signals_summary?.entered || []);
+    return _jrnSection('📋 Previous Journal', `
       <div class="jrn-prev-meta">
         <span class="jrn-prev-time">${fmtTime(prevEntry.time)}</span>
-        <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${sessLabel(prevEntry.session_name)}</span>
-        ${prevCsPt}
-        <span class="jrn-prev-pairs">${prevEntry.trend_pairs}T · ${prevEntry.pullback_pairs}PB · ${prevEntry.ready_pairs}R</span>
+        <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${clean(prevEntry.session_name||'—')}</span>
       </div>
-      ${prevEntry.summary ? `<p class="jrn-prev-summary">${clean(prevEntry.summary)}</p>` : ''}
+      ${prevEntry.summary ? `<p class="jrn-prev-summary">${clean(prevEntry.summary)}</p>` : '<p class="jrn-empty">No summary recorded.</p>'}
       ${entered.length ? `<div class="jrn-prev-sigs">${entered.map(s => {
         const d = s.signal === 'BUY' ? 'buy' : 'sell';
         return `<span class="jrn-prev-sig signal-dir ${d}" style="font-size:9px">${pair(s.instrument)} ${s.signal}</span>`;
-      }).join('')}</div>` : ''}
-      ${(prevEntry.top_setups || []).slice(0,5).map(s => {
-        const dir = s.bias === 'BUY' ? 'buy' : 'sell';
-        return `<div class="jrn-setup-row"><span class="jrn-setup-pair">${pair(s.instrument)}</span><span class="signal-dir ${dir}" style="font-size:9px">${s.bias}</span><span class="jrn-setup-state">${clean(s.state||'')}</span><span class="jrn-setup-conf">${s.confidence}%</span></div>`;
-      }).join('')}`);
+      }).join('')}</div>` : ''}`);
   }
 
   // ─── Modal open/close ─────────────────────────────────────────────────────────
   function _renderJournalModal(e, newsEvents, sessionEntries, prevEntry) {
-    const sessCls      = (e.session_quality || 'BLOCKED').toLowerCase().replace(/_/g, '-');
-    const signals      = e.signals_summary || {};
+    const sessCls = (e.session_quality || 'BLOCKED').toLowerCase().replace(/_/g, '-');
+    const signals  = e.signals_summary || {};
     const enteredCount = (signals.entered || []).length;
-    const { strong: mStrong, weak: mWeak } = computeEntryCsig(e);
-    const mCsPt = _csigPointHtml(_csigScore(mStrong.length, mWeak.length));
+
+    const { strong: _csStrong, weak: _csWeak } = computeEntryCsig(e);
+    const _allEntryCsig = [..._csStrong, ..._csWeak];
+    const _entryCsSet = _allEntryCsig.length >= 2 ? new Set(_allEntryCsig) : new Set();
+    const entryCsigFilter = instr => {
+      if (!_entryCsSet.size) return false;
+      const base  = (instr || '').slice(0, 3).toUpperCase();
+      const quote = (instr || '').slice(4, 7).toUpperCase();
+      return _entryCsSet.has(base) || _entryCsSet.has(quote);
+    };
 
     document.getElementById('jrn-modal-time').textContent = fmtTime(e.time);
     document.getElementById('jrn-modal-badges').innerHTML = `
       <span class="sess-card-badge sq-${sessCls}" style="font-size:9px">${clean(e.session_name||'—')}</span>
-      ${mCsPt}
-      ${enteredCount ? `<span class="jrn-count sig" style="font-size:9px">${enteredCount} signal${enteredCount>1?'s':''}</span>` : ''}
+      ${enteredCount ? `<span class="jrn-count sig" style="font-size:9px">${enteredCount}✦</span>` : ''}
       ${(({ strong, weak }) => {
         const parts = [];
         if (strong.length) parts.push(`<span class="jrn-csig-tag strong">💪 ${strong.join(' ')}</span>`);
@@ -734,11 +869,14 @@
       })(computeEntryCsig(e))}`;
 
     document.getElementById('jrn-modal-body').innerHTML = [
-      renderJrnCalendarSection(newsEvents, e.time),
-      renderJrnSetupsSection(e.top_setups || [], signals),
+      sessionEntries ? renderJrnSessionPerfSection(e, sessionEntries) : '',
+      newsEvents !== null ? renderJrnCalendarSection(newsEvents, e.time) : _jrnSection('📅 Economic Calendar', '<p class="jrn-empty jrn-loading">Loading…</p>'),
+      renderJrnCsigSection(e),
       renderJrnStrengthSection(e.currency_strength),
-      renderJrnSessionPerfSection(e, sessionEntries),
-      renderJrnPrevSessionSection(prevEntry),
+      e.m15_impulses != null ? renderJrnM15Section(e.m15_impulses) : '',
+      renderJrnSetupsSection(e.top_setups || [], signals, entryCsigFilter),
+      renderJrnOutcomesSection(e),
+      prevEntry !== undefined ? renderJrnPrevSessionSection(prevEntry) : '',
     ].filter(Boolean).join('');
 
     document.getElementById('jrn-modal-overlay').classList.add('open');
@@ -753,13 +891,16 @@
 
     const all = Object.values(_journalEntries).sort((a, b) => a.time.localeCompare(b.time));
     const sessionEntries = all.filter(x => x.session_name === e.session_name && x.time <= e.time);
-    const prevEntry = [...all].reverse().find(x => x.session_name !== e.session_name && x.time < e.time) || null;
+    const prevEntry = [...all].reverse().find(x => x.time < e.time) || null;
 
     let newsEvents = [];
     try {
-      const dateStr = e.time.slice(0, 10);
-      const r = await fetch(`/api/news?date=${dateStr}`);
-      if (r.ok) { const j = await r.json(); newsEvents = j.events || []; }
+      const [newsR, energyR] = await Promise.all([
+        api(`/api/news?date=${e.time.slice(0, 10)}`).catch(() => ({})),
+        api('/api/market-energy').catch(() => null),
+      ]);
+      newsEvents = newsR.events || [];
+      _jrnCachedEnergy = energyR;
     } catch {}
 
     _renderJournalModal(e, newsEvents, sessionEntries, prevEntry);
