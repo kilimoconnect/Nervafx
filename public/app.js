@@ -1988,41 +1988,38 @@ function _renderBreadthBars(container, rows) {
 
     html += `</div>`;
 
-    // Per-day explanation — only for today
-    if (date === todayStr) {
-      const dayMax = Math.max(...breadths);
-      const dayAvg = Math.round(breadths.reduce((a, b) => a + b, 0) / breadths.length);
-      const streakCount = streaks.size;
-      const peakHour = bars[breadths.indexOf(dayMax)];
-      const peakTime = new Date(peakHour.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
-      const peakSess = SESS_LABEL[peakHour.session] || peakHour.session;
+    // Per-day explanation
+    const dayMax = Math.max(...breadths);
+    const dayAvg = Math.round(breadths.reduce((a, b) => a + b, 0) / breadths.length);
+    const streakCount = streaks.size;
+    const peakHour = bars[breadths.indexOf(dayMax)];
+    const peakTime = new Date(peakHour.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
+    const peakSess = SESS_LABEL[peakHour.session] || peakHour.session;
 
-      const dayLines = [];
-      if (dayAvg >= 40) dayLines.push(`Strong overall participation (avg ${dayAvg}) — broad market activity throughout the day.`);
-      else if (dayAvg >= 20) dayLines.push(`Moderate participation (avg ${dayAvg}) — some sessions were active, others quiet.`);
-      else dayLines.push(`Low participation (avg ${dayAvg}) — most of the day was quiet with low momentum.`);
+    const dayLines = [];
+    if (dayAvg >= 40) dayLines.push(`Strong overall participation (avg ${dayAvg}) — broad market activity throughout the day.`);
+    else if (dayAvg >= 20) dayLines.push(`Moderate participation (avg ${dayAvg}) — some sessions were active, others quiet.`);
+    else dayLines.push(`Low participation (avg ${dayAvg}) — most of the day was quiet with low momentum.`);
 
-      dayLines.push(`Peak momentum of ${dayMax} hit at ${peakTime} during ${peakSess} — this was when momentum peaked.`);
+    dayLines.push(`Peak momentum of ${dayMax} hit at ${peakTime} during ${peakSess} — this was when momentum peaked.`);
 
-      if (streakCount >= 3) dayLines.push(`Continuation signal detected (${streakCount} bars in streak) — sustained momentum buildup during this day.`);
-      else dayLines.push('No continuation signal — momentum did not sustain 3+ consecutive increases above 10.');
+    if (streakCount >= 3) dayLines.push(`Continuation signal detected (${streakCount} bars in streak) — sustained momentum buildup during this day.`);
+    else dayLines.push('No continuation signal — momentum did not sustain 3+ consecutive increases above 10.');
 
-      for (const g of sessGroups) {
-        const sBars = bars.filter(b => b.session === g.session);
-        const sAvg = Math.round(sBars.reduce((a, b) => a + b.breadth, 0) / sBars.length);
-        const sMax = Math.max(...sBars.map(b => b.breadth));
-        const sLabel = SESS_LABEL[g.session] || g.session;
-        if (sAvg >= 35) dayLines.push(`${sLabel}: active session (avg ${sAvg}, peak ${sMax}) — good trading conditions.`);
-        else if (sAvg >= 15) dayLines.push(`${sLabel}: moderate activity (avg ${sAvg}, peak ${sMax}) — selective opportunities.`);
-        else dayLines.push(`${sLabel}: quiet session (avg ${sAvg}, peak ${sMax}) — limited opportunities.`);
-      }
-
-      html += `<div class="bc-day-explain">
-        <ul class="bc-explain-list">${dayLines.map(l => `<li>${l}</li>`).join('')}</ul>
-      </div>`;
+    // Session-level summaries
+    for (const g of sessGroups) {
+      const sBars = bars.filter(b => b.session === g.session);
+      const sAvg = Math.round(sBars.reduce((a, b) => a + b.breadth, 0) / sBars.length);
+      const sMax = Math.max(...sBars.map(b => b.breadth));
+      const sLabel = SESS_LABEL[g.session] || g.session;
+      if (sAvg >= 35) dayLines.push(`${sLabel}: active session (avg ${sAvg}, peak ${sMax}) — good trading conditions.`);
+      else if (sAvg >= 15) dayLines.push(`${sLabel}: moderate activity (avg ${sAvg}, peak ${sMax}) — selective opportunities.`);
+      else dayLines.push(`${sLabel}: quiet session (avg ${sAvg}, peak ${sMax}) — limited opportunities.`);
     }
 
-    html += `</div>`;
+    html += `<div class="bc-day-explain">
+      <ul class="bc-explain-list">${dayLines.map(l => `<li>${l}</li>`).join('')}</ul>
+    </div></div>`;
   }
 
   html += '</div>';
