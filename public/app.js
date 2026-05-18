@@ -2211,6 +2211,8 @@ function _renderMeAnalysisModal() {
       </div>
 
       <div class="me-modal-body">
+        <h3 class="me-di-group-heading">Live Analysis</h3>
+
         <section class="me-modal-section">
           <h3 class="me-modal-section-title">Market Cycle</h3>
           ${cycleHtml}
@@ -2227,13 +2229,14 @@ function _renderMeAnalysisModal() {
         </section>
 
         <section class="me-modal-section">
-          <h3 class="me-modal-section-title">Previous Sessions</h3>
-          ${prevSessHtml}
-        </section>
-
-        <section class="me-modal-section">
           <h3 class="me-modal-section-title">Summary & Playbook</h3>
           ${summaryHtml}
+        </section>
+
+        <h3 class="me-di-group-heading">Previous Session Analysis</h3>
+
+        <section class="me-modal-section">
+          ${prevSessHtml}
         </section>
       </div>
     </div>`;

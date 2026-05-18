@@ -4960,6 +4960,19 @@ body::after {
   line-height: 1.65;
   color: var(--text-secondary);
 }
+/* ── Group headings ────────────────────────────────────────────────────────── */
+.me-di-group-heading {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: #94a3b8;
+  margin: 18px 0 6px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(148,163,184,0.15);
+}
+.me-di-group-heading:first-child { border-top: none; margin-top: 0; padding-top: 0; }
+
 /* ── Previous sessions section ─────────────────────────────────────────────── */
 .me-di-prev-list {
   display: flex;
