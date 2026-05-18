@@ -2258,6 +2258,7 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 220px; overflow: hidd
     padding: 2px 8px;
   }
   .last-update { display: none; }
+  .header-user-email { display: none; }
 
   /* Grid */
   .grid {
