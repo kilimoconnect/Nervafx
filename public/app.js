@@ -1397,20 +1397,6 @@ function renderSession(data) {
         <div class="sess-act-bar-wrap">
           <div class="sess-act-bar-fill act-${actCls}" style="width:${activity}%"></div>
         </div>
-        ${(() => {
-          const me = (_meSessSnapshot || []).find(m => m.session_name === s.session);
-          if (!me) return '';
-          const mov = Math.round(me.movement_score || 0);
-          const mom = Math.round(me.breadth_score || 0);
-          const agr = Math.round(me.agreement_score || 0);
-          const vol = Math.round(me.volatility_score || 0);
-          return `<div class="sess-me-summary">
-            <span class="sess-me-pill"><span class="sess-me-lbl">Mov</span><span class="sess-me-val">${mov}</span></span>
-            <span class="sess-me-pill"><span class="sess-me-lbl">Mom</span><span class="sess-me-val">${mom}</span></span>
-            <span class="sess-me-pill"><span class="sess-me-lbl">Agr</span><span class="sess-me-val">${agr}</span></span>
-            <span class="sess-me-pill"><span class="sess-me-lbl">Vol</span><span class="sess-me-val">${vol}</span></span>
-          </div>`;
-        })()}
       </div>
       <div class="session-status-wrap">
         ${allowed

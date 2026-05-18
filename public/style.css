@@ -3202,17 +3202,6 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 400px; }
 .sess-act-bar-fill.act-medium    { background: linear-gradient(90deg, #92400e, #fbbf24); }
 .sess-act-bar-fill.act-low       { background: #374151; }
 
-.sess-me-summary {
-  display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px;
-}
-.sess-me-pill {
-  display: flex; align-items: center; gap: 4px;
-  font-size: 10px; padding: 2px 8px; border-radius: 5px;
-  background: rgba(255,255,255,0.04); border: 1px solid var(--border);
-}
-.sess-me-lbl { color: var(--text-dim); font-weight: 600; }
-.sess-me-val { color: var(--text); font-family: var(--font-data); font-weight: 700; }
-
 /* Status block */
 .session-status-wrap {
   display: flex;
