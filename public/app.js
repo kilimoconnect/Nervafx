@@ -1392,7 +1392,6 @@ function renderSession(data) {
       </div>
       <div class="session-quality-wrap">
         <div class="sess-qlabel sq-${qCls}">${qLabel}</div>
-        <div class="sess-qdesc">${s.quality_desc || ''}</div>
       </div>
       <div class="session-activity-wrap">
         <div class="sess-act-header">
