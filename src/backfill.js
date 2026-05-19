@@ -29,7 +29,7 @@ const RATE_MS       = 250;  // slightly conservative vs 200ms default
 // Chunk durations (in ms) — stay well under 5000-candle OANDA limit
 const CHUNK_MS = {
   H1:  180 * 24 * 60 * 60 * 1000, // 180 days ≈ 4 320 H1 candles
-  M15:  60 * 24 * 60 * 60 * 1000, //  60 days ≈ 5 760 M15 candles (some weekend gaps)
+  M15:  45 * 24 * 60 * 60 * 1000, //  45 days ≈ 4 320 M15 candles (under 5000 limit)
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
