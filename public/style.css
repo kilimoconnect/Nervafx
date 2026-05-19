@@ -5338,4 +5338,128 @@ body::after {
   display: grid;
 }
 
+/* ─── Backtesting ──────────────────────────────────────────────────────────── */
+
+.bt-hidden { display: none !important; }
+
+.bt-controls { padding: 4px 0; }
+.bt-control-row {
+  display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;
+}
+.bt-field { display: flex; flex-direction: column; gap: 4px; }
+.bt-field label {
+  font-size: 11px; color: var(--text-muted); text-transform: uppercase;
+  letter-spacing: 0.5px; font-weight: 600;
+}
+.bt-input {
+  background: var(--card-bg); border: 1px solid var(--border);
+  color: var(--text); padding: 8px 12px; border-radius: 6px;
+  font-size: 13px; font-family: inherit; min-width: 140px;
+}
+.bt-input:focus { outline: none; border-color: var(--accent); }
+
+.bt-run-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--accent); color: #fff; border: none;
+  padding: 9px 20px; border-radius: 6px; cursor: pointer;
+  font-size: 13px; font-weight: 600; font-family: inherit;
+  transition: background .15s;
+}
+.bt-run-btn:hover { background: #2563eb; }
+.bt-run-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+.bt-status {
+  margin-top: 8px; font-size: 12px; color: var(--text-muted);
+  min-height: 18px;
+}
+
+/* Summary stats grid */
+.bt-summary {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+.bt-stat {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px 14px; text-align: center;
+}
+.bt-stat-value {
+  font-size: 22px; font-weight: 700; color: var(--text);
+  line-height: 1.2;
+}
+.bt-stat-value.positive { color: #22c55e; }
+.bt-stat-value.negative { color: #ef4444; }
+.bt-stat-label {
+  font-size: 10px; color: var(--text-muted); text-transform: uppercase;
+  letter-spacing: 0.5px; margin-top: 4px;
+}
+
+/* Equity chart */
+.bt-chart-wrap { position: relative; height: 280px; }
+
+/* Monthly breakdown */
+.bt-monthly-table {
+  width: 100%; border-collapse: collapse; font-size: 12px;
+}
+.bt-monthly-table th {
+  text-align: left; padding: 6px 8px; font-size: 10px;
+  color: var(--text-muted); text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+}
+.bt-monthly-table td {
+  padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,.04);
+}
+
+/* Instrument table */
+.bt-inst-table {
+  width: 100%; border-collapse: collapse; font-size: 12px;
+}
+.bt-inst-table th {
+  text-align: left; padding: 6px 8px; font-size: 10px;
+  color: var(--text-muted); text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+}
+.bt-inst-table td {
+  padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,.04);
+}
+.bt-inst-table .bt-pair { font-weight: 600; }
+
+/* Trade log */
+.bt-trades { max-height: 400px; overflow-y: auto; }
+.bt-trade-table {
+  width: 100%; border-collapse: collapse; font-size: 11px;
+}
+.bt-trade-table th {
+  text-align: left; padding: 5px 6px; font-size: 10px;
+  color: var(--text-muted); text-transform: uppercase;
+  border-bottom: 1px solid var(--border); position: sticky; top: 0;
+  background: var(--card-bg);
+}
+.bt-trade-table td {
+  padding: 5px 6px; border-bottom: 1px solid rgba(255,255,255,.04);
+}
+.bt-win { color: #22c55e; }
+.bt-loss { color: #ef4444; }
+.bt-be { color: #f59e0b; }
+
+/* History */
+.bt-history-table {
+  width: 100%; border-collapse: collapse; font-size: 12px;
+}
+.bt-history-table th {
+  text-align: left; padding: 6px 8px; font-size: 10px;
+  color: var(--text-muted); text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+}
+.bt-history-table td {
+  padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,.04);
+}
+
+/* Loading spinner */
+.bt-spinner {
+  display: inline-block; width: 14px; height: 14px;
+  border: 2px solid var(--text-muted); border-top-color: var(--accent);
+  border-radius: 50%; animation: bt-spin .6s linear infinite;
+}
+@keyframes bt-spin { to { transform: rotate(360deg); } }
+
 

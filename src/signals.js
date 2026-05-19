@@ -292,4 +292,4 @@ async function printLatestSignals() {
   console.log(`\n=== NO TRADE: ${inactive.length} pairs ===`);
 }
 
-module.exports = { backfillSignals, calculateLatestSignals, printLatestSignals };
+module.exports = { backfillSignals, calculateLatestSignals, printLatestSignals, buildSignal, getCandlesAtTime, avgRange };

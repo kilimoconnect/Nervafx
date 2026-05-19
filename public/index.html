@@ -98,6 +98,7 @@
     <button class="dash-tab" data-tab="signals">Signals</button>
     <button class="dash-tab" data-tab="scanner">Scanner</button>
     <button class="dash-tab" data-tab="intelligence">Intelligence</button>
+    <button class="dash-tab" data-tab="backtest">Backtesting</button>
   </nav>
 
   <!-- ═══ TAB 1: OVERVIEW ═══ -->
@@ -341,6 +342,78 @@
       </div>
       <h2 class="card-title"><i data-lucide="database"></i> Data Quality</h2>
       <div id="quality-info" class="quality-info"></div>
+    </section>
+
+  </main>
+
+  <!-- ═══ TAB 5: BACKTESTING ═══ -->
+  <main class="grid tab-panel" id="tab-backtest" data-tab="backtest">
+
+    <section class="card span-3" id="section-backtest-controls">
+      <div class="plan-lock-overlay" data-require="premium">
+        <span class="plan-lock-icon">🔬</span>
+        <span class="plan-lock-title">Backtesting Engine</span>
+        <span class="plan-lock-desc">Replay 12 months of historical data through the full NervaFX signal pipeline. Validate strategy performance with real market data before risking capital.</span>
+        <ul class="plan-lock-features">
+          <li>Full pipeline replay: Strength → Spreads → States → Signals</li>
+          <li>Win rate, profit factor, drawdown analysis</li>
+          <li>Per-instrument and monthly breakdowns</li>
+        </ul>
+        <a href="/home.html#pricing" class="plan-lock-btn">Upgrade to Premium →</a>
+      </div>
+      <h2 class="card-title"><i data-lucide="flask-conical"></i> Backtesting Engine</h2>
+      <div class="bt-controls">
+        <div class="bt-control-row">
+          <div class="bt-field">
+            <label for="bt-from">From</label>
+            <input type="date" id="bt-from" class="bt-input" />
+          </div>
+          <div class="bt-field">
+            <label for="bt-to">To</label>
+            <input type="date" id="bt-to" class="bt-input" />
+          </div>
+          <div class="bt-field">
+            <label for="bt-max-bars">Max Hold (bars)</label>
+            <input type="number" id="bt-max-bars" class="bt-input" value="48" min="6" max="120" />
+          </div>
+          <button class="bt-run-btn" id="bt-run-btn" onclick="runBacktest()">
+            <i data-lucide="play" style="width:14px;height:14px"></i> Run Backtest
+          </button>
+        </div>
+        <div class="bt-status" id="bt-status"></div>
+      </div>
+    </section>
+
+    <section class="card span-3 bt-hidden" id="section-backtest-summary">
+      <h2 class="card-title"><i data-lucide="bar-chart-3"></i> Results Summary</h2>
+      <div id="bt-summary" class="bt-summary"></div>
+    </section>
+
+    <section class="card span-2 bt-hidden" id="section-backtest-equity">
+      <h2 class="card-title"><i data-lucide="trending-up"></i> Equity Curve</h2>
+      <div class="bt-chart-wrap">
+        <canvas id="bt-equity-chart"></canvas>
+      </div>
+    </section>
+
+    <section class="card bt-hidden" id="section-backtest-monthly">
+      <h2 class="card-title"><i data-lucide="calendar"></i> Monthly Breakdown</h2>
+      <div id="bt-monthly" class="bt-monthly"></div>
+    </section>
+
+    <section class="card span-3 bt-hidden" id="section-backtest-instruments">
+      <h2 class="card-title"><i data-lucide="list-ordered"></i> Per-Instrument Performance</h2>
+      <div id="bt-instruments" class="bt-instruments"></div>
+    </section>
+
+    <section class="card span-3 bt-hidden" id="section-backtest-trades">
+      <h2 class="card-title"><i data-lucide="scroll-text"></i> Trade Log</h2>
+      <div id="bt-trades" class="bt-trades"></div>
+    </section>
+
+    <section class="card span-3" id="section-backtest-history">
+      <h2 class="card-title"><i data-lucide="history"></i> Previous Runs</h2>
+      <div id="bt-history" class="bt-history"></div>
     </section>
 
   </main>

@@ -3029,6 +3029,239 @@ function flashEl(id) {
   });
 })();
 
+// ─── Backtesting Tab ─────────────────────────────────────────────────────────
+
+let _btEquityChart = null;
+
+function _btInit() {
+  // Default dates: 6 months ago → today
+  const to = new Date();
+  const from = new Date();
+  from.setUTCMonth(from.getUTCMonth() - 6);
+  const el = (id) => document.getElementById(id);
+  if (el('bt-from')) el('bt-from').value = from.toISOString().slice(0, 10);
+  if (el('bt-to'))   el('bt-to').value   = to.toISOString().slice(0, 10);
+  // Load previous runs
+  _btLoadHistory();
+}
+
+async function runBacktest() {
+  const el = (id) => document.getElementById(id);
+  const btn    = el('bt-run-btn');
+  const status = el('bt-status');
+
+  const from    = el('bt-from')?.value;
+  const to      = el('bt-to')?.value;
+  const maxBars = parseInt(el('bt-max-bars')?.value || '48', 10);
+
+  if (!from || !to) { status.textContent = 'Please select date range.'; return; }
+
+  btn.disabled = true;
+  status.innerHTML = '<span class="bt-spinner"></span> Running backtest — this may take a few minutes...';
+
+  try {
+    const data = await api('/api/backtest-run', {
+      method: 'POST',
+      body: JSON.stringify({ from, to, maxBars }),
+    });
+    status.textContent = `Completed in ${data.duration_sec}s — ${data.summary.total_trades} trades replayed`;
+
+    _btRenderSummary(data.summary);
+    _btRenderEquity(data.equity_curve);
+    _btRenderMonthly(data.by_month);
+    _btRenderInstruments(data.by_instrument);
+    _btRenderTrades(data.trades);
+    _btLoadHistory();
+
+    // Show result sections
+    ['section-backtest-summary', 'section-backtest-equity', 'section-backtest-monthly',
+     'section-backtest-instruments', 'section-backtest-trades'].forEach(id => {
+      const s = el(id);
+      if (s) s.classList.remove('bt-hidden');
+    });
+
+  } catch (e) {
+    status.textContent = `Error: ${e.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function _btRenderSummary(s) {
+  const el = document.getElementById('bt-summary');
+  if (!el) return;
+
+  const stats = [
+    { label: 'Total Trades', value: s.total_trades, cls: '' },
+    { label: 'Win Rate',     value: `${s.win_rate}%`, cls: s.win_rate >= 50 ? 'positive' : 'negative' },
+    { label: 'Total Pips',   value: s.total_pips, cls: s.total_pips >= 0 ? 'positive' : 'negative' },
+    { label: 'Profit Factor', value: s.profit_factor, cls: s.profit_factor >= 1 ? 'positive' : 'negative' },
+    { label: 'Wins',         value: s.wins, cls: 'positive' },
+    { label: 'Losses',       value: s.losses, cls: 'negative' },
+    { label: 'Avg Win',      value: `${s.avg_win_pips}p`, cls: 'positive' },
+    { label: 'Avg Loss',     value: `${s.avg_loss_pips}p`, cls: 'negative' },
+    { label: 'Max Drawdown', value: `${s.max_drawdown_pips}p`, cls: 'negative' },
+    { label: 'Breakevens',   value: s.breakevens, cls: '' },
+    { label: 'Timeouts',     value: s.timeouts, cls: '' },
+  ];
+
+  el.innerHTML = stats.map(st => `
+    <div class="bt-stat">
+      <div class="bt-stat-value ${st.cls}">${st.value}</div>
+      <div class="bt-stat-label">${st.label}</div>
+    </div>
+  `).join('');
+}
+
+function _btRenderEquity(curve) {
+  const canvas = document.getElementById('bt-equity-chart');
+  if (!canvas || !curve || !curve.length) return;
+
+  if (_btEquityChart) _btEquityChart.destroy();
+
+  const labels = curve.map(p => p.time?.slice(0, 10) || '');
+  const data   = curve.map(p => p.pips);
+  const colors = curve.map(p => p.outcome === 'WIN' ? '#22c55e' : p.outcome === 'LOSS' ? '#ef4444' : '#64748b');
+
+  _btEquityChart = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Cumulative Pips',
+        data,
+        borderColor: '#3b82f6',
+        backgroundColor: 'rgba(59,130,246,0.1)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 2,
+        pointBackgroundColor: colors,
+        borderWidth: 2,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const pt = curve[ctx.dataIndex];
+              return `${pt.pips} pips | ${pt.instrument} | ${pt.outcome}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          display: true,
+          ticks: { color: '#64748b', font: { size: 10 }, maxTicksLimit: 12 },
+          grid: { color: 'rgba(255,255,255,.04)' },
+        },
+        y: {
+          display: true,
+          ticks: { color: '#64748b', font: { size: 10 } },
+          grid: { color: 'rgba(255,255,255,.06)' },
+        },
+      },
+    },
+  });
+}
+
+function _btRenderMonthly(byMonth) {
+  const el = document.getElementById('bt-monthly');
+  if (!el || !byMonth) return;
+
+  const months = Object.keys(byMonth).sort();
+  el.innerHTML = `<table class="bt-monthly-table">
+    <thead><tr><th>Month</th><th>Trades</th><th>Wins</th><th>Losses</th><th>Win %</th><th>Pips</th></tr></thead>
+    <tbody>${months.map(m => {
+      const d = byMonth[m];
+      const wr = d.trades > 0 ? Math.round(d.wins / d.trades * 100) : 0;
+      const pipCls = d.pips >= 0 ? 'bt-win' : 'bt-loss';
+      return `<tr><td>${m}</td><td>${d.trades}</td><td class="bt-win">${d.wins}</td><td class="bt-loss">${d.losses}</td><td>${wr}%</td><td class="${pipCls}">${d.pips}</td></tr>`;
+    }).join('')}</tbody>
+  </table>`;
+}
+
+function _btRenderInstruments(byInst) {
+  const el = document.getElementById('bt-instruments');
+  if (!el || !byInst) return;
+
+  const pairs = Object.keys(byInst).sort((a, b) => byInst[b].pips - byInst[a].pips);
+  el.innerHTML = `<table class="bt-inst-table">
+    <thead><tr><th>Pair</th><th>Trades</th><th>Wins</th><th>Losses</th><th>Win %</th><th>Pips</th></tr></thead>
+    <tbody>${pairs.map(p => {
+      const d = byInst[p];
+      const wr = d.trades > 0 ? Math.round(d.wins / d.trades * 100) : 0;
+      const pipCls = d.pips >= 0 ? 'bt-win' : 'bt-loss';
+      return `<tr><td class="bt-pair">${p.replace('_','/')}</td><td>${d.trades}</td><td class="bt-win">${d.wins}</td><td class="bt-loss">${d.losses}</td><td>${wr}%</td><td class="${pipCls}">${d.pips}</td></tr>`;
+    }).join('')}</tbody>
+  </table>`;
+}
+
+function _btRenderTrades(trades) {
+  const el = document.getElementById('bt-trades');
+  if (!el || !trades) return;
+
+  el.innerHTML = `<table class="bt-trade-table">
+    <thead><tr><th>Time</th><th>Pair</th><th>Signal</th><th>State</th><th>Conf</th><th>Entry</th><th>SL</th><th>TP</th><th>Exit</th><th>Outcome</th><th>Pips</th><th>Bars</th></tr></thead>
+    <tbody>${trades.slice(0, 200).map(t => {
+      const oCls = t.outcome === 'WIN' ? 'bt-win' : t.outcome === 'LOSS' ? 'bt-loss' : 'bt-be';
+      return `<tr>
+        <td>${(t.time || '').slice(0, 16).replace('T',' ')}</td>
+        <td class="bt-pair">${(t.instrument || '').replace('_','/')}</td>
+        <td>${t.signal}</td>
+        <td>${t.market_state || ''}</td>
+        <td>${t.confidence || ''}</td>
+        <td>${Number(t.entry_price || 0).toFixed(5)}</td>
+        <td>${Number(t.stop_loss || 0).toFixed(5)}</td>
+        <td>${Number(t.take_profit || 0).toFixed(5)}</td>
+        <td>${Number(t.exit_price || 0).toFixed(5)}</td>
+        <td class="${oCls}">${t.outcome}${t.timeout ? ' ⏱' : ''}</td>
+        <td class="${oCls}">${t.pips}</td>
+        <td>${t.bars_held || ''}</td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>`;
+}
+
+async function _btLoadHistory() {
+  const el = document.getElementById('bt-history');
+  if (!el) return;
+
+  try {
+    const data = await api('/api/backtest-results?limit=10');
+    if (!data || !data.length) {
+      el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px">No previous runs</div>';
+      return;
+    }
+
+    el.innerHTML = `<table class="bt-history-table">
+      <thead><tr><th>Date</th><th>Range</th><th>Trades</th><th>Win %</th><th>Pips</th><th>PF</th><th>Drawdown</th><th>Time</th></tr></thead>
+      <tbody>${data.map(r => {
+        const pipCls = r.total_pips >= 0 ? 'bt-win' : 'bt-loss';
+        return `<tr>
+          <td>${(r.run_date || '').slice(0, 16).replace('T',' ')}</td>
+          <td>${(r.date_from || '').slice(0, 10)} → ${(r.date_to || '').slice(0, 10)}</td>
+          <td>${r.total_trades}</td>
+          <td>${r.win_rate}%</td>
+          <td class="${pipCls}">${r.total_pips}</td>
+          <td>${r.profit_factor}</td>
+          <td class="bt-loss">${r.max_drawdown}p</td>
+          <td>${r.duration_sec}s</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>`;
+  } catch (e) {
+    el.innerHTML = '<div style="color:var(--text-muted);font-size:13px">Could not load history</div>';
+  }
+}
+
+// Initialize backtest defaults on load
+setTimeout(_btInit, 500);
+
 // Boot
 showSkeletons();
 refresh();
