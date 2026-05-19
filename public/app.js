@@ -3067,6 +3067,7 @@ async function runBacktest() {
 
     const a = data.analysis;
     const ins = data.insights || {};
+    _btRenderComponentThresholds(a.component_thresholds, ins.component_thresholds);
     _btRenderEnergyThresholds(a.energy_thresholds, ins.energy_thresholds);
     _btRenderStrengthThresholds(a.strength_thresholds, ins.strength_thresholds);
     _btRenderStateOutcomes(a.state_outcomes, ins.state_outcomes);
@@ -3107,6 +3108,119 @@ function _btInsightBox(insight) {
   }
   html += '</div>';
   return html;
+}
+
+function _btRenderComponentThresholds(components, insights) {
+  const el = document.getElementById('bt-components');
+  if (!el || !components || !components.length) return;
+
+  // Group components by their group
+  const groups = {};
+  for (const comp of components) {
+    if (!groups[comp.group]) groups[comp.group] = [];
+    groups[comp.group].push(comp);
+  }
+
+  // Find matching insight for each component
+  const insightMap = {};
+  if (insights && insights.length) {
+    for (const ins of insights) insightMap[ins.id] = ins;
+  }
+
+  const groupIcons = {
+    'Market Energy': 'zap',
+    'Directional Pressure': 'arrow-up-down',
+    'Market Structure': 'git-branch',
+    'Currency Strength': 'gauge',
+    'Quality Metrics': 'shield-check',
+  };
+
+  let html = '';
+
+  for (const [groupName, comps] of Object.entries(groups)) {
+    const icon = groupIcons[groupName] || 'bar-chart-3';
+    html += `<div class="bt-comp-group">
+      <div class="bt-comp-group-header">
+        <i data-lucide="${icon}" style="width:16px;height:16px"></i>
+        <span>${groupName}</span>
+      </div>`;
+
+    for (const comp of comps) {
+      const ins = insightMap[comp.id];
+      const ranges = comp.ranges || {};
+      const rangeKeys = Object.keys(ranges).sort((a, b) => {
+        const aNum = parseFloat(a.split('–')[0]) || 0;
+        const bNum = parseFloat(b.split('–')[0]) || 0;
+        return aNum - bNum;
+      });
+
+      // Summary badges
+      let badges = '';
+      if (comp.best_range) badges += `<span class="bt-comp-badge bt-comp-badge-best">Sweet Spot: ${comp.best_range}${comp.unit} (${comp.best_win_rate}% WR)</span>`;
+      if (comp.min_edge_threshold) badges += `<span class="bt-comp-badge bt-comp-badge-min">Min Edge: ${comp.min_edge_threshold}${comp.unit}</span>`;
+      if (comp.worst_range && comp.worst_win_rate < 48) badges += `<span class="bt-comp-badge bt-comp-badge-danger">Danger: ${comp.worst_range}${comp.unit} (${comp.worst_win_rate}% WR)</span>`;
+
+      // AI insight for this component
+      let insightHtml = '';
+      if (ins && (ins.summary || ins.bullets?.length)) {
+        insightHtml = '<div class="bt-comp-insight">';
+        if (ins.summary) insightHtml += `<div class="bt-comp-insight-summary">${ins.summary}</div>`;
+        if (ins.bullets?.length) {
+          insightHtml += '<ul class="bt-comp-insight-bullets">';
+          for (const b of ins.bullets) insightHtml += `<li>${b}</li>`;
+          insightHtml += '</ul>';
+        }
+        insightHtml += '</div>';
+      }
+
+      // Data table
+      let tableHtml = '';
+      if (rangeKeys.length) {
+        tableHtml = `<table class="bt-inst-table bt-comp-table">
+          <thead><tr><th>Range</th><th>Hours</th><th>Trades</th><th>Win Rate</th><th>Avg Fav</th><th>Avg Adv</th><th>Avg Move</th></tr></thead>
+          <tbody>`;
+        for (const key of rangeKeys) {
+          const r = ranges[key];
+          if (r.insufficient) {
+            tableHtml += `<tr class="bt-comp-row-dim"><td>${key}</td><td>${r.hours}</td><td>${r.trades}</td><td colspan="4" style="color:var(--text-muted);font-style:italic">Insufficient data</td></tr>`;
+            continue;
+          }
+          const isBest = key === comp.best_range;
+          const isWorst = key === comp.worst_range && comp.worst_win_rate < 48;
+          const rowCls = isBest ? 'bt-comp-row-best' : isWorst ? 'bt-comp-row-worst' : '';
+          const wrCls = r.win_rate >= 55 ? 'bt-win' : r.win_rate < 45 ? 'bt-loss' : '';
+          tableHtml += `<tr class="${rowCls}">
+            <td><strong>${key}</strong>${isBest ? ' ★' : ''}${isWorst ? ' ⚠' : ''}</td>
+            <td>${r.hours}</td><td>${r.trades}</td>
+            <td class="${wrCls}"><strong>${r.win_rate}%</strong></td>
+            <td class="bt-win">+${r.avg_fav}p</td>
+            <td class="bt-loss">-${r.avg_adv}p</td>
+            <td>${r.avg_move}p</td>
+          </tr>`;
+        }
+        tableHtml += '</tbody></table>';
+      }
+
+      html += `<div class="bt-comp-card" id="bt-comp-${comp.id}">
+        <div class="bt-comp-header" onclick="this.parentElement.classList.toggle('bt-comp-expanded')">
+          <div class="bt-comp-title-row">
+            <span class="bt-comp-expand-icon">▶</span>
+            <span class="bt-comp-name">${comp.name}</span>
+            <span class="bt-comp-desc">${comp.description}</span>
+          </div>
+          <div class="bt-comp-badges">${badges}</div>
+        </div>
+        <div class="bt-comp-body">
+          ${insightHtml}
+          ${tableHtml}
+        </div>
+      </div>`;
+    }
+
+    html += '</div>';
+  }
+
+  el.innerHTML = html;
 }
 
 function _btRenderEnergyThresholds(data, insight) {

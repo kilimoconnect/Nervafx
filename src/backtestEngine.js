@@ -376,6 +376,7 @@ async function runBacktest({ from, to }) {
   console.log('[BACKTEST] Phase 3: Discovering condition thresholds...');
 
   const analysis = {
+    component_thresholds: analyzeComponentThresholds(snapshots),
     energy_thresholds: analyzeEnergyThresholds(snapshots),
     strength_thresholds: analyzeStrengthThresholds(snapshots),
     session_performance: analyzeSessionPerformance(snapshots),
@@ -397,6 +398,219 @@ async function runBacktest({ from, to }) {
 }
 
 // ─── Analysis modules ────────────────────────────────────────────────────────
+
+// ── Master component threshold analyzer ─────────────────────────────────────
+// Analyzes EVERY measurable component individually: buckets values, measures
+// outcomes at each level, and finds optimal thresholds, sweet spots & danger zones.
+
+function analyzeComponentThresholds(snapshots) {
+  // Define every component to analyze with its extraction function and bucketing
+  const components = [
+    {
+      id: 'movement', name: 'Movement Score', group: 'Market Energy',
+      desc: 'How much price is moving across all pairs (0–100)',
+      extract: s => s.energy.movement,
+      ranges: [[0,15],[15,30],[30,45],[45,60],[60,80],[80,100]],
+      unit: '',
+    },
+    {
+      id: 'momentum', name: 'Momentum (Breadth)', group: 'Market Energy',
+      desc: 'Percentage of pairs actively moving — market participation width (0–100)',
+      extract: s => s.energy.momentum,
+      ranges: [[0,15],[15,30],[30,45],[45,60],[60,80],[80,100]],
+      unit: '%',
+    },
+    {
+      id: 'agreement', name: 'Agreement Score', group: 'Market Energy',
+      desc: 'How aligned active pairs are with currency strength direction (0–100)',
+      extract: s => s.energy.agreement,
+      ranges: [[0,15],[15,30],[30,45],[45,60],[60,80],[80,100]],
+      unit: '',
+    },
+    {
+      id: 'volatility', name: 'Volatility Score', group: 'Market Energy',
+      desc: 'Raw range intensity — how wide candles are printing (0–100)',
+      extract: s => s.energy.volatility,
+      ranges: [[0,15],[15,30],[30,45],[45,60],[60,80],[80,100]],
+      unit: '',
+    },
+    {
+      id: 'market_energy', name: 'Market Energy (Composite)', group: 'Market Energy',
+      desc: 'Weighted blend of movement, breadth, agreement & volatility (0–100)',
+      extract: s => s.energy.market_energy,
+      ranges: [[0,10],[10,20],[20,30],[30,45],[45,60],[60,80],[80,100]],
+      unit: '',
+    },
+    {
+      id: 'bull_pressure', name: 'Bull Pressure', group: 'Directional Pressure',
+      desc: 'Proportion of total magnitude coming from bullish pairs (0–100%)',
+      extract: s => s.energy.bull_pressure,
+      ranges: [[0,20],[20,35],[35,50],[50,65],[65,80],[80,100]],
+      unit: '%',
+    },
+    {
+      id: 'bear_pressure', name: 'Bear Pressure', group: 'Directional Pressure',
+      desc: 'Proportion of total magnitude coming from bearish pairs (0–100%)',
+      extract: s => s.energy.bear_pressure,
+      ranges: [[0,20],[20,35],[35,50],[50,65],[65,80],[80,100]],
+      unit: '%',
+    },
+    {
+      id: 'dominance', name: 'Directional Dominance', group: 'Directional Pressure',
+      desc: 'Imbalance between bull and bear pressure — higher = one side controls the market',
+      extract: s => Math.abs(s.energy.bull_pressure - s.energy.bear_pressure),
+      ranges: [[0,10],[10,20],[20,30],[30,45],[45,60],[60,100]],
+      unit: '',
+    },
+    {
+      id: 'active_pairs', name: 'Liquidity (Active Pairs)', group: 'Market Structure',
+      desc: 'Number of pairs moving ≥5 pips — measures how many pairs are "alive" (0–28)',
+      extract: s => s.energy.active_pairs,
+      ranges: [[0,3],[3,6],[6,10],[10,15],[15,20],[20,28]],
+      unit: '',
+    },
+    {
+      id: 'strength_diff', name: 'Currency Strength Differential', group: 'Currency Strength',
+      desc: 'Gap between strongest and weakest currency — the raw fuel for directional moves',
+      extract: s => s.energy.strength_diff,
+      ranges: [[0,0.0005],[0.0005,0.001],[0.001,0.002],[0.002,0.003],[0.003,0.005],[0.005,Infinity]],
+      unit: '',
+      formatRange: (lo, hi) => hi === Infinity ? `${lo}+` : `${lo}–${hi}`,
+    },
+    {
+      id: 'ready_count', name: 'Readiness (Ready-to-Enter Pairs)', group: 'Market Structure',
+      desc: 'How many pairs have completed pullback and are ready for entry (0–28)',
+      extract: s => s.states.ready,
+      ranges: [[0,1],[1,2],[2,4],[4,6],[6,10],[10,28]],
+      unit: '',
+    },
+    {
+      id: 'trend_count', name: 'Trending Pairs', group: 'Market Structure',
+      desc: 'Number of pairs in active trend state — measures market conviction',
+      extract: s => s.states.trend,
+      ranges: [[0,3],[3,6],[6,10],[10,14],[14,20],[20,28]],
+      unit: '',
+    },
+    {
+      id: 'pullback_count', name: 'Pullback Pairs', group: 'Market Structure',
+      desc: 'Pairs currently pulling back — future entry candidates forming',
+      extract: s => s.states.pullback,
+      ranges: [[0,2],[2,4],[4,7],[7,10],[10,15],[15,28]],
+      unit: '',
+    },
+    {
+      id: 'reversal_count', name: 'Reversal Pairs', group: 'Market Structure',
+      desc: 'Pairs showing reversal signals — structural uncertainty indicator',
+      extract: s => s.states.reversal,
+      ranges: [[0,2],[2,4],[4,7],[7,10],[10,15],[15,28]],
+      unit: '',
+    },
+    {
+      id: 'avg_confidence', name: 'Average Confidence', group: 'Quality Metrics',
+      desc: 'Mean confidence score across all pair states — overall signal quality',
+      extract: s => s.avg_confidence,
+      ranges: [[0,30],[30,45],[45,55],[55,65],[65,80],[80,100]],
+      unit: '',
+    },
+    {
+      id: 'max_spread', name: 'Max Pair Spread (6H)', group: 'Currency Strength',
+      desc: 'Largest 6H spread among all pairs — indicates strongest individual setup',
+      extract: s => s.max_spread,
+      ranges: [[0,0.001],[0.001,0.002],[0.002,0.003],[0.003,0.005],[0.005,0.008],[0.008,Infinity]],
+      unit: '',
+      formatRange: (lo, hi) => hi === Infinity ? `${lo}+` : `${lo}–${hi}`,
+    },
+  ];
+
+  const results = [];
+
+  for (const comp of components) {
+    const buckets = {};
+
+    for (const snap of snapshots) {
+      const val = comp.extract(snap);
+      if (val == null || isNaN(val)) continue;
+
+      // Find matching range
+      for (const [lo, hi] of comp.ranges) {
+        if (val >= lo && val < hi) {
+          const label = comp.formatRange ? comp.formatRange(lo, hi) : `${lo}–${hi}`;
+          if (!buckets[label]) buckets[label] = { lo, hi, hours: 0, outcomes: [], moves: [] };
+          buckets[label].hours++;
+
+          // Collect pair outcomes for this hour
+          for (const po of snap.pair_outcomes) {
+            if (!po.h4) continue;
+            const dirCorrect = (po.bias === 'BUY' && po.h4.net_pips > 0) || (po.bias === 'SELL' && po.h4.net_pips < 0);
+            const favourable = po.bias === 'BUY' ? po.h4.max_up_pips : po.h4.max_down_pips;
+            const adverse    = po.bias === 'BUY' ? po.h4.max_down_pips : po.h4.max_up_pips;
+            buckets[label].outcomes.push({ correct: dirCorrect, net: po.h4.net_pips, favourable, adverse });
+            buckets[label].moves.push(Math.max(po.h4.max_up_pips, po.h4.max_down_pips));
+          }
+          break;
+        }
+      }
+    }
+
+    // Compute stats per bucket
+    const rangeStats = {};
+    let bestRange = null, bestWR = 0, worstRange = null, worstWR = 100;
+    let bestMoveRange = null, bestMove = 0;
+
+    for (const [label, b] of Object.entries(buckets)) {
+      if (b.outcomes.length < 10) {
+        rangeStats[label] = { hours: b.hours, trades: b.outcomes.length, win_rate: null, avg_move: null, avg_fav: null, avg_adv: null, avg_net: null, insufficient: true };
+        continue;
+      }
+
+      const wins = b.outcomes.filter(o => o.correct).length;
+      const wr   = Math.round(wins / b.outcomes.length * 100);
+      const avgMove = Math.round(b.moves.reduce((s, m) => s + m, 0) / b.moves.length);
+      const avgFav  = Math.round(b.outcomes.reduce((s, o) => s + o.favourable, 0) / b.outcomes.length);
+      const avgAdv  = Math.round(b.outcomes.reduce((s, o) => s + o.adverse, 0) / b.outcomes.length);
+      const avgNet  = Math.round(b.outcomes.reduce((s, o) => s + o.net, 0) / b.outcomes.length);
+
+      rangeStats[label] = { hours: b.hours, trades: b.outcomes.length, win_rate: wr, avg_move: avgMove, avg_fav: avgFav, avg_adv: avgAdv, avg_net: avgNet, insufficient: false };
+
+      if (wr > bestWR)  { bestWR = wr;  bestRange = label; }
+      if (wr < worstWR) { worstWR = wr; worstRange = label; }
+      if (avgMove > bestMove) { bestMove = avgMove; bestMoveRange = label; }
+    }
+
+    // Find minimum threshold for >50% edge
+    let minEdgeThreshold = null;
+    const sortedLabels = Object.keys(rangeStats).sort((a, b) => {
+      const aLo = buckets[a]?.lo ?? 0;
+      const bLo = buckets[b]?.lo ?? 0;
+      return aLo - bLo;
+    });
+    for (const label of sortedLabels) {
+      const s = rangeStats[label];
+      if (!s.insufficient && s.win_rate >= 52) {
+        minEdgeThreshold = label;
+        break;
+      }
+    }
+
+    results.push({
+      id: comp.id,
+      name: comp.name,
+      group: comp.group,
+      description: comp.desc,
+      unit: comp.unit,
+      ranges: rangeStats,
+      best_range: bestRange,
+      best_win_rate: bestWR,
+      worst_range: worstRange,
+      worst_win_rate: worstWR,
+      best_move_range: bestMoveRange,
+      best_avg_move: bestMove,
+      min_edge_threshold: minEdgeThreshold,
+    });
+  }
+
+  return results;
+}
 
 function analyzeEnergyThresholds(snapshots) {
   // Bucket by movement score ranges and measure outcome quality
@@ -804,6 +1018,7 @@ async function saveBacktestResult(result) {
 
 function interpretAnalysis(analysis) {
   return {
+    component_thresholds: interpretComponents(analysis.component_thresholds),
     energy_thresholds:    interpretEnergy(analysis.energy_thresholds),
     strength_thresholds:  interpretStrength(analysis.strength_thresholds),
     state_outcomes:       interpretStates(analysis.state_outcomes),
@@ -812,6 +1027,133 @@ function interpretAnalysis(analysis) {
     move_distance:        interpretDistance(analysis.move_distance),
     session_performance:  interpretSessions(analysis.session_performance),
   };
+}
+
+// ── Per-component threshold interpretation ──
+
+function interpretComponents(components) {
+  if (!components || !components.length) return [];
+
+  return components.map(comp => {
+    const insight = { summary: '', bullets: [] };
+    const ranges = comp.ranges || {};
+    const validRanges = Object.entries(ranges).filter(([_, r]) => !r.insufficient && r.win_rate != null);
+
+    if (validRanges.length < 2) {
+      insight.summary = `Not enough data to determine reliable thresholds for ${comp.name}.`;
+      return { id: comp.id, ...insight };
+    }
+
+    // Sort by range order (ascending by lower bound from label)
+    const sorted = validRanges.sort((a, b) => {
+      const aNum = parseFloat(a[0].split('–')[0]) || 0;
+      const bNum = parseFloat(b[0].split('–')[0]) || 0;
+      return aNum - bNum;
+    });
+
+    // Best range
+    if (comp.best_range && comp.best_win_rate > 0) {
+      const bestData = ranges[comp.best_range];
+      if (bestData && !bestData.insufficient) {
+        insight.summary = `${comp.name}: optimal threshold is ${comp.best_range}${comp.unit}. At this level, trades continue in the expected direction ${comp.best_win_rate}% of the time with ${bestData.avg_fav}p average favourable move.`;
+      }
+    }
+
+    // Minimum edge threshold
+    if (comp.min_edge_threshold) {
+      const edgeData = ranges[comp.min_edge_threshold];
+      if (edgeData) {
+        insight.bullets.push(`Minimum for edge: ${comp.name} must be at least ${comp.min_edge_threshold}${comp.unit} before you have any statistical advantage (${edgeData.win_rate}% win rate, ${edgeData.trades} trades measured).`);
+      }
+    }
+
+    // Sweet spot
+    if (comp.best_range) {
+      const bestData = ranges[comp.best_range];
+      if (bestData && !bestData.insufficient) {
+        const rr = bestData.avg_adv > 0 ? (bestData.avg_fav / bestData.avg_adv).toFixed(1) : '∞';
+        insight.bullets.push(`Sweet spot: ${comp.best_range}${comp.unit} delivers ${comp.best_win_rate}% win rate, +${bestData.avg_fav}p favourable vs -${bestData.avg_adv}p adverse (${rr}:1 reward-to-risk). ${bestData.hours} hours observed at this level.`);
+      }
+    }
+
+    // Danger zone
+    if (comp.worst_range && comp.worst_win_rate < 48) {
+      const worstData = ranges[comp.worst_range];
+      if (worstData && !worstData.insufficient) {
+        insight.bullets.push(`Danger zone: ${comp.worst_range}${comp.unit} shows only ${comp.worst_win_rate}% win rate with -${worstData.avg_adv}p average adverse move. Trades at this level are net losers — avoid or reduce size.`);
+      }
+    }
+
+    // Best movement range
+    if (comp.best_move_range && comp.best_avg_move > 0) {
+      insight.bullets.push(`Largest moves: when ${comp.name.toLowerCase()} is ${comp.best_move_range}${comp.unit}, price averages ${comp.best_avg_move}p maximum excursion at 4H. Set TP targets accordingly.`);
+    }
+
+    // Trend across ranges — does higher = better?
+    if (sorted.length >= 3) {
+      const firstHalf = sorted.slice(0, Math.floor(sorted.length / 2));
+      const secondHalf = sorted.slice(Math.floor(sorted.length / 2));
+      const avgFirst = Math.round(firstHalf.reduce((s, [_, r]) => s + r.win_rate, 0) / firstHalf.length);
+      const avgSecond = Math.round(secondHalf.reduce((s, [_, r]) => s + r.win_rate, 0) / secondHalf.length);
+
+      if (avgSecond > avgFirst + 5) {
+        insight.bullets.push(`Higher is better: win rate improves from ${avgFirst}% at lower values to ${avgSecond}% at higher values. The relationship is clear — wait for stronger readings before entering.`);
+      } else if (avgFirst > avgSecond + 5) {
+        insight.bullets.push(`Caution at extremes: lower ${comp.name.toLowerCase()} readings (${avgFirst}% WR) actually outperform higher ones (${avgSecond}% WR). Very high values may signal exhaustion or choppy conditions.`);
+      } else {
+        insight.bullets.push(`Mixed relationship: win rate stays around ${Math.round((avgFirst + avgSecond) / 2)}% across all levels. This component alone doesn't strongly predict direction — combine with other filters.`);
+      }
+    }
+
+    // Component-specific contextual insight
+    const ctx = _componentContext(comp, ranges, sorted);
+    if (ctx) insight.bullets.push(ctx);
+
+    if (!insight.summary) {
+      insight.summary = `${comp.name} analysis across ${validRanges.reduce((s, [_, r]) => s + r.trades, 0)} trades at ${validRanges.reduce((s, [_, r]) => s + r.hours, 0)} hourly snapshots.`;
+    }
+
+    return { id: comp.id, ...insight };
+  });
+}
+
+function _componentContext(comp, ranges, sorted) {
+  switch (comp.id) {
+    case 'movement':
+      return 'Movement reflects actual pip displacement across all pairs. Low movement = ranging/dead market. High movement = directional flow. Your entries need movement above the minimum threshold to have follow-through.';
+    case 'momentum':
+      return 'Momentum (breadth) measures how many pairs participate in the move. Wide breadth = real institutional flow. Narrow breadth = isolated pair move that can reverse quickly.';
+    case 'agreement':
+      return 'Agreement measures whether active pairs are aligned with currency strength. High agreement = currencies are driving the move. Low agreement = random noise, pairs moving against their strength profile.';
+    case 'volatility':
+      return 'Volatility shows candle range intensity. Moderate volatility enables good entries; extreme volatility often means whipsaw and wide stops that destroy risk/reward.';
+    case 'market_energy':
+      return 'Market Energy is the master composite — the single best reading for overall market tradability. It weights movement (40%), breadth (30%), agreement (20%), and volatility (10%), adjusted by quality.';
+    case 'bull_pressure':
+      return 'Bull pressure above 65% signals strong upside bias across the board. Look for BUY setups on pairs where base currency is strong. Below 35% means bears dominate — flip to SELL bias.';
+    case 'bear_pressure':
+      return 'Bear pressure above 65% signals broad selling pressure. SELL setups on pairs with weak base currency are favoured. Below 35% means bulls control — flip to BUY bias.';
+    case 'dominance':
+      return 'Dominance measures how one-sided the market is (|bull − bear|). High dominance = clear directional conviction, ideal for trend trades. Low dominance = tug-of-war, favour range strategies or stay out.';
+    case 'active_pairs':
+      return 'Active pairs is your liquidity gauge. Below 5 active pairs means the market is effectively dead — no edge exists. Above 15 means broad participation and reliable setups.';
+    case 'strength_diff':
+      return 'The gap between strongest and weakest currency is the fundamental driver. Larger gaps create pairs with strong directional bias. This is the #1 filter for trade quality.';
+    case 'ready_count':
+      return 'Ready-to-enter count shows how many pairs have completed the ideal pullback cycle. 0 means no setups exist now. 3+ means multiple high-quality entries are available simultaneously.';
+    case 'trend_count':
+      return 'Trend count shows how many pairs are in active directional movement. High trend count = strong market conviction. Very low count with high energy = possible reversal forming.';
+    case 'pullback_count':
+      return 'Pullback count is your pipeline indicator — these pairs are building toward entries. A rising pullback count after a strong trend phase means entries are about to appear.';
+    case 'reversal_count':
+      return 'Reversal count is a danger signal. Many pairs reversing simultaneously means the macro trend is exhausting. Reduce exposure and tighten stops when reversals spike above the danger threshold.';
+    case 'avg_confidence':
+      return 'Average confidence reflects overall state machine certainty. Low confidence = ambiguous signals, expect more false entries. High confidence = the pattern is clear and well-confirmed.';
+    case 'max_spread':
+      return 'Max pair spread shows the strongest individual setup available. Large max spread means at least one pair has extreme strength divergence — often your best trade of the day.';
+    default:
+      return null;
+  }
 }
 
 // ── Energy thresholds ──
