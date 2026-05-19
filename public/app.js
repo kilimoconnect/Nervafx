@@ -2395,12 +2395,17 @@ function renderMarketEnergy(sessions, expansionPressure, marketCycle, currentSes
   const todaySessions = sessions.filter(s => (s.session_date || '').slice(0, 10) === todayStr);
   const byName = Object.fromEntries(todaySessions.map(s => [s.session_name, s]));
 
-  const ORDER  = ['ASIA', 'LONDON', 'NEW_YORK', 'LOW_LIQUIDITY'];
+  const ORDER  = ['ASIA', 'LONDON', 'NEW_YORK'];
+  // Sort: current (ACTIVE) first, then past (COMPLETED), then upcoming (UPCOMING)
+  const STATUS_PRIORITY = { ACTIVE: 0, COMPLETED: 1, UPCOMING: 2 };
+  const sorted = ORDER
+    .map(name => ({ name, status: _meSessionStatus(name, currentSession) }))
+    .sort((a, b) => (STATUS_PRIORITY[a.status] ?? 3) - (STATUS_PRIORITY[b.status] ?? 3));
 
   el.innerHTML = `
     ${_meMarketCycleBanner(marketCycle)}
     <div class="me-card-grid">
-      ${ORDER.map(name => _meSessionCard(name, byName[name] || null, _meSessionStatus(name, currentSession))).join('')}
+      ${sorted.map(({ name }) => _meSessionCard(name, byName[name] || null, _meSessionStatus(name, currentSession))).join('')}
     </div>
     ${_meExpansionPressurePanel(expansionPressure)}
     ${_meHistoryPanel(historyRows, todaySessions)}`;
