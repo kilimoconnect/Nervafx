@@ -98,7 +98,7 @@
     <button class="dash-tab" data-tab="signals">Signals</button>
     <button class="dash-tab" data-tab="scanner">Scanner</button>
     <button class="dash-tab" data-tab="intelligence">Intelligence</button>
-    <button class="dash-tab" data-tab="backtest">Backtesting</button>
+    <button class="dash-tab" data-tab="backtest" data-require-plan="premium">Backtesting</button>
   </nav>
 
   <!-- ═══ TAB 1: OVERVIEW ═══ -->
@@ -475,6 +475,17 @@
       document.querySelectorAll('.plan-lock-overlay').forEach(overlay => {
         const required = REQUIRE_LEVELS[overlay.dataset.require] ?? 1;
         overlay.classList.toggle('visible', level < required);
+      });
+
+      // Hide tab buttons that require a higher plan
+      document.querySelectorAll('.dash-tab[data-require-plan]').forEach(tab => {
+        const req = REQUIRE_LEVELS[tab.dataset.requirePlan] ?? 1;
+        tab.style.display = level < req ? 'none' : '';
+        // If hiding the active tab, switch to overview
+        if (level < req && tab.classList.contains('active')) {
+          const overviewTab = document.querySelector('.dash-tab[data-tab="overview"]');
+          if (overviewTab) overviewTab.click();
+        }
       });
 
       // For free plan: hide M15 impulse notification bar
