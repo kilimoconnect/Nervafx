@@ -3050,35 +3050,33 @@ async function runBacktest() {
   const btn    = el('bt-run-btn');
   const status = el('bt-status');
 
-  const from    = el('bt-from')?.value;
-  const to      = el('bt-to')?.value;
-  const maxBars = parseInt(el('bt-max-bars')?.value || '48', 10);
+  const from = el('bt-from')?.value;
+  const to   = el('bt-to')?.value;
 
   if (!from || !to) { status.textContent = 'Please select date range.'; return; }
 
   btn.disabled = true;
-  status.innerHTML = '<span class="bt-spinner"></span> Running backtest — this may take a few minutes...';
+  status.innerHTML = '<span class="bt-spinner"></span> Analyzing market conditions — this may take a few minutes...';
 
   try {
     const data = await api('/api/backtest-run', {
       method: 'POST',
-      body: JSON.stringify({ from, to, maxBars }),
+      body: JSON.stringify({ from, to }),
     });
-    status.textContent = `Completed in ${data.duration_sec}s — ${data.summary.total_trades} trades replayed`;
+    status.textContent = `Analyzed ${data.snapshots_analyzed} hourly snapshots in ${data.duration_sec}s`;
 
-    _btRenderSummary(data.summary);
-    _btRenderEquity(data.equity_curve);
-    _btRenderMonthly(data.by_month);
-    _btRenderInstruments(data.by_instrument);
-    _btRenderTrades(data.trades);
+    const a = data.analysis;
+    _btRenderEnergyThresholds(a.energy_thresholds);
+    _btRenderStrengthThresholds(a.strength_thresholds);
+    _btRenderStateOutcomes(a.state_outcomes);
+    _btRenderNoTradeZones(a.no_trade_zones);
+    _btRenderConditionCombos(a.condition_combos);
+    _btRenderMoveDistance(a.move_distance);
+    _btRenderSessionPerf(a.session_performance);
     _btLoadHistory();
 
-    // Show result sections
-    ['section-backtest-summary', 'section-backtest-equity', 'section-backtest-monthly',
-     'section-backtest-instruments', 'section-backtest-trades'].forEach(id => {
-      const s = el(id);
-      if (s) s.classList.remove('bt-hidden');
-    });
+    // Show all result sections
+    document.querySelectorAll('.bt-hidden').forEach(s => s.classList.remove('bt-hidden'));
 
   } catch (e) {
     status.textContent = `Error: ${e.message}`;
@@ -3087,144 +3085,148 @@ async function runBacktest() {
   }
 }
 
-function _btRenderSummary(s) {
-  const el = document.getElementById('bt-summary');
-  if (!el) return;
-
-  const stats = [
-    { label: 'Total Trades', value: s.total_trades, cls: '' },
-    { label: 'Win Rate',     value: `${s.win_rate}%`, cls: s.win_rate >= 50 ? 'positive' : 'negative' },
-    { label: 'Total Pips',   value: s.total_pips, cls: s.total_pips >= 0 ? 'positive' : 'negative' },
-    { label: 'Profit Factor', value: s.profit_factor, cls: s.profit_factor >= 1 ? 'positive' : 'negative' },
-    { label: 'Wins',         value: s.wins, cls: 'positive' },
-    { label: 'Losses',       value: s.losses, cls: 'negative' },
-    { label: 'Avg Win',      value: `${s.avg_win_pips}p`, cls: 'positive' },
-    { label: 'Avg Loss',     value: `${s.avg_loss_pips}p`, cls: 'negative' },
-    { label: 'Max Drawdown', value: `${s.max_drawdown_pips}p`, cls: 'negative' },
-    { label: 'Breakevens',   value: s.breakevens, cls: '' },
-    { label: 'Timeouts',     value: s.timeouts, cls: '' },
-  ];
-
-  el.innerHTML = stats.map(st => `
-    <div class="bt-stat">
-      <div class="bt-stat-value ${st.cls}">${st.value}</div>
-      <div class="bt-stat-label">${st.label}</div>
-    </div>
-  `).join('');
-}
-
-function _btRenderEquity(curve) {
-  const canvas = document.getElementById('bt-equity-chart');
-  if (!canvas || !curve || !curve.length) return;
-
-  if (_btEquityChart) _btEquityChart.destroy();
-
-  const labels = curve.map(p => p.time?.slice(0, 10) || '');
-  const data   = curve.map(p => p.pips);
-  const colors = curve.map(p => p.outcome === 'WIN' ? '#22c55e' : p.outcome === 'LOSS' ? '#ef4444' : '#64748b');
-
-  _btEquityChart = new Chart(canvas.getContext('2d'), {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [{
-        label: 'Cumulative Pips',
-        data,
-        borderColor: '#3b82f6',
-        backgroundColor: 'rgba(59,130,246,0.1)',
-        fill: true,
-        tension: 0.3,
-        pointRadius: 2,
-        pointBackgroundColor: colors,
-        borderWidth: 2,
-      }],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: (ctx) => {
-              const pt = curve[ctx.dataIndex];
-              return `${pt.pips} pips | ${pt.instrument} | ${pt.outcome}`;
-            }
-          }
-        }
-      },
-      scales: {
-        x: {
-          display: true,
-          ticks: { color: '#64748b', font: { size: 10 }, maxTicksLimit: 12 },
-          grid: { color: 'rgba(255,255,255,.04)' },
-        },
-        y: {
-          display: true,
-          ticks: { color: '#64748b', font: { size: 10 } },
-          grid: { color: 'rgba(255,255,255,.06)' },
-        },
-      },
-    },
-  });
-}
-
-function _btRenderMonthly(byMonth) {
-  const el = document.getElementById('bt-monthly');
-  if (!el || !byMonth) return;
-
-  const months = Object.keys(byMonth).sort();
-  el.innerHTML = `<table class="bt-monthly-table">
-    <thead><tr><th>Month</th><th>Trades</th><th>Wins</th><th>Losses</th><th>Win %</th><th>Pips</th></tr></thead>
-    <tbody>${months.map(m => {
-      const d = byMonth[m];
-      const wr = d.trades > 0 ? Math.round(d.wins / d.trades * 100) : 0;
-      const pipCls = d.pips >= 0 ? 'bt-win' : 'bt-loss';
-      return `<tr><td>${m}</td><td>${d.trades}</td><td class="bt-win">${d.wins}</td><td class="bt-loss">${d.losses}</td><td>${wr}%</td><td class="${pipCls}">${d.pips}</td></tr>`;
-    }).join('')}</tbody>
+function _btTable(headers, rows) {
+  return `<table class="bt-inst-table">
+    <thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+    <tbody>${rows.join('')}</tbody>
   </table>`;
 }
 
-function _btRenderInstruments(byInst) {
-  const el = document.getElementById('bt-instruments');
-  if (!el || !byInst) return;
+function _btRenderEnergyThresholds(data) {
+  const el = document.getElementById('bt-energy');
+  if (!el || !data?.by_component) return;
 
-  const pairs = Object.keys(byInst).sort((a, b) => byInst[b].pips - byInst[a].pips);
-  el.innerHTML = `<table class="bt-inst-table">
-    <thead><tr><th>Pair</th><th>Trades</th><th>Wins</th><th>Losses</th><th>Win %</th><th>Pips</th></tr></thead>
-    <tbody>${pairs.map(p => {
-      const d = byInst[p];
-      const wr = d.trades > 0 ? Math.round(d.wins / d.trades * 100) : 0;
-      const pipCls = d.pips >= 0 ? 'bt-win' : 'bt-loss';
-      return `<tr><td class="bt-pair">${p.replace('_','/')}</td><td>${d.trades}</td><td class="bt-win">${d.wins}</td><td class="bt-loss">${d.losses}</td><td>${wr}%</td><td class="${pipCls}">${d.pips}</td></tr>`;
-    }).join('')}</tbody>
-  </table>`;
+  let html = '';
+  for (const [comp, ranges] of Object.entries(data.by_component)) {
+    const label = comp.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
+    const keys = Object.keys(ranges).sort();
+    if (!keys.length) continue;
+
+    html += `<div class="bt-section-title">${label}</div>`;
+    html += _btTable(['Range', 'Hours', 'Pairs', 'Avg Move', 'Continuation %'], keys.map(k => {
+      const d = ranges[k];
+      const cls = d.continuation_rate >= 50 ? 'bt-win' : d.continuation_rate < 35 ? 'bt-loss' : '';
+      return `<tr><td><strong>${k}</strong></td><td>${d.hours}</td><td>${d.pairs_measured}</td>
+        <td>${d.avg_move_pips}p</td><td class="${cls}">${d.continuation_rate}%</td></tr>`;
+    }));
+  }
+  el.innerHTML = html || '<div style="color:var(--text-muted)">No data</div>';
 }
 
-function _btRenderTrades(trades) {
-  const el = document.getElementById('bt-trades');
-  if (!el || !trades) return;
+function _btRenderStrengthThresholds(data) {
+  const el = document.getElementById('bt-strength');
+  if (!el || !data) return;
 
-  el.innerHTML = `<table class="bt-trade-table">
-    <thead><tr><th>Time</th><th>Pair</th><th>Signal</th><th>State</th><th>Conf</th><th>Entry</th><th>SL</th><th>TP</th><th>Exit</th><th>Outcome</th><th>Pips</th><th>Bars</th></tr></thead>
-    <tbody>${trades.slice(0, 200).map(t => {
-      const oCls = t.outcome === 'WIN' ? 'bt-win' : t.outcome === 'LOSS' ? 'bt-loss' : 'bt-be';
-      return `<tr>
-        <td>${(t.time || '').slice(0, 16).replace('T',' ')}</td>
-        <td class="bt-pair">${(t.instrument || '').replace('_','/')}</td>
-        <td>${t.signal}</td>
-        <td>${t.market_state || ''}</td>
-        <td>${t.confidence || ''}</td>
-        <td>${Number(t.entry_price || 0).toFixed(5)}</td>
-        <td>${Number(t.stop_loss || 0).toFixed(5)}</td>
-        <td>${Number(t.take_profit || 0).toFixed(5)}</td>
-        <td>${Number(t.exit_price || 0).toFixed(5)}</td>
-        <td class="${oCls}">${t.outcome}${t.timeout ? ' ⏱' : ''}</td>
-        <td class="${oCls}">${t.pips}</td>
-        <td>${t.bars_held || ''}</td>
+  const keys = Object.keys(data).sort();
+  el.innerHTML = _btTable(
+    ['Spread Diff', 'Samples', 'Continuation %', 'Avg Favourable', 'Avg Adverse', 'Avg Net'],
+    keys.map(k => {
+      const d = data[k];
+      const cls = d.continuation_rate >= 55 ? 'bt-win' : d.continuation_rate < 45 ? 'bt-loss' : '';
+      return `<tr><td><strong>${k}</strong></td><td>${d.samples}</td>
+        <td class="${cls}">${d.continuation_rate}%</td>
+        <td class="bt-win">${d.avg_favourable_pips}p</td>
+        <td class="bt-loss">${d.avg_adverse_pips}p</td>
+        <td>${d.avg_net_pips}p</td></tr>`;
+    })
+  );
+}
+
+function _btRenderStateOutcomes(data) {
+  const el = document.getElementById('bt-states');
+  if (!el || !data) return;
+
+  const states = Object.keys(data).sort((a, b) => data[b].win_rate - data[a].win_rate);
+  el.innerHTML = _btTable(
+    ['Market State', 'Samples', 'Win Rate', 'Avg Favourable', 'Avg Adverse', 'Avg Confidence'],
+    states.map(s => {
+      const d = data[s];
+      const cls = d.win_rate >= 55 ? 'bt-win' : d.win_rate < 45 ? 'bt-loss' : '';
+      return `<tr><td><strong>${s}</strong></td><td>${d.samples}</td>
+        <td class="${cls}">${d.win_rate}%</td>
+        <td class="bt-win">${d.avg_favourable}p</td>
+        <td class="bt-loss">${d.avg_adverse}p</td>
+        <td>${d.avg_confidence}</td></tr>`;
+    })
+  );
+}
+
+function _btRenderNoTradeZones(zones) {
+  const el = document.getElementById('bt-notrade');
+  if (!el || !zones) return;
+
+  if (!zones.length) {
+    el.innerHTML = '<div style="color:var(--text-muted)">No clear no-trade zones detected</div>';
+    return;
+  }
+
+  el.innerHTML = zones.map(z => {
+    const cls = z.verdict === 'AVOID' ? 'bt-loss' : 'bt-be';
+    return `<div class="bt-zone-card">
+      <div class="bt-zone-verdict ${cls}">${z.verdict}</div>
+      <div class="bt-zone-condition">${z.condition}</div>
+      <div class="bt-zone-stats">${z.samples} samples | Win rate: <span class="${cls}">${z.win_rate}%</span> | Avg: ${z.avg_pips}p</div>
+    </div>`;
+  }).join('');
+}
+
+function _btRenderConditionCombos(combos) {
+  const el = document.getElementById('bt-combos');
+  if (!el || !combos) return;
+
+  if (!combos.length) {
+    el.innerHTML = '<div style="color:var(--text-muted)">Not enough data for combo analysis</div>';
+    return;
+  }
+
+  el.innerHTML = combos.map(c => {
+    const cls = c.verdict === 'STRONG_ENTRY' ? 'bt-win' : c.verdict === 'OPPORTUNITY' ? 'bt-be' : '';
+    return `<div class="bt-combo-card">
+      <div class="bt-combo-name">${c.name}</div>
+      <div class="bt-combo-cond">${c.condition}</div>
+      <div class="bt-combo-stats">
+        <span>${c.samples} samples</span>
+        <span>Win rate: <strong class="${cls}">${c.win_rate}%</strong></span>
+        <span>Avg move: <strong>${c.avg_move}p</strong></span>
+        <span class="bt-combo-verdict ${cls}">${c.verdict.replace('_', ' ')}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function _btRenderMoveDistance(data) {
+  const el = document.getElementById('bt-distance');
+  if (!el || !data) return;
+
+  const horizons = Object.keys(data).sort();
+  el.innerHTML = _btTable(
+    ['Horizon', 'Samples', 'Avg Max Move', 'Avg Net', 'Low Energy', 'Mid Energy', 'High Energy'],
+    horizons.map(h => {
+      const d = data[h];
+      return `<tr><td><strong>${d.horizon_hours}H</strong></td><td>${d.total_samples}</td>
+        <td>${d.overall_avg_max}p</td><td>${d.overall_avg_net}p</td>
+        <td>${d.low_energy.avg_max}p <span style="opacity:.5">(${d.low_energy.samples})</span></td>
+        <td>${d.mid_energy.avg_max}p <span style="opacity:.5">(${d.mid_energy.samples})</span></td>
+        <td class="bt-win">${d.high_energy.avg_max}p <span style="opacity:.5">(${d.high_energy.samples})</span></td>
       </tr>`;
-    }).join('')}</tbody>
-  </table>`;
+    })
+  );
+}
+
+function _btRenderSessionPerf(data) {
+  const el = document.getElementById('bt-sessions');
+  if (!el || !data) return;
+
+  const sessions = Object.keys(data).sort((a, b) => data[b].avg_energy - data[a].avg_energy);
+  el.innerHTML = _btTable(
+    ['Session', 'Hours', 'Avg Energy', '4H Avg Move', '4H Samples', '8H Avg Move', '8H Samples'],
+    sessions.map(s => {
+      const d = data[s];
+      return `<tr><td><strong>${s}</strong></td><td>${d.hours}</td><td>${d.avg_energy}</td>
+        <td>${d.h4_avg_move}p</td><td>${d.h4_samples}</td>
+        <td>${d.h8_avg_move}p</td><td>${d.h8_samples}</td></tr>`;
+    })
+  );
 }
 
 async function _btLoadHistory() {
@@ -3238,22 +3240,15 @@ async function _btLoadHistory() {
       return;
     }
 
-    el.innerHTML = `<table class="bt-history-table">
-      <thead><tr><th>Date</th><th>Range</th><th>Trades</th><th>Win %</th><th>Pips</th><th>PF</th><th>Drawdown</th><th>Time</th></tr></thead>
-      <tbody>${data.map(r => {
-        const pipCls = r.total_pips >= 0 ? 'bt-win' : 'bt-loss';
-        return `<tr>
-          <td>${(r.run_date || '').slice(0, 16).replace('T',' ')}</td>
-          <td>${(r.date_from || '').slice(0, 10)} → ${(r.date_to || '').slice(0, 10)}</td>
-          <td>${r.total_trades}</td>
-          <td>${r.win_rate}%</td>
-          <td class="${pipCls}">${r.total_pips}</td>
-          <td>${r.profit_factor}</td>
-          <td class="bt-loss">${r.max_drawdown}p</td>
-          <td>${r.duration_sec}s</td>
-        </tr>`;
-      }).join('')}</tbody>
-    </table>`;
+    el.innerHTML = _btTable(
+      ['Date', 'Range', 'Snapshots', 'Duration'],
+      data.map(r => `<tr>
+        <td>${(r.run_date || '').slice(0, 16).replace('T',' ')}</td>
+        <td>${(r.date_from || '').slice(0, 10)} → ${(r.date_to || '').slice(0, 10)}</td>
+        <td>${r.bars_replayed}</td>
+        <td>${r.duration_sec}s</td>
+      </tr>`)
+    );
   } catch (e) {
     el.innerHTML = '<div style="color:var(--text-muted);font-size:13px">Could not load history</div>';
   }

@@ -352,16 +352,16 @@
     <section class="card span-3" id="section-backtest-controls">
       <div class="plan-lock-overlay" data-require="premium">
         <span class="plan-lock-icon">🔬</span>
-        <span class="plan-lock-title">Backtesting Engine</span>
-        <span class="plan-lock-desc">Replay 12 months of historical data through the full NervaFX signal pipeline. Validate strategy performance with real market data before risking capital.</span>
+        <span class="plan-lock-title">Condition Discovery Engine</span>
+        <span class="plan-lock-desc">Analyze 12 months of historical data to discover optimal thresholds for every NervaFX component. Find what actually works before risking capital.</span>
         <ul class="plan-lock-features">
-          <li>Full pipeline replay: Strength → Spreads → States → Signals</li>
-          <li>Win rate, profit factor, drawdown analysis</li>
-          <li>Per-instrument and monthly breakdowns</li>
+          <li>Market Energy threshold discovery per cycle phase</li>
+          <li>Currency strength &amp; state outcome analysis</li>
+          <li>No-trade zone detection &amp; condition combos</li>
         </ul>
         <a href="/home.html#pricing" class="plan-lock-btn">Upgrade to Premium →</a>
       </div>
-      <h2 class="card-title"><i data-lucide="flask-conical"></i> Backtesting Engine</h2>
+      <h2 class="card-title"><i data-lucide="flask-conical"></i> Condition Discovery Engine</h2>
       <div class="bt-controls">
         <div class="bt-control-row">
           <div class="bt-field">
@@ -372,43 +372,47 @@
             <label for="bt-to">To</label>
             <input type="date" id="bt-to" class="bt-input" />
           </div>
-          <div class="bt-field">
-            <label for="bt-max-bars">Max Hold (bars)</label>
-            <input type="number" id="bt-max-bars" class="bt-input" value="48" min="6" max="120" />
-          </div>
           <button class="bt-run-btn" id="bt-run-btn" onclick="runBacktest()">
-            <i data-lucide="play" style="width:14px;height:14px"></i> Run Backtest
+            <i data-lucide="play" style="width:14px;height:14px"></i> Run Discovery
           </button>
         </div>
         <div class="bt-status" id="bt-status"></div>
       </div>
     </section>
 
-    <section class="card span-3 bt-hidden" id="section-backtest-summary">
-      <h2 class="card-title"><i data-lucide="bar-chart-3"></i> Results Summary</h2>
-      <div id="bt-summary" class="bt-summary"></div>
+    <section class="card span-3 bt-hidden" id="section-bt-energy">
+      <h2 class="card-title"><i data-lucide="zap"></i> Market Energy Thresholds</h2>
+      <div id="bt-energy"></div>
     </section>
 
-    <section class="card span-2 bt-hidden" id="section-backtest-equity">
-      <h2 class="card-title"><i data-lucide="trending-up"></i> Equity Curve</h2>
-      <div class="bt-chart-wrap">
-        <canvas id="bt-equity-chart"></canvas>
-      </div>
+    <section class="card span-3 bt-hidden" id="section-bt-strength">
+      <h2 class="card-title"><i data-lucide="gauge"></i> Currency Strength Thresholds</h2>
+      <div id="bt-strength"></div>
     </section>
 
-    <section class="card bt-hidden" id="section-backtest-monthly">
-      <h2 class="card-title"><i data-lucide="calendar"></i> Monthly Breakdown</h2>
-      <div id="bt-monthly" class="bt-monthly"></div>
+    <section class="card span-3 bt-hidden" id="section-bt-states">
+      <h2 class="card-title"><i data-lucide="git-branch"></i> State Outcomes</h2>
+      <div id="bt-states"></div>
     </section>
 
-    <section class="card span-3 bt-hidden" id="section-backtest-instruments">
-      <h2 class="card-title"><i data-lucide="list-ordered"></i> Per-Instrument Performance</h2>
-      <div id="bt-instruments" class="bt-instruments"></div>
+    <section class="card span-3 bt-hidden" id="section-bt-notrade">
+      <h2 class="card-title"><i data-lucide="shield-off"></i> No-Trade Zones</h2>
+      <div id="bt-notrade"></div>
     </section>
 
-    <section class="card span-3 bt-hidden" id="section-backtest-trades">
-      <h2 class="card-title"><i data-lucide="scroll-text"></i> Trade Log</h2>
-      <div id="bt-trades" class="bt-trades"></div>
+    <section class="card span-3 bt-hidden" id="section-bt-combos">
+      <h2 class="card-title"><i data-lucide="layers"></i> Condition Combos</h2>
+      <div id="bt-combos"></div>
+    </section>
+
+    <section class="card span-3 bt-hidden" id="section-bt-distance">
+      <h2 class="card-title"><i data-lucide="ruler"></i> Expected Move Distance</h2>
+      <div id="bt-distance"></div>
+    </section>
+
+    <section class="card span-3 bt-hidden" id="section-bt-sessions">
+      <h2 class="card-title"><i data-lucide="clock"></i> Session Performance</h2>
+      <div id="bt-sessions"></div>
     </section>
 
     <section class="card span-3" id="section-backtest-history">
