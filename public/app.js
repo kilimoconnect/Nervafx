@@ -3068,6 +3068,13 @@ async function runBacktest() {
     const a = data.analysis;
     const ins = data.insights || {};
     _btRenderComponentThresholds(a.component_thresholds, ins.component_thresholds);
+    _btRenderConditionalEdge(a.conditional_edge, ins.conditional_edge);
+    _btRenderHeatmaps(a.heatmaps, ins.heatmaps);
+    _btRenderRegimeThresholds(a.regime_thresholds, ins.regime_thresholds);
+    _btRenderSessionThresholds(a.session_thresholds, ins.session_thresholds);
+    _btRenderTransitions(a.transitions, ins.transitions);
+    _btRenderEdgeStability(a.edge_stability, ins.edge_stability);
+    _btRenderProbabilityCurves(a.probability_curves, ins.probability_curves);
     _btRenderEnergyThresholds(a.energy_thresholds, ins.energy_thresholds);
     _btRenderStrengthThresholds(a.strength_thresholds, ins.strength_thresholds);
     _btRenderStateOutcomes(a.state_outcomes, ins.state_outcomes);
@@ -3218,6 +3225,272 @@ function _btRenderComponentThresholds(components, insights) {
     }
 
     html += '</div>';
+  }
+
+  el.innerHTML = html;
+}
+
+// ─── Conditional Edge Renderer ──────────────────────────────────────────────
+
+function _btRenderConditionalEdge(data, insight) {
+  const el = document.getElementById('bt-conditional');
+  if (!el || !data?.chains) return;
+
+  let html = _btInsightBox(insight);
+
+  for (const chain of data.chains) {
+    if (!chain.steps || chain.steps.length < 2) continue;
+
+    html += `<div class="bt-chain">
+      <div class="bt-chain-name">${chain.name}</div>
+      <div class="bt-chain-desc">${chain.desc}</div>
+      <div class="bt-chain-steps">`;
+
+    for (let i = 0; i < chain.steps.length; i++) {
+      const s = chain.steps[i];
+      if (!s.win_rate) continue;
+      const lift = i > 0 ? s.win_rate - chain.steps[i - 1].win_rate : 0;
+      const barW = Math.max(8, Math.min(100, s.win_rate));
+      const barCls = s.win_rate >= 65 ? 'bt-bar-hot' : s.win_rate >= 55 ? 'bt-bar-warm' : s.win_rate >= 50 ? 'bt-bar-neutral' : 'bt-bar-cold';
+
+      html += `<div class="bt-chain-step">
+        <div class="bt-chain-label">${s.label}</div>
+        <div class="bt-chain-bar-wrap">
+          <div class="bt-chain-bar ${barCls}" style="width:${barW}%"></div>
+          <span class="bt-chain-wr">${s.win_rate}%</span>
+          ${lift > 0 ? `<span class="bt-chain-lift">+${lift}</span>` : ''}
+        </div>
+        <div class="bt-chain-meta">${s.samples} trades · +${s.avg_fav}p fav · -${s.avg_adv}p adv</div>
+      </div>`;
+    }
+
+    html += '</div></div>';
+  }
+
+  el.innerHTML = html || '<div style="color:var(--text-muted)">No data</div>';
+}
+
+// ─── Heatmap Renderer ──────────────────────────────────────────────────────
+
+function _btRenderHeatmaps(data, insight) {
+  const el = document.getElementById('bt-heatmaps');
+  if (!el || !data?.length) return;
+
+  let html = _btInsightBox(insight);
+
+  for (const hm of data) {
+    html += `<div class="bt-heatmap">
+      <div class="bt-heatmap-title">${hm.name}</div>
+      <div class="bt-heatmap-labels">
+        <span>X: ${hm.x_label}</span> <span>Y: ${hm.y_label}</span>
+      </div>
+      <table class="bt-hm-table">
+        <thead><tr><th>${hm.y_label} \\ ${hm.x_label}</th>${hm.x_labels.map(l => `<th>${l}</th>`).join('')}</tr></thead>
+        <tbody>`;
+
+    for (let y = hm.y_labels.length - 1; y >= 0; y--) {
+      html += `<tr><td class="bt-hm-rowlabel">${hm.y_labels[y]}</td>`;
+      for (let x = 0; x < hm.x_labels.length; x++) {
+        const c = hm.cells[y][x];
+        if (c.wr == null) {
+          html += '<td class="bt-hm-cell bt-hm-na">—</td>';
+        } else {
+          const cls = c.wr >= 62 ? 'bt-hm-5' : c.wr >= 56 ? 'bt-hm-4' : c.wr >= 52 ? 'bt-hm-3' : c.wr >= 48 ? 'bt-hm-2' : 'bt-hm-1';
+          html += `<td class="bt-hm-cell ${cls}" title="${c.samples} trades, +${c.avg_fav || 0}p fav">${c.wr}%</td>`;
+        }
+      }
+      html += '</tr>';
+    }
+
+    html += '</tbody></table></div>';
+  }
+
+  el.innerHTML = html;
+}
+
+// ─── Regime Thresholds Renderer ────────────────────────────────────────────
+
+function _btRenderRegimeThresholds(data, insight) {
+  const el = document.getElementById('bt-regimes');
+  if (!el || !data) return;
+
+  let html = _btInsightBox(insight);
+  const regimes = Object.entries(data).sort((a, b) => (b[1].baseline?.win_rate || 0) - (a[1].baseline?.win_rate || 0));
+
+  for (const [regime, d] of regimes) {
+    if (d.insufficient) {
+      html += `<div class="bt-regime-card"><div class="bt-regime-name">${regime}</div><div class="bt-regime-insuff">${d.hours} hours · ${d.total_trades} trades — insufficient data</div></div>`;
+      continue;
+    }
+
+    const optEntries = Object.entries(d.optimal || {}).filter(([_, v]) => v.threshold != null);
+    html += `<div class="bt-regime-card">
+      <div class="bt-regime-header">
+        <span class="bt-regime-name">${regime}</span>
+        <span class="bt-regime-base">Baseline: <strong>${d.baseline?.win_rate}%</strong> WR · ${d.total_trades} trades · ${d.hours} hours</span>
+      </div>`;
+
+    if (optEntries.length) {
+      html += '<table class="bt-inst-table"><thead><tr><th>Component</th><th>Optimal Threshold</th><th>Win Rate</th><th>Trades</th><th>Avg Fav</th></tr></thead><tbody>';
+      for (const [comp, v] of optEntries) {
+        const cls = v.win_rate >= 60 ? 'bt-win' : v.win_rate >= 52 ? '' : 'bt-loss';
+        html += `<tr><td><strong>${comp}</strong></td><td>≥ ${v.threshold}</td><td class="${cls}">${v.win_rate}%</td><td>${v.samples}</td><td>+${v.avg_fav}p</td></tr>`;
+      }
+      html += '</tbody></table>';
+    } else {
+      html += '<div style="color:var(--text-muted);font-size:11px;padding:4px 0">No filter significantly improves baseline in this regime</div>';
+    }
+
+    html += '</div>';
+  }
+
+  el.innerHTML = html;
+}
+
+// ─── Session Thresholds Renderer ───────────────────────────────────────────
+
+function _btRenderSessionThresholds(data, insight) {
+  const el = document.getElementById('bt-session-th');
+  if (!el || !data) return;
+
+  let html = _btInsightBox(insight);
+  const sessions = Object.entries(data).sort((a, b) => (b[1].baseline?.win_rate || 0) - (a[1].baseline?.win_rate || 0));
+
+  for (const [session, d] of sessions) {
+    if (d.insufficient) continue;
+
+    const optEntries = Object.entries(d.optimal || {}).filter(([_, v]) => v.threshold != null);
+    html += `<div class="bt-regime-card">
+      <div class="bt-regime-header">
+        <span class="bt-regime-name">${session.replace('_', ' ')}</span>
+        <span class="bt-regime-base">Baseline: <strong>${d.baseline?.win_rate}%</strong> WR · ${d.total_trades} trades</span>
+      </div>`;
+
+    if (optEntries.length) {
+      html += '<table class="bt-inst-table"><thead><tr><th>Component</th><th>Optimal Threshold</th><th>Win Rate</th><th>Trades</th><th>Avg Fav</th></tr></thead><tbody>';
+      for (const [comp, v] of optEntries) {
+        const cls = v.win_rate >= 60 ? 'bt-win' : '';
+        html += `<tr><td><strong>${comp}</strong></td><td>≥ ${v.threshold}</td><td class="${cls}">${v.win_rate}%</td><td>${v.samples}</td><td>+${v.avg_fav}p</td></tr>`;
+      }
+      html += '</tbody></table>';
+    }
+
+    html += '</div>';
+  }
+
+  el.innerHTML = html;
+}
+
+// ─── Transition Renderer ───────────────────────────────────────────────────
+
+function _btRenderTransitions(data, insight) {
+  const el = document.getElementById('bt-transitions');
+  if (!el || !data) return;
+
+  if (!data.length) {
+    el.innerHTML = _btInsightBox(insight) + '<div style="color:var(--text-muted)">Not enough transition data</div>';
+    return;
+  }
+
+  el.innerHTML = _btInsightBox(insight) + _btTable(
+    ['Transition', 'Occurrences', 'Trades', 'Win Rate', 'Avg Fav', 'Avg Adv', 'Avg Net'],
+    data.map(t => {
+      const cls = t.win_rate >= 58 ? 'bt-win' : t.win_rate < 45 ? 'bt-loss' : '';
+      return `<tr>
+        <td><strong>${t.from}</strong> → <strong>${t.to}</strong></td>
+        <td>${t.occurrences}</td><td>${t.trades}</td>
+        <td class="${cls}"><strong>${t.win_rate}%</strong></td>
+        <td class="bt-win">+${t.avg_fav}p</td><td class="bt-loss">-${t.avg_adv}p</td>
+        <td>${t.avg_net}p</td>
+      </tr>`;
+    })
+  );
+}
+
+// ─── Edge Stability Renderer ───────────────────────────────────────────────
+
+function _btRenderEdgeStability(data, insight) {
+  const el = document.getElementById('bt-stability');
+  if (!el || !data) return;
+
+  if (!data.length) {
+    el.innerHTML = _btInsightBox(insight) + '<div style="color:var(--text-muted)">Not enough data for stability analysis</div>';
+    return;
+  }
+
+  let html = _btInsightBox(insight);
+  html += _btTable(
+    ['Condition', 'Samples', 'Overall WR', 'Recent 3M', 'Historical', 'Variance', 'Stability', 'Status'],
+    data.map(d => {
+      const decayCls = d.decay === 'DECAYING' ? 'bt-loss' : d.decay === 'IMPROVING' ? 'bt-win' : '';
+      const stabCls = d.stability_score >= 70 ? 'bt-win' : d.stability_score < 50 ? 'bt-loss' : '';
+      return `<tr>
+        <td><strong>${d.condition}</strong></td>
+        <td>${d.total_samples}</td>
+        <td>${d.overall_wr}%</td>
+        <td>${d.recent_3m_wr != null ? d.recent_3m_wr + '%' : '—'}</td>
+        <td>${d.older_wr != null ? d.older_wr + '%' : '—'}</td>
+        <td>±${d.variance}pp</td>
+        <td class="${stabCls}"><strong>${d.stability_score}/100</strong></td>
+        <td class="${decayCls}"><strong>${d.decay}</strong></td>
+      </tr>`;
+    })
+  );
+
+  // Monthly sparkline for top condition
+  if (data[0]?.monthly_wr?.length) {
+    html += '<div class="bt-section-title" style="margin-top:14px">Monthly Win Rate — "' + data[0].condition + '"</div>';
+    html += '<div class="bt-monthly-spark">';
+    for (const m of data[0].monthly_wr) {
+      if (m.wr == null) { html += `<div class="bt-spark-bar bt-spark-na" title="${m.month}: insufficient data"><div style="height:3px"></div><span>${m.month.slice(5)}</span></div>`; continue; }
+      const h = Math.max(4, Math.min(60, m.wr * 0.7));
+      const cls = m.wr >= 58 ? 'bt-spark-hot' : m.wr >= 52 ? 'bt-spark-warm' : m.wr >= 48 ? 'bt-spark-neutral' : 'bt-spark-cold';
+      html += `<div class="bt-spark-bar ${cls}" title="${m.month}: ${m.wr}% (${m.samples} trades)"><div style="height:${h}px"></div><span>${m.month.slice(5)}</span></div>`;
+    }
+    html += '</div>';
+  }
+
+  el.innerHTML = html;
+}
+
+// ─── Probability Curves Renderer ───────────────────────────────────────────
+
+function _btRenderProbabilityCurves(data, insight) {
+  const el = document.getElementById('bt-probability');
+  if (!el || !data) return;
+
+  if (!data.length) {
+    el.innerHTML = _btInsightBox(insight) + '<div style="color:var(--text-muted)">Not enough data for probability analysis</div>';
+    return;
+  }
+
+  let html = _btInsightBox(insight);
+
+  for (const comp of data) {
+    const validPts = comp.curve.filter(p => p.wr != null);
+    if (!validPts.length) continue;
+
+    html += `<div class="bt-prob-card">
+      <div class="bt-prob-name">${comp.name} ${comp.edge_threshold != null ? `<span class="bt-comp-badge bt-comp-badge-min">Edge at ≥ ${comp.edge_threshold}</span>` : ''}</div>
+      <div class="bt-prob-curve">`;
+
+    for (const pt of comp.curve) {
+      if (pt.wr == null) {
+        html += `<div class="bt-prob-point bt-prob-na"><div class="bt-prob-bar" style="height:3px"></div><span class="bt-prob-val">—</span><span class="bt-prob-th">${pt.threshold}</span></div>`;
+        continue;
+      }
+      const h = Math.max(4, Math.min(80, (pt.wr - 30) * 1.6));
+      const cls = pt.wr >= 62 ? 'bt-prob-5' : pt.wr >= 56 ? 'bt-prob-4' : pt.wr >= 52 ? 'bt-prob-3' : pt.wr >= 48 ? 'bt-prob-2' : 'bt-prob-1';
+      const isEdge = pt.threshold === comp.edge_threshold;
+      html += `<div class="bt-prob-point ${cls} ${isEdge ? 'bt-prob-edge' : ''}">
+        <div class="bt-prob-bar" style="height:${h}px"></div>
+        <span class="bt-prob-val">${pt.wr}%</span>
+        <span class="bt-prob-th">${pt.threshold}</span>
+        <span class="bt-prob-n">${pt.samples}</span>
+      </div>`;
+    }
+
+    html += '</div></div>';
   }
 
   el.innerHTML = html;

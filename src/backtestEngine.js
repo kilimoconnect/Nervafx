@@ -377,6 +377,13 @@ async function runBacktest({ from, to }) {
 
   const analysis = {
     component_thresholds: analyzeComponentThresholds(snapshots),
+    conditional_edge: analyzeConditionalEdge(snapshots),
+    heatmaps: analyzeHeatmaps(snapshots),
+    regime_thresholds: analyzeRegimeThresholds(snapshots),
+    session_thresholds: analyzeSessionThresholds(snapshots),
+    transitions: analyzeTransitions(snapshots),
+    edge_stability: analyzeEdgeStability(snapshots),
+    probability_curves: analyzeProbabilityCurves(snapshots),
     energy_thresholds: analyzeEnergyThresholds(snapshots),
     strength_thresholds: analyzeStrengthThresholds(snapshots),
     session_performance: analyzeSessionPerformance(snapshots),
@@ -976,6 +983,502 @@ function analyzeMoveDistance(snapshots) {
   return byHorizon;
 }
 
+// ─── Advanced Analysis: Conditional Discovery Engine ─────────────────────────
+// Multi-factor stacking — discovers how conditions compound edge
+
+function _flattenOutcomes(snapshots, horizon = 'h4') {
+  const rows = [];
+  for (const snap of snapshots) {
+    for (const po of snap.pair_outcomes) {
+      if (!po[horizon]) continue;
+      const correct = (po.bias === 'BUY' && po[horizon].net_pips > 0) || (po.bias === 'SELL' && po[horizon].net_pips < 0);
+      const fav = po.bias === 'BUY' ? po[horizon].max_up_pips : po[horizon].max_down_pips;
+      const adv = po.bias === 'BUY' ? po[horizon].max_down_pips : po[horizon].max_up_pips;
+      rows.push({
+        correct, net: po[horizon].net_pips, fav, adv,
+        energy: snap.energy.market_energy, movement: snap.energy.movement,
+        momentum: snap.energy.momentum, agreement: snap.energy.agreement,
+        volatility: snap.energy.volatility, bull_pressure: snap.energy.bull_pressure,
+        bear_pressure: snap.energy.bear_pressure, active_pairs: snap.energy.active_pairs,
+        strength_diff: snap.energy.strength_diff,
+        dominance: Math.abs(snap.energy.bull_pressure - snap.energy.bear_pressure),
+        session: snap.session, time: snap.time,
+        state: po.state, confidence: po.confidence,
+        spread_6h: Math.abs(po.spread_6h || 0),
+        ready: snap.states.ready, trend: snap.states.trend,
+        pullback: snap.states.pullback, reversal: snap.states.reversal,
+      });
+    }
+  }
+  return rows;
+}
+
+function _measurePool(pool) {
+  if (!pool.length) return null;
+  const wins = pool.filter(r => r.correct).length;
+  return {
+    samples: pool.length,
+    win_rate: Math.round(wins / pool.length * 100),
+    avg_fav: Math.round(pool.reduce((s, r) => s + r.fav, 0) / pool.length),
+    avg_adv: Math.round(pool.reduce((s, r) => s + r.adv, 0) / pool.length),
+    avg_net: Math.round(pool.reduce((s, r) => s + r.net, 0) / pool.length),
+  };
+}
+
+function analyzeConditionalEdge(snapshots) {
+  const all = _flattenOutcomes(snapshots, 'h4');
+  if (all.length < 50) return { chains: [] };
+
+  const baseline = _measurePool(all);
+
+  // Build progressive filter chains — each step adds one condition
+  const chains = [];
+
+  // ── Chain 1: The Complete Edge Stack (CS-based)
+  const c1 = [{ label: 'All trades (baseline)', pool: all }];
+  let pool = all;
+  const filters1 = [
+    { label: '+ CS Diff > 0.002', fn: r => r.spread_6h > 0.002 },
+    { label: '+ Energy > 35', fn: r => r.energy > 35 },
+    { label: '+ Agreement > 40', fn: r => r.agreement > 40 },
+    { label: '+ London / London-NY', fn: r => r.session === 'LONDON' || r.session === 'LONDON_NY' },
+    { label: '+ Ready or Pullback state', fn: r => r.state === 'READY_TO_ENTER' || r.state === 'PULLBACK_ACTIVE' || r.state === 'BASE_FORMING' },
+  ];
+  for (const f of filters1) {
+    pool = pool.filter(f.fn);
+    if (pool.length < 5) break;
+    c1.push({ label: f.label, pool });
+  }
+  chains.push({
+    name: 'The Complete Edge Stack',
+    desc: 'CS Differential → Energy → Agreement → Session → State. The full conviction filter.',
+    steps: c1.map(s => ({ label: s.label, ..._measurePool(s.pool) })),
+  });
+
+  // ── Chain 2: Energy-First Stack
+  pool = all;
+  const c2 = [{ label: 'All trades (baseline)', pool: all }];
+  const filters2 = [
+    { label: '+ Energy > 30', fn: r => r.energy > 30 },
+    { label: '+ Movement > 25', fn: r => r.movement > 25 },
+    { label: '+ Momentum > 25', fn: r => r.momentum > 25 },
+    { label: '+ Dominance > 15', fn: r => r.dominance > 15 },
+    { label: '+ Trending pairs > 5', fn: r => r.trend > 5 },
+    { label: '+ Active pairs > 10', fn: r => r.active_pairs > 10 },
+  ];
+  for (const f of filters2) {
+    pool = pool.filter(f.fn);
+    if (pool.length < 5) break;
+    c2.push({ label: f.label, pool });
+  }
+  chains.push({
+    name: 'Energy-First Stack',
+    desc: 'Energy → Movement → Momentum → Dominance → Trends → Liquidity. Market vitality filter.',
+    steps: c2.map(s => ({ label: s.label, ..._measurePool(s.pool) })),
+  });
+
+  // ── Chain 3: Maximum Conviction
+  pool = all;
+  const c3 = [{ label: 'All trades (baseline)', pool: all }];
+  const filters3 = [
+    { label: '+ Energy > 45', fn: r => r.energy > 45 },
+    { label: '+ Agreement > 55', fn: r => r.agreement > 55 },
+    { label: '+ CS Diff > 0.003', fn: r => r.spread_6h > 0.003 },
+    { label: '+ Confidence > 60', fn: r => r.confidence > 60 },
+    { label: '+ Volatility 15–70', fn: r => r.volatility >= 15 && r.volatility <= 70 },
+  ];
+  for (const f of filters3) {
+    pool = pool.filter(f.fn);
+    if (pool.length < 5) break;
+    c3.push({ label: f.label, pool });
+  }
+  chains.push({
+    name: 'Maximum Conviction Filter',
+    desc: 'Energy → Agreement → CS Diff → Confidence → Healthy Vol. Only the highest-quality setups.',
+    steps: c3.map(s => ({ label: s.label, ..._measurePool(s.pool) })),
+  });
+
+  // ── Chain 4: Reversal Avoidance
+  pool = all;
+  const c4 = [{ label: 'All trades (baseline)', pool: all }];
+  const filters4 = [
+    { label: '+ Reversals < 6', fn: r => r.reversal < 6 },
+    { label: '+ Volatility < 65', fn: r => r.volatility < 65 },
+    { label: '+ Agreement > 30', fn: r => r.agreement > 30 },
+    { label: '+ Energy > 20', fn: r => r.energy > 20 },
+    { label: '+ Dominance > 10', fn: r => r.dominance > 10 },
+  ];
+  for (const f of filters4) {
+    pool = pool.filter(f.fn);
+    if (pool.length < 5) break;
+    c4.push({ label: f.label, pool });
+  }
+  chains.push({
+    name: 'Reversal Avoidance Filter',
+    desc: 'Low reversals → Controlled vol → Agreement → Energy → Dominance. Removes structural danger.',
+    steps: c4.map(s => ({ label: s.label, ..._measurePool(s.pool) })),
+  });
+
+  return { baseline, chains };
+}
+
+// ─── Cross-Component Heatmaps ───────────────────────────────────────────────
+// 2D matrices showing win rate at intersections of two components
+
+function analyzeHeatmaps(snapshots) {
+  const all = _flattenOutcomes(snapshots, 'h4');
+  if (all.length < 50) return [];
+
+  const definitions = [
+    {
+      name: 'Energy × Agreement', x: 'energy', y: 'agreement',
+      xRanges: [[0,20],[20,40],[40,60],[60,80],[80,100]],
+      yRanges: [[0,20],[20,40],[40,60],[60,80],[80,100]],
+    },
+    {
+      name: 'Movement × Momentum', x: 'movement', y: 'momentum',
+      xRanges: [[0,20],[20,40],[40,60],[60,80],[80,100]],
+      yRanges: [[0,20],[20,40],[40,60],[60,80],[80,100]],
+    },
+    {
+      name: 'Energy × Dominance', x: 'energy', y: 'dominance',
+      xRanges: [[0,20],[20,40],[40,60],[60,80],[80,100]],
+      yRanges: [[0,15],[15,30],[30,45],[45,60],[60,100]],
+    },
+    {
+      name: 'Agreement × Volatility', x: 'agreement', y: 'volatility',
+      xRanges: [[0,20],[20,40],[40,60],[60,80],[80,100]],
+      yRanges: [[0,20],[20,40],[40,60],[60,80],[80,100]],
+    },
+    {
+      name: 'Active Pairs × Energy', x: 'active_pairs', y: 'energy',
+      xRanges: [[0,5],[5,10],[10,15],[15,20],[20,28]],
+      yRanges: [[0,20],[20,40],[40,60],[60,80],[80,100]],
+    },
+  ];
+
+  const results = [];
+
+  for (const def of definitions) {
+    const xLabels = def.xRanges.map(([lo, hi]) => `${lo}–${hi}`);
+    const yLabels = def.yRanges.map(([lo, hi]) => `${lo}–${hi}`);
+    const cells = [];
+
+    for (const [yLo, yHi] of def.yRanges) {
+      const row = [];
+      for (const [xLo, xHi] of def.xRanges) {
+        const pool = all.filter(r => r[def.x] >= xLo && r[def.x] < xHi && r[def.y] >= yLo && r[def.y] < yHi);
+        if (pool.length < 8) {
+          row.push({ wr: null, samples: pool.length });
+        } else {
+          const wins = pool.filter(r => r.correct).length;
+          row.push({
+            wr: Math.round(wins / pool.length * 100),
+            samples: pool.length,
+            avg_fav: Math.round(pool.reduce((s, r) => s + r.fav, 0) / pool.length),
+          });
+        }
+      }
+      cells.push(row);
+    }
+
+    // Find best and worst cells
+    let bestWR = 0, worstWR = 100, bestPos = null, worstPos = null;
+    for (let y = 0; y < cells.length; y++) {
+      for (let x = 0; x < cells[y].length; x++) {
+        const c = cells[y][x];
+        if (c.wr == null) continue;
+        if (c.wr > bestWR && c.samples >= 15) { bestWR = c.wr; bestPos = { x: xLabels[x], y: yLabels[y] }; }
+        if (c.wr < worstWR && c.samples >= 15) { worstWR = c.wr; worstPos = { x: xLabels[x], y: yLabels[y] }; }
+      }
+    }
+
+    results.push({
+      name: def.name, x_label: def.x, y_label: def.y,
+      x_labels: xLabels, y_labels: yLabels, cells,
+      best: bestPos ? { ...bestPos, wr: bestWR } : null,
+      worst: worstPos ? { ...worstPos, wr: worstWR } : null,
+    });
+  }
+
+  return results;
+}
+
+// ─── Regime-Specific Threshold Discovery ────────────────────────────────────
+// Discovers optimal thresholds per market regime
+
+function _classifyRegime(snap, prevSnap) {
+  const e = snap.energy;
+  if (e.market_energy < 12) return 'DEAD';
+  if (e.market_energy < 25 && e.agreement < 30) return 'COMPRESSION';
+  if (e.volatility > 55 && e.agreement < 30) return 'CHOPPY';
+  if (prevSnap && e.market_energy > prevSnap.energy.market_energy + 8 && e.market_energy >= 25) return 'BREAKOUT';
+  if (e.market_energy >= 60 && e.agreement >= 45) return 'EXPANSION';
+  if (e.market_energy >= 45 && e.volatility > 50 && e.agreement < 35) return 'EXHAUSTION';
+  if (e.market_energy >= 25 && e.market_energy < 45) return 'TRANSITION';
+  return 'BUILDING';
+}
+
+function analyzeRegimeThresholds(snapshots) {
+  // Classify each snapshot into a regime
+  const regimeSnaps = {};
+  for (let i = 0; i < snapshots.length; i++) {
+    const regime = _classifyRegime(snapshots[i], i > 0 ? snapshots[i - 1] : null);
+    if (!regimeSnaps[regime]) regimeSnaps[regime] = [];
+    regimeSnaps[regime].push(snapshots[i]);
+  }
+
+  const results = {};
+  const keyComponents = [
+    { id: 'cs_diff', label: 'CS Differential', extract: r => r.spread_6h, thresholds: [0.001, 0.0015, 0.002, 0.0025, 0.003, 0.004, 0.005] },
+    { id: 'energy', label: 'Market Energy', extract: r => r.energy, thresholds: [15, 25, 35, 45, 55, 65] },
+    { id: 'agreement', label: 'Agreement', extract: r => r.agreement, thresholds: [15, 25, 35, 45, 55, 65] },
+    { id: 'movement', label: 'Movement', extract: r => r.movement, thresholds: [15, 25, 35, 45, 55] },
+    { id: 'confidence', label: 'Confidence', extract: r => r.confidence, thresholds: [40, 50, 60, 70, 80] },
+  ];
+
+  for (const [regime, snaps] of Object.entries(regimeSnaps)) {
+    const all = _flattenOutcomes(snaps, 'h4');
+    if (all.length < 20) { results[regime] = { hours: snaps.length, total_trades: all.length, insufficient: true }; continue; }
+
+    const base = _measurePool(all);
+    const thresholds = {};
+
+    for (const comp of keyComponents) {
+      let bestTh = null, bestWR = base.win_rate;
+      for (const th of comp.thresholds) {
+        const filtered = all.filter(r => comp.extract(r) >= th);
+        if (filtered.length < 10) continue;
+        const m = _measurePool(filtered);
+        if (m.win_rate > bestWR) { bestWR = m.win_rate; bestTh = { threshold: th, ...m }; }
+      }
+      thresholds[comp.id] = bestTh || { threshold: null, note: 'No improvement found' };
+    }
+
+    results[regime] = { hours: snaps.length, total_trades: all.length, baseline: base, optimal: thresholds };
+  }
+
+  return results;
+}
+
+// ─── Session-Specific Threshold Discovery ───────────────────────────────────
+
+function analyzeSessionThresholds(snapshots) {
+  const sessionSnaps = {};
+  for (const s of snapshots) {
+    if (!sessionSnaps[s.session]) sessionSnaps[s.session] = [];
+    sessionSnaps[s.session].push(s);
+  }
+
+  const keyComponents = [
+    { id: 'cs_diff', label: 'CS Differential', extract: r => r.spread_6h, thresholds: [0.001, 0.0015, 0.002, 0.0025, 0.003, 0.004] },
+    { id: 'energy', label: 'Market Energy', extract: r => r.energy, thresholds: [15, 25, 35, 45, 55, 65] },
+    { id: 'agreement', label: 'Agreement', extract: r => r.agreement, thresholds: [15, 25, 35, 45, 55, 65] },
+    { id: 'movement', label: 'Movement', extract: r => r.movement, thresholds: [10, 20, 30, 40, 50] },
+    { id: 'dominance', label: 'Dominance', extract: r => r.dominance, thresholds: [5, 10, 15, 20, 30, 40] },
+    { id: 'volatility', label: 'Volatility', extract: r => r.volatility, thresholds: [10, 20, 30, 40, 50] },
+  ];
+
+  const results = {};
+  for (const [session, snaps] of Object.entries(sessionSnaps)) {
+    const all = _flattenOutcomes(snaps, 'h4');
+    if (all.length < 20) { results[session] = { hours: snaps.length, total_trades: all.length, insufficient: true }; continue; }
+
+    const base = _measurePool(all);
+    const optimal = {};
+
+    for (const comp of keyComponents) {
+      let bestTh = null, bestWR = base.win_rate;
+      for (const th of comp.thresholds) {
+        const filtered = all.filter(r => comp.extract(r) >= th);
+        if (filtered.length < 10) continue;
+        const m = _measurePool(filtered);
+        if (m.win_rate > bestWR) { bestWR = m.win_rate; bestTh = { threshold: th, ...m }; }
+      }
+      optimal[comp.id] = bestTh || { threshold: null, note: 'No improvement found' };
+    }
+
+    results[session] = { hours: snaps.length, total_trades: all.length, baseline: base, optimal };
+  }
+
+  return results;
+}
+
+// ─── Transition Discovery ───────────────────────────────────────────────────
+// What happens when market regime changes?
+
+function analyzeTransitions(snapshots) {
+  const transitions = {};
+
+  for (let i = 1; i < snapshots.length; i++) {
+    const prev = snapshots[i - 1];
+    const curr = snapshots[i];
+    const prevRegime = _classifyRegime(prev, i > 1 ? snapshots[i - 2] : null);
+    const currRegime = _classifyRegime(curr, prev);
+
+    if (prevRegime === currRegime) continue;
+
+    const key = `${prevRegime} → ${currRegime}`;
+    if (!transitions[key]) transitions[key] = { from: prevRegime, to: currRegime, snapshots: [] };
+    transitions[key].snapshots.push(curr);
+  }
+
+  const results = [];
+  for (const [key, t] of Object.entries(transitions)) {
+    const outcomes = _flattenOutcomes(t.snapshots, 'h8');
+    if (outcomes.length < 8) continue;
+
+    const m = _measurePool(outcomes);
+    results.push({
+      transition: key, from: t.from, to: t.to,
+      occurrences: t.snapshots.length, trades: m.samples,
+      win_rate: m.win_rate, avg_fav: m.avg_fav, avg_adv: m.avg_adv, avg_net: m.avg_net,
+    });
+  }
+
+  // Sort by win rate descending
+  results.sort((a, b) => b.win_rate - a.win_rate);
+  return results;
+}
+
+// ─── Edge Stability & Reliability ───────────────────────────────────────────
+// Detects whether discovered edges are stable or decaying over time
+
+function analyzeEdgeStability(snapshots) {
+  const all = _flattenOutcomes(snapshots, 'h4');
+  if (all.length < 50) return [];
+
+  // Key conditions to test stability
+  const conditions = [
+    { name: 'CS Diff > 0.002', fn: r => r.spread_6h > 0.002 },
+    { name: 'Energy > 40', fn: r => r.energy > 40 },
+    { name: 'Agreement > 45', fn: r => r.agreement > 45 },
+    { name: 'Energy > 40 + Agreement > 45', fn: r => r.energy > 40 && r.agreement > 45 },
+    { name: 'CS > 0.002 + Energy > 35 + Agreement > 35', fn: r => r.spread_6h > 0.002 && r.energy > 35 && r.agreement > 35 },
+    { name: 'London/NY + Energy > 35', fn: r => (r.session === 'LONDON' || r.session === 'LONDON_NY') && r.energy > 35 },
+    { name: 'Ready-to-Enter state', fn: r => r.state === 'READY_TO_ENTER' },
+    { name: 'Dominance > 20 + Movement > 30', fn: r => r.dominance > 20 && r.movement > 30 },
+  ];
+
+  // Group all trades by month
+  const byMonth = {};
+  for (const r of all) {
+    const month = r.time.slice(0, 7); // YYYY-MM
+    if (!byMonth[month]) byMonth[month] = [];
+    byMonth[month].push(r);
+  }
+  const months = Object.keys(byMonth).sort();
+
+  const results = [];
+
+  for (const cond of conditions) {
+    const filtered = all.filter(cond.fn);
+    if (filtered.length < 20) continue;
+
+    const overall = _measurePool(filtered);
+
+    // Monthly win rates
+    const monthlyWR = [];
+    for (const m of months) {
+      const mPool = (byMonth[m] || []).filter(cond.fn);
+      if (mPool.length < 5) { monthlyWR.push({ month: m, wr: null, samples: mPool.length }); continue; }
+      const wins = mPool.filter(r => r.correct).length;
+      monthlyWR.push({ month: m, wr: Math.round(wins / mPool.length * 100), samples: mPool.length });
+    }
+
+    // Compute variance of valid months
+    const validWRs = monthlyWR.filter(m => m.wr != null).map(m => m.wr);
+    const mean = validWRs.length ? validWRs.reduce((a, b) => a + b, 0) / validWRs.length : 0;
+    const variance = validWRs.length > 1 ? Math.round(Math.sqrt(validWRs.reduce((s, w) => s + (w - mean) ** 2, 0) / (validWRs.length - 1))) : 0;
+
+    // Recent vs historical
+    const recentMonths = months.slice(-3);
+    const olderMonths = months.slice(0, -3);
+    const recentPool = recentMonths.flatMap(m => (byMonth[m] || []).filter(cond.fn));
+    const olderPool = olderMonths.flatMap(m => (byMonth[m] || []).filter(cond.fn));
+    const recentWR = recentPool.length >= 10 ? Math.round(recentPool.filter(r => r.correct).length / recentPool.length * 100) : null;
+    const olderWR = olderPool.length >= 10 ? Math.round(olderPool.filter(r => r.correct).length / olderPool.length * 100) : null;
+
+    // Decay detection
+    let decay = 'STABLE';
+    if (recentWR != null && olderWR != null) {
+      if (recentWR < olderWR - 8) decay = 'DECAYING';
+      else if (recentWR > olderWR + 8) decay = 'IMPROVING';
+    }
+
+    // Stability score (0-100): penalise high variance, low samples, and decay
+    const sampleScore = Math.min(100, filtered.length / 5);
+    const varianceScore = Math.max(0, 100 - variance * 3);
+    const decayScore = decay === 'STABLE' ? 100 : decay === 'IMPROVING' ? 100 : 50;
+    const stabilityScore = Math.round(sampleScore * 0.3 + varianceScore * 0.4 + decayScore * 0.3);
+
+    results.push({
+      condition: cond.name,
+      total_samples: filtered.length,
+      overall_wr: overall.win_rate,
+      monthly_wr: monthlyWR,
+      variance,
+      recent_3m_wr: recentWR,
+      older_wr: olderWR,
+      decay,
+      stability_score: stabilityScore,
+    });
+  }
+
+  // Sort by stability score descending
+  results.sort((a, b) => b.stability_score - a.stability_score);
+  return results;
+}
+
+// ─── Probability Curves ─────────────────────────────────────────────────────
+// Progressive probability instead of hard thresholds
+
+function analyzeProbabilityCurves(snapshots) {
+  const all = _flattenOutcomes(snapshots, 'h4');
+  if (all.length < 50) return [];
+
+  const components = [
+    { id: 'cs_diff', name: 'CS Differential', extract: r => r.spread_6h,
+      points: [0.0005, 0.001, 0.0015, 0.002, 0.0025, 0.003, 0.004, 0.005, 0.007, 0.01] },
+    { id: 'energy', name: 'Market Energy', extract: r => r.energy,
+      points: [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 80] },
+    { id: 'agreement', name: 'Agreement', extract: r => r.agreement,
+      points: [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 80] },
+    { id: 'movement', name: 'Movement', extract: r => r.movement,
+      points: [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 70, 80] },
+    { id: 'dominance', name: 'Dominance', extract: r => r.dominance,
+      points: [0, 5, 10, 15, 20, 25, 30, 35, 40, 50, 60] },
+    { id: 'active_pairs', name: 'Active Pairs', extract: r => r.active_pairs,
+      points: [2, 4, 6, 8, 10, 12, 14, 16, 18, 20] },
+    { id: 'confidence', name: 'Confidence', extract: r => r.confidence,
+      points: [30, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85] },
+  ];
+
+  const results = [];
+
+  for (const comp of components) {
+    const curve = [];
+    for (const threshold of comp.points) {
+      const pool = all.filter(r => comp.extract(r) >= threshold);
+      if (pool.length < 8) { curve.push({ threshold, wr: null, samples: pool.length }); continue; }
+      const wins = pool.filter(r => r.correct).length;
+      const wr = Math.round(wins / pool.length * 100);
+      const avgFav = Math.round(pool.reduce((s, r) => s + r.fav, 0) / pool.length);
+      curve.push({ threshold, wr, samples: pool.length, avg_fav: avgFav });
+    }
+
+    // Find the inflection point (where WR crosses 55%)
+    let edgeThreshold = null;
+    for (const pt of curve) {
+      if (pt.wr != null && pt.wr >= 55 && pt.samples >= 15) { edgeThreshold = pt.threshold; break; }
+    }
+
+    results.push({ id: comp.id, name: comp.name, curve, edge_threshold: edgeThreshold });
+  }
+
+  return results;
+}
+
 // ─── Save result ─────────────────────────────────────────────────────────────
 
 async function saveBacktestResult(result) {
@@ -1019,6 +1522,13 @@ async function saveBacktestResult(result) {
 function interpretAnalysis(analysis) {
   return {
     component_thresholds: interpretComponents(analysis.component_thresholds),
+    conditional_edge:     interpretConditional(analysis.conditional_edge),
+    heatmaps:             interpretHeatmaps(analysis.heatmaps),
+    regime_thresholds:    interpretRegimes(analysis.regime_thresholds),
+    session_thresholds:   interpretSessionTh(analysis.session_thresholds),
+    transitions:          interpretTransitions(analysis.transitions),
+    edge_stability:       interpretStability(analysis.edge_stability),
+    probability_curves:   interpretProbability(analysis.probability_curves),
     energy_thresholds:    interpretEnergy(analysis.energy_thresholds),
     strength_thresholds:  interpretStrength(analysis.strength_thresholds),
     state_outcomes:       interpretStates(analysis.state_outcomes),
@@ -1027,6 +1537,202 @@ function interpretAnalysis(analysis) {
     move_distance:        interpretDistance(analysis.move_distance),
     session_performance:  interpretSessions(analysis.session_performance),
   };
+}
+
+// ── Conditional Edge interpretation ──
+
+function interpretConditional(data) {
+  if (!data?.chains?.length) return { summary: 'Not enough data for conditional analysis.', bullets: [] };
+  const bullets = [];
+
+  for (const chain of data.chains) {
+    if (chain.steps.length < 2) continue;
+    const first = chain.steps[0];
+    const last = chain.steps[chain.steps.length - 1];
+    if (!first || !last) continue;
+    const lift = last.win_rate - first.win_rate;
+    bullets.push(`"${chain.name}" — stacking ${chain.steps.length - 1} filters lifts win rate from ${first.win_rate}% to ${last.win_rate}% (+${lift}pp), though sample drops from ${first.samples} to ${last.samples}. ${lift >= 15 ? 'This is a massive edge improvement.' : lift >= 8 ? 'Meaningful improvement — worth applying.' : 'Modest improvement — other chains may work better.'}`);
+
+    // Find the biggest single-step jump
+    let maxJump = 0, jumpLabel = '';
+    for (let i = 1; i < chain.steps.length; i++) {
+      const jump = chain.steps[i].win_rate - chain.steps[i - 1].win_rate;
+      if (jump > maxJump) { maxJump = jump; jumpLabel = chain.steps[i].label; }
+    }
+    if (maxJump >= 5) {
+      bullets.push(`In "${chain.name}", the single biggest improvement comes from "${jumpLabel}" (+${maxJump}pp). This is the most impactful filter in the chain.`);
+    }
+  }
+
+  // Find best final win rate across chains
+  const best = data.chains.reduce((a, c) => {
+    const last = c.steps[c.steps.length - 1];
+    return last && last.win_rate > (a?.wr || 0) ? { name: c.name, wr: last.win_rate, samples: last.samples } : a;
+  }, null);
+
+  const summary = best
+    ? `Multi-factor analysis reveals that stacking conditions is transformative. "${best.name}" reaches ${best.wr}% win rate when all filters align. Single-factor analysis never shows this — the real edge lives in combinations.`
+    : 'Conditional edge analysis shows how stacking filters improves trade quality.';
+
+  return { summary, bullets };
+}
+
+// ── Heatmap interpretation ──
+
+function interpretHeatmaps(data) {
+  if (!data?.length) return { summary: 'Not enough data for heatmap analysis.', bullets: [] };
+  const bullets = [];
+
+  for (const hm of data) {
+    if (hm.best && hm.worst) {
+      bullets.push(`${hm.name}: best zone is ${hm.x_label} ${hm.best.x} × ${hm.y_label} ${hm.best.y} at ${hm.best.wr}% WR. Worst: ${hm.worst.x} × ${hm.worst.y} at ${hm.worst.wr}% WR. Spread: ${hm.best.wr - hm.worst.wr} percentage points — the interaction between these two components creates a massive edge difference.`);
+    }
+  }
+
+  const summary = 'Cross-component heatmaps reveal where edge clusters in 2D space. No single indicator tells the full story — the interaction between components creates non-linear edges that only appear when you look at both dimensions simultaneously.';
+  return { summary, bullets };
+}
+
+// ── Regime threshold interpretation ──
+
+function interpretRegimes(data) {
+  if (!data || !Object.keys(data).length) return { summary: 'Not enough data for regime analysis.', bullets: [] };
+  const bullets = [];
+
+  for (const [regime, d] of Object.entries(data)) {
+    if (d.insufficient) continue;
+    const optEntries = Object.entries(d.optimal || {}).filter(([_, v]) => v.threshold != null);
+    if (!optEntries.length) {
+      bullets.push(`${regime}: baseline ${d.baseline?.win_rate}% WR across ${d.total_trades} trades. No component filter significantly improves this — the regime itself determines quality.`);
+      continue;
+    }
+    const best = optEntries.reduce((a, [k, v]) => v.win_rate > (a?.v?.win_rate || 0) ? { k, v } : a, null);
+    if (best) {
+      bullets.push(`${regime}: baseline ${d.baseline?.win_rate}% WR. Best filter: ${best.k} ≥ ${best.v.threshold} lifts to ${best.v.win_rate}% (${best.v.samples} trades). Thresholds in this regime are fundamentally different from global averages.`);
+    }
+  }
+
+  // Find best and worst regimes
+  const regimeWRs = Object.entries(data).filter(([_, d]) => !d.insufficient && d.baseline).sort((a, b) => b[1].baseline.win_rate - a[1].baseline.win_rate);
+  if (regimeWRs.length >= 2) {
+    bullets.push(`Best regime: ${regimeWRs[0][0]} at ${regimeWRs[0][1].baseline.win_rate}% baseline WR. Worst: ${regimeWRs[regimeWRs.length - 1][0]} at ${regimeWRs[regimeWRs.length - 1][1].baseline.win_rate}% WR. The same setup performs completely differently depending on market regime.`);
+  }
+
+  const summary = 'Thresholds change fundamentally between market regimes. A CS Differential that works in Expansion may fail in Compression. Regime-aware thresholds are essential for real-world edge.';
+  return { summary, bullets };
+}
+
+// ── Session threshold interpretation ──
+
+function interpretSessionTh(data) {
+  if (!data || !Object.keys(data).length) return { summary: 'Not enough data for session threshold analysis.', bullets: [] };
+  const bullets = [];
+
+  for (const [session, d] of Object.entries(data)) {
+    if (d.insufficient) continue;
+    const optEntries = Object.entries(d.optimal || {}).filter(([_, v]) => v.threshold != null);
+    if (!optEntries.length) continue;
+
+    const parts = optEntries.map(([k, v]) => `${k} ≥ ${v.threshold}`).join(', ');
+    const best = optEntries.reduce((a, [k, v]) => v.win_rate > (a?.v?.win_rate || 0) ? { k, v } : a, null);
+    bullets.push(`${session}: optimal filters are ${parts}. ${best ? `Best single filter: ${best.k} ≥ ${best.v.threshold} → ${best.v.win_rate}% WR (base: ${d.baseline?.win_rate}%).` : ''}`);
+  }
+
+  const summary = 'Each trading session has different optimal thresholds. Asia needs higher agreement to filter noise. London tolerates higher volatility. NY rewards directional dominance. Using global thresholds across all sessions leaves edge on the table.';
+  return { summary, bullets };
+}
+
+// ── Transition interpretation ──
+
+function interpretTransitions(data) {
+  if (!data?.length) return { summary: 'Not enough data for transition analysis.', bullets: [] };
+  const bullets = [];
+
+  const best = data[0]; // Already sorted by win rate
+  if (best) {
+    bullets.push(`Best transition: ${best.transition} at ${best.win_rate}% WR with ${best.avg_fav}p favourable move (${best.trades} trades). ${best.win_rate >= 60 ? 'This is an elite-level entry window.' : 'Worth targeting when this shift occurs.'}`);
+  }
+
+  const worst = data[data.length - 1];
+  if (worst && worst.win_rate < 48) {
+    bullets.push(`Worst transition: ${worst.transition} at ${worst.win_rate}% WR. ${worst.win_rate < 42 ? 'Trades taken during this shift are net losers — add to no-trade filter.' : 'Weak edge during this regime change.'}`);
+  }
+
+  const breakouts = data.filter(t => t.to === 'BREAKOUT' || t.to === 'EXPANSION');
+  if (breakouts.length) {
+    const avgWR = Math.round(breakouts.reduce((s, t) => s + t.win_rate, 0) / breakouts.length);
+    bullets.push(`Transitions INTO expansion/breakout average ${avgWR}% WR. ${avgWR >= 58 ? 'Confirmed: catching the regime shift is one of the highest-edge strategies.' : 'Expansion entries show an edge, but regime timing must be precise.'}`);
+  }
+
+  const summary = 'Markets move in transitions, not static states. The moment a regime changes is where the biggest opportunities and dangers live. Static analysis misses these windows entirely.';
+  return { summary, bullets };
+}
+
+// ── Edge stability interpretation ──
+
+function interpretStability(data) {
+  if (!data?.length) return { summary: 'Not enough data for stability analysis.', bullets: [] };
+  const bullets = [];
+
+  const stable = data.filter(d => d.decay === 'STABLE' && d.stability_score >= 70);
+  const decaying = data.filter(d => d.decay === 'DECAYING');
+  const improving = data.filter(d => d.decay === 'IMPROVING');
+
+  if (stable.length) {
+    bullets.push(`${stable.length} condition(s) show STABLE edge over time: ${stable.map(s => `"${s.condition}" (${s.stability_score}/100)`).join(', ')}. These are your most reliable trading rules.`);
+  }
+
+  if (decaying.length) {
+    for (const d of decaying) {
+      bullets.push(`WARNING — "${d.condition}" is DECAYING: historical ${d.older_wr}% WR → recent 3 months ${d.recent_3m_wr}% WR. This edge may be disappearing. Reduce reliance or investigate why.`);
+    }
+  }
+
+  if (improving.length) {
+    for (const d of improving) {
+      bullets.push(`IMPROVING — "${d.condition}": recent 3 months ${d.recent_3m_wr}% WR vs historical ${d.older_wr}% WR. Current market regime is favouring this condition.`);
+    }
+  }
+
+  // Highest stability score
+  const best = data[0]; // Already sorted by stability
+  if (best) {
+    bullets.push(`Most reliable condition: "${best.condition}" with stability score ${best.stability_score}/100, variance ±${best.variance}pp, overall ${best.overall_wr}% WR.`);
+  }
+
+  const summary = decaying.length
+    ? `${decaying.length} edge(s) are decaying — recently performing worse than historically. ${stable.length} edge(s) remain stable. Trust stable edges and reduce exposure to decaying ones.`
+    : `${stable.length} tested condition(s) show stable edge across the entire period. No significant edge decay detected.`;
+
+  return { summary, bullets };
+}
+
+// ── Probability curve interpretation ──
+
+function interpretProbability(data) {
+  if (!data?.length) return { summary: 'Not enough data for probability analysis.', bullets: [] };
+  const bullets = [];
+
+  for (const comp of data) {
+    if (!comp.edge_threshold) continue;
+    const edgePt = comp.curve.find(p => p.threshold === comp.edge_threshold);
+    if (!edgePt) continue;
+    bullets.push(`${comp.name}: probability of continuation crosses 55% at threshold ${comp.edge_threshold}. Below this, trades are coin flips. Above this, edge scales progressively.`);
+
+    // Find the steepest improvement section
+    let maxSlope = 0, slopeRange = '';
+    for (let i = 1; i < comp.curve.length; i++) {
+      if (comp.curve[i].wr == null || comp.curve[i - 1].wr == null) continue;
+      const slope = comp.curve[i].wr - comp.curve[i - 1].wr;
+      if (slope > maxSlope) { maxSlope = slope; slopeRange = `${comp.curve[i - 1].threshold} → ${comp.curve[i].threshold}`; }
+    }
+    if (maxSlope >= 4) {
+      bullets.push(`${comp.name} probability jumps fastest between ${slopeRange} (+${maxSlope}pp). This is the critical zone where the indicator transitions from noise to signal.`);
+    }
+  }
+
+  const summary = 'Markets are probabilistic, not binary. These curves show how the probability of continuation rises progressively with each indicator — there is no magic number, but there ARE inflection points where edge materially appears.';
+  return { summary, bullets };
 }
 
 // ── Per-component threshold interpretation ──
