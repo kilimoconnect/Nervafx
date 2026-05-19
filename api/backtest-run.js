@@ -25,7 +25,7 @@ module.exports = async function handler(req, res) {
 
   try {
     // Dynamic import to avoid loading heavy modules on cold start for other endpoints
-    const { runBacktest, saveBacktestResult } = require('../src/backtestEngine');
+    const { runBacktest, saveBacktestResult, interpretAnalysis } = require('../src/backtestEngine');
 
     const result = await runBacktest({
       from: new Date(from).toISOString(),
@@ -33,13 +33,16 @@ module.exports = async function handler(req, res) {
       maxBars: maxBars || 48,
     });
 
+    // Generate AI interpretations for every section
+    const insights = interpretAnalysis(result.analysis);
+
     // Save to DB (non-blocking — don't fail if save fails)
     const id = await saveBacktestResult(result).catch(e => {
       console.warn('[BACKTEST-API] Save failed:', e.message);
       return null;
     });
 
-    res.json({ id, ...result });
+    res.json({ id, ...result, insights });
   } catch (e) {
     console.error('[BACKTEST-RUN]', e.message);
     res.status(500).json({ error: e.message });

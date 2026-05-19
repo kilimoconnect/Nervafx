@@ -798,4 +798,358 @@ async function saveBacktestResult(result) {
   return data.id;
 }
 
-module.exports = { runBacktest, saveBacktestResult, loadCandles };
+// ─── AI Interpretation Engine ───────────────────────────────────────────────
+// Generates plain-English insights from raw analysis data so every user
+// can understand what the numbers mean and what to do about them.
+
+function interpretAnalysis(analysis) {
+  return {
+    energy_thresholds:    interpretEnergy(analysis.energy_thresholds),
+    strength_thresholds:  interpretStrength(analysis.strength_thresholds),
+    state_outcomes:       interpretStates(analysis.state_outcomes),
+    no_trade_zones:       interpretNoTrade(analysis.no_trade_zones),
+    condition_combos:     interpretCombos(analysis.condition_combos),
+    move_distance:        interpretDistance(analysis.move_distance),
+    session_performance:  interpretSessions(analysis.session_performance),
+  };
+}
+
+// ── Energy thresholds ──
+
+function interpretEnergy(data) {
+  if (!data?.by_component) return { summary: 'Not enough data to analyze energy thresholds.', bullets: [] };
+
+  const bullets = [];
+  let bestComp = '', bestRange = '', bestRate = 0;
+  let worstComp = '', worstRange = '', worstRate = 100;
+
+  for (const [comp, ranges] of Object.entries(data.by_component)) {
+    const keys = Object.keys(ranges).sort();
+    for (const k of keys) {
+      const d = ranges[k];
+      if (d.pairs_measured < 20) continue;
+      if (d.continuation_rate > bestRate)  { bestRate = d.continuation_rate;  bestComp = comp; bestRange = k; }
+      if (d.continuation_rate < worstRate) { worstRate = d.continuation_rate; worstComp = comp; worstRange = k; }
+    }
+  }
+
+  // Market energy sweet spot
+  const me = data.by_component.market_energy;
+  if (me) {
+    const sorted = Object.entries(me).sort((a, b) => b[1].continuation_rate - a[1].continuation_rate);
+    if (sorted.length >= 2) {
+      const best = sorted[0];
+      const worst = sorted[sorted.length - 1];
+      bullets.push(`The market moves most reliably when overall energy is in the ${best[0]} range (${best[1].continuation_rate}% continuation on ${best[1].pairs_measured} trades). This is your sweet spot for entries.`);
+      bullets.push(`Energy in the ${worst[0]} range shows the weakest follow-through (${worst[1].continuation_rate}%). Trades taken here are more likely to chop sideways.`);
+    }
+  }
+
+  // Best individual component
+  if (bestComp) {
+    const label = bestComp.replace('_', ' ');
+    bullets.push(`Strongest signal: when ${label} is ${bestRange}, the market continues in the expected direction ${bestRate}% of the time. Prioritize this reading above others.`);
+  }
+
+  // Agreement insight
+  const agr = data.by_component.agreement;
+  if (agr) {
+    const highAgr = agr['60-80'] || agr['80-100'];
+    const lowAgr  = agr['0-20'];
+    if (highAgr && lowAgr) {
+      const diff = highAgr.continuation_rate - lowAgr.continuation_rate;
+      if (diff > 5) {
+        bullets.push(`Agreement matters: high agreement (60+) produces ${diff} percentage points better continuation than low agreement (0-20). When currencies disagree on direction, stay out.`);
+      }
+    }
+  }
+
+  // Movement vs volatility
+  const mov = data.by_component.movement;
+  const vol = data.by_component.volatility;
+  if (mov && vol) {
+    const highMov = mov['60-80'] || mov['80-100'];
+    const highVol = vol['60-80'] || vol['80-100'];
+    if (highMov && highVol && highMov.continuation_rate > highVol.continuation_rate + 5) {
+      bullets.push(`Steady movement beats raw volatility. High movement scores predict continuation better than high volatility, which often means whipsaw and noise.`);
+    }
+  }
+
+  // Summary
+  const summary = bestComp
+    ? `The data reveals that ${bestComp.replace('_', ' ')} in the ${bestRange} range is your most reliable energy signal. Focus your entries when this condition is met and overall energy sits in the optimal zone.`
+    : 'The energy analysis shows how each component of market activity affects trade continuation.';
+
+  return { summary, bullets };
+}
+
+// ── Strength thresholds ──
+
+function interpretStrength(data) {
+  if (!data || !Object.keys(data).length) return { summary: 'Not enough data to analyze strength thresholds.', bullets: [] };
+
+  const bullets = [];
+  const sorted = Object.entries(data).sort((a, b) => parseFloat(a[0]) - parseFloat(b[0]));
+
+  // Find crossover point where continuation becomes profitable
+  let crossover = null;
+  for (const [key, d] of sorted) {
+    if (d.continuation_rate >= 55 && d.samples >= 20) {
+      crossover = { key, ...d };
+      break;
+    }
+  }
+
+  if (crossover) {
+    bullets.push(`Currency strength differential of ${crossover.key} or higher gives you a reliable edge: ${crossover.continuation_rate}% continuation rate across ${crossover.samples} trades. Below this level, trades are essentially coin flips.`);
+  }
+
+  // Best tier
+  const best = sorted.reduce((a, b) => (b[1].continuation_rate > (a?.[1]?.continuation_rate || 0) && b[1].samples >= 15) ? b : a, null);
+  if (best) {
+    bullets.push(`Strongest edge: spread differential at ${best[0]} shows ${best[1].continuation_rate}% continuation, averaging +${best[1].avg_favourable_pips} pips favourable vs -${best[1].avg_adverse_pips} pips adverse. The reward-to-risk from strength alone is ${(best[1].avg_favourable_pips / Math.max(1, best[1].avg_adverse_pips)).toFixed(1)}:1.`);
+  }
+
+  // Weak tier warning
+  const weakest = sorted.find(([_, d]) => d.continuation_rate < 50 && d.samples >= 20);
+  if (weakest) {
+    bullets.push(`Weak differentials (${weakest[0]}) show only ${weakest[1].continuation_rate}% continuation with ${weakest[1].avg_adverse_pips} pips of adverse movement. These are the trades that stop you out before moving — avoid them.`);
+  }
+
+  // Risk/reward insight
+  const bigSpread = sorted[sorted.length - 1];
+  const smallSpread = sorted[0];
+  if (bigSpread && smallSpread && bigSpread[1].samples >= 10 && smallSpread[1].samples >= 10) {
+    const bigRR = bigSpread[1].avg_favourable_pips / Math.max(1, bigSpread[1].avg_adverse_pips);
+    const smallRR = smallSpread[1].avg_favourable_pips / Math.max(1, smallSpread[1].avg_adverse_pips);
+    if (bigRR > smallRR + 0.3) {
+      bullets.push(`Larger strength gaps produce fundamentally better risk/reward: ${bigRR.toFixed(1)}:1 at ${bigSpread[0]} vs ${smallRR.toFixed(1)}:1 at ${smallSpread[0]}. Patience for wider spreads pays off.`);
+    }
+  }
+
+  const summary = crossover
+    ? `Currency strength differential is a strong filter. The minimum threshold for a reliable trade is a spread of ${crossover.key}. Below that, price action is too random to trade with an edge.`
+    : 'The analysis shows how currency strength differentials correlate with trade outcomes. Larger differentials generally improve continuation probability.';
+
+  return { summary, bullets };
+}
+
+// ── State outcomes ──
+
+function interpretStates(data) {
+  if (!data || !Object.keys(data).length) return { summary: 'Not enough data to analyze state outcomes.', bullets: [] };
+
+  const bullets = [];
+  const sorted = Object.entries(data).sort((a, b) => b[1].win_rate - a[1].win_rate);
+
+  // Best state
+  const best = sorted.find(([_, d]) => d.samples >= 20);
+  if (best) {
+    bullets.push(`${best[0].replace(/_/g, ' ')} is the highest-probability entry state at ${best[1].win_rate}% win rate across ${best[1].samples} trades. This is the state the engine should target for entries.`);
+  }
+
+  // READY_TO_ENTER specifically
+  const ready = data['READY_TO_ENTER'];
+  if (ready && ready.samples >= 10) {
+    bullets.push(`READY TO ENTER signals delivered ${ready.win_rate}% win rate with +${ready.avg_favourable} pips average favourable move and -${ready.avg_adverse} pips adverse. ${ready.win_rate >= 55 ? 'This confirms the state machine is correctly identifying entry windows.' : 'This state needs tighter filters to improve accuracy.'}`);
+  }
+
+  // TREND state
+  const trend = data['TREND'];
+  if (trend && trend.samples >= 10) {
+    bullets.push(`Taking trades during TREND state (before pullback) shows ${trend.win_rate}% win rate. ${trend.win_rate < 50 ? 'This confirms that waiting for a pullback before entering is critical — chasing trends hurts performance.' : 'Trend-following entries show decent accuracy, but pullback entries likely offer better risk/reward.'}`);
+  }
+
+  // Worst states
+  const avoid = sorted.filter(([_, d]) => d.win_rate < 45 && d.samples >= 15);
+  if (avoid.length) {
+    const names = avoid.map(([s]) => s.replace(/_/g, ' ')).join(', ');
+    bullets.push(`States to avoid completely: ${names}. These produce sub-45% win rates — you lose money trading them regardless of other conditions.`);
+  }
+
+  // Confidence correlation
+  const highConf = sorted.filter(([_, d]) => d.avg_confidence >= 70 && d.samples >= 10);
+  const lowConf  = sorted.filter(([_, d]) => d.avg_confidence < 50 && d.samples >= 10);
+  if (highConf.length && lowConf.length) {
+    const avgHigh = Math.round(highConf.reduce((s, [_, d]) => s + d.win_rate, 0) / highConf.length);
+    const avgLow  = Math.round(lowConf.reduce((s, [_, d]) => s + d.win_rate, 0) / lowConf.length);
+    if (avgHigh > avgLow + 5) {
+      bullets.push(`Confidence scores matter: states with 70+ confidence average ${avgHigh}% win rate vs ${avgLow}% for sub-50 confidence. Trust the confidence reading.`);
+    }
+  }
+
+  const summary = best
+    ? `The state machine analysis reveals ${best[0].replace(/_/g, ' ')} as the optimal entry state. ${avoid.length ? `${avoid.length} state(s) should be filtered out entirely as they consistently lose money.` : ''}`
+    : 'State outcome analysis shows how each market state performs when trades are taken.';
+
+  return { summary, bullets };
+}
+
+// ── No-trade zones ──
+
+function interpretNoTrade(zones) {
+  if (!zones || !zones.length) return { summary: 'No clear no-trade zones were detected in the historical data.', bullets: [] };
+
+  const bullets = [];
+  const avoidZones = zones.filter(z => z.verdict === 'AVOID');
+  const cautionZones = zones.filter(z => z.verdict === 'CAUTION');
+
+  if (avoidZones.length) {
+    bullets.push(`${avoidZones.length} market condition(s) are confirmed danger zones where trades consistently lose money. The engine should automatically block entries when these conditions are present.`);
+    for (const z of avoidZones) {
+      bullets.push(`DANGER: "${z.condition}" — only ${z.win_rate}% win rate across ${z.samples} trades with average ${z.avg_pips} pips per trade. Every trade taken here costs you money.`);
+    }
+  }
+
+  if (cautionZones.length) {
+    for (const z of cautionZones) {
+      bullets.push(`CAUTION: "${z.condition}" — ${z.win_rate}% win rate. Not a clear loser, but the edge is thin. Reduce position size or require additional confirmation before entering.`);
+    }
+  }
+
+  const totalSaved = avoidZones.reduce((s, z) => s + Math.abs(z.avg_pips) * z.samples, 0);
+  if (totalSaved > 0) {
+    bullets.push(`By avoiding just these ${avoidZones.length} conditions, you would have dodged approximately ${Math.round(totalSaved)} pips of losses in the test period.`);
+  }
+
+  const summary = avoidZones.length
+    ? `${avoidZones.length} no-trade zone(s) confirmed. These conditions produce consistently negative results and should be hard-coded as trade blockers in your system.`
+    : 'Some market conditions show reduced edge but none are confirmed money-losers. Use caution flags rather than hard blocks.';
+
+  return { summary, bullets };
+}
+
+// ── Condition combos ──
+
+function interpretCombos(combos) {
+  if (!combos || !combos.length) return { summary: 'Not enough data to identify condition combinations.', bullets: [] };
+
+  const bullets = [];
+  const strong = combos.filter(c => c.verdict === 'STRONG_ENTRY');
+  const opps   = combos.filter(c => c.verdict === 'OPPORTUNITY');
+
+  if (strong.length) {
+    for (const c of strong) {
+      bullets.push(`HIGH-PROBABILITY SETUP: "${c.name}" — ${c.win_rate}% win rate with average ${c.avg_move} pip moves across ${c.samples} occurrences. When you see ${c.condition}, enter with full conviction.`);
+    }
+  }
+
+  if (opps.length) {
+    for (const c of opps) {
+      bullets.push(`OPPORTUNITY: "${c.name}" — ${c.win_rate}% win rate, ${c.avg_move} pip average move. ${c.win_rate >= 55 ? 'Solid edge worth trading with standard size.' : 'Edge present but moderate — consider reduced position size.'}`);
+    }
+  }
+
+  // Best overall combo
+  const best = combos.reduce((a, b) => (b.win_rate > (a?.win_rate || 0)) ? b : a, null);
+  if (best && best.win_rate >= 55) {
+    bullets.push(`Your single best setup is "${best.name}" at ${best.win_rate}% win rate. If you traded only this pattern, you would have a significant edge over the market.`);
+  }
+
+  // Compare combos to see if stacking matters
+  if (combos.length >= 2) {
+    const avgRate = Math.round(combos.reduce((s, c) => s + c.win_rate, 0) / combos.length);
+    bullets.push(`Across all ${combos.length} condition combinations, the average win rate is ${avgRate}%. ${avgRate >= 55 ? 'The engine is finding genuine edges in the market structure.' : 'Some patterns show promise but need more filtering for consistent profitability.'}`);
+  }
+
+  const summary = strong.length
+    ? `${strong.length} high-probability entry pattern(s) identified. These are the specific market conditions where NervaFX signals have the strongest historical edge.`
+    : `${combos.length} condition patterns analyzed. ${opps.length ? 'Opportunities exist but require careful position sizing.' : 'More data needed for definitive conclusions.'}`;
+
+  return { summary, bullets };
+}
+
+// ── Move distance ──
+
+function interpretDistance(data) {
+  if (!data || !Object.keys(data).length) return { summary: 'Not enough data to analyze move distances.', bullets: [] };
+
+  const bullets = [];
+  const horizons = Object.keys(data).sort();
+
+  // 4H is the key trading horizon
+  const h4 = data.h4;
+  if (h4) {
+    bullets.push(`At the 4-hour mark, price moves an average of ${h4.overall_avg_max} pips from entry. Your take-profit should be calibrated around this — setting TP beyond ${Math.round(h4.overall_avg_max * 1.3)} pips means most trades won't reach target.`);
+    if (h4.high_energy.samples >= 10 && h4.low_energy.samples >= 10) {
+      const ratio = (h4.high_energy.avg_max / Math.max(1, h4.low_energy.avg_max)).toFixed(1);
+      bullets.push(`High-energy markets move ${ratio}x further than low-energy markets at 4H (${h4.high_energy.avg_max}p vs ${h4.low_energy.avg_max}p). This is why energy level should directly scale your TP target.`);
+    }
+  }
+
+  // 8H for swing context
+  const h8 = data.h8;
+  if (h8) {
+    bullets.push(`Over 8 hours, average maximum excursion is ${h8.overall_avg_max} pips. ${h8.overall_avg_net < h8.overall_avg_max * 0.5 ? 'But only ' + h8.overall_avg_net + ' pips net — meaning price retraces significantly. Consider trailing stops rather than fixed TP for longer holds.' : 'Net move of ' + h8.overall_avg_net + ' pips shows strong directional follow-through at this horizon.'}`);
+  }
+
+  // 1H for stop loss calibration
+  const h1 = data.h1;
+  if (h1) {
+    bullets.push(`In the first hour, price swings ${h1.overall_avg_max} pips on average. Your stop loss needs to accommodate at least ${Math.round(h1.overall_avg_max * 1.2)} pips to avoid being stopped out by normal noise before the trade can work.`);
+  }
+
+  // Energy scaling summary
+  if (h4 && h4.high_energy.samples >= 10) {
+    const scales = [];
+    if (h4.low_energy.avg_max > 0) scales.push(`Low energy: ~${h4.low_energy.avg_max}p`);
+    if (h4.mid_energy.avg_max > 0) scales.push(`Mid energy: ~${h4.mid_energy.avg_max}p`);
+    if (h4.high_energy.avg_max > 0) scales.push(`High energy: ~${h4.high_energy.avg_max}p`);
+    if (scales.length >= 2) {
+      bullets.push(`TP scale by energy level (4H): ${scales.join(' → ')}. Use these as your TP targets based on current market energy.`);
+    }
+  }
+
+  const summary = h4
+    ? `Price typically moves ${h4.overall_avg_max} pips maximum within 4 hours. Use this as your baseline for take-profit placement, scaled by market energy level.`
+    : 'Move distance analysis shows expected pip ranges at multiple time horizons.';
+
+  return { summary, bullets };
+}
+
+// ── Session performance ──
+
+function interpretSessions(data) {
+  if (!data || !Object.keys(data).length) return { summary: 'Not enough data to analyze session performance.', bullets: [] };
+
+  const bullets = [];
+  const sorted = Object.entries(data).sort((a, b) => b[1].h4_avg_move - a[1].h4_avg_move);
+
+  // Best session
+  const best = sorted[0];
+  if (best) {
+    bullets.push(`${best[0].replace('_', ' ')} is your highest-opportunity session with ${best[1].h4_avg_move} pip average 4H moves and ${best[1].avg_energy} average energy. This is when the market delivers the most tradeable setups.`);
+  }
+
+  // Worst session
+  const worst = sorted[sorted.length - 1];
+  if (worst && worst[1].h4_avg_move < best[1].h4_avg_move * 0.7) {
+    bullets.push(`${worst[0].replace('_', ' ')} produces ${worst[1].h4_avg_move} pip 4H moves — ${Math.round((1 - worst[1].h4_avg_move / best[1].h4_avg_move) * 100)}% less than ${best[0].replace('_', ' ')}. ${worst[1].avg_energy < 25 ? 'Low energy during this session makes entries high-risk.' : 'Consider tighter stops during this session.'}`);
+  }
+
+  // London/NY overlap
+  const overlap = data['LONDON_NY'];
+  if (overlap) {
+    bullets.push(`London–New York overlap: ${overlap.h4_avg_move} pip 4H moves at ${overlap.avg_energy} avg energy. ${overlap.avg_energy >= 40 ? 'This session overlap generates the most liquid and directional conditions — ideal for trend continuation trades.' : 'Energy levels are moderate. Be selective during this session.'}`);
+  }
+
+  // Asia session
+  const asia = data['ASIA'];
+  if (asia) {
+    bullets.push(`Asian session: ${asia.h4_avg_move} pip 4H moves. ${asia.avg_energy < 25 ? 'Low energy typically means ranging conditions. Consider range-based strategies or simply wait for London open.' : 'Surprisingly active — some pairs move well during Asia. Focus on JPY and AUD crosses.'}`);
+  }
+
+  // 8H horizon comparison
+  const bestH8 = sorted.reduce((a, b) => (b[1].h8_avg_move > (a?.[1]?.h8_avg_move || 0)) ? b : a, null);
+  if (bestH8 && bestH8[1].h8_avg_move > 0) {
+    bullets.push(`For swing trades (8H+), ${bestH8[0].replace('_', ' ')} entries travel furthest: ${bestH8[1].h8_avg_move} pips average. Time your swing entries during this session for maximum follow-through.`);
+  }
+
+  const summary = best
+    ? `${best[0].replace('_', ' ')} is the strongest trading session, producing the largest and most reliable price moves. Plan your highest-conviction entries around this time window.`
+    : 'Session analysis shows how price behaviour varies across the trading day.';
+
+  return { summary, bullets };
+}
+
+module.exports = { runBacktest, saveBacktestResult, loadCandles, interpretAnalysis };

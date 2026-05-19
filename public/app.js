@@ -3066,14 +3066,17 @@ async function runBacktest() {
     status.textContent = `Analyzed ${data.snapshots_analyzed} hourly snapshots in ${data.duration_sec}s`;
 
     const a = data.analysis;
-    _btRenderEnergyThresholds(a.energy_thresholds);
-    _btRenderStrengthThresholds(a.strength_thresholds);
-    _btRenderStateOutcomes(a.state_outcomes);
-    _btRenderNoTradeZones(a.no_trade_zones);
-    _btRenderConditionCombos(a.condition_combos);
-    _btRenderMoveDistance(a.move_distance);
-    _btRenderSessionPerf(a.session_performance);
+    const ins = data.insights || {};
+    _btRenderEnergyThresholds(a.energy_thresholds, ins.energy_thresholds);
+    _btRenderStrengthThresholds(a.strength_thresholds, ins.strength_thresholds);
+    _btRenderStateOutcomes(a.state_outcomes, ins.state_outcomes);
+    _btRenderNoTradeZones(a.no_trade_zones, ins.no_trade_zones);
+    _btRenderConditionCombos(a.condition_combos, ins.condition_combos);
+    _btRenderMoveDistance(a.move_distance, ins.move_distance);
+    _btRenderSessionPerf(a.session_performance, ins.session_performance);
     _btLoadHistory();
+    // Re-init lucide icons for insight boxes
+    if (window.lucide) lucide.createIcons();
 
     // Show all result sections
     document.querySelectorAll('.bt-hidden').forEach(s => s.classList.remove('bt-hidden'));
@@ -3092,11 +3095,25 @@ function _btTable(headers, rows) {
   </table>`;
 }
 
-function _btRenderEnergyThresholds(data) {
+function _btInsightBox(insight) {
+  if (!insight || (!insight.summary && !insight.bullets?.length)) return '';
+  let html = '<div class="bt-insight">';
+  html += '<div class="bt-insight-header"><i data-lucide="brain" style="width:16px;height:16px"></i> AI Analysis</div>';
+  if (insight.summary) html += `<div class="bt-insight-summary">${insight.summary}</div>`;
+  if (insight.bullets?.length) {
+    html += '<ul class="bt-insight-bullets">';
+    for (const b of insight.bullets) html += `<li>${b}</li>`;
+    html += '</ul>';
+  }
+  html += '</div>';
+  return html;
+}
+
+function _btRenderEnergyThresholds(data, insight) {
   const el = document.getElementById('bt-energy');
   if (!el || !data?.by_component) return;
 
-  let html = '';
+  let html = _btInsightBox(insight);
   for (const [comp, ranges] of Object.entries(data.by_component)) {
     const label = comp.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
     const keys = Object.keys(ranges).sort();
@@ -3113,12 +3130,12 @@ function _btRenderEnergyThresholds(data) {
   el.innerHTML = html || '<div style="color:var(--text-muted)">No data</div>';
 }
 
-function _btRenderStrengthThresholds(data) {
+function _btRenderStrengthThresholds(data, insight) {
   const el = document.getElementById('bt-strength');
   if (!el || !data) return;
 
   const keys = Object.keys(data).sort();
-  el.innerHTML = _btTable(
+  el.innerHTML = _btInsightBox(insight) + _btTable(
     ['Spread Diff', 'Samples', 'Continuation %', 'Avg Favourable', 'Avg Adverse', 'Avg Net'],
     keys.map(k => {
       const d = data[k];
@@ -3132,12 +3149,12 @@ function _btRenderStrengthThresholds(data) {
   );
 }
 
-function _btRenderStateOutcomes(data) {
+function _btRenderStateOutcomes(data, insight) {
   const el = document.getElementById('bt-states');
   if (!el || !data) return;
 
   const states = Object.keys(data).sort((a, b) => data[b].win_rate - data[a].win_rate);
-  el.innerHTML = _btTable(
+  el.innerHTML = _btInsightBox(insight) + _btTable(
     ['Market State', 'Samples', 'Win Rate', 'Avg Favourable', 'Avg Adverse', 'Avg Confidence'],
     states.map(s => {
       const d = data[s];
@@ -3151,16 +3168,16 @@ function _btRenderStateOutcomes(data) {
   );
 }
 
-function _btRenderNoTradeZones(zones) {
+function _btRenderNoTradeZones(zones, insight) {
   const el = document.getElementById('bt-notrade');
   if (!el || !zones) return;
 
   if (!zones.length) {
-    el.innerHTML = '<div style="color:var(--text-muted)">No clear no-trade zones detected</div>';
+    el.innerHTML = _btInsightBox(insight) + '<div style="color:var(--text-muted)">No clear no-trade zones detected</div>';
     return;
   }
 
-  el.innerHTML = zones.map(z => {
+  el.innerHTML = _btInsightBox(insight) + zones.map(z => {
     const cls = z.verdict === 'AVOID' ? 'bt-loss' : 'bt-be';
     return `<div class="bt-zone-card">
       <div class="bt-zone-verdict ${cls}">${z.verdict}</div>
@@ -3170,16 +3187,16 @@ function _btRenderNoTradeZones(zones) {
   }).join('');
 }
 
-function _btRenderConditionCombos(combos) {
+function _btRenderConditionCombos(combos, insight) {
   const el = document.getElementById('bt-combos');
   if (!el || !combos) return;
 
   if (!combos.length) {
-    el.innerHTML = '<div style="color:var(--text-muted)">Not enough data for combo analysis</div>';
+    el.innerHTML = _btInsightBox(insight) + '<div style="color:var(--text-muted)">Not enough data for combo analysis</div>';
     return;
   }
 
-  el.innerHTML = combos.map(c => {
+  el.innerHTML = _btInsightBox(insight) + combos.map(c => {
     const cls = c.verdict === 'STRONG_ENTRY' ? 'bt-win' : c.verdict === 'OPPORTUNITY' ? 'bt-be' : '';
     return `<div class="bt-combo-card">
       <div class="bt-combo-name">${c.name}</div>
@@ -3194,12 +3211,12 @@ function _btRenderConditionCombos(combos) {
   }).join('');
 }
 
-function _btRenderMoveDistance(data) {
+function _btRenderMoveDistance(data, insight) {
   const el = document.getElementById('bt-distance');
   if (!el || !data) return;
 
   const horizons = Object.keys(data).sort();
-  el.innerHTML = _btTable(
+  el.innerHTML = _btInsightBox(insight) + _btTable(
     ['Horizon', 'Samples', 'Avg Max Move', 'Avg Net', 'Low Energy', 'Mid Energy', 'High Energy'],
     horizons.map(h => {
       const d = data[h];
@@ -3213,12 +3230,12 @@ function _btRenderMoveDistance(data) {
   );
 }
 
-function _btRenderSessionPerf(data) {
+function _btRenderSessionPerf(data, insight) {
   const el = document.getElementById('bt-sessions');
   if (!el || !data) return;
 
   const sessions = Object.keys(data).sort((a, b) => data[b].avg_energy - data[a].avg_energy);
-  el.innerHTML = _btTable(
+  el.innerHTML = _btInsightBox(insight) + _btTable(
     ['Session', 'Hours', 'Avg Energy', '4H Avg Move', '4H Samples', '8H Avg Move', '8H Samples'],
     sessions.map(s => {
       const d = data[s];

@@ -5454,6 +5454,82 @@ body::after {
   padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,.04);
 }
 
+/* AI Insight Box */
+.bt-insight {
+  background: linear-gradient(135deg, rgba(59,130,246,.08) 0%, rgba(79,70,229,.06) 100%);
+  border: 1px solid rgba(59,130,246,.25);
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+  position: relative;
+  overflow: hidden;
+}
+.bt-insight::before {
+  content: '';
+  position: absolute; top: 0; left: 0; width: 3px; height: 100%;
+  background: linear-gradient(180deg, #3b82f6, #8b5cf6);
+  border-radius: 3px 0 0 3px;
+}
+.bt-insight-header {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.8px; color: #818cf8; margin-bottom: 10px;
+}
+.bt-insight-summary {
+  font-size: 14px; font-weight: 600; color: var(--text);
+  line-height: 1.5; margin-bottom: 10px;
+}
+.bt-insight-bullets {
+  list-style: none; padding: 0; margin: 0;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.bt-insight-bullets li {
+  font-size: 12.5px; color: var(--text-dim); line-height: 1.55;
+  padding-left: 18px; position: relative;
+}
+.bt-insight-bullets li::before {
+  content: ''; position: absolute; left: 0; top: 7px;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: #818cf8; opacity: .7;
+}
+
+/* Section title within analysis cards */
+.bt-section-title {
+  font-size: 12px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--text-muted);
+  margin: 14px 0 6px; padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+}
+.bt-section-title:first-child { margin-top: 0; }
+
+/* Zone and combo cards */
+.bt-zone-card {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px 14px; margin-bottom: 8px;
+}
+.bt-zone-verdict {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.8px; margin-bottom: 4px;
+}
+.bt-zone-condition { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.bt-zone-stats { font-size: 11px; color: var(--text-muted); }
+
+.bt-combo-card {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px 14px; margin-bottom: 8px;
+}
+.bt-combo-name { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 2px; }
+.bt-combo-cond { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; }
+.bt-combo-stats {
+  display: flex; gap: 14px; flex-wrap: wrap;
+  font-size: 12px; color: var(--text-dim);
+}
+.bt-combo-verdict {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.5px; padding: 2px 8px; border-radius: 4px;
+  background: rgba(255,255,255,.06);
+}
+
 /* Loading spinner */
 .bt-spinner {
   display: inline-block; width: 14px; height: 14px;
