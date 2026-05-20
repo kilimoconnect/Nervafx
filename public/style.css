@@ -158,6 +158,13 @@ html, body {
   font-weight: 700;
 }
 
+.plan-lock-premium-note {
+  font-size: 10px;
+  color: #a78bfa;
+  margin: 0;
+  font-style: italic;
+}
+
 .plan-lock-btn {
   margin-top: 8px;
   font-size: 11px;
