@@ -1795,7 +1795,7 @@ function _meSessionCard(name, s, status, hourlyRows) {
       <span class="me-foot-item">Readiness <strong>${readiness}</strong></span>
       <span class="me-foot-item" style="color:${liqColor}">Liquidity <strong>${liqScore}</strong></span>
     </div>
-    ${_meHourlyTrend(hourlyRows)}
+    ${status === 'ACTIVE' ? _meHourlyTrend(hourlyRows) : ''}
     ${_meSessionExplain(s, label)}
   </div>`;
 }
