@@ -4330,9 +4330,21 @@ body::after {
   padding: 3px 4px;
   font-weight: 600;
 }
-.me-ht-up { color: #22c55e; font-size: 8px; margin-right: 2px; }
-.me-ht-dn { color: #ef4444; font-size: 8px; margin-right: 2px; }
-.me-ht-flat { color: #64748b; font-size: 8px; margin-right: 2px; }
+.me-ht-val { font-weight: 700; }
+.me-ht-chg-up {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  color: #22c55e;
+  margin-left: 3px;
+}
+.me-ht-chg-dn {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  color: #ef4444;
+  margin-left: 3px;
+}
 
 /* Session explanation block */
 .me-explain {

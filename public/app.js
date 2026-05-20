@@ -1620,23 +1620,24 @@ function _meHourlyTrend(hourlyRows) {
     { key: 'market_energy',   label: 'Energy' },
   ];
 
-  // Time headers in user's timezone (e.g. "19:00")
+  // Time headers in user's timezone
   const tz = (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC');
   const timeHeaders = hourlyRows.map(h => {
     const d = new Date(h.time_utc);
     return d.toLocaleTimeString('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false });
   });
 
-  // Trend arrow between consecutive values
-  function trendArrow(vals, idx) {
+  // Change badge: shows delta from previous candle
+  function changeBadge(vals, idx) {
     if (idx === 0) return '';
     const diff = vals[idx] - vals[idx - 1];
-    if (diff > 2) return '<span class="me-ht-up">▲</span>';
-    if (diff < -2) return '<span class="me-ht-dn">▼</span>';
-    return '<span class="me-ht-flat">—</span>';
+    if (diff === 0) return '';
+    const sign = diff > 0 ? '+' : '';
+    const cls = diff > 0 ? 'me-ht-chg-up' : 'me-ht-chg-dn';
+    return `<span class="${cls}">${sign}${diff}</span>`;
   }
 
-  // Color a value cell based on its magnitude
+  // Color a value based on its magnitude
   function valColor(v) {
     if (v >= 60) return '#22c55e';
     if (v >= 35) return '#eab308';
@@ -1648,7 +1649,7 @@ function _meHourlyTrend(hourlyRows) {
   const bodyRows = metrics.map(m => {
     const vals = hourlyRows.map(h => Math.round(parseFloat(h[m.key]) || 0));
     const cells = vals.map((v, i) =>
-      `<td class="me-ht-td" style="color:${valColor(v)}">${trendArrow(vals, i)}${v}</td>`
+      `<td class="me-ht-td"><span class="me-ht-val" style="color:${valColor(v)}">${v}</span>${changeBadge(vals, i)}</td>`
     ).join('');
     return `<tr><td class="me-ht-label">${m.label}</td>${cells}</tr>`;
   }).join('');
