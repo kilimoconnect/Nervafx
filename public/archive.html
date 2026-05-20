@@ -176,10 +176,10 @@
         <span class="arc-filter-label">Period</span>
         <div class="arc-filter-pills" id="arc-period-pills">
           <button class="arc-fpill" data-days="7" onclick="setArcPeriod(this)">7D</button>
-          <button class="arc-fpill active" data-days="30" onclick="setArcPeriod(this)">30D</button>
+          <button class="arc-fpill" data-days="30" onclick="setArcPeriod(this)">30D</button>
           <button class="arc-fpill" data-days="90" onclick="setArcPeriod(this)">90D</button>
           <button class="arc-fpill" data-days="180" onclick="setArcPeriod(this)">6M</button>
-          <button class="arc-fpill" data-days="365" onclick="setArcPeriod(this)">1Y</button>
+          <button class="arc-fpill active" data-days="365" onclick="setArcPeriod(this)">1Y</button>
         </div>
       </div>
       <div class="arc-filter-group">
@@ -267,7 +267,7 @@
 
   // ─── Filter State ──────────────────────────────────────────────────────────
 
-  let _arcFilterDays = 30;
+  let _arcFilterDays = 365;
   let _arcFilterSession = 'ALL';
   let _arcCustomFrom = null;  // ISO string or null
   let _arcCustomTo = null;
