@@ -3407,7 +3407,7 @@ async function refresh() {
     updateHeader(risk);
     renderSession(sessionData);
     fetchMarketActivity(); // non-blocking — separate fetch, renders independently
-    fetchMomentumSignal(); // non-blocking — checks for continuation signal
+    // fetchMomentumSignal(); // disabled — momentum bar removed from header
     buildChart(strength, activeTF);
     renderCurrencySignals(strength);          // must run first — populates _csigCurrencies
     renderLiveOpportunities(states.states || []);
