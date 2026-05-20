@@ -1789,7 +1789,7 @@ function _meSessionCard(name, s, status, hourlyRows) {
       ${momentumHtml}
       ${statusHtml}
     </div>
-    <div class="me-card-comps">${compRows}${dirRows}</div>
+    <div class="me-card-comps"><div class="me-avg-note">Session averages</div>${compRows}${dirRows}</div>
     <div class="me-card-foot">
       <div class="me-foot-energy">
         <span class="me-foot-item">Energy <strong>${energy}</strong></span>

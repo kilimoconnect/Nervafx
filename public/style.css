@@ -4220,6 +4220,14 @@ body::after {
   flex-direction: column;
   gap: 5px;
 }
+.me-avg-note {
+  font-size: 9px;
+  color: var(--text-dim);
+  letter-spacing: .3px;
+  text-transform: uppercase;
+  opacity: .6;
+  margin-bottom: 2px;
+}
 
 .me-card-empty {
   color: var(--text-dim);
