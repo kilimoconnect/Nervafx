@@ -57,17 +57,24 @@
       font-size: 14px; font-weight: 700; color: var(--text);
     }
     .arc-section-header i { width: 18px; height: 18px; color: var(--text-muted); }
+    .arc-section-desc {
+      font-size: 12px; color: var(--text-muted); line-height: 1.5;
+      margin: -8px 0 14px; padding-left: 28px;
+    }
 
     .arc-tabs {
       display: flex; gap: 4px;
       margin-bottom: 16px;
+      overflow-x: auto; -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
     }
+    .arc-tabs::-webkit-scrollbar { display: none; }
     .arc-tab {
       padding: 6px 14px; border-radius: 6px;
       border: 1px solid var(--border);
       background: transparent; color: var(--text-muted);
       font-size: 11px; font-weight: 600; cursor: pointer;
-      transition: all 0.15s;
+      transition: all 0.15s; white-space: nowrap; flex-shrink: 0;
     }
     .arc-tab:hover { background: var(--bg-hover); color: var(--text); }
     .arc-tab.active { background: rgba(59,130,246,0.14); border-color: rgba(59,130,246,0.38); color: #93c5fd; }
@@ -108,28 +115,54 @@
 
   <main class="arc-main">
     <div class="arc-tabs">
-      <button class="arc-tab active" data-section="momentum" onclick="switchArchiveTab(this)">Momentum Chart</button>
+      <button class="arc-tab active" data-section="momentum" onclick="switchArchiveTab(this)">Momentum</button>
+      <button class="arc-tab" data-section="movement" onclick="switchArchiveTab(this)">Movement</button>
+      <button class="arc-tab" data-section="agreement" onclick="switchArchiveTab(this)">Agreement</button>
+      <button class="arc-tab" data-section="volatility" onclick="switchArchiveTab(this)">Volatility</button>
+      <button class="arc-tab" data-section="energy" onclick="switchArchiveTab(this)">Energy</button>
+      <button class="arc-tab" data-section="liquidity" onclick="switchArchiveTab(this)">Liquidity</button>
       <button class="arc-tab" data-section="history" onclick="switchArchiveTab(this)">Session History</button>
     </div>
 
     <section class="arc-section" id="arc-momentum">
-      <div class="arc-section-header">
-        <i data-lucide="bar-chart-3"></i>
-        Hourly Session Momentum
-      </div>
-      <div id="arc-momentum-body">
-        <div class="arc-loading"><span class="spinner"></span> Loading momentum data…</div>
-      </div>
+      <div class="arc-section-header"><i data-lucide="bar-chart-3"></i> Hourly Momentum (Breadth)</div>
+      <div class="arc-section-desc">How many pairs are moving together each hour. Higher = broader market participation. Green bars = 3+ consecutive increases (continuation signal).</div>
+      <div id="arc-momentum-body"><div class="arc-loading"><span class="spinner"></span> Loading momentum data…</div></div>
+    </section>
+
+    <section class="arc-section" id="arc-movement" style="display:none">
+      <div class="arc-section-header"><i data-lucide="move"></i> Hourly Movement</div>
+      <div class="arc-section-desc">How much pairs are physically moving in pips each hour. Higher = bigger price action. Green bars = 3+ consecutive increases (building movement).</div>
+      <div id="arc-movement-body"><div class="arc-loading"><span class="spinner"></span> Loading movement data…</div></div>
+    </section>
+
+    <section class="arc-section" id="arc-agreement" style="display:none">
+      <div class="arc-section-header"><i data-lucide="check-check"></i> Hourly Agreement</div>
+      <div class="arc-section-desc">How well timeframes agree on direction each hour. High agreement = clear directional bias. Green bars = sustained agreement buildup.</div>
+      <div id="arc-agreement-body"><div class="arc-loading"><span class="spinner"></span> Loading agreement data…</div></div>
+    </section>
+
+    <section class="arc-section" id="arc-volatility" style="display:none">
+      <div class="arc-section-header"><i data-lucide="activity"></i> Hourly Volatility</div>
+      <div class="arc-section-desc">How erratic price action is each hour. Moderate volatility = healthy movement. Very high = choppy/risky. Green bars = 3+ consecutive increases.</div>
+      <div id="arc-volatility-body"><div class="arc-loading"><span class="spinner"></span> Loading volatility data…</div></div>
+    </section>
+
+    <section class="arc-section" id="arc-energy" style="display:none">
+      <div class="arc-section-header"><i data-lucide="zap"></i> Hourly Market Energy</div>
+      <div class="arc-section-desc">The composite energy score combining movement, momentum, agreement, and volatility. The single most important number. Green bars = energy buildup streaks.</div>
+      <div id="arc-energy-body"><div class="arc-loading"><span class="spinner"></span> Loading energy data…</div></div>
+    </section>
+
+    <section class="arc-section" id="arc-liquidity" style="display:none">
+      <div class="arc-section-header"><i data-lucide="droplets"></i> Session Liquidity</div>
+      <div class="arc-section-desc">Liquidity score per session (not hourly). Higher = tighter spreads, better fills, more reliable signals. Color-coded: green ≥50, yellow ≥30, orange ≥15, grey &lt;15.</div>
+      <div id="arc-liquidity-body"><div class="arc-loading"><span class="spinner"></span> Loading liquidity data…</div></div>
     </section>
 
     <section class="arc-section" id="arc-history" style="display:none">
-      <div class="arc-section-header">
-        <i data-lucide="clock"></i>
-        Session Energy History
-      </div>
-      <div id="arc-history-body">
-        <div class="arc-loading"><span class="spinner"></span> Loading history…</div>
-      </div>
+      <div class="arc-section-header"><i data-lucide="clock"></i> Session Energy History</div>
+      <div id="arc-history-body"><div class="arc-loading"><span class="spinner"></span> Loading history…</div></div>
     </section>
   </main>
 
@@ -158,31 +191,56 @@
 
   const ARCHIVE_CUTOFF = '2026-05-01';
 
+  const ARC_SECTIONS = ['momentum', 'movement', 'agreement', 'volatility', 'energy', 'liquidity', 'history'];
+
   function switchArchiveTab(btn) {
     document.querySelectorAll('.arc-tab').forEach(t => t.classList.remove('active'));
     btn.classList.add('active');
     const section = btn.dataset.section;
-    document.getElementById('arc-momentum').style.display = section === 'momentum' ? '' : 'none';
-    document.getElementById('arc-history').style.display = section === 'history' ? '' : 'none';
+    ARC_SECTIONS.forEach(s => {
+      const el = document.getElementById('arc-' + s);
+      if (el) el.style.display = s === section ? '' : 'none';
+    });
   }
 
-  // ─── Momentum Chart (reuses same rendering as dashboard) ──────────────────
+  // ─── Hourly Metric Charts ─────────────────────────────────────────────────
 
-  async function loadMomentumArchive() {
+  // Shared hourly data — loaded once, reused across all metric tabs
+  let _arcHourlyRows = null;
+  let _arcHourlyLoading = null;
+
+  async function _loadHourlyRows() {
+    if (_arcHourlyRows) return _arcHourlyRows;
+    if (_arcHourlyLoading) return _arcHourlyLoading;
+    _arcHourlyLoading = api('/api/session-activity?type=hourly&days=365').then(data => {
+      _arcHourlyRows = (data.hourly || []).filter(r => r.time_utc >= ARCHIVE_CUTOFF);
+      return _arcHourlyRows;
+    });
+    return _arcHourlyLoading;
+  }
+
+  // Metric definitions — each produces a { label, field, unit, thresholds } config
+  const ARC_METRICS = {
+    momentum:   { field: 'breadth_score',    label: 'Momentum',   unit: '',  streakMin: 10, highThresh: 40, midThresh: 20, peakWord: 'momentum' },
+    movement:   { field: 'movement_score',   label: 'Movement',   unit: '',  streakMin: 10, highThresh: 40, midThresh: 20, peakWord: 'movement' },
+    agreement:  { field: 'agreement_score',  label: 'Agreement',  unit: '',  streakMin: 10, highThresh: 50, midThresh: 30, peakWord: 'agreement' },
+    volatility: { field: 'volatility_score', label: 'Volatility', unit: '',  streakMin: 10, highThresh: 45, midThresh: 25, peakWord: 'volatility' },
+    energy:     { field: 'market_energy',    label: 'Energy',     unit: '',  streakMin: 15, highThresh: 50, midThresh: 30, peakWord: 'energy' },
+  };
+
+  async function loadMetricArchive(metricKey) {
+    const bodyEl = document.getElementById(`arc-${metricKey}-body`);
+    if (!bodyEl) return;
     try {
-      const data = await api('/api/session-activity?type=hourly&days=365');
-      const rows = (data.hourly || []).filter(r => r.time_utc >= ARCHIVE_CUTOFF);
-      if (!rows.length) {
-        document.getElementById('arc-momentum-body').innerHTML = '<p class="me-empty">No hourly momentum data available.</p>';
-        return;
-      }
-      renderBreadthBars(document.getElementById('arc-momentum-body'), rows);
+      const rows = await _loadHourlyRows();
+      if (!rows.length) { bodyEl.innerHTML = '<p class="me-empty">No hourly data available.</p>'; return; }
+      renderMetricBars(bodyEl, rows, ARC_METRICS[metricKey]);
     } catch (e) {
-      document.getElementById('arc-momentum-body').innerHTML = `<p class="me-empty">Failed to load: ${e.message}</p>`;
+      bodyEl.innerHTML = `<p class="me-empty">Failed to load: ${e.message}</p>`;
     }
   }
 
-  function renderBreadthBars(container, rows) {
+  function renderMetricBars(container, rows, metric) {
     const SESS_COLOR = { ASIA: '#f59e0b', LONDON: '#0ea5e9', NEW_YORK: '#a855f7', LOW_LIQUIDITY: '#475569' };
     const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York', LOW_LIQUIDITY: 'Low Liq.' };
     const tz = (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC');
@@ -195,7 +253,7 @@
       if (SKIP.has(r.session_name)) continue;
       const date = r.time_utc.slice(0, 10);
       if (!byDate[date]) byDate[date] = [];
-      byDate[date].push({ time: r.time_utc, session: r.session_name, breadth: Math.round(parseFloat(r.breadth_score) || 0) });
+      byDate[date].push({ time: r.time_utc, session: r.session_name, val: Math.round(parseFloat(r[metric.field]) || 0) });
     }
 
     const todayStr = new Date().toISOString().slice(0, 10);
@@ -205,7 +263,7 @@
         return new Set(byDate[d].map(b => b.session)).size >= 2;
       })
       .sort((a, b) => b.localeCompare(a));
-    const maxBreadth = Math.max(80, ...rows.map(r => parseFloat(r.breadth_score) || 0));
+    const maxVal = Math.max(80, ...rows.map(r => parseFloat(r[metric.field]) || 0));
 
     let html = '<div class="bc-chart-wrap">';
 
@@ -214,11 +272,11 @@
       const d = new Date(date + 'T12:00:00Z');
       const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz });
 
-      const breadths = bars.map(b => b.breadth);
+      const vals = bars.map(b => b.val);
       const streaks = new Set();
       let streak = 0;
-      for (let i = 1; i < breadths.length; i++) {
-        if (breadths[i] >= breadths[i - 1] && breadths[i] >= 10 && breadths[i - 1] >= 10) {
+      for (let i = 1; i < vals.length; i++) {
+        if (vals[i] >= vals[i - 1] && vals[i] >= metric.streakMin && vals[i - 1] >= metric.streakMin) {
           streak++;
           if (streak >= 2) {
             for (let j = i - streak; j <= i; j++) streaks.add(j);
@@ -255,7 +313,7 @@
       for (let i = 0; i < bars.length; i++) {
         const b = bars[i];
         const color = SESS_COLOR[b.session] || '#64748b';
-        const pct = Math.round((b.breadth / maxBreadth) * 100);
+        const pct = Math.round((b.val / maxVal) * 100);
         const localTime = new Date(b.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
         const localHour = localTime.slice(0, 2);
         const highlighted = streaks.has(i);
@@ -267,8 +325,8 @@
         }
         prevSess = b.session;
 
-        html += `<div class="${cls}" title="${SESS_LABEL[b.session] || b.session}: ${b.breadth}% at ${localTime} ${tzLabel}">
-          <span class="bc-bar-val">${b.breadth}</span>
+        html += `<div class="${cls}" title="${SESS_LABEL[b.session] || b.session}: ${b.val} at ${localTime} ${tzLabel}">
+          <span class="bc-bar-val">${b.val}</span>
           <div class="bc-bar-inner">
             <div class="bc-bar-fill" style="height:${pct}%;background:${barColor}"></div>
           </div>
@@ -278,34 +336,112 @@
 
       html += '</div>';
 
-      const dayMax = Math.max(...breadths);
-      const dayAvg = Math.round(breadths.reduce((a, b) => a + b, 0) / breadths.length);
+      // Day summary narrative
+      const dayMax = Math.max(...vals);
+      const dayAvg = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
       const streakCount = streaks.size;
-      const peakHour = bars[breadths.indexOf(dayMax)];
+      const peakIdx = vals.indexOf(dayMax);
+      const peakHour = bars[peakIdx];
       const peakTime = new Date(peakHour.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
       const peakSess = SESS_LABEL[peakHour.session] || peakHour.session;
 
       const dayLines = [];
-      if (dayAvg >= 40) dayLines.push(`Strong overall participation (avg ${dayAvg}) — broad market activity throughout the day.`);
-      else if (dayAvg >= 20) dayLines.push(`Moderate participation (avg ${dayAvg}) — some sessions were active, others quiet.`);
-      else dayLines.push(`Low participation (avg ${dayAvg}) — most of the day was quiet with low momentum.`);
-      dayLines.push(`Peak momentum of ${dayMax} hit at ${peakTime} during ${peakSess}.`);
-      if (streakCount >= 3) dayLines.push(`Continuation signal detected (${streakCount} bars in streak) — sustained momentum buildup.`);
-      else dayLines.push('No continuation signal — momentum did not sustain 3+ consecutive increases above 10.');
+      if (dayAvg >= metric.highThresh) dayLines.push(`Strong ${metric.peakWord} day (avg ${dayAvg}) — sustained activity throughout.`);
+      else if (dayAvg >= metric.midThresh) dayLines.push(`Moderate ${metric.peakWord} (avg ${dayAvg}) — some sessions active, others quiet.`);
+      else dayLines.push(`Low ${metric.peakWord} (avg ${dayAvg}) — most of the day was quiet.`);
+      dayLines.push(`Peak ${metric.peakWord} of ${dayMax} at ${peakTime} during ${peakSess}.`);
+      if (streakCount >= 3) dayLines.push(`Buildup signal detected (${streakCount} bars in streak) — sustained ${metric.peakWord} increase.`);
+      else dayLines.push(`No sustained buildup — ${metric.peakWord} did not sustain 3+ consecutive increases.`);
 
       for (const g of sessGroups) {
         const sBars = bars.filter(b => b.session === g.session);
-        const sAvg = Math.round(sBars.reduce((a, b) => a + b.breadth, 0) / sBars.length);
-        const sMax = Math.max(...sBars.map(b => b.breadth));
+        const sAvg = Math.round(sBars.reduce((a, b) => a + b.val, 0) / sBars.length);
+        const sMax = Math.max(...sBars.map(b => b.val));
         const sLabel = SESS_LABEL[g.session] || g.session;
-        if (sAvg >= 35) dayLines.push(`${sLabel}: active session (avg ${sAvg}, peak ${sMax}).`);
-        else if (sAvg >= 15) dayLines.push(`${sLabel}: moderate activity (avg ${sAvg}, peak ${sMax}).`);
+        if (sAvg >= metric.highThresh) dayLines.push(`${sLabel}: strong session (avg ${sAvg}, peak ${sMax}).`);
+        else if (sAvg >= metric.midThresh) dayLines.push(`${sLabel}: moderate (avg ${sAvg}, peak ${sMax}).`);
         else dayLines.push(`${sLabel}: quiet session (avg ${sAvg}, peak ${sMax}).`);
       }
 
       html += `<div class="bc-day-explain">
         <ul class="bc-explain-list">${dayLines.map(l => `<li>${l}</li>`).join('')}</ul>
       </div></div>`;
+    }
+
+    html += '</div>';
+    container.innerHTML = html;
+  }
+
+  // ─── Liquidity Archive (session-level, not hourly) ────────────────────────
+
+  async function loadLiquidityArchive() {
+    const bodyEl = document.getElementById('arc-liquidity-body');
+    if (!bodyEl) return;
+    try {
+      const rows = (await api('/api/market-energy-history?days=365')).filter(r => (r.session_date || '') >= ARCHIVE_CUTOFF);
+      if (!rows.length) { bodyEl.innerHTML = '<p class="me-empty">No liquidity data available.</p>'; return; }
+      renderLiquidityChart(bodyEl, rows);
+    } catch (e) {
+      bodyEl.innerHTML = `<p class="me-empty">Failed to load: ${e.message}</p>`;
+    }
+  }
+
+  function renderLiquidityChart(container, rows) {
+    const SESS_COLOR = { ASIA: '#f59e0b', LONDON: '#0ea5e9', NEW_YORK: '#a855f7' };
+    const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York' };
+    const SESS_ORDER = ['ASIA', 'LONDON', 'NEW_YORK'];
+    const tz = (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC');
+
+    const byDate = {};
+    for (const r of rows) {
+      const date = (r.session_date || '').slice(0, 10);
+      if (!byDate[date]) byDate[date] = {};
+      byDate[date][r.session_name] = r;
+    }
+
+    const dates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
+    const maxLiq = Math.max(100, ...rows.map(r => Math.round(r.liquidity_score || 0)));
+
+    let html = '<div class="bc-chart-wrap">';
+
+    for (const date of dates) {
+      const d = new Date(date + 'T12:00:00Z');
+      const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz });
+      const sessions = byDate[date];
+
+      html += `<div class="bc-day-block">
+        <div class="bc-date-header">${dayLabel}</div>
+        <div class="bc-unified-chart" style="justify-content:flex-start;gap:8px">`;
+
+      const dayLines = [];
+      for (const sessKey of SESS_ORDER) {
+        const r = sessions[sessKey];
+        if (!r) continue;
+        const liq = Math.round(r.liquidity_score || 0);
+        const grade = r.liquidity_grade || '—';
+        const pct = Math.round((liq / maxLiq) * 100);
+        const color = liq >= 50 ? '#22c55e' : liq >= 30 ? '#eab308' : liq >= 15 ? '#f97316' : '#64748b';
+        const sessLabel = SESS_LABEL[sessKey] || sessKey;
+
+        html += `<div class="bc-bar" style="flex:1;max-width:120px" title="${sessLabel}: ${liq} (${grade})">
+          <span class="bc-bar-val" style="color:${color}">${liq}</span>
+          <div class="bc-bar-inner">
+            <div class="bc-bar-fill" style="height:${pct}%;background:${color}"></div>
+          </div>
+          <span class="bc-bar-hour" style="color:${SESS_COLOR[sessKey]}">${sessLabel.slice(0, 3)}</span>
+        </div>`;
+
+        if (liq >= 50) dayLines.push(`${sessLabel}: strong liquidity (${liq}) — grade ${grade}. Tight spreads, reliable fills.`);
+        else if (liq >= 30) dayLines.push(`${sessLabel}: moderate liquidity (${liq}) — grade ${grade}. Acceptable for trading.`);
+        else if (liq >= 15) dayLines.push(`${sessLabel}: thin liquidity (${liq}) — grade ${grade}. Wider spreads, watch position sizes.`);
+        else dayLines.push(`${sessLabel}: very low liquidity (${liq}) — grade ${grade}. Avoid trading.`);
+      }
+
+      html += `</div>
+        <div class="bc-day-explain">
+          <ul class="bc-explain-list">${dayLines.map(l => `<li>${l}</li>`).join('')}</ul>
+        </div>
+      </div>`;
     }
 
     html += '</div>';
@@ -422,7 +558,15 @@
 
   // ─── Init ─────────────────────────────────────────────────────────────────────
 
-  Promise.all([loadMomentumArchive(), loadHistoryArchive()]);
+  Promise.all([
+    loadMetricArchive('momentum'),
+    loadMetricArchive('movement'),
+    loadMetricArchive('agreement'),
+    loadMetricArchive('volatility'),
+    loadMetricArchive('energy'),
+    loadLiquidityArchive(),
+    loadHistoryArchive(),
+  ]);
 
   if (typeof lucide !== 'undefined') lucide.createIcons();
   document.addEventListener('DOMContentLoaded', () => {

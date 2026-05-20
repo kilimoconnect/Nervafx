@@ -24,7 +24,7 @@ module.exports = async function handler(req, res) {
     if (type === 'hourly' || type === 'both') {
       const { data, error } = await sb
         .from('hourly_session_activity')
-        .select('time_utc, session_name, movement_score, breadth_score, compression_score, expansion_score, pairs_moving, pairs_quiet, market_state')
+        .select('time_utc, session_name, movement_score, breadth_score, agreement_score, volatility_score, market_energy, expansion_readiness, compression_score, expansion_score, pairs_moving, pairs_quiet, market_state')
         .gte('time_utc', since)
         .order('time_utc', { ascending: true });
       if (error) throw error;
