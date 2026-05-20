@@ -1620,10 +1620,11 @@ function _meHourlyTrend(hourlyRows) {
     { key: 'market_energy',   label: 'Energy' },
   ];
 
-  // Time headers (e.g. "12:00")
+  // Time headers in user's timezone (e.g. "19:00")
+  const tz = (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC');
   const timeHeaders = hourlyRows.map(h => {
     const d = new Date(h.time_utc);
-    return `${String(d.getUTCHours()).padStart(2,'0')}:00`;
+    return d.toLocaleTimeString('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false });
   });
 
   // Trend arrow between consecutive values
