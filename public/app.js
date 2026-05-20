@@ -2849,11 +2849,13 @@ function renderMarketEnergy(sessions, expansionPressure, marketCycle, currentSes
   const todaySessions = sessions.filter(s => (s.session_date || '').slice(0, 10) === todayStr);
   const byName = Object.fromEntries(todaySessions.map(s => [s.session_name, s]));
 
-  // Group today's hourly rows by session (last 3 hours each)
+  // Group today's hourly rows by session (last 3 hours of today only)
   const hourlyBySession = {};
   for (const h of (hourlyRows || [])) {
     const sess = h.session_name;
     if (!sess || sess === 'LOW_LIQUIDITY' || sess === 'DEAD_HOURS') continue;
+    // Only include today's rows — exclude carryover from yesterday's session
+    if ((h.time_utc || '').slice(0, 10) !== todayStr) continue;
     if (!hourlyBySession[sess]) hourlyBySession[sess] = [];
     hourlyBySession[sess].push(h);
   }
