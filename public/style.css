@@ -3810,17 +3810,18 @@ body::after {
   opacity: 0.85;
   transform: translateY(-1px);
 }
-.me-btn-breadth {
-  background: linear-gradient(135deg, #0ea5e9, #6366f1);
-  color: #fff;
-}
-.me-btn-ai {
-  background: linear-gradient(135deg, #a855f7, #ec4899);
-  color: #fff;
-}
+.me-btn-breadth,
+.me-btn-ai,
 .me-btn-metric {
-  background: linear-gradient(135deg, #10b981, #0ea5e9);
-  color: #fff;
+  background: rgba(99,102,241,0.15);
+  color: #a5b4fc;
+  border: 1px solid rgba(99,102,241,0.25);
+}
+.me-btn-breadth:hover,
+.me-btn-ai:hover,
+.me-btn-metric:hover {
+  background: rgba(99,102,241,0.25);
+  color: #c7d2fe;
 }
 .plan-free .premium-only,
 .plan-pro .premium-only {
