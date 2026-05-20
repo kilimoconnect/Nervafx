@@ -189,7 +189,7 @@
     return r.json();
   }
 
-  const ARCHIVE_CUTOFF = '2026-05-01';
+  // No cutoff — backtest_candles now feeds 12 months of data into the archive tables
 
   const ARC_SECTIONS = ['momentum', 'movement', 'agreement', 'volatility', 'energy', 'liquidity', 'history'];
 
@@ -213,7 +213,7 @@
     if (_arcHourlyRows) return _arcHourlyRows;
     if (_arcHourlyLoading) return _arcHourlyLoading;
     _arcHourlyLoading = api('/api/session-activity?type=hourly&days=365').then(data => {
-      _arcHourlyRows = (data.hourly || []).filter(r => r.time_utc >= ARCHIVE_CUTOFF);
+      _arcHourlyRows = (data.hourly || []);
       return _arcHourlyRows;
     });
     return _arcHourlyLoading;
@@ -378,7 +378,7 @@
     const bodyEl = document.getElementById('arc-liquidity-body');
     if (!bodyEl) return;
     try {
-      const rows = (await api('/api/market-energy-history?days=365')).filter(r => (r.session_date || '') >= ARCHIVE_CUTOFF);
+      const rows = (await api('/api/market-energy-history?days=365'));
       if (!rows.length) { bodyEl.innerHTML = '<p class="me-empty">No liquidity data available.</p>'; return; }
       renderLiquidityChart(bodyEl, rows);
     } catch (e) {
@@ -458,7 +458,7 @@
 
   async function loadHistoryArchive() {
     try {
-      const rows = (await api('/api/market-energy-history?days=365')).filter(r => (r.session_date || '') >= ARCHIVE_CUTOFF);
+      const rows = (await api('/api/market-energy-history?days=365'));
       if (!rows.length) {
         document.getElementById('arc-history-body').innerHTML = '<p class="me-empty">No history data available.</p>';
         return;
