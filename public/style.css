@@ -5305,7 +5305,11 @@ body::after {
   position: sticky;
   top: 56px;
   z-index: 90;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
+.dash-tabs::-webkit-scrollbar { display: none; }
 
 .dash-tab {
   padding: 8px 18px;
@@ -5318,6 +5322,8 @@ body::after {
   font-weight: 600;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .dash-tab:hover {
@@ -5789,5 +5795,123 @@ body::after {
   border-radius: 50%; animation: bt-spin .6s linear infinite;
 }
 @keyframes bt-spin { to { transform: rotate(360deg); } }
+
+/* ─── Mobile: Tabs ────────────────────────────────────────────────────────── */
+@media (max-width: 700px) {
+  .dash-tabs {
+    padding: 4px 10px;
+    gap: 3px;
+  }
+  .dash-tab {
+    padding: 7px 12px;
+    font-size: 11px;
+  }
+}
+@media (max-width: 420px) {
+  .dash-tabs { padding: 4px 6px; }
+  .dash-tab { padding: 6px 10px; font-size: 10.5px; }
+}
+
+/* ─── Mobile: Backtesting ─────────────────────────────────────────────────── */
+@media (max-width: 700px) {
+
+  /* Controls */
+  .bt-control-row { flex-direction: column; gap: 8px; }
+  .bt-field { width: 100%; }
+  .bt-input { width: 100%; min-width: 0; }
+  .bt-run-btn { width: 100%; justify-content: center; }
+  .bt-section-subtitle { font-size: 11px; }
+
+  /* Insight boxes */
+  .bt-insight { padding: 12px 14px; }
+  .bt-insight-summary { font-size: 13px; }
+  .bt-insight-bullets li { font-size: 11.5px; }
+
+  /* Component threshold cards */
+  .bt-comp-title-row { flex-wrap: wrap; }
+  .bt-comp-desc { white-space: normal; font-size: 10px; }
+  .bt-comp-badges { padding-left: 0; flex-wrap: wrap; }
+  .bt-comp-badge { font-size: 9px; padding: 2px 6px; }
+  .bt-comp-insight-summary { font-size: 11.5px; }
+  .bt-comp-insight-bullets li { font-size: 11px; }
+
+  /* Tables — horizontal scroll */
+  .bt-inst-table,
+  .bt-trade-table,
+  .bt-monthly-table,
+  .bt-history-table,
+  .bt-hm-table,
+  .bt-comp-table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+  }
+  .bt-inst-table thead,
+  .bt-inst-table tbody,
+  .bt-inst-table tr,
+  .bt-trade-table thead,
+  .bt-trade-table tbody,
+  .bt-trade-table tr,
+  .bt-hm-table thead,
+  .bt-hm-table tbody,
+  .bt-hm-table tr { display: table; width: 100%; table-layout: auto; }
+  .bt-inst-table th,
+  .bt-inst-table td { font-size: 10.5px; padding: 5px 6px; }
+
+  /* Conditional edge chains */
+  .bt-chain { padding: 10px 12px; }
+  .bt-chain-name { font-size: 13px; }
+  .bt-chain-desc { font-size: 10px; }
+  .bt-chain-label { font-size: 10px; }
+  .bt-chain-wr { font-size: 12px; }
+  .bt-chain-meta { font-size: 9px; }
+
+  /* Heatmaps */
+  .bt-heatmap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .bt-hm-table { min-width: 340px; }
+  .bt-hm-cell { padding: 4px 2px; font-size: 10px; }
+  .bt-hm-table th { font-size: 8px; padding: 4px 2px; }
+  .bt-hm-rowlabel { font-size: 9px; }
+
+  /* Regime / session cards */
+  .bt-regime-header { flex-direction: column; align-items: flex-start; gap: 3px; }
+  .bt-regime-name { font-size: 12px; }
+  .bt-regime-base { font-size: 10px; }
+
+  /* Transitions table */
+  .bt-section-title { font-size: 11px; }
+
+  /* Edge stability sparkline */
+  .bt-monthly-spark { height: 60px; gap: 2px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .bt-spark-bar > span { font-size: 7px; }
+
+  /* Probability curves */
+  .bt-prob-curve { height: 85px; gap: 1px; padding: 6px 4px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .bt-prob-val { font-size: 8px; }
+  .bt-prob-th { font-size: 7px; }
+  .bt-prob-n { font-size: 6px; }
+  .bt-prob-name { font-size: 12px; }
+
+  /* Zone and combo cards */
+  .bt-zone-card { padding: 10px 12px; }
+  .bt-zone-condition { font-size: 12px; }
+  .bt-zone-stats { font-size: 10px; }
+  .bt-combo-card { padding: 10px 12px; }
+  .bt-combo-name { font-size: 12px; }
+  .bt-combo-cond { font-size: 10px; }
+  .bt-combo-stats { font-size: 11px; gap: 8px; }
+
+  /* Plan lock overlay on mobile */
+  .plan-lock-overlay { padding: 20px 14px; }
+  .plan-lock-features { font-size: 11px; }
+}
+
+@media (max-width: 420px) {
+  .bt-hm-table { min-width: 300px; }
+  .bt-hm-cell { font-size: 9px; padding: 3px 1px; }
+  .bt-prob-curve { height: 70px; }
+  .bt-chain-bar-wrap { flex-wrap: wrap; }
+}
 
 
