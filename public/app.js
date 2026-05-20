@@ -3592,7 +3592,7 @@ function _btInit() {
     if (window.lucide) lucide.createIcons();
   }
 
-  _btLoadHistory();
+  // _btLoadHistory(); // removed — no longer storing runs in Supabase
 }
 
 function _btSelectEngine(engineId) {
@@ -3660,7 +3660,7 @@ async function runBacktest() {
     const resultSection = el('section-bt-result');
     if (resultSection) resultSection.classList.remove('bt-hidden');
 
-    _btLoadHistory();
+    // _btLoadHistory(); // removed — no longer storing runs in Supabase
     if (window.lucide) lucide.createIcons();
 
   } catch (e) {
