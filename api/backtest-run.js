@@ -17,7 +17,7 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
-  const { from, to, maxBars } = req.body || {};
+  const { from, to, engine } = req.body || {};
 
   if (!from || !to) {
     return res.status(400).json({ error: 'from and to dates required (YYYY-MM-DD)' });
@@ -30,7 +30,7 @@ module.exports = async function handler(req, res) {
     const result = await runBacktest({
       from: new Date(from).toISOString(),
       to:   new Date(to).toISOString(),
-      maxBars: maxBars || 48,
+      engine: engine || null,
     });
 
     // Generate AI interpretations for every section

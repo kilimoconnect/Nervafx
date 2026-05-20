@@ -5788,6 +5788,47 @@ body::after {
   padding-left: 2px;
 }
 
+/* ─── Engine Selector Grid ──────────────────────────────────────────────── */
+.bt-engine-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.bt-engine-card {
+  display: flex; gap: 12px; align-items: flex-start;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 14px 16px;
+  cursor: pointer; transition: all .15s ease;
+}
+.bt-engine-card:hover {
+  border-color: rgba(59,130,246,.35);
+  background: var(--bg-hover);
+}
+.bt-engine-card.bt-engine-selected {
+  border-color: var(--accent);
+  background: rgba(59,130,246,.08);
+  box-shadow: 0 0 0 1px var(--accent), var(--glow-blue);
+}
+.bt-engine-icon {
+  flex-shrink: 0; width: 36px; height: 36px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(59,130,246,.1); border-radius: 8px;
+  color: var(--accent);
+}
+.bt-engine-card.bt-engine-selected .bt-engine-icon {
+  background: rgba(59,130,246,.2);
+}
+.bt-engine-info { flex: 1; min-width: 0; }
+.bt-engine-name {
+  font-size: 13px; font-weight: 700; color: var(--text);
+  margin-bottom: 3px;
+}
+.bt-engine-desc {
+  font-size: 11px; color: var(--text-muted); line-height: 1.45;
+}
+.bt-engine-card.bt-engine-selected .bt-engine-name { color: var(--accent); }
+
 /* Loading spinner */
 .bt-spinner {
   display: inline-block; width: 14px; height: 14px;
@@ -5902,6 +5943,13 @@ body::after {
   .bt-combo-cond { font-size: 10px; }
   .bt-combo-stats { font-size: 11px; gap: 8px; }
 
+  /* Engine selector grid */
+  .bt-engine-grid { grid-template-columns: 1fr; gap: 8px; }
+  .bt-engine-card { padding: 10px 12px; gap: 10px; }
+  .bt-engine-icon { width: 30px; height: 30px; }
+  .bt-engine-name { font-size: 12px; }
+  .bt-engine-desc { font-size: 10px; }
+
   /* Plan lock overlay on mobile */
   .plan-lock-overlay { padding: 20px 14px; }
   .plan-lock-features { font-size: 11px; }
@@ -5912,6 +5960,7 @@ body::after {
   .bt-hm-cell { font-size: 9px; padding: 3px 1px; }
   .bt-prob-curve { height: 70px; }
   .bt-chain-bar-wrap { flex-wrap: wrap; }
+  .bt-engine-desc { display: none; }
 }
 
 

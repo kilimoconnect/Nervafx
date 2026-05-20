@@ -373,25 +373,35 @@ async function runBacktest({ from, to }) {
   console.log(`[BACKTEST] ${snapshots.length} hourly snapshots built`);
 
   // ── Phase 3: Statistical analysis — discover conditions ────────────────────
-  console.log('[BACKTEST] Phase 3: Discovering condition thresholds...');
+  // ── Phase 3: Run selected engine (or all if none specified) ─────────────
+  const engineId = from && to ? (arguments[0]?.engine || null) : null;
+  console.log(`[BACKTEST] Phase 3: Running ${engineId || 'all'} analysis...`);
 
-  const analysis = {
-    component_thresholds: analyzeComponentThresholds(snapshots),
-    conditional_edge: analyzeConditionalEdge(snapshots),
-    heatmaps: analyzeHeatmaps(snapshots),
-    regime_thresholds: analyzeRegimeThresholds(snapshots),
-    session_thresholds: analyzeSessionThresholds(snapshots),
-    transitions: analyzeTransitions(snapshots),
-    edge_stability: analyzeEdgeStability(snapshots),
-    probability_curves: analyzeProbabilityCurves(snapshots),
-    energy_thresholds: analyzeEnergyThresholds(snapshots),
-    strength_thresholds: analyzeStrengthThresholds(snapshots),
-    session_performance: analyzeSessionPerformance(snapshots),
-    state_outcomes: analyzeStateOutcomes(snapshots),
-    no_trade_zones: analyzeNoTradeZones(snapshots),
-    condition_combos: analyzeConditionCombos(snapshots),
-    move_distance: analyzeMoveDistance(snapshots),
+  const ENGINE_MAP = {
+    component_thresholds: () => analyzeComponentThresholds(snapshots),
+    conditional_edge:     () => analyzeConditionalEdge(snapshots),
+    heatmaps:             () => analyzeHeatmaps(snapshots),
+    regime_thresholds:    () => analyzeRegimeThresholds(snapshots),
+    session_thresholds:   () => analyzeSessionThresholds(snapshots),
+    transitions:          () => analyzeTransitions(snapshots),
+    edge_stability:       () => analyzeEdgeStability(snapshots),
+    probability_curves:   () => analyzeProbabilityCurves(snapshots),
+    energy_thresholds:    () => analyzeEnergyThresholds(snapshots),
+    strength_thresholds:  () => analyzeStrengthThresholds(snapshots),
+    session_performance:  () => analyzeSessionPerformance(snapshots),
+    state_outcomes:       () => analyzeStateOutcomes(snapshots),
+    no_trade_zones:       () => analyzeNoTradeZones(snapshots),
+    condition_combos:     () => analyzeConditionCombos(snapshots),
+    move_distance:        () => analyzeMoveDistance(snapshots),
   };
+
+  let analysis;
+  if (engineId && ENGINE_MAP[engineId]) {
+    analysis = { [engineId]: ENGINE_MAP[engineId]() };
+  } else {
+    analysis = {};
+    for (const [k, fn] of Object.entries(ENGINE_MAP)) analysis[k] = fn();
+  }
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   console.log(`[BACKTEST] Analysis complete in ${elapsed}s`);
@@ -1520,23 +1530,30 @@ async function saveBacktestResult(result) {
 // can understand what the numbers mean and what to do about them.
 
 function interpretAnalysis(analysis) {
-  return {
-    component_thresholds: interpretComponents(analysis.component_thresholds),
-    conditional_edge:     interpretConditional(analysis.conditional_edge),
-    heatmaps:             interpretHeatmaps(analysis.heatmaps),
-    regime_thresholds:    interpretRegimes(analysis.regime_thresholds),
-    session_thresholds:   interpretSessionTh(analysis.session_thresholds),
-    transitions:          interpretTransitions(analysis.transitions),
-    edge_stability:       interpretStability(analysis.edge_stability),
-    probability_curves:   interpretProbability(analysis.probability_curves),
-    energy_thresholds:    interpretEnergy(analysis.energy_thresholds),
-    strength_thresholds:  interpretStrength(analysis.strength_thresholds),
-    state_outcomes:       interpretStates(analysis.state_outcomes),
-    no_trade_zones:       interpretNoTrade(analysis.no_trade_zones),
-    condition_combos:     interpretCombos(analysis.condition_combos),
-    move_distance:        interpretDistance(analysis.move_distance),
-    session_performance:  interpretSessions(analysis.session_performance),
+  const INTERPRET_MAP = {
+    component_thresholds: interpretComponents,
+    conditional_edge:     interpretConditional,
+    heatmaps:             interpretHeatmaps,
+    regime_thresholds:    interpretRegimes,
+    session_thresholds:   interpretSessionTh,
+    transitions:          interpretTransitions,
+    edge_stability:       interpretStability,
+    probability_curves:   interpretProbability,
+    energy_thresholds:    interpretEnergy,
+    strength_thresholds:  interpretStrength,
+    state_outcomes:       interpretStates,
+    no_trade_zones:       interpretNoTrade,
+    condition_combos:     interpretCombos,
+    move_distance:        interpretDistance,
+    session_performance:  interpretSessions,
   };
+
+  // Only interpret keys that exist in analysis (supports single-engine runs)
+  const result = {};
+  for (const [key, fn] of Object.entries(INTERPRET_MAP)) {
+    if (analysis[key] !== undefined) result[key] = fn(analysis[key]);
+  }
+  return result;
 }
 
 // ── Conditional Edge interpretation ──

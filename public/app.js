@@ -3033,67 +3033,494 @@ function flashEl(id) {
 
 let _btEquityChart = null;
 
+// ─── Engine Definitions ─────────────────────────────────────────────────────
+
+const BT_ENGINES = [
+  { id: 'component_thresholds', name: 'Component Thresholds', icon: 'sliders-horizontal',
+    desc: 'Every indicator analyzed individually — find exact thresholds for movement, momentum, agreement, volatility, energy, pressure, liquidity, readiness, CS, and confidence.' },
+  { id: 'conditional_edge', name: 'Conditional Edge', icon: 'layers',
+    desc: 'Multi-factor stacking — discover how combining CS Diff + Energy + Agreement + Session + State compounds your win rate from baseline to 80%+.' },
+  { id: 'heatmaps', name: 'Cross-Component Heatmaps', icon: 'grid-3x3',
+    desc: 'Win rate at every intersection of two indicators. Reveals non-linear edge clusters that single-factor analysis misses entirely.' },
+  { id: 'regime_thresholds', name: 'Regime Thresholds', icon: 'repeat',
+    desc: 'Optimal thresholds per market regime (Dead, Compression, Breakout, Expansion, Exhaustion). The same indicator needs different thresholds per regime.' },
+  { id: 'session_thresholds', name: 'Session Thresholds', icon: 'clock',
+    desc: 'Per-session optimal filters — Asia needs higher agreement, London tolerates volatility, NY rewards dominance. Unique thresholds per window.' },
+  { id: 'transitions', name: 'Transition Discovery', icon: 'arrow-right-left',
+    desc: 'What happens when the market regime shifts. Compression→Expansion breakouts, Trend→Exhaustion danger — where the biggest moves and risks live.' },
+  { id: 'edge_stability', name: 'Edge Stability', icon: 'shield-check',
+    desc: 'Are discovered edges stable or decaying? Monthly win rate tracking, variance, decay detection, and stability scores to prevent overfitting.' },
+  { id: 'probability_curves', name: 'Probability Curves', icon: 'trending-up',
+    desc: 'Progressive probability — see exactly how continuation probability rises with each indicator value. No hard thresholds, just smooth probability gradients.' },
+  { id: 'energy_thresholds', name: 'Energy Deep Dive', icon: 'zap',
+    desc: 'Detailed breakdown of each energy sub-component (movement, momentum, agreement, volatility) bucketed by range with continuation rates.' },
+  { id: 'strength_thresholds', name: 'Strength Thresholds', icon: 'gauge',
+    desc: 'Currency strength differential analysis — at what spread level does directional edge appear, and how does reward-to-risk scale with spread size.' },
+  { id: 'state_outcomes', name: 'State Outcomes', icon: 'git-branch',
+    desc: 'Win rate and pip performance for every market state (Trend, Pullback, Ready-to-Enter, Reversal, No Trade). Confirms which states to trade and avoid.' },
+  { id: 'no_trade_zones', name: 'No-Trade Zones', icon: 'shield-off',
+    desc: 'Conditions where trades consistently lose money — low energy + low agreement, thin markets, choppy volatility. Hard rules for when NOT to trade.' },
+  { id: 'condition_combos', name: 'Condition Combos', icon: 'puzzle',
+    desc: 'Best multi-condition setups: High Energy + Agreement + Ready-to-Enter, Strong Trends, Compression Breakouts. The highest-probability entry patterns.' },
+  { id: 'move_distance', name: 'Move Distance', icon: 'ruler',
+    desc: 'Expected pip distance at 1H, 4H, 8H, 12H, 24H horizons — broken by energy level. Calibrate TP targets and stop losses to actual market data.' },
+  { id: 'session_performance', name: 'Session Performance', icon: 'bar-chart-3',
+    desc: 'Which trading session produces the biggest and most reliable moves. Average energy, 4H and 8H pip ranges per session window.' },
+];
+
+let _btSelectedEngine = null;
+
 function _btInit() {
-  // Default dates: 6 months ago → today
   const to = new Date();
   const from = new Date();
   from.setUTCMonth(from.getUTCMonth() - 6);
   const el = (id) => document.getElementById(id);
   if (el('bt-from')) el('bt-from').value = from.toISOString().slice(0, 10);
   if (el('bt-to'))   el('bt-to').value   = to.toISOString().slice(0, 10);
-  // Load previous runs
+
+  // Render engine selector grid
+  const grid = el('bt-engine-grid');
+  if (grid) {
+    grid.innerHTML = BT_ENGINES.map(e => `
+      <div class="bt-engine-card" data-engine="${e.id}" onclick="_btSelectEngine('${e.id}')">
+        <div class="bt-engine-icon"><i data-lucide="${e.icon}" style="width:20px;height:20px"></i></div>
+        <div class="bt-engine-info">
+          <div class="bt-engine-name">${e.name}</div>
+          <div class="bt-engine-desc">${e.desc}</div>
+        </div>
+      </div>
+    `).join('');
+    if (window.lucide) lucide.createIcons();
+  }
+
   _btLoadHistory();
 }
 
+function _btSelectEngine(engineId) {
+  _btSelectedEngine = engineId;
+  const engine = BT_ENGINES.find(e => e.id === engineId);
+
+  // Update selected state
+  document.querySelectorAll('.bt-engine-card').forEach(c => {
+    c.classList.toggle('bt-engine-selected', c.dataset.engine === engineId);
+  });
+
+  // Enable run button with engine name
+  const btn = document.getElementById('bt-run-btn');
+  const label = document.getElementById('bt-run-label');
+  if (btn) btn.disabled = false;
+  if (label) label.textContent = `Run ${engine?.name || 'Discovery'}`;
+
+  // Hide previous results
+  const resultSection = document.getElementById('section-bt-result');
+  if (resultSection) resultSection.classList.add('bt-hidden');
+}
+
 async function runBacktest() {
+  if (!_btSelectedEngine) return;
+
   const el = (id) => document.getElementById(id);
   const btn    = el('bt-run-btn');
   const status = el('bt-status');
-
-  const from = el('bt-from')?.value;
-  const to   = el('bt-to')?.value;
+  const from   = el('bt-from')?.value;
+  const to     = el('bt-to')?.value;
 
   if (!from || !to) { status.textContent = 'Please select date range.'; return; }
 
+  const engine = BT_ENGINES.find(e => e.id === _btSelectedEngine);
   btn.disabled = true;
-  status.innerHTML = '<span class="bt-spinner"></span> Analyzing market conditions — this may take a few minutes...';
+  status.innerHTML = `<span class="bt-spinner"></span> Running ${engine?.name || 'analysis'} — this may take a few minutes...`;
 
   try {
     const data = await api('/api/backtest-run', {
       method: 'POST',
-      body: JSON.stringify({ from, to }),
+      body: JSON.stringify({ from, to, engine: _btSelectedEngine }),
     });
-    status.textContent = `Analyzed ${data.snapshots_analyzed} hourly snapshots in ${data.duration_sec}s`;
+
+    status.textContent = `${engine?.name}: ${data.snapshots_analyzed} hourly snapshots analyzed in ${data.duration_sec}s`;
+
+    // Render header
+    const header = el('bt-result-header');
+    if (header) {
+      header.innerHTML = `<h2 class="card-title"><i data-lucide="${engine?.icon || 'flask-conical'}"></i> ${engine?.name || 'Results'}</h2>
+        <p class="bt-section-subtitle">${engine?.desc || ''}</p>`;
+    }
+
+    // Render the single engine result into bt-result-body
+    const body = el('bt-result-body');
+    if (body) body.innerHTML = ''; // clear previous
 
     const a = data.analysis;
     const ins = data.insights || {};
-    _btRenderComponentThresholds(a.component_thresholds, ins.component_thresholds);
-    _btRenderConditionalEdge(a.conditional_edge, ins.conditional_edge);
-    _btRenderHeatmaps(a.heatmaps, ins.heatmaps);
-    _btRenderRegimeThresholds(a.regime_thresholds, ins.regime_thresholds);
-    _btRenderSessionThresholds(a.session_thresholds, ins.session_thresholds);
-    _btRenderTransitions(a.transitions, ins.transitions);
-    _btRenderEdgeStability(a.edge_stability, ins.edge_stability);
-    _btRenderProbabilityCurves(a.probability_curves, ins.probability_curves);
-    _btRenderEnergyThresholds(a.energy_thresholds, ins.energy_thresholds);
-    _btRenderStrengthThresholds(a.strength_thresholds, ins.strength_thresholds);
-    _btRenderStateOutcomes(a.state_outcomes, ins.state_outcomes);
-    _btRenderNoTradeZones(a.no_trade_zones, ins.no_trade_zones);
-    _btRenderConditionCombos(a.condition_combos, ins.condition_combos);
-    _btRenderMoveDistance(a.move_distance, ins.move_distance);
-    _btRenderSessionPerf(a.session_performance, ins.session_performance);
-    _btLoadHistory();
-    // Re-init lucide icons for insight boxes
-    if (window.lucide) lucide.createIcons();
+    const key = _btSelectedEngine;
 
-    // Show all result sections
-    document.querySelectorAll('.bt-hidden').forEach(s => s.classList.remove('bt-hidden'));
+    // Each renderer now targets bt-result-body
+    _btRenderEngine(key, a[key], ins[key], body);
+
+    // Show result section
+    const resultSection = el('section-bt-result');
+    if (resultSection) resultSection.classList.remove('bt-hidden');
+
+    _btLoadHistory();
+    if (window.lucide) lucide.createIcons();
 
   } catch (e) {
     status.textContent = `Error: ${e.message}`;
   } finally {
     btn.disabled = false;
   }
+}
+
+// Master dispatch — renders a single engine's data into a target container
+function _btRenderEngine(key, data, insight, container) {
+  if (!data || !container) return;
+
+  // Create a temporary div, render into it, then append to container
+  const wrap = document.createElement('div');
+  wrap.id = `bt-${key.replace(/_/g, '-')}-result`;
+  container.appendChild(wrap);
+
+  // Map engine keys to renderer functions
+  const renderers = {
+    component_thresholds: () => { wrap.innerHTML = ''; _btRenderComponentThresholdsInto(data, insight, wrap); },
+    conditional_edge:     () => { _btRenderConditionalEdgeInto(data, insight, wrap); },
+    heatmaps:             () => { _btRenderHeatmapsInto(data, insight, wrap); },
+    regime_thresholds:    () => { _btRenderRegimeThresholdsInto(data, insight, wrap); },
+    session_thresholds:   () => { _btRenderSessionThresholdsInto(data, insight, wrap); },
+    transitions:          () => { _btRenderTransitionsInto(data, insight, wrap); },
+    edge_stability:       () => { _btRenderEdgeStabilityInto(data, insight, wrap); },
+    probability_curves:   () => { _btRenderProbabilityCurvesInto(data, insight, wrap); },
+    energy_thresholds:    () => { _btRenderEnergyThresholdsInto(data, insight, wrap); },
+    strength_thresholds:  () => { _btRenderStrengthThresholdsInto(data, insight, wrap); },
+    state_outcomes:       () => { _btRenderStateOutcomesInto(data, insight, wrap); },
+    no_trade_zones:       () => { _btRenderNoTradeZonesInto(data, insight, wrap); },
+    condition_combos:     () => { _btRenderConditionCombosInto(data, insight, wrap); },
+    move_distance:        () => { _btRenderMoveDistanceInto(data, insight, wrap); },
+    session_performance:  () => { _btRenderSessionPerfInto(data, insight, wrap); },
+  };
+
+  if (renderers[key]) renderers[key]();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// *Into() renderers — each renders into a passed container element
+// ═══════════════════════════════════════════════════════════════════════════
+
+function _btRenderComponentThresholdsInto(components, insights, wrap) {
+  if (!components || !components.length) { wrap.innerHTML = '<div style="color:var(--text-muted)">No component data</div>'; return; }
+
+  const groups = {};
+  for (const comp of components) {
+    if (!groups[comp.group]) groups[comp.group] = [];
+    groups[comp.group].push(comp);
+  }
+
+  const insightMap = {};
+  if (insights && insights.length) {
+    for (const ins of insights) insightMap[ins.id] = ins;
+  }
+
+  const groupIcons = {
+    'Market Energy': 'zap', 'Directional Pressure': 'arrow-up-down',
+    'Market Structure': 'git-branch', 'Currency Strength': 'gauge', 'Quality Metrics': 'shield-check',
+  };
+
+  let html = '';
+  for (const [groupName, comps] of Object.entries(groups)) {
+    const icon = groupIcons[groupName] || 'bar-chart-3';
+    html += `<div class="bt-comp-group">
+      <div class="bt-comp-group-header"><i data-lucide="${icon}" style="width:16px;height:16px"></i><span>${groupName}</span></div>`;
+
+    for (const comp of comps) {
+      const ins = insightMap[comp.id];
+      const ranges = comp.ranges || {};
+      const rangeKeys = Object.keys(ranges).sort((a, b) => (parseFloat(a.split('–')[0]) || 0) - (parseFloat(b.split('–')[0]) || 0));
+
+      let badges = '';
+      if (comp.best_range) badges += `<span class="bt-comp-badge bt-comp-badge-best">Sweet Spot: ${comp.best_range}${comp.unit} (${comp.best_win_rate}% WR)</span>`;
+      if (comp.min_edge_threshold) badges += `<span class="bt-comp-badge bt-comp-badge-min">Min Edge: ${comp.min_edge_threshold}${comp.unit}</span>`;
+      if (comp.worst_range && comp.worst_win_rate < 48) badges += `<span class="bt-comp-badge bt-comp-badge-danger">Danger: ${comp.worst_range}${comp.unit} (${comp.worst_win_rate}% WR)</span>`;
+
+      let insightHtml = '';
+      if (ins && (ins.summary || ins.bullets?.length)) {
+        insightHtml = '<div class="bt-comp-insight">';
+        if (ins.summary) insightHtml += `<div class="bt-comp-insight-summary">${ins.summary}</div>`;
+        if (ins.bullets?.length) { insightHtml += '<ul class="bt-comp-insight-bullets">'; for (const b of ins.bullets) insightHtml += `<li>${b}</li>`; insightHtml += '</ul>'; }
+        insightHtml += '</div>';
+      }
+
+      let tableHtml = '';
+      if (rangeKeys.length) {
+        tableHtml = `<table class="bt-inst-table bt-comp-table">
+          <thead><tr><th>Range</th><th>Hours</th><th>Trades</th><th>Win Rate</th><th>Avg Fav</th><th>Avg Adv</th><th>Avg Move</th></tr></thead><tbody>`;
+        for (const key of rangeKeys) {
+          const r = ranges[key];
+          if (r.insufficient) { tableHtml += `<tr class="bt-comp-row-dim"><td>${key}</td><td>${r.hours}</td><td>${r.trades}</td><td colspan="4" style="color:var(--text-muted);font-style:italic">Insufficient data</td></tr>`; continue; }
+          const isBest = key === comp.best_range, isWorst = key === comp.worst_range && comp.worst_win_rate < 48;
+          const rowCls = isBest ? 'bt-comp-row-best' : isWorst ? 'bt-comp-row-worst' : '';
+          const wrCls = r.win_rate >= 55 ? 'bt-win' : r.win_rate < 45 ? 'bt-loss' : '';
+          tableHtml += `<tr class="${rowCls}"><td><strong>${key}</strong>${isBest ? ' ★' : ''}${isWorst ? ' ⚠' : ''}</td><td>${r.hours}</td><td>${r.trades}</td><td class="${wrCls}"><strong>${r.win_rate}%</strong></td><td class="bt-win">+${r.avg_fav}p</td><td class="bt-loss">-${r.avg_adv}p</td><td>${r.avg_move}p</td></tr>`;
+        }
+        tableHtml += '</tbody></table>';
+      }
+
+      html += `<div class="bt-comp-card" id="bt-comp-${comp.id}">
+        <div class="bt-comp-header" onclick="this.parentElement.classList.toggle('bt-comp-expanded')">
+          <div class="bt-comp-title-row"><span class="bt-comp-expand-icon">▶</span><span class="bt-comp-name">${comp.name}</span><span class="bt-comp-desc">${comp.description}</span></div>
+          <div class="bt-comp-badges">${badges}</div>
+        </div>
+        <div class="bt-comp-body">${insightHtml}${tableHtml}</div>
+      </div>`;
+    }
+    html += '</div>';
+  }
+  wrap.innerHTML = html;
+}
+
+function _btRenderConditionalEdgeInto(data, insight, wrap) {
+  if (!data?.chains) { wrap.innerHTML = '<div style="color:var(--text-muted)">No data</div>'; return; }
+
+  let html = _btInsightBox(insight);
+  for (const chain of data.chains) {
+    if (!chain.steps || chain.steps.length < 2) continue;
+    html += `<div class="bt-chain"><div class="bt-chain-name">${chain.name}</div><div class="bt-chain-desc">${chain.desc}</div><div class="bt-chain-steps">`;
+    for (let i = 0; i < chain.steps.length; i++) {
+      const s = chain.steps[i];
+      if (!s.win_rate) continue;
+      const lift = i > 0 ? s.win_rate - chain.steps[i - 1].win_rate : 0;
+      const barW = Math.max(8, Math.min(100, s.win_rate));
+      const barCls = s.win_rate >= 65 ? 'bt-bar-hot' : s.win_rate >= 55 ? 'bt-bar-warm' : s.win_rate >= 50 ? 'bt-bar-neutral' : 'bt-bar-cold';
+      html += `<div class="bt-chain-step"><div class="bt-chain-label">${s.label}</div><div class="bt-chain-bar-wrap"><div class="bt-chain-bar ${barCls}" style="width:${barW}%"></div><span class="bt-chain-wr">${s.win_rate}%</span>${lift > 0 ? `<span class="bt-chain-lift">+${lift}</span>` : ''}</div><div class="bt-chain-meta">${s.samples} trades · +${s.avg_fav}p fav · -${s.avg_adv}p adv</div></div>`;
+    }
+    html += '</div></div>';
+  }
+  wrap.innerHTML = html || '<div style="color:var(--text-muted)">No data</div>';
+}
+
+function _btRenderHeatmapsInto(data, insight, wrap) {
+  if (!data?.length) { wrap.innerHTML = '<div style="color:var(--text-muted)">No heatmap data</div>'; return; }
+
+  let html = _btInsightBox(insight);
+  for (const hm of data) {
+    html += `<div class="bt-heatmap"><div class="bt-heatmap-title">${hm.name}</div><div class="bt-heatmap-labels"><span>X: ${hm.x_label}</span> <span>Y: ${hm.y_label}</span></div>
+      <table class="bt-hm-table"><thead><tr><th>${hm.y_label} \\ ${hm.x_label}</th>${hm.x_labels.map(l => `<th>${l}</th>`).join('')}</tr></thead><tbody>`;
+    for (let y = hm.y_labels.length - 1; y >= 0; y--) {
+      html += `<tr><td class="bt-hm-rowlabel">${hm.y_labels[y]}</td>`;
+      for (let x = 0; x < hm.x_labels.length; x++) {
+        const c = hm.cells[y][x];
+        if (c.wr == null) { html += '<td class="bt-hm-cell bt-hm-na">—</td>'; }
+        else {
+          const cls = c.wr >= 62 ? 'bt-hm-5' : c.wr >= 56 ? 'bt-hm-4' : c.wr >= 52 ? 'bt-hm-3' : c.wr >= 48 ? 'bt-hm-2' : 'bt-hm-1';
+          html += `<td class="bt-hm-cell ${cls}" title="${c.samples} trades, +${c.avg_fav || 0}p fav">${c.wr}%</td>`;
+        }
+      }
+      html += '</tr>';
+    }
+    html += '</tbody></table></div>';
+  }
+  wrap.innerHTML = html;
+}
+
+function _btRenderRegimeThresholdsInto(data, insight, wrap) {
+  if (!data) { wrap.innerHTML = '<div style="color:var(--text-muted)">No regime data</div>'; return; }
+
+  let html = _btInsightBox(insight);
+  const regimes = Object.entries(data).sort((a, b) => (b[1].baseline?.win_rate || 0) - (a[1].baseline?.win_rate || 0));
+
+  for (const [regime, d] of regimes) {
+    if (d.insufficient) { html += `<div class="bt-regime-card"><div class="bt-regime-name">${regime}</div><div class="bt-regime-insuff">${d.hours} hours · ${d.total_trades} trades — insufficient data</div></div>`; continue; }
+    const optEntries = Object.entries(d.optimal || {}).filter(([_, v]) => v.threshold != null);
+    html += `<div class="bt-regime-card"><div class="bt-regime-header"><span class="bt-regime-name">${regime}</span><span class="bt-regime-base">Baseline: <strong>${d.baseline?.win_rate}%</strong> WR · ${d.total_trades} trades · ${d.hours} hours</span></div>`;
+    if (optEntries.length) {
+      html += '<table class="bt-inst-table"><thead><tr><th>Component</th><th>Optimal Threshold</th><th>Win Rate</th><th>Trades</th><th>Avg Fav</th></tr></thead><tbody>';
+      for (const [comp, v] of optEntries) {
+        const cls = v.win_rate >= 60 ? 'bt-win' : v.win_rate >= 52 ? '' : 'bt-loss';
+        html += `<tr><td><strong>${comp}</strong></td><td>≥ ${v.threshold}</td><td class="${cls}">${v.win_rate}%</td><td>${v.samples}</td><td>+${v.avg_fav}p</td></tr>`;
+      }
+      html += '</tbody></table>';
+    } else { html += '<div style="color:var(--text-muted);font-size:11px;padding:4px 0">No filter significantly improves baseline in this regime</div>'; }
+    html += '</div>';
+  }
+  wrap.innerHTML = html;
+}
+
+function _btRenderSessionThresholdsInto(data, insight, wrap) {
+  if (!data) { wrap.innerHTML = '<div style="color:var(--text-muted)">No session data</div>'; return; }
+
+  let html = _btInsightBox(insight);
+  const sessions = Object.entries(data).sort((a, b) => (b[1].baseline?.win_rate || 0) - (a[1].baseline?.win_rate || 0));
+
+  for (const [session, d] of sessions) {
+    if (d.insufficient) continue;
+    const optEntries = Object.entries(d.optimal || {}).filter(([_, v]) => v.threshold != null);
+    html += `<div class="bt-regime-card"><div class="bt-regime-header"><span class="bt-regime-name">${session.replace('_', ' ')}</span><span class="bt-regime-base">Baseline: <strong>${d.baseline?.win_rate}%</strong> WR · ${d.total_trades} trades</span></div>`;
+    if (optEntries.length) {
+      html += '<table class="bt-inst-table"><thead><tr><th>Component</th><th>Optimal Threshold</th><th>Win Rate</th><th>Trades</th><th>Avg Fav</th></tr></thead><tbody>';
+      for (const [comp, v] of optEntries) {
+        const cls = v.win_rate >= 60 ? 'bt-win' : '';
+        html += `<tr><td><strong>${comp}</strong></td><td>≥ ${v.threshold}</td><td class="${cls}">${v.win_rate}%</td><td>${v.samples}</td><td>+${v.avg_fav}p</td></tr>`;
+      }
+      html += '</tbody></table>';
+    }
+    html += '</div>';
+  }
+  wrap.innerHTML = html;
+}
+
+function _btRenderTransitionsInto(data, insight, wrap) {
+  if (!data) { wrap.innerHTML = '<div style="color:var(--text-muted)">No transition data</div>'; return; }
+  if (!data.length) { wrap.innerHTML = _btInsightBox(insight) + '<div style="color:var(--text-muted)">Not enough transition data</div>'; return; }
+
+  wrap.innerHTML = _btInsightBox(insight) + _btTable(
+    ['Transition', 'Occurrences', 'Trades', 'Win Rate', 'Avg Fav', 'Avg Adv', 'Avg Net'],
+    data.map(t => {
+      const cls = t.win_rate >= 58 ? 'bt-win' : t.win_rate < 45 ? 'bt-loss' : '';
+      return `<tr><td><strong>${t.from}</strong> → <strong>${t.to}</strong></td><td>${t.occurrences}</td><td>${t.trades}</td><td class="${cls}"><strong>${t.win_rate}%</strong></td><td class="bt-win">+${t.avg_fav}p</td><td class="bt-loss">-${t.avg_adv}p</td><td>${t.avg_net}p</td></tr>`;
+    })
+  );
+}
+
+function _btRenderEdgeStabilityInto(data, insight, wrap) {
+  if (!data) { wrap.innerHTML = '<div style="color:var(--text-muted)">No stability data</div>'; return; }
+  if (!data.length) { wrap.innerHTML = _btInsightBox(insight) + '<div style="color:var(--text-muted)">Not enough data for stability analysis</div>'; return; }
+
+  let html = _btInsightBox(insight);
+  html += _btTable(
+    ['Condition', 'Samples', 'Overall WR', 'Recent 3M', 'Historical', 'Variance', 'Stability', 'Status'],
+    data.map(d => {
+      const decayCls = d.decay === 'DECAYING' ? 'bt-loss' : d.decay === 'IMPROVING' ? 'bt-win' : '';
+      const stabCls = d.stability_score >= 70 ? 'bt-win' : d.stability_score < 50 ? 'bt-loss' : '';
+      return `<tr><td><strong>${d.condition}</strong></td><td>${d.total_samples}</td><td>${d.overall_wr}%</td><td>${d.recent_3m_wr != null ? d.recent_3m_wr + '%' : '—'}</td><td>${d.older_wr != null ? d.older_wr + '%' : '—'}</td><td>±${d.variance}pp</td><td class="${stabCls}"><strong>${d.stability_score}/100</strong></td><td class="${decayCls}"><strong>${d.decay}</strong></td></tr>`;
+    })
+  );
+
+  if (data[0]?.monthly_wr?.length) {
+    html += '<div class="bt-section-title" style="margin-top:14px">Monthly Win Rate — "' + data[0].condition + '"</div>';
+    html += '<div class="bt-monthly-spark">';
+    for (const m of data[0].monthly_wr) {
+      if (m.wr == null) { html += `<div class="bt-spark-bar bt-spark-na" title="${m.month}: insufficient data"><div style="height:3px"></div><span>${m.month.slice(5)}</span></div>`; continue; }
+      const h = Math.max(4, Math.min(60, m.wr * 0.7));
+      const cls = m.wr >= 58 ? 'bt-spark-hot' : m.wr >= 52 ? 'bt-spark-warm' : m.wr >= 48 ? 'bt-spark-neutral' : 'bt-spark-cold';
+      html += `<div class="bt-spark-bar ${cls}" title="${m.month}: ${m.wr}% (${m.samples} trades)"><div style="height:${h}px"></div><span>${m.month.slice(5)}</span></div>`;
+    }
+    html += '</div>';
+  }
+  wrap.innerHTML = html;
+}
+
+function _btRenderProbabilityCurvesInto(data, insight, wrap) {
+  if (!data) { wrap.innerHTML = '<div style="color:var(--text-muted)">No probability data</div>'; return; }
+  if (!data.length) { wrap.innerHTML = _btInsightBox(insight) + '<div style="color:var(--text-muted)">Not enough data for probability analysis</div>'; return; }
+
+  let html = _btInsightBox(insight);
+  for (const comp of data) {
+    const validPts = comp.curve.filter(p => p.wr != null);
+    if (!validPts.length) continue;
+
+    html += `<div class="bt-prob-card"><div class="bt-prob-name">${comp.name} ${comp.edge_threshold != null ? `<span class="bt-comp-badge bt-comp-badge-min">Edge at ≥ ${comp.edge_threshold}</span>` : ''}</div><div class="bt-prob-curve">`;
+    for (const pt of comp.curve) {
+      if (pt.wr == null) { html += `<div class="bt-prob-point bt-prob-na"><div class="bt-prob-bar" style="height:3px"></div><span class="bt-prob-val">—</span><span class="bt-prob-th">${pt.threshold}</span></div>`; continue; }
+      const h = Math.max(4, Math.min(80, (pt.wr - 30) * 1.6));
+      const cls = pt.wr >= 62 ? 'bt-prob-5' : pt.wr >= 56 ? 'bt-prob-4' : pt.wr >= 52 ? 'bt-prob-3' : pt.wr >= 48 ? 'bt-prob-2' : 'bt-prob-1';
+      const isEdge = pt.threshold === comp.edge_threshold;
+      html += `<div class="bt-prob-point ${cls} ${isEdge ? 'bt-prob-edge' : ''}"><div class="bt-prob-bar" style="height:${h}px"></div><span class="bt-prob-val">${pt.wr}%</span><span class="bt-prob-th">${pt.threshold}</span><span class="bt-prob-n">${pt.samples}</span></div>`;
+    }
+    html += '</div></div>';
+  }
+  wrap.innerHTML = html;
+}
+
+function _btRenderEnergyThresholdsInto(data, insight, wrap) {
+  if (!data?.by_component) { wrap.innerHTML = '<div style="color:var(--text-muted)">No energy data</div>'; return; }
+
+  let html = _btInsightBox(insight);
+  for (const [comp, ranges] of Object.entries(data.by_component)) {
+    const label = comp.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
+    const keys = Object.keys(ranges).sort();
+    if (!keys.length) continue;
+
+    html += `<div class="bt-section-title">${label}</div>`;
+    html += _btTable(['Range', 'Hours', 'Pairs', 'Avg Move', 'Continuation %'], keys.map(k => {
+      const d = ranges[k];
+      const cls = d.continuation_rate >= 50 ? 'bt-win' : d.continuation_rate < 35 ? 'bt-loss' : '';
+      return `<tr><td><strong>${k}</strong></td><td>${d.hours}</td><td>${d.pairs_measured}</td><td>${d.avg_move_pips}p</td><td class="${cls}">${d.continuation_rate}%</td></tr>`;
+    }));
+  }
+  wrap.innerHTML = html || '<div style="color:var(--text-muted)">No data</div>';
+}
+
+function _btRenderStrengthThresholdsInto(data, insight, wrap) {
+  if (!data) { wrap.innerHTML = '<div style="color:var(--text-muted)">No strength data</div>'; return; }
+
+  const keys = Object.keys(data).sort();
+  wrap.innerHTML = _btInsightBox(insight) + _btTable(
+    ['Spread Diff', 'Samples', 'Continuation %', 'Avg Favourable', 'Avg Adverse', 'Avg Net'],
+    keys.map(k => {
+      const d = data[k];
+      const cls = d.continuation_rate >= 55 ? 'bt-win' : d.continuation_rate < 45 ? 'bt-loss' : '';
+      return `<tr><td><strong>${k}</strong></td><td>${d.samples}</td><td class="${cls}">${d.continuation_rate}%</td><td class="bt-win">${d.avg_favourable_pips}p</td><td class="bt-loss">${d.avg_adverse_pips}p</td><td>${d.avg_net_pips}p</td></tr>`;
+    })
+  );
+}
+
+function _btRenderStateOutcomesInto(data, insight, wrap) {
+  if (!data) { wrap.innerHTML = '<div style="color:var(--text-muted)">No state data</div>'; return; }
+
+  const states = Object.keys(data).sort((a, b) => data[b].win_rate - data[a].win_rate);
+  wrap.innerHTML = _btInsightBox(insight) + _btTable(
+    ['Market State', 'Samples', 'Win Rate', 'Avg Favourable', 'Avg Adverse', 'Avg Confidence'],
+    states.map(s => {
+      const d = data[s];
+      const cls = d.win_rate >= 55 ? 'bt-win' : d.win_rate < 45 ? 'bt-loss' : '';
+      return `<tr><td><strong>${s}</strong></td><td>${d.samples}</td><td class="${cls}">${d.win_rate}%</td><td class="bt-win">${d.avg_favourable}p</td><td class="bt-loss">${d.avg_adverse}p</td><td>${d.avg_confidence}</td></tr>`;
+    })
+  );
+}
+
+function _btRenderNoTradeZonesInto(zones, insight, wrap) {
+  if (!zones) { wrap.innerHTML = '<div style="color:var(--text-muted)">No data</div>'; return; }
+  if (!zones.length) { wrap.innerHTML = _btInsightBox(insight) + '<div style="color:var(--text-muted)">No clear no-trade zones detected</div>'; return; }
+
+  wrap.innerHTML = _btInsightBox(insight) + zones.map(z => {
+    const cls = z.verdict === 'AVOID' ? 'bt-loss' : 'bt-be';
+    return `<div class="bt-zone-card"><div class="bt-zone-verdict ${cls}">${z.verdict}</div><div class="bt-zone-condition">${z.condition}</div><div class="bt-zone-stats">${z.samples} samples | Win rate: <span class="${cls}">${z.win_rate}%</span> | Avg: ${z.avg_pips}p</div></div>`;
+  }).join('');
+}
+
+function _btRenderConditionCombosInto(combos, insight, wrap) {
+  if (!combos) { wrap.innerHTML = '<div style="color:var(--text-muted)">No data</div>'; return; }
+  if (!combos.length) { wrap.innerHTML = _btInsightBox(insight) + '<div style="color:var(--text-muted)">Not enough data for combo analysis</div>'; return; }
+
+  wrap.innerHTML = _btInsightBox(insight) + combos.map(c => {
+    const cls = c.verdict === 'STRONG_ENTRY' ? 'bt-win' : c.verdict === 'OPPORTUNITY' ? 'bt-be' : '';
+    return `<div class="bt-combo-card"><div class="bt-combo-name">${c.name}</div><div class="bt-combo-cond">${c.condition}</div><div class="bt-combo-stats"><span>${c.samples} samples</span><span>Win rate: <strong class="${cls}">${c.win_rate}%</strong></span><span>Avg move: <strong>${c.avg_move}p</strong></span><span class="bt-combo-verdict ${cls}">${c.verdict.replace('_', ' ')}</span></div></div>`;
+  }).join('');
+}
+
+function _btRenderMoveDistanceInto(data, insight, wrap) {
+  if (!data) { wrap.innerHTML = '<div style="color:var(--text-muted)">No distance data</div>'; return; }
+
+  const horizons = Object.keys(data).sort();
+  wrap.innerHTML = _btInsightBox(insight) + _btTable(
+    ['Horizon', 'Samples', 'Avg Max Move', 'Avg Net', 'Low Energy', 'Mid Energy', 'High Energy'],
+    horizons.map(h => {
+      const d = data[h];
+      return `<tr><td><strong>${d.horizon_hours}H</strong></td><td>${d.total_samples}</td><td>${d.overall_avg_max}p</td><td>${d.overall_avg_net}p</td><td>${d.low_energy.avg_max}p <span style="opacity:.5">(${d.low_energy.samples})</span></td><td>${d.mid_energy.avg_max}p <span style="opacity:.5">(${d.mid_energy.samples})</span></td><td class="bt-win">${d.high_energy.avg_max}p <span style="opacity:.5">(${d.high_energy.samples})</span></td></tr>`;
+    })
+  );
+}
+
+function _btRenderSessionPerfInto(data, insight, wrap) {
+  if (!data) { wrap.innerHTML = '<div style="color:var(--text-muted)">No session data</div>'; return; }
+
+  const sessions = Object.keys(data).sort((a, b) => data[b].avg_energy - data[a].avg_energy);
+  wrap.innerHTML = _btInsightBox(insight) + _btTable(
+    ['Session', 'Hours', 'Avg Energy', '4H Avg Move', '4H Samples', '8H Avg Move', '8H Samples'],
+    sessions.map(s => {
+      const d = data[s];
+      return `<tr><td><strong>${s}</strong></td><td>${d.hours}</td><td>${d.avg_energy}</td><td>${d.h4_avg_move}p</td><td>${d.h4_samples}</td><td>${d.h8_avg_move}p</td><td>${d.h8_samples}</td></tr>`;
+    })
+  );
 }
 
 function _btTable(headers, rows) {
