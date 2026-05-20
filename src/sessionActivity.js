@@ -1013,17 +1013,16 @@ async function calculateLatestSessionActivity() {
   return row;
 }
 
-// ─── Market energy report (DB-backed — called by api/market-energy.js) ────────
-// Reads stored session data from market_energy_sessions for completed sessions
-// (consistent with what users saw during the session). Only the active session
-// is computed live from candles so it updates in real-time.
+// ─── Market energy report (pure DB — called by api/market-energy.js) ──────────
+// All data comes from stored DB tables. No in-memory candle computation.
+// The pipeline (run-pipeline cron) keeps market_energy_sessions up to date.
 
 async function getMarketEnergyData() {
   const { getCurrentSession } = require('./sessionEngine');
   const currentSession = getCurrentSession().session;
   const todayStr = new Date().toISOString().slice(0, 10);
 
-  // 1. Read today's stored sessions from DB
+  // Read today's sessions from DB
   const { data: dbSessions, error: dbErr } = await supabase
     .from('market_energy_sessions')
     .select('*')
@@ -1031,9 +1030,10 @@ async function getMarketEnergyData() {
     .order('session_name', { ascending: true });
 
   if (dbErr) console.warn('[ME] DB read error:', dbErr.message);
+  if (!dbSessions?.length) return null;
 
   const storedByName = {};
-  for (const row of (dbSessions || [])) {
+  for (const row of dbSessions) {
     // Merge computed fields from details JSON back to top-level
     if (row.details && typeof row.details === 'object') {
       const { hours, hourly, ...computed } = row.details;
@@ -1043,38 +1043,25 @@ async function getMarketEnergyData() {
     storedByName[row.session_name] = row;
   }
 
-  // 2. Compute live data from candles (needed for active session + cross-session analysis)
-  const byTime   = await fetchHourlyCandles(200);
-  const hourKeys = Object.keys(byTime).sort();
-  if (!hourKeys.length && !dbSessions?.length) return null;
+  const sessions = SESSION_ORDER.map(n => storedByName[n]).filter(Boolean);
 
-  let liveSessionRows = [];
-  if (hourKeys.length) {
-    const hourRows = processHours(hourKeys, byTime);
-    liveSessionRows = buildSessionRows(hourRows);
-  }
+  // Cross-session analysis: read recent sessions for expansion pressure + market cycle
+  const { data: recentSessions } = await supabase
+    .from('market_energy_sessions')
+    .select('*')
+    .neq('session_name', 'LOW_LIQUIDITY')
+    .order('session_date', { ascending: false })
+    .order('session_name', { ascending: false })
+    .limit(8);
 
-  const liveByName = {};
-  for (const row of liveSessionRows) liveByName[row.session_name] = row;
-
-  // 3. Build final sessions: use stored DB data for completed, live for active
-  const sessions = [];
-  for (const name of SESSION_ORDER) {
-    if (name === currentSession) {
-      // Active session: use live in-memory data (real-time)
-      if (liveByName[name]) sessions.push(liveByName[name]);
-      else if (storedByName[name]) sessions.push(storedByName[name]);
-    } else {
-      // Completed/upcoming: use stored DB data (consistent point-in-time values)
-      if (storedByName[name]) sessions.push(storedByName[name]);
-      else if (liveByName[name]) sessions.push(liveByName[name]);
+  const sequence = (recentSessions || []).reverse().map(row => {
+    if (row.details && typeof row.details === 'object') {
+      const { hours, hourly, ...computed } = row.details;
+      Object.assign(row, computed);
+      row.details = { hours, hourly };
     }
-  }
-
-  // 4. Cross-session analysis uses live sequence for accurate expansion pressure
-  const sequence = liveSessionRows
-    .filter(r => r.session_name !== 'LOW_LIQUIDITY')
-    .slice(-8);
+    return row;
+  });
 
   const expansionPressure = computeExpansionPressure(sequence);
   const marketCycle       = classifyMarketCycle(sequence);
