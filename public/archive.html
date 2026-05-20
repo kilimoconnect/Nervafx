@@ -84,11 +84,41 @@
       color: var(--text-muted); font-size: 13px;
     }
 
+    .arc-filters {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px;
+      margin-bottom: 16px; padding: 10px 14px;
+      background: rgba(255,255,255,.03);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    .arc-filter-group {
+      display: flex; align-items: center; gap: 6px;
+    }
+    .arc-filter-label {
+      font-size: 10px; font-weight: 700; color: var(--text-dim);
+      text-transform: uppercase; letter-spacing: .06em;
+      white-space: nowrap;
+    }
+    .arc-filter-pills {
+      display: flex; gap: 3px;
+    }
+    .arc-fpill {
+      padding: 3px 10px; border-radius: 5px;
+      border: 1px solid var(--border);
+      background: transparent; color: var(--text-muted);
+      font-size: 10px; font-weight: 600; cursor: pointer;
+      transition: all .15s; white-space: nowrap;
+    }
+    .arc-fpill:hover { background: var(--bg-hover); color: var(--text); }
+    .arc-fpill.active { background: rgba(59,130,246,.14); border-color: rgba(59,130,246,.38); color: #93c5fd; }
+
     @media (max-width: 700px) {
       .arc-topbar { padding: 0 14px; }
       .arc-sep, .arc-title-text { display: none; }
       .arc-back-btn { font-size: 10px; padding: 5px 10px; }
       .arc-main { padding: 12px 12px 60px; }
+      .arc-filters { gap: 6px 10px; padding: 8px 10px; }
+      .arc-fpill { padding: 2px 7px; font-size: 9px; }
     }
   </style>
 </head>
@@ -122,6 +152,28 @@
       <button class="arc-tab" data-section="energy" onclick="switchArchiveTab(this)">Energy</button>
       <button class="arc-tab" data-section="liquidity" onclick="switchArchiveTab(this)">Liquidity</button>
       <button class="arc-tab" data-section="history" onclick="switchArchiveTab(this)">Session History</button>
+    </div>
+
+    <div class="arc-filters">
+      <div class="arc-filter-group">
+        <span class="arc-filter-label">Period</span>
+        <div class="arc-filter-pills" id="arc-period-pills">
+          <button class="arc-fpill" data-days="7" onclick="setArcPeriod(this)">7D</button>
+          <button class="arc-fpill active" data-days="30" onclick="setArcPeriod(this)">30D</button>
+          <button class="arc-fpill" data-days="90" onclick="setArcPeriod(this)">90D</button>
+          <button class="arc-fpill" data-days="180" onclick="setArcPeriod(this)">6M</button>
+          <button class="arc-fpill" data-days="365" onclick="setArcPeriod(this)">1Y</button>
+        </div>
+      </div>
+      <div class="arc-filter-group">
+        <span class="arc-filter-label">Session</span>
+        <div class="arc-filter-pills" id="arc-session-pills">
+          <button class="arc-fpill active" data-session="ALL" onclick="setArcSession(this)">All</button>
+          <button class="arc-fpill" data-session="ASIA" onclick="setArcSession(this)">Asia</button>
+          <button class="arc-fpill" data-session="LONDON" onclick="setArcSession(this)">London</button>
+          <button class="arc-fpill" data-session="NEW_YORK" onclick="setArcSession(this)">New York</button>
+        </div>
+      </div>
     </div>
 
     <section class="arc-section" id="arc-momentum">
@@ -189,9 +241,54 @@
     return r.json();
   }
 
-  // No cutoff — backtest_candles now feeds 12 months of data into the archive tables
+  // ─── Filter State ──────────────────────────────────────────────────────────
+
+  let _arcFilterDays = 30;
+  let _arcFilterSession = 'ALL';
 
   const ARC_SECTIONS = ['momentum', 'movement', 'agreement', 'volatility', 'energy', 'liquidity', 'history'];
+
+  function setArcPeriod(btn) {
+    document.querySelectorAll('#arc-period-pills .arc-fpill').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    _arcFilterDays = parseInt(btn.dataset.days, 10);
+    _reloadAllArchive();
+  }
+
+  function setArcSession(btn) {
+    document.querySelectorAll('#arc-session-pills .arc-fpill').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    _arcFilterSession = btn.dataset.session;
+    _reloadAllArchive();
+  }
+
+  function _filterRows(rows, timeField) {
+    const cutoff = new Date(Date.now() - _arcFilterDays * 24 * 60 * 60 * 1000).toISOString();
+    return rows.filter(r => {
+      const t = r[timeField] || '';
+      if (t < cutoff) return false;
+      if (_arcFilterSession !== 'ALL' && r.session_name !== _arcFilterSession) return false;
+      return true;
+    });
+  }
+
+  function _reloadAllArchive() {
+    // Re-render whatever is already loaded (no re-fetch needed)
+    if (_arcHourlyRows) {
+      for (const key of Object.keys(ARC_METRICS)) {
+        const bodyEl = document.getElementById(`arc-${key}-body`);
+        if (bodyEl) {
+          const filtered = _filterRows(_arcHourlyRows, 'time_utc');
+          if (!filtered.length) bodyEl.innerHTML = '<p class="me-empty">No data for this filter.</p>';
+          else renderMetricBars(bodyEl, filtered, ARC_METRICS[key]);
+        }
+      }
+    }
+    if (_arcSessionRows) {
+      _renderFilteredLiquidity();
+      _renderFilteredHistory();
+    }
+  }
 
   function switchArchiveTab(btn) {
     document.querySelectorAll('.arc-tab').forEach(t => t.classList.remove('active'));
@@ -219,7 +316,21 @@
     return _arcHourlyLoading;
   }
 
-  // Metric definitions — each produces a { label, field, unit, thresholds } config
+  // Shared session data — loaded once
+  let _arcSessionRows = null;
+  let _arcSessionLoading = null;
+
+  async function _loadSessionRows() {
+    if (_arcSessionRows) return _arcSessionRows;
+    if (_arcSessionLoading) return _arcSessionLoading;
+    _arcSessionLoading = api('/api/market-energy-history?days=365').then(data => {
+      _arcSessionRows = Array.isArray(data) ? data : (data.rows || []);
+      return _arcSessionRows;
+    });
+    return _arcSessionLoading;
+  }
+
+  // Metric definitions
   const ARC_METRICS = {
     momentum:   { field: 'breadth_score',    label: 'Momentum',   unit: '',  streakMin: 10, highThresh: 40, midThresh: 20, peakWord: 'momentum' },
     movement:   { field: 'movement_score',   label: 'Movement',   unit: '',  streakMin: 10, highThresh: 40, midThresh: 20, peakWord: 'movement' },
@@ -233,8 +344,9 @@
     if (!bodyEl) return;
     try {
       const rows = await _loadHourlyRows();
-      if (!rows.length) { bodyEl.innerHTML = '<p class="me-empty">No hourly data available.</p>'; return; }
-      renderMetricBars(bodyEl, rows, ARC_METRICS[metricKey]);
+      const filtered = _filterRows(rows, 'time_utc');
+      if (!filtered.length) { bodyEl.innerHTML = '<p class="me-empty">No hourly data available.</p>'; return; }
+      renderMetricBars(bodyEl, filtered, ARC_METRICS[metricKey]);
     } catch (e) {
       bodyEl.innerHTML = `<p class="me-empty">Failed to load: ${e.message}</p>`;
     }
@@ -374,13 +486,39 @@
 
   // ─── Liquidity Archive (session-level, not hourly) ────────────────────────
 
+  function _filterSessionRows(rows) {
+    const cutoff = new Date(Date.now() - _arcFilterDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    return rows.filter(r => {
+      if ((r.session_date || '') < cutoff) return false;
+      if (_arcFilterSession !== 'ALL' && r.session_name !== _arcFilterSession) return false;
+      return true;
+    });
+  }
+
+  function _renderFilteredLiquidity() {
+    const bodyEl = document.getElementById('arc-liquidity-body');
+    if (!bodyEl || !_arcSessionRows) return;
+    const filtered = _filterSessionRows(_arcSessionRows);
+    if (!filtered.length) { bodyEl.innerHTML = '<p class="me-empty">No data for this filter.</p>'; return; }
+    renderLiquidityChart(bodyEl, filtered);
+  }
+
+  function _renderFilteredHistory() {
+    const bodyEl = document.getElementById('arc-history-body');
+    if (!bodyEl || !_arcSessionRows) return;
+    const filtered = _filterSessionRows(_arcSessionRows);
+    if (!filtered.length) { bodyEl.innerHTML = '<p class="me-empty">No data for this filter.</p>'; return; }
+    renderHistoryTable(bodyEl, filtered);
+  }
+
   async function loadLiquidityArchive() {
     const bodyEl = document.getElementById('arc-liquidity-body');
     if (!bodyEl) return;
     try {
-      const rows = (await api('/api/market-energy-history?days=365'));
-      if (!rows.length) { bodyEl.innerHTML = '<p class="me-empty">No liquidity data available.</p>'; return; }
-      renderLiquidityChart(bodyEl, rows);
+      const rows = await _loadSessionRows();
+      const filtered = _filterSessionRows(rows);
+      if (!filtered.length) { bodyEl.innerHTML = '<p class="me-empty">No liquidity data available.</p>'; return; }
+      renderLiquidityChart(bodyEl, filtered);
     } catch (e) {
       bodyEl.innerHTML = `<p class="me-empty">Failed to load: ${e.message}</p>`;
     }
@@ -458,12 +596,13 @@
 
   async function loadHistoryArchive() {
     try {
-      const rows = (await api('/api/market-energy-history?days=365'));
-      if (!rows.length) {
+      const rows = await _loadSessionRows();
+      const filtered = _filterSessionRows(rows);
+      if (!filtered.length) {
         document.getElementById('arc-history-body').innerHTML = '<p class="me-empty">No history data available.</p>';
         return;
       }
-      renderHistoryTable(document.getElementById('arc-history-body'), rows);
+      renderHistoryTable(document.getElementById('arc-history-body'), filtered);
     } catch (e) {
       document.getElementById('arc-history-body').innerHTML = `<p class="me-empty">Failed to load: ${e.message}</p>`;
     }
