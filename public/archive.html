@@ -111,6 +111,23 @@
     }
     .arc-fpill:hover { background: var(--bg-hover); color: var(--text); }
     .arc-fpill.active { background: rgba(59,130,246,.14); border-color: rgba(59,130,246,.38); color: #93c5fd; }
+    .arc-date-input {
+      padding: 3px 8px; border-radius: 5px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.04); color: var(--text);
+      font-size: 10px; font-weight: 600; font-family: var(--font-ui);
+      outline: none; cursor: pointer;
+    }
+    .arc-date-input:focus { border-color: rgba(59,130,246,.5); }
+    .arc-date-input::-webkit-calendar-picker-indicator { filter: invert(.7); cursor: pointer; }
+    .arc-date-apply {
+      padding: 3px 10px; border-radius: 5px;
+      border: 1px solid rgba(59,130,246,.38);
+      background: rgba(59,130,246,.14); color: #93c5fd;
+      font-size: 10px; font-weight: 700; cursor: pointer;
+      transition: all .15s;
+    }
+    .arc-date-apply:hover { background: rgba(59,130,246,.25); }
 
     @media (max-width: 700px) {
       .arc-topbar { padding: 0 14px; }
@@ -164,6 +181,13 @@
           <button class="arc-fpill" data-days="180" onclick="setArcPeriod(this)">6M</button>
           <button class="arc-fpill" data-days="365" onclick="setArcPeriod(this)">1Y</button>
         </div>
+      </div>
+      <div class="arc-filter-group">
+        <span class="arc-filter-label">Custom</span>
+        <input type="date" id="arc-date-from" class="arc-date-input" title="From date">
+        <span style="color:var(--text-dim);font-size:10px">→</span>
+        <input type="date" id="arc-date-to" class="arc-date-input" title="To date">
+        <button class="arc-date-apply" onclick="applyCustomDates()">Apply</button>
       </div>
       <div class="arc-filter-group">
         <span class="arc-filter-label">Session</span>
@@ -245,6 +269,8 @@
 
   let _arcFilterDays = 30;
   let _arcFilterSession = 'ALL';
+  let _arcCustomFrom = null;  // ISO string or null
+  let _arcCustomTo = null;
 
   const ARC_SECTIONS = ['momentum', 'movement', 'agreement', 'volatility', 'energy', 'liquidity', 'history'];
 
@@ -252,6 +278,10 @@
     document.querySelectorAll('#arc-period-pills .arc-fpill').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     _arcFilterDays = parseInt(btn.dataset.days, 10);
+    _arcCustomFrom = null;
+    _arcCustomTo = null;
+    document.getElementById('arc-date-from').value = '';
+    document.getElementById('arc-date-to').value = '';
     _reloadAllArchive();
   }
 
@@ -262,11 +292,29 @@
     _reloadAllArchive();
   }
 
+  function applyCustomDates() {
+    const from = document.getElementById('arc-date-from').value;
+    const to   = document.getElementById('arc-date-to').value;
+    if (!from && !to) return;
+    _arcCustomFrom = from ? from + 'T00:00:00Z' : null;
+    _arcCustomTo   = to   ? to   + 'T23:59:59Z' : null;
+    // Deactivate period pills
+    document.querySelectorAll('#arc-period-pills .arc-fpill').forEach(b => b.classList.remove('active'));
+    _reloadAllArchive();
+  }
+
   function _filterRows(rows, timeField) {
-    const cutoff = new Date(Date.now() - _arcFilterDays * 24 * 60 * 60 * 1000).toISOString();
+    let cutoffFrom, cutoffTo;
+    if (_arcCustomFrom || _arcCustomTo) {
+      cutoffFrom = _arcCustomFrom || '1970-01-01T00:00:00Z';
+      cutoffTo   = _arcCustomTo   || '2099-12-31T23:59:59Z';
+    } else {
+      cutoffFrom = new Date(Date.now() - _arcFilterDays * 24 * 60 * 60 * 1000).toISOString();
+      cutoffTo   = '2099-12-31T23:59:59Z';
+    }
     return rows.filter(r => {
       const t = r[timeField] || '';
-      if (t < cutoff) return false;
+      if (t < cutoffFrom || t > cutoffTo) return false;
       if (_arcFilterSession !== 'ALL' && r.session_name !== _arcFilterSession) return false;
       return true;
     });
@@ -484,9 +532,17 @@
   // ─── Liquidity Archive (session-level, not hourly) ────────────────────────
 
   function _filterSessionRows(rows) {
-    const cutoff = new Date(Date.now() - _arcFilterDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    let cutoffFrom, cutoffTo;
+    if (_arcCustomFrom || _arcCustomTo) {
+      cutoffFrom = _arcCustomFrom ? _arcCustomFrom.slice(0, 10) : '1970-01-01';
+      cutoffTo   = _arcCustomTo   ? _arcCustomTo.slice(0, 10)   : '2099-12-31';
+    } else {
+      cutoffFrom = new Date(Date.now() - _arcFilterDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      cutoffTo   = '2099-12-31';
+    }
     return rows.filter(r => {
-      if ((r.session_date || '') < cutoff) return false;
+      const d = (r.session_date || '').slice(0, 10);
+      if (d < cutoffFrom || d > cutoffTo) return false;
       if (_arcFilterSession !== 'ALL' && r.session_name !== _arcFilterSession) return false;
       return true;
     });
