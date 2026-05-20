@@ -2827,7 +2827,7 @@ function _meHistoryPanel(rows, liveSessions) {
   return `<div class="sh-panel sh-collapsed">
     <div class="sh-controls">
       <button class="sh-toggle-btn" onclick="var p=this.closest('.sh-panel');p.classList.toggle('sh-collapsed');this.textContent=p.classList.contains('sh-collapsed')?'Show Session History':'Hide Session History'">Show Session History</button>
-      <a href="/archive.html" class="sh-archive-link">View Full Archive →</a>
+      <a href="/archive.html" class="sh-archive-link premium-only">View Full Archive →</a>
     </div>
     <div class="sh-table">
       ${tableHead}
