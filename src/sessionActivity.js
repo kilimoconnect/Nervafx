@@ -960,7 +960,7 @@ async function computeSessionSummaries() {
 
 // ─── Backfill ─────────────────────────────────────────────────────────────────
 
-async function backfillSessionActivity() {
+async function backfillSessionActivity({ fullRewrite = false } = {}) {
   console.log('[SESSION_ACTIVITY] Backfill: fetching candles…');
   const byTime   = await fetchHourlyCandles(300);
   const hourKeys = Object.keys(byTime).sort();
@@ -975,7 +975,37 @@ async function backfillSessionActivity() {
   if (error) throw new Error(`Hourly upsert: ${error.message}`);
   console.log(`[SESSION_ACTIVITY] Backfilled ${rows.length} rows.`);
 
-  await upsertMarketEnergySessions(buildSessionRows(rows));
+  const allSessionRows = buildSessionRows(rows);
+
+  if (fullRewrite) {
+    // Manual admin backfill — overwrite everything
+    await upsertMarketEnergySessions(allSessionRows);
+  } else {
+    // Hourly pipeline — only upsert today's active session + any new sessions
+    // not yet in DB. Completed sessions keep their original scores to prevent
+    // rolling averages/EMA from inflating values retroactively.
+    const { getCurrentSession } = require('./sessionEngine');
+    const activeSession = getCurrentSession().session;
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayRows = allSessionRows.filter(sr => sr.session_date === todayStr);
+
+    if (todayRows.length) {
+      const { data: existing } = await supabase
+        .from('market_energy_sessions')
+        .select('session_name')
+        .eq('session_date', todayStr);
+      const existingNames = new Set((existing || []).map(r => r.session_name));
+
+      // Upsert: active session (always) + any new sessions not yet stored
+      const toUpsert = todayRows.filter(
+        sr => sr.session_name === activeSession || !existingNames.has(sr.session_name)
+      );
+      if (toUpsert.length) {
+        await upsertMarketEnergySessions(toUpsert);
+      }
+    }
+  }
+
   await computeSessionSummaries();
   return { rows: rows.length };
 }
@@ -998,9 +1028,19 @@ async function calculateLatestSessionActivity() {
     .upsert([toHourlyRow(row)], { onConflict: 'time_utc', ignoreDuplicates: false });
   if (error) throw new Error(`Hourly upsert: ${error.message}`);
 
-  // Upsert current + recent sessions (last 4 to cover today's full cycle)
+  // Only upsert the CURRENT active session — completed sessions keep their
+  // stored scores. Recomputing all 4 shifts rolling averages/EMA context and
+  // inflates completed session values retroactively.
+  const { getCurrentSession } = require('./sessionEngine');
+  const activeSession = getCurrentSession().session;
+  const todayStr = new Date().toISOString().slice(0, 10);
   const sessionRows = buildSessionRows(allRows);
-  await upsertMarketEnergySessions(sessionRows.slice(-4));
+  const currentOnly = sessionRows.filter(
+    sr => sr.session_name === activeSession && sr.session_date === todayStr
+  );
+  if (currentOnly.length) {
+    await upsertMarketEnergySessions(currentOnly);
+  }
 
   console.log(
     `[SESSION_ACTIVITY] ✓ ${row.time_utc} | ${row.session_name} | ${row.energy_cycle}` +

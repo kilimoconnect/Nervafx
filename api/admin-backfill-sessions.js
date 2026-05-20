@@ -3,8 +3,8 @@
 /**
  * POST /api/admin-backfill-sessions
  *
- * Triggers backfillSessionActivity() which processes 200 in-memory candles
- * and upserts all session rows to market_energy_sessions.
+ * Triggers backfillSessionActivity({ fullRewrite: true }) to recompute
+ * and overwrite ALL session rows in market_energy_sessions from backtest_candles.
  * Admin-only (requires valid JWT for the admin user ID).
  */
 
@@ -29,7 +29,7 @@ module.exports = async function handler(req, res) {
   if (getSubFromToken(token) !== ADMIN_ID) return res.status(403).json({ error: 'Forbidden' });
 
   try {
-    const result = await backfillSessionActivity();
+    const result = await backfillSessionActivity({ fullRewrite: true });
     res.json({ ok: true, rows: result?.rows });
   } catch (e) {
     console.error('[BACKFILL-SESSIONS]', e.message);
