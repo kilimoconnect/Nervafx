@@ -2797,11 +2797,18 @@ function renderMarketEnergy(sessions, expansionPressure, marketCycle, currentSes
   const byName = Object.fromEntries(todaySessions.map(s => [s.session_name, s]));
 
   const ORDER  = ['ASIA', 'LONDON', 'NEW_YORK'];
-  // Sort: current (ACTIVE) first, then past (COMPLETED), then upcoming (UPCOMING)
+  // Sort: current (ACTIVE) top-left, then previous (most recent COMPLETED) top-right,
+  // then older completed, then upcoming — reverse chronological within each group
   const STATUS_PRIORITY = { ACTIVE: 0, COMPLETED: 1, UPCOMING: 2 };
   const sorted = ORDER
-    .map(name => ({ name, status: _meSessionStatus(name, currentSession) }))
-    .sort((a, b) => (STATUS_PRIORITY[a.status] ?? 3) - (STATUS_PRIORITY[b.status] ?? 3));
+    .map(name => ({ name, status: _meSessionStatus(name, currentSession), idx: ORDER.indexOf(name) }))
+    .sort((a, b) => {
+      const sp = (STATUS_PRIORITY[a.status] ?? 3) - (STATUS_PRIORITY[b.status] ?? 3);
+      if (sp !== 0) return sp;
+      // Within COMPLETED: most recent session first (higher index = more recent)
+      if (a.status === 'COMPLETED') return b.idx - a.idx;
+      return a.idx - b.idx;
+    });
 
   el.innerHTML = `
     ${_meMarketCycleBanner(marketCycle)}
