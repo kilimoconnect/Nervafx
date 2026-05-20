@@ -5788,6 +5788,140 @@ body::after {
   padding-left: 2px;
 }
 
+/* ─── Detailed Engine Result Sections ───────────────────────────────────── */
+
+/* What-is intro panel */
+.bt-what-is {
+  background: rgba(59,130,246,.06); border: 1px solid rgba(59,130,246,.15);
+  border-radius: var(--radius); padding: 16px 20px; margin-bottom: 18px;
+  display: flex; gap: 14px; align-items: flex-start;
+}
+.bt-what-is-icon {
+  flex-shrink: 0; width: 40px; height: 40px; border-radius: 10px;
+  background: rgba(59,130,246,.12); display: flex; align-items: center; justify-content: center;
+  color: var(--accent);
+}
+.bt-what-is-text h4 {
+  font-size: 13px; font-weight: 700; color: var(--accent); margin-bottom: 6px;
+  text-transform: uppercase; letter-spacing: .5px;
+}
+.bt-what-is-text p {
+  font-size: 13px; color: var(--text-dim); line-height: 1.6;
+}
+
+/* Key Findings cards */
+.bt-findings { margin-bottom: 20px; }
+.bt-findings-title {
+  font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 10px;
+  display: flex; align-items: center; gap: 6px;
+}
+.bt-findings-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+.bt-finding {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 14px 16px;
+  border-left: 3px solid var(--border);
+}
+.bt-finding.bt-finding-good { border-left-color: var(--green); }
+.bt-finding.bt-finding-warn { border-left-color: var(--yellow); }
+.bt-finding.bt-finding-bad  { border-left-color: var(--red); }
+.bt-finding.bt-finding-info { border-left-color: var(--accent); }
+.bt-finding-label {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .5px;
+  color: var(--text-muted); font-weight: 600; margin-bottom: 4px;
+}
+.bt-finding-value {
+  font-size: 20px; font-weight: 800; font-family: var(--font-data);
+  line-height: 1.2; margin-bottom: 4px;
+}
+.bt-finding-good .bt-finding-value { color: var(--green); }
+.bt-finding-warn .bt-finding-value { color: var(--yellow); }
+.bt-finding-bad .bt-finding-value  { color: var(--red); }
+.bt-finding-info .bt-finding-value { color: var(--accent); }
+.bt-finding-desc {
+  font-size: 11px; color: var(--text-muted); line-height: 1.45;
+}
+
+/* How-to-read guide */
+.bt-guide {
+  background: rgba(255,255,255,.03); border: 1px dashed var(--border);
+  border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 14px;
+}
+.bt-guide-title {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .5px; color: var(--text-muted); margin-bottom: 6px;
+  display: flex; align-items: center; gap: 5px;
+}
+.bt-guide p, .bt-guide li {
+  font-size: 12px; color: var(--text-dim); line-height: 1.5;
+}
+.bt-guide ul { padding-left: 16px; margin-top: 4px; }
+.bt-guide li { margin-bottom: 3px; }
+
+/* Action box */
+.bt-action-box {
+  background: rgba(22,163,74,.05); border: 1px solid rgba(22,163,74,.2);
+  border-radius: var(--radius); padding: 16px 20px; margin-top: 18px;
+}
+.bt-action-title {
+  font-size: 13px; font-weight: 700; color: var(--green); margin-bottom: 8px;
+  display: flex; align-items: center; gap: 6px;
+  text-transform: uppercase; letter-spacing: .4px;
+}
+.bt-action-box ul { padding-left: 18px; }
+.bt-action-box li {
+  font-size: 12.5px; color: var(--text-dim); line-height: 1.55; margin-bottom: 4px;
+}
+.bt-action-box li strong { color: var(--text); }
+
+/* Inline metric callout */
+.bt-metric-callout {
+  display: inline-flex; align-items: baseline; gap: 4px;
+  background: rgba(255,255,255,.04); border-radius: 4px;
+  padding: 2px 8px; font-family: var(--font-data); font-size: 12px;
+}
+.bt-metric-callout .val { font-weight: 700; }
+.bt-metric-callout .val.good { color: var(--green); }
+.bt-metric-callout .val.bad  { color: var(--red); }
+.bt-metric-callout .val.mid  { color: var(--yellow); }
+.bt-metric-callout .label { color: var(--text-muted); font-size: 10px; }
+
+/* Section divider within engine results */
+.bt-result-divider {
+  border: none; border-top: 1px solid var(--border); margin: 20px 0;
+}
+
+/* Verdict banner */
+.bt-verdict-banner {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 18px; border-radius: var(--radius-sm); margin-bottom: 14px;
+  font-size: 13px; font-weight: 600;
+}
+.bt-verdict-banner.good { background: rgba(22,163,74,.08); border: 1px solid rgba(22,163,74,.2); color: var(--green); }
+.bt-verdict-banner.warn { background: rgba(202,138,4,.08); border: 1px solid rgba(202,138,4,.2); color: var(--yellow); }
+.bt-verdict-banner.bad  { background: rgba(220,38,38,.08); border: 1px solid rgba(220,38,38,.2); color: var(--red); }
+
+/* Explanation row under tables */
+.bt-explain-row {
+  font-size: 11px; color: var(--text-muted); padding: 8px 0; line-height: 1.5;
+  border-bottom: 1px solid rgba(255,255,255,.04);
+}
+.bt-explain-row strong { color: var(--text-dim); }
+
+/* Legend for heatmaps / probability */
+.bt-legend {
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  margin: 8px 0 12px; font-size: 10px; color: var(--text-muted);
+}
+.bt-legend-item {
+  display: flex; align-items: center; gap: 4px;
+}
+.bt-legend-swatch {
+  width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0;
+}
+
 /* ─── Engine Selector Grid ──────────────────────────────────────────────── */
 .bt-engine-grid {
   display: grid;
@@ -5942,6 +6076,22 @@ body::after {
   .bt-combo-name { font-size: 12px; }
   .bt-combo-cond { font-size: 10px; }
   .bt-combo-stats { font-size: 11px; gap: 8px; }
+
+  /* Detail sections */
+  .bt-what-is { flex-direction: column; padding: 12px 14px; gap: 8px; }
+  .bt-what-is-icon { width: 32px; height: 32px; }
+  .bt-what-is-text h4 { font-size: 11px; }
+  .bt-what-is-text p { font-size: 12px; }
+  .bt-findings-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .bt-finding { padding: 10px 12px; }
+  .bt-finding-value { font-size: 16px; }
+  .bt-finding-desc { font-size: 10px; }
+  .bt-guide { padding: 10px 12px; }
+  .bt-guide p, .bt-guide li { font-size: 11px; }
+  .bt-action-box { padding: 12px 14px; }
+  .bt-action-box li { font-size: 11.5px; }
+  .bt-verdict-banner { padding: 10px 14px; font-size: 12px; }
+  .bt-legend { font-size: 9px; gap: 6px; }
 
   /* Engine selector grid */
   .bt-engine-grid { grid-template-columns: 1fr; gap: 8px; }

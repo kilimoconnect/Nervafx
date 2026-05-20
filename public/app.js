@@ -3203,33 +3203,108 @@ function _btRenderEngine(key, data, insight, container) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// *Into() renderers — each renders into a passed container element
+// *Into() renderers — ultra-detailed, explainable for every user
 // ═══════════════════════════════════════════════════════════════════════════
+
+// Shared helpers for rich presentation
+function _btWhatIs(icon, title, description) {
+  return `<div class="bt-what-is">
+    <div class="bt-what-is-icon"><i data-lucide="${icon}" style="width:22px;height:22px"></i></div>
+    <div class="bt-what-is-text"><h4>${title}</h4><p>${description}</p></div>
+  </div>`;
+}
+
+function _btFindings(cards) {
+  if (!cards.length) return '';
+  return `<div class="bt-findings">
+    <div class="bt-findings-title"><i data-lucide="target" style="width:15px;height:15px"></i> Key Findings</div>
+    <div class="bt-findings-grid">${cards.map(c => `<div class="bt-finding bt-finding-${c.type || 'info'}">
+      <div class="bt-finding-label">${c.label}</div>
+      <div class="bt-finding-value">${c.value}</div>
+      <div class="bt-finding-desc">${c.desc}</div>
+    </div>`).join('')}</div>
+  </div>`;
+}
+
+function _btGuide(lines) {
+  return `<div class="bt-guide">
+    <div class="bt-guide-title"><i data-lucide="info" style="width:12px;height:12px"></i> How To Read This</div>
+    <ul>${lines.map(l => `<li>${l}</li>`).join('')}</ul>
+  </div>`;
+}
+
+function _btActionBox(actions) {
+  return `<div class="bt-action-box">
+    <div class="bt-action-title"><i data-lucide="check-circle" style="width:14px;height:14px"></i> Trading Actions</div>
+    <ul>${actions.map(a => `<li>${a}</li>`).join('')}</ul>
+  </div>`;
+}
+
+function _btHmLegend() {
+  return `<div class="bt-legend">
+    <span style="font-weight:600">Win Rate Scale:</span>
+    <div class="bt-legend-item"><div class="bt-legend-swatch" style="background:#ef4444"></div>&lt;48% Avoid</div>
+    <div class="bt-legend-item"><div class="bt-legend-swatch" style="background:#f97316"></div>48–52% Weak</div>
+    <div class="bt-legend-item"><div class="bt-legend-swatch" style="background:rgba(255,255,255,.15)"></div>52–56% Neutral</div>
+    <div class="bt-legend-item"><div class="bt-legend-swatch" style="background:#22c55e"></div>56–62% Good</div>
+    <div class="bt-legend-item"><div class="bt-legend-swatch" style="background:#10b981"></div>62%+ Excellent</div>
+  </div>`;
+}
+
+// ─── 1. Component Thresholds ────────────────────────────────────────────────
 
 function _btRenderComponentThresholdsInto(components, insights, wrap) {
   if (!components || !components.length) { wrap.innerHTML = '<div style="color:var(--text-muted)">No component data</div>'; return; }
 
+  let html = _btWhatIs('sliders-horizontal', 'What This Analysis Shows',
+    'Every individual indicator in the NervaFX system has been tested independently across your entire date range. For each indicator (movement, momentum, agreement, volatility, energy, bull/bear pressure, dominance, liquidity, readiness, CS diff, confidence, etc.), we bucketed the data into ranges and measured: <strong>how often price moved in the expected direction (win rate)</strong>, how far it moved favorably, and how far it moved against you. This tells you the exact threshold where each indicator starts giving you a real trading edge.');
+
+  // Build summary findings
+  const bestComp = [...components].sort((a, b) => (b.best_win_rate || 0) - (a.best_win_rate || 0))[0];
+  const worstComp = [...components].filter(c => c.worst_win_rate != null).sort((a, b) => (a.worst_win_rate || 100) - (b.worst_win_rate || 100))[0];
+  const edgeComps = components.filter(c => c.min_edge_threshold != null);
+
+  const findings = [];
+  if (bestComp?.best_win_rate) findings.push({ type: 'good', label: 'Strongest indicator', value: `${bestComp.best_win_rate}% WR`, desc: `${bestComp.name} at ${bestComp.best_range}${bestComp.unit} produces the highest win rate of any single indicator.` });
+  findings.push({ type: 'info', label: 'Indicators tested', value: `${components.length}`, desc: `Each indicator independently analyzed across all hourly snapshots in your date range.` });
+  if (edgeComps.length) findings.push({ type: 'warn', label: 'With clear edge thresholds', value: `${edgeComps.length} of ${components.length}`, desc: `These indicators have a provable minimum value where your edge begins — below it, you have no advantage.` });
+  if (worstComp?.worst_win_rate < 45) findings.push({ type: 'bad', label: 'Danger zone found', value: `${worstComp.worst_win_rate}% WR`, desc: `${worstComp.name} at ${worstComp.worst_range}${worstComp.unit} actively loses money. Avoid trading when this indicator is in this range.` });
+
+  html += _btFindings(findings);
+  html += _btInsightBox(insights && insights.summary ? insights : null);
+
+  html += _btGuide([
+    '<strong>★ Sweet Spot</strong> = the range where this indicator produces the highest win rate. Trade here.',
+    '<strong>Min Edge</strong> = the minimum value needed before this indicator gives you ANY advantage over random.',
+    '<strong>⚠ Danger</strong> = ranges where win rate drops below 48%. These conditions actively lose money.',
+    '<strong>Win Rate</strong> = % of times price moved in the favorable direction within the next few hours.',
+    '<strong>Avg Fav / Adv</strong> = average pips that moved in your favor vs. against you. Higher fav and lower adv = better.',
+    'Click any component card to expand and see the full data table with every range bucket.',
+  ]);
+
+  // Group components
   const groups = {};
   for (const comp of components) {
     if (!groups[comp.group]) groups[comp.group] = [];
     groups[comp.group].push(comp);
   }
-
   const insightMap = {};
-  if (insights && insights.length) {
-    for (const ins of insights) insightMap[ins.id] = ins;
-  }
+  if (insights && insights.length) for (const ins of insights) insightMap[ins.id] = ins;
 
-  const groupIcons = {
-    'Market Energy': 'zap', 'Directional Pressure': 'arrow-up-down',
-    'Market Structure': 'git-branch', 'Currency Strength': 'gauge', 'Quality Metrics': 'shield-check',
+  const groupIcons = { 'Market Energy': 'zap', 'Directional Pressure': 'arrow-up-down', 'Market Structure': 'git-branch', 'Currency Strength': 'gauge', 'Quality Metrics': 'shield-check' };
+  const groupDescs = {
+    'Market Energy': 'How much the market is moving and how strong that movement is. Higher energy = bigger potential trades, but also more risk.',
+    'Directional Pressure': 'Whether bulls or bears are in control. Measures the one-sided dominance of the market — the more one side dominates, the clearer the direction.',
+    'Market Structure': 'The underlying market condition — is it trending, pulling back, ready for entry, or in no-trade territory?',
+    'Currency Strength': 'How strong or weak each individual currency is. A large spread between the two currencies in a pair = strong directional bias.',
+    'Quality Metrics': 'Confidence and reliability scores that tell you how trustworthy the current signal is.',
   };
 
-  let html = '';
   for (const [groupName, comps] of Object.entries(groups)) {
     const icon = groupIcons[groupName] || 'bar-chart-3';
     html += `<div class="bt-comp-group">
-      <div class="bt-comp-group-header"><i data-lucide="${icon}" style="width:16px;height:16px"></i><span>${groupName}</span></div>`;
+      <div class="bt-comp-group-header"><i data-lucide="${icon}" style="width:16px;height:16px"></i><span>${groupName}</span></div>
+      <div class="bt-explain-row">${groupDescs[groupName] || ''}</div>`;
 
     for (const comp of comps) {
       const ins = insightMap[comp.id];
@@ -3238,7 +3313,7 @@ function _btRenderComponentThresholdsInto(components, insights, wrap) {
 
       let badges = '';
       if (comp.best_range) badges += `<span class="bt-comp-badge bt-comp-badge-best">Sweet Spot: ${comp.best_range}${comp.unit} (${comp.best_win_rate}% WR)</span>`;
-      if (comp.min_edge_threshold) badges += `<span class="bt-comp-badge bt-comp-badge-min">Min Edge: ${comp.min_edge_threshold}${comp.unit}</span>`;
+      if (comp.min_edge_threshold) badges += `<span class="bt-comp-badge bt-comp-badge-min">Min Edge: ≥${comp.min_edge_threshold}${comp.unit}</span>`;
       if (comp.worst_range && comp.worst_win_rate < 48) badges += `<span class="bt-comp-badge bt-comp-badge-danger">Danger: ${comp.worst_range}${comp.unit} (${comp.worst_win_rate}% WR)</span>`;
 
       let insightHtml = '';
@@ -3251,15 +3326,16 @@ function _btRenderComponentThresholdsInto(components, insights, wrap) {
 
       let tableHtml = '';
       if (rangeKeys.length) {
-        tableHtml = `<table class="bt-inst-table bt-comp-table">
-          <thead><tr><th>Range</th><th>Hours</th><th>Trades</th><th>Win Rate</th><th>Avg Fav</th><th>Avg Adv</th><th>Avg Move</th></tr></thead><tbody>`;
+        tableHtml = '<div class="bt-explain-row" style="font-size:10px;margin-bottom:6px"><strong>Reading the table:</strong> Each row is a range of values for ' + comp.name + '. The ★ row is the sweet spot. Green = profitable range. Red = losing range.</div>';
+        tableHtml += `<table class="bt-inst-table bt-comp-table">
+          <thead><tr><th>${comp.name} Range</th><th>Hours Observed</th><th>Trade Samples</th><th>Win Rate</th><th>Avg Pips For You</th><th>Avg Pips Against</th><th>Net Pips</th></tr></thead><tbody>`;
         for (const key of rangeKeys) {
           const r = ranges[key];
-          if (r.insufficient) { tableHtml += `<tr class="bt-comp-row-dim"><td>${key}</td><td>${r.hours}</td><td>${r.trades}</td><td colspan="4" style="color:var(--text-muted);font-style:italic">Insufficient data</td></tr>`; continue; }
+          if (r.insufficient) { tableHtml += `<tr class="bt-comp-row-dim"><td>${key}</td><td>${r.hours}h</td><td>${r.trades}</td><td colspan="4" style="color:var(--text-muted);font-style:italic">Not enough trades to be reliable</td></tr>`; continue; }
           const isBest = key === comp.best_range, isWorst = key === comp.worst_range && comp.worst_win_rate < 48;
           const rowCls = isBest ? 'bt-comp-row-best' : isWorst ? 'bt-comp-row-worst' : '';
           const wrCls = r.win_rate >= 55 ? 'bt-win' : r.win_rate < 45 ? 'bt-loss' : '';
-          tableHtml += `<tr class="${rowCls}"><td><strong>${key}</strong>${isBest ? ' ★' : ''}${isWorst ? ' ⚠' : ''}</td><td>${r.hours}</td><td>${r.trades}</td><td class="${wrCls}"><strong>${r.win_rate}%</strong></td><td class="bt-win">+${r.avg_fav}p</td><td class="bt-loss">-${r.avg_adv}p</td><td>${r.avg_move}p</td></tr>`;
+          tableHtml += `<tr class="${rowCls}"><td><strong>${key}</strong>${isBest ? ' ★' : ''}${isWorst ? ' ⚠' : ''}</td><td>${r.hours}h</td><td>${r.trades}</td><td class="${wrCls}"><strong>${r.win_rate}%</strong></td><td class="bt-win">+${r.avg_fav}p</td><td class="bt-loss">-${r.avg_adv}p</td><td>${r.avg_move}p</td></tr>`;
         }
         tableHtml += '</tbody></table>';
       }
@@ -3274,35 +3350,128 @@ function _btRenderComponentThresholdsInto(components, insights, wrap) {
     }
     html += '</div>';
   }
+
+  html += _btActionBox([
+    '<strong>Build your filter checklist:</strong> For every indicator, note the "Min Edge" threshold. Only take trades when each indicator is above its minimum.',
+    '<strong>Target the sweet spots:</strong> The ★ ranges give you the highest probability. When multiple indicators are all in their sweet spots simultaneously, your edge compounds.',
+    '<strong>Hard-avoid danger zones:</strong> If any indicator shows ⚠ Danger, that single condition is enough to skip the trade — even if everything else looks perfect.',
+    '<strong>Focus on high-impact indicators:</strong> Indicators with the biggest spread between best and worst win rates matter most. A component where best=65% and worst=35% is far more important than one where best=53% and worst=49%.',
+  ]);
+
   wrap.innerHTML = html;
 }
+
+// ─── 2. Conditional Edge ─────────────────────────────────────────────────────
 
 function _btRenderConditionalEdgeInto(data, insight, wrap) {
   if (!data?.chains) { wrap.innerHTML = '<div style="color:var(--text-muted)">No data</div>'; return; }
 
-  let html = _btInsightBox(insight);
-  for (const chain of data.chains) {
-    if (!chain.steps || chain.steps.length < 2) continue;
+  let html = _btWhatIs('layers', 'What This Analysis Shows',
+    'This is the most powerful analysis in NervaFX. Instead of looking at indicators one at a time, we <strong>stack multiple filters together</strong> and measure how your win rate improves with each additional condition. Think of it like a checklist — the more boxes you tick, the higher your probability. Each "chain" starts from a baseline (all trades) and progressively adds filters: first currency strength, then energy, then agreement, then session timing, etc. You can see exactly how much each additional filter improves your odds.');
+
+  // Extract best chain stats
+  const validChains = data.chains.filter(c => c.steps?.length >= 2);
+  let bestFinalWR = 0, bestChainName = '', totalLift = 0, bestStart = 0;
+  for (const chain of validChains) {
+    const last = chain.steps[chain.steps.length - 1];
+    const first = chain.steps[0];
+    if (last?.win_rate > bestFinalWR) {
+      bestFinalWR = last.win_rate;
+      bestChainName = chain.name;
+      bestStart = first?.win_rate || 0;
+      totalLift = bestFinalWR - bestStart;
+    }
+  }
+
+  html += _btFindings([
+    { type: 'good', label: 'Best stacked win rate', value: `${bestFinalWR}%`, desc: `The "${bestChainName}" chain reaches ${bestFinalWR}% when all filters are applied simultaneously.` },
+    { type: 'info', label: 'Total lift achieved', value: `+${totalLift}pp`, desc: `From ${bestStart}% baseline to ${bestFinalWR}% — that is ${totalLift} percentage points of edge created by stacking conditions.` },
+    { type: 'info', label: 'Filter chains tested', value: `${validChains.length}`, desc: `Each chain stacks 3-5 conditions in different orders to find the optimal combination path.` },
+  ]);
+
+  html += _btInsightBox(insight);
+
+  html += _btGuide([
+    'Each chain reads <strong>top to bottom</strong>. The first bar is the baseline (no filters). Each subsequent bar adds one more condition.',
+    'The <strong>+number</strong> next to each bar shows how many percentage points that single filter added to your win rate.',
+    '<strong>Bar colors:</strong> Red = below 50% (losing), Grey = 50-55% (breakeven), Yellow = 55-65% (profitable), Green = 65%+ (strong edge).',
+    'The <strong>samples count</strong> decreases as you add filters — this is normal. Fewer but higher-quality trades is the goal.',
+    'Look for chains where the final step has <strong>at least 100+ trades</strong> — below that, the result may not be reliable.',
+  ]);
+
+  for (const chain of validChains) {
     html += `<div class="bt-chain"><div class="bt-chain-name">${chain.name}</div><div class="bt-chain-desc">${chain.desc}</div><div class="bt-chain-steps">`;
+
     for (let i = 0; i < chain.steps.length; i++) {
       const s = chain.steps[i];
       if (!s.win_rate) continue;
       const lift = i > 0 ? s.win_rate - chain.steps[i - 1].win_rate : 0;
       const barW = Math.max(8, Math.min(100, s.win_rate));
       const barCls = s.win_rate >= 65 ? 'bt-bar-hot' : s.win_rate >= 55 ? 'bt-bar-warm' : s.win_rate >= 50 ? 'bt-bar-neutral' : 'bt-bar-cold';
-      html += `<div class="bt-chain-step"><div class="bt-chain-label">${s.label}</div><div class="bt-chain-bar-wrap"><div class="bt-chain-bar ${barCls}" style="width:${barW}%"></div><span class="bt-chain-wr">${s.win_rate}%</span>${lift > 0 ? `<span class="bt-chain-lift">+${lift}</span>` : ''}</div><div class="bt-chain-meta">${s.samples} trades · +${s.avg_fav}p fav · -${s.avg_adv}p adv</div></div>`;
+      const stepExplain = i === 0 ? '(Starting point — all trades, no filter)' : `(Added this filter: ${lift > 0 ? '+' + lift + ' percentage points' : 'no improvement'})`;
+
+      html += `<div class="bt-chain-step">
+        <div class="bt-chain-label">${s.label} <span style="font-weight:400;color:var(--text-muted);font-size:10px">${stepExplain}</span></div>
+        <div class="bt-chain-bar-wrap"><div class="bt-chain-bar ${barCls}" style="width:${barW}%"></div><span class="bt-chain-wr">${s.win_rate}%</span>${lift > 0 ? `<span class="bt-chain-lift">+${lift}</span>` : ''}</div>
+        <div class="bt-chain-meta">${s.samples} trades · avg +${s.avg_fav}p in your favor · avg -${s.avg_adv}p against you · net ${(s.avg_fav - s.avg_adv).toFixed(1)}p per trade</div>
+      </div>`;
     }
     html += '</div></div>';
   }
-  wrap.innerHTML = html || '<div style="color:var(--text-muted)">No data</div>';
+
+  html += _btActionBox([
+    '<strong>Use the best chain as your trading checklist.</strong> Before entering any trade, verify that each condition in the chain is met.',
+    '<strong>More filters = higher win rate but fewer trades.</strong> Decide your trade-off: the 3rd filter alone might get you 60% WR with plenty of opportunities, while the 5th gets 75% but only a few trades per week.',
+    '<strong>The biggest single lift tells you the most important filter.</strong> If adding "Energy > 40" adds +8pp but "Agreement > 60" adds +3pp, energy is far more critical to check.',
+    '<strong>Minimum 50+ samples on the final step</strong> for the result to be tradeable. Below that, it could be noise.',
+  ]);
+
+  wrap.innerHTML = html;
 }
+
+// ─── 3. Heatmaps ─────────────────────────────────────────────────────────────
 
 function _btRenderHeatmapsInto(data, insight, wrap) {
   if (!data?.length) { wrap.innerHTML = '<div style="color:var(--text-muted)">No heatmap data</div>'; return; }
 
-  let html = _btInsightBox(insight);
+  let html = _btWhatIs('grid-3x3', 'What This Analysis Shows',
+    'Heatmaps reveal what happens when <strong>two indicators combine</strong>. Each cell shows the win rate for trades where both the X-axis indicator AND the Y-axis indicator were in that specific range at the same time. Bright green cells = high probability zones. Red cells = danger zones. This exposes non-linear patterns that single-indicator analysis completely misses — sometimes two mediocre indicators create an incredible edge together.');
+
+  // Find best and worst cells across all heatmaps
+  let bestCell = { wr: 0 }, worstCell = { wr: 100 };
   for (const hm of data) {
-    html += `<div class="bt-heatmap"><div class="bt-heatmap-title">${hm.name}</div><div class="bt-heatmap-labels"><span>X: ${hm.x_label}</span> <span>Y: ${hm.y_label}</span></div>
+    for (let y = 0; y < hm.y_labels.length; y++) {
+      for (let x = 0; x < hm.x_labels.length; x++) {
+        const c = hm.cells[y][x];
+        if (c.wr != null && c.samples >= 20) {
+          if (c.wr > bestCell.wr) bestCell = { wr: c.wr, x: hm.x_labels[x], y: hm.y_labels[y], name: hm.name, samples: c.samples };
+          if (c.wr < worstCell.wr) worstCell = { wr: c.wr, x: hm.x_labels[x], y: hm.y_labels[y], name: hm.name, samples: c.samples };
+        }
+      }
+    }
+  }
+
+  html += _btFindings([
+    { type: 'good', label: 'Best combination', value: `${bestCell.wr}% WR`, desc: `${bestCell.name}: ${bestCell.x} × ${bestCell.y} (${bestCell.samples} trades). This is the highest probability intersection found.` },
+    { type: 'bad', label: 'Worst combination', value: `${worstCell.wr}% WR`, desc: `${worstCell.name}: ${worstCell.x} × ${worstCell.y} (${worstCell.samples} trades). Avoid this combination.` },
+    { type: 'info', label: 'Heatmaps analyzed', value: `${data.length}`, desc: `Each heatmap tests a different pair of indicators against each other to find hidden edge clusters.` },
+  ]);
+
+  html += _btInsightBox(insight);
+
+  html += _btGuide([
+    'Each heatmap is a grid. <strong>Rows = one indicator, Columns = another indicator.</strong>',
+    'Find the <strong>brightest green cluster</strong> — that is where both indicators align to create the strongest edge.',
+    '<strong>Hover or tap any cell</strong> to see the exact trade count and average pip gain.',
+    'Cells marked "—" had too few trades to be statistically meaningful.',
+    'Look for <strong>diagonal patterns</strong> — these suggest the two indicators amplify each other as they both increase.',
+  ]);
+
+  html += _btHmLegend();
+
+  for (const hm of data) {
+    html += `<div class="bt-heatmap"><div class="bt-heatmap-title">${hm.name}</div>
+      <div class="bt-heatmap-labels"><span>Columns (X): ${hm.x_label}</span> <span>Rows (Y): ${hm.y_label}</span></div>
       <table class="bt-hm-table"><thead><tr><th>${hm.y_label} \\ ${hm.x_label}</th>${hm.x_labels.map(l => `<th>${l}</th>`).join('')}</tr></thead><tbody>`;
     for (let y = hm.y_labels.length - 1; y >= 0; y--) {
       html += `<tr><td class="bt-hm-rowlabel">${hm.y_labels[y]}</td>`;
@@ -3311,113 +3480,337 @@ function _btRenderHeatmapsInto(data, insight, wrap) {
         if (c.wr == null) { html += '<td class="bt-hm-cell bt-hm-na">—</td>'; }
         else {
           const cls = c.wr >= 62 ? 'bt-hm-5' : c.wr >= 56 ? 'bt-hm-4' : c.wr >= 52 ? 'bt-hm-3' : c.wr >= 48 ? 'bt-hm-2' : 'bt-hm-1';
-          html += `<td class="bt-hm-cell ${cls}" title="${c.samples} trades, +${c.avg_fav || 0}p fav">${c.wr}%</td>`;
+          html += `<td class="bt-hm-cell ${cls}" title="${c.samples} trades · +${c.avg_fav || 0}p avg favourable">${c.wr}%</td>`;
         }
       }
       html += '</tr>';
     }
     html += '</tbody></table></div>';
   }
+
+  html += _btActionBox([
+    '<strong>Memorize the green clusters.</strong> When you see both indicators in that range simultaneously on the live dashboard, it is a high-probability moment.',
+    '<strong>Red zones are hard no-trade rules.</strong> Even if the signal looks good, if both indicators fall in a red cell, the historical data says you lose money.',
+    '<strong>Combine with Component Thresholds.</strong> Use single-indicator sweet spots as your baseline filter, then use heatmaps to find the bonus combinations that push win rate even higher.',
+  ]);
+
   wrap.innerHTML = html;
 }
+
+// ─── 4. Regime Thresholds ────────────────────────────────────────────────────
 
 function _btRenderRegimeThresholdsInto(data, insight, wrap) {
   if (!data) { wrap.innerHTML = '<div style="color:var(--text-muted)">No regime data</div>'; return; }
 
-  let html = _btInsightBox(insight);
+  let html = _btWhatIs('repeat', 'What This Analysis Shows',
+    'The market constantly shifts between different "regimes" — Dead (no movement), Compression (building energy), Breakout (starting to move), Expansion (strong trend), Exhaustion (trend ending), and Transition (changing). <strong>The same indicator threshold that works in Expansion will fail in Compression.</strong> This analysis finds the optimal threshold for each indicator within each specific regime, so you know exactly how to adjust your filters based on current market conditions.');
+
   const regimes = Object.entries(data).sort((a, b) => (b[1].baseline?.win_rate || 0) - (a[1].baseline?.win_rate || 0));
+  const validRegimes = regimes.filter(([_, d]) => !d.insufficient);
+  const bestRegime = validRegimes[0];
+  const worstRegime = validRegimes[validRegimes.length - 1];
+
+  const regimeExplains = {
+    'DEAD': 'Market is barely moving. Very low energy and no clear direction. Usually worst for trading.',
+    'COMPRESSION': 'Energy is building but hasnt released yet. Like a spring being compressed — breakout coming but timing uncertain.',
+    'CHOPPY': 'Market is active but has no clear direction. Lots of movement, but it keeps reversing. Difficult to trade.',
+    'BREAKOUT': 'Market just broke out of compression or range. Energy is surging. Can be the start of a big move.',
+    'EXPANSION': 'Strong directional trend underway. High energy, clear direction. Best conditions for trend-following.',
+    'EXHAUSTION': 'Trend is running out of steam. Still moving but losing momentum. Reversal risk is high.',
+    'TRANSITION': 'Regime is changing. The market is shifting from one state to another. Unpredictable period.',
+    'BUILDING': 'Momentum is increasing. Not yet a full breakout but conditions are aligning for a move.',
+  };
+
+  const findings = [];
+  if (bestRegime) findings.push({ type: 'good', label: 'Best regime to trade', value: `${bestRegime[0]}`, desc: `Baseline win rate of ${bestRegime[1].baseline?.win_rate}% — even without any filters, this regime already favors continuation. With optimal thresholds, it gets even higher.` });
+  if (worstRegime && worstRegime[1].baseline?.win_rate < 50) findings.push({ type: 'bad', label: 'Worst regime to trade', value: `${worstRegime[0]}`, desc: `Baseline only ${worstRegime[1].baseline?.win_rate}% — trading in this regime is nearly a coin flip even before filters.` });
+  findings.push({ type: 'info', label: 'Regimes discovered', value: `${validRegimes.length}`, desc: 'Each regime has its own unique set of optimal indicator thresholds.' });
+
+  html += _btFindings(findings);
+  html += _btInsightBox(insight);
+
+  html += _btGuide([
+    'Each card is one market regime. The <strong>baseline</strong> is the win rate for ALL trades in that regime with no filters.',
+    'The table shows which indicators have an <strong>optimal threshold</strong> for that specific regime.',
+    '<strong>"Optimal Threshold"</strong> means: when this indicator is ≥ this value during this regime, your win rate jumps to the "Win Rate" column.',
+    'If a regime says "No filter significantly improves baseline," it means the regime itself is already so strong (or so weak) that individual filters do not help much.',
+  ]);
 
   for (const [regime, d] of regimes) {
-    if (d.insufficient) { html += `<div class="bt-regime-card"><div class="bt-regime-name">${regime}</div><div class="bt-regime-insuff">${d.hours} hours · ${d.total_trades} trades — insufficient data</div></div>`; continue; }
+    if (d.insufficient) {
+      html += `<div class="bt-regime-card"><div class="bt-regime-name">${regime}</div><div class="bt-regime-insuff">${d.hours} hours · ${d.total_trades} trades — not enough data for reliable analysis</div></div>`;
+      continue;
+    }
+
     const optEntries = Object.entries(d.optimal || {}).filter(([_, v]) => v.threshold != null);
-    html += `<div class="bt-regime-card"><div class="bt-regime-header"><span class="bt-regime-name">${regime}</span><span class="bt-regime-base">Baseline: <strong>${d.baseline?.win_rate}%</strong> WR · ${d.total_trades} trades · ${d.hours} hours</span></div>`;
+    const baseCls = d.baseline?.win_rate >= 55 ? 'good' : d.baseline?.win_rate >= 50 ? 'warn' : 'bad';
+
+    html += `<div class="bt-regime-card">
+      <div class="bt-regime-header">
+        <span class="bt-regime-name">${regime}</span>
+        <span class="bt-regime-base">Baseline: <strong>${d.baseline?.win_rate}%</strong> WR · ${d.total_trades} trades · ${d.hours} hours</span>
+      </div>
+      <div class="bt-explain-row">${regimeExplains[regime] || 'Market condition with unique characteristics.'}</div>`;
+
     if (optEntries.length) {
-      html += '<table class="bt-inst-table"><thead><tr><th>Component</th><th>Optimal Threshold</th><th>Win Rate</th><th>Trades</th><th>Avg Fav</th></tr></thead><tbody>';
+      html += '<div class="bt-explain-row" style="font-size:10px"><strong>Optimal filters for this regime:</strong> Apply these thresholds ONLY when the market is in ' + regime + ' state.</div>';
+      html += '<table class="bt-inst-table"><thead><tr><th>Indicator</th><th>Use When ≥</th><th>Win Rate Achieved</th><th>Trade Samples</th><th>Avg Pips For You</th></tr></thead><tbody>';
       for (const [comp, v] of optEntries) {
         const cls = v.win_rate >= 60 ? 'bt-win' : v.win_rate >= 52 ? '' : 'bt-loss';
-        html += `<tr><td><strong>${comp}</strong></td><td>≥ ${v.threshold}</td><td class="${cls}">${v.win_rate}%</td><td>${v.samples}</td><td>+${v.avg_fav}p</td></tr>`;
+        const lift = v.win_rate - (d.baseline?.win_rate || 50);
+        html += `<tr><td><strong>${comp}</strong></td><td>≥ ${v.threshold}</td><td class="${cls}"><strong>${v.win_rate}%</strong> <span style="font-size:10px;color:var(--text-muted)">(+${lift}pp vs baseline)</span></td><td>${v.samples}</td><td class="bt-win">+${v.avg_fav}p</td></tr>`;
       }
       html += '</tbody></table>';
-    } else { html += '<div style="color:var(--text-muted);font-size:11px;padding:4px 0">No filter significantly improves baseline in this regime</div>'; }
+    } else {
+      html += '<div style="color:var(--text-muted);font-size:11px;padding:4px 0">No individual filter significantly improves the baseline in this regime. Try combining multiple filters (see Conditional Edge engine).</div>';
+    }
     html += '</div>';
   }
+
+  html += _btActionBox([
+    '<strong>First identify the current regime</strong> on the live dashboard (check Market Energy section), then apply ONLY the thresholds listed for that regime.',
+    '<strong>Do NOT use Expansion thresholds during Compression</strong> — each regime needs its own playbook.',
+    'If the best regime has a baseline > 55%, you can be more aggressive with entries during that regime.',
+    'If a regime baseline is < 48%, consider <strong>not trading at all</strong> during that regime — no filter can fix a broken environment.',
+  ]);
+
   wrap.innerHTML = html;
 }
+
+// ─── 5. Session Thresholds ───────────────────────────────────────────────────
 
 function _btRenderSessionThresholdsInto(data, insight, wrap) {
   if (!data) { wrap.innerHTML = '<div style="color:var(--text-muted)">No session data</div>'; return; }
 
-  let html = _btInsightBox(insight);
+  let html = _btWhatIs('clock', 'What This Analysis Shows',
+    'Forex sessions (Asia, London, New York, etc.) have dramatically different characteristics. Asia is thin and choppy. London has the most liquidity and biggest breakouts. New York often continues or reverses London moves. <strong>The same indicator at the same value performs very differently depending on which session you are in.</strong> This analysis finds the exact optimal threshold for each indicator, per session — so you never apply a London rule during Asia.');
+
   const sessions = Object.entries(data).sort((a, b) => (b[1].baseline?.win_rate || 0) - (a[1].baseline?.win_rate || 0));
+  const validSess = sessions.filter(([_, d]) => !d.insufficient);
+
+  const sessExplains = {
+    'Asia': 'Tokyo/Sydney session (roughly 00:00–08:00 UTC). Lower liquidity, smaller moves, range-bound. Requires higher agreement thresholds.',
+    'London': 'European session (roughly 07:00–16:00 UTC). Highest liquidity, biggest breakouts, strongest trends. Most tradeable session.',
+    'New York': 'US session (roughly 12:00–21:00 UTC). Overlaps with London early, then goes solo. Often continues or reverses earlier moves.',
+    'London_NY_Overlap': 'When London and New York are both open (roughly 12:00–16:00 UTC). Maximum liquidity and volatility. Biggest moves happen here.',
+    'Late_NY': 'Late US session (roughly 17:00–21:00 UTC). Liquidity drops off, spreads widen. Often quieter.',
+    'Pre_Asia': 'Between NY close and Asia open. Lowest liquidity. Usually not worth trading.',
+  };
+
+  const findings = [];
+  if (validSess[0]) findings.push({ type: 'good', label: 'Best session', value: validSess[0][0].replace(/_/g, ' '), desc: `Baseline ${validSess[0][1].baseline?.win_rate}% win rate — this session naturally favors directional continuation.` });
+  if (validSess.length > 1) {
+    const worst = validSess[validSess.length - 1];
+    findings.push({ type: worst[1].baseline?.win_rate < 48 ? 'bad' : 'warn', label: 'Weakest session', value: worst[0].replace(/_/g, ' '), desc: `Baseline only ${worst[1].baseline?.win_rate}% — be extra selective during this window or avoid entirely.` });
+  }
+  findings.push({ type: 'info', label: 'Sessions analyzed', value: `${validSess.length}`, desc: 'Each session has unique optimal thresholds tailored to its liquidity and volatility profile.' });
+
+  html += _btFindings(findings);
+  html += _btInsightBox(insight);
+
+  html += _btGuide([
+    'Each card represents one trading session (time window) with its baseline and optimal filters.',
+    '<strong>Baseline</strong> = the win rate during this session with zero filters. This is your starting edge just from timing.',
+    'The table shows which indicators need a <strong>higher or different threshold</strong> during this specific session.',
+    '<strong>"+Xpp vs baseline"</strong> shows how much each filter improves your odds above the session default.',
+  ]);
 
   for (const [session, d] of sessions) {
     if (d.insufficient) continue;
     const optEntries = Object.entries(d.optimal || {}).filter(([_, v]) => v.threshold != null);
-    html += `<div class="bt-regime-card"><div class="bt-regime-header"><span class="bt-regime-name">${session.replace('_', ' ')}</span><span class="bt-regime-base">Baseline: <strong>${d.baseline?.win_rate}%</strong> WR · ${d.total_trades} trades</span></div>`;
+    const sessName = session.replace(/_/g, ' ');
+
+    html += `<div class="bt-regime-card">
+      <div class="bt-regime-header"><span class="bt-regime-name">${sessName}</span><span class="bt-regime-base">Baseline: <strong>${d.baseline?.win_rate}%</strong> WR · ${d.total_trades} trades</span></div>
+      <div class="bt-explain-row">${sessExplains[session] || 'Trading session with distinct market characteristics.'}</div>`;
+
     if (optEntries.length) {
-      html += '<table class="bt-inst-table"><thead><tr><th>Component</th><th>Optimal Threshold</th><th>Win Rate</th><th>Trades</th><th>Avg Fav</th></tr></thead><tbody>';
+      html += '<table class="bt-inst-table"><thead><tr><th>Indicator</th><th>Use When ≥</th><th>Win Rate</th><th>Lift</th><th>Samples</th><th>Avg Pips For You</th></tr></thead><tbody>';
       for (const [comp, v] of optEntries) {
         const cls = v.win_rate >= 60 ? 'bt-win' : '';
-        html += `<tr><td><strong>${comp}</strong></td><td>≥ ${v.threshold}</td><td class="${cls}">${v.win_rate}%</td><td>${v.samples}</td><td>+${v.avg_fav}p</td></tr>`;
+        const lift = v.win_rate - (d.baseline?.win_rate || 50);
+        html += `<tr><td><strong>${comp}</strong></td><td>≥ ${v.threshold}</td><td class="${cls}"><strong>${v.win_rate}%</strong></td><td style="color:var(--green)">+${lift}pp</td><td>${v.samples}</td><td class="bt-win">+${v.avg_fav}p</td></tr>`;
       }
       html += '</tbody></table>';
+    } else {
+      html += '<div style="color:var(--text-muted);font-size:11px;padding:6px 0">No individual filter significantly improves the baseline during this session.</div>';
     }
     html += '</div>';
   }
+
+  html += _btActionBox([
+    '<strong>Check the clock before applying thresholds.</strong> Switch your filter set based on the active session.',
+    '<strong>Asia requires patience.</strong> Wait for higher agreement and confidence before entering.',
+    '<strong>London is the power session.</strong> Be more aggressive here, but still respect minimum thresholds.',
+    'If a session baseline is below 48%, consider <strong>sitting it out entirely</strong> — your time is better spent on profitable sessions.',
+  ]);
+
   wrap.innerHTML = html;
 }
+
+// ─── 6. Transitions ──────────────────────────────────────────────────────────
 
 function _btRenderTransitionsInto(data, insight, wrap) {
   if (!data) { wrap.innerHTML = '<div style="color:var(--text-muted)">No transition data</div>'; return; }
-  if (!data.length) { wrap.innerHTML = _btInsightBox(insight) + '<div style="color:var(--text-muted)">Not enough transition data</div>'; return; }
+  if (!data.length) { wrap.innerHTML = _btInsightBox(insight) + '<div style="color:var(--text-muted)">Not enough transition data in the selected period</div>'; return; }
 
-  wrap.innerHTML = _btInsightBox(insight) + _btTable(
-    ['Transition', 'Occurrences', 'Trades', 'Win Rate', 'Avg Fav', 'Avg Adv', 'Avg Net'],
+  let html = _btWhatIs('arrow-right-left', 'What This Analysis Shows',
+    'When the market regime changes (e.g., from Compression to Expansion, or from Trend to Exhaustion), <strong>these transition moments create both the biggest opportunities and the biggest risks</strong>. This analysis measures what happens to trades taken during each type of regime shift. Some transitions (like Compression → Expansion) are explosive opportunities. Others (like Trend → Exhaustion) are traps where continuation fails.');
+
+  const bestTrans = [...data].sort((a, b) => b.win_rate - a.win_rate)[0];
+  const worstTrans = [...data].sort((a, b) => a.win_rate - b.win_rate)[0];
+  const mostCommon = [...data].sort((a, b) => b.occurrences - a.occurrences)[0];
+
+  html += _btFindings([
+    { type: 'good', label: 'Best transition to trade', value: `${bestTrans.win_rate}% WR`, desc: `${bestTrans.from} → ${bestTrans.to}: ${bestTrans.trades} trades with +${bestTrans.avg_fav}p avg favorable.` },
+    { type: 'bad', label: 'Most dangerous transition', value: `${worstTrans.win_rate}% WR`, desc: `${worstTrans.from} → ${worstTrans.to}: Trading during this shift historically loses money.` },
+    { type: 'info', label: 'Most frequent shift', value: `${mostCommon.from} → ${mostCommon.to}`, desc: `Happened ${mostCommon.occurrences} times. This is the regime change you will encounter most often.` },
+  ]);
+
+  html += _btInsightBox(insight);
+
+  html += _btGuide([
+    '<strong>Transition</strong> = the market changed from one regime to another (e.g., "COMPRESSION → EXPANSION").',
+    '<strong>Occurrences</strong> = how many times this regime shift happened in your date range.',
+    '<strong>Win Rate</strong> = how often continuation trades succeeded during this transition.',
+    '<strong>Avg Fav / Adv / Net</strong> = average pips in your favor, against you, and the net result per trade.',
+    'Green rows = profitable transitions (trade aggressively). Red rows = dangerous (reduce size or skip).',
+  ]);
+
+  html += _btTable(
+    ['Regime Shift', 'Times Occurred', 'Trades Taken', 'Win Rate', 'Avg For You', 'Avg Against', 'Net Per Trade'],
     data.map(t => {
       const cls = t.win_rate >= 58 ? 'bt-win' : t.win_rate < 45 ? 'bt-loss' : '';
-      return `<tr><td><strong>${t.from}</strong> → <strong>${t.to}</strong></td><td>${t.occurrences}</td><td>${t.trades}</td><td class="${cls}"><strong>${t.win_rate}%</strong></td><td class="bt-win">+${t.avg_fav}p</td><td class="bt-loss">-${t.avg_adv}p</td><td>${t.avg_net}p</td></tr>`;
+      const verdict = t.win_rate >= 58 ? 'Trade it' : t.win_rate < 45 ? 'Avoid it' : 'Be cautious';
+      const verdictCls = t.win_rate >= 58 ? 'bt-win' : t.win_rate < 45 ? 'bt-loss' : '';
+      return `<tr><td><strong>${t.from}</strong> → <strong>${t.to}</strong></td><td>${t.occurrences}</td><td>${t.trades}</td><td class="${cls}"><strong>${t.win_rate}%</strong></td><td class="bt-win">+${t.avg_fav}p</td><td class="bt-loss">-${t.avg_adv}p</td><td>${t.avg_net}p <span class="${verdictCls}" style="font-size:10px;font-weight:600">${verdict}</span></td></tr>`;
     })
   );
+
+  html += _btActionBox([
+    '<strong>Watch for Compression → Expansion shifts.</strong> These breakouts typically produce the largest moves.',
+    '<strong>Be wary of Trend → Exhaustion.</strong> This is where trend-followers get trapped — the move looks like it is continuing but it is actually ending.',
+    '<strong>Reduce position size during unfamiliar transitions.</strong> If a transition has high variance (big fav AND big adv), the outcome is uncertain.',
+    '<strong>The first 1-2 hours after a regime shift</strong> are the most volatile. Wait for confirmation before sizing up.',
+  ]);
+
+  wrap.innerHTML = html;
 }
+
+// ─── 7. Edge Stability ───────────────────────────────────────────────────────
 
 function _btRenderEdgeStabilityInto(data, insight, wrap) {
   if (!data) { wrap.innerHTML = '<div style="color:var(--text-muted)">No stability data</div>'; return; }
-  if (!data.length) { wrap.innerHTML = _btInsightBox(insight) + '<div style="color:var(--text-muted)">Not enough data for stability analysis</div>'; return; }
+  if (!data.length) { wrap.innerHTML = _btInsightBox(insight) + '<div style="color:var(--text-muted)">Not enough monthly data for stability analysis</div>'; return; }
 
-  let html = _btInsightBox(insight);
+  let html = _btWhatIs('shield-check', 'What This Analysis Shows',
+    'An edge that worked 6 months ago but stopped working last month is useless. This analysis tracks <strong>whether your discovered edges are stable, improving, or decaying over time</strong>. Each condition is measured month-by-month to calculate variance (how much win rate jumps around) and detect decay trends. A high stability score means you can trust the edge. A "DECAYING" status means the edge is weakening and may not work going forward.');
+
+  const stableEdges = data.filter(d => d.decay === 'STABLE');
+  const improvingEdges = data.filter(d => d.decay === 'IMPROVING');
+  const decayingEdges = data.filter(d => d.decay === 'DECAYING');
+  const bestStability = [...data].sort((a, b) => b.stability_score - a.stability_score)[0];
+
+  html += _btFindings([
+    { type: 'good', label: 'Stable edges', value: `${stableEdges.length}`, desc: `These conditions produce consistent results month after month. They are the most trustworthy.` },
+    { type: improvingEdges.length ? 'good' : 'info', label: 'Improving edges', value: `${improvingEdges.length}`, desc: `Recent performance is BETTER than historical — these edges are getting stronger.` },
+    { type: decayingEdges.length ? 'bad' : 'info', label: 'Decaying edges', value: `${decayingEdges.length}`, desc: decayingEdges.length ? `These edges are weakening. Recent win rate is dropping — reduce reliance on them.` : 'No decaying edges detected. All discovered edges are holding up.' },
+    { type: 'info', label: 'Most reliable condition', value: `${bestStability.stability_score}/100`, desc: `"${bestStability.condition}" has the highest stability score — lowest variance and no decay.` },
+  ]);
+
+  html += _btInsightBox(insight);
+
+  html += _btGuide([
+    '<strong>Stability Score (0-100):</strong> Higher = more reliable. 70+ is great, 50-70 is okay, below 50 is unreliable.',
+    '<strong>Recent 3M vs Historical:</strong> Compares last 3 months to everything before. If Recent > Historical = improving.',
+    '<strong>Variance (±Xpp):</strong> How much the win rate jumps around month to month. Lower = more predictable.',
+    '<strong>Status:</strong> STABLE = consistent, IMPROVING = getting better, DECAYING = getting worse.',
+    'The sparkline chart below shows month-by-month win rate — visually confirm the trend.',
+  ]);
+
   html += _btTable(
-    ['Condition', 'Samples', 'Overall WR', 'Recent 3M', 'Historical', 'Variance', 'Stability', 'Status'],
+    ['Condition', 'Total Samples', 'Overall Win Rate', 'Recent 3 Months', 'Older History', 'Monthly Variance', 'Stability Score', 'Trend Status'],
     data.map(d => {
       const decayCls = d.decay === 'DECAYING' ? 'bt-loss' : d.decay === 'IMPROVING' ? 'bt-win' : '';
       const stabCls = d.stability_score >= 70 ? 'bt-win' : d.stability_score < 50 ? 'bt-loss' : '';
-      return `<tr><td><strong>${d.condition}</strong></td><td>${d.total_samples}</td><td>${d.overall_wr}%</td><td>${d.recent_3m_wr != null ? d.recent_3m_wr + '%' : '—'}</td><td>${d.older_wr != null ? d.older_wr + '%' : '—'}</td><td>±${d.variance}pp</td><td class="${stabCls}"><strong>${d.stability_score}/100</strong></td><td class="${decayCls}"><strong>${d.decay}</strong></td></tr>`;
+      const trendArrow = d.decay === 'IMPROVING' ? ' ↑' : d.decay === 'DECAYING' ? ' ↓' : ' →';
+      return `<tr><td><strong>${d.condition}</strong></td><td>${d.total_samples}</td><td>${d.overall_wr}%</td><td>${d.recent_3m_wr != null ? d.recent_3m_wr + '%' : '—'}</td><td>${d.older_wr != null ? d.older_wr + '%' : '—'}</td><td>±${d.variance}pp</td><td class="${stabCls}"><strong>${d.stability_score}/100</strong></td><td class="${decayCls}"><strong>${d.decay}${trendArrow}</strong></td></tr>`;
     })
   );
 
-  if (data[0]?.monthly_wr?.length) {
-    html += '<div class="bt-section-title" style="margin-top:14px">Monthly Win Rate — "' + data[0].condition + '"</div>';
+  // Monthly sparklines for top conditions
+  for (const d of data.slice(0, 3)) {
+    if (!d.monthly_wr?.length) continue;
+    html += `<div class="bt-section-title" style="margin-top:14px">Monthly Win Rate — "${d.condition}" <span style="font-weight:400;color:var(--text-muted);font-size:11px">(${d.decay}, stability ${d.stability_score}/100)</span></div>`;
     html += '<div class="bt-monthly-spark">';
-    for (const m of data[0].monthly_wr) {
+    for (const m of d.monthly_wr) {
       if (m.wr == null) { html += `<div class="bt-spark-bar bt-spark-na" title="${m.month}: insufficient data"><div style="height:3px"></div><span>${m.month.slice(5)}</span></div>`; continue; }
       const h = Math.max(4, Math.min(60, m.wr * 0.7));
       const cls = m.wr >= 58 ? 'bt-spark-hot' : m.wr >= 52 ? 'bt-spark-warm' : m.wr >= 48 ? 'bt-spark-neutral' : 'bt-spark-cold';
-      html += `<div class="bt-spark-bar ${cls}" title="${m.month}: ${m.wr}% (${m.samples} trades)"><div style="height:${h}px"></div><span>${m.month.slice(5)}</span></div>`;
+      html += `<div class="bt-spark-bar ${cls}" title="${m.month}: ${m.wr}% win rate (${m.samples} trades)"><div style="height:${h}px"></div><span>${m.month.slice(5)}</span></div>`;
     }
     html += '</div>';
   }
+
+  html += _btActionBox([
+    '<strong>Only trust edges with stability ≥ 60/100.</strong> Below that, the monthly variance is too high to rely on.',
+    '<strong>IMPROVING edges deserve more capital.</strong> If recent performance exceeds history, the edge is getting stronger — lean into it.',
+    '<strong>DECAYING edges need re-evaluation.</strong> Reduce position size or stop using them until you re-run discovery with fresh data.',
+    '<strong>Re-run this analysis every 1-2 months</strong> to catch decay early before it costs you money.',
+    '<strong>Low variance (±3pp or less) is the gold standard.</strong> This means the edge performs almost identically every month.',
+  ]);
+
   wrap.innerHTML = html;
 }
+
+// ─── 8. Probability Curves ───────────────────────────────────────────────────
 
 function _btRenderProbabilityCurvesInto(data, insight, wrap) {
   if (!data) { wrap.innerHTML = '<div style="color:var(--text-muted)">No probability data</div>'; return; }
   if (!data.length) { wrap.innerHTML = _btInsightBox(insight) + '<div style="color:var(--text-muted)">Not enough data for probability analysis</div>'; return; }
 
-  let html = _btInsightBox(insight);
+  let html = _btWhatIs('trending-up', 'What This Analysis Shows',
+    'Instead of a binary threshold ("good if above X, bad if below"), probability curves show you the <strong>smooth gradient of how your win rate changes as each indicator increases</strong>. At value 10, you might have 45% probability. At 30, maybe 52%. At 60, perhaps 68%. The "edge threshold" is the exact inflection point where probability crosses from losing to winning. These curves let you make <strong>nuanced decisions</strong> rather than binary pass/fail choices.');
+
+  const edgeComps = data.filter(c => c.edge_threshold != null);
+  const bestCurve = [...data].filter(c => c.curve?.length).sort((a, b) => {
+    const aMax = Math.max(...a.curve.filter(p => p.wr != null).map(p => p.wr));
+    const bMax = Math.max(...b.curve.filter(p => p.wr != null).map(p => p.wr));
+    return bMax - aMax;
+  })[0];
+  const bestMax = bestCurve ? Math.max(...bestCurve.curve.filter(p => p.wr != null).map(p => p.wr)) : 0;
+
+  html += _btFindings([
+    { type: 'info', label: 'Indicators with curves', value: `${data.length}`, desc: 'Each indicator has been broken into progressive thresholds to map probability from low to high values.' },
+    { type: 'good', label: 'Highest probability reached', value: `${bestMax}%`, desc: bestCurve ? `${bestCurve.name} reaches ${bestMax}% win rate at its peak — this is where the indicator is most powerful.` : '' },
+    { type: 'warn', label: 'Have edge thresholds', value: `${edgeComps.length} of ${data.length}`, desc: 'These indicators have a clear inflection point (marked with a blue dashed line) where edge begins.' },
+  ]);
+
+  html += _btInsightBox(insight);
+
+  html += _btGuide([
+    'Each chart shows one indicator. The <strong>horizontal axis</strong> is the indicator value (low to high). The <strong>vertical bars</strong> represent win rate.',
+    '<strong>Taller bar = higher win rate</strong> at that indicator value.',
+    'The <strong>blue dashed line</strong> marks the "edge threshold" — the point where probability shifts from losing to winning. Values to the right of this line give you an advantage.',
+    '<strong>Bar colors:</strong> Red = below 48%, Orange = 48-52%, Grey = 52-56%, Green = 56-62%, Bright green = 62%+.',
+    'The number below each bar is the <strong>sample count</strong>. More samples = more reliable. Be skeptical of high bars with < 30 samples.',
+  ]);
+
+  html += _btHmLegend();
+
   for (const comp of data) {
     const validPts = comp.curve.filter(p => p.wr != null);
     if (!validPts.length) continue;
+    const maxWR = Math.max(...validPts.map(p => p.wr));
+    const minWR = Math.min(...validPts.map(p => p.wr));
 
-    html += `<div class="bt-prob-card"><div class="bt-prob-name">${comp.name} ${comp.edge_threshold != null ? `<span class="bt-comp-badge bt-comp-badge-min">Edge at ≥ ${comp.edge_threshold}</span>` : ''}</div><div class="bt-prob-curve">`;
+    html += `<div class="bt-prob-card">
+      <div class="bt-prob-name">${comp.name}
+        ${comp.edge_threshold != null ? `<span class="bt-comp-badge bt-comp-badge-min">Edge begins at ≥ ${comp.edge_threshold}</span>` : '<span class="bt-comp-badge" style="background:rgba(255,255,255,.06);color:var(--text-muted)">No clear edge threshold</span>'}
+      </div>
+      <div class="bt-explain-row" style="margin-bottom:6px">Range: ${minWR}% (lowest) → ${maxWR}% (highest). ${maxWR - minWR >= 15 ? '<strong style="color:var(--green)">Strong gradient — this indicator matters a lot.</strong>' : maxWR - minWR >= 8 ? 'Moderate gradient — useful but not dominant.' : '<span style="color:var(--text-muted)">Flat gradient — this indicator has limited impact on probability.</span>'}</div>
+      <div class="bt-prob-curve">`;
+
     for (const pt of comp.curve) {
       if (pt.wr == null) { html += `<div class="bt-prob-point bt-prob-na"><div class="bt-prob-bar" style="height:3px"></div><span class="bt-prob-val">—</span><span class="bt-prob-th">${pt.threshold}</span></div>`; continue; }
       const h = Math.max(4, Math.min(80, (pt.wr - 30) * 1.6));
@@ -3427,100 +3820,412 @@ function _btRenderProbabilityCurvesInto(data, insight, wrap) {
     }
     html += '</div></div>';
   }
+
+  html += _btActionBox([
+    '<strong>Indicators with a steep gradient (big difference between low and high) are your most powerful filters.</strong> Prioritize them in your trading checklist.',
+    '<strong>The edge threshold is your minimum.</strong> Never take a trade when this indicator is below its edge threshold.',
+    '<strong>Flat curves mean the indicator does not matter much</strong> on its own. It may still be valuable in combinations (see Heatmaps or Conditional Edge).',
+    '<strong>High bars with low sample counts (< 30) are unreliable.</strong> The probability looks great but could be noise.',
+    'Use these curves to <strong>size your positions:</strong> indicator near its edge threshold = smaller position, indicator deep in the green = full size.',
+  ]);
+
   wrap.innerHTML = html;
 }
+
+// ─── 9. Energy Thresholds ────────────────────────────────────────────────────
 
 function _btRenderEnergyThresholdsInto(data, insight, wrap) {
   if (!data?.by_component) { wrap.innerHTML = '<div style="color:var(--text-muted)">No energy data</div>'; return; }
 
-  let html = _btInsightBox(insight);
-  for (const [comp, ranges] of Object.entries(data.by_component)) {
+  let html = _btWhatIs('zap', 'What This Analysis Shows',
+    'Market Energy is made up of four sub-components: <strong>Movement</strong> (how much pairs are actually moving), <strong>Momentum/Breadth</strong> (how many pairs are moving together), <strong>Agreement</strong> (are pairs agreeing on direction), and <strong>Volatility</strong> (how erratic the movement is). This analysis breaks each sub-component into ranges and measures the <strong>actual continuation rate and pip movement</strong> at each level. You will learn exactly what energy level is needed for reliable trades.');
+
+  const compEntries = Object.entries(data.by_component);
+  const compExplains = {
+    'movement': 'How much pairs are physically moving in pips. Higher movement = more opportunity but also more risk.',
+    'momentum': 'How many currency pairs are moving in the same direction simultaneously. High breadth = the whole market agrees.',
+    'agreement': 'How well the individual pair signals agree with each other. High agreement = clear direction, low = mixed signals.',
+    'volatility': 'How erratic the price action is. Some volatility is good (movement), too much is bad (unpredictable whipsaws).',
+  };
+
+  // Find best continuation rates
+  let bestRange = { rate: 0 };
+  for (const [comp, ranges] of compEntries) {
+    for (const [k, d] of Object.entries(ranges)) {
+      if (d.continuation_rate > bestRange.rate && d.hours >= 10) bestRange = { rate: d.continuation_rate, range: k, comp, move: d.avg_move_pips };
+    }
+  }
+
+  html += _btFindings([
+    { type: 'good', label: 'Best energy sweet spot', value: `${bestRange.rate}%`, desc: `${bestRange.comp} at ${bestRange.range} gives ${bestRange.rate}% continuation with ${bestRange.move}p avg movement.` },
+    { type: 'info', label: 'Sub-components analyzed', value: `${compEntries.length}`, desc: 'Each energy sub-component broken into ranges with measured outcomes.' },
+  ]);
+
+  html += _btInsightBox(insight);
+
+  html += _btGuide([
+    '<strong>Continuation %</strong> = how often price continued moving in the same direction after this energy reading. Higher = better.',
+    '<strong>Avg Move</strong> = average pip distance moved. This helps calibrate your take-profit targets.',
+    '<strong>Hours / Pairs</strong> = how much data was available for this range. More = more reliable.',
+    'Look for the <strong>sweet spot</strong> where continuation is high AND avg move is large — that is your optimal trading zone.',
+  ]);
+
+  for (const [comp, ranges] of compEntries) {
     const label = comp.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
     const keys = Object.keys(ranges).sort();
     if (!keys.length) continue;
 
     html += `<div class="bt-section-title">${label}</div>`;
-    html += _btTable(['Range', 'Hours', 'Pairs', 'Avg Move', 'Continuation %'], keys.map(k => {
+    html += `<div class="bt-explain-row">${compExplains[comp] || ''}</div>`;
+    html += _btTable(['Range', 'Hours Observed', 'Pair Measurements', 'Avg Pip Move', 'Continuation Rate'], keys.map(k => {
       const d = ranges[k];
       const cls = d.continuation_rate >= 50 ? 'bt-win' : d.continuation_rate < 35 ? 'bt-loss' : '';
-      return `<tr><td><strong>${k}</strong></td><td>${d.hours}</td><td>${d.pairs_measured}</td><td>${d.avg_move_pips}p</td><td class="${cls}">${d.continuation_rate}%</td></tr>`;
+      const verdict = d.continuation_rate >= 55 ? 'Trade zone' : d.continuation_rate >= 45 ? 'Neutral' : 'Avoid zone';
+      return `<tr><td><strong>${k}</strong></td><td>${d.hours}h</td><td>${d.pairs_measured}</td><td>${d.avg_move_pips}p</td><td class="${cls}"><strong>${d.continuation_rate}%</strong> <span style="font-size:10px;color:var(--text-muted)">${verdict}</span></td></tr>`;
     }));
   }
-  wrap.innerHTML = html || '<div style="color:var(--text-muted)">No data</div>';
+
+  html += _btActionBox([
+    '<strong>Do not trade when ALL energy sub-components are in their lowest range.</strong> The market is dead — there is nothing to capture.',
+    '<strong>High movement + high agreement = best combo.</strong> The market is moving AND it is moving together in one direction.',
+    '<strong>High volatility + low agreement = danger zone.</strong> Lots of movement but no clear direction — you will get whipsawed.',
+    '<strong>Use the continuation rates to set expectations.</strong> If continuation is only 40%, you need tighter stops and faster exits.',
+  ]);
+
+  wrap.innerHTML = html;
 }
+
+// ─── 10. Strength Thresholds ─────────────────────────────────────────────────
 
 function _btRenderStrengthThresholdsInto(data, insight, wrap) {
   if (!data) { wrap.innerHTML = '<div style="color:var(--text-muted)">No strength data</div>'; return; }
 
+  let html = _btWhatIs('gauge', 'What This Analysis Shows',
+    'Currency Strength Spread is the difference between the strong currency and the weak currency in a pair. A small spread (e.g., 0.0002) means both currencies are similar — no clear direction. A large spread (e.g., 0.0015) means one currency is much stronger than the other — clear directional bias. <strong>This analysis measures exactly how much spread is needed before you have a real edge</strong>, and how the reward-to-risk ratio scales as the spread increases.');
+
   const keys = Object.keys(data).sort();
-  wrap.innerHTML = _btInsightBox(insight) + _btTable(
-    ['Spread Diff', 'Samples', 'Continuation %', 'Avg Favourable', 'Avg Adverse', 'Avg Net'],
+  const vals = keys.map(k => data[k]).filter(d => d.samples >= 20);
+  const bestKey = keys.reduce((best, k) => data[k].continuation_rate > (data[best]?.continuation_rate || 0) ? k : best, keys[0]);
+  const bestD = data[bestKey];
+
+  // Find the approximate edge threshold
+  let edgeKey = null;
+  for (const k of keys) {
+    if (data[k].continuation_rate >= 52 && data[k].samples >= 20) { edgeKey = k; break; }
+  }
+
+  html += _btFindings([
+    { type: 'good', label: 'Best spread level', value: `${bestD.continuation_rate}%`, desc: `At spread diff ${bestKey}, continuation rate reaches ${bestD.continuation_rate}% with avg +${bestD.avg_favourable_pips}p favorable.` },
+    { type: edgeKey ? 'warn' : 'info', label: 'Minimum edge spread', value: edgeKey || 'N/A', desc: edgeKey ? `Below ${edgeKey} spread difference, you have no statistical advantage. Do not trade.` : 'No clear edge threshold found — strength alone may not be sufficient.' },
+    { type: 'info', label: 'Spread levels tested', value: `${keys.length}`, desc: 'Each row shows a different strength differential bucket with measured outcomes.' },
+  ]);
+
+  html += _btInsightBox(insight);
+
+  html += _btGuide([
+    '<strong>Spread Diff</strong> = the difference in strength between the two currencies in a pair. Bigger = stronger directional bias.',
+    '<strong>Continuation %</strong> = how often the stronger currency kept getting stronger (and the pair kept moving in the expected direction).',
+    '<strong>Avg Favourable</strong> = average pips that moved in your favor. This is your potential profit.',
+    '<strong>Avg Adverse</strong> = average pips that moved against you before the trade resolved. This is your drawdown risk.',
+    '<strong>Avg Net</strong> = average net pip result per trade. Positive = profitable, negative = losing at this spread level.',
+  ]);
+
+  html += _btTable(
+    ['Spread Difference', 'Trade Samples', 'Continuation Rate', 'Avg Pips For You', 'Avg Pips Against', 'Net Pips Per Trade'],
     keys.map(k => {
       const d = data[k];
       const cls = d.continuation_rate >= 55 ? 'bt-win' : d.continuation_rate < 45 ? 'bt-loss' : '';
-      return `<tr><td><strong>${k}</strong></td><td>${d.samples}</td><td class="${cls}">${d.continuation_rate}%</td><td class="bt-win">${d.avg_favourable_pips}p</td><td class="bt-loss">${d.avg_adverse_pips}p</td><td>${d.avg_net_pips}p</td></tr>`;
+      const netCls = d.avg_net_pips >= 0 ? 'bt-win' : 'bt-loss';
+      return `<tr><td><strong>${k}</strong></td><td>${d.samples}</td><td class="${cls}"><strong>${d.continuation_rate}%</strong></td><td class="bt-win">+${d.avg_favourable_pips}p</td><td class="bt-loss">-${d.avg_adverse_pips}p</td><td class="${netCls}"><strong>${d.avg_net_pips}p</strong></td></tr>`;
     })
   );
+
+  html += _btActionBox([
+    '<strong>Set a minimum spread threshold.</strong> Do not enter any trade where the currency strength spread is below the edge threshold.',
+    '<strong>Scale position size with spread.</strong> Larger spread = higher conviction = larger position. Small spread = small position or skip.',
+    '<strong>Spread is your primary directional signal.</strong> If the spread is small, other indicators need to be extra strong to compensate.',
+    '<strong>Watch for spread convergence.</strong> If the spread was large but is now shrinking, the move may be ending — tighten your stop.',
+  ]);
+
+  wrap.innerHTML = html;
 }
+
+// ─── 11. State Outcomes ──────────────────────────────────────────────────────
 
 function _btRenderStateOutcomesInto(data, insight, wrap) {
   if (!data) { wrap.innerHTML = '<div style="color:var(--text-muted)">No state data</div>'; return; }
 
+  const stateExplains = {
+    'Trend': 'Strong directional move in progress. Strength spread is wide, energy is high, and the pair is consistently moving one way.',
+    'Pullback': 'Temporary retracement within a larger trend. Price pulled back against the dominant direction — a potential re-entry point.',
+    'Ready-to-Enter': 'Conditions have aligned for a new entry. Strength, energy, and agreement are all favorable. The system says "go."',
+    'Reversal': 'The dominant direction may be changing. What was strong is weakening. Dangerous for continuation trades.',
+    'No Trade': 'Conditions are not favorable for any directional trade. Too choppy, too weak, or mixed signals.',
+    'Compression': 'Market is coiling — building energy but not yet releasing. Patience needed.',
+    'Exhaustion': 'The current move has gone too far too fast. Risk of snapback is high.',
+  };
+
+  let html = _btWhatIs('git-branch', 'What This Analysis Shows',
+    'NervaFX classifies the market into distinct states: Trend, Pullback, Ready-to-Enter, Reversal, No Trade, and others. <strong>This analysis measures the actual outcome when you take a continuation trade in each state</strong>. You will see exactly which states make money, which lose money, and which are coin flips. This is your go/no-go map for market conditions.');
+
   const states = Object.keys(data).sort((a, b) => data[b].win_rate - data[a].win_rate);
-  wrap.innerHTML = _btInsightBox(insight) + _btTable(
-    ['Market State', 'Samples', 'Win Rate', 'Avg Favourable', 'Avg Adverse', 'Avg Confidence'],
+  const bestState = states[0], worstState = states[states.length - 1];
+
+  html += _btFindings([
+    { type: 'good', label: 'Best state to trade', value: `${data[bestState].win_rate}% WR`, desc: `"${bestState}" state: ${data[bestState].samples} trades with +${data[bestState].avg_favourable}p average favorable movement.` },
+    { type: 'bad', label: 'Worst state', value: `${data[worstState].win_rate}% WR`, desc: `"${worstState}" state: Trading here actively loses money. Hard avoid.` },
+    { type: 'info', label: 'States analyzed', value: `${states.length}`, desc: 'Each state independently tested for continuation trade outcomes.' },
+  ]);
+
+  html += _btInsightBox(insight);
+
+  html += _btGuide([
+    'Each row is a market state that NervaFX assigns on the live dashboard.',
+    '<strong>Win Rate</strong> = how often a continuation trade succeeded in this state.',
+    '<strong>Avg Favourable / Adverse</strong> = average pips for and against you.',
+    '<strong>Avg Confidence</strong> = the average signal confidence when this state was active.',
+    'Green states = actively profitable. Red states = avoid. Yellow = breakeven.',
+  ]);
+
+  html += _btTable(
+    ['Market State', 'Trade Samples', 'Win Rate', 'Avg Pips For You', 'Avg Pips Against', 'Avg Confidence', 'Verdict'],
     states.map(s => {
       const d = data[s];
       const cls = d.win_rate >= 55 ? 'bt-win' : d.win_rate < 45 ? 'bt-loss' : '';
-      return `<tr><td><strong>${s}</strong></td><td>${d.samples}</td><td class="${cls}">${d.win_rate}%</td><td class="bt-win">${d.avg_favourable}p</td><td class="bt-loss">${d.avg_adverse}p</td><td>${d.avg_confidence}</td></tr>`;
+      const verdict = d.win_rate >= 58 ? 'TRADE' : d.win_rate >= 52 ? 'SELECTIVE' : d.win_rate >= 48 ? 'CAUTION' : 'AVOID';
+      const vCls = d.win_rate >= 58 ? 'bt-win' : d.win_rate < 48 ? 'bt-loss' : '';
+      return `<tr>
+        <td><strong>${s}</strong><div style="font-size:10px;color:var(--text-muted);font-weight:400;white-space:normal">${stateExplains[s] || ''}</div></td>
+        <td>${d.samples}</td><td class="${cls}"><strong>${d.win_rate}%</strong></td>
+        <td class="bt-win">+${d.avg_favourable}p</td><td class="bt-loss">-${d.avg_adverse}p</td>
+        <td>${d.avg_confidence}</td>
+        <td class="${vCls}" style="font-weight:700">${verdict}</td>
+      </tr>`;
     })
   );
+
+  html += _btActionBox([
+    '<strong>Only take trades when the dashboard shows a "TRADE" state.</strong> These are the only states where the historical data supports continuation.',
+    '<strong>"SELECTIVE" states need extra confirmation.</strong> Check that energy AND agreement AND strength spread are also above their minimum thresholds.',
+    '<strong>"AVOID" states are hard rules.</strong> No matter how good the signal looks, if the state says "No Trade" or "Reversal," stay out.',
+    '<strong>Pullbacks can be tricky.</strong> They look like re-entry points, but the data will show you whether pullback-state entries actually work in your tested period.',
+  ]);
+
+  wrap.innerHTML = html;
 }
+
+// ─── 12. No-Trade Zones ──────────────────────────────────────────────────────
 
 function _btRenderNoTradeZonesInto(zones, insight, wrap) {
   if (!zones) { wrap.innerHTML = '<div style="color:var(--text-muted)">No data</div>'; return; }
-  if (!zones.length) { wrap.innerHTML = _btInsightBox(insight) + '<div style="color:var(--text-muted)">No clear no-trade zones detected</div>'; return; }
+  if (!zones.length) { wrap.innerHTML = _btWhatIs('shield-off', 'What This Analysis Shows', 'This analysis searches for market conditions where continuation trades consistently lose money.') + '<div class="bt-verdict-banner good"><i data-lucide="check-circle" style="width:16px;height:16px"></i> No clear no-trade zones detected — the market did not show any reliably losing condition patterns in your date range.</div>'; return; }
 
-  wrap.innerHTML = _btInsightBox(insight) + zones.map(z => {
+  let html = _btWhatIs('shield-off', 'What This Analysis Shows',
+    '<strong>These are the conditions where you should NEVER trade.</strong> This analysis finds specific market conditions (like low energy + low agreement, or thin liquidity + high volatility) where continuation trades consistently lose money. These are not marginal — they are statistically proven money-losing zones. Memorize them and build them into your "do not trade" checklist. Avoiding bad trades is just as important as finding good ones.');
+
+  const avoidZones = zones.filter(z => z.verdict === 'AVOID');
+  html += _btFindings([
+    { type: 'bad', label: 'Hard no-trade zones', value: `${avoidZones.length}`, desc: 'These conditions CONSISTENTLY lose money. Every trade taken here hurts your account.' },
+    { type: 'info', label: 'Total danger conditions', value: `${zones.length}`, desc: 'All conditions identified where continuation trades perform below acceptable levels.' },
+  ]);
+
+  html += _btInsightBox(insight);
+
+  html += _btGuide([
+    '<strong>AVOID</strong> = statistically proven losing condition. Do NOT trade when you see this combination.',
+    '<strong>CAUTION</strong> = borderline condition. Win rate is near breakeven — not worth the risk.',
+    '<strong>Win Rate</strong> = how often continuation trades succeeded under this condition.',
+    '<strong>Avg Pips</strong> = the average net result per trade. Negative means you lose money on average.',
+  ]);
+
+  html += zones.map(z => {
     const cls = z.verdict === 'AVOID' ? 'bt-loss' : 'bt-be';
-    return `<div class="bt-zone-card"><div class="bt-zone-verdict ${cls}">${z.verdict}</div><div class="bt-zone-condition">${z.condition}</div><div class="bt-zone-stats">${z.samples} samples | Win rate: <span class="${cls}">${z.win_rate}%</span> | Avg: ${z.avg_pips}p</div></div>`;
+    const icon = z.verdict === 'AVOID' ? 'x-circle' : 'alert-triangle';
+    return `<div class="bt-zone-card">
+      <div class="bt-zone-verdict ${cls}"><i data-lucide="${icon}" style="width:14px;height:14px"></i> ${z.verdict}</div>
+      <div class="bt-zone-condition">${z.condition}</div>
+      <div class="bt-zone-stats">${z.samples} trade samples | Win rate: <span class="${cls}"><strong>${z.win_rate}%</strong></span> | Average result: <strong>${z.avg_pips}p per trade</strong></div>
+      <div class="bt-explain-row">When these conditions appear on the live dashboard, <strong>close any open trades and wait</strong> for conditions to improve.</div>
+    </div>`;
   }).join('');
+
+  html += _btActionBox([
+    '<strong>Print these rules and put them next to your screen.</strong> Before every trade, check that NONE of these conditions are active.',
+    '<strong>These save more money than good entries make.</strong> A single avoided losing trade often saves more pips than a winning trade gains.',
+    '<strong>No exceptions.</strong> Even if the signal looks perfect, if a no-trade zone condition is active, the historical data says you will lose.',
+    '<strong>Set alerts if possible</strong> for when these conditions activate, so you are warned automatically.',
+  ]);
+
+  wrap.innerHTML = html;
 }
+
+// ─── 13. Condition Combos ────────────────────────────────────────────────────
 
 function _btRenderConditionCombosInto(combos, insight, wrap) {
   if (!combos) { wrap.innerHTML = '<div style="color:var(--text-muted)">No data</div>'; return; }
   if (!combos.length) { wrap.innerHTML = _btInsightBox(insight) + '<div style="color:var(--text-muted)">Not enough data for combo analysis</div>'; return; }
 
-  wrap.innerHTML = _btInsightBox(insight) + combos.map(c => {
+  let html = _btWhatIs('puzzle', 'What This Analysis Shows',
+    'This analysis tests <strong>pre-built condition combinations</strong> — specific multi-indicator setups that represent real trading scenarios. Examples: "High Energy + Agreement + Ready-to-Enter" (the perfect entry), "Strong Trend + High Confidence" (trend continuation), "Compression + Building Momentum" (pre-breakout). Each combo is measured for win rate, average move, and overall profitability.');
+
+  const strongEntries = combos.filter(c => c.verdict === 'STRONG_ENTRY');
+  const opportunities = combos.filter(c => c.verdict === 'OPPORTUNITY');
+  const best = [...combos].sort((a, b) => b.win_rate - a.win_rate)[0];
+
+  html += _btFindings([
+    { type: 'good', label: 'Strong entry setups', value: `${strongEntries.length}`, desc: 'These combinations produce reliably profitable entries with high win rates and good pip yield.' },
+    { type: best ? 'good' : 'info', label: 'Best combo win rate', value: best ? `${best.win_rate}%` : 'N/A', desc: best ? `"${best.name}" — ${best.samples} trades with ${best.avg_move}p average move. This is your highest-probability setup.` : '' },
+    { type: 'info', label: 'Total combos tested', value: `${combos.length}`, desc: 'Each represents a specific multi-indicator scenario you might encounter while trading.' },
+  ]);
+
+  html += _btInsightBox(insight);
+
+  html += _btGuide([
+    '<strong>STRONG_ENTRY</strong> = high win rate + good pip yield. These are your A+ setups — trade them every time.',
+    '<strong>OPPORTUNITY</strong> = decent win rate but may require additional confirmation.',
+    '<strong>Condition</strong> = the specific combination of indicators that must ALL be true simultaneously.',
+    '<strong>Avg Move</strong> = average pip distance the trade moved. Use this to set your take-profit target.',
+  ]);
+
+  html += combos.map(c => {
     const cls = c.verdict === 'STRONG_ENTRY' ? 'bt-win' : c.verdict === 'OPPORTUNITY' ? 'bt-be' : '';
-    return `<div class="bt-combo-card"><div class="bt-combo-name">${c.name}</div><div class="bt-combo-cond">${c.condition}</div><div class="bt-combo-stats"><span>${c.samples} samples</span><span>Win rate: <strong class="${cls}">${c.win_rate}%</strong></span><span>Avg move: <strong>${c.avg_move}p</strong></span><span class="bt-combo-verdict ${cls}">${c.verdict.replace('_', ' ')}</span></div></div>`;
+    const icon = c.verdict === 'STRONG_ENTRY' ? 'check-circle' : 'target';
+    return `<div class="bt-combo-card">
+      <div class="bt-combo-name"><i data-lucide="${icon}" style="width:14px;height:14px"></i> ${c.name}</div>
+      <div class="bt-combo-cond">${c.condition}</div>
+      <div class="bt-combo-stats">
+        <span><strong>${c.samples}</strong> trade samples</span>
+        <span>Win rate: <strong class="${cls}">${c.win_rate}%</strong></span>
+        <span>Avg move: <strong>${c.avg_move}p</strong></span>
+        <span class="bt-combo-verdict ${cls}">${c.verdict.replace(/_/g, ' ')}</span>
+      </div>
+      <div class="bt-explain-row">When all these conditions are true on the live dashboard, this setup has historically ${c.win_rate >= 55 ? 'been profitable with ' + c.avg_move + 'p average movement' : 'shown a slight edge but requires careful trade management'}.</div>
+    </div>`;
   }).join('');
+
+  html += _btActionBox([
+    '<strong>STRONG_ENTRY combos are your "A+ trade" checklist.</strong> When you see all conditions met, enter with conviction.',
+    '<strong>Set your TP based on the avg move column.</strong> If a combo shows 25p avg move, set your TP near 20-25p for realistic targets.',
+    '<strong>Combine combos with Session Thresholds.</strong> A STRONG_ENTRY combo during the best session is the ultimate setup.',
+    '<strong>Do not force combos.</strong> Wait for all conditions to align naturally — forcing a trade by ignoring one condition defeats the purpose.',
+  ]);
+
+  wrap.innerHTML = html;
 }
+
+// ─── 14. Move Distance ──────────────────────────────────────────────────────
 
 function _btRenderMoveDistanceInto(data, insight, wrap) {
   if (!data) { wrap.innerHTML = '<div style="color:var(--text-muted)">No distance data</div>'; return; }
 
+  let html = _btWhatIs('ruler', 'What This Analysis Shows',
+    'How far does price actually move over time? This analysis measures the <strong>expected pip distance at different time horizons</strong> (1 hour, 4 hours, 8 hours, 12 hours, 24 hours) and breaks it down by energy level. This is critical for <strong>setting realistic take-profit and stop-loss levels</strong>. If 4H average max move is only 15 pips during low energy, setting a 50-pip TP is unrealistic. This data calibrates your expectations to actual market behavior.');
+
   const horizons = Object.keys(data).sort();
-  wrap.innerHTML = _btInsightBox(insight) + _btTable(
-    ['Horizon', 'Samples', 'Avg Max Move', 'Avg Net', 'Low Energy', 'Mid Energy', 'High Energy'],
+  const h4 = data[horizons.find(h => data[h].horizon_hours === 4)] || data[horizons[1]];
+  const h8 = data[horizons.find(h => data[h].horizon_hours === 8)] || data[horizons[2]];
+
+  const findings = [];
+  if (h4) findings.push({ type: 'info', label: '4H avg max move', value: `${h4.overall_avg_max}p`, desc: `Over 4 hours, price moves an average of ${h4.overall_avg_max} pips at its peak. Set 4H TP near or below this level.` });
+  if (h8) findings.push({ type: 'info', label: '8H avg max move', value: `${h8.overall_avg_max}p`, desc: `Over 8 hours, average max movement is ${h8.overall_avg_max} pips. Swing trade targets should be within this range.` });
+  if (h4) findings.push({ type: 'good', label: 'High energy 4H move', value: `${h4.high_energy.avg_max}p`, desc: `When energy is high, 4H moves reach ${h4.high_energy.avg_max}p — ${Math.round(h4.high_energy.avg_max / (h4.low_energy.avg_max || 1) * 10) / 10}x more than low energy.` });
+  if (h4) findings.push({ type: 'bad', label: 'Low energy 4H move', value: `${h4.low_energy.avg_max}p`, desc: `Low energy = tiny moves. Not enough movement to cover spreads and commissions.` });
+
+  html += _btFindings(findings);
+  html += _btInsightBox(insight);
+
+  html += _btGuide([
+    '<strong>Horizon</strong> = how far ahead we measured (1H, 4H, 8H, etc.).',
+    '<strong>Avg Max Move</strong> = the average furthest distance price traveled from the entry point. This is your maximum potential profit.',
+    '<strong>Avg Net</strong> = where price ended up after the horizon period. This shows the average held position result.',
+    '<strong>Low / Mid / High Energy</strong> columns show how the expected move changes based on current market energy.',
+    '<strong>The gap between Low and High energy is the key insight.</strong> If high energy produces 3x the move, energy level should determine your TP.',
+  ]);
+
+  html += _btTable(
+    ['Time Horizon', 'Samples', 'Avg Max Move', 'Where Price Ended', 'Low Energy Move', 'Mid Energy Move', 'High Energy Move'],
     horizons.map(h => {
       const d = data[h];
-      return `<tr><td><strong>${d.horizon_hours}H</strong></td><td>${d.total_samples}</td><td>${d.overall_avg_max}p</td><td>${d.overall_avg_net}p</td><td>${d.low_energy.avg_max}p <span style="opacity:.5">(${d.low_energy.samples})</span></td><td>${d.mid_energy.avg_max}p <span style="opacity:.5">(${d.mid_energy.samples})</span></td><td class="bt-win">${d.high_energy.avg_max}p <span style="opacity:.5">(${d.high_energy.samples})</span></td></tr>`;
+      const ratio = d.low_energy.avg_max > 0 ? (d.high_energy.avg_max / d.low_energy.avg_max).toFixed(1) : '—';
+      return `<tr>
+        <td><strong>${d.horizon_hours} Hours</strong></td><td>${d.total_samples}</td>
+        <td><strong>${d.overall_avg_max}p</strong></td><td>${d.overall_avg_net}p</td>
+        <td>${d.low_energy.avg_max}p <span style="opacity:.5;font-size:10px">(${d.low_energy.samples} trades)</span></td>
+        <td>${d.mid_energy.avg_max}p <span style="opacity:.5;font-size:10px">(${d.mid_energy.samples} trades)</span></td>
+        <td class="bt-win"><strong>${d.high_energy.avg_max}p</strong> <span style="opacity:.5;font-size:10px">(${d.high_energy.samples} trades) ${ratio}x low</span></td>
+      </tr>`;
     })
   );
+
+  html += _btActionBox([
+    '<strong>Set TP at 60-80% of the "Avg Max Move" for your chosen horizon.</strong> Trying to capture 100% of the average move is unrealistic.',
+    '<strong>Use the energy-based columns.</strong> During low energy, set tight TPs (use the low energy column). During high energy, widen TPs (use the high energy column).',
+    '<strong>If Avg Net is much smaller than Avg Max</strong>, it means price reaches the target but then retraces. Use a trailing stop instead of a fixed TP.',
+    '<strong>For scalping (1-2H):</strong> Use the 1H row. For intraday swing (4-8H): Use the 4H-8H rows. For overnight holds: Use 12-24H rows.',
+    '<strong>Stop-loss hint:</strong> If Avg Max Move at 4H is 20p, a stop wider than 25p is probably too loose — you are giving back more than the expected move.',
+  ]);
+
+  wrap.innerHTML = html;
 }
+
+// ─── 15. Session Performance ─────────────────────────────────────────────────
 
 function _btRenderSessionPerfInto(data, insight, wrap) {
   if (!data) { wrap.innerHTML = '<div style="color:var(--text-muted)">No session data</div>'; return; }
 
+  let html = _btWhatIs('bar-chart-3', 'What This Analysis Shows',
+    'Which trading session produces the most reliable and biggest moves? This analysis compares <strong>every session window</strong> (Asia, London, New York, overlaps) by their average energy level, and the actual pip movement achieved at 4-hour and 8-hour horizons. This tells you <strong>when to trade and when to sleep</strong> — literally. If London produces 3x the movement of Asia, your time is far better spent trading London.');
+
   const sessions = Object.keys(data).sort((a, b) => data[b].avg_energy - data[a].avg_energy);
-  wrap.innerHTML = _btInsightBox(insight) + _btTable(
-    ['Session', 'Hours', 'Avg Energy', '4H Avg Move', '4H Samples', '8H Avg Move', '8H Samples'],
-    sessions.map(s => {
+  const bestSess = sessions[0], worstSess = sessions[sessions.length - 1];
+
+  const sessTimings = {
+    'Asia': '00:00 – 08:00 UTC (Tokyo/Sydney)',
+    'London': '07:00 – 16:00 UTC (European)',
+    'New_York': '12:00 – 21:00 UTC (US)',
+    'London_NY_Overlap': '12:00 – 16:00 UTC (Both open)',
+    'Late_NY': '17:00 – 21:00 UTC (US afternoon)',
+    'Pre_Asia': '21:00 – 00:00 UTC (Quietest period)',
+  };
+
+  html += _btFindings([
+    { type: 'good', label: 'Most active session', value: bestSess.replace(/_/g, ' '), desc: `Average energy: ${data[bestSess].avg_energy}. 4H move: ${data[bestSess].h4_avg_move}p, 8H move: ${data[bestSess].h8_avg_move}p. This is when the market gives you the most to work with.` },
+    { type: 'bad', label: 'Least active session', value: worstSess.replace(/_/g, ' '), desc: `Average energy: ${data[worstSess].avg_energy}. 4H move: ${data[worstSess].h4_avg_move}p. Not enough movement to trade profitably.` },
+    { type: 'info', label: 'Sessions compared', value: `${sessions.length}`, desc: 'Each session measured for energy, 4-hour movement, and 8-hour movement.' },
+  ]);
+
+  html += _btInsightBox(insight);
+
+  html += _btGuide([
+    '<strong>Avg Energy</strong> = average Market Energy reading during this session. Higher = more movement potential.',
+    '<strong>4H / 8H Avg Move</strong> = average pip distance measured 4 and 8 hours into this session.',
+    '<strong>Sessions are time windows in UTC.</strong> Adjust to your local timezone to know when to be at your screen.',
+    'The session with the highest 4H avg move is where your intraday trades will perform best.',
+  ]);
+
+  html += _btTable(
+    ['Session Window', 'Hours of Data', 'Avg Energy', '4H Avg Move (pips)', '4H Trades', '8H Avg Move (pips)', '8H Trades'],
+    sessions.map((s, i) => {
       const d = data[s];
-      return `<tr><td><strong>${s}</strong></td><td>${d.hours}</td><td>${d.avg_energy}</td><td>${d.h4_avg_move}p</td><td>${d.h4_samples}</td><td>${d.h8_avg_move}p</td><td>${d.h8_samples}</td></tr>`;
+      const bestCls = i === 0 ? 'bt-comp-row-best' : i === sessions.length - 1 ? 'bt-comp-row-worst' : '';
+      return `<tr class="${bestCls}">
+        <td><strong>${s.replace(/_/g, ' ')}</strong>${i === 0 ? ' ★' : ''}${i === sessions.length - 1 ? ' ⚠' : ''}<div style="font-size:10px;color:var(--text-muted);font-weight:400">${sessTimings[s] || ''}</div></td>
+        <td>${d.hours}h</td><td><strong>${d.avg_energy}</strong></td>
+        <td${i === 0 ? ' class="bt-win"' : ''}><strong>${d.h4_avg_move}p</strong></td><td>${d.h4_samples}</td>
+        <td${i === 0 ? ' class="bt-win"' : ''}><strong>${d.h8_avg_move}p</strong></td><td>${d.h8_samples}</td>
+      </tr>`;
     })
   );
+
+  html += _btActionBox([
+    `<strong>Focus your trading on ${bestSess.replace(/_/g, ' ')}.</strong> This session produces the most movement and the best opportunities.`,
+    `<strong>Avoid ${worstSess.replace(/_/g, ' ')}.</strong> The movement is too small to cover your spreads and risk.`,
+    '<strong>Plan your day around sessions.</strong> Set alarms for session opens. Be at your screen during the best sessions, away during the worst.',
+    '<strong>Combine with Session Thresholds.</strong> This engine tells you WHEN to trade, Session Thresholds tells you WHAT thresholds to use during each window.',
+    '<strong>London-NY overlap is typically the highest-volume period.</strong> If it does not show up as the best here, market conditions in your test period were unusual.',
+  ]);
+
+  wrap.innerHTML = html;
 }
 
 function _btTable(headers, rows) {
