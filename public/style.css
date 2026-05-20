@@ -4308,7 +4308,7 @@ body::after {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .5px;
-  color: var(--text-dim);
+  color: #fff;
   margin-bottom: 6px;
 }
 .me-ht-table {
