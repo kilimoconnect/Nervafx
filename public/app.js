@@ -2703,13 +2703,13 @@ function _meMarketCycleBanner(cycle) {
   return `<div class="me-cycle-banner">
     <span class="me-cycle-banner-label">Market Cycle</span>
     <span class="me-cycle-banner-val" style="--bc:${color}">${label}</span>
-    <button class="me-ai-toggle me-btn-breadth" onclick="openBreadthChart()">Momentum Chart</button>
-    <button class="me-ai-toggle me-btn-metric" onclick="openMetricChart('movement')">Movement</button>
-    <button class="me-ai-toggle me-btn-metric" onclick="openMetricChart('agreement')">Agreement</button>
-    <button class="me-ai-toggle me-btn-metric" onclick="openMetricChart('volatility')">Volatility</button>
-    <button class="me-ai-toggle me-btn-metric" onclick="openMetricChart('energy')">Energy</button>
-    <button class="me-ai-toggle me-btn-metric" onclick="openMetricChart('liquidity')">Liquidity</button>
-    <button class="me-ai-toggle me-btn-ai" onclick="openMeAiAnalysis()">AI Analysis</button>
+    <button class="me-ai-toggle me-btn-breadth premium-only" onclick="openBreadthChart()">Momentum Chart</button>
+    <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('movement')">Movement</button>
+    <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('agreement')">Agreement</button>
+    <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('volatility')">Volatility</button>
+    <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('energy')">Energy</button>
+    <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('liquidity')">Liquidity</button>
+    <button class="me-ai-toggle me-btn-ai premium-only" onclick="openMeAiAnalysis()">AI Analysis</button>
   </div>`;
 }
 
