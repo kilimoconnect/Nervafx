@@ -370,10 +370,7 @@
 
     const todayStr = new Date().toISOString().slice(0, 10);
     const dates = Object.keys(byDate)
-      .filter(d => {
-        if (d === todayStr) return byDate[d].length >= 1;
-        return new Set(byDate[d].map(b => b.session)).size >= 2;
-      })
+      .filter(d => byDate[d].length >= 1)
       .sort((a, b) => b.localeCompare(a));
     const maxVal = Math.max(80, ...rows.map(r => parseFloat(r[metric.field]) || 0));
 
