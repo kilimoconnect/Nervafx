@@ -2849,22 +2849,11 @@ function renderMarketEnergy(sessions, expansionPressure, marketCycle, currentSes
   const todaySessions = sessions.filter(s => (s.session_date || '').slice(0, 10) === todayStr);
   const byName = Object.fromEntries(todaySessions.map(s => [s.session_name, s]));
 
-  // Group today's hourly rows by session (last 3 hours of today only)
-  const hourlyBySession = {};
-  for (const h of (hourlyRows || [])) {
-    const sess = h.session_name;
-    if (!sess || sess === 'LOW_LIQUIDITY' || sess === 'DEAD_HOURS') continue;
-    // Only include today's rows — exclude carryover from yesterday's session
-    if ((h.time_utc || '').slice(0, 10) !== todayStr) continue;
-    if (!hourlyBySession[sess]) hourlyBySession[sess] = [];
-    hourlyBySession[sess].push(h);
-  }
-  // Sort ascending by time, keep last 3
-  for (const sess of Object.keys(hourlyBySession)) {
-    hourlyBySession[sess].sort((a, b) => a.time_utc.localeCompare(b.time_utc));
-    const arr = hourlyBySession[sess];
-    if (arr.length > 3) hourlyBySession[sess] = arr.slice(-3);
-  }
+  // Last 3 hourly candles (across all sessions) for the active session card
+  const allHourly = (hourlyRows || [])
+    .filter(h => h.session_name && h.session_name !== 'LOW_LIQUIDITY' && h.session_name !== 'DEAD_HOURS')
+    .sort((a, b) => a.time_utc.localeCompare(b.time_utc));
+  const lastThreeHourly = allHourly.slice(-3);
 
   const ORDER  = ['ASIA', 'LONDON', 'NEW_YORK'];
   // Sort: current (ACTIVE) top-left, then previous (most recent COMPLETED) top-right,
@@ -2883,7 +2872,7 @@ function renderMarketEnergy(sessions, expansionPressure, marketCycle, currentSes
   el.innerHTML = `
     ${_meMarketCycleBanner(marketCycle)}
     <div class="me-card-grid">
-      ${sorted.map(({ name }) => _meSessionCard(name, byName[name] || null, _meSessionStatus(name, currentSession), hourlyBySession[name] || [])).join('')}
+      ${sorted.map(({ name }) => _meSessionCard(name, byName[name] || null, _meSessionStatus(name, currentSession), lastThreeHourly)).join('')}
     </div>
     ${_meExpansionPressurePanel(expansionPressure)}
     ${_meHistoryPanel(historyRows, todaySessions)}`;
