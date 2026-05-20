@@ -270,7 +270,7 @@
     for (const date of dates) {
       const bars = byDate[date].sort((a, b) => a.time.localeCompare(b.time));
       const d = new Date(date + 'T12:00:00Z');
-      const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz });
+      const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: tz });
 
       const vals = bars.map(b => b.val);
       const streaks = new Set();
@@ -406,7 +406,7 @@
 
     for (const date of dates) {
       const d = new Date(date + 'T12:00:00Z');
-      const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz });
+      const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: tz });
       const sessions = byDate[date];
 
       html += `<div class="bc-day-block">
@@ -505,7 +505,7 @@
     const dayBlocks = days.map(date => {
       const dateLabel = (date === lastMarketDate && marketOpen)
         ? 'Today'
-        : new Date(date + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+        : new Date(date + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 
       const sessOrder = ['ASIA', 'LONDON', 'NEW_YORK'];
       const sessMap = Object.fromEntries(byDate[date].map(r => [r.session_name, r]));
