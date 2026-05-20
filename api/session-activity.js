@@ -22,13 +22,24 @@ module.exports = async function handler(req, res) {
     const result = {};
 
     if (type === 'hourly' || type === 'both') {
-      const { data, error } = await sb
-        .from('hourly_session_activity')
-        .select('time_utc, session_name, movement_score, breadth_score, agreement_score, volatility_score, market_energy, expansion_readiness, compression_score, expansion_score, pairs_moving, pairs_quiet, market_state')
-        .gte('time_utc', since)
-        .order('time_utc', { ascending: true });
-      if (error) throw error;
-      result.hourly = data || [];
+      // Paginate — Supabase caps at 1000 rows per request
+      const allRows = [];
+      const PAGE = 1000;
+      let offset = 0;
+      while (true) {
+        const { data, error } = await sb
+          .from('hourly_session_activity')
+          .select('time_utc, session_name, movement_score, breadth_score, agreement_score, volatility_score, market_energy, expansion_readiness, compression_score, expansion_score, pairs_moving, pairs_quiet, market_state')
+          .gte('time_utc', since)
+          .order('time_utc', { ascending: true })
+          .range(offset, offset + PAGE - 1);
+        if (error) throw error;
+        if (!data || !data.length) break;
+        allRows.push(...data);
+        if (data.length < PAGE) break;
+        offset += PAGE;
+      }
+      result.hourly = allRows;
     }
 
     if (type === 'summary' || type === 'both') {
