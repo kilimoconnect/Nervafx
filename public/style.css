@@ -4222,10 +4222,10 @@ body::after {
 }
 .me-avg-note {
   font-size: 9px;
-  color: var(--text-dim);
+  color: #fff;
+  font-weight: 700;
   letter-spacing: .3px;
   text-transform: uppercase;
-  opacity: .6;
   margin-bottom: 2px;
 }
 
