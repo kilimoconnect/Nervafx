@@ -4289,6 +4289,51 @@ body::after {
 .me-comp-bull { color: #22c55e !important; }
 .me-comp-bear { color: #ef4444 !important; }
 
+/* Hourly trend breakdown inside session card */
+.me-hourly-trend {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+.me-ht-title {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+.me-ht-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+.me-ht-table thead { border-bottom: 1px solid var(--border); }
+.me-ht-label {
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 3px 4px 3px 0;
+  white-space: nowrap;
+  width: 48px;
+}
+.me-ht-th {
+  text-align: center;
+  font-weight: 600;
+  color: var(--text-dim);
+  padding: 3px 4px;
+  font-size: 9.5px;
+}
+.me-ht-td {
+  text-align: center;
+  padding: 3px 4px;
+  font-weight: 600;
+}
+.me-ht-up { color: #22c55e; font-size: 8px; margin-right: 2px; }
+.me-ht-dn { color: #ef4444; font-size: 8px; margin-right: 2px; }
+.me-ht-flat { color: #64748b; font-size: 8px; margin-right: 2px; }
+
 /* Session explanation block */
 .me-explain {
   margin-top: 8px;

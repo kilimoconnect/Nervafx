@@ -1610,7 +1610,58 @@ function _meSessionExplain(s, label) {
   </div>`;
 }
 
-function _meSessionCard(name, s, status) {
+function _meHourlyTrend(hourlyRows) {
+  if (!hourlyRows || hourlyRows.length === 0) return '';
+  const metrics = [
+    { key: 'movement_score',  label: 'Mov' },
+    { key: 'breadth_score',   label: 'Mom' },
+    { key: 'agreement_score', label: 'Agr' },
+    { key: 'volatility_score',label: 'Vol' },
+    { key: 'market_energy',   label: 'Energy' },
+  ];
+
+  // Time headers (e.g. "12:00")
+  const timeHeaders = hourlyRows.map(h => {
+    const d = new Date(h.time_utc);
+    return `${String(d.getUTCHours()).padStart(2,'0')}:00`;
+  });
+
+  // Trend arrow between consecutive values
+  function trendArrow(vals, idx) {
+    if (idx === 0) return '';
+    const diff = vals[idx] - vals[idx - 1];
+    if (diff > 2) return '<span class="me-ht-up">▲</span>';
+    if (diff < -2) return '<span class="me-ht-dn">▼</span>';
+    return '<span class="me-ht-flat">—</span>';
+  }
+
+  // Color a value cell based on its magnitude
+  function valColor(v) {
+    if (v >= 60) return '#22c55e';
+    if (v >= 35) return '#eab308';
+    if (v >= 15) return '#94a3b8';
+    return '#64748b';
+  }
+
+  const headerCells = timeHeaders.map(t => `<th class="me-ht-th">${t}</th>`).join('');
+  const bodyRows = metrics.map(m => {
+    const vals = hourlyRows.map(h => Math.round(parseFloat(h[m.key]) || 0));
+    const cells = vals.map((v, i) =>
+      `<td class="me-ht-td" style="color:${valColor(v)}">${trendArrow(vals, i)}${v}</td>`
+    ).join('');
+    return `<tr><td class="me-ht-label">${m.label}</td>${cells}</tr>`;
+  }).join('');
+
+  return `<div class="me-hourly-trend">
+    <div class="me-ht-title">Hourly Breakdown</div>
+    <table class="me-ht-table">
+      <thead><tr><th class="me-ht-label"></th>${headerCells}</tr></thead>
+      <tbody>${bodyRows}</tbody>
+    </table>
+  </div>`;
+}
+
+function _meSessionCard(name, s, status, hourlyRows) {
   const sessColor  = ME_SESSION_COLOR[name];
   const label      = ME_SESSION_LABEL[name];
 
@@ -1744,6 +1795,7 @@ function _meSessionCard(name, s, status) {
       <span class="me-foot-item">Readiness <strong>${readiness}</strong></span>
       <span class="me-foot-item" style="color:${liqColor}">Liquidity <strong>${liqScore}</strong></span>
     </div>
+    ${_meHourlyTrend(hourlyRows)}
     ${_meSessionExplain(s, label)}
   </div>`;
 }
@@ -2782,7 +2834,7 @@ function _meHistoryPanel(rows, liveSessions) {
   </div>`;
 }
 
-function renderMarketEnergy(sessions, expansionPressure, marketCycle, currentSession, historyRows) {
+function renderMarketEnergy(sessions, expansionPressure, marketCycle, currentSession, historyRows, hourlyRows) {
   const el = document.getElementById('market-activity-display');
   if (!el) return;
 
@@ -2795,6 +2847,21 @@ function renderMarketEnergy(sessions, expansionPressure, marketCycle, currentSes
   const todayStr = new Date().toISOString().slice(0, 10);
   const todaySessions = sessions.filter(s => (s.session_date || '').slice(0, 10) === todayStr);
   const byName = Object.fromEntries(todaySessions.map(s => [s.session_name, s]));
+
+  // Group today's hourly rows by session (last 3 hours each)
+  const hourlyBySession = {};
+  for (const h of (hourlyRows || [])) {
+    const sess = h.session_name;
+    if (!sess || sess === 'LOW_LIQUIDITY' || sess === 'DEAD_HOURS') continue;
+    if (!hourlyBySession[sess]) hourlyBySession[sess] = [];
+    hourlyBySession[sess].push(h);
+  }
+  // Sort ascending by time, keep last 3
+  for (const sess of Object.keys(hourlyBySession)) {
+    hourlyBySession[sess].sort((a, b) => a.time_utc.localeCompare(b.time_utc));
+    const arr = hourlyBySession[sess];
+    if (arr.length > 3) hourlyBySession[sess] = arr.slice(-3);
+  }
 
   const ORDER  = ['ASIA', 'LONDON', 'NEW_YORK'];
   // Sort: current (ACTIVE) top-left, then previous (most recent COMPLETED) top-right,
@@ -2813,7 +2880,7 @@ function renderMarketEnergy(sessions, expansionPressure, marketCycle, currentSes
   el.innerHTML = `
     ${_meMarketCycleBanner(marketCycle)}
     <div class="me-card-grid">
-      ${sorted.map(({ name }) => _meSessionCard(name, byName[name] || null, _meSessionStatus(name, currentSession))).join('')}
+      ${sorted.map(({ name }) => _meSessionCard(name, byName[name] || null, _meSessionStatus(name, currentSession), hourlyBySession[name] || [])).join('')}
     </div>
     ${_meExpansionPressurePanel(expansionPressure)}
     ${_meHistoryPanel(historyRows, todaySessions)}`;
@@ -2823,9 +2890,10 @@ function renderMarketEnergy(sessions, expansionPressure, marketCycle, currentSes
 
 async function fetchMarketActivity() {
   try {
-    const [data, historyRows] = await Promise.all([
+    const [data, historyRows, hourlyData] = await Promise.all([
       api('/api/market-energy'),
       api('/api/market-energy-history').catch(e => { console.warn('[ME-HISTORY]', e.message); return []; }),
+      api('/api/session-activity?type=hourly&days=1').catch(e => { console.warn('[ME-HOURLY]', e.message); return { hourly: [] }; }),
     ]);
     console.log('[ME-HISTORY] rows:', historyRows?.length, historyRows?.[0]);
     renderMarketEnergy(
@@ -2834,6 +2902,7 @@ async function fetchMarketActivity() {
       data.marketCycle    || null,
       data.currentSession || null,
       historyRows,
+      (hourlyData.hourly || []),
     );
   } catch (_) {
     const el = document.getElementById('market-activity-display');
