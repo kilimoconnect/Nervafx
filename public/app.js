@@ -1860,12 +1860,41 @@ async function fetchMarketEnergyNarrative(sessions, expansionPressure, marketCyc
   _meSessSnapshot = sessions;
   _meEpSnapshot   = expansionPressure;
   _meMcSnapshot   = marketCycle;
+
+  // Refresh Market Activity bar in the trading session card now that _meSessSnapshot is available
+  _updateMarketActivityBar();
+
   try {
     const data = await api('/api/market-energy-narrative');
     _meNarrative = data;
     const modal = document.getElementById('me-analysis-modal');
     if (modal) _renderMeAnalysisModal();
   } catch (_) {}
+}
+
+// Update the Market Activity % bar in the session card without re-fetching session data
+function _updateMarketActivityBar() {
+  const sessEl = document.querySelector('.session-main');
+  if (!sessEl) return;
+  const sessName = document.querySelector('.sess-name-badge');
+  if (!sessName) return;
+  // Match session name from badge text to _meSessSnapshot
+  const SESS_MAP = { 'Asia': 'ASIA', 'LDN Open': 'LONDON_OPEN', 'London': 'LONDON', 'LDN/NY': 'LONDON_NY', 'New York': 'NEW_YORK', 'Low Liquidity': 'LOW_LIQUIDITY' };
+  const currentLabel = sessName.textContent.trim();
+  const sessKey = SESS_MAP[currentLabel] || currentLabel;
+  const me = (_meSessSnapshot || []).find(m => m.session_name === sessKey);
+  if (!me) return;
+
+  const activity = Math.round(((me.movement_score || 0) + (me.breadth_score || 0) + (me.agreement_score || 0) + (me.volatility_score || 0)) / 4);
+  const actCls = activity >= 75 ? 'very-high' : activity >= 55 ? 'high' : activity >= 35 ? 'medium' : 'low';
+
+  const pctEl = document.querySelector('.sess-act-pct');
+  const fillEl = document.querySelector('.sess-act-bar-fill');
+  if (pctEl) pctEl.textContent = `${activity}%`;
+  if (fillEl) {
+    fillEl.style.width = `${activity}%`;
+    fillEl.className = `sess-act-bar-fill act-${actCls}`;
+  }
 }
 
 function openMeAiAnalysis() {
