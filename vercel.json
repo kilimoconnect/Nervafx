@@ -2,11 +2,13 @@
   "version": 2,
   "crons": [
     { "path": "/api/run-pipeline?force=1", "schedule": "1 * * * *" },
-    { "path": "/api/email-notify?type=digest", "schedule": "0 21 * * 1-5" }
+    { "path": "/api/email-notify?type=digest", "schedule": "0 21 * * 1-5" },
+    { "path": "/api/cron-backtest-sync", "schedule": "0 */6 * * *" }
   ],
   "functions": {
-    "api/news-parse.js":   { "maxDuration": 30 },
-    "api/run-pipeline.js": { "maxDuration": 120 }
+    "api/news-parse.js":          { "maxDuration": 30 },
+    "api/run-pipeline.js":        { "maxDuration": 120 },
+    "api/cron-backtest-sync.js":  { "maxDuration": 300 }
   },
   "rewrites": [
     { "source": "/",       "destination": "/home.html" },
