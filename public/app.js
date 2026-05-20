@@ -2732,7 +2732,7 @@ function _meMarketCycleBanner(cycle) {
   return `<div class="me-cycle-banner">
     <span class="me-cycle-banner-label">Market Cycle</span>
     <span class="me-cycle-banner-val" style="--bc:${color}">${label}</span>
-    <button class="me-ai-toggle me-btn-breadth premium-only" onclick="openBreadthChart()">Momentum Chart</button>
+    <button class="me-ai-toggle me-btn-breadth premium-only" onclick="openBreadthChart()">Momentum</button>
     <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('movement')">Movement</button>
     <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('agreement')">Agreement</button>
     <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('volatility')">Volatility</button>
