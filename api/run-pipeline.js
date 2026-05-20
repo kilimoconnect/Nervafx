@@ -13,8 +13,7 @@
  */
 
 const { createClient } = require('@supabase/supabase-js');
-const { fetchAndParseCandles, sleep, RATE_LIMIT_DELAY } = require('../src/oanda');
-const { upsertCandles }                  = require('../src/supabase');
+// Candle data maintained by cron-backtest-sync — no direct OANDA fetch needed
 const { config }                         = require('../src/config');
 const { calculateLatestStates }          = require('../src/stateDetect');
 const { calculateLatestSignals }         = require('../src/signals');
@@ -75,7 +74,7 @@ async function runStrength(sb) {
   const arrays = {};
   for (const inst of INSTRUMENTS) {
     const { data, error } = await sb
-      .from('market_candles')
+      .from('backtest_candles')
       .select('time, close')
       .eq('instrument', inst)
       .eq('timeframe', 'H1')
@@ -272,14 +271,8 @@ module.exports = async function handler(req, res) {
   const t0 = Date.now();
   let strengthTime = null;
 
-  // Fetch latest candles from OANDA
-  await step('candles', async () => {
-    for (const instrument of config.instruments) {
-      const candles = await fetchAndParseCandles(instrument, { count: 5 });
-      if (candles.length > 0) await upsertCandles(candles);
-      await sleep(RATE_LIMIT_DELAY);
-    }
-  });
+  // Candle data is now maintained by cron-backtest-sync (hourly) in backtest_candles.
+  // No OANDA fetch needed here — pipeline reads directly from backtest_candles.
 
   await step('strength', async () => { strengthTime = await runStrength(sb); });
   await step('smooth',   () => runSmooth(sb));

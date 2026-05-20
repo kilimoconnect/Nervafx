@@ -28,7 +28,7 @@ async function buildCandleLookup() {
       const to   = from + PAGE_SIZE - 1;
 
       const { data, error } = await supabase
-        .from('market_candles')
+        .from('backtest_candles')
         .select('time, close')
         .eq('instrument', instrument)
         .eq('timeframe', config.granularity)
@@ -58,7 +58,7 @@ async function buildRecentCandleLookup(recentCount = 50) {
 
   for (const instrument of config.instruments) {
     const { data, error } = await supabase
-      .from('market_candles')
+      .from('backtest_candles')
       .select('time, close')
       .eq('instrument', instrument)
       .eq('timeframe', config.granularity)
@@ -197,7 +197,7 @@ async function calculateLatestStrength() {
   const arrays = {};
   for (const instrument of config.instruments) {
     const { data, error } = await supabase
-      .from('market_candles')
+      .from('backtest_candles')
       .select('time, close')
       .eq('instrument', instrument)
       .eq('timeframe', config.granularity)

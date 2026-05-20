@@ -73,7 +73,7 @@ async function fetchHourlyCandles(limit = 300) {
   const byTime = {};
   for (const instrument of config.instruments) {
     const { data, error } = await supabase
-      .from('market_candles')
+      .from('backtest_candles')
       .select('time, high, low, close')
       .eq('instrument', instrument)
       .eq('timeframe', 'H1')

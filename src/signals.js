@@ -13,7 +13,7 @@ async function buildCandleLookup() {
   const lookup = {};
   for (const instrument of config.instruments) {
     const { data, error } = await supabase
-      .from('market_candles')
+      .from('backtest_candles')
       .select('time, high, low, close')
       .eq('instrument', instrument)
       .eq('timeframe', config.granularity)

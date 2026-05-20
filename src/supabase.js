@@ -10,7 +10,7 @@ async function upsertCandles(candles) {
   if (candles.length === 0) return { inserted: 0 };
 
   const { data, error } = await supabase
-    .from('market_candles')
+    .from('backtest_candles')
     .upsert(candles, { onConflict: 'instrument,timeframe,time', ignoreDuplicates: true });
 
   if (error) throw new Error(`Supabase upsert error: ${error.message}`);
@@ -19,7 +19,7 @@ async function upsertCandles(candles) {
 
 async function getCandlesForInstrument(instrument, timeframe) {
   const { data, error } = await supabase
-    .from('market_candles')
+    .from('backtest_candles')
     .select('time')
     .eq('instrument', instrument)
     .eq('timeframe', timeframe)
@@ -39,7 +39,7 @@ async function insertQualityCheck(check) {
 
 async function getCandleCount(instrument, timeframe) {
   const { count, error } = await supabase
-    .from('market_candles')
+    .from('backtest_candles')
     .select('*', { count: 'exact', head: true })
     .eq('instrument', instrument)
     .eq('timeframe', timeframe);
