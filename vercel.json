@@ -3,7 +3,7 @@
   "crons": [
     { "path": "/api/run-pipeline?force=1", "schedule": "1 * * * *" },
     { "path": "/api/email-notify?type=digest", "schedule": "0 21 * * 1-5" },
-    { "path": "/api/cron-backtest-sync", "schedule": "0 */6 * * *" }
+    { "path": "/api/cron-backtest-sync", "schedule": "5 * * * *" }
   ],
   "functions": {
     "api/news-parse.js":          { "maxDuration": 30 },
