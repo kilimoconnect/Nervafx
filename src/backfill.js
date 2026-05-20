@@ -2,7 +2,7 @@
 
 /**
  * Historical backfill — fetch 12 months of H1 and M15 candles from OANDA
- * and store in Supabase `market_candles` table.
+ * and store in Supabase `backtest_candles` table.
  *
  * OANDA API limits: 5000 candles per request.
  *   H1  → ~6 240 candles/instrument/year  → 2 chunks
