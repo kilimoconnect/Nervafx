@@ -3793,7 +3793,7 @@ body::after {
 }
 
 .me-ai-toggle {
-  margin-left: auto;
+  margin-left: 0;
   padding: 4px 12px;
   border-radius: 5px;
   border: none;
@@ -3802,6 +3802,9 @@ body::after {
   letter-spacing: 0.05em;
   cursor: pointer;
   transition: opacity 0.15s, transform 0.15s;
+}
+.me-cycle-banner .me-ai-toggle:first-of-type {
+  margin-left: auto;
 }
 .me-ai-toggle:hover {
   opacity: 0.85;
@@ -3813,6 +3816,10 @@ body::after {
 }
 .me-btn-ai {
   background: linear-gradient(135deg, #a855f7, #ec4899);
+  color: #fff;
+}
+.me-btn-metric {
+  background: linear-gradient(135deg, #10b981, #0ea5e9);
   color: #fff;
 }
 .plan-free .premium-only,
