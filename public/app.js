@@ -1986,7 +1986,7 @@ function openBreadthChart() {
     .formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value || '';
   modal.innerHTML = `<div class="me-modal-panel">
     <div class="me-modal-header">
-      <div class="me-modal-title"><span class="me-modal-title-label">Hourly Session Momentum</span><span style="font-size:10px;color:var(--text-muted);margin-left:8px">${_bcTzLabel}</span><a href="/archive.html" style="font-size:10px;color:var(--accent);margin-left:auto;text-decoration:none">Full Archive →</a></div>
+      <div class="me-modal-title"><span class="me-modal-title-label">Hourly Session Breadth</span><span style="font-size:10px;color:var(--text-muted);margin-left:8px">${_bcTzLabel}</span><a href="/archive.html" style="font-size:10px;color:var(--accent);margin-left:auto;text-decoration:none">Full Archive →</a></div>
       <button class="me-modal-close" onclick="closeBreadthChart()">✕</button>
     </div>
     <div class="me-modal-body" style="padding:16px 20px">
@@ -2168,12 +2168,12 @@ function _renderBreadthBars(container, rows) {
   html += `<div class="bc-guide">
     <div class="bc-guide-title">How to read this chart</div>
     <ul class="bc-guide-list">
-      <li><strong>Momentum</strong> measures the strength and participation of market movement during each hour. Higher = stronger directional conviction.</li>
-      <li><strong>Rising bars</strong> mean momentum is building — the market is gaining strength and trends are more likely to continue.</li>
-      <li><strong>Falling bars</strong> mean momentum is fading — reversals or ranging conditions may follow.</li>
-      <li><strong>Green bars</strong> highlight 3+ consecutive hourly increases (both ≥10) — a continuation signal suggesting the move has broad support and is likely to persist.</li>
-      <li><strong>Low momentum</strong> (under 15) means weak market activity — avoid trading as moves lack conviction.</li>
-      <li><strong>High momentum</strong> (above 50) with agreement means strong trending conditions — ideal for trend-following entries.</li>
+      <li><strong>Breadth</strong> measures what percentage of 28 pairs are actively moving each hour (above session-calibrated threshold). Higher = broader participation.</li>
+      <li><strong>Rising bars</strong> mean more pairs are engaging — the market is gaining strength and trends are more likely to continue.</li>
+      <li><strong>Falling bars</strong> mean participation is fading — fewer pairs are active, reversals or ranging conditions may follow.</li>
+      <li><strong>Green bars</strong> highlight 3+ consecutive hourly increases (both &ge;10) — a continuation signal suggesting the move has broad support and is likely to persist.</li>
+      <li><strong>Low breadth</strong> (under 15) means weak participation — avoid trading as moves lack conviction.</li>
+      <li><strong>High breadth</strong> (above 50) with agreement means strong trending conditions — ideal for trend-following entries.</li>
     </ul>
   </div>`;
 
@@ -2187,7 +2187,7 @@ function _renderBreadthBars(container, rows) {
   container.innerHTML = html;
 }
 
-// ─── Generic Metric Chart Modals (Movement, Agreement, Volatility, Energy, Liquidity) ─────
+// ─── Generic Metric Chart Modals ────────────────────────────────────────────
 
 const METRIC_CHART_CONFIG = {
   movement: {
@@ -2199,7 +2199,7 @@ const METRIC_CHART_CONFIG = {
       { min: 0,  color: '#ef4444', label: 'Weak movement' },
     ],
     guide: [
-      '<strong>Movement</strong> measures how much currency pairs are physically moving (pip-distance) in each hour. Higher = bigger moves across the board.',
+      '<strong>Movement</strong> measures average pair movement normalized by session-calibrated caps (Asia 0.12%, London 0.15%, NY 0.18%). Higher = bigger price action.',
       '<strong>Rising bars</strong> mean price action is accelerating — pairs are covering more ground and breakout conditions are more likely.',
       '<strong>Falling bars</strong> mean movement is contracting — pairs are slowing down, expect tighter ranges.',
       '<strong>Green bars</strong> highlight 3+ consecutive hourly increases — a sustained movement surge suggesting real directional commitment.',
@@ -2208,24 +2208,24 @@ const METRIC_CHART_CONFIG = {
     ],
   },
   agreement: {
-    field: 'agreement_score', label: 'Directional Agreement', title: 'Hourly Session Agreement',
-    unit: '%', decimals: 0,
+    field: 'agreement_score', label: 'Agreement Score', title: 'Hourly Session Agreement',
+    unit: '', decimals: 0,
     thresholds: [
       { min: 60, color: '#22c55e', label: 'Strong agreement' },
       { min: 35, color: '#f59e0b', label: 'Moderate agreement' },
       { min: 0,  color: '#ef4444', label: 'Weak/conflicting' },
     ],
     guide: [
-      '<strong>Agreement</strong> measures how many currency pairs are moving in the same direction. High agreement = the market has a clear bias.',
-      '<strong>Rising bars</strong> mean currencies are aligning — USD weakness or strength is becoming uniform across pairs.',
+      '<strong>Agreement</strong> = currency alignment x pair alignment x &radic;breadth. Measures whether pairs move consistently with currency strength AND hourly direction matches session trend.',
+      '<strong>Rising bars</strong> mean currencies and pairs are aligning — institutional flow is becoming clear and consistent.',
       '<strong>Falling bars</strong> mean currencies are diverging — mixed signals, no clear theme.',
       '<strong>Green bars</strong> highlight 3+ consecutive hourly increases — sustained directional consensus building.',
-      '<strong>Below 30%</strong>: conflicting signals — avoid directional trades, market is choppy.',
-      '<strong>Above 60%</strong>: strong consensus — trend-following setups are high-probability.',
+      '<strong>Below 25</strong>: conflicting signals — avoid directional trades, market is choppy.',
+      '<strong>Above 50</strong>: strong consensus — trend-following setups are high-probability.',
     ],
   },
   volatility: {
-    field: 'volatility_score', label: 'Volatility Score', title: 'Hourly Session Volatility',
+    field: 'volatility_score', label: 'Volatility Score', title: 'Hourly Session Volatility (Raw)',
     unit: '', decimals: 0,
     thresholds: [
       { min: 60, color: '#ef4444', label: 'High volatility' },
@@ -2233,12 +2233,12 @@ const METRIC_CHART_CONFIG = {
       { min: 0,  color: '#22c55e', label: 'Low volatility' },
     ],
     guide: [
-      '<strong>Volatility</strong> measures how erratic price movement is — large swings, sudden reversals, and whipsaw risk.',
-      '<strong>Rising bars</strong> mean the market is becoming more unpredictable — widen stops or reduce position size.',
-      '<strong>Falling bars</strong> mean the market is calming down — tighter ranges, more predictable movement.',
+      '<strong>Volatility</strong> measures raw hourly range normalized by session-calibrated caps. Does not distinguish organized vs chaotic — see Vol Quality for that.',
+      '<strong>Rising bars</strong> mean the market is becoming more active — larger hourly ranges.',
+      '<strong>Falling bars</strong> mean the market is calming down — tighter ranges, less movement.',
       '<strong>Green bars</strong> highlight 3+ consecutive hourly increases — an escalating volatility surge, risk management critical.',
       '<strong>Below 25</strong>: calm market — standard position sizing and tighter stops work well.',
-      '<strong>Above 60</strong>: high volatility — widen stops, reduce size, or stay out entirely. News events likely.',
+      '<strong>Above 55</strong>: high volatility — check Vol Quality to determine if it is healthy or chaotic.',
     ],
   },
   energy: {
@@ -2250,12 +2250,64 @@ const METRIC_CHART_CONFIG = {
       { min: 0,  color: '#ef4444', label: 'Low energy' },
     ],
     guide: [
-      '<strong>Market Energy</strong> is a composite score combining movement, momentum, and participation into one overall activity reading.',
+      '<strong>Market Energy</strong> = 30% movement + 25% breadth + 20% agreement + 15% directional control + 10% volatility quality, scaled by session quality multiplier.',
       '<strong>Rising bars</strong> mean the forex market is "waking up" — more pairs are active, moves are larger, and there is more to trade.',
       '<strong>Falling bars</strong> mean the market is winding down — fewer opportunities, lower conviction.',
       '<strong>Green bars</strong> highlight 3+ consecutive hourly increases — a building energy wave that often precedes strong trending moves.',
-      '<strong>Below 25</strong>: dead market — little activity, poor fills, avoid trading.',
-      '<strong>Above 60</strong>: energized market — conditions favor active trading with clear setups.',
+      '<strong>Session quality</strong> scales the score: Healthy x1.10, Normal x0.90, Event x0.75, Chaotic x0.65, Dead x0.55.',
+      '<strong>Above 50</strong>: energized market — conditions favor active trading with clear setups.',
+    ],
+  },
+  tradability: {
+    field: 'tradability_score', label: 'Tradability Score', title: 'Hourly Session Tradability',
+    unit: '', decimals: 0,
+    thresholds: [
+      { min: 55, color: '#22c55e', label: 'Tradable / Strong' },
+      { min: 40, color: '#0ea5e9', label: 'Selective' },
+      { min: 25, color: '#f59e0b', label: 'Dangerous' },
+      { min: 0,  color: '#ef4444', label: 'Avoid' },
+    ],
+    guide: [
+      '<strong>Tradability</strong> = geometric mean of (energy, agreement, directional control, breadth) x volatility quality factor. ALL components must be strong — one weak link drags it down.',
+      '<strong>70+</strong>: Strong Trend — high-conviction setups across multiple pairs. Full position sizing.',
+      '<strong>55-69</strong>: Tradable — good conditions for selective entries with standard risk.',
+      '<strong>40-54</strong>: Selective — only take A+ setups with reduced size. Some components are weak.',
+      '<strong>25-39</strong>: Dangerous — poor conditions, high risk of getting stopped out. Avoid or scale down heavily.',
+      '<strong>Below 25</strong>: Avoid — market is dead, chaotic, or structurally broken. No edge.',
+    ],
+  },
+  dircontrol: {
+    field: 'directional_control', label: 'Directional Control', title: 'Hourly Directional Control',
+    unit: '%', decimals: 0,
+    thresholds: [
+      { min: 60, color: '#22c55e', label: 'Strong one-sided' },
+      { min: 35, color: '#f59e0b', label: 'Moderate bias' },
+      { min: 0,  color: '#ef4444', label: 'Split / no bias' },
+    ],
+    guide: [
+      '<strong>Directional Control</strong> measures how one-sided market pressure is — 0% = evenly split bull/bear, 100% = fully one-directional.',
+      '<strong>High control + high breadth</strong> = institutional conviction. Many pairs moving the same way with clear force.',
+      '<strong>Low control</strong> means bulls and bears are evenly matched — choppy, range-bound conditions.',
+      '<strong>Green bars</strong> highlight 3+ consecutive hourly increases — directional conviction building.',
+      '<strong>Below 20%</strong>: split market — avoid directional trades, use range strategies.',
+      '<strong>Above 60%</strong>: strong bias — trend trades and momentum entries have the best edge.',
+    ],
+  },
+  volquality: {
+    field: 'volatility_quality', label: 'Volatility Quality', title: 'Hourly Volatility Quality',
+    unit: '', decimals: 0,
+    thresholds: [
+      { min: 40, color: '#22c55e', label: 'Healthy volatility' },
+      { min: 20, color: '#f59e0b', label: 'Moderate quality' },
+      { min: 0,  color: '#ef4444', label: 'Poor quality' },
+    ],
+    guide: [
+      '<strong>Volatility Quality</strong> = raw volatility x quality multiplier. Healthy x1.0, Normal x0.75, Event x0.50, Chaotic x0.30, Dead x0.20.',
+      '<strong>Healthy volatility</strong> (high vol + high agreement + good directional control) = organized moves you can trade.',
+      '<strong>Chaotic volatility</strong> (high vol + low agreement + low control) = erratic whipsaw — dangerous.',
+      '<strong>Event volatility</strong> = sudden spike vs previous hour. Often news-driven, unpredictable.',
+      '<strong>Below 15</strong>: dead or chaotic — volatility is either absent or harmful. Avoid.',
+      '<strong>Above 40</strong>: quality environment — price action is organized and tradable.',
     ],
   },
   liquidity: {
@@ -2267,7 +2319,7 @@ const METRIC_CHART_CONFIG = {
       { min: 0,  color: '#ef4444', label: 'Low liquidity' },
     ],
     guide: [
-      '<strong>Liquidity</strong> measures how deep and accessible the market is during each session — tighter spreads, better fills, and less slippage.',
+      '<strong>Liquidity</strong> is a derived proxy based on energy magnitude, breadth coherence, directional bias, and flow persistence.',
       '<strong>Asia session</strong> typically has lower liquidity — wider spreads on EUR/USD, GBP pairs.',
       '<strong>London session</strong> has peak liquidity — the best time for most major pairs.',
       '<strong>New York session</strong> has strong liquidity, especially during the London-NY overlap.',
@@ -2786,11 +2838,14 @@ function _meMarketCycleBanner(cycle) {
   return `<div class="me-cycle-banner">
     <span class="me-cycle-banner-label">Market Cycle</span>
     <span class="me-cycle-banner-val" style="--bc:${color}">${label}</span>
-    <button class="me-ai-toggle me-btn-breadth premium-only" onclick="openBreadthChart()">Momentum</button>
-    <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('movement')">Movement</button>
-    <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('agreement')">Agreement</button>
-    <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('volatility')">Volatility</button>
     <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('energy')">Energy</button>
+    <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('tradability')">Tradability</button>
+    <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('movement')">Movement</button>
+    <button class="me-ai-toggle me-btn-breadth premium-only" onclick="openBreadthChart()">Breadth</button>
+    <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('agreement')">Agreement</button>
+    <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('dircontrol')">Dir Control</button>
+    <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('volquality')">Vol Quality</button>
+    <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('volatility')">Volatility</button>
     <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('liquidity')">Liquidity</button>
     <button class="me-ai-toggle me-btn-ai premium-only" onclick="openMeAiAnalysis()">AI Analysis</button>
   </div>`;
@@ -2851,7 +2906,7 @@ function _meHistoryPanel(rows, liveSessions) {
     <div class="sh-col-cycle">Cycle</div>
     <div class="sh-col-metric">E</div>
     <div class="sh-col-metric">Trad</div>
-    <div class="sh-col-metric">Liq</div>
+    <div class="sh-col-metric">DirCtrl</div>
     <div class="sh-col-flow">Flow</div>
     <div class="sh-col-ccy">Currencies</div>
   </div>`;
@@ -2888,8 +2943,8 @@ function _meHistoryPanel(rows, liveSessions) {
       const eng   = Math.round(r.market_energy || 0);
       const trad  = Math.round(r.tradability_score || 0);
       const tradColor = trad >= 65 ? '#22c55e' : trad >= 50 ? '#0ea5e9' : trad >= 35 ? '#f59e0b' : '#64748b';
-      const liq   = Math.round(r.liquidity_score || 0);
-      const liqColor = liq >= 50 ? '#22c55e' : liq >= 30 ? '#eab308' : liq >= 15 ? '#f97316' : '#64748b';
+      const dirCtrl = Math.round(r.directional_control || 0);
+      const dirColor = dirCtrl >= 60 ? '#22c55e' : dirCtrl >= 35 ? '#eab308' : '#64748b';
       const bullPct = Math.round(r.bullish_breadth || 0);
       const bearPct = Math.round(r.bearish_breadth || 0);
 
@@ -2899,7 +2954,7 @@ function _meHistoryPanel(rows, liveSessions) {
         <div class="sh-col-cycle"><span class="sh-dot" style="background:${dot}"></span>${cycle}</div>
         <div class="sh-col-metric">${eng}</div>
         <div class="sh-col-metric" style="color:${tradColor};font-weight:600">${trad}</div>
-        <div class="sh-col-metric" style="color:${liqColor};font-weight:600">${liq}</div>
+        <div class="sh-col-metric" style="color:${dirColor}">${dirCtrl}</div>
         <div class="sh-col-flow"><span class="sh-bull">▲${bullPct}%</span><span class="sh-bear">▼${bearPct}%</span></div>
         <div class="sh-col-ccy">${(r.strongest_ccy||'—').split(',').map(c => `<span class="sh-strong">${c} ↑</span>`).join('')}${(r.weakest_ccy||'—').split(',').map(c => `<span class="sh-weak">${c} ↓</span>`).join('')}</div>
       </div>`;

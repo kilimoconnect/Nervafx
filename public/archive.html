@@ -162,11 +162,15 @@
 
   <main class="arc-main">
     <div class="arc-tabs">
-      <button class="arc-tab active" data-section="momentum" onclick="switchArchiveTab(this)">Momentum</button>
+      <button class="arc-tab active" data-section="energy" onclick="switchArchiveTab(this)">Energy</button>
+      <button class="arc-tab" data-section="tradability" onclick="switchArchiveTab(this)">Tradability</button>
       <button class="arc-tab" data-section="movement" onclick="switchArchiveTab(this)">Movement</button>
+      <button class="arc-tab" data-section="breadth" onclick="switchArchiveTab(this)">Breadth</button>
       <button class="arc-tab" data-section="agreement" onclick="switchArchiveTab(this)">Agreement</button>
+      <button class="arc-tab" data-section="dircontrol" onclick="switchArchiveTab(this)">Dir Control</button>
+      <button class="arc-tab" data-section="volquality" onclick="switchArchiveTab(this)">Vol Quality</button>
       <button class="arc-tab" data-section="volatility" onclick="switchArchiveTab(this)">Volatility</button>
-      <button class="arc-tab" data-section="energy" onclick="switchArchiveTab(this)">Energy</button>
+      <button class="arc-tab" data-section="momentum" onclick="switchArchiveTab(this)">Momentum</button>
       <button class="arc-tab" data-section="liquidity" onclick="switchArchiveTab(this)">Liquidity</button>
       <button class="arc-tab" data-section="history" onclick="switchArchiveTab(this)">Session History</button>
     </div>
@@ -200,39 +204,63 @@
       </div>
     </div>
 
-    <section class="arc-section" id="arc-momentum">
-      <div class="arc-section-header"><i data-lucide="bar-chart-3"></i> Hourly Momentum (Breadth)</div>
-      <div class="arc-section-desc">How many pairs are moving together each hour. Higher = broader market participation. Green bars = 3+ consecutive increases (continuation signal).</div>
-      <div id="arc-momentum-body"><div class="arc-loading"><span class="spinner"></span> Loading momentum data…</div></div>
+    <section class="arc-section" id="arc-energy">
+      <div class="arc-section-header"><i data-lucide="zap"></i> Hourly Market Energy</div>
+      <div class="arc-section-desc">Weighted composite: 30% movement + 25% breadth + 20% agreement + 15% directional control + 10% volatility quality, scaled by session quality (healthy×1.1, chaotic×0.65). Green bars = energy buildup streaks.</div>
+      <div id="arc-energy-body"><div class="arc-loading"><span class="spinner"></span> Loading energy data…</div></div>
+    </section>
+
+    <section class="arc-section" id="arc-tradability" style="display:none">
+      <div class="arc-section-header"><i data-lucide="shield-check"></i> Hourly Tradability</div>
+      <div class="arc-section-desc">Geometric-mean gate of energy, agreement, directional control, and breadth — all components must be strong. Scaled by volatility quality factor. 70+ = Strong Trend, 55+ = Tradable, 40+ = Selective, 25+ = Dangerous, &lt;25 = Avoid.</div>
+      <div id="arc-tradability-body"><div class="arc-loading"><span class="spinner"></span> Loading tradability data…</div></div>
     </section>
 
     <section class="arc-section" id="arc-movement" style="display:none">
       <div class="arc-section-header"><i data-lucide="move"></i> Hourly Movement</div>
-      <div class="arc-section-desc">How much pairs are physically moving in pips each hour. Higher = bigger price action. Green bars = 3+ consecutive increases (building movement).</div>
+      <div class="arc-section-desc">Average pair movement normalized by session-calibrated caps (Asia 0.12%, London 0.15%, NY 0.18%). Higher = bigger price action. Green bars = 3+ consecutive increases.</div>
       <div id="arc-movement-body"><div class="arc-loading"><span class="spinner"></span> Loading movement data…</div></div>
+    </section>
+
+    <section class="arc-section" id="arc-breadth" style="display:none">
+      <div class="arc-section-header"><i data-lucide="bar-chart-3"></i> Hourly Breadth (Participation)</div>
+      <div class="arc-section-desc">Percentage of 28 pairs actively moving each hour (exceeding session-calibrated threshold). Higher = broader market participation. Green bars = sustained breadth buildup.</div>
+      <div id="arc-breadth-body"><div class="arc-loading"><span class="spinner"></span> Loading breadth data…</div></div>
     </section>
 
     <section class="arc-section" id="arc-agreement" style="display:none">
       <div class="arc-section-header"><i data-lucide="check-check"></i> Hourly Agreement</div>
-      <div class="arc-section-desc">How well timeframes agree on direction each hour. High agreement = clear directional bias. Green bars = sustained agreement buildup.</div>
+      <div class="arc-section-desc">Currency alignment × pair alignment × √breadth. Measures whether pairs move consistently with currency strength AND hourly direction matches session trend. High = clear institutional flow.</div>
       <div id="arc-agreement-body"><div class="arc-loading"><span class="spinner"></span> Loading agreement data…</div></div>
     </section>
 
+    <section class="arc-section" id="arc-dircontrol" style="display:none">
+      <div class="arc-section-header"><i data-lucide="compass"></i> Hourly Directional Control</div>
+      <div class="arc-section-desc">How one-sided the market pressure is — 0% = evenly split bull/bear, 100% = fully one-directional. High control + high breadth = institutional conviction.</div>
+      <div id="arc-dircontrol-body"><div class="arc-loading"><span class="spinner"></span> Loading directional control data…</div></div>
+    </section>
+
+    <section class="arc-section" id="arc-volquality" style="display:none">
+      <div class="arc-section-header"><i data-lucide="heart-pulse"></i> Hourly Volatility Quality</div>
+      <div class="arc-section-desc">Volatility score × quality multiplier (Healthy ×1.0, Normal ×0.75, Event ×0.50, Chaotic ×0.30, Dead ×0.20). Rewards organized volatility, penalizes choppy conditions.</div>
+      <div id="arc-volquality-body"><div class="arc-loading"><span class="spinner"></span> Loading volatility quality data…</div></div>
+    </section>
+
     <section class="arc-section" id="arc-volatility" style="display:none">
-      <div class="arc-section-header"><i data-lucide="activity"></i> Hourly Volatility</div>
-      <div class="arc-section-desc">How erratic price action is each hour. Moderate volatility = healthy movement. Very high = choppy/risky. Green bars = 3+ consecutive increases.</div>
+      <div class="arc-section-header"><i data-lucide="activity"></i> Hourly Volatility (Raw)</div>
+      <div class="arc-section-desc">Raw hourly range normalized by session-calibrated caps. Unlike Vol Quality, this doesn't account for whether volatility is organized or chaotic. Green bars = consecutive increases.</div>
       <div id="arc-volatility-body"><div class="arc-loading"><span class="spinner"></span> Loading volatility data…</div></div>
     </section>
 
-    <section class="arc-section" id="arc-energy" style="display:none">
-      <div class="arc-section-header"><i data-lucide="zap"></i> Hourly Market Energy</div>
-      <div class="arc-section-desc">The composite energy score combining movement, momentum, agreement, and volatility. The single most important number. Green bars = energy buildup streaks.</div>
-      <div id="arc-energy-body"><div class="arc-loading"><span class="spinner"></span> Loading energy data…</div></div>
+    <section class="arc-section" id="arc-momentum" style="display:none">
+      <div class="arc-section-header"><i data-lucide="trending-up"></i> Hourly Momentum</div>
+      <div class="arc-section-desc">Hour-over-hour movement delta — positive = movement accelerating, negative = decelerating. Captures rate of change in market activity. Green bars = sustained acceleration.</div>
+      <div id="arc-momentum-body"><div class="arc-loading"><span class="spinner"></span> Loading momentum data…</div></div>
     </section>
 
     <section class="arc-section" id="arc-liquidity" style="display:none">
       <div class="arc-section-header"><i data-lucide="droplets"></i> Session Liquidity</div>
-      <div class="arc-section-desc">Liquidity score per session (not hourly). Higher = tighter spreads, better fills, more reliable signals. Color-coded: green ≥50, yellow ≥30, orange ≥15, grey &lt;15.</div>
+      <div class="arc-section-desc">Derived liquidity proxy per session (not hourly). Based on energy magnitude, breadth coherence, directional bias, and flow persistence. Color-coded: green ≥50, yellow ≥30, orange ≥15, grey &lt;15.</div>
       <div id="arc-liquidity-body"><div class="arc-loading"><span class="spinner"></span> Loading liquidity data…</div></div>
     </section>
 
@@ -272,7 +300,7 @@
   let _arcCustomFrom = null;  // ISO string or null
   let _arcCustomTo = null;
 
-  const ARC_SECTIONS = ['momentum', 'movement', 'agreement', 'volatility', 'energy', 'liquidity', 'history'];
+  const ARC_SECTIONS = ['energy', 'tradability', 'movement', 'breadth', 'agreement', 'dircontrol', 'volquality', 'volatility', 'momentum', 'liquidity', 'history'];
 
   function setArcPeriod(btn) {
     document.querySelectorAll('#arc-period-pills .arc-fpill').forEach(b => b.classList.remove('active'));
@@ -378,13 +406,17 @@
     return _arcSessionLoading;
   }
 
-  // Metric definitions
+  // Metric definitions — V2 institutional model
   const ARC_METRICS = {
-    momentum:   { field: 'breadth_score',    label: 'Momentum',   unit: '',  streakMin: 10, highThresh: 40, midThresh: 20, peakWord: 'momentum' },
-    movement:   { field: 'movement_score',   label: 'Movement',   unit: '',  streakMin: 10, highThresh: 40, midThresh: 20, peakWord: 'movement' },
-    agreement:  { field: 'agreement_score',  label: 'Agreement',  unit: '',  streakMin: 10, highThresh: 50, midThresh: 30, peakWord: 'agreement' },
-    volatility: { field: 'volatility_score', label: 'Volatility', unit: '',  streakMin: 10, highThresh: 45, midThresh: 25, peakWord: 'volatility' },
-    energy:     { field: 'market_energy',    label: 'Energy',     unit: '',  streakMin: 15, highThresh: 50, midThresh: 30, peakWord: 'energy' },
+    energy:     { field: 'market_energy',         label: 'Energy',       unit: '',  streakMin: 15, highThresh: 50, midThresh: 30, peakWord: 'energy' },
+    tradability:{ field: 'tradability_score',      label: 'Tradability',  unit: '',  streakMin: 15, highThresh: 55, midThresh: 35, peakWord: 'tradability' },
+    movement:   { field: 'movement_score',         label: 'Movement',     unit: '',  streakMin: 10, highThresh: 40, midThresh: 20, peakWord: 'movement' },
+    breadth:    { field: 'breadth_score',           label: 'Breadth',      unit: '',  streakMin: 10, highThresh: 40, midThresh: 20, peakWord: 'breadth' },
+    agreement:  { field: 'agreement_score',         label: 'Agreement',    unit: '',  streakMin: 10, highThresh: 50, midThresh: 30, peakWord: 'agreement' },
+    dircontrol: { field: 'directional_control',     label: 'Dir Control',  unit: '',  streakMin: 10, highThresh: 50, midThresh: 25, peakWord: 'directional control' },
+    volquality: { field: 'volatility_quality',      label: 'Vol Quality',  unit: '',  streakMin: 10, highThresh: 40, midThresh: 20, peakWord: 'volatility quality' },
+    volatility: { field: 'volatility_score',        label: 'Volatility',   unit: '',  streakMin: 10, highThresh: 45, midThresh: 25, peakWord: 'volatility' },
+    momentum:   { field: 'momentum_score',          label: 'Momentum',     unit: '',  streakMin:  3, highThresh: 10, midThresh:  3, peakWord: 'momentum', canBeNegative: true },
   };
 
   async function loadMetricArchive(metricKey) {
@@ -420,7 +452,10 @@
     const dates = Object.keys(byDate)
       .filter(d => byDate[d].length >= 1)
       .sort((a, b) => b.localeCompare(a));
-    const maxVal = Math.max(80, ...rows.map(r => parseFloat(r[metric.field]) || 0));
+    const allVals = rows.map(r => parseFloat(r[metric.field]) || 0);
+    const maxVal = metric.canBeNegative
+      ? Math.max(30, ...allVals.map(v => Math.abs(v)))
+      : Math.max(80, ...allVals);
 
     let html = '<div class="bc-chart-wrap">';
 
@@ -470,20 +505,28 @@
       for (let i = 0; i < bars.length; i++) {
         const b = bars[i];
         const color = SESS_COLOR[b.session] || '#64748b';
-        const pct = Math.round((b.val / maxVal) * 100);
+        const absVal = Math.abs(b.val);
+        const pct = Math.round((absVal / maxVal) * 100);
         const localTime = new Date(b.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
         const localHour = localTime.slice(0, 2);
         const highlighted = streaks.has(i);
-        const barColor = highlighted ? '#22c55e' : color;
-        const cls = highlighted ? 'bc-bar bc-bar-streak' : 'bc-bar';
+        // For negative metrics (momentum): green = positive, red = negative
+        let barColor;
+        if (metric.canBeNegative) {
+          barColor = b.val > 0 ? '#22c55e' : b.val < 0 ? '#ef4444' : '#475569';
+        } else {
+          barColor = highlighted ? '#22c55e' : color;
+        }
+        const cls = highlighted && !metric.canBeNegative ? 'bc-bar bc-bar-streak' : 'bc-bar';
+        const displayVal = metric.canBeNegative && b.val > 0 ? `+${b.val}` : `${b.val}`;
 
         if (b.session !== prevSess && prevSess !== '') {
           html += '<div class="bc-sess-divider"></div>';
         }
         prevSess = b.session;
 
-        html += `<div class="${cls}" title="${SESS_LABEL[b.session] || b.session}: ${b.val} at ${localTime} ${tzLabel}">
-          <span class="bc-bar-val">${b.val}</span>
+        html += `<div class="${cls}" title="${SESS_LABEL[b.session] || b.session}: ${displayVal} at ${localTime} ${tzLabel}">
+          <span class="bc-bar-val" ${metric.canBeNegative && b.val < 0 ? 'style="color:#ef4444"' : ''}>${displayVal}</span>
           <div class="bc-bar-inner">
             <div class="bc-bar-fill" style="height:${pct}%;background:${barColor}"></div>
           </div>
@@ -503,19 +546,32 @@
       const peakSess = SESS_LABEL[peakHour.session] || peakHour.session;
 
       const dayLines = [];
-      if (dayAvg >= metric.highThresh) dayLines.push(`Strong ${metric.peakWord} day (avg ${dayAvg}) — sustained activity throughout.`);
-      else if (dayAvg >= metric.midThresh) dayLines.push(`Moderate ${metric.peakWord} (avg ${dayAvg}) — some sessions active, others quiet.`);
-      else dayLines.push(`Low ${metric.peakWord} (avg ${dayAvg}) — most of the day was quiet.`);
-      dayLines.push(`Peak ${metric.peakWord} of ${dayMax} at ${peakTime} during ${peakSess}.`);
-      if (streakCount >= 3) dayLines.push(`Buildup signal detected (${streakCount} bars in streak) — sustained ${metric.peakWord} increase.`);
-      else dayLines.push(`No sustained buildup — ${metric.peakWord} did not sustain 3+ consecutive increases.`);
+      if (metric.canBeNegative) {
+        // Momentum: delta metric, avg near 0 is normal
+        const posCount = vals.filter(v => v > 0).length;
+        const negCount = vals.filter(v => v < 0).length;
+        if (dayAvg > metric.highThresh) dayLines.push(`Accelerating day (avg ${dayAvg > 0 ? '+' : ''}${dayAvg}) — movement building throughout.`);
+        else if (dayAvg < -metric.highThresh) dayLines.push(`Decelerating day (avg ${dayAvg}) — movement declining throughout.`);
+        else dayLines.push(`Mixed ${metric.peakWord} (avg ${dayAvg > 0 ? '+' : ''}${dayAvg}) — ${posCount} accelerating, ${negCount} decelerating hours.`);
+        dayLines.push(`Peak acceleration: +${dayMax} at ${peakTime} during ${peakSess}.`);
+      } else {
+        if (dayAvg >= metric.highThresh) dayLines.push(`Strong ${metric.peakWord} day (avg ${dayAvg}) — sustained activity throughout.`);
+        else if (dayAvg >= metric.midThresh) dayLines.push(`Moderate ${metric.peakWord} (avg ${dayAvg}) — some sessions active, others quiet.`);
+        else dayLines.push(`Low ${metric.peakWord} (avg ${dayAvg}) — most of the day was quiet.`);
+        dayLines.push(`Peak ${metric.peakWord} of ${dayMax} at ${peakTime} during ${peakSess}.`);
+        if (streakCount >= 3) dayLines.push(`Buildup signal detected (${streakCount} bars in streak) — sustained ${metric.peakWord} increase.`);
+        else dayLines.push(`No sustained buildup — ${metric.peakWord} did not sustain 3+ consecutive increases.`);
+      }
 
       for (const g of sessGroups) {
         const sBars = bars.filter(b => b.session === g.session);
         const sAvg = Math.round(sBars.reduce((a, b) => a + b.val, 0) / sBars.length);
         const sMax = Math.max(...sBars.map(b => b.val));
         const sLabel = SESS_LABEL[g.session] || g.session;
-        if (sAvg >= metric.highThresh) dayLines.push(`${sLabel}: strong session (avg ${sAvg}, peak ${sMax}).`);
+        if (metric.canBeNegative) {
+          const sFmt = sAvg > 0 ? `+${sAvg}` : `${sAvg}`;
+          dayLines.push(`${sLabel}: avg ${sFmt}, peak +${sMax}.`);
+        } else if (sAvg >= metric.highThresh) dayLines.push(`${sLabel}: strong session (avg ${sAvg}, peak ${sMax}).`);
         else if (sAvg >= metric.midThresh) dayLines.push(`${sLabel}: moderate (avg ${sAvg}, peak ${sMax}).`);
         else dayLines.push(`${sLabel}: quiet session (avg ${sAvg}, peak ${sMax}).`);
       }
@@ -688,8 +744,8 @@
       <div class="sh-col-sess">Session</div>
       <div class="sh-col-cycle">Cycle</div>
       <div class="sh-col-metric">E</div>
-      <div class="sh-col-metric">Mom</div>
-      <div class="sh-col-metric">Liq</div>
+      <div class="sh-col-metric">Trad</div>
+      <div class="sh-col-metric">DirCtrl</div>
       <div class="sh-col-flow">Flow</div>
       <div class="sh-col-ccy">Currencies</div>
     </div>`;
@@ -718,15 +774,16 @@
             <div class="sh-col-metric sh-na">—</div>
             <div class="sh-col-flow sh-na">—</div>
             <div class="sh-col-ccy sh-na">—</div>
-          </div>`;
+          </div>`;  // 7 columns: Date, Session, Cycle, E, Trad, DirCtrl, Flow, Currencies
         }
 
         const dot = CYCLE_DOT[r.energy_cycle] || '#64748b';
         const cycle = (ME_CYCLE_LABEL[r.energy_cycle] || r.energy_cycle || '—').replace(/_/g, ' ');
         const eng = Math.round(r.market_energy || 0);
-        const brd = Math.round(r.breadth_score || 0);
-        const liq = Math.round(r.liquidity_score || 0);
-        const liqColor = liq >= 50 ? '#22c55e' : liq >= 30 ? '#eab308' : liq >= 15 ? '#f97316' : '#64748b';
+        const trad = Math.round(r.tradability_score || 0);
+        const tradColor = trad >= 65 ? '#22c55e' : trad >= 50 ? '#0ea5e9' : trad >= 35 ? '#f59e0b' : '#64748b';
+        const dirCtrl = Math.round(r.directional_control || 0);
+        const dirColor = dirCtrl >= 60 ? '#22c55e' : dirCtrl >= 35 ? '#eab308' : '#64748b';
         const bullPct = Math.round(r.bullish_breadth || 0);
         const bearPct = Math.round(r.bearish_breadth || 0);
 
@@ -735,8 +792,8 @@
           <div class="sh-col-sess" style="color:${SESS_COLOR[key]}">${SESS_LABEL[key]}</div>
           <div class="sh-col-cycle"><span class="sh-dot" style="background:${dot}"></span>${cycle}</div>
           <div class="sh-col-metric">${eng}</div>
-          <div class="sh-col-metric">${brd}</div>
-          <div class="sh-col-metric" style="color:${liqColor};font-weight:600">${liq}</div>
+          <div class="sh-col-metric" style="color:${tradColor};font-weight:600">${trad}</div>
+          <div class="sh-col-metric" style="color:${dirColor}">${dirCtrl}</div>
           <div class="sh-col-flow"><span class="sh-bull">▲${bullPct}%</span><span class="sh-bear">▼${bearPct}%</span></div>
           <div class="sh-col-ccy">${(r.strongest_ccy||'—').split(',').map(c => `<span class="sh-strong">${c} ↑</span>`).join('')}${(r.weakest_ccy||'—').split(',').map(c => `<span class="sh-weak">${c} ↓</span>`).join('')}</div>
         </div>`;
@@ -751,11 +808,15 @@
   // ─── Init ─────────────────────────────────────────────────────────────────────
 
   Promise.all([
-    loadMetricArchive('momentum'),
-    loadMetricArchive('movement'),
-    loadMetricArchive('agreement'),
-    loadMetricArchive('volatility'),
     loadMetricArchive('energy'),
+    loadMetricArchive('tradability'),
+    loadMetricArchive('movement'),
+    loadMetricArchive('breadth'),
+    loadMetricArchive('agreement'),
+    loadMetricArchive('dircontrol'),
+    loadMetricArchive('volquality'),
+    loadMetricArchive('volatility'),
+    loadMetricArchive('momentum'),
     loadLiquidityArchive(),
     loadHistoryArchive(),
   ]);
