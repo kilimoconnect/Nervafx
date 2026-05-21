@@ -25,6 +25,7 @@ const V2_THRESHOLDS = [
   { key: 'false_breakout_risk', label: 'FBRisk',  max: 15, warnAbove: 30 },
 ];
 const V2_FIRE_PCT = 0.60;
+const V2_MANDATORY = new Set(['market_energy', 'tradability_score', 'movement_score', 'breadth_score', 'agreement_score']);
 
 function evaluateConfluence(hourlyRow) {
   if (!hourlyRow) return null;
@@ -41,7 +42,8 @@ function evaluateConfluence(hourlyRow) {
   const passed = results.filter(r => r.pass).length;
   const total  = results.length;
   const pct    = total > 0 ? passed / total : 0;
-  return { results, passed, total, pct, fired: pct >= V2_FIRE_PCT };
+  const mandatoryMet = results.filter(r => V2_MANDATORY.has(r.key)).every(r => r.pass);
+  return { results, passed, total, pct, fired: pct >= V2_FIRE_PCT && mandatoryMet, mandatoryMet };
 }
 
 // ── Deduplication ────────────────────────────────────────────────────────────

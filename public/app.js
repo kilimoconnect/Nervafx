@@ -1267,6 +1267,7 @@ const V2_THRESHOLDS = [
 ];
 
 const V2_FIRE_PCT = 0.60; // 60% of thresholds must pass to show notification
+const V2_MANDATORY = new Set(['market_energy', 'tradability_score', 'movement_score', 'breadth_score', 'agreement_score']);
 
 // Global confluence state — drives section gating
 let _v2Confluence = { fired: false, passed: 0, total: 11, pct: 0, results: [] };
@@ -1296,13 +1297,13 @@ function applyV2Gate() {
         overlay.innerHTML = `
           <span class="v2-gate-icon">⏸</span>
           <span class="v2-gate-title">Engine Confluence Not Met</span>
-          <span class="v2-gate-desc">Waiting for 60%+ engine alignment — currently ${_v2Confluence.passed}/${_v2Confluence.total} passing. Market conditions do not support high-probability setups right now.</span>
+          <span class="v2-gate-desc">${!_v2Confluence.mandatoryMet ? 'Mandatory engines (Energy, Trad, Mov, Brd, Agr) not all passing.' : `Waiting for 60%+ engine alignment — currently ${_v2Confluence.passed}/${_v2Confluence.total} passing.`} Market conditions do not support high-probability setups right now.</span>
           <span class="v2-gate-chips" id="v2g-chips-${id}"></span>`;
         section.style.position = 'relative';
         section.appendChild(overlay);
       } else {
         overlay.querySelector('.v2-gate-desc').textContent =
-          `Waiting for 60%+ engine alignment — currently ${_v2Confluence.passed}/${_v2Confluence.total} passing. Market conditions do not support high-probability setups right now.`;
+          (!_v2Confluence.mandatoryMet ? 'Mandatory engines (Energy, Trad, Mov, Brd, Agr) not all passing. ' : `Waiting for 60%+ engine alignment — currently ${_v2Confluence.passed}/${_v2Confluence.total} passing. `) + 'Market conditions do not support high-probability setups right now.';
       }
       // Mini chips showing pass/fail
       const chipsEl = overlay.querySelector(`[id="v2g-chips-${id}"]`);
@@ -1353,9 +1354,10 @@ function evaluateV2Thresholds(hourlyRow) {
   const passed = results.filter(r => r.pass).length;
   const total  = results.length;
   const pct    = total > 0 ? passed / total : 0;
-  const fired  = pct >= V2_FIRE_PCT;
+  const mandatoryMet = results.filter(r => V2_MANDATORY.has(r.key)).every(r => r.pass);
+  const fired  = pct >= V2_FIRE_PCT && mandatoryMet;
 
-  return { results, passed, total, pct, fired };
+  return { results, passed, total, pct, fired, mandatoryMet };
 }
 
 function updateV2ThresholdBar(hourlyRows) {
@@ -3623,7 +3625,9 @@ function renderJrnConfluenceSection(hourlyRow) {
 
   const explanation = eval_.fired
     ? `${eval_.passed} of ${eval_.total} engines passing (${Math.round(eval_.pct * 100)}%). Market scanners, trade setups, and impulse detection are active for this hour.`
-    : `Only ${eval_.passed} of ${eval_.total} engines passing (${Math.round(eval_.pct * 100)}%) — need ${Math.ceil(V2_FIRE_PCT * eval_.total)} (60%) for activation. Trading sections are gated until conditions improve.`;
+    : !eval_.mandatoryMet
+      ? `Mandatory engines (Energy, Trad, Mov, Brd, Agr) not all passing — all 5 must pass. Currently ${eval_.passed}/${eval_.total} overall (${Math.round(eval_.pct * 100)}%). Trading sections gated.`
+      : `Only ${eval_.passed} of ${eval_.total} engines passing (${Math.round(eval_.pct * 100)}%) — need ${Math.ceil(V2_FIRE_PCT * eval_.total)} (60%) for activation. Trading sections are gated until conditions improve.`;
 
   // Build chip rows — group passes and fails
   const passes = eval_.results.filter(r => r.pass);

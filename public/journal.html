@@ -570,6 +570,7 @@
     { key: 'false_breakout_risk', label: 'FBRisk',  max: 15, warnAbove: 30 },
   ];
   const V2_FIRE_PCT = 0.60;
+  const V2_MANDATORY = new Set(['market_energy', 'tradability_score', 'movement_score', 'breadth_score', 'agreement_score']);
 
   function evaluateV2Thresholds(hourlyRow) {
     if (!hourlyRow) return null;
@@ -586,7 +587,8 @@
     const passed = results.filter(r => r.pass).length;
     const total  = results.length;
     const pct    = total > 0 ? passed / total : 0;
-    return { results, passed, total, pct, fired: pct >= V2_FIRE_PCT };
+    const mandatoryMet = results.filter(r => V2_MANDATORY.has(r.key)).every(r => r.pass);
+    return { results, passed, total, pct, fired: pct >= V2_FIRE_PCT && mandatoryMet, mandatoryMet };
   }
 
   function renderJrnConfluenceSection(hourlyRow) {
@@ -600,7 +602,9 @@
       : '🔴 NOT MET — Market conditions insufficient';
     const explanation = eval_.fired
       ? `${eval_.passed} of ${eval_.total} engines passing (${Math.round(eval_.pct * 100)}%). Market scanners, trade setups, and impulse detection are active for this hour.`
-      : `Only ${eval_.passed} of ${eval_.total} engines passing (${Math.round(eval_.pct * 100)}%) — need ${Math.ceil(V2_FIRE_PCT * eval_.total)} (60%) for activation. Trading sections are gated until conditions improve.`;
+      : !eval_.mandatoryMet
+        ? `Mandatory engines (Energy, Trad, Mov, Brd, Agr) not all passing — all 5 must pass. Currently ${eval_.passed}/${eval_.total} overall (${Math.round(eval_.pct * 100)}%). Trading sections gated.`
+        : `Only ${eval_.passed} of ${eval_.total} engines passing (${Math.round(eval_.pct * 100)}%) — need ${Math.ceil(V2_FIRE_PCT * eval_.total)} (60%) for activation. Trading sections are gated until conditions improve.`;
 
     const passes = eval_.results.filter(r => r.pass);
     const fails  = eval_.results.filter(r => !r.pass);
