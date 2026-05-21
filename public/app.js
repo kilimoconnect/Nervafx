@@ -2874,10 +2874,8 @@ function renderMarketEnergy(sessions, expansionPressure, marketCycle, currentSes
     return;
   }
 
-  // Live cards: only show today's sessions, blank if not yet active
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const todaySessions = sessions.filter(s => (s.session_date || '').slice(0, 10) === todayStr);
-  const byName = Object.fromEntries(todaySessions.map(s => [s.session_name, s]));
+  // Live cards: use whatever sessions the API returned (today or yesterday fallback)
+  const byName = Object.fromEntries(sessions.map(s => [s.session_name, s]));
 
   // Last 3 hourly candles (across all sessions) for the active session card
   const allHourly = (hourlyRows || [])
@@ -2905,7 +2903,7 @@ function renderMarketEnergy(sessions, expansionPressure, marketCycle, currentSes
       ${sorted.map(({ name }) => _meSessionCard(name, byName[name] || null, _meSessionStatus(name, currentSession), lastThreeHourly)).join('')}
     </div>
     ${_meExpansionPressurePanel(expansionPressure)}
-    ${_meHistoryPanel(historyRows, todaySessions)}`;
+    ${_meHistoryPanel(historyRows, sessions)}`;
 
   fetchMarketEnergyNarrative(sessions, expansionPressure, marketCycle);
 }
