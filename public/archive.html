@@ -1329,7 +1329,7 @@
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, W, H);
 
-    const PAD_L = 40, PAD_R = 10, PAD_T = 14, PAD_B = 22;
+    const PAD_L = 40, PAD_R = 36, PAD_T = 14, PAD_B = 22;
     const cw = W - PAD_L - PAD_R;
     const ch = H - PAD_T - PAD_B;
 
@@ -1393,7 +1393,8 @@
       ctx.fillText(lt, xPx, H - 4);
     }
 
-    // Draw lines for each currency
+    // Draw lines + collect endpoints for labels
+    const endpoints = [];
     for (const ccy of CCY_ORDER) {
       if (hiddenCcys.has(ccy)) continue;
       const color = CCY_COLORS[ccy];
@@ -1402,6 +1403,7 @@
       ctx.lineJoin = 'round';
       ctx.beginPath();
       let started = false;
+      let lastX = 0, lastY = 0;
       for (let i = 0; i < pts.length; i++) {
         const v = pts[i][ccy];
         if (v === undefined) continue;
@@ -1409,28 +1411,33 @@
         const yPx = PAD_T + ch - ((v - yMin) / yRange) * ch;
         if (!started) { ctx.moveTo(xPx, yPx); started = true; }
         else ctx.lineTo(xPx, yPx);
+        lastX = xPx; lastY = yPx;
       }
       ctx.stroke();
 
-      // Endpoint dot + label
-      for (let i = pts.length - 1; i >= 0; i--) {
-        const v = pts[i][ccy];
-        if (v === undefined) continue;
-        const xPx = PAD_L + (pts.length > 1 ? (i / (pts.length - 1)) * cw : cw / 2);
-        const yPx = PAD_T + ch - ((v - yMin) / yRange) * ch;
+      // Endpoint dot
+      if (started) {
         ctx.fillStyle = color;
         ctx.beginPath();
-        ctx.arc(xPx, yPx, 2.5, 0, Math.PI * 2);
+        ctx.arc(lastX, lastY, 2.5, 0, Math.PI * 2);
         ctx.fill();
-        // Currency label at end
-        if (i === pts.length - 1 || i >= pts.length - 2) {
-          ctx.font = 'bold 8px Inter, sans-serif';
-          ctx.fillStyle = color;
-          ctx.textAlign = 'left';
-          ctx.fillText(ccy, xPx + 5, yPx + 3);
-        }
-        break;
+        endpoints.push({ ccy, color, x: lastX, y: lastY });
       }
+    }
+
+    // Draw endpoint labels — de-overlap vertically
+    endpoints.sort((a, b) => a.y - b.y);
+    const LBL_H = 10;
+    for (let i = 1; i < endpoints.length; i++) {
+      if (endpoints[i].y - endpoints[i - 1].y < LBL_H) {
+        endpoints[i].y = endpoints[i - 1].y + LBL_H;
+      }
+    }
+    ctx.font = 'bold 9px Inter, sans-serif';
+    ctx.textAlign = 'left';
+    for (const ep of endpoints) {
+      ctx.fillStyle = ep.color;
+      ctx.fillText(ep.ccy, ep.x + 6, ep.y + 3);
     }
   }
 
