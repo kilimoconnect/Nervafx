@@ -190,7 +190,7 @@ function processHours(hourKeys, byTime) {
       sessionVolList    = [];
 
       for (const [inst, c] of Object.entries(candles)) {
-        sessionOpenPrices[inst] = c.close;
+        sessionOpenPrices[inst] = c.open;  // use candle OPEN, not close — close=open makes rawDir=0
         sessionHigh[inst]       = c.high;
         sessionLow[inst]        = c.low;
       }
@@ -486,7 +486,7 @@ async function fetchBacktestCandles(fromDate) {
     while (true) {
       let query = supabase
         .from('backtest_candles')
-        .select('time, high, low, close')
+        .select('time, open, high, low, close')
         .eq('instrument', instrument)
         .eq('timeframe', 'H1')
         .eq('complete', true)
@@ -505,6 +505,7 @@ async function fetchBacktestCandles(fromDate) {
         const t = new Date(c.time).toISOString();
         if (!byTime[t]) byTime[t] = {};
         byTime[t][instrument] = {
+          open:  parseFloat(c.open),
           close: parseFloat(c.close),
           high:  parseFloat(c.high),
           low:   parseFloat(c.low),
