@@ -2,6 +2,52 @@ const OpenAI = require('openai');
 const { supabase } = require('./supabase');
 const { getCurrentSession, applySessionFilter } = require('./sessionEngine');
 
+// ── Engine Confluence (V2 thresholds — must stay in sync with public/app.js) ──
+const V2_THRESHOLDS = [
+  { key: 'market_energy',       label: 'Energy',  min: 50, optimal: 65 },
+  { key: 'tradability_score',   label: 'Trad',    min: 55, optimal: 70 },
+  { key: 'movement_score',      label: 'Mov',     min: 35, optimal: 70 },
+  { key: 'breadth_score',       label: 'Brd',     min: 65, optimal: 80 },
+  { key: 'agreement_score',     label: 'Agr',     min: 60, optimal: 75 },
+  { key: 'directional_control', label: 'DirCtrl', min: 30, optimal: 45 },
+  { key: 'volatility_quality',  label: 'VolQ',    min: 30, optimal: 60 },
+  { key: 'volatility_score',    label: 'Vol',     min: 40, optimal: 70 },
+  { key: 'momentum_score',      label: 'Mom',     min: 30, optimal: 60, signed: true },
+  { key: 'chaos_score',         label: 'Chaos',   max: 35, warnAbove: 50 },
+  { key: 'false_breakout_risk', label: 'FBRisk',  max: 15, warnAbove: 30 },
+];
+const V2_FIRE_PCT = 0.60;
+const SKIP_SESSIONS = new Set(['LOW_LIQUIDITY', 'DEAD_HOURS']);
+const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York' };
+
+function evaluateConfluence(hourlyRow) {
+  if (!hourlyRow) return null;
+  const results = [];
+  for (const t of V2_THRESHOLDS) {
+    const val = parseFloat(hourlyRow[t.key]) || 0;
+    const pass = t.max !== undefined ? val <= t.max : val >= t.min;
+    results.push({ key: t.key, label: t.label, value: Math.round(val),
+      threshold: t.min !== undefined ? t.min : t.max, pass,
+      inverted: t.max !== undefined, signed: t.signed });
+  }
+  const passed = results.filter(r => r.pass).length;
+  const total  = results.length;
+  const pct    = total > 0 ? passed / total : 0;
+  return { results, passed, total, pct, fired: pct >= V2_FIRE_PCT };
+}
+
+async function getLatestHourlyRow() {
+  const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  const { data } = await supabase
+    .from('hourly_session_activity')
+    .select('*')
+    .gte('time_utc', twoHoursAgo)
+    .order('time_utc', { ascending: false })
+    .limit(5);
+  if (!data?.length) return null;
+  return data.find(r => !SKIP_SESSIONS.has(r.session_name)) || null;
+}
+
 function getClient() {
   return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 }
@@ -338,7 +384,7 @@ function describeSentiment(s, base, quote) {
 
 // ─── Core analysis ────────────────────────────────────────────────────────────
 
-async function analyzeSetup(instrument, state, sentimentRow) {
+async function analyzeSetup(instrument, state, sentimentRow, confluenceData) {
   const { base, quote, baseArr, quoteArr, spread3h, spread6h, spread12h }
     = await getHistory(instrument);
 
@@ -371,7 +417,7 @@ async function analyzeSetup(instrument, state, sentimentRow) {
         ? `${sessionFilter.session_delta} pts — ${base}/${quote} is off-peak this session`
         : 'neutral — no pair-specific session edge';
 
-  console.log(`[AI] ${instrument} → ${metrics.phase} ${metrics.completion}% cp:${metrics.counterPressureLabel} clean:${metrics.cleanlinessLabel} macro:${macroAlignment} session:${sessionObj.session}(${sessionObj.quality}) participation:${marketParticipation} | comp=${metrics.compressionCycles}cyc depth=${metrics.depthRatio.toFixed(2)} decel=${metrics.decelCycles}/8`);
+  console.log(`[AI] ${instrument} → ${metrics.phase} ${metrics.completion}% cp:${metrics.counterPressureLabel} clean:${metrics.cleanlinessLabel} macro:${macroAlignment} confluence:${confStatus} session:${sessionObj.session}(${sessionObj.quality}) participation:${marketParticipation} | comp=${metrics.compressionCycles}cyc depth=${metrics.depthRatio.toFixed(2)} decel=${metrics.decelCycles}/8`);
 
   const client = getClient();
 
@@ -395,6 +441,32 @@ SESSION / MARKET TIMING:
 - Continuation support: ${continuationSupport ? 'YES — session conditions support continuation trades' : 'REDUCED — session conditions are not optimal for continuation'}
 `;
 
+  // ── Engine Confluence context ───────────────────────────────────────────────
+  const conf = confluenceData;
+  const confStatus = conf
+    ? (conf.fired ? (conf.pct >= 0.80 ? 'STRONG' : 'ACTIVE') : 'NOT_MET')
+    : 'UNAVAILABLE';
+  const confEngineLines = conf
+    ? conf.results.map(r => {
+        const icon = r.pass ? '✓' : '✗';
+        const dir = r.inverted ? '≤' : '≥';
+        const prefix = r.signed && r.value > 0 ? '+' : '';
+        return `  ${icon} ${r.label}: ${prefix}${r.value} (threshold: ${dir}${r.threshold})`;
+      }).join('\n')
+    : '  No hourly engine data available';
+  const confPassingStr = conf ? conf.results.filter(r => r.pass).map(r => r.label).join(', ') : 'N/A';
+  const confFailingStr = conf ? conf.results.filter(r => !r.pass).map(r => r.label).join(', ') : 'N/A';
+
+  const confluenceSection = `
+ENGINE CONFLUENCE (market-wide health — 11 engines, fires at 60%+):
+- Status: ${confStatus} | ${conf ? `${conf.passed}/${conf.total} engines passing (${Math.round(conf.pct * 100)}%)` : 'data unavailable'}
+- Passing: ${confPassingStr}
+- Failing: ${confFailingStr}
+${confEngineLines}
+- When ACTIVE/STRONG: market conditions broadly support high-probability setups — scanners, impulse detection, and trade watchlist are enabled
+- When NOT_MET: market conditions are insufficient — trading sections are gated, setups carry higher structural risk
+`;
+
   const response = await client.chat.completions.create({
     model: 'gpt-4o-mini',
     max_tokens: 1200,
@@ -409,17 +481,24 @@ The engine computes all numbers deterministically. Your job is to write what the
 STRUCTURAL RULES:
 1. NEVER include raw decimal numbers (e.g. 0.00136, -0.00043). Forbidden.
 2. Cycle counts are allowed (e.g. "6 H1 cycles", "last 8 cycles").
-3. Use engine vocabulary: 3H compression, 6H spread, 12H alignment, spread lifecycle, re-expansion, compression velocity, counter-trend force.
+3. Use engine vocabulary: 3H compression, 6H spread, 12H alignment, spread lifecycle, re-expansion, compression velocity, counter-trend force, engine confluence.
 4. Lifecycle phase and counter_pressure are engine-determined and FIXED — text must align with them.
 5. No trade recommendations. No entry/exit signals.
+
+ENGINE CONFLUENCE:
+The system measures 11 market health engines every hour: Energy, Tradability, Movement, Breadth, Agreement, Directional Control, Volatility Quality, Volatility, Momentum, Chaos (inverted), False Breakout Risk (inverted). When 60%+ pass their thresholds, Engine Confluence is ACTIVE and the market broadly supports high-probability setups. At 80%+ it is STRONG. Below 60% it is NOT_MET and trading sections are gated.
+- When confluence is ACTIVE/STRONG: reference it as a positive structural factor — "engine confluence is active, market conditions broadly supportive"
+- When confluence is NOT_MET: reference the specific failing engines and frame the setup as carrying elevated structural risk — "engine confluence not met, [failing engines] below threshold — setup-level structure exists but market-wide conditions are insufficient"
+- confluence_assessment must ALWAYS reflect the actual confluence status and name the key failing or passing engines
 
 LANGUAGE RULES — most important:
 6. NEVER use predictive language: "will", "leads to", "must", "should move", "expect to see", "typically results in". These imply future prediction. They are forbidden.
 7. ALWAYS use environment language: "environment remains supportive for", "conditions are consistent with", "flow is currently weighted toward", "regime provides context for", "weight of capital appears toward".
-8. STRICT SEPARATION — structure sections (structure_analysis, trend_assessment, pullback_quality_text, momentum_shift) must contain NO macro references. They describe price structure only.
+8. STRICT SEPARATION — structure sections (structure_analysis, trend_assessment, pullback_quality_text, momentum_shift) must contain NO macro references and NO confluence references. They describe price structure only.
 9. STRICT SEPARATION — flow_of_money must contain NO cycle counts or spread values. It describes macro capital positioning only.
 10. Write as if briefing a senior analyst — precise, direct, no filler phrases.
-11. session_context describes ONLY market timing and participation — no price structure, no macro regime references, no predictions. Use: "participation environment is", "session conditions are consistent with", "timing environment supports".`,
+11. session_context describes ONLY market timing and participation — no price structure, no macro regime references, no predictions.
+12. confluence_assessment describes ONLY the 11-engine market health check — which engines are passing/failing and what that means for setup viability. No price structure, no macro regime.`,
       },
       {
         role: 'user',
@@ -442,26 +521,28 @@ STRUCTURAL FACTS:
 
 SCORES (engine-computed, use as-is):
 { "continuation": ${metrics.scores.continuation}, "trend_health": ${metrics.scores.trend_health}, "pullback_quality": ${metrics.scores.pullback_quality}, "cleanliness": ${metrics.scores.cleanliness} }
-${macroSection}${sessionSection}
+${macroSection}${sessionSection}${confluenceSection}
 Return this exact JSON. All text: no raw decimals, use cycle counts, engine terminology, environment language only:
 {
   "structure_type": "HEALTHY_PULLBACK"|"WEAK_PULLBACK"|"STRONG_TREND"|"REVERSAL_RISK"|"CHOPPY"|"EXHAUSTED",
   "market_quality": "CLEAN"|"NOISY"|"CHOPPY",
   "warning": <null or one short observation — no decimals, no predictions>,
-  "summary": <one sentence: name 3H/6H behavior, cycle count, and whether macro flow is supportive or neutral — no decimals, no predictions>,
+  "summary": <one sentence: name 3H/6H behavior, cycle count, confluence status, and whether macro flow is supportive or neutral — no decimals, no predictions>,
   "details": {
     "lifecycle_phase": "${desc.phase}",
     "lifecycle_completion": ${desc.completion},
     "counter_pressure": "${desc.counterPressureLabel}",
+    "engine_confluence": "${confStatus}",
     "scores": { "continuation": ${metrics.scores.continuation}, "trend_health": ${metrics.scores.trend_health}, "pullback_quality": ${metrics.scores.pullback_quality}, "cleanliness": ${metrics.scores.cleanliness} },
-    "structure_analysis": <2 sentences: pure price structure — describe 3H vs 6H spread relationship, cite cycle counts — NO macro references>,
+    "structure_analysis": <2 sentences: pure price structure — describe 3H vs 6H spread relationship, cite cycle counts — NO macro references, NO confluence references>,
     "trend_assessment": <2 sentences: how ${base} and ${quote} strength behaved over 48H — pure structure, NO macro references>,
     "pullback_quality_text": <1-2 sentences: characterize compression depth and duration — NO macro references>,
     "momentum_shift": <1-2 sentences: describe compression velocity — fading or building — NO macro references>,
     "flow_of_money": <2-3 sentences: describe where capital weight is currently positioned at the macro level — name which currencies carry the weight and which face pressure — connect the current regime to how it relates to ${base} and ${quote} positioning — NO cycle counts, NO spread values, NO predictions — use: "flow remains supportive for", "conditions are consistent with", "weight of capital appears toward">,
+    "confluence_assessment": <1-2 sentences: describe engine confluence status — which key engines are passing or failing, what this means for overall market viability — NO price structure, NO macro references — use: "engine confluence is [status]", "market-wide conditions [support/do not support]">,
     "session_context": <1 sentence: describe how current session conditions relate to this pair — timing and participation environment only — no structure references, no predictions>,
-    "support_factors": [<up to 3 strings: structural spread facts only — no decimals>],
-    "risk_factors": [<up to 3 strings: structural or macro positioning risks — no decimals, no predictions>]
+    "support_factors": [<up to 4 strings: structural, macro, confluence, or session factors supporting this setup — no decimals>],
+    "risk_factors": [<up to 4 strings: structural, macro, confluence, or session risks — no decimals, no predictions>]
   }
 }`,
       },
@@ -482,6 +563,13 @@ Return this exact JSON. All text: no raw decimals, use cycle counts, engine term
   parsed.details.session_quality        = sessionObj.quality;
   parsed.details.market_participation   = marketParticipation;
   parsed.details.continuation_support   = continuationSupport;
+  parsed.details.engine_confluence      = confStatus;
+  parsed.details.confluence_passed      = conf ? conf.passed : null;
+  parsed.details.confluence_total       = conf ? conf.total : null;
+  parsed.details.confluence_pct         = conf ? Math.round(conf.pct * 100) : null;
+  parsed.details.confluence_engines     = conf ? conf.results.map(r => ({
+    label: r.label, value: r.value, pass: r.pass
+  })) : null;
 
   return parsed;
 }
@@ -525,10 +613,19 @@ async function analyzeActiveSetups() {
     .eq('time', latest.time);
   if (sErr) throw sErr;
 
-  const sentimentRow = await getLatestSentiment();
+  const [sentimentRow, hourlyRow] = await Promise.all([
+    getLatestSentiment(),
+    getLatestHourlyRow(),
+  ]);
   if (sentimentRow) {
     console.log(`[AI] Macro: ${sentimentRow.sentiment} [${sentimentRow.environment}] conf:${sentimentRow.confidence}%`);
   }
+
+  const confluenceData = evaluateConfluence(hourlyRow);
+  const confStatus = confluenceData
+    ? (confluenceData.fired ? (confluenceData.pct >= 0.80 ? 'STRONG' : 'ACTIVE') : 'NOT_MET')
+    : 'UNAVAILABLE';
+  console.log(`[AI] Engine Confluence: ${confStatus} (${confluenceData?.passed || 0}/${confluenceData?.total || 11})`);
 
   const PRIORITY = {
     READY_TO_ENTER:    5,
@@ -557,12 +654,13 @@ async function analyzeActiveSetups() {
 
   for (const state of targets) {
     try {
-      const result = await analyzeSetup(state.instrument, state, sentimentRow);
+      const result = await analyzeSetup(state.instrument, state, sentimentRow, confluenceData);
       await saveAnalysis(state.instrument, latest.time, result);
       const sc = result.details?.scores || {};
       const ma = result.details?.macro_alignment || 'NEUTRAL';
       const cp = result.details?.counter_pressure || '—';
-      console.log(`[AI] ✓ ${state.instrument}: ${result.details?.lifecycle_phase} ${result.details?.lifecycle_completion}% cp:${cp} macro:${ma} | cont=${sc.continuation} trend=${sc.trend_health} pbq=${sc.pullback_quality} clean=${sc.cleanliness}`);
+      const ec = result.details?.engine_confluence || '—';
+      console.log(`[AI] ✓ ${state.instrument}: ${result.details?.lifecycle_phase} ${result.details?.lifecycle_completion}% cp:${cp} macro:${ma} conf:${ec} | cont=${sc.continuation} trend=${sc.trend_health} pbq=${sc.pullback_quality} clean=${sc.cleanliness}`);
     } catch (err) {
       console.error(`[AI] ✗ ${state.instrument}: ${err.message}`);
     }

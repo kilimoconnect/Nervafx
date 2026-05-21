@@ -187,18 +187,21 @@ async function collectAiAnalysis() {
   }
 
   return Object.values(map).map(r => ({
-    instrument:           r.instrument,
-    structure_type:       r.structure_type,
-    trend_health:         r.trend_health,
-    market_quality:       r.market_quality,
-    summary:              r.summary,
-    warning:              r.warning || null,
-    lifecycle_phase:      r.details?.lifecycle_phase || null,
-    lifecycle_completion: r.details?.lifecycle_completion || null,
-    scores:               r.details?.scores || null,
-    counter_pressure:     r.details?.counter_pressure || null,
-    cleanliness_label:    r.details?.cleanliness_label || null,
-    session_context:      r.details?.session_context || null,
+    instrument:              r.instrument,
+    structure_type:          r.structure_type,
+    trend_health:            r.trend_health,
+    market_quality:          r.market_quality,
+    summary:                 r.summary,
+    warning:                 r.warning || null,
+    lifecycle_phase:         r.details?.lifecycle_phase || null,
+    lifecycle_completion:    r.details?.lifecycle_completion || null,
+    scores:                  r.details?.scores || null,
+    counter_pressure:        r.details?.counter_pressure || null,
+    cleanliness_label:       r.details?.cleanliness_label || null,
+    session_context:         r.details?.session_context || null,
+    confluence_assessment:   r.details?.confluence_assessment || null,
+    engine_confluence:       r.details?.engine_confluence || null,
+    confluence_pct:          r.details?.confluence_pct || null,
   }));
 }
 
