@@ -1243,21 +1243,21 @@ function updateM15Bar(data) {
 }
 
 // ─── V2 Threshold Notification Bar ────────────────────────────────────────────
-// Data-backed thresholds from backtest (May 2025 → present, 5478 hours analyzed)
-// Each threshold = minimum value for "edge" (avg ≥15 pip move, ≥50% directional rate)
+// Data-backed "good" thresholds from backtest (May 2025 → present, 5478 hours)
+// Each threshold = where h4 profitable ≥65% & directional rate ≥58% (good zone)
 
 const V2_THRESHOLDS = [
-  { key: 'market_energy',       label: 'Energy',  min: 25, optimal: 65 },
-  { key: 'tradability_score',   label: 'Trad',    min: 15, optimal: 70 },
-  { key: 'movement_score',      label: 'Mov',     min: 20, optimal: 70 },
-  { key: 'breadth_score',       label: 'Brd',     min: 50, optimal: 80 },
-  { key: 'agreement_score',     label: 'Agr',     min: 30, optimal: 75 },
-  { key: 'directional_control', label: 'DirCtrl', min: 20, optimal: 45 },
-  { key: 'volatility_quality',  label: 'VolQ',    min: 10, optimal: 60 },
-  { key: 'volatility_score',    label: 'Vol',     min: 25, optimal: 70 },
-  { key: 'momentum_score',      label: 'Mom',     min: 10, optimal: 30, signed: true },
-  { key: 'chaos_score',         label: 'Chaos',   max: 50, warnAbove: 50 },
-  { key: 'false_breakout_risk', label: 'FBRisk',  max: 30, warnAbove: 60 },
+  { key: 'market_energy',       label: 'Energy',  min: 50, optimal: 65 },
+  { key: 'tradability_score',   label: 'Trad',    min: 55, optimal: 70 },
+  { key: 'movement_score',      label: 'Mov',     min: 35, optimal: 70 },
+  { key: 'breadth_score',       label: 'Brd',     min: 65, optimal: 80 },
+  { key: 'agreement_score',     label: 'Agr',     min: 60, optimal: 75 },
+  { key: 'directional_control', label: 'DirCtrl', min: 30, optimal: 45 },
+  { key: 'volatility_quality',  label: 'VolQ',    min: 30, optimal: 60 },
+  { key: 'volatility_score',    label: 'Vol',     min: 40, optimal: 70 },
+  { key: 'momentum_score',      label: 'Mom',     min: 30, optimal: 60, signed: true },
+  { key: 'chaos_score',         label: 'Chaos',   max: 35, warnAbove: 50 },
+  { key: 'false_breakout_risk', label: 'FBRisk',  max: 15, warnAbove: 30 },
 ];
 
 const V2_FIRE_PCT = 0.60; // 60% of thresholds must pass to show notification
