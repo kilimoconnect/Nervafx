@@ -226,6 +226,71 @@
       .bd-delta { font-size: 7px; }
       .bd-badge { font-size: 7px; padding: 1px 3px; }
     }
+
+    /* ── Currency Strength Chart ─────────────────────────────────────────── */
+    .ccs-tf-row {
+      display: flex; align-items: center; gap: 6px;
+      padding: 0 28px 12px;
+    }
+    .ccs-day-block {
+      margin-bottom: 20px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: rgba(255,255,255,.02);
+      overflow: hidden;
+    }
+    .ccs-day-block .bc-date-header {
+      padding: 10px 14px;
+      font-size: 12px; font-weight: 700; color: var(--text);
+      background: rgba(255,255,255,.03);
+      border-bottom: 1px solid var(--border);
+    }
+    .ccs-chart-area {
+      position: relative;
+      padding: 8px 14px 6px;
+    }
+    .ccs-canvas-wrap {
+      position: relative;
+      width: 100%;
+      height: 220px;
+    }
+    .ccs-canvas-wrap canvas {
+      width: 100% !important;
+      height: 100% !important;
+      display: block;
+    }
+    .ccs-legend {
+      display: flex; flex-wrap: wrap; gap: 4px 12px;
+      padding: 8px 14px 10px;
+      border-top: 1px solid rgba(255,255,255,.04);
+    }
+    .ccs-legend-item {
+      display: flex; align-items: center; gap: 4px;
+      font-size: 10px; font-weight: 600; color: var(--text-muted);
+      cursor: pointer; user-select: none;
+      transition: opacity .15s;
+    }
+    .ccs-legend-item.dimmed { opacity: .25; }
+    .ccs-legend-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .ccs-zero-line {
+      position: absolute; left: 0; right: 0;
+      border-top: 1px dashed rgba(255,255,255,.08);
+    }
+    .ccs-sess-label {
+      position: absolute; top: 2px;
+      font-size: 9px; font-weight: 700;
+      letter-spacing: .03em;
+      opacity: .5;
+    }
+    @media (max-width: 700px) {
+      .ccs-tf-row { padding: 0 12px 10px; }
+      .ccs-canvas-wrap { height: 180px; }
+      .ccs-legend { gap: 3px 8px; padding: 6px 10px 8px; }
+      .ccs-legend-item { font-size: 9px; }
+    }
   </style>
 </head>
 <body>
@@ -262,6 +327,7 @@
       <button class="arc-tab" data-section="momentum" onclick="switchArchiveTab(this)">Momentum</button>
       <button class="arc-tab" data-section="liquidity" onclick="switchArchiveTab(this)">Liquidity</button>
       <button class="arc-tab" data-section="breakdown" onclick="switchArchiveTab(this)">Hourly Breakdown</button>
+      <button class="arc-tab" data-section="ccystrength" onclick="switchArchiveTab(this)">Currency Strength</button>
       <button class="arc-tab" data-section="history" onclick="switchArchiveTab(this)">Session History</button>
     </div>
 
@@ -361,6 +427,18 @@
       <div id="arc-breakdown-body"><div class="arc-loading"><span class="spinner"></span> Loading breakdown data…</div></div>
     </section>
 
+    <section class="arc-section" id="arc-ccystrength" style="display:none">
+      <div class="arc-section-header"><i data-lucide="git-branch"></i> Hourly Currency Strength</div>
+      <div class="arc-section-desc">All 8 major currencies plotted over time — smoothed 3H strength scores. Compare flow patterns, divergences, and relative positioning across sessions.</div>
+      <div class="ccs-tf-row">
+        <span class="arc-filter-label">Timeframe</span>
+        <button class="arc-fpill active" data-tf="3h" onclick="setCcsTf(this)">3H</button>
+        <button class="arc-fpill" data-tf="6h" onclick="setCcsTf(this)">6H</button>
+        <button class="arc-fpill" data-tf="12h" onclick="setCcsTf(this)">12H</button>
+      </div>
+      <div id="arc-ccystrength-body"><div class="arc-loading"><span class="spinner"></span> Loading currency strength…</div></div>
+    </section>
+
     <section class="arc-section" id="arc-history" style="display:none">
       <div class="arc-section-header"><i data-lucide="clock"></i> Session Energy History</div>
       <div id="arc-history-body"><div class="arc-loading"><span class="spinner"></span> Loading history…</div></div>
@@ -397,7 +475,7 @@
   let _arcCustomFrom = null;  // ISO string or null
   let _arcCustomTo = null;
 
-  const ARC_SECTIONS = ['energy', 'tradability', 'movement', 'breadth', 'agreement', 'dircontrol', 'volquality', 'volatility', 'momentum', 'liquidity', 'breakdown', 'history'];
+  const ARC_SECTIONS = ['energy', 'tradability', 'movement', 'breadth', 'agreement', 'dircontrol', 'volquality', 'volatility', 'momentum', 'liquidity', 'breakdown', 'ccystrength', 'history'];
 
   function setArcPeriod(btn) {
     document.querySelectorAll('#arc-period-pills .arc-fpill').forEach(b => b.classList.remove('active'));
@@ -458,6 +536,7 @@
       }
       _renderFilteredBreakdown();
     }
+    _renderFilteredCcyStrength();
     if (_arcSessionRows) {
       _renderFilteredLiquidity();
       _renderFilteredHistory();
@@ -1083,6 +1162,271 @@
     container.innerHTML = html || '<p class="me-empty">No breakdown data available.</p>';
   }
 
+  // ─── Currency Strength Chart ──────────────────────────────────────────────────
+
+  const CCY_COLORS = {
+    USD: '#22c55e', EUR: '#3b82f6', GBP: '#ef4444', JPY: '#f59e0b',
+    AUD: '#a855f7', NZD: '#06b6d4', CAD: '#f97316', CHF: '#ec4899',
+  };
+  const CCY_ORDER = ['USD', 'EUR', 'GBP', 'JPY', 'AUD', 'NZD', 'CAD', 'CHF'];
+  let _ccsTf = '3h';
+  let _ccsCache = {};  // keyed by tf
+
+  function setCcsTf(btn) {
+    document.querySelectorAll('.ccs-tf-row .arc-fpill').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    _ccsTf = btn.dataset.tf;
+    loadCcyStrengthArchive();
+  }
+
+  async function loadCcyStrengthArchive() {
+    const bodyEl = document.getElementById('arc-ccystrength-body');
+    if (!bodyEl) return;
+    try {
+      let rows;
+      if (_ccsCache[_ccsTf]) {
+        rows = _ccsCache[_ccsTf];
+      } else {
+        bodyEl.innerHTML = '<div class="arc-loading"><span class="spinner"></span> Loading currency strength…</div>';
+        const data = await api(`/api/strength-history?days=730&tf=${_ccsTf}`);
+        rows = data.rows || [];
+        _ccsCache[_ccsTf] = rows;
+      }
+      const filtered = _filterCcsRows(rows);
+      if (!filtered.length) { bodyEl.innerHTML = '<p class="me-empty">No currency strength data available.</p>'; return; }
+      renderCcyStrength(bodyEl, filtered);
+    } catch (e) {
+      bodyEl.innerHTML = `<p class="me-empty">Failed to load: ${e.message}</p>`;
+    }
+  }
+
+  function _filterCcsRows(rows) {
+    let cutoffFrom, cutoffTo;
+    if (_arcCustomFrom || _arcCustomTo) {
+      cutoffFrom = _arcCustomFrom || '1970-01-01T00:00:00Z';
+      cutoffTo   = _arcCustomTo   || '2099-12-31T23:59:59Z';
+    } else {
+      cutoffFrom = new Date(Date.now() - _arcFilterDays * 24 * 60 * 60 * 1000).toISOString();
+      cutoffTo   = '2099-12-31T23:59:59Z';
+    }
+    return rows.filter(r => {
+      const t = r.time || '';
+      return t >= cutoffFrom && t <= cutoffTo;
+    });
+  }
+
+  function _renderFilteredCcyStrength() {
+    if (!_ccsCache[_ccsTf]) return;
+    const bodyEl = document.getElementById('arc-ccystrength-body');
+    if (!bodyEl) return;
+    const filtered = _filterCcsRows(_ccsCache[_ccsTf]);
+    if (!filtered.length) { bodyEl.innerHTML = '<p class="me-empty">No data for this filter.</p>'; return; }
+    renderCcyStrength(bodyEl, filtered);
+  }
+
+  function renderCcyStrength(container, rows) {
+    const tz = (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC');
+    const field = _ccsTf === '12h' ? 'smooth_12h' : _ccsTf === '6h' ? 'smooth_6h' : 'smooth_3h';
+
+    // Pivot: group by time → { time, USD: val, EUR: val, ... }
+    const timeMap = {};
+    for (const r of rows) {
+      const t = r.time;
+      if (!timeMap[t]) timeMap[t] = { time: t };
+      timeMap[t][r.currency] = parseFloat(r[field]) || 0;
+    }
+    const points = Object.values(timeMap).sort((a, b) => a.time.localeCompare(b.time));
+    if (!points.length) { container.innerHTML = '<p class="me-empty">No data.</p>'; return; }
+
+    // Group points by date
+    const byDate = {};
+    for (const p of points) {
+      const date = p.time.slice(0, 10);
+      if (!byDate[date]) byDate[date] = [];
+      byDate[date].push(p);
+    }
+
+    const dates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
+    const hiddenCcys = new Set();
+
+    let html = '';
+    const canvasIds = [];
+
+    for (const date of dates) {
+      const dayPts = byDate[date];
+      const d = new Date(date + 'T12:00:00Z');
+      const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: tz });
+      const cid = 'ccs-cv-' + date;
+      canvasIds.push({ id: cid, pts: dayPts });
+
+      html += `<div class="ccs-day-block">
+        <div class="bc-date-header">${dayLabel}</div>
+        <div class="ccs-chart-area">
+          <div class="ccs-canvas-wrap"><canvas id="${cid}"></canvas></div>
+        </div>
+        <div class="ccs-legend" id="ccs-leg-${date}">`;
+      for (const ccy of CCY_ORDER) {
+        html += `<div class="ccs-legend-item" data-ccy="${ccy}" onclick="toggleCcsLine(this)">
+          <span class="ccs-legend-dot" style="background:${CCY_COLORS[ccy]}"></span>${ccy}
+        </div>`;
+      }
+      html += '</div></div>';
+    }
+
+    container.innerHTML = html;
+
+    // Draw all canvases
+    requestAnimationFrame(() => {
+      for (const { id, pts } of canvasIds) {
+        drawCcsCanvas(id, pts, field, tz, hiddenCcys);
+      }
+    });
+
+    // Store references for toggle redraws
+    container._ccsData = { canvasIds, field, tz, hiddenCcys };
+  }
+
+  function toggleCcsLine(el) {
+    const ccy = el.dataset.ccy;
+    const container = document.getElementById('arc-ccystrength-body');
+    if (!container || !container._ccsData) return;
+    const { canvasIds, field, tz, hiddenCcys } = container._ccsData;
+
+    if (hiddenCcys.has(ccy)) {
+      hiddenCcys.delete(ccy);
+      el.classList.remove('dimmed');
+    } else {
+      hiddenCcys.add(ccy);
+      el.classList.add('dimmed');
+    }
+    // Sync all legend items across all days
+    document.querySelectorAll(`.ccs-legend-item[data-ccy="${ccy}"]`).forEach(item => {
+      item.classList.toggle('dimmed', hiddenCcys.has(ccy));
+    });
+    // Redraw all canvases
+    for (const { id, pts } of canvasIds) {
+      drawCcsCanvas(id, pts, field, tz, hiddenCcys);
+    }
+  }
+
+  function drawCcsCanvas(canvasId, pts, field, tz, hiddenCcys) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const wrap = canvas.parentElement;
+    const dpr = window.devicePixelRatio || 1;
+    const W = wrap.clientWidth;
+    const H = wrap.clientHeight;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, W, H);
+
+    const PAD_L = 40, PAD_R = 10, PAD_T = 14, PAD_B = 22;
+    const cw = W - PAD_L - PAD_R;
+    const ch = H - PAD_T - PAD_B;
+
+    // Find Y range across all visible currencies
+    let yMin = 0, yMax = 0;
+    for (const ccy of CCY_ORDER) {
+      if (hiddenCcys.has(ccy)) continue;
+      for (const p of pts) {
+        const v = p[ccy];
+        if (v !== undefined) {
+          if (v < yMin) yMin = v;
+          if (v > yMax) yMax = v;
+        }
+      }
+    }
+    // Pad range symmetrically
+    const absMax = Math.max(Math.abs(yMin), Math.abs(yMax), 0.001);
+    yMin = -absMax * 1.15;
+    yMax =  absMax * 1.15;
+    const yRange = yMax - yMin;
+
+    const xStep = pts.length > 1 ? cw / (pts.length - 1) : cw;
+
+    // Grid lines + Y labels
+    ctx.strokeStyle = 'rgba(255,255,255,.06)';
+    ctx.lineWidth = 1;
+    ctx.fillStyle = 'rgba(255,255,255,.25)';
+    ctx.font = '9px Inter, sans-serif';
+    ctx.textAlign = 'right';
+    const gridSteps = 5;
+    for (let i = 0; i <= gridSteps; i++) {
+      const yVal = yMin + (yRange * i / gridSteps);
+      const yPx = PAD_T + ch - (ch * i / gridSteps);
+      ctx.beginPath();
+      ctx.moveTo(PAD_L, yPx);
+      ctx.lineTo(W - PAD_R, yPx);
+      ctx.stroke();
+      const lbl = yVal.toFixed(4);
+      ctx.fillText(lbl, PAD_L - 4, yPx + 3);
+    }
+
+    // Zero line (stronger)
+    const zeroY = PAD_T + ch - ((0 - yMin) / yRange) * ch;
+    ctx.strokeStyle = 'rgba(255,255,255,.15)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(PAD_L, zeroY);
+    ctx.lineTo(W - PAD_R, zeroY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // X axis time labels
+    ctx.fillStyle = 'rgba(255,255,255,.3)';
+    ctx.font = '9px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    const xLabelEvery = Math.max(1, Math.floor(pts.length / 8));
+    for (let i = 0; i < pts.length; i += xLabelEvery) {
+      const xPx = PAD_L + (pts.length > 1 ? (i / (pts.length - 1)) * cw : cw / 2);
+      const lt = new Date(pts[i].time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
+      ctx.fillText(lt, xPx, H - 4);
+    }
+
+    // Draw lines for each currency
+    for (const ccy of CCY_ORDER) {
+      if (hiddenCcys.has(ccy)) continue;
+      const color = CCY_COLORS[ccy];
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.8;
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      let started = false;
+      for (let i = 0; i < pts.length; i++) {
+        const v = pts[i][ccy];
+        if (v === undefined) continue;
+        const xPx = PAD_L + (pts.length > 1 ? (i / (pts.length - 1)) * cw : cw / 2);
+        const yPx = PAD_T + ch - ((v - yMin) / yRange) * ch;
+        if (!started) { ctx.moveTo(xPx, yPx); started = true; }
+        else ctx.lineTo(xPx, yPx);
+      }
+      ctx.stroke();
+
+      // Endpoint dot + label
+      for (let i = pts.length - 1; i >= 0; i--) {
+        const v = pts[i][ccy];
+        if (v === undefined) continue;
+        const xPx = PAD_L + (pts.length > 1 ? (i / (pts.length - 1)) * cw : cw / 2);
+        const yPx = PAD_T + ch - ((v - yMin) / yRange) * ch;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(xPx, yPx, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        // Currency label at end
+        if (i === pts.length - 1 || i >= pts.length - 2) {
+          ctx.font = 'bold 8px Inter, sans-serif';
+          ctx.fillStyle = color;
+          ctx.textAlign = 'left';
+          ctx.fillText(ccy, xPx + 5, yPx + 3);
+        }
+        break;
+      }
+    }
+  }
+
   // ─── Init ─────────────────────────────────────────────────────────────────────
 
   Promise.all([
@@ -1097,6 +1441,7 @@
     loadMetricArchive('momentum'),
     loadLiquidityArchive(),
     loadBreakdownArchive(),
+    loadCcyStrengthArchive(),
     loadHistoryArchive(),
   ]);
 
