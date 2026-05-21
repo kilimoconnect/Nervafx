@@ -1545,9 +1545,12 @@ function _meSessionExplain(s, label) {
   const bull = Math.round(parseFloat(s.bullish_breadth) || 0);
   const bear = Math.round(parseFloat(s.bearish_breadth) || 0);
   const activePct = Math.min(100, Math.round((parseFloat(s.active_pairs) || 0) / 28 * 100));
-  const readiness = Math.round(parseFloat(s.expansion_readiness) || 0);
-  const liq = Math.round(parseFloat(s.liquidity_score) || 0);
-  const dom = Math.round(parseFloat(s.dominance_score) || 0);
+  const dirCtrl = Math.round(parseFloat(s.directional_control) || 0);
+  const tradScore = Math.round(parseFloat(s.tradability_score) || 0);
+  const tradGrade = s.tradability_grade || 'AVOID';
+  const volType = s.volatility_type || 'NORMAL';
+  const chaosVal = Math.round(parseFloat(s.chaos_score) || 0);
+  const fbRisk = s.false_breakout_risk || false;
   const strongCcys = (s.strongest_ccy || '').split(',').filter(Boolean);
   const weakCcys   = (s.weakest_ccy   || '').split(',').filter(Boolean);
   const strong = strongCcys[0] || null;
@@ -1555,54 +1558,65 @@ function _meSessionExplain(s, label) {
 
   const lines = [];
 
-  // Movement
-  if (mov >= 60) lines.push(`Prices are moving strongly (${mov}/100) — high pip activity across pairs.`);
-  else if (mov >= 35) lines.push(`Moderate price movement (${mov}/100) — some pairs are active.`);
-  else lines.push(`Low price movement (${mov}/100) — most pairs are quiet.`);
+  // Tradability verdict (the key output)
+  const TRAD_DESC = {
+    STRONG_TREND: `Strong institutional trend (${tradScore}/100) — high conviction, favour trend-following.`,
+    TRADABLE: `Tradable environment (${tradScore}/100) — good conditions for directional trades.`,
+    SELECTIVE: `Selective conditions (${tradScore}/100) — be picky, only take the best setups.`,
+    DANGEROUS: `Low-quality conditions (${tradScore}/100) — high risk of false signals, reduce size.`,
+    AVOID: `Avoid trading (${tradScore}/100) — conditions are unfavourable for directional trades.`,
+  };
+  lines.push(TRAD_DESC[tradGrade] || `Tradability: ${tradScore}/100`);
 
-  // Momentum
-  if (brd >= 60) lines.push(`Wide momentum (${brd}/100) — strong directional conviction across the market.`);
-  else if (brd >= 35) lines.push(`Moderate momentum (${brd}/100) — partial market participation, mixed conditions.`);
-  else if (brd >= 20) lines.push(`Narrow momentum (${brd}/100) — moderate market participation, building conditions.`);
-  else lines.push(`Narrow momentum (${brd}/100) — weak market participation, low conviction.`);
+  // Movement
+  if (mov >= 60) lines.push(`Strong price movement (${mov}) — high pip activity across pairs.`);
+  else if (mov >= 35) lines.push(`Moderate movement (${mov}) — some pairs are active.`);
+  else lines.push(`Low movement (${mov}) — most pairs are quiet.`);
+
+  // Breadth / participation
+  if (brd >= 60) lines.push(`Wide breadth (${brd}) — ${activePct}% of pairs participating.`);
+  else if (brd >= 35) lines.push(`Moderate breadth (${brd}) — ${activePct}% of pairs active.`);
+  else lines.push(`Narrow breadth (${brd}) — only ${activePct}% of pairs active.`);
+
+  // Directional control
+  if (dirCtrl >= 50) {
+    const dominant = bull > bear ? 'Buyers' : 'Sellers';
+    lines.push(`${dominant} in control (${dirCtrl}%) — strong one-sided pressure.`);
+  } else if (dirCtrl >= 25) {
+    lines.push(`Mild directional lean (${dirCtrl}%) — not a clean one-sided move.`);
+  } else {
+    lines.push(`No directional control (${dirCtrl}%) — bulls and bears evenly matched.`);
+  }
+
+  // Volatility quality
+  const VOL_DESC = {
+    HEALTHY: `Healthy volatility (${vol}) — organized moves with good agreement.`,
+    NORMAL: `Normal volatility (${vol}) — standard market conditions.`,
+    CHAOTIC: `Chaotic volatility (${vol}) — high movement but disorganized, chaos score ${chaosVal}.`,
+    EVENT: `Event-driven volatility (${vol}) — likely news impact, wait for stability.`,
+    DEAD: `Dead volatility (${vol}) — tight ranges, no activity.`,
+  };
+  lines.push(VOL_DESC[volType] || `Volatility: ${vol}`);
 
   // Agreement
-  if (agr >= 60) lines.push(`High agreement (${agr}/100) — timeframes are aligned, trends are consistent.`);
-  else if (agr >= 35) lines.push(`Mixed agreement (${agr}/100) — some timeframe conflict.`);
-  else lines.push(`Low agreement (${agr}/100) — timeframes are giving conflicting signals.`);
+  if (agr >= 50) lines.push(`High agreement (${agr}) — currencies and pairs aligned, trends are consistent.`);
+  else if (agr >= 25) lines.push(`Mixed agreement (${agr}) — partial alignment, some conflict.`);
+  else lines.push(`Low agreement (${agr}) — currencies giving conflicting signals.`);
 
-  // Volatility
-  if (vol >= 60) lines.push(`Volatility is elevated (${vol}/100) — expect larger candles and wider swings.`);
-  else if (vol >= 35) lines.push(`Normal volatility (${vol}/100).`);
-  else lines.push(`Low volatility (${vol}/100) — tight ranges, small candles.`);
-
-  // Directional pressure
-  const pressGap = Math.abs(bull - bear);
-  const dominant = bull > bear ? 'buyers' : 'sellers';
-  const dominantPct = bull > bear ? bull : bear;
-  if (pressGap >= 20) {
-    lines.push(`${dominant.charAt(0).toUpperCase() + dominant.slice(1)} dominate at ${dominantPct}% — strong directional bias.`);
-  } else if (pressGap >= 8) {
-    lines.push(`${dominant.charAt(0).toUpperCase() + dominant.slice(1)} have the edge at ${dominantPct}% vs ${100 - dominantPct}% — moderate directional lean.`);
-  } else {
-    lines.push(`Bulls (${bull}%) and bears (${bear}%) are evenly matched — no clear direction.`);
+  // Currency leadership
+  if (strong && weak && strong !== weak && dirCtrl >= 15) {
+    lines.push(`${strong} strongest, ${weak} weakest — look for ${strong}/${weak} pair trends.`);
   }
 
-  // Participation
-  if (activePct >= 50) lines.push(`${activePct}% of pairs are actively moving — strong market participation.`);
-  else if (activePct >= 25) lines.push(`${activePct}% of pairs active — moderate participation.`);
-  else lines.push(`Only ${activePct}% of pairs are active — thin market.`);
-
-  // Currency dominance
-  if (strong && weak && strong !== weak && dom >= 15) {
-    lines.push(`${strong} is the strongest currency and ${weak} is the weakest — ${strong}/${weak} pairs are likely trending.`);
+  // False breakout warning
+  if (fbRisk) {
+    lines.push(`⚠ False breakout risk: movement is rising but breadth and agreement remain weak.`);
   }
 
-  // Overall energy verdict
-  if (energy >= 60) lines.push(`Overall energy is high (${energy}) — conditions favour trend-following.`);
-  else if (energy >= 35) lines.push(`Moderate energy (${energy}) — be selective, not all setups will follow through.`);
-  else if (energy >= 25) lines.push(`Moderate energy (${energy}) — building conditions, wait for confirmation.`);
-  else lines.push(`Low energy (${energy}) — range-bound conditions, avoid forcing trades.`);
+  // Overall energy
+  if (energy >= 60) lines.push(`High energy (${energy}) — market is active and directional.`);
+  else if (energy >= 35) lines.push(`Moderate energy (${energy}) — conditions building, wait for confirmation.`);
+  else lines.push(`Low energy (${energy}) — range-bound, avoid forcing trades.`);
 
   return `<div class="me-explain">
     <div class="me-explain-title">What this means</div>
@@ -1613,11 +1627,13 @@ function _meSessionExplain(s, label) {
 function _meHourlyTrend(hourlyRows) {
   if (!hourlyRows || hourlyRows.length === 0) return '';
   const metrics = [
-    { key: 'movement_score',  label: 'Mov' },
-    { key: 'breadth_score',   label: 'Mom' },
-    { key: 'agreement_score', label: 'Agr' },
-    { key: 'volatility_score',label: 'Vol' },
-    { key: 'market_energy',   label: 'Energy' },
+    { key: 'movement_score',    label: 'Mov' },
+    { key: 'breadth_score',     label: 'Brd' },
+    { key: 'agreement_score',   label: 'Agr' },
+    { key: 'volatility_score',  label: 'Vol' },
+    { key: 'market_energy',     label: 'Energy' },
+    { key: 'tradability_score', label: 'Trad' },
+    { key: 'momentum_score',    label: 'Mom' },
   ];
 
   // Time headers in user's timezone
@@ -1694,9 +1710,9 @@ function _meSessionCard(name, s, status, hourlyRows) {
 
   const comps = [
     { label: 'Movement',   val: s.movement_score,   norm: s.norm_movement,   prev: s.prev_movement   },
-    { label: 'Momentum',   val: s.breadth_score,    norm: s.norm_breadth,    prev: s.prev_breadth    },
-    { label: 'Agreement',  val: s.agreement_score,  norm: s.norm_agreement,  prev: s.prev_agreement  },
-    { label: 'Volatility', val: s.volatility_score, norm: s.norm_volatility, prev: null              },
+    { label: 'Breadth',    val: s.breadth_score,     norm: s.norm_breadth,    prev: s.prev_breadth    },
+    { label: 'Agreement',  val: s.agreement_score,   norm: s.norm_agreement,  prev: s.prev_agreement  },
+    { label: 'Volatility', val: s.volatility_score,  norm: s.norm_volatility, prev: null              },
   ];
 
   const compRows = comps.map(c => {
@@ -1767,6 +1783,21 @@ function _meSessionCard(name, s, status, hourlyRows) {
   const liqGrade  = s.liquidity_grade || '—';
   const liqColor  = liqScore >= 50 ? '#22c55e' : liqScore >= 30 ? '#eab308' : liqScore >= 15 ? '#f97316' : '#64748b';
 
+  // V2 metrics
+  const tradScore = Math.round(parseFloat(s.tradability_score) || 0);
+  const tradGrade = s.tradability_grade || 'AVOID';
+  const tradColor = tradScore >= 65 ? '#22c55e' : tradScore >= 50 ? '#0ea5e9' : tradScore >= 35 ? '#f59e0b' : '#64748b';
+  const momScore  = Math.round(parseFloat(s.momentum_score) || 0);
+  const volType   = s.volatility_type || 'NORMAL';
+  const volQual   = Math.round(parseFloat(s.volatility_quality) || 0);
+  const dirCtrl   = Math.round(parseFloat(s.directional_control) || 0);
+  const chaosVal  = Math.round(parseFloat(s.chaos_score) || 0);
+  const fbRisk    = s.false_breakout_risk || false;
+
+  const TRAD_LABELS = { STRONG_TREND: 'Strong', TRADABLE: 'Tradable', SELECTIVE: 'Selective', DANGEROUS: 'Dangerous', AVOID: 'Avoid' };
+  const VOL_TYPE_LABELS = { HEALTHY: 'Healthy', NORMAL: 'Normal', CHAOTIC: 'Chaotic', EVENT: 'Event', DEAD: 'Dead' };
+  const VOL_TYPE_COLORS = { HEALTHY: '#22c55e', NORMAL: '#94a3b8', CHAOTIC: '#ef4444', EVENT: '#f59e0b', DEAD: '#64748b' };
+
   const momentum      = s.energy_momentum;
   const momColor      = ME_MOMENTUM_COLOR[momentum] || '#64748b';
   const momLabel      = ME_MOMENTUM_LABEL[momentum]  || '';
@@ -1782,6 +1813,28 @@ function _meSessionCard(name, s, status, hourlyRows) {
     ? '<span class="me-status-badge me-status-upcoming">Next</span>'
     : '';
 
+  // Tradability bar
+  const tradBar = `<div class="me-dir-sep"></div>
+    <div class="me-dir-header">Tradability</div>
+    <div class="me-comp-row">
+      <span class="me-comp-label" style="color:${tradColor}">${TRAD_LABELS[tradGrade] || tradGrade}</span>
+      ${_meCompBar(tradScore)}
+      <div class="me-comp-right">
+        <span class="me-comp-val" style="color:${tradColor}">${tradScore}</span>
+      </div>
+    </div>
+    <div class="me-comp-row">
+      <span class="me-comp-label" style="color:var(--text-dim)">Dir Control</span>
+      ${_meDirBar(dirCtrl, '#a855f7')}
+      <span class="me-comp-val">${dirCtrl}%</span>
+    </div>
+    <div class="me-comp-row">
+      <span class="me-comp-label" style="color:${VOL_TYPE_COLORS[volType] || '#94a3b8'}">Vol: ${VOL_TYPE_LABELS[volType] || volType}</span>
+      ${_meDirBar(volQual, VOL_TYPE_COLORS[volType] || '#94a3b8')}
+      <span class="me-comp-val">${volQual}</span>
+    </div>
+    ${fbRisk ? '<div class="me-fb-warn">⚠ False breakout risk — movement without breadth/agreement</div>' : ''}`;
+
   return `<div class="me-card${status === 'ACTIVE' ? ' me-card--active' : status === 'UPCOMING' ? ' me-card--upcoming' : ''}">
     <div class="me-card-head">
       <span class="me-card-sess" style="color:${sessColor}">${label}</span>
@@ -1789,12 +1842,12 @@ function _meSessionCard(name, s, status, hourlyRows) {
       ${momentumHtml}
       ${statusHtml}
     </div>
-    <div class="me-card-comps"><div class="me-avg-note">Session averages</div>${compRows}${dirRows}</div>
+    <div class="me-card-comps"><div class="me-avg-note">Session averages</div>${compRows}${tradBar}${dirRows}</div>
     <div class="me-card-foot">
       <div class="me-foot-energy">
         <span class="me-foot-item">Energy <strong>${energy}</strong></span>
       </div>
-      <span class="me-foot-item">Readiness <strong>${readiness}</strong></span>
+      <span class="me-foot-item" style="color:${tradColor}">Tradability <strong>${tradScore}</strong></span>
       <span class="me-foot-item" style="color:${liqColor}">Liquidity <strong>${liqScore}</strong></span>
     </div>
     ${status === 'ACTIVE' ? _meHourlyTrend(hourlyRows) : ''}
@@ -2582,11 +2635,12 @@ function _renderMeAnalysisModal() {
     const metrics = `
       <div class="me-modal-metrics">
         <div class="me-modal-metric"><span>Mov</span><strong>${Math.round(s.movement_score||0)}</strong>${pct(s.norm_movement)}</div>
-        <div class="me-modal-metric"><span>Mom</span><strong>${Math.round(s.breadth_score||0)}</strong>${pct(s.norm_breadth)}</div>
+        <div class="me-modal-metric"><span>Brd</span><strong>${Math.round(s.breadth_score||0)}</strong>${pct(s.norm_breadth)}</div>
         <div class="me-modal-metric"><span>Agr</span><strong>${Math.round(s.agreement_score||0)}</strong>${pct(s.norm_agreement)}</div>
         <div class="me-modal-metric"><span>Vol</span><strong>${Math.round(s.volatility_score||0)}</strong>${pct(s.norm_volatility)}</div>
         <div class="me-modal-metric"><span>Energy</span><strong>${Math.round(s.market_energy||0)}</strong>${pct(s.norm_energy)}</div>
-        <div class="me-modal-metric"><span>Dom%</span><strong>${Math.round(s.dominance_score||0)}</strong></div>
+        <div class="me-modal-metric"><span>Trad</span><strong>${Math.round(s.tradability_score||0)}</strong></div>
+        <div class="me-modal-metric"><span>DirCtrl</span><strong>${Math.round(s.directional_control||0)}</strong></div>
       </div>`;
 
     const momHtml = mom
@@ -2796,7 +2850,7 @@ function _meHistoryPanel(rows, liveSessions) {
     <div class="sh-col-sess">Session</div>
     <div class="sh-col-cycle">Cycle</div>
     <div class="sh-col-metric">E</div>
-    <div class="sh-col-metric">Mom</div>
+    <div class="sh-col-metric">Trad</div>
     <div class="sh-col-metric">Liq</div>
     <div class="sh-col-flow">Flow</div>
     <div class="sh-col-ccy">Currencies</div>
@@ -2832,7 +2886,8 @@ function _meHistoryPanel(rows, liveSessions) {
       const dot   = CYCLE_DOT[r.energy_cycle] || '#64748b';
       const cycle = (ME_CYCLE_LABEL[r.energy_cycle] || r.energy_cycle || '—').replace(/_/g,' ');
       const eng   = Math.round(r.market_energy || 0);
-      const brd   = Math.round(r.breadth_score || 0);
+      const trad  = Math.round(r.tradability_score || 0);
+      const tradColor = trad >= 65 ? '#22c55e' : trad >= 50 ? '#0ea5e9' : trad >= 35 ? '#f59e0b' : '#64748b';
       const liq   = Math.round(r.liquidity_score || 0);
       const liqColor = liq >= 50 ? '#22c55e' : liq >= 30 ? '#eab308' : liq >= 15 ? '#f97316' : '#64748b';
       const bullPct = Math.round(r.bullish_breadth || 0);
@@ -2843,7 +2898,7 @@ function _meHistoryPanel(rows, liveSessions) {
         <div class="sh-col-sess" style="color:${SESS_COLOR[key]}">${SESS_LABEL[key]}</div>
         <div class="sh-col-cycle"><span class="sh-dot" style="background:${dot}"></span>${cycle}</div>
         <div class="sh-col-metric">${eng}</div>
-        <div class="sh-col-metric">${brd}</div>
+        <div class="sh-col-metric" style="color:${tradColor};font-weight:600">${trad}</div>
         <div class="sh-col-metric" style="color:${liqColor};font-weight:600">${liq}</div>
         <div class="sh-col-flow"><span class="sh-bull">▲${bullPct}%</span><span class="sh-bear">▼${bearPct}%</span></div>
         <div class="sh-col-ccy">${(r.strongest_ccy||'—').split(',').map(c => `<span class="sh-strong">${c} ↑</span>`).join('')}${(r.weakest_ccy||'—').split(',').map(c => `<span class="sh-weak">${c} ↓</span>`).join('')}</div>

@@ -1,40 +1,26 @@
 'use strict';
 
 /**
- * Session Activity Engine — Steps 4–14
+ * Session Activity Engine — V2 Institutional Calculation Model
  *
- * Step 4   Normalize:    normalized_move = pair_session_move / rolling-20-session avg
- * Step 5   EMA:          smooth_move = (prev_smooth + normalized_move) / 2
- * Step 6   Movement:     movement_score = clamp(avg(smooth_move) × 50, 0–100)
- * Step 7   Breadth:      active = smooth_move >= 1.0 → breadth_score = active/28 × 100
- * Step 8   Agreement:    aligned active pairs / total active pairs × 100
- * Step 9   Volatility:   normalized session range → volatility_score 0–100
- * Step 10  Acceleration: energy_base delta vs previous session
- * Step 11  Compression:  consecutive compressed session streak
- * Step 12  Market energy: weighted composite × quality multiplier (agreement penalises chaos)
- * Step 13  Expansion readiness: streak + compression + session quality + alignment (separate)
- * Step 14  Energy cycle: DEAD / COMPRESSION / TRANSITION / EXPANSION / EXPLOSIVE / EXHAUSTION
+ * Engines (per NervaFX_Market_Energy_Calculation_Model.pdf):
+ *  1. Movement Engine        — pair moves normalized by session-calibrated caps
+ *  2. Momentum Engine        — hour-over-hour movement delta + classification
+ *  3. Agreement Engine       — currency alignment × pair alignment
+ *  4. Volatility Quality     — classify healthy/chaotic/dead/event + quality score
+ *  5. Directional Pressure   — bull/bear pressure + directional control
+ *  6. Participation Engine   — breadth (active pairs %)
+ *  7. Currency Leadership    — strongest vs weakest currency gap
+ *  8. Market Energy          — weighted composite × session quality
+ *  9. Tradability Engine     — geometric-mean gated composite
+ * 10. False Breakout Detect  — movement up + weak breadth + weak agreement
+ * 11. Expansion Readiness    — compression persistence + volatility contraction
+ * 12. Market Cycle Engine    — regime classification with confidence
  *
- * DB migration required — new columns in hourly_session_activity:
- *   agreement_score    NUMERIC(5,1)
- *   volatility_score   NUMERIC(5,1)
- *   energy_base        NUMERIC(5,1)
- *   acceleration       NUMERIC(6,1)
- *   compression_streak INTEGER DEFAULT 0
- *   movement_magnitude NUMERIC(6,1)
- *   market_energy      NUMERIC(5,1)
- *   expansion_readiness NUMERIC(5,1)
- *   energy_cycle       VARCHAR(20)
- *
- * New columns in session_performance_summary:
- *   avg_agreement_score    NUMERIC(5,1)
- *   avg_volatility_score   NUMERIC(5,1)
- *   avg_energy_base        NUMERIC(5,1)
- *   avg_acceleration       NUMERIC(6,1)
- *   avg_market_energy      NUMERIC(5,1)
- *   avg_expansion_readiness NUMERIC(5,1)
- *   dominant_cycle         VARCHAR(20)
- *   compression_streak     INTEGER DEFAULT 0
+ * DB tables:
+ *   hourly_session_activity  — per-hour metrics
+ *   market_energy_sessions   — per-session aggregated metrics
+ *   session_performance_summary — legacy summaries
  */
 
 const { supabase }          = require('./supabase');
@@ -58,6 +44,14 @@ function avgField(arr, field) {
   return arr.reduce((s, row) => s + (parseFloat(row[field]) || 0), 0) / arr.length;
 }
 
+// Geometric mean of positive values (returns 0 if any is 0)
+function geoMean(vals) {
+  if (!vals.length) return 0;
+  if (vals.some(v => v <= 0)) return 0;
+  const logSum = vals.reduce((s, v) => s + Math.log(v), 0);
+  return Math.exp(logSum / vals.length);
+}
+
 // ─── Session quality scores (for expansion readiness) ─────────────────────────
 
 const SESSION_QUALITY_SCORE = {
@@ -69,28 +63,22 @@ const SESSION_QUALITY_SCORE = {
 
 // ─── Calibrated scaling thresholds (from 30-day raw candle analysis) ─────────
 // These define what "100" means for each metric in each session.
-// Derived from P90 values × 1.2 so P90 ≈ 83, extreme days reach 100.
-//
-// hourlyMove: single-candle |close - open| / open (per-pair average)
-// hourlyRange: single-candle (high - low) / open (per-pair average)
-// breadthThreshold: hourly move threshold to count a pair as "active"
-//                   (calibrated to P25 of hourly single-candle moves)
 
 const SESSION_SCALE = {
   ASIA: {
-    movementCap: 0.0012,   // 0.12% avg hourly move = score 100
-    volatilityCap: 0.0020, // 0.20% avg hourly range = score 100
+    movementCap: 0.0012,       // 0.12% avg hourly move = score 100
+    volatilityCap: 0.0020,     // 0.20% avg hourly range = score 100
     breadthThreshold: 0.00015, // 0.015% = pair is "active" this hour
   },
   LONDON: {
-    movementCap: 0.0015,   // 0.15% avg hourly move = score 100
-    volatilityCap: 0.0025, // 0.25% avg hourly range = score 100
-    breadthThreshold: 0.00020, // 0.020%
+    movementCap: 0.0015,
+    volatilityCap: 0.0025,
+    breadthThreshold: 0.00020,
   },
   NEW_YORK: {
-    movementCap: 0.0018,   // 0.18% avg hourly move = score 100
-    volatilityCap: 0.0030, // 0.30% avg hourly range = score 100
-    breadthThreshold: 0.00020, // 0.020%
+    movementCap: 0.0018,
+    volatilityCap: 0.0030,
+    breadthThreshold: 0.00020,
   },
   DEFAULT: {
     movementCap: 0.0015,
@@ -133,8 +121,7 @@ function classifyHour(isoTime) {
   return getCurrentSession(new Date(isoTime)).session;
 }
 
-// ─── Currency strength (Step 8) ──────────────────────────────────────────────
-// Derived from same session-open candles — no extra DB fetch needed.
+// ─── Currency strength ──────────────────────────────────────────────────────
 
 const CURRENCIES = ['GBP', 'EUR', 'USD', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
 
@@ -157,31 +144,75 @@ function computeCurrencyStrengths(candles, sessionOpenPrices) {
   return strength;
 }
 
-// ─── Step 14: Energy cycle classification ────────────────────────────────────
-// Priority order: DEAD → EXPLOSIVE → EXPANSION → EXHAUSTION → COMPRESSION → TRANSITION → STABLE
+// ─── Momentum classification ────────────────────────────────────────────────
+// Types: TREND (steady positive), EXPANSION (accelerating), IMPULSE (sudden spike),
+//        EXHAUSTION (high but decelerating), DECAY (falling), STABLE (flat)
 
-// Step 14 — Energy cycle classification
-// 7-state lifecycle: DEAD → LOW_PARTICIPATION → COMPRESSION → TRANSITION
-//                            → EXPANSION → EXPLOSIVE → EXHAUSTION
-// Each state is mutually exclusive and ordered by priority.
-// Session-specific thresholds: Asia naturally runs quieter than London/NY.
+function classifyMomentum(momentumScore, momentumAccel, movementScore, prevMovement) {
+  const absMom = Math.abs(momentumScore);
 
-// Thresholds calibrated for raw-based scoring (no EMA/normalization).
-// Movement and volatility now use session-calibrated pip scales (0-100).
-// Breadth counts pairs with meaningful HOURLY moves (not cumulative).
-// Agreement measures hourly-vs-session trend continuation.
+  // IMPULSE: sudden large spike in movement this hour
+  if (momentumScore > 15 && movementScore >= 50) return 'IMPULSE';
+
+  // EXPANSION: movement accelerating (positive momentum + positive acceleration)
+  if (momentumScore > 5 && momentumAccel > 2) return 'EXPANSION';
+
+  // EXHAUSTION: movement still high but decelerating
+  if (movementScore >= 40 && momentumScore < -5) return 'EXHAUSTION';
+
+  // TREND: steady positive momentum
+  if (momentumScore > 3) return 'TREND';
+
+  // DECAY: movement contracting
+  if (momentumScore < -3) return 'DECAY';
+
+  return 'STABLE';
+}
+
+// ─── Volatility quality classification ──────────────────────────────────────
+// HEALTHY: high vol + high agreement + good directional control → tradable
+// CHAOTIC: high vol + low agreement + low directional control → dangerous
+// EVENT:   extreme vol spike vs previous hour → news/event driven
+// NORMAL:  moderate vol
+// DEAD:    very low vol
+
+function classifyVolatility(volScore, agrScore, dirControl, prevVolScore) {
+  // EVENT: extreme spike (>1.8x previous hour's vol AND vol >= 50)
+  if (prevVolScore != null && volScore > prevVolScore * 1.8 && volScore >= 50) return 'EVENT';
+
+  if (volScore >= 55) {
+    if (agrScore >= 45 && dirControl >= 35) return 'HEALTHY';
+    if (agrScore < 30 || dirControl < 20) return 'CHAOTIC';
+    return 'HEALTHY'; // borderline → lean healthy
+  }
+  if (volScore >= 25) return 'NORMAL';
+  return 'DEAD';
+}
+
+// Volatility quality score: rewards healthy vol, penalizes chaotic
+function computeVolatilityQuality(volScore, volType) {
+  const multiplier = {
+    HEALTHY: 1.0,
+    NORMAL:  0.75,
+    EVENT:   0.50,
+    CHAOTIC: 0.30,
+    DEAD:    0.20,
+  };
+  return round1(volScore * (multiplier[volType] || 0.5));
+}
+
+// ─── Energy cycle classification ────────────────────────────────────────────
+
 const SESS_PROFILE = {
   ASIA: {
-    // Asia: quieter session. P50 mov≈35, P50 brd≈55, typical agr≈40-60
     deadMov:  8, deadBrd: 15, deadVol: 10,
-    exMov:   65, exBrd:   80, exAgr:   70,   // EXPLOSIVE
-    expMov:  30, expBrd:  45, expAgr:  35,   // EXPANSION
+    exMov:   65, exBrd:   80, exAgr:   70,
+    expMov:  30, expBrd:  45, expAgr:  35,
     exhMov:  30,
-    trBrd:   30, trAgr:   25, trMov:   20,   // TRANSITION
-    cmpBrd:  25,                              // COMPRESSION
+    trBrd:   30, trAgr:   25, trMov:   20,
+    cmpBrd:  25,
   },
   LONDON: {
-    // London: active session. P50 mov≈45, P50 brd≈65, typical agr≈50-70
     deadMov: 10, deadBrd: 20, deadVol: 12,
     exMov:   75, exBrd:   85, exAgr:   75,
     expMov:  40, expBrd:  55, expAgr:  45,
@@ -190,7 +221,6 @@ const SESS_PROFILE = {
     cmpBrd:  30,
   },
   NEW_YORK: {
-    // NY: most active. P50 mov≈40, P50 brd≈60, typical agr≈45-65
     deadMov: 10, deadBrd: 20, deadVol: 12,
     exMov:   70, exBrd:   85, exAgr:   70,
     expMov:  35, expBrd:  50, expAgr:  40,
@@ -235,20 +265,21 @@ function processHours(hourKeys, byTime, onlyLast = false) {
   let sessionHigh       = {};
   let sessionLow        = {};
 
-  // Per-session-type carry-over (Asia vs Asia, London vs London, NY vs NY)
-  const prevSameSessionEnergy = {}; // session_name → avg energy base of previous same-session occurrence
-  const prevSameSessionScores = {}; // session_name → { movement, breadth, agreement, volatility }
+  // Per-session-type carry-over
+  const prevSameSessionEnergy = {};
+  const prevSameSessionScores = {};
   let compressionStreak = 0;
 
-  // Running session accumulators (reset each new session)
+  // Running session accumulators
   let sessionEBList  = [];
   let sessionMovList = [];
   let sessionBrdList = [];
   let sessionAgrList = [];
   let sessionVolList = [];
 
-  // Previous candles for hourly-vs-session agreement
-  let prevCandles = null;
+  // Previous hour tracking (for momentum engine)
+  let prevHourScores = null;
+  let prevCandles    = null;
 
   const rows = [];
 
@@ -259,20 +290,15 @@ function processHours(hourKeys, byTime, onlyLast = false) {
     // ── Session transition ──────────────────────────────────────────────────
     if (session !== currentSession) {
       if (currentSession && currentSession !== 'LOW_LIQUIDITY') {
-        // Capture session averages before resetting
         const avgMov = arrAvg(sessionMovList);
         const avgBrd = arrAvg(sessionBrdList);
         const avgAgr = arrAvg(sessionAgrList);
         const avgVol = arrAvg(sessionVolList);
 
-        // Update compression streak
         if (avgMov < 35 && avgBrd < 35 && avgVol < 40) compressionStreak++;
         else compressionStreak = 0;
 
-        // Carry energy base forward (same-session only)
         if (sessionEBList.length) prevSameSessionEnergy[currentSession] = arrAvg(sessionEBList);
-
-        // Store per-session scores so Asia compares against previous Asia (not NY)
         prevSameSessionScores[currentSession] = { movement: avgMov, breadth: avgBrd, agreement: avgAgr, volatility: avgVol };
       }
 
@@ -285,9 +311,10 @@ function processHours(hourKeys, byTime, onlyLast = false) {
       sessionBrdList    = [];
       sessionAgrList    = [];
       sessionVolList    = [];
+      prevHourScores    = null; // reset momentum at session boundary
 
       for (const [inst, c] of Object.entries(candles)) {
-        sessionOpenPrices[inst] = c.open;  // candle OPEN = true session start price
+        sessionOpenPrices[inst] = c.open;
         sessionHigh[inst]       = c.high;
         sessionLow[inst]        = c.low;
       }
@@ -315,21 +342,23 @@ function processHours(hourKeys, byTime, onlyLast = false) {
       }
     }
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // ENGINE 7: Currency Leadership
+    // ═══════════════════════════════════════════════════════════════════════
+    const strengthVals = Object.values(ccyStrength).sort((a, b) => b - a);
+    const currencyLeadershipGap = strengthVals.length >= 2
+      ? round1((strengthVals[0] - strengthVals[strengthVals.length - 1]) * 10000) / 10000
+      : 0;
+
     // ── Per-pair hourly calculations ────────────────────────────────────────
-    // Movement & breadth use HOURLY candle moves (open→close of THIS candle)
-    // Agreement uses hourly direction vs cumulative session direction
-    // Volatility uses hourly candle range (high-low)
     const hourlyMoves  = [];
     const hourlyRanges = [];
     let activePairs    = 0;
     let bullishMag = 0, bearishMag = 0;
-
-    // Agreement: does this hour continue the session trend per currency?
-    // Currency strength = session-to-date trend. Hourly direction = this candle.
-    // If session shows GBP strong and this hour GBP pairs ALSO rise → aligned.
-    // This breaks the tautology because session strength uses session open→current close,
-    // while hourly direction uses candle open→candle close (different time window).
     let agrAligned = 0, agrTotal = 0;
+
+    // Currency alignment: does each pair move consistently with currency strength?
+    let ccyAligned = 0, ccyTotal = 0;
 
     for (const inst of config.instruments) {
       const c    = candles[inst];
@@ -345,15 +374,17 @@ function processHours(hourKeys, byTime, onlyLast = false) {
       const hourlyRange = (c.high - c.low) / c.open;
       hourlyRanges.push(hourlyRange);
 
-      // Is this pair "active" this hour?
+      // Breadth: is this pair "active" this hour?
       if (hourlyMove >= scale.breadthThreshold) {
         activePairs++;
         if (hourlyDir > 0) bullishMag += hourlyMove;
         else               bearishMag += hourlyMove;
       }
 
-      // Agreement: does this hour's direction match session-to-date direction?
-      const sessionDir = (c.close - sOpen) / sOpen; // cumulative session move
+      // ═══════════════════════════════════════════════════════════════════
+      // ENGINE 3: Agreement — pair alignment (hourly vs session direction)
+      // ═══════════════════════════════════════════════════════════════════
+      const sessionDir = (c.close - sOpen) / sOpen;
       if (Math.abs(hourlyDir) >= scale.breadthThreshold * 0.5 &&
           Math.abs(sessionDir) >= scale.breadthThreshold * 0.5) {
         agrTotal++;
@@ -361,63 +392,156 @@ function processHours(hourKeys, byTime, onlyLast = false) {
           agrAligned++;
         }
       }
+
+      // ═══════════════════════════════════════════════════════════════════
+      // ENGINE 3: Agreement — currency alignment
+      // Does pair direction match currency strength expectation?
+      // ═══════════════════════════════════════════════════════════════════
+      const [base, quote] = inst.split('_');
+      const expectedDir = (ccyStrength[base] || 0) - (ccyStrength[quote] || 0);
+      if (Math.abs(hourlyDir) >= scale.breadthThreshold * 0.5 && Math.abs(expectedDir) > 0.00001) {
+        ccyTotal++;
+        if ((expectedDir > 0 && hourlyDir > 0) || (expectedDir < 0 && hourlyDir < 0)) {
+          ccyAligned++;
+        }
+      }
     }
 
     if (!hourlyMoves.length) { prevCandles = candles; continue; }
 
-    // ── Movement score (0-100) ──────────────────────────────────────────────
-    // Based on actual hourly pip movement, scaled by session-calibrated cap
+    // ═══════════════════════════════════════════════════════════════════════
+    // ENGINE 1: Movement
+    // ═══════════════════════════════════════════════════════════════════════
     const avgHourlyMove = arrAvg(hourlyMoves);
     const movementScore = round1(Math.min(100, (avgHourlyMove / scale.movementCap) * 100));
 
-    // ── Breadth score (0-100) ───────────────────────────────────────────────
-    // Percentage of pairs with meaningful activity THIS hour
+    // ═══════════════════════════════════════════════════════════════════════
+    // ENGINE 6: Participation (Breadth)
+    // ═══════════════════════════════════════════════════════════════════════
     const breadthScore = round1((activePairs / TOTAL) * 100);
 
-    // ── Agreement score (0-100) ─────────────────────────────────────────────
-    // Measures trend continuation: are this hour's moves consistent with session direction?
-    // High = market trending consistently. Low = choppy/reversing.
-    // Weighted by √(breadth) so low participation doesn't produce misleading agreement.
-    const rawAgrRatio    = agrTotal > 0 ? agrAligned / agrTotal : 0;
-    const agreementScore = round1(rawAgrRatio * Math.sqrt(breadthScore / 100) * 100);
+    // ═══════════════════════════════════════════════════════════════════════
+    // ENGINE 3: Agreement (combined: currency × pair alignment)
+    // ═══════════════════════════════════════════════════════════════════════
+    const pairAlignment = agrTotal > 0 ? agrAligned / agrTotal : 0;
+    const ccyAlignment  = ccyTotal > 0 ? ccyAligned / ccyTotal : 0;
+    // Combined agreement: product of alignments, weighted by breadth participation
+    const rawAgreement   = pairAlignment * ccyAlignment;
+    const agreementScore = round1(rawAgreement * Math.sqrt(breadthScore / 100) * 100);
 
-    // ── Volatility score (0-100) ────────────────────────────────────────────
-    // Based on actual hourly candle range (high-low)
-    const avgHourlyRange = arrAvg(hourlyRanges);
-    const volatilityScore = round1(Math.min(100, (avgHourlyRange / scale.volatilityCap) * 100));
-
-    // ── Directional pressure ────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // ENGINE 5: Directional Pressure
+    // ═══════════════════════════════════════════════════════════════════════
     const totalMag = bullishMag + bearishMag;
     const bullishPressurePct = totalMag > 0 ? round1(bullishMag / totalMag * 100) : 50;
     const bearishPressurePct = totalMag > 0 ? round1(bearishMag / totalMag * 100) : 50;
-    const dominanceScore = totalMag > 0
+    // directional_control: how one-sided is the pressure? 0 = split, 100 = one-sided
+    const directionalControl = totalMag > 0
       ? round1(Math.abs(bullishMag - bearishMag) / totalMag * 100) : 0;
 
-    // ── Energy base and acceleration ────────────────────────────────────────
-    const energyBase   = round1(0.45 * movementScore + 0.35 * breadthScore + 0.20 * volatilityScore);
+    // ═══════════════════════════════════════════════════════════════════════
+    // ENGINE 4: Volatility Quality
+    // ═══════════════════════════════════════════════════════════════════════
+    const avgHourlyRange  = arrAvg(hourlyRanges);
+    const volatilityScore = round1(Math.min(100, (avgHourlyRange / scale.volatilityCap) * 100));
+    const volatilityType  = classifyVolatility(
+      volatilityScore, agreementScore, directionalControl,
+      prevHourScores ? prevHourScores.volatility : null
+    );
+    const volatilityQuality = computeVolatilityQuality(volatilityScore, volatilityType);
+    // chaos_score: high volatility + low agreement + low directional control = chaos
+    const chaosScore = round1(
+      (volatilityScore / 100) * (1 - agreementScore / 100) * (1 - directionalControl / 100) * 100
+    );
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // ENGINE 2: Momentum (hour-over-hour movement delta)
+    // ═══════════════════════════════════════════════════════════════════════
+    const momentumScore = prevHourScores
+      ? round1(movementScore - prevHourScores.movement)
+      : 0;
+    const momentumAccel = prevHourScores?.momentum != null
+      ? round1(momentumScore - prevHourScores.momentum)
+      : 0;
+    const momentumType = classifyMomentum(
+      momentumScore, momentumAccel, movementScore,
+      prevHourScores ? prevHourScores.movement : null
+    );
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // ENGINE 8: Market Energy (per PDF formula)
+    // energy_base = 0.30×movement + 0.25×breadth + 0.20×agreement
+    //            + 0.15×directional_control + 0.10×volatility_quality
+    // energy = energy_base × session_quality
+    // ═══════════════════════════════════════════════════════════════════════
+    const energyBase = round1(
+      0.30 * movementScore +
+      0.25 * breadthScore +
+      0.20 * agreementScore +
+      0.15 * directionalControl +
+      0.10 * volatilityQuality
+    );
+
+    // Session quality penalizes chaotic/dead conditions, rewards healthy
+    const sessionQualityMult = volatilityType === 'CHAOTIC' ? 0.65
+                             : volatilityType === 'DEAD'    ? 0.55
+                             : volatilityType === 'EVENT'   ? 0.75
+                             : volatilityType === 'HEALTHY' ? 1.10
+                             :                                0.90; // NORMAL
+    const marketEnergy = round1(Math.min(100, energyBase * sessionQualityMult));
+
+    // Acceleration (vs previous same-session energy)
     const prevSessEB   = prevSameSessionEnergy[session] ?? null;
     const acceleration = prevSessEB != null ? round1(energyBase - prevSessEB) : 0;
 
-    // ── Market energy (composite) ───────────────────────────────────────────
-    // Agreement acts as quality multiplier — organized moves produce more energy
-    const rawEnergy    = 0.40 * movementScore + 0.30 * breadthScore + 0.20 * agreementScore + 0.10 * volatilityScore;
-    const qualityMult  = 0.5 + agreementScore / 200; // 0.5 (agr=0) → 1.0 (agr=100)
-    const marketEnergy = round1(Math.min(100, rawEnergy * qualityMult));
+    // ═══════════════════════════════════════════════════════════════════════
+    // ENGINE 9: Tradability (geometric mean gate)
+    // All components must be strong for high tradability.
+    // tradability = geoMean(energy, agreement, directional_control, breadth) × volQuality_factor
+    // ═══════════════════════════════════════════════════════════════════════
+    const volQualFactor = volatilityType === 'HEALTHY' ? 1.1
+                        : volatilityType === 'NORMAL'  ? 0.95
+                        : volatilityType === 'EVENT'   ? 0.7
+                        : volatilityType === 'CHAOTIC' ? 0.5
+                        :                                0.4; // DEAD
+    const tradComponents = [
+      Math.max(1, marketEnergy),
+      Math.max(1, agreementScore),
+      Math.max(1, directionalControl),
+      Math.max(1, breadthScore),
+    ];
+    const tradabilityScore = round1(Math.min(100, geoMean(tradComponents) * volQualFactor));
 
-    // ── Compression score ───────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // ENGINE 10: False Breakout Detection
+    // Movement rising but breadth and agreement remain weak
+    // ═══════════════════════════════════════════════════════════════════════
+    const falseBreakoutRisk = movementScore >= 35 && breadthScore < 30 && agreementScore < 25;
+
+    // ── Compression & Expansion ────────────────────────────────────────────
     const compressionScore = round1(((100 - movementScore) * (100 - breadthScore)) / 100);
 
-    // ── Expansion readiness ─────────────────────────────────────────────────
-    const streakScore    = Math.min(100, compressionStreak * 25);
-    const energyPressure = Math.max(0, 100 - marketEnergy);
-    const sessQualScore  = SESSION_QUALITY_SCORE[session] || 50;
-    const accelScore     = Math.min(100, Math.max(0, 50 + acceleration * 2));
+    // ═══════════════════════════════════════════════════════════════════════
+    // ENGINE 11: Expansion Readiness (per PDF formula)
+    // readiness = 0.35×compression_persistence + 0.20×volatility_contraction
+    //           + 0.20×participation_expansion + 0.15×session_transition_quality
+    //           + 0.10×alignment_improvement
+    // ═══════════════════════════════════════════════════════════════════════
+    const compPersistence  = Math.min(100, compressionStreak * 25);
+    const volContraction   = Math.max(0, 100 - volatilityScore);
+    const partExpansion    = prevHourScores
+      ? Math.min(100, Math.max(0, 50 + (breadthScore - (prevHourScores.breadth || 50)) * 3))
+      : 50;
+    const sessTransQuality = SESSION_QUALITY_SCORE[session] || 50;
+    const alignImprove     = prevHourScores
+      ? Math.min(100, Math.max(0, 50 + (agreementScore - (prevHourScores.agreement || 0)) * 2))
+      : 50;
     const expansionReadiness = round1(Math.min(100,
-      0.35 * streakScore
-      + 0.25 * energyPressure
-      + 0.20 * accelScore
-      + 0.10 * sessQualScore
-      + 0.10 * agreementScore
+      0.35 * compPersistence +
+      0.20 * volContraction +
+      0.20 * partExpansion +
+      0.15 * sessTransQuality +
+      0.10 * alignImprove
     ));
 
     // ── Energy cycle classification ─────────────────────────────────────────
@@ -434,31 +558,60 @@ function processHours(hourKeys, byTime, onlyLast = false) {
     sessionVolList.push(volatilityScore);
 
     rows.push({
-      time_utc:             hk,
-      session_name:         session,
-      movement_score:       movementScore,
-      breadth_score:        breadthScore,
-      agreement_score:      agreementScore,
-      volatility_score:     volatilityScore,
-      energy_base:          energyBase,
-      acceleration:         acceleration,
-      compression_score:    compressionScore,
-      expansion_score:      round1((movementScore * breadthScore) / 100),
-      market_energy:        marketEnergy,
-      expansion_readiness:  expansionReadiness,
-      energy_cycle:         energyCycle,
-      compression_streak:   compressionStreak,
-      pairs_moving:         activePairs,
-      pairs_quiet:          TOTAL - activePairs,
-      movement_magnitude:   round1(avgHourlyMove * 10000), // in pips (×10000)
-      bullish_breadth:      bullishPressurePct,
-      bearish_breadth:      bearishPressurePct,
-      dominance_score:      dominanceScore,
-      strongest_ccy:        strongestCcy,
-      weakest_ccy:          weakestCcy,
+      time_utc:              hk,
+      session_name:          session,
+      // Engine 1: Movement
+      movement_score:        movementScore,
+      movement_magnitude:    round1(avgHourlyMove * 10000),
+      // Engine 2: Momentum
+      momentum_score:        momentumScore,
+      momentum_type:         momentumType,
+      // Engine 3: Agreement
+      agreement_score:       agreementScore,
       directional_agreement: agreementScore,
+      // Engine 4: Volatility Quality
+      volatility_score:      volatilityScore,
+      volatility_quality:    volatilityQuality,
+      volatility_type:       volatilityType,
+      chaos_score:           chaosScore,
+      // Engine 5: Directional Pressure
+      directional_control:   directionalControl,
+      bullish_breadth:       bullishPressurePct,
+      bearish_breadth:       bearishPressurePct,
+      dominance_score:       directionalControl, // alias for backward compat
+      // Engine 6: Participation
+      breadth_score:         breadthScore,
+      pairs_moving:          activePairs,
+      pairs_quiet:           TOTAL - activePairs,
+      // Engine 7: Currency Leadership
+      currency_leadership_gap: currencyLeadershipGap,
+      strongest_ccy:         strongestCcy,
+      weakest_ccy:           weakestCcy,
+      // Engine 8: Market Energy
+      energy_base:           energyBase,
+      market_energy:         marketEnergy,
+      acceleration:          acceleration,
+      // Engine 9: Tradability
+      tradability_score:     tradabilityScore,
+      // Engine 10: False Breakout
+      false_breakout_risk:   falseBreakoutRisk,
+      // Engine 11: Expansion Readiness
+      compression_score:     compressionScore,
+      expansion_score:       round1((movementScore * breadthScore) / 100),
+      expansion_readiness:   expansionReadiness,
+      compression_streak:    compressionStreak,
+      // Engine 12: Energy Cycle
+      energy_cycle:          energyCycle,
     });
 
+    // Track for next hour's momentum calculation
+    prevHourScores = {
+      movement:   movementScore,
+      momentum:   momentumScore,
+      volatility: volatilityScore,
+      breadth:    breadthScore,
+      agreement:  agreementScore,
+    };
     prevCandles = candles;
   }
 
@@ -466,10 +619,7 @@ function processHours(hourKeys, byTime, onlyLast = false) {
 }
 
 // ─── Hourly upsert column filter ─────────────────────────────────────────────
-// bullish_breadth / bearish_breadth are in-memory only — not columns in
-// hourly_session_activity. Strip them before upserting to that table.
 
-// Most-frequent value in an array (used for currency labels across session hours)
 function _modal(arr) {
   if (!arr.length) return null;
   const counts = {};
@@ -478,8 +628,6 @@ function _modal(arr) {
 }
 
 // Fields that exist as columns in hourly_session_activity.
-// bullish_breadth / bearish_breadth / dominance_score / strongest_ccy / weakest_ccy
-// are computed in-memory and aggregated at session level only — not stored hourly.
 const HOURLY_COLS = new Set([
   'time_utc', 'session_name',
   'movement_score', 'breadth_score', 'agreement_score', 'volatility_score',
@@ -487,13 +635,30 @@ const HOURLY_COLS = new Set([
   'market_energy', 'expansion_readiness', 'energy_cycle',
   'compression_streak', 'pairs_moving', 'pairs_quiet',
   'movement_magnitude', 'directional_agreement',
+  // V2 new columns
+  'momentum_score', 'momentum_type',
+  'directional_control',
+  'volatility_quality', 'volatility_type', 'chaos_score',
+  'currency_leadership_gap',
+  'tradability_score',
+  'false_breakout_risk',
 ]);
 
 function toHourlyRow(r) {
   return Object.fromEntries(Object.entries(r).filter(([k]) => HOURLY_COLS.has(k)));
 }
 
-// ─── Market energy analysis (in-memory — no DB re-read required) ─────────────
+// ─── Tradability grade ──────────────────────────────────────────────────────
+
+function tradabilityGrade(score) {
+  if (score >= 70) return 'STRONG_TREND';
+  if (score >= 55) return 'TRADABLE';
+  if (score >= 40) return 'SELECTIVE';
+  if (score >= 25) return 'DANGEROUS';
+  return 'AVOID';
+}
+
+// ─── Market energy analysis helpers ─────────────────────────────────────────
 
 const SESSION_ORDER    = ['ASIA', 'LONDON', 'NEW_YORK', 'LOW_LIQUIDITY'];
 const SESS_LABEL       = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York' };
@@ -642,7 +807,7 @@ function computeExpansionPressure(sequence) {
   };
 }
 
-// ─── Step 15: Build per-session rows for market_energy_sessions ──────────────
+// ─── Build per-session rows for market_energy_sessions ──────────────────────
 
 function buildSessionRows(hourRows) {
   const groups = {};
@@ -653,10 +818,9 @@ function buildSessionRows(hourRows) {
     groups[key].rows.push(r);
   }
 
-  // Must iterate chronologically so each session can reference the previous same-session
   const sortedKeys  = Object.keys(groups).sort();
-  const sessHistory = {}; // session_name → [{movement, breadth, agreement, volatility, energy}]
-  let prevFlowBullPct = 50; // tracks preceding session's bullPct (intraday flow: Asia→London→NY)
+  const sessHistory = {};
+  let prevFlowBullPct = 50;
 
   return sortedKeys.map(key => {
     const g   = groups[key];
@@ -677,18 +841,27 @@ function buildSessionRows(hourRows) {
     const eng    = round1(avg(n('market_energy')));
     const streak = lastRow.compression_streak || 0;
 
-    // Pull same-session history so Asia compares against Asia, London vs London, NY vs NY
+    // New V2 metrics — session averages
+    const momAvg     = round1(avg(n('momentum_score')));
+    const dirCtrl    = round1(avg(n('directional_control')));
+    const volQual    = round1(avg(n('volatility_quality')));
+    const chaosAvg   = round1(avg(n('chaos_score')));
+    const tradAvg    = round1(avg(n('tradability_score')));
+    const leaderGap  = avg(g.rows.map(r => parseFloat(r.currency_leadership_gap) || 0));
+
+    // Session-level volatility type: most frequent hourly type
+    const volTypes = g.rows.map(r => r.volatility_type).filter(Boolean);
+    const sessVolType = _modal(volTypes) || 'NORMAL';
+
+    // Session-level false breakout: any hour flagged?
+    const anyFalseBreakout = g.rows.some(r => r.false_breakout_risk);
+
+    // Pull same-session history
     const hist     = sessHistory[g.session] || [];
     const prevHist = hist[hist.length - 1];
 
-    // Acceleration: current session energy vs previous SAME session energy.
-    // Cross-session accel (hourly rows) compares Asia vs NY which is meaningless.
     const accel = prevHist ? round1(eng - prevHist.energy) : 0;
 
-    // Classify using session-averaged scores instead of modal hourly cycle.
-    // Hourly classifications are dominated by low-activity edge hours (start/end
-    // of session) which vote LOW_PARTICIPATION even when peak hours show expansion.
-    // Session averages reflect the true character of the full session.
     const sessionCycle = classifyEnergyCycle(
       mov, brd, agr, vol, streak, accel,
       prevHist ? { movement: prevHist.movement, breadth: prevHist.breadth } : null,
@@ -696,23 +869,16 @@ function buildSessionRows(hourRows) {
     );
 
     // ── Liquidity score ──────────────────────────────────────────────────────
-    // Identifies sessions with genuine directional liquidity (real moves) vs noise.
-    // Components:
-    //   breadthCoherence:  Brd/Mov ratio — pairs moving together vs scattered
-    //   eMagnitude:        market energy — the composite strength of the session
-    //   directionalBias:   how skewed bull/bear pressure is (50/50 = no conviction)
-    //   flowPersistence:   same bias as preceding session today = institutional carry
     const bullPct  = round1(avg(n('bullish_breadth')));
     const bearPct  = round1(avg(n('bearish_breadth')));
 
     const breadthCoherence = mov > 0 ? Math.min(1, brd / mov) : 0;
     const eMagnitude       = Math.min(100, eng);
-    const directionalBias  = Math.abs(bullPct - 50) / 50; // 0 = split, 1 = one-sided
+    const directionalBias  = Math.abs(bullPct - 50) / 50;
     const currDominant     = bullPct >= bearPct ? 'bull' : 'bear';
     const prevFlowDominant = prevFlowBullPct >= 50 ? 'bull' : 'bear';
     const flowPersistence  = currDominant === prevFlowDominant ? 1.0 : 0.6;
 
-    // Weighted composite: energy is the base, coherence and bias amplify it
     const liquidityScore = round1(Math.min(100,
       eMagnitude * (0.35 + 0.30 * breadthCoherence + 0.20 * directionalBias + 0.15 * flowPersistence)
     ));
@@ -730,10 +896,22 @@ function buildSessionRows(hourRows) {
       session_zone:        null,
       session_start:       sessionStart.toISOString(),
       session_end:         sessionEnd.toISOString(),
+      // Core scores
       movement_score:      mov,
       breadth_score:       brd,
       agreement_score:     agr,
       volatility_score:    vol,
+      // V2 new engines
+      momentum_score:          momAvg,
+      directional_control:     dirCtrl,
+      volatility_quality:      volQual,
+      volatility_type:         sessVolType,
+      chaos_score:             chaosAvg,
+      currency_leadership_gap: round1(leaderGap * 10000) / 10000,
+      tradability_score:       tradAvg,
+      tradability_grade:       tradabilityGrade(tradAvg),
+      false_breakout_risk:     anyFalseBreakout,
+      // Existing fields
       acceleration_score:  accel,
       compression_score:   round1(avg(n('compression_score'))),
       compression_streak:  streak,
@@ -746,7 +924,7 @@ function buildSessionRows(hourRows) {
       aligned_pairs:       null,
       bullish_breadth:     bullPct,
       bearish_breadth:     bearPct,
-      dominance_score:     round1(avg(n('dominance_score'))),
+      dominance_score:     dirCtrl,
       strongest_ccy:       lastRow.strongest_ccy || null,
       weakest_ccy:         lastRow.weakest_ccy   || null,
       details: {
@@ -756,6 +934,9 @@ function buildSessionRows(hourRows) {
           energy_cycle:        r.energy_cycle,
           market_energy:       r.market_energy,
           expansion_readiness: r.expansion_readiness,
+          momentum_type:       r.momentum_type,
+          tradability_score:   r.tradability_score,
+          volatility_type:     r.volatility_type,
         })),
       },
     };
@@ -779,8 +960,6 @@ function buildSessionRows(hourRows) {
       row.prev_breadth   = pctVsRef(brd, prevHist.breadth);
       row.prev_agreement = pctVsRef(agr, prevHist.agreement);
       row.prev_energy    = pctVsRef(eng, prevHist.energy);
-      // Use absolute delta for momentum — avoids pctVsRef returning null when
-      // a prior session had near-zero energy (e.g. 5 → 26 = 420%, gets capped).
       const energyDelta = eng - prevHist.energy;
       row.energy_momentum = energyDelta > 5  ? 'ACCELERATING'
                           : energyDelta < -5 ? 'DECELERATING'
@@ -833,6 +1012,7 @@ async function computeSessionSummaries() {
       'movement_score', 'breadth_score', 'agreement_score', 'volatility_score',
       'energy_base', 'acceleration', 'market_energy', 'expansion_readiness',
       'energy_cycle', 'compression_streak', 'pairs_moving', 'expansion_score',
+      'momentum_score', 'directional_control', 'tradability_score',
     ].join(', '))
     .order('time_utc', { ascending: true });
   if (error || !rawRows?.length) return;
@@ -872,14 +1052,12 @@ async function computeSessionSummaries() {
     const avgEnergy  = arrAvg(energies);
     const avgReady   = arrAvg(readiness);
 
-    // Expansion component vs last-10 same-session history (for session_energy_score)
     const hist    = sessionHistory[g.session] || [];
     const histAvg = hist.slice(-10).length > 0 ? arrAvg(hist.slice(-10)) : avgMov;
     const expComp = round1(Math.min(100, (histAvg > 0 ? avgMov / histAvg : 1.0) * 50));
     if (!sessionHistory[g.session]) sessionHistory[g.session] = [];
     sessionHistory[g.session].push(avgMov);
 
-    // Legacy energy score (for existing code that reads session_energy_score)
     const energyScore = Math.min(100, Math.round(
       0.40 * avgMov + 0.35 * avgBrd + 0.15 * expComp + 0.10 * avgAgr
     ));
@@ -889,20 +1067,17 @@ async function computeSessionSummaries() {
                     : energyScore <= 75 ? 'EXPANSION' : 'EXPLOSIVE';
     if (avgBrd < 50 && (energyState === 'EXPANSION' || energyState === 'EXPLOSIVE')) energyState = 'STABLE';
 
-    // Dominant energy cycle for this session
     const cycleCounts = {};
     for (const h of g.hrs) {
       const c = h.energy_cycle || 'STABLE';
       cycleCounts[c] = (cycleCounts[c] || 0) + 1;
     }
     const dominantCycle = Object.entries(cycleCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'STABLE';
-
     const maxStreak = g.hrs.reduce((m, h) => Math.max(m, parseInt(h.compression_streak) || 0), 0);
 
     return {
       session_date_utc:          g.date,
       session_name:              g.session,
-      // Component averages
       avg_movement_score:        round1(avgMov),
       avg_breadth_score:         round1(avgBrd),
       avg_directional_agreement: round1(avgAgr),
@@ -910,16 +1085,12 @@ async function computeSessionSummaries() {
       avg_volatility_score:      round1(avgVol),
       avg_energy_base:           round1(avgEB),
       avg_acceleration:          round1(avgAcc),
-      // Final energy outputs
       avg_market_energy:         round1(avgEnergy),
       avg_expansion_readiness:   round1(avgReady),
-      // Legacy
       expansion_score:           expComp,
       session_energy_score:      energyScore,
       session_state:             energyState,
-      // Cycle
       dominant_cycle:            dominantCycle,
-      // Stats
       pairs_moving_avg:          round1(arrAvg(movingN)),
       expansion_hours:           g.hrs.filter(h => parseFloat(h.expansion_score) >= 40).length,
       compression_hours:         g.hrs.filter(h => parseFloat(h.expansion_score) <  20).length,
@@ -956,12 +1127,8 @@ async function backfillSessionActivity({ fullRewrite = false } = {}) {
   const allSessionRows = buildSessionRows(rows);
 
   if (fullRewrite) {
-    // Manual admin backfill — overwrite everything
     await upsertMarketEnergySessions(allSessionRows);
   } else {
-    // Hourly pipeline — only upsert today's active session + any new sessions
-    // not yet in DB. Completed sessions keep their original scores to prevent
-    // rolling averages/EMA from inflating values retroactively.
     const { getCurrentSession } = require('./sessionEngine');
     const activeSession = getCurrentSession().session;
     const todayStr = new Date().toISOString().slice(0, 10);
@@ -974,7 +1141,6 @@ async function backfillSessionActivity({ fullRewrite = false } = {}) {
         .eq('session_date', todayStr);
       const existingNames = new Set((existing || []).map(r => r.session_name));
 
-      // Upsert: active session (always) + any new sessions not yet stored
       const toUpsert = todayRows.filter(
         sr => sr.session_name === activeSession || !existingNames.has(sr.session_name)
       );
@@ -995,20 +1161,15 @@ async function calculateLatestSessionActivity() {
   const hourKeys = Object.keys(byTime).sort();
   if (hourKeys.length < 2) return;
 
-  // Full compute — need all rows to build accurate session aggregates
   const allRows = processHours(hourKeys, byTime);
   const row = allRows[allRows.length - 1];
   if (!row) return;
 
-  // Upsert the latest hourly row (strip in-memory-only fields)
   const { error } = await supabase
     .from('hourly_session_activity')
     .upsert([toHourlyRow(row)], { onConflict: 'time_utc', ignoreDuplicates: false });
   if (error) throw new Error(`Hourly upsert: ${error.message}`);
 
-  // Only upsert the CURRENT active session — completed sessions keep their
-  // stored scores. Recomputing all 4 shifts rolling averages/EMA context and
-  // inflates completed session values retroactively.
   const { getCurrentSession } = require('./sessionEngine');
   const activeSession = getCurrentSession().session;
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -1022,8 +1183,9 @@ async function calculateLatestSessionActivity() {
 
   console.log(
     `[SESSION_ACTIVITY] ✓ ${row.time_utc} | ${row.session_name} | ${row.energy_cycle}` +
-    ` | energy:${row.market_energy} ready:${row.expansion_readiness}` +
+    ` | energy:${row.market_energy} trad:${row.tradability_score} mom:${row.momentum_score}(${row.momentum_type})` +
     ` | mov:${row.movement_score} brd:${row.breadth_score} agr:${row.agreement_score} vol:${row.volatility_score}` +
+    ` | dirCtrl:${row.directional_control} volQ:${row.volatility_quality}(${row.volatility_type})` +
     ` | acc:${row.acceleration >= 0 ? '+' : ''}${row.acceleration} streak:${row.compression_streak}`
   );
 
@@ -1031,17 +1193,13 @@ async function calculateLatestSessionActivity() {
   return row;
 }
 
-// ─── Market energy report (pure DB — called by api/market-energy.js) ──────────
-// All data comes from stored DB tables. No in-memory candle computation.
-// The pipeline (run-pipeline cron) keeps market_energy_sessions up to date.
+// ─── Market energy report ───────────────────────────────────────────────────
 
 async function getMarketEnergyData() {
   const { getCurrentSession } = require('./sessionEngine');
   const currentSession = getCurrentSession().session;
   const todayStr = new Date().toISOString().slice(0, 10);
 
-  // Read today's sessions from DB — fall back to yesterday if today is empty
-  // (early UTC hours before first candle completes)
   let targetDate = todayStr;
   let { data: dbSessions, error: dbErr } = await supabase
     .from('market_energy_sessions')
@@ -1068,7 +1226,6 @@ async function getMarketEnergyData() {
 
   const storedByName = {};
   for (const row of dbSessions) {
-    // Merge computed fields from details JSON back to top-level
     if (row.details && typeof row.details === 'object') {
       const { hours, hourly, ...computed } = row.details;
       Object.assign(row, computed);
@@ -1079,7 +1236,6 @@ async function getMarketEnergyData() {
 
   const sessions = SESSION_ORDER.map(n => storedByName[n]).filter(Boolean);
 
-  // Cross-session analysis: read recent sessions for expansion pressure + market cycle
   const { data: recentSessions } = await supabase
     .from('market_energy_sessions')
     .select('*')
