@@ -3604,6 +3604,62 @@ function renderJrnOutcomesSection(e) {
   return _jrnSection('📈 Outcomes', `${blocks}${pending ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">${pending}</div>` : ''}`);
 }
 
+// ─── Journal: Engine Confluence section ───────────────────────────────────────
+
+function renderJrnConfluenceSection(hourlyRow) {
+  if (!hourlyRow) {
+    return _jrnSection('⚙️ Engine Confluence', '<p class="jrn-empty">No hourly engine data for this snapshot.</p>');
+  }
+
+  const eval_ = evaluateV2Thresholds(hourlyRow);
+  if (!eval_) {
+    return _jrnSection('⚙️ Engine Confluence', '<p class="jrn-empty">Unable to evaluate engine thresholds.</p>');
+  }
+
+  const statusCls = eval_.fired ? 'jrn-conf-active' : 'jrn-conf-inactive';
+  const statusLabel = eval_.fired
+    ? (eval_.pct >= 0.80 ? '🟢 STRONG — All systems go' : '🟡 ACTIVE — Conditions favourable')
+    : '🔴 NOT MET — Market conditions insufficient';
+
+  const explanation = eval_.fired
+    ? `${eval_.passed} of ${eval_.total} engines passing (${Math.round(eval_.pct * 100)}%). Market scanners, trade setups, and impulse detection are active for this hour.`
+    : `Only ${eval_.passed} of ${eval_.total} engines passing (${Math.round(eval_.pct * 100)}%) — need ${Math.ceil(V2_FIRE_PCT * eval_.total)} (60%) for activation. Trading sections are gated until conditions improve.`;
+
+  // Build chip rows — group passes and fails
+  const passes = eval_.results.filter(r => r.pass);
+  const fails  = eval_.results.filter(r => !r.pass);
+
+  const chipHtml = (r) => {
+    const cls = r.pass ? 'jrn-conf-chip pass' : 'jrn-conf-chip fail';
+    const prefix = r.signed && r.value > 0 ? '+' : '';
+    const icon = r.pass ? '✓' : '✗';
+    const dir = r.inverted ? '≤' : '≥';
+    return `<span class="${cls}" title="${r.label}: ${prefix}${r.value} (threshold: ${dir}${r.threshold})">
+      <span class="jrn-conf-name">${r.label}</span>
+      <span class="jrn-conf-val">${prefix}${r.value}</span>
+      <span class="jrn-conf-icon">${icon}</span>
+    </span>`;
+  };
+
+  // Failing engines get specific reasons
+  const failReasons = fails.map(r => {
+    const prefix = r.signed && r.value > 0 ? '+' : '';
+    const dir = r.inverted ? '≤' : '≥';
+    return `<div class="jrn-conf-reason">✗ <strong>${r.label}</strong>: ${prefix}${r.value} (need ${dir}${r.threshold})</div>`;
+  }).join('');
+
+  return _jrnSection('⚙️ Engine Confluence', `
+    <div class="${statusCls}">
+      <div class="jrn-conf-status">${statusLabel}</div>
+      <div class="jrn-conf-score">${eval_.passed}/${eval_.total} engines · ${Math.round(eval_.pct * 100)}%</div>
+      <div class="jrn-conf-explain">${explanation}</div>
+      <div class="jrn-conf-chips">
+        ${passes.map(chipHtml).join('')}${fails.map(chipHtml).join('')}
+      </div>
+      ${fails.length ? `<div class="jrn-conf-reasons"><div class="jrn-conf-reasons-title">Failing engines:</div>${failReasons}</div>` : ''}
+    </div>`);
+}
+
 // ─── Journal modal open/close ─────────────────────────────────────────────────
 
 let _jrnCachedEnergy = null;
@@ -3613,28 +3669,35 @@ async function openJournalModal(id) {
   if (!e) return;
 
   // Open immediately with data we already have — no waiting
-  _renderJournalModal(e, null, null, null);
+  _renderJournalModal(e, null, null, null, null);
 
   // Compute session context from already-loaded entries (no extra API call)
   const all = Object.values(_journalEntries).sort((a, b) => a.time.localeCompare(b.time));
   const sessionEntries = all.filter(x => x.session_name === e.session_name && x.time <= e.time);
   const prevEntry = [...all].reverse().find(x => x.time < e.time) || null; // immediately preceding entry (any session)
 
-  // Fetch market energy + news in parallel
+  // Fetch market energy + news + hourly V2 data in parallel
   let newsEvents = [];
+  let hourlyMatch = null;
   try {
-    const [newsR, energyR] = await Promise.all([
+    const [newsR, energyR, hourlyR] = await Promise.all([
       api(`/api/news?date=${e.time.slice(0, 10)}`).catch(() => ({})),
       api('/api/market-energy').catch(() => null),
+      api('/api/session-activity?type=hourly&days=3').catch(() => ({ hourly: [] })),
     ]);
     newsEvents = newsR.events || [];
     _jrnCachedEnergy = energyR;
+
+    // Match hourly row closest to entry time (same hour)
+    const entryHour = e.time.slice(0, 13); // "YYYY-MM-DDTHH"
+    const rows = hourlyR.hourly || [];
+    hourlyMatch = rows.find(r => (r.time_utc || '').slice(0, 13) === entryHour) || null;
   } catch {}
 
-  _renderJournalModal(e, newsEvents, sessionEntries, prevEntry);
+  _renderJournalModal(e, newsEvents, sessionEntries, prevEntry, hourlyMatch);
 }
 
-function _renderJournalModal(e, newsEvents, sessionEntries, prevEntry) {
+function _renderJournalModal(e, newsEvents, sessionEntries, prevEntry, hourlyRow) {
   const sessCls = (e.session_quality || 'BLOCKED').toLowerCase().replace(/_/g, '-');
   const signals  = e.signals_summary || {};
   const enteredCount = (signals.entered || []).length;
@@ -3664,8 +3727,9 @@ function _renderJournalModal(e, newsEvents, sessionEntries, prevEntry) {
       return parts.join('');
     })(computeEntryCsig(e))}`;
 
-  // Body — sections in order
+  // Body — sections in order (Engine Confluence at top — it's the master gate)
   document.getElementById('jrn-modal-body').innerHTML = [
+    renderJrnConfluenceSection(hourlyRow !== undefined ? hourlyRow : null),
     sessionEntries ? renderJrnSessionPerfSection(e, sessionEntries) : '',
     newsEvents !== null ? renderJrnCalendarSection(newsEvents, e.time) : _jrnSection('📅 Economic Calendar', '<p class="jrn-empty jrn-loading">Loading…</p>'),
     renderJrnCsigSection(e),
