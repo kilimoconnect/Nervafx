@@ -63,21 +63,23 @@
     }
 
     .arc-tabs {
-      display: flex; gap: 4px;
+      display: flex; flex-wrap: wrap; gap: 4px 4px;
       margin-bottom: 16px;
-      overflow-x: auto; -webkit-overflow-scrolling: touch;
-      scrollbar-width: none;
     }
-    .arc-tabs::-webkit-scrollbar { display: none; }
     .arc-tab {
-      padding: 6px 14px; border-radius: 6px;
+      padding: 5px 12px; border-radius: 6px;
       border: 1px solid var(--border);
       background: transparent; color: var(--text-muted);
       font-size: 11px; font-weight: 600; cursor: pointer;
-      transition: all 0.15s; white-space: nowrap; flex-shrink: 0;
+      transition: all 0.15s; white-space: nowrap;
     }
     .arc-tab:hover { background: var(--bg-hover); color: var(--text); }
     .arc-tab.active { background: rgba(59,130,246,0.14); border-color: rgba(59,130,246,0.38); color: #93c5fd; }
+    .arc-tab-sep {
+      width: 1px; height: 22px; align-self: center;
+      background: rgba(255,255,255,.06);
+      margin: 0 4px; flex-shrink: 0;
+    }
 
     .arc-loading {
       text-align: center; padding: 40px 20px;
@@ -134,6 +136,9 @@
       .arc-sep, .arc-title-text { display: none; }
       .arc-back-btn { font-size: 10px; padding: 5px 10px; }
       .arc-main { padding: 12px 12px 60px; }
+      .arc-tabs { gap: 3px 3px; }
+      .arc-tab { padding: 4px 9px; font-size: 10px; }
+      .arc-tab-sep { display: none; }
       .arc-filters { gap: 6px 10px; padding: 8px 10px; }
       .arc-fpill { padding: 2px 7px; font-size: 9px; }
     }
@@ -325,9 +330,11 @@
       <button class="arc-tab" data-section="volquality" onclick="switchArchiveTab(this)">Vol Quality</button>
       <button class="arc-tab" data-section="volatility" onclick="switchArchiveTab(this)">Volatility</button>
       <button class="arc-tab" data-section="momentum" onclick="switchArchiveTab(this)">Momentum</button>
+      <span class="arc-tab-sep"></span>
       <button class="arc-tab" data-section="liquidity" onclick="switchArchiveTab(this)">Liquidity</button>
-      <button class="arc-tab" data-section="breakdown" onclick="switchArchiveTab(this)">Hourly Breakdown</button>
       <button class="arc-tab" data-section="ccystrength" onclick="switchArchiveTab(this)">Currency Strength</button>
+      <span class="arc-tab-sep"></span>
+      <button class="arc-tab" data-section="breakdown" onclick="switchArchiveTab(this)">Hourly Breakdown</button>
       <button class="arc-tab" data-section="history" onclick="switchArchiveTab(this)">Session History</button>
     </div>
 
