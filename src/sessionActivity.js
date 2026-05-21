@@ -1040,15 +1040,31 @@ async function getMarketEnergyData() {
   const currentSession = getCurrentSession().session;
   const todayStr = new Date().toISOString().slice(0, 10);
 
-  // Read today's sessions from DB
-  const { data: dbSessions, error: dbErr } = await supabase
+  // Read today's sessions from DB — fall back to yesterday if today is empty
+  // (early UTC hours before first candle completes)
+  let targetDate = todayStr;
+  let { data: dbSessions, error: dbErr } = await supabase
     .from('market_energy_sessions')
     .select('*')
     .eq('session_date', todayStr)
     .order('session_name', { ascending: true });
 
   if (dbErr) console.warn('[ME] DB read error:', dbErr.message);
-  if (!dbSessions?.length) return null;
+
+  if (!dbSessions?.length) {
+    const yesterday = new Date();
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+    const yesterdayStr = yesterday.toISOString().slice(0, 10);
+    const { data: ySessions, error: yErr } = await supabase
+      .from('market_energy_sessions')
+      .select('*')
+      .eq('session_date', yesterdayStr)
+      .order('session_name', { ascending: true });
+    if (yErr) console.warn('[ME] Yesterday DB read error:', yErr.message);
+    if (!ySessions?.length) return null;
+    dbSessions = ySessions;
+    targetDate = yesterdayStr;
+  }
 
   const storedByName = {};
   for (const row of dbSessions) {
