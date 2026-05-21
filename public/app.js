@@ -1626,24 +1626,35 @@ function _meSessionExplain(s, label) {
 
 function _meHourlyTrend(hourlyRows) {
   if (!hourlyRows || hourlyRows.length === 0) return '';
-  const metrics = [
-    { key: 'movement_score',    label: 'Mov' },
-    { key: 'breadth_score',     label: 'Brd' },
-    { key: 'agreement_score',   label: 'Agr' },
-    { key: 'volatility_score',  label: 'Vol' },
-    { key: 'market_energy',     label: 'Energy' },
-    { key: 'tradability_score', label: 'Trad' },
-    { key: 'momentum_score',    label: 'Mom' },
+
+  // ── Score metrics (numeric rows with delta badges) ──
+  const scoreMetrics = [
+    { key: 'market_energy',       label: 'Energy' },
+    { key: 'tradability_score',   label: 'Trad' },
+    { key: 'movement_score',      label: 'Mov' },
+    { key: 'breadth_score',       label: 'Brd' },
+    { key: 'agreement_score',     label: 'Agr' },
+    { key: 'directional_control', label: 'DirCtrl' },
+    { key: 'volatility_quality',  label: 'VolQ' },
+    { key: 'volatility_score',    label: 'Vol' },
+    { key: 'momentum_score',      label: 'Mom', isMomentum: true },
   ];
 
-  // Time headers in user's timezone
+  // ── Classification labels (badge rows) ──
+  const VOL_TYPE_COLOR = { HEALTHY: '#22c55e', NORMAL: '#94a3b8', CHAOTIC: '#ef4444', EVENT: '#f59e0b', DEAD: '#64748b' };
+  const VOL_TYPE_SHORT = { HEALTHY: 'Hlthy', NORMAL: 'Norm', CHAOTIC: 'Chaos', EVENT: 'Event', DEAD: 'Dead' };
+  const MOM_TYPE_COLOR = { IMPULSE: '#f59e0b', EXPANSION: '#22c55e', TREND: '#0ea5e9', EXHAUSTION: '#ef4444', DECAY: '#f97316', STABLE: '#64748b' };
+  const MOM_TYPE_SHORT = { IMPULSE: 'Impls', EXPANSION: 'Expan', TREND: 'Trend', EXHAUSTION: 'Exhst', DECAY: 'Decay', STABLE: 'Stbl' };
+  const CYCLE_COLOR = { EXPLOSIVE: '#f59e0b', EXPANSION: '#22c55e', TRANSITION: '#0ea5e9', COMPRESSION: '#ef4444', EXHAUSTION: '#f97316', LOW_PARTICIPATION: '#64748b', DEAD: '#334155' };
+  const CYCLE_SHORT = { EXPLOSIVE: 'Explo', EXPANSION: 'Expan', TRANSITION: 'Trans', COMPRESSION: 'Compr', EXHAUSTION: 'Exhst', LOW_PARTICIPATION: 'LowP', DEAD: 'Dead' };
+
+  // Time headers
   const tz = (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC');
   const timeHeaders = hourlyRows.map(h => {
     const d = new Date(h.time_utc);
     return d.toLocaleTimeString('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false });
   });
 
-  // Change badge: shows delta from previous candle
   function changeBadge(vals, idx) {
     if (idx === 0) return '';
     const diff = vals[idx] - vals[idx - 1];
@@ -1653,7 +1664,6 @@ function _meHourlyTrend(hourlyRows) {
     return `<span class="${cls}">${sign}${diff}</span>`;
   }
 
-  // Color a value based on its magnitude
   function valColor(v) {
     if (v >= 60) return '#22c55e';
     if (v >= 35) return '#eab308';
@@ -1661,20 +1671,62 @@ function _meHourlyTrend(hourlyRows) {
     return '#64748b';
   }
 
+  function momColor(v) {
+    if (v > 5) return '#22c55e';
+    if (v > 0) return '#94a3b8';
+    if (v < -5) return '#ef4444';
+    if (v < 0) return '#f97316';
+    return '#64748b';
+  }
+
   const headerCells = timeHeaders.map(t => `<th class="me-ht-th">${t}</th>`).join('');
-  const bodyRows = metrics.map(m => {
+
+  // Score rows
+  const scoreRows = scoreMetrics.map(m => {
     const vals = hourlyRows.map(h => Math.round(parseFloat(h[m.key]) || 0));
-    const cells = vals.map((v, i) =>
-      `<td class="me-ht-td"><span class="me-ht-val" style="color:${valColor(v)}">${v}</span>${changeBadge(vals, i)}</td>`
-    ).join('');
+    const cells = vals.map((v, i) => {
+      if (m.isMomentum) {
+        const display = v > 0 ? `+${v}` : `${v}`;
+        return `<td class="me-ht-td"><span class="me-ht-val" style="color:${momColor(v)}">${display}</span>${changeBadge(vals, i)}</td>`;
+      }
+      return `<td class="me-ht-td"><span class="me-ht-val" style="color:${valColor(v)}">${v}</span>${changeBadge(vals, i)}</td>`;
+    }).join('');
     return `<tr><td class="me-ht-label">${m.label}</td>${cells}</tr>`;
   }).join('');
+
+  // Classification badge rows
+  function badgeRow(label, hourlyRows, field, colorMap, shortMap) {
+    const cells = hourlyRows.map(h => {
+      const type = h[field] || '';
+      const color = colorMap[type] || '#64748b';
+      const short = shortMap[type] || type.slice(0, 5);
+      return `<td class="me-ht-td"><span class="me-ht-badge" style="color:${color}">${short}</span></td>`;
+    }).join('');
+    return `<tr><td class="me-ht-label">${label}</td>${cells}</tr>`;
+  }
+
+  const classRows = [
+    badgeRow('Cycle', hourlyRows, 'energy_cycle', CYCLE_COLOR, CYCLE_SHORT),
+    badgeRow('VolTyp', hourlyRows, 'volatility_type', VOL_TYPE_COLOR, VOL_TYPE_SHORT),
+    badgeRow('MomTyp', hourlyRows, 'momentum_type', MOM_TYPE_COLOR, MOM_TYPE_SHORT),
+  ].join('');
+
+  // False breakout warning row
+  const anyFB = hourlyRows.some(h => h.false_breakout_risk);
+  const fbRow = anyFB ? `<tr><td class="me-ht-label" style="color:#ef4444">FB Risk</td>${hourlyRows.map(h =>
+    `<td class="me-ht-td">${h.false_breakout_risk ? '<span class="me-ht-badge" style="color:#ef4444">⚠</span>' : '<span class="me-ht-badge" style="color:#334155">—</span>'}</td>`
+  ).join('')}</tr>` : '';
 
   return `<div class="me-hourly-trend">
     <div class="me-ht-title">Hourly Breakdown</div>
     <table class="me-ht-table">
       <thead><tr><th class="me-ht-label"></th>${headerCells}</tr></thead>
-      <tbody>${bodyRows}</tbody>
+      <tbody>
+        ${scoreRows}
+        <tr class="me-ht-sep"><td colspan="${hourlyRows.length + 1}"></td></tr>
+        ${classRows}
+        ${fbRow}
+      </tbody>
     </table>
   </div>`;
 }

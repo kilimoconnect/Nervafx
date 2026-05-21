@@ -29,7 +29,7 @@ module.exports = async function handler(req, res) {
       while (true) {
         const { data, error } = await sb
           .from('hourly_session_activity')
-          .select('time_utc, session_name, movement_score, breadth_score, agreement_score, volatility_score, market_energy, expansion_readiness, compression_score, expansion_score, pairs_moving, pairs_quiet, market_state, tradability_score, directional_control, volatility_quality, volatility_type, momentum_score, momentum_type, chaos_score, currency_leadership_gap, false_breakout_risk')
+          .select('time_utc, session_name, movement_score, breadth_score, agreement_score, volatility_score, market_energy, expansion_readiness, compression_score, expansion_score, pairs_moving, pairs_quiet, market_state, tradability_score, directional_control, volatility_quality, volatility_type, momentum_score, momentum_type, chaos_score, currency_leadership_gap, false_breakout_risk, energy_cycle')
           .gte('time_utc', since)
           .order('time_utc', { ascending: true })
           .range(offset, offset + PAGE - 1);

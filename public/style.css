@@ -4360,6 +4360,16 @@ body::after {
   color: #ef4444;
   margin-left: 3px;
 }
+.me-ht-sep td {
+  height: 1px;
+  padding: 0;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.me-ht-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
 
 /* Session explanation block */
 .me-explain {
