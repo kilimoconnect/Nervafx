@@ -42,10 +42,7 @@ function baseLayout(content) {
 <style>
   body { margin:0; padding:0; background:#0b1120; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; }
   .wrap { max-width:600px; margin:0 auto; background:#111827; border-radius:12px; overflow:hidden; }
-  .header { background:linear-gradient(135deg,#1e293b,#0f172a); padding:28px 32px; text-align:center; }
-  .header h1 { margin:0; font-size:28px; }
-  .header h1 .nerva { color:#fff; font-weight:700; }
-  .header h1 .fx { color:#f59e0b; font-weight:800; }
+  .header { background:linear-gradient(135deg,#1e293b,#0f172a); padding:24px 32px; text-align:center; }
   .body { padding:28px 32px; color:#e2e8f0; font-size:15px; line-height:1.6; }
   .body h2 { color:#fff; font-size:20px; margin:0 0 12px; }
   .body p { margin:0 0 14px; }
@@ -65,7 +62,7 @@ function baseLayout(content) {
   .divider { height:1px; background:#334155; margin:20px 0; }
 </style></head>
 <body><div style="padding:20px"><div class="wrap">
-  <div class="header"><h1><span class="nerva">Nerva</span><span class="fx">FX</span></h1></div>
+  <div class="header"><a href="https://nervafx.com" style="text-decoration:none"><img src="https://nervafx.com/nervafx-logo.png" alt="NervaFX" width="180" style="display:inline-block;max-width:180px;height:auto;border:0" /></a></div>
   <div class="body">${content}</div>
   <div class="footer">
     <p>NervaFX — Currency Strength & Market Energy Engine</p>
@@ -273,13 +270,27 @@ function confluenceAlertEmail(confluenceData) {
     ? '<span class="badge badge-green">STRONG</span>'
     : '<span class="badge badge-amber">ACTIVE</span>';
 
-  const chipRows = results.map(r => {
-    const cls = r.pass ? 'badge-green' : 'badge-red';
-    const prefix = r.signed && r.value > 0 ? '+' : '';
+  // Build a 2-column table grid for email compatibility
+  const chipCells = results.map(r => {
+    const bgColor = r.pass ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.10)';
+    const borderColor = r.pass ? '#22c55e' : '#ef4444';
     const icon = r.pass ? '✓' : '✗';
+    const iconColor = r.pass ? '#22c55e' : '#ef4444';
+    const prefix = r.signed && r.value > 0 ? '+' : '';
     const dir = r.inverted ? '≤' : '≥';
-    return `<span class="metric"><span class="badge ${cls}">${icon}</span> ${r.label}: <strong>${prefix}${r.value}</strong> <span style="color:#64748b;font-size:11px">(${dir}${r.threshold})</span></span>`;
-  }).join('\n          ');
+    return `<td style="padding:4px;width:50%">
+      <div style="background:${bgColor};border:1px solid ${borderColor};border-radius:6px;padding:8px 10px;font-size:13px;color:#e2e8f0">
+        <span style="color:${iconColor};font-weight:700">${icon}</span> ${r.label}: <strong style="color:#fff">${prefix}${r.value}</strong> <span style="color:#64748b;font-size:11px">(${dir}${r.threshold})</span>
+      </div>
+    </td>`;
+  });
+  // Pair cells into 2-column rows
+  const chipTableRows = [];
+  for (let i = 0; i < chipCells.length; i += 2) {
+    const cell1 = chipCells[i];
+    const cell2 = chipCells[i + 1] || '<td style="padding:4px;width:50%"></td>';
+    chipTableRows.push(`<tr>${cell1}${cell2}</tr>`);
+  }
 
   const failList = results.filter(r => !r.pass);
   const failHtml = failList.length ? `
@@ -299,9 +310,9 @@ function confluenceAlertEmail(confluenceData) {
       <p>${passed} of ${total} engines are aligned (${pctStr}%).${session ? ` Current session: <strong>${session}</strong>.` : ''} Market conditions support high-probability setups.</p>
       <div class="card">
         <div class="card-title">Engine Status</div>
-        <div style="display:flex;flex-wrap:wrap;gap:4px">
-          ${chipRows}
-        </div>
+        <table style="width:100%;border-collapse:collapse;border-spacing:0">
+          ${chipTableRows.join('\n          ')}
+        </table>
         ${failHtml}
       </div>
       <p>Scanners, trade watchlist, and impulse detection are <strong>active</strong>. Check the dashboard for live opportunities.</p>
@@ -315,19 +326,39 @@ function approvedTradesEmail(trades, confluenceData) {
   const { passed, total, pct } = confluenceData;
   const pctStr = Math.round(pct * 100);
 
-  const tradeRows = trades.map(t => {
-    const dir = (t.direction || t.signal) === 'BUY'
-      ? '<span class="signal-buy">▲ BUY</span>'
-      : '<span class="signal-sell">▼ SELL</span>';
+  const tradeCards = trades.map(t => {
+    const isBuy = (t.direction || t.signal) === 'BUY';
+    const dir = isBuy
+      ? '<span style="color:#22c55e;font-weight:700">▲ BUY</span>'
+      : '<span style="color:#ef4444;font-weight:700">▼ SELL</span>';
+    const borderColor = isBuy ? '#22c55e' : '#ef4444';
     const inst = (t.instrument || '').replace('_', '/');
-    return `<tr>
-      <td style="padding:8px;color:#fff;font-weight:600">${inst}</td>
-      <td style="padding:8px">${dir}</td>
-      <td style="padding:8px;color:#cbd5e1">${t.confidence || '—'}%</td>
-      <td style="padding:8px;color:#22c55e;font-size:13px">${t.entry_price ? t.entry_price : '—'}</td>
-      <td style="padding:8px;color:#ef4444;font-size:13px">${t.stop_loss ? t.stop_loss : '—'}</td>
-      <td style="padding:8px;color:#3b82f6;font-size:13px">${t.take_profit ? t.take_profit : '—'}</td>
-    </tr>`;
+    return `<div style="background:#1e293b;border:1px solid ${borderColor};border-radius:8px;padding:14px 16px;margin:8px 0">
+      <table style="width:100%;border-collapse:collapse">
+        <tr>
+          <td style="color:#fff;font-weight:700;font-size:16px;padding:0 0 8px">${inst}</td>
+          <td style="text-align:right;padding:0 0 8px">${dir}</td>
+        </tr>
+        <tr>
+          <td colspan="2" style="padding:0">
+            <table style="width:100%;border-collapse:collapse">
+              <tr style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">
+                <td style="padding:4px 0">Confidence</td>
+                <td style="padding:4px 0">Entry</td>
+                <td style="padding:4px 0">Stop Loss</td>
+                <td style="padding:4px 0">Take Profit</td>
+              </tr>
+              <tr style="font-size:14px">
+                <td style="padding:2px 0;color:#f59e0b;font-weight:600">${t.confidence || '—'}%</td>
+                <td style="padding:2px 0;color:#e2e8f0">${t.entry_price || '—'}</td>
+                <td style="padding:2px 0;color:#ef4444">${t.stop_loss || '—'}</td>
+                <td style="padding:2px 0;color:#22c55e">${t.take_profit || '—'}</td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </div>`;
   }).join('');
 
   return {
@@ -335,15 +366,8 @@ function approvedTradesEmail(trades, confluenceData) {
     html: baseLayout(`
       <h2>Approved Trades</h2>
       <p>Engine Confluence is active (<strong>${passed}/${total}</strong> engines, ${pctStr}%). The following trades meet all approval criteria:</p>
-      <table style="width:100%;border-collapse:collapse;margin:16px 0">
-        <thead><tr style="border-bottom:1px solid #334155;color:#94a3b8;font-size:13px;text-align:left">
-          <th style="padding:8px">Pair</th><th style="padding:8px">Signal</th>
-          <th style="padding:8px">Conf</th><th style="padding:8px">Entry</th>
-          <th style="padding:8px">SL</th><th style="padding:8px">TP</th>
-        </tr></thead>
-        <tbody>${tradeRows}</tbody>
-      </table>
-      <div class="card">
+      ${tradeCards}
+      <div class="card" style="margin-top:16px">
         <div class="card-title">Engine Confluence</div>
         <p style="margin:0;color:#cbd5e1">${passed}/${total} engines aligned — conditions are favourable for these setups.</p>
       </div>
@@ -356,27 +380,35 @@ function approvedTradesEmail(trades, confluenceData) {
 function impulseAlertEmail(impulses, confluenceData) {
   const { passed, total, pct } = confluenceData;
 
-  const impulseRows = impulses.map(imp => {
-    const dir = imp.direction === 'BUY'
-      ? '<span class="signal-buy">▲ Bullish</span>'
-      : '<span class="signal-sell">▼ Bearish</span>';
-    return `<tr>
-      <td style="padding:8px;color:#fff;font-weight:600">${(imp.instrument || '').replace('_', '/')}</td>
-      <td style="padding:8px">${dir}</td>
-      <td style="padding:8px;color:#cbd5e1">EXPANDING</td>
-    </tr>`;
-  }).join('');
+  const impulseCells = impulses.map(imp => {
+    const isBuy = imp.direction === 'BUY';
+    const borderColor = isBuy ? '#22c55e' : '#ef4444';
+    const arrow = isBuy ? '▲' : '▼';
+    const dirLabel = isBuy ? 'Bullish' : 'Bearish';
+    const dirColor = isBuy ? '#22c55e' : '#ef4444';
+    const inst = (imp.instrument || '').replace('_', '/');
+    return `<td style="padding:4px;width:50%">
+      <div style="background:#1e293b;border:1px solid ${borderColor};border-radius:8px;padding:12px 14px">
+        <div style="color:#fff;font-weight:700;font-size:15px;margin:0 0 4px">${inst}</div>
+        <div style="color:${dirColor};font-size:13px;font-weight:600">${arrow} ${dirLabel}</div>
+        <div style="color:#64748b;font-size:11px;margin-top:2px">EXPANDING</div>
+      </div>
+    </td>`;
+  });
+  const impulseTableRows = [];
+  for (let i = 0; i < impulseCells.length; i += 2) {
+    const cell1 = impulseCells[i];
+    const cell2 = impulseCells[i + 1] || '<td style="padding:4px;width:50%"></td>';
+    impulseTableRows.push(`<tr>${cell1}${cell2}</tr>`);
+  }
 
   return {
     subject: `${impulses.length} M15 Impulse${impulses.length > 1 ? 's' : ''} — Engine Active (${passed}/${total})`,
     html: baseLayout(`
       <h2>M15 Impulse Moves Detected</h2>
       <p>Engine Confluence is active (<strong>${passed}/${total}</strong>, ${Math.round(pct * 100)}%). These pairs are showing expanding momentum across 45M/90M/180M:</p>
-      <table style="width:100%;border-collapse:collapse;margin:16px 0">
-        <thead><tr style="border-bottom:1px solid #334155;color:#94a3b8;font-size:13px;text-align:left">
-          <th style="padding:8px">Pair</th><th style="padding:8px">Direction</th><th style="padding:8px">State</th>
-        </tr></thead>
-        <tbody>${impulseRows}</tbody>
+      <table style="width:100%;border-collapse:collapse;border-spacing:0;margin:16px 0">
+        ${impulseTableRows.join('\n        ')}
       </table>
       <p style="text-align:center;margin:24px 0"><a class="cta" href="https://nervafx.com">View Live Dashboard →</a></p>
       <p style="color:#94a3b8;font-size:13px">Impulse detection is a market observation, not a trade recommendation.</p>
