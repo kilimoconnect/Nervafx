@@ -1304,6 +1304,12 @@ function updateV2ThresholdBar(hourlyRows) {
   const bar = document.getElementById('v2-threshold-bar');
   if (!bar) return;
 
+  // Engine Confluence is a Pro+ feature — never show on free plan
+  if (document.body.classList.contains('plan-free')) {
+    bar.style.display = 'none';
+    return;
+  }
+
   // Use the latest hourly row from the active session
   if (!hourlyRows || !hourlyRows.length) {
     bar.style.display = 'none';

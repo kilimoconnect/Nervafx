@@ -3902,6 +3902,9 @@ body::after {
   background: rgba(99,102,241,0.25);
   color: #c7d2fe;
 }
+.plan-free .pro-only {
+  display: none !important;
+}
 .plan-free .premium-only,
 .plan-pro .premium-only {
   display: none !important;
