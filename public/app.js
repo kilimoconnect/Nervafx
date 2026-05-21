@@ -3683,15 +3683,30 @@ async function openJournalModal(id) {
     const [newsR, energyR, hourlyR] = await Promise.all([
       api(`/api/news?date=${e.time.slice(0, 10)}`).catch(() => ({})),
       api('/api/market-energy').catch(() => null),
-      api('/api/session-activity?type=hourly&days=3').catch(() => ({ hourly: [] })),
+      api(`/api/session-activity?type=hourly&days=${Math.min(30, Math.ceil((Date.now() - new Date(e.time).getTime()) / 86400000) + 2)}`).catch(() => ({ hourly: [] })),
     ]);
     newsEvents = newsR.events || [];
     _jrnCachedEnergy = energyR;
 
-    // Match hourly row closest to entry time (same hour)
-    const entryHour = e.time.slice(0, 13); // "YYYY-MM-DDTHH"
+    // Match hourly row to entry time (same UTC hour)
+    // Normalise formats: Supabase may return "2026-05-21 14:00" or "2026-05-21T14:00"
+    const entryDt = new Date(e.time);
+    const entryUtcH = Date.UTC(entryDt.getUTCFullYear(), entryDt.getUTCMonth(), entryDt.getUTCDate(), entryDt.getUTCHours());
     const rows = hourlyR.hourly || [];
-    hourlyMatch = rows.find(r => (r.time_utc || '').slice(0, 13) === entryHour) || null;
+    hourlyMatch = rows.find(r => {
+      const rd = new Date(r.time_utc);
+      return Date.UTC(rd.getUTCFullYear(), rd.getUTCMonth(), rd.getUTCDate(), rd.getUTCHours()) === entryUtcH;
+    }) || null;
+    // Fallback: if no exact hour match, use closest row within 2 hours
+    if (!hourlyMatch && rows.length) {
+      const entryMs = entryDt.getTime();
+      let best = null, bestDiff = Infinity;
+      for (const r of rows) {
+        const diff = Math.abs(new Date(r.time_utc).getTime() - entryMs);
+        if (diff < bestDiff && diff <= 2 * 3600000) { bestDiff = diff; best = r; }
+      }
+      hourlyMatch = best;
+    }
   } catch {}
 
   _renderJournalModal(e, newsEvents, sessionEntries, prevEntry, hourlyMatch);
