@@ -237,32 +237,37 @@
       display: flex; align-items: center; gap: 6px;
       padding: 0 28px 12px;
     }
-    .ccs-day-block {
-      margin-bottom: 20px;
+    .ccs-card {
       border: 1px solid var(--border);
       border-radius: 10px;
       background: rgba(255,255,255,.02);
       overflow: hidden;
     }
-    .ccs-day-block .bc-date-header {
+    .ccs-header-row {
+      display: flex; align-items: center; justify-content: space-between;
       padding: 10px 14px;
-      font-size: 12px; font-weight: 700; color: var(--text);
       background: rgba(255,255,255,.03);
       border-bottom: 1px solid var(--border);
     }
-    .ccs-chart-area {
-      position: relative;
-      padding: 8px 14px 6px;
+    .ccs-header-row .ccs-legend {
+      padding: 0; border: none;
     }
+    .ccs-scroll {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255,255,255,.12) transparent;
+    }
+    .ccs-scroll::-webkit-scrollbar { height: 6px; }
+    .ccs-scroll::-webkit-scrollbar-track { background: transparent; }
+    .ccs-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 3px; }
     .ccs-canvas-wrap {
       position: relative;
-      width: 100%;
-      height: 220px;
+      height: 340px;
     }
     .ccs-canvas-wrap canvas {
-      width: 100% !important;
-      height: 100% !important;
       display: block;
+      height: 100%;
     }
     .ccs-legend {
       display: flex; flex-wrap: wrap; gap: 4px 12px;
@@ -280,19 +285,9 @@
       width: 8px; height: 8px; border-radius: 50%;
       flex-shrink: 0;
     }
-    .ccs-zero-line {
-      position: absolute; left: 0; right: 0;
-      border-top: 1px dashed rgba(255,255,255,.08);
-    }
-    .ccs-sess-label {
-      position: absolute; top: 2px;
-      font-size: 9px; font-weight: 700;
-      letter-spacing: .03em;
-      opacity: .5;
-    }
     @media (max-width: 700px) {
       .ccs-tf-row { padding: 0 12px 10px; }
-      .ccs-canvas-wrap { height: 180px; }
+      .ccs-canvas-wrap { height: 260px; }
       .ccs-legend { gap: 3px 8px; padding: 6px 10px 8px; }
       .ccs-legend-item { font-size: 9px; }
     }
@@ -1250,99 +1245,72 @@
     const points = Object.values(timeMap).sort((a, b) => a.time.localeCompare(b.time));
     if (!points.length) { container.innerHTML = '<p class="me-empty">No data.</p>'; return; }
 
-    // Group points by date
-    const byDate = {};
-    for (const p of points) {
-      const date = p.time.slice(0, 10);
-      if (!byDate[date]) byDate[date] = [];
-      byDate[date].push(p);
-    }
-
-    const dates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
     const hiddenCcys = new Set();
 
-    let html = '';
-    const canvasIds = [];
-
-    for (const date of dates) {
-      const dayPts = byDate[date];
-      const d = new Date(date + 'T12:00:00Z');
-      const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: tz });
-      const cid = 'ccs-cv-' + date;
-      canvasIds.push({ id: cid, pts: dayPts });
-
-      html += `<div class="ccs-day-block">
-        <div class="bc-date-header">${dayLabel}</div>
-        <div class="ccs-chart-area">
-          <div class="ccs-canvas-wrap"><canvas id="${cid}"></canvas></div>
-        </div>
-        <div class="ccs-legend" id="ccs-leg-${date}">`;
-      for (const ccy of CCY_ORDER) {
-        html += `<div class="ccs-legend-item" data-ccy="${ccy}" onclick="toggleCcsLine(this)">
-          <span class="ccs-legend-dot" style="background:${CCY_COLORS[ccy]}"></span>${ccy}
-        </div>`;
-      }
-      html += '</div></div>';
+    let html = '<div class="ccs-card">';
+    // Header with legend
+    html += '<div class="ccs-header-row"><div class="ccs-legend">';
+    for (const ccy of CCY_ORDER) {
+      html += `<div class="ccs-legend-item" data-ccy="${ccy}" onclick="toggleCcsLine(this)">
+        <span class="ccs-legend-dot" style="background:${CCY_COLORS[ccy]}"></span>${ccy}
+      </div>`;
     }
+    html += '</div></div>';
+    // Scrollable canvas
+    html += '<div class="ccs-scroll"><div class="ccs-canvas-wrap"><canvas id="ccs-main-cv"></canvas></div></div></div>';
 
     container.innerHTML = html;
 
-    // Draw all canvases
-    requestAnimationFrame(() => {
-      for (const { id, pts } of canvasIds) {
-        drawCcsCanvas(id, pts, field, tz, hiddenCcys);
-      }
-    });
+    // Store data for redraws
+    container._ccsData = { points, field, tz, hiddenCcys };
 
-    // Store references for toggle redraws
-    container._ccsData = { canvasIds, field, tz, hiddenCcys };
+    requestAnimationFrame(() => drawCcsCanvas(container));
   }
 
   function toggleCcsLine(el) {
     const ccy = el.dataset.ccy;
     const container = document.getElementById('arc-ccystrength-body');
     if (!container || !container._ccsData) return;
-    const { canvasIds, field, tz, hiddenCcys } = container._ccsData;
+    const { hiddenCcys } = container._ccsData;
 
-    if (hiddenCcys.has(ccy)) {
-      hiddenCcys.delete(ccy);
-      el.classList.remove('dimmed');
-    } else {
-      hiddenCcys.add(ccy);
-      el.classList.add('dimmed');
-    }
-    // Sync all legend items across all days
+    hiddenCcys.has(ccy) ? hiddenCcys.delete(ccy) : hiddenCcys.add(ccy);
     document.querySelectorAll(`.ccs-legend-item[data-ccy="${ccy}"]`).forEach(item => {
       item.classList.toggle('dimmed', hiddenCcys.has(ccy));
     });
-    // Redraw all canvases
-    for (const { id, pts } of canvasIds) {
-      drawCcsCanvas(id, pts, field, tz, hiddenCcys);
-    }
+    drawCcsCanvas(container);
   }
 
-  function drawCcsCanvas(canvasId, pts, field, tz, hiddenCcys) {
-    const canvas = document.getElementById(canvasId);
+  function drawCcsCanvas(container) {
+    const { points, field, tz, hiddenCcys } = container._ccsData;
+    const canvas = document.getElementById('ccs-main-cv');
     if (!canvas) return;
     const wrap = canvas.parentElement;
+    const scrollEl = wrap.parentElement;
     const dpr = window.devicePixelRatio || 1;
-    const W = wrap.clientWidth;
+
+    // Width: 6px per data point, minimum viewport width
+    const PX_PER_PT = 6;
+    const viewW = scrollEl.clientWidth;
+    const W = Math.max(viewW, points.length * PX_PER_PT + 80);
     const H = wrap.clientHeight;
+
     canvas.width = W * dpr;
     canvas.height = H * dpr;
+    canvas.style.width = W + 'px';
+    wrap.style.width = W + 'px';
     const ctx = canvas.getContext('2d');
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, W, H);
 
-    const PAD_L = 40, PAD_R = 36, PAD_T = 14, PAD_B = 22;
+    const PAD_L = 50, PAD_R = 36, PAD_T = 24, PAD_B = 22;
     const cw = W - PAD_L - PAD_R;
     const ch = H - PAD_T - PAD_B;
 
-    // Find Y range across all visible currencies
+    // Y range across all visible currencies (full dataset for consistent scale)
     let yMin = 0, yMax = 0;
     for (const ccy of CCY_ORDER) {
       if (hiddenCcys.has(ccy)) continue;
-      for (const p of pts) {
+      for (const p of points) {
         const v = p[ccy];
         if (v !== undefined) {
           if (v < yMin) yMin = v;
@@ -1350,99 +1318,112 @@
         }
       }
     }
-    // Pad range symmetrically
     const absMax = Math.max(Math.abs(yMin), Math.abs(yMax), 0.001);
     yMin = -absMax * 1.15;
     yMax =  absMax * 1.15;
     const yRange = yMax - yMin;
 
-    const xStep = pts.length > 1 ? cw / (pts.length - 1) : cw;
+    function xPx(i) { return PAD_L + (points.length > 1 ? (i / (points.length - 1)) * cw : cw / 2); }
+    function yPx(v) { return PAD_T + ch - ((v - yMin) / yRange) * ch; }
 
-    // Grid lines + Y labels
-    ctx.strokeStyle = 'rgba(255,255,255,.06)';
+    // Horizontal grid
+    ctx.strokeStyle = 'rgba(255,255,255,.05)';
     ctx.lineWidth = 1;
-    ctx.fillStyle = 'rgba(255,255,255,.25)';
+    ctx.fillStyle = 'rgba(255,255,255,.22)';
     ctx.font = '9px Inter, sans-serif';
     ctx.textAlign = 'right';
-    const gridSteps = 5;
+    const gridSteps = 6;
     for (let i = 0; i <= gridSteps; i++) {
-      const yVal = yMin + (yRange * i / gridSteps);
-      const yPx = PAD_T + ch - (ch * i / gridSteps);
-      ctx.beginPath();
-      ctx.moveTo(PAD_L, yPx);
-      ctx.lineTo(W - PAD_R, yPx);
-      ctx.stroke();
-      const lbl = yVal.toFixed(4);
-      ctx.fillText(lbl, PAD_L - 4, yPx + 3);
+      const val = yMin + (yRange * i / gridSteps);
+      const y = PAD_T + ch - (ch * i / gridSteps);
+      ctx.beginPath(); ctx.moveTo(PAD_L, y); ctx.lineTo(W - PAD_R, y); ctx.stroke();
+      ctx.fillText(val.toFixed(4), PAD_L - 4, y + 3);
     }
 
-    // Zero line (stronger)
-    const zeroY = PAD_T + ch - ((0 - yMin) / yRange) * ch;
-    ctx.strokeStyle = 'rgba(255,255,255,.15)';
-    ctx.lineWidth = 1;
+    // Zero line
+    const zy = yPx(0);
+    ctx.strokeStyle = 'rgba(255,255,255,.12)';
     ctx.setLineDash([4, 3]);
-    ctx.beginPath();
-    ctx.moveTo(PAD_L, zeroY);
-    ctx.lineTo(W - PAD_R, zeroY);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(PAD_L, zy); ctx.lineTo(W - PAD_R, zy); ctx.stroke();
     ctx.setLineDash([]);
 
-    // X axis time labels
-    ctx.fillStyle = 'rgba(255,255,255,.3)';
-    ctx.font = '9px Inter, sans-serif';
-    ctx.textAlign = 'center';
-    const xLabelEvery = Math.max(1, Math.floor(pts.length / 8));
-    for (let i = 0; i < pts.length; i += xLabelEvery) {
-      const xPx = PAD_L + (pts.length > 1 ? (i / (pts.length - 1)) * cw : cw / 2);
-      const lt = new Date(pts[i].time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
-      ctx.fillText(lt, xPx, H - 4);
+    // Date dividers + labels
+    let prevDate = '';
+    for (let i = 0; i < points.length; i++) {
+      const date = points[i].time.slice(0, 10);
+      if (date !== prevDate) {
+        const x = xPx(i);
+        // Vertical divider line
+        ctx.strokeStyle = 'rgba(255,255,255,.08)';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, PAD_T); ctx.lineTo(x, PAD_T + ch); ctx.stroke();
+        // Date label at top
+        const d = new Date(date + 'T12:00:00Z');
+        const lbl = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: tz });
+        ctx.fillStyle = 'rgba(255,255,255,.35)';
+        ctx.font = 'bold 9px Inter, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(lbl, x + 4, PAD_T - 6);
+        prevDate = date;
+      }
     }
 
-    // Draw lines + collect endpoints for labels
+    // X axis time labels (spaced for readability)
+    ctx.fillStyle = 'rgba(255,255,255,.25)';
+    ctx.font = '8px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    const minPxGap = 50;
+    let lastLabelX = -999;
+    for (let i = 0; i < points.length; i++) {
+      const x = xPx(i);
+      if (x - lastLabelX < minPxGap) continue;
+      const lt = new Date(points[i].time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
+      ctx.fillText(lt, x, H - 5);
+      lastLabelX = x;
+    }
+
+    // Draw currency lines
     const endpoints = [];
     for (const ccy of CCY_ORDER) {
       if (hiddenCcys.has(ccy)) continue;
       const color = CCY_COLORS[ccy];
       ctx.strokeStyle = color;
-      ctx.lineWidth = 1.8;
+      ctx.lineWidth = 1.6;
       ctx.lineJoin = 'round';
       ctx.beginPath();
-      let started = false;
-      let lastX = 0, lastY = 0;
-      for (let i = 0; i < pts.length; i++) {
-        const v = pts[i][ccy];
+      let started = false, lx = 0, ly = 0;
+      for (let i = 0; i < points.length; i++) {
+        const v = points[i][ccy];
         if (v === undefined) continue;
-        const xPx = PAD_L + (pts.length > 1 ? (i / (pts.length - 1)) * cw : cw / 2);
-        const yPx = PAD_T + ch - ((v - yMin) / yRange) * ch;
-        if (!started) { ctx.moveTo(xPx, yPx); started = true; }
-        else ctx.lineTo(xPx, yPx);
-        lastX = xPx; lastY = yPx;
+        const x = xPx(i), y = yPx(v);
+        if (!started) { ctx.moveTo(x, y); started = true; }
+        else ctx.lineTo(x, y);
+        lx = x; ly = y;
       }
       ctx.stroke();
-
-      // Endpoint dot
       if (started) {
         ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.arc(lastX, lastY, 2.5, 0, Math.PI * 2);
-        ctx.fill();
-        endpoints.push({ ccy, color, x: lastX, y: lastY });
+        ctx.beginPath(); ctx.arc(lx, ly, 2.5, 0, Math.PI * 2); ctx.fill();
+        endpoints.push({ ccy, color, x: lx, y: ly });
       }
     }
 
-    // Draw endpoint labels — de-overlap vertically
+    // Endpoint labels — de-overlap
     endpoints.sort((a, b) => a.y - b.y);
-    const LBL_H = 10;
     for (let i = 1; i < endpoints.length; i++) {
-      if (endpoints[i].y - endpoints[i - 1].y < LBL_H) {
-        endpoints[i].y = endpoints[i - 1].y + LBL_H;
-      }
+      if (endpoints[i].y - endpoints[i - 1].y < 10) endpoints[i].y = endpoints[i - 1].y + 10;
     }
     ctx.font = 'bold 9px Inter, sans-serif';
     ctx.textAlign = 'left';
     for (const ep of endpoints) {
       ctx.fillStyle = ep.color;
       ctx.fillText(ep.ccy, ep.x + 6, ep.y + 3);
+    }
+
+    // Auto-scroll to the right (latest data) on first render
+    if (!container._ccsScrolled) {
+      scrollEl.scrollLeft = scrollEl.scrollWidth;
+      container._ccsScrolled = true;
     }
   }
 
