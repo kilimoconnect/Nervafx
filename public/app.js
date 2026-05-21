@@ -1201,6 +1201,12 @@ function updateM15Bar(data) {
     return;
   }
 
+  // M15 bar only shows when Engine Confluence is active
+  if (!_v2Confluence.fired) {
+    bar.style.display = 'none';
+    return;
+  }
+
   const impulse = getM15Impulses(data);
 
   if (!impulse.length) {
@@ -1262,6 +1268,58 @@ const V2_THRESHOLDS = [
 
 const V2_FIRE_PCT = 0.60; // 60% of thresholds must pass to show notification
 
+// Global confluence state — drives section gating
+let _v2Confluence = { fired: false, passed: 0, total: 11, pct: 0, results: [] };
+
+// Sections gated behind Engine Confluence
+const V2_GATED_SECTIONS = [
+  'section-states',       // Full Market Scanner
+  'section-risk',         // Approved Trades
+  'section-m15-spreads',  // M15 Impulse Detection
+  'section-live',         // Live Opportunities
+  'section-top',          // Top Setups
+  'section-signals',      // Trade Watchlist
+];
+
+function applyV2Gate() {
+  const active = _v2Confluence.fired;
+  for (const id of V2_GATED_SECTIONS) {
+    const section = document.getElementById(id);
+    if (!section) continue;
+
+    let overlay = section.querySelector('.v2-gate-overlay');
+    if (!active) {
+      // Show gate overlay
+      if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.className = 'v2-gate-overlay';
+        overlay.innerHTML = `
+          <span class="v2-gate-icon">⏸</span>
+          <span class="v2-gate-title">Engine Confluence Not Met</span>
+          <span class="v2-gate-desc">Waiting for 60%+ engine alignment — currently ${_v2Confluence.passed}/${_v2Confluence.total} passing. Market conditions do not support high-probability setups right now.</span>
+          <span class="v2-gate-chips" id="v2g-chips-${id}"></span>`;
+        section.style.position = 'relative';
+        section.appendChild(overlay);
+      } else {
+        overlay.querySelector('.v2-gate-desc').textContent =
+          `Waiting for 60%+ engine alignment — currently ${_v2Confluence.passed}/${_v2Confluence.total} passing. Market conditions do not support high-probability setups right now.`;
+      }
+      // Mini chips showing pass/fail
+      const chipsEl = overlay.querySelector(`[id="v2g-chips-${id}"]`);
+      if (chipsEl && _v2Confluence.results.length) {
+        chipsEl.innerHTML = _v2Confluence.results.map(r => {
+          const cls = r.pass ? 'v2g-chip v2g-pass' : 'v2g-chip v2g-fail';
+          return `<span class="${cls}">${r.label} ${r.pass ? '✓' : '✗'}</span>`;
+        }).join('');
+      }
+      overlay.classList.add('visible');
+    } else {
+      // Remove gate overlay
+      if (overlay) overlay.classList.remove('visible');
+    }
+  }
+}
+
 function evaluateV2Thresholds(hourlyRow) {
   if (!hourlyRow) return null;
   const results = [];
@@ -1302,37 +1360,36 @@ function evaluateV2Thresholds(hourlyRow) {
 
 function updateV2ThresholdBar(hourlyRows) {
   const bar = document.getElementById('v2-threshold-bar');
-  if (!bar) return;
 
-  // Engine Confluence is a Pro+ feature — never show on free plan
+  // Evaluate latest hourly data for confluence state
+  const SKIP = new Set(['LOW_LIQUIDITY', 'DEAD_HOURS']);
+  const valid = (hourlyRows || []).filter(r => !SKIP.has(r.session_name));
+  const latest = valid.length ? valid[valid.length - 1] : null;
+  const eval_ = latest ? evaluateV2Thresholds(latest) : null;
+
+  // Always update global confluence state (drives section gating)
+  if (eval_) {
+    _v2Confluence = eval_;
+  } else {
+    _v2Confluence = { fired: false, passed: 0, total: 11, pct: 0, results: [] };
+  }
+  applyV2Gate();
+
+  // Bar display — Pro+ only
+  if (!bar) return;
   if (document.body.classList.contains('plan-free')) {
     bar.style.display = 'none';
     return;
   }
 
-  // Use the latest hourly row from the active session
-  if (!hourlyRows || !hourlyRows.length) {
-    bar.style.display = 'none';
-    return;
-  }
-
-  const SKIP = new Set(['LOW_LIQUIDITY', 'DEAD_HOURS']);
-  const valid = hourlyRows.filter(r => !SKIP.has(r.session_name));
-  if (!valid.length) { bar.style.display = 'none'; return; }
-
-  const latest = valid[valid.length - 1];
-  const eval_ = evaluateV2Thresholds(latest);
-  if (!eval_) { bar.style.display = 'none'; return; }
-
-  // Only show bar when 60%+ thresholds met
-  if (!eval_.fired) {
+  if (!eval_ || !eval_.fired) {
     bar.style.display = 'none';
     return;
   }
 
   // Strong mode when 80%+ pass
   const strong = eval_.pct >= 0.80;
-  bar.className = `v2-thresh-bar${strong ? ' v2t--strong' : ''}`;
+  bar.className = `v2-thresh-bar pro-only${strong ? ' v2t--strong' : ''}`;
 
   // Score badge
   const scoreEl = document.getElementById('v2t-score');
@@ -3713,7 +3770,8 @@ async function refresh() {
 
     updateHeader(risk);
     renderSession(sessionData);
-    fetchMarketActivity(); // non-blocking — separate fetch, renders independently
+    applyV2Gate(); // Gate sections before render — will update once fetchMarketActivity resolves
+    fetchMarketActivity(); // non-blocking — separate fetch, renders independently + updates V2 gate
     // fetchMomentumSignal(); // disabled — momentum bar removed from header
     buildChart(strength, activeTF);
     renderCurrencySignals(strength);          // must run first — populates _csigCurrencies
