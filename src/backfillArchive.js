@@ -66,38 +66,45 @@ function classifyHour(isoTime) {
 
 const SESSION_QUALITY_SCORE = { LOW_LIQUIDITY: 0, ASIA: 45, LONDON: 80, NEW_YORK: 80 };
 
+const SESSION_SCALE = {
+  ASIA:     { movementCap: 0.0012, volatilityCap: 0.0020, breadthThreshold: 0.00015 },
+  LONDON:   { movementCap: 0.0015, volatilityCap: 0.0025, breadthThreshold: 0.00020 },
+  NEW_YORK: { movementCap: 0.0018, volatilityCap: 0.0030, breadthThreshold: 0.00020 },
+  DEFAULT:  { movementCap: 0.0015, volatilityCap: 0.0025, breadthThreshold: 0.00020 },
+};
+
 const SESS_PROFILE = {
   ASIA: {
-    deadMov: 10, deadBrd:  8, deadVol: 12,
-    exMov:   52, exBrd:   42, exAgr:   48,
-    expMov:  28, expBrd:  18, expAgr:  24,
-    exhMov:  28,
-    trBrd:   14, trAgr:   20, trMov:   18,
-    cmpBrd:  14,
+    deadMov:  8, deadBrd: 15, deadVol: 10,
+    exMov:   65, exBrd:   80, exAgr:   70,
+    expMov:  30, expBrd:  45, expAgr:  35,
+    exhMov:  30,
+    trBrd:   30, trAgr:   25, trMov:   20,
+    cmpBrd:  25,
   },
   LONDON: {
-    deadMov: 15, deadBrd: 12, deadVol: 18,
-    exMov:   68, exBrd:   62, exAgr:   62,
-    expMov:  42, expBrd:  35, expAgr:  36,
-    exhMov:  42,
-    trBrd:   22, trAgr:   30, trMov:   28,
-    cmpBrd:  22,
+    deadMov: 10, deadBrd: 20, deadVol: 12,
+    exMov:   75, exBrd:   85, exAgr:   75,
+    expMov:  40, expBrd:  55, expAgr:  45,
+    exhMov:  40,
+    trBrd:   35, trAgr:   30, trMov:   25,
+    cmpBrd:  30,
   },
   NEW_YORK: {
-    deadMov: 15, deadBrd: 12, deadVol: 18,
-    exMov:   72, exBrd:   65, exAgr:   65,
-    expMov:  48, expBrd:  38, expAgr:  38,
-    exhMov:  48,
-    trBrd:   24, trAgr:   30, trMov:   32,
-    cmpBrd:  24,
+    deadMov: 10, deadBrd: 20, deadVol: 12,
+    exMov:   70, exBrd:   85, exAgr:   70,
+    expMov:  35, expBrd:  50, expAgr:  40,
+    exhMov:  35,
+    trBrd:   35, trAgr:   30, trMov:   25,
+    cmpBrd:  30,
   },
   DEFAULT: {
-    deadMov: 20, deadBrd: 20, deadVol: 25,
-    exMov:   75, exBrd:   70, exAgr:   70,
-    expMov:  50, expBrd:  45, expAgr:  45,
-    exhMov:  50,
-    trBrd:   35, trAgr:   45, trMov:   30,
-    cmpBrd:  35,
+    deadMov: 12, deadBrd: 20, deadVol: 15,
+    exMov:   70, exBrd:   80, exAgr:   70,
+    expMov:  35, expBrd:  50, expAgr:  40,
+    exhMov:  35,
+    trBrd:   30, trAgr:   30, trMov:   25,
+    cmpBrd:  25,
   },
 };
 
@@ -117,21 +124,15 @@ function classifyEnergyCycle(mov, brd, agr, vol, streak, accel, prev, session) {
   return 'LOW_PARTICIPATION';
 }
 
-// ── Core processHours (from sessionActivity.js) ─────────────────────────────
+// ── Core processHours — raw-based scoring (mirrors sessionActivity.js) ──────
 
 function processHours(hourKeys, byTime) {
   const TOTAL = config.instruments.length;
-  const HIST  = 20;
-
-  const moveHistory  = {};
-  const rangeHistory = {};
-  const pairEma      = {};
 
   let currentSession    = null;
   let sessionOpenPrices = {};
   let sessionHigh       = {};
   let sessionLow        = {};
-  let sessionFinalMove  = {};
 
   const prevSameSessionEnergy = {};
   const prevSameSessionScores = {};
@@ -151,23 +152,6 @@ function processHours(hourKeys, byTime) {
 
     if (session !== currentSession) {
       if (currentSession && currentSession !== 'LOW_LIQUIDITY') {
-        for (const inst of config.instruments) {
-          const finalMove = sessionFinalMove[inst];
-          if (finalMove != null) {
-            if (!moveHistory[inst])                moveHistory[inst]                = {};
-            if (!moveHistory[inst][currentSession]) moveHistory[inst][currentSession] = [];
-            moveHistory[inst][currentSession].push(finalMove);
-            if (moveHistory[inst][currentSession].length > HIST) moveHistory[inst][currentSession].shift();
-          }
-          const high = sessionHigh[inst], low = sessionLow[inst], open = sessionOpenPrices[inst];
-          if (high != null && low != null && open > 0) {
-            const range = (high - low) / open;
-            if (!rangeHistory[inst])                rangeHistory[inst]                = {};
-            if (!rangeHistory[inst][currentSession]) rangeHistory[inst][currentSession] = [];
-            rangeHistory[inst][currentSession].push(range);
-            if (rangeHistory[inst][currentSession].length > HIST) rangeHistory[inst][currentSession].shift();
-          }
-        }
         const avgMov = arrAvg(sessionMovList);
         const avgBrd = arrAvg(sessionBrdList);
         const avgVol = arrAvg(sessionVolList);
@@ -182,7 +166,6 @@ function processHours(hourKeys, byTime) {
       sessionOpenPrices = {};
       sessionHigh       = {};
       sessionLow        = {};
-      sessionFinalMove  = {};
       sessionEBList     = [];
       sessionMovList    = [];
       sessionBrdList    = [];
@@ -190,7 +173,7 @@ function processHours(hourKeys, byTime) {
       sessionVolList    = [];
 
       for (const [inst, c] of Object.entries(candles)) {
-        sessionOpenPrices[inst] = c.open;  // use candle OPEN, not close — close=open makes rawDir=0
+        sessionOpenPrices[inst] = c.open;
         sessionHigh[inst]       = c.high;
         sessionLow[inst]        = c.low;
       }
@@ -204,6 +187,7 @@ function processHours(hourKeys, byTime) {
       if (c.low  != null && (sessionLow[inst]  == null || c.low  < sessionLow[inst]))  sessionLow[inst]  = c.low;
     }
 
+    const scale = SESSION_SCALE[session] || SESSION_SCALE.DEFAULT;
     const ccyStrength = computeCurrencyStrengths(candles, sessionOpenPrices);
 
     let strongestCcy = null, weakestCcy = null;
@@ -215,66 +199,54 @@ function processHours(hourKeys, byTime) {
       }
     }
 
-    const smoothMoveVals   = [];
-    const normalizedRanges = [];
-    let alignedActive = 0, totalActive = 0;
-    let bullishMagnitude = 0, bearishMagnitude = 0;
+    const hourlyMoves  = [];
+    const hourlyRanges = [];
+    let activePairs    = 0;
+    let bullishMag = 0, bearishMag = 0;
+    let agrAligned = 0, agrTotal = 0;
 
     for (const inst of config.instruments) {
       const c    = candles[inst];
-      const open = sessionOpenPrices[inst];
-      if (!c || open == null || open === 0) continue;
+      const sOpen = sessionOpenPrices[inst];
+      if (!c || !c.open || c.open === 0 || sOpen == null) continue;
 
-      const rawDir  = (c.close - open) / open;
-      const rawMove = Math.abs(rawDir);
-      sessionFinalMove[inst] = rawMove;
+      const hourlyDir  = (c.close - c.open) / c.open;
+      const hourlyMove = Math.abs(hourlyDir);
+      hourlyMoves.push(hourlyMove);
 
-      const mhist  = moveHistory[inst]?.[session] || [];
-      const mhAvg  = mhist.length > 0 ? arrAvg(mhist) : rawMove;
-      const normMov = mhAvg > 0 ? rawMove / mhAvg : 1.0;
+      const hourlyRange = (c.high - c.low) / c.open;
+      hourlyRanges.push(hourlyRange);
 
-      if (!pairEma[inst]) pairEma[inst] = {};
-      const prevEma    = pairEma[inst][session] ?? normMov;
-      const smoothMove = (prevEma + normMov) / 2;
-      pairEma[inst][session] = smoothMove;
-      smoothMoveVals.push(smoothMove);
-
-      if (rawDir > 0) bullishMagnitude += smoothMove;
-      else if (rawDir < 0) bearishMagnitude += smoothMove;
-
-      if (smoothMove >= 1.0) {
-        totalActive++;
-        const [base, quote] = inst.split('_');
-        const expectedDir   = (ccyStrength[base] || 0) - (ccyStrength[quote] || 0);
-        if ((expectedDir > 0 && rawDir > 0) || (expectedDir < 0 && rawDir < 0)) alignedActive++;
+      if (hourlyMove >= scale.breadthThreshold) {
+        activePairs++;
+        if (hourlyDir > 0) bullishMag += hourlyMove;
+        else               bearishMag += hourlyMove;
       }
 
-      const high = sessionHigh[inst], low = sessionLow[inst];
-      if (high != null && low != null) {
-        const range = (high - low) / open;
-        const rhist = rangeHistory[inst]?.[session] || [];
-        const rhAvg = rhist.length > 0 ? arrAvg(rhist) : range;
-        normalizedRanges.push(rhAvg > 0 ? range / rhAvg : 1.0);
+      const sessionDir = (c.close - sOpen) / sOpen;
+      if (Math.abs(hourlyDir) >= scale.breadthThreshold * 0.5 &&
+          Math.abs(sessionDir) >= scale.breadthThreshold * 0.5) {
+        agrTotal++;
+        if ((hourlyDir > 0 && sessionDir > 0) || (hourlyDir < 0 && sessionDir < 0)) {
+          agrAligned++;
+        }
       }
     }
 
-    if (!smoothMoveVals.length) continue;
+    if (!hourlyMoves.length) continue;
 
-    const moveMagnitude  = arrAvg(smoothMoveVals);
-    const movementScore  = round1(Math.min(100, moveMagnitude * 50));
-    const activePairs    = smoothMoveVals.filter(m => m >= 1.0).length;
+    const avgHourlyMove  = arrAvg(hourlyMoves);
+    const movementScore  = round1(Math.min(100, (avgHourlyMove / scale.movementCap) * 100));
     const breadthScore   = round1((activePairs / TOTAL) * 100);
+    const rawAgrRatio    = agrTotal > 0 ? agrAligned / agrTotal : 0;
+    const agreementScore = round1(rawAgrRatio * Math.sqrt(breadthScore / 100) * 100);
+    const avgHourlyRange = arrAvg(hourlyRanges);
+    const volatilityScore = round1(Math.min(100, (avgHourlyRange / scale.volatilityCap) * 100));
 
-    const rawAgreementRatio = totalActive > 0 ? alignedActive / totalActive : 0;
-    const agreementScore    = round1(rawAgreementRatio * Math.sqrt(breadthScore / 100) * 100);
-
-    const totalMagnitude     = bullishMagnitude + bearishMagnitude;
-    const bullishPressurePct = totalMagnitude > 0 ? round1(bullishMagnitude / totalMagnitude * 100) : 50;
-    const bearishPressurePct = totalMagnitude > 0 ? round1(bearishMagnitude / totalMagnitude * 100) : 50;
-    const dominanceScore     = totalMagnitude > 0 ? round1(Math.abs(bullishMagnitude - bearishMagnitude) / totalMagnitude * 100) : 0;
-
-    const volatilityScore = normalizedRanges.length > 0
-      ? round1(Math.min(100, arrAvg(normalizedRanges) * 50)) : 0;
+    const totalMag           = bullishMag + bearishMag;
+    const bullishPressurePct = totalMag > 0 ? round1(bullishMag / totalMag * 100) : 50;
+    const bearishPressurePct = totalMag > 0 ? round1(bearishMag / totalMag * 100) : 50;
+    const dominanceScore     = totalMag > 0 ? round1(Math.abs(bullishMag - bearishMag) / totalMag * 100) : 0;
 
     const energyBase   = round1(0.45 * movementScore + 0.35 * breadthScore + 0.20 * volatilityScore);
     const prevSessEB   = prevSameSessionEnergy[session] ?? null;
@@ -322,9 +294,8 @@ function processHours(hourKeys, byTime) {
       compression_streak:   compressionStreak,
       pairs_moving:         activePairs,
       pairs_quiet:          TOTAL - activePairs,
-      movement_magnitude:   round1(moveMagnitude * 100),
+      movement_magnitude:   round1(avgHourlyMove * 10000),
       directional_agreement: agreementScore,
-      // In-memory only (for session-level aggregation)
       bullish_breadth:      bullishPressurePct,
       bearish_breadth:      bearishPressurePct,
       dominance_score:      dominanceScore,
