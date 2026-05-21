@@ -1,0 +1,1849 @@
+{
+  "metricResults": [
+    {
+      "metric": "Market Energy",
+      "key": "market_energy",
+      "bestRange": "65–100",
+      "bestMove": 28,
+      "worstRange": "0–15",
+      "worstMove": 15,
+      "minGoodThreshold": 25,
+      "ranges": [
+        {
+          "range": "0–15",
+          "h4": {
+            "samples": 4620,
+            "avg_max_move": 15,
+            "median_max_move": 11,
+            "avg_net": 8,
+            "directional_rate": 33,
+            "profitable_pct": 36
+          },
+          "h8": {
+            "samples": 4620,
+            "avg_max_move": 25,
+            "median_max_move": 19,
+            "avg_net": 15,
+            "directional_rate": 57,
+            "profitable_pct": 64
+          }
+        },
+        {
+          "range": "15–25",
+          "h4": {
+            "samples": 11312,
+            "avg_max_move": 18,
+            "median_max_move": 14,
+            "avg_net": 10,
+            "directional_rate": 42,
+            "profitable_pct": 46
+          },
+          "h8": {
+            "samples": 11312,
+            "avg_max_move": 28,
+            "median_max_move": 21,
+            "avg_net": 17,
+            "directional_rate": 61,
+            "profitable_pct": 69
+          }
+        },
+        {
+          "range": "25–35",
+          "h4": {
+            "samples": 30772,
+            "avg_max_move": 25,
+            "median_max_move": 19,
+            "avg_net": 15,
+            "directional_rate": 59,
+            "profitable_pct": 64
+          },
+          "h8": {
+            "samples": 30772,
+            "avg_max_move": 35,
+            "median_max_move": 28,
+            "avg_net": 21,
+            "directional_rate": 68,
+            "profitable_pct": 81
+          }
+        },
+        {
+          "range": "35–50",
+          "h4": {
+            "samples": 61208,
+            "avg_max_move": 24,
+            "median_max_move": 19,
+            "avg_net": 15,
+            "directional_rate": 59,
+            "profitable_pct": 63
+          },
+          "h8": {
+            "samples": 61152,
+            "avg_max_move": 35,
+            "median_max_move": 27,
+            "avg_net": 21,
+            "directional_rate": 70,
+            "profitable_pct": 81
+          }
+        },
+        {
+          "range": "50–65",
+          "h4": {
+            "samples": 21028,
+            "avg_max_move": 25,
+            "median_max_move": 19,
+            "avg_net": 15,
+            "directional_rate": 59,
+            "profitable_pct": 65
+          },
+          "h8": {
+            "samples": 21028,
+            "avg_max_move": 36,
+            "median_max_move": 28,
+            "avg_net": 22,
+            "directional_rate": 71,
+            "profitable_pct": 82
+          }
+        },
+        {
+          "range": "65–100",
+          "h4": {
+            "samples": 24052,
+            "avg_max_move": 28,
+            "median_max_move": 22,
+            "avg_net": 17,
+            "directional_rate": 64,
+            "profitable_pct": 71
+          },
+          "h8": {
+            "samples": 23996,
+            "avg_max_move": 40,
+            "median_max_move": 32,
+            "avg_net": 25,
+            "directional_rate": 75,
+            "profitable_pct": 87
+          }
+        }
+      ]
+    },
+    {
+      "metric": "Tradability",
+      "key": "tradability_score",
+      "bestRange": "70–100",
+      "bestMove": 28,
+      "worstRange": "0–15",
+      "worstMove": 20,
+      "minGoodThreshold": 15,
+      "ranges": [
+        {
+          "range": "0–15",
+          "h4": {
+            "samples": 17640,
+            "avg_max_move": 20,
+            "median_max_move": 15,
+            "avg_net": 12,
+            "directional_rate": 47,
+            "profitable_pct": 52
+          },
+          "h8": {
+            "samples": 17640,
+            "avg_max_move": 31,
+            "median_max_move": 23,
+            "avg_net": 19,
+            "directional_rate": 64,
+            "profitable_pct": 73
+          }
+        },
+        {
+          "range": "15–25",
+          "h4": {
+            "samples": 25312,
+            "avg_max_move": 25,
+            "median_max_move": 19,
+            "avg_net": 15,
+            "directional_rate": 59,
+            "profitable_pct": 65
+          },
+          "h8": {
+            "samples": 25284,
+            "avg_max_move": 36,
+            "median_max_move": 28,
+            "avg_net": 21,
+            "directional_rate": 70,
+            "profitable_pct": 81
+          }
+        },
+        {
+          "range": "25–40",
+          "h4": {
+            "samples": 33488,
+            "avg_max_move": 24,
+            "median_max_move": 18,
+            "avg_net": 14,
+            "directional_rate": 57,
+            "profitable_pct": 62
+          },
+          "h8": {
+            "samples": 33488,
+            "avg_max_move": 34,
+            "median_max_move": 27,
+            "avg_net": 20,
+            "directional_rate": 69,
+            "profitable_pct": 80
+          }
+        },
+        {
+          "range": "40–55",
+          "h4": {
+            "samples": 36316,
+            "avg_max_move": 24,
+            "median_max_move": 18,
+            "avg_net": 15,
+            "directional_rate": 57,
+            "profitable_pct": 62
+          },
+          "h8": {
+            "samples": 36288,
+            "avg_max_move": 34,
+            "median_max_move": 26,
+            "avg_net": 21,
+            "directional_rate": 69,
+            "profitable_pct": 79
+          }
+        },
+        {
+          "range": "55–70",
+          "h4": {
+            "samples": 22008,
+            "avg_max_move": 24,
+            "median_max_move": 19,
+            "avg_net": 15,
+            "directional_rate": 59,
+            "profitable_pct": 66
+          },
+          "h8": {
+            "samples": 21980,
+            "avg_max_move": 36,
+            "median_max_move": 29,
+            "avg_net": 22,
+            "directional_rate": 72,
+            "profitable_pct": 84
+          }
+        },
+        {
+          "range": "70–100",
+          "h4": {
+            "samples": 18368,
+            "avg_max_move": 28,
+            "median_max_move": 22,
+            "avg_net": 18,
+            "directional_rate": 64,
+            "profitable_pct": 71
+          },
+          "h8": {
+            "samples": 18340,
+            "avg_max_move": 40,
+            "median_max_move": 32,
+            "avg_net": 25,
+            "directional_rate": 75,
+            "profitable_pct": 86
+          }
+        }
+      ]
+    },
+    {
+      "metric": "Movement",
+      "key": "movement_score",
+      "bestRange": "70–100",
+      "bestMove": 30,
+      "worstRange": "0–10",
+      "worstMove": 16,
+      "minGoodThreshold": 20,
+      "ranges": [
+        {
+          "range": "0–10",
+          "h4": {
+            "samples": 2240,
+            "avg_max_move": 16,
+            "median_max_move": 12,
+            "avg_net": 9,
+            "directional_rate": 36,
+            "profitable_pct": 37
+          },
+          "h8": {
+            "samples": 2240,
+            "avg_max_move": 25,
+            "median_max_move": 19,
+            "avg_net": 15,
+            "directional_rate": 58,
+            "profitable_pct": 64
+          }
+        },
+        {
+          "range": "10–20",
+          "h4": {
+            "samples": 20720,
+            "avg_max_move": 20,
+            "median_max_move": 15,
+            "avg_net": 11,
+            "directional_rate": 46,
+            "profitable_pct": 50
+          },
+          "h8": {
+            "samples": 20720,
+            "avg_max_move": 29,
+            "median_max_move": 22,
+            "avg_net": 17,
+            "directional_rate": 61,
+            "profitable_pct": 72
+          }
+        },
+        {
+          "range": "20–35",
+          "h4": {
+            "samples": 50176,
+            "avg_max_move": 23,
+            "median_max_move": 18,
+            "avg_net": 14,
+            "directional_rate": 56,
+            "profitable_pct": 61
+          },
+          "h8": {
+            "samples": 50148,
+            "avg_max_move": 33,
+            "median_max_move": 26,
+            "avg_net": 20,
+            "directional_rate": 68,
+            "profitable_pct": 79
+          }
+        },
+        {
+          "range": "35–50",
+          "h4": {
+            "samples": 38808,
+            "avg_max_move": 25,
+            "median_max_move": 20,
+            "avg_net": 15,
+            "directional_rate": 60,
+            "profitable_pct": 66
+          },
+          "h8": {
+            "samples": 38780,
+            "avg_max_move": 36,
+            "median_max_move": 29,
+            "avg_net": 22,
+            "directional_rate": 71,
+            "profitable_pct": 83
+          }
+        },
+        {
+          "range": "50–70",
+          "h4": {
+            "samples": 25508,
+            "avg_max_move": 26,
+            "median_max_move": 20,
+            "avg_net": 16,
+            "directional_rate": 62,
+            "profitable_pct": 68
+          },
+          "h8": {
+            "samples": 25452,
+            "avg_max_move": 38,
+            "median_max_move": 30,
+            "avg_net": 23,
+            "directional_rate": 73,
+            "profitable_pct": 84
+          }
+        },
+        {
+          "range": "70–100",
+          "h4": {
+            "samples": 11676,
+            "avg_max_move": 30,
+            "median_max_move": 23,
+            "avg_net": 18,
+            "directional_rate": 66,
+            "profitable_pct": 73
+          },
+          "h8": {
+            "samples": 11676,
+            "avg_max_move": 42,
+            "median_max_move": 33,
+            "avg_net": 26,
+            "directional_rate": 76,
+            "profitable_pct": 88
+          }
+        }
+      ]
+    },
+    {
+      "metric": "Breadth",
+      "key": "breadth_score",
+      "bestRange": "80–100",
+      "bestMove": 26,
+      "worstRange": "0–20",
+      "worstMove": 14,
+      "minGoodThreshold": 50,
+      "ranges": [
+        {
+          "range": "0–20",
+          "h4": {
+            "samples": 392,
+            "avg_max_move": 14,
+            "median_max_move": 11,
+            "avg_net": 8,
+            "directional_rate": 36,
+            "profitable_pct": 32
+          },
+          "h8": {
+            "samples": 392,
+            "avg_max_move": 23,
+            "median_max_move": 18,
+            "avg_net": 13,
+            "directional_rate": 54,
+            "profitable_pct": 63
+          }
+        },
+        {
+          "range": "20–35",
+          "h4": {
+            "samples": 1428,
+            "avg_max_move": 17,
+            "median_max_move": 12,
+            "avg_net": 9,
+            "directional_rate": 38,
+            "profitable_pct": 40
+          },
+          "h8": {
+            "samples": 1428,
+            "avg_max_move": 27,
+            "median_max_move": 20,
+            "avg_net": 16,
+            "directional_rate": 60,
+            "profitable_pct": 66
+          }
+        },
+        {
+          "range": "35–50",
+          "h4": {
+            "samples": 5124,
+            "avg_max_move": 20,
+            "median_max_move": 14,
+            "avg_net": 11,
+            "directional_rate": 45,
+            "profitable_pct": 50
+          },
+          "h8": {
+            "samples": 5124,
+            "avg_max_move": 29,
+            "median_max_move": 22,
+            "avg_net": 18,
+            "directional_rate": 63,
+            "profitable_pct": 71
+          }
+        },
+        {
+          "range": "50–65",
+          "h4": {
+            "samples": 23212,
+            "avg_max_move": 22,
+            "median_max_move": 16,
+            "avg_net": 13,
+            "directional_rate": 51,
+            "profitable_pct": 56
+          },
+          "h8": {
+            "samples": 23212,
+            "avg_max_move": 32,
+            "median_max_move": 24,
+            "avg_net": 19,
+            "directional_rate": 64,
+            "profitable_pct": 76
+          }
+        },
+        {
+          "range": "65–80",
+          "h4": {
+            "samples": 51324,
+            "avg_max_move": 24,
+            "median_max_move": 18,
+            "avg_net": 15,
+            "directional_rate": 57,
+            "profitable_pct": 61
+          },
+          "h8": {
+            "samples": 51324,
+            "avg_max_move": 34,
+            "median_max_move": 27,
+            "avg_net": 21,
+            "directional_rate": 69,
+            "profitable_pct": 80
+          }
+        },
+        {
+          "range": "80–100",
+          "h4": {
+            "samples": 71092,
+            "avg_max_move": 26,
+            "median_max_move": 20,
+            "avg_net": 16,
+            "directional_rate": 61,
+            "profitable_pct": 68
+          },
+          "h8": {
+            "samples": 70980,
+            "avg_max_move": 37,
+            "median_max_move": 30,
+            "avg_net": 23,
+            "directional_rate": 72,
+            "profitable_pct": 84
+          }
+        }
+      ]
+    },
+    {
+      "metric": "Agreement",
+      "key": "agreement_score",
+      "bestRange": "75–100",
+      "bestMove": 26,
+      "worstRange": "0–15",
+      "worstMove": 23,
+      "minGoodThreshold": 0,
+      "ranges": [
+        {
+          "range": "0–15",
+          "h4": {
+            "samples": 18956,
+            "avg_max_move": 23,
+            "median_max_move": 17,
+            "avg_net": 13,
+            "directional_rate": 53,
+            "profitable_pct": 57
+          },
+          "h8": {
+            "samples": 18956,
+            "avg_max_move": 33,
+            "median_max_move": 26,
+            "avg_net": 20,
+            "directional_rate": 67,
+            "profitable_pct": 77
+          }
+        },
+        {
+          "range": "15–30",
+          "h4": {
+            "samples": 27160,
+            "avg_max_move": 24,
+            "median_max_move": 18,
+            "avg_net": 15,
+            "directional_rate": 56,
+            "profitable_pct": 61
+          },
+          "h8": {
+            "samples": 27160,
+            "avg_max_move": 34,
+            "median_max_move": 27,
+            "avg_net": 21,
+            "directional_rate": 69,
+            "profitable_pct": 79
+          }
+        },
+        {
+          "range": "30–45",
+          "h4": {
+            "samples": 28924,
+            "avg_max_move": 24,
+            "median_max_move": 18,
+            "avg_net": 14,
+            "directional_rate": 57,
+            "profitable_pct": 62
+          },
+          "h8": {
+            "samples": 28924,
+            "avg_max_move": 34,
+            "median_max_move": 26,
+            "avg_net": 20,
+            "directional_rate": 68,
+            "profitable_pct": 79
+          }
+        },
+        {
+          "range": "45–60",
+          "h4": {
+            "samples": 25172,
+            "avg_max_move": 24,
+            "median_max_move": 19,
+            "avg_net": 15,
+            "directional_rate": 58,
+            "profitable_pct": 64
+          },
+          "h8": {
+            "samples": 25144,
+            "avg_max_move": 35,
+            "median_max_move": 28,
+            "avg_net": 21,
+            "directional_rate": 69,
+            "profitable_pct": 81
+          }
+        },
+        {
+          "range": "60–75",
+          "h4": {
+            "samples": 20216,
+            "avg_max_move": 25,
+            "median_max_move": 19,
+            "avg_net": 15,
+            "directional_rate": 60,
+            "profitable_pct": 65
+          },
+          "h8": {
+            "samples": 20160,
+            "avg_max_move": 36,
+            "median_max_move": 28,
+            "avg_net": 22,
+            "directional_rate": 71,
+            "profitable_pct": 82
+          }
+        },
+        {
+          "range": "75–100",
+          "h4": {
+            "samples": 32760,
+            "avg_max_move": 26,
+            "median_max_move": 20,
+            "avg_net": 16,
+            "directional_rate": 60,
+            "profitable_pct": 66
+          },
+          "h8": {
+            "samples": 32732,
+            "avg_max_move": 37,
+            "median_max_move": 29,
+            "avg_net": 23,
+            "directional_rate": 72,
+            "profitable_pct": 84
+          }
+        }
+      ]
+    },
+    {
+      "metric": "Dir Control",
+      "key": "directional_control",
+      "bestRange": "45–60",
+      "bestMove": 25,
+      "worstRange": "0–10",
+      "worstMove": 24,
+      "minGoodThreshold": 0,
+      "ranges": [
+        {
+          "range": "0–10",
+          "h4": {
+            "samples": 21168,
+            "avg_max_move": 24,
+            "median_max_move": 19,
+            "avg_net": 14,
+            "directional_rate": 57,
+            "profitable_pct": 62
+          },
+          "h8": {
+            "samples": 21140,
+            "avg_max_move": 34,
+            "median_max_move": 27,
+            "avg_net": 21,
+            "directional_rate": 69,
+            "profitable_pct": 80
+          }
+        },
+        {
+          "range": "10–20",
+          "h4": {
+            "samples": 22344,
+            "avg_max_move": 24,
+            "median_max_move": 19,
+            "avg_net": 15,
+            "directional_rate": 58,
+            "profitable_pct": 63
+          },
+          "h8": {
+            "samples": 22316,
+            "avg_max_move": 35,
+            "median_max_move": 28,
+            "avg_net": 21,
+            "directional_rate": 70,
+            "profitable_pct": 81
+          }
+        },
+        {
+          "range": "20–30",
+          "h4": {
+            "samples": 23464,
+            "avg_max_move": 24,
+            "median_max_move": 18,
+            "avg_net": 15,
+            "directional_rate": 57,
+            "profitable_pct": 62
+          },
+          "h8": {
+            "samples": 23436,
+            "avg_max_move": 35,
+            "median_max_move": 27,
+            "avg_net": 21,
+            "directional_rate": 69,
+            "profitable_pct": 80
+          }
+        },
+        {
+          "range": "30–45",
+          "h4": {
+            "samples": 32536,
+            "avg_max_move": 24,
+            "median_max_move": 19,
+            "avg_net": 15,
+            "directional_rate": 57,
+            "profitable_pct": 63
+          },
+          "h8": {
+            "samples": 32536,
+            "avg_max_move": 35,
+            "median_max_move": 27,
+            "avg_net": 21,
+            "directional_rate": 70,
+            "profitable_pct": 81
+          }
+        },
+        {
+          "range": "45–60",
+          "h4": {
+            "samples": 27188,
+            "avg_max_move": 25,
+            "median_max_move": 19,
+            "avg_net": 15,
+            "directional_rate": 58,
+            "profitable_pct": 63
+          },
+          "h8": {
+            "samples": 27188,
+            "avg_max_move": 35,
+            "median_max_move": 27,
+            "avg_net": 21,
+            "directional_rate": 70,
+            "profitable_pct": 81
+          }
+        },
+        {
+          "range": "60–100",
+          "h4": {
+            "samples": 25872,
+            "avg_max_move": 25,
+            "median_max_move": 19,
+            "avg_net": 15,
+            "directional_rate": 58,
+            "profitable_pct": 63
+          },
+          "h8": {
+            "samples": 25844,
+            "avg_max_move": 35,
+            "median_max_move": 28,
+            "avg_net": 22,
+            "directional_rate": 70,
+            "profitable_pct": 81
+          }
+        }
+      ]
+    },
+    {
+      "metric": "Vol Quality",
+      "key": "volatility_quality",
+      "bestRange": "60–100",
+      "bestMove": 28,
+      "worstRange": "0–10",
+      "worstMove": 16,
+      "minGoodThreshold": 10,
+      "ranges": [
+        {
+          "range": "0–10",
+          "h4": {
+            "samples": 12432,
+            "avg_max_move": 16,
+            "median_max_move": 12,
+            "avg_net": 8,
+            "directional_rate": 35,
+            "profitable_pct": 38
+          },
+          "h8": {
+            "samples": 12432,
+            "avg_max_move": 25,
+            "median_max_move": 19,
+            "avg_net": 15,
+            "directional_rate": 57,
+            "profitable_pct": 64
+          }
+        },
+        {
+          "range": "10–20",
+          "h4": {
+            "samples": 12936,
+            "avg_max_move": 25,
+            "median_max_move": 20,
+            "avg_net": 15,
+            "directional_rate": 59,
+            "profitable_pct": 65
+          },
+          "h8": {
+            "samples": 12908,
+            "avg_max_move": 36,
+            "median_max_move": 28,
+            "avg_net": 22,
+            "directional_rate": 69,
+            "profitable_pct": 82
+          }
+        },
+        {
+          "range": "20–30",
+          "h4": {
+            "samples": 44996,
+            "avg_max_move": 23,
+            "median_max_move": 18,
+            "avg_net": 14,
+            "directional_rate": 56,
+            "profitable_pct": 60
+          },
+          "h8": {
+            "samples": 44968,
+            "avg_max_move": 33,
+            "median_max_move": 26,
+            "avg_net": 20,
+            "directional_rate": 67,
+            "profitable_pct": 78
+          }
+        },
+        {
+          "range": "30–45",
+          "h4": {
+            "samples": 51828,
+            "avg_max_move": 25,
+            "median_max_move": 19,
+            "avg_net": 15,
+            "directional_rate": 60,
+            "profitable_pct": 65
+          },
+          "h8": {
+            "samples": 51828,
+            "avg_max_move": 35,
+            "median_max_move": 28,
+            "avg_net": 22,
+            "directional_rate": 71,
+            "profitable_pct": 82
+          }
+        },
+        {
+          "range": "45–60",
+          "h4": {
+            "samples": 8512,
+            "avg_max_move": 26,
+            "median_max_move": 21,
+            "avg_net": 16,
+            "directional_rate": 62,
+            "profitable_pct": 69
+          },
+          "h8": {
+            "samples": 8512,
+            "avg_max_move": 37,
+            "median_max_move": 30,
+            "avg_net": 23,
+            "directional_rate": 72,
+            "profitable_pct": 85
+          }
+        },
+        {
+          "range": "60–100",
+          "h4": {
+            "samples": 19992,
+            "avg_max_move": 28,
+            "median_max_move": 22,
+            "avg_net": 17,
+            "directional_rate": 64,
+            "profitable_pct": 71
+          },
+          "h8": {
+            "samples": 19936,
+            "avg_max_move": 40,
+            "median_max_move": 32,
+            "avg_net": 25,
+            "directional_rate": 75,
+            "profitable_pct": 87
+          }
+        }
+      ]
+    },
+    {
+      "metric": "Volatility",
+      "key": "volatility_score",
+      "bestRange": "70–100",
+      "bestMove": 29,
+      "worstRange": "0–15",
+      "worstMove": 15,
+      "minGoodThreshold": 25,
+      "ranges": [
+        {
+          "range": "0–15",
+          "h4": {
+            "samples": 532,
+            "avg_max_move": 15,
+            "median_max_move": 10,
+            "avg_net": 9,
+            "directional_rate": 26,
+            "profitable_pct": 28
+          },
+          "h8": {
+            "samples": 532,
+            "avg_max_move": 27,
+            "median_max_move": 19,
+            "avg_net": 18,
+            "directional_rate": 57,
+            "profitable_pct": 64
+          }
+        },
+        {
+          "range": "15–25",
+          "h4": {
+            "samples": 11900,
+            "avg_max_move": 16,
+            "median_max_move": 12,
+            "avg_net": 8,
+            "directional_rate": 35,
+            "profitable_pct": 38
+          },
+          "h8": {
+            "samples": 11900,
+            "avg_max_move": 25,
+            "median_max_move": 19,
+            "avg_net": 15,
+            "directional_rate": 57,
+            "profitable_pct": 64
+          }
+        },
+        {
+          "range": "25–40",
+          "h4": {
+            "samples": 39060,
+            "avg_max_move": 22,
+            "median_max_move": 16,
+            "avg_net": 13,
+            "directional_rate": 53,
+            "profitable_pct": 56
+          },
+          "h8": {
+            "samples": 39032,
+            "avg_max_move": 31,
+            "median_max_move": 24,
+            "avg_net": 18,
+            "directional_rate": 65,
+            "profitable_pct": 76
+          }
+        },
+        {
+          "range": "40–55",
+          "h4": {
+            "samples": 48944,
+            "avg_max_move": 24,
+            "median_max_move": 19,
+            "avg_net": 15,
+            "directional_rate": 60,
+            "profitable_pct": 65
+          },
+          "h8": {
+            "samples": 48944,
+            "avg_max_move": 35,
+            "median_max_move": 28,
+            "avg_net": 22,
+            "directional_rate": 71,
+            "profitable_pct": 82
+          }
+        },
+        {
+          "range": "55–70",
+          "h4": {
+            "samples": 29764,
+            "avg_max_move": 27,
+            "median_max_move": 21,
+            "avg_net": 17,
+            "directional_rate": 63,
+            "profitable_pct": 69
+          },
+          "h8": {
+            "samples": 29708,
+            "avg_max_move": 38,
+            "median_max_move": 31,
+            "avg_net": 23,
+            "directional_rate": 73,
+            "profitable_pct": 85
+          }
+        },
+        {
+          "range": "70–100",
+          "h4": {
+            "samples": 18312,
+            "avg_max_move": 29,
+            "median_max_move": 23,
+            "avg_net": 18,
+            "directional_rate": 65,
+            "profitable_pct": 73
+          },
+          "h8": {
+            "samples": 18284,
+            "avg_max_move": 41,
+            "median_max_move": 33,
+            "avg_net": 25,
+            "directional_rate": 75,
+            "profitable_pct": 88
+          }
+        }
+      ]
+    },
+    {
+      "metric": "Momentum",
+      "key": "momentum_score",
+      "bestRange": "60–100",
+      "bestMove": 30,
+      "worstRange": "-30–-10",
+      "worstMove": 23,
+      "minGoodThreshold": -100,
+      "ranges": [
+        {
+          "range": "-100–-30",
+          "h4": {
+            "samples": 13272,
+            "avg_max_move": 25,
+            "median_max_move": 20,
+            "avg_net": 16,
+            "directional_rate": 60,
+            "profitable_pct": 65
+          },
+          "h8": {
+            "samples": 13272,
+            "avg_max_move": 37,
+            "median_max_move": 29,
+            "avg_net": 23,
+            "directional_rate": 72,
+            "profitable_pct": 82
+          }
+        },
+        {
+          "range": "-30–-10",
+          "h4": {
+            "samples": 29792,
+            "avg_max_move": 23,
+            "median_max_move": 18,
+            "avg_net": 14,
+            "directional_rate": 56,
+            "profitable_pct": 60
+          },
+          "h8": {
+            "samples": 29764,
+            "avg_max_move": 34,
+            "median_max_move": 26,
+            "avg_net": 20,
+            "directional_rate": 68,
+            "profitable_pct": 79
+          }
+        },
+        {
+          "range": "-10–10",
+          "h4": {
+            "samples": 74816,
+            "avg_max_move": 24,
+            "median_max_move": 18,
+            "avg_net": 14,
+            "directional_rate": 56,
+            "profitable_pct": 61
+          },
+          "h8": {
+            "samples": 74760,
+            "avg_max_move": 34,
+            "median_max_move": 26,
+            "avg_net": 21,
+            "directional_rate": 68,
+            "profitable_pct": 79
+          }
+        },
+        {
+          "range": "10–30",
+          "h4": {
+            "samples": 23772,
+            "avg_max_move": 25,
+            "median_max_move": 20,
+            "avg_net": 15,
+            "directional_rate": 60,
+            "profitable_pct": 66
+          },
+          "h8": {
+            "samples": 23772,
+            "avg_max_move": 36,
+            "median_max_move": 28,
+            "avg_net": 22,
+            "directional_rate": 71,
+            "profitable_pct": 82
+          }
+        },
+        {
+          "range": "30–60",
+          "h4": {
+            "samples": 9744,
+            "avg_max_move": 28,
+            "median_max_move": 22,
+            "avg_net": 17,
+            "directional_rate": 65,
+            "profitable_pct": 72
+          },
+          "h8": {
+            "samples": 9716,
+            "avg_max_move": 39,
+            "median_max_move": 31,
+            "avg_net": 24,
+            "directional_rate": 73,
+            "profitable_pct": 85
+          }
+        },
+        {
+          "range": "60–100",
+          "h4": {
+            "samples": 1988,
+            "avg_max_move": 30,
+            "median_max_move": 23,
+            "avg_net": 18,
+            "directional_rate": 66,
+            "profitable_pct": 75
+          },
+          "h8": {
+            "samples": 1988,
+            "avg_max_move": 40,
+            "median_max_move": 33,
+            "avg_net": 25,
+            "directional_rate": 77,
+            "profitable_pct": 88
+          }
+        }
+      ]
+    },
+    {
+      "metric": "Chaos",
+      "key": "chaos_score",
+      "bestRange": "70–100",
+      "bestMove": 43,
+      "worstRange": "10–20",
+      "worstMove": 23,
+      "minGoodThreshold": 0,
+      "ranges": [
+        {
+          "range": "0–10",
+          "h4": {
+            "samples": 59584,
+            "avg_max_move": 24,
+            "median_max_move": 18,
+            "avg_net": 14,
+            "directional_rate": 56,
+            "profitable_pct": 61
+          },
+          "h8": {
+            "samples": 59556,
+            "avg_max_move": 34,
+            "median_max_move": 27,
+            "avg_net": 21,
+            "directional_rate": 69,
+            "profitable_pct": 80
+          }
+        },
+        {
+          "range": "10–20",
+          "h4": {
+            "samples": 52528,
+            "avg_max_move": 23,
+            "median_max_move": 18,
+            "avg_net": 14,
+            "directional_rate": 56,
+            "profitable_pct": 60
+          },
+          "h8": {
+            "samples": 52444,
+            "avg_max_move": 34,
+            "median_max_move": 26,
+            "avg_net": 21,
+            "directional_rate": 68,
+            "profitable_pct": 79
+          }
+        },
+        {
+          "range": "20–35",
+          "h4": {
+            "samples": 32676,
+            "avg_max_move": 26,
+            "median_max_move": 20,
+            "avg_net": 16,
+            "directional_rate": 61,
+            "profitable_pct": 67
+          },
+          "h8": {
+            "samples": 32676,
+            "avg_max_move": 36,
+            "median_max_move": 29,
+            "avg_net": 22,
+            "directional_rate": 71,
+            "profitable_pct": 83
+          }
+        },
+        {
+          "range": "35–50",
+          "h4": {
+            "samples": 6916,
+            "avg_max_move": 28,
+            "median_max_move": 22,
+            "avg_net": 17,
+            "directional_rate": 65,
+            "profitable_pct": 73
+          },
+          "h8": {
+            "samples": 6916,
+            "avg_max_move": 39,
+            "median_max_move": 31,
+            "avg_net": 23,
+            "directional_rate": 71,
+            "profitable_pct": 86
+          }
+        },
+        {
+          "range": "50–70",
+          "h4": {
+            "samples": 1512,
+            "avg_max_move": 30,
+            "median_max_move": 25,
+            "avg_net": 18,
+            "directional_rate": 69,
+            "profitable_pct": 76
+          },
+          "h8": {
+            "samples": 1512,
+            "avg_max_move": 41,
+            "median_max_move": 34,
+            "avg_net": 24,
+            "directional_rate": 76,
+            "profitable_pct": 89
+          }
+        },
+        {
+          "range": "70–100",
+          "h4": {
+            "samples": 168,
+            "avg_max_move": 43,
+            "median_max_move": 34,
+            "avg_net": 23,
+            "directional_rate": 76,
+            "profitable_pct": 86
+          },
+          "h8": {
+            "samples": 168,
+            "avg_max_move": 55,
+            "median_max_move": 46,
+            "avg_net": 28,
+            "directional_rate": 80,
+            "profitable_pct": 95
+          }
+        }
+      ]
+    },
+    {
+      "metric": "Ccy Leadership Gap",
+      "key": "currency_leadership_gap",
+      "bestRange": "0–5",
+      "bestMove": 24,
+      "worstRange": "0–5",
+      "worstMove": 24,
+      "minGoodThreshold": 0,
+      "ranges": [
+        {
+          "range": "0–5",
+          "h4": {
+            "samples": 153384,
+            "avg_max_move": 24,
+            "median_max_move": 19,
+            "avg_net": 15,
+            "directional_rate": 58,
+            "profitable_pct": 63
+          },
+          "h8": {
+            "samples": 153272,
+            "avg_max_move": 35,
+            "median_max_move": 27,
+            "avg_net": 21,
+            "directional_rate": 69,
+            "profitable_pct": 81
+          }
+        }
+      ]
+    },
+    {
+      "metric": "False Breakout Risk",
+      "key": "false_breakout_risk",
+      "bestRange": "0–15",
+      "bestMove": 24,
+      "worstRange": "0–15",
+      "worstMove": 24,
+      "minGoodThreshold": 0,
+      "ranges": [
+        {
+          "range": "0–15",
+          "h4": {
+            "samples": 153384,
+            "avg_max_move": 24,
+            "median_max_move": 19,
+            "avg_net": 15,
+            "directional_rate": 58,
+            "profitable_pct": 63
+          },
+          "h8": {
+            "samples": 153272,
+            "avg_max_move": 35,
+            "median_max_move": 27,
+            "avg_net": 21,
+            "directional_rate": 69,
+            "profitable_pct": 81
+          }
+        }
+      ]
+    },
+    {
+      "metric": "Expansion Readiness",
+      "key": "expansion_readiness",
+      "bestRange": "0–15",
+      "bestMove": 30,
+      "worstRange": "45–60",
+      "worstMove": 23,
+      "minGoodThreshold": 0,
+      "ranges": [
+        {
+          "range": "0–15",
+          "h4": {
+            "samples": 1372,
+            "avg_max_move": 30,
+            "median_max_move": 24,
+            "avg_net": 19,
+            "directional_rate": 67,
+            "profitable_pct": 73
+          },
+          "h8": {
+            "samples": 1372,
+            "avg_max_move": 44,
+            "median_max_move": 35,
+            "avg_net": 27,
+            "directional_rate": 75,
+            "profitable_pct": 89
+          }
+        },
+        {
+          "range": "15–30",
+          "h4": {
+            "samples": 50792,
+            "avg_max_move": 25,
+            "median_max_move": 19,
+            "avg_net": 15,
+            "directional_rate": 59,
+            "profitable_pct": 64
+          },
+          "h8": {
+            "samples": 50764,
+            "avg_max_move": 36,
+            "median_max_move": 29,
+            "avg_net": 22,
+            "directional_rate": 71,
+            "profitable_pct": 82
+          }
+        },
+        {
+          "range": "30–45",
+          "h4": {
+            "samples": 81984,
+            "avg_max_move": 24,
+            "median_max_move": 19,
+            "avg_net": 15,
+            "directional_rate": 58,
+            "profitable_pct": 63
+          },
+          "h8": {
+            "samples": 81900,
+            "avg_max_move": 35,
+            "median_max_move": 27,
+            "avg_net": 21,
+            "directional_rate": 69,
+            "profitable_pct": 81
+          }
+        },
+        {
+          "range": "45–60",
+          "h4": {
+            "samples": 19236,
+            "avg_max_move": 23,
+            "median_max_move": 17,
+            "avg_net": 13,
+            "directional_rate": 52,
+            "profitable_pct": 57
+          },
+          "h8": {
+            "samples": 19236,
+            "avg_max_move": 32,
+            "median_max_move": 24,
+            "avg_net": 19,
+            "directional_rate": 65,
+            "profitable_pct": 75
+          }
+        }
+      ]
+    }
+  ],
+  "cycleResults": {
+    "EXPANSION": {
+      "samples": 45164,
+      "avg_max_move": 25,
+      "median_max_move": 20,
+      "avg_net": 15,
+      "directional_rate": 60,
+      "profitable_pct": 66
+    },
+    "LOW_PARTICIPATION": {
+      "samples": 81564,
+      "avg_max_move": 23,
+      "median_max_move": 17,
+      "avg_net": 14,
+      "directional_rate": 54,
+      "profitable_pct": 59
+    },
+    "EXPLOSIVE": {
+      "samples": 8204,
+      "avg_max_move": 29,
+      "median_max_move": 22,
+      "avg_net": 18,
+      "directional_rate": 65,
+      "profitable_pct": 71
+    },
+    "TRANSITION": {
+      "samples": 8008,
+      "avg_max_move": 24,
+      "median_max_move": 19,
+      "avg_net": 15,
+      "directional_rate": 60,
+      "profitable_pct": 65
+    },
+    "EXHAUSTION": {
+      "samples": 10360,
+      "avg_max_move": 27,
+      "median_max_move": 21,
+      "avg_net": 17,
+      "directional_rate": 63,
+      "profitable_pct": 69
+    },
+    "DEAD": {
+      "samples": 84,
+      "avg_max_move": 13,
+      "median_max_move": 8,
+      "avg_net": 9,
+      "directional_rate": 31,
+      "profitable_pct": 25
+    }
+  },
+  "volTypeResults": {
+    "HEALTHY": {
+      "samples": 29316,
+      "avg_max_move": 28,
+      "median_max_move": 22,
+      "avg_net": 17,
+      "directional_rate": 64,
+      "profitable_pct": 71
+    },
+    "CHAOTIC": {
+      "samples": 19432,
+      "avg_max_move": 28,
+      "median_max_move": 22,
+      "avg_net": 17,
+      "directional_rate": 65,
+      "profitable_pct": 72
+    },
+    "NORMAL": {
+      "samples": 87892,
+      "avg_max_move": 23,
+      "median_max_move": 18,
+      "avg_net": 14,
+      "directional_rate": 57,
+      "profitable_pct": 61
+    },
+    "DEAD": {
+      "samples": 12432,
+      "avg_max_move": 16,
+      "median_max_move": 12,
+      "avg_net": 8,
+      "directional_rate": 35,
+      "profitable_pct": 38
+    },
+    "EVENT": {
+      "samples": 4312,
+      "avg_max_move": 28,
+      "median_max_move": 21,
+      "avg_net": 17,
+      "directional_rate": 63,
+      "profitable_pct": 72
+    }
+  },
+  "momTypeResults": {
+    "STABLE": {
+      "samples": 39480,
+      "avg_max_move": 24,
+      "median_max_move": 19,
+      "avg_net": 15,
+      "directional_rate": 58,
+      "profitable_pct": 63
+    },
+    "EXPANSION": {
+      "samples": 24444,
+      "avg_max_move": 24,
+      "median_max_move": 18,
+      "avg_net": 14,
+      "directional_rate": 57,
+      "profitable_pct": 62
+    },
+    "DECAY": {
+      "samples": 50820,
+      "avg_max_move": 23,
+      "median_max_move": 17,
+      "avg_net": 14,
+      "directional_rate": 54,
+      "profitable_pct": 59
+    },
+    "IMPULSE": {
+      "samples": 19236,
+      "avg_max_move": 28,
+      "median_max_move": 21,
+      "avg_net": 17,
+      "directional_rate": 63,
+      "profitable_pct": 71
+    },
+    "EXHAUSTION": {
+      "samples": 11200,
+      "avg_max_move": 28,
+      "median_max_move": 22,
+      "avg_net": 17,
+      "directional_rate": 63,
+      "profitable_pct": 70
+    },
+    "TREND": {
+      "samples": 8204,
+      "avg_max_move": 24,
+      "median_max_move": 19,
+      "avg_net": 15,
+      "directional_rate": 57,
+      "profitable_pct": 63
+    }
+  },
+  "comboResults": [
+    {
+      "name": "Strong Trend (Trad≥55 + Agr≥50 + Brd≥50)",
+      "hours": 1235,
+      "h4": {
+        "samples": 34580,
+        "avg_max_move": 26,
+        "median_max_move": 20,
+        "avg_net": 16,
+        "directional_rate": 62,
+        "profitable_pct": 68
+      },
+      "h8": {
+        "samples": 34524,
+        "avg_max_move": 38,
+        "median_max_move": 30,
+        "avg_net": 23,
+        "directional_rate": 73,
+        "profitable_pct": 85
+      }
+    },
+    {
+      "name": "Tradable (Trad≥40 + Energy≥35 + DirCtrl≥20)",
+      "hours": 2589,
+      "h4": {
+        "samples": 72492,
+        "avg_max_move": 25,
+        "median_max_move": 19,
+        "avg_net": 15,
+        "directional_rate": 60,
+        "profitable_pct": 65
+      },
+      "h8": {
+        "samples": 72436,
+        "avg_max_move": 36,
+        "median_max_move": 28,
+        "avg_net": 22,
+        "directional_rate": 71,
+        "profitable_pct": 82
+      }
+    },
+    {
+      "name": "Selective (Trad≥25 + Energy≥25 + Agr≥30)",
+      "hours": 3193,
+      "h4": {
+        "samples": 89404,
+        "avg_max_move": 25,
+        "median_max_move": 19,
+        "avg_net": 15,
+        "directional_rate": 59,
+        "profitable_pct": 65
+      },
+      "h8": {
+        "samples": 89320,
+        "avg_max_move": 36,
+        "median_max_move": 28,
+        "avg_net": 22,
+        "directional_rate": 70,
+        "profitable_pct": 82
+      }
+    },
+    {
+      "name": "High Energy + Low FB Risk (E≥45 + FB<30)",
+      "hours": 2187,
+      "h4": {
+        "samples": 61236,
+        "avg_max_move": 26,
+        "median_max_move": 20,
+        "avg_net": 16,
+        "directional_rate": 61,
+        "profitable_pct": 67
+      },
+      "h8": {
+        "samples": 61180,
+        "avg_max_move": 37,
+        "median_max_move": 29,
+        "avg_net": 23,
+        "directional_rate": 72,
+        "profitable_pct": 84
+      }
+    },
+    {
+      "name": "Expansion Ready (ExpReady≥50 + Brd≥40)",
+      "hours": 251,
+      "h4": {
+        "samples": 7028,
+        "avg_max_move": 21,
+        "median_max_move": 16,
+        "avg_net": 12,
+        "directional_rate": 48,
+        "profitable_pct": 53
+      },
+      "h8": {
+        "samples": 7028,
+        "avg_max_move": 30,
+        "median_max_move": 23,
+        "avg_net": 18,
+        "directional_rate": 63,
+        "profitable_pct": 73
+      }
+    },
+    {
+      "name": "AVOID: Low Everything (E<20 + Trad<20 + Agr<20)",
+      "hours": 217,
+      "h4": {
+        "samples": 6076,
+        "avg_max_move": 15,
+        "median_max_move": 12,
+        "avg_net": 8,
+        "directional_rate": 35,
+        "profitable_pct": 38
+      },
+      "h8": {
+        "samples": 6076,
+        "avg_max_move": 26,
+        "median_max_move": 19,
+        "avg_net": 15,
+        "directional_rate": 57,
+        "profitable_pct": 64
+      }
+    },
+    {
+      "name": "AVOID: High Chaos + Low DirCtrl (Chaos≥50 + Dir<15)",
+      "hours": 44,
+      "h4": {
+        "samples": 1232,
+        "avg_max_move": 32,
+        "median_max_move": 26,
+        "avg_net": 20,
+        "directional_rate": 71,
+        "profitable_pct": 76
+      },
+      "h8": {
+        "samples": 1232,
+        "avg_max_move": 43,
+        "median_max_move": 36,
+        "avg_net": 26,
+        "directional_rate": 78,
+        "profitable_pct": 90
+      }
+    },
+    {
+      "name": "AVOID: High FB Risk (FB≥60 + E<30)",
+      "hours": 0,
+      "h4": {
+        "samples": 0,
+        "insufficient": true
+      },
+      "h8": {
+        "samples": 0,
+        "insufficient": true
+      }
+    },
+    {
+      "name": "London Strong (London + E≥40 + Trad≥40)",
+      "hours": 808,
+      "h4": {
+        "samples": 22624,
+        "avg_max_move": 29,
+        "median_max_move": 23,
+        "avg_net": 18,
+        "directional_rate": 65,
+        "profitable_pct": 73
+      },
+      "h8": {
+        "samples": 22540,
+        "avg_max_move": 41,
+        "median_max_move": 33,
+        "avg_net": 25,
+        "directional_rate": 76,
+        "profitable_pct": 88
+      }
+    },
+    {
+      "name": "NY Strong (NY + E≥40 + Trad≥40)",
+      "hours": 762,
+      "h4": {
+        "samples": 21336,
+        "avg_max_move": 24,
+        "median_max_move": 19,
+        "avg_net": 14,
+        "directional_rate": 57,
+        "profitable_pct": 63
+      },
+      "h8": {
+        "samples": 21336,
+        "avg_max_move": 31,
+        "median_max_move": 24,
+        "avg_net": 19,
+        "directional_rate": 66,
+        "profitable_pct": 77
+      }
+    },
+    {
+      "name": "Asia Filtered (Asia + E≥30 + Agr≥40)",
+      "hours": 1091,
+      "h4": {
+        "samples": 30548,
+        "avg_max_move": 23,
+        "median_max_move": 18,
+        "avg_net": 15,
+        "directional_rate": 58,
+        "profitable_pct": 61
+      },
+      "h8": {
+        "samples": 30520,
+        "avg_max_move": 37,
+        "median_max_move": 29,
+        "avg_net": 23,
+        "directional_rate": 73,
+        "profitable_pct": 83
+      }
+    },
+    {
+      "name": "Vol Quality Sweet Spot (VolQ 30-60 + Mov≥25)",
+      "hours": 1931,
+      "h4": {
+        "samples": 54068,
+        "avg_max_move": 25,
+        "median_max_move": 20,
+        "avg_net": 15,
+        "directional_rate": 60,
+        "profitable_pct": 66
+      },
+      "h8": {
+        "samples": 54068,
+        "avg_max_move": 36,
+        "median_max_move": 28,
+        "avg_net": 22,
+        "directional_rate": 71,
+        "profitable_pct": 83
+      }
+    },
+    {
+      "name": "EXPLOSIVE cycle",
+      "hours": 293,
+      "h4": {
+        "samples": 8204,
+        "avg_max_move": 29,
+        "median_max_move": 22,
+        "avg_net": 18,
+        "directional_rate": 65,
+        "profitable_pct": 71
+      },
+      "h8": {
+        "samples": 8204,
+        "avg_max_move": 41,
+        "median_max_move": 33,
+        "avg_net": 25,
+        "directional_rate": 76,
+        "profitable_pct": 87
+      }
+    },
+    {
+      "name": "EXPANSION cycle",
+      "hours": 1613,
+      "h4": {
+        "samples": 45164,
+        "avg_max_move": 25,
+        "median_max_move": 20,
+        "avg_net": 15,
+        "directional_rate": 60,
+        "profitable_pct": 66
+      },
+      "h8": {
+        "samples": 45080,
+        "avg_max_move": 37,
+        "median_max_move": 29,
+        "avg_net": 23,
+        "directional_rate": 72,
+        "profitable_pct": 83
+      }
+    },
+    {
+      "name": "COMPRESSION cycle",
+      "hours": 0,
+      "h4": {
+        "samples": 0,
+        "insufficient": true
+      },
+      "h8": {
+        "samples": 0,
+        "insufficient": true
+      }
+    },
+    {
+      "name": "DEAD cycle",
+      "hours": 3,
+      "h4": {
+        "samples": 84,
+        "avg_max_move": 13,
+        "median_max_move": 8,
+        "avg_net": 9,
+        "directional_rate": 31,
+        "profitable_pct": 25
+      },
+      "h8": {
+        "samples": 84,
+        "avg_max_move": 24,
+        "median_max_move": 18,
+        "avg_net": 13,
+        "directional_rate": 50,
+        "profitable_pct": 61
+      }
+    }
+  ]
+}

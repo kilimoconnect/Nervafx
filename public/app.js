@@ -1242,6 +1242,117 @@ function updateM15Bar(data) {
   bar.style.display = 'flex';
 }
 
+// ─── V2 Threshold Notification Bar ────────────────────────────────────────────
+// Data-backed thresholds from backtest (May 2025 → present, 5478 hours analyzed)
+// Each threshold = minimum value for "edge" (avg ≥15 pip move, ≥50% directional rate)
+
+const V2_THRESHOLDS = [
+  { key: 'market_energy',       label: 'Energy',  min: 25, optimal: 65 },
+  { key: 'tradability_score',   label: 'Trad',    min: 15, optimal: 70 },
+  { key: 'movement_score',      label: 'Mov',     min: 20, optimal: 70 },
+  { key: 'breadth_score',       label: 'Brd',     min: 50, optimal: 80 },
+  { key: 'agreement_score',     label: 'Agr',     min: 30, optimal: 75 },
+  { key: 'directional_control', label: 'DirCtrl', min: 20, optimal: 45 },
+  { key: 'volatility_quality',  label: 'VolQ',    min: 10, optimal: 60 },
+  { key: 'volatility_score',    label: 'Vol',     min: 25, optimal: 70 },
+  { key: 'momentum_score',      label: 'Mom',     min: 10, optimal: 30, signed: true },
+  { key: 'chaos_score',         label: 'Chaos',   max: 50, warnAbove: 50 },
+  { key: 'false_breakout_risk', label: 'FBRisk',  max: 30, warnAbove: 60 },
+];
+
+const V2_FIRE_PCT = 0.60; // 60% of thresholds must pass to show notification
+
+function evaluateV2Thresholds(hourlyRow) {
+  if (!hourlyRow) return null;
+  const results = [];
+
+  for (const t of V2_THRESHOLDS) {
+    const val = parseFloat(hourlyRow[t.key]) || 0;
+    let pass;
+
+    if (t.max !== undefined) {
+      // Inverted metric — lower is better (chaos, FB risk)
+      pass = val <= t.max;
+    } else if (t.signed) {
+      // Momentum — positive and above min
+      pass = val >= t.min;
+    } else {
+      pass = val >= t.min;
+    }
+
+    results.push({
+      key: t.key,
+      label: t.label,
+      value: Math.round(val),
+      threshold: t.min !== undefined ? t.min : t.max,
+      optimal: t.optimal,
+      pass,
+      inverted: t.max !== undefined,
+      signed: t.signed,
+    });
+  }
+
+  const passed = results.filter(r => r.pass).length;
+  const total  = results.length;
+  const pct    = total > 0 ? passed / total : 0;
+  const fired  = pct >= V2_FIRE_PCT;
+
+  return { results, passed, total, pct, fired };
+}
+
+function updateV2ThresholdBar(hourlyRows) {
+  const bar = document.getElementById('v2-threshold-bar');
+  if (!bar) return;
+
+  // Use the latest hourly row from the active session
+  if (!hourlyRows || !hourlyRows.length) {
+    bar.style.display = 'none';
+    return;
+  }
+
+  const SKIP = new Set(['LOW_LIQUIDITY', 'DEAD_HOURS']);
+  const valid = hourlyRows.filter(r => !SKIP.has(r.session_name));
+  if (!valid.length) { bar.style.display = 'none'; return; }
+
+  const latest = valid[valid.length - 1];
+  const eval_ = evaluateV2Thresholds(latest);
+  if (!eval_) { bar.style.display = 'none'; return; }
+
+  // Only show bar when 60%+ thresholds met
+  if (!eval_.fired) {
+    bar.style.display = 'none';
+    return;
+  }
+
+  // Strong mode when 80%+ pass
+  const strong = eval_.pct >= 0.80;
+  bar.className = `v2-thresh-bar${strong ? ' v2t--strong' : ''}`;
+
+  // Score badge
+  const scoreEl = document.getElementById('v2t-score');
+  if (scoreEl) scoreEl.textContent = `${eval_.passed}/${eval_.total}`;
+
+  // Chips — show all, green for pass, dim red for fail
+  const chipsEl = document.getElementById('v2t-chips');
+  if (chipsEl) {
+    chipsEl.innerHTML = eval_.results.map(r => {
+      const cls = r.pass ? 'v2t-chip v2tc-pass' : 'v2t-chip v2tc-fail';
+      const prefix = r.signed && r.value > 0 ? '+' : '';
+      const icon = r.pass ? '✓' : '✗';
+      return `<span class="${cls}" title="${r.label}: ${prefix}${r.value} (threshold: ${r.inverted ? '≤' : '≥'}${r.threshold})">
+        <span class="v2tc-name">${r.label}</span>
+        <span class="v2tc-val">${prefix}${r.value} ${icon}</span>
+      </span>`;
+    }).join('');
+  }
+
+  // Time
+  const timeEl = document.getElementById('v2t-time');
+  if (timeEl && latest.time_utc) timeEl.textContent = fmtTime(latest.time_utc);
+
+  bar.style.display = 'flex';
+}
+
 // ─── Risk / approved trades ───────────────────────────────────────────────────
 
 function renderRisk(data) {
@@ -3086,6 +3197,7 @@ async function fetchMarketActivity() {
       historyRows,
       (hourlyData.hourly || []),
     );
+    updateV2ThresholdBar(hourlyData.hourly || []);
   } catch (_) {
     const el = document.getElementById('market-activity-display');
     if (el) el.innerHTML = '<p class="me-empty">Market Energy unavailable.</p>';
