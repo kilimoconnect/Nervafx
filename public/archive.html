@@ -558,6 +558,11 @@
       const el = document.getElementById('arc-' + s);
       if (el) el.style.display = s === section ? '' : 'none';
     });
+    // Auto-refresh currency strength data when tab is opened
+    if (section === 'ccystrength') {
+      _ccsCache = {};
+      loadCcyStrengthArchive();
+    }
   }
 
   // ─── Hourly Metric Charts ─────────────────────────────────────────────────
