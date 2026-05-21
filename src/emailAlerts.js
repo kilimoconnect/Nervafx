@@ -1,9 +1,82 @@
 'use strict';
 
-const { sendEmail, signalAlertEmail, momentumAlertEmail } = require('./emailService');
+const {
+  sendEmail,
+  confluenceAlertEmail,
+  approvedTradesEmail,
+  impulseAlertEmail,
+} = require('./emailService');
 
 const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York' };
 const SKIP_SESSIONS = new Set(['LOW_LIQUIDITY', 'DEAD_HOURS']);
+
+// ── V2 Engine Thresholds (must stay in sync with public/app.js) ──────────────
+const V2_THRESHOLDS = [
+  { key: 'market_energy',       label: 'Energy',  min: 50, optimal: 65 },
+  { key: 'tradability_score',   label: 'Trad',    min: 55, optimal: 70 },
+  { key: 'movement_score',      label: 'Mov',     min: 35, optimal: 70 },
+  { key: 'breadth_score',       label: 'Brd',     min: 65, optimal: 80 },
+  { key: 'agreement_score',     label: 'Agr',     min: 60, optimal: 75 },
+  { key: 'directional_control', label: 'DirCtrl', min: 30, optimal: 45 },
+  { key: 'volatility_quality',  label: 'VolQ',    min: 30, optimal: 60 },
+  { key: 'volatility_score',    label: 'Vol',     min: 40, optimal: 70 },
+  { key: 'momentum_score',      label: 'Mom',     min: 30, optimal: 60, signed: true },
+  { key: 'chaos_score',         label: 'Chaos',   max: 35, warnAbove: 50 },
+  { key: 'false_breakout_risk', label: 'FBRisk',  max: 15, warnAbove: 30 },
+];
+const V2_FIRE_PCT = 0.60;
+
+function evaluateConfluence(hourlyRow) {
+  if (!hourlyRow) return null;
+  const results = [];
+  for (const t of V2_THRESHOLDS) {
+    const val = parseFloat(hourlyRow[t.key]) || 0;
+    const pass = t.max !== undefined ? val <= t.max : val >= t.min;
+    results.push({
+      key: t.key, label: t.label, value: Math.round(val),
+      threshold: t.min !== undefined ? t.min : t.max,
+      optimal: t.optimal, pass, inverted: t.max !== undefined, signed: t.signed,
+    });
+  }
+  const passed = results.filter(r => r.pass).length;
+  const total  = results.length;
+  const pct    = total > 0 ? passed / total : 0;
+  return { results, passed, total, pct, fired: pct >= V2_FIRE_PCT };
+}
+
+// ── Deduplication ────────────────────────────────────────────────────────────
+// Uses a Supabase table `email_alert_log` to prevent sending the same alert
+// type within a cooldown window. If the table doesn't exist, alerts send anyway.
+
+async function wasRecentlySent(sb, alertType, cooldownMinutes = 120) {
+  try {
+    const since = new Date(Date.now() - cooldownMinutes * 60 * 1000).toISOString();
+    const { data } = await sb
+      .from('email_alert_log')
+      .select('id')
+      .eq('alert_type', alertType)
+      .gte('sent_at', since)
+      .limit(1);
+    return data && data.length > 0;
+  } catch (_) {
+    // Table may not exist yet — allow sending
+    return false;
+  }
+}
+
+async function logAlertSent(sb, alertType, details) {
+  try {
+    await sb.from('email_alert_log').insert({
+      alert_type: alertType,
+      details: details || {},
+      sent_at: new Date().toISOString(),
+    });
+  } catch (_) {
+    console.warn('[email-alert] could not log alert (table may not exist)');
+  }
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
 async function getSubscribedUsers(sb) {
   const { data: allUsers } = await sb.auth.admin.listUsers({ perPage: 1000 });
@@ -24,56 +97,31 @@ async function getSubscribedUsers(sb) {
   });
 }
 
-async function detectMomentum(sb) {
-  const today = new Date().toISOString().split('T')[0];
-  const { data: rows } = await sb
-    .from('session_activity')
-    .select('session_name, breadth_score, time_utc')
-    .gte('time_utc', today + 'T00:00:00Z')
-    .order('time_utc', { ascending: true });
-
-  if (!rows?.length) return null;
-
-  const valid = rows.filter(r => !SKIP_SESSIONS.has(r.session_name));
-  const breadths = valid.map(r => Math.round(parseFloat(r.breadth_score) || 0));
-
-  let bestStreak = 0, bestEnd = -1, streak = 0;
-  for (let i = 1; i < breadths.length; i++) {
-    if (breadths[i] >= breadths[i - 1] && breadths[i] >= 10 && breadths[i - 1] >= 10) {
-      streak++;
-      if (streak >= 2 && streak > bestStreak) {
-        bestStreak = streak;
-        bestEnd = i;
-      }
-    } else {
-      streak = 0;
-    }
-  }
-
-  if (bestStreak >= 2 && bestEnd >= 0) {
-    const peakRow = valid[bestEnd];
-    return {
-      session: SESS_LABEL[peakRow.session_name] || peakRow.session_name,
-      streak: bestStreak + 1,
-      peakVal: breadths[bestEnd],
-    };
-  }
-  return null;
+async function getLatestHourlyRow(sb) {
+  const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  const { data } = await sb
+    .from('hourly_session_activity')
+    .select('*')
+    .gte('time_utc', twoHoursAgo)
+    .order('time_utc', { ascending: false })
+    .limit(5);
+  if (!data?.length) return null;
+  // Find latest non-LOW_LIQUIDITY row
+  return data.find(r => !SKIP_SESSIONS.has(r.session_name)) || null;
 }
 
-async function detectImpulses(sb) {
+async function getM15Impulses(sb) {
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-  const { data: spreads } = await sb
+  const { data } = await sb
     .from('m15_pair_spreads')
     .select('instrument, state, spread_45m')
     .gte('time', oneHourAgo)
     .eq('state', 'EXPANDING')
     .order('time', { ascending: false });
-
-  if (!spreads?.length) return [];
+  if (!data?.length) return [];
 
   const seen = new Set();
-  return spreads.filter(s => {
+  return data.filter(s => {
     if (seen.has(s.instrument)) return false;
     seen.add(s.instrument);
     return true;
@@ -84,42 +132,47 @@ async function detectImpulses(sb) {
   }));
 }
 
+async function getApprovedTrades(sb) {
+  const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  const { data } = await sb
+    .from('risk_checks')
+    .select('instrument, direction, confidence, entry_price, stop_loss, take_profit, signal')
+    .eq('status', 'APPROVED')
+    .gte('time', twoHoursAgo)
+    .order('confidence', { ascending: false })
+    .limit(10);
+  return data || [];
+}
+
+// ── Main entry point ─────────────────────────────────────────────────────────
+
 async function sendSignalAlerts(sb) {
   if (!process.env.BREVO_API_KEY) {
     console.log('[email-alert] BREVO_API_KEY not set — skipping');
     return;
   }
 
-  const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-  console.log(`[email-alert] checking signals since ${twoHoursAgo}`);
+  console.log('[email-alert] checking conditions...');
 
-  // Trade signals
-  const { data: signals, error: sigErr } = await sb
-    .from('trade_signals')
-    .select('instrument, direction, confidence, reason')
-    .gte('time', twoHoursAgo)
-    .in('signal', ['BUY', 'SELL'])
-    .gte('confidence', 65)
-    .order('confidence', { ascending: false })
-    .limit(10);
+  // 1. Get latest hourly V2 data and evaluate confluence
+  const latestRow = await getLatestHourlyRow(sb);
+  const confluence = evaluateConfluence(latestRow);
+  const confluenceActive = confluence?.fired || false;
+  const sessionName = latestRow?.session_name ? (SESS_LABEL[latestRow.session_name] || latestRow.session_name) : null;
 
-  if (sigErr) console.error('[email-alert] signal query error:', sigErr.message);
-  console.log(`[email-alert] found ${signals?.length || 0} signals (conf>=65), ${signals?.map(s => s.instrument + ':' + s.confidence).join(', ') || 'none'}`);
+  console.log(`[email-alert] confluence: ${confluenceActive ? 'ACTIVE' : 'NOT MET'} (${confluence?.passed || 0}/${confluence?.total || 11})`);
 
-  // Momentum + M15 impulse
-  const [momentum, impulses] = await Promise.all([
-    detectMomentum(sb),
-    detectImpulses(sb),
+  // 2. Get M15 impulses and approved trades (only relevant if confluence is active)
+  const [impulses, trades] = await Promise.all([
+    getM15Impulses(sb),
+    confluenceActive ? getApprovedTrades(sb) : Promise.resolve([]),
   ]);
 
-  const hasTradeSignals = signals?.length > 0;
-  const hasMomentum = !!momentum;
-  const hasImpulses = impulses?.length > 0;
+  console.log(`[email-alert] impulses: ${impulses.length}, trades: ${trades.length}`);
 
-  console.log(`[email-alert] signals:${hasTradeSignals} momentum:${hasMomentum} impulses:${hasImpulses}`);
-
-  if (!hasTradeSignals && !hasMomentum && !hasImpulses) {
-    console.log('[email-alert] nothing to send');
+  // Nothing to send?
+  if (!confluenceActive && !impulses.length) {
+    console.log('[email-alert] confluence not met and no impulses — nothing to send');
     return;
   }
 
@@ -127,43 +180,71 @@ async function sendSignalAlerts(sb) {
   console.log(`[email-alert] ${recipients.length} subscribed users`);
   if (!recipients.length) return;
 
-  const emails = [];
+  const emailsSent = [];
 
-  // Trade signal email
-  if (hasTradeSignals) {
-    const { data: sessions } = await sb
-      .from('session_activity')
-      .select('session_name, energy_cycle, market_energy')
-      .order('time', { ascending: false })
-      .limit(3);
-
-    const sessionSummary = sessions?.map(s =>
-      `${s.session_name}: ${s.energy_cycle} (E:${Math.round(s.market_energy || 0)})`
-    ).join(' · ') || '';
-
-    emails.push(signalAlertEmail(signals, sessionSummary));
-  }
-
-  // Momentum / impulse email (combined or momentum alone)
-  if (hasMomentum || hasImpulses) {
-    emails.push(momentumAlertEmail(momentum, hasImpulses ? impulses : []));
-  }
-
-  for (const template of emails) {
-    for (const u of recipients) {
-      try {
-        await sendEmail(u.email, template);
-      } catch (e) {
-        console.error(`[email-alert] failed for ${u.email}:`, e.message);
+  // ── Engine Confluence alert (2h cooldown) ─────────────────────────────────
+  if (confluenceActive) {
+    const alreadySent = await wasRecentlySent(sb, 'confluence', 120);
+    if (!alreadySent) {
+      const confluenceData = {
+        ...confluence,
+        session: sessionName,
+      };
+      const template = confluenceAlertEmail(confluenceData);
+      for (const u of recipients) {
+        try { await sendEmail(u.email, template); } catch (e) {
+          console.error(`[email-alert] confluence failed for ${u.email}:`, e.message);
+        }
       }
+      await logAlertSent(sb, 'confluence', { passed: confluence.passed, total: confluence.total });
+      emailsSent.push('confluence');
+      console.log(`[email-alert] confluence email sent to ${recipients.length} users`);
+    } else {
+      console.log('[email-alert] confluence already sent within 2h — skipping');
     }
   }
 
-  const parts = [];
-  if (hasTradeSignals) parts.push(`${signals.length} signals`);
-  if (hasMomentum) parts.push('momentum');
-  if (hasImpulses) parts.push(`${impulses.length} impulses`);
-  console.log(`[email-alert] sent to ${recipients.length} users (${parts.join(', ')})`);
+  // ── Approved Trades alert (2h cooldown, only when confluence active) ──────
+  if (confluenceActive && trades.length > 0) {
+    const alreadySent = await wasRecentlySent(sb, 'approved_trades', 120);
+    if (!alreadySent) {
+      const template = approvedTradesEmail(trades, confluence);
+      for (const u of recipients) {
+        try { await sendEmail(u.email, template); } catch (e) {
+          console.error(`[email-alert] trades failed for ${u.email}:`, e.message);
+        }
+      }
+      await logAlertSent(sb, 'approved_trades', { count: trades.length, pairs: trades.map(t => t.instrument) });
+      emailsSent.push(`${trades.length} trades`);
+      console.log(`[email-alert] approved trades email sent to ${recipients.length} users`);
+    } else {
+      console.log('[email-alert] approved trades already sent within 2h — skipping');
+    }
+  }
+
+  // ── M15 Impulse alert (1h cooldown, only when confluence active) ──────────
+  if (confluenceActive && impulses.length > 0) {
+    const alreadySent = await wasRecentlySent(sb, 'impulse', 60);
+    if (!alreadySent) {
+      const template = impulseAlertEmail(impulses, confluence);
+      for (const u of recipients) {
+        try { await sendEmail(u.email, template); } catch (e) {
+          console.error(`[email-alert] impulse failed for ${u.email}:`, e.message);
+        }
+      }
+      await logAlertSent(sb, 'impulse', { count: impulses.length, pairs: impulses.map(i => i.instrument) });
+      emailsSent.push(`${impulses.length} impulses`);
+      console.log(`[email-alert] impulse email sent to ${recipients.length} users`);
+    } else {
+      console.log('[email-alert] impulse already sent within 1h — skipping');
+    }
+  }
+
+  if (emailsSent.length) {
+    console.log(`[email-alert] done — sent: ${emailsSent.join(', ')} to ${recipients.length} users`);
+  } else {
+    console.log('[email-alert] done — all alerts recently sent or no qualifying events');
+  }
 }
 
 module.exports = { sendSignalAlerts };

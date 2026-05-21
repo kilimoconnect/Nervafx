@@ -264,6 +264,126 @@ function momentumAlertEmail(momentum, impulses) {
   };
 }
 
+function confluenceAlertEmail(confluenceData) {
+  const { passed, total, pct, results, session } = confluenceData;
+  const pctStr = Math.round(pct * 100);
+  const strong = pct >= 0.80;
+
+  const statusBadge = strong
+    ? '<span class="badge badge-green">STRONG</span>'
+    : '<span class="badge badge-amber">ACTIVE</span>';
+
+  const chipRows = results.map(r => {
+    const cls = r.pass ? 'badge-green' : 'badge-red';
+    const prefix = r.signed && r.value > 0 ? '+' : '';
+    const icon = r.pass ? '✓' : '✗';
+    const dir = r.inverted ? '≤' : '≥';
+    return `<span class="metric"><span class="badge ${cls}">${icon}</span> ${r.label}: <strong>${prefix}${r.value}</strong> <span style="color:#64748b;font-size:11px">(${dir}${r.threshold})</span></span>`;
+  }).join('\n          ');
+
+  const failList = results.filter(r => !r.pass);
+  const failHtml = failList.length ? `
+    <div style="margin-top:12px;padding-top:12px;border-top:1px solid #334155">
+      <p style="color:#94a3b8;font-size:13px;margin:0 0 6px"><strong>Failing engines:</strong></p>
+      ${failList.map(r => {
+        const prefix = r.signed && r.value > 0 ? '+' : '';
+        const dir = r.inverted ? '≤' : '≥';
+        return `<p style="color:#f87171;font-size:13px;margin:2px 0">✗ ${r.label}: ${prefix}${r.value} (need ${dir}${r.threshold})</p>`;
+      }).join('')}
+    </div>` : '';
+
+  return {
+    subject: `Engine Confluence ${strong ? 'STRONG' : 'Active'} (${passed}/${total}) — NervaFX`,
+    html: baseLayout(`
+      <h2>Engine Confluence ${statusBadge}</h2>
+      <p>${passed} of ${total} engines are aligned (${pctStr}%).${session ? ` Current session: <strong>${session}</strong>.` : ''} Market conditions support high-probability setups.</p>
+      <div class="card">
+        <div class="card-title">Engine Status</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px">
+          ${chipRows}
+        </div>
+        ${failHtml}
+      </div>
+      <p>Scanners, trade watchlist, and impulse detection are <strong>active</strong>. Check the dashboard for live opportunities.</p>
+      <p style="text-align:center;margin:24px 0"><a class="cta" href="https://nervafx.com">Open Dashboard →</a></p>
+      <p style="color:#94a3b8;font-size:13px">Engine confluence is an analytical tool, not a trade recommendation. Always apply your own risk management.</p>
+    `),
+  };
+}
+
+function approvedTradesEmail(trades, confluenceData) {
+  const { passed, total, pct } = confluenceData;
+  const pctStr = Math.round(pct * 100);
+
+  const tradeRows = trades.map(t => {
+    const dir = (t.direction || t.signal) === 'BUY'
+      ? '<span class="signal-buy">▲ BUY</span>'
+      : '<span class="signal-sell">▼ SELL</span>';
+    const inst = (t.instrument || '').replace('_', '/');
+    return `<tr>
+      <td style="padding:8px;color:#fff;font-weight:600">${inst}</td>
+      <td style="padding:8px">${dir}</td>
+      <td style="padding:8px;color:#cbd5e1">${t.confidence || '—'}%</td>
+      <td style="padding:8px;color:#22c55e;font-size:13px">${t.entry_price ? t.entry_price : '—'}</td>
+      <td style="padding:8px;color:#ef4444;font-size:13px">${t.stop_loss ? t.stop_loss : '—'}</td>
+      <td style="padding:8px;color:#3b82f6;font-size:13px">${t.take_profit ? t.take_profit : '—'}</td>
+    </tr>`;
+  }).join('');
+
+  return {
+    subject: `${trades.length} Approved Trade${trades.length > 1 ? 's' : ''} — Engine Confluence ${pctStr}%`,
+    html: baseLayout(`
+      <h2>Approved Trades</h2>
+      <p>Engine Confluence is active (<strong>${passed}/${total}</strong> engines, ${pctStr}%). The following trades meet all approval criteria:</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0">
+        <thead><tr style="border-bottom:1px solid #334155;color:#94a3b8;font-size:13px;text-align:left">
+          <th style="padding:8px">Pair</th><th style="padding:8px">Signal</th>
+          <th style="padding:8px">Conf</th><th style="padding:8px">Entry</th>
+          <th style="padding:8px">SL</th><th style="padding:8px">TP</th>
+        </tr></thead>
+        <tbody>${tradeRows}</tbody>
+      </table>
+      <div class="card">
+        <div class="card-title">Engine Confluence</div>
+        <p style="margin:0;color:#cbd5e1">${passed}/${total} engines aligned — conditions are favourable for these setups.</p>
+      </div>
+      <p style="text-align:center;margin:24px 0"><a class="cta" href="https://nervafx.com">View Trade Details →</a></p>
+      <p style="color:#94a3b8;font-size:13px">Approved trades are system-generated plans, not financial advice. Manage your own risk.</p>
+    `),
+  };
+}
+
+function impulseAlertEmail(impulses, confluenceData) {
+  const { passed, total, pct } = confluenceData;
+
+  const impulseRows = impulses.map(imp => {
+    const dir = imp.direction === 'BUY'
+      ? '<span class="signal-buy">▲ Bullish</span>'
+      : '<span class="signal-sell">▼ Bearish</span>';
+    return `<tr>
+      <td style="padding:8px;color:#fff;font-weight:600">${(imp.instrument || '').replace('_', '/')}</td>
+      <td style="padding:8px">${dir}</td>
+      <td style="padding:8px;color:#cbd5e1">EXPANDING</td>
+    </tr>`;
+  }).join('');
+
+  return {
+    subject: `${impulses.length} M15 Impulse${impulses.length > 1 ? 's' : ''} — Engine Active (${passed}/${total})`,
+    html: baseLayout(`
+      <h2>M15 Impulse Moves Detected</h2>
+      <p>Engine Confluence is active (<strong>${passed}/${total}</strong>, ${Math.round(pct * 100)}%). These pairs are showing expanding momentum across 45M/90M/180M:</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0">
+        <thead><tr style="border-bottom:1px solid #334155;color:#94a3b8;font-size:13px;text-align:left">
+          <th style="padding:8px">Pair</th><th style="padding:8px">Direction</th><th style="padding:8px">State</th>
+        </tr></thead>
+        <tbody>${impulseRows}</tbody>
+      </table>
+      <p style="text-align:center;margin:24px 0"><a class="cta" href="https://nervafx.com">View Live Dashboard →</a></p>
+      <p style="color:#94a3b8;font-size:13px">Impulse detection is a market observation, not a trade recommendation.</p>
+    `),
+  };
+}
+
 // ── Send helpers ─────────────────────────────────────────────────────────────
 
 async function sendEmail(to, template) {
@@ -309,4 +429,7 @@ module.exports = {
   dailyDigestEmail,
   upgradePromptEmail,
   momentumAlertEmail,
+  confluenceAlertEmail,
+  approvedTradesEmail,
+  impulseAlertEmail,
 };
