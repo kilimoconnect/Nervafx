@@ -137,6 +137,95 @@
       .arc-filters { gap: 6px 10px; padding: 8px 10px; }
       .arc-fpill { padding: 2px 7px; font-size: 9px; }
     }
+
+    /* ── Hourly Breakdown Table ──────────────────────────────────────────── */
+    .bd-day-block {
+      margin-bottom: 24px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: rgba(255,255,255,.02);
+      overflow: hidden;
+    }
+    .bd-day-block .bc-date-header {
+      padding: 10px 14px;
+      font-size: 12px; font-weight: 700; color: var(--text);
+      background: rgba(255,255,255,.03);
+      border-bottom: 1px solid var(--border);
+    }
+    .bd-session-block {
+      padding: 8px 0 4px;
+      border-bottom: 1px solid rgba(255,255,255,.04);
+    }
+    .bd-session-block:last-child { border-bottom: none; }
+    .bd-session-header {
+      padding: 0 14px 6px;
+      font-size: 11px; font-weight: 700;
+      letter-spacing: .03em;
+    }
+    .bd-table-scroll {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255,255,255,.1) transparent;
+    }
+    .bd-table {
+      width: 100%;
+      min-width: 360px;
+      border-collapse: collapse;
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+    }
+    .bd-table th, .bd-table td {
+      padding: 3px 6px;
+      text-align: center;
+      white-space: nowrap;
+    }
+    .bd-label-col {
+      text-align: left !important;
+      padding-left: 14px !important;
+      font-weight: 600;
+      color: var(--text-muted);
+      width: 60px;
+      min-width: 60px;
+    }
+    .bd-time-col {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-dim);
+      padding-bottom: 6px !important;
+    }
+    .bd-val-col {
+      font-weight: 600;
+      color: var(--text);
+      position: relative;
+    }
+    .bd-delta {
+      font-size: 8px;
+      font-weight: 700;
+      margin-left: 1px;
+      vertical-align: super;
+    }
+    .bd-sep td {
+      height: 1px;
+      padding: 0 !important;
+      border-bottom: 1px solid rgba(255,255,255,.06);
+    }
+    .bd-badge {
+      display: inline-block;
+      font-size: 8px;
+      font-weight: 700;
+      letter-spacing: .03em;
+      padding: 1px 5px;
+      border-radius: 3px;
+      border: 1px solid;
+      text-transform: uppercase;
+    }
+    @media (max-width: 700px) {
+      .bd-label-col { padding-left: 8px !important; font-size: 10px; width: 48px; min-width: 48px; }
+      .bd-table th, .bd-table td { padding: 2px 4px; font-size: 10px; }
+      .bd-delta { font-size: 7px; }
+      .bd-badge { font-size: 7px; padding: 1px 3px; }
+    }
   </style>
 </head>
 <body>
@@ -172,6 +261,7 @@
       <button class="arc-tab" data-section="volatility" onclick="switchArchiveTab(this)">Volatility</button>
       <button class="arc-tab" data-section="momentum" onclick="switchArchiveTab(this)">Momentum</button>
       <button class="arc-tab" data-section="liquidity" onclick="switchArchiveTab(this)">Liquidity</button>
+      <button class="arc-tab" data-section="breakdown" onclick="switchArchiveTab(this)">Hourly Breakdown</button>
       <button class="arc-tab" data-section="history" onclick="switchArchiveTab(this)">Session History</button>
     </div>
 
@@ -184,6 +274,7 @@
           <button class="arc-fpill" data-days="90" onclick="setArcPeriod(this)">90D</button>
           <button class="arc-fpill" data-days="180" onclick="setArcPeriod(this)">6M</button>
           <button class="arc-fpill active" data-days="365" onclick="setArcPeriod(this)">1Y</button>
+          <button class="arc-fpill" data-days="730" onclick="setArcPeriod(this)">All</button>
         </div>
       </div>
       <div class="arc-filter-group">
@@ -264,6 +355,12 @@
       <div id="arc-liquidity-body"><div class="arc-loading"><span class="spinner"></span> Loading liquidity data…</div></div>
     </section>
 
+    <section class="arc-section" id="arc-breakdown" style="display:none">
+      <div class="arc-section-header"><i data-lucide="table-2"></i> Hourly Breakdown</div>
+      <div class="arc-section-desc">Full V2 metric table for every session — scores, deltas, and classifications hour by hour. Mirrors the live session hourly breakdown across all historical data.</div>
+      <div id="arc-breakdown-body"><div class="arc-loading"><span class="spinner"></span> Loading breakdown data…</div></div>
+    </section>
+
     <section class="arc-section" id="arc-history" style="display:none">
       <div class="arc-section-header"><i data-lucide="clock"></i> Session Energy History</div>
       <div id="arc-history-body"><div class="arc-loading"><span class="spinner"></span> Loading history…</div></div>
@@ -300,7 +397,7 @@
   let _arcCustomFrom = null;  // ISO string or null
   let _arcCustomTo = null;
 
-  const ARC_SECTIONS = ['energy', 'tradability', 'movement', 'breadth', 'agreement', 'dircontrol', 'volquality', 'volatility', 'momentum', 'liquidity', 'history'];
+  const ARC_SECTIONS = ['energy', 'tradability', 'movement', 'breadth', 'agreement', 'dircontrol', 'volquality', 'volatility', 'momentum', 'liquidity', 'breakdown', 'history'];
 
   function setArcPeriod(btn) {
     document.querySelectorAll('#arc-period-pills .arc-fpill').forEach(b => b.classList.remove('active'));
@@ -359,6 +456,7 @@
           else renderMetricBars(bodyEl, filtered, ARC_METRICS[key]);
         }
       }
+      _renderFilteredBreakdown();
     }
     if (_arcSessionRows) {
       _renderFilteredLiquidity();
@@ -385,7 +483,7 @@
   async function _loadHourlyRows() {
     if (_arcHourlyRows) return _arcHourlyRows;
     if (_arcHourlyLoading) return _arcHourlyLoading;
-    _arcHourlyLoading = api('/api/session-activity?type=hourly&days=365').then(data => {
+    _arcHourlyLoading = api('/api/session-activity?type=hourly&days=730').then(data => {
       _arcHourlyRows = (data.hourly || []);
       return _arcHourlyRows;
     });
@@ -399,7 +497,7 @@
   async function _loadSessionRows() {
     if (_arcSessionRows) return _arcSessionRows;
     if (_arcSessionLoading) return _arcSessionLoading;
-    _arcSessionLoading = api('/api/market-energy-history?days=365').then(data => {
+    _arcSessionLoading = api('/api/market-energy-history?days=730').then(data => {
       _arcSessionRows = Array.isArray(data) ? data : (data.rows || []);
       return _arcSessionRows;
     });
@@ -805,6 +903,186 @@
     container.innerHTML = `<div class="sh-table">${tableHead}${dayBlocks}</div>`;
   }
 
+  // ─── Hourly Breakdown Archive ────────────────────────────────────────────────
+
+  function _renderFilteredBreakdown() {
+    const bodyEl = document.getElementById('arc-breakdown-body');
+    if (!bodyEl || !_arcHourlyRows) return;
+    const filtered = _filterRows(_arcHourlyRows, 'time_utc');
+    if (!filtered.length) { bodyEl.innerHTML = '<p class="me-empty">No data for this filter.</p>'; return; }
+    renderBreakdown(bodyEl, filtered);
+  }
+
+  async function loadBreakdownArchive() {
+    const bodyEl = document.getElementById('arc-breakdown-body');
+    if (!bodyEl) return;
+    try {
+      const rows = await _loadHourlyRows();
+      const filtered = _filterRows(rows, 'time_utc');
+      if (!filtered.length) { bodyEl.innerHTML = '<p class="me-empty">No hourly data available.</p>'; return; }
+      renderBreakdown(bodyEl, filtered);
+    } catch (e) {
+      bodyEl.innerHTML = `<p class="me-empty">Failed to load: ${e.message}</p>`;
+    }
+  }
+
+  function renderBreakdown(container, rows) {
+    const SESS_COLOR = { ASIA: '#f59e0b', LONDON: '#0ea5e9', NEW_YORK: '#a855f7', LOW_LIQUIDITY: '#475569' };
+    const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York', LOW_LIQUIDITY: 'Low Liq.' };
+    const SESS_ORDER = ['ASIA', 'LONDON', 'NEW_YORK'];
+    const SKIP = new Set(['LOW_LIQUIDITY', 'DEAD_HOURS']);
+    const tz = (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC');
+
+    // Score metric rows (9 rows)
+    const SCORE_ROWS = [
+      { key: 'market_energy',       label: 'Energy' },
+      { key: 'tradability_score',   label: 'Trad' },
+      { key: 'movement_score',      label: 'Mov' },
+      { key: 'breadth_score',       label: 'Brd' },
+      { key: 'agreement_score',     label: 'Agr' },
+      { key: 'directional_control', label: 'DirCtrl' },
+      { key: 'volatility_quality',  label: 'VolQ' },
+      { key: 'volatility_score',    label: 'Vol' },
+      { key: 'momentum_score',      label: 'Mom', signed: true },
+    ];
+
+    // Classification badge rows
+    const CLASS_ROWS = [
+      { key: 'energy_cycle',    label: 'Cycle' },
+      { key: 'volatility_type', label: 'VolTyp' },
+      { key: 'momentum_type',   label: 'MomTyp' },
+    ];
+
+    // Short labels for classification values
+    const SHORT_LABEL = {
+      EXPLOSIVE: 'Explo', EXPANSION: 'Expan', TRANSITION: 'Trans',
+      COMPRESSION: 'Comp', EXHAUSTION: 'Exhst', LOW_PARTICIPATION: 'LowP', DEAD: 'Dead',
+      HEALTHY: 'Hlthy', NORMAL: 'Norm', CHAOTIC: 'Chaot', EVENT: 'Event',
+      IMPULSE: 'Impls', TREND: 'Trend', DECAY: 'Decay', STABLE: 'Stble',
+    };
+
+    // Colors for classification badge text
+    const CLASS_CLR = {
+      EXPLOSIVE: '#f59e0b', EXPANSION: '#22c55e', TRANSITION: '#0ea5e9',
+      COMPRESSION: '#ef4444', EXHAUSTION: '#f97316', LOW_PARTICIPATION: '#64748b', DEAD: '#334155',
+      HEALTHY: '#22c55e', NORMAL: '#94a3b8', CHAOTIC: '#ef4444', EVENT: '#f59e0b',
+      IMPULSE: '#22c55e', TREND: '#0ea5e9', DECAY: '#ef4444', STABLE: '#64748b',
+    };
+
+    // Group by date → session → sorted hours
+    const byDate = {};
+    for (const r of rows) {
+      if (SKIP.has(r.session_name)) continue;
+      const date = r.time_utc.slice(0, 10);
+      if (!byDate[date]) byDate[date] = {};
+      if (!byDate[date][r.session_name]) byDate[date][r.session_name] = [];
+      byDate[date][r.session_name].push(r);
+    }
+    // Sort hours within each session
+    for (const date of Object.keys(byDate)) {
+      for (const sess of Object.keys(byDate[date])) {
+        byDate[date][sess].sort((a, b) => a.time_utc.localeCompare(b.time_utc));
+      }
+    }
+
+    const dates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
+    let html = '';
+
+    for (const date of dates) {
+      const d = new Date(date + 'T12:00:00Z');
+      const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: tz });
+
+      html += `<div class="bd-day-block"><div class="bc-date-header">${dayLabel}</div>`;
+
+      for (const sessKey of SESS_ORDER) {
+        const sessHours = byDate[date][sessKey];
+        if (!sessHours || !sessHours.length) continue;
+
+        const sessColor = SESS_COLOR[sessKey] || '#64748b';
+        const sessLabel = SESS_LABEL[sessKey] || sessKey;
+        const colCount = sessHours.length + 1;
+
+        html += `<div class="bd-session-block">
+          <div class="bd-session-header" style="color:${sessColor}">${sessLabel}</div>
+          <div class="bd-table-scroll"><table class="bd-table"><thead><tr><th class="bd-label-col"></th>`;
+
+        // Time column headers
+        for (const h of sessHours) {
+          const lt = new Date(h.time_utc).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
+          html += `<th class="bd-time-col">${lt}</th>`;
+        }
+        html += '</tr></thead><tbody>';
+
+        // 9 score metric rows
+        for (const sr of SCORE_ROWS) {
+          html += `<tr><td class="bd-label-col">${sr.label}</td>`;
+          for (let i = 0; i < sessHours.length; i++) {
+            const val = Math.round(parseFloat(sessHours[i][sr.key]) || 0);
+            let prevVal = null;
+            if (i > 0) prevVal = Math.round(parseFloat(sessHours[i - 1][sr.key]) || 0);
+
+            let cell = '';
+            if (sr.signed) {
+              cell = val > 0 ? `<span style="color:#22c55e">+${val}</span>`
+                   : val < 0 ? `<span style="color:#ef4444">${val}</span>`
+                   : `<span style="color:#64748b">0</span>`;
+            } else {
+              const c = val >= 60 ? '#22c55e' : val >= 40 ? '#0ea5e9' : val >= 20 ? '#f59e0b' : '#64748b';
+              cell = `<span style="color:${c}">${val}</span>`;
+            }
+
+            // Delta badge (skip first hour — no prior reference)
+            if (prevVal !== null) {
+              const delta = val - prevVal;
+              if (delta !== 0) {
+                const ds = delta > 0 ? `+${delta}` : `${delta}`;
+                const dc = delta > 0 ? '#22c55e' : '#ef4444';
+                cell += `<span class="bd-delta" style="color:${dc}">${ds}</span>`;
+              }
+            }
+
+            html += `<td class="bd-val-col">${cell}</td>`;
+          }
+          html += '</tr>';
+        }
+
+        // Separator
+        html += `<tr class="bd-sep"><td colspan="${colCount}"></td></tr>`;
+
+        // 3 classification badge rows
+        for (const cr of CLASS_ROWS) {
+          html += `<tr><td class="bd-label-col">${cr.label}</td>`;
+          for (const h of sessHours) {
+            const raw = h[cr.key] || '';
+            const short = SHORT_LABEL[raw] || (raw ? raw.slice(0, 5) : '—');
+            const clr = CLASS_CLR[raw] || '#64748b';
+            html += `<td class="bd-val-col"><span class="bd-badge" style="color:${clr};border-color:${clr}33">${short}</span></td>`;
+          }
+          html += '</tr>';
+        }
+
+        // False breakout risk warning row (only if any hour ≥ 50%)
+        const hasFB = sessHours.some(h => (parseFloat(h.false_breakout_risk) || 0) >= 50);
+        if (hasFB) {
+          html += '<tr><td class="bd-label-col" style="color:#ef4444">FB Risk</td>';
+          for (const h of sessHours) {
+            const fb = Math.round(parseFloat(h.false_breakout_risk) || 0);
+            html += fb >= 50
+              ? `<td class="bd-val-col"><span class="bd-badge" style="color:#ef4444;border-color:rgba(239,68,68,.3)">⚠ ${fb}%</span></td>`
+              : '<td class="bd-val-col"><span style="color:#334155">—</span></td>';
+          }
+          html += '</tr>';
+        }
+
+        html += '</tbody></table></div></div>';
+      }
+
+      html += '</div>';
+    }
+
+    container.innerHTML = html || '<p class="me-empty">No breakdown data available.</p>';
+  }
+
   // ─── Init ─────────────────────────────────────────────────────────────────────
 
   Promise.all([
@@ -818,6 +1096,7 @@
     loadMetricArchive('volatility'),
     loadMetricArchive('momentum'),
     loadLiquidityArchive(),
+    loadBreakdownArchive(),
     loadHistoryArchive(),
   ]);
 
