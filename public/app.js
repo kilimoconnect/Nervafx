@@ -3141,24 +3141,39 @@ function _renderMeAnalysisModal() {
     </div>`;
 }
 
-function _meMarketCycleBanner(cycle) {
+function _meMarketCycleBanner(cycle, latestHourly) {
   const color = cycle ? (ME_MARKET_CYCLE_COLOR[cycle] || '#64748b') : '#64748b';
   const label = cycle ? (ME_MARKET_CYCLE_LABEL[cycle]  || cycle.replace(/_/g, ' ')) : '—';
+
+  // Check which engines meet their V2 threshold in the latest hourly bar
+  function engineBtn(key, displayLabel) {
+    const cfg = METRIC_CHART_CONFIG[key];
+    if (!cfg || !latestHourly || cfg.sessionLevel) {
+      return `<button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('${key}')">${displayLabel}</button>`;
+    }
+    const val = parseFloat(latestHourly[cfg.field]) || 0;
+    const meets = cfg.v2Threshold !== undefined
+      ? (cfg.inverted ? val <= cfg.v2Threshold : val >= cfg.v2Threshold)
+      : false;
+    const style = meets ? ' style="background:#22c55e;color:#fff;border-color:#22c55e"' : '';
+    return `<button class="me-ai-toggle me-btn-metric premium-only"${style} onclick="openMetricChart('${key}')">${displayLabel}</button>`;
+  }
+
   return `<div class="me-cycle-banner">
     <span class="me-cycle-banner-label">Market Cycle</span>
     <span class="me-cycle-banner-val" style="--bc:${color}">${label}</span>
-    <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('energy')">Energy</button>
-    <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('tradability')">Tradability</button>
-    <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('movement')">Movement</button>
-    <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('breadth')">Breadth</button>
-    <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('agreement')">Agreement</button>
-    <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('dircontrol')">Dir Control</button>
-    <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('volquality')">Vol Quality</button>
-    <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('volatility')">Volatility</button>
-    <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('momentum')">Momentum</button>
-    <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('chaos')">Chaos</button>
-    <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('fbr')">FB Risk</button>
-    <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('liquidity')">Liquidity</button>
+    ${engineBtn('energy', 'Energy')}
+    ${engineBtn('tradability', 'Tradability')}
+    ${engineBtn('movement', 'Movement')}
+    ${engineBtn('breadth', 'Breadth')}
+    ${engineBtn('agreement', 'Agreement')}
+    ${engineBtn('dircontrol', 'Dir Control')}
+    ${engineBtn('volquality', 'Vol Quality')}
+    ${engineBtn('volatility', 'Volatility')}
+    ${engineBtn('momentum', 'Momentum')}
+    ${engineBtn('chaos', 'Chaos')}
+    ${engineBtn('fbr', 'FB Risk')}
+    ${engineBtn('liquidity', 'Liquidity')}
     <button class="me-ai-toggle me-btn-ai premium-only" onclick="openMeAiAnalysis()">AI Analysis</button>
   </div>`;
 }
@@ -3319,8 +3334,11 @@ function renderMarketEnergy(sessions, expansionPressure, marketCycle, currentSes
       return a.idx - b.idx;
     });
 
+  // Latest hourly row for button coloring (last non-LOW_LIQUIDITY bar)
+  const latestHourlyRow = allHourly.length ? allHourly[allHourly.length - 1] : null;
+
   el.innerHTML = `
-    ${_meMarketCycleBanner(marketCycle)}
+    ${_meMarketCycleBanner(marketCycle, latestHourlyRow)}
     <div class="me-card-grid">
       ${sorted.map(({ name }) => _meSessionCard(name, byName[name] || null, _meSessionStatus(name, currentSession), lastThreeHourly)).join('')}
     </div>
