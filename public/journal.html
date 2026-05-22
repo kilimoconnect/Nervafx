@@ -414,24 +414,6 @@
     return `<div class="jrn-csig-row">${pt}${parts.join('')}</div>`;
   }
 
-  // Compute top 2 strongest / bottom 2 weakest from a journal entry's own
-  // stored currency_strength snapshot (session open→current close ranking).
-  function computeEntryFlowLeaders(e) {
-    const cs   = e.currency_strength;
-    const list = Array.isArray(cs) ? cs : (cs?.currencies || []);
-    if (!list.length) return { strongest: [], weakest: [] };
-    const scored = list.map(c => {
-      const v3  = parseFloat(c.smooth_3h  ?? c.normalized_3h)  || 0;
-      const v6  = parseFloat(c.smooth_6h  ?? c.normalized_6h)  || 0;
-      const v12 = parseFloat(c.smooth_12h ?? c.normalized_12h) || 0;
-      return { currency: c.currency, score: (v3 + v6 + v12) / 3 };
-    }).sort((a, b) => b.score - a.score);
-    return {
-      strongest: scored.slice(0, 2).map(s => s.currency),
-      weakest:   scored.slice(-2).reverse().map(s => s.currency),
-    };
-  }
-
   // For modal pair filtering — uses live _csigCurrencies (pass-through when empty)
   function hasCsigCurrency(instrument) {
     if (!_csigCurrencies.size) return true;
@@ -942,20 +924,13 @@
       // Filter signals through confluence + CS gates
       const filteredSignals = _filterSignalsByConfluenceAndCS(dedupedSignals, me, e);
 
-      // Flow: use journal entry's own currency strength (historically accurate)
-      const flow = computeEntryFlowLeaders(e);
-      const flowHtml = (flow.strongest.length || flow.weakest.length)
-        ? flow.strongest.map(c => `<span style="color:#22c55e">${c}↑</span>`).join(' ') + ' ' +
-          flow.weakest.map(c => `<span style="color:#ef4444">${c}↓</span>`).join(' ')
-        : '—';
-
       return _jrnSection(`📊 ${clean(e.session_name||'')} · ${cycle}`, `
         <div class="jrn-sess-stats">
           <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Energy</span><span class="jrn-sess-val" style="color:${cycleColor}">${eng}</span></div>
           <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Momentum</span><span class="jrn-sess-val">${brd}</span></div>
           <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Liquidity</span><span class="jrn-sess-val" style="color:${liqColor}">${liq}</span></div>
           <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Pressure</span><span class="jrn-sess-val">▲${bull}% ▼${bear}%</span></div>
-          <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Flow</span><span class="jrn-sess-val">${flowHtml}</span></div>
+          <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Flow</span><span class="jrn-sess-val">${(me.strongest_ccy||'—').split(',').map(c => `<span style="color:#22c55e">${c}↑</span>`).join(' ')} ${(me.weakest_ccy||'—').split(',').map(c => `<span style="color:#ef4444">${c}↓</span>`).join(' ')}</span></div>
           ${filteredSignals.length ? `<div class="jrn-sess-stat jrn-sess-full"><span class="jrn-sess-lbl">Signals</span><span class="jrn-sess-val">${filteredSignals.map(s => `${pair(s.instrument)} ${s.signal}`).join(', ')}</span></div>` : ''}
         </div>`);
     }
