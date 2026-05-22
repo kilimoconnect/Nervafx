@@ -786,12 +786,17 @@
       </div>`);
   }
 
-  function renderJrnSetupsSection(topSetups, signals, csigFilter) {
+  function renderJrnSetupsSection(topSetups, signals, csigFilter, hourlyRow) {
+    // Gate: no signals/setups shown unless confluence is active
+    const conf = evaluateV2Thresholds(hourlyRow);
+    if (!conf || !conf.fired) {
+      return _jrnSection('🎯 Top Setups & Signals', '<p class="jrn-empty">Confluence not met — signals gated.</p>');
+    }
     const filter   = csigFilter || hasCsigCurrency;
     const entered  = (signals?.entered || []).filter(s => filter(s.instrument));
     const waiting  = (signals?.waiting || []).filter(s => filter(s.instrument));
     const setups   = (topSetups || []).filter(s => filter(s.instrument));
-    if (!setups.length && !entered.length) return '';
+    if (!setups.length && !entered.length) return _jrnSection('🎯 Top Setups & Signals', '<p class="jrn-empty">No CS-aligned setups this hour.</p>');
     return _jrnSection('🎯 Top Setups & Signals', `
       ${entered.length ? `<div class="jrn-sig-entered">${entered.map(s => {
         const d = s.signal === 'BUY' ? 'buy' : 'sell';
@@ -861,12 +866,47 @@
     return _jrnSection('📈 Outcomes', `${blocks}${pending ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">${pending}</div>` : ''}`);
   }
 
+  // Filter signals: must pass confluence AND CS alignment
+  function _filterSignalsByConfluenceAndCS(allSignals, sessionRow, entry) {
+    // Gate 1: Confluence must be active
+    const conf = evaluateV2Thresholds(sessionRow);
+    if (!conf || !conf.fired) return [];
+
+    // Gate 2: CS alignment — pair must have a currency in the strong/weak set
+    const { strong, weak } = entry ? computeEntryCsig(entry) : { strong: [], weak: [] };
+    const csSet = new Set([...strong, ...weak]);
+    if (!csSet.size) return []; // No CS currencies qualified → no signals
+
+    // Gate 3: Direction alignment — BUY signal needs strong base or weak quote;
+    // SELL signal needs weak base or strong quote
+    const strongSet = new Set(strong);
+    const weakSet   = new Set(weak);
+
+    return allSignals.filter(s => {
+      const base  = (s.instrument || '').slice(0, 3).toUpperCase();
+      const quote = (s.instrument || '').slice(4, 7).toUpperCase();
+      if (!csSet.has(base) && !csSet.has(quote)) return false;
+
+      // Direction must align with strength
+      if (s.signal === 'BUY')  return strongSet.has(base) || weakSet.has(quote);
+      if (s.signal === 'SELL') return weakSet.has(base) || strongSet.has(quote);
+      return false;
+    });
+  }
+
   function renderJrnSessionPerfSection(e, sessionEntries) {
     if (!sessionEntries || sessionEntries.length <= 1) {
       return _jrnSection(`📊 Session: ${clean(e.session_name||'')}`, '<p class="jrn-empty">First snapshot of this session.</p>');
     }
 
-    const allSignals = sessionEntries.flatMap(x => (x.signals_summary?.entered || []));
+    const rawSignals = sessionEntries.flatMap(x => (x.signals_summary?.entered || []));
+    // Deduplicate: keep only one signal per instrument (latest)
+    const seenInstr = new Set();
+    const dedupedSignals = rawSignals.filter(s => {
+      if (seenInstr.has(s.instrument)) return false;
+      seenInstr.add(s.instrument);
+      return true;
+    });
 
     const me = _jrnCachedEnergy?.sessions?.find(s => s.session_name === e.session_name);
     if (me) {
@@ -881,6 +921,9 @@
                        : cycle.includes('TRANS') ? '#0ea5e9'
                        : cycle.includes('COMP') || cycle.includes('DEAD') ? '#f59e0b' : '#64748b';
 
+      // Filter signals through confluence + CS gates
+      const filteredSignals = _filterSignalsByConfluenceAndCS(dedupedSignals, me, e);
+
       return _jrnSection(`📊 ${clean(e.session_name||'')} · ${cycle}`, `
         <div class="jrn-sess-stats">
           <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Energy</span><span class="jrn-sess-val" style="color:${cycleColor}">${eng}</span></div>
@@ -888,7 +931,7 @@
           <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Liquidity</span><span class="jrn-sess-val" style="color:${liqColor}">${liq}</span></div>
           <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Pressure</span><span class="jrn-sess-val">▲${bull}% ▼${bear}%</span></div>
           <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Flow</span><span class="jrn-sess-val">${(me.strongest_ccy||'—').split(',').map(c => `<span style="color:#22c55e">${c}↑</span>`).join(' ')} ${(me.weakest_ccy||'—').split(',').map(c => `<span style="color:#ef4444">${c}↓</span>`).join(' ')}</span></div>
-          ${allSignals.length ? `<div class="jrn-sess-stat jrn-sess-full"><span class="jrn-sess-lbl">Signals</span><span class="jrn-sess-val">${allSignals.map(s => `${pair(s.instrument)} ${s.signal}`).join(', ')}</span></div>` : ''}
+          ${filteredSignals.length ? `<div class="jrn-sess-stat jrn-sess-full"><span class="jrn-sess-lbl">Signals</span><span class="jrn-sess-val">${filteredSignals.map(s => `${pair(s.instrument)} ${s.signal}`).join(', ')}</span></div>` : ''}
         </div>`);
     }
 
@@ -896,7 +939,6 @@
     return _jrnSection(`📊 ${clean(e.session_name||'')} · ${sessionEntries.length}H`, `
       <div class="jrn-sess-stats">
         <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Duration</span><span class="jrn-sess-val">${sessionEntries.length}H</span></div>
-        ${allSignals.length ? `<div class="jrn-sess-stat jrn-sess-full"><span class="jrn-sess-lbl">Signals</span><span class="jrn-sess-val">${allSignals.map(s => `${pair(s.instrument)} ${s.signal}`).join(', ')}</span></div>` : ''}
       </div>`);
   }
 
@@ -950,7 +992,7 @@
       renderJrnCsigSection(e),
       renderJrnStrengthSection(e.currency_strength),
       e.m15_impulses != null ? renderJrnM15Section(e.m15_impulses) : '',
-      renderJrnSetupsSection(e.top_setups || [], signals, entryCsigFilter),
+      renderJrnSetupsSection(e.top_setups || [], signals, entryCsigFilter, hourlyRow),
       renderJrnOutcomesSection(e),
       prevEntry !== undefined ? renderJrnPrevSessionSection(prevEntry) : '',
     ].filter(Boolean).join('');
