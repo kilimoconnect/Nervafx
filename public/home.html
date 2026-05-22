@@ -931,84 +931,12 @@
       padding: 2px 8px;
       border-radius: 4px;
     }
-    /* Confluence status bar */
-    .me-ex-confluence { margin-bottom: 14px; }
-    .me-ex-conf-status {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 6px;
-    }
-    .me-ex-conf-dot {
-      width: 8px; height: 8px;
-      border-radius: 50%;
-      background: #f59e0b;
-      flex-shrink: 0;
-    }
-    .me-ex-conf--active .me-ex-conf-dot { background: #22c55e; box-shadow: 0 0 6px rgba(34,197,94,0.5); }
-    .me-ex-conf-label { font-size: 11px; color: var(--text2); font-weight: 600; }
-    .me-ex-conf-score { font-size: 12px; font-weight: 800; color: var(--text); font-family: 'SF Mono','Fira Code',monospace; margin-left: auto; }
-    .me-ex-conf-badge {
-      font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
-      padding: 2px 8px; border-radius: 4px;
-      background: rgba(34,197,94,0.12); color: #22c55e; border: 1px solid rgba(34,197,94,0.25);
-    }
-    .me-ex-conf-bar-track {
-      height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px;
-      position: relative; overflow: visible;
-    }
-    .me-ex-conf-bar-fill {
-      height: 100%; border-radius: 2px;
-      background: linear-gradient(90deg, #f59e0b 0%, #22c55e 60%);
-    }
-    .me-ex-conf-bar-gate {
-      position: absolute; top: -3px; width: 2px; height: 10px;
-      background: rgba(255,255,255,0.35); border-radius: 1px;
-    }
-
-    /* 9-engine 3-bar grid */
-    .me-ex-engines {
-      display: flex;
-      flex-direction: column;
-      gap: 5px;
-      margin-bottom: 12px;
-    }
-    .me-ex-eng-row {
-      display: grid;
-      grid-template-columns: 72px 1fr 32px;
-      align-items: center;
-      gap: 8px;
-    }
-    .me-ex-eng-label {
-      font-size: 10.5px;
-      color: var(--text2);
-      font-weight: 500;
-    }
-    .me-ex-eng-bars {
-      display: flex;
-      gap: 3px;
-      align-items: flex-end;
-      height: 18px;
-    }
-    .me-ex-eng-b {
-      flex: 1;
-      border-radius: 2px;
-      min-width: 0;
-      transition: height 0.4s, background 0.3s;
-    }
-    .me-ex-eng-b.dim { background: rgba(255,255,255,0.08); }
-    .me-ex-eng-b.lit { background: #22c55e; }
-    .me-ex-eng-val {
-      font-size: 11px; font-weight: 700; color: var(--text);
-      text-align: right; font-family: 'SF Mono','Fira Code',monospace;
-    }
-    .me-ex-eng-val.fail { color: var(--text3); }
-
-    /* Pressure + rest */
-    .me-ex-pressure {
+    .me-ex-metrics, .me-ex-pressure {
       display: flex;
       flex-direction: column;
       gap: 6px;
+    }
+    .me-ex-pressure {
       margin-top: 10px;
       padding-top: 10px;
       border-top: 1px solid var(--border);
@@ -1041,6 +969,16 @@
       text-align: right;
       font-family: 'SF Mono', 'Fira Code', monospace;
     }
+    .me-ex-foot {
+      display: flex;
+      gap: 12px;
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--text3);
+    }
+    .me-ex-foot strong { color: var(--text); font-weight: 800; }
     .me-ex-explain {
       margin-top: 12px;
       padding-top: 10px;
@@ -1965,16 +1903,16 @@
     </div>
   </section>
 
-  <!-- ENGINE CONFLUENCE -->
+  <!-- MARKET ENERGY -->
   <section>
     <div class="container">
       <div class="section-header center">
-        <div class="section-badge gold">Engine Confluence</div>
-        <h2 class="section-title">11 Engines. One Signal: Trade or Wait.</h2>
-        <p class="section-sub">Every hour, NervaFX evaluates 11 independent market health engines across all 28 pairs. When 60%+ align, Engine Confluence fires — unlocking scanners, trade setups, and impulse detection. Below that, everything is gated. No guessing when to trade.</p>
+        <div class="section-badge gold">Market Energy Engine</div>
+        <h2 class="section-title">Know When the Market Is Really Moving</h2>
+        <p class="section-sub">The Market Energy Engine scans all 28 pairs every hour to measure movement, momentum, agreement, and volatility across Asia, London, and New York sessions. It tells you whether conditions support your next trade — regardless of your strategy or style.</p>
       </div>
 
-      <!-- Example Engine Confluence Card -->
+      <!-- Example Market Energy Card -->
       <div class="me-example-wrap">
         <div class="me-example-card">
           <div class="me-ex-head">
@@ -1982,116 +1920,28 @@
             <span class="me-ex-cycle" style="background:rgba(34,197,94,0.15);color:#22c55e;border:1px solid rgba(34,197,94,0.3)">Expansion</span>
             <span class="me-ex-status">Live</span>
           </div>
-
-          <!-- Confluence Status -->
-          <div class="me-ex-confluence">
-            <div class="me-ex-conf-status me-ex-conf--active">
-              <span class="me-ex-conf-dot"></span>
-              <span class="me-ex-conf-label">Engine Confluence</span>
-              <span class="me-ex-conf-score">8 / 11</span>
-              <span class="me-ex-conf-badge">ACTIVE</span>
+          <div class="me-ex-metrics">
+            <div class="me-ex-row">
+              <span class="me-ex-label">Movement</span>
+              <div class="me-ex-bar"><div class="me-ex-fill" style="width:64%;background:#22c55e"></div></div>
+              <span class="me-ex-val">64</span>
             </div>
-            <div class="me-ex-conf-bar-track">
-              <div class="me-ex-conf-bar-fill" style="width:73%"></div>
-              <div class="me-ex-conf-bar-gate" style="left:60%"></div>
+            <div class="me-ex-row">
+              <span class="me-ex-label">Momentum</span>
+              <div class="me-ex-bar"><div class="me-ex-fill" style="width:48%;background:#0ea5e9"></div></div>
+              <span class="me-ex-val">48</span>
             </div>
-          </div>
-
-          <!-- 9 Engine 3-Bar Grid (3 consecutive hours: H-2, H-1, Now) -->
-          <div class="me-ex-engines">
-            <!-- Energy ≥50: 38→46→58 -->
-            <div class="me-ex-eng-row">
-              <span class="me-ex-eng-label">Energy</span>
-              <div class="me-ex-eng-bars">
-                <div class="me-ex-eng-b dim" style="height:38%"></div>
-                <div class="me-ex-eng-b dim" style="height:46%"></div>
-                <div class="me-ex-eng-b lit" style="height:58%"></div>
-              </div>
-              <span class="me-ex-eng-val">58</span>
+            <div class="me-ex-row">
+              <span class="me-ex-label">Agreement</span>
+              <div class="me-ex-bar"><div class="me-ex-fill" style="width:55%;background:#0ea5e9"></div></div>
+              <span class="me-ex-val">55</span>
             </div>
-            <!-- Tradability ≥55: 41→52→62 -->
-            <div class="me-ex-eng-row">
-              <span class="me-ex-eng-label">Tradability</span>
-              <div class="me-ex-eng-bars">
-                <div class="me-ex-eng-b dim" style="height:41%"></div>
-                <div class="me-ex-eng-b dim" style="height:52%"></div>
-                <div class="me-ex-eng-b lit" style="height:62%"></div>
-              </div>
-              <span class="me-ex-eng-val">62</span>
-            </div>
-            <!-- Movement ≥35: 22→40→64 -->
-            <div class="me-ex-eng-row">
-              <span class="me-ex-eng-label">Movement</span>
-              <div class="me-ex-eng-bars">
-                <div class="me-ex-eng-b dim" style="height:22%"></div>
-                <div class="me-ex-eng-b lit" style="height:40%"></div>
-                <div class="me-ex-eng-b lit" style="height:64%"></div>
-              </div>
-              <span class="me-ex-eng-val">64</span>
-            </div>
-            <!-- Breadth ≥65: 48→62→72 -->
-            <div class="me-ex-eng-row">
-              <span class="me-ex-eng-label">Breadth</span>
-              <div class="me-ex-eng-bars">
-                <div class="me-ex-eng-b dim" style="height:48%"></div>
-                <div class="me-ex-eng-b dim" style="height:62%"></div>
-                <div class="me-ex-eng-b lit" style="height:72%"></div>
-              </div>
-              <span class="me-ex-eng-val">72</span>
-            </div>
-            <!-- Agreement ≥60: 44→58→68 -->
-            <div class="me-ex-eng-row">
-              <span class="me-ex-eng-label">Agreement</span>
-              <div class="me-ex-eng-bars">
-                <div class="me-ex-eng-b dim" style="height:44%"></div>
-                <div class="me-ex-eng-b dim" style="height:58%"></div>
-                <div class="me-ex-eng-b lit" style="height:68%"></div>
-              </div>
-              <span class="me-ex-eng-val">68</span>
-            </div>
-            <!-- Dir Control ≥30: 15→26→41 -->
-            <div class="me-ex-eng-row">
-              <span class="me-ex-eng-label">Dir Control</span>
-              <div class="me-ex-eng-bars">
-                <div class="me-ex-eng-b dim" style="height:15%"></div>
-                <div class="me-ex-eng-b dim" style="height:26%"></div>
-                <div class="me-ex-eng-b lit" style="height:41%"></div>
-              </div>
-              <span class="me-ex-eng-val">41</span>
-            </div>
-            <!-- Vol Quality ≥30: 18→22→24 (failing) -->
-            <div class="me-ex-eng-row">
-              <span class="me-ex-eng-label">Vol Quality</span>
-              <div class="me-ex-eng-bars">
-                <div class="me-ex-eng-b dim" style="height:18%"></div>
-                <div class="me-ex-eng-b dim" style="height:22%"></div>
-                <div class="me-ex-eng-b dim" style="height:24%"></div>
-              </div>
-              <span class="me-ex-eng-val fail">24</span>
-            </div>
-            <!-- Volatility ≥40: 28→38→48 -->
-            <div class="me-ex-eng-row">
-              <span class="me-ex-eng-label">Volatility</span>
-              <div class="me-ex-eng-bars">
-                <div class="me-ex-eng-b dim" style="height:28%"></div>
-                <div class="me-ex-eng-b dim" style="height:38%"></div>
-                <div class="me-ex-eng-b lit" style="height:48%"></div>
-              </div>
-              <span class="me-ex-eng-val">48</span>
-            </div>
-            <!-- Liquidity: 32→40→45 -->
-            <div class="me-ex-eng-row">
-              <span class="me-ex-eng-label">Liquidity</span>
-              <div class="me-ex-eng-bars">
-                <div class="me-ex-eng-b dim" style="height:32%"></div>
-                <div class="me-ex-eng-b lit" style="height:40%"></div>
-                <div class="me-ex-eng-b lit" style="height:45%"></div>
-              </div>
-              <span class="me-ex-eng-val">45</span>
+            <div class="me-ex-row">
+              <span class="me-ex-label">Volatility</span>
+              <div class="me-ex-bar"><div class="me-ex-fill" style="width:42%;background:#f59e0b"></div></div>
+              <span class="me-ex-val">42</span>
             </div>
           </div>
-
-          <!-- Directional Pressure -->
           <div class="me-ex-pressure">
             <div class="me-ex-row">
               <span class="me-ex-label" style="color:#22c55e">Bull Press</span>
@@ -2104,54 +1954,58 @@
               <span class="me-ex-val">39%</span>
             </div>
           </div>
-
+          <div class="me-ex-foot">
+            <span>Energy <strong>58</strong></span>
+            <span>Readiness <strong>72</strong></span>
+            <span style="color:#22c55e">Liquidity <strong>45</strong></span>
+          </div>
           <div class="me-ex-explain">
             <div class="me-ex-explain-title">What this means</div>
             <ul>
-              <li>Engine Confluence is ACTIVE (8/11) — market conditions support high-probability setups.</li>
-              <li>All core engines passing: Energy, Tradability, Movement, Breadth, Agreement aligned.</li>
-              <li>Buyers dominate at 61% — directional control confirmed with strong one-sided pressure.</li>
-              <li>Chaos low (19) and volatility healthy — organized moves, not noise.</li>
-              <li>Trade scanners, impulse detection, and watchlist are fully unlocked.</li>
+              <li>Prices are moving strongly — high pip activity across pairs.</li>
+              <li>Wide momentum — strong directional conviction across the market.</li>
+              <li>Buyers dominate at 61% — clear directional bias to the upside.</li>
+              <li>GBP is the strongest currency, JPY the weakest — GBP/JPY pairs likely trending.</li>
+              <li>Overall energy is high — conditions favour trend-following entries.</li>
             </ul>
           </div>
         </div>
         <div class="me-example-context">
-          <h3>How Engine Confluence works</h3>
+          <h3>How traders use this</h3>
           <div class="me-ex-use-cases">
             <div class="me-ex-use">
-              <span class="me-ex-use-icon">🟢</span>
+              <span class="me-ex-use-icon">📈</span>
               <div>
-                <strong>ACTIVE (60%+)</strong>
-                <p>7+ engines aligned — market scanners, approved trades, M15 impulse detection and trade watchlist unlock automatically.</p>
+                <strong>Trend followers</strong>
+                <p>Enter when energy is high and momentum confirms broad participation — your trend has real backing.</p>
               </div>
             </div>
             <div class="me-ex-use">
-              <span class="me-ex-use-icon">🟢</span>
+              <span class="me-ex-use-icon">⚡</span>
               <div>
-                <strong>STRONG (80%+)</strong>
-                <p>9+ engines aligned — highest conviction environment. Conditions strongly favour directional trades.</p>
+                <strong>Scalpers</strong>
+                <p>Trade when movement and volatility are elevated — more pip opportunity per candle, tighter spreads.</p>
               </div>
             </div>
             <div class="me-ex-use">
-              <span class="me-ex-use-icon">🔴</span>
+              <span class="me-ex-use-icon">🔄</span>
               <div>
-                <strong>NOT MET (&lt;60%)</strong>
-                <p>Market conditions insufficient — all trading sections are gated. You see why, and which engines are failing.</p>
+                <strong>Swing traders</strong>
+                <p>Wait for compression-to-expansion transitions — the energy engine flags when the breakout is building.</p>
               </div>
             </div>
             <div class="me-ex-use">
-              <span class="me-ex-use-icon">🛡️</span>
+              <span class="me-ex-use-icon">🛑</span>
               <div>
-                <strong>Built-in protection</strong>
-                <p>No more guessing when to sit out. The engine gates your tools until conditions genuinely support your next trade.</p>
+                <strong>Any style</strong>
+                <p>Stay out when energy is low, momentum is narrow, and participation is weak — protect your capital from dead markets.</p>
               </div>
             </div>
           </div>
         </div>
       </div>
       <p style="text-align:center; font-size:11px; color:var(--text3); margin-top:18px; opacity:0.6; letter-spacing:0.3px;">
-        ⓘ Illustrative example — live engine readings update every hour inside the platform.
+        ⓘ Illustrative example — live energy readings update every hour inside the platform.
       </p>
     </div>
   </section>
