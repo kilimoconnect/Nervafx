@@ -1724,7 +1724,6 @@ function _meSessionExplain(s, label) {
   const tradGrade = s.tradability_grade || 'AVOID';
   const volType = s.volatility_type || 'NORMAL';
   const chaosVal = Math.round(parseFloat(s.chaos_score) || 0);
-  const fbRisk = s.false_breakout_risk || false;
   const strongCcys = (s.strongest_ccy || '').split(',').filter(Boolean);
   const weakCcys   = (s.weakest_ccy   || '').split(',').filter(Boolean);
   const strong = strongCcys[0] || null;
@@ -1780,11 +1779,6 @@ function _meSessionExplain(s, label) {
   // Currency leadership
   if (strong && weak && strong !== weak && dirCtrl >= 15) {
     lines.push(`${strong} strongest, ${weak} weakest — look for ${strong}/${weak} pair trends.`);
-  }
-
-  // False breakout warning
-  if (fbRisk) {
-    lines.push(`⚠ False breakout risk: movement is rising but breadth and agreement remain weak.`);
   }
 
   // Overall energy
@@ -1885,12 +1879,6 @@ function _meHourlyTrend(hourlyRows) {
     badgeRow('MomTyp', hourlyRows, 'momentum_type', MOM_TYPE_COLOR, MOM_TYPE_SHORT),
   ].join('');
 
-  // False breakout warning row
-  const anyFB = hourlyRows.some(h => h.false_breakout_risk);
-  const fbRow = anyFB ? `<tr><td class="me-ht-label" style="color:#ef4444">FB Risk</td>${hourlyRows.map(h =>
-    `<td class="me-ht-td">${h.false_breakout_risk ? '<span class="me-ht-badge" style="color:#ef4444">⚠</span>' : '<span class="me-ht-badge" style="color:#334155">—</span>'}</td>`
-  ).join('')}</tr>` : '';
-
   return `<div class="me-hourly-trend">
     <div class="me-ht-title">Hourly Breakdown</div>
     <table class="me-ht-table">
@@ -1899,7 +1887,6 @@ function _meHourlyTrend(hourlyRows) {
         ${scoreRows}
         <tr class="me-ht-sep"><td colspan="${hourlyRows.length + 1}"></td></tr>
         ${classRows}
-        ${fbRow}
       </tbody>
     </table>
   </div>`;
@@ -2018,8 +2005,6 @@ function _meSessionCard(name, s, status, hourlyRows) {
   const volQual   = Math.round(parseFloat(s.volatility_quality) || 0);
   const dirCtrl   = Math.round(parseFloat(s.directional_control) || 0);
   const chaosVal  = Math.round(parseFloat(s.chaos_score) || 0);
-  const fbRisk    = s.false_breakout_risk || false;
-
   const TRAD_LABELS = { STRONG_TREND: 'Strong', TRADABLE: 'Tradable', SELECTIVE: 'Selective', DANGEROUS: 'Dangerous', AVOID: 'Avoid' };
   const VOL_TYPE_LABELS = { HEALTHY: 'Healthy', NORMAL: 'Normal', CHAOTIC: 'Chaotic', EVENT: 'Event', DEAD: 'Dead' };
   const VOL_TYPE_COLORS = { HEALTHY: '#22c55e', NORMAL: '#94a3b8', CHAOTIC: '#ef4444', EVENT: '#f59e0b', DEAD: '#64748b' };
@@ -2059,7 +2044,7 @@ function _meSessionCard(name, s, status, hourlyRows) {
       ${_meDirBar(volQual, VOL_TYPE_COLORS[volType] || '#94a3b8')}
       <span class="me-comp-val">${volQual}</span>
     </div>
-    ${fbRisk ? '<div class="me-fb-warn">⚠ False breakout risk — movement without breadth/agreement</div>' : ''}`;
+    `;
 
   return `<div class="me-card${status === 'ACTIVE' ? ' me-card--active' : status === 'UPCOMING' ? ' me-card--upcoming' : ''}">
     <div class="me-card-head">
