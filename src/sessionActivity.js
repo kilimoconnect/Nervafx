@@ -513,10 +513,13 @@ function processHours(hourKeys, byTime, onlyLast = false) {
     const tradabilityScore = round1(Math.min(100, geoMean(tradComponents) * volQualFactor));
 
     // ═══════════════════════════════════════════════════════════════════════
-    // ENGINE 10: False Breakout Detection
-    // Movement rising but breadth and agreement remain weak
+    // ENGINE 10: False Breakout Risk (0-100)
+    // High movement + low breadth + low agreement = high false breakout risk
+    // Formula mirrors chaos_score approach: product of contributing factors
     // ═══════════════════════════════════════════════════════════════════════
-    const falseBreakoutRisk = movementScore >= 35 && breadthScore < 30 && agreementScore < 25;
+    const falseBreakoutRisk = round1(
+      (movementScore / 100) * (1 - breadthScore / 100) * (1 - agreementScore / 100) * 100
+    );
 
     // ── Compression & Expansion ────────────────────────────────────────────
     const compressionScore = round1(((100 - movementScore) * (100 - breadthScore)) / 100);
@@ -853,8 +856,8 @@ function buildSessionRows(hourRows) {
     const volTypes = g.rows.map(r => r.volatility_type).filter(Boolean);
     const sessVolType = _modal(volTypes) || 'NORMAL';
 
-    // Session-level false breakout: any hour flagged?
-    const anyFalseBreakout = g.rows.some(r => r.false_breakout_risk);
+    // Session-level false breakout risk: average of hourly scores
+    const fbrAvg = round1(avg(n('false_breakout_risk')));
 
     // Pull same-session history
     const hist     = sessHistory[g.session] || [];
@@ -910,7 +913,7 @@ function buildSessionRows(hourRows) {
       currency_leadership_gap: round1(leaderGap * 10000) / 10000,
       tradability_score:       tradAvg,
       tradability_grade:       tradabilityGrade(tradAvg),
-      false_breakout_risk:     anyFalseBreakout,
+      false_breakout_risk:     fbrAvg,
       // Existing fields
       acceleration_score:  accel,
       compression_score:   round1(avg(n('compression_score'))),

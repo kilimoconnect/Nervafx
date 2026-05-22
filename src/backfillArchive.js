@@ -367,8 +367,10 @@ function processHours(hourKeys, byTime) {
     ];
     const tradabilityScore = round1(Math.min(100, geoMean(tradComponents) * volQualFactor));
 
-    // False Breakout Detection
-    const falseBreakoutRisk = movementScore >= 35 && breadthScore < 30 && agreementScore < 25;
+    // False Breakout Risk (0-100): high movement + low breadth + low agreement
+    const falseBreakoutRisk = round1(
+      (movementScore / 100) * (1 - breadthScore / 100) * (1 - agreementScore / 100) * 100
+    );
 
     // Compression & Expansion Readiness
     const compressionScore = round1(((100 - movementScore) * (100 - breadthScore)) / 100);
@@ -519,7 +521,7 @@ function buildSessionRows(hourRows) {
     const tradAvg    = round1(avg(n('tradability_score')));
     const leaderGap  = avg(g.rows.map(r => parseFloat(r.currency_leadership_gap) || 0));
     const sessVolType = _modal(g.rows.map(r => r.volatility_type).filter(Boolean)) || 'NORMAL';
-    const anyFalseBreakout = g.rows.some(r => r.false_breakout_risk);
+    const fbrAvg = round1(avg(n('false_breakout_risk')));
 
     const hist     = sessHistory[g.session] || [];
     const prevHist = hist[hist.length - 1];
@@ -570,7 +572,7 @@ function buildSessionRows(hourRows) {
       currency_leadership_gap: round1(leaderGap * 10000) / 10000,
       tradability_score:       tradAvg,
       tradability_grade:       tradabilityGrade(tradAvg),
-      false_breakout_risk:     anyFalseBreakout,
+      false_breakout_risk:     fbrAvg,
       acceleration_score:  accel,
       compression_score:   round1(avg(n('compression_score'))),
       compression_streak:  streak,
