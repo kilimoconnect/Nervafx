@@ -2418,7 +2418,7 @@ function _renderBreadthBars(container, rows) {
 const METRIC_CHART_CONFIG = {
   movement: {
     field: 'movement_score', label: 'Movement Score', title: 'Hourly Session Movement',
-    unit: '', decimals: 0,
+    unit: '', decimals: 0, v2Threshold: 35,
     thresholds: [
       { min: 60, color: '#22c55e', label: 'Strong movement' },
       { min: 30, color: '#f59e0b', label: 'Moderate movement' },
@@ -2428,14 +2428,14 @@ const METRIC_CHART_CONFIG = {
       '<strong>Movement</strong> measures average pair movement normalized by session-calibrated caps (Asia 0.12%, London 0.15%, NY 0.18%). Higher = bigger price action.',
       '<strong>Rising bars</strong> mean price action is accelerating — pairs are covering more ground and breakout conditions are more likely.',
       '<strong>Falling bars</strong> mean movement is contracting — pairs are slowing down, expect tighter ranges.',
-      '<strong>Green bars</strong> highlight 3+ consecutive hourly increases — a sustained movement surge suggesting real directional commitment.',
+      '<strong>Green bars</strong> indicate the value met the V2 engine threshold (≥35) — this engine is contributing to the Engine Confluence signal.',
       '<strong>Below 20</strong>: very quiet market — avoid entries, spreads may widen.',
       '<strong>Above 60</strong>: strong movement — ideal for breakout and trend strategies.',
     ],
   },
   agreement: {
     field: 'agreement_score', label: 'Agreement Score', title: 'Hourly Session Agreement',
-    unit: '', decimals: 0,
+    unit: '', decimals: 0, v2Threshold: 60,
     thresholds: [
       { min: 60, color: '#22c55e', label: 'Strong agreement' },
       { min: 35, color: '#f59e0b', label: 'Moderate agreement' },
@@ -2445,14 +2445,14 @@ const METRIC_CHART_CONFIG = {
       '<strong>Agreement</strong> = currency alignment x pair alignment x &radic;breadth. Measures whether pairs move consistently with currency strength AND hourly direction matches session trend.',
       '<strong>Rising bars</strong> mean currencies and pairs are aligning — institutional flow is becoming clear and consistent.',
       '<strong>Falling bars</strong> mean currencies are diverging — mixed signals, no clear theme.',
-      '<strong>Green bars</strong> highlight 3+ consecutive hourly increases — sustained directional consensus building.',
+      '<strong>Green bars</strong> indicate the value met the V2 engine threshold (≥60) — this engine is contributing to the Engine Confluence signal.',
       '<strong>Below 25</strong>: conflicting signals — avoid directional trades, market is choppy.',
       '<strong>Above 50</strong>: strong consensus — trend-following setups are high-probability.',
     ],
   },
   volatility: {
     field: 'volatility_score', label: 'Volatility Score', title: 'Hourly Session Volatility (Raw)',
-    unit: '', decimals: 0,
+    unit: '', decimals: 0, v2Threshold: 40,
     thresholds: [
       { min: 60, color: '#ef4444', label: 'High volatility' },
       { min: 30, color: '#f59e0b', label: 'Moderate volatility' },
@@ -2462,14 +2462,14 @@ const METRIC_CHART_CONFIG = {
       '<strong>Volatility</strong> measures raw hourly range normalized by session-calibrated caps. Does not distinguish organized vs chaotic — see Vol Quality for that.',
       '<strong>Rising bars</strong> mean the market is becoming more active — larger hourly ranges.',
       '<strong>Falling bars</strong> mean the market is calming down — tighter ranges, less movement.',
-      '<strong>Green bars</strong> highlight 3+ consecutive hourly increases — an escalating volatility surge, risk management critical.',
+      '<strong>Green bars</strong> indicate the value met the V2 engine threshold (≥40) — this engine is contributing to the Engine Confluence signal.',
       '<strong>Below 25</strong>: calm market — standard position sizing and tighter stops work well.',
       '<strong>Above 55</strong>: high volatility — check Vol Quality to determine if it is healthy or chaotic.',
     ],
   },
   energy: {
     field: 'market_energy', label: 'Market Energy', title: 'Hourly Session Energy',
-    unit: '', decimals: 0,
+    unit: '', decimals: 0, v2Threshold: 50,
     thresholds: [
       { min: 60, color: '#22c55e', label: 'High energy' },
       { min: 30, color: '#f59e0b', label: 'Moderate energy' },
@@ -2479,14 +2479,14 @@ const METRIC_CHART_CONFIG = {
       '<strong>Market Energy</strong> = 30% movement + 25% breadth + 20% agreement + 15% directional control + 10% volatility quality, scaled by session quality multiplier.',
       '<strong>Rising bars</strong> mean the forex market is "waking up" — more pairs are active, moves are larger, and there is more to trade.',
       '<strong>Falling bars</strong> mean the market is winding down — fewer opportunities, lower conviction.',
-      '<strong>Green bars</strong> highlight 3+ consecutive hourly increases — a building energy wave that often precedes strong trending moves.',
+      '<strong>Green bars</strong> indicate the value met the V2 engine threshold (≥50) — this engine is contributing to the Engine Confluence signal.',
       '<strong>Session quality</strong> scales the score: Healthy x1.10, Normal x0.90, Event x0.75, Chaotic x0.65, Dead x0.55.',
       '<strong>Above 50</strong>: energized market — conditions favor active trading with clear setups.',
     ],
   },
   tradability: {
     field: 'tradability_score', label: 'Tradability Score', title: 'Hourly Session Tradability',
-    unit: '', decimals: 0,
+    unit: '', decimals: 0, v2Threshold: 55,
     thresholds: [
       { min: 55, color: '#22c55e', label: 'Tradable / Strong' },
       { min: 40, color: '#0ea5e9', label: 'Selective' },
@@ -2500,11 +2500,12 @@ const METRIC_CHART_CONFIG = {
       '<strong>40-54</strong>: Selective — only take A+ setups with reduced size. Some components are weak.',
       '<strong>25-39</strong>: Dangerous — poor conditions, high risk of getting stopped out. Avoid or scale down heavily.',
       '<strong>Below 25</strong>: Avoid — market is dead, chaotic, or structurally broken. No edge.',
+      '<strong>Green bars</strong> indicate the value met the V2 engine threshold (≥55) — this engine is contributing to the Engine Confluence signal.',
     ],
   },
   dircontrol: {
     field: 'directional_control', label: 'Directional Control', title: 'Hourly Directional Control',
-    unit: '%', decimals: 0,
+    unit: '%', decimals: 0, v2Threshold: 30,
     thresholds: [
       { min: 60, color: '#22c55e', label: 'Strong one-sided' },
       { min: 35, color: '#f59e0b', label: 'Moderate bias' },
@@ -2514,14 +2515,14 @@ const METRIC_CHART_CONFIG = {
       '<strong>Directional Control</strong> measures how one-sided market pressure is — 0% = evenly split bull/bear, 100% = fully one-directional.',
       '<strong>High control + high breadth</strong> = institutional conviction. Many pairs moving the same way with clear force.',
       '<strong>Low control</strong> means bulls and bears are evenly matched — choppy, range-bound conditions.',
-      '<strong>Green bars</strong> highlight 3+ consecutive hourly increases — directional conviction building.',
+      '<strong>Green bars</strong> indicate the value met the V2 engine threshold (≥30) — this engine is contributing to the Engine Confluence signal.',
       '<strong>Below 20%</strong>: split market — avoid directional trades, use range strategies.',
       '<strong>Above 60%</strong>: strong bias — trend trades and momentum entries have the best edge.',
     ],
   },
   volquality: {
     field: 'volatility_quality', label: 'Volatility Quality', title: 'Hourly Volatility Quality',
-    unit: '', decimals: 0,
+    unit: '', decimals: 0, v2Threshold: 30,
     thresholds: [
       { min: 40, color: '#22c55e', label: 'Healthy volatility' },
       { min: 20, color: '#f59e0b', label: 'Moderate quality' },
@@ -2534,6 +2535,7 @@ const METRIC_CHART_CONFIG = {
       '<strong>Event volatility</strong> = sudden spike vs previous hour. Often news-driven, unpredictable.',
       '<strong>Below 15</strong>: dead or chaotic — volatility is either absent or harmful. Avoid.',
       '<strong>Above 40</strong>: quality environment — price action is organized and tradable.',
+      '<strong>Green bars</strong> indicate the value met the V2 engine threshold (≥30) — this engine is contributing to the Engine Confluence signal.',
     ],
   },
   liquidity: {
@@ -2551,6 +2553,74 @@ const METRIC_CHART_CONFIG = {
       '<strong>New York session</strong> has strong liquidity, especially during the London-NY overlap.',
       '<strong>Below 30</strong>: thin market — spreads widen, slippage risk increases. Use limit orders.',
       '<strong>Above 60</strong>: deep market — tight spreads, reliable fills. Ideal for larger positions.',
+    ],
+  },
+  breadth: {
+    field: 'breadth_score', label: 'Breadth Score', title: 'Hourly Session Breadth',
+    unit: '', decimals: 0, v2Threshold: 65,
+    thresholds: [
+      { min: 50, color: '#22c55e', label: 'Strong breadth' },
+      { min: 25, color: '#f59e0b', label: 'Moderate breadth' },
+      { min: 0,  color: '#ef4444', label: 'Low breadth' },
+    ],
+    guide: [
+      '<strong>Breadth</strong> measures what percentage of 28 pairs are actively moving each hour (above session-calibrated threshold). Higher = broader participation.',
+      '<strong>Rising bars</strong> mean more pairs are engaging — the market is gaining strength and trends are more likely to continue.',
+      '<strong>Falling bars</strong> mean participation is fading — fewer pairs are active, reversals or ranging conditions may follow.',
+      '<strong>Green bars</strong> indicate the value met the V2 engine threshold (≥65) — this engine is contributing to the Engine Confluence signal.',
+      '<strong>Low breadth</strong> (under 15) means weak participation — avoid trading as moves lack conviction.',
+      '<strong>High breadth</strong> (above 50) with agreement means strong trending conditions — ideal for trend-following entries.',
+    ],
+  },
+  momentum: {
+    field: 'momentum_score', label: 'Momentum Score', title: 'Hourly Session Momentum',
+    unit: '', decimals: 0, v2Threshold: 30,
+    thresholds: [
+      { min: 50, color: '#22c55e', label: 'Strong momentum' },
+      { min: 25, color: '#f59e0b', label: 'Moderate momentum' },
+      { min: 0,  color: '#ef4444', label: 'Low momentum' },
+    ],
+    guide: [
+      '<strong>Momentum</strong> measures the magnitude and persistence of directional price moves across currency pairs. Positive = bullish bias, negative = bearish bias.',
+      '<strong>Rising bars</strong> mean directional pressure is intensifying — moves are gaining follow-through.',
+      '<strong>Falling bars</strong> mean momentum is fading — potential exhaustion or reversal.',
+      '<strong>Green bars</strong> indicate the value met the V2 engine threshold (≥30) — this engine is contributing to the Engine Confluence signal.',
+      '<strong>Below 15</strong>: weak momentum — no clear directional bias, avoid momentum strategies.',
+      '<strong>Above 50</strong>: strong momentum — high conviction directional moves, trend trades are favored.',
+    ],
+  },
+  chaos: {
+    field: 'chaos_score', label: 'Chaos Score', title: 'Hourly Session Chaos',
+    unit: '', decimals: 0, v2Threshold: 35, inverted: true,
+    thresholds: [
+      { max: 35, color: '#22c55e', label: 'Low chaos (orderly)' },
+      { max: 50, color: '#f59e0b', label: 'Moderate chaos' },
+      { max: Infinity, color: '#ef4444', label: 'High chaos (erratic)' },
+    ],
+    guide: [
+      '<strong>Chaos</strong> measures erratic, unpredictable market behavior — high chaos = whipsaw, random noise, and false signals.',
+      '<strong>Low values are good</strong> — orderly markets with clean price action are easier to trade.',
+      '<strong>Rising bars</strong> mean conditions are deteriorating — more noise, more false breakouts.',
+      '<strong>Green bars</strong> indicate the value is at or below the V2 engine threshold (≤35) — this engine is contributing to the Engine Confluence signal.',
+      '<strong>Below 35</strong>: orderly market — price action is clean and tradable.',
+      '<strong>Above 50</strong>: dangerous chaos — erratic moves, avoid or reduce position size significantly.',
+    ],
+  },
+  fbr: {
+    field: 'false_breakout_risk', label: 'False Breakout Risk', title: 'Hourly False Breakout Risk',
+    unit: '', decimals: 0, v2Threshold: 15, inverted: true,
+    thresholds: [
+      { max: 15, color: '#22c55e', label: 'Low FBR (safe)' },
+      { max: 30, color: '#f59e0b', label: 'Moderate FBR' },
+      { max: Infinity, color: '#ef4444', label: 'High FBR (dangerous)' },
+    ],
+    guide: [
+      '<strong>False Breakout Risk</strong> measures the likelihood that breakout moves will reverse — high FBR = traps and fakeouts.',
+      '<strong>Low values are good</strong> — breakouts are more likely to follow through when FBR is low.',
+      '<strong>Rising bars</strong> mean more pairs are experiencing failed breakouts — be cautious with breakout entries.',
+      '<strong>Green bars</strong> indicate the value is at or below the V2 engine threshold (≤15) — this engine is contributing to the Engine Confluence signal.',
+      '<strong>Below 15</strong>: breakouts are reliable — good conditions for breakout strategies.',
+      '<strong>Above 30</strong>: high false breakout risk — avoid breakout entries, favor pullback and range strategies.',
     ],
   },
 };
@@ -2664,16 +2734,6 @@ function _renderMetricBars(container, rows, key) {
     const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz });
 
     const values = bars.map(b => b.value);
-    const streaks = new Set();
-    let streak = 0;
-    for (let i = 1; i < values.length; i++) {
-      if (values[i] >= values[i - 1] && values[i] >= 10 && values[i - 1] >= 10) {
-        streak++;
-        if (streak >= 2) {
-          for (let j = i - streak; j <= i; j++) streaks.add(j);
-        }
-      } else { streak = 0; }
-    }
 
     const sessGroups = [];
     let curGroup = null;
@@ -2705,9 +2765,11 @@ function _renderMetricBars(container, rows, key) {
       const pct = Math.round((b.value / maxVal) * 100);
       const localTime = new Date(b.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
       const localHour = localTime.slice(0, 2);
-      const highlighted = streaks.has(i);
-      const barColor = highlighted ? '#22c55e' : color;
-      const cls = highlighted ? 'bc-bar bc-bar-streak' : 'bc-bar';
+      const meetsThreshold = cfg.v2Threshold !== undefined
+        ? (cfg.inverted ? b.value <= cfg.v2Threshold : b.value >= cfg.v2Threshold)
+        : false;
+      const barColor = meetsThreshold ? '#22c55e' : color;
+      const cls = meetsThreshold ? 'bc-bar bc-bar-streak' : 'bc-bar';
 
       if (b.session !== prevSess && prevSess !== '') {
         html += '<div class="bc-sess-divider"></div>';
@@ -2727,30 +2789,48 @@ function _renderMetricBars(container, rows, key) {
     // Per-day explanation
     const dayMax = Math.max(...values);
     const dayAvg = Math.round(values.reduce((a, b) => a + b, 0) / values.length);
-    const streakCount = streaks.size;
+    const thresholdPasses = cfg.v2Threshold !== undefined
+      ? values.filter(v => cfg.inverted ? v <= cfg.v2Threshold : v >= cfg.v2Threshold).length
+      : 0;
     const peakBar = bars[values.indexOf(dayMax)];
     const peakTime = new Date(peakBar.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
     const peakSess = SESS_LABEL[peakBar.session] || peakBar.session;
 
     const dayLines = [];
     const t = cfg.thresholds;
-    if (dayAvg >= t[0].min) dayLines.push(`Strong ${cfg.label.toLowerCase()} (avg ${dayAvg}${cfg.unit}) — ${t[0].label} throughout the day.`);
-    else if (dayAvg >= t[1].min) dayLines.push(`Moderate ${cfg.label.toLowerCase()} (avg ${dayAvg}${cfg.unit}) — ${t[1].label} with mixed sessions.`);
-    else dayLines.push(`Low ${cfg.label.toLowerCase()} (avg ${dayAvg}${cfg.unit}) — ${t[2].label} for most of the day.`);
+    const thresholdOp = cfg.inverted ? '≤' : '≥';
+
+    if (cfg.inverted) {
+      if (dayAvg <= (t[0].max || 0)) dayLines.push(`${t[0].label} (avg ${dayAvg}${cfg.unit}) — favorable conditions throughout the day.`);
+      else if (dayAvg <= (t[1].max || 0)) dayLines.push(`${t[1].label} (avg ${dayAvg}${cfg.unit}) — mixed conditions with some risk.`);
+      else dayLines.push(`${t[2].label} (avg ${dayAvg}${cfg.unit}) — poor conditions for most of the day.`);
+    } else {
+      if (dayAvg >= t[0].min) dayLines.push(`Strong ${cfg.label.toLowerCase()} (avg ${dayAvg}${cfg.unit}) — ${t[0].label} throughout the day.`);
+      else if (dayAvg >= t[1].min) dayLines.push(`Moderate ${cfg.label.toLowerCase()} (avg ${dayAvg}${cfg.unit}) — ${t[1].label} with mixed sessions.`);
+      else dayLines.push(`Low ${cfg.label.toLowerCase()} (avg ${dayAvg}${cfg.unit}) — ${t[2].label} for most of the day.`);
+    }
 
     dayLines.push(`Peak of ${dayMax}${cfg.unit} at ${peakTime} during ${peakSess}.`);
 
-    if (streakCount >= 3) dayLines.push(`Continuation signal detected (${streakCount} bars in streak) — sustained ${cfg.label.toLowerCase()} buildup.`);
-    else dayLines.push(`No continuation signal — ${cfg.label.toLowerCase()} did not sustain 3+ consecutive increases.`);
+    if (cfg.v2Threshold !== undefined) {
+      if (thresholdPasses > 0) dayLines.push(`${thresholdPasses}/${values.length} bars met V2 threshold (${thresholdOp}${cfg.v2Threshold}) — contributing to Engine Confluence.`);
+      else dayLines.push(`No bars met V2 threshold (${thresholdOp}${cfg.v2Threshold}) — not contributing to Engine Confluence.`);
+    }
 
     for (const g of sessGroups) {
       const sBars = bars.filter(b => b.session === g.session);
       const sAvg = Math.round(sBars.reduce((a, b) => a + b.value, 0) / sBars.length);
       const sMax = Math.max(...sBars.map(b => b.value));
       const sLabel = SESS_LABEL[g.session] || g.session;
-      if (sAvg >= t[0].min) dayLines.push(`${sLabel}: ${t[0].label} (avg ${sAvg}${cfg.unit}, peak ${sMax}${cfg.unit}).`);
-      else if (sAvg >= t[1].min) dayLines.push(`${sLabel}: ${t[1].label} (avg ${sAvg}${cfg.unit}, peak ${sMax}${cfg.unit}).`);
-      else dayLines.push(`${sLabel}: ${t[2].label} (avg ${sAvg}${cfg.unit}, peak ${sMax}${cfg.unit}).`);
+      if (cfg.inverted) {
+        if (sAvg <= (t[0].max || 0)) dayLines.push(`${sLabel}: ${t[0].label} (avg ${sAvg}${cfg.unit}, peak ${sMax}${cfg.unit}).`);
+        else if (sAvg <= (t[1].max || 0)) dayLines.push(`${sLabel}: ${t[1].label} (avg ${sAvg}${cfg.unit}, peak ${sMax}${cfg.unit}).`);
+        else dayLines.push(`${sLabel}: ${t[2].label} (avg ${sAvg}${cfg.unit}, peak ${sMax}${cfg.unit}).`);
+      } else {
+        if (sAvg >= t[0].min) dayLines.push(`${sLabel}: ${t[0].label} (avg ${sAvg}${cfg.unit}, peak ${sMax}${cfg.unit}).`);
+        else if (sAvg >= t[1].min) dayLines.push(`${sLabel}: ${t[1].label} (avg ${sAvg}${cfg.unit}, peak ${sMax}${cfg.unit}).`);
+        else dayLines.push(`${sLabel}: ${t[2].label} (avg ${sAvg}${cfg.unit}, peak ${sMax}${cfg.unit}).`);
+      }
     }
 
     html += `<div class="bc-day-explain">
@@ -2766,11 +2846,14 @@ function _renderMetricBars(container, rows, key) {
     <ul class="bc-guide-list">${cfg.guide.map(g => `<li>${g}</li>`).join('')}</ul>
   </div>`;
 
+  const thresholdLabel = cfg.v2Threshold !== undefined
+    ? `Met V2 threshold (${cfg.inverted ? '≤' : '≥'}${cfg.v2Threshold})`
+    : 'Met threshold';
   html += `<div class="bc-legend">
     <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#f59e0b"></span> Asia</span>
     <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#0ea5e9"></span> London</span>
     <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#a855f7"></span> New York</span>
-    <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#22c55e"></span> 3+ rises = continuation</span>
+    <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#22c55e"></span> ${thresholdLabel}</span>
   </div>`;
 
   container.innerHTML = html;
@@ -3067,11 +3150,14 @@ function _meMarketCycleBanner(cycle) {
     <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('energy')">Energy</button>
     <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('tradability')">Tradability</button>
     <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('movement')">Movement</button>
-    <button class="me-ai-toggle me-btn-breadth premium-only" onclick="openBreadthChart()">Breadth</button>
+    <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('breadth')">Breadth</button>
     <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('agreement')">Agreement</button>
     <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('dircontrol')">Dir Control</button>
     <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('volquality')">Vol Quality</button>
     <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('volatility')">Volatility</button>
+    <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('momentum')">Momentum</button>
+    <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('chaos')">Chaos</button>
+    <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('fbr')">FB Risk</button>
     <button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('liquidity')">Liquidity</button>
     <button class="me-ai-toggle me-btn-ai premium-only" onclick="openMeAiAnalysis()">AI Analysis</button>
   </div>`;
