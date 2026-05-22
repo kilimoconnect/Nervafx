@@ -330,6 +330,8 @@
       <button class="arc-tab" data-section="volquality" onclick="switchArchiveTab(this)">Vol Quality</button>
       <button class="arc-tab" data-section="volatility" onclick="switchArchiveTab(this)">Volatility</button>
       <button class="arc-tab" data-section="momentum" onclick="switchArchiveTab(this)">Momentum</button>
+      <button class="arc-tab" data-section="chaos" onclick="switchArchiveTab(this)">Chaos</button>
+      <button class="arc-tab" data-section="fbr" onclick="switchArchiveTab(this)">FB Risk</button>
       <span class="arc-tab-sep"></span>
       <button class="arc-tab" data-section="liquidity" onclick="switchArchiveTab(this)">Liquidity</button>
       <button class="arc-tab" data-section="ccystrength" onclick="switchArchiveTab(this)">Currency Strength</button>
@@ -418,8 +420,20 @@
 
     <section class="arc-section" id="arc-momentum" style="display:none">
       <div class="arc-section-header"><i data-lucide="trending-up"></i> Hourly Momentum</div>
-      <div class="arc-section-desc">Hour-over-hour movement delta — positive = movement accelerating, negative = decelerating. Captures rate of change in market activity. Green bars = sustained acceleration.</div>
+      <div class="arc-section-desc">Magnitude and persistence of directional price moves. V2 engine threshold ≥30. Green bars = met threshold, contributing to Engine Confluence.</div>
       <div id="arc-momentum-body"><div class="arc-loading"><span class="spinner"></span> Loading momentum data…</div></div>
+    </section>
+
+    <section class="arc-section" id="arc-chaos" style="display:none">
+      <div class="arc-section-header"><i data-lucide="flame"></i> Hourly Chaos Score</div>
+      <div class="arc-section-desc">Measures erratic, unpredictable market behavior — whipsaw, noise, false signals. Lower is better. V2 engine threshold ≤35. Green bars = orderly market (at or below threshold).</div>
+      <div id="arc-chaos-body"><div class="arc-loading"><span class="spinner"></span> Loading chaos data…</div></div>
+    </section>
+
+    <section class="arc-section" id="arc-fbr" style="display:none">
+      <div class="arc-section-header"><i data-lucide="shield-alert"></i> Hourly False Breakout Risk</div>
+      <div class="arc-section-desc">Likelihood that breakout moves will reverse — traps and fakeouts. Lower is better. V2 engine threshold ≤15. Green bars = reliable breakouts (at or below threshold).</div>
+      <div id="arc-fbr-body"><div class="arc-loading"><span class="spinner"></span> Loading false breakout risk data…</div></div>
     </section>
 
     <section class="arc-section" id="arc-liquidity" style="display:none">
@@ -482,7 +496,7 @@
   let _arcCustomFrom = null;  // ISO string or null
   let _arcCustomTo = null;
 
-  const ARC_SECTIONS = ['energy', 'tradability', 'movement', 'breadth', 'agreement', 'dircontrol', 'volquality', 'volatility', 'momentum', 'liquidity', 'breakdown', 'ccystrength', 'history'];
+  const ARC_SECTIONS = ['energy', 'tradability', 'movement', 'breadth', 'agreement', 'dircontrol', 'volquality', 'volatility', 'momentum', 'chaos', 'fbr', 'liquidity', 'breakdown', 'ccystrength', 'history'];
 
   function setArcPeriod(btn) {
     document.querySelectorAll('#arc-period-pills .arc-fpill').forEach(b => b.classList.remove('active'));
@@ -597,15 +611,17 @@
 
   // Metric definitions — V2 institutional model
   const ARC_METRICS = {
-    energy:     { field: 'market_energy',         label: 'Energy',       unit: '',  streakMin: 15, highThresh: 50, midThresh: 30, peakWord: 'energy' },
-    tradability:{ field: 'tradability_score',      label: 'Tradability',  unit: '',  streakMin: 15, highThresh: 55, midThresh: 35, peakWord: 'tradability' },
-    movement:   { field: 'movement_score',         label: 'Movement',     unit: '',  streakMin: 10, highThresh: 40, midThresh: 20, peakWord: 'movement' },
-    breadth:    { field: 'breadth_score',           label: 'Breadth',      unit: '',  streakMin: 10, highThresh: 40, midThresh: 20, peakWord: 'breadth' },
-    agreement:  { field: 'agreement_score',         label: 'Agreement',    unit: '',  streakMin: 10, highThresh: 50, midThresh: 30, peakWord: 'agreement' },
-    dircontrol: { field: 'directional_control',     label: 'Dir Control',  unit: '',  streakMin: 10, highThresh: 50, midThresh: 25, peakWord: 'directional control' },
-    volquality: { field: 'volatility_quality',      label: 'Vol Quality',  unit: '',  streakMin: 10, highThresh: 40, midThresh: 20, peakWord: 'volatility quality' },
-    volatility: { field: 'volatility_score',        label: 'Volatility',   unit: '',  streakMin: 10, highThresh: 45, midThresh: 25, peakWord: 'volatility' },
-    momentum:   { field: 'momentum_score',          label: 'Momentum',     unit: '',  streakMin:  3, highThresh: 10, midThresh:  3, peakWord: 'momentum', canBeNegative: true },
+    energy:     { field: 'market_energy',         label: 'Energy',       unit: '',  highThresh: 50, midThresh: 30, peakWord: 'energy',             v2Threshold: 50 },
+    tradability:{ field: 'tradability_score',      label: 'Tradability',  unit: '',  highThresh: 55, midThresh: 35, peakWord: 'tradability',        v2Threshold: 55 },
+    movement:   { field: 'movement_score',         label: 'Movement',     unit: '',  highThresh: 40, midThresh: 20, peakWord: 'movement',           v2Threshold: 35 },
+    breadth:    { field: 'breadth_score',           label: 'Breadth',      unit: '',  highThresh: 40, midThresh: 20, peakWord: 'breadth',            v2Threshold: 65 },
+    agreement:  { field: 'agreement_score',         label: 'Agreement',    unit: '',  highThresh: 50, midThresh: 30, peakWord: 'agreement',          v2Threshold: 60 },
+    dircontrol: { field: 'directional_control',     label: 'Dir Control',  unit: '',  highThresh: 50, midThresh: 25, peakWord: 'directional control', v2Threshold: 30 },
+    volquality: { field: 'volatility_quality',      label: 'Vol Quality',  unit: '',  highThresh: 40, midThresh: 20, peakWord: 'volatility quality',  v2Threshold: 30 },
+    volatility: { field: 'volatility_score',        label: 'Volatility',   unit: '',  highThresh: 45, midThresh: 25, peakWord: 'volatility',         v2Threshold: 40 },
+    momentum:   { field: 'momentum_score',          label: 'Momentum',     unit: '',  highThresh: 10, midThresh:  3, peakWord: 'momentum',           v2Threshold: 30, canBeNegative: true },
+    chaos:      { field: 'chaos_score',             label: 'Chaos',        unit: '',  highThresh: 35, midThresh: 50, peakWord: 'chaos',              v2Threshold: 35, inverted: true },
+    fbr:        { field: 'false_breakout_risk',     label: 'FB Risk',      unit: '',  highThresh: 15, midThresh: 30, peakWord: 'false breakout risk', v2Threshold: 15, inverted: true },
   };
 
   async function loadMetricArchive(metricKey) {
@@ -654,18 +670,6 @@
       const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: tz });
 
       const vals = bars.map(b => b.val);
-      const streaks = new Set();
-      let streak = 0;
-      for (let i = 1; i < vals.length; i++) {
-        if (vals[i] >= vals[i - 1] && vals[i] >= metric.streakMin && vals[i - 1] >= metric.streakMin) {
-          streak++;
-          if (streak >= 2) {
-            for (let j = i - streak; j <= i; j++) streaks.add(j);
-          }
-        } else {
-          streak = 0;
-        }
-      }
 
       const sessGroups = [];
       let curGroup = null;
@@ -698,15 +702,19 @@
         const pct = Math.round((absVal / maxVal) * 100);
         const localTime = new Date(b.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
         const localHour = localTime.slice(0, 2);
-        const highlighted = streaks.has(i);
-        // For negative metrics (momentum): green = positive, red = negative
+        // Threshold-based green: green when bar meets V2 engine threshold
         let barColor;
         if (metric.canBeNegative) {
           barColor = b.val > 0 ? '#22c55e' : b.val < 0 ? '#ef4444' : '#475569';
+        } else if (metric.inverted) {
+          barColor = (metric.v2Threshold !== undefined && b.val <= metric.v2Threshold) ? '#22c55e' : color;
         } else {
-          barColor = highlighted ? '#22c55e' : color;
+          barColor = (metric.v2Threshold !== undefined && b.val >= metric.v2Threshold) ? '#22c55e' : color;
         }
-        const cls = highlighted && !metric.canBeNegative ? 'bc-bar bc-bar-streak' : 'bc-bar';
+        const meetsThreshold = metric.v2Threshold !== undefined
+          ? (metric.inverted ? b.val <= metric.v2Threshold : b.val >= metric.v2Threshold)
+          : false;
+        const cls = meetsThreshold && !metric.canBeNegative ? 'bc-bar bc-bar-streak' : 'bc-bar';
         const displayVal = metric.canBeNegative && b.val > 0 ? `+${b.val}` : `${b.val}`;
 
         if (b.session !== prevSess && prevSess !== '') {
@@ -728,28 +736,37 @@
       // Day summary narrative
       const dayMax = Math.max(...vals);
       const dayAvg = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
-      const streakCount = streaks.size;
       const peakIdx = vals.indexOf(dayMax);
       const peakHour = bars[peakIdx];
       const peakTime = new Date(peakHour.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
       const peakSess = SESS_LABEL[peakHour.session] || peakHour.session;
+      const thresholdOp = metric.inverted ? '≤' : '≥';
+      const thresholdPasses = metric.v2Threshold !== undefined
+        ? vals.filter(v => metric.inverted ? v <= metric.v2Threshold : v >= metric.v2Threshold).length
+        : 0;
 
       const dayLines = [];
       if (metric.canBeNegative) {
-        // Momentum: delta metric, avg near 0 is normal
         const posCount = vals.filter(v => v > 0).length;
         const negCount = vals.filter(v => v < 0).length;
         if (dayAvg > metric.highThresh) dayLines.push(`Accelerating day (avg ${dayAvg > 0 ? '+' : ''}${dayAvg}) — movement building throughout.`);
         else if (dayAvg < -metric.highThresh) dayLines.push(`Decelerating day (avg ${dayAvg}) — movement declining throughout.`);
         else dayLines.push(`Mixed ${metric.peakWord} (avg ${dayAvg > 0 ? '+' : ''}${dayAvg}) — ${posCount} accelerating, ${negCount} decelerating hours.`);
         dayLines.push(`Peak acceleration: +${dayMax} at ${peakTime} during ${peakSess}.`);
+      } else if (metric.inverted) {
+        if (dayAvg <= metric.highThresh) dayLines.push(`Good ${metric.peakWord} conditions (avg ${dayAvg}) — orderly market throughout.`);
+        else if (dayAvg <= metric.midThresh) dayLines.push(`Moderate ${metric.peakWord} (avg ${dayAvg}) — some periods of disorder.`);
+        else dayLines.push(`High ${metric.peakWord} (avg ${dayAvg}) — erratic conditions for most of the day.`);
+        dayLines.push(`Peak ${metric.peakWord} of ${dayMax} at ${peakTime} during ${peakSess}.`);
       } else {
         if (dayAvg >= metric.highThresh) dayLines.push(`Strong ${metric.peakWord} day (avg ${dayAvg}) — sustained activity throughout.`);
         else if (dayAvg >= metric.midThresh) dayLines.push(`Moderate ${metric.peakWord} (avg ${dayAvg}) — some sessions active, others quiet.`);
         else dayLines.push(`Low ${metric.peakWord} (avg ${dayAvg}) — most of the day was quiet.`);
         dayLines.push(`Peak ${metric.peakWord} of ${dayMax} at ${peakTime} during ${peakSess}.`);
-        if (streakCount >= 3) dayLines.push(`Buildup signal detected (${streakCount} bars in streak) — sustained ${metric.peakWord} increase.`);
-        else dayLines.push(`No sustained buildup — ${metric.peakWord} did not sustain 3+ consecutive increases.`);
+      }
+      if (metric.v2Threshold !== undefined && !metric.canBeNegative) {
+        if (thresholdPasses > 0) dayLines.push(`${thresholdPasses}/${vals.length} bars met V2 threshold (${thresholdOp}${metric.v2Threshold}) — contributing to Engine Confluence.`);
+        else dayLines.push(`No bars met V2 threshold (${thresholdOp}${metric.v2Threshold}) — not contributing to Engine Confluence.`);
       }
 
       for (const g of sessGroups) {
@@ -760,6 +777,10 @@
         if (metric.canBeNegative) {
           const sFmt = sAvg > 0 ? `+${sAvg}` : `${sAvg}`;
           dayLines.push(`${sLabel}: avg ${sFmt}, peak +${sMax}.`);
+        } else if (metric.inverted) {
+          if (sAvg <= metric.highThresh) dayLines.push(`${sLabel}: orderly (avg ${sAvg}, peak ${sMax}).`);
+          else if (sAvg <= metric.midThresh) dayLines.push(`${sLabel}: moderate (avg ${sAvg}, peak ${sMax}).`);
+          else dayLines.push(`${sLabel}: erratic (avg ${sAvg}, peak ${sMax}).`);
         } else if (sAvg >= metric.highThresh) dayLines.push(`${sLabel}: strong session (avg ${sAvg}, peak ${sMax}).`);
         else if (sAvg >= metric.midThresh) dayLines.push(`${sLabel}: moderate (avg ${sAvg}, peak ${sMax}).`);
         else dayLines.push(`${sLabel}: quiet session (avg ${sAvg}, peak ${sMax}).`);
@@ -1458,6 +1479,8 @@
     loadMetricArchive('volquality'),
     loadMetricArchive('volatility'),
     loadMetricArchive('momentum'),
+    loadMetricArchive('chaos'),
+    loadMetricArchive('fbr'),
     loadLiquidityArchive(),
     loadBreakdownArchive(),
     loadCcyStrengthArchive(),
