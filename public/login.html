@@ -10,6 +10,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <!-- GSAP -->
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <!-- Supabase JS (for Google OAuth) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -436,6 +438,52 @@
       cursor: pointer;
     }
 
+    /* ── Google button ── */
+    .btn-google {
+      width: 100%;
+      padding: 12px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 11px;
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: background 0.18s, border-color 0.18s, box-shadow 0.18s;
+    }
+    .btn-google:hover {
+      background: rgba(255,255,255,0.10);
+      border-color: rgba(255,255,255,0.18);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    }
+    .btn-google:active { transform: scale(0.99); }
+    .btn-google:disabled { opacity: 0.45; cursor: default; pointer-events: none; }
+    .btn-google svg { flex-shrink: 0; }
+
+    .or-divider {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin: 20px 0;
+    }
+    .or-divider .line {
+      flex: 1;
+      height: 1px;
+      background: rgba(255,255,255,0.06);
+    }
+    .or-divider .or-text {
+      font-size: 11px;
+      font-weight: 600;
+      color: rgba(100,116,139,0.45);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
     @media (max-width: 480px) {
       .auth-card { padding: 28px 22px 24px; border-radius: 16px; }
       .logo { font-size: 28px; }
@@ -468,6 +516,23 @@
         <div class="tab-pill" id="tab-pill"></div>
         <button class="tab active" id="tab-login"  onclick="switchTab('login')">Sign In</button>
         <button class="tab"        id="tab-signup" onclick="switchTab('signup')">Sign Up</button>
+      </div>
+
+      <!-- Google Sign-In -->
+      <button class="btn-google" id="btn-google" onclick="signInWithGoogle()">
+        <svg width="18" height="18" viewBox="0 0 48 48">
+          <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+          <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+          <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+          <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+        </svg>
+        Continue with Google
+      </button>
+
+      <div class="or-divider">
+        <span class="line"></span>
+        <span class="or-text">or</span>
+        <span class="line"></span>
       </div>
 
       <!-- Form -->
@@ -611,6 +676,24 @@
 
     let currentTab = 'login';
 
+    /* ── Supabase client (anon key for OAuth only) ── */
+    let _sb = null;
+    let _sbReady = null; // promise
+    function initSb() {
+      if (_sbReady) return _sbReady;
+      _sbReady = fetch('/api/config').then(r => r.json()).then(cfg => {
+        _sb = supabase.createClient(cfg.supabase_url, cfg.supabase_anon);
+        return _sb;
+      });
+      return _sbReady;
+    }
+    async function getSb() {
+      if (_sb) return _sb;
+      return initSb();
+    }
+    // Pre-fetch config
+    initSb();
+
     /* ── Redirect if already authenticated ── */
     (function () {
       const token = localStorage.getItem('nfx_token');
@@ -620,6 +703,82 @@
         if (pay.exp * 1000 > Date.now()) location.replace('/app');
       } catch (_) {}
     })();
+
+    /* ── Handle OAuth callback (tokens in URL hash after Google redirect) ── */
+    (async function handleOAuthCallback() {
+      const hash = window.location.hash;
+      if (!hash || !hash.includes('access_token')) return;
+
+      const params = new URLSearchParams(hash.substring(1));
+      const accessToken  = params.get('access_token');
+      const refreshToken = params.get('refresh_token');
+      if (!accessToken) return;
+
+      // Show loading state
+      const btn = document.getElementById('btn-google');
+      if (btn) { btn.disabled = true; btn.textContent = 'Signing in...'; }
+
+      try {
+        // Get user info from Supabase using the token
+        const sb = await getSb();
+        const { data: { user }, error } = await sb.auth.getUser(accessToken);
+        if (error || !user) throw new Error(error?.message || 'Failed to get user');
+
+        const meta = user.user_metadata || {};
+        localStorage.setItem('nfx_token', accessToken);
+        localStorage.setItem('nfx_refresh_token', refreshToken || '');
+        localStorage.setItem('nfx_user', JSON.stringify({
+          id:         user.id,
+          email:      user.email,
+          first_name: meta.first_name || meta.full_name?.split(' ')[0] || '',
+          last_name:  meta.last_name  || meta.full_name?.split(' ').slice(1).join(' ') || '',
+          full_name:  meta.full_name  || '',
+          avatar_url: meta.avatar_url || '',
+        }));
+
+        // Check if this is a new user (needs setup)
+        const profileRes = await fetch('/api/profile', {
+          headers: { 'Authorization': 'Bearer ' + accessToken },
+        });
+        const profile = await profileRes.json();
+
+        if (!profile.timezone) {
+          localStorage.setItem('nfx_needs_setup', 'true');
+          location.replace('/setup');
+        } else {
+          location.replace('/app');
+        }
+      } catch (e) {
+        showMsg('Google sign-in failed: ' + e.message, 'error');
+        if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg> Continue with Google'; }
+        // Clear the hash so it doesn't re-trigger
+        history.replaceState(null, '', location.pathname + location.search);
+      }
+    })();
+
+    /* ── Google sign-in ── */
+    async function signInWithGoogle() {
+      const btn = document.getElementById('btn-google');
+      btn.disabled = true;
+      btn.textContent = 'Redirecting...';
+      clearMsg();
+
+      try {
+        const sb = await getSb();
+        const { error } = await sb.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: window.location.origin + '/login',
+          },
+        });
+        if (error) throw error;
+        // Browser will redirect to Google — this code won't continue
+      } catch (e) {
+        showMsg('Could not connect to Google: ' + e.message, 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg> Continue with Google';
+      }
+    }
 
     // ── Tab switching — animate signup fields in/out ──────────────────────────
     function switchTab(tab) {
