@@ -1112,6 +1112,43 @@ async function computeSessionSummaries() {
 
 // ─── Backfill ─────────────────────────────────────────────────────────────────
 
+// Fetch latest currency strength from the pipeline (smooth_* or normalized_*)
+// and return top 2 strongest / bottom 2 weakest based on multi-TF average.
+async function fetchPipelineStrengthLeaders() {
+  try {
+    const { data: latest } = await supabase
+      .from('currency_strength')
+      .select('time')
+      .order('time', { ascending: false })
+      .limit(1)
+      .single();
+    if (!latest) return null;
+
+    const { data: rows } = await supabase
+      .from('currency_strength')
+      .select('currency, smooth_3h, smooth_6h, smooth_12h, normalized_3h, normalized_6h, normalized_12h')
+      .eq('time', latest.time);
+    if (!rows?.length) return null;
+
+    // Use smooth values (preferred) falling back to normalized
+    const scored = rows.map(r => {
+      const v3  = parseFloat(r.smooth_3h  ?? r.normalized_3h)  || 0;
+      const v6  = parseFloat(r.smooth_6h  ?? r.normalized_6h)  || 0;
+      const v12 = parseFloat(r.smooth_12h ?? r.normalized_12h) || 0;
+      return { currency: r.currency, score: (v3 + v6 + v12) / 3 };
+    }).sort((a, b) => b.score - a.score);
+
+    if (scored.length < 2) return null;
+    return {
+      strongest: scored.slice(0, 2).map(s => s.currency).join(','),
+      weakest:   scored.slice(-2).reverse().map(s => s.currency).join(','),
+    };
+  } catch (e) {
+    console.warn('[SESSION_ACTIVITY] Failed to fetch pipeline strength:', e.message);
+    return null;
+  }
+}
+
 async function backfillSessionActivity({ fullRewrite = false } = {}) {
   console.log('[SESSION_ACTIVITY] Backfill: fetching candles…');
   const byTime   = await fetchHourlyCandles(300);
@@ -1120,6 +1157,17 @@ async function backfillSessionActivity({ fullRewrite = false } = {}) {
 
   const rows = processHours(hourKeys, byTime);
   if (!rows.length) return;
+
+  // Override strongest/weakest on latest rows with pipeline currency strength
+  // (multi-timeframe smoothed values instead of raw session candle moves)
+  const leaders = await fetchPipelineStrengthLeaders();
+  if (leaders) {
+    // Apply to the most recent hourly row (current hour)
+    const lastRow = rows[rows.length - 1];
+    lastRow.strongest_ccy = leaders.strongest;
+    lastRow.weakest_ccy   = leaders.weakest;
+    console.log(`[SESSION_ACTIVITY] Pipeline strength: ${leaders.strongest} ↑ / ${leaders.weakest} ↓`);
+  }
 
   const { error } = await supabase
     .from('hourly_session_activity')
@@ -1167,6 +1215,13 @@ async function calculateLatestSessionActivity() {
   const allRows = processHours(hourKeys, byTime);
   const row = allRows[allRows.length - 1];
   if (!row) return;
+
+  // Override with pipeline currency strength (multi-TF smoothed)
+  const leaders = await fetchPipelineStrengthLeaders();
+  if (leaders) {
+    row.strongest_ccy = leaders.strongest;
+    row.weakest_ccy   = leaders.weakest;
+  }
 
   const { error } = await supabase
     .from('hourly_session_activity')
