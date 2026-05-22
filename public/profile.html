@@ -9,6 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script src="https://checkout.flutterwave.com/v3.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -150,6 +151,23 @@
     .btn-save:hover::before { transform: translateX(100%); }
     .btn-save:active { transform: scale(0.99); }
     .btn-save:disabled { opacity: 0.4; cursor: default; pointer-events: none; }
+
+    /* Billing & Plan */
+    .billing-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    .billing-row:last-child { border-bottom: none; }
+    .billing-label { font-size: 13px; color: #999; }
+    .billing-value { font-size: 13px; font-weight: 600; }
+    .plan-badge { display: inline-block; padding: 3px 12px; border-radius: 6px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; }
+    .plan-badge.free    { background: rgba(255,255,255,.06); color: #999; }
+    .plan-badge.pro     { background: rgba(247,147,26,.12); color: #f7931a; }
+    .plan-badge.premium { background: rgba(168,85,247,.12); color: #a855f7; }
+    .billing-actions { margin-top: 16px; }
+    .btn-upgrade {
+      padding: 11px 28px; border-radius: 10px; border: none; font-family: 'Inter', sans-serif;
+      font-size: 13px; font-weight: 700; cursor: pointer; transition: all .15s;
+      background: linear-gradient(135deg,#2563eb,#3b82f6); color: #fff;
+    }
+    .btn-upgrade:hover { box-shadow: 0 8px 24px rgba(37,99,235,.45); transform: translateY(-1px); }
 
     /* Danger zone */
     .danger-title { font-size: 14px; font-weight: 700; color: #fca5a5; margin-bottom: 4px; }
@@ -418,6 +436,28 @@
           <button class="btn-save" onclick="saveEmailPrefs()">Save Preferences</button>
           <span class="save-msg" id="msg-email"></span>
         </div>
+      </div>
+    </div>
+
+    <!-- ── Billing & Plan ── -->
+    <div class="section">
+      <div class="section-label">Billing & Plan</div>
+      <div class="pcard" id="card-billing">
+        <div class="billing-row">
+          <div class="billing-label">Current Plan</div>
+          <div class="billing-value">
+            <span class="plan-badge" id="billing-plan-badge">Loading...</span>
+          </div>
+        </div>
+        <div class="billing-row" id="billing-expiry-row" style="display:none">
+          <div class="billing-label">Renews</div>
+          <div class="billing-value" id="billing-expiry">—</div>
+        </div>
+        <div class="billing-row" id="billing-status-row" style="display:none">
+          <div class="billing-label">Status</div>
+          <div class="billing-value" id="billing-status">—</div>
+        </div>
+        <div class="billing-actions" id="billing-actions"></div>
       </div>
     </div>
 
@@ -819,6 +859,96 @@
         updateTzCurrent(e.target.value);
       });
     });
+  </script>
+
+  <!-- Billing & Plan -->
+  <script>
+    (async function loadBilling() {
+      const token = localStorage.getItem('nfx_token');
+      if (!token) return;
+
+      const badge   = document.getElementById('billing-plan-badge');
+      const expRow  = document.getElementById('billing-expiry-row');
+      const expVal  = document.getElementById('billing-expiry');
+      const statRow = document.getElementById('billing-status-row');
+      const statVal = document.getElementById('billing-status');
+      const actions = document.getElementById('billing-actions');
+
+      try {
+        const r = await fetch('/api/subscription', {
+          headers: { 'Authorization': 'Bearer ' + token },
+        });
+        if (!r.ok) throw new Error('Failed');
+        const sub = await r.json();
+        const plan = sub.plan || 'free';
+        const label = plan.charAt(0).toUpperCase() + plan.slice(1);
+
+        badge.textContent = label;
+        badge.className = 'plan-badge ' + plan;
+
+        if (sub.expires_at && plan !== 'free') {
+          expRow.style.display = '';
+          expVal.textContent = new Date(sub.expires_at).toLocaleDateString('en-US', {
+            year: 'numeric', month: 'long', day: 'numeric'
+          });
+        }
+
+        if (sub.status && sub.status !== 'active') {
+          statRow.style.display = '';
+          statVal.textContent = sub.status.charAt(0).toUpperCase() + sub.status.slice(1);
+          statVal.style.color = sub.status === 'expired' ? '#fca5a5' : '#999';
+        }
+
+        // Show upgrade button if not on premium
+        if (plan !== 'premium') {
+          const targetPlan = plan === 'free' ? 'pro' : 'premium';
+          const targetLabel = targetPlan.charAt(0).toUpperCase() + targetPlan.slice(1);
+          actions.innerHTML = `<button class="btn-upgrade" onclick="profileUpgrade('${targetPlan}')">Upgrade to ${targetLabel}</button>`;
+        }
+      } catch (_) {
+        badge.textContent = 'Free';
+        badge.className = 'plan-badge free';
+      }
+    })();
+
+    async function profileUpgrade(plan) {
+      const token = localStorage.getItem('nfx_token');
+      try {
+        const r = await fetch('/api/create-checkout', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token,
+          },
+          body: JSON.stringify({ plan }),
+        });
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          throw new Error(err.error || 'Checkout failed');
+        }
+        const cfg = await r.json();
+
+        FlutterwaveCheckout({
+          public_key:     cfg.public_key,
+          tx_ref:         cfg.tx_ref,
+          amount:         cfg.amount,
+          currency:       cfg.currency,
+          customer:       cfg.customer,
+          meta:           cfg.meta,
+          customizations: cfg.customizations,
+          callback: function (data) {
+            if (data.status === 'successful' || data.status === 'completed') {
+              window.location.href = '/payment-callback?tx_ref=' + cfg.tx_ref + '&plan=' + plan + '&status=successful';
+            } else {
+              alert('Payment was not completed.');
+            }
+          },
+          onclose: function () {},
+        });
+      } catch (e) {
+        alert(e.message || 'Could not start checkout.');
+      }
+    }
   </script>
 </body>
 </html>

@@ -31,19 +31,11 @@
 
   <!-- Notyf JS -->
   <script src="https://cdn.jsdelivr.net/npm/notyf@3/notyf.min.js"></script>
+
+  <!-- Flutterwave Inline JS -->
+  <script src="https://checkout.flutterwave.com/v3.js"></script>
 </head>
 <body>
-
-  <!-- PLAN SWITCHER (dev preview) -->
-  <div class="plan-switcher-bar" id="plan-switcher-bar">
-    <span class="plan-sw-label">⚡ Plan Preview:</span>
-    <div class="plan-sw-pills">
-      <button class="plan-sw-pill" data-plan="free"    onclick="applyPlan('free')">Free</button>
-      <button class="plan-sw-pill active" data-plan="pro" onclick="applyPlan('pro')">Pro</button>
-      <button class="plan-sw-pill" data-plan="premium" onclick="applyPlan('premium')">Premium</button>
-    </div>
-    <span class="plan-sw-note">Dev preview — not visible to real users</span>
-  </div>
 
   <!-- HEADER -->
   <header class="header">
@@ -446,11 +438,18 @@
         btn.classList.toggle('active', btn.dataset.plan === plan);
       });
 
-      // Show/hide lock overlays
-      const level = PLAN_LEVELS[plan] ?? 1;
+      // Show/hide lock overlays + wire upgrade buttons
+      const level = PLAN_LEVELS[plan] ?? 0;
       document.querySelectorAll('.plan-lock-overlay').forEach(overlay => {
-        const required = REQUIRE_LEVELS[overlay.dataset.require] ?? 1;
+        const reqPlan  = overlay.dataset.require || 'pro';
+        const required = REQUIRE_LEVELS[reqPlan] ?? 1;
         overlay.classList.toggle('visible', level < required);
+        // Wire upgrade button to Flutterwave checkout
+        const btn = overlay.querySelector('.plan-lock-btn');
+        if (btn) {
+          btn.href = '#';
+          btn.onclick = (e) => { e.preventDefault(); startUpgrade(reqPlan); };
+        }
       });
 
       // Hide tab buttons that require a higher plan
@@ -484,9 +483,53 @@
       localStorage.setItem('nfx_plan_preview', plan);
     }
 
-    // Init from localStorage or default to pro
-    const savedPlan = localStorage.getItem('nfx_plan_preview') || 'pro';
-    applyPlan(savedPlan);
+    // Init — default to free, loadUserPlan() in app.js will override from DB
+    applyPlan('free');
+
+    // ── Upgrade flow (Flutterwave Inline) ──────────────────────────────
+    async function startUpgrade(plan) {
+      try {
+        const tok = localStorage.getItem('nfx_token');
+        const r = await fetch('/api/create-checkout', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(tok ? { 'Authorization': 'Bearer ' + tok } : {}),
+          },
+          body: JSON.stringify({ plan }),
+        });
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          throw new Error(err.error || 'Checkout failed');
+        }
+        const cfg = await r.json();
+
+        // Launch Flutterwave inline modal
+        FlutterwaveCheckout({
+          public_key:     cfg.public_key,
+          tx_ref:         cfg.tx_ref,
+          amount:         cfg.amount,
+          currency:       cfg.currency,
+          customer:       cfg.customer,
+          meta:           cfg.meta,
+          customizations: cfg.customizations,
+          callback: function (data) {
+            // Payment completed — verify server-side then update UI
+            if (data.status === 'successful' || data.status === 'completed') {
+              window.location.href = '/payment-callback?tx_ref=' + cfg.tx_ref + '&plan=' + plan + '&status=successful';
+            } else {
+              if (window.notyf) notyf.error('Payment was not completed.');
+            }
+          },
+          onclose: function () {
+            // User closed the modal — do nothing
+          },
+        });
+      } catch (e) {
+        if (window.notyf) notyf.error(e.message || 'Could not start checkout.');
+        else alert(e.message || 'Could not start checkout.');
+      }
+    }
   </script>
 </body>
 </html>

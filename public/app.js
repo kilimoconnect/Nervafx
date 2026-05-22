@@ -297,6 +297,21 @@ async function api(path, opts = {}) {
   return r.json();
 }
 
+// ─── User plan (subscription) ─────────────────────────────────────────────────
+
+async function loadUserPlan() {
+  try {
+    const sub = await api('/api/subscription');
+    if (typeof applyPlan === 'function') applyPlan(sub.plan || 'free');
+  } catch (_) {
+    // Not logged in or endpoint error — stay on free
+    if (typeof applyPlan === 'function') applyPlan('free');
+  }
+}
+
+// Load plan as soon as possible
+loadUserPlan();
+
 // ─── News calendar ────────────────────────────────────────────────────────────
 
 let _newsMap = {}; // { 'USD': [...events], 'EUR': [...events] }

@@ -11,11 +11,17 @@
  */
 
 const { cors, getClient } = require('./_db');
+const { requirePlan } = require('./_plan');
 
 module.exports = async function handler(req, res) {
   cors(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+
+  try {
+    const gate = await requirePlan(getClient(), req, 'premium');
+    if (gate.error) return res.status(gate.status).json({ error: gate.error, upgrade: gate.upgrade });
+  } catch (e) { return res.status(500).json({ error: e.message }); }
 
   const { from, to, engine } = req.body || {};
 

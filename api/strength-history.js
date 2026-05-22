@@ -1,6 +1,7 @@
 'use strict';
 
 const { getClient, cors } = require('./_db');
+const { requirePlan } = require('./_plan');
 
 // Returns historical currency strength rows for charting.
 // Query params:
@@ -12,6 +13,8 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
+    const gate = await requirePlan(getClient(), req, 'premium');
+    if (gate.error) return res.status(gate.status).json({ error: gate.error, upgrade: gate.upgrade });
     const days  = Math.min(730, parseInt(req.query?.days || '30', 10) || 30);
     const tf    = req.query?.tf || '3h';
     const field = tf === '12h' ? 'smooth_12h' : tf === '6h' ? 'smooth_6h' : 'smooth_3h';

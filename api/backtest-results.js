@@ -8,6 +8,7 @@
  */
 
 const { cors, getClient } = require('./_db');
+const { requirePlan } = require('./_plan');
 
 module.exports = async function handler(req, res) {
   cors(res);
@@ -18,6 +19,8 @@ module.exports = async function handler(req, res) {
 
   try {
     const sb = getClient();
+    const gate = await requirePlan(sb, req, 'premium');
+    if (gate.error) return res.status(gate.status).json({ error: gate.error, upgrade: gate.upgrade });
     const { data, error } = await sb
       .from('backtest_results')
       .select('*')

@@ -8,6 +8,7 @@
  */
 
 const { cors, getClient } = require('./_db');
+const { requirePlan } = require('./_plan');
 
 module.exports = async function handler(req, res) {
   cors(res);
@@ -16,6 +17,8 @@ module.exports = async function handler(req, res) {
 
   try {
     const sb = getClient();
+    const gate = await requirePlan(sb, req, 'premium');
+    if (gate.error) return res.status(gate.status).json({ error: gate.error, upgrade: gate.upgrade });
     const cutoff = new Date();
     const days = Math.min(730, parseInt(req.query?.days || '5', 10) || 5);
     cutoff.setUTCDate(cutoff.getUTCDate() - days);

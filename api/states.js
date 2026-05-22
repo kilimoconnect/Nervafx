@@ -1,4 +1,5 @@
 const { getClient, getLatestTime, cors } = require('./_db');
+const { requirePlan } = require('./_plan');
 const { getCurrentSession, applySessionFilter } = require('../src/sessionEngine');
 
 const MIN_SPREAD = 0.0020;
@@ -151,7 +152,10 @@ function confBreakdown(s3, s6, s12, bias, state) {
 // ─── Handler ──────────────────────────────────────────────────────────────────
 module.exports = async function handler(req, res) {
   cors(res);
+  if (req.method === 'OPTIONS') return res.status(200).end();
   try {
+    const gate = await requirePlan(getClient(), req, 'pro');
+    if (gate.error) return res.status(gate.status).json({ error: gate.error, upgrade: gate.upgrade });
     const t = await getLatestTime('market_states');
     if (!t) return res.json({ states: [] });
 

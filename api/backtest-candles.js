@@ -14,10 +14,15 @@
  */
 
 const { cors, getClient } = require('./_db');
+const { requirePlan } = require('./_plan');
 
 module.exports = async function handler(req, res) {
   cors(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
+  try {
+    const gate = await requirePlan(getClient(), req, 'premium');
+    if (gate.error) return res.status(gate.status).json({ error: gate.error, upgrade: gate.upgrade });
+  } catch (e) { return res.status(500).json({ error: e.message }); }
   if (req.method !== 'GET')    return res.status(405).json({ error: 'GET only' });
 
   const { instrument, timeframe, from, to, limit } = req.query || {};

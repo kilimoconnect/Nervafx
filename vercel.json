@@ -18,7 +18,8 @@
     { "source": "/setup",  "destination": "/setup.html"   },
     { "source": "/profile","destination": "/profile.html" },
     { "source": "/admin",   "destination": "/admin.html"   },
-    { "source": "/journal", "destination": "/journal.html" }
+    { "source": "/journal",          "destination": "/journal.html" },
+    { "source": "/payment-callback", "destination": "/payment-callback.html" }
   ],
   "headers": [
     {

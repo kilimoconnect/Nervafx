@@ -1547,6 +1547,8 @@
       .footer-links { flex-wrap: wrap; }
     }
   </style>
+  <!-- Flutterwave Inline JS -->
+  <script src="https://checkout.flutterwave.com/v3.js"></script>
 </head>
 <body>
 
@@ -2441,6 +2443,63 @@
     setInterval(fetchStrength, 60000);
 
     // Stats are static — no counter animation needed
+
+    // ── Smart pricing buttons: if logged in, trigger Flutterwave Inline ──
+    (function () {
+      const token = localStorage.getItem('nfx_token');
+      if (!token) return; // Not logged in — keep default signup links
+
+      async function startUpgrade(plan) {
+        try {
+          const r = await fetch('/api/create-checkout', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + token,
+            },
+            body: JSON.stringify({ plan }),
+          });
+          if (!r.ok) {
+            const err = await r.json().catch(() => ({}));
+            throw new Error(err.error || 'Checkout failed');
+          }
+          const cfg = await r.json();
+
+          FlutterwaveCheckout({
+            public_key:     cfg.public_key,
+            tx_ref:         cfg.tx_ref,
+            amount:         cfg.amount,
+            currency:       cfg.currency,
+            customer:       cfg.customer,
+            meta:           cfg.meta,
+            customizations: cfg.customizations,
+            callback: function (data) {
+              if (data.status === 'successful' || data.status === 'completed') {
+                window.location.href = '/payment-callback?tx_ref=' + cfg.tx_ref + '&plan=' + plan + '&status=successful';
+              } else {
+                alert('Payment was not completed.');
+              }
+            },
+            onclose: function () {},
+          });
+        } catch (e) {
+          alert(e.message || 'Could not start checkout.');
+        }
+      }
+
+      // Find pricing buttons by their card context
+      const cards = document.querySelectorAll('.pricing-card');
+      cards.forEach(card => {
+        const tier = card.querySelector('.pricing-tier');
+        const btn  = card.querySelector('.btn-pricing');
+        if (!tier || !btn) return;
+        const t = tier.textContent.trim().toLowerCase();
+        if (t === 'pro' || t === 'premium') {
+          btn.href = '#';
+          btn.onclick = (e) => { e.preventDefault(); startUpgrade(t); };
+        }
+      });
+    })();
   </script>
 </body>
 </html>

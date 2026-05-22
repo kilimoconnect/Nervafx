@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NervaFX — Payment Processing</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Inter',system-ui,sans-serif;background:#0b0e11;color:#e0e0e0;display:flex;align-items:center;justify-content:center;min-height:100vh}
+    .container{text-align:center;max-width:440px;padding:2rem}
+    .logo{height:32px;margin-bottom:1.5rem}
+    .spinner{width:48px;height:48px;border:4px solid rgba(255,255,255,.1);border-top-color:#f7931a;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 1.5rem}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    h1{font-size:1.4rem;font-weight:600;margin-bottom:.75rem}
+    p{color:#999;font-size:.95rem;line-height:1.5}
+    .plan-badge{display:inline-block;padding:.25rem .75rem;border-radius:6px;font-size:.85rem;font-weight:600;margin:.75rem 0;text-transform:uppercase}
+    .plan-badge.pro{background:rgba(247,147,26,.15);color:#f7931a}
+    .plan-badge.premium{background:rgba(168,85,247,.15);color:#a855f7}
+    .status{margin-top:1rem;font-size:.85rem;color:#666}
+    .success-icon{font-size:3rem;margin-bottom:1rem}
+    .error-msg{color:#ef4444;margin-top:1rem;font-size:.9rem}
+    .btn{display:inline-block;margin-top:1.5rem;padding:.6rem 1.5rem;border-radius:8px;background:#f7931a;color:#000;text-decoration:none;font-weight:600;font-size:.9rem;border:none;cursor:pointer}
+    .btn:hover{background:#e8850f}
+  </style>
+</head>
+<body>
+  <div class="container" id="main">
+    <img src="/nervafx-logo.png" alt="NervaFX" class="logo">
+    <div class="spinner" id="spinner"></div>
+    <h1 id="heading">Processing your payment...</h1>
+    <p id="message">Please wait while we activate your plan. This usually takes a few seconds.</p>
+    <div id="badge-area"></div>
+    <p class="status" id="status">Verifying payment...</p>
+  </div>
+
+  <script>
+    (async function () {
+      const params  = new URLSearchParams(window.location.search);
+      const txRef   = params.get('tx_ref');
+      const plan    = params.get('plan');
+      const flwStatus = params.get('status'); // Flutterwave appends this
+
+      const heading = document.getElementById('heading');
+      const message = document.getElementById('message');
+      const status  = document.getElementById('status');
+      const spinner = document.getElementById('spinner');
+      const badge   = document.getElementById('badge-area');
+
+      // If Flutterwave reports cancellation
+      if (flwStatus === 'cancelled') {
+        spinner.style.display = 'none';
+        heading.textContent = 'Payment Cancelled';
+        message.textContent = 'Your payment was not completed. No charges were made.';
+        status.innerHTML = '<a href="/app" class="btn">Back to Dashboard</a>';
+        return;
+      }
+
+      if (plan) {
+        const label = plan.charAt(0).toUpperCase() + plan.slice(1);
+        badge.innerHTML = `<span class="plan-badge ${plan}">${label} Plan</span>`;
+      }
+
+      const token = localStorage.getItem('nfx_token');
+
+      // Poll for subscription activation (webhook may take a moment)
+      let attempts = 0;
+      const maxAttempts = 5;
+      const delay = ms => new Promise(r => setTimeout(r, ms));
+
+      while (attempts < maxAttempts) {
+        attempts++;
+        status.textContent = `Checking activation... (${attempts}/${maxAttempts})`;
+
+        try {
+          const r = await fetch('/api/subscription', {
+            headers: token ? { 'Authorization': 'Bearer ' + token } : {},
+          });
+          if (r.ok) {
+            const sub = await r.json();
+            if (sub.plan === plan) {
+              // Success!
+              spinner.style.display = 'none';
+              heading.innerHTML = '<span class="success-icon">&#10003;</span><br>Plan Activated!';
+              message.textContent = `Your ${plan.charAt(0).toUpperCase() + plan.slice(1)} plan is now active. Enjoy full access to NervaFX.`;
+              status.innerHTML = '<a href="/app" class="btn">Go to Dashboard</a>';
+              localStorage.setItem('nfx_plan', sub.plan);
+              return;
+            }
+          }
+        } catch (_) {}
+
+        await delay(2500);
+      }
+
+      // Timed out waiting for webhook
+      spinner.style.display = 'none';
+      heading.textContent = 'Payment Received';
+      message.textContent = 'Your payment is being processed. Your plan will activate shortly — please refresh your dashboard in a minute.';
+      status.innerHTML = '<a href="/app" class="btn">Go to Dashboard</a>';
+    })();
+  </script>
+</body>
+</html>

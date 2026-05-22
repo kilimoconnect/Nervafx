@@ -7,6 +7,7 @@
 //   10% acceleration (|smooth_45m| - |smooth_90m| when positive → spread widening)
 
 const { getClient, getLatestTime, cors } = require('./_db');
+const { requirePlan } = require('./_plan');
 
 function weightedScore(s) {
   const s180 = parseFloat(s.smooth_180m) || 0;
@@ -21,7 +22,10 @@ function weightedScore(s) {
 
 module.exports = async function handler(req, res) {
   cors(res);
+  if (req.method === 'OPTIONS') return res.status(200).end();
   try {
+    const gate = await requirePlan(getClient(), req, 'pro');
+    if (gate.error) return res.status(gate.status).json({ error: gate.error, upgrade: gate.upgrade });
     const t = await getLatestTime('m15_pair_spreads');
     if (!t) return res.json({ spreads: [] });
 
