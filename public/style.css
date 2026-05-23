@@ -6473,6 +6473,11 @@ body::after {
   grid-template-columns: 1fr 1fr;
   gap: 16px;
 }
+.upgrade-modal-grid.single {
+  grid-template-columns: 1fr;
+  max-width: 380px;
+  margin: 0 auto;
+}
 
 .upgrade-card {
   background: var(--bg-card);

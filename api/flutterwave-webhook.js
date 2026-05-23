@@ -5,10 +5,15 @@
  *
  * Receives Flutterwave payment webhooks, verifies the transaction
  * server-side, and upserts the user's subscription row.
+ *
+ * Handles:
+ * - New subscriptions (free → pro/premium): 30 days from now
+ * - Renewals (expired → same plan): 30 days from now
+ * - Upgrades (pro → premium): keeps existing expiry date
  */
 
 const { getClient } = require('./_db');
-const { PLAN_PRICES } = require('./_plan');
+const { PLAN_PRICES, PLAN_LEVELS } = require('./_plan');
 
 module.exports = async function handler(req, res) {
   // No CORS — server-to-server only
@@ -69,17 +74,24 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ error: 'Unknown plan' });
     }
 
-    // Verify amount matches expected price
-    const expectedAmount = PLAN_PRICES[plan];
-    if (verifyData.data.amount < expectedAmount) {
-      console.warn('[WEBHOOK] Amount mismatch:', verifyData.data.amount, 'vs', expectedAmount);
+    const isUpgrade = meta?.is_upgrade === true || meta?.is_upgrade === 'true';
+    const paidAmount = verifyData.data.amount;
+
+    // Amount validation:
+    // - Full purchase: must be >= full plan price
+    // - Upgrade (prorated): must be >= $1 (any positive amount accepted)
+    if (!isUpgrade && paidAmount < PLAN_PRICES[plan]) {
+      console.warn('[WEBHOOK] Amount mismatch:', paidAmount, 'vs', PLAN_PRICES[plan]);
       return res.status(400).json({ error: 'Amount mismatch' });
+    }
+    if (isUpgrade && paidAmount < 1) {
+      console.warn('[WEBHOOK] Upgrade amount too low:', paidAmount);
+      return res.status(400).json({ error: 'Amount too low' });
     }
 
     // ── 5. Find user by meta.user_id or by customer email ────────────────
     let userId = meta?.user_id;
     if (!userId && customer?.email) {
-      // Fallback: look up by email
       const { data: users } = await sb.auth.admin.listUsers();
       const found = users?.users?.find(u => u.email === customer.email);
       userId = found?.id;
@@ -90,10 +102,32 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ error: 'User not found' });
     }
 
-    // ── 6. Upsert subscription ───────────────────────────────────────────
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 30);
+    // ── 6. Calculate expiry date ─────────────────────────────────────────
+    let expiresAt;
+    const now = new Date();
 
+    if (isUpgrade) {
+      // Upgrade: keep existing expiry (user already paid for those days)
+      const { data: currentSub } = await sb
+        .from('subscriptions')
+        .select('expires_at')
+        .eq('user_id', userId)
+        .single();
+
+      if (currentSub?.expires_at && new Date(currentSub.expires_at) > now) {
+        expiresAt = new Date(currentSub.expires_at);
+      } else {
+        // Fallback: 30 days from now
+        expiresAt = new Date(now);
+        expiresAt.setDate(expiresAt.getDate() + 30);
+      }
+    } else {
+      // New subscription or renewal: 30 days from now
+      expiresAt = new Date(now);
+      expiresAt.setDate(expiresAt.getDate() + 30);
+    }
+
+    // ── 7. Upsert subscription ───────────────────────────────────────────
     const { error: upsertErr } = await sb
       .from('subscriptions')
       .upsert({
@@ -102,11 +136,11 @@ module.exports = async function handler(req, res) {
         status:     'active',
         flw_tx_ref: tx_ref,
         flw_tx_id:  txId,
-        amount:     verifyData.data.amount,
+        amount:     paidAmount,
         currency:   verifyData.data.currency || currency || 'USD',
-        started_at: new Date().toISOString(),
+        started_at: now.toISOString(),
         expires_at: expiresAt.toISOString(),
-        updated_at: new Date().toISOString(),
+        updated_at: now.toISOString(),
       }, { onConflict: 'user_id' });
 
     if (upsertErr) {
@@ -114,7 +148,8 @@ module.exports = async function handler(req, res) {
       return res.status(500).json({ error: 'Failed to update subscription' });
     }
 
-    console.log(`[WEBHOOK] Activated ${plan} for user ${userId} (tx: ${tx_ref})`);
+    const action = isUpgrade ? 'Upgraded to' : 'Activated';
+    console.log(`[WEBHOOK] ${action} ${plan} for user ${userId} — expires ${expiresAt.toISOString()} (tx: ${tx_ref})`);
     res.status(200).json({ status: 'ok', plan });
   } catch (e) {
     console.error('[WEBHOOK]', e.message);
