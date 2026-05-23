@@ -20,9 +20,17 @@ module.exports = async function handler(req, res) {
 
     const uid = user.id;
 
-    // Delete from all user-linked tables before removing the auth user.
-    // Some tables may not exist yet — ignore errors from missing tables.
+    // Delete trade_actions that reference this user's risk_checks first (FK dependency)
+    const { data: checks } = await sb.from('risk_checks').select('id').eq('user_id', uid);
+    const checkIds = (checks || []).map(r => r.id);
+    if (checkIds.length) {
+      await sb.from('trade_actions').delete().in('risk_check_id', checkIds);
+    }
+
+    // Delete from all user-linked tables in dependency order
     const userTables = [
+      { table: 'trade_actions',     col: 'user_id' },
+      { table: 'risk_checks',       col: 'user_id' },
       { table: 'email_preferences', col: 'user_id' },
       { table: 'subscriptions',     col: 'user_id' },
       { table: 'profiles',          col: 'id' },
