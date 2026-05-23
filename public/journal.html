@@ -375,6 +375,16 @@
 
   // ─── Currency Signals helpers ─────────────────────────────────────────────────
 
+  // Top 2 strongest / weakest by smoothed 3H — for flow display.
+  function getSmoothed3HFlow(currencies) {
+    if (!currencies || !currencies.length) return { strong: [], weak: [] };
+    const scored = currencies.map(c => {
+      const v3 = parseFloat(c.smooth_3h ?? c.normalized_3h) || 0;
+      return { cur: c.currency, v3 };
+    }).sort((a, b) => b.v3 - a.v3);
+    return { strong: scored.slice(0, 2).map(c => c.cur), weak: scored.slice(-2).reverse().map(c => c.cur) };
+  }
+
   // Compute strong/weak from an entry's OWN stored currency_strength snapshot.
   // Historically accurate — no live API needed.
   function computeEntryCsig(e) {
@@ -943,7 +953,7 @@
           <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Momentum</span><span class="jrn-sess-val">${brd}</span></div>
           <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Liquidity</span><span class="jrn-sess-val" style="color:${liqColor}">${liq}</span></div>
           <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Pressure</span><span class="jrn-sess-val">▲${bull}% ▼${bear}%</span></div>
-          <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Flow</span><span class="jrn-sess-val">${(me.strongest_ccy||'—').split(',').map(c => `<span style="color:#22c55e">${c}↑</span>`).join(' ')} ${(me.weakest_ccy||'—').split(',').map(c => `<span style="color:#ef4444">${c}↓</span>`).join(' ')}</span></div>
+          <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Flow</span><span class="jrn-sess-val">${(() => { const cs = e.currency_strength; const ccys = Array.isArray(cs) ? cs : (cs?.currencies || []); const fl = getSmoothed3HFlow(ccys); return fl.strong.map(c => `<span style="color:#22c55e">${c}↑</span>`).join(' ') + ' ' + fl.weak.map(c => `<span style="color:#ef4444">${c}↓</span>`).join(' ') || '—'; })()}</span></div>
           ${filteredSignals.length ? `<div class="jrn-sess-stat jrn-sess-full"><span class="jrn-sess-lbl">Signals</span><span class="jrn-sess-val">${filteredSignals.map(s => `${pair(s.instrument)} ${s.signal}`).join(', ')}</span></div>` : ''}
         </div>`);
     }
