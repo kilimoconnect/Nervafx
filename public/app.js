@@ -3928,11 +3928,11 @@ async function refresh() {
     if (_userPlanReady) await _userPlanReady;
 
     const [strength, signals, states, risk, actions, quality, spreads, m15Data, sessionData, journalData, profileData] = await Promise.all([
-      api('/api/strength'),
+      api('/api/strength').catch(() => ({ currencies: [] })),
       api('/api/signals').catch(() => ({ signals: [] })),
       api('/api/states').catch(() => ({ states: [] })),
-      api('/api/risk'),
-      api('/api/actions'),
+      api('/api/risk').catch(() => ({})),
+      api('/api/actions').catch(() => ({ actions: [] })),
       api('/api/quality').catch(() => ({})),
       api('/api/spreads').catch(() => ({ spreads: [] })),
       api('/api/m15-spreads').catch(() => ({ spreads: [] })),
