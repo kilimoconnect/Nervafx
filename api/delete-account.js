@@ -18,16 +18,32 @@ module.exports = async function handler(req, res) {
     const { data: { user }, error: authErr } = await sb.auth.getUser(token);
     if (authErr || !user) return res.status(401).json({ error: 'Invalid or expired token' });
 
-    // Delete profile row first (cascade would handle it but belt+braces)
-    await sb.from('profiles').delete().eq('id', user.id);
+    const uid = user.id;
+
+    // Delete from all user-linked tables before removing the auth user.
+    // Some tables may not exist yet — ignore errors from missing tables.
+    const userTables = [
+      { table: 'email_preferences', col: 'user_id' },
+      { table: 'subscriptions',     col: 'user_id' },
+      { table: 'profiles',          col: 'id' },
+    ];
+
+    for (const { table, col } of userTables) {
+      const { error: delErr } = await sb.from(table).delete().eq(col, uid);
+      if (delErr) console.warn(`[DELETE-ACCOUNT] ${table}: ${delErr.message}`);
+    }
 
     // Delete the Supabase Auth user
-    const { error } = await sb.auth.admin.deleteUser(user.id);
-    if (error) return res.status(500).json({ error: error.message });
+    const { error } = await sb.auth.admin.deleteUser(uid);
+    if (error) {
+      console.error(`[DELETE-ACCOUNT] auth.admin.deleteUser failed: ${error.message}`);
+      return res.status(500).json({ error: `Failed to delete user: ${error.message}` });
+    }
 
     return res.json({ success: true });
 
   } catch (e) {
+    console.error('[DELETE-ACCOUNT]', e.message);
     return res.status(500).json({ error: e.message });
   }
 };
