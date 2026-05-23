@@ -5453,7 +5453,7 @@ body::after {
 
 .sh-row {
   display: grid;
-  grid-template-columns: 120px 66px minmax(90px,160px) 34px 34px 34px 76px minmax(140px,1fr);
+  grid-template-columns: 110px 62px minmax(80px,140px) 30px 38px 50px 76px minmax(130px,1fr);
   align-items: center;
   gap: 0;
   padding: 0 4px;
@@ -5530,6 +5530,9 @@ body::after {
   font-size: 11px;
   text-align: center;
   color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sh-col-flow {
@@ -5564,7 +5567,7 @@ body::after {
 
 @media (max-width: 768px) {
   .sh-row {
-    grid-template-columns: 100px 52px minmax(70px,120px) 28px 28px 28px 62px minmax(110px,1fr);
+    grid-template-columns: 90px 50px minmax(65px,110px) 26px 34px 44px 62px minmax(100px,1fr);
     font-size: 9px;
     min-height: 24px;
     padding: 0 2px;
@@ -5581,7 +5584,7 @@ body::after {
 
 @media (max-width: 480px) {
   .sh-row {
-    grid-template-columns: 90px 48px 1fr 26px 26px 26px;
+    grid-template-columns: 80px 44px 1fr 24px 32px 40px;
   }
   .sh-col-flow,
   .sh-col-ccy,
