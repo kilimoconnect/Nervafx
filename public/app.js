@@ -1311,28 +1311,41 @@ function updateM15Bar(data) {
   bar.style.display = 'flex';
 }
 
-// ─── V2 Threshold Notification Bar ────────────────────────────────────────────
-// Data-backed "good" thresholds from backtest (May 2025 → present, 5478 hours)
-// Each threshold = where h4 profitable ≥65% & directional rate ≥58% (good zone)
+// ─── V2 Environment Gate ─────────────────────────────────────────────────────
+// Gate trades using 3 market environment classifications from the hourly data.
+// Each environment type has favorable values that allow trading.
 
-const V2_THRESHOLDS = [
-  { key: 'market_energy',       label: 'Energy',  min: 50, optimal: 65 },
-  { key: 'tradability_score',   label: 'Trad',    min: 55, optimal: 70 },
-  { key: 'movement_score',      label: 'Mov',     min: 35, optimal: 70 },
-  { key: 'breadth_score',       label: 'Brd',     min: 65, optimal: 80 },
-  { key: 'agreement_score',     label: 'Agr',     min: 60, optimal: 75 },
-  { key: 'directional_control', label: 'DirCtrl', min: 30, optimal: 45 },
-  { key: 'volatility_quality',  label: 'VolQ',    min: 30, optimal: 60 },
-  { key: 'volatility_score',    label: 'Vol',     min: 40, optimal: 70 },
-  { key: 'momentum_score',      label: 'Mom',     min: 30, optimal: 60, signed: true },
-  { key: 'chaos_score',         label: 'Chaos',   max: 35, warnAbove: 50 },
-  { key: 'false_breakout_risk', label: 'FBRisk',  max: 15, warnAbove: 30 },
-];
+const V2_ENV_FAVORABLE = {
+  energy_cycle:    new Set(['EXPANSION', 'EXPLOSIVE', 'ACTIVE_EXPANSION', 'CHAOTIC_EXPANSION']),
+  volatility_type: new Set(['HEALTHY', 'NORMAL']),
+  momentum_type:   new Set(['IMPULSE', 'EXPANSION', 'TREND', 'STABLE']),
+};
 
-const V2_FIRE_PCT = 0.60; // 60% of thresholds must pass to show notification
+const V2_ENV_LABELS = {
+  energy_cycle:    'Cycle',
+  volatility_type: 'VolTyp',
+  momentum_type:   'MomTyp',
+};
+
+const V2_ENV_SHORT = {
+  // Cycle
+  EXPLOSIVE: 'Explo', EXPANSION: 'Expan', ACTIVE_EXPANSION: 'Expan', CHAOTIC_EXPANSION: 'Expan',
+  TRANSITION: 'Trans', COMPRESSION: 'Compr', EXHAUSTION: 'Exhst', LOW_PARTICIPATION: 'LowP', DEAD: 'Dead',
+  // VolTyp
+  HEALTHY: 'Hlthy', NORMAL: 'Norm', CHAOTIC: 'Chaos', EVENT: 'Event',
+  // MomTyp
+  IMPULSE: 'Impls', TREND: 'Trend', STABLE: 'Stble', DECAY: 'Decay',
+};
+
+const V2_ENV_COLOR = {
+  EXPLOSIVE: '#f59e0b', EXPANSION: '#22c55e', ACTIVE_EXPANSION: '#22c55e', CHAOTIC_EXPANSION: '#f97316',
+  TRANSITION: '#0ea5e9', COMPRESSION: '#ef4444', EXHAUSTION: '#f97316', LOW_PARTICIPATION: '#64748b', DEAD: '#334155',
+  HEALTHY: '#22c55e', NORMAL: '#94a3b8', CHAOTIC: '#ef4444', EVENT: '#f59e0b',
+  IMPULSE: '#f59e0b', TREND: '#0ea5e9', STABLE: '#64748b', DECAY: '#f97316',
+};
 
 // Global confluence state — drives section gating
-let _v2Confluence = { fired: false, passed: 0, total: 11, pct: 0, results: [] };
+let _v2Confluence = { fired: false, passed: 0, total: 3, pct: 0, results: [] };
 
 // Sections gated behind Engine Confluence
 const V2_GATED_SECTIONS = [
@@ -1352,32 +1365,26 @@ function applyV2Gate() {
 
     let overlay = section.querySelector('.v2-gate-overlay');
     if (!active) {
-      // Show gate overlay
+      // Build environment chips HTML
+      const chipsHtml = _v2Confluence.results.map(r => {
+        const color = V2_ENV_COLOR[r.value] || '#64748b';
+        const cls = r.pass ? 'v2g-chip v2g-pass' : 'v2g-chip v2g-fail';
+        return `<span class="${cls}"><span class="v2g-lbl">${r.label}</span> <span style="color:${color}">${r.short}</span></span>`;
+      }).join('');
+
       if (!overlay) {
         overlay = document.createElement('div');
         overlay.className = 'v2-gate-overlay';
-        overlay.innerHTML = `
-          <span class="v2-gate-icon">⏸</span>
-          <span class="v2-gate-title">Engine Confluence Not Met</span>
-          <span class="v2-gate-desc">Waiting for 60%+ engine alignment — currently ${_v2Confluence.passed}/${_v2Confluence.total} passing. Market conditions do not support high-probability setups right now.</span>
-          <span class="v2-gate-chips" id="v2g-chips-${id}"></span>`;
         section.style.position = 'relative';
         section.appendChild(overlay);
-      } else {
-        overlay.querySelector('.v2-gate-desc').textContent =
-          `Waiting for 60%+ engine alignment — currently ${_v2Confluence.passed}/${_v2Confluence.total} passing. Market conditions do not support high-probability setups right now.`;
       }
-      // Mini chips showing pass/fail
-      const chipsEl = overlay.querySelector(`[id="v2g-chips-${id}"]`);
-      if (chipsEl && _v2Confluence.results.length) {
-        chipsEl.innerHTML = _v2Confluence.results.map(r => {
-          const cls = r.pass ? 'v2g-chip v2g-pass' : 'v2g-chip v2g-fail';
-          return `<span class="${cls}">${r.label} ${r.pass ? '✓' : '✗'}</span>`;
-        }).join('');
-      }
+      overlay.innerHTML = `
+        <span class="v2-gate-icon">⏸</span>
+        <span class="v2-gate-title">Environment Not Favorable</span>
+        <span class="v2-gate-desc">Market environment does not support high-probability trades right now. Waiting for favorable Cycle, Volatility & Momentum conditions.</span>
+        <span class="v2-gate-chips">${chipsHtml}</span>`;
       overlay.classList.add('visible');
     } else {
-      // Remove gate overlay
       if (overlay) overlay.classList.remove('visible');
     }
   }
@@ -1387,36 +1394,23 @@ function evaluateV2Thresholds(hourlyRow) {
   if (!hourlyRow) return null;
   const results = [];
 
-  for (const t of V2_THRESHOLDS) {
-    const val = parseFloat(hourlyRow[t.key]) || 0;
-    let pass;
-
-    if (t.max !== undefined) {
-      // Inverted metric — lower is better (chaos, FB risk)
-      pass = val <= t.max;
-    } else if (t.signed) {
-      // Momentum — positive and above min
-      pass = val >= t.min;
-    } else {
-      pass = val >= t.min;
-    }
-
+  for (const [field, favorable] of Object.entries(V2_ENV_FAVORABLE)) {
+    const value = hourlyRow[field] || '';
+    const pass = favorable.has(value);
     results.push({
-      key: t.key,
-      label: t.label,
-      value: Math.round(val),
-      threshold: t.min !== undefined ? t.min : t.max,
-      optimal: t.optimal,
+      key: field,
+      label: V2_ENV_LABELS[field],
+      value,
+      short: V2_ENV_SHORT[value] || value.slice(0, 5) || '—',
       pass,
-      inverted: t.max !== undefined,
-      signed: t.signed,
     });
   }
 
   const passed = results.filter(r => r.pass).length;
   const total  = results.length;
   const pct    = total > 0 ? passed / total : 0;
-  const fired  = pct >= V2_FIRE_PCT;
+  // All 3 must pass for the gate to open
+  const fired  = passed === total;
 
   return { results, passed, total, pct, fired };
 }
@@ -1434,7 +1428,7 @@ function updateV2ThresholdBar(hourlyRows) {
   if (eval_) {
     _v2Confluence = eval_;
   } else {
-    _v2Confluence = { fired: false, passed: 0, total: 11, pct: 0, results: [] };
+    _v2Confluence = { fired: false, passed: 0, total: 3, pct: 0, results: [] };
   }
   applyV2Gate();
 
@@ -1450,24 +1444,20 @@ function updateV2ThresholdBar(hourlyRows) {
     return;
   }
 
-  // Strong mode when 80%+ pass
-  const strong = eval_.pct >= 0.80;
-  bar.className = `v2-thresh-bar pro-only${strong ? ' v2t--strong' : ''}`;
+  bar.className = 'v2-thresh-bar pro-only v2t--strong';
 
   // Score badge
   const scoreEl = document.getElementById('v2t-score');
   if (scoreEl) scoreEl.textContent = `${eval_.passed}/${eval_.total}`;
 
-  // Chips — show all, green for pass, dim red for fail
+  // Chips — show environment classifications
   const chipsEl = document.getElementById('v2t-chips');
   if (chipsEl) {
     chipsEl.innerHTML = eval_.results.map(r => {
-      const cls = r.pass ? 'v2t-chip v2tc-pass' : 'v2t-chip v2tc-fail';
-      const prefix = r.signed && r.value > 0 ? '+' : '';
-      const icon = r.pass ? '✓' : '✗';
-      return `<span class="${cls}" title="${r.label}: ${prefix}${r.value} (threshold: ${r.inverted ? '≤' : '≥'}${r.threshold})">
+      const color = V2_ENV_COLOR[r.value] || '#64748b';
+      return `<span class="v2t-chip v2tc-pass" title="${r.label}: ${r.value}">
         <span class="v2tc-name">${r.label}</span>
-        <span class="v2tc-val">${prefix}${r.value} ${icon}</span>
+        <span class="v2tc-val" style="color:${color}">${r.short}</span>
       </span>`;
     }).join('');
   }
@@ -3765,50 +3755,43 @@ function renderJrnConfluenceSection(hourlyRow) {
 
   const eval_ = evaluateV2Thresholds(hourlyRow);
   if (!eval_) {
-    return _jrnSection('⚙️ Engine Confluence', '<p class="jrn-empty">Unable to evaluate engine thresholds.</p>');
+    return _jrnSection('⚙️ Market Environment', '<p class="jrn-empty">Unable to evaluate environment.</p>');
   }
 
   const statusCls = eval_.fired ? 'jrn-conf-active' : 'jrn-conf-inactive';
   const statusLabel = eval_.fired
-    ? (eval_.pct >= 0.80 ? '🟢 STRONG — All systems go' : '🟡 ACTIVE — Conditions favourable')
-    : '🔴 NOT MET — Market conditions insufficient';
+    ? '🟢 FAVORABLE — Environment supports trading'
+    : '🔴 NOT FAVORABLE — Environment does not support trades';
 
   const explanation = eval_.fired
-    ? `${eval_.passed} of ${eval_.total} engines passing (${Math.round(eval_.pct * 100)}%). Market scanners, trade setups, and impulse detection are active for this hour.`
-    : `Only ${eval_.passed} of ${eval_.total} engines passing (${Math.round(eval_.pct * 100)}%) — need ${Math.ceil(V2_FIRE_PCT * eval_.total)} (60%) for activation. Trading sections are gated until conditions improve.`;
-
-  // Build chip rows — group passes and fails
-  const passes = eval_.results.filter(r => r.pass);
-  const fails  = eval_.results.filter(r => !r.pass);
+    ? `All ${eval_.total} environment checks passing. Market scanners, trade setups, and impulse detection are active for this hour.`
+    : `${eval_.passed} of ${eval_.total} environment checks passing. Trading sections are gated until all conditions are favorable.`;
 
   const chipHtml = (r) => {
     const cls = r.pass ? 'jrn-conf-chip pass' : 'jrn-conf-chip fail';
-    const prefix = r.signed && r.value > 0 ? '+' : '';
+    const color = V2_ENV_COLOR[r.value] || '#64748b';
     const icon = r.pass ? '✓' : '✗';
-    const dir = r.inverted ? '≤' : '≥';
-    return `<span class="${cls}" title="${r.label}: ${prefix}${r.value} (threshold: ${dir}${r.threshold})">
+    return `<span class="${cls}" title="${r.label}: ${r.value}">
       <span class="jrn-conf-name">${r.label}</span>
-      <span class="jrn-conf-val">${prefix}${r.value}</span>
+      <span class="jrn-conf-val" style="color:${color}">${r.short}</span>
       <span class="jrn-conf-icon">${icon}</span>
     </span>`;
   };
 
-  // Failing engines get specific reasons
+  const fails = eval_.results.filter(r => !r.pass);
   const failReasons = fails.map(r => {
-    const prefix = r.signed && r.value > 0 ? '+' : '';
-    const dir = r.inverted ? '≤' : '≥';
-    return `<div class="jrn-conf-reason">✗ <strong>${r.label}</strong>: ${prefix}${r.value} (need ${dir}${r.threshold})</div>`;
+    return `<div class="jrn-conf-reason">✗ <strong>${r.label}</strong>: ${r.short} — not a favorable environment</div>`;
   }).join('');
 
-  return _jrnSection('⚙️ Engine Confluence', `
+  return _jrnSection('⚙️ Market Environment', `
     <div class="${statusCls}">
       <div class="jrn-conf-status">${statusLabel}</div>
-      <div class="jrn-conf-score">${eval_.passed}/${eval_.total} engines · ${Math.round(eval_.pct * 100)}%</div>
+      <div class="jrn-conf-score">${eval_.passed}/${eval_.total} checks</div>
       <div class="jrn-conf-explain">${explanation}</div>
       <div class="jrn-conf-chips">
-        ${passes.map(chipHtml).join('')}${fails.map(chipHtml).join('')}
+        ${eval_.results.map(chipHtml).join('')}
       </div>
-      ${fails.length ? `<div class="jrn-conf-reasons"><div class="jrn-conf-reasons-title">Failing engines:</div>${failReasons}</div>` : ''}
+      ${fails.length ? `<div class="jrn-conf-reasons"><div class="jrn-conf-reasons-title">Unfavorable:</div>${failReasons}</div>` : ''}
     </div>`);
 }
 
