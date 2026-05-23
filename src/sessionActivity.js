@@ -144,6 +144,49 @@ function computeCurrencyStrengths(candles, sessionOpenPrices) {
   return strength;
 }
 
+// Fetch latest smoothed 3H strength from currency_strength table.
+// Returns { strongest: 'AUD,EUR', weakest: 'CHF,NZD' } — top 2 each side.
+let _cachedSmooth3H = null;
+let _cachedSmooth3HTime = 0;
+const SMOOTH_CACHE_MS = 60000; // cache for 1 minute
+
+async function getSmoothed3HLeaders() {
+  const now = Date.now();
+  if (_cachedSmooth3H && (now - _cachedSmooth3HTime) < SMOOTH_CACHE_MS) return _cachedSmooth3H;
+
+  try {
+    // Get latest time
+    const { data: latest } = await supabase
+      .from('currency_strength')
+      .select('time')
+      .order('time', { ascending: false })
+      .limit(1)
+      .single();
+    if (!latest) return null;
+
+    const { data: rows } = await supabase
+      .from('currency_strength')
+      .select('currency, smooth_3h, normalized_3h')
+      .eq('time', latest.time);
+    if (!rows || !rows.length) return null;
+
+    const scored = rows.map(r => ({
+      cur: r.currency,
+      v3: parseFloat(r.smooth_3h ?? r.normalized_3h) || 0,
+    })).sort((a, b) => b.v3 - a.v3);
+
+    _cachedSmooth3H = {
+      strongest: scored.slice(0, 2).map(c => c.cur).join(','),
+      weakest:   scored.slice(-2).reverse().map(c => c.cur).join(','),
+    };
+    _cachedSmooth3HTime = now;
+    return _cachedSmooth3H;
+  } catch (e) {
+    console.warn('[SESSION] Failed to fetch smooth 3H:', e.message);
+    return null;
+  }
+}
+
 // ─── Momentum classification ────────────────────────────────────────────────
 // Types: TREND (steady positive), EXPANSION (accelerating), IMPULSE (sudden spike),
 //        EXHAUSTION (high but decelerating), DECAY (falling), STABLE (flat)
@@ -1168,6 +1211,13 @@ async function calculateLatestSessionActivity() {
   const row = allRows[allRows.length - 1];
   if (!row) return;
 
+  // Override strongest/weakest with smoothed 3H
+  const smooth3H = await getSmoothed3HLeaders();
+  if (smooth3H) {
+    row.strongest_ccy = smooth3H.strongest;
+    row.weakest_ccy   = smooth3H.weakest;
+  }
+
   const { error } = await supabase
     .from('hourly_session_activity')
     .upsert([toHourlyRow(row)], { onConflict: 'time_utc', ignoreDuplicates: false });
@@ -1177,6 +1227,13 @@ async function calculateLatestSessionActivity() {
   const activeSession = getCurrentSession().session;
   const todayStr = new Date().toISOString().slice(0, 10);
   const sessionRows = buildSessionRows(allRows);
+  // Override session rows too
+  if (smooth3H) {
+    for (const sr of sessionRows) {
+      sr.strongest_ccy = smooth3H.strongest;
+      sr.weakest_ccy   = smooth3H.weakest;
+    }
+  }
   const currentOnly = sessionRows.filter(
     sr => sr.session_name === activeSession && sr.session_date === todayStr
   );
@@ -1258,6 +1315,15 @@ async function getMarketEnergyData() {
 
   const expansionPressure = computeExpansionPressure(sequence);
   const marketCycle       = classifyMarketCycle(sequence);
+
+  // Override strongest/weakest with smoothed 3H for consistency with Currency Signals
+  const smooth3H = await getSmoothed3HLeaders();
+  if (smooth3H) {
+    for (const s of sessions) {
+      s.strongest_ccy = smooth3H.strongest;
+      s.weakest_ccy   = smooth3H.weakest;
+    }
+  }
 
   return { sessions, expansionPressure, marketCycle, currentSession };
 }
