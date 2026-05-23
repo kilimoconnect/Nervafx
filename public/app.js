@@ -119,18 +119,16 @@ function entryHasCsigPair(e) {
 
 // Derive strongest/weakest currencies from smoothed 3H strength data.
 // Uses the global `strengthData` (from /api/strength) when available.
-// Returns { strong: ['USD','CHF'], weak: ['AUD','NZD'] } — top 2 each side,
-// only if smooth_3h value exceeds a minimum threshold (noise filter).
+// Always returns top 2 strongest and top 2 weakest by smooth_3h value.
 function getSmoothed3HFlow(currencies) {
   const list = currencies || strengthData?.currencies || [];
   if (!list.length) return { strong: [], weak: [] };
   const scored = list.map(c => {
     const v3 = parseFloat(c.smooth_3h ?? c.normalized_3h) || 0;
     return { cur: c.currency, v3 };
-  });
-  const MIN = 0.00030; // minimum absolute smooth_3h to qualify
-  const strong = scored.filter(c => c.v3 > MIN).sort((a, b) => b.v3 - a.v3).slice(0, 2).map(c => c.cur);
-  const weak   = scored.filter(c => c.v3 < -MIN).sort((a, b) => a.v3 - b.v3).slice(0, 2).map(c => c.cur);
+  }).sort((a, b) => b.v3 - a.v3);
+  const strong = scored.slice(0, 2).map(c => c.cur);
+  const weak   = scored.slice(-2).reverse().map(c => c.cur);
   return { strong, weak };
 }
 
