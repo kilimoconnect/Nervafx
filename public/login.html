@@ -703,8 +703,13 @@
 
     const GOOGLE_SVG = '<svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
 
-    /* ── Redirect if already authenticated ── */
+    /* ── Redirect if already authenticated (skip if OAuth callback pending) ── */
     (function () {
+      // Don't auto-redirect if we're handling an OAuth callback
+      const hash = window.location.hash;
+      const query = new URLSearchParams(window.location.search);
+      if ((hash && hash.includes('access_token')) || query.has('code') || query.has('error')) return;
+
       const token = localStorage.getItem('nfx_token');
       if (!token) return;
       try {
@@ -713,7 +718,19 @@
       } catch (_) {}
     })();
 
-    /* ── Handle OAuth callback — supports both implicit (#access_token) and PKCE (?code) ── */
+    /* ── PKCE helpers — generate code_verifier + code_challenge ── */
+    async function generatePKCE() {
+      const arr = new Uint8Array(32);
+      crypto.getRandomValues(arr);
+      const verifier = btoa(String.fromCharCode(...arr))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+      const challenge = btoa(String.fromCharCode(...new Uint8Array(digest)))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+      return { verifier, challenge };
+    }
+
+    /* ── Handle OAuth callback — supports both PKCE (?code) and implicit (#access_token) ── */
     (async function handleOAuthCallback() {
       const hash = window.location.hash;
       const query = new URLSearchParams(window.location.search);
@@ -728,15 +745,13 @@
         return;
       }
 
-      // Check for access_token in hash (implicit flow)
+      // Check for code in query (PKCE flow — primary)
+      const authCode = query.get('code');
+      // Check for access_token in hash (implicit flow — fallback)
       let accessToken = hashParams?.get('access_token');
       let refreshToken = hashParams?.get('refresh_token') || '';
-      let userId = null, userEmail = null;
 
-      // Check for code in query (PKCE flow)
-      const authCode = query.get('code');
-
-      if (!accessToken && !authCode) return;
+      if (!authCode && !accessToken) return;
 
       // Clean URL immediately
       history.replaceState(null, '', location.pathname);
@@ -745,12 +760,15 @@
       if (btn) { btn.disabled = true; btn.textContent = 'Signing in...'; }
 
       try {
-        // If we have a code (PKCE), exchange it for tokens via server
-        if (!accessToken && authCode) {
+        // PKCE flow: exchange code + verifier for tokens via server
+        if (authCode) {
+          const verifier = sessionStorage.getItem('nfx_pkce_verifier') || '';
+          sessionStorage.removeItem('nfx_pkce_verifier');
+
           const exchRes = await fetch('/api/oauth-exchange', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code: authCode }),
+            body: JSON.stringify({ code: authCode, code_verifier: verifier }),
           });
           const exchData = await exchRes.json();
           if (!exchRes.ok) throw new Error(exchData.error || 'Code exchange failed');
@@ -792,7 +810,7 @@
       }
     })();
 
-    /* ── Google sign-in — direct redirect, no Supabase client needed ── */
+    /* ── Google sign-in — PKCE flow (code survives HTTP→HTTPS redirects) ── */
     async function signInWithGoogle() {
       const btn = document.getElementById('btn-google');
       btn.disabled = true;
@@ -803,11 +821,19 @@
         const cfg = await fetch('/api/config').then(r => r.json());
         if (!cfg.supabase_url) throw new Error('Service unavailable');
 
-        // Always use HTTPS for redirect (prevents hash stripping on HTTP→HTTPS redirect)
+        // Generate PKCE challenge — code comes back as ?code= (query param, survives redirects)
+        const { verifier, challenge } = await generatePKCE();
+        sessionStorage.setItem('nfx_pkce_verifier', verifier);
+
+        // Always use HTTPS for redirect
         const origin = window.location.origin.replace(/^http:/, 'https:');
         const redirectTo = encodeURIComponent(origin + '/login');
-        // Direct redirect to Supabase OAuth
-        window.location.href = cfg.supabase_url + '/auth/v1/authorize?provider=google&redirect_to=' + redirectTo;
+
+        window.location.href = cfg.supabase_url + '/auth/v1/authorize'
+          + '?provider=google'
+          + '&redirect_to=' + redirectTo
+          + '&code_challenge=' + encodeURIComponent(challenge)
+          + '&code_challenge_method=S256';
       } catch (e) {
         console.error('Google OAuth error:', e);
         showMsg('Could not connect to Google: ' + (e.message || e), 'error');
