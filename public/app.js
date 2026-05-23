@@ -299,6 +299,8 @@ async function api(path, opts = {}) {
 
 // ─── User plan (subscription) ─────────────────────────────────────────────────
 
+let _userPlanReady = null; // resolved once plan is loaded
+
 async function loadUserPlan() {
   try {
     const sub = await api('/api/subscription');
@@ -309,8 +311,8 @@ async function loadUserPlan() {
   }
 }
 
-// Load plan as soon as possible
-loadUserPlan();
+// Load plan as soon as possible; expose promise so refresh() can await it
+_userPlanReady = loadUserPlan();
 
 // ─── News calendar ────────────────────────────────────────────────────────────
 
@@ -3922,14 +3924,17 @@ function renderJournal(data) {
 
 async function refresh() {
   try {
+    // Wait for plan to load first (prevents 403 cascade on cold start)
+    if (_userPlanReady) await _userPlanReady;
+
     const [strength, signals, states, risk, actions, quality, spreads, m15Data, sessionData, journalData, profileData] = await Promise.all([
       api('/api/strength'),
-      api('/api/signals'),
-      api('/api/states'),
+      api('/api/signals').catch(() => ({ signals: [] })),
+      api('/api/states').catch(() => ({ states: [] })),
       api('/api/risk'),
       api('/api/actions'),
-      api('/api/quality'),
-      api('/api/spreads'),
+      api('/api/quality').catch(() => ({})),
+      api('/api/spreads').catch(() => ({ spreads: [] })),
       api('/api/m15-spreads').catch(() => ({ spreads: [] })),
       api('/api/session').catch(() => ({ session: null })),
       api('/api/journal?limit=5').catch(() => ({ entries: [] })),
@@ -5811,7 +5816,10 @@ async function _btLoadHistory() {
 // Initialize backtest defaults on load
 setTimeout(_btInit, 500);
 
-// Boot
+// Boot — wait for plan to load before first refresh to avoid cold-start 403 cascade
 showSkeletons();
-refresh();
-setInterval(refresh, REFRESH_MS);
+(async function boot() {
+  if (_userPlanReady) await _userPlanReady;
+  refresh();
+  setInterval(refresh, REFRESH_MS);
+})();
