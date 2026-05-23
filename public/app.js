@@ -1886,7 +1886,7 @@ function _meHourlyTrend(hourlyRows) {
     { key: 'movement_score',      label: 'Mov' },
     { key: 'breadth_score',       label: 'Brd' },
     { key: 'agreement_score',     label: 'Agr' },
-    { key: 'directional_control', label: 'DirCtrl' },
+    { key: 'directional_control', label: 'Dir' },
     { key: 'volatility_quality',  label: 'VolQ' },
     { key: 'volatility_score',    label: 'Vol' },
     { key: 'momentum_score',      label: 'Mom', isMomentum: true },
@@ -3070,7 +3070,7 @@ function _renderMeAnalysisModal() {
         <div class="me-modal-metric"><span>Vol</span><strong>${Math.round(s.volatility_score||0)}</strong>${pct(s.norm_volatility)}</div>
         <div class="me-modal-metric"><span>Energy</span><strong>${Math.round(s.market_energy||0)}</strong>${pct(s.norm_energy)}</div>
         <div class="me-modal-metric"><span>Trad</span><strong>${Math.round(s.tradability_score||0)}</strong></div>
-        <div class="me-modal-metric"><span>DirCtrl</span><strong>${Math.round(s.directional_control||0)}</strong></div>
+        <div class="me-modal-metric"><span>Dir</span><strong>${Math.round(s.directional_control||0)}</strong></div>
       </div>`;
 
     const momHtml = mom
@@ -3302,7 +3302,7 @@ function _meHistoryPanel(rows, liveSessions) {
     <div class="sh-col-cycle">Cycle</div>
     <div class="sh-col-metric">E</div>
     <div class="sh-col-metric">Trad</div>
-    <div class="sh-col-metric">DirCtrl</div>
+    <div class="sh-col-metric">Dir</div>
     <div class="sh-col-flow">Flow</div>
     <div class="sh-col-ccy">Currencies</div>
   </div>`;

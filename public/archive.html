@@ -989,7 +989,7 @@
       <div class="sh-col-cycle">Cycle</div>
       <div class="sh-col-metric">E</div>
       <div class="sh-col-metric">Trad</div>
-      <div class="sh-col-metric">DirCtrl</div>
+      <div class="sh-col-metric">Dir</div>
       <div class="sh-col-flow">Flow</div>
       <div class="sh-col-ccy">Currencies</div>
     </div>`;
@@ -1018,7 +1018,7 @@
             <div class="sh-col-metric sh-na">—</div>
             <div class="sh-col-flow sh-na">—</div>
             <div class="sh-col-ccy sh-na">—</div>
-          </div>`;  // 7 columns: Date, Session, Cycle, E, Trad, DirCtrl, Flow, Currencies
+          </div>`;  // 7 columns: Date, Session, Cycle, E, Trad, Dir, Flow, Currencies
         }
 
         const dot = CYCLE_DOT[r.energy_cycle] || '#64748b';
@@ -1086,7 +1086,7 @@
       { key: 'movement_score',      label: 'Mov' },
       { key: 'breadth_score',       label: 'Brd' },
       { key: 'agreement_score',     label: 'Agr' },
-      { key: 'directional_control', label: 'DirCtrl' },
+      { key: 'directional_control', label: 'Dir' },
       { key: 'volatility_quality',  label: 'VolQ' },
       { key: 'volatility_score',    label: 'Vol' },
       { key: 'momentum_score',      label: 'Mom', signed: true },
