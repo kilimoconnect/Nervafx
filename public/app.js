@@ -6,6 +6,7 @@ function _clearAuth() {
   localStorage.removeItem('nfx_token');
   localStorage.removeItem('nfx_refresh_token');
   localStorage.removeItem('nfx_user');
+  localStorage.removeItem('nfx_plan');
 }
 
 async function _refreshToken() {
@@ -302,11 +303,18 @@ async function api(path, opts = {}) {
 let _userPlanReady = null; // resolved once plan is loaded
 
 async function loadUserPlan() {
+  // Instantly apply cached plan to avoid Free→Premium flash
+  const cached = localStorage.getItem('nfx_plan');
+  if (cached && typeof applyPlan === 'function') applyPlan(cached);
+
   try {
     const sub = await api('/api/subscription');
-    if (typeof applyPlan === 'function') applyPlan(sub.plan || 'free');
+    const plan = sub.plan || 'free';
+    localStorage.setItem('nfx_plan', plan);
+    if (typeof applyPlan === 'function') applyPlan(plan);
   } catch (_) {
     // Not logged in or endpoint error — stay on free
+    localStorage.setItem('nfx_plan', 'free');
     if (typeof applyPlan === 'function') applyPlan('free');
   }
 }
