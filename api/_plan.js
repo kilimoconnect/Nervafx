@@ -10,7 +10,8 @@
 
 const PLAN_LEVELS = { free: 0, pro: 1, premium: 2 };
 
-const PLAN_PRICES = { pro: 59, premium: 89 };
+// TODO: restore to { pro: 59, premium: 89 } when switching to live Flutterwave keys
+const PLAN_PRICES = { pro: 10, premium: 20 };
 
 // Admin — permanent premium, never expires
 const ADMIN_UIDS = new Set([
