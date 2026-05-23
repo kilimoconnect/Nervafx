@@ -10,8 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <!-- GSAP -->
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
-  <!-- Supabase JS (for Google OAuth) -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <!-- Supabase JS removed — OAuth handled via direct URL + /api/profile -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -702,27 +701,6 @@
 
     let currentTab = 'login';
 
-    /* ── Supabase client (anon key for OAuth) ── */
-    let _sb = null;
-    let _sbReady = null;
-    function initSb() {
-      if (_sbReady) return _sbReady;
-      _sbReady = fetch('/api/config').then(r => r.json()).then(cfg => {
-        if (!cfg.supabase_url || !cfg.supabase_anon) throw new Error('Missing Supabase config');
-        _sb = supabase.createClient(cfg.supabase_url, cfg.supabase_anon, {
-          auth: { flowType: 'implicit' }
-        });
-        return _sb;
-      });
-      return _sbReady;
-    }
-    async function getSb() {
-      if (_sb) return _sb;
-      return initSb();
-    }
-    // Pre-fetch config
-    initSb();
-
     const GOOGLE_SVG = '<svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
 
     /* ── Redirect if already authenticated ── */
@@ -735,73 +713,50 @@
       } catch (_) {}
     })();
 
-    /* ── Handle OAuth callback — works with both hash fragments and Supabase session ── */
+    /* ── Handle OAuth callback — parse hash tokens directly (no Supabase client needed) ── */
     (async function handleOAuthCallback() {
-      // Check for tokens in hash (implicit flow) or code in query (PKCE flow)
       const hash = window.location.hash;
-      const query = new URLSearchParams(window.location.search);
-      const hasHash = hash && hash.includes('access_token');
-      const hasCode = query.has('code');
+      const hashParams = hash ? new URLSearchParams(hash.substring(1)) : null;
 
-      if (!hasHash && !hasCode) return;
+      // Check for OAuth error in callback
+      if (hashParams && hashParams.get('error')) {
+        showMsg('Google sign-in failed: ' + (hashParams.get('error_description') || hashParams.get('error')), 'error');
+        history.replaceState(null, '', location.pathname);
+        return;
+      }
+
+      // Check for access_token in hash (implicit flow)
+      const accessToken = hashParams?.get('access_token');
+      if (!accessToken) return;
+
+      const refreshToken = hashParams?.get('refresh_token') || '';
+
+      // Clean URL immediately
+      history.replaceState(null, '', location.pathname);
 
       const btn = document.getElementById('btn-google');
       if (btn) { btn.disabled = true; btn.textContent = 'Signing in...'; }
 
       try {
-        const sb = await getSb();
-        let session, user;
-
-        if (hasHash) {
-          // Implicit flow — tokens are in the hash, let Supabase parse them
-          const { data, error } = await sb.auth.getSession();
-          if (error) throw error;
-          session = data.session;
-          user = session?.user;
-
-          // If getSession didn't pick it up, parse manually
-          if (!session) {
-            const params = new URLSearchParams(hash.substring(1));
-            const accessToken = params.get('access_token');
-            const refreshToken = params.get('refresh_token');
-            if (accessToken) {
-              const { data: sData, error: sErr } = await sb.auth.setSession({
-                access_token: accessToken,
-                refresh_token: refreshToken || '',
-              });
-              if (sErr) throw sErr;
-              session = sData.session;
-              user = sData.user;
-            }
-          }
-        } else if (hasCode) {
-          // PKCE flow — exchange the code for a session
-          const { data, error } = await sb.auth.exchangeCodeForSession(query.get('code'));
-          if (error) throw error;
-          session = data.session;
-          user = data.user;
-        }
-
-        if (!session || !user) throw new Error('No session returned from Google sign-in');
-
-        const meta = user.user_metadata || {};
-        localStorage.setItem('nfx_token', session.access_token);
-        localStorage.setItem('nfx_refresh_token', session.refresh_token || '');
-        localStorage.setItem('nfx_user', JSON.stringify({
-          id:         user.id,
-          email:      user.email,
-          first_name: meta.first_name || meta.full_name?.split(' ')[0] || '',
-          last_name:  meta.last_name  || meta.full_name?.split(' ').slice(1).join(' ') || '',
-          full_name:  meta.full_name  || '',
-          avatar_url: meta.avatar_url || '',
-        }));
-
-        // Check if this is a new user (needs setup)
+        // Verify token and get user info from our own backend
         const profileRes = await fetch('/api/profile', {
-          headers: { 'Authorization': 'Bearer ' + session.access_token },
+          headers: { 'Authorization': 'Bearer ' + accessToken },
         });
+        if (!profileRes.ok) throw new Error('Failed to verify your session');
         const profile = await profileRes.json();
 
+        // Store auth data
+        localStorage.setItem('nfx_token', accessToken);
+        localStorage.setItem('nfx_refresh_token', refreshToken);
+        localStorage.setItem('nfx_user', JSON.stringify({
+          id:         profile.id,
+          email:      profile.email,
+          first_name: profile.first_name || '',
+          last_name:  profile.last_name  || '',
+          full_name:  ((profile.first_name || '') + ' ' + (profile.last_name || '')).trim(),
+        }));
+
+        // New user (no timezone set) → setup wizard. Existing user → dashboard.
         if (!profile.timezone) {
           localStorage.setItem('nfx_needs_setup', 'true');
           location.replace('/setup');
@@ -812,11 +767,10 @@
         console.error('OAuth callback error:', e);
         showMsg('Google sign-in failed: ' + (e.message || e), 'error');
         if (btn) { btn.disabled = false; btn.innerHTML = GOOGLE_SVG + ' Continue with Google'; }
-        history.replaceState(null, '', location.pathname);
       }
     })();
 
-    /* ── Google sign-in ── */
+    /* ── Google sign-in — direct redirect, no Supabase client needed ── */
     async function signInWithGoogle() {
       const btn = document.getElementById('btn-google');
       btn.disabled = true;
@@ -824,14 +778,12 @@
       clearMsg();
 
       try {
-        const sb = await getSb();
-        const { error } = await sb.auth.signInWithOAuth({
-          provider: 'google',
-          options: {
-            redirectTo: window.location.origin + '/login',
-          },
-        });
-        if (error) throw error;
+        const cfg = await fetch('/api/config').then(r => r.json());
+        if (!cfg.supabase_url) throw new Error('Service unavailable');
+
+        const redirectTo = encodeURIComponent(window.location.origin + '/login');
+        // Direct redirect to Supabase OAuth — implicit flow returns tokens in hash
+        window.location.href = cfg.supabase_url + '/auth/v1/authorize?provider=google&redirect_to=' + redirectTo;
       } catch (e) {
         console.error('Google OAuth error:', e);
         showMsg('Could not connect to Google: ' + (e.message || e), 'error');
