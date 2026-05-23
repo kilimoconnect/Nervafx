@@ -548,11 +548,11 @@ section.card:has(.v2-gate-overlay.visible) { min-height: 220px; }
 }
 
 .header-plan-badge {
-  font-size: 9.5px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.8px;
-  padding: 3px 10px;
+  padding: 4px 12px;
   border-radius: 5px;
   line-height: 1;
   white-space: nowrap;
@@ -2377,13 +2377,30 @@ section.card:has(.v2-gate-overlay.visible) { min-height: 220px; }
   /* Base */
   html, body { font-size: 12px; }
 
-  /* Header */
+  /* Header — 3 rows on mobile:
+     Row 1: logo + plan badge
+     Row 2: Settings / Admin / Sign Out buttons
+     Row 3: Balance / Risk / Trades stats */
   .header-row { padding-left: 14px; padding-right: 14px; }
-  .header-row-top { padding-top: 6px; padding-bottom: 4px; }
+  .header-row-top {
+    padding-top: 6px;
+    padding-bottom: 4px;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .header-left {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .header-right {
+    width: 100%;
+    justify-content: flex-start;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
   .header-row-bottom { padding-top: 4px; padding-bottom: 6px; flex-wrap: wrap; gap: 6px; }
   .tagline { display: none; }
-  .header-plan-badge { font-size: 8.5px; padding: 2px 7px; }
-  .header-right { gap: 6px; flex-wrap: wrap; }
+  .header-plan-badge { font-size: 10px; padding: 3px 10px; }
   .header-stats { flex-wrap: wrap; gap: 4px; }
   .stat-pill {
     font-size: 10px;
