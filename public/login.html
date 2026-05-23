@@ -728,9 +728,36 @@
       return _supabaseUrl;
     }
 
-    /* ── Handle OAuth callback — parse #access_token directly from hash ── */
+    /* ── Handle OAuth callback — supports both #access_token (implicit) and ?code= (PKCE) ── */
     (async function handleOAuthCallback() {
       const hash = window.location.hash;
+      const query = new URLSearchParams(window.location.search);
+
+      // ── Path A: ?code= in query string (PKCE flow) ──
+      if (query.has('code')) {
+        const code = query.get('code');
+        history.replaceState(null, '', location.pathname);
+        const btn = document.getElementById('btn-google');
+        if (btn) { btn.disabled = true; btn.textContent = 'Signing in...'; }
+        try {
+          const resp = await fetch('/api/oauth-exchange', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code }),
+          });
+          const data = await resp.json();
+          if (!resp.ok) throw new Error(data.error || 'Code exchange failed');
+          // Got tokens — fall through to profile verification below
+          return await finishOAuth(data.access_token, data.refresh_token || '');
+        } catch (e) {
+          console.error('PKCE exchange error:', e);
+          showMsg('Google sign-in failed: ' + (e.message || e), 'error');
+          if (btn) { btn.disabled = false; btn.innerHTML = GOOGLE_SVG + ' Continue with Google'; }
+          return;
+        }
+      }
+
+      // ── Path B: #access_token in hash (implicit flow) ──
       if (!hash) return;
       const params = new URLSearchParams(hash.substring(1));
 
@@ -746,9 +773,13 @@
       if (!accessToken) return;
       const refreshToken = params.get('refresh_token') || '';
 
-      // Clean URL
+      // Clean URL and finish
       history.replaceState(null, '', location.pathname);
+      return await finishOAuth(accessToken, refreshToken);
+    })();
 
+    /* ── Shared: verify token, store auth, redirect ── */
+    async function finishOAuth(accessToken, refreshToken) {
       const btn = document.getElementById('btn-google');
       if (btn) { btn.disabled = true; btn.textContent = 'Signing in...'; }
 
@@ -782,7 +813,7 @@
         showMsg('Google sign-in failed: ' + (e.message || e), 'error');
         if (btn) { btn.disabled = false; btn.innerHTML = GOOGLE_SVG + ' Continue with Google'; }
       }
-    })();
+    }
 
     /* ── Google sign-in — direct redirect, zero SDK dependency ── */
     async function signInWithGoogle() {
@@ -795,7 +826,8 @@
         const sbUrl = await getSupabaseUrl();
         if (!sbUrl) throw new Error('Service unavailable');
         const redirectTo = encodeURIComponent(window.location.origin + '/login');
-        window.location.href = sbUrl + '/auth/v1/authorize?provider=google&redirect_to=' + redirectTo;
+        // flow_type=implicit → Supabase returns #access_token in hash (no PKCE code exchange needed)
+        window.location.href = sbUrl + '/auth/v1/authorize?provider=google&redirect_to=' + redirectTo + '&flow_type=implicit';
       } catch (e) {
         showMsg('Could not connect to Google: ' + (e.message || e), 'error');
         btn.disabled = false;
