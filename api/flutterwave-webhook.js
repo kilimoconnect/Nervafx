@@ -17,7 +17,7 @@ module.exports = async function handler(req, res) {
   try {
     // ── 1. Verify webhook hash ────────────────────────────────────────────
     const hash = req.headers['verif-hash'];
-    if (!hash || hash !== process.env.FLW_WEBHOOK_HASH) {
+    if (!hash || hash !== process.env.FLW_ENCRYPTION_KEY) {
       console.warn('[WEBHOOK] Invalid verif-hash');
       return res.status(401).json({ error: 'Unauthorized' });
     }
