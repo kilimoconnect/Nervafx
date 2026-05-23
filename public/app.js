@@ -653,8 +653,7 @@ function nextActionHtml(text) {
 // ─── Header ───────────────────────────────────────────────────────────────────
 
 function updateHeader(risk) {
-  if (!risk?.summary) return;
-  const s = risk.summary;
+  const s = risk?.summary || {};
 
   // Profile values take precedence over risk.js defaults
   const balance = _profile.account_size       ?? Number(s.balance)          ?? 0;
@@ -666,7 +665,7 @@ function updateHeader(risk) {
   const dailyRisk = Number(s.dailyRisk ?? 0);
   const riskPct   = balance > 0 ? (dailyRisk / balance) * 100 : 0;
 
-  document.getElementById('stat-balance').textContent = `Balance: $${balance.toLocaleString()}`;
+  document.getElementById('stat-balance').textContent = balance > 0 ? `Balance: $${balance.toLocaleString()}` : 'Balance: Set in Profile';
   document.getElementById('stat-risk').textContent    = `Daily Risk: ${riskPct.toFixed(2)}% / ${maxPct}%`;
   document.getElementById('stat-trades').textContent  = `Open: ${open} / ${maxTr}`;
   document.getElementById('status-dot').className     = 'status-dot online';
@@ -3375,7 +3374,7 @@ function renderMarketEnergy(sessions, expansionPressure, marketCycle, currentSes
 async function fetchMarketActivity() {
   try {
     const [data, historyRows, hourlyData] = await Promise.all([
-      api('/api/market-energy'),
+      api('/api/market-energy').catch(() => ({ sessions: [] })),
       api('/api/market-energy-history').catch(e => { console.warn('[ME-HISTORY]', e.message); return []; }),
       api('/api/session-activity?type=hourly&days=1').catch(e => { console.warn('[ME-HOURLY]', e.message); return { hourly: [] }; }),
     ]);
