@@ -724,18 +724,18 @@
     async function getSb() {
       if (_sb) return _sb;
       const cfg = await fetch('/api/config').then(r => r.json());
-      if (!cfg.supabase_url || !cfg.supabase_anon) throw new Error('Missing config');
+      if (!cfg.supabase_url || !cfg.supabase_anon) throw new Error('Missing Supabase config');
       _sb = supabase.createClient(cfg.supabase_url, cfg.supabase_anon, {
         auth: {
-          autoRefreshToken: false,
-          persistSession: false,     // We manage our own localStorage keys
-          detectSessionInUrl: true,  // Let the SDK detect ?code= or #access_token
+          detectSessionInUrl: true,
+          persistSession: true,      // SDK needs this for PKCE code_verifier storage
+          storageKey: 'nfx-sb-auth', // Use unique key so it doesn't clash
         },
       });
       return _sb;
     }
     // Pre-init (non-blocking)
-    getSb().catch(() => {});
+    getSb().catch(e => console.warn('Supabase init:', e.message));
 
     /* ── Handle OAuth callback — Supabase SDK handles PKCE exchange automatically ── */
     (async function handleOAuthCallback() {
@@ -816,13 +816,17 @@
 
       try {
         const sb = await getSb();
-        const { error } = await sb.auth.signInWithOAuth({
+        // Use current origin (may be www.nervafx.com or nervafx.com)
+        const origin = window.location.origin;
+        const { data, error } = await sb.auth.signInWithOAuth({
           provider: 'google',
           options: {
-            redirectTo: window.location.origin.replace(/^http:/, 'https:') + '/login',
+            redirectTo: origin + '/login',
           },
         });
         if (error) throw error;
+        // If SDK didn't redirect automatically, do it manually
+        if (data?.url) window.location.href = data.url;
       } catch (e) {
         console.error('Google OAuth error:', e);
         showMsg('Could not connect to Google: ' + (e.message || e), 'error');
