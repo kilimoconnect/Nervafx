@@ -827,7 +827,8 @@
         if (!sbUrl) throw new Error('Service unavailable');
         const redirectTo = encodeURIComponent(window.location.origin + '/login');
         // flow_type=implicit → Supabase returns #access_token in hash (no PKCE code exchange needed)
-        window.location.href = sbUrl + '/auth/v1/authorize?provider=google&redirect_to=' + redirectTo + '&flow_type=implicit';
+        // prompt=select_account → Google always shows the account chooser
+        window.location.href = sbUrl + '/auth/v1/authorize?provider=google&redirect_to=' + redirectTo + '&flow_type=implicit&prompt=select_account';
       } catch (e) {
         showMsg('Could not connect to Google: ' + (e.message || e), 'error');
         btn.disabled = false;
