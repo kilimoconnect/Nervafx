@@ -102,8 +102,12 @@
     .tz-select {
       width: 100%; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
       border-radius: 0 0 11px 11px; color: var(--text); font-family: 'Inter', sans-serif;
-      font-size: 13px; outline: none; height: 130px; overflow-y: auto;
+      font-size: 13px; outline: none; padding: 10px 14px;
       transition: border-color 0.2s;
+      appearance: none; -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 12px center;
+      cursor: pointer;
     }
     .tz-select:focus { border-color: rgba(59,130,246,0.55); }
     .tz-select option { padding: 6px 14px; background: #0d1019; }
@@ -289,7 +293,7 @@
             <input id="tz-search" class="tz-search" type="text"
                    placeholder="Search — city, country or zone name…"
                    autocomplete="off" oninput="filterTz(this.value)" />
-            <select id="timezone-select" class="tz-select" size="6">
+            <select id="timezone-select" class="tz-select">
               <!-- Populated by buildTzList() on load -->
             </select>
             <div class="tz-current" id="tz-current"></div>
