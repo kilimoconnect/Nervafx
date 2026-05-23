@@ -648,6 +648,32 @@
         <div class="msg" id="msg"></div>
       </form>
 
+      <!-- Confirmation code panel (hidden until signup sends code) -->
+      <div id="confirm-panel" style="display:none">
+        <div style="text-align:center;margin-bottom:20px">
+          <div style="font-size:28px;margin-bottom:8px">✉</div>
+          <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px">Check your email</div>
+          <div style="font-size:12px;color:var(--muted)" id="confirm-email-hint">We sent a 6-digit code to your email</div>
+        </div>
+        <div class="field">
+          <label for="confirm-code">Verification Code</label>
+          <div class="input-wrap">
+            <span class="input-icon">🔑</span>
+            <input id="confirm-code" type="text" placeholder="000000"
+                   maxlength="6" inputmode="numeric" pattern="[0-9]*"
+                   style="text-align:center;letter-spacing:6px;font-size:20px;font-weight:700"
+                   oninput="this.value=this.value.replace(/\D/g,'')" />
+          </div>
+        </div>
+        <button class="btn-submit" id="btn-confirm" onclick="handleConfirm()">Verify & Create Account</button>
+        <div style="text-align:center;margin-top:14px">
+          <button style="background:none;border:none;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;text-decoration:underline" onclick="handleResend()">Resend code</button>
+          <span style="color:rgba(255,255,255,0.1);margin:0 8px">|</span>
+          <button style="background:none;border:none;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;text-decoration:underline" onclick="backToSignup()">Back to signup</button>
+        </div>
+        <div class="msg" id="confirm-msg"></div>
+      </div>
+
     </div>
 
     <!-- Footer -->
@@ -952,6 +978,85 @@
       document.getElementById('msg').className = 'msg';
     }
 
+    // ── Pending confirmation state ───────────────────────────────────────────
+    let _pendingEmail = null;
+
+    function showConfirmPanel(email) {
+      _pendingEmail = email;
+      document.getElementById('auth-form').style.display = 'none';
+      document.getElementById('btn-google').style.display = 'none';
+      document.querySelector('.or-divider').style.display = 'none';
+      document.querySelector('.tabs').style.display = 'none';
+      document.getElementById('confirm-panel').style.display = '';
+      document.getElementById('confirm-email-hint').textContent = 'We sent a 6-digit code to ' + email;
+      document.getElementById('confirm-code').value = '';
+      document.getElementById('confirm-code').focus();
+    }
+
+    function backToSignup() {
+      document.getElementById('confirm-panel').style.display = 'none';
+      document.getElementById('auth-form').style.display = '';
+      document.getElementById('btn-google').style.display = '';
+      document.querySelector('.or-divider').style.display = '';
+      document.querySelector('.tabs').style.display = '';
+      document.getElementById('confirm-msg').className = 'msg';
+      switchTab('signup');
+    }
+
+    function showConfirmMsg(text, type) {
+      const el = document.getElementById('confirm-msg');
+      el.textContent = text;
+      el.className = 'msg show-' + type;
+    }
+
+    async function handleConfirm() {
+      const code = document.getElementById('confirm-code').value.trim();
+      if (code.length !== 6) { showConfirmMsg('Please enter the 6-digit code.', 'error'); return; }
+
+      const btn = document.getElementById('btn-confirm');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>Verifying…';
+
+      try {
+        const res = await fetch('/api/auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'confirm', email: _pendingEmail, code }),
+        });
+        const data = await res.json();
+
+        if (!res.ok) { showConfirmMsg(data.error || 'Verification failed.', 'error'); return; }
+
+        localStorage.setItem('nfx_token', data.token);
+        localStorage.setItem('nfx_refresh_token', data.refresh_token || '');
+        localStorage.setItem('nfx_user', JSON.stringify(data.user));
+
+        showConfirmMsg('✓ Email verified! Setting up your account…', 'success');
+        localStorage.setItem('nfx_needs_setup', 'true');
+        setTimeout(() => location.replace('/setup'), 800);
+      } catch (_) {
+        showConfirmMsg('Network error — try again.', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Verify & Create Account';
+      }
+    }
+
+    async function handleResend() {
+      try {
+        const res = await fetch('/api/auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'resend', email: _pendingEmail }),
+        });
+        const data = await res.json();
+        if (!res.ok) { showConfirmMsg(data.error || 'Failed to resend.', 'error'); return; }
+        showConfirmMsg('New code sent — check your email.', 'success');
+      } catch (_) {
+        showConfirmMsg('Network error — try again.', 'error');
+      }
+    }
+
     // ── Submit ────────────────────────────────────────────────────────────────
     async function handleSubmit(e) {
       e.preventDefault();
@@ -982,7 +1087,6 @@
         }
         if (!document.getElementById('disc-agreed').checked) {
           showMsg('Please read and accept the Risk Disclaimer to continue.', 'error');
-          // Auto-expand so it's visible
           document.getElementById('disc-content').classList.add('open');
           document.getElementById('disc-arrow').classList.add('open');
           return;
@@ -1011,23 +1115,18 @@
           return;
         }
 
+        // Signup now requires email confirmation
+        if (data.needs_confirmation) {
+          showConfirmPanel(email);
+          return;
+        }
+
         localStorage.setItem('nfx_token',         data.token);
         localStorage.setItem('nfx_refresh_token', data.refresh_token || '');
         localStorage.setItem('nfx_user',           JSON.stringify(data.user));
 
-        showMsg(
-          currentTab === 'signup'
-            ? `✓ Welcome, ${body.firstName}! Setting up your account…`
-            : '✓ Welcome back — redirecting…',
-          'success'
-        );
-
-        if (currentTab === 'signup') {
-          localStorage.setItem('nfx_needs_setup', 'true');
-          setTimeout(() => location.replace('/setup'), 800);
-        } else {
-          setTimeout(() => location.replace('/app'), 800);
-        }
+        showMsg('✓ Welcome back — redirecting…', 'success');
+        setTimeout(() => location.replace('/app'), 800);
 
       } catch (err) {
         showMsg('Network error — check your connection and try again.', 'error');

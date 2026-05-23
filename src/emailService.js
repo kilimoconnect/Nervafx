@@ -73,6 +73,22 @@ function baseLayout(content) {
 
 // ── Email templates ──────────────────────────────────────────────────────────
 
+function confirmationEmail(firstName, code) {
+  const name = firstName || 'Trader';
+  return {
+    subject: `${code} — Verify your NervaFX account`,
+    html: baseLayout(`
+      <h2>Verify your email, ${name}</h2>
+      <p>Thanks for signing up! Enter this code on the signup page to activate your account:</p>
+      <div style="text-align:center;margin:28px 0">
+        <div style="display:inline-block;background:#0f172a;border:2px solid #f59e0b;border-radius:12px;padding:18px 36px;letter-spacing:8px;font-size:32px;font-weight:800;color:#f59e0b;font-family:monospace">${code}</div>
+      </div>
+      <p style="color:#94a3b8;font-size:13px;text-align:center">This code expires in 15 minutes.</p>
+      <p style="color:#64748b;font-size:12px">If you didn't create a NervaFX account, you can safely ignore this email.</p>
+    `),
+  };
+}
+
 function welcomeEmail(firstName) {
   const name = firstName || 'Trader';
   return {
@@ -456,6 +472,7 @@ async function sendBulk(recipients, template) {
 module.exports = {
   sendEmail,
   sendBulk,
+  confirmationEmail,
   welcomeEmail,
   signalAlertEmail,
   dailyDigestEmail,

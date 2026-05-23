@@ -1,5 +1,21 @@
 const { getClient } = require('./_db');
-const { sendEmail, welcomeEmail } = require('../src/emailService');
+const { sendEmail, confirmationEmail, welcomeEmail } = require('../src/emailService');
+
+// In-memory confirmation store (survives within a single Vercel instance)
+// For production scale, use a DB table — but for now this is fine
+const _pendingConfirmations = new Map();
+const CODE_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
+
+function generateCode() {
+  return String(Math.floor(100000 + Math.random() * 900000)); // 6-digit
+}
+
+function cleanExpired() {
+  const now = Date.now();
+  for (const [key, val] of _pendingConfirmations) {
+    if (now - val.created > CODE_EXPIRY_MS) _pendingConfirmations.delete(key);
+  }
+}
 
 module.exports = async function handler(req, res) {
   // CORS
@@ -13,54 +29,126 @@ module.exports = async function handler(req, res) {
   try {
     const { action, email, password } = req.body || {};
 
-    if (!action || !email || !password) {
-      return res.status(400).json({ error: 'action, email and password are required' });
+    if (!action || !email) {
+      return res.status(400).json({ error: 'action and email are required' });
     }
 
     const sb = getClient();
 
-    // ── Sign Up ───────────────────────────────────────────────────────────────
+    // ── Sign Up — Step 1: send confirmation code ─────────────────────────
     if (action === 'signup') {
+      if (!password) return res.status(400).json({ error: 'password is required' });
       const { firstName = '', lastName = '' } = req.body;
 
-      // Use admin API so email confirmation is skipped (email_confirm: true)
+      // Check if email already exists
+      const { data: existing } = await sb.auth.admin.listUsers();
+      const userExists = existing?.users?.some(u => u.email === email);
+      if (userExists) {
+        return res.status(400).json({ error: 'An account with this email already exists. Please sign in.' });
+      }
+
+      // Generate and store confirmation code
+      cleanExpired();
+      const code = generateCode();
+      _pendingConfirmations.set(email.toLowerCase(), {
+        code,
+        password,
+        firstName,
+        lastName,
+        created: Date.now(),
+      });
+
+      // Send confirmation email
+      await sendEmail(email, confirmationEmail(firstName, code));
+
+      return res.json({
+        needs_confirmation: true,
+        message: 'Verification code sent to your email.',
+      });
+    }
+
+    // ── Confirm — Step 2: verify code and create account ─────────────────
+    if (action === 'confirm') {
+      const { code } = req.body || {};
+      if (!code) return res.status(400).json({ error: 'Verification code is required' });
+
+      cleanExpired();
+      const key = email.toLowerCase();
+      const pending = _pendingConfirmations.get(key);
+
+      if (!pending) {
+        return res.status(400).json({ error: 'No pending verification. Please sign up again.' });
+      }
+
+      if (pending.code !== String(code).trim()) {
+        return res.status(400).json({ error: 'Invalid verification code. Please try again.' });
+      }
+
+      // Code matches — create the user (confirmed)
       const { data: created, error: createErr } = await sb.auth.admin.createUser({
         email,
-        password,
-        email_confirm: true,
+        password: pending.password,
+        email_confirm: true, // Already verified via our code
         user_metadata: {
-          first_name: firstName,
-          last_name:  lastName,
-          full_name:  `${firstName} ${lastName}`.trim(),
+          first_name: pending.firstName,
+          last_name:  pending.lastName,
+          full_name:  `${pending.firstName} ${pending.lastName}`.trim(),
         },
       });
 
       if (createErr) return res.status(400).json({ error: createErr.message });
 
-      // Auto sign-in right after signup
-      const { data: session, error: signErr } = await sb.auth.signInWithPassword({ email, password });
+      // Clean up
+      _pendingConfirmations.delete(key);
+
+      // Auto sign-in
+      const { data: session, error: signErr } = await sb.auth.signInWithPassword({
+        email,
+        password: pending.password,
+      });
       if (signErr) return res.status(400).json({ error: signErr.message });
 
       // Send welcome email (non-blocking)
-      sendEmail(email, welcomeEmail(firstName)).catch(e =>
+      sendEmail(email, welcomeEmail(pending.firstName)).catch(e =>
         console.error('[welcome-email]', e.message)
       );
 
       return res.json({
         token:         session.session.access_token,
         refresh_token: session.session.refresh_token,
-        user:  {
+        user: {
           id:         session.user.id,
           email:      session.user.email,
-          first_name: firstName,
-          last_name:  lastName,
-          full_name:  `${firstName} ${lastName}`.trim(),
+          first_name: pending.firstName,
+          last_name:  pending.lastName,
+          full_name:  `${pending.firstName} ${pending.lastName}`.trim(),
         },
       });
     }
 
-    // ── Sign In ───────────────────────────────────────────────────────────────
+    // ── Resend — resend the confirmation code ────────────────────────────
+    if (action === 'resend') {
+      cleanExpired();
+      const key = email.toLowerCase();
+      const pending = _pendingConfirmations.get(key);
+
+      if (!pending) {
+        return res.status(400).json({ error: 'No pending verification. Please sign up again.' });
+      }
+
+      // Generate new code
+      const code = generateCode();
+      pending.code = code;
+      pending.created = Date.now();
+
+      await sendEmail(email, confirmationEmail(pending.firstName, code));
+
+      return res.json({ message: 'New verification code sent.' });
+    }
+
+    // ── Sign In ───────────────────────────────────────────────────────────
     if (action === 'login') {
+      if (!password) return res.status(400).json({ error: 'password is required' });
       const { data: session, error: signErr } = await sb.auth.signInWithPassword({ email, password });
       if (signErr) return res.status(401).json({ error: signErr.message });
 
@@ -68,7 +156,7 @@ module.exports = async function handler(req, res) {
       return res.json({
         token:         session.session.access_token,
         refresh_token: session.session.refresh_token,
-        user:  {
+        user: {
           id:         session.user.id,
           email:      session.user.email,
           first_name: meta.first_name || '',
@@ -78,7 +166,7 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    return res.status(400).json({ error: 'action must be "signup" or "login"' });
+    return res.status(400).json({ error: 'action must be "signup", "confirm", "resend", or "login"' });
 
   } catch (e) {
     return res.status(500).json({ error: e.message });
