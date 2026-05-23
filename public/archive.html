@@ -345,10 +345,10 @@
         <span class="arc-filter-label">Period</span>
         <div class="arc-filter-pills" id="arc-period-pills">
           <button class="arc-fpill" data-days="7" onclick="setArcPeriod(this)">7D</button>
-          <button class="arc-fpill" data-days="30" onclick="setArcPeriod(this)">30D</button>
+          <button class="arc-fpill active" data-days="30" onclick="setArcPeriod(this)">30D</button>
           <button class="arc-fpill" data-days="90" onclick="setArcPeriod(this)">90D</button>
           <button class="arc-fpill" data-days="180" onclick="setArcPeriod(this)">6M</button>
-          <button class="arc-fpill active" data-days="365" onclick="setArcPeriod(this)">1Y</button>
+          <button class="arc-fpill" data-days="365" onclick="setArcPeriod(this)">1Y</button>
           <button class="arc-fpill" data-days="730" onclick="setArcPeriod(this)">All</button>
         </div>
       </div>
@@ -491,7 +491,7 @@
 
   // ─── Filter State ──────────────────────────────────────────────────────────
 
-  let _arcFilterDays = 365;
+  let _arcFilterDays = 30;
   let _arcFilterSession = 'ALL';
   let _arcCustomFrom = null;  // ISO string or null
   let _arcCustomTo = null;
@@ -501,7 +501,10 @@
   function setArcPeriod(btn) {
     document.querySelectorAll('#arc-period-pills .arc-fpill').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    _arcFilterDays = parseInt(btn.dataset.days, 10);
+    const newDays = parseInt(btn.dataset.days, 10);
+    // Invalidate cache if we need more data than previously fetched
+    if (newDays > _arcFilterDays) _invalidateCache();
+    _arcFilterDays = newDays;
     _arcCustomFrom = null;
     _arcCustomTo = null;
     document.getElementById('arc-date-from').value = '';
@@ -544,24 +547,33 @@
     });
   }
 
-  function _reloadAllArchive() {
-    // Re-render whatever is already loaded (no re-fetch needed)
-    if (_arcHourlyRows) {
+  async function _reloadAllArchive() {
+    // Clear ccy strength cache so it refetches with new days
+    _ccsCache = {};
+
+    // Re-fetch if cache was invalidated, otherwise re-render with filters
+    try {
+      const hourly = await _loadHourlyRows();
       for (const key of Object.keys(ARC_METRICS)) {
         const bodyEl = document.getElementById(`arc-${key}-body`);
         if (bodyEl) {
-          const filtered = _filterRows(_arcHourlyRows, 'time_utc');
+          const filtered = _filterRows(hourly, 'time_utc');
           if (!filtered.length) bodyEl.innerHTML = '<p class="me-empty">No data for this filter.</p>';
           else renderMetricBars(bodyEl, filtered, ARC_METRICS[key]);
         }
       }
       _renderFilteredBreakdown();
-    }
+    } catch (_) {}
+
     _renderFilteredCcyStrength();
-    if (_arcSessionRows) {
-      _renderFilteredLiquidity();
-      _renderFilteredHistory();
-    }
+
+    try {
+      const sessions = await _loadSessionRows();
+      if (sessions) {
+        _renderFilteredLiquidity();
+        _renderFilteredHistory();
+      }
+    } catch (_) {}
   }
 
   function switchArchiveTab(btn) {
@@ -572,41 +584,63 @@
       const el = document.getElementById('arc-' + s);
       if (el) el.style.display = s === section ? '' : 'none';
     });
-    // Auto-refresh currency strength data when tab is opened
-    if (section === 'ccystrength') {
-      _ccsCache = {};
+    // Lazy-load data for the tab being opened
+    if (ARC_METRICS[section]) {
+      loadMetricArchive(section);
+    } else if (section === 'ccystrength') {
       loadCcyStrengthArchive();
+    } else if (section === 'liquidity') {
+      loadLiquidityArchive();
+    } else if (section === 'breakdown') {
+      loadBreakdownArchive();
+    } else if (section === 'history') {
+      loadHistoryArchive();
     }
   }
 
   // ─── Hourly Metric Charts ─────────────────────────────────────────────────
 
-  // Shared hourly data — loaded once, reused across all metric tabs
+  // Shared hourly data — fetched per period, cached until period changes
   let _arcHourlyRows = null;
   let _arcHourlyLoading = null;
+  let _arcHourlyDays = 0; // days that were fetched
 
   async function _loadHourlyRows() {
-    if (_arcHourlyRows) return _arcHourlyRows;
-    if (_arcHourlyLoading) return _arcHourlyLoading;
-    _arcHourlyLoading = api('/api/session-activity?type=hourly&days=730').then(data => {
+    const need = _arcFilterDays || 30;
+    if (_arcHourlyRows && _arcHourlyDays >= need) return _arcHourlyRows;
+    if (_arcHourlyLoading && _arcHourlyDays >= need) return _arcHourlyLoading;
+    _arcHourlyLoading = api('/api/session-activity?type=hourly&days=' + need).then(data => {
       _arcHourlyRows = (data.hourly || []);
+      _arcHourlyDays = need;
       return _arcHourlyRows;
     });
     return _arcHourlyLoading;
   }
 
-  // Shared session data — loaded once
+  // Shared session data — fetched per period
   let _arcSessionRows = null;
   let _arcSessionLoading = null;
+  let _arcSessionDays = 0;
 
   async function _loadSessionRows() {
-    if (_arcSessionRows) return _arcSessionRows;
-    if (_arcSessionLoading) return _arcSessionLoading;
-    _arcSessionLoading = api('/api/market-energy-history?days=730').then(data => {
+    const need = _arcFilterDays || 30;
+    if (_arcSessionRows && _arcSessionDays >= need) return _arcSessionRows;
+    if (_arcSessionLoading && _arcSessionDays >= need) return _arcSessionLoading;
+    _arcSessionLoading = api('/api/market-energy-history?days=' + need).then(data => {
       _arcSessionRows = Array.isArray(data) ? data : (data.rows || []);
+      _arcSessionDays = need;
       return _arcSessionRows;
     });
     return _arcSessionLoading;
+  }
+
+  function _invalidateCache() {
+    _arcHourlyRows = null;
+    _arcHourlyLoading = null;
+    _arcHourlyDays = 0;
+    _arcSessionRows = null;
+    _arcSessionLoading = null;
+    _arcSessionDays = 0;
   }
 
   // Metric definitions — V2 institutional model
@@ -1221,7 +1255,7 @@
         rows = _ccsCache[_ccsTf];
       } else {
         bodyEl.innerHTML = '<div class="arc-loading"><span class="spinner"></span> Loading currency strength…</div>';
-        const data = await api(`/api/strength-history?days=730&tf=${_ccsTf}`);
+        const data = await api(`/api/strength-history?days=${_arcFilterDays || 30}&tf=${_ccsTf}`);
         rows = data.rows || [];
         _ccsCache[_ccsTf] = rows;
       }
@@ -1469,23 +1503,8 @@
 
   // ─── Init ─────────────────────────────────────────────────────────────────────
 
-  Promise.all([
-    loadMetricArchive('energy'),
-    loadMetricArchive('tradability'),
-    loadMetricArchive('movement'),
-    loadMetricArchive('breadth'),
-    loadMetricArchive('agreement'),
-    loadMetricArchive('dircontrol'),
-    loadMetricArchive('volquality'),
-    loadMetricArchive('volatility'),
-    loadMetricArchive('momentum'),
-    loadMetricArchive('chaos'),
-    loadMetricArchive('fbr'),
-    loadLiquidityArchive(),
-    loadBreakdownArchive(),
-    loadCcyStrengthArchive(),
-    loadHistoryArchive(),
-  ]);
+  // Only load the first visible tab (energy) on init — others load on tab switch
+  loadMetricArchive('energy');
 
   if (typeof lucide !== 'undefined') lucide.createIcons();
   document.addEventListener('DOMContentLoaded', () => {
