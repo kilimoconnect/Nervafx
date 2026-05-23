@@ -1316,8 +1316,8 @@ function updateM15Bar(data) {
 // Each environment type has favorable values that allow trading.
 
 const V2_ENV_FAVORABLE = {
-  energy_cycle:    new Set(['EXPANSION', 'EXPLOSIVE', 'ACTIVE_EXPANSION', 'CHAOTIC_EXPANSION']),
-  volatility_type: new Set(['HEALTHY', 'NORMAL']),
+  energy_cycle:    new Set(['EXPANSION', 'EXPLOSIVE', 'ACTIVE_EXPANSION', 'CHAOTIC_EXPANSION', 'TRANSITION']),
+  volatility_type: new Set(['HEALTHY', 'NORMAL', 'EVENT']),
   momentum_type:   new Set(['IMPULSE', 'EXPANSION', 'TREND', 'STABLE']),
 };
 
