@@ -6620,6 +6620,27 @@ body::after {
   transform: translateY(-1px);
 }
 
+.upgrade-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255,255,255,0.25);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: upgrade-spin 0.6s linear infinite;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+@keyframes upgrade-spin {
+  to { transform: rotate(360deg); }
+}
+
+.upgrade-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+  pointer-events: none;
+}
+
 @media (max-width: 640px) {
   .upgrade-modal { padding: 28px 18px 24px; }
   .upgrade-modal-grid { grid-template-columns: 1fr; }
