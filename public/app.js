@@ -1344,8 +1344,36 @@ const V2_ENV_COLOR = {
   IMPULSE: '#f59e0b', TREND: '#0ea5e9', STABLE: '#64748b', DECAY: '#f97316',
 };
 
+// Environment quality scores — higher = better conditions
+const V2_ENV_SCORE = {
+  // Cycle
+  EXPLOSIVE: 3, ACTIVE_EXPANSION: 3, CHAOTIC_EXPANSION: 3,
+  EXPANSION: 2,
+  TRANSITION: 1,
+  // VolTyp
+  HEALTHY: 3,
+  EVENT: 2,
+  NORMAL: 1,
+  // MomTyp
+  IMPULSE: 3,
+  EXPANSION: 2,
+  TREND: 1,
+  STABLE: 1,
+};
+
+// Total 3–9: 7–9 = Prime, 5–6 = Good, 3–4 = Acceptable
+const V2_ENV_GRADES = [
+  { min: 7, label: 'Prime',      icon: '🟢', color: '#22c55e', desc: 'Optimal conditions — highest conviction setups' },
+  { min: 5, label: 'Good',       icon: '🟡', color: '#eab308', desc: 'Solid conditions — good for directional trades' },
+  { min: 0, label: 'Acceptable', icon: '🟠', color: '#f97316', desc: 'Marginal conditions — be selective, smaller size' },
+];
+
+function getEnvGrade(score) {
+  return V2_ENV_GRADES.find(g => score >= g.min) || V2_ENV_GRADES[V2_ENV_GRADES.length - 1];
+}
+
 // Global confluence state — drives section gating
-let _v2Confluence = { fired: false, passed: 0, total: 3, pct: 0, results: [] };
+let _v2Confluence = { fired: false, passed: 0, total: 3, pct: 0, results: [], score: 0, grade: null };
 
 // Sections gated behind Engine Confluence
 const V2_GATED_SECTIONS = [
@@ -1393,26 +1421,30 @@ function applyV2Gate() {
 function evaluateV2Thresholds(hourlyRow) {
   if (!hourlyRow) return null;
   const results = [];
+  let score = 0;
 
   for (const [field, favorable] of Object.entries(V2_ENV_FAVORABLE)) {
     const value = hourlyRow[field] || '';
     const pass = favorable.has(value);
+    const pts = pass ? (V2_ENV_SCORE[value] || 1) : 0;
+    score += pts;
     results.push({
       key: field,
       label: V2_ENV_LABELS[field],
       value,
       short: V2_ENV_SHORT[value] || value.slice(0, 5) || '—',
       pass,
+      score: pts,
     });
   }
 
   const passed = results.filter(r => r.pass).length;
   const total  = results.length;
   const pct    = total > 0 ? passed / total : 0;
-  // All 3 must pass for the gate to open
   const fired  = passed === total;
+  const grade  = fired ? getEnvGrade(score) : null;
 
-  return { results, passed, total, pct, fired };
+  return { results, passed, total, pct, fired, score, grade };
 }
 
 function updateV2ThresholdBar(hourlyRows) {
@@ -1428,7 +1460,7 @@ function updateV2ThresholdBar(hourlyRows) {
   if (eval_) {
     _v2Confluence = eval_;
   } else {
-    _v2Confluence = { fired: false, passed: 0, total: 3, pct: 0, results: [] };
+    _v2Confluence = { fired: false, passed: 0, total: 3, pct: 0, results: [], score: 0, grade: null };
   }
   applyV2Gate();
 
@@ -1446,9 +1478,10 @@ function updateV2ThresholdBar(hourlyRows) {
 
   bar.className = 'v2-thresh-bar pro-only v2t--strong';
 
-  // Score badge
+  // Score badge — show grade
+  const grade = eval_.grade;
   const scoreEl = document.getElementById('v2t-score');
-  if (scoreEl) scoreEl.textContent = `${eval_.passed}/${eval_.total}`;
+  if (scoreEl) scoreEl.innerHTML = `<span style="color:${grade.color}">${grade.icon} ${grade.label}</span> <span style="opacity:0.5;font-size:10px">${eval_.score}/9</span>`;
 
   // Chips — show environment classifications
   const chipsEl = document.getElementById('v2t-chips');
@@ -3759,12 +3792,13 @@ function renderJrnConfluenceSection(hourlyRow) {
   }
 
   const statusCls = eval_.fired ? 'jrn-conf-active' : 'jrn-conf-inactive';
+  const grade = eval_.grade;
   const statusLabel = eval_.fired
-    ? '🟢 FAVORABLE — Environment supports trading'
+    ? `${grade.icon} ${grade.label.toUpperCase()} (${eval_.score}/9) — ${grade.desc}`
     : '🔴 NOT FAVORABLE — Environment does not support trades';
 
   const explanation = eval_.fired
-    ? `All ${eval_.total} environment checks passing. Market scanners, trade setups, and impulse detection are active for this hour.`
+    ? `All ${eval_.total} environment checks passing. ${grade.desc}`
     : `${eval_.passed} of ${eval_.total} environment checks passing. Trading sections are gated until all conditions are favorable.`;
 
   const chipHtml = (r) => {
@@ -3786,7 +3820,7 @@ function renderJrnConfluenceSection(hourlyRow) {
   return _jrnSection('⚙️ Market Environment', `
     <div class="${statusCls}">
       <div class="jrn-conf-status">${statusLabel}</div>
-      <div class="jrn-conf-score">${eval_.passed}/${eval_.total} checks</div>
+      <div class="jrn-conf-score">${eval_.passed}/${eval_.total} checks · Score ${eval_.score}/9${grade ? ` · ${grade.icon} ${grade.label}` : ''}</div>
       <div class="jrn-conf-explain">${explanation}</div>
       <div class="jrn-conf-chips">
         ${eval_.results.map(chipHtml).join('')}
