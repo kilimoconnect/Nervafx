@@ -1227,16 +1227,15 @@ async function calculateLatestSessionActivity() {
   const activeSession = getCurrentSession().session;
   const todayStr = new Date().toISOString().slice(0, 10);
   const sessionRows = buildSessionRows(allRows);
-  // Override session rows too
+  const currentOnly = sessionRows.filter(
+    sr => sr.session_name === activeSession && sr.session_date === todayStr
+  );
   if (smooth3H) {
-    for (const sr of sessionRows) {
+    for (const sr of currentOnly) {
       sr.strongest_ccy = smooth3H.strongest;
       sr.weakest_ccy   = smooth3H.weakest;
     }
   }
-  const currentOnly = sessionRows.filter(
-    sr => sr.session_name === activeSession && sr.session_date === todayStr
-  );
   if (currentOnly.length) {
     await upsertMarketEnergySessions(currentOnly);
   }
@@ -1316,12 +1315,13 @@ async function getMarketEnergyData() {
   const expansionPressure = computeExpansionPressure(sequence);
   const marketCycle       = classifyMarketCycle(sequence);
 
-  // Override strongest/weakest with smoothed 3H for consistency with Currency Signals
+  // Override strongest/weakest with smoothed 3H only for the current active session
   const smooth3H = await getSmoothed3HLeaders();
   if (smooth3H) {
-    for (const s of sessions) {
-      s.strongest_ccy = smooth3H.strongest;
-      s.weakest_ccy   = smooth3H.weakest;
+    const current = sessions.find(s => s.session_name === currentSession);
+    if (current) {
+      current.strongest_ccy = smooth3H.strongest;
+      current.weakest_ccy   = smooth3H.weakest;
     }
   }
 
