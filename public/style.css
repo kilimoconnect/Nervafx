@@ -552,9 +552,8 @@ section.card:has(.v2-gate-overlay.visible) { min-height: 220px; }
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.8px;
-  padding: 2px 8px;
-  border-radius: 4px;
-  margin-left: 8px;
+  padding: 3px 10px;
+  border-radius: 5px;
   line-height: 1;
   white-space: nowrap;
   flex-shrink: 0;
@@ -2383,7 +2382,7 @@ section.card:has(.v2-gate-overlay.visible) { min-height: 220px; }
   .header-row-top { padding-top: 6px; padding-bottom: 4px; }
   .header-row-bottom { padding-top: 4px; padding-bottom: 6px; flex-wrap: wrap; gap: 6px; }
   .tagline { display: none; }
-  .header-plan-badge { margin-left: 4px; font-size: 8px; padding: 2px 6px; }
+  .header-plan-badge { font-size: 8.5px; padding: 2px 7px; }
   .header-right { gap: 6px; flex-wrap: wrap; }
   .header-stats { flex-wrap: wrap; gap: 4px; }
   .stat-pill {
