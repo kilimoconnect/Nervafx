@@ -427,10 +427,11 @@
     // ── PLAN SWITCHER ─────────────────────────────────────────────────────────
     const PLAN_LEVELS = { free: 0, pro: 1, premium: 2 };
     const REQUIRE_LEVELS = { pro: 1, premium: 2 };
+    var _currentPlan = 'free'; // tracked by applyPlan, used by upgrade modal
 
     function applyPlan(plan) {
       // Track current plan for upgrade modal
-      if (typeof _currentPlan !== 'undefined') _currentPlan = plan;
+      _currentPlan = plan;
 
       // Update body class
       document.body.classList.remove('plan-free', 'plan-pro', 'plan-premium');
@@ -490,8 +491,6 @@
     applyPlan('free');
 
     // ── Upgrade modal — context-aware: hides current plan, shows proration ──
-    let _currentPlan = 'free'; // updated by applyPlan / loadUserPlan
-
     function showUpgradeModal(highlightPlan) {
       const old = document.getElementById('upgrade-modal-overlay');
       if (old) old.remove();
