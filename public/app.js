@@ -117,6 +117,23 @@ function entryHasCsigPair(e) {
   return instruments.some(i => hasCsigCurrency(i));
 }
 
+// Derive strongest/weakest currencies from smoothed 3H strength data.
+// Uses the global `strengthData` (from /api/strength) when available.
+// Returns { strong: ['USD','CHF'], weak: ['AUD','NZD'] } — top 2 each side,
+// only if smooth_3h value exceeds a minimum threshold (noise filter).
+function getSmoothed3HFlow(currencies) {
+  const list = currencies || strengthData?.currencies || [];
+  if (!list.length) return { strong: [], weak: [] };
+  const scored = list.map(c => {
+    const v3 = parseFloat(c.smooth_3h ?? c.normalized_3h) || 0;
+    return { cur: c.currency, v3 };
+  });
+  const MIN = 0.00030; // minimum absolute smooth_3h to qualify
+  const strong = scored.filter(c => c.v3 > MIN).sort((a, b) => b.v3 - a.v3).slice(0, 2).map(c => c.cur);
+  const weak   = scored.filter(c => c.v3 < -MIN).sort((a, b) => a.v3 - b.v3).slice(0, 2).map(c => c.cur);
+  return { strong, weak };
+}
+
 // Compute strong/weak currencies FROM a journal entry's own stored
 // currency_strength snapshot — historically accurate, no live data needed.
 function computeEntryCsig(e) {
@@ -1770,10 +1787,10 @@ function _meSessionExplain(s, label) {
   const tradGrade = s.tradability_grade || 'AVOID';
   const volType = s.volatility_type || 'NORMAL';
   const chaosVal = Math.round(parseFloat(s.chaos_score) || 0);
-  const strongCcys = (s.strongest_ccy || '').split(',').filter(Boolean);
-  const weakCcys   = (s.weakest_ccy   || '').split(',').filter(Boolean);
-  const strong = strongCcys[0] || null;
-  const weak   = weakCcys[0]   || null;
+  // Use smoothed 3H for currency leadership
+  const { strong: _strCcys, weak: _wkCcys } = getSmoothed3HFlow();
+  const strong = _strCcys[0] || null;
+  const weak   = _wkCcys[0]   || null;
 
   const lines = [];
 
@@ -1994,8 +2011,8 @@ function _meSessionCard(name, s, status, hourlyRows) {
   const neutral    = Math.max(0, 100 - activePct);
 
   const domScore  = Math.round(parseFloat(s.dominance_score) || 0);
-  const strongCcys = (s.strongest_ccy || '').split(',').filter(Boolean);
-  const weakCcys   = (s.weakest_ccy   || '').split(',').filter(Boolean);
+  // Use smoothed 3H strength for currency flow (not raw session moves)
+  const { strong: strongCcys, weak: weakCcys } = getSmoothed3HFlow();
   const domLabel   = (strongCcys.length || weakCcys.length)
     ? strongCcys.map(c => `<span class="me-dom-strong">${c} ↑</span>`).join('') +
       weakCcys.map(c => `<span class="me-dom-weak">${c} ↓</span>`).join('')
@@ -3632,7 +3649,7 @@ function renderJrnSessionPerfSection(e, sessionEntries) {
         <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Momentum</span><span class="jrn-sess-val">${brd}</span></div>
         <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Liquidity</span><span class="jrn-sess-val" style="color:${liqColor}">${liq}</span></div>
         <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Pressure</span><span class="jrn-sess-val">▲${bull}% ▼${bear}%</span></div>
-        <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Flow</span><span class="jrn-sess-val">${(me.strongest_ccy||'—').split(',').map(c => `<span style="color:#22c55e">${c}↑</span>`).join(' ')} ${(me.weakest_ccy||'—').split(',').map(c => `<span style="color:#ef4444">${c}↓</span>`).join(' ')}</span></div>
+        <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Flow</span><span class="jrn-sess-val">${(() => { const cs = e.currency_strength; const ccys = Array.isArray(cs) ? cs : (cs?.currencies || []); const fl = getSmoothed3HFlow(ccys.length ? ccys : null); return (fl.strong.length || fl.weak.length) ? fl.strong.map(c => `<span style="color:#22c55e">${c}↑</span>`).join(' ') + ' ' + fl.weak.map(c => `<span style="color:#ef4444">${c}↓</span>`).join(' ') : '—'; })()}</span></div>
         ${allSignals.length ? `<div class="jrn-sess-stat jrn-sess-full"><span class="jrn-sess-lbl">Signals</span><span class="jrn-sess-val">${allSignals.map(s => `${pair(s.instrument)} ${s.signal}`).join(', ')}</span></div>` : ''}
       </div>`);
   }
