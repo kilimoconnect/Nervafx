@@ -10,8 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <!-- GSAP -->
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
-  <!-- Supabase JS (handles Google OAuth PKCE automatically) -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <!-- No external SDK needed — Google OAuth uses direct URL redirect -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -719,80 +718,59 @@
       } catch (_) {}
     })();
 
-    /* ── Supabase client for Google OAuth ── */
-    let _sb = null;
-    async function getSb() {
-      if (_sb) return _sb;
-      const cfg = await fetch('/api/config').then(r => r.json());
-      if (!cfg.supabase_url || !cfg.supabase_anon) throw new Error('Missing Supabase config');
-      _sb = supabase.createClient(cfg.supabase_url, cfg.supabase_anon, {
-        auth: {
-          detectSessionInUrl: true,
-          persistSession: true,      // SDK needs this for PKCE code_verifier storage
-          storageKey: 'nfx-sb-auth', // Use unique key so it doesn't clash
-        },
-      });
-      return _sb;
+    /* ── Supabase URL (cached after first fetch) ── */
+    let _supabaseUrl = null;
+    async function getSupabaseUrl() {
+      if (_supabaseUrl) return _supabaseUrl;
+      const r = await fetch('/api/config');
+      const cfg = await r.json();
+      _supabaseUrl = cfg.supabase_url;
+      return _supabaseUrl;
     }
-    // Pre-init (non-blocking)
-    getSb().catch(e => console.warn('Supabase init:', e.message));
 
-    /* ── Handle OAuth callback — Supabase SDK handles PKCE exchange automatically ── */
+    /* ── Handle OAuth callback — parse #access_token directly from hash ── */
     (async function handleOAuthCallback() {
       const hash = window.location.hash;
-      const query = new URLSearchParams(window.location.search);
+      if (!hash) return;
+      const params = new URLSearchParams(hash.substring(1));
 
-      // Check if this is an OAuth callback (code or access_token or error)
-      const hasCode  = query.has('code');
-      const hasHash  = hash && hash.includes('access_token');
-      const hasError = query.has('error') || (hash && hash.includes('error'));
+      // Check for error
+      if (params.get('error')) {
+        showMsg('Google sign-in failed: ' + (params.get('error_description') || params.get('error')), 'error');
+        history.replaceState(null, '', location.pathname);
+        return;
+      }
 
-      if (!hasCode && !hasHash && !hasError) return;
+      // Check for access_token
+      const accessToken = params.get('access_token');
+      if (!accessToken) return;
+      const refreshToken = params.get('refresh_token') || '';
 
-      // Show loading state
+      // Clean URL
+      history.replaceState(null, '', location.pathname);
+
       const btn = document.getElementById('btn-google');
       if (btn) { btn.disabled = true; btn.textContent = 'Signing in...'; }
 
       try {
-        const sb = await getSb();
-
-        // Let Supabase SDK handle the exchange (it reads code + verifier from its own storage)
-        // For PKCE: exchanges ?code= using the stored code_verifier
-        // For implicit: parses #access_token from hash
-        if (hasCode) {
-          const { data, error } = await sb.auth.exchangeCodeForSession(query.get('code'));
-          if (error) throw error;
-        }
-
-        // Get the session (works for both PKCE and implicit after SDK processes the URL)
-        const { data: { session }, error: sessErr } = await sb.auth.getSession();
-        if (sessErr) throw sessErr;
-        if (!session) throw new Error('No session returned from Google');
-
-        // Clean URL
-        history.replaceState(null, '', location.pathname);
-
-        // Store our own auth keys
-        localStorage.setItem('nfx_token', session.access_token);
-        localStorage.setItem('nfx_refresh_token', session.refresh_token || '');
-
-        // Get profile from our backend
+        // Verify token via our backend
         const profileRes = await fetch('/api/profile', {
-          headers: { 'Authorization': 'Bearer ' + session.access_token },
+          headers: { 'Authorization': 'Bearer ' + accessToken },
         });
-        const profile = profileRes.ok ? await profileRes.json() : {};
-        const user = session.user;
-        const meta = user.user_metadata || {};
+        if (!profileRes.ok) throw new Error('Invalid session');
+        const profile = await profileRes.json();
 
+        // Store auth
+        localStorage.setItem('nfx_token', accessToken);
+        localStorage.setItem('nfx_refresh_token', refreshToken);
         localStorage.setItem('nfx_user', JSON.stringify({
-          id:         user.id,
-          email:      user.email,
-          first_name: meta.first_name || meta.full_name?.split(' ')[0] || profile.first_name || '',
-          last_name:  meta.last_name  || meta.full_name?.split(' ').slice(1).join(' ') || profile.last_name || '',
-          full_name:  meta.full_name  || ((profile.first_name || '') + ' ' + (profile.last_name || '')).trim(),
+          id:         profile.id,
+          email:      profile.email,
+          first_name: profile.first_name || '',
+          last_name:  profile.last_name  || '',
+          full_name:  ((profile.first_name || '') + ' ' + (profile.last_name || '')).trim(),
         }));
 
-        // New user → setup, existing → dashboard
         if (!profile.timezone) {
           localStorage.setItem('nfx_needs_setup', 'true');
           location.replace('/setup');
@@ -801,13 +779,12 @@
         }
       } catch (e) {
         console.error('OAuth callback error:', e);
-        history.replaceState(null, '', location.pathname);
         showMsg('Google sign-in failed: ' + (e.message || e), 'error');
         if (btn) { btn.disabled = false; btn.innerHTML = GOOGLE_SVG + ' Continue with Google'; }
       }
     })();
 
-    /* ── Google sign-in — Supabase SDK handles PKCE automatically ── */
+    /* ── Google sign-in — direct redirect, zero SDK dependency ── */
     async function signInWithGoogle() {
       const btn = document.getElementById('btn-google');
       btn.disabled = true;
@@ -815,20 +792,11 @@
       clearMsg();
 
       try {
-        const sb = await getSb();
-        // Use current origin (may be www.nervafx.com or nervafx.com)
-        const origin = window.location.origin;
-        const { data, error } = await sb.auth.signInWithOAuth({
-          provider: 'google',
-          options: {
-            redirectTo: origin + '/login',
-          },
-        });
-        if (error) throw error;
-        // If SDK didn't redirect automatically, do it manually
-        if (data?.url) window.location.href = data.url;
+        const sbUrl = await getSupabaseUrl();
+        if (!sbUrl) throw new Error('Service unavailable');
+        const redirectTo = encodeURIComponent(window.location.origin + '/login');
+        window.location.href = sbUrl + '/auth/v1/authorize?provider=google&redirect_to=' + redirectTo;
       } catch (e) {
-        console.error('Google OAuth error:', e);
         showMsg('Could not connect to Google: ' + (e.message || e), 'error');
         btn.disabled = false;
         btn.innerHTML = GOOGLE_SVG + ' Continue with Google';
