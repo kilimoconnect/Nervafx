@@ -1808,10 +1808,11 @@ function _meSessionExplain(s, label) {
   const tradGrade = s.tradability_grade || 'AVOID';
   const volType = s.volatility_type || 'NORMAL';
   const chaosVal = Math.round(parseFloat(s.chaos_score) || 0);
-  // Use smoothed 3H for currency leadership
-  const { strong: _strCcys, weak: _wkCcys } = getSmoothed3HFlow();
+  // Per-session currency leadership
+  const _strCcys = (s.strongest_ccy || '').split(',').filter(Boolean);
+  const _wkCcys  = (s.weakest_ccy   || '').split(',').filter(Boolean);
   const strong = _strCcys[0] || null;
-  const weak   = _wkCcys[0]   || null;
+  const weak   = _wkCcys[0]  || null;
 
   const lines = [];
 
@@ -2032,8 +2033,9 @@ function _meSessionCard(name, s, status, hourlyRows) {
   const neutral    = Math.max(0, 100 - activePct);
 
   const domScore  = Math.round(parseFloat(s.dominance_score) || 0);
-  // Use smoothed 3H strength for currency flow (not raw session moves)
-  const { strong: strongCcys, weak: weakCcys } = getSmoothed3HFlow();
+  // Per-session strongest/weakest from server data
+  const strongCcys = (s.strongest_ccy || '').split(',').filter(Boolean);
+  const weakCcys   = (s.weakest_ccy   || '').split(',').filter(Boolean);
   const domLabel   = (strongCcys.length || weakCcys.length)
     ? strongCcys.map(c => `<span class="me-dom-strong">${c} ↑</span>`).join('') +
       weakCcys.map(c => `<span class="me-dom-weak">${c} ↓</span>`).join('')
@@ -3670,7 +3672,7 @@ function renderJrnSessionPerfSection(e, sessionEntries) {
         <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Momentum</span><span class="jrn-sess-val">${brd}</span></div>
         <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Liquidity</span><span class="jrn-sess-val" style="color:${liqColor}">${liq}</span></div>
         <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Pressure</span><span class="jrn-sess-val">▲${bull}% ▼${bear}%</span></div>
-        <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Flow</span><span class="jrn-sess-val">${(() => { const cs = e.currency_strength; const ccys = Array.isArray(cs) ? cs : (cs?.currencies || []); const fl = getSmoothed3HFlow(ccys.length ? ccys : null); return (fl.strong.length || fl.weak.length) ? fl.strong.map(c => `<span style="color:#22c55e">${c}↑</span>`).join(' ') + ' ' + fl.weak.map(c => `<span style="color:#ef4444">${c}↓</span>`).join(' ') : '—'; })()}</span></div>
+        <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Flow</span><span class="jrn-sess-val">${(me.strongest_ccy||'—').split(',').map(c => `<span style="color:#22c55e">${c}↑</span>`).join(' ')} ${(me.weakest_ccy||'—').split(',').map(c => `<span style="color:#ef4444">${c}↓</span>`).join(' ')}</span></div>
         ${allSignals.length ? `<div class="jrn-sess-stat jrn-sess-full"><span class="jrn-sess-lbl">Signals</span><span class="jrn-sess-val">${allSignals.map(s => `${pair(s.instrument)} ${s.signal}`).join(', ')}</span></div>` : ''}
       </div>`);
   }
