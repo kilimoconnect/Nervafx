@@ -1808,10 +1808,8 @@ function _meSessionExplain(s, label) {
   const tradGrade = s.tradability_grade || 'AVOID';
   const volType = s.volatility_type || 'NORMAL';
   const chaosVal = Math.round(parseFloat(s.chaos_score) || 0);
-  // Use smoothed 3H strength for consistency with Currency Signals
-  const { strong: _strCcys, weak: _wkCcys } = getSmoothed3HFlow();
-  const strong = _strCcys[0] || null;
-  const weak   = _wkCcys[0]  || null;
+  const strong = (s.strongest_ccy || '').split(',')[0] || null;
+  const weak   = (s.weakest_ccy   || '').split(',')[0] || null;
 
   const lines = [];
 
@@ -2032,8 +2030,8 @@ function _meSessionCard(name, s, status, hourlyRows) {
   const neutral    = Math.max(0, 100 - activePct);
 
   const domScore  = Math.round(parseFloat(s.dominance_score) || 0);
-  // Use smoothed 3H strength for consistency with Currency Signals
-  const { strong: strongCcys, weak: weakCcys } = getSmoothed3HFlow();
+  const strongCcys = (s.strongest_ccy || '').split(',').filter(Boolean);
+  const weakCcys   = (s.weakest_ccy   || '').split(',').filter(Boolean);
   const domLabel   = (strongCcys.length || weakCcys.length)
     ? strongCcys.map(c => `<span class="me-dom-strong">${c} ↑</span>`).join('') +
       weakCcys.map(c => `<span class="me-dom-weak">${c} ↓</span>`).join('')

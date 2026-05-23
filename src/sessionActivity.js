@@ -144,49 +144,6 @@ function computeCurrencyStrengths(candles, sessionOpenPrices) {
   return strength;
 }
 
-// Fetch latest smoothed 3H strength from currency_strength table.
-// Returns { strongest: 'AUD,EUR', weakest: 'CHF,NZD' } — top 2 each side.
-let _cachedSmooth3H = null;
-let _cachedSmooth3HTime = 0;
-const SMOOTH_CACHE_MS = 60000; // cache for 1 minute
-
-async function getSmoothed3HLeaders() {
-  const now = Date.now();
-  if (_cachedSmooth3H && (now - _cachedSmooth3HTime) < SMOOTH_CACHE_MS) return _cachedSmooth3H;
-
-  try {
-    // Get latest time
-    const { data: latest } = await supabase
-      .from('currency_strength')
-      .select('time')
-      .order('time', { ascending: false })
-      .limit(1)
-      .single();
-    if (!latest) return null;
-
-    const { data: rows } = await supabase
-      .from('currency_strength')
-      .select('currency, smooth_3h, normalized_3h')
-      .eq('time', latest.time);
-    if (!rows || !rows.length) return null;
-
-    const scored = rows.map(r => ({
-      cur: r.currency,
-      v3: parseFloat(r.smooth_3h ?? r.normalized_3h) || 0,
-    })).sort((a, b) => b.v3 - a.v3);
-
-    _cachedSmooth3H = {
-      strongest: scored.slice(0, 2).map(c => c.cur).join(','),
-      weakest:   scored.slice(-2).reverse().map(c => c.cur).join(','),
-    };
-    _cachedSmooth3HTime = now;
-    return _cachedSmooth3H;
-  } catch (e) {
-    console.warn('[SESSION] Failed to fetch smooth 3H:', e.message);
-    return null;
-  }
-}
-
 // ─── Momentum classification ────────────────────────────────────────────────
 // Types: TREND (steady positive), EXPANSION (accelerating), IMPULSE (sudden spike),
 //        EXHAUSTION (high but decelerating), DECAY (falling), STABLE (flat)
@@ -971,8 +928,8 @@ function buildSessionRows(hourRows) {
       bullish_breadth:     bullPct,
       bearish_breadth:     bearPct,
       dominance_score:     dirCtrl,
-      strongest_ccy:       lastRow.strongest_ccy || null,
-      weakest_ccy:         lastRow.weakest_ccy   || null,
+      strongest_ccy:       _modal(g.rows.map(r => r.strongest_ccy).filter(Boolean)) || null,
+      weakest_ccy:         _modal(g.rows.map(r => r.weakest_ccy).filter(Boolean)) || null,
       details: {
         hours: g.rows.length,
         hourly: g.rows.map(r => ({
@@ -1211,13 +1168,6 @@ async function calculateLatestSessionActivity() {
   const row = allRows[allRows.length - 1];
   if (!row) return;
 
-  // Override strongest/weakest with smoothed 3H
-  const smooth3H = await getSmoothed3HLeaders();
-  if (smooth3H) {
-    row.strongest_ccy = smooth3H.strongest;
-    row.weakest_ccy   = smooth3H.weakest;
-  }
-
   const { error } = await supabase
     .from('hourly_session_activity')
     .upsert([toHourlyRow(row)], { onConflict: 'time_utc', ignoreDuplicates: false });
@@ -1230,12 +1180,6 @@ async function calculateLatestSessionActivity() {
   const currentOnly = sessionRows.filter(
     sr => sr.session_name === activeSession && sr.session_date === todayStr
   );
-  if (smooth3H) {
-    for (const sr of currentOnly) {
-      sr.strongest_ccy = smooth3H.strongest;
-      sr.weakest_ccy   = smooth3H.weakest;
-    }
-  }
   if (currentOnly.length) {
     await upsertMarketEnergySessions(currentOnly);
   }
@@ -1314,16 +1258,6 @@ async function getMarketEnergyData() {
 
   const expansionPressure = computeExpansionPressure(sequence);
   const marketCycle       = classifyMarketCycle(sequence);
-
-  // Override strongest/weakest with smoothed 3H only for the current active session
-  const smooth3H = await getSmoothed3HLeaders();
-  if (smooth3H) {
-    const current = sessions.find(s => s.session_name === currentSession);
-    if (current) {
-      current.strongest_ccy = smooth3H.strongest;
-      current.weakest_ccy   = smooth3H.weakest;
-    }
-  }
 
   return { sessions, expansionPressure, marketCycle, currentSession };
 }
