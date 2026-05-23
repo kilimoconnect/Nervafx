@@ -486,8 +486,94 @@
     // Init — default to free, loadUserPlan() in app.js will override from DB
     applyPlan('free');
 
-    // ── Upgrade flow (Flutterwave Inline) ──────────────────────────────
-    async function startUpgrade(plan) {
+    // ── Upgrade modal — show Pro vs Premium picker ──────────────────────
+    function showUpgradeModal(highlightPlan) {
+      // Remove existing modal if any
+      const old = document.getElementById('upgrade-modal-overlay');
+      if (old) old.remove();
+
+      const overlay = document.createElement('div');
+      overlay.id = 'upgrade-modal-overlay';
+      overlay.innerHTML = `
+        <div class="upgrade-modal">
+          <button class="upgrade-modal-close" onclick="closeUpgradeModal()">&times;</button>
+          <div class="upgrade-modal-header">
+            <h2>Choose Your Plan</h2>
+            <p>Upgrade to unlock the full NervaFX intelligence stack.</p>
+          </div>
+          <div class="upgrade-modal-grid">
+
+            <!-- PRO -->
+            <div class="upgrade-card ${highlightPlan === 'pro' ? 'highlight' : ''}" id="upgrade-card-pro">
+              <div class="upgrade-tier">Pro</div>
+              <div class="upgrade-price"><span class="upgrade-original">$79</span> <sup>$</sup>59</div>
+              <div class="upgrade-period">per month</div>
+              <div class="upgrade-divider"></div>
+              <div class="upgrade-best">Best for <strong>Active traders</strong></div>
+              <div class="upgrade-features">
+                <div class="upgrade-feat"><span class="uf-check">&#10003;</span> Full live dashboard</div>
+                <div class="upgrade-feat"><span class="uf-check">&#10003;</span> Currency Signals (3H / 6H / 12H)</div>
+                <div class="upgrade-feat"><span class="uf-check">&#10003;</span> M15 impulse detection &amp; alert bar</div>
+                <div class="upgrade-feat"><span class="uf-check">&#10003;</span> Engine Confluence (11 engines, 60%+)</div>
+                <div class="upgrade-feat"><span class="uf-check">&#10003;</span> Multi-timeframe analysis</div>
+                <div class="upgrade-feat"><span class="uf-check">&#10003;</span> 12-engine Market Energy system</div>
+                <div class="upgrade-feat"><span class="uf-check">&#10003;</span> Tradability score &amp; session grading</div>
+                <div class="upgrade-feat"><span class="uf-check">&#10003;</span> Trade plans, alerts &amp; risk calculator</div>
+                <div class="upgrade-feat"><span class="uf-check">&#10003;</span> Email notifications</div>
+                <div class="upgrade-sep"></div>
+                <div class="upgrade-feat dim"><span class="uf-cross">&#10005;</span> Hourly metric charts &amp; archive</div>
+                <div class="upgrade-feat dim"><span class="uf-cross">&#10005;</span> AI market intelligence</div>
+                <div class="upgrade-feat dim"><span class="uf-cross">&#10005;</span> Backtesting engine</div>
+              </div>
+              <button class="upgrade-btn" onclick="closeUpgradeModal(); proceedCheckout('pro')">Get Pro — $59/mo</button>
+            </div>
+
+            <!-- PREMIUM -->
+            <div class="upgrade-card premium ${highlightPlan === 'premium' ? 'highlight' : ''}" id="upgrade-card-premium">
+              <div class="upgrade-popular">&#11088; Recommended</div>
+              <div class="upgrade-tier">Premium</div>
+              <div class="upgrade-price"><span class="upgrade-original">$129</span> <sup>$</sup>89</div>
+              <div class="upgrade-period">per month</div>
+              <div class="upgrade-divider"></div>
+              <div class="upgrade-best">Best for <strong>Serious &amp; advanced traders</strong></div>
+              <div class="upgrade-features">
+                <div class="upgrade-feat"><span class="uf-check">&#10003;</span> Everything in Pro</div>
+                <div class="upgrade-sep"></div>
+                <div class="upgrade-feat"><span class="uf-star">&#9733;</span> AI market intelligence &amp; decision analysis</div>
+                <div class="upgrade-feat"><span class="uf-star">&#9733;</span> 10 hourly metric charts</div>
+                <div class="upgrade-feat"><span class="uf-star">&#9733;</span> Full Market Energy archive (12 months)</div>
+                <div class="upgrade-feat"><span class="uf-star">&#9733;</span> Expansion pressure &amp; session flow</div>
+                <div class="upgrade-feat"><span class="uf-star">&#9733;</span> Currency leadership gap analysis</div>
+                <div class="upgrade-feat"><span class="uf-star">&#9733;</span> Energy cycle classification</div>
+                <div class="upgrade-feat"><span class="uf-star">&#9733;</span> Full journal &amp; performance insights</div>
+                <div class="upgrade-feat"><span class="uf-star">&#9733;</span> Backtesting engine</div>
+              </div>
+              <button class="upgrade-btn primary" onclick="closeUpgradeModal(); proceedCheckout('premium')">Get Premium — $89/mo</button>
+            </div>
+
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+      // Animate in
+      requestAnimationFrame(() => overlay.classList.add('visible'));
+      // Close on overlay click
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) closeUpgradeModal(); });
+    }
+
+    function closeUpgradeModal() {
+      const el = document.getElementById('upgrade-modal-overlay');
+      if (!el) return;
+      el.classList.remove('visible');
+      setTimeout(() => el.remove(), 200);
+    }
+
+    function startUpgrade(plan) {
+      showUpgradeModal(plan || 'pro');
+    }
+
+    // ── Checkout flow (Flutterwave Inline) ──────────────────────────────
+    async function proceedCheckout(plan) {
       try {
         const tok = localStorage.getItem('nfx_token');
         const r = await fetch('/api/create-checkout', {
