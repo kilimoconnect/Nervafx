@@ -43,6 +43,7 @@
       <div class="header-left">
         <img src="/nervafx-logo.png" alt="NervaFX" style="height:26px;display:block;">
         <span class="tagline">Currency Strength Engine</span>
+        <span class="header-plan-badge" id="header-plan-badge">Free</span>
       </div>
       <div class="header-right">
         <div class="status-dot" id="status-dot" title="System status"></div>
@@ -432,6 +433,13 @@
     function applyPlan(plan) {
       // Track current plan for upgrade modal
       _currentPlan = plan;
+
+      // Update header plan badge
+      const badge = document.getElementById('header-plan-badge');
+      if (badge) {
+        badge.textContent = plan.charAt(0).toUpperCase() + plan.slice(1);
+        badge.className = 'header-plan-badge plan-badge-' + plan;
+      }
 
       // Update body class
       document.body.classList.remove('plan-free', 'plan-pro', 'plan-premium');
