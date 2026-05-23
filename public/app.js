@@ -1117,14 +1117,36 @@ function renderSpreads(data) {
 
 // ─── 12H Pair Ranking ────────────────────────────────────────────────────────
 
-function renderRanking12H(spreadsData) {
+function renderRanking12H(spreadsData, strengthData) {
   const el = document.getElementById('ranking-12h-list');
-  if (!el || !spreadsData?.spreads) return;
+  if (!el) return;
 
-  // Sort purely by abs(spread_12h) — no weighted composite
-  const ranked = [...spreadsData.spreads]
-    .filter(s => s.spread_12h != null)
-    .sort((a, b) => Math.abs(parseFloat(b.spread_12h)) - Math.abs(parseFloat(a.spread_12h)));
+  let ranked = [];
+
+  // Primary: use spreads data if available (Pro+ users)
+  if (spreadsData?.spreads?.length) {
+    ranked = [...spreadsData.spreads]
+      .filter(s => s.spread_12h != null)
+      .sort((a, b) => Math.abs(parseFloat(b.spread_12h)) - Math.abs(parseFloat(a.spread_12h)));
+  }
+
+  // Fallback: compute 12H pair spreads from free strength data
+  if (!ranked.length && strengthData?.currencies?.length) {
+    const ccys = strengthData.currencies;
+    const valMap = {};
+    ccys.forEach(c => { valMap[c.currency] = parseFloat(c.smooth_12h ?? c.normalized_12h) || 0; });
+    const pairs = [
+      'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
+      'EUR_GBP','EUR_JPY','EUR_CHF','EUR_AUD','EUR_NZD','EUR_CAD',
+      'GBP_JPY','GBP_CHF','GBP_AUD','GBP_NZD','GBP_CAD',
+      'AUD_JPY','AUD_NZD','AUD_CHF','AUD_CAD',
+      'NZD_JPY','NZD_CHF','NZD_CAD','CHF_JPY','CAD_JPY','CAD_CHF'
+    ];
+    ranked = pairs
+      .filter(p => { const [b,q] = p.split('_'); return valMap[b] != null && valMap[q] != null; })
+      .map(p => { const [b,q] = p.split('_'); return { instrument: p, spread_12h: valMap[b] - valMap[q] }; })
+      .sort((a, b) => Math.abs(parseFloat(b.spread_12h)) - Math.abs(parseFloat(a.spread_12h)));
+  }
 
   if (!ranked.length) { el.innerHTML = '<p class="empty-state">No 12H data</p>'; return; }
 
@@ -3968,7 +3990,7 @@ async function refresh() {
     renderSignals(signals, states.states || [], journalData?.entries || []);
     renderStates(states);
     renderSpreads(spreads);
-    renderRanking12H(spreads);
+    renderRanking12H(spreads, strength);
     renderM15Spreads(m15Data);
     updateM15Bar(m15Data);
     renderRisk(risk);
