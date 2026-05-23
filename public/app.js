@@ -3779,11 +3779,11 @@ function renderJrnOutcomesSection(e) {
   return _jrnSection('📈 Outcomes', `${blocks}${pending ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">${pending}</div>` : ''}`);
 }
 
-// ─── Journal: Engine Confluence section ───────────────────────────────────────
+// ─── Journal: Market Environment section ─────────────────────────────────────
 
 function renderJrnConfluenceSection(hourlyRow) {
   if (!hourlyRow) {
-    return _jrnSection('⚙️ Engine Confluence', '<p class="jrn-empty">No hourly engine data for this snapshot.</p>');
+    return _jrnSection('⚙️ Market Environment', '<p class="jrn-empty">No hourly engine data for this snapshot.</p>');
   }
 
   const eval_ = evaluateV2Thresholds(hourlyRow);
@@ -3911,7 +3911,7 @@ function _renderJournalModal(e, newsEvents, sessionEntries, prevEntry, hourlyRow
       return parts.join('');
     })(computeEntryCsig(e))}`;
 
-  // Body — sections in order (Engine Confluence at top — it's the master gate)
+  // Body — sections in order (Market Environment at top — it's the master gate)
   document.getElementById('jrn-modal-body').innerHTML = [
     renderJrnConfluenceSection(hourlyRow !== undefined ? hourlyRow : null),
     sessionEntries ? renderJrnSessionPerfSection(e, sessionEntries) : '',
