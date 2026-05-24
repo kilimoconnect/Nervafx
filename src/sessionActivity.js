@@ -1203,6 +1203,7 @@ async function getMarketEnergyData() {
   const currentSession = getCurrentSession().session;
   const todayStr = new Date().toISOString().slice(0, 10);
 
+  // Try today, then fall back to the most recent available date
   let targetDate = todayStr;
   let { data: dbSessions, error: dbErr } = await supabase
     .from('market_energy_sessions')
@@ -1213,18 +1214,26 @@ async function getMarketEnergyData() {
   if (dbErr) console.warn('[ME] DB read error:', dbErr.message);
 
   if (!dbSessions?.length) {
-    const yesterday = new Date();
-    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-    const yesterdayStr = yesterday.toISOString().slice(0, 10);
-    const { data: ySessions, error: yErr } = await supabase
+    // No data today — find the most recent date with data
+    const { data: latest, error: latErr } = await supabase
+      .from('market_energy_sessions')
+      .select('session_date')
+      .neq('session_name', 'LOW_LIQUIDITY')
+      .order('session_date', { ascending: false })
+      .limit(1);
+    if (latErr) console.warn('[ME] Latest date lookup error:', latErr.message);
+    const latestDate = latest?.[0]?.session_date;
+    if (!latestDate) return null;
+
+    const { data: fallback, error: fbErr } = await supabase
       .from('market_energy_sessions')
       .select('*')
-      .eq('session_date', yesterdayStr)
+      .eq('session_date', latestDate)
       .order('session_name', { ascending: true });
-    if (yErr) console.warn('[ME] Yesterday DB read error:', yErr.message);
-    if (!ySessions?.length) return null;
-    dbSessions = ySessions;
-    targetDate = yesterdayStr;
+    if (fbErr) console.warn('[ME] Fallback read error:', fbErr.message);
+    if (!fallback?.length) return null;
+    dbSessions = fallback;
+    targetDate = latestDate;
   }
 
   const storedByName = {};
