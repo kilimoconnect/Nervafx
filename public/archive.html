@@ -1231,14 +1231,20 @@
         const sessionTimes = ccsTimes.filter(t => t >= startKey && t < endKey);
         if (!sessionTimes.length) continue;
 
-        // Derive flow pairs from 3H currency strength at last hour (same as live getSmoothed3HFlow)
-        const lastT = sessionTimes[sessionTimes.length - 1];
-        const lastSnap = ccsIndex[lastT] || {};
-        const ccyScored = Object.entries(lastSnap)
-          .map(([ccy, vals]) => ({ ccy, h3: vals.h3 || 0 }))
-          .sort((a, b) => b.h3 - a.h3);
-        const allStrong = ccyScored.filter(c => c.h3 > 0).slice(0, 2).map(c => c.ccy);
-        const allWeak   = ccyScored.filter(c => c.h3 < 0).slice(-2).reverse().map(c => c.ccy);
+        // Derive flow pairs from session's strongest/weakest currencies (matches live "Strength flow")
+        // Use market_energy_sessions stored currencies; fall back to currency_strength if missing
+        let allStrong = (sess.strongest_ccy || '').split(',').filter(Boolean);
+        let allWeak   = (sess.weakest_ccy   || '').split(',').filter(Boolean);
+        if (!allStrong.length || !allWeak.length) {
+          // Fallback: derive from currency_strength data at last session hour
+          const lastT = sessionTimes[sessionTimes.length - 1];
+          const lastSnap = ccsIndex[lastT] || {};
+          const ccyScored = Object.entries(lastSnap)
+            .map(([ccy, vals]) => ({ ccy, h3: vals.h3 || 0 }))
+            .sort((a, b) => b.h3 - a.h3);
+          allStrong = ccyScored.filter(c => c.h3 > 0).slice(0, 2).map(c => c.ccy);
+          allWeak   = ccyScored.filter(c => c.h3 < 0).slice(-2).reverse().map(c => c.ccy);
+        }
         if (!allStrong.length || !allWeak.length) continue;
 
         // Build flow pairs (same as live card)
