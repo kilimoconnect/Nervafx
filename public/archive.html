@@ -1242,7 +1242,7 @@
         const sessionTimes = ccsTimes.filter(t => t >= startKey && t < endKey);
         if (!sessionTimes.length) continue;
 
-        // Compute hourly spreads (M15 + 3H + 6H) for each pair
+        // Compute hourly metrics for each pair — mirrors live card logic exactly
         const pairs = flowPairs.slice(0, 4).map(fp => {
           const [b, q] = fp.instrument.split('_');
           const flowSign = fp.dir === 'BUY' ? 1 : -1;
@@ -1252,40 +1252,84 @@
             const bv6 = snap[b]?.h6 ?? null, qv6 = snap[q]?.h6 ?? null;
             const spread3H = (bv3 != null && qv3 != null) ? bv3 - qv3 : null;
             const spread6H = (bv6 != null && qv6 != null) ? bv6 - qv6 : null;
+            const h3Base = bv3, h3Quote = qv3;
 
-            // M15 pair spread (direct from m15_pair_spreads table)
+            // M15 pair spread
             const m15Snap = (m15Index[t] || {})[fp.instrument];
-            const m15Val = m15Snap?.v45 ?? null;
-            const m15State = m15Snap?.state ?? null;
+            const v45 = m15Snap?.v45 ?? null;
+            const v90 = m15Snap?.v90 ?? null;
 
-            // Combined weighted: 35% M15 + 40% 3H + 25% 6H (directional)
-            let combined = null;
-            const parts = [];
-            if (m15Val != null)    parts.push({ v: m15Val,    w: 0.35 });
-            if (spread3H != null)  parts.push({ v: spread3H,  w: 0.40 });
-            if (spread6H != null)  parts.push({ v: spread6H,  w: 0.25 });
-            if (parts.length) {
-              const totalW = parts.reduce((s, p) => s + p.w, 0);
-              combined = parts.reduce((s, p) => s + p.v * (p.w / totalW), 0);
+            // State — relative to flow direction (same as live card)
+            let state = null;
+            if (v45 != null && v90 != null) {
+              const dir45 = v45 * flowSign;
+              const dir90 = v90 * flowSign;
+              if (Math.abs(v45) < 0.00005)                state = 'FLAT';
+              else if (dir45 < 0)                          state = 'REVERSING';
+              else if (dir45 > dir90 * 1.1)                state = 'EXPANDING';
+              else if (dir45 < dir90 * 0.85 && dir90 > 0) state = 'COMPRESSING';
+              else                                         state = 'STEADY';
             }
-            const dirScore = combined != null ? combined * flowSign : null;
-            return { time: t, m15Val, m15State, spread3H, spread6H, combined, dirScore };
+
+            // Alignment — M15 is gatekeeper (same as live card)
+            const m15Confirms = v45 != null ? Math.sign(v45) === flowSign : null;
+            const h3Confirms  = spread3H != null ? Math.sign(spread3H) === flowSign : null;
+            const h6Confirms  = spread6H != null ? Math.sign(spread6H) === flowSign : null;
+
+            // Acceleration
+            const accel = (v45 != null && v90 != null) ? v45 - v90 : null;
+            const accelSign = accel != null ? Math.sign(accel) === flowSign : null;
+
+            // Momentum (same as live card)
+            let momentum = 'No data';
+            if (accel != null && v45 != null) {
+              const accelAbs = Math.abs(accel);
+              if (accelSign && Math.abs(v45) > 0.0005)      momentum = 'Accelerating';
+              else if (!accelSign && accelAbs > 0.0002)      momentum = 'Fading';
+              else if (Math.abs(v45) < 0.0002)               momentum = 'Flat';
+              else                                            momentum = 'Steady';
+            }
+
+            // Status — M15 gatekeeper (same as live card)
+            const htfCount = [h3Confirms, h6Confirms].filter(x => x === true).length;
+            let status, statusCls;
+            if (m15Confirms && htfCount === 2)       { status = 'STRONG';   statusCls = 'fp-strong'; }
+            else if (m15Confirms && htfCount === 1)  { status = 'ALIGNED';  statusCls = 'fp-aligned'; }
+            else if (m15Confirms && htfCount === 0)  { status = 'PARTIAL';  statusCls = 'fp-partial'; }
+            else if (!m15Confirms && htfCount >= 1)  { status = 'BUILDING'; statusCls = 'fp-building'; }
+            else if (m15Confirms === false)          { status = 'AGAINST';  statusCls = 'fp-against'; }
+            else                                     { status = 'WAIT';     statusCls = 'fp-wait'; }
+
+            // Performance score — directional magnitude (same as live card)
+            let perfScore = 0;
+            if (v45 != null)      perfScore += (v45 * flowSign) * 10000 * 4;
+            if (spread3H != null) perfScore += (spread3H * flowSign) * 10000 * 2;
+            if (spread6H != null) perfScore += (spread6H * flowSign) * 10000 * 1;
+            if (m15Confirms) perfScore += 15;
+            if (h3Confirms)  perfScore += 10;
+            if (h6Confirms)  perfScore += 5;
+            if (accelSign)   perfScore += 10;
+            if (state === 'EXPANDING' && m15Confirms)    perfScore += 15;
+            if (state === 'REVERSING')                   perfScore -= 10;
+            if (state === 'COMPRESSING' && !m15Confirms) perfScore -= 15;
+
+            return { time: t, v45, v90, spread3H, spread6H, h3Base, h3Quote, state, momentum, status, statusCls, m15Confirms, h3Confirms, h6Confirms, perfScore };
           });
-          return { ...fp, hourly, flowSign };
+          return { ...fp, hourly, flowSign, base: b, quote: q };
         });
 
         // Check we have data
-        const validTimes = sessionTimes.filter(t => pairs.some(p => p.hourly.find(h => h.time === t && h.combined != null)));
+        const validTimes = sessionTimes.filter(t => pairs.some(p => p.hourly.find(h => h.time === t && h.perfScore !== 0)));
         if (!validTimes.length) continue;
 
-        // Compute per-hour rankings (rank by combined directional score — higher = better)
+        // Compute per-hour rankings (rank by perfScore — same as live card)
         const hourlyRanks = {};
         for (const t of validTimes) {
           const scored = pairs.map(p => {
             const h = p.hourly.find(h => h.time === t);
-            return { pair: p, m15Val: h?.m15Val ?? null, m15State: h?.m15State ?? null, spread3H: h?.spread3H ?? null, spread6H: h?.spread6H ?? null, combined: h?.combined ?? null, dirScore: h?.dirScore ?? null };
-          }).filter(s => s.dirScore != null)
-            .sort((a, b) => b.dirScore - a.dirScore);
+            return { pair: p, ...(h || {}) };
+          }).filter(s => s.perfScore != null)
+            .sort((a, b) => b.perfScore - a.perfScore);
           scored.forEach((s, i) => { s.rank = i + 1; });
           hourlyRanks[t] = scored;
         }
@@ -1325,47 +1369,53 @@
               <span class="spread-bias ${cls}" style="font-size:9px;margin-left:3px">${p.dir}</span>
             </td>`;
 
-          let prevCombined = null;
+          let prevScore = null;
           for (const t of validTimes) {
             const entry = (hourlyRanks[t] || []).find(r => r.pair === p);
-            if (!entry || entry.combined == null) {
+            if (!entry || entry.perfScore == null) {
               html += `<td class="fp-arc-td">—</td>`;
               continue;
             }
             const rank = entry.rank;
             const rankClr = RANK_CLR[rank - 1] || '#64748b';
-            const dirOk = entry.dirScore >= 0;
-            const valClr = dirOk ? '#4ade80' : '#f87171';
 
-            // Delta from previous hour
+            // Rank change arrow
             let deltaHtml = '';
-            if (prevCombined != null) {
-              const d = entry.combined - prevCombined;
-              const dDir = d * p.flowSign;
-              const dClr = dDir >= 0 ? '#4ade80' : '#f87171';
-              deltaHtml = `<span class="fp-arc-delta" style="color:${dClr}">${dDir >= 0 ? '▲' : '▼'}</span>`;
+            if (prevScore != null) {
+              const d = entry.perfScore - prevScore;
+              const dClr = d >= 0 ? '#4ade80' : '#f87171';
+              deltaHtml = `<span class="fp-arc-delta" style="color:${dClr}">${d >= 0 ? '▲' : '▼'}</span>`;
             }
-            prevCombined = entry.combined;
+            prevScore = entry.perfScore;
 
-            // Show M15, 3H, 6H stacked
-            const vm = entry.m15Val, v3 = entry.spread3H, v6 = entry.spread6H;
+            // M15, 3H, 6H values color-coded by flow direction
+            const vm = entry.v45, v3 = entry.spread3H, v6 = entry.spread6H;
             const mClr = vm != null && vm * p.flowSign >= 0 ? '#4ade80' : '#f87171';
             const v3Clr = v3 != null && v3 * p.flowSign >= 0 ? '#4ade80' : '#f87171';
             const v6Clr = v6 != null && v6 * p.flowSign >= 0 ? '#4ade80' : '#f87171';
 
+            // State + momentum short labels
+            const ST_CLR = { EXPANDING: '#22c55e', COMPRESSING: '#f97316', REVERSING: '#ef4444', STEADY: '#94a3b8', FLAT: '#475569' };
+            const ST_SHORT = { EXPANDING: 'Exp', COMPRESSING: 'Comp', REVERSING: 'Rev', STEADY: 'Stdy', FLAT: 'Flat' };
+            const MOM_SHORT = { Accelerating: 'Acc', Fading: 'Fad', Steady: 'Stdy', Flat: 'Flat', 'No data': '—' };
+
             html += `<td class="fp-arc-td">
               <span class="fp-arc-rank-badge" style="background:${rankClr}">#${rank}</span>
+              <span class="fp-status ${entry.statusCls}" style="font-size:7px">${entry.status}</span>
               ${deltaHtml}
               <span class="fp-arc-spread" style="color:${mClr}" title="M15">${vm != null ? fmt5(vm) : '—'}</span>
               <span class="fp-arc-spread fp-arc-sub" style="color:${v3Clr}" title="3H">${v3 != null ? fmt5(v3) : '—'}</span>
               <span class="fp-arc-spread fp-arc-sub" style="color:${v6Clr}" title="6H">${v6 != null ? fmt5(v6) : '—'}</span>
+              <span class="fp-arc-meta" style="color:${ST_CLR[entry.state] || '#64748b'}">${ST_SHORT[entry.state] || '—'}</span>
+              <span class="fp-arc-meta" style="color:var(--text-dim)">${MOM_SHORT[entry.momentum] || '—'}</span>
             </td>`;
           }
 
-          // End column — final status
-          const statusLabel = lastDir > 0.0005 ? 'STRONG' : lastDir > 0 ? 'ALIGNED' : lastDir > -0.0003 ? 'BUILDING' : 'AGAINST';
-          const STATUS_CLS = { STRONG: 'fp-strong', ALIGNED: 'fp-aligned', BUILDING: 'fp-building', AGAINST: 'fp-against' };
-          html += `<td class="fp-arc-td"><span class="fp-status ${STATUS_CLS[statusLabel]}" style="font-size:8px">${statusLabel}</span></td>`;
+          // End column — final hour's status
+          const lastEntry = (hourlyRanks[lastTime] || []).find(r => r.pair === p);
+          const endStatus = lastEntry?.status || 'WAIT';
+          const endCls = lastEntry?.statusCls || 'fp-wait';
+          html += `<td class="fp-arc-td"><span class="fp-status ${endCls}" style="font-size:8px">${endStatus}</span></td>`;
           html += '</tr>';
         }
 

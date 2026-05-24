@@ -1216,6 +1216,11 @@ section.card:has(.v2-gate-overlay.visible) { min-height: 220px; }
   font-size: 8px;
   margin-right: 2px;
 }
+.fp-arc-meta {
+  font-size: 8px;
+  display: inline-block;
+  margin-left: 2px;
+}
 
 /* ─── Risk list ────────────────────────────────────────────────────────────── */
 .risk-list {
