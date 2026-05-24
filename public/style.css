@@ -1060,11 +1060,12 @@ section.card:has(.v2-gate-overlay.visible) { min-height: 220px; }
   border-radius: 3px;
   margin-left: auto;
 }
-.fp-strong  { color: #4ade80; background: rgba(74,222,128,0.15); }
-.fp-aligned { color: #4ade80; background: rgba(74,222,128,0.1); }
-.fp-partial { color: #facc15; background: rgba(250,204,21,0.1); }
-.fp-against { color: #f87171; background: rgba(248,113,113,0.1); }
-.fp-wait    { color: #64748b; background: rgba(100,116,139,0.1); }
+.fp-strong   { color: #4ade80; background: rgba(74,222,128,0.15); }
+.fp-aligned  { color: #4ade80; background: rgba(74,222,128,0.1); }
+.fp-partial  { color: #facc15; background: rgba(250,204,21,0.1); }
+.fp-building { color: #0ea5e9; background: rgba(14,165,233,0.1); }
+.fp-against  { color: #f87171; background: rgba(248,113,113,0.1); }
+.fp-wait     { color: #64748b; background: rgba(100,116,139,0.1); }
 
 .fp-bar-wrap {
   height: 3px;

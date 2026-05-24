@@ -1315,14 +1315,15 @@ function renderFlowPerformance(strengthData, m15Data) {
     if (state === 'REVERSING')                       perfScore -= 10;
     if (state === 'COMPRESSING' && !m15Confirms)     perfScore -= 15;
 
-    // Status classification
-    const alignCount = [m15Confirms, h3Confirms, h6Confirms].filter(x => x === true).length;
+    // Status classification — M15 is the gatekeeper (real-time performance)
+    const htfCount = [h3Confirms, h6Confirms].filter(x => x === true).length;
     let status, statusCls;
-    if (alignCount === 3)      { status = 'STRONG'; statusCls = 'fp-strong'; }
-    else if (alignCount === 2) { status = 'ALIGNED'; statusCls = 'fp-aligned'; }
-    else if (alignCount === 1) { status = 'PARTIAL'; statusCls = 'fp-partial'; }
-    else if (m15Confirms === false && h3Confirms === false) { status = 'AGAINST'; statusCls = 'fp-against'; }
-    else { status = 'WAIT'; statusCls = 'fp-wait'; }
+    if (m15Confirms && htfCount === 2)       { status = 'STRONG';   statusCls = 'fp-strong'; }
+    else if (m15Confirms && htfCount === 1)  { status = 'ALIGNED';  statusCls = 'fp-aligned'; }
+    else if (m15Confirms && htfCount === 0)  { status = 'PARTIAL';  statusCls = 'fp-partial'; }
+    else if (!m15Confirms && htfCount >= 1)  { status = 'BUILDING'; statusCls = 'fp-building'; } // HTF setup, M15 not yet
+    else if (m15Confirms === false)          { status = 'AGAINST';  statusCls = 'fp-against'; }
+    else                                     { status = 'WAIT';     statusCls = 'fp-wait'; }
 
     // Momentum description
     let momentum;
