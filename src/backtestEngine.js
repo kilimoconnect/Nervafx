@@ -29,19 +29,18 @@ const { classifyRow }      = require('./stateDetect');
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
 const HORIZONS   = [1, 4, 8, 12, 24]; // hours ahead to measure outcome
 
-// ─── Session classification (mirrors sessionEngine logic) ────────────────────
+// ─── Session classification (V2 unified model) ──────────────────────────────
 
 function classifySession(isoTime) {
   const h = new Date(isoTime).getUTCHours();
-  if (h >= 23 || h < 7)  return 'ASIA';       // 23:00–07:00 (wraps midnight)
-  if (h >= 7  && h < 13) return 'LONDON';
-  if (h >= 13 && h < 17) return 'LONDON_NY';
-  if (h >= 17 && h < 21) return 'LATE_NY';
-  return 'LOW_LIQUIDITY';                      // 21:00–23:00
+  if (h >= 23 || h < 7)  return 'ASIA';         // 23:00–07:00 (wraps midnight)
+  if (h >= 7  && h < 13) return 'LONDON';        // 07:00–13:00
+  if (h >= 13 && h < 21) return 'NEW_YORK';      // 13:00–21:00
+  return 'LOW_LIQUIDITY';                        // 21:00–23:00
 }
 
 function isTradingSession(session) {
-  return ['ASIA', 'LONDON', 'LONDON_NY', 'LATE_NY'].includes(session);
+  return ['ASIA', 'LONDON', 'NEW_YORK'].includes(session);
 }
 
 // ─── 1. Load candles ─────────────────────────────────────────────────────────
@@ -114,21 +113,89 @@ function measureOutcome(candleArray, timeIdx, horizonBars) {
   };
 }
 
-// ─── 4. Compute Market Energy components (simplified in-memory) ─────────────
-// Mirrors sessionActivity.js Steps 4-9 without DB dependencies
+// ─── Session-calibrated scaling thresholds (from sessionActivity.js) ────────
 
-function computeMarketEnergy(candles, sessionOpenPrices) {
+const SESSION_SCALE = {
+  ASIA:       { movementCap: 0.0012, volatilityCap: 0.0020, breadthThreshold: 0.00015 },
+  LONDON:     { movementCap: 0.0015, volatilityCap: 0.0025, breadthThreshold: 0.00020 },
+  NEW_YORK:   { movementCap: 0.0018, volatilityCap: 0.0030, breadthThreshold: 0.00020 },
+  DEFAULT:    { movementCap: 0.0015, volatilityCap: 0.0025, breadthThreshold: 0.00020 },
+};
+
+// ─── V2 Volatility classification ──────────────────────────────────────────
+
+function classifyVolatility(volScore, agrScore, dirControl, prevVolScore) {
+  if (prevVolScore != null && volScore > prevVolScore * 1.8 && volScore >= 50) return 'EVENT';
+  if (volScore >= 55) {
+    if (agrScore >= 45 && dirControl >= 35) return 'HEALTHY';
+    if (agrScore < 30 || dirControl < 20) return 'CHAOTIC';
+    return 'HEALTHY';
+  }
+  if (volScore >= 25) return 'NORMAL';
+  return 'DEAD';
+}
+
+function computeVolatilityQuality(volScore, volType) {
+  const multiplier = { HEALTHY: 1.0, NORMAL: 0.75, EVENT: 0.50, CHAOTIC: 0.30, DEAD: 0.20 };
+  return Math.round((volScore * (multiplier[volType] || 0.5)) * 10) / 10;
+}
+
+// ─── V2 Momentum classification ──────────────────────────────────────────────
+
+function classifyMomentum(momentumScore, momentumAccel, movementScore) {
+  if (momentumScore > 15 && movementScore >= 50) return 'IMPULSE';
+  if (momentumScore > 5 && momentumAccel > 2) return 'EXPANSION';
+  if (movementScore >= 40 && momentumScore < -5) return 'EXHAUSTION';
+  if (momentumScore > 3) return 'TREND';
+  if (momentumScore < -3) return 'DECAY';
+  return 'STABLE';
+}
+
+// ─── V2 Energy cycle classification ──────────────────────────────────────────
+
+const SESS_PROFILE = {
+  ASIA:     { deadMov: 8, deadBrd: 15, deadVol: 10, exMov: 65, exBrd: 80, exAgr: 70, expMov: 30, expBrd: 45, expAgr: 35, exhMov: 30, trBrd: 30, trAgr: 25, trMov: 20, cmpBrd: 25 },
+  LONDON:   { deadMov: 10, deadBrd: 20, deadVol: 12, exMov: 75, exBrd: 85, exAgr: 75, expMov: 40, expBrd: 55, expAgr: 45, exhMov: 40, trBrd: 35, trAgr: 30, trMov: 25, cmpBrd: 30 },
+  NEW_YORK: { deadMov: 10, deadBrd: 20, deadVol: 12, exMov: 70, exBrd: 85, exAgr: 70, expMov: 35, expBrd: 50, expAgr: 40, exhMov: 35, trBrd: 35, trAgr: 30, trMov: 25, cmpBrd: 30 },
+  DEFAULT:  { deadMov: 12, deadBrd: 20, deadVol: 15, exMov: 70, exBrd: 80, exAgr: 70, expMov: 35, expBrd: 50, expAgr: 40, exhMov: 35, trBrd: 30, trAgr: 30, trMov: 25, cmpBrd: 25 },
+};
+
+function classifyEnergyCycle(mov, brd, agr, vol, streak, accel, prev, session) {
+  const p = SESS_PROFILE[session] || SESS_PROFILE.DEFAULT;
+  const movRising  = prev ? mov > prev.movement : false;
+  const brdRising  = prev ? brd > prev.breadth  : false;
+  const brdFalling = prev ? brd < prev.breadth  : false;
+
+  if (mov < p.deadMov && brd < p.deadBrd && vol < p.deadVol)  return 'DEAD';
+  if (mov >= p.exMov  && brd >= p.exBrd  && agr >= p.exAgr)   return 'EXPLOSIVE';
+  if (mov >= p.exhMov && accel < 0 && brdFalling)             return 'EXHAUSTION';
+  if (mov >= p.expMov && brd >= p.expBrd && agr >= p.expAgr)  return 'EXPANSION';
+  if (movRising && brdRising && accel > 0 && brd > p.trBrd && agr > p.trAgr && mov >= p.trMov)
+    return 'TRANSITION';
+  if (brd < p.cmpBrd && streak >= 1)                           return 'COMPRESSION';
+  return 'LOW_PARTICIPATION';
+}
+
+// ─── Geometric mean helper ───────────────────────────────────────────────────
+
+function geoMean(vals) {
+  if (!vals.length) return 0;
+  if (vals.some(v => v <= 0)) return 0;
+  const logSum = vals.reduce((s, v) => s + Math.log(v), 0);
+  return Math.exp(logSum / vals.length);
+}
+
+// ─── 4. Compute Market Energy — V2 Institutional Model ─────────────────────
+// Full 12-engine calculation matching sessionActivity.js
+
+function computeMarketEnergy(candles, sessionOpenPrices, session, prevHourScores) {
   const TOTAL = config.instruments.length;
-  const smoothMoveVals = [];
-  let alignedActive = 0, totalActive = 0;
-  let bullMag = 0, bearMag = 0;
-  const normalizedRanges = [];
+  const scale = SESSION_SCALE[session] || SESSION_SCALE.DEFAULT;
 
   // Currency strength from session opens
   const ccyStr = {};
-  for (const ccy of CURRENCIES) ccyStr[ccy] = 0;
-  let ccyCounts = {};
-  for (const ccy of CURRENCIES) ccyCounts[ccy] = 0;
+  const ccyCounts = {};
+  for (const ccy of CURRENCIES) { ccyStr[ccy] = 0; ccyCounts[ccy] = 0; }
 
   for (const inst of config.instruments) {
     const [base, quote] = inst.split('_');
@@ -136,72 +203,193 @@ function computeMarketEnergy(candles, sessionOpenPrices) {
     const open = sessionOpenPrices[inst];
     if (!c || !open || open === 0) continue;
     const move = (c.close - open) / open;
-    ccyStr[base] = (ccyStr[base] || 0) + move;
-    ccyCounts[base] = (ccyCounts[base] || 0) + 1;
-    ccyStr[quote] = (ccyStr[quote] || 0) - move;
-    ccyCounts[quote] = (ccyCounts[quote] || 0) + 1;
+    ccyStr[base]  += move;  ccyCounts[base]++;
+    ccyStr[quote] -= move;  ccyCounts[quote]++;
   }
   for (const ccy of CURRENCIES) {
     if (ccyCounts[ccy] > 0) ccyStr[ccy] /= ccyCounts[ccy];
   }
 
+  // Per-pair calculations
+  const hourlyMoves  = [];
+  const hourlyRanges = [];
+  let activePairs    = 0;
+  let bullMag = 0, bearMag = 0;
+  let agrAligned = 0, agrTotal = 0;
+  let ccyAligned = 0, ccyTotal = 0;
+
   for (const inst of config.instruments) {
-    const c = candles[inst];
-    const open = sessionOpenPrices[inst];
-    if (!c || !open || open === 0) continue;
+    const c    = candles[inst];
+    const sOpen = sessionOpenPrices[inst];
+    if (!c || !c.open || c.open === 0 || sOpen == null) continue;
 
-    const rawDir  = (c.close - open) / open;
-    const rawMove = Math.abs(rawDir);
-    const normMov = rawMove > 0 ? 1.0 : 0; // simplified norm (no rolling history in backtest)
-    smoothMoveVals.push(rawMove * 10000); // in pips-equivalent for readability
+    const hourlyDir  = (c.close - c.open) / c.open;
+    const hourlyMove = Math.abs(hourlyDir);
+    hourlyMoves.push(hourlyMove);
 
-    if (rawDir > 0) bullMag += rawMove;
-    else if (rawDir < 0) bearMag += rawMove;
+    const hourlyRange = (c.high - c.low) / c.open;
+    hourlyRanges.push(hourlyRange);
 
-    if (rawMove * 10000 >= 5) { // ~5 pip threshold for "active"
-      totalActive++;
-      const [base, quote] = inst.split('_');
-      const expectedDir = (ccyStr[base] || 0) - (ccyStr[quote] || 0);
-      if ((expectedDir > 0 && rawDir > 0) || (expectedDir < 0 && rawDir < 0)) alignedActive++;
+    // Breadth: is this pair "active" this hour?
+    if (hourlyMove >= scale.breadthThreshold) {
+      activePairs++;
+      if (hourlyDir > 0) bullMag += hourlyMove;
+      else               bearMag += hourlyMove;
+    }
+
+    // Agreement: pair alignment (hourly vs session direction)
+    const sessionDir = (c.close - sOpen) / sOpen;
+    if (Math.abs(hourlyDir) >= scale.breadthThreshold * 0.5 &&
+        Math.abs(sessionDir) >= scale.breadthThreshold * 0.5) {
+      agrTotal++;
+      if ((hourlyDir > 0 && sessionDir > 0) || (hourlyDir < 0 && sessionDir < 0)) agrAligned++;
+    }
+
+    // Currency alignment
+    const [base, quote] = inst.split('_');
+    const expectedDir = (ccyStr[base] || 0) - (ccyStr[quote] || 0);
+    if (Math.abs(hourlyDir) >= scale.breadthThreshold * 0.5 && Math.abs(expectedDir) > 0.00001) {
+      ccyTotal++;
+      if ((expectedDir > 0 && hourlyDir > 0) || (expectedDir < 0 && hourlyDir < 0)) ccyAligned++;
     }
   }
 
-  const activePairs    = totalActive;
-  const movementScore  = Math.round(Math.min(100, (smoothMoveVals.length ? smoothMoveVals.reduce((a,b)=>a+b,0)/smoothMoveVals.length : 0) * 5));
-  const breadthScore   = Math.round((activePairs / TOTAL) * 100);
-  const rawAgreement   = totalActive > 0 ? alignedActive / totalActive : 0;
+  if (!hourlyMoves.length) return null;
+
+  // ENGINE 1: Movement
+  const avgHourlyMove = hourlyMoves.reduce((a, b) => a + b, 0) / hourlyMoves.length;
+  const movementScore = Math.round(Math.min(100, (avgHourlyMove / scale.movementCap) * 100));
+
+  // ENGINE 6: Participation (Breadth)
+  const breadthScore = Math.round((activePairs / TOTAL) * 100);
+
+  // ENGINE 3: Agreement (combined: currency × pair alignment)
+  const pairAlignment = agrTotal > 0 ? agrAligned / agrTotal : 0;
+  const ccyAlignment  = ccyTotal > 0 ? ccyAligned / ccyTotal : 0;
+  const rawAgreement   = pairAlignment * ccyAlignment;
   const agreementScore = Math.round(rawAgreement * Math.sqrt(breadthScore / 100) * 100);
-  const totalMag       = bullMag + bearMag;
-  const bullPressure   = totalMag > 0 ? Math.round(bullMag / totalMag * 100) : 50;
-  const bearPressure   = totalMag > 0 ? Math.round(bearMag / totalMag * 100) : 50;
 
-  // Volatility from max range
-  const volatilityScore = Math.round(Math.min(100, (smoothMoveVals.length ?
-    Math.max(...smoothMoveVals) / 2 : 0)));
+  // ENGINE 5: Directional Pressure & Control
+  const totalMag = bullMag + bearMag;
+  const bullPressure = totalMag > 0 ? Math.round(bullMag / totalMag * 100) : 50;
+  const bearPressure = totalMag > 0 ? Math.round(bearMag / totalMag * 100) : 50;
+  const directionalControl = totalMag > 0
+    ? Math.round(Math.abs(bullMag - bearMag) / totalMag * 100) : 0;
 
-  // Market energy composite
-  const rawEnergy   = 0.40 * movementScore + 0.30 * breadthScore + 0.20 * agreementScore + 0.10 * volatilityScore;
-  const qualityMult = 0.5 + agreementScore / 200;
-  const marketEnergy = Math.round(Math.min(100, rawEnergy * qualityMult));
+  // ENGINE 4: Volatility Quality
+  const avgHourlyRange  = hourlyRanges.reduce((a, b) => a + b, 0) / hourlyRanges.length;
+  const volatilityScore = Math.round(Math.min(100, (avgHourlyRange / scale.volatilityCap) * 100));
+  const volatilityType  = classifyVolatility(
+    volatilityScore, agreementScore, directionalControl,
+    prevHourScores ? prevHourScores.volatility : null
+  );
+  const volatilityQuality = computeVolatilityQuality(volatilityScore, volatilityType);
+
+  // Chaos score
+  const chaosScore = Math.round(
+    (volatilityScore / 100) * (1 - agreementScore / 100) * (1 - directionalControl / 100) * 100
+  );
+
+  // ENGINE 2: Momentum (hour-over-hour movement delta)
+  const momentumScore = prevHourScores ? Math.round(movementScore - prevHourScores.movement) : 0;
+  const momentumAccel = prevHourScores?.momentum != null
+    ? Math.round(momentumScore - prevHourScores.momentum) : 0;
+  const momentumType = classifyMomentum(momentumScore, momentumAccel, movementScore);
+
+  // ENGINE 8: Market Energy (V2 formula)
+  // energy_base = 0.30×movement + 0.25×breadth + 0.20×agreement + 0.15×directional_control + 0.10×volatility_quality
+  const energyBase = Math.round(
+    (0.30 * movementScore + 0.25 * breadthScore + 0.20 * agreementScore +
+     0.15 * directionalControl + 0.10 * volatilityQuality) * 10
+  ) / 10;
+
+  // Session quality multiplier by volatility type
+  const sessionQualityMult = volatilityType === 'CHAOTIC' ? 0.65
+                           : volatilityType === 'DEAD'    ? 0.55
+                           : volatilityType === 'EVENT'   ? 0.75
+                           : volatilityType === 'HEALTHY' ? 1.10
+                           :                                0.90; // NORMAL
+  const marketEnergy = Math.round(Math.min(100, energyBase * sessionQualityMult));
+
+  // ENGINE 9: Tradability (geometric mean gate)
+  const volQualFactor = volatilityType === 'HEALTHY' ? 1.1
+                      : volatilityType === 'NORMAL'  ? 0.95
+                      : volatilityType === 'EVENT'   ? 0.7
+                      : volatilityType === 'CHAOTIC' ? 0.5
+                      :                                0.4; // DEAD
+  const tradComponents = [
+    Math.max(1, marketEnergy),
+    Math.max(1, agreementScore),
+    Math.max(1, directionalControl),
+    Math.max(1, breadthScore),
+  ];
+  const tradabilityScore = Math.round(Math.min(100, geoMean(tradComponents) * volQualFactor));
+
+  // ENGINE 10: False Breakout Risk
+  const falseBreakoutRisk = Math.round(
+    (movementScore / 100) * (1 - breadthScore / 100) * (1 - agreementScore / 100) * 100
+  );
+
+  // ENGINE 11: Expansion Readiness (simplified — no multi-session persistence in backtest)
+  const compressionScore = Math.round(((100 - movementScore) * (100 - breadthScore)) / 100);
+  const expansionReadiness = prevHourScores
+    ? Math.round(Math.min(100,
+        0.35 * compressionScore +
+        0.20 * Math.max(0, 100 - volatilityScore) +
+        0.20 * Math.min(100, Math.max(0, 50 + (breadthScore - (prevHourScores.breadth || 50)) * 3)) +
+        0.15 * 65 + // session quality placeholder
+        0.10 * Math.min(100, Math.max(0, 50 + (agreementScore - (prevHourScores.agreement || 0)) * 2))
+      ))
+    : 50;
 
   // Currency ranking
   const sorted = Object.entries(ccyStr).sort((a, b) => b[1] - a[1]);
   const strongest = sorted[0]?.[0] || '';
   const weakest   = sorted[sorted.length - 1]?.[0] || '';
-  const strengthDiff = sorted.length >= 2 ? Math.round((sorted[0][1] - sorted[sorted.length-1][1]) * 100000) / 100000 : 0;
+  const strengthDiff = sorted.length >= 2
+    ? Math.round((sorted[0][1] - sorted[sorted.length - 1][1]) * 100000) / 100000 : 0;
+
+  // Currency leadership gap
+  const currencyLeadershipGap = sorted.length >= 2
+    ? Math.round((sorted[0][1] - sorted[sorted.length - 1][1]) * 10000) / 10000 : 0;
 
   return {
+    // Engine 1: Movement
     movement: movementScore,
-    momentum: breadthScore, // breadth as momentum proxy
+    // Engine 2: Momentum
+    momentum_score: momentumScore,
+    momentum_type: momentumType,
+    // Engine 3: Agreement
     agreement: agreementScore,
+    // Engine 4: Volatility Quality
     volatility: volatilityScore,
-    market_energy: marketEnergy,
-    active_pairs: activePairs,
+    volatility_type: volatilityType,
+    volatility_quality: volatilityQuality,
+    chaos_score: chaosScore,
+    // Engine 5: Directional Pressure
+    directional_control: directionalControl,
     bull_pressure: bullPressure,
     bear_pressure: bearPressure,
+    // Engine 6: Participation
+    active_pairs: activePairs,
+    momentum: breadthScore, // breadth (backward compat alias)
+    // Engine 7: Currency Leadership
+    currency_leadership_gap: currencyLeadershipGap,
     strongest,
     weakest,
     strength_diff: strengthDiff,
+    // Engine 8: Market Energy
+    energy_base: energyBase,
+    market_energy: marketEnergy,
+    // Engine 9: Tradability
+    tradability_score: tradabilityScore,
+    // Engine 10: False Breakout
+    false_breakout_risk: falseBreakoutRisk,
+    // Engine 11: Expansion Readiness
+    compression_score: compressionScore,
+    expansion_readiness: expansionReadiness,
+    // Internal: currency strength for flow performance
+    _ccyStrength: ccyStr,
   };
 }
 
@@ -283,18 +471,21 @@ async function runBacktest({ from, to }) {
     }
   }
 
-  // ── Phase 2: Build hourly snapshots with Market Energy + outcomes ──────────
-  console.log('[BACKTEST] Phase 2: Building condition snapshots + measuring outcomes...');
+  // ── Phase 2: Build hourly snapshots with V2 Market Energy + outcomes ────────
+  console.log('[BACKTEST] Phase 2: Building V2 condition snapshots + measuring outcomes...');
 
   let currentSession = null;
   let sessionOpenPrices = {};
+  let prevHourScores = null;
+  let compressionStreak = 0;
+  let prevEnergyCycleScores = null;
   const snapshots = []; // Each = one hour's conditions + what happened next
 
   for (const time of timestamps) {
     const session = classifySession(time);
     if (!isTradingSession(session)) continue;
 
-    // Session transition — reset open prices
+    // Session transition — reset open prices & momentum
     if (session !== currentSession) {
       sessionOpenPrices = {};
       for (const inst of config.instruments) {
@@ -302,6 +493,7 @@ async function runBacktest({ from, to }) {
         if (c != null) sessionOpenPrices[inst] = c;
       }
       currentSession = session;
+      prevHourScores = null; // reset momentum at session boundary
     }
 
     // Build candle snapshot for this hour
@@ -312,8 +504,34 @@ async function runBacktest({ from, to }) {
     }
     if (Object.keys(candleSnap).length < 20) continue; // need most instruments
 
-    // Market Energy
-    const energy = computeMarketEnergy(candleSnap, sessionOpenPrices);
+    // V2 Market Energy (with session context and previous hour)
+    const energy = computeMarketEnergy(candleSnap, sessionOpenPrices, session, prevHourScores);
+    if (!energy) continue;
+
+    // Energy cycle classification
+    const accel = prevEnergyCycleScores ? energy.energy_base - prevEnergyCycleScores.energyBase : 0;
+    const energyCycle = classifyEnergyCycle(
+      energy.movement, energy.momentum, energy.agreement, energy.volatility,
+      compressionStreak, accel, prevEnergyCycleScores, session
+    );
+
+    // Track compression streak
+    if (energy.movement < 35 && energy.momentum < 35 && energy.volatility < 40) compressionStreak++;
+    else compressionStreak = 0;
+
+    // Update carry-over for next iteration
+    prevHourScores = {
+      movement:   energy.movement,
+      momentum:   energy.momentum_score,
+      volatility: energy.volatility,
+      breadth:    energy.momentum, // breadth alias
+      agreement:  energy.agreement,
+    };
+    prevEnergyCycleScores = {
+      movement: energy.movement,
+      breadth:  energy.momentum,
+      energyBase: energy.energy_base,
+    };
 
     // Pair-level state summary at this hour
     let trendCount = 0, pullbackCount = 0, readyCount = 0, noTradeCount = 0, reversalCount = 0;
@@ -331,6 +549,67 @@ async function runBacktest({ from, to }) {
       maxSpread = Math.max(maxSpread, Math.abs(state.spread_6h || 0));
     }
     avgConfidence = config.instruments.length > 0 ? Math.round(avgConfidence / config.instruments.length) : 0;
+
+    // ── Flow Performance scoring (M15 + 3H + 6H directional) ──────────────
+    // Determine flow pairs from currency strength at this hour
+    const ccySorted = Object.entries(energy._ccyStrength || {}).sort((a, b) => b[1] - a[1]);
+    const flowPairs = [];
+    if (ccySorted.length >= 4) {
+      const strongCcys = ccySorted.slice(0, 2).map(e => e[0]);
+      const weakCcys   = ccySorted.slice(-2).map(e => e[0]);
+      for (const strong of strongCcys) {
+        for (const weak of weakCcys) {
+          const pair = `${strong}_${weak}`;
+          const pairRev = `${weak}_${strong}`;
+          if (config.instruments.includes(pair)) flowPairs.push({ instrument: pair, dir: 'BUY' });
+          else if (config.instruments.includes(pairRev)) flowPairs.push({ instrument: pairRev, dir: 'SELL' });
+        }
+      }
+    }
+
+    // Score flow pairs directionally
+    const flowPerf = [];
+    for (const fp of flowPairs) {
+      const state  = statesByInst[fp.instrument]?.[time];
+      const spread = spreadsByInst[fp.instrument]?.find(s => s.time === time);
+      if (!state && !spread) continue;
+
+      const flowSign = fp.dir === 'BUY' ? 1 : -1;
+      const v45  = spread ? parseFloat(spread.smooth_3h) || 0 : null;   // 3H as M15 proxy in backtest
+      const s3H  = state ? parseFloat(state.spread_3h) || 0 : null;
+      const s6H  = state ? parseFloat(state.spread_6h) || 0 : null;
+
+      // Directional performance score
+      let perfScore = 0;
+      if (v45 != null) perfScore += (v45 * flowSign) * 10000 * 4;
+      if (s3H != null) perfScore += (s3H * flowSign) * 10000 * 2;
+      if (s6H != null) perfScore += (s6H * flowSign) * 10000 * 1;
+
+      // Status classification (M15 as gatekeeper)
+      const m15Confirms = v45 != null ? (v45 * flowSign > 0) : null;
+      const h3Confirms  = s3H != null ? (s3H * flowSign > 0) : false;
+      const h6Confirms  = s6H != null ? (s6H * flowSign > 0) : false;
+      const htfCount    = [h3Confirms, h6Confirms].filter(x => x === true).length;
+
+      let status;
+      if (m15Confirms && htfCount === 2)       status = 'STRONG';
+      else if (m15Confirms && htfCount === 1)  status = 'ALIGNED';
+      else if (m15Confirms && htfCount === 0)  status = 'PARTIAL';
+      else if (!m15Confirms && htfCount >= 1)  status = 'BUILDING';
+      else if (m15Confirms === false)          status = 'AGAINST';
+      else                                     status = 'WAIT';
+
+      flowPerf.push({
+        instrument: fp.instrument,
+        dir: fp.dir,
+        perf_score: Math.round(perfScore * 100) / 100,
+        status,
+        m15_confirms: m15Confirms,
+        h3_confirms: h3Confirms,
+        h6_confirms: h6Confirms,
+      });
+    }
+    flowPerf.sort((a, b) => b.perf_score - a.perf_score);
 
     // Measure outcomes for TOP spread pairs (strongest setups)
     const pairOutcomes = [];
@@ -361,11 +640,12 @@ async function runBacktest({ from, to }) {
     snapshots.push({
       time,
       session,
-      energy,
+      energy: { ...energy, energy_cycle: energyCycle },
       states: { trend: trendCount, pullback: pullbackCount, ready: readyCount, noTrade: noTradeCount, reversal: reversalCount },
       avg_confidence: avgConfidence,
       max_spread: Math.round(maxSpread * 100000) / 100000,
       pair_outcomes: pairOutcomes,
+      flow_performance: flowPerf,
     });
   }
 
@@ -392,6 +672,9 @@ async function runBacktest({ from, to }) {
     no_trade_zones:       () => analyzeNoTradeZones(snapshots),
     condition_combos:     () => analyzeConditionCombos(snapshots),
     move_distance:        () => analyzeMoveDistance(snapshots),
+    flow_performance:     () => analyzeFlowPerformance(snapshots),
+    tradability:          () => analyzeTradability(snapshots),
+    energy_cycle:         () => analyzeEnergyCycleOutcomes(snapshots),
   };
 
   let analysis;
@@ -536,6 +819,49 @@ function analyzeComponentThresholds(snapshots) {
       unit: '',
       formatRange: (lo, hi) => hi === Infinity ? `${lo}+` : `${lo}–${hi}`,
     },
+    // ── V2 Engine Components ──
+    {
+      id: 'directional_control', name: 'Directional Control', group: 'V2 Engines',
+      desc: 'How one-sided the market pressure is (0=split, 100=fully one-sided)',
+      extract: s => s.energy.directional_control || 0,
+      ranges: [[0,15],[15,30],[30,45],[45,60],[60,80],[80,100]],
+      unit: '',
+    },
+    {
+      id: 'tradability', name: 'Tradability Score', group: 'V2 Engines',
+      desc: 'Geometric-mean gated composite — ALL components must be strong for high tradability',
+      extract: s => s.energy.tradability_score || 0,
+      ranges: [[0,15],[15,30],[30,45],[45,60],[60,80],[80,100]],
+      unit: '',
+    },
+    {
+      id: 'chaos_score', name: 'Chaos Score', group: 'V2 Engines',
+      desc: 'High volatility × low agreement × low directional control = market chaos (0–100)',
+      extract: s => s.energy.chaos_score || 0,
+      ranges: [[0,5],[5,15],[15,25],[25,40],[40,60],[60,100]],
+      unit: '',
+    },
+    {
+      id: 'false_breakout_risk', name: 'False Breakout Risk', group: 'V2 Engines',
+      desc: 'High movement + low breadth + low agreement = risk of false move (0–100)',
+      extract: s => s.energy.false_breakout_risk || 0,
+      ranges: [[0,5],[5,15],[15,25],[25,40],[40,60],[60,100]],
+      unit: '',
+    },
+    {
+      id: 'expansion_readiness', name: 'Expansion Readiness', group: 'V2 Engines',
+      desc: 'Composite: compression persistence + volatility contraction + transition quality',
+      extract: s => s.energy.expansion_readiness || 0,
+      ranges: [[0,20],[20,35],[35,50],[50,65],[65,80],[80,100]],
+      unit: '',
+    },
+    {
+      id: 'volatility_quality', name: 'Volatility Quality', group: 'V2 Engines',
+      desc: 'Volatility adjusted by type (HEALTHY boosts, CHAOTIC penalizes)',
+      extract: s => s.energy.volatility_quality || 0,
+      ranges: [[0,10],[10,25],[25,40],[40,55],[55,70],[70,100]],
+      unit: '',
+    },
   ];
 
   const results = [];
@@ -626,6 +952,183 @@ function analyzeComponentThresholds(snapshots) {
   }
 
   return results;
+}
+
+// ─── Flow Performance Analysis ──────────────────────────────────────────────
+// Analyzes how flow pairs (M15+3H+6H directional scoring) perform over time
+
+function analyzeFlowPerformance(snapshots) {
+  const statusOutcomes = { STRONG: [], ALIGNED: [], PARTIAL: [], BUILDING: [], AGAINST: [], WAIT: [] };
+  const scoreVsOutcome = [];
+
+  for (const snap of snapshots) {
+    if (!snap.flow_performance?.length) continue;
+
+    for (const fp of snap.flow_performance) {
+      // Measure the actual outcome for this flow pair
+      const inst = fp.instrument;
+      const po = snap.pair_outcomes.find(p => p.instrument === inst);
+      if (!po || !po.h4) continue;
+
+      const dirCorrect = (fp.dir === 'BUY' && po.h4.net_pips > 0) || (fp.dir === 'SELL' && po.h4.net_pips < 0);
+      const fav = fp.dir === 'BUY' ? po.h4.max_up_pips : po.h4.max_down_pips;
+      const adv = fp.dir === 'BUY' ? po.h4.max_down_pips : po.h4.max_up_pips;
+
+      if (statusOutcomes[fp.status]) {
+        statusOutcomes[fp.status].push({ correct: dirCorrect, fav, adv, net: po.h4.net_pips });
+      }
+
+      scoreVsOutcome.push({ perf_score: fp.perf_score, status: fp.status, correct: dirCorrect, fav, adv });
+    }
+  }
+
+  // Status performance breakdown
+  const statusStats = {};
+  for (const [status, items] of Object.entries(statusOutcomes)) {
+    if (items.length < 5) { statusStats[status] = { samples: items.length, insufficient: true }; continue; }
+    const wins = items.filter(i => i.correct).length;
+    statusStats[status] = {
+      samples: items.length,
+      win_rate: Math.round(wins / items.length * 100),
+      avg_fav: Math.round(items.reduce((s, i) => s + i.fav, 0) / items.length),
+      avg_adv: Math.round(items.reduce((s, i) => s + i.adv, 0) / items.length),
+      avg_net: Math.round(items.reduce((s, i) => s + i.net, 0) / items.length),
+    };
+  }
+
+  // Performance score buckets
+  const scoreBuckets = {};
+  const ranges = [[-100, -20], [-20, -5], [-5, 5], [5, 20], [20, 50], [50, 200]];
+  for (const [lo, hi] of ranges) {
+    const pool = scoreVsOutcome.filter(r => r.perf_score >= lo && r.perf_score < hi);
+    if (pool.length < 5) continue;
+    const wins = pool.filter(r => r.correct).length;
+    const label = `${lo} to ${hi}`;
+    scoreBuckets[label] = {
+      samples: pool.length,
+      win_rate: Math.round(wins / pool.length * 100),
+      avg_fav: Math.round(pool.reduce((s, r) => s + r.fav, 0) / pool.length),
+    };
+  }
+
+  // Overall stats
+  const totalFlowSnaps = snapshots.filter(s => s.flow_performance?.length > 0).length;
+  const avgFlowPairs = totalFlowSnaps > 0
+    ? Math.round(snapshots.reduce((s, snap) => s + (snap.flow_performance?.length || 0), 0) / totalFlowSnaps * 10) / 10
+    : 0;
+
+  return {
+    total_snapshots_with_flow: totalFlowSnaps,
+    avg_flow_pairs_per_hour: avgFlowPairs,
+    status_performance: statusStats,
+    score_buckets: scoreBuckets,
+  };
+}
+
+// ─── Tradability Analysis ───────────────────────────────────────────────────
+// How tradability score predicts outcomes
+
+function analyzeTradability(snapshots) {
+  const ranges = [[0, 15], [15, 30], [30, 45], [45, 60], [60, 80], [80, 100]];
+  const buckets = {};
+
+  for (const [lo, hi] of ranges) {
+    const label = `${lo}-${hi}`;
+    const matching = snapshots.filter(s => s.energy.tradability_score >= lo && s.energy.tradability_score < hi);
+    const outcomes = matching.flatMap(s => s.pair_outcomes.filter(p => p.h4).map(p => ({
+      correct: (p.bias === 'BUY' && p.h4.net_pips > 0) || (p.bias === 'SELL' && p.h4.net_pips < 0),
+      fav: p.bias === 'BUY' ? p.h4.max_up_pips : p.h4.max_down_pips,
+      adv: p.bias === 'BUY' ? p.h4.max_down_pips : p.h4.max_up_pips,
+      net: p.h4.net_pips,
+    })));
+    if (!outcomes.length) continue;
+    const wins = outcomes.filter(o => o.correct).length;
+    buckets[label] = {
+      hours: matching.length,
+      trades: outcomes.length,
+      win_rate: Math.round(wins / outcomes.length * 100),
+      avg_fav: Math.round(outcomes.reduce((s, o) => s + o.fav, 0) / outcomes.length),
+      avg_adv: Math.round(outcomes.reduce((s, o) => s + o.adv, 0) / outcomes.length),
+      avg_net: Math.round(outcomes.reduce((s, o) => s + o.net, 0) / outcomes.length),
+    };
+  }
+
+  // False breakout risk correlation
+  const fbrRanges = [[0, 10], [10, 25], [25, 40], [40, 60], [60, 100]];
+  const fbrBuckets = {};
+  for (const [lo, hi] of fbrRanges) {
+    const label = `${lo}-${hi}`;
+    const matching = snapshots.filter(s => s.energy.false_breakout_risk >= lo && s.energy.false_breakout_risk < hi);
+    const outcomes = matching.flatMap(s => s.pair_outcomes.filter(p => p.h4).map(p => ({
+      correct: (p.bias === 'BUY' && p.h4.net_pips > 0) || (p.bias === 'SELL' && p.h4.net_pips < 0),
+    })));
+    if (outcomes.length < 10) continue;
+    fbrBuckets[label] = {
+      hours: matching.length,
+      trades: outcomes.length,
+      win_rate: Math.round(outcomes.filter(o => o.correct).length / outcomes.length * 100),
+    };
+  }
+
+  return { tradability_buckets: buckets, false_breakout_risk_buckets: fbrBuckets };
+}
+
+// ─── Energy Cycle Outcome Analysis ─────────────────────────────────────────
+// How does each energy cycle state predict price movement?
+
+function analyzeEnergyCycleOutcomes(snapshots) {
+  const cycleOutcomes = {};
+
+  for (const snap of snapshots) {
+    const cycle = snap.energy.energy_cycle;
+    if (!cycle) continue;
+    if (!cycleOutcomes[cycle]) cycleOutcomes[cycle] = [];
+
+    for (const po of snap.pair_outcomes) {
+      if (!po.h4) continue;
+      const correct = (po.bias === 'BUY' && po.h4.net_pips > 0) || (po.bias === 'SELL' && po.h4.net_pips < 0);
+      const fav = po.bias === 'BUY' ? po.h4.max_up_pips : po.h4.max_down_pips;
+      const adv = po.bias === 'BUY' ? po.h4.max_down_pips : po.h4.max_up_pips;
+      cycleOutcomes[cycle].push({ correct, fav, adv, net: po.h4.net_pips });
+    }
+  }
+
+  const results = {};
+  for (const [cycle, items] of Object.entries(cycleOutcomes)) {
+    if (items.length < 10) { results[cycle] = { samples: items.length, insufficient: true }; continue; }
+    const wins = items.filter(i => i.correct).length;
+    results[cycle] = {
+      samples: items.length,
+      win_rate: Math.round(wins / items.length * 100),
+      avg_fav: Math.round(items.reduce((s, i) => s + i.fav, 0) / items.length),
+      avg_adv: Math.round(items.reduce((s, i) => s + i.adv, 0) / items.length),
+      avg_net: Math.round(items.reduce((s, i) => s + i.net, 0) / items.length),
+      avg_move: Math.round(items.reduce((s, i) => s + Math.max(i.fav, i.adv), 0) / items.length),
+    };
+  }
+
+  // Volatility type outcomes
+  const volTypeOutcomes = {};
+  for (const snap of snapshots) {
+    const vt = snap.energy.volatility_type;
+    if (!vt) continue;
+    if (!volTypeOutcomes[vt]) volTypeOutcomes[vt] = [];
+    for (const po of snap.pair_outcomes) {
+      if (!po.h4) continue;
+      const correct = (po.bias === 'BUY' && po.h4.net_pips > 0) || (po.bias === 'SELL' && po.h4.net_pips < 0);
+      volTypeOutcomes[vt].push({ correct });
+    }
+  }
+  const volTypeResults = {};
+  for (const [vt, items] of Object.entries(volTypeOutcomes)) {
+    if (items.length < 10) continue;
+    volTypeResults[vt] = {
+      samples: items.length,
+      win_rate: Math.round(items.filter(i => i.correct).length / items.length * 100),
+    };
+  }
+
+  return { by_cycle: results, by_volatility_type: volTypeResults };
 }
 
 function analyzeEnergyThresholds(snapshots) {
@@ -1011,6 +1514,15 @@ function _flattenOutcomes(snapshots, horizon = 'h4') {
         bear_pressure: snap.energy.bear_pressure, active_pairs: snap.energy.active_pairs,
         strength_diff: snap.energy.strength_diff,
         dominance: Math.abs(snap.energy.bull_pressure - snap.energy.bear_pressure),
+        // V2 engines
+        directional_control: snap.energy.directional_control || 0,
+        tradability: snap.energy.tradability_score || 0,
+        chaos_score: snap.energy.chaos_score || 0,
+        false_breakout_risk: snap.energy.false_breakout_risk || 0,
+        volatility_type: snap.energy.volatility_type || 'NORMAL',
+        energy_cycle: snap.energy.energy_cycle || 'LOW_PARTICIPATION',
+        expansion_readiness: snap.energy.expansion_readiness || 0,
+        // Legacy
         session: snap.session, time: snap.time,
         state: po.state, confidence: po.confidence,
         spread_6h: Math.abs(po.spread_6h || 0),
@@ -1050,7 +1562,7 @@ function analyzeConditionalEdge(snapshots) {
     { label: '+ CS Diff > 0.002', fn: r => r.spread_6h > 0.002 },
     { label: '+ Energy > 35', fn: r => r.energy > 35 },
     { label: '+ Agreement > 40', fn: r => r.agreement > 40 },
-    { label: '+ London / London-NY', fn: r => r.session === 'LONDON' || r.session === 'LONDON_NY' },
+    { label: '+ London / New York', fn: r => r.session === 'LONDON' || r.session === 'NEW_YORK' },
     { label: '+ Ready or Pullback state', fn: r => r.state === 'READY_TO_ENTER' || r.state === 'PULLBACK_ACTIVE' || r.state === 'BASE_FORMING' },
   ];
   for (const f of filters1) {
@@ -1364,7 +1876,7 @@ function analyzeEdgeStability(snapshots) {
     { name: 'Agreement > 45', fn: r => r.agreement > 45 },
     { name: 'Energy > 40 + Agreement > 45', fn: r => r.energy > 40 && r.agreement > 45 },
     { name: 'CS > 0.002 + Energy > 35 + Agreement > 35', fn: r => r.spread_6h > 0.002 && r.energy > 35 && r.agreement > 35 },
-    { name: 'London/NY + Energy > 35', fn: r => (r.session === 'LONDON' || r.session === 'LONDON_NY') && r.energy > 35 },
+    { name: 'London/NY + Energy > 35', fn: r => (r.session === 'LONDON' || r.session === 'NEW_YORK') && r.energy > 35 },
     { name: 'Ready-to-Enter state', fn: r => r.state === 'READY_TO_ENTER' },
     { name: 'Dominance > 20 + Movement > 30', fn: r => r.dominance > 20 && r.movement > 30 },
   ];
@@ -1545,6 +2057,9 @@ function interpretAnalysis(analysis) {
     condition_combos:     interpretCombos,
     move_distance:        interpretDistance,
     session_performance:  interpretSessions,
+    flow_performance:     interpretFlowPerformance,
+    tradability:          interpretTradability,
+    energy_cycle:         interpretEnergyCycle,
   };
 
   // Only interpret keys that exist in analysis (supports single-engine runs)
@@ -1850,7 +2365,7 @@ function _componentContext(comp, ranges, sorted) {
     case 'volatility':
       return 'Volatility shows candle range intensity. Moderate volatility enables good entries; extreme volatility often means whipsaw and wide stops that destroy risk/reward.';
     case 'market_energy':
-      return 'Market Energy is the master composite — the single best reading for overall market tradability. It weights movement (40%), breadth (30%), agreement (20%), and volatility (10%), adjusted by quality.';
+      return 'Market Energy is the master composite — the single best reading for overall market tradability. V2 weights: movement (30%), breadth (25%), agreement (20%), directional control (15%), volatility quality (10%), adjusted by session quality multiplier based on volatility type.';
     case 'bull_pressure':
       return 'Bull pressure above 65% signals strong upside bias across the board. Look for BUY setups on pairs where base currency is strong. Below 35% means bears dominate — flip to SELL bias.';
     case 'bear_pressure':
@@ -2191,10 +2706,10 @@ function interpretSessions(data) {
     bullets.push(`${worst[0].replace('_', ' ')} produces ${worst[1].h4_avg_move} pip 4H moves — ${Math.round((1 - worst[1].h4_avg_move / best[1].h4_avg_move) * 100)}% less than ${best[0].replace('_', ' ')}. ${worst[1].avg_energy < 25 ? 'Low energy during this session makes entries high-risk.' : 'Consider tighter stops during this session.'}`);
   }
 
-  // London/NY overlap
-  const overlap = data['LONDON_NY'];
-  if (overlap) {
-    bullets.push(`London–New York overlap: ${overlap.h4_avg_move} pip 4H moves at ${overlap.avg_energy} avg energy. ${overlap.avg_energy >= 40 ? 'This session overlap generates the most liquid and directional conditions — ideal for trend continuation trades.' : 'Energy levels are moderate. Be selective during this session.'}`);
+  // New York session
+  const ny = data['NEW_YORK'];
+  if (ny) {
+    bullets.push(`New York session: ${ny.h4_avg_move} pip 4H moves at ${ny.avg_energy} avg energy. ${ny.avg_energy >= 40 ? 'New York generates the most liquid and directional conditions — ideal for trend continuation trades.' : 'Energy levels are moderate. Be selective during this session.'}`);
   }
 
   // Asia session
@@ -2212,6 +2727,142 @@ function interpretSessions(data) {
   const summary = best
     ? `${best[0].replace('_', ' ')} is the strongest trading session, producing the largest and most reliable price moves. Plan your highest-conviction entries around this time window.`
     : 'Session analysis shows how price behaviour varies across the trading day.';
+
+  return { summary, bullets };
+}
+
+// ── Flow Performance interpretation ──
+
+function interpretFlowPerformance(data) {
+  if (!data || !data.status_performance) return { summary: 'Not enough data for flow performance analysis.', bullets: [] };
+
+  const bullets = [];
+  const sp = data.status_performance;
+
+  // Best status
+  const validStatuses = Object.entries(sp).filter(([_, d]) => !d.insufficient && d.win_rate != null);
+  if (validStatuses.length) {
+    validStatuses.sort((a, b) => b[1].win_rate - a[1].win_rate);
+    const best = validStatuses[0];
+    bullets.push(`${best[0]} flow status achieves ${best[1].win_rate}% win rate across ${best[1].samples} trades with +${best[1].avg_fav}p avg favourable. This confirms M15 alignment with HTF is the strongest signal.`);
+
+    // STRONG vs AGAINST comparison
+    if (sp.STRONG && sp.AGAINST && !sp.STRONG.insufficient && !sp.AGAINST.insufficient) {
+      const diff = sp.STRONG.win_rate - sp.AGAINST.win_rate;
+      bullets.push(`STRONG (all timeframes aligned) vs AGAINST (M15 opposing): ${sp.STRONG.win_rate}% vs ${sp.AGAINST.win_rate}% WR — a ${diff} percentage point edge. Multi-timeframe alignment is critical.`);
+    }
+
+    // BUILDING status insight
+    if (sp.BUILDING && !sp.BUILDING.insufficient) {
+      bullets.push(`BUILDING status (HTF confirms but M15 not yet): ${sp.BUILDING.win_rate}% WR. ${sp.BUILDING.win_rate >= 50 ? 'Decent accuracy — these often resolve into STRONG when M15 catches up. Worth watching.' : 'Below breakeven — wait for M15 confirmation before entry.'}`);
+    }
+  }
+
+  // Score bucket insights
+  if (data.score_buckets) {
+    const posBuckets = Object.entries(data.score_buckets).filter(([_, d]) => d.win_rate >= 55);
+    const negBuckets = Object.entries(data.score_buckets).filter(([_, d]) => d.win_rate < 45);
+    if (posBuckets.length) {
+      const best = posBuckets.sort((a, b) => b[1].win_rate - a[1].win_rate)[0];
+      bullets.push(`Flow scores in the ${best[0]} range achieve ${best[1].win_rate}% win rate — high directional performance scores reliably predict continuation.`);
+    }
+    if (negBuckets.length) {
+      const worst = negBuckets.sort((a, b) => a[1].win_rate - b[1].win_rate)[0];
+      bullets.push(`Flow scores in the ${worst[0]} range show only ${worst[1].win_rate}% WR. Negative scores mean M15 opposes flow direction — avoid.`);
+    }
+  }
+
+  const summary = validStatuses.length
+    ? `Flow Performance analysis confirms multi-timeframe alignment is the strongest edge predictor. STRONG status (M15+3H+6H aligned) significantly outperforms misaligned conditions.`
+    : 'Flow performance analysis requires more data for definitive conclusions.';
+
+  return { summary, bullets };
+}
+
+// ── Tradability interpretation ──
+
+function interpretTradability(data) {
+  if (!data?.tradability_buckets) return { summary: 'Not enough data for tradability analysis.', bullets: [] };
+
+  const bullets = [];
+  const tb = data.tradability_buckets;
+  const sorted = Object.entries(tb).sort((a, b) => {
+    const aLo = parseInt(a[0].split('-')[0]);
+    const bLo = parseInt(b[0].split('-')[0]);
+    return aLo - bLo;
+  });
+
+  if (sorted.length >= 2) {
+    const low  = sorted[0];
+    const high = sorted[sorted.length - 1];
+    bullets.push(`Tradability gradient: ${low[0]} range → ${low[1].win_rate}% WR. ${high[0]} range → ${high[1].win_rate}% WR. The geometric-mean gate reliably separates tradeable from dangerous conditions.`);
+  }
+
+  // Find the crossover point
+  for (const [range, d] of sorted) {
+    if (d.win_rate >= 55 && d.trades >= 20) {
+      bullets.push(`Tradability must be ≥${range.split('-')[0]} for edge to appear (${d.win_rate}% WR, ${d.trades} trades). Below this, all components aren't aligned and trades are coin flips.`);
+      break;
+    }
+  }
+
+  // False breakout risk
+  if (data.false_breakout_risk_buckets) {
+    const fbr = Object.entries(data.false_breakout_risk_buckets);
+    const highFBR = fbr.filter(([k, _]) => parseInt(k.split('-')[0]) >= 40);
+    const lowFBR  = fbr.filter(([k, _]) => parseInt(k.split('-')[0]) < 15);
+    if (highFBR.length && lowFBR.length) {
+      const avgHigh = Math.round(highFBR.reduce((s, [_, d]) => s + d.win_rate, 0) / highFBR.length);
+      const avgLow  = Math.round(lowFBR.reduce((s, [_, d]) => s + d.win_rate, 0) / lowFBR.length);
+      bullets.push(`False breakout risk matters: high risk (40+) → ${avgHigh}% WR vs low risk (<15) → ${avgLow}% WR. Movement without breadth/agreement is a trap.`);
+    }
+  }
+
+  const summary = 'Tradability (geometric mean of energy, agreement, directional control, breadth) is a powerful filter. It requires ALL components to be strong, catching conditions where single-metric analysis would miss the danger.';
+  return { summary, bullets };
+}
+
+// ── Energy Cycle interpretation ──
+
+function interpretEnergyCycle(data) {
+  if (!data?.by_cycle) return { summary: 'Not enough data for energy cycle analysis.', bullets: [] };
+
+  const bullets = [];
+  const cycles = data.by_cycle;
+  const validCycles = Object.entries(cycles).filter(([_, d]) => !d.insufficient);
+  validCycles.sort((a, b) => b[1].win_rate - a[1].win_rate);
+
+  if (validCycles.length >= 2) {
+    const best  = validCycles[0];
+    const worst = validCycles[validCycles.length - 1];
+    bullets.push(`Best cycle for entries: ${best[0]} at ${best[1].win_rate}% WR with ${best[1].avg_move}p avg moves. Worst: ${worst[0]} at ${worst[1].win_rate}% WR. The regime makes the trade.`);
+  }
+
+  // EXPANSION / EXPLOSIVE
+  const expansion = cycles.EXPANSION || cycles.EXPLOSIVE;
+  if (expansion && !expansion.insufficient) {
+    bullets.push(`Expansion/Explosive cycles: ${expansion.win_rate}% WR, ${expansion.avg_fav}p favourable moves. ${expansion.win_rate >= 55 ? 'Confirmed: entering during expansion phase is high-probability.' : 'Expansion does not guarantee success — still filter by agreement and spread.'}`);
+  }
+
+  // DEAD / COMPRESSION
+  const dead = cycles.DEAD;
+  if (dead && !dead.insufficient) {
+    bullets.push(`DEAD cycle: ${dead.win_rate}% WR with only ${dead.avg_move}p avg moves. ${dead.win_rate < 48 ? 'Confirmed danger zone — trades taken in dead markets are net losers.' : 'Surprisingly, some edge exists even in dead markets, but moves are tiny.'}`);
+  }
+
+  // Volatility type
+  if (data.by_volatility_type) {
+    const vt = Object.entries(data.by_volatility_type);
+    const healthy = vt.find(([k]) => k === 'HEALTHY');
+    const chaotic = vt.find(([k]) => k === 'CHAOTIC');
+    if (healthy && chaotic) {
+      bullets.push(`Volatility classification: HEALTHY → ${healthy[1].win_rate}% WR vs CHAOTIC → ${chaotic[1].win_rate}% WR. The V2 volatility quality engine correctly identifies tradeable vs dangerous volatility.`);
+    }
+  }
+
+  const summary = validCycles.length
+    ? `Energy cycle classification reveals dramatically different outcomes between regimes. ${validCycles[0][0]} is optimal for entries while ${validCycles[validCycles.length - 1][0]} should be avoided.`
+    : 'Energy cycle analysis shows how market regime affects trade outcomes.';
 
   return { summary, bullets };
 }
