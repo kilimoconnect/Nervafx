@@ -671,6 +671,20 @@
     }
   }
 
+  // Helper: get grouping date for a hourly row (ASIA hour 23 → next day)
+  function _arcGroupDate(r) {
+    const date = r.time_utc.slice(0, 10);
+    if (r.session_name === 'ASIA') {
+      const h = new Date(r.time_utc).getUTCHours();
+      if (h === 23) {
+        const next = new Date(r.time_utc);
+        next.setUTCDate(next.getUTCDate() + 1);
+        return next.toISOString().slice(0, 10);
+      }
+    }
+    return date;
+  }
+
   function renderMetricBars(container, rows, metric) {
     const SESS_COLOR = { ASIA: '#f59e0b', LONDON: '#0ea5e9', NEW_YORK: '#a855f7', LOW_LIQUIDITY: '#475569' };
     const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York', LOW_LIQUIDITY: 'Low Liq.' };
@@ -682,7 +696,7 @@
     const byDate = {};
     for (const r of rows) {
       if (SKIP.has(r.session_name)) continue;
-      const date = r.time_utc.slice(0, 10);
+      const date = _arcGroupDate(r);
       if (!byDate[date]) byDate[date] = [];
       byDate[date].push({ time: r.time_utc, session: r.session_name, val: Math.round(parseFloat(r[metric.field]) || 0) });
     }
@@ -1115,11 +1129,11 @@
       IMPULSE: '#22c55e', TREND: '#0ea5e9', DECAY: '#ef4444', STABLE: '#64748b',
     };
 
-    // Group by date → session → sorted hours
+    // Group by date → session → sorted hours (ASIA hour 23 → next day)
     const byDate = {};
     for (const r of rows) {
       if (SKIP.has(r.session_name)) continue;
-      const date = r.time_utc.slice(0, 10);
+      const date = _arcGroupDate(r);
       if (!byDate[date]) byDate[date] = {};
       if (!byDate[date][r.session_name]) byDate[date][r.session_name] = [];
       byDate[date][r.session_name].push(r);

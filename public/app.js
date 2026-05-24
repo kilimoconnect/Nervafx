@@ -94,6 +94,20 @@ let _csigCurrencies = new Set();
 // Distinguishes "still loading" (pass-through) from "loaded but nothing qualifies" (filter out).
 let _csigDataLoaded = false;
 
+// Helper: get grouping date for a hourly row (ASIA hour 23 → next day)
+function _groupDate(r) {
+  const date = r.time_utc.slice(0, 10);
+  if (r.session_name === 'ASIA') {
+    const h = new Date(r.time_utc).getUTCHours();
+    if (h === 23) {
+      const next = new Date(r.time_utc);
+      next.setUTCDate(next.getUTCDate() + 1);
+      return next.toISOString().slice(0, 10);
+    }
+  }
+  return date;
+}
+
 // Returns true if strength data isn't loaded yet (pass-through) OR if either the
 // base or quote currency of `instrument` (e.g. "EUR_USD") is in the set.
 // Returns false when data IS loaded but no currencies meet the threshold.
@@ -2347,7 +2361,7 @@ function _renderBreadthBars(container, rows) {
   const byDate = {};
   for (const r of rows) {
     if (SKIP_SESSIONS.has(r.session_name)) continue;
-    const date = r.time_utc.slice(0, 10);
+    const date = _groupDate(r);
     if (!byDate[date]) byDate[date] = [];
     byDate[date].push({
       time: r.time_utc,
@@ -2796,7 +2810,7 @@ function _renderMetricBars(container, rows, key) {
   const byDate = {};
   for (const r of rows) {
     if (SKIP_SESSIONS.has(r.session_name)) continue;
-    const date = r.time_utc.slice(0, 10);
+    const date = _groupDate(r);
     if (!byDate[date]) byDate[date] = [];
     byDate[date].push({
       time: r.time_utc,
