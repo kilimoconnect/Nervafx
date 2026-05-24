@@ -1034,8 +1034,23 @@ section.card:has(.v2-gate-overlay.visible) { min-height: 220px; }
 .spread-bar-fill.sell { background: var(--red); }
 
 /* ─── Flow Performance card ───────────────────────────────────────────────── */
-.fp-row {
-  grid-template-columns: 6px 72px 42px 62px 1fr;
+.fp-card {
+  background: var(--bg);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+}
+.fp-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 5px;
+}
+.fp-rank {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-dim);
+  min-width: 18px;
 }
 .fp-status {
   font-size: 9px;
@@ -1043,23 +1058,96 @@ section.card:has(.v2-gate-overlay.visible) { min-height: 220px; }
   text-transform: uppercase;
   padding: 1px 5px;
   border-radius: 3px;
-  text-align: center;
+  margin-left: auto;
 }
+.fp-strong  { color: #4ade80; background: rgba(74,222,128,0.15); }
 .fp-aligned { color: #4ade80; background: rgba(74,222,128,0.1); }
 .fp-partial { color: #facc15; background: rgba(250,204,21,0.1); }
 .fp-against { color: #f87171; background: rgba(248,113,113,0.1); }
 .fp-wait    { color: #64748b; background: rgba(100,116,139,0.1); }
-.fp-vals {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-  font-size: 10px;
-  color: var(--text-dim);
-  justify-self: end;
+
+.fp-bar-wrap {
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 6px;
 }
-.fp-m15 { color: var(--text-muted); }
-.fp-3h  { color: var(--text-muted); }
-.fp-sep { color: var(--border); font-size: 8px; }
+.fp-bar-fill { height: 100%; border-radius: 2px; }
+.fp-bar-fill.buy  { background: var(--green); }
+.fp-bar-fill.sell { background: var(--red); }
+
+.fp-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.fp-detail-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+}
+.fp-lbl {
+  color: var(--text-dim);
+  font-size: 9px;
+  min-width: 22px;
+}
+.fp-val {
+  color: var(--text-muted);
+  font-family: var(--mono, monospace);
+  font-size: 10px;
+  min-width: 52px;
+}
+.fp-val.green { color: #4ade80; }
+.fp-val.red   { color: #f87171; }
+
+.fp-state-badge {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  min-width: 58px;
+  text-align: center;
+}
+.fp-st-exp  { color: #22c55e; background: rgba(34,197,94,0.1); }
+.fp-st-comp { color: #ef4444; background: rgba(239,68,68,0.1); }
+.fp-st-stdy { color: #94a3b8; background: rgba(148,163,184,0.1); }
+.fp-st-flat { color: #475569; background: rgba(71,85,105,0.1); }
+
+.fp-dots {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+}
+.fp-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.fp-dot.green { background: #4ade80; }
+.fp-dot.red   { background: #f87171; }
+.fp-dot.grey  { background: #475569; }
+
+.fp-ccy-row {
+  margin-top: 2px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+.fp-ccy-chip {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-family: var(--mono, monospace);
+}
+.fp-ccy-chip.strong { color: #4ade80; background: rgba(74,222,128,0.08); }
+.fp-ccy-chip.weak   { color: #f87171; background: rgba(248,113,113,0.08); }
+.fp-ccy-vs {
+  font-size: 9px;
+  color: var(--text-dim);
+}
 
 /* ─── Risk list ────────────────────────────────────────────────────────────── */
 .risk-list {

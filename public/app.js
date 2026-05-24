@@ -1250,48 +1250,130 @@ function renderFlowPerformance(strengthData, m15Data) {
     }
   }
 
-  // 3. Build 3H spread from currency strength data
-  const ccyMap = {};
+  // 3. Build currency strength maps (3H + 6H for divergence check)
+  const ccyMap3H = {}, ccyMap6H = {};
   if (strengthData?.currencies?.length) {
     for (const c of strengthData.currencies) {
-      ccyMap[c.currency] = parseFloat(c.smooth_3h ?? c.normalized_3h) || 0;
+      ccyMap3H[c.currency] = parseFloat(c.smooth_3h ?? c.normalized_3h) || 0;
+      ccyMap6H[c.currency] = parseFloat(c.smooth_6h ?? c.normalized_6h) || 0;
     }
   }
 
-  // 4. Render each flow pair with M15 + 3H performance
-  const rows = flowPairs.slice(0, 4).map(fp => {
+  // 4. Score each flow pair for ranking
+  const scored = flowPairs.slice(0, 4).map(fp => {
     const [base, quote] = fp.instrument.split('_');
     const m15 = m15Map[fp.instrument];
-    const v45  = m15 ? parseFloat(m15.smooth_45m) || 0 : null;
-    const v3h  = (ccyMap[base] != null && ccyMap[quote] != null)
-      ? ccyMap[base] - ccyMap[quote] : null;
+    const v45  = m15 ? parseFloat(m15.smooth_45m)  || 0 : null;
+    const v90  = m15 ? parseFloat(m15.smooth_90m)  || 0 : null;
+    const v180 = m15 ? parseFloat(m15.smooth_180m) || 0 : null;
     const state = m15?.state || null;
 
-    // Determine if M15 confirms the flow direction
-    const flowSign = fp.dir === 'BUY' ? 1 : -1;
-    const m15Confirms = v45 != null ? Math.sign(v45) === flowSign : null;
-    const h3Confirms  = v3h != null ? Math.sign(v3h) === flowSign : null;
+    const h3Base  = ccyMap3H[base]  ?? null;
+    const h3Quote = ccyMap3H[quote] ?? null;
+    const h6Base  = ccyMap6H[base]  ?? null;
+    const h6Quote = ccyMap6H[quote] ?? null;
+    const spread3H = (h3Base != null && h3Quote != null) ? h3Base - h3Quote : null;
+    const spread6H = (h6Base != null && h6Quote != null) ? h6Base - h6Quote : null;
 
-    // Status: ALIGNED (both confirm), PARTIAL (one confirms), AGAINST (neither)
+    const flowSign = fp.dir === 'BUY' ? 1 : -1;
+
+    // Alignment checks
+    const m15Confirms = v45 != null ? Math.sign(v45) === flowSign : null;
+    const h3Confirms  = spread3H != null ? Math.sign(spread3H) === flowSign : null;
+    const h6Confirms  = spread6H != null ? Math.sign(spread6H) === flowSign : null;
+
+    // M15 acceleration (45m vs 90m delta)
+    const accel = (v45 != null && v90 != null) ? v45 - v90 : null;
+    const accelSign = accel != null ? Math.sign(accel) === flowSign : null;
+
+    // Performance score: weighted combination of magnitude + alignment + acceleration
+    let perfScore = 0;
+    if (v45 != null) perfScore += Math.abs(v45) * 10000 * 3;         // M15 magnitude (heaviest weight)
+    if (spread3H != null) perfScore += Math.abs(spread3H) * 10000 * 2; // 3H spread magnitude
+    if (m15Confirms) perfScore += 20;                                    // Alignment bonuses
+    if (h3Confirms)  perfScore += 15;
+    if (h6Confirms)  perfScore += 10;
+    if (accelSign)   perfScore += 10;                                    // Accelerating in flow dir
+    if (state === 'EXPANDING') perfScore += 15;
+    if (state === 'COMPRESSING' && !m15Confirms) perfScore -= 10;
+
+    // Status classification
+    const alignCount = [m15Confirms, h3Confirms, h6Confirms].filter(x => x === true).length;
     let status, statusCls;
-    if (m15Confirms && h3Confirms) { status = 'ALIGNED'; statusCls = 'fp-aligned'; }
-    else if (m15Confirms || h3Confirms) { status = 'PARTIAL'; statusCls = 'fp-partial'; }
+    if (alignCount === 3)      { status = 'STRONG'; statusCls = 'fp-strong'; }
+    else if (alignCount === 2) { status = 'ALIGNED'; statusCls = 'fp-aligned'; }
+    else if (alignCount === 1) { status = 'PARTIAL'; statusCls = 'fp-partial'; }
     else if (m15Confirms === false && h3Confirms === false) { status = 'AGAINST'; statusCls = 'fp-against'; }
     else { status = 'WAIT'; statusCls = 'fp-wait'; }
 
+    // Momentum description
+    let momentum;
+    if (accel != null && v45 != null) {
+      const accelAbs = Math.abs(accel);
+      if (accelSign && Math.abs(v45) > 0.0005) momentum = 'Accelerating';
+      else if (!accelSign && accelAbs > 0.0002) momentum = 'Fading';
+      else if (Math.abs(v45) < 0.0002) momentum = 'Flat';
+      else momentum = 'Steady';
+    } else {
+      momentum = 'No data';
+    }
+
+    return { ...fp, v45, v90, v180, spread3H, spread6H, state, accel, m15Confirms, h3Confirms, h6Confirms, accelSign, perfScore, status, statusCls, momentum, h3Base, h3Quote, base, quote };
+  });
+
+  // 5. Rank by performance score (best first)
+  scored.sort((a, b) => b.perfScore - a.perfScore);
+
+  // 6. Render ranked cards with detail rows
+  const maxPerf = scored[0]?.perfScore || 1;
+
+  const rows = scored.map((fp, idx) => {
     const cls = fp.dir === 'BUY' ? 'buy' : 'sell';
+    const perfPct = Math.round((fp.perfScore / maxPerf) * 100);
+
+    // M15 state badge
+    const stateLabel = fp.state ? fp.state.charAt(0) + fp.state.slice(1).toLowerCase() : '—';
+    const STATE_CLS = { EXPANDING: 'fp-st-exp', COMPRESSING: 'fp-st-comp', STEADY: 'fp-st-stdy', FLAT: 'fp-st-flat' };
+    const stateCls = STATE_CLS[fp.state] || 'fp-st-flat';
+
+    // Timeframe alignment dots
+    const dot = (confirms) => confirms === true ? '<span class="fp-dot green"></span>'
+      : confirms === false ? '<span class="fp-dot red"></span>'
+      : '<span class="fp-dot grey"></span>';
 
     return `
-      <div class="spread-row fp-row">
-        <div class="spread-accent ${cls}"></div>
-        <span class="spread-pair">${pair(fp.instrument)}</span>
-        <span class="spread-bias ${cls}">${fp.dir}</span>
-        <span class="fp-status ${statusCls}">${status}</span>
-        <span class="fp-vals">
-          <span class="fp-m15" title="M15 momentum">${v45 != null ? fmt(v45, 5) : '—'}</span>
-          <span class="fp-sep">·</span>
-          <span class="fp-3h" title="3H spread">${v3h != null ? fmt(v3h, 5) : '—'}</span>
-        </span>
+      <div class="fp-card">
+        <div class="fp-header">
+          <span class="fp-rank">#${idx + 1}</span>
+          <span class="spread-accent ${cls}"></span>
+          <span class="spread-pair">${pair(fp.instrument)}</span>
+          <span class="spread-bias ${cls}">${fp.dir}</span>
+          <span class="fp-status ${fp.statusCls}">${fp.status}</span>
+        </div>
+        <div class="fp-bar-wrap"><div class="fp-bar-fill ${cls}" style="width:${perfPct}%"></div></div>
+        <div class="fp-details">
+          <div class="fp-detail-row">
+            <span class="fp-lbl">M15</span>
+            <span class="fp-val ${fp.m15Confirms ? 'green' : fp.m15Confirms === false ? 'red' : ''}">${fp.v45 != null ? fmt(fp.v45, 5) : '—'}</span>
+            <span class="fp-lbl">3H</span>
+            <span class="fp-val ${fp.h3Confirms ? 'green' : fp.h3Confirms === false ? 'red' : ''}">${fp.spread3H != null ? fmt(fp.spread3H, 5) : '—'}</span>
+            <span class="fp-lbl">6H</span>
+            <span class="fp-val ${fp.h6Confirms ? 'green' : fp.h6Confirms === false ? 'red' : ''}">${fp.spread6H != null ? fmt(fp.spread6H, 5) : '—'}</span>
+          </div>
+          <div class="fp-detail-row">
+            <span class="fp-lbl">State</span>
+            <span class="fp-state-badge ${stateCls}">${stateLabel}</span>
+            <span class="fp-lbl">Mom</span>
+            <span class="fp-val">${fp.momentum}</span>
+            <span class="fp-lbl">Align</span>
+            <span class="fp-dots">${dot(fp.m15Confirms)}${dot(fp.h3Confirms)}${dot(fp.h6Confirms)}</span>
+          </div>
+          <div class="fp-detail-row fp-ccy-row">
+            <span class="fp-ccy-chip ${(fp.h3Base ?? 0) >= 0 ? 'strong' : 'weak'}">${fp.base} ${fmt(fp.h3Base ?? 0, 5)}</span>
+            <span class="fp-ccy-vs">vs</span>
+            <span class="fp-ccy-chip ${(fp.h3Quote ?? 0) <= 0 ? 'weak' : 'strong'}">${fp.quote} ${fmt(fp.h3Quote ?? 0, 5)}</span>
+          </div>
+        </div>
       </div>`;
   }).join('');
 
