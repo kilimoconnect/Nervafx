@@ -1858,9 +1858,32 @@ function _meSessionExplain(s, label) {
   else if (agr >= 25) lines.push(`Mixed agreement (${agr}) — partial alignment, some conflict.`);
   else lines.push(`Low agreement (${agr}) — currencies giving conflicting signals.`);
 
-  // Currency leadership
-  if (strong && weak && strong !== weak && dirCtrl >= 15) {
-    lines.push(`${strong} strongest, ${weak} weakest — look for ${strong}/${weak} pair trends.`);
+  // Currency leadership — list actionable pairs from strong vs weak
+  const allStrong = (s.strongest_ccy || '').split(',').filter(Boolean);
+  const allWeak   = (s.weakest_ccy   || '').split(',').filter(Boolean);
+  if (allStrong.length && allWeak.length) {
+    const PAIRS = new Set([
+      'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
+      'EUR_GBP','EUR_JPY','EUR_CHF','EUR_CAD','EUR_AUD','EUR_NZD',
+      'GBP_JPY','GBP_CHF','GBP_CAD','GBP_AUD','GBP_NZD',
+      'AUD_JPY','AUD_CHF','AUD_CAD','AUD_NZD',
+      'NZD_JPY','NZD_CHF','NZD_CAD','CAD_JPY','CAD_CHF','CHF_JPY',
+    ]);
+    const ideas = [];
+    for (const st of allStrong) {
+      for (const wk of allWeak) {
+        if (st === wk) continue;
+        const fwd = `${st}_${wk}`;
+        const rev = `${wk}_${st}`;
+        if (PAIRS.has(fwd))      ideas.push({ pair: fwd.replace('_', '/'), dir: 'BUY',  reason: `${st} ↑ ${wk} ↓` });
+        else if (PAIRS.has(rev)) ideas.push({ pair: rev.replace('_', '/'), dir: 'SELL', reason: `${wk} ↓ ${st} ↑` });
+      }
+    }
+    if (ideas.length) {
+      const top4 = ideas.slice(0, 4);
+      const pairList = top4.map(p => `${p.dir} ${p.pair} (${p.reason})`).join(' · ');
+      lines.push(`Strength flow: ${pairList}`);
+    }
   }
 
   // Overall energy
