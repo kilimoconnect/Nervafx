@@ -656,7 +656,8 @@
     _arcSessionLoading = null;
     _arcSessionDays = 0;
     _fpCcsData = null;
-    _fpCcsLoading = null;
+    _fpM15Data = null;
+    _fpLoading = null;
     _fpCcsTimes = [];
   }
 
@@ -1105,18 +1106,20 @@
 
   // ─── Flow Performance Archive ──────────────────────────────────────────────
 
-  let _fpCcsData = null;  // merged { time → { ccy → { h3, h6 } } }
-  let _fpCcsLoading = null;
-  let _fpCcsTimes = [];   // sorted time keys for filtering
+  let _fpCcsData = null;  // { time → { ccy → { h3, h6 } } }
+  let _fpM15Data = null;  // { time → { instrument → { v45, v90, state } } }
+  let _fpLoading = null;
+  let _fpCcsTimes = [];
 
-  async function _loadFpCcsData() {
-    if (_fpCcsData) return _fpCcsData;
-    if (_fpCcsLoading) return _fpCcsLoading;
+  async function _loadFpData() {
+    if (_fpCcsData && _fpM15Data) return;
+    if (_fpLoading) return _fpLoading;
     const need = _arcFilterDays || 30;
-    _fpCcsLoading = Promise.all([
+    _fpLoading = Promise.all([
       api(`/api/strength-history?days=${need}&tf=3h`),
       api(`/api/strength-history?days=${need}&tf=6h`),
-    ]).then(([d3, d6]) => {
+      api(`/api/m15-spreads-history?days=${need}`).catch(() => ({ rows: [] })),
+    ]).then(([d3, d6, dm15]) => {
       const merged = {};
       for (const r of (d3.rows || [])) {
         const t = r.time?.slice(0, 16)?.replace(' ', 'T') || '';
@@ -1132,9 +1135,20 @@
       }
       _fpCcsData = merged;
       _fpCcsTimes = Object.keys(merged).sort();
-      return merged;
+
+      const m15 = {};
+      for (const r of (dm15.rows || [])) {
+        const t = r.time?.slice(0, 16)?.replace(' ', 'T') || '';
+        if (!m15[t]) m15[t] = {};
+        m15[t][r.instrument] = {
+          v45: parseFloat(r.smooth_45m) || 0,
+          v90: parseFloat(r.smooth_90m) || 0,
+          state: r.state || null,
+        };
+      }
+      _fpM15Data = m15;
     });
-    return _fpCcsLoading;
+    return _fpLoading;
   }
 
   async function loadFlowPerfArchive() {
@@ -1142,7 +1156,7 @@
     if (!bodyEl) return;
     try {
       bodyEl.innerHTML = '<div class="arc-loading"><span class="spinner"></span> Loading flow performance…</div>';
-      const [sessions] = await Promise.all([_loadSessionRows(), _loadFpCcsData()]);
+      const [sessions] = await Promise.all([_loadSessionRows(), _loadFpData()]);
       if (!sessions?.length || !_fpCcsData) { bodyEl.innerHTML = '<p class="me-empty">No data available.</p>'; return; }
       const filteredSess = _filterSessionRows(sessions);
       if (!filteredSess.length) { bodyEl.innerHTML = '<p class="me-empty">No sessions for this filter.</p>'; return; }
@@ -1153,7 +1167,7 @@
   }
 
   function _renderFilteredFlowPerf() {
-    if (!_fpCcsData || !_arcSessionRows) return;
+    if (!_fpCcsData || !_fpM15Data || !_arcSessionRows) return;
     const bodyEl = document.getElementById('arc-flowperf-body');
     if (!bodyEl) return;
     const filteredSess = _filterSessionRows(_arcSessionRows);
@@ -1174,6 +1188,7 @@
     ]);
     const RANK_CLR = ['#4ade80', '#60a5fa', '#facc15', '#94a3b8'];
     const ccsIndex = _fpCcsData;
+    const m15Index = _fpM15Data;
     const ccsTimes = _fpCcsTimes;
 
     // Group sessions by date
@@ -1227,7 +1242,7 @@
         const sessionTimes = ccsTimes.filter(t => t >= startKey && t < endKey);
         if (!sessionTimes.length) continue;
 
-        // Compute hourly spreads (3H + 6H) for each pair
+        // Compute hourly spreads (M15 + 3H + 6H) for each pair
         const pairs = flowPairs.slice(0, 4).map(fp => {
           const [b, q] = fp.instrument.split('_');
           const flowSign = fp.dir === 'BUY' ? 1 : -1;
@@ -1237,13 +1252,24 @@
             const bv6 = snap[b]?.h6 ?? null, qv6 = snap[q]?.h6 ?? null;
             const spread3H = (bv3 != null && qv3 != null) ? bv3 - qv3 : null;
             const spread6H = (bv6 != null && qv6 != null) ? bv6 - qv6 : null;
-            // Combined weighted score: 60% 3H + 40% 6H (directional)
+
+            // M15 pair spread (direct from m15_pair_spreads table)
+            const m15Snap = (m15Index[t] || {})[fp.instrument];
+            const m15Val = m15Snap?.v45 ?? null;
+            const m15State = m15Snap?.state ?? null;
+
+            // Combined weighted: 35% M15 + 40% 3H + 25% 6H (directional)
             let combined = null;
-            if (spread3H != null && spread6H != null) combined = spread3H * 0.6 + spread6H * 0.4;
-            else if (spread3H != null) combined = spread3H;
-            else if (spread6H != null) combined = spread6H;
+            const parts = [];
+            if (m15Val != null)    parts.push({ v: m15Val,    w: 0.35 });
+            if (spread3H != null)  parts.push({ v: spread3H,  w: 0.40 });
+            if (spread6H != null)  parts.push({ v: spread6H,  w: 0.25 });
+            if (parts.length) {
+              const totalW = parts.reduce((s, p) => s + p.w, 0);
+              combined = parts.reduce((s, p) => s + p.v * (p.w / totalW), 0);
+            }
             const dirScore = combined != null ? combined * flowSign : null;
-            return { time: t, spread3H, spread6H, combined, dirScore };
+            return { time: t, m15Val, m15State, spread3H, spread6H, combined, dirScore };
           });
           return { ...fp, hourly, flowSign };
         });
@@ -1257,7 +1283,7 @@
         for (const t of validTimes) {
           const scored = pairs.map(p => {
             const h = p.hourly.find(h => h.time === t);
-            return { pair: p, spread3H: h?.spread3H ?? null, spread6H: h?.spread6H ?? null, combined: h?.combined ?? null, dirScore: h?.dirScore ?? null };
+            return { pair: p, m15Val: h?.m15Val ?? null, m15State: h?.m15State ?? null, spread3H: h?.spread3H ?? null, spread6H: h?.spread6H ?? null, combined: h?.combined ?? null, dirScore: h?.dirScore ?? null };
           }).filter(s => s.dirScore != null)
             .sort((a, b) => b.dirScore - a.dirScore);
           scored.forEach((s, i) => { s.rank = i + 1; });
@@ -1321,15 +1347,17 @@
             }
             prevCombined = entry.combined;
 
-            // Show 3H and 6H stacked
-            const v3 = entry.spread3H, v6 = entry.spread6H;
+            // Show M15, 3H, 6H stacked
+            const vm = entry.m15Val, v3 = entry.spread3H, v6 = entry.spread6H;
+            const mClr = vm != null && vm * p.flowSign >= 0 ? '#4ade80' : '#f87171';
             const v3Clr = v3 != null && v3 * p.flowSign >= 0 ? '#4ade80' : '#f87171';
             const v6Clr = v6 != null && v6 * p.flowSign >= 0 ? '#4ade80' : '#f87171';
 
             html += `<td class="fp-arc-td">
               <span class="fp-arc-rank-badge" style="background:${rankClr}">#${rank}</span>
               ${deltaHtml}
-              <span class="fp-arc-spread" style="color:${v3Clr}" title="3H">${v3 != null ? fmt5(v3) : '—'}</span>
+              <span class="fp-arc-spread" style="color:${mClr}" title="M15">${vm != null ? fmt5(vm) : '—'}</span>
+              <span class="fp-arc-spread fp-arc-sub" style="color:${v3Clr}" title="3H">${v3 != null ? fmt5(v3) : '—'}</span>
               <span class="fp-arc-spread fp-arc-sub" style="color:${v6Clr}" title="6H">${v6 != null ? fmt5(v6) : '—'}</span>
             </td>`;
           }
