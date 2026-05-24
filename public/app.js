@@ -2017,9 +2017,10 @@ function _meSessionExplain(s, label, status) {
   const tradGrade = s.tradability_grade || 'AVOID';
   const volType = s.volatility_type || 'NORMAL';
   const chaosVal = Math.round(parseFloat(s.chaos_score) || 0);
-  // Use Flow Performance calculation for today's sessions (ACTIVE + COMPLETED)
+  // Use Flow Performance calculation for active session only
+  // Completed sessions use their own stored snapshot from that session's time
   let strong, weak;
-  if ((status === 'ACTIVE' || status === 'COMPLETED') && strengthData?.currencies?.length) {
+  if (status === 'ACTIVE' && strengthData?.currencies?.length) {
     const flow = getSmoothed3HFlow(strengthData.currencies);
     strong = flow.strong[0] || null;
     weak   = flow.weak[0]   || null;
@@ -2076,9 +2077,9 @@ function _meSessionExplain(s, label, status) {
   else lines.push(`Low agreement (${agr}) — currencies giving conflicting signals.`);
 
   // Currency leadership — list actionable pairs from strong vs weak
-  // Today's sessions: use same smooth_3h flow as Flow Performance card for consistency
+  // Active session: use live smooth_3h; completed: use stored session snapshot
   let allStrong, allWeak;
-  if ((status === 'ACTIVE' || status === 'COMPLETED') && strengthData?.currencies?.length) {
+  if (status === 'ACTIVE' && strengthData?.currencies?.length) {
     const flow = getSmoothed3HFlow(strengthData.currencies);
     allStrong = flow.strong;
     allWeak   = flow.weak;
@@ -2278,9 +2279,10 @@ function _meSessionCard(name, s, status, hourlyRows) {
   const neutral    = Math.max(0, 100 - activePct);
 
   const domScore  = Math.round(parseFloat(s.dominance_score) || 0);
-  // Use Flow Performance calculation (smooth_3h) for today's sessions to stay in sync
+  // Use Flow Performance calculation (smooth_3h) for active session to stay in sync with live card
+  // Completed/upcoming sessions use their own stored snapshot from that session's time
   let strongCcys, weakCcys;
-  if ((status === 'ACTIVE' || status === 'COMPLETED') && strengthData?.currencies?.length) {
+  if (status === 'ACTIVE' && strengthData?.currencies?.length) {
     const flow = getSmoothed3HFlow(strengthData.currencies);
     strongCcys = flow.strong;
     weakCcys   = flow.weak;

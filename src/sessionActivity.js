@@ -815,17 +815,29 @@ function computeExpansionPressure(sequence) {
 
 async function fetchCurrencyStrengthFlow(sinceDays = 14) {
   const since = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000).toISOString();
-  const { data, error } = await supabase
-    .from('currency_strength')
-    .select('time, currency, smooth_3h, smooth_6h')
-    .gte('time', since)
-    .order('time', { ascending: true });
-  if (error) { console.warn('[SESSION_ACTIVITY] currency_strength fetch:', error.message); return null; }
-  if (!data?.length) return null;
+  // Paginate — PostgREST caps at 1000 rows per request
+  const PAGE = 1000;
+  const allData = [];
+  let page = 0;
+  while (true) {
+    const from = page * PAGE;
+    const { data, error } = await supabase
+      .from('currency_strength')
+      .select('time, currency, smooth_3h, smooth_6h')
+      .gte('time', since)
+      .order('time', { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) { console.warn('[SESSION_ACTIVITY] currency_strength fetch:', error.message); break; }
+    if (!data?.length) break;
+    allData.push(...data);
+    if (data.length < PAGE) break;
+    page++;
+  }
+  if (!allData.length) return null;
 
   // Index by floored-hour time → { ccy → { s3h, s6h } }
   const index = {};
-  for (const r of data) {
+  for (const r of allData) {
     const t = (r.time || '').slice(0, 16).replace(' ', 'T');
     if (!index[t]) index[t] = {};
     index[t][r.currency] = {
@@ -838,17 +850,29 @@ async function fetchCurrencyStrengthFlow(sinceDays = 14) {
 
 async function fetchM15FlowIndex(sinceDays = 14) {
   const since = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000).toISOString();
-  const { data, error } = await supabase
-    .from('m15_pair_spreads')
-    .select('time, instrument, smooth_45m, smooth_90m, smooth_180m, state')
-    .gte('time', since)
-    .order('time', { ascending: true });
-  if (error) { console.warn('[SESSION_ACTIVITY] m15_pair_spreads fetch:', error.message); return null; }
-  if (!data?.length) return null;
+  // Paginate — PostgREST caps at 1000 rows per request
+  const PAGE = 1000;
+  const allData = [];
+  let page = 0;
+  while (true) {
+    const from = page * PAGE;
+    const { data, error } = await supabase
+      .from('m15_pair_spreads')
+      .select('time, instrument, smooth_45m, smooth_90m, smooth_180m, state')
+      .gte('time', since)
+      .order('time', { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) { console.warn('[SESSION_ACTIVITY] m15_pair_spreads fetch:', error.message); break; }
+    if (!data?.length) break;
+    allData.push(...data);
+    if (data.length < PAGE) break;
+    page++;
+  }
+  if (!allData.length) return null;
 
   // Index by floored-hour time → { instrument → { v45, v90, v180, state } }
   const index = {};
-  for (const r of data) {
+  for (const r of allData) {
     const t = (r.time || '').slice(0, 16).replace(' ', 'T');
     if (!index[t]) index[t] = {};
     index[t][r.instrument] = {
