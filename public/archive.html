@@ -655,8 +655,9 @@
     _arcSessionRows = null;
     _arcSessionLoading = null;
     _arcSessionDays = 0;
-    _fpCcsRows = null;
+    _fpCcsData = null;
     _fpCcsLoading = null;
+    _fpCcsTimes = [];
   }
 
   // Metric definitions — V2 institutional model
@@ -1104,16 +1105,34 @@
 
   // ─── Flow Performance Archive ──────────────────────────────────────────────
 
-  let _fpCcsRows = null;
+  let _fpCcsData = null;  // merged { time → { ccy → { h3, h6 } } }
   let _fpCcsLoading = null;
+  let _fpCcsTimes = [];   // sorted time keys for filtering
 
-  async function _loadFpCcsRows() {
-    const need = _arcFilterDays || 30;
-    if (_fpCcsRows) return _fpCcsRows;
+  async function _loadFpCcsData() {
+    if (_fpCcsData) return _fpCcsData;
     if (_fpCcsLoading) return _fpCcsLoading;
-    _fpCcsLoading = api(`/api/strength-history?days=${need}&tf=3h`).then(d => {
-      _fpCcsRows = d.rows || [];
-      return _fpCcsRows;
+    const need = _arcFilterDays || 30;
+    _fpCcsLoading = Promise.all([
+      api(`/api/strength-history?days=${need}&tf=3h`),
+      api(`/api/strength-history?days=${need}&tf=6h`),
+    ]).then(([d3, d6]) => {
+      const merged = {};
+      for (const r of (d3.rows || [])) {
+        const t = r.time?.slice(0, 16)?.replace(' ', 'T') || '';
+        if (!merged[t]) merged[t] = {};
+        if (!merged[t][r.currency]) merged[t][r.currency] = {};
+        merged[t][r.currency].h3 = parseFloat(r.smooth_3h ?? 0) || 0;
+      }
+      for (const r of (d6.rows || [])) {
+        const t = r.time?.slice(0, 16)?.replace(' ', 'T') || '';
+        if (!merged[t]) merged[t] = {};
+        if (!merged[t][r.currency]) merged[t][r.currency] = {};
+        merged[t][r.currency].h6 = parseFloat(r.smooth_6h ?? 0) || 0;
+      }
+      _fpCcsData = merged;
+      _fpCcsTimes = Object.keys(merged).sort();
+      return merged;
     });
     return _fpCcsLoading;
   }
@@ -1123,28 +1142,26 @@
     if (!bodyEl) return;
     try {
       bodyEl.innerHTML = '<div class="arc-loading"><span class="spinner"></span> Loading flow performance…</div>';
-      const [sessions, ccsRows] = await Promise.all([_loadSessionRows(), _loadFpCcsRows()]);
-      if (!sessions?.length || !ccsRows?.length) { bodyEl.innerHTML = '<p class="me-empty">No data available.</p>'; return; }
+      const [sessions] = await Promise.all([_loadSessionRows(), _loadFpCcsData()]);
+      if (!sessions?.length || !_fpCcsData) { bodyEl.innerHTML = '<p class="me-empty">No data available.</p>'; return; }
       const filteredSess = _filterSessionRows(sessions);
-      const filteredCcs  = _filterCcsRows(ccsRows);
       if (!filteredSess.length) { bodyEl.innerHTML = '<p class="me-empty">No sessions for this filter.</p>'; return; }
-      renderFlowPerfArchive(bodyEl, filteredSess, filteredCcs);
+      renderFlowPerfArchive(bodyEl, filteredSess);
     } catch (e) {
       bodyEl.innerHTML = `<p class="me-empty">Failed to load: ${e.message}</p>`;
     }
   }
 
   function _renderFilteredFlowPerf() {
-    if (!_fpCcsRows || !_arcSessionRows) return;
+    if (!_fpCcsData || !_arcSessionRows) return;
     const bodyEl = document.getElementById('arc-flowperf-body');
     if (!bodyEl) return;
     const filteredSess = _filterSessionRows(_arcSessionRows);
-    const filteredCcs  = _filterCcsRows(_fpCcsRows);
     if (!filteredSess.length) { bodyEl.innerHTML = '<p class="me-empty">No sessions for this filter.</p>'; return; }
-    renderFlowPerfArchive(bodyEl, filteredSess, filteredCcs);
+    renderFlowPerfArchive(bodyEl, filteredSess);
   }
 
-  function renderFlowPerfArchive(container, sessions, ccsRows) {
+  function renderFlowPerfArchive(container, sessions) {
     const tz = (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC');
     const SESS_COLOR = { ASIA: '#f59e0b', LONDON: '#0ea5e9', NEW_YORK: '#a855f7' };
     const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York' };
@@ -1155,16 +1172,9 @@
       'AUD_JPY','AUD_CHF','AUD_CAD','AUD_NZD',
       'NZD_JPY','NZD_CHF','NZD_CAD','CAD_JPY','CAD_CHF','CHF_JPY',
     ]);
-    const RANK_CLR = ['#4ade80', '#60a5fa', '#facc15', '#94a3b8']; // #1 green, #2 blue, #3 yellow, #4 grey
-
-    // Build ccy strength time index
-    const ccsIndex = {};
-    for (const r of ccsRows) {
-      const t = r.time?.slice(0, 16)?.replace(' ', 'T') || '';
-      if (!ccsIndex[t]) ccsIndex[t] = {};
-      ccsIndex[t][r.currency] = parseFloat(r.smooth_3h ?? 0) || 0;
-    }
-    const ccsTimes = Object.keys(ccsIndex).sort();
+    const RANK_CLR = ['#4ade80', '#60a5fa', '#facc15', '#94a3b8'];
+    const ccsIndex = _fpCcsData;
+    const ccsTimes = _fpCcsTimes;
 
     // Group sessions by date
     const sorted = [...sessions]
@@ -1217,31 +1227,39 @@
         const sessionTimes = ccsTimes.filter(t => t >= startKey && t < endKey);
         if (!sessionTimes.length) continue;
 
-        // Compute hourly spreads for each pair
+        // Compute hourly spreads (3H + 6H) for each pair
         const pairs = flowPairs.slice(0, 4).map(fp => {
           const [b, q] = fp.instrument.split('_');
           const flowSign = fp.dir === 'BUY' ? 1 : -1;
           const hourly = sessionTimes.map(t => {
             const snap = ccsIndex[t] || {};
-            const bv = snap[b] ?? null, qv = snap[q] ?? null;
-            const spread = (bv != null && qv != null) ? bv - qv : null;
-            return { time: t, spread, dirSpread: spread != null ? spread * flowSign : null };
+            const bv3 = snap[b]?.h3 ?? null, qv3 = snap[q]?.h3 ?? null;
+            const bv6 = snap[b]?.h6 ?? null, qv6 = snap[q]?.h6 ?? null;
+            const spread3H = (bv3 != null && qv3 != null) ? bv3 - qv3 : null;
+            const spread6H = (bv6 != null && qv6 != null) ? bv6 - qv6 : null;
+            // Combined weighted score: 60% 3H + 40% 6H (directional)
+            let combined = null;
+            if (spread3H != null && spread6H != null) combined = spread3H * 0.6 + spread6H * 0.4;
+            else if (spread3H != null) combined = spread3H;
+            else if (spread6H != null) combined = spread6H;
+            const dirScore = combined != null ? combined * flowSign : null;
+            return { time: t, spread3H, spread6H, combined, dirScore };
           });
           return { ...fp, hourly, flowSign };
         });
 
         // Check we have data
-        const validTimes = sessionTimes.filter(t => pairs.some(p => p.hourly.find(h => h.time === t && h.spread != null)));
+        const validTimes = sessionTimes.filter(t => pairs.some(p => p.hourly.find(h => h.time === t && h.combined != null)));
         if (!validTimes.length) continue;
 
-        // Compute per-hour rankings (rank by directional spread — higher = better performing)
-        const hourlyRanks = {}; // { time → [ { pair, rank, spread, dirSpread, delta } ] }
+        // Compute per-hour rankings (rank by combined directional score — higher = better)
+        const hourlyRanks = {};
         for (const t of validTimes) {
           const scored = pairs.map(p => {
             const h = p.hourly.find(h => h.time === t);
-            return { pair: p, spread: h?.spread ?? null, dirSpread: h?.dirSpread ?? null };
-          }).filter(s => s.dirSpread != null)
-            .sort((a, b) => b.dirSpread - a.dirSpread);
+            return { pair: p, spread3H: h?.spread3H ?? null, spread6H: h?.spread6H ?? null, combined: h?.combined ?? null, dirScore: h?.dirScore ?? null };
+          }).filter(s => s.dirScore != null)
+            .sort((a, b) => b.dirScore - a.dirScore);
           scored.forEach((s, i) => { s.rank = i + 1; });
           hourlyRanks[t] = scored;
         }
@@ -1272,9 +1290,7 @@
         for (const p of pairOrder) {
           const cls = p.dir === 'BUY' ? 'buy' : 'sell';
           const lastH = p.hourly.find(h => h.time === lastTime);
-          const lastSpread = lastH?.spread;
-          const lastDir = lastH?.dirSpread ?? 0;
-          const confirms = lastDir >= 0;
+          const lastDir = lastH?.dirScore ?? 0;
 
           html += `<tr>
             <td class="fp-arc-td-pair">
@@ -1283,32 +1299,38 @@
               <span class="spread-bias ${cls}" style="font-size:9px;margin-left:3px">${p.dir}</span>
             </td>`;
 
-          let prevSpread = null;
+          let prevCombined = null;
           for (const t of validTimes) {
             const entry = (hourlyRanks[t] || []).find(r => r.pair === p);
-            if (!entry || entry.spread == null) {
+            if (!entry || entry.combined == null) {
               html += `<td class="fp-arc-td">—</td>`;
               continue;
             }
             const rank = entry.rank;
             const rankClr = RANK_CLR[rank - 1] || '#64748b';
-            const dirOk = entry.dirSpread >= 0;
+            const dirOk = entry.dirScore >= 0;
             const valClr = dirOk ? '#4ade80' : '#f87171';
 
             // Delta from previous hour
             let deltaHtml = '';
-            if (prevSpread != null) {
-              const d = entry.spread - prevSpread;
+            if (prevCombined != null) {
+              const d = entry.combined - prevCombined;
               const dDir = d * p.flowSign;
               const dClr = dDir >= 0 ? '#4ade80' : '#f87171';
               deltaHtml = `<span class="fp-arc-delta" style="color:${dClr}">${dDir >= 0 ? '▲' : '▼'}</span>`;
             }
-            prevSpread = entry.spread;
+            prevCombined = entry.combined;
+
+            // Show 3H and 6H stacked
+            const v3 = entry.spread3H, v6 = entry.spread6H;
+            const v3Clr = v3 != null && v3 * p.flowSign >= 0 ? '#4ade80' : '#f87171';
+            const v6Clr = v6 != null && v6 * p.flowSign >= 0 ? '#4ade80' : '#f87171';
 
             html += `<td class="fp-arc-td">
               <span class="fp-arc-rank-badge" style="background:${rankClr}">#${rank}</span>
-              <span class="fp-arc-spread" style="color:${valClr}">${fmt5(entry.spread)}</span>
               ${deltaHtml}
+              <span class="fp-arc-spread" style="color:${v3Clr}" title="3H">${v3 != null ? fmt5(v3) : '—'}</span>
+              <span class="fp-arc-spread fp-arc-sub" style="color:${v6Clr}" title="6H">${v6 != null ? fmt5(v6) : '—'}</span>
             </td>`;
           }
 
