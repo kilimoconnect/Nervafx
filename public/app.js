@@ -1267,16 +1267,17 @@ function renderFlowPerformance(strengthData, m15Data) {
     const v90  = m15 ? parseFloat(m15.smooth_90m)  || 0 : null;
     const v180 = m15 ? parseFloat(m15.smooth_180m) || 0 : null;
 
-    // Compute M15 state from 15M spread values (smooth_45m vs smooth_90m)
+    // Compute M15 state relative to flow direction (BUY → positive is good, SELL → negative is good)
+    const flowSign = fp.dir === 'BUY' ? 1 : -1;
     let state = null;
     if (v45 != null && v90 != null) {
-      const abs45 = Math.abs(v45), abs90 = Math.abs(v90);
-      const sameSign = v45 === 0 && v90 === 0 ? true : Math.sign(v45) === Math.sign(v90);
-      if (abs45 < 0.00005)                          state = 'FLAT';
-      else if (!sameSign)                            state = 'REVERSING';
-      else if (abs45 > abs90 * 1.1)                  state = 'EXPANDING';
-      else if (abs45 < abs90 * 0.85)                 state = 'COMPRESSING';
-      else                                           state = 'STEADY';
+      const dir45 = v45 * flowSign;   // positive = moving WITH flow
+      const dir90 = v90 * flowSign;
+      if (Math.abs(v45) < 0.00005)                   state = 'FLAT';
+      else if (dir45 < 0)                             state = 'REVERSING';  // moving AGAINST flow
+      else if (dir45 > dir90 * 1.1)                   state = 'EXPANDING';  // accelerating WITH flow
+      else if (dir45 < dir90 * 0.85 && dir90 > 0)    state = 'COMPRESSING';// decelerating but still with flow
+      else                                            state = 'STEADY';
     }
 
     const h3Base  = ccyMap3H[base]  ?? null;
@@ -1285,8 +1286,6 @@ function renderFlowPerformance(strengthData, m15Data) {
     const h6Quote = ccyMap6H[quote] ?? null;
     const spread3H = (h3Base != null && h3Quote != null) ? h3Base - h3Quote : null;
     const spread6H = (h6Base != null && h6Quote != null) ? h6Base - h6Quote : null;
-
-    const flowSign = fp.dir === 'BUY' ? 1 : -1;
 
     // Alignment checks
     const m15Confirms = v45 != null ? Math.sign(v45) === flowSign : null;
