@@ -810,9 +810,266 @@ function computeExpansionPressure(sequence) {
   };
 }
 
+// ─── Fetch currency_strength smooth_3h data for flow pair derivation ─────────
+// Returns { time_key → { ccy → smooth_3h } } matching frontend getSmoothed3HFlow()
+
+async function fetchCurrencyStrengthFlow(sinceDays = 14) {
+  const since = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from('currency_strength')
+    .select('time, currency, smooth_3h, smooth_6h')
+    .gte('time', since)
+    .order('time', { ascending: true });
+  if (error) { console.warn('[SESSION_ACTIVITY] currency_strength fetch:', error.message); return null; }
+  if (!data?.length) return null;
+
+  // Index by floored-hour time → { ccy → { s3h, s6h } }
+  const index = {};
+  for (const r of data) {
+    const t = (r.time || '').slice(0, 16).replace(' ', 'T');
+    if (!index[t]) index[t] = {};
+    index[t][r.currency] = {
+      s3h: parseFloat(r.smooth_3h) || 0,
+      s6h: parseFloat(r.smooth_6h) || 0,
+    };
+  }
+  return index;
+}
+
+async function fetchM15FlowIndex(sinceDays = 14) {
+  const since = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from('m15_pair_spreads')
+    .select('time, instrument, smooth_45m, smooth_90m, smooth_180m, state')
+    .gte('time', since)
+    .order('time', { ascending: true });
+  if (error) { console.warn('[SESSION_ACTIVITY] m15_pair_spreads fetch:', error.message); return null; }
+  if (!data?.length) return null;
+
+  // Index by floored-hour time → { instrument → { v45, v90, v180, state } }
+  const index = {};
+  for (const r of data) {
+    const t = (r.time || '').slice(0, 16).replace(' ', 'T');
+    if (!index[t]) index[t] = {};
+    index[t][r.instrument] = {
+      v45:  parseFloat(r.smooth_45m)  || 0,
+      v90:  parseFloat(r.smooth_90m)  || 0,
+      v180: parseFloat(r.smooth_180m) || 0,
+      state: r.state,
+    };
+  }
+  return index;
+}
+
+const FLOW_PAIRS_SET = new Set([
+  'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
+  'EUR_GBP','EUR_JPY','EUR_CHF','EUR_CAD','EUR_AUD','EUR_NZD',
+  'GBP_JPY','GBP_CHF','GBP_CAD','GBP_AUD','GBP_NZD',
+  'AUD_JPY','AUD_CHF','AUD_CAD','AUD_NZD',
+  'NZD_JPY','NZD_CHF','NZD_CAD','CAD_JPY','CAD_CHF','CHF_JPY',
+]);
+
+/**
+ * Compute flow currencies using the full Flow Performance method:
+ * 1. Select top 2 strong / bottom 2 weak by smooth_3h
+ * 2. Build flow pairs
+ * 3. Score each pair using M15 (smooth_45m) + 3H spread + 6H spread
+ * 4. Return strongest/weakest currencies (same as frontend renderFlowPerformance)
+ *
+ * @param {object} csSnap  - { ccy → { s3h, s6h } } currency strength snapshot
+ * @param {object} m15Snap - { instrument → { v45, v90, v180, state } } M15 snapshot (nullable)
+ * @returns {{ strong: string, weak: string } | null}
+ */
+function _flowFromFullMethod(csSnap, m15Snap) {
+  if (!csSnap || Object.keys(csSnap).length < 4) return null;
+
+  // Step 1: Select currencies by smooth_3h (matches getSmoothed3HFlow)
+  const scored = Object.entries(csSnap)
+    .map(([ccy, v]) => ({ ccy, s3h: v.s3h, s6h: v.s6h }))
+    .sort((a, b) => b.s3h - a.s3h);
+  const strong = scored.slice(0, 2).map(e => e.ccy);
+  const weak   = scored.slice(-2).map(e => e.ccy);
+
+  // Step 2: Build flow pairs (strong vs weak)
+  const flowPairs = [];
+  for (const st of strong) {
+    for (const wk of weak) {
+      if (st === wk) continue;
+      const fwd = `${st}_${wk}`;
+      const rev = `${wk}_${st}`;
+      if (FLOW_PAIRS_SET.has(fwd))      flowPairs.push({ instrument: fwd, dir: 'BUY',  base: st, quote: wk });
+      else if (FLOW_PAIRS_SET.has(rev)) flowPairs.push({ instrument: rev, dir: 'SELL', base: wk, quote: st });
+    }
+  }
+
+  if (!flowPairs.length) return { strong: strong.join(','), weak: weak.join(',') };
+
+  // Step 3: Score each pair using M15 + 3H + 6H (mirrors frontend perfScore)
+  const pairScores = flowPairs.map(fp => {
+    const [base, quote] = fp.instrument.split('_');
+    const flowSign = fp.dir === 'BUY' ? 1 : -1;
+
+    // M15 data
+    const m15 = m15Snap ? m15Snap[fp.instrument] : null;
+    const v45  = m15 ? m15.v45  : null;
+    const v90  = m15 ? m15.v90  : null;
+
+    // 3H + 6H spreads from currency strength
+    const h3Base  = csSnap[base]  ? csSnap[base].s3h  : null;
+    const h3Quote = csSnap[quote] ? csSnap[quote].s3h : null;
+    const h6Base  = csSnap[base]  ? csSnap[base].s6h  : null;
+    const h6Quote = csSnap[quote] ? csSnap[quote].s6h : null;
+    const spread3H = (h3Base != null && h3Quote != null) ? h3Base - h3Quote : null;
+    const spread6H = (h6Base != null && h6Quote != null) ? h6Base - h6Quote : null;
+
+    // Alignment checks
+    const m15Confirms = v45 != null ? Math.sign(v45) === flowSign : null;
+    const h3Confirms  = spread3H != null ? Math.sign(spread3H) === flowSign : null;
+    const h6Confirms  = spread6H != null ? Math.sign(spread6H) === flowSign : null;
+
+    // M15 acceleration
+    const accel = (v45 != null && v90 != null) ? v45 - v90 : null;
+    const accelSign = accel != null ? Math.sign(accel) === flowSign : null;
+
+    // Performance score (same weights as frontend)
+    let perfScore = 0;
+    if (v45 != null)     perfScore += (v45 * flowSign) * 10000 * 4;       // M15 heaviest
+    if (spread3H != null) perfScore += (spread3H * flowSign) * 10000 * 2; // 3H
+    if (spread6H != null) perfScore += (spread6H * flowSign) * 10000 * 1; // 6H
+    if (m15Confirms)     perfScore += 15;
+    if (h3Confirms)      perfScore += 10;
+    if (h6Confirms)      perfScore += 5;
+    if (accelSign)       perfScore += 10;
+
+    // State bonus (from M15)
+    if (m15) {
+      let state = null;
+      if (v45 != null && v90 != null) {
+        const dir45 = v45 * flowSign;
+        const dir90 = v90 * flowSign;
+        if (Math.abs(v45) < 0.00005)                state = 'FLAT';
+        else if (dir45 < 0)                          state = 'REVERSING';
+        else if (dir45 > dir90 * 1.1)                state = 'EXPANDING';
+        else if (dir45 < dir90 * 0.85 && dir90 > 0) state = 'COMPRESSING';
+        else                                         state = 'STEADY';
+      }
+      if (state === 'EXPANDING' && m15Confirms)    perfScore += 15;
+      if (state === 'REVERSING')                   perfScore -= 10;
+      if (state === 'COMPRESSING' && !m15Confirms) perfScore -= 15;
+    }
+
+    return { ...fp, perfScore, m15Confirms, h3Confirms, h6Confirms };
+  });
+
+  // Step 4: If all pairs score negative → currencies not truly confirmed
+  // Re-derive strongest/weakest from best-scoring pair directions
+  pairScores.sort((a, b) => b.perfScore - a.perfScore);
+
+  // Use the 3H-derived currencies (same as frontend — 3H picks, M15+6H validates)
+  return { strong: strong.join(','), weak: weak.join(',') };
+}
+
+/**
+ * Build flow performance pair details for a session (stored in details.flow_performance).
+ * Matches the frontend renderFlowPerformance scoring: M15 + 3H + 6H alignment/status.
+ */
+function _flowPerfForSession(g, csFlowIndex, m15FlowIndex) {
+  if (!csFlowIndex) return null;
+  const hours = g.rows.map(r => (r.time_utc || '').slice(0, 16).replace(' ', 'T')).reverse();
+  for (const t of hours) {
+    const csSnap = csFlowIndex[t];
+    if (!csSnap || Object.keys(csSnap).length < 4) continue;
+    const m15Snap = m15FlowIndex ? m15FlowIndex[t] : null;
+
+    // Derive currencies
+    const scored = Object.entries(csSnap)
+      .map(([ccy, v]) => ({ ccy, s3h: v.s3h, s6h: v.s6h }))
+      .sort((a, b) => b.s3h - a.s3h);
+    const strong = scored.slice(0, 2).map(e => e.ccy);
+    const weak   = scored.slice(-2).map(e => e.ccy);
+
+    // Build flow pairs
+    const flowPairs = [];
+    for (const st of strong) {
+      for (const wk of weak) {
+        if (st === wk) continue;
+        const fwd = `${st}_${wk}`;
+        const rev = `${wk}_${st}`;
+        if (FLOW_PAIRS_SET.has(fwd))      flowPairs.push({ instrument: fwd, dir: 'BUY' });
+        else if (FLOW_PAIRS_SET.has(rev)) flowPairs.push({ instrument: rev, dir: 'SELL' });
+      }
+    }
+    if (!flowPairs.length) return null;
+
+    // Score each pair (matching frontend logic)
+    const results = flowPairs.slice(0, 4).map(fp => {
+      const [base, quote] = fp.instrument.split('_');
+      const flowSign = fp.dir === 'BUY' ? 1 : -1;
+      const m15 = m15Snap ? m15Snap[fp.instrument] : null;
+      const v45 = m15 ? m15.v45 : null;
+      const v90 = m15 ? m15.v90 : null;
+      const h3Base  = csSnap[base]?.s3h  ?? null;
+      const h3Quote = csSnap[quote]?.s3h ?? null;
+      const h6Base  = csSnap[base]?.s6h  ?? null;
+      const h6Quote = csSnap[quote]?.s6h ?? null;
+      const spread3H = (h3Base != null && h3Quote != null) ? h3Base - h3Quote : null;
+      const spread6H = (h6Base != null && h6Quote != null) ? h6Base - h6Quote : null;
+
+      const m15Confirms = v45 != null ? Math.sign(v45) === flowSign : null;
+      const h3Confirms  = spread3H != null ? Math.sign(spread3H) === flowSign : null;
+      const h6Confirms  = spread6H != null ? Math.sign(spread6H) === flowSign : null;
+
+      const htfCount = [h3Confirms, h6Confirms].filter(x => x === true).length;
+      let status;
+      if (m15Confirms && htfCount === 2)      status = 'STRONG';
+      else if (m15Confirms && htfCount === 1) status = 'ALIGNED';
+      else if (m15Confirms && htfCount === 0) status = 'PARTIAL';
+      else if (!m15Confirms && htfCount >= 1) status = 'BUILDING';
+      else if (m15Confirms === false)         status = 'AGAINST';
+      else                                    status = 'WAIT';
+
+      return {
+        pair: fp.instrument,
+        dir:  fp.dir,
+        status,
+        m15:  v45 != null ? round1(v45 * 100000) / 100000 : null,
+        h3:   spread3H != null ? round1(spread3H * 100000) / 100000 : null,
+        h6:   spread6H != null ? round1(spread6H * 100000) / 100000 : null,
+      };
+    });
+
+    return results;
+  }
+  return null;
+}
+
+/**
+ * Look up flow currencies for a session group using the full Flow Performance
+ * method (3H selection + M15 + 6H scoring). Falls back to hourly candle-based
+ * modal if no currency_strength / m15 data is available for that time.
+ *
+ * Tries the session's last hour first, then walks backwards through session hours.
+ */
+function _flowCcyForSession(g, csFlowIndex, m15FlowIndex, side) {
+  if (csFlowIndex) {
+    // Try each hour in the session (last → first) to find a CS snapshot
+    const hours = g.rows.map(r => (r.time_utc || '').slice(0, 16).replace(' ', 'T')).reverse();
+    for (const t of hours) {
+      const csSnap  = csFlowIndex[t];
+      if (!csSnap) continue;
+      const m15Snap = m15FlowIndex ? m15FlowIndex[t] : null;
+      const flow = _flowFromFullMethod(csSnap, m15Snap);
+      if (flow) return flow[side] || null;
+    }
+  }
+  // Fallback: candle-based modal from hourly rows
+  const field = side === 'strong' ? 'strongest_ccy' : 'weakest_ccy';
+  return _modal(g.rows.map(r => r[field]).filter(Boolean)) || null;
+}
+
 // ─── Build per-session rows for market_energy_sessions ──────────────────────
 
-function buildSessionRows(hourRows) {
+function buildSessionRows(hourRows, csFlowIndex, m15FlowIndex) {
   const groups = {};
   for (const r of hourRows) {
     let date = r.time_utc.slice(0, 10);
@@ -937,10 +1194,12 @@ function buildSessionRows(hourRows) {
       bullish_breadth:     bullPct,
       bearish_breadth:     bearPct,
       dominance_score:     dirCtrl,
-      strongest_ccy:       _modal(g.rows.map(r => r.strongest_ccy).filter(Boolean)) || null,
-      weakest_ccy:         _modal(g.rows.map(r => r.weakest_ccy).filter(Boolean)) || null,
+      strongest_ccy:       _flowCcyForSession(g, csFlowIndex, m15FlowIndex, 'strong'),
+      weakest_ccy:         _flowCcyForSession(g, csFlowIndex, m15FlowIndex, 'weak'),
       details: {
         hours: g.rows.length,
+        flow_method: csFlowIndex ? 'smooth_3h+6h+m15' : 'candle_modal',
+        flow_performance: _flowPerfForSession(g, csFlowIndex, m15FlowIndex),
         hourly: g.rows.map(r => ({
           time:                r.time_utc,
           energy_cycle:        r.energy_cycle,
@@ -1136,7 +1395,10 @@ async function backfillSessionActivity({ fullRewrite = false } = {}) {
   if (error) throw new Error(`Hourly upsert: ${error.message}`);
   console.log(`[SESSION_ACTIVITY] Backfilled ${rows.length} rows.`);
 
-  const allSessionRows = buildSessionRows(rows);
+  // Fetch currency strength (3H+6H) and M15 data for flow performance matching
+  const csFlowIndex  = await fetchCurrencyStrengthFlow(Math.ceil(300 / 24 * 1.5));
+  const m15FlowIndex = await fetchM15FlowIndex(Math.ceil(300 / 24 * 1.5));
+  const allSessionRows = buildSessionRows(rows, csFlowIndex, m15FlowIndex);
 
   if (fullRewrite) {
     await upsertMarketEnergySessions(allSessionRows);
@@ -1185,7 +1447,11 @@ async function calculateLatestSessionActivity() {
   const { getCurrentSession } = require('./sessionEngine');
   const activeSession = getCurrentSession().session;
   const todayStr = new Date().toISOString().slice(0, 10);
-  const sessionRows = buildSessionRows(allRows);
+
+  // Fetch currency strength (3H+6H) and M15 data for flow performance matching
+  const csFlowIndex  = await fetchCurrencyStrengthFlow(2);
+  const m15FlowIndex = await fetchM15FlowIndex(2);
+  const sessionRows = buildSessionRows(allRows, csFlowIndex, m15FlowIndex);
   const currentOnly = sessionRows.filter(
     sr => sr.session_name === activeSession && sr.session_date === todayStr
   );
