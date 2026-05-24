@@ -1286,16 +1286,23 @@ function renderFlowPerformance(strengthData, m15Data) {
     const accel = (v45 != null && v90 != null) ? v45 - v90 : null;
     const accelSign = accel != null ? Math.sign(accel) === flowSign : null;
 
-    // Performance score: weighted combination of magnitude + alignment + acceleration
+    // Performance score: directional magnitude (confirms = positive, against = negative)
     let perfScore = 0;
-    if (v45 != null) perfScore += Math.abs(v45) * 10000 * 3;         // M15 magnitude (heaviest weight)
-    if (spread3H != null) perfScore += Math.abs(spread3H) * 10000 * 2; // 3H spread magnitude
-    if (m15Confirms) perfScore += 20;                                    // Alignment bonuses
-    if (h3Confirms)  perfScore += 15;
-    if (h6Confirms)  perfScore += 10;
-    if (accelSign)   perfScore += 10;                                    // Accelerating in flow dir
-    if (state === 'EXPANDING') perfScore += 15;
-    if (state === 'COMPRESSING' && !m15Confirms) perfScore -= 10;
+    // M15: reward confirming moves, penalize opposing moves (heaviest weight)
+    if (v45 != null) perfScore += (v45 * flowSign) * 10000 * 4;
+    // 3H spread: same directional logic
+    if (spread3H != null) perfScore += (spread3H * flowSign) * 10000 * 2;
+    // 6H spread: lighter weight
+    if (spread6H != null) perfScore += (spread6H * flowSign) * 10000 * 1;
+    // Alignment bonuses
+    if (m15Confirms) perfScore += 15;
+    if (h3Confirms)  perfScore += 10;
+    if (h6Confirms)  perfScore += 5;
+    // Acceleration in flow direction
+    if (accelSign)   perfScore += 10;
+    // State bonuses
+    if (state === 'EXPANDING' && m15Confirms) perfScore += 15;
+    if (state === 'COMPRESSING' && !m15Confirms) perfScore -= 15;
 
     // Status classification
     const alignCount = [m15Confirms, h3Confirms, h6Confirms].filter(x => x === true).length;
