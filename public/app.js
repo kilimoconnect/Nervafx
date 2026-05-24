@@ -1204,6 +1204,100 @@ function renderRanking12H(spreadsData, strengthData) {
   }).join('');
 }
 
+// ─── Flow Performance (session strength pairs · M15 & 3H) ───────────────────
+
+function renderFlowPerformance(strengthData, m15Data) {
+  const el = document.getElementById('flow-perf-list');
+  if (!el) return;
+
+  // 1. Derive flow pairs from 3H currency strength (top 2 strong vs top 2 weak)
+  const { strong, weak } = getSmoothed3HFlow(strengthData?.currencies);
+  if (!strong.length || !weak.length) {
+    el.innerHTML = '<p class="empty-state">No strength data yet</p>';
+    return;
+  }
+
+  const PAIRS = new Set([
+    'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
+    'EUR_GBP','EUR_JPY','EUR_CHF','EUR_CAD','EUR_AUD','EUR_NZD',
+    'GBP_JPY','GBP_CHF','GBP_CAD','GBP_AUD','GBP_NZD',
+    'AUD_JPY','AUD_CHF','AUD_CAD','AUD_NZD',
+    'NZD_JPY','NZD_CHF','NZD_CAD','CAD_JPY','CAD_CHF','CHF_JPY',
+  ]);
+
+  // Build flow pair list (strong vs weak)
+  const flowPairs = [];
+  for (const st of strong) {
+    for (const wk of weak) {
+      if (st === wk) continue;
+      const fwd = `${st}_${wk}`;
+      const rev = `${wk}_${st}`;
+      if (PAIRS.has(fwd))      flowPairs.push({ instrument: fwd, dir: 'BUY' });
+      else if (PAIRS.has(rev)) flowPairs.push({ instrument: rev, dir: 'SELL' });
+    }
+  }
+
+  if (!flowPairs.length) {
+    el.innerHTML = '<p class="empty-state">No valid flow pairs</p>';
+    return;
+  }
+
+  // 2. Build M15 lookup from m15-spreads data
+  const m15Map = {};
+  if (m15Data?.spreads?.length) {
+    for (const s of m15Data.spreads) {
+      m15Map[s.instrument] = s;
+    }
+  }
+
+  // 3. Build 3H spread from currency strength data
+  const ccyMap = {};
+  if (strengthData?.currencies?.length) {
+    for (const c of strengthData.currencies) {
+      ccyMap[c.currency] = parseFloat(c.smooth_3h ?? c.normalized_3h) || 0;
+    }
+  }
+
+  // 4. Render each flow pair with M15 + 3H performance
+  const rows = flowPairs.slice(0, 4).map(fp => {
+    const [base, quote] = fp.instrument.split('_');
+    const m15 = m15Map[fp.instrument];
+    const v45  = m15 ? parseFloat(m15.smooth_45m) || 0 : null;
+    const v3h  = (ccyMap[base] != null && ccyMap[quote] != null)
+      ? ccyMap[base] - ccyMap[quote] : null;
+    const state = m15?.state || null;
+
+    // Determine if M15 confirms the flow direction
+    const flowSign = fp.dir === 'BUY' ? 1 : -1;
+    const m15Confirms = v45 != null ? Math.sign(v45) === flowSign : null;
+    const h3Confirms  = v3h != null ? Math.sign(v3h) === flowSign : null;
+
+    // Status: ALIGNED (both confirm), PARTIAL (one confirms), AGAINST (neither)
+    let status, statusCls;
+    if (m15Confirms && h3Confirms) { status = 'ALIGNED'; statusCls = 'fp-aligned'; }
+    else if (m15Confirms || h3Confirms) { status = 'PARTIAL'; statusCls = 'fp-partial'; }
+    else if (m15Confirms === false && h3Confirms === false) { status = 'AGAINST'; statusCls = 'fp-against'; }
+    else { status = 'WAIT'; statusCls = 'fp-wait'; }
+
+    const cls = fp.dir === 'BUY' ? 'buy' : 'sell';
+
+    return `
+      <div class="spread-row fp-row">
+        <div class="spread-accent ${cls}"></div>
+        <span class="spread-pair">${pair(fp.instrument)}</span>
+        <span class="spread-bias ${cls}">${fp.dir}</span>
+        <span class="fp-status ${statusCls}">${status}</span>
+        <span class="fp-vals">
+          <span class="fp-m15" title="M15 momentum">${v45 != null ? fmt(v45, 5) : '—'}</span>
+          <span class="fp-sep">·</span>
+          <span class="fp-3h" title="3H spread">${v3h != null ? fmt(v3h, 5) : '—'}</span>
+        </span>
+      </div>`;
+  }).join('');
+
+  el.innerHTML = rows;
+}
+
 // ─── M15 Pair Ranking ─────────────────────────────────────────────────────────
 
 // Notification bar filter — EXPANDING + COMPRESSING · all TFs same sign · |smooth_45m| >= CS_THRESHOLD
@@ -4065,6 +4159,7 @@ async function refresh() {
     renderStates(states);
     renderSpreads(spreads);
     renderRanking12H(spreads, strength);
+    renderFlowPerformance(strength, m15Data);
     renderM15Spreads(m15Data);
     updateM15Bar(m15Data);
     renderRisk(risk);
@@ -4097,6 +4192,7 @@ function showSkeletons() {
     'watchlist-list':      2,
     'spreads-list':        6,
     'ranking-12h-list':    6,
+    'flow-perf-list':      4,
     'm15-spreads-list':    6,
     'risk-list':           3,
     'actions-list':        4,

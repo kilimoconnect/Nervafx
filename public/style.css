@@ -200,6 +200,7 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 400px; }
 .plan-free #section-news             { order: 2; }
 .plan-free #section-strength         { order: 3; }
 .plan-free #section-ranking-12h      { order: 3; }
+.plan-free #section-flow-perf        { order: 3; }
 .plan-free #section-market-activity  { order: 4; }
 .plan-free #section-currency-signals { order: 5; }
 .plan-free #section-m15-spreads      { order: 5; }
@@ -1031,6 +1032,34 @@ section.card:has(.v2-gate-overlay.visible) { min-height: 220px; }
 .spread-bar-fill { height: 100%; border-radius: 2px; }
 .spread-bar-fill.buy  { background: var(--green); }
 .spread-bar-fill.sell { background: var(--red); }
+
+/* ─── Flow Performance card ───────────────────────────────────────────────── */
+.fp-row {
+  grid-template-columns: 6px 72px 42px 62px 1fr;
+}
+.fp-status {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: 3px;
+  text-align: center;
+}
+.fp-aligned { color: #4ade80; background: rgba(74,222,128,0.1); }
+.fp-partial { color: #facc15; background: rgba(250,204,21,0.1); }
+.fp-against { color: #f87171; background: rgba(248,113,113,0.1); }
+.fp-wait    { color: #64748b; background: rgba(100,116,139,0.1); }
+.fp-vals {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  font-size: 10px;
+  color: var(--text-dim);
+  justify-self: end;
+}
+.fp-m15 { color: var(--text-muted); }
+.fp-3h  { color: var(--text-muted); }
+.fp-sep { color: var(--border); font-size: 8px; }
 
 /* ─── Risk list ────────────────────────────────────────────────────────────── */
 .risk-list {
