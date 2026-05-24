@@ -1138,7 +1138,11 @@
 
       const m15 = {};
       for (const r of (dm15.rows || [])) {
-        const t = r.time?.slice(0, 16)?.replace(' ', 'T') || '';
+        // Normalize M15 timestamps to hour boundary (M15 stores at :15/:30/:45, not :00)
+        const raw = r.time?.slice(0, 16)?.replace(' ', 'T') || '';
+        const dt = new Date(raw + ':00Z');
+        dt.setUTCMinutes(0, 0, 0);
+        const t = dt.toISOString().slice(0, 16);
         if (!m15[t]) m15[t] = {};
         m15[t][r.instrument] = {
           v45: parseFloat(r.smooth_45m) || 0,
@@ -1218,11 +1222,26 @@
         if (!sess) continue;
         const sessColor = SESS_COLOR[sessKey] || '#64748b';
         const sessLabel = SESS_LABEL[sessKey] || sessKey;
-        const allStrong = (sess.strongest_ccy || '').split(',').filter(Boolean);
-        const allWeak   = (sess.weakest_ccy   || '').split(',').filter(Boolean);
+
+        // Session time range
+        const sessStart = sess.session_start || `${date}T00:00:00Z`;
+        const sessEnd   = sess.session_end   || `${date}T23:59:59Z`;
+        const startKey  = sessStart.slice(0, 16).replace(' ', 'T');
+        const endKey    = sessEnd.slice(0, 16).replace(' ', 'T');
+        const sessionTimes = ccsTimes.filter(t => t >= startKey && t < endKey);
+        if (!sessionTimes.length) continue;
+
+        // Derive flow pairs from 3H currency strength at last hour (same as live getSmoothed3HFlow)
+        const lastT = sessionTimes[sessionTimes.length - 1];
+        const lastSnap = ccsIndex[lastT] || {};
+        const ccyScored = Object.entries(lastSnap)
+          .map(([ccy, vals]) => ({ ccy, h3: vals.h3 || 0 }))
+          .sort((a, b) => b.h3 - a.h3);
+        const allStrong = ccyScored.filter(c => c.h3 > 0).slice(0, 2).map(c => c.ccy);
+        const allWeak   = ccyScored.filter(c => c.h3 < 0).slice(-2).reverse().map(c => c.ccy);
         if (!allStrong.length || !allWeak.length) continue;
 
-        // Build flow pairs
+        // Build flow pairs (same as live card)
         const flowPairs = [];
         for (const st of allStrong) {
           for (const wk of allWeak) {
@@ -1233,14 +1252,6 @@
           }
         }
         if (!flowPairs.length) continue;
-
-        // Session time range
-        const sessStart = sess.session_start || `${date}T00:00:00Z`;
-        const sessEnd   = sess.session_end   || `${date}T23:59:59Z`;
-        const startKey  = sessStart.slice(0, 16).replace(' ', 'T');
-        const endKey    = sessEnd.slice(0, 16).replace(' ', 'T');
-        const sessionTimes = ccsTimes.filter(t => t >= startKey && t < endKey);
-        if (!sessionTimes.length) continue;
 
         // Compute hourly metrics for each pair — mirrors live card logic exactly
         const pairs = flowPairs.slice(0, 4).map(fp => {
