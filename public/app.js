@@ -1548,12 +1548,12 @@ function renderActions(actions) {
 // ─── Trading Session ──────────────────────────────────────────────────────────
 
 const SESSION_TIMELINE = [
-  { name: 'ASIA',        label: 'Asia',       hours: '00–06', quality: 'medium'    },
+  { name: 'ASIA',        label: 'Asia',       hours: '23–06', quality: 'medium'    },
   { name: 'LONDON_OPEN', label: 'LDN Open',   hours: '07–10', quality: 'high'      },
   { name: 'LONDON',      label: 'London',     hours: '10–13', quality: 'high'      },
   { name: 'LONDON_NY',   label: 'LDN/NY',     hours: '13–17', quality: 'very_high' },
   { name: 'LATE_NY',     label: 'Late NY',    hours: '17–21', quality: 'low'       },
-  { name: 'DEAD_HOURS',  label: 'Low Liq.',   hours: '21–00', quality: 'blocked'   },
+  { name: 'DEAD_HOURS',  label: 'Low Liq.',   hours: '21–23', quality: 'blocked'   },
 ];
 
 // Maps stored session_name keys (e.g. DEAD_HOURS) to human display labels.
@@ -4671,7 +4671,7 @@ function _btRenderSessionThresholdsInto(data, insight, wrap) {
   const validSess = sessions.filter(([_, d]) => !d.insufficient);
 
   const sessExplains = {
-    'Asia': 'Tokyo/Sydney session (roughly 00:00–08:00 UTC). Lower liquidity, smaller moves, range-bound. Requires higher agreement thresholds.',
+    'Asia': 'Tokyo/Sydney session (roughly 23:00–07:00 UTC). Lower liquidity, smaller moves, range-bound. Requires higher agreement thresholds.',
     'London': 'European session (roughly 07:00–16:00 UTC). Highest liquidity, biggest breakouts, strongest trends. Most tradeable session.',
     'New York': 'US session (roughly 12:00–21:00 UTC). Overlaps with London early, then goes solo. Often continues or reverses earlier moves.',
     'London_NY_Overlap': 'When London and New York are both open (roughly 12:00–16:00 UTC). Maximum liquidity and volatility. Biggest moves happen here.',
@@ -5262,12 +5262,12 @@ function _btRenderSessionPerfInto(data, insight, wrap) {
   const bestSess = sessions[0], worstSess = sessions[sessions.length - 1];
 
   const sessTimings = {
-    'Asia': '00:00 – 08:00 UTC (Tokyo/Sydney)',
+    'Asia': '23:00 – 07:00 UTC (Tokyo/Sydney)',
     'London': '07:00 – 16:00 UTC (European)',
     'New_York': '12:00 – 21:00 UTC (US)',
     'London_NY_Overlap': '12:00 – 16:00 UTC (Both open)',
     'Late_NY': '17:00 – 21:00 UTC (US afternoon)',
-    'Pre_Asia': '21:00 – 00:00 UTC (Quietest period)',
+    'Pre_Asia': '21:00 – 23:00 UTC (Quietest period)',
   };
 
   html += _btFindings([

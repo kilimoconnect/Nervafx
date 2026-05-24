@@ -3,8 +3,8 @@
 /**
  * Session Engine — fixed UTC boundaries, 4 sessions
  *
- * LOW_LIQUIDITY : 21:00–00:00 UTC   (dead / rollover zone)
- * ASIA          : 00:00–07:00 UTC
+ * LOW_LIQUIDITY : 21:00–23:00 UTC   (dead / rollover zone)
+ * ASIA          : 23:00–07:00 UTC
  * LONDON        : 07:00–13:00 UTC
  * NEW_YORK      : 13:00–21:00 UTC
  *
@@ -21,10 +21,10 @@
 // ─── Session boundaries (UTC hours, inclusive open, exclusive close) ──────────
 
 const SESSION_BOUNDARIES = [
-  { session: 'ASIA',          open: 0,  close: 7  },
+  { session: 'ASIA',          open: 23, close: 7  }, // wraps midnight: 23:00–07:00
   { session: 'LONDON',        open: 7,  close: 13 },
   { session: 'NEW_YORK',      open: 13, close: 21 },
-  { session: 'LOW_LIQUIDITY', open: 21, close: 24 }, // 21:00–00:00
+  { session: 'LOW_LIQUIDITY', open: 21, close: 23 }, // 21:00–23:00
 ];
 
 // Zones annotated inside their parent session (informational only)
@@ -107,9 +107,15 @@ function getCurrentSession(now = new Date()) {
 
 function _sessionForHour(utcHour) {
   for (const b of SESSION_BOUNDARIES) {
-    if (utcHour >= b.open && utcHour < b.close) return b.session;
+    if (b.open < b.close) {
+      // Normal range (e.g. LONDON 7–13)
+      if (utcHour >= b.open && utcHour < b.close) return b.session;
+    } else {
+      // Wraps midnight (e.g. ASIA 23–07)
+      if (utcHour >= b.open || utcHour < b.close) return b.session;
+    }
   }
-  return 'LOW_LIQUIDITY'; // 00:00 wraps from 23:00
+  return 'LOW_LIQUIDITY';
 }
 
 // Returns the active zone name within a session (or null)
@@ -132,9 +138,9 @@ function _build(sessName, now, opts = {}) {
 
   let activityIndex = tradesAllowed ? meta.baseActivity : 0;
   if (tradesAllowed && b) {
-    const duration = b.close - b.open || 1;
-    const elapsed  = utcHour - b.open;
-    const progress = Math.max(0, Math.min(1, elapsed / duration));
+    const duration = b.open < b.close ? (b.close - b.open) : (24 - b.open + b.close);
+    const elapsed  = utcHour >= b.open ? (utcHour - b.open) : (24 - b.open + utcHour);
+    const progress = Math.max(0, Math.min(1, elapsed / (duration || 1)));
     const ramp     = Math.sin(progress * Math.PI);
     activityIndex  = Math.round(Math.max(5, meta.baseActivity * 0.75 + meta.baseActivity * 0.25 * ramp));
   }

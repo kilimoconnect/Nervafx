@@ -33,12 +33,11 @@ const HORIZONS   = [1, 4, 8, 12, 24]; // hours ahead to measure outcome
 
 function classifySession(isoTime) {
   const h = new Date(isoTime).getUTCHours();
-  if (h >= 0  && h < 3)  return 'ASIA';
-  if (h >= 3  && h < 10) return 'ASIA';
-  if (h >= 10 && h < 13) return 'LONDON';
+  if (h >= 23 || h < 7)  return 'ASIA';       // 23:00–07:00 (wraps midnight)
+  if (h >= 7  && h < 13) return 'LONDON';
   if (h >= 13 && h < 17) return 'LONDON_NY';
   if (h >= 17 && h < 21) return 'LATE_NY';
-  return 'LOW_LIQUIDITY';
+  return 'LOW_LIQUIDITY';                      // 21:00–23:00
 }
 
 function isTradingSession(session) {
