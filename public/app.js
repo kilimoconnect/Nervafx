@@ -1242,7 +1242,7 @@ function renderFlowPerformance(strengthData, m15Data) {
     return;
   }
 
-  // 2. Build M15 lookup from m15-spreads data
+  // 2. Build M15 lookup from m15-spreads data (includes DE scores)
   const m15Map = {};
   if (m15Data?.spreads?.length) {
     for (const s of m15Data.spreads) {
@@ -1337,18 +1337,25 @@ function renderFlowPerformance(strengthData, m15Data) {
       momentum = 'No data';
     }
 
-    return { ...fp, v45, v90, v180, spread3H, spread6H, state, accel, m15Confirms, h3Confirms, h6Confirms, accelSign, perfScore, status, statusCls, momentum, h3Base, h3Quote, base, quote };
+    // Directional Efficiency from API (combined M15+H1 DE)
+    const deCombined = m15 ? parseFloat(m15.de_combined) || 0 : 0;
+    const deLabel = deCombined >= 85 ? 'Institutional' : deCombined >= 70 ? 'Clean' : deCombined >= 55 ? 'Mixed' : 'Noisy';
+
+    return { ...fp, v45, v90, v180, spread3H, spread6H, state, accel, m15Confirms, h3Confirms, h6Confirms, accelSign, perfScore, status, statusCls, momentum, h3Base, h3Quote, base, quote, deCombined, deLabel };
   });
 
-  // 5. Rank by performance score (best first)
-  scored.sort((a, b) => b.perfScore - a.perfScore);
+  // 5. Rank by enhanced score: 75% flow score + 25% DE (ranking booster, not standalone)
+  scored.forEach(fp => {
+    fp.finalScore = (0.75 * fp.perfScore) + (0.25 * fp.deCombined);
+  });
+  scored.sort((a, b) => b.finalScore - a.finalScore);
 
   // 6. Render ranked cards with detail rows
-  const maxPerf = scored[0]?.perfScore || 1;
+  const maxPerf = scored[0]?.finalScore || 1;
 
   const rows = scored.map((fp, idx) => {
     const cls = fp.dir === 'BUY' ? 'buy' : 'sell';
-    const perfPct = Math.round((fp.perfScore / maxPerf) * 100);
+    const perfPct = Math.min(100, Math.max(0, Math.round((fp.finalScore / maxPerf) * 100)));
 
     // M15 state badge
     const stateLabel = fp.state ? fp.state.charAt(0) + fp.state.slice(1).toLowerCase() : '—';
@@ -1386,6 +1393,8 @@ function renderFlowPerformance(strengthData, m15Data) {
             <span class="fp-val">${fp.momentum}</span>
             <span class="fp-lbl">Align</span>
             <span class="fp-dots">${dot(fp.m15Confirms)}${dot(fp.h3Confirms)}${dot(fp.h6Confirms)}</span>
+            <span class="fp-lbl">Eff</span>
+            <span class="fp-val fp-de-${fp.deLabel.toLowerCase()}">${Math.round(fp.deCombined)}</span>
           </div>
           <div class="fp-detail-row fp-ccy-row">
             <span class="fp-ccy-chip ${(fp.h3Base ?? 0) >= 0 ? 'strong' : 'weak'}">${fp.base} ${fmt(fp.h3Base ?? 0, 5)}</span>

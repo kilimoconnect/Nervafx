@@ -1108,6 +1108,7 @@
 
   let _fpCcsData = null;  // { time → { ccy → { h3, h6 } } }
   let _fpM15Data = null;  // { time → { instrument → { v45, v90, state } } }
+  let _fpDeData  = null;  // { time → { instrument → de_combined } }
   let _fpLoading = null;
   let _fpCcsTimes = [];
 
@@ -1119,7 +1120,8 @@
       api(`/api/strength-history?days=${need}&tf=3h`),
       api(`/api/strength-history?days=${need}&tf=6h`),
       api(`/api/m15-spreads-history?days=${need}`).catch(() => ({ rows: [] })),
-    ]).then(([d3, d6, dm15]) => {
+      api(`/api/de-history?days=${need}`).catch(() => ({ rows: [] })),
+    ]).then(([d3, d6, dm15, dDE]) => {
       const merged = {};
       for (const r of (d3.rows || [])) {
         const t = r.time?.slice(0, 16)?.replace(' ', 'T') || '';
@@ -1151,6 +1153,15 @@
         };
       }
       _fpM15Data = m15;
+
+      // DE index: time → { instrument → de_combined }
+      const de = {};
+      for (const r of (dDE.rows || [])) {
+        const t = (r.time || '').slice(0, 16).replace(' ', 'T');
+        if (!de[t]) de[t] = {};
+        de[t][r.instrument] = parseFloat(r.de_combined) || 0;
+      }
+      _fpDeData = de;
     });
     return _fpLoading;
   }
@@ -1193,6 +1204,7 @@
     const RANK_CLR = ['#4ade80', '#60a5fa', '#facc15', '#94a3b8'];
     const ccsIndex = _fpCcsData;
     const m15Index = _fpM15Data;
+    const deIndex  = _fpDeData || {};
     const ccsTimes = _fpCcsTimes;
 
     // Group sessions by date
@@ -1324,7 +1336,12 @@
             if (state === 'REVERSING')                   perfScore -= 10;
             if (state === 'COMPRESSING' && !m15Confirms) perfScore -= 15;
 
-            return { time: t, v45, v90, spread3H, spread6H, h3Base, h3Quote, state, momentum, status, statusCls, m15Confirms, h3Confirms, h6Confirms, perfScore };
+            // Directional Efficiency (DE) — ranking booster
+            const deSnap = deIndex[t] || {};
+            const deCombined = deSnap[fp.instrument] || 0;
+            const finalScore = (0.75 * perfScore) + (0.25 * deCombined);
+
+            return { time: t, v45, v90, spread3H, spread6H, h3Base, h3Quote, state, momentum, status, statusCls, m15Confirms, h3Confirms, h6Confirms, perfScore, deCombined, finalScore };
           });
           return { ...fp, hourly, flowSign, base: b, quote: q };
         });
@@ -1333,14 +1350,14 @@
         const validTimes = sessionTimes.filter(t => pairs.some(p => p.hourly.find(h => h.time === t && h.perfScore !== 0)));
         if (!validTimes.length) continue;
 
-        // Compute per-hour rankings (rank by perfScore — same as live card)
+        // Compute per-hour rankings (rank by finalScore = 75% flow + 25% DE)
         const hourlyRanks = {};
         for (const t of validTimes) {
           const scored = pairs.map(p => {
             const h = p.hourly.find(h => h.time === t);
             return { pair: p, ...(h || {}) };
           }).filter(s => s.perfScore != null)
-            .sort((a, b) => b.perfScore - a.perfScore);
+            .sort((a, b) => (b.finalScore || b.perfScore) - (a.finalScore || a.perfScore));
           scored.forEach((s, i) => { s.rank = i + 1; });
           hourlyRanks[t] = scored;
         }
@@ -1410,6 +1427,10 @@
             const ST_SHORT = { EXPANDING: 'Exp', COMPRESSING: 'Comp', REVERSING: 'Rev', STEADY: 'Stdy', FLAT: 'Flat' };
             const MOM_SHORT = { Accelerating: 'Acc', Fading: 'Fad', Steady: 'Stdy', Flat: 'Flat', 'No data': '—' };
 
+            // DE label
+            const deVal = entry.deCombined || 0;
+            const DE_CLR = deVal >= 85 ? '#4ade80' : deVal >= 70 ? '#60a5fa' : deVal >= 55 ? '#facc15' : '#f87171';
+
             html += `<td class="fp-arc-td">
               <span class="fp-arc-rank-badge" style="background:${rankClr}">#${rank}</span>
               <span class="fp-status ${entry.statusCls}" style="font-size:7px">${entry.status}</span>
@@ -1419,6 +1440,7 @@
               <span class="fp-arc-spread fp-arc-sub" style="color:${v6Clr}" title="6H">${v6 != null ? fmt5(v6) : '—'}</span>
               <span class="fp-arc-meta" style="color:${ST_CLR[entry.state] || '#64748b'}">${ST_SHORT[entry.state] || '—'}</span>
               <span class="fp-arc-meta" style="color:var(--text-dim)">${MOM_SHORT[entry.momentum] || '—'}</span>
+              <span class="fp-arc-meta" style="color:${DE_CLR}" title="Eff ${Math.round(deVal)}">E${Math.round(deVal)}</span>
             </td>`;
           }
 

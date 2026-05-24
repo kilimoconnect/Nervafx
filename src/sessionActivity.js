@@ -885,6 +885,54 @@ async function fetchM15FlowIndex(sinceDays = 14) {
   return index;
 }
 
+/**
+ * Compute Directional Efficiency from raw candles.
+ * DE = (|final_close - initial_open| / sum(high - low)) × 100
+ */
+function computeDE(candles) {
+  if (!candles || candles.length < 2) return 0;
+  const netMove = Math.abs(candles[candles.length - 1].close - candles[0].open);
+  let totalTravel = 0;
+  for (const c of candles) totalTravel += c.high - c.low;
+  if (totalTravel === 0) return 0;
+  return Math.min(100, (netMove / totalTravel) * 100);
+}
+
+async function fetchM15Candles(sinceDays = 14) {
+  const since = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000).toISOString();
+  const PAGE = 1000;
+  const allData = [];
+  let page = 0;
+  while (true) {
+    const from = page * PAGE;
+    const { data, error } = await supabase
+      .from('backtest_candles')
+      .select('instrument, time, open, high, low, close')
+      .eq('timeframe', 'M15')
+      .eq('complete', true)
+      .gte('time', since)
+      .order('time', { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) { console.warn('[SESSION_ACTIVITY] M15 candles fetch:', error.message); break; }
+    if (!data?.length) break;
+    allData.push(...data);
+    if (data.length < PAGE) break;
+    page++;
+  }
+  if (!allData.length) return null;
+
+  // Group by instrument, sorted ascending
+  const byPair = {};
+  for (const c of allData) {
+    if (!byPair[c.instrument]) byPair[c.instrument] = [];
+    byPair[c.instrument].push({
+      open: parseFloat(c.open), high: parseFloat(c.high),
+      low: parseFloat(c.low), close: parseFloat(c.close), time: c.time,
+    });
+  }
+  return byPair;
+}
+
 const FLOW_PAIRS_SET = new Set([
   'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
   'EUR_GBP','EUR_JPY','EUR_CHF','EUR_CAD','EUR_AUD','EUR_NZD',
@@ -995,9 +1043,9 @@ function _flowFromFullMethod(csSnap, m15Snap) {
 
 /**
  * Build flow performance pair details for a session (stored in details.flow_performance).
- * Matches the frontend renderFlowPerformance scoring: M15 + 3H + 6H alignment/status.
+ * Matches the frontend renderFlowPerformance scoring: M15 + 3H + 6H alignment/status + DE.
  */
-function _flowPerfForSession(g, csFlowIndex, m15FlowIndex) {
+function _flowPerfForSession(g, csFlowIndex, m15FlowIndex, h1CandlesByTime, m15CandlesByPair) {
   if (!csFlowIndex) return null;
   const hours = g.rows.map(r => (r.time_utc || '').slice(0, 16).replace(' ', 'T')).reverse();
   for (const t of hours) {
@@ -1052,6 +1100,31 @@ function _flowPerfForSession(g, csFlowIndex, m15FlowIndex) {
       else if (m15Confirms === false)         status = 'AGAINST';
       else                                    status = 'WAIT';
 
+      // Directional Efficiency from raw candles (last 20 H1 + last 20 M15 up to this time)
+      let deCombined = 0;
+      if (h1CandlesByTime || m15CandlesByPair) {
+        // H1 DE: get last 20 H1 candles for this pair up to session time
+        let h1DE = 0;
+        if (h1CandlesByTime) {
+          const sessionTimes = g.rows.map(r => r.time_utc).sort();
+          const h1Candles = [];
+          for (const st of sessionTimes) {
+            const hourData = h1CandlesByTime[st];
+            if (hourData && hourData[fp.instrument]) h1Candles.push(hourData[fp.instrument]);
+          }
+          // Use up to last 20 from available data
+          h1DE = computeDE(h1Candles.slice(-20));
+        }
+        // M15 DE: get last 20 M15 candles for this pair up to session end time
+        let m15DE = 0;
+        if (m15CandlesByPair && m15CandlesByPair[fp.instrument]) {
+          const sessEnd = g.rows[g.rows.length - 1]?.time_utc || '';
+          const m15ForPair = m15CandlesByPair[fp.instrument].filter(c => c.time <= sessEnd);
+          m15DE = computeDE(m15ForPair.slice(-20));
+        }
+        deCombined = round1(0.40 * m15DE + 0.60 * h1DE);
+      }
+
       return {
         pair: fp.instrument,
         dir:  fp.dir,
@@ -1059,6 +1132,7 @@ function _flowPerfForSession(g, csFlowIndex, m15FlowIndex) {
         m15:  v45 != null ? round1(v45 * 100000) / 100000 : null,
         h3:   spread3H != null ? round1(spread3H * 100000) / 100000 : null,
         h6:   spread6H != null ? round1(spread6H * 100000) / 100000 : null,
+        de:   deCombined,
       };
     });
 
@@ -1093,7 +1167,7 @@ function _flowCcyForSession(g, csFlowIndex, m15FlowIndex, side) {
 
 // ─── Build per-session rows for market_energy_sessions ──────────────────────
 
-function buildSessionRows(hourRows, csFlowIndex, m15FlowIndex) {
+function buildSessionRows(hourRows, csFlowIndex, m15FlowIndex, h1CandlesByTime, m15CandlesByPair) {
   const groups = {};
   for (const r of hourRows) {
     let date = r.time_utc.slice(0, 10);
@@ -1223,7 +1297,7 @@ function buildSessionRows(hourRows, csFlowIndex, m15FlowIndex) {
       details: {
         hours: g.rows.length,
         flow_method: csFlowIndex ? 'smooth_3h+6h+m15' : 'candle_modal',
-        flow_performance: _flowPerfForSession(g, csFlowIndex, m15FlowIndex),
+        flow_performance: _flowPerfForSession(g, csFlowIndex, m15FlowIndex, h1CandlesByTime, m15CandlesByPair),
         hourly: g.rows.map(r => ({
           time:                r.time_utc,
           energy_cycle:        r.energy_cycle,
@@ -1419,10 +1493,12 @@ async function backfillSessionActivity({ fullRewrite = false } = {}) {
   if (error) throw new Error(`Hourly upsert: ${error.message}`);
   console.log(`[SESSION_ACTIVITY] Backfilled ${rows.length} rows.`);
 
-  // Fetch currency strength (3H+6H) and M15 data for flow performance matching
-  const csFlowIndex  = await fetchCurrencyStrengthFlow(Math.ceil(300 / 24 * 1.5));
-  const m15FlowIndex = await fetchM15FlowIndex(Math.ceil(300 / 24 * 1.5));
-  const allSessionRows = buildSessionRows(rows, csFlowIndex, m15FlowIndex);
+  // Fetch currency strength (3H+6H), M15 spread data, and M15 candles for DE
+  const daysCover = Math.ceil(300 / 24 * 1.5);
+  const csFlowIndex    = await fetchCurrencyStrengthFlow(daysCover);
+  const m15FlowIndex   = await fetchM15FlowIndex(daysCover);
+  const m15CandleData  = await fetchM15Candles(daysCover);
+  const allSessionRows = buildSessionRows(rows, csFlowIndex, m15FlowIndex, byTime, m15CandleData);
 
   if (fullRewrite) {
     await upsertMarketEnergySessions(allSessionRows);
@@ -1472,10 +1548,11 @@ async function calculateLatestSessionActivity() {
   const activeSession = getCurrentSession().session;
   const todayStr = new Date().toISOString().slice(0, 10);
 
-  // Fetch currency strength (3H+6H) and M15 data for flow performance matching
-  const csFlowIndex  = await fetchCurrencyStrengthFlow(2);
-  const m15FlowIndex = await fetchM15FlowIndex(2);
-  const sessionRows = buildSessionRows(allRows, csFlowIndex, m15FlowIndex);
+  // Fetch currency strength (3H+6H), M15 spread data, and M15 candles for DE
+  const csFlowIndex   = await fetchCurrencyStrengthFlow(2);
+  const m15FlowIndex  = await fetchM15FlowIndex(2);
+  const m15CandleData = await fetchM15Candles(2);
+  const sessionRows = buildSessionRows(allRows, csFlowIndex, m15FlowIndex, byTime, m15CandleData);
   const currentOnly = sessionRows.filter(
     sr => sr.session_name === activeSession && sr.session_date === todayStr
   );

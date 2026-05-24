@@ -1150,6 +1150,11 @@ section.card:has(.v2-gate-overlay.visible) { min-height: 220px; }
   font-size: 9px;
   color: var(--text-dim);
 }
+/* Directional Efficiency labels */
+.fp-de-institutional { color: #4ade80; font-weight: 700; }
+.fp-de-clean         { color: #60a5fa; font-weight: 600; }
+.fp-de-mixed         { color: #facc15; }
+.fp-de-noisy         { color: #f87171; }
 
 /* ─── Archive Flow Performance ────────────────────────────────────────────── */
 .fp-arc-table {
