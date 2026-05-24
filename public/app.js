@@ -86,8 +86,6 @@ const REFRESH_MS = 60000;
 let strengthChart = null;
 let activeTF = '6';
 let strengthData = null;
-let _m15DataCache = null; // cached for re-render by fetchMarketActivity
-let _meFlowCurrencies = null; // { strong: ['CHF','GBP'], weak: ['NZD','CAD'] } from ME session
 let _firstLoad = true;
 // Currencies that currently meet the Currency Signals threshold (strong + weak combined).
 // Set<string> — populated by renderCurrencySignals() before the section renderers run.
@@ -1212,17 +1210,8 @@ function renderFlowPerformance(strengthData, m15Data) {
   const el = document.getElementById('flow-perf-list');
   if (!el) return;
 
-  // 1. Derive flow pairs �� prefer Market Energy session currencies (same as "Strength flow")
-  //    to ensure consistency. Fall back to smooth_3h sort if ME not loaded yet.
-  let strong, weak;
-  if (_meFlowCurrencies && _meFlowCurrencies.strong.length && _meFlowCurrencies.weak.length) {
-    strong = _meFlowCurrencies.strong;
-    weak   = _meFlowCurrencies.weak;
-  } else {
-    const flow = getSmoothed3HFlow(strengthData?.currencies);
-    strong = flow.strong;
-    weak   = flow.weak;
-  }
+  // 1. Derive flow pairs from 3H currency strength (top 2 strong vs top 2 weak)
+  const { strong, weak } = getSmoothed3HFlow(strengthData?.currencies);
   if (!strong.length || !weak.length) {
     el.innerHTML = '<p class="empty-state">No strength data yet</p>';
     return;
@@ -3675,23 +3664,6 @@ async function fetchMarketActivity() {
       (hourlyData.hourly || []),
     );
     updateV2ThresholdBar(hourlyData.hourly || []);
-
-    // Sync Flow Performance card with ME session currencies
-    // so it uses the same strong/weak as the "Strength flow" line
-    const meSessions = data.sessions || [];
-    const curSess = data.currentSession || null;
-    if (curSess && meSessions.length) {
-      const active = meSessions.find(s => s.session_name === curSess) || meSessions[0];
-      const meStrong = (active.strongest_ccy || '').split(',').filter(Boolean);
-      const meWeak   = (active.weakest_ccy   || '').split(',').filter(Boolean);
-      if (meStrong.length && meWeak.length) {
-        _meFlowCurrencies = { strong: meStrong, weak: meWeak };
-        // Re-render Flow Performance with ME-aligned currencies
-        if (strengthData && _m15DataCache) {
-          renderFlowPerformance(strengthData, _m15DataCache);
-        }
-      }
-    }
   } catch (_) {
     const el = document.getElementById('market-activity-display');
     if (el) el.innerHTML = '<p class="me-empty">Market Energy unavailable.</p>';
@@ -4287,7 +4259,6 @@ async function refresh() {
     renderSignals(signals, states.states || [], journalData?.entries || []);
     renderStates(states);
     renderSpreads(spreads);
-    _m15DataCache = m15Data; // cache for ME-triggered re-render
     renderRanking12H(spreads, strength);
     renderFlowPerformance(strength, m15Data);
     renderM15Spreads(m15Data);
