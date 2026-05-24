@@ -1155,8 +1155,9 @@
       'AUD_JPY','AUD_CHF','AUD_CAD','AUD_NZD',
       'NZD_JPY','NZD_CHF','NZD_CAD','CAD_JPY','CAD_CHF','CHF_JPY',
     ]);
+    const RANK_CLR = ['#4ade80', '#60a5fa', '#facc15', '#94a3b8']; // #1 green, #2 blue, #3 yellow, #4 grey
 
-    // Build ccy strength time index: { "2026-05-22T03:00" → { USD: 0.001, EUR: -0.002, ... } }
+    // Build ccy strength time index
     const ccsIndex = {};
     for (const r of ccsRows) {
       const t = r.time?.slice(0, 16)?.replace(' ', 'T') || '';
@@ -1165,12 +1166,10 @@
     }
     const ccsTimes = Object.keys(ccsIndex).sort();
 
-    // Process sessions newest first
+    // Group sessions by date
     const sorted = [...sessions]
       .filter(s => s.session_name !== 'LOW_LIQUIDITY')
-      .sort((a, b) => (b.session_date || '').localeCompare(a.session_date || '') || b.session_name.localeCompare(a.session_name));
-
-    // Group by date
+      .sort((a, b) => (b.session_date || '').localeCompare(a.session_date || ''));
     const byDate = {};
     for (const s of sorted) {
       const d = (s.session_date || '').slice(0, 10);
@@ -1178,28 +1177,24 @@
       byDate[d].push(s);
     }
 
-    const fmt5 = v => v >= 0 ? `+${v.toFixed(5)}` : v.toFixed(5);
+    const fmt5 = v => v >= 0 ? '+' + v.toFixed(5) : v.toFixed(5);
     let html = '';
 
     for (const date of Object.keys(byDate).sort((a, b) => b.localeCompare(a)).slice(0, 14)) {
       const d = new Date(date + 'T12:00:00Z');
       const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: tz });
-
       html += `<div class="bd-day-block"><div class="bc-date-header">${dayLabel}</div>`;
 
-      // Order sessions: ASIA → LONDON → NEW_YORK
       const sessOrder = ['ASIA', 'LONDON', 'NEW_YORK'];
       const sessMap = Object.fromEntries(byDate[date].map(s => [s.session_name, s]));
 
       for (const sessKey of sessOrder) {
         const sess = sessMap[sessKey];
         if (!sess) continue;
-
         const sessColor = SESS_COLOR[sessKey] || '#64748b';
         const sessLabel = SESS_LABEL[sessKey] || sessKey;
         const allStrong = (sess.strongest_ccy || '').split(',').filter(Boolean);
         const allWeak   = (sess.weakest_ccy   || '').split(',').filter(Boolean);
-
         if (!allStrong.length || !allWeak.length) continue;
 
         // Build flow pairs
@@ -1208,117 +1203,123 @@
           for (const wk of allWeak) {
             if (st === wk) continue;
             const fwd = `${st}_${wk}`, rev = `${wk}_${st}`;
-            if (PAIRS.has(fwd))      flowPairs.push({ instrument: fwd, dir: 'BUY', base: st, quote: wk });
-            else if (PAIRS.has(rev)) flowPairs.push({ instrument: rev, dir: 'SELL', base: wk, quote: st });
+            if (PAIRS.has(fwd))      flowPairs.push({ instrument: fwd, dir: 'BUY' });
+            else if (PAIRS.has(rev)) flowPairs.push({ instrument: rev, dir: 'SELL' });
           }
         }
         if (!flowPairs.length) continue;
 
-        // Find hourly ccy strength snapshots within this session's time range
+        // Session time range
         const sessStart = sess.session_start || `${date}T00:00:00Z`;
         const sessEnd   = sess.session_end   || `${date}T23:59:59Z`;
         const startKey  = sessStart.slice(0, 16).replace(' ', 'T');
         const endKey    = sessEnd.slice(0, 16).replace(' ', 'T');
-
-        // Get all ccs times within session range
         const sessionTimes = ccsTimes.filter(t => t >= startKey && t < endKey);
         if (!sessionTimes.length) continue;
 
-        // Compute hourly spreads for each flow pair
-        const pairData = flowPairs.slice(0, 4).map(fp => {
+        // Compute hourly spreads for each pair
+        const pairs = flowPairs.slice(0, 4).map(fp => {
           const [b, q] = fp.instrument.split('_');
+          const flowSign = fp.dir === 'BUY' ? 1 : -1;
           const hourly = sessionTimes.map(t => {
             const snap = ccsIndex[t] || {};
             const bv = snap[b] ?? null, qv = snap[q] ?? null;
             const spread = (bv != null && qv != null) ? bv - qv : null;
-            return { time: t, spread, bv, qv };
-          }).filter(h => h.spread != null);
+            return { time: t, spread, dirSpread: spread != null ? spread * flowSign : null };
+          });
+          return { ...fp, hourly, flowSign };
+        });
 
-          if (!hourly.length) return null;
+        // Check we have data
+        const validTimes = sessionTimes.filter(t => pairs.some(p => p.hourly.find(h => h.time === t && h.spread != null)));
+        if (!validTimes.length) continue;
 
-          // Performance: directional magnitude at end vs start
-          const first = hourly[0].spread;
-          const last  = hourly[hourly.length - 1].spread;
-          const flowSign = fp.dir === 'BUY' ? 1 : -1;
-          const endDirSpread = last * flowSign; // positive = performing with flow
-          const delta = last - first;
-          const dirDelta = delta * flowSign; // positive = improving
+        // Compute per-hour rankings (rank by directional spread — higher = better performing)
+        const hourlyRanks = {}; // { time → [ { pair, rank, spread, dirSpread, delta } ] }
+        for (const t of validTimes) {
+          const scored = pairs.map(p => {
+            const h = p.hourly.find(h => h.time === t);
+            return { pair: p, spread: h?.spread ?? null, dirSpread: h?.dirSpread ?? null };
+          }).filter(s => s.dirSpread != null)
+            .sort((a, b) => b.dirSpread - a.dirSpread);
+          scored.forEach((s, i) => { s.rank = i + 1; });
+          hourlyRanks[t] = scored;
+        }
 
-          // Peak: best and worst spread in flow direction
-          const dirSpreads = hourly.map(h => h.spread * flowSign);
-          const peak = Math.max(...dirSpreads);
-          const trough = Math.min(...dirSpreads);
-
-          // State at end (last 2 hours)
-          let endState = '—';
-          if (hourly.length >= 2) {
-            const prev = hourly[hourly.length - 2].spread * flowSign;
-            const curr = last * flowSign;
-            if (curr < 0)                          endState = 'Reversing';
-            else if (curr > prev * 1.1)            endState = 'Expanding';
-            else if (curr < prev * 0.85 && prev > 0) endState = 'Compressing';
-            else                                   endState = 'Steady';
-          }
-
-          return { ...fp, hourly, first, last, delta, dirDelta, endDirSpread, endState, peak, trough };
-        }).filter(Boolean);
-
-        if (!pairData.length) continue;
-
-        // Rank by end-of-session directional performance
-        pairData.sort((a, b) => b.endDirSpread - a.endDirSpread);
-
+        // Build table
         html += `<div class="bd-session-block">
           <div class="bd-session-header" style="color:${sessColor}">${sessLabel}
             <span style="font-size:10px;color:var(--text-dim);margin-left:8px">${allStrong.map(c => c + ' ↑').join(' ')} ${allWeak.map(c => c + ' ↓').join(' ')}</span>
-          </div>`;
+          </div>
+          <div class="bd-table-scroll"><table class="fp-arc-table"><thead><tr>
+            <th class="fp-arc-th-pair">Pair</th>`;
 
-        for (let pi = 0; pi < pairData.length; pi++) {
-          const pd = pairData[pi];
-          const cls = pd.dir === 'BUY' ? 'buy' : 'sell';
-          const performing = pd.endDirSpread > 0;
-          const statusLabel = performing ? (pd.endDirSpread > 0.0005 ? 'STRONG' : 'ALIGNED') : (pd.endDirSpread < -0.0003 ? 'AGAINST' : 'BUILDING');
-          const STATUS_CLS = { STRONG: 'fp-strong', ALIGNED: 'fp-aligned', BUILDING: 'fp-building', AGAINST: 'fp-against' };
+        // Time column headers
+        for (const t of validTimes) {
+          const lt = new Date(t + ':00Z').toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
+          html += `<th class="fp-arc-th-time">${lt}</th>`;
+        }
+        html += `<th class="fp-arc-th-time">End</th></tr></thead><tbody>`;
 
-          // Hourly spread columns
-          const maxAbs = Math.max(...pd.hourly.map(h => Math.abs(h.spread)), 0.0001);
+        // Determine final ranks for row ordering
+        const lastTime = validTimes[validTimes.length - 1];
+        const finalRanked = hourlyRanks[lastTime] || [];
+        const pairOrder = finalRanked.length
+          ? finalRanked.map(r => r.pair)
+          : pairs;
 
-          html += `<div class="fp-arc-card">
-            <div class="fp-arc-header">
-              <span class="fp-rank">#${pi + 1}</span>
-              <span class="spread-accent ${cls}"></span>
-              <span class="spread-pair" style="font-weight:700;font-size:12px">${pd.instrument.replace('_', '/')}</span>
-              <span class="spread-bias ${cls}" style="font-size:10px">${pd.dir}</span>
-              <span class="fp-status ${STATUS_CLS[statusLabel]}" style="font-size:9px">${statusLabel}</span>
-              <span class="fp-arc-end" style="font-size:10px;color:${pd.endDirSpread >= 0 ? '#4ade80' : '#f87171'};margin-left:auto;font-family:var(--mono,monospace)">${fmt5(pd.last)}</span>
-            </div>
-            <div class="fp-arc-hours">`;
+        // One row per pair, ordered by final rank
+        for (const p of pairOrder) {
+          const cls = p.dir === 'BUY' ? 'buy' : 'sell';
+          const lastH = p.hourly.find(h => h.time === lastTime);
+          const lastSpread = lastH?.spread;
+          const lastDir = lastH?.dirSpread ?? 0;
+          const confirms = lastDir >= 0;
 
-          // Hourly spread bars
-          for (const h of pd.hourly) {
-            const lt = new Date(h.time + ':00Z').toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
-            const pct = Math.round((Math.abs(h.spread) / maxAbs) * 100);
-            const barCls = (h.spread * pd.flowSign) >= 0 || (pd.dir === 'BUY' ? h.spread >= 0 : h.spread <= 0) ? 'buy' : 'sell';
-            const confirms = pd.dir === 'BUY' ? h.spread >= 0 : h.spread <= 0;
+          html += `<tr>
+            <td class="fp-arc-td-pair">
+              <span class="spread-accent ${cls}" style="display:inline-block;width:3px;height:14px;border-radius:2px;margin-right:4px;vertical-align:middle"></span>
+              <span style="font-weight:700;font-size:11px">${p.instrument.replace('_', '/')}</span>
+              <span class="spread-bias ${cls}" style="font-size:9px;margin-left:3px">${p.dir}</span>
+            </td>`;
 
-            html += `<div class="fp-arc-hour">
-              <span class="fp-arc-time">${lt}</span>
-              <div class="fp-arc-bar-wrap"><div class="fp-arc-bar ${confirms ? 'buy' : 'sell'}" style="width:${pct}%"></div></div>
-              <span class="fp-arc-val" style="color:${confirms ? '#4ade80' : '#f87171'}">${fmt5(h.spread)}</span>
-            </div>`;
+          let prevSpread = null;
+          for (const t of validTimes) {
+            const entry = (hourlyRanks[t] || []).find(r => r.pair === p);
+            if (!entry || entry.spread == null) {
+              html += `<td class="fp-arc-td">—</td>`;
+              continue;
+            }
+            const rank = entry.rank;
+            const rankClr = RANK_CLR[rank - 1] || '#64748b';
+            const dirOk = entry.dirSpread >= 0;
+            const valClr = dirOk ? '#4ade80' : '#f87171';
+
+            // Delta from previous hour
+            let deltaHtml = '';
+            if (prevSpread != null) {
+              const d = entry.spread - prevSpread;
+              const dDir = d * p.flowSign;
+              const dClr = dDir >= 0 ? '#4ade80' : '#f87171';
+              deltaHtml = `<span class="fp-arc-delta" style="color:${dClr}">${dDir >= 0 ? '▲' : '▼'}</span>`;
+            }
+            prevSpread = entry.spread;
+
+            html += `<td class="fp-arc-td">
+              <span class="fp-arc-rank-badge" style="background:${rankClr}">#${rank}</span>
+              <span class="fp-arc-spread" style="color:${valClr}">${fmt5(entry.spread)}</span>
+              ${deltaHtml}
+            </td>`;
           }
 
-          html += `</div>
-            <div class="fp-arc-summary">
-              <span>Δ <b style="color:${pd.dirDelta >= 0 ? '#4ade80' : '#f87171'}">${fmt5(pd.delta)}</b></span>
-              <span>State <b class="fp-state-badge fp-st-${pd.endState === 'Expanding' ? 'exp' : pd.endState === 'Compressing' ? 'comp' : pd.endState === 'Reversing' ? 'rev' : 'stdy'}">${pd.endState}</b></span>
-              <span>${pd.base} <b style="color:${(pd.hourly[pd.hourly.length-1].bv ?? 0) >= 0 ? '#4ade80' : '#f87171'}">${fmt5(pd.hourly[pd.hourly.length-1].bv ?? 0)}</b></span>
-              <span>vs ${pd.quote} <b style="color:${(pd.hourly[pd.hourly.length-1].qv ?? 0) >= 0 ? '#4ade80' : '#f87171'}">${fmt5(pd.hourly[pd.hourly.length-1].qv ?? 0)}</b></span>
-            </div>
-          </div>`;
+          // End column — final status
+          const statusLabel = lastDir > 0.0005 ? 'STRONG' : lastDir > 0 ? 'ALIGNED' : lastDir > -0.0003 ? 'BUILDING' : 'AGAINST';
+          const STATUS_CLS = { STRONG: 'fp-strong', ALIGNED: 'fp-aligned', BUILDING: 'fp-building', AGAINST: 'fp-against' };
+          html += `<td class="fp-arc-td"><span class="fp-status ${STATUS_CLS[statusLabel]}" style="font-size:8px">${statusLabel}</span></td>`;
+          html += '</tr>';
         }
 
-        html += '</div>';
+        html += '</tbody></table></div></div>';
       }
 
       html += '</div>';

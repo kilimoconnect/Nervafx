@@ -1152,63 +1152,58 @@ section.card:has(.v2-gate-overlay.visible) { min-height: 220px; }
 }
 
 /* ─── Archive Flow Performance ────────────────────────────────────────────── */
-.fp-arc-card {
-  background: var(--bg);
-  border-radius: 6px;
-  padding: 8px 10px;
-  margin-bottom: 6px;
+.fp-arc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10px;
 }
-.fp-arc-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 6px;
+.fp-arc-table th,
+.fp-arc-table td {
+  padding: 5px 4px;
+  border-bottom: 1px solid var(--border);
 }
-.fp-arc-hours {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin-bottom: 6px;
-}
-.fp-arc-hour {
-  display: grid;
-  grid-template-columns: 38px 1fr 68px;
-  align-items: center;
-  gap: 6px;
-}
-.fp-arc-time {
+.fp-arc-th-pair {
+  text-align: left;
   font-size: 9px;
   color: var(--text-dim);
-  font-family: var(--mono, monospace);
-}
-.fp-arc-bar-wrap {
-  height: 6px;
-  background: var(--border);
-  border-radius: 3px;
-  overflow: hidden;
-}
-.fp-arc-bar {
-  height: 100%;
-  border-radius: 3px;
-}
-.fp-arc-bar.buy  { background: rgba(74,222,128,0.5); }
-.fp-arc-bar.sell { background: rgba(248,113,113,0.5); }
-.fp-arc-val {
-  font-size: 10px;
-  font-family: var(--mono, monospace);
-  text-align: right;
-}
-.fp-arc-summary {
-  display: flex;
-  gap: 12px;
-  font-size: 10px;
-  color: var(--text-dim);
-  padding-top: 5px;
-  border-top: 1px solid var(--border);
-  flex-wrap: wrap;
-}
-.fp-arc-end {
   font-weight: 600;
+  min-width: 100px;
+  white-space: nowrap;
+}
+.fp-arc-th-time {
+  text-align: center;
+  font-size: 9px;
+  color: var(--text-dim);
+  font-weight: 600;
+  min-width: 80px;
+}
+.fp-arc-td-pair {
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.fp-arc-td {
+  text-align: center;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.fp-arc-rank-badge {
+  display: inline-block;
+  font-size: 8px;
+  font-weight: 800;
+  color: #0f172a;
+  padding: 1px 4px;
+  border-radius: 3px;
+  margin-right: 3px;
+  min-width: 16px;
+  text-align: center;
+}
+.fp-arc-spread {
+  font-family: var(--mono, monospace);
+  font-size: 10px;
+}
+.fp-arc-delta {
+  font-size: 8px;
+  margin-left: 2px;
 }
 
 /* ─── Risk list ────────────────────────────────────────────────────────────── */
