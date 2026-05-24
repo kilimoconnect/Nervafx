@@ -1881,7 +1881,7 @@ function _meSessionExplain(s, label) {
     }
     if (ideas.length) {
       const top4 = ideas.slice(0, 4);
-      const pairList = top4.map(p => `${p.dir} ${p.pair} (${p.reason})`).join(' · ');
+      const pairList = top4.map(p => `${p.dir} ${p.pair}`).join(' · ');
       lines.push(`Strength flow: ${pairList}`);
     }
   }
