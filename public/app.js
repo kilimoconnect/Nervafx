@@ -1266,7 +1266,18 @@ function renderFlowPerformance(strengthData, m15Data) {
     const v45  = m15 ? parseFloat(m15.smooth_45m)  || 0 : null;
     const v90  = m15 ? parseFloat(m15.smooth_90m)  || 0 : null;
     const v180 = m15 ? parseFloat(m15.smooth_180m) || 0 : null;
-    const state = m15?.state || null;
+
+    // Compute M15 state from 15M spread values (smooth_45m vs smooth_90m)
+    let state = null;
+    if (v45 != null && v90 != null) {
+      const abs45 = Math.abs(v45), abs90 = Math.abs(v90);
+      const sameSign = v45 === 0 && v90 === 0 ? true : Math.sign(v45) === Math.sign(v90);
+      if (abs45 < 0.00005)                          state = 'FLAT';
+      else if (!sameSign)                            state = 'REVERSING';
+      else if (abs45 > abs90 * 1.1)                  state = 'EXPANDING';
+      else if (abs45 < abs90 * 0.85)                 state = 'COMPRESSING';
+      else                                           state = 'STEADY';
+    }
 
     const h3Base  = ccyMap3H[base]  ?? null;
     const h3Quote = ccyMap3H[quote] ?? null;
@@ -1300,9 +1311,10 @@ function renderFlowPerformance(strengthData, m15Data) {
     if (h6Confirms)  perfScore += 5;
     // Acceleration in flow direction
     if (accelSign)   perfScore += 10;
-    // State bonuses
-    if (state === 'EXPANDING' && m15Confirms) perfScore += 15;
-    if (state === 'COMPRESSING' && !m15Confirms) perfScore -= 15;
+    // State bonuses (from M15-computed state)
+    if (state === 'EXPANDING' && m15Confirms)        perfScore += 15;
+    if (state === 'REVERSING')                       perfScore -= 10;
+    if (state === 'COMPRESSING' && !m15Confirms)     perfScore -= 15;
 
     // Status classification
     const alignCount = [m15Confirms, h3Confirms, h6Confirms].filter(x => x === true).length;
@@ -1340,7 +1352,7 @@ function renderFlowPerformance(strengthData, m15Data) {
 
     // M15 state badge
     const stateLabel = fp.state ? fp.state.charAt(0) + fp.state.slice(1).toLowerCase() : '—';
-    const STATE_CLS = { EXPANDING: 'fp-st-exp', COMPRESSING: 'fp-st-comp', STEADY: 'fp-st-stdy', FLAT: 'fp-st-flat' };
+    const STATE_CLS = { EXPANDING: 'fp-st-exp', COMPRESSING: 'fp-st-comp', REVERSING: 'fp-st-rev', STEADY: 'fp-st-stdy', FLAT: 'fp-st-flat' };
     const stateCls = STATE_CLS[fp.state] || 'fp-st-flat';
 
     // Timeframe alignment dots
