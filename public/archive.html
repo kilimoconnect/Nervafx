@@ -337,6 +337,7 @@
       <button class="arc-tab" data-section="ccystrength" onclick="switchArchiveTab(this)">Currency Strength</button>
       <span class="arc-tab-sep"></span>
       <button class="arc-tab" data-section="breakdown" onclick="switchArchiveTab(this)">Hourly Breakdown</button>
+      <button class="arc-tab" data-section="flowperf" onclick="switchArchiveTab(this)">Flow Performance</button>
       <button class="arc-tab" data-section="history" onclick="switchArchiveTab(this)">Session History</button>
     </div>
 
@@ -460,6 +461,12 @@
       <div id="arc-ccystrength-body"><div class="arc-loading"><span class="spinner"></span> Loading currency strength…</div></div>
     </section>
 
+    <section class="arc-section" id="arc-flowperf" style="display:none">
+      <div class="arc-section-header"><i data-lucide="git-compare"></i> Flow Performance</div>
+      <div class="arc-section-desc">Hourly performance of session flow pairs (strongest vs weakest currencies). Shows how each pair's 3H spread evolved hour by hour within the session. Ranked by end-of-session performance.</div>
+      <div id="arc-flowperf-body"><div class="arc-loading"><span class="spinner"></span> Loading flow performance…</div></div>
+    </section>
+
     <section class="arc-section" id="arc-history" style="display:none">
       <div class="arc-section-header"><i data-lucide="clock"></i> Session Energy History</div>
       <div id="arc-history-body"><div class="arc-loading"><span class="spinner"></span> Loading history…</div></div>
@@ -496,7 +503,7 @@
   let _arcCustomFrom = null;  // ISO string or null
   let _arcCustomTo = null;
 
-  const ARC_SECTIONS = ['energy', 'tradability', 'movement', 'breadth', 'agreement', 'dircontrol', 'volquality', 'volatility', 'momentum', 'chaos', 'fbr', 'liquidity', 'breakdown', 'ccystrength', 'history'];
+  const ARC_SECTIONS = ['energy', 'tradability', 'movement', 'breadth', 'agreement', 'dircontrol', 'volquality', 'volatility', 'momentum', 'chaos', 'fbr', 'liquidity', 'breakdown', 'ccystrength', 'flowperf', 'history'];
 
   function setArcPeriod(btn) {
     document.querySelectorAll('#arc-period-pills .arc-fpill').forEach(b => b.classList.remove('active'));
@@ -570,6 +577,7 @@
     } catch (_) {}
 
     _renderFilteredCcyStrength();
+    _renderFilteredFlowPerf();
 
     try {
       const sessions = await _loadSessionRows();
@@ -597,6 +605,8 @@
       loadLiquidityArchive();
     } else if (section === 'breakdown') {
       loadBreakdownArchive();
+    } else if (section === 'flowperf') {
+      loadFlowPerfArchive();
     } else if (section === 'history') {
       loadHistoryArchive();
     }
@@ -645,6 +655,8 @@
     _arcSessionRows = null;
     _arcSessionLoading = null;
     _arcSessionDays = 0;
+    _fpCcsRows = null;
+    _fpCcsLoading = null;
   }
 
   // Metric definitions — V2 institutional model
@@ -1089,6 +1101,233 @@
       bodyEl.innerHTML = `<p class="me-empty">Failed to load: ${e.message}</p>`;
     }
   }
+
+  // ─── Flow Performance Archive ──────────────────────────────────────────────
+
+  let _fpCcsRows = null;
+  let _fpCcsLoading = null;
+
+  async function _loadFpCcsRows() {
+    const need = _arcFilterDays || 30;
+    if (_fpCcsRows) return _fpCcsRows;
+    if (_fpCcsLoading) return _fpCcsLoading;
+    _fpCcsLoading = api(`/api/strength-history?days=${need}&tf=3h`).then(d => {
+      _fpCcsRows = d.rows || [];
+      return _fpCcsRows;
+    });
+    return _fpCcsLoading;
+  }
+
+  async function loadFlowPerfArchive() {
+    const bodyEl = document.getElementById('arc-flowperf-body');
+    if (!bodyEl) return;
+    try {
+      bodyEl.innerHTML = '<div class="arc-loading"><span class="spinner"></span> Loading flow performance…</div>';
+      const [sessions, ccsRows] = await Promise.all([_loadSessionRows(), _loadFpCcsRows()]);
+      if (!sessions?.length || !ccsRows?.length) { bodyEl.innerHTML = '<p class="me-empty">No data available.</p>'; return; }
+      const filteredSess = _filterSessionRows(sessions);
+      const filteredCcs  = _filterCcsRows(ccsRows);
+      if (!filteredSess.length) { bodyEl.innerHTML = '<p class="me-empty">No sessions for this filter.</p>'; return; }
+      renderFlowPerfArchive(bodyEl, filteredSess, filteredCcs);
+    } catch (e) {
+      bodyEl.innerHTML = `<p class="me-empty">Failed to load: ${e.message}</p>`;
+    }
+  }
+
+  function _renderFilteredFlowPerf() {
+    if (!_fpCcsRows || !_arcSessionRows) return;
+    const bodyEl = document.getElementById('arc-flowperf-body');
+    if (!bodyEl) return;
+    const filteredSess = _filterSessionRows(_arcSessionRows);
+    const filteredCcs  = _filterCcsRows(_fpCcsRows);
+    if (!filteredSess.length) { bodyEl.innerHTML = '<p class="me-empty">No sessions for this filter.</p>'; return; }
+    renderFlowPerfArchive(bodyEl, filteredSess, filteredCcs);
+  }
+
+  function renderFlowPerfArchive(container, sessions, ccsRows) {
+    const tz = (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC');
+    const SESS_COLOR = { ASIA: '#f59e0b', LONDON: '#0ea5e9', NEW_YORK: '#a855f7' };
+    const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York' };
+    const PAIRS = new Set([
+      'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
+      'EUR_GBP','EUR_JPY','EUR_CHF','EUR_CAD','EUR_AUD','EUR_NZD',
+      'GBP_JPY','GBP_CHF','GBP_CAD','GBP_AUD','GBP_NZD',
+      'AUD_JPY','AUD_CHF','AUD_CAD','AUD_NZD',
+      'NZD_JPY','NZD_CHF','NZD_CAD','CAD_JPY','CAD_CHF','CHF_JPY',
+    ]);
+
+    // Build ccy strength time index: { "2026-05-22T03:00" → { USD: 0.001, EUR: -0.002, ... } }
+    const ccsIndex = {};
+    for (const r of ccsRows) {
+      const t = r.time?.slice(0, 16)?.replace(' ', 'T') || '';
+      if (!ccsIndex[t]) ccsIndex[t] = {};
+      ccsIndex[t][r.currency] = parseFloat(r.smooth_3h ?? 0) || 0;
+    }
+    const ccsTimes = Object.keys(ccsIndex).sort();
+
+    // Process sessions newest first
+    const sorted = [...sessions]
+      .filter(s => s.session_name !== 'LOW_LIQUIDITY')
+      .sort((a, b) => (b.session_date || '').localeCompare(a.session_date || '') || b.session_name.localeCompare(a.session_name));
+
+    // Group by date
+    const byDate = {};
+    for (const s of sorted) {
+      const d = (s.session_date || '').slice(0, 10);
+      if (!byDate[d]) byDate[d] = [];
+      byDate[d].push(s);
+    }
+
+    const fmt5 = v => v >= 0 ? `+${v.toFixed(5)}` : v.toFixed(5);
+    let html = '';
+
+    for (const date of Object.keys(byDate).sort((a, b) => b.localeCompare(a)).slice(0, 14)) {
+      const d = new Date(date + 'T12:00:00Z');
+      const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: tz });
+
+      html += `<div class="bd-day-block"><div class="bc-date-header">${dayLabel}</div>`;
+
+      // Order sessions: ASIA → LONDON → NEW_YORK
+      const sessOrder = ['ASIA', 'LONDON', 'NEW_YORK'];
+      const sessMap = Object.fromEntries(byDate[date].map(s => [s.session_name, s]));
+
+      for (const sessKey of sessOrder) {
+        const sess = sessMap[sessKey];
+        if (!sess) continue;
+
+        const sessColor = SESS_COLOR[sessKey] || '#64748b';
+        const sessLabel = SESS_LABEL[sessKey] || sessKey;
+        const allStrong = (sess.strongest_ccy || '').split(',').filter(Boolean);
+        const allWeak   = (sess.weakest_ccy   || '').split(',').filter(Boolean);
+
+        if (!allStrong.length || !allWeak.length) continue;
+
+        // Build flow pairs
+        const flowPairs = [];
+        for (const st of allStrong) {
+          for (const wk of allWeak) {
+            if (st === wk) continue;
+            const fwd = `${st}_${wk}`, rev = `${wk}_${st}`;
+            if (PAIRS.has(fwd))      flowPairs.push({ instrument: fwd, dir: 'BUY', base: st, quote: wk });
+            else if (PAIRS.has(rev)) flowPairs.push({ instrument: rev, dir: 'SELL', base: wk, quote: st });
+          }
+        }
+        if (!flowPairs.length) continue;
+
+        // Find hourly ccy strength snapshots within this session's time range
+        const sessStart = sess.session_start || `${date}T00:00:00Z`;
+        const sessEnd   = sess.session_end   || `${date}T23:59:59Z`;
+        const startKey  = sessStart.slice(0, 16).replace(' ', 'T');
+        const endKey    = sessEnd.slice(0, 16).replace(' ', 'T');
+
+        // Get all ccs times within session range
+        const sessionTimes = ccsTimes.filter(t => t >= startKey && t < endKey);
+        if (!sessionTimes.length) continue;
+
+        // Compute hourly spreads for each flow pair
+        const pairData = flowPairs.slice(0, 4).map(fp => {
+          const [b, q] = fp.instrument.split('_');
+          const hourly = sessionTimes.map(t => {
+            const snap = ccsIndex[t] || {};
+            const bv = snap[b] ?? null, qv = snap[q] ?? null;
+            const spread = (bv != null && qv != null) ? bv - qv : null;
+            return { time: t, spread, bv, qv };
+          }).filter(h => h.spread != null);
+
+          if (!hourly.length) return null;
+
+          // Performance: directional magnitude at end vs start
+          const first = hourly[0].spread;
+          const last  = hourly[hourly.length - 1].spread;
+          const flowSign = fp.dir === 'BUY' ? 1 : -1;
+          const endDirSpread = last * flowSign; // positive = performing with flow
+          const delta = last - first;
+          const dirDelta = delta * flowSign; // positive = improving
+
+          // Peak: best and worst spread in flow direction
+          const dirSpreads = hourly.map(h => h.spread * flowSign);
+          const peak = Math.max(...dirSpreads);
+          const trough = Math.min(...dirSpreads);
+
+          // State at end (last 2 hours)
+          let endState = '—';
+          if (hourly.length >= 2) {
+            const prev = hourly[hourly.length - 2].spread * flowSign;
+            const curr = last * flowSign;
+            if (curr < 0)                          endState = 'Reversing';
+            else if (curr > prev * 1.1)            endState = 'Expanding';
+            else if (curr < prev * 0.85 && prev > 0) endState = 'Compressing';
+            else                                   endState = 'Steady';
+          }
+
+          return { ...fp, hourly, first, last, delta, dirDelta, endDirSpread, endState, peak, trough };
+        }).filter(Boolean);
+
+        if (!pairData.length) continue;
+
+        // Rank by end-of-session directional performance
+        pairData.sort((a, b) => b.endDirSpread - a.endDirSpread);
+
+        html += `<div class="bd-session-block">
+          <div class="bd-session-header" style="color:${sessColor}">${sessLabel}
+            <span style="font-size:10px;color:var(--text-dim);margin-left:8px">${allStrong.map(c => c + ' ↑').join(' ')} ${allWeak.map(c => c + ' ↓').join(' ')}</span>
+          </div>`;
+
+        for (let pi = 0; pi < pairData.length; pi++) {
+          const pd = pairData[pi];
+          const cls = pd.dir === 'BUY' ? 'buy' : 'sell';
+          const performing = pd.endDirSpread > 0;
+          const statusLabel = performing ? (pd.endDirSpread > 0.0005 ? 'STRONG' : 'ALIGNED') : (pd.endDirSpread < -0.0003 ? 'AGAINST' : 'BUILDING');
+          const STATUS_CLS = { STRONG: 'fp-strong', ALIGNED: 'fp-aligned', BUILDING: 'fp-building', AGAINST: 'fp-against' };
+
+          // Hourly spread columns
+          const maxAbs = Math.max(...pd.hourly.map(h => Math.abs(h.spread)), 0.0001);
+
+          html += `<div class="fp-arc-card">
+            <div class="fp-arc-header">
+              <span class="fp-rank">#${pi + 1}</span>
+              <span class="spread-accent ${cls}"></span>
+              <span class="spread-pair" style="font-weight:700;font-size:12px">${pd.instrument.replace('_', '/')}</span>
+              <span class="spread-bias ${cls}" style="font-size:10px">${pd.dir}</span>
+              <span class="fp-status ${STATUS_CLS[statusLabel]}" style="font-size:9px">${statusLabel}</span>
+              <span class="fp-arc-end" style="font-size:10px;color:${pd.endDirSpread >= 0 ? '#4ade80' : '#f87171'};margin-left:auto;font-family:var(--mono,monospace)">${fmt5(pd.last)}</span>
+            </div>
+            <div class="fp-arc-hours">`;
+
+          // Hourly spread bars
+          for (const h of pd.hourly) {
+            const lt = new Date(h.time + ':00Z').toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
+            const pct = Math.round((Math.abs(h.spread) / maxAbs) * 100);
+            const barCls = (h.spread * pd.flowSign) >= 0 || (pd.dir === 'BUY' ? h.spread >= 0 : h.spread <= 0) ? 'buy' : 'sell';
+            const confirms = pd.dir === 'BUY' ? h.spread >= 0 : h.spread <= 0;
+
+            html += `<div class="fp-arc-hour">
+              <span class="fp-arc-time">${lt}</span>
+              <div class="fp-arc-bar-wrap"><div class="fp-arc-bar ${confirms ? 'buy' : 'sell'}" style="width:${pct}%"></div></div>
+              <span class="fp-arc-val" style="color:${confirms ? '#4ade80' : '#f87171'}">${fmt5(h.spread)}</span>
+            </div>`;
+          }
+
+          html += `</div>
+            <div class="fp-arc-summary">
+              <span>Δ <b style="color:${pd.dirDelta >= 0 ? '#4ade80' : '#f87171'}">${fmt5(pd.delta)}</b></span>
+              <span>State <b class="fp-state-badge fp-st-${pd.endState === 'Expanding' ? 'exp' : pd.endState === 'Compressing' ? 'comp' : pd.endState === 'Reversing' ? 'rev' : 'stdy'}">${pd.endState}</b></span>
+              <span>${pd.base} <b style="color:${(pd.hourly[pd.hourly.length-1].bv ?? 0) >= 0 ? '#4ade80' : '#f87171'}">${fmt5(pd.hourly[pd.hourly.length-1].bv ?? 0)}</b></span>
+              <span>vs ${pd.quote} <b style="color:${(pd.hourly[pd.hourly.length-1].qv ?? 0) >= 0 ? '#4ade80' : '#f87171'}">${fmt5(pd.hourly[pd.hourly.length-1].qv ?? 0)}</b></span>
+            </div>
+          </div>`;
+        }
+
+        html += '</div>';
+      }
+
+      html += '</div>';
+    }
+
+    container.innerHTML = html || '<p class="me-empty">No flow performance data available.</p>';
+  }
+
+  // ─── Hourly Breakdown ──────────────────────────────────────────────────────
 
   function renderBreakdown(container, rows) {
     const SESS_COLOR = { ASIA: '#f59e0b', LONDON: '#0ea5e9', NEW_YORK: '#a855f7', LOW_LIQUIDITY: '#475569' };
