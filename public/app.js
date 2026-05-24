@@ -1206,6 +1206,64 @@ function renderRanking12H(spreadsData, strengthData) {
 
 // ─── Flow Performance (session strength pairs · M15 & 3H) ───────────────────
 
+/**
+ * Generate a plain-English explanation for a flow performance pair.
+ * Tells the user what is happening and what it means for trading.
+ */
+function _fpExplain(fp) {
+  const pairName = fp.instrument.replace('_', '/');
+  const dirWord = fp.dir === 'BUY' ? 'buying' : 'selling';
+  const baseWord = fp.dir === 'BUY' ? 'strengthening' : 'weakening';
+  const quoteWord = fp.dir === 'BUY' ? 'weakening' : 'strengthening';
+
+  // Alignment summary
+  const aligned = [fp.m15Confirms, fp.h3Confirms, fp.h6Confirms].filter(x => x === true).length;
+  const against = [fp.m15Confirms, fp.h3Confirms, fp.h6Confirms].filter(x => x === false).length;
+
+  // Status explanation
+  let statusMsg = '';
+  switch (fp.status) {
+    case 'STRONG':
+      statusMsg = `All timeframes confirm ${dirWord} pressure.`;
+      break;
+    case 'ALIGNED':
+      statusMsg = `M15 and one higher timeframe confirm the ${fp.dir.toLowerCase()} direction.`;
+      break;
+    case 'PARTIAL':
+      statusMsg = `M15 confirms but higher timeframes not yet aligned.`;
+      break;
+    case 'BUILDING':
+      statusMsg = `Higher timeframes support but M15 hasn't confirmed yet — setup building.`;
+      break;
+    case 'AGAINST':
+      statusMsg = `M15 is moving against the expected direction — wait for reversal.`;
+      break;
+    default:
+      statusMsg = `Waiting for clearer signals.`;
+  }
+
+  // Momentum context
+  let momMsg = '';
+  if (fp.momentum === 'Accelerating') momMsg = ' Momentum is accelerating.';
+  else if (fp.momentum === 'Fading') momMsg = ' Momentum is fading — move may be slowing.';
+  else if (fp.momentum === 'Flat') momMsg = ' No momentum — price is flat.';
+
+  // State context
+  let stateMsg = '';
+  if (fp.state === 'EXPANDING') stateMsg = ' Spread is expanding — pressure building.';
+  else if (fp.state === 'COMPRESSING') stateMsg = ' Spread is compressing — pressure easing.';
+  else if (fp.state === 'REVERSING') stateMsg = ' Short-term is reversing against the flow.';
+
+  // Efficiency context
+  let effMsg = '';
+  if (fp.deCombined >= 85) effMsg = ' Clean institutional movement.';
+  else if (fp.deCombined >= 70) effMsg = ' Clean directional movement.';
+  else if (fp.deCombined >= 55) effMsg = ' Mixed movement quality.';
+  else if (fp.deCombined > 0) effMsg = ' Noisy/choppy price action.';
+
+  return `${fp.base} ${baseWord}, ${fp.quote} ${quoteWord}. ${statusMsg}${momMsg}${stateMsg}${effMsg}`;
+}
+
 function renderFlowPerformance(strengthData, m15Data) {
   const el = document.getElementById('flow-perf-list');
   if (!el) return;
@@ -1367,6 +1425,9 @@ function renderFlowPerformance(strengthData, m15Data) {
       : confirms === false ? '<span class="fp-dot red"></span>'
       : '<span class="fp-dot grey"></span>';
 
+    // Build simple explanation for the user
+    const explain = _fpExplain(fp);
+
     return `
       <div class="fp-card">
         <div class="fp-header">
@@ -1377,6 +1438,7 @@ function renderFlowPerformance(strengthData, m15Data) {
           <span class="fp-status ${fp.statusCls}">${fp.status}</span>
         </div>
         <div class="fp-bar-wrap"><div class="fp-bar-fill ${cls}" style="width:${perfPct}%"></div></div>
+        <div class="fp-explain">${explain}</div>
         <div class="fp-details">
           <div class="fp-detail-row">
             <span class="fp-lbl">M15</span>

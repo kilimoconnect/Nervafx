@@ -1150,6 +1150,14 @@ section.card:has(.v2-gate-overlay.visible) { min-height: 220px; }
   font-size: 9px;
   color: var(--text-dim);
 }
+/* Flow Performance explanation */
+.fp-explain {
+  font-size: 10px;
+  color: var(--text-muted);
+  padding: 4px 8px;
+  line-height: 1.4;
+  border-bottom: 1px solid var(--border);
+}
 /* Directional Efficiency labels */
 .fp-de-institutional { color: #4ade80; font-weight: 700; }
 .fp-de-clean         { color: #60a5fa; font-weight: 600; }
