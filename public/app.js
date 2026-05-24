@@ -2002,7 +2002,7 @@ function _meDirBar(pct, color) {
   </div>`;
 }
 
-function _meSessionExplain(s, label) {
+function _meSessionExplain(s, label, status) {
   if (!s) return '';
   const mov = Math.round(parseFloat(s.movement_score) || 0);
   const brd = Math.round(parseFloat(s.breadth_score) || 0);
@@ -2017,8 +2017,16 @@ function _meSessionExplain(s, label) {
   const tradGrade = s.tradability_grade || 'AVOID';
   const volType = s.volatility_type || 'NORMAL';
   const chaosVal = Math.round(parseFloat(s.chaos_score) || 0);
-  const strong = (s.strongest_ccy || '').split(',')[0] || null;
-  const weak   = (s.weakest_ccy   || '').split(',')[0] || null;
+  // Use Flow Performance calculation for active session
+  let strong, weak;
+  if (status === 'ACTIVE' && strengthData?.currencies?.length) {
+    const flow = getSmoothed3HFlow(strengthData.currencies);
+    strong = flow.strong[0] || null;
+    weak   = flow.weak[0]   || null;
+  } else {
+    strong = (s.strongest_ccy || '').split(',')[0] || null;
+    weak   = (s.weakest_ccy   || '').split(',')[0] || null;
+  }
 
   const lines = [];
 
@@ -2068,8 +2076,16 @@ function _meSessionExplain(s, label) {
   else lines.push(`Low agreement (${agr}) — currencies giving conflicting signals.`);
 
   // Currency leadership — list actionable pairs from strong vs weak
-  const allStrong = (s.strongest_ccy || '').split(',').filter(Boolean);
-  const allWeak   = (s.weakest_ccy   || '').split(',').filter(Boolean);
+  // Active session: use same smooth_3h flow as Flow Performance card for consistency
+  let allStrong, allWeak;
+  if (status === 'ACTIVE' && strengthData?.currencies?.length) {
+    const flow = getSmoothed3HFlow(strengthData.currencies);
+    allStrong = flow.strong;
+    allWeak   = flow.weak;
+  } else {
+    allStrong = (s.strongest_ccy || '').split(',').filter(Boolean);
+    allWeak   = (s.weakest_ccy   || '').split(',').filter(Boolean);
+  }
   if (allStrong.length && allWeak.length) {
     const PAIRS = new Set([
       'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
@@ -2262,8 +2278,16 @@ function _meSessionCard(name, s, status, hourlyRows) {
   const neutral    = Math.max(0, 100 - activePct);
 
   const domScore  = Math.round(parseFloat(s.dominance_score) || 0);
-  const strongCcys = (s.strongest_ccy || '').split(',').filter(Boolean);
-  const weakCcys   = (s.weakest_ccy   || '').split(',').filter(Boolean);
+  // Use Flow Performance calculation (smooth_3h) for active session to stay in sync
+  let strongCcys, weakCcys;
+  if (status === 'ACTIVE' && strengthData?.currencies?.length) {
+    const flow = getSmoothed3HFlow(strengthData.currencies);
+    strongCcys = flow.strong;
+    weakCcys   = flow.weak;
+  } else {
+    strongCcys = (s.strongest_ccy || '').split(',').filter(Boolean);
+    weakCcys   = (s.weakest_ccy   || '').split(',').filter(Boolean);
+  }
   const domLabel   = (strongCcys.length || weakCcys.length)
     ? strongCcys.map(c => `<span class="me-dom-strong">${c} ↑</span>`).join('') +
       weakCcys.map(c => `<span class="me-dom-weak">${c} ↓</span>`).join('')
@@ -2376,7 +2400,7 @@ function _meSessionCard(name, s, status, hourlyRows) {
       <span class="me-foot-item" style="color:${liqColor}">Liquidity <strong>${liqScore}</strong></span>
     </div>
     ${status === 'ACTIVE' ? _meHourlyTrend(hourlyRows) : ''}
-    ${_meSessionExplain(s, label)}
+    ${_meSessionExplain(s, label, status)}
   </div>`;
 }
 
