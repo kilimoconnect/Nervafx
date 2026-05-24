@@ -539,10 +539,14 @@
       cutoffFrom = new Date(Date.now() - _arcFilterDays * 24 * 60 * 60 * 1000).toISOString();
       cutoffTo   = '2099-12-31T23:59:59Z';
     }
+    const cutoffFromDate = cutoffFrom.slice(0, 10);
+    const cutoffToDate   = cutoffTo.slice(0, 10);
     return rows.filter(r => {
       const t = r[timeField] || '';
-      if (t < cutoffFrom || t > cutoffTo) return false;
       if (_arcFilterSession !== 'ALL' && r.session_name !== _arcFilterSession) return false;
+      // Use logical session date for ASIA midnight-wrap (hour 23 belongs to next day)
+      const groupDate = _arcGroupDate(r);
+      if (groupDate < cutoffFromDate || groupDate > cutoffToDate) return false;
       return true;
     });
   }
