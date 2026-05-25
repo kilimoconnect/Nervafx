@@ -2399,9 +2399,13 @@ function _meSessionExplain(s, label, status) {
         ${deHtml}
       </div>`;
     }).join('');
+    const actionHint = status === 'ACTIVE'
+      ? `<div class="me-flow-hint">Wait for pullback on top-ranked pairs, then confirm entry on M15</div>`
+      : '';
     flowHtml = `<div class="me-flow-block">
       <div class="me-flow-title">Strength Flow</div>
       ${pairRows}
+      ${actionHint}
     </div>`;
   }
 

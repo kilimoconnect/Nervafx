@@ -4943,6 +4943,16 @@ body::after {
   margin-left: auto;
   font-weight: 600;
 }
+.me-flow-hint {
+  margin-top: 6px;
+  padding: 4px 8px;
+  font-size: 9px;
+  font-weight: 600;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.08);
+  border-radius: 4px;
+  text-align: center;
+}
 
 /* False breakout warning */
 .me-fb-warn {
