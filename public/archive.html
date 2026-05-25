@@ -1377,7 +1377,7 @@
             const pairLabel = p.instrument.replace('_', '/');
             const statusClr = STATUS_CLR[entry.status] || '#64748b';
             const deVal = entry.deCombined || 0;
-            const DE_CLR = deVal >= 85 ? '#4ade80' : deVal >= 70 ? '#60a5fa' : deVal >= 55 ? '#facc15' : '#f87171';
+            const DE_CLR = deVal >= 25 ? '#4ade80' : deVal >= 15 ? '#60a5fa' : deVal >= 8 ? '#facc15' : '#f87171';
             const ST_SHORT = { EXPANDING: 'Exp', COMPRESSING: 'Comp', REVERSING: 'Rev', STEADY: 'Stdy', FLAT: 'Flat' };
             const ST_CLR = { EXPANDING: '#22c55e', COMPRESSING: '#f97316', REVERSING: '#ef4444', STEADY: '#94a3b8', FLAT: '#475569' };
 
