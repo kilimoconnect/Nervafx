@@ -1398,7 +1398,7 @@ function renderFlowPerformance(strengthData, m15Data) {
 
     // Directional Efficiency from API (combined M15+H1 DE)
     const deCombined = m15 ? parseFloat(m15.de_combined) || 0 : 0;
-    const deLabel = deCombined >= 25 ? 'Institutional' : deCombined >= 15 ? 'Clean' : deCombined >= 8 ? 'Mixed' : 'Noisy';
+    const deLabel = deCombined >= 30 ? 'Institutional' : deCombined >= 20 ? 'Clean' : deCombined >= 8 ? 'Mixed' : 'Noisy';
 
     return { ...fp, v45, v90, v180, spread3H, spread6H, state, accel, m15Confirms, h3Confirms, h6Confirms, accelSign, perfScore, status, statusCls, momentum, h3Base, h3Quote, base, quote, deCombined, deLabel };
   });
@@ -2279,8 +2279,8 @@ function _meSessionExplain(s, label, status) {
 
   if (rankedPairs && rankedPairs.length) {
     const deLabel = v => {
-      if (v >= 25) return { text: 'Trending',    color: '#22c55e' };
-      if (v >= 15) return { text: 'Directional', color: '#0ea5e9' };
+      if (v >= 30) return { text: 'Trending',    color: '#22c55e' };
+      if (v >= 20) return { text: 'Directional', color: '#0ea5e9' };
       if (v >= 8)  return { text: 'Mixed',       color: '#f59e0b' };
       return              { text: 'Choppy',       color: '#ef4444' };
     };
