@@ -1456,8 +1456,7 @@ function renderFlowPerformance(strengthData, m15Data) {
             <span class="fp-val">${fp.momentum}</span>
             <span class="fp-lbl">Align</span>
             <span class="fp-dots">${dot(fp.m15Confirms)}${dot(fp.h3Confirms)}${dot(fp.h6Confirms)}</span>
-            <span class="fp-lbl">Eff</span>
-            <span class="fp-val fp-de-${fp.deLabel.toLowerCase()}">${Math.round(fp.deCombined)}</span>
+            ${fp.deCombined > 0 ? `<span class="fp-lbl">Eff</span><span class="fp-val fp-de-${fp.deLabel.toLowerCase()}">${Math.round(fp.deCombined)}</span>` : ''}
           </div>
           <div class="fp-detail-row fp-ccy-row">
             <span class="fp-ccy-chip ${(fp.h3Base ?? 0) >= 0 ? 'strong' : 'weak'}">${fp.base} ${fmt(fp.h3Base ?? 0, 5)}</span>
@@ -2287,8 +2286,8 @@ function _meSessionExplain(s, label, status) {
     };
     const pairList = rankedPairs.map((p, i) => {
       const statusColor = p.status === 'STRONG' ? '#22c55e' : p.status === 'ALIGNED' ? '#0ea5e9' : p.status === 'PARTIAL' ? '#a855f7' : p.status === 'BUILDING' ? '#f59e0b' : p.status === 'AGAINST' ? '#ef4444' : '#64748b';
-      const dl = deLabel(p.de);
-      return `#${i + 1} ${p.dir} ${p.pair} <span style="color:${statusColor};font-size:9px">${p.status}</span> <span style="color:${dl.color};font-size:8px;opacity:0.85">DE ${p.de}% ${dl.text}</span>`;
+      const deHtml = p.de > 0 ? (() => { const dl = deLabel(p.de); return ` <span style="color:${dl.color};font-size:8px;opacity:0.85">DE ${p.de}% ${dl.text}</span>`; })() : '';
+      return `#${i + 1} ${p.dir} ${p.pair} <span style="color:${statusColor};font-size:9px">${p.status}</span>${deHtml}`;
     }).join(' · ');
     lines.push(`Strength flow: ${pairList}`);
   }

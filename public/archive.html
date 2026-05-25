@@ -1384,12 +1384,13 @@
             const statusClr = STATUS_CLR[entry.status] || '#64748b';
             const deVal = entry.deCombined || 0;
             const DE_CLR = deVal >= 25 ? '#4ade80' : deVal >= 15 ? '#60a5fa' : deVal >= 8 ? '#facc15' : '#f87171';
+            const deHtml = deVal > 0 ? `<span style="color:${DE_CLR}">E${Math.round(deVal)}</span>` : '';
             const ST_SHORT = { EXPANDING: 'Exp', COMPRESSING: 'Comp', REVERSING: 'Rev', STEADY: 'Stdy', FLAT: 'Flat' };
             const ST_CLR = { EXPANDING: '#22c55e', COMPRESSING: '#f97316', REVERSING: '#ef4444', STEADY: '#94a3b8', FLAT: '#475569' };
 
             html += `<td class="fp-arc-td-cell">
               <div class="fp-rc-pair"><span class="fp-rc-name">${pairLabel}</span><span class="spread-bias ${dirCls}">${p.dir}</span></div>
-              <div class="fp-rc-meta"><span class="fp-rc-status" style="color:${statusClr}">${entry.status}</span><span class="fp-rc-state" style="color:${ST_CLR[entry.state] || '#64748b'}">${ST_SHORT[entry.state] || ''}</span><span style="color:${DE_CLR}">E${Math.round(deVal)}</span></div>
+              <div class="fp-rc-meta"><span class="fp-rc-status" style="color:${statusClr}">${entry.status}</span><span class="fp-rc-state" style="color:${ST_CLR[entry.state] || '#64748b'}">${ST_SHORT[entry.state] || ''}</span>${deHtml}</div>
             </td>`;
           }
           html += '</tr>';
