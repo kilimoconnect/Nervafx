@@ -3984,6 +3984,12 @@ async function fetchMarketActivity() {
       (hourlyData.hourly || []),
     );
     updateV2ThresholdBar(hourlyData.hourly || []);
+    // Re-render M15 bar + card now that _v2Confluence is set
+    // (on first load, updateM15Bar ran before this async resolved → bar was hidden)
+    if (_m15DataCache) {
+      updateM15Bar(_m15DataCache);
+      renderM15Spreads(_m15DataCache);
+    }
   } catch (_) {
     const el = document.getElementById('market-activity-display');
     if (el) el.innerHTML = '<p class="me-empty">Market Energy unavailable.</p>';
