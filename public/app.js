@@ -2518,6 +2518,26 @@ function _meSessionCard(name, s, status, hourlyRows) {
     </div>`;
   }
 
+  if (!s && status === 'ACTIVE') {
+    return `<div class="me-card me-card--active">
+      <div class="me-card-head">
+        <span class="me-card-sess" style="color:${sessColor}">${label}</span>
+        <span class="me-status-badge me-status-active">Live</span>
+      </div>
+      <div class="me-card-comps me-card-empty">Session just started — data populates on the next hourly cycle</div>
+    </div>`;
+  }
+
+  if (!s && status === 'UPCOMING') {
+    return `<div class="me-card me-card--dim">
+      <div class="me-card-head">
+        <span class="me-card-sess" style="color:${sessColor}">${label}</span>
+        <span class="me-card-cycle" style="--bc:#475569">Upcoming</span>
+      </div>
+      <div class="me-card-comps me-card-empty">Session hasn't started yet today</div>
+    </div>`;
+  }
+
   if (!s) {
     return `<div class="me-card me-card--dim">
       <div class="me-card-head">
