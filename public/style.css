@@ -4923,7 +4923,7 @@ body::after {
   min-width: 16px;
 }
 .me-flow-dir {
-  font-size: 8px;
+  font-size: 10px;
   font-weight: 700;
   padding: 1px 5px;
   border-radius: 3px;
@@ -4935,18 +4935,18 @@ body::after {
   color: var(--text);
 }
 .me-flow-status {
-  font-size: 8px;
+  font-size: 10px;
   font-weight: 600;
 }
 .me-flow-de {
-  font-size: 8px;
+  font-size: 10px;
   font-weight: 600;
   margin-left: auto;
 }
 .me-flow-hint {
   margin-top: 6px;
-  padding: 4px 8px;
-  font-size: 9px;
+  padding: 5px 8px;
+  font-size: 11px;
   font-weight: 600;
   color: #f59e0b;
   background: rgba(245, 158, 11, 0.08);
