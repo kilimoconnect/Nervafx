@@ -86,6 +86,7 @@ const REFRESH_MS = 60000;
 let strengthChart = null;
 let activeTF = '6';
 let strengthData = null;
+let _m15DataCache = null;   // Cached M15 spreads for flow ranking across components
 let _firstLoad = true;
 // Currencies that currently meet the Currency Signals threshold (strong + weak combined).
 // Set<string> — populated by renderCurrencySignals() before the section renderers run.
@@ -2147,40 +2148,129 @@ function _meSessionExplain(s, label, status) {
   else if (agr >= 25) lines.push(`Mixed agreement (${agr}) — partial alignment, some conflict.`);
   else lines.push(`Low agreement (${agr}) — currencies giving conflicting signals.`);
 
-  // Currency leadership — list actionable pairs from strong vs weak
-  // Active session: use live smooth_3h; completed: use stored session snapshot
-  let allStrong, allWeak;
-  if (status === 'ACTIVE' && strengthData?.currencies?.length) {
-    const flow = getSmoothed3HFlow(strengthData.currencies);
-    allStrong = flow.strong;
-    allWeak   = flow.weak;
-  } else {
-    allStrong = (s.strongest_ccy || '').split(',').filter(Boolean);
-    allWeak   = (s.weakest_ccy   || '').split(',').filter(Boolean);
+  // Currency leadership — list actionable pairs ranked by Flow Performance score
+  // ACTIVE: score using live M15 + currency strength data
+  // COMPLETED: use stored flow_performance from session details, or fall back to live scoring
+  const _FP_PAIRS = new Set([
+    'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
+    'EUR_GBP','EUR_JPY','EUR_CHF','EUR_CAD','EUR_AUD','EUR_NZD',
+    'GBP_JPY','GBP_CHF','GBP_CAD','GBP_AUD','GBP_NZD',
+    'AUD_JPY','AUD_CHF','AUD_CAD','AUD_NZD',
+    'NZD_JPY','NZD_CHF','NZD_CAD','CAD_JPY','CAD_CHF','CHF_JPY',
+  ]);
+  let rankedPairs = null;
+
+  // Try stored flow_performance first (COMPLETED sessions have this pre-computed)
+  const storedFP = s.details?.flow_performance;
+  if (storedFP && storedFP.length) {
+    // Re-score from stored values to get proper ranking
+    rankedPairs = storedFP.map(fp => {
+      const [b, q] = fp.pair.split('_');
+      const flowSign = fp.dir === 'BUY' ? 1 : -1;
+      const v45 = fp.m15 != null ? fp.m15 : null;
+      const spread3H = fp.h3 != null ? fp.h3 : null;
+      const spread6H = fp.h6 != null ? fp.h6 : null;
+      let perfScore = 0;
+      if (v45 != null)      perfScore += (v45 * flowSign) * 10000 * 4;
+      if (spread3H != null) perfScore += (spread3H * flowSign) * 10000 * 2;
+      if (spread6H != null) perfScore += (spread6H * flowSign) * 10000 * 1;
+      if (v45 != null && Math.sign(v45) === flowSign) perfScore += 15;
+      if (spread3H != null && Math.sign(spread3H) === flowSign) perfScore += 10;
+      if (spread6H != null && Math.sign(spread6H) === flowSign) perfScore += 5;
+      const deCombined = fp.de || 0;
+      const finalScore = (0.75 * perfScore) + (0.25 * deCombined);
+      return { pair: fp.pair.replace('_', '/'), dir: fp.dir, status: fp.status, finalScore };
+    }).sort((a, b) => b.finalScore - a.finalScore);
   }
-  if (allStrong.length && allWeak.length) {
-    const PAIRS = new Set([
-      'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
-      'EUR_GBP','EUR_JPY','EUR_CHF','EUR_CAD','EUR_AUD','EUR_NZD',
-      'GBP_JPY','GBP_CHF','GBP_CAD','GBP_AUD','GBP_NZD',
-      'AUD_JPY','AUD_CHF','AUD_CAD','AUD_NZD',
-      'NZD_JPY','NZD_CHF','NZD_CAD','CAD_JPY','CAD_CHF','CHF_JPY',
-    ]);
-    const ideas = [];
-    for (const st of allStrong) {
-      for (const wk of allWeak) {
-        if (st === wk) continue;
-        const fwd = `${st}_${wk}`;
-        const rev = `${wk}_${st}`;
-        if (PAIRS.has(fwd))      ideas.push({ pair: fwd.replace('_', '/'), dir: 'BUY',  reason: `${st} ↑ ${wk} ↓` });
-        else if (PAIRS.has(rev)) ideas.push({ pair: rev.replace('_', '/'), dir: 'SELL', reason: `${wk} ↓ ${st} ↑` });
+
+  // If no stored data (ACTIVE session or missing), compute from live data
+  if (!rankedPairs || !rankedPairs.length) {
+    let allStrong, allWeak;
+    if (status === 'ACTIVE' && strengthData?.currencies?.length) {
+      const flow = getSmoothed3HFlow(strengthData.currencies);
+      allStrong = flow.strong;
+      allWeak   = flow.weak;
+    } else {
+      allStrong = (s.strongest_ccy || '').split(',').filter(Boolean);
+      allWeak   = (s.weakest_ccy   || '').split(',').filter(Boolean);
+    }
+    if (allStrong.length && allWeak.length) {
+      const flowPairs = [];
+      for (const st of allStrong) {
+        for (const wk of allWeak) {
+          if (st === wk) continue;
+          const fwd = `${st}_${wk}`, rev = `${wk}_${st}`;
+          if (_FP_PAIRS.has(fwd))      flowPairs.push({ instrument: fwd, dir: 'BUY' });
+          else if (_FP_PAIRS.has(rev)) flowPairs.push({ instrument: rev, dir: 'SELL' });
+        }
       }
+      // Score using live M15 + currency strength
+      const m15Map = {};
+      if (_m15DataCache?.spreads?.length) {
+        for (const sp of _m15DataCache.spreads) m15Map[sp.instrument] = sp;
+      }
+      const ccyMap3H = {}, ccyMap6H = {};
+      if (strengthData?.currencies?.length) {
+        for (const c of strengthData.currencies) {
+          ccyMap3H[c.currency] = parseFloat(c.smooth_3h ?? c.normalized_3h) || 0;
+          ccyMap6H[c.currency] = parseFloat(c.smooth_6h ?? c.normalized_6h) || 0;
+        }
+      }
+      rankedPairs = flowPairs.slice(0, 4).map(fp => {
+        const [b, q] = fp.instrument.split('_');
+        const flowSign = fp.dir === 'BUY' ? 1 : -1;
+        const m15 = m15Map[fp.instrument];
+        const v45 = m15 ? parseFloat(m15.smooth_45m) || 0 : null;
+        const v90 = m15 ? parseFloat(m15.smooth_90m) || 0 : null;
+        const h3B = ccyMap3H[b] ?? null, h3Q = ccyMap3H[q] ?? null;
+        const h6B = ccyMap6H[b] ?? null, h6Q = ccyMap6H[q] ?? null;
+        const spread3H = (h3B != null && h3Q != null) ? h3B - h3Q : null;
+        const spread6H = (h6B != null && h6Q != null) ? h6B - h6Q : null;
+        const m15Confirms = v45 != null ? Math.sign(v45) === flowSign : null;
+        const h3Confirms  = spread3H != null ? Math.sign(spread3H) === flowSign : null;
+        const h6Confirms  = spread6H != null ? Math.sign(spread6H) === flowSign : null;
+        const accel = (v45 != null && v90 != null) ? v45 - v90 : null;
+        const accelSign = accel != null ? Math.sign(accel) === flowSign : null;
+        let perfScore = 0;
+        if (v45 != null)      perfScore += (v45 * flowSign) * 10000 * 4;
+        if (spread3H != null) perfScore += (spread3H * flowSign) * 10000 * 2;
+        if (spread6H != null) perfScore += (spread6H * flowSign) * 10000 * 1;
+        if (m15Confirms) perfScore += 15;
+        if (h3Confirms)  perfScore += 10;
+        if (h6Confirms)  perfScore += 5;
+        if (accelSign)   perfScore += 10;
+        let state = null;
+        if (v45 != null && v90 != null) {
+          const d45 = v45 * flowSign, d90 = v90 * flowSign;
+          if (Math.abs(v45) < 0.00005) state = 'FLAT';
+          else if (d45 < 0) state = 'REVERSING';
+          else if (d45 > d90 * 1.1) state = 'EXPANDING';
+          else if (d45 < d90 * 0.85 && d90 > 0) state = 'COMPRESSING';
+          else state = 'STEADY';
+        }
+        if (state === 'EXPANDING' && m15Confirms) perfScore += 15;
+        if (state === 'REVERSING') perfScore -= 10;
+        if (state === 'COMPRESSING' && !m15Confirms) perfScore -= 15;
+        const htfCount = [h3Confirms, h6Confirms].filter(x => x === true).length;
+        let fpStatus;
+        if (m15Confirms && htfCount === 2)       fpStatus = 'STRONG';
+        else if (m15Confirms && htfCount === 1)  fpStatus = 'ALIGNED';
+        else if (m15Confirms && htfCount === 0)  fpStatus = 'PARTIAL';
+        else if (!m15Confirms && htfCount >= 1)  fpStatus = 'BUILDING';
+        else if (m15Confirms === false)          fpStatus = 'AGAINST';
+        else                                     fpStatus = 'WAIT';
+        const deCombined = m15 ? parseFloat(m15.de_combined) || 0 : 0;
+        const finalScore = (0.75 * perfScore) + (0.25 * deCombined);
+        return { pair: fp.instrument.replace('_', '/'), dir: fp.dir, status: fpStatus, finalScore };
+      }).sort((a, b) => b.finalScore - a.finalScore);
     }
-    if (ideas.length) {
-      const top4 = ideas.slice(0, 4);
-      const pairList = top4.map(p => `${p.dir} ${p.pair}`).join(' · ');
-      lines.push(`Strength flow: ${pairList}`);
-    }
+  }
+
+  if (rankedPairs && rankedPairs.length) {
+    const pairList = rankedPairs.map((p, i) => `#${i + 1} ${p.dir} ${p.pair} <span style="color:${
+      p.status === 'STRONG' ? '#22c55e' : p.status === 'ALIGNED' ? '#0ea5e9' : p.status === 'PARTIAL' ? '#a855f7' : p.status === 'BUILDING' ? '#f59e0b' : p.status === 'AGAINST' ? '#ef4444' : '#64748b'
+    };font-size:9px">${p.status}</span>`).join(' · ');
+    lines.push(`Strength flow: ${pairList}`);
   }
 
   // Overall energy
@@ -4357,6 +4447,7 @@ async function refresh() {
     renderStates(states);
     renderSpreads(spreads);
     renderRanking12H(spreads, strength);
+    _m15DataCache = m15Data;   // Cache for ME card flow ranking
     renderFlowPerformance(strength, m15Data);
     renderM15Spreads(m15Data);
     updateM15Bar(m15Data);
