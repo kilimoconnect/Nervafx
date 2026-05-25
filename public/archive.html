@@ -1294,7 +1294,8 @@
               else                                         state = 'STEADY';
             }
 
-            const m15Confirms = v45 != null ? Math.sign(v45) === flowSign : null;
+            const M15_CONFIRM_MIN = 0.00008;
+            const m15Confirms = v45 != null ? (Math.sign(v45) === flowSign && Math.abs(v45) >= M15_CONFIRM_MIN) : null;
             const h3Confirms  = spread3H != null ? Math.sign(spread3H) === flowSign : null;
             const h6Confirms  = spread6H != null ? Math.sign(spread6H) === flowSign : null;
             const accel = (v45 != null && v90 != null) ? v45 - v90 : null;
@@ -1310,7 +1311,7 @@
             else                                     status = 'WAIT';
 
             let perfScore = 0;
-            if (v45 != null)      perfScore += (v45 * flowSign) * 10000 * 4;
+            if (v45 != null)      perfScore += (v45 * flowSign) * 10000 * 3;
             if (spread3H != null) perfScore += (spread3H * flowSign) * 10000 * 2;
             if (spread6H != null) perfScore += (spread6H * flowSign) * 10000 * 1;
             if (m15Confirms) perfScore += 15;

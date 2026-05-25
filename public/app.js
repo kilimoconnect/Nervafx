@@ -1243,9 +1243,19 @@ function _fpExplain(fp) {
       statusMsg = `Waiting for clearer signals.`;
   }
 
+  // Impulse context (real price action)
+  let impulseMsg = '';
+  if (fp.impulseScore >= 60 && fp.impulseAligned)
+    impulseMsg = ' Strong impulse move in flow direction.';
+  else if (fp.impulseScore >= 40 && fp.impulseAligned)
+    impulseMsg = ' Price action trending with flow.';
+  else if (fp.impulseScore >= 40 && !fp.impulseAligned)
+    impulseMsg = ' Price impulse opposing the flow — caution.';
+
   // Momentum context
   let momMsg = '';
-  if (fp.momentum === 'Accelerating') momMsg = ' Momentum is accelerating.';
+  if (fp.momentum === 'Impulsive') momMsg = ' M15 candles show impulsive momentum.';
+  else if (fp.momentum === 'Accelerating') momMsg = ' Momentum is accelerating.';
   else if (fp.momentum === 'Fading') momMsg = ' Momentum is fading — move may be slowing.';
   else if (fp.momentum === 'Flat') momMsg = ' No momentum — price is flat.';
 
@@ -1257,12 +1267,12 @@ function _fpExplain(fp) {
 
   // Efficiency context
   let effMsg = '';
-  if (fp.deCombined >= 85) effMsg = ' Clean institutional movement.';
-  else if (fp.deCombined >= 70) effMsg = ' Clean directional movement.';
-  else if (fp.deCombined >= 55) effMsg = ' Mixed movement quality.';
+  if (fp.deCombined >= 30) effMsg = ' Clean trending movement.';
+  else if (fp.deCombined >= 20) effMsg = ' Directional movement.';
+  else if (fp.deCombined >= 8) effMsg = ' Mixed movement quality.';
   else if (fp.deCombined > 0) effMsg = ' Noisy/choppy price action.';
 
-  return `${fp.base} ${baseWord}, ${fp.quote} ${quoteWord}. ${statusMsg}${momMsg}${stateMsg}${effMsg}`;
+  return `${fp.base} ${baseWord}, ${fp.quote} ${quoteWord}. ${statusMsg}${impulseMsg}${momMsg}${stateMsg}${effMsg}`;
 }
 
 function renderFlowPerformance(strengthData, m15Data) {
@@ -1326,16 +1336,22 @@ function renderFlowPerformance(strengthData, m15Data) {
     const v90  = m15 ? parseFloat(m15.smooth_90m)  || 0 : null;
     const v180 = m15 ? parseFloat(m15.smooth_180m) || 0 : null;
 
+    // Impulse metrics from real M15 candle price action
+    const impulseScore = m15 ? (m15.impulse_score || 0) : 0;
+    const impulseDir   = m15 ? (m15.impulse_dir   || 0) : 0;
+    const velocity     = m15 ? (m15.velocity       || 0) : 0;
+
     // Compute M15 state relative to flow direction (BUY → positive is good, SELL → negative is good)
     const flowSign = fp.dir === 'BUY' ? 1 : -1;
+    const impulseAligned = impulseDir === flowSign;
     let state = null;
     if (v45 != null && v90 != null) {
       const dir45 = v45 * flowSign;   // positive = moving WITH flow
       const dir90 = v90 * flowSign;
       if (Math.abs(v45) < 0.00005)                   state = 'FLAT';
-      else if (dir45 < 0)                             state = 'REVERSING';  // moving AGAINST flow
-      else if (dir45 > dir90 * 1.1)                   state = 'EXPANDING';  // accelerating WITH flow
-      else if (dir45 < dir90 * 0.85 && dir90 > 0)    state = 'COMPRESSING';// decelerating but still with flow
+      else if (dir45 < 0)                             state = 'REVERSING';
+      else if (dir45 > dir90 * 1.1)                   state = 'EXPANDING';
+      else if (dir45 < dir90 * 0.85 && dir90 > 0)    state = 'COMPRESSING';
       else                                            state = 'STEADY';
     }
 
@@ -1346,8 +1362,9 @@ function renderFlowPerformance(strengthData, m15Data) {
     const spread3H = (h3Base != null && h3Quote != null) ? h3Base - h3Quote : null;
     const spread6H = (h6Base != null && h6Quote != null) ? h6Base - h6Quote : null;
 
-    // Alignment checks
-    const m15Confirms = v45 != null ? Math.sign(v45) === flowSign : null;
+    // Alignment checks — M15 requires minimum magnitude to count as confirming
+    const M15_CONFIRM_MIN = 0.00008; // filter out noise — need real spread movement
+    const m15Confirms = v45 != null ? (Math.sign(v45) === flowSign && Math.abs(v45) >= M15_CONFIRM_MIN) : null;
     const h3Confirms  = spread3H != null ? Math.sign(spread3H) === flowSign : null;
     const h6Confirms  = spread6H != null ? Math.sign(spread6H) === flowSign : null;
 
@@ -1355,22 +1372,31 @@ function renderFlowPerformance(strengthData, m15Data) {
     const accel = (v45 != null && v90 != null) ? v45 - v90 : null;
     const accelSign = accel != null ? Math.sign(accel) === flowSign : null;
 
-    // Performance score: directional magnitude (confirms = positive, against = negative)
+    // ── Performance score ────────────────────────────────────────────────
     let perfScore = 0;
-    // M15: reward confirming moves, penalize opposing moves (heaviest weight)
-    if (v45 != null) perfScore += (v45 * flowSign) * 10000 * 4;
-    // 3H spread: same directional logic
+
+    // A) Currency strength spreads (indirect signal)
+    if (v45 != null)      perfScore += (v45 * flowSign) * 10000 * 3;
     if (spread3H != null) perfScore += (spread3H * flowSign) * 10000 * 2;
-    // 6H spread: lighter weight
     if (spread6H != null) perfScore += (spread6H * flowSign) * 10000 * 1;
-    // Alignment bonuses
-    if (m15Confirms) perfScore += 15;
+
+    // B) Real M15 price action impulse (direct signal — heaviest weight)
+    if (impulseAligned && impulseScore >= 40) perfScore += impulseScore * 0.5;  // up to +50
+    else if (impulseAligned)                  perfScore += impulseScore * 0.25; // up to +10
+    else if (impulseScore >= 40)              perfScore -= impulseScore * 0.3;  // strong counter-impulse penalty
+
+    // C) Alignment bonuses — scaled by impulse quality
+    if (m15Confirms && impulseScore >= 40) perfScore += 20; // strong M15 confirmation
+    else if (m15Confirms)                  perfScore += 10; // weak M15 confirmation
     if (h3Confirms)  perfScore += 10;
     if (h6Confirms)  perfScore += 5;
-    // Acceleration in flow direction
-    if (accelSign)   perfScore += 10;
-    // State bonuses (from M15-computed state)
-    if (state === 'EXPANDING' && m15Confirms)        perfScore += 15;
+
+    // D) Acceleration in flow direction
+    if (accelSign) perfScore += 10;
+
+    // E) State bonuses
+    if (state === 'EXPANDING' && m15Confirms) perfScore += 15;
+    if (state === 'EXPANDING' && impulseAligned && impulseScore >= 50) perfScore += 10; // impulse + expansion = strong
     if (state === 'REVERSING')                       perfScore -= 10;
     if (state === 'COMPRESSING' && !m15Confirms)     perfScore -= 15;
 
@@ -1380,27 +1406,27 @@ function renderFlowPerformance(strengthData, m15Data) {
     if (m15Confirms && htfCount === 2)       { status = 'STRONG';   statusCls = 'fp-strong'; }
     else if (m15Confirms && htfCount === 1)  { status = 'ALIGNED';  statusCls = 'fp-aligned'; }
     else if (m15Confirms && htfCount === 0)  { status = 'PARTIAL';  statusCls = 'fp-partial'; }
-    else if (!m15Confirms && htfCount >= 1)  { status = 'BUILDING'; statusCls = 'fp-building'; } // HTF setup, M15 not yet
+    else if (!m15Confirms && htfCount >= 1)  { status = 'BUILDING'; statusCls = 'fp-building'; }
     else if (m15Confirms === false)          { status = 'AGAINST';  statusCls = 'fp-against'; }
     else                                     { status = 'WAIT';     statusCls = 'fp-wait'; }
 
-    // Momentum description
+    // Momentum — combine spread acceleration with real impulse data
     let momentum;
-    if (accel != null && v45 != null) {
-      const accelAbs = Math.abs(accel);
-      if (accelSign && Math.abs(v45) > 0.0005) momentum = 'Accelerating';
-      else if (!accelSign && accelAbs > 0.0002) momentum = 'Fading';
-      else if (Math.abs(v45) < 0.0002) momentum = 'Flat';
-      else momentum = 'Steady';
+    if (impulseScore >= 50 && impulseAligned)         momentum = 'Impulsive';
+    else if (accel != null && v45 != null) {
+      if (accelSign && Math.abs(v45) > 0.0003)       momentum = 'Accelerating';
+      else if (!accelSign && Math.abs(accel) > 0.0002) momentum = 'Fading';
+      else if (Math.abs(v45) < 0.0002)               momentum = 'Flat';
+      else                                            momentum = 'Steady';
     } else {
       momentum = 'No data';
     }
 
-    // Directional Efficiency from API (combined M15+H1 DE)
+    // Directional Efficiency from API
     const deCombined = m15 ? parseFloat(m15.de_combined) || 0 : 0;
     const deLabel = deCombined >= 30 ? 'Institutional' : deCombined >= 20 ? 'Clean' : deCombined >= 8 ? 'Mixed' : 'Noisy';
 
-    return { ...fp, v45, v90, v180, spread3H, spread6H, state, accel, m15Confirms, h3Confirms, h6Confirms, accelSign, perfScore, status, statusCls, momentum, h3Base, h3Quote, base, quote, deCombined, deLabel };
+    return { ...fp, v45, v90, v180, spread3H, spread6H, state, accel, m15Confirms, h3Confirms, h6Confirms, accelSign, perfScore, status, statusCls, momentum, h3Base, h3Quote, base, quote, deCombined, deLabel, impulseScore, impulseAligned };
   });
 
   // 5. Rank by enhanced score: 75% flow score + 25% DE (ranking booster, not standalone)
@@ -1453,11 +1479,16 @@ function renderFlowPerformance(strengthData, m15Data) {
             <span class="fp-lbl">State</span>
             <span class="fp-state-badge ${stateCls}">${stateLabel}</span>
             <span class="fp-lbl">Mom</span>
-            <span class="fp-val">${fp.momentum}</span>
+            <span class="fp-val ${fp.momentum === 'Impulsive' ? 'green' : ''}">${fp.momentum}</span>
             <span class="fp-lbl">Align</span>
             <span class="fp-dots">${dot(fp.m15Confirms)}${dot(fp.h3Confirms)}${dot(fp.h6Confirms)}</span>
             ${fp.deCombined > 0 ? `<span class="fp-lbl">Eff</span><span class="fp-val fp-de-${fp.deLabel.toLowerCase()}">${Math.round(fp.deCombined)}</span>` : ''}
           </div>
+          ${fp.impulseScore > 0 ? `<div class="fp-detail-row fp-impulse-row">
+            <span class="fp-lbl">Impulse</span>
+            <span class="fp-imp-badge ${fp.impulseScore >= 60 ? 'imp-strong' : fp.impulseScore >= 40 ? 'imp-trend' : fp.impulseScore >= 20 ? 'imp-weak' : 'imp-flat'}">${fp.impulseScore >= 60 ? 'Strong' : fp.impulseScore >= 40 ? 'Trending' : fp.impulseScore >= 20 ? 'Weak' : 'Flat'} ${fp.impulseScore}</span>
+            <span class="fp-imp-dir ${fp.impulseAligned ? 'green' : 'red'}">${fp.impulseAligned ? '▲ Aligned' : '▼ Counter'}</span>
+          </div>` : ''}
           <div class="fp-detail-row fp-ccy-row">
             <span class="fp-ccy-chip ${(fp.h3Base ?? 0) >= 0 ? 'strong' : 'weak'}">${fp.base} ${fmt(fp.h3Base ?? 0, 5)}</span>
             <span class="fp-ccy-vs">vs</span>
@@ -1472,28 +1503,37 @@ function renderFlowPerformance(strengthData, m15Data) {
 
 // ─── M15 Pair Ranking ─────────────────────────────────────────────────────────
 
-// Notification bar filter — EXPANDING + COMPRESSING · all TFs same sign · |smooth_45m| >= CS_THRESHOLD
-// Used by updateM15Bar() — shows active momentum (building or fading but still directional).
+// Notification bar filter — requires impulse_score ≥ 30 AND all TFs same sign
+// Sorted by impulse quality (actual price action) instead of spread magnitude.
 function getM15Impulses(data) {
   return (data?.spreads || [])
     .filter(s => {
-      if (s.state !== 'EXPANDING' && s.state !== 'COMPRESSING' && s.state !== 'STEADY') return false;
+      if (s.state === 'FLAT' || s.state === 'REVERSING') return false;
       const s45  = parseFloat(s.smooth_45m)  || 0;
       const s90  = parseFloat(s.smooth_90m)  || 0;
       const s180 = parseFloat(s.smooth_180m) || 0;
       if (Math.sign(s45) !== Math.sign(s90))  return false;
       if (Math.sign(s45) !== Math.sign(s180)) return false;
-      return Math.abs(s45) >= CS_THRESHOLD;
+      if (Math.abs(s45) < CS_THRESHOLD) return false;
+      return (s.impulse_score || 0) >= 30; // minimum impulse quality
     })
-    .sort((a, b) => Math.abs(parseFloat(b.smooth_45m)) - Math.abs(parseFloat(a.smooth_45m)));
+    .sort((a, b) => (b.impulse_score || 0) - (a.impulse_score || 0));
 }
 
 // Card filter — all active states (not FLAT) · |smooth_45m| >= CS_THRESHOLD (±0.00100)
-// Used by renderM15Spreads() — same threshold as bar, all states shown.
+// Sorted by impulse_score (actual price action quality) instead of spread magnitude.
 function getM15AllActive(data) {
   return (data?.spreads || [])
     .filter(s => s.state !== 'FLAT' && Math.abs(parseFloat(s.smooth_45m) || 0) >= CS_THRESHOLD)
-    .sort((a, b) => Math.abs(parseFloat(b.smooth_45m)) - Math.abs(parseFloat(a.smooth_45m)));
+    .sort((a, b) => (b.impulse_score || 0) - (a.impulse_score || 0));
+}
+
+// Impulse quality label from impulse_score (0-100)
+function impulseLabel(score) {
+  if (score >= 60) return { text: 'Impulsive', cls: 'imp-strong' };
+  if (score >= 40) return { text: 'Trending',  cls: 'imp-trend' };
+  if (score >= 20) return { text: 'Weak',      cls: 'imp-weak' };
+  return                   { text: 'Flat',      cls: 'imp-flat' };
 }
 
 function renderM15Spreads(data) {
@@ -1511,21 +1551,33 @@ function renderM15Spreads(data) {
     return;
   }
 
-  const maxVal = Math.abs(parseFloat(spreads[0].smooth_45m)) || 0.0001;
+  const maxImp = spreads[0]?.impulse_score || 1;
 
   el.innerHTML = spreads.map(s => {
     const v45  = parseFloat(s.smooth_45m) || 0;
     const cls  = v45 >= 0 ? 'buy' : 'sell';
     const bias = cls === 'buy' ? 'BUY' : 'SELL';
-    const pct  = Math.round((Math.abs(v45) / maxVal) * 100);
+    const imp  = s.impulse_score || 0;
+    const pct  = Math.round((imp / maxImp) * 100);
+    const il   = impulseLabel(imp);
+    const vel  = s.velocity || 0;
+    const body = s.body_ratio || 0;
+    const cons = s.consec_dir || 0;
     return `
       <div class="spread-row m15-row">
         <div class="spread-accent ${cls}"></div>
         <span class="spread-pair">${pair(s.instrument)}</span>
         <span class="spread-bias ${cls}">${bias}</span>
         <span class="sb-behavior ${s.state}">${clean(s.state || '')}</span>
+        <span class="m15-imp-badge ${il.cls}">${il.text}</span>
         <span class="spread-val">${fmt(v45, 5)}</span>
         <div class="spread-bar-wrap"><div class="spread-bar-fill ${cls}" style="width:${pct}%"></div></div>
+      </div>
+      <div class="m15-imp-detail">
+        <span class="m15-imp-lbl">Vel</span><span class="m15-imp-val">${vel.toFixed(1)}×</span>
+        <span class="m15-imp-lbl">Body</span><span class="m15-imp-val">${Math.round(body * 100)}%</span>
+        <span class="m15-imp-lbl">Run</span><span class="m15-imp-val">${cons}/4</span>
+        <span class="m15-imp-lbl">Score</span><span class="m15-imp-val ${il.cls}">${imp}</span>
       </div>`;
   }).join('');
 }
@@ -1564,12 +1616,13 @@ function updateM15Bar(data) {
     const v45  = parseFloat(s.smooth_45m) || 0;
     const bias = v45 >= 0 ? 'BUY' : 'SELL';
     const dir  = v45 >= 0 ? 'buy' : 'sell';
-    const vStr = (v45 >= 0 ? '+' : '') + v45.toFixed(5);
+    const imp  = s.impulse_score || 0;
+    const il   = impulseLabel(imp);
     const stateLabel = s.state === 'COMPRESSING' ? ' ▾' : ' ▲';
     return `<span class="m15-bar-chip">
       <span class="chip-pair">${pair(s.instrument)}</span>
       <span class="chip-${dir}">${bias}${stateLabel}</span>
-      <span class="chip-val">${vStr}</span>
+      <span class="m15-imp-badge ${il.cls}">${il.text} ${imp}</span>
     </span>`;
   }).join('');
 
@@ -2233,20 +2286,31 @@ function _meSessionExplain(s, label, status) {
         const m15 = m15Map[fp.instrument];
         const v45 = m15 ? parseFloat(m15.smooth_45m) || 0 : null;
         const v90 = m15 ? parseFloat(m15.smooth_90m) || 0 : null;
+        const impulseScore = m15 ? (m15.impulse_score || 0) : 0;
+        const impulseDir   = m15 ? (m15.impulse_dir   || 0) : 0;
+        const impulseAligned = impulseDir === flowSign;
         const h3B = ccyMap3H[b] ?? null, h3Q = ccyMap3H[q] ?? null;
         const h6B = ccyMap6H[b] ?? null, h6Q = ccyMap6H[q] ?? null;
         const spread3H = (h3B != null && h3Q != null) ? h3B - h3Q : null;
         const spread6H = (h6B != null && h6Q != null) ? h6B - h6Q : null;
-        const m15Confirms = v45 != null ? Math.sign(v45) === flowSign : null;
+        const M15_CONFIRM_MIN = 0.00008;
+        const m15Confirms = v45 != null ? (Math.sign(v45) === flowSign && Math.abs(v45) >= M15_CONFIRM_MIN) : null;
         const h3Confirms  = spread3H != null ? Math.sign(spread3H) === flowSign : null;
         const h6Confirms  = spread6H != null ? Math.sign(spread6H) === flowSign : null;
         const accel = (v45 != null && v90 != null) ? v45 - v90 : null;
         const accelSign = accel != null ? Math.sign(accel) === flowSign : null;
         let perfScore = 0;
-        if (v45 != null)      perfScore += (v45 * flowSign) * 10000 * 4;
+        // Currency strength spreads
+        if (v45 != null)      perfScore += (v45 * flowSign) * 10000 * 3;
         if (spread3H != null) perfScore += (spread3H * flowSign) * 10000 * 2;
         if (spread6H != null) perfScore += (spread6H * flowSign) * 10000 * 1;
-        if (m15Confirms) perfScore += 15;
+        // Real M15 price action impulse
+        if (impulseAligned && impulseScore >= 40) perfScore += impulseScore * 0.5;
+        else if (impulseAligned)                  perfScore += impulseScore * 0.25;
+        else if (impulseScore >= 40)              perfScore -= impulseScore * 0.3;
+        // Alignment bonuses scaled by impulse
+        if (m15Confirms && impulseScore >= 40) perfScore += 20;
+        else if (m15Confirms)                  perfScore += 10;
         if (h3Confirms)  perfScore += 10;
         if (h6Confirms)  perfScore += 5;
         if (accelSign)   perfScore += 10;
@@ -2260,6 +2324,7 @@ function _meSessionExplain(s, label, status) {
           else state = 'STEADY';
         }
         if (state === 'EXPANDING' && m15Confirms) perfScore += 15;
+        if (state === 'EXPANDING' && impulseAligned && impulseScore >= 50) perfScore += 10;
         if (state === 'REVERSING') perfScore -= 10;
         if (state === 'COMPRESSING' && !m15Confirms) perfScore -= 15;
         const htfCount = [h3Confirms, h6Confirms].filter(x => x === true).length;
