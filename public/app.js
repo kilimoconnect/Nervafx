@@ -2399,8 +2399,10 @@ function _meSessionExplain(s, label, status) {
         ${deHtml}
       </div>`;
     }).join('');
+    const hasChoppy = rankedPairs.some(p => p.de > 0 && p.de < 20);
+    const deWarn = hasChoppy ? ' Choppy/Mixed DE — expect noise, tighten stops.' : '';
     const actionHint = status === 'ACTIVE'
-      ? `<div class="me-flow-hint">Wait for pullback on top-ranked pairs, then confirm entry on M15</div>`
+      ? `<div class="me-flow-hint">Wait for pullback on top-ranked pairs, then confirm entry on M15.${deWarn}</div>`
       : '';
     flowHtml = `<div class="me-flow-block">
       <div class="me-flow-title">Strength Flow</div>
