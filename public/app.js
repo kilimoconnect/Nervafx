@@ -2179,7 +2179,7 @@ function _meSessionExplain(s, label, status) {
       if (spread6H != null && Math.sign(spread6H) === flowSign) perfScore += 5;
       const deCombined = fp.de || 0;
       const finalScore = (0.75 * perfScore) + (0.25 * deCombined);
-      return { pair: fp.pair.replace('_', '/'), dir: fp.dir, status: fp.status, finalScore };
+      return { pair: fp.pair.replace('_', '/'), dir: fp.dir, status: fp.status, finalScore, de: Math.round(deCombined) };
     }).sort((a, b) => b.finalScore - a.finalScore);
   }
 
@@ -2261,15 +2261,23 @@ function _meSessionExplain(s, label, status) {
         else                                     fpStatus = 'WAIT';
         const deCombined = m15 ? parseFloat(m15.de_combined) || 0 : 0;
         const finalScore = (0.75 * perfScore) + (0.25 * deCombined);
-        return { pair: fp.instrument.replace('_', '/'), dir: fp.dir, status: fpStatus, finalScore };
+        return { pair: fp.instrument.replace('_', '/'), dir: fp.dir, status: fpStatus, finalScore, de: Math.round(deCombined) };
       }).sort((a, b) => b.finalScore - a.finalScore);
     }
   }
 
   if (rankedPairs && rankedPairs.length) {
-    const pairList = rankedPairs.map((p, i) => `#${i + 1} ${p.dir} ${p.pair} <span style="color:${
-      p.status === 'STRONG' ? '#22c55e' : p.status === 'ALIGNED' ? '#0ea5e9' : p.status === 'PARTIAL' ? '#a855f7' : p.status === 'BUILDING' ? '#f59e0b' : p.status === 'AGAINST' ? '#ef4444' : '#64748b'
-    };font-size:9px">${p.status}</span>`).join(' · ');
+    const deLabel = v => {
+      if (v >= 70) return { text: 'Trending',    color: '#22c55e' };
+      if (v >= 40) return { text: 'Directional', color: '#0ea5e9' };
+      if (v >= 20) return { text: 'Mixed',       color: '#f59e0b' };
+      return              { text: 'Choppy',       color: '#ef4444' };
+    };
+    const pairList = rankedPairs.map((p, i) => {
+      const statusColor = p.status === 'STRONG' ? '#22c55e' : p.status === 'ALIGNED' ? '#0ea5e9' : p.status === 'PARTIAL' ? '#a855f7' : p.status === 'BUILDING' ? '#f59e0b' : p.status === 'AGAINST' ? '#ef4444' : '#64748b';
+      const dl = deLabel(p.de);
+      return `#${i + 1} ${p.dir} ${p.pair} <span style="color:${statusColor};font-size:9px">${p.status}</span> <span style="color:${dl.color};font-size:8px;opacity:0.85">DE ${p.de}% ${dl.text}</span>`;
+    }).join(' · ');
     lines.push(`Strength flow: ${pairList}`);
   }
 
