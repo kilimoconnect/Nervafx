@@ -1044,8 +1044,9 @@ function _flowFromFullMethod(csSnap, m15Snap) {
 /**
  * Build flow performance pair details for a session (stored in details.flow_performance).
  * Matches the frontend renderFlowPerformance scoring: M15 + 3H + 6H alignment/status + DE.
+ * DE uses M15 last 20 candles only.
  */
-function _flowPerfForSession(g, csFlowIndex, m15FlowIndex, h1CandlesByTime, m15CandlesByPair) {
+function _flowPerfForSession(g, csFlowIndex, m15FlowIndex, m15CandlesByPair) {
   if (!csFlowIndex) return null;
   const hours = g.rows.map(r => (r.time_utc || '').slice(0, 16).replace(' ', 'T')).reverse();
   for (const t of hours) {
@@ -1100,29 +1101,12 @@ function _flowPerfForSession(g, csFlowIndex, m15FlowIndex, h1CandlesByTime, m15C
       else if (m15Confirms === false)         status = 'AGAINST';
       else                                    status = 'WAIT';
 
-      // Directional Efficiency from raw candles (last 20 H1 + last 20 M15 up to this time)
+      // Directional Efficiency from M15 last 20 candles only
       let deCombined = 0;
-      if (h1CandlesByTime || m15CandlesByPair) {
-        // H1 DE: get last 20 H1 candles for this pair up to session time
-        let h1DE = 0;
-        if (h1CandlesByTime) {
-          const sessionTimes = g.rows.map(r => r.time_utc).sort();
-          const h1Candles = [];
-          for (const st of sessionTimes) {
-            const hourData = h1CandlesByTime[st];
-            if (hourData && hourData[fp.instrument]) h1Candles.push(hourData[fp.instrument]);
-          }
-          // Use up to last 20 from available data
-          h1DE = computeDE(h1Candles.slice(-20));
-        }
-        // M15 DE: get last 20 M15 candles for this pair up to session end time
-        let m15DE = 0;
-        if (m15CandlesByPair && m15CandlesByPair[fp.instrument]) {
-          const sessEnd = g.rows[g.rows.length - 1]?.time_utc || '';
-          const m15ForPair = m15CandlesByPair[fp.instrument].filter(c => c.time <= sessEnd);
-          m15DE = computeDE(m15ForPair.slice(-20));
-        }
-        deCombined = round1(0.40 * m15DE + 0.60 * h1DE);
+      if (m15CandlesByPair && m15CandlesByPair[fp.instrument]) {
+        const sessEnd = g.rows[g.rows.length - 1]?.time_utc || '';
+        const m15ForPair = m15CandlesByPair[fp.instrument].filter(c => c.time <= sessEnd);
+        deCombined = round1(computeDE(m15ForPair.slice(-20)));
       }
 
       return {
@@ -1167,7 +1151,7 @@ function _flowCcyForSession(g, csFlowIndex, m15FlowIndex, side) {
 
 // ─── Build per-session rows for market_energy_sessions ──────────────────────
 
-function buildSessionRows(hourRows, csFlowIndex, m15FlowIndex, h1CandlesByTime, m15CandlesByPair) {
+function buildSessionRows(hourRows, csFlowIndex, m15FlowIndex, m15CandlesByPair) {
   const groups = {};
   for (const r of hourRows) {
     let date = r.time_utc.slice(0, 10);
@@ -1297,7 +1281,7 @@ function buildSessionRows(hourRows, csFlowIndex, m15FlowIndex, h1CandlesByTime, 
       details: {
         hours: g.rows.length,
         flow_method: csFlowIndex ? 'smooth_3h+6h+m15' : 'candle_modal',
-        flow_performance: _flowPerfForSession(g, csFlowIndex, m15FlowIndex, h1CandlesByTime, m15CandlesByPair),
+        flow_performance: _flowPerfForSession(g, csFlowIndex, m15FlowIndex, m15CandlesByPair),
         hourly: g.rows.map(r => ({
           time:                r.time_utc,
           energy_cycle:        r.energy_cycle,
@@ -1498,7 +1482,7 @@ async function backfillSessionActivity({ fullRewrite = false } = {}) {
   const csFlowIndex    = await fetchCurrencyStrengthFlow(daysCover);
   const m15FlowIndex   = await fetchM15FlowIndex(daysCover);
   const m15CandleData  = await fetchM15Candles(daysCover);
-  const allSessionRows = buildSessionRows(rows, csFlowIndex, m15FlowIndex, byTime, m15CandleData);
+  const allSessionRows = buildSessionRows(rows, csFlowIndex, m15FlowIndex, m15CandleData);
 
   if (fullRewrite) {
     await upsertMarketEnergySessions(allSessionRows);
@@ -1552,7 +1536,7 @@ async function calculateLatestSessionActivity() {
   const csFlowIndex   = await fetchCurrencyStrengthFlow(2);
   const m15FlowIndex  = await fetchM15FlowIndex(2);
   const m15CandleData = await fetchM15Candles(2);
-  const sessionRows = buildSessionRows(allRows, csFlowIndex, m15FlowIndex, byTime, m15CandleData);
+  const sessionRows = buildSessionRows(allRows, csFlowIndex, m15FlowIndex, m15CandleData);
   const currentOnly = sessionRows.filter(
     sr => sr.session_name === activeSession && sr.session_date === todayStr
   );

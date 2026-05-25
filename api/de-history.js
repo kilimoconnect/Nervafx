@@ -4,8 +4,7 @@
  * GET /api/de-history?days=14
  *
  * Returns Directional Efficiency (DE) per pair per hour for the archive.
- * DE = (net_move / total_travel) × 100 using last 20 candles at each time.
- * Combined: 0.40 × M15_DE + 0.60 × H1_DE
+ * DE = (net_move / total_travel) × 100 using last 20 M15 candles only.
  */
 
 const { getClient, cors } = require('./_db');
@@ -31,29 +30,10 @@ module.exports = async function handler(req, res) {
     const sb = getClient();
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
-    // Fetch H1 candles (ascending)
-    const PAGE = 1000;
-    const h1All = [];
-    let offset = 0;
-    while (true) {
-      const { data, error } = await sb
-        .from('backtest_candles')
-        .select('instrument, time, open, high, low, close')
-        .eq('timeframe', 'H1')
-        .eq('complete', true)
-        .gte('time', since)
-        .order('time', { ascending: true })
-        .range(offset, offset + PAGE - 1);
-      if (error) throw error;
-      if (!data?.length) break;
-      h1All.push(...data);
-      if (data.length < PAGE) break;
-      offset += PAGE;
-    }
-
     // Fetch M15 candles (ascending)
+    const PAGE = 1000;
     const m15All = [];
-    offset = 0;
+    let offset = 0;
     while (true) {
       const { data, error } = await sb
         .from('backtest_candles')
@@ -70,35 +50,38 @@ module.exports = async function handler(req, res) {
       offset += PAGE;
     }
 
-    // Group by instrument, compute DE at each H1 boundary using trailing 20 candles
-    const h1ByPair = {}, m15ByPair = {};
-    for (const c of h1All) {
-      if (!h1ByPair[c.instrument]) h1ByPair[c.instrument] = [];
-      h1ByPair[c.instrument].push({ open: +c.open, high: +c.high, low: +c.low, close: +c.close, time: c.time });
-    }
+    // Group M15 candles by instrument (ascending by time)
+    const m15ByPair = {};
     for (const c of m15All) {
       if (!m15ByPair[c.instrument]) m15ByPair[c.instrument] = [];
       m15ByPair[c.instrument].push({ open: +c.open, high: +c.high, low: +c.low, close: +c.close, time: c.time });
     }
 
-    // For each pair, compute DE at each H1 candle time using trailing 20 candles
+    // Collect unique hour boundaries from M15 candle times
+    const hourSet = new Set();
+    for (const c of m15All) {
+      const t = new Date(c.time);
+      t.setUTCMinutes(0, 0, 0);
+      hourSet.add(t.toISOString().slice(0, 16));
+    }
+    const hours = [...hourSet].sort();
+
+    // For each pair, compute DE at each hour boundary using trailing 20 M15 candles
     const results = {};  // { time_key → { instrument → de_combined } }
-    for (const [inst, h1Candles] of Object.entries(h1ByPair)) {
-      const m15Candles = m15ByPair[inst] || [];
-      for (let i = 19; i < h1Candles.length; i++) {
-        const h1Window = h1Candles.slice(i - 19, i + 1);
-        const t = new Date(h1Candles[i].time).toISOString().slice(0, 16);
-        const h1DE = computeDE(h1Window);
+    for (const [inst, m15Candles] of Object.entries(m15ByPair)) {
+      for (const hourKey of hours) {
+        // Find M15 candles up to this hour's end (hour + 59 min)
+        const cutoffDate = new Date(hourKey + ':00Z');
+        cutoffDate.setUTCHours(cutoffDate.getUTCHours() + 1);
+        const cutoff = cutoffDate.toISOString();
 
-        // Find M15 candles up to this H1 time (last 20)
-        const cutoff = h1Candles[i].time;
-        const m15Before = m15Candles.filter(c => c.time <= cutoff);
+        const m15Before = m15Candles.filter(c => c.time < cutoff);
+        if (m15Before.length < 2) continue;
         const m15Window = m15Before.slice(-20);
-        const m15DE = computeDE(m15Window);
+        const de = Math.round(computeDE(m15Window) * 10) / 10;
 
-        const combined = Math.round((0.40 * m15DE + 0.60 * h1DE) * 10) / 10;
-        if (!results[t]) results[t] = {};
-        results[t][inst] = combined;
+        if (!results[hourKey]) results[hourKey] = {};
+        results[hourKey][inst] = de;
       }
     }
 

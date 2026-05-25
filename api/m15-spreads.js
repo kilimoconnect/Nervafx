@@ -60,34 +60,18 @@ module.exports = async function handler(req, res) {
 
     if (error) throw error;
 
-    // Fetch last 20 H1 candles + last 20 M15 candles for all instruments (for DE)
+    // Fetch last 20 M15 candles for all instruments (for DE)
     const instruments = (data || []).map(s => s.instrument);
-    const [h1Result, m15Result] = await Promise.all([
-      sb.from('backtest_candles')
-        .select('instrument, time, open, high, low, close')
-        .in('instrument', instruments)
-        .eq('timeframe', 'H1')
-        .eq('complete', true)
-        .order('time', { ascending: false })
-        .limit(instruments.length * 20),
-      sb.from('backtest_candles')
-        .select('instrument, time, open, high, low, close')
-        .in('instrument', instruments)
-        .eq('timeframe', 'M15')
-        .eq('complete', true)
-        .order('time', { ascending: false })
-        .limit(instruments.length * 20),
-    ]);
+    const m15Result = await sb.from('backtest_candles')
+      .select('instrument, time, open, high, low, close')
+      .in('instrument', instruments)
+      .eq('timeframe', 'M15')
+      .eq('complete', true)
+      .order('time', { ascending: false })
+      .limit(instruments.length * 20);
 
     // Group candles by instrument (ascending time for DE calc)
-    const h1ByPair = {}, m15ByPair = {};
-    for (const c of (h1Result.data || [])) {
-      if (!h1ByPair[c.instrument]) h1ByPair[c.instrument] = [];
-      h1ByPair[c.instrument].push({
-        open: parseFloat(c.open), high: parseFloat(c.high),
-        low: parseFloat(c.low), close: parseFloat(c.close), time: c.time,
-      });
-    }
+    const m15ByPair = {};
     for (const c of (m15Result.data || [])) {
       if (!m15ByPair[c.instrument]) m15ByPair[c.instrument] = [];
       m15ByPair[c.instrument].push({
@@ -96,18 +80,14 @@ module.exports = async function handler(req, res) {
       });
     }
     // Reverse to ascending (fetched desc for limit) then take last 20
-    for (const k of Object.keys(h1ByPair))  h1ByPair[k]  = h1ByPair[k].reverse().slice(-20);
     for (const k of Object.keys(m15ByPair)) m15ByPair[k] = m15ByPair[k].reverse().slice(-20);
 
-    // Compute DE per pair
+    // Compute DE per pair (M15 only — last 20 candles)
     const deMap = {};
     for (const inst of instruments) {
-      const h1DE  = computeDE(h1ByPair[inst]  || []);
-      const m15DE = computeDE(m15ByPair[inst] || []);
+      const de = computeDE(m15ByPair[inst] || []);
       deMap[inst] = {
-        de_m15: Math.round(m15DE * 10) / 10,
-        de_h1:  Math.round(h1DE * 10)  / 10,
-        de_combined: Math.round((0.40 * m15DE + 0.60 * h1DE) * 10) / 10,
+        de_combined: Math.round(de * 10) / 10,
       };
     }
 
