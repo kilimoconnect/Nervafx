@@ -2409,6 +2409,22 @@ function _meSessionCard(name, s, status, hourlyRows) {
     </div>`;
   }
 
+  // Free plan: hide active/live session card — show upgrade prompt instead
+  if (status === 'ACTIVE' && document.body.classList.contains('plan-free')) {
+    return `<div class="me-card me-card--active me-card--locked">
+      <div class="me-card-head">
+        <span class="me-card-sess" style="color:${sessColor}">${label}</span>
+        <span class="me-status-badge me-status-active">Live</span>
+      </div>
+      <div class="me-lock-body">
+        <span class="me-lock-icon">🔒</span>
+        <span class="me-lock-title">Live Session</span>
+        <span class="me-lock-desc">Upgrade to Pro to see real-time energy, tradability, directional flow, and hourly breakdown for the current session.</span>
+        <a href="#" class="me-lock-btn" onclick="event.preventDefault();startUpgrade('pro')">Upgrade to Pro →</a>
+      </div>
+    </div>`;
+  }
+
   const cycle      = s.energy_cycle || 'BALANCED';
   const cycleColor = ME_CYCLE_COLOR[cycle] || '#64748b';
   const cycleLabel = ME_CYCLE_LABEL[cycle] || cycle;

@@ -18,7 +18,7 @@ module.exports = async function handler(req, res) {
   if (req.method !== 'GET')    return res.status(405).json({ error: 'GET only' });
 
   try {
-    const gate = await requirePlan(getClient(), req, 'pro');
+    const gate = await requirePlan(getClient(), req, 'free');
     if (gate.error) return res.status(gate.status).json({ error: gate.error, upgrade: gate.upgrade });
     const data = await getMarketEnergyData();
     if (!data) return res.json({ sessions: [], expansionPressure: null, marketCycle: null });
