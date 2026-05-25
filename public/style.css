@@ -1164,7 +1164,7 @@ section.card:has(.v2-gate-overlay.visible) { min-height: 220px; }
 .fp-de-mixed         { color: #facc15; }
 .fp-de-noisy         { color: #f87171; }
 
-/* ─── Archive Flow Performance ────────────────────────────────────────────── */
+/* ─── Archive Flow Performance (rank-based layout) ───────────────────────── */
 .fp-arc-table {
   width: 100%;
   border-collapse: collapse;
@@ -1172,67 +1172,66 @@ section.card:has(.v2-gate-overlay.visible) { min-height: 220px; }
 }
 .fp-arc-table th,
 .fp-arc-table td {
-  padding: 5px 4px;
+  padding: 6px 6px;
   border-bottom: 1px solid var(--border);
 }
-.fp-arc-th-pair {
-  text-align: left;
-  font-size: 9px;
+.fp-arc-th-rank {
+  text-align: center;
+  font-size: 10px;
   color: var(--text-dim);
-  font-weight: 600;
-  min-width: 100px;
-  white-space: nowrap;
+  font-weight: 700;
+  width: 28px;
+  min-width: 28px;
 }
 .fp-arc-th-time {
   text-align: center;
   font-size: 9px;
   color: var(--text-dim);
   font-weight: 600;
-  min-width: 80px;
+  min-width: 110px;
 }
-.fp-arc-td-pair {
-  white-space: nowrap;
-  vertical-align: middle;
-}
-.fp-arc-td {
+.fp-arc-td-rank {
   text-align: center;
   vertical-align: middle;
+  font-size: 13px;
+}
+.fp-arc-td-cell {
+  vertical-align: middle;
   white-space: nowrap;
+  padding: 5px 8px;
 }
-.fp-arc-rank-badge {
-  display: inline-block;
+.fp-rc-pair {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 2px;
+}
+.fp-rc-name {
+  font-weight: 700;
+  font-size: 11px;
+  color: var(--text);
+}
+.fp-rc-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9px;
+  font-weight: 600;
+}
+.fp-rc-status {
+  font-weight: 700;
   font-size: 8px;
-  font-weight: 800;
-  color: #0f172a;
-  padding: 1px 4px;
-  border-radius: 3px;
-  margin-right: 3px;
-  min-width: 16px;
-  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: .03em;
 }
-.fp-arc-spread {
-  font-family: var(--mono, monospace);
-  font-size: 10px;
-  display: inline-block;
-}
-.fp-arc-sub {
+.fp-rc-state {
   font-size: 8px;
-  opacity: 0.7;
-  margin-left: 1px;
 }
-.fp-arc-sub::before {
-  content: '·';
-  margin-right: 1px;
-  color: var(--text-dim);
-}
-.fp-arc-delta {
-  font-size: 8px;
-  margin-right: 2px;
-}
-.fp-arc-meta {
-  font-size: 8px;
-  display: inline-block;
-  margin-left: 2px;
+@media (max-width: 700px) {
+  .fp-arc-th-time { min-width: 90px; }
+  .fp-arc-td-cell { padding: 4px 5px; }
+  .fp-rc-name { font-size: 10px; }
+  .fp-rc-meta { gap: 4px; font-size: 8px; }
 }
 
 /* ─── Risk list ────────────────────────────────────────────────────────────── */
