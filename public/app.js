@@ -2174,7 +2174,7 @@ function _meDirBar(pct, color) {
 }
 
 function _meSessionExplain(s, label, status) {
-  if (!s) return '';
+  if (!s) return { explainHtml: '', flowHtml: '' };
   const mov = Math.round(parseFloat(s.movement_score) || 0);
   const brd = Math.round(parseFloat(s.breadth_score) || 0);
   const agr = Math.round(parseFloat(s.agreement_score) || 0);
@@ -2414,11 +2414,10 @@ function _meSessionExplain(s, label, status) {
   else if (energy >= 35) lines.push(`Moderate energy (${energy}) — conditions building, wait for confirmation.`);
   else lines.push(`Low energy (${energy}) — range-bound, avoid forcing trades.`);
 
-  return `<div class="me-explain">
+  return { explainHtml: `<div class="me-explain">
     <div class="me-explain-title">What this means</div>
     <ul class="me-explain-list">${lines.map(l => `<li>${l}</li>`).join('')}</ul>
-    ${flowHtml}
-  </div>`;
+  </div>`, flowHtml };
 }
 
 function _meHourlyTrend(hourlyRows) {
@@ -2720,6 +2719,8 @@ function _meSessionCard(name, s, status, hourlyRows) {
     </div>
     `;
 
+  const { explainHtml, flowHtml: flowBlock } = _meSessionExplain(s, label, status) || { explainHtml: '', flowHtml: '' };
+
   return `<div class="me-card${status === 'ACTIVE' ? ' me-card--active' : status === 'UPCOMING' ? ' me-card--upcoming' : ''}">
     <div class="me-card-head">
       <span class="me-card-sess" style="color:${sessColor}">${label}</span>
@@ -2727,6 +2728,7 @@ function _meSessionCard(name, s, status, hourlyRows) {
       ${momentumHtml}
       ${statusHtml}
     </div>
+    ${flowBlock}
     <div class="me-card-comps"><div class="me-avg-note">Session averages</div>${compRows}${tradBar}${dirRows}</div>
     <div class="me-card-foot">
       <div class="me-foot-energy">
@@ -2736,7 +2738,7 @@ function _meSessionCard(name, s, status, hourlyRows) {
       <span class="me-foot-item" style="color:${liqColor}">Liquidity <strong>${liqScore}</strong></span>
     </div>
     ${status === 'ACTIVE' ? _meHourlyTrend(hourlyRows) : ''}
-    ${_meSessionExplain(s, label, status)}
+    ${explainHtml}
   </div>`;
 }
 
