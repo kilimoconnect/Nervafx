@@ -13,7 +13,7 @@
  */
 
 const { createClient } = require('@supabase/supabase-js');
-// Candle data maintained by cron-backtest-sync — no direct OANDA fetch needed
+const { fetchCandles, sleep }            = require('../src/oanda');
 const { config }                         = require('../src/config');
 const { calculateLatestStates }          = require('../src/stateDetect');
 const { calculateLatestSignals }         = require('../src/signals');
@@ -271,8 +271,72 @@ module.exports = async function handler(req, res) {
   const t0 = Date.now();
   let strengthTime = null;
 
-  // Candle data is now maintained by cron-backtest-sync (hourly) in backtest_candles.
-  // No OANDA fetch needed here — pipeline reads directly from backtest_candles.
+  // ── Candle freshness guard ───────────────────────────────────────────────
+  // If cron-backtest-sync missed a run or was slow, the pipeline self-heals
+  // by syncing stale instruments inline before proceeding.
+  await step('candle_sync', async () => {
+    const STALE_MS = 2 * 60 * 60 * 1000; // 2 hours — if latest candle is older, sync it
+    const PARALLEL = 7;
+    const TFS = ['M15', 'H1'];
+
+    for (const tf of TFS) {
+      // Check freshest candle for this timeframe (single query, not per-instrument)
+      const { data: newest } = await sb.from('backtest_candles')
+        .select('time')
+        .eq('timeframe', tf)
+        .eq('complete', true)
+        .order('time', { ascending: false })
+        .limit(1);
+
+      const latestTime = newest?.[0]?.time ? new Date(newest[0].time).getTime() : 0;
+      const age = Date.now() - latestTime;
+
+      if (age <= STALE_MS) continue; // fresh enough
+      console.log(`[PIPELINE] ${tf} candles stale (${(age / 3600000).toFixed(1)}h old) — syncing...`);
+
+      // Sync all instruments for this timeframe in parallel batches
+      let synced = 0;
+      for (let i = 0; i < INSTRUMENTS.length; i += PARALLEL) {
+        const batch = INSTRUMENTS.slice(i, i + PARALLEL);
+        const results = await Promise.allSettled(batch.map(async (inst) => {
+          const { data: latest } = await sb.from('backtest_candles')
+            .select('time').eq('instrument', inst).eq('timeframe', tf)
+            .order('time', { ascending: false }).limit(1);
+
+          let fromISO;
+          if (latest?.length) {
+            const lt = new Date(latest[0].time);
+            lt.setSeconds(lt.getSeconds() + 1);
+            fromISO = lt.toISOString();
+          } else {
+            fromISO = new Date(Date.now() - 7 * 86400000).toISOString();
+          }
+          if (new Date(fromISO) >= new Date()) return 0;
+
+          const raw = await fetchCandles(inst, { from: fromISO, to: new Date().toISOString(), granularity: tf });
+          const candles = raw.filter(c => c.complete).map(c => ({
+            instrument: inst, timeframe: tf, time: c.time,
+            open: parseFloat(c.mid.o), high: parseFloat(c.mid.h),
+            low: parseFloat(c.mid.l), close: parseFloat(c.mid.c),
+            volume: c.volume, complete: true, source: 'OANDA',
+          }));
+          if (!candles.length) return 0;
+          for (let j = 0; j < candles.length; j += 500) {
+            const b = candles.slice(j, j + 500);
+            const { error } = await sb.from('backtest_candles')
+              .upsert(b, { onConflict: 'instrument,timeframe,time', ignoreDuplicates: true });
+            if (error) throw new Error(`${inst}: ${error.message}`);
+          }
+          return candles.length;
+        }));
+        for (const r of results) {
+          if (r.status === 'fulfilled') synced += (r.value || 0);
+        }
+        if (i + PARALLEL < INSTRUMENTS.length) await sleep(150);
+      }
+      if (synced > 0) console.log(`[PIPELINE] Synced ${synced} ${tf} candles inline`);
+    }
+  });
 
   await step('strength', async () => { strengthTime = await runStrength(sb); });
   await step('smooth',   () => runSmooth(sb));
