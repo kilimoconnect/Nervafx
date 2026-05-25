@@ -1092,25 +1092,56 @@ document.querySelectorAll('.tf-btn').forEach(btn => {
 // ─── Full Market Scanner ──────────────────────────────────────────────────────
 // Compact single-line rows for all 28 pairs. Sorted: actionable first (by
 // pipeline_stage desc), NO_TRADE at bottom. TF arrows show raw spread direction.
+// Gated by currency signals — at least two currencies must qualify.
 
-function renderStates(data) {
+function renderStates(data, m15Data) {
   if (!data?.states) return;
   const el = document.getElementById('states-table');
   if (!el) return;
 
-  // Sort: pipeline_stage desc → confidence desc → NO_TRADE last
-  const sorted = [...data.states].sort((a, b) => {
+  // Currency signal gate — same as approved trades
+  const noSignal = _csigDataLoaded && !_csigCurrencies.size;
+  if (noSignal) {
+    el.innerHTML = '<p class="empty-state">No currency signal — at least two currencies must qualify before scanner populates</p>';
+    return;
+  }
+
+  // Build M15 impulse lookup
+  const m15Map = {};
+  if (m15Data?.spreads?.length) {
+    for (const s of m15Data.spreads) m15Map[s.instrument] = s;
+  }
+
+  // Filter to only pairs with a qualifying currency, then sort
+  const filtered = data.states.filter(s => hasCsigCurrency(s.instrument));
+  const sorted = [...filtered].sort((a, b) => {
     const pa = (a.state === 'NO_TRADE' || !a.bias || a.bias === 'NONE') ? -1 : (a.pipeline_stage || 0);
     const pb = (b.state === 'NO_TRADE' || !b.bias || b.bias === 'NONE') ? -1 : (b.pipeline_stage || 0);
     if (pb !== pa) return pb - pa;
     return (b.confidence || 0) - (a.confidence || 0);
   });
 
+  if (!sorted.length) {
+    el.innerHTML = '<p class="empty-state">No pairs match current currency signals</p>';
+    return;
+  }
+
   el.innerHTML = sorted.map(s => {
     const ta       = s.tf_alignment || {};
     const dir      = s.bias === 'BUY' ? 'buy' : s.bias === 'SELL' ? 'sell' : '';
     const isNoTrade = s.state === 'NO_TRADE' || !s.bias || s.bias === 'NONE';
     const phCls    = (s.phase || s.state || '').replace(/ /g, '_');
+
+    // M15 impulse data
+    const m15 = m15Map[s.instrument];
+    const imp = m15 ? (m15.impulse_score || 0) : 0;
+    const impDir = m15 ? (m15.impulse_dir || 0) : 0;
+    const flowSign = s.bias === 'BUY' ? 1 : s.bias === 'SELL' ? -1 : 0;
+    const impAligned = flowSign !== 0 && impDir === flowSign;
+    const il = impulseLabel(imp);
+    const impHtml = imp > 0 && !isNoTrade
+      ? `<span class="m15-imp-badge ${il.cls}" style="font-size:7px">${il.text} ${imp}</span>${impAligned ? '<span class="fp-imp-dir green" style="font-size:7px">▲</span>' : imp >= 30 ? '<span class="fp-imp-dir red" style="font-size:7px">▼</span>' : ''}`
+      : '';
 
     return `<div class="scanner-row${isNoTrade ? ' no-trade' : ''}">
       <span class="scanner-pair">${pair(s.instrument)}</span>
@@ -1120,6 +1151,7 @@ function renderStates(data) {
       <span class="phase-badge ${phCls}" style="font-size:8px;padding:1px 5px;white-space:nowrap">${clean(s.phase || s.state || '')}</span>
       <span class="action-badge ${s.action}" style="font-size:8px;padding:1px 5px;white-space:nowrap">${clean(s.action) || '—'}</span>
       <span class="scanner-conf">${s.confidence}%</span>
+      ${impHtml}
       <span class="scanner-tf">
         <span class="tfa ${ta.h12}">12H${ta.h12||'→'}</span>
         <span class="tfa ${ta.h6}">6H${ta.h6||'→'}</span>
@@ -4544,10 +4576,10 @@ async function refresh() {
     renderLiveOpportunities(states.states || []);
     renderTopSetups(states.states || []);
     renderSignals(signals, states.states || [], journalData?.entries || []);
-    renderStates(states);
+    _m15DataCache = m15Data;   // Cache for ME card flow ranking + scanner
+    renderStates(states, m15Data);
     renderSpreads(spreads);
     renderRanking12H(spreads, strength);
-    _m15DataCache = m15Data;   // Cache for ME card flow ranking
     renderFlowPerformance(strength, m15Data);
     renderM15Spreads(m15Data);
     updateM15Bar(m15Data);
