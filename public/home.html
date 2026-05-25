@@ -936,6 +936,63 @@
       flex-direction: column;
       gap: 6px;
     }
+    .me-ex-momentum {
+      font-size: 10px;
+      font-weight: 700;
+    }
+    .me-ex-avg-note {
+      font-size: 9px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text3);
+      margin-bottom: 4px;
+    }
+    .me-ex-section {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .me-ex-sep {
+      height: 1px;
+      background: var(--border);
+      margin: 8px 0 4px;
+    }
+    .me-ex-section-title {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text3);
+    }
+    .me-ex-dom-row {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .me-ex-dom-ccys {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .me-ex-dom-strong {
+      font-size: 10px;
+      font-weight: 700;
+      color: #22c55e;
+      background: rgba(34,197,94,0.1);
+      border: 1px solid rgba(34,197,94,0.2);
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
+    .me-ex-dom-weak {
+      font-size: 10px;
+      font-weight: 700;
+      color: #ef4444;
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.2);
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
     .me-ex-pressure {
       margin-top: 10px;
       padding-top: 10px;
@@ -1920,18 +1977,21 @@
           <div class="me-ex-head">
             <span class="me-ex-sess" style="color:#0ea5e9">London</span>
             <span class="me-ex-cycle" style="background:rgba(34,197,94,0.15);color:#22c55e;border:1px solid rgba(34,197,94,0.3)">Expansion</span>
+            <span class="me-ex-momentum" style="color:#22c55e">▲ Rising</span>
             <span class="me-ex-status">Live</span>
           </div>
+          <!-- Session averages -->
           <div class="me-ex-metrics">
+            <div class="me-ex-avg-note">Session averages</div>
             <div class="me-ex-row">
               <span class="me-ex-label">Movement</span>
               <div class="me-ex-bar"><div class="me-ex-fill" style="width:64%;background:#22c55e"></div></div>
               <span class="me-ex-val">64</span>
             </div>
             <div class="me-ex-row">
-              <span class="me-ex-label">Momentum</span>
-              <div class="me-ex-bar"><div class="me-ex-fill" style="width:48%;background:#0ea5e9"></div></div>
-              <span class="me-ex-val">48</span>
+              <span class="me-ex-label">Breadth</span>
+              <div class="me-ex-bar"><div class="me-ex-fill" style="width:86%;background:#22c55e"></div></div>
+              <span class="me-ex-val">86</span>
             </div>
             <div class="me-ex-row">
               <span class="me-ex-label">Agreement</span>
@@ -1944,7 +2004,30 @@
               <span class="me-ex-val">42</span>
             </div>
           </div>
-          <div class="me-ex-pressure">
+          <!-- Tradability -->
+          <div class="me-ex-section">
+            <div class="me-ex-sep"></div>
+            <div class="me-ex-section-title">Tradability</div>
+            <div class="me-ex-row">
+              <span class="me-ex-label" style="color:#22c55e">Tradable</span>
+              <div class="me-ex-bar"><div class="me-ex-fill" style="width:58%;background:#22c55e"></div></div>
+              <span class="me-ex-val" style="color:#22c55e">58</span>
+            </div>
+            <div class="me-ex-row">
+              <span class="me-ex-label" style="color:var(--text3)">Dir Control</span>
+              <div class="me-ex-bar"><div class="me-ex-fill" style="width:52%;background:#a855f7"></div></div>
+              <span class="me-ex-val">52%</span>
+            </div>
+            <div class="me-ex-row">
+              <span class="me-ex-label" style="color:#22c55e">Vol: Healthy</span>
+              <div class="me-ex-bar"><div class="me-ex-fill" style="width:48%;background:#22c55e"></div></div>
+              <span class="me-ex-val">48</span>
+            </div>
+          </div>
+          <!-- Directional Pressure -->
+          <div class="me-ex-section">
+            <div class="me-ex-sep"></div>
+            <div class="me-ex-section-title">Directional Pressure</div>
             <div class="me-ex-row">
               <span class="me-ex-label" style="color:#22c55e">Bull Press</span>
               <div class="me-ex-bar"><div class="me-ex-fill" style="width:61%;background:#22c55e"></div></div>
@@ -1955,20 +2038,50 @@
               <div class="me-ex-bar"><div class="me-ex-fill" style="width:39%;background:#ef4444"></div></div>
               <span class="me-ex-val">39%</span>
             </div>
+            <div class="me-ex-sep"></div>
+            <div class="me-ex-section-title">Participation</div>
+            <div class="me-ex-row">
+              <span class="me-ex-label" style="color:var(--text2)">Active</span>
+              <div class="me-ex-bar"><div class="me-ex-fill" style="width:82%;background:#0ea5e9"></div></div>
+              <span class="me-ex-val">82%</span>
+            </div>
+            <div class="me-ex-row">
+              <span class="me-ex-label" style="color:var(--text3)">Inactive</span>
+              <div class="me-ex-bar"><div class="me-ex-fill" style="width:18%;background:#1e293b"></div></div>
+              <span class="me-ex-val" style="color:var(--text3)">18%</span>
+            </div>
+            <div class="me-ex-sep"></div>
+            <div class="me-ex-dom-row">
+              <div class="me-ex-dom-ccys">
+                <span class="me-ex-dom-strong">GBP ↑</span>
+                <span class="me-ex-dom-strong">EUR ↑</span>
+                <span class="me-ex-dom-weak">JPY ↓</span>
+                <span class="me-ex-dom-weak">CHF ↓</span>
+              </div>
+              <div class="me-ex-row">
+                <span class="me-ex-label" style="color:var(--text3)">Dominance</span>
+                <div class="me-ex-bar"><div class="me-ex-fill" style="width:68%;background:#a855f7"></div></div>
+                <span class="me-ex-val">68%</span>
+              </div>
+            </div>
           </div>
+          <!-- Footer -->
           <div class="me-ex-foot">
             <span>Energy <strong>58</strong></span>
-            <span>Readiness <strong>72</strong></span>
+            <span style="color:#22c55e">Tradability <strong>58</strong></span>
             <span style="color:#22c55e">Liquidity <strong>45</strong></span>
           </div>
+          <!-- What this means -->
           <div class="me-ex-explain">
             <div class="me-ex-explain-title">What this means</div>
             <ul>
-              <li>Prices are moving strongly — high pip activity across pairs.</li>
-              <li>Wide momentum — strong directional conviction across the market.</li>
-              <li>Buyers dominate at 61% — clear directional bias to the upside.</li>
-              <li>GBP is the strongest currency, JPY the weakest — GBP/JPY pairs likely trending.</li>
-              <li>Overall energy is high — conditions favour trend-following entries.</li>
+              <li>Tradable environment (58/100) — good conditions for directional trades.</li>
+              <li>Strong price movement (64) — high pip activity across pairs.</li>
+              <li>Wide breadth (86) — 82% of pairs participating.</li>
+              <li>Buyers in control (52%) — strong one-sided pressure.</li>
+              <li>Healthy volatility (42) — organized moves with good agreement.</li>
+              <li>Strength flow: <span style="color:#22c55e;font-size:9px">#1 BUY GBP/JPY STRONG</span> · <span style="color:#0ea5e9;font-size:9px">#2 SELL CHF/JPY ALIGNED</span> · <span style="color:#22c55e;font-size:9px">#3 BUY GBP/CHF STRONG</span> · <span style="color:#a855f7;font-size:9px">#4 BUY EUR/JPY PARTIAL</span></li>
+              <li>High energy (58) — market is active and directional.</li>
             </ul>
           </div>
         </div>
