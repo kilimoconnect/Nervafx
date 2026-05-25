@@ -2377,6 +2377,8 @@ function _meSessionExplain(s, label, status) {
     }
   }
 
+  // Strength flow — rendered as highlighted block, not inline text
+  let flowHtml = '';
   if (rankedPairs && rankedPairs.length) {
     const deLabel = v => {
       if (v >= 30) return { text: 'Trending',    color: '#22c55e' };
@@ -2384,12 +2386,23 @@ function _meSessionExplain(s, label, status) {
       if (v >= 8)  return { text: 'Mixed',       color: '#f59e0b' };
       return              { text: 'Choppy',       color: '#ef4444' };
     };
-    const pairList = rankedPairs.map((p, i) => {
+    const pairRows = rankedPairs.map((p, i) => {
+      const dirCls = p.dir === 'BUY' ? 'buy' : 'sell';
       const statusColor = p.status === 'STRONG' ? '#22c55e' : p.status === 'ALIGNED' ? '#0ea5e9' : p.status === 'PARTIAL' ? '#a855f7' : p.status === 'BUILDING' ? '#f59e0b' : p.status === 'AGAINST' ? '#ef4444' : '#64748b';
-      const deHtml = p.de > 0 ? (() => { const dl = deLabel(p.de); return ` <span style="color:${dl.color};font-size:8px;opacity:0.85">DE ${p.de}% ${dl.text}</span>`; })() : '';
-      return `#${i + 1} ${p.dir} ${p.pair} <span style="color:${statusColor};font-size:9px">${p.status}</span>${deHtml}`;
-    }).join(' · ');
-    lines.push(`Strength flow: ${pairList}`);
+      const dl = deLabel(p.de);
+      const deHtml = p.de > 0 ? `<span class="me-flow-de" style="color:${dl.color}">DE ${p.de}% ${dl.text}</span>` : '';
+      return `<div class="me-flow-row">
+        <span class="me-flow-rank">#${i + 1}</span>
+        <span class="me-flow-dir ${dirCls}">${p.dir}</span>
+        <span class="me-flow-pair">${p.pair}</span>
+        <span class="me-flow-status" style="color:${statusColor}">${p.status}</span>
+        ${deHtml}
+      </div>`;
+    }).join('');
+    flowHtml = `<div class="me-flow-block">
+      <div class="me-flow-title">Strength Flow</div>
+      ${pairRows}
+    </div>`;
   }
 
   // Overall energy
@@ -2400,6 +2413,7 @@ function _meSessionExplain(s, label, status) {
   return `<div class="me-explain">
     <div class="me-explain-title">What this means</div>
     <ul class="me-explain-list">${lines.map(l => `<li>${l}</li>`).join('')}</ul>
+    ${flowHtml}
   </div>`;
 }
 

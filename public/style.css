@@ -4891,6 +4891,59 @@ body::after {
   color: var(--accent);
 }
 
+/* ─── ME Strength Flow block (highlighted on energy card) ───────────────── */
+.me-flow-block {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: rgba(14, 165, 233, 0.06);
+  border: 1px solid rgba(14, 165, 233, 0.15);
+  border-radius: 6px;
+}
+.me-flow-title {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #0ea5e9;
+  margin-bottom: 6px;
+}
+.me-flow-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  font-size: 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.me-flow-row:last-child { border-bottom: none; }
+.me-flow-rank {
+  font-weight: 700;
+  color: var(--text-dim);
+  min-width: 18px;
+}
+.me-flow-dir {
+  font-size: 8px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+.me-flow-dir.buy  { color: #22c55e; background: rgba(34,197,94,0.12); }
+.me-flow-dir.sell { color: #ef4444; background: rgba(239,68,68,0.12); }
+.me-flow-pair {
+  font-weight: 600;
+  color: var(--text);
+  min-width: 60px;
+}
+.me-flow-status {
+  font-size: 8px;
+  font-weight: 600;
+}
+.me-flow-de {
+  font-size: 8px;
+  margin-left: auto;
+  font-weight: 600;
+}
+
 /* False breakout warning */
 .me-fb-warn {
   margin-top: 6px;
