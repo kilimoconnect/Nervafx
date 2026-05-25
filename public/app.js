@@ -1570,18 +1570,19 @@ function impulseLabel(score) {
 
 function renderM15Spreads(data) {
   const el = document.getElementById('m15-spreads-list');
+  const section = document.getElementById('section-m15-spreads');
   if (!el) return;
-  if (!data?.spreads?.length) {
-    el.innerHTML = '<p class="empty-state">No M15 data yet</p>';
+
+  // Only show the card when impulses qualify for the notification bar.
+  // If nothing on the bar → hide the entire section.
+  const impulses = getM15Impulses(data);
+  if (!impulses.length) {
+    if (section) section.style.display = 'none';
     return;
   }
+  if (section) section.style.display = '';
 
-  const spreads = getM15AllActive(data);
-
-  if (!spreads.length) {
-    el.innerHTML = '<p class="empty-state">No active M15 moves</p>';
-    return;
-  }
+  const spreads = impulses;
 
   const maxImp = spreads[0]?.impulse_score || 1;
 
