@@ -215,6 +215,9 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 400px; }
 .plan-free #section-quality,
 .plan-free #section-journal          { order: 6; }
 
+/* Free plan: hide Session History panel inside Market Energy */
+.plan-free .sh-panel { display: none !important; }
+
 /* Free plan: dim the tf buttons that are disabled */
 .tf-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
