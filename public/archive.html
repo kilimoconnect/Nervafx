@@ -1115,7 +1115,7 @@
   async function _loadFpData() {
     if (_fpCcsData && _fpM15Data) return;
     if (_fpLoading) return _fpLoading;
-    const need = _arcFilterDays || 30;
+    const need = Math.min(_arcFilterDays || 30, 30);
     _fpLoading = Promise.all([
       api(`/api/strength-history?days=${need}&tf=3h`),
       api(`/api/strength-history?days=${need}&tf=6h`),
@@ -1243,14 +1243,17 @@
         const sessionTimes = ccsTimes.filter(t => t >= startKey && t < endKey);
         if (!sessionTimes.length) continue;
 
-        // Derive flow pairs from 3H currency strength at last hour
-        const lastT = sessionTimes[sessionTimes.length - 1];
-        const lastSnap = ccsIndex[lastT] || {};
-        const ccyScored = Object.entries(lastSnap)
-          .map(([ccy, vals]) => ({ ccy, h3: vals.h3 || 0 }))
-          .sort((a, b) => b.h3 - a.h3);
-        const allStrong = ccyScored.filter(c => c.h3 > 0).slice(0, 2).map(c => c.ccy);
-        const allWeak   = ccyScored.filter(c => c.h3 < 0).slice(-2).reverse().map(c => c.ccy);
+        // Derive flow pairs from 3H currency strength — try hours from latest back
+        let allStrong = [], allWeak = [];
+        for (let ti = sessionTimes.length - 1; ti >= 0; ti--) {
+          const snap = ccsIndex[sessionTimes[ti]] || {};
+          const ccyScored = Object.entries(snap)
+            .map(([ccy, vals]) => ({ ccy, h3: vals.h3 || 0 }))
+            .sort((a, b) => b.h3 - a.h3);
+          const s = ccyScored.filter(c => c.h3 > 0).slice(0, 2).map(c => c.ccy);
+          const w = ccyScored.filter(c => c.h3 < 0).slice(-2).reverse().map(c => c.ccy);
+          if (s.length && w.length) { allStrong = s; allWeak = w; break; }
+        }
         if (!allStrong.length || !allWeak.length) continue;
 
         // Build flow pairs
@@ -1327,8 +1330,11 @@
           return { ...fp, hourly, flowSign, base: b, quote: q };
         });
 
-        // Check we have data
-        const validTimes = sessionTimes.filter(t => pairs.some(p => p.hourly.find(h => h.time === t && h.perfScore !== 0)));
+        // Check we have data — include hours where any pair has a computed status (not just score !== 0)
+        const validTimes = sessionTimes.filter(t => pairs.some(p => {
+          const h = p.hourly.find(h => h.time === t);
+          return h && h.status && h.status !== 'WAIT';
+        }));
         if (!validTimes.length) continue;
 
         // Compute per-hour independent rankings (rank by finalScore)

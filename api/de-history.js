@@ -5,10 +5,21 @@
  *
  * Returns Directional Efficiency (DE) per pair per hour for the archive.
  * DE = (net_move / total_travel) × 100 using last 20 M15 candles only.
+ *
+ * Optimised: fetches one instrument at a time (avoids loading 50K+ rows)
+ * and uses index-based lookups instead of repeated .filter() scans.
  */
 
 const { getClient, cors } = require('./_db');
 const { requirePlan } = require('./_plan');
+
+const INSTRUMENTS = [
+  'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
+  'EUR_GBP','EUR_JPY','EUR_CHF','EUR_CAD','EUR_AUD','EUR_NZD',
+  'GBP_JPY','GBP_CHF','GBP_CAD','GBP_AUD','GBP_NZD',
+  'AUD_JPY','AUD_CHF','AUD_CAD','AUD_NZD',
+  'NZD_JPY','NZD_CHF','NZD_CAD','CAD_JPY','CAD_CHF','CHF_JPY',
+];
 
 function computeDE(candles) {
   if (!candles || candles.length < 2) return 0;
@@ -30,67 +41,72 @@ module.exports = async function handler(req, res) {
     const sb = getClient();
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
-    // Fetch M15 candles (ascending)
-    const PAGE = 1000;
-    const m15All = [];
-    let offset = 0;
-    while (true) {
-      const { data, error } = await sb
-        .from('backtest_candles')
-        .select('instrument, time, open, high, low, close')
-        .eq('timeframe', 'M15')
-        .eq('complete', true)
-        .gte('time', since)
-        .order('time', { ascending: true })
-        .range(offset, offset + PAGE - 1);
-      if (error) throw error;
-      if (!data?.length) break;
-      m15All.push(...data);
-      if (data.length < PAGE) break;
-      offset += PAGE;
-    }
-
-    // Group M15 candles by instrument (ascending by time)
-    const m15ByPair = {};
-    for (const c of m15All) {
-      if (!m15ByPair[c.instrument]) m15ByPair[c.instrument] = [];
-      m15ByPair[c.instrument].push({ open: +c.open, high: +c.high, low: +c.low, close: +c.close, time: c.time });
-    }
-
-    // Collect unique hour boundaries from M15 candle times
-    const hourSet = new Set();
-    for (const c of m15All) {
-      const t = new Date(c.time);
-      t.setUTCMinutes(0, 0, 0);
-      hourSet.add(t.toISOString().slice(0, 16));
-    }
-    const hours = [...hourSet].sort();
-
-    // For each pair, compute DE at each hour boundary using trailing 20 M15 candles
-    const results = {};  // { time_key → { instrument → de_combined } }
-    for (const [inst, m15Candles] of Object.entries(m15ByPair)) {
-      for (const hourKey of hours) {
-        // Find M15 candles up to this hour's end (hour + 59 min)
-        const cutoffDate = new Date(hourKey + ':00Z');
-        cutoffDate.setUTCHours(cutoffDate.getUTCHours() + 1);
-        const cutoff = cutoffDate.toISOString();
-
-        const m15Before = m15Candles.filter(c => c.time < cutoff);
-        if (m15Before.length < 2) continue;
-        const m15Window = m15Before.slice(-20);
-        const de = Math.round(computeDE(m15Window) * 10) / 10;
-
-        if (!results[hourKey]) results[hourKey] = {};
-        results[hourKey][inst] = de;
-      }
-    }
-
-    // Flatten to array for transport
+    // Process instruments in parallel batches of 7 to keep DB load reasonable
+    const BATCH = 7;
     const rows = [];
-    for (const [time, pairs] of Object.entries(results)) {
-      for (const [instrument, de] of Object.entries(pairs)) {
-        rows.push({ time, instrument, de_combined: de });
-      }
+
+    for (let i = 0; i < INSTRUMENTS.length; i += BATCH) {
+      const batch = INSTRUMENTS.slice(i, i + BATCH);
+      await Promise.all(batch.map(async (inst) => {
+        // Fetch candles for this single instrument — typically ~1700 rows for 30 days
+        const PAGE = 1000;
+        const candles = [];
+        let offset = 0;
+        while (true) {
+          const { data, error } = await sb
+            .from('backtest_candles')
+            .select('time, open, high, low, close')
+            .eq('timeframe', 'M15')
+            .eq('complete', true)
+            .eq('instrument', inst)
+            .gte('time', since)
+            .order('time', { ascending: true })
+            .range(offset, offset + PAGE - 1);
+          if (error) throw error;
+          if (!data?.length) break;
+          candles.push(...data);
+          if (data.length < PAGE) break;
+          offset += PAGE;
+        }
+        if (candles.length < 2) return;
+
+        // Collect unique hour boundaries for this instrument
+        const hourSet = new Set();
+        for (const c of candles) {
+          const t = new Date(c.time);
+          t.setUTCMinutes(0, 0, 0);
+          hourSet.add(t.toISOString().slice(0, 16));
+        }
+
+        // Walk through candles once using a sliding window approach
+        // Candles are sorted ascending — for each hour, find the cutoff index
+        const parsed = candles.map(c => ({
+          open: +c.open, high: +c.high, low: +c.low, close: +c.close, time: c.time
+        }));
+        const hours = [...hourSet].sort();
+
+        let searchStart = 0; // optimise: start search from last found position
+        for (const hourKey of hours) {
+          const cutoffDate = new Date(hourKey + ':00Z');
+          cutoffDate.setUTCHours(cutoffDate.getUTCHours() + 1);
+          const cutoff = cutoffDate.toISOString();
+
+          // Find index of first candle >= cutoff (binary-ish, but sequential is fine since hours are sorted)
+          let cutIdx = searchStart;
+          while (cutIdx < parsed.length && parsed[cutIdx].time < cutoff) cutIdx++;
+
+          if (cutIdx < 2) continue;
+          const windowStart = Math.max(0, cutIdx - 20);
+          const window = parsed.slice(windowStart, cutIdx);
+          if (window.length < 2) continue;
+
+          const de = Math.round(computeDE(window) * 10) / 10;
+          rows.push({ time: hourKey, instrument: inst, de_combined: de });
+
+          // Next hour search can start from current position
+          searchStart = Math.max(0, cutIdx - 20);
+        }
+      }));
     }
 
     res.json({ rows });
