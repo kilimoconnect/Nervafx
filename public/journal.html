@@ -567,10 +567,11 @@
 
   // ─── V2 Market Environment (journal) ─────────────────────────────────────────
   const V2_ENV_FAVORABLE = {
-    energy_cycle:    new Set(['EXPANSION', 'EXPLOSIVE', 'ACTIVE_EXPANSION', 'CHAOTIC_EXPANSION', 'TRANSITION']),
+    energy_cycle:    new Set(['EXPANSION', 'EXPLOSIVE', 'ACTIVE_EXPANSION', 'CHAOTIC_EXPANSION', 'TRANSITION', 'EXHAUSTION']),
     volatility_type: new Set(['HEALTHY', 'NORMAL', 'EVENT']),
-    momentum_type:   new Set(['IMPULSE', 'EXPANSION', 'TREND', 'STABLE']),
+    momentum_type:   new Set(['IMPULSE', 'EXPANSION', 'TREND', 'STABLE', 'EXHAUSTION']),
   };
+  const V2_LOWP_TRAD_THRESHOLD = 35;
   const V2_ENV_LABELS = { energy_cycle: 'Cycle', volatility_type: 'VolTyp', momentum_type: 'MomTyp' };
   const V2_ENV_SHORT = {
     EXPLOSIVE: 'Explo', EXPANSION: 'Expan', ACTIVE_EXPANSION: 'Expan', CHAOTIC_EXPANSION: 'Expan',
@@ -585,7 +586,7 @@
     IMPULSE: '#f59e0b', TREND: '#0ea5e9', STABLE: '#64748b', DECAY: '#f97316',
   };
   const V2_ENV_SCORE = {
-    EXPLOSIVE: 3, ACTIVE_EXPANSION: 3, CHAOTIC_EXPANSION: 3, EXPANSION: 2, TRANSITION: 1,
+    EXPLOSIVE: 3, ACTIVE_EXPANSION: 3, CHAOTIC_EXPANSION: 3, EXPANSION: 2, TRANSITION: 1, EXHAUSTION: 1, LOW_PARTICIPATION: 1,
     HEALTHY: 3, EVENT: 2, NORMAL: 1,
     IMPULSE: 3, TREND: 1, STABLE: 1,
   };
@@ -604,7 +605,12 @@
     let score = 0;
     for (const [field, favorable] of Object.entries(V2_ENV_FAVORABLE)) {
       const value = hourlyRow[field] || '';
-      const pass = favorable.has(value);
+      let pass = favorable.has(value);
+      // Hybrid override: LOW_PARTICIPATION passes cycle check when tradability is decent
+      if (!pass && field === 'energy_cycle' && value === 'LOW_PARTICIPATION') {
+        const trad = parseFloat(hourlyRow.tradability_score) || 0;
+        if (trad >= V2_LOWP_TRAD_THRESHOLD) pass = true;
+      }
       const pts = pass ? (V2_ENV_SCORE[value] || 1) : 0;
       score += pts;
       results.push({ key: field, label: V2_ENV_LABELS[field], value, short: V2_ENV_SHORT[value] || value.slice(0, 5) || '—', pass, score: pts });

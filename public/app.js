@@ -1595,10 +1595,12 @@ function updateM15Bar(data) {
 // Each environment type has favorable values that allow trading.
 
 const V2_ENV_FAVORABLE = {
-  energy_cycle:    new Set(['EXPANSION', 'EXPLOSIVE', 'ACTIVE_EXPANSION', 'CHAOTIC_EXPANSION', 'TRANSITION']),
+  energy_cycle:    new Set(['EXPANSION', 'EXPLOSIVE', 'ACTIVE_EXPANSION', 'CHAOTIC_EXPANSION', 'TRANSITION', 'EXHAUSTION']),
   volatility_type: new Set(['HEALTHY', 'NORMAL', 'EVENT']),
-  momentum_type:   new Set(['IMPULSE', 'EXPANSION', 'TREND', 'STABLE']),
+  momentum_type:   new Set(['IMPULSE', 'EXPANSION', 'TREND', 'STABLE', 'EXHAUSTION']),
 };
+// Hybrid override: LOW_PARTICIPATION passes cycle check when tradability ≥ this
+const V2_LOWP_TRAD_THRESHOLD = 35;
 
 const V2_ENV_LABELS = {
   energy_cycle:    'Cycle',
@@ -1629,6 +1631,8 @@ const V2_ENV_SCORE = {
   EXPLOSIVE: 3, ACTIVE_EXPANSION: 3, CHAOTIC_EXPANSION: 3,
   EXPANSION: 2,
   TRANSITION: 1,
+  EXHAUSTION: 1,
+  LOW_PARTICIPATION: 1, // only when tradability override fires
   // VolTyp
   HEALTHY: 3,
   EVENT: 2,
@@ -1638,6 +1642,7 @@ const V2_ENV_SCORE = {
   EXPANSION: 2,
   TREND: 1,
   STABLE: 1,
+  // EXHAUSTION (momentum) — scored 1 (still high movement, just decelerating)
 };
 
 // Total 3–9: 7–9 = Prime, 5–6 = Good, 3–4 = Acceptable
@@ -1704,7 +1709,14 @@ function evaluateV2Thresholds(hourlyRow) {
 
   for (const [field, favorable] of Object.entries(V2_ENV_FAVORABLE)) {
     const value = hourlyRow[field] || '';
-    const pass = favorable.has(value);
+    let pass = favorable.has(value);
+
+    // Hybrid override: LOW_PARTICIPATION passes cycle check when tradability is decent
+    if (!pass && field === 'energy_cycle' && value === 'LOW_PARTICIPATION') {
+      const trad = parseFloat(hourlyRow.tradability_score) || 0;
+      if (trad >= V2_LOWP_TRAD_THRESHOLD) pass = true;
+    }
+
     const pts = pass ? (V2_ENV_SCORE[value] || 1) : 0;
     score += pts;
     results.push({
