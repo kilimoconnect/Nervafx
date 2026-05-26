@@ -1113,7 +1113,6 @@
     const need = _arcFilterDays || 30;
     _fpLoading = api(`/api/flow-performance?days=${need}`).then(d => {
       _fpData = d.rows || [];
-      console.log('[FP] Loaded', _fpData.length, 'flow performance rows');
     }).catch(e => { console.error('[FP] Load error:', e.message); _fpData = []; });
     return _fpLoading;
   }
@@ -1124,7 +1123,6 @@
     try {
       bodyEl.innerHTML = '<div class="arc-loading"><span class="spinner"></span> Loading flow performance…</div>';
       const [sessions] = await Promise.all([_loadSessionRows(), _loadFpData()]);
-      console.log('[FP] sessions:', sessions?.length, 'fpData:', _fpData?.length);
       if (!sessions?.length || !_fpData?.length) { bodyEl.innerHTML = '<p class="me-empty">No data available.</p>'; return; }
       const filteredSess = _filterSessionRows(sessions);
       if (!filteredSess.length) { bodyEl.innerHTML = '<p class="me-empty">No sessions for this filter.</p>'; return; }
@@ -1163,8 +1161,6 @@
       fpTimes.add(t);
     }
     const allTimes = [...fpTimes].sort();
-    console.log('[FP-RENDER] allTimes sample:', allTimes.slice(0, 5), '...total:', allTimes.length);
-
     // Group sessions by date
     const sorted = [...sessions]
       .filter(s => s.session_name !== 'LOW_LIQUIDITY')
@@ -1175,10 +1171,7 @@
       if (!byDate[d]) byDate[d] = [];
       byDate[d].push(s);
     }
-    console.log('[FP-RENDER] dates:', Object.keys(byDate).sort().slice(-3), 'sessions sample:', sorted.slice(0, 2).map(s => s.session_date + ' ' + s.session_name + ' ' + (s.session_start||'').slice(0,16) + '-' + (s.session_end||'').slice(0,16)));
-
     let html = '';
-    let _dbgFP = 0;
 
     for (const date of Object.keys(byDate).sort((a, b) => b.localeCompare(a)).slice(0, 60)) {
       const d = new Date(date + 'T12:00:00Z');
@@ -1207,7 +1200,6 @@
           const rows = fpByTime[t] || [];
           return rows.some(r => r.status && r.status !== 'WAIT');
         });
-        if (_dbgFP < 6) { console.log('[FP-DBG]', date, sessKey, '| startKey:', startKey, 'endKey:', endKey, '| sessionTimes:', sessionTimes.length, 'validTimes:', validTimes.length, '| sample allTimes near:', allTimes.filter(t => t.startsWith(date)).slice(0, 3)); _dbgFP++; }
         if (!validTimes.length) continue;
 
         // Get strong/weak from the latest row's stored currencies

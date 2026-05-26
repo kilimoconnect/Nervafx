@@ -40,7 +40,9 @@ function getSession(utcHour) {
  */
 async function calculateFlowPerformance() {
   const now = new Date();
-  const time = now.toISOString();
+  // Round to current hour bucket (same as backfill) so times align with session windows
+  const hourBucket = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours()));
+  const time = hourBucket.toISOString();
   const session = getSession(now.getUTCHours());
 
   // ── 1. Fetch latest currency strength (3H + 6H) ────────────────────────
