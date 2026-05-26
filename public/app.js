@@ -2565,7 +2565,7 @@ function _meSessionExplain(s, label, status) {
       const volShort = VOL_GRADE_SHORT[p.volGrade] || '';
       const volHtml = p.volGrade ? `<span class="me-flow-vol" style="color:${volColor}">${p.volRV.toFixed(1)}× ${volShort}</span>` : '';
       const analysis = _flowPairAnalysis(p);
-      const uid = 'sfa-' + name + '-' + i;
+      const uid = 'sfa-' + s.session_name + '-' + i;
       return `<div class="me-flow-pair-block">
         <div class="me-flow-row">
           <span class="me-flow-rank">#${i + 1}</span>
