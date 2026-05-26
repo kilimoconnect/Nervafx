@@ -1570,7 +1570,7 @@ function renderFlowPerformance(strengthData, m15Data) {
             <span class="fp-lbl">Pers</span>
             <span class="fp-val">${fp.volPers}/4</span>
             <span class="fp-lbl">Eff</span>
-            <span class="fp-val ${fp.volEff >= 0.5 ? 'vol-strong' : fp.volEff >= 0.25 ? 'vol-normal' : 'vol-weak'}">${(fp.volEff * 100).toFixed(0)}%</span>
+            <span class="fp-val ${fp.volEff >= 0.05 ? 'vol-strong' : fp.volEff >= 0.01 ? 'vol-normal' : 'vol-weak'}">${(fp.volEff * 100).toFixed(0)}%</span>
           </div>` : ''}
           <div class="fp-detail-row fp-ccy-row">
             <span class="fp-ccy-chip ${(fp.h3Base ?? 0) >= 0 ? 'strong' : 'weak'}">${fp.base} ${fmt(fp.h3Base ?? 0, 5)}</span>
@@ -1672,7 +1672,7 @@ function renderM15Spreads(data) {
         <span class="m15-imp-lbl">Score</span><span class="m15-imp-val ${il.cls}">${imp}</span>
         ${vol ? `<span class="m15-vol-sep">│</span>
         <span class="m15-imp-lbl">RV</span><span class="m15-imp-val ${rv >= 1.5 ? 'vol-institutional' : rv >= 1.0 ? 'vol-strong' : 'vol-weak'}">${rv.toFixed(1)}×</span>
-        <span class="m15-imp-lbl">Eff</span><span class="m15-imp-val ${volEff >= 0.5 ? 'vol-strong' : volEff >= 0.25 ? 'vol-normal' : 'vol-weak'}">${(volEff * 100).toFixed(0)}%</span>
+        <span class="m15-imp-lbl">Eff</span><span class="m15-imp-val ${volEff >= 0.05 ? 'vol-strong' : volEff >= 0.01 ? 'vol-normal' : 'vol-weak'}">${(volEff * 100).toFixed(0)}%</span>
         ${_volGradeBadge(volGrade)}` : ''}
       </div>`;
   }).join('');
