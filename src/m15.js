@@ -55,6 +55,65 @@ function computeState(s45, s90) {
   return 'STEADY';
 }
 
+/**
+ * Compute impulse metrics from real M15 candle price action.
+ * Uses last 4 candles (1 hour) for impulse, full array for ATR normalisation.
+ * @param {Array} candles - sorted ascending by time, each { open, high, low, close }
+ * @returns {{ velocity, body_ratio, consec_dir, impulse_dir, impulse_score }}
+ */
+function computeImpulse(candles) {
+  const empty = { velocity: 0, body_ratio: 0, consec_dir: 0, impulse_dir: 0, impulse_score: 0 };
+  if (!candles || candles.length < 4) return empty;
+
+  const recent = candles.slice(-4); // last 4 M15 = 1 hour
+
+  // ATR from all candles for normalisation
+  let atrSum = 0;
+  for (const c of candles) atrSum += c.high - c.low;
+  const avgRange = atrSum / candles.length;
+  if (avgRange === 0) return empty;
+
+  // 1. Velocity: net move over 4 candles / average candle range
+  const netMove = Math.abs(recent[recent.length - 1].close - recent[0].open);
+  const velocity = netMove / avgRange;
+
+  // 2. Body ratio: total body / total range (high = directional candles)
+  let bodySum = 0, rangeSum = 0;
+  for (const c of recent) {
+    bodySum  += Math.abs(c.close - c.open);
+    rangeSum += c.high - c.low;
+  }
+  const bodyRatio = rangeSum > 0 ? bodySum / rangeSum : 0;
+
+  // 3. Consecutive directional closes (from most recent backward)
+  let consecDir = 1;
+  const lastDir = recent[recent.length - 1].close >= recent[recent.length - 1].open ? 1 : -1;
+  for (let i = recent.length - 2; i >= 0; i--) {
+    const dir = recent[i].close >= recent[i].open ? 1 : -1;
+    if (dir === lastDir) consecDir++;
+    else break;
+  }
+
+  // 4. Net impulse direction: +1 bullish, -1 bearish
+  const impulseDir = recent[recent.length - 1].close >= recent[0].open ? 1 : -1;
+
+  // 5. Composite score: velocity 45%, body dominance 30%, consecutive 25%
+  const velScore    = Math.min(100, velocity * 33);
+  const bodyScore   = Math.min(100, bodyRatio * 125);
+  const consecScore = (consecDir / 4) * 100;
+  const impulseScore = Math.min(100, Math.round(
+    velScore * 0.45 + bodyScore * 0.30 + consecScore * 0.25
+  ));
+
+  return {
+    velocity:      Math.round(velocity * 100) / 100,
+    body_ratio:    Math.round(bodyRatio * 100) / 100,
+    consec_dir:    consecDir,
+    impulse_dir:   impulseDir,
+    impulse_score: impulseScore,
+  };
+}
+
 // Calculate and store M15 spreads for the latest common closed candle.
 // Called once per hourly update cycle (after H1 strength/smooth/spreads).
 async function calculateLatestM15Spreads() {
@@ -166,9 +225,10 @@ async function calculateLatestM15Spreads() {
     const smooth_90m  = sb[6]  - sq[6];
     const smooth_180m = sb[12] - sq[12];
 
-    // Compute DE from the OANDA candles we already have (ascending order)
+    // Compute DE + impulse from the OANDA candles we already have (ascending order)
     const candlesAsc = arrays[instrument].slice().reverse(); // newest-first → oldest-first
     const de = Math.round(computeDE(candlesAsc) * 10) / 10;
+    const impulse = computeImpulse(candlesAsc);
 
     return {
       time: refTime,
@@ -181,6 +241,11 @@ async function calculateLatestM15Spreads() {
       smooth_180m,
       state: computeState(smooth_45m, smooth_90m),
       de_combined: de,
+      impulse_score: impulse.impulse_score,
+      impulse_dir:   impulse.impulse_dir,
+      velocity:      impulse.velocity,
+      body_ratio:    impulse.body_ratio,
+      consec_dir:    impulse.consec_dir,
     };
   });
 
@@ -189,13 +254,13 @@ async function calculateLatestM15Spreads() {
     .from('m15_pair_spreads')
     .upsert(rows, { onConflict: 'time,instrument', ignoreDuplicates: false });
 
-  // Graceful fallback: if de_combined column doesn't exist yet, retry without it
-  if (error && error.message && error.message.includes('de_combined')) {
-    console.warn('[M15] de_combined column missing — upserting without DE (run migration)');
-    const rowsNoDe = rows.map(({ de_combined, ...rest }) => rest);
+  // Graceful fallback: if new columns don't exist yet, retry without them
+  if (error && error.message && (error.message.includes('de_combined') || error.message.includes('impulse_score'))) {
+    console.warn('[M15] Missing columns — upserting without DE/impulse (run migration)');
+    const rowsLite = rows.map(({ de_combined, impulse_score, impulse_dir, velocity, body_ratio, consec_dir, ...rest }) => rest);
     const retry = await supabase
       .from('m15_pair_spreads')
-      .upsert(rowsNoDe, { onConflict: 'time,instrument', ignoreDuplicates: false });
+      .upsert(rowsLite, { onConflict: 'time,instrument', ignoreDuplicates: false });
     error = retry.error;
   }
 
@@ -205,4 +270,4 @@ async function calculateLatestM15Spreads() {
   return { time: refTime, rows };
 }
 
-module.exports = { calculateLatestM15Spreads, computeState };
+module.exports = { calculateLatestM15Spreads, computeState, computeImpulse, computeDE };

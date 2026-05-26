@@ -91,7 +91,7 @@ async function calculateFlowPerformance() {
   const fpInstruments = flowPairs.map(fp => fp.instrument);
   const { data: m15Rows, error: m15Err } = await supabase
     .from('m15_pair_spreads')
-    .select('instrument, smooth_45m, smooth_90m, smooth_180m, de_combined, state')
+    .select('instrument, smooth_45m, smooth_90m, smooth_180m, de_combined, state, impulse_score, impulse_dir, velocity')
     .in('instrument', fpInstruments)
     .order('time', { ascending: false })
     .limit(fpInstruments.length * 2); // buffer for duplicates
@@ -127,8 +127,11 @@ async function calculateFlowPerformance() {
     const v45  = m15 ? parseFloat(m15.smooth_45m)  || 0 : 0;
     const v90  = m15 ? parseFloat(m15.smooth_90m)  || 0 : 0;
     const v180 = m15 ? parseFloat(m15.smooth_180m) || 0 : 0;
+    const impulseScore = m15 ? (m15.impulse_score || 0) : 0;
+    const impulseDir   = m15 ? (m15.impulse_dir   || 0) : 0;
 
     const flowSign = fp.dir === 'BUY' ? 1 : -1;
+    const impulseAligned = impulseDir === flowSign;
 
     // M15 state (computed from smoothed spreads — same logic as client)
     let state = null;
@@ -159,12 +162,18 @@ async function calculateFlowPerformance() {
     perfScore += (spread3H * flowSign) * 10000 * 2;
     perfScore += (spread6H * flowSign) * 10000 * 1;
 
-    if (m15Confirms) perfScore += 10;
+    if (impulseAligned && impulseScore >= 40) perfScore += impulseScore * 0.5;
+    else if (impulseAligned)                  perfScore += impulseScore * 0.25;
+    else if (impulseScore >= 40)              perfScore -= impulseScore * 0.3;
+
+    if (m15Confirms && impulseScore >= 40) perfScore += 20;
+    else if (m15Confirms)                  perfScore += 10;
     if (h3Confirms)  perfScore += 10;
     if (h6Confirms)  perfScore += 5;
     if (accelSign)   perfScore += 10;
 
     if (state === 'EXPANDING' && m15Confirms) perfScore += 15;
+    if (state === 'EXPANDING' && impulseAligned && impulseScore >= 50) perfScore += 10;
     if (state === 'REVERSING')                       perfScore -= 10;
     if (state === 'COMPRESSING' && !m15Confirms)     perfScore -= 15;
 
@@ -178,12 +187,13 @@ async function calculateFlowPerformance() {
     else if (!m15Confirms)                   status = 'AGAINST';
     else                                     status = 'WAIT';
 
-    // Momentum (from M15 spread acceleration — no impulse data in DB)
+    // Momentum
     let momentum;
-    if (accelSign && Math.abs(v45) > 0.0003)         momentum = 'Accelerating';
-    else if (!accelSign && Math.abs(accel) > 0.0002)  momentum = 'Fading';
-    else if (Math.abs(v45) < 0.0002)                  momentum = 'Flat';
-    else                                               momentum = 'Steady';
+    if (impulseScore >= 50 && impulseAligned)              momentum = 'Impulsive';
+    else if (accelSign && Math.abs(v45) > 0.0003)         momentum = 'Accelerating';
+    else if (!accelSign && Math.abs(accel) > 0.0002)      momentum = 'Fading';
+    else if (Math.abs(v45) < 0.0002)                      momentum = 'Flat';
+    else                                                   momentum = 'Steady';
 
     // DE
     const deCombined = m15 ? parseFloat(m15.de_combined) || 0 : 0;
@@ -200,6 +210,7 @@ async function calculateFlowPerformance() {
       spread3H, spread6H, state, perfScore, finalScore,
       status, momentum, deCombined,
       volRV, volEff, volGrade, volPers,
+      impulseScore, impulseAligned,
     };
   });
 
@@ -226,8 +237,8 @@ async function calculateFlowPerformance() {
     vol_eff:            Math.round(s.volEff * 100000) / 100000,
     vol_grade:          s.volGrade || null,
     vol_pers:           s.volPers,
-    impulse_score:      null,
-    impulse_aligned:    null,
+    impulse_score:      s.impulseScore,
+    impulse_aligned:    s.impulseAligned,
     strong_currencies:  strong.join(','),
     weak_currencies:    weak.join(','),
   }));
