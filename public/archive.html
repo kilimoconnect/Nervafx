@@ -1163,6 +1163,7 @@
       fpTimes.add(t);
     }
     const allTimes = [...fpTimes].sort();
+    console.log('[FP-RENDER] allTimes sample:', allTimes.slice(0, 5), '...total:', allTimes.length);
 
     // Group sessions by date
     const sorted = [...sessions]
@@ -1174,8 +1175,10 @@
       if (!byDate[d]) byDate[d] = [];
       byDate[d].push(s);
     }
+    console.log('[FP-RENDER] dates:', Object.keys(byDate).sort().slice(-3), 'sessions sample:', sorted.slice(0, 2).map(s => s.session_date + ' ' + s.session_name + ' ' + (s.session_start||'').slice(0,16) + '-' + (s.session_end||'').slice(0,16)));
 
     let html = '';
+    let _dbgFP = 0;
 
     for (const date of Object.keys(byDate).sort((a, b) => b.localeCompare(a)).slice(0, 60)) {
       const d = new Date(date + 'T12:00:00Z');
@@ -1204,6 +1207,7 @@
           const rows = fpByTime[t] || [];
           return rows.some(r => r.status && r.status !== 'WAIT');
         });
+        if (_dbgFP < 6) { console.log('[FP-DBG]', date, sessKey, '| startKey:', startKey, 'endKey:', endKey, '| sessionTimes:', sessionTimes.length, 'validTimes:', validTimes.length, '| sample allTimes near:', allTimes.filter(t => t.startsWith(date)).slice(0, 3)); _dbgFP++; }
         if (!validTimes.length) continue;
 
         // Get strong/weak from the latest row's stored currencies
