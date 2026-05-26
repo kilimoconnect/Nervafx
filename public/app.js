@@ -366,6 +366,7 @@ async function fetchNews() {
       map[e.currency].push(e);
     });
     _newsMap = map;
+    startNewsAlertTimer();
   } catch (_) {}
 }
 
@@ -530,6 +531,75 @@ function newsWarnHtml(instrument, hoursAhead = 4) {
   }).join('');
 
   return `<div class="news-warn-row">${badges}</div>`;
+}
+
+// ─── News Alert Notification Bar ─────────────────────────────────────────────
+// Shows upcoming HIGH/MEDIUM news in the header — 2h lookahead, countdown timer
+
+let _newsAlertTimer = null;
+
+function updateNewsAlertBar() {
+  const bar = document.getElementById('news-alert-bar');
+  if (!bar) return;
+
+  const now = Date.now();
+  const LOOKAHEAD_MS = 2 * 60 * 60 * 1000; // 2 hours
+
+  // Collect all upcoming HIGH/MEDIUM events within lookahead
+  const upcoming = [];
+  for (const [cur, events] of Object.entries(_newsMap)) {
+    for (const e of events) {
+      const t = new Date(e.event_time).getTime();
+      if (t > now && t <= now + LOOKAHEAD_MS && (e.impact === 'HIGH' || e.impact === 'MEDIUM')) {
+        upcoming.push({ ...e, cur, ms: t - now });
+      }
+    }
+  }
+
+  if (!upcoming.length) {
+    bar.style.display = 'none';
+    return;
+  }
+
+  upcoming.sort((a, b) => a.ms - b.ms);
+
+  const tz = (_userTz === 'auto')
+    ? Intl.DateTimeFormat().resolvedOptions().timeZone
+    : (_userTz || 'UTC');
+
+  // Show up to 3 chips
+  const chips = upcoming.slice(0, 3).map(e => {
+    const mins = Math.round(e.ms / 60000);
+    const when = mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h${mins % 60 ? ' ' + (mins % 60) + 'm' : ''}`;
+    const impCls = e.impact === 'HIGH' ? 'nab-high' : 'nab-med';
+    const timeStr = new Date(e.event_time).toLocaleTimeString('en-GB',
+      { hour: '2-digit', minute: '2-digit', timeZone: tz, hour12: false });
+    return `<span class="nab-chip ${impCls}" title="${e.event_name} at ${timeStr}">
+      <span class="nab-imp">${e.impact === 'HIGH' ? '🔴' : '🟡'}</span>
+      <span class="nab-cur">${e.cur}</span>
+      <span class="nab-name">${e.event_name.length > 20 ? e.event_name.slice(0, 18) + '…' : e.event_name}</span>
+      <span class="nab-when">${when}</span>
+    </span>`;
+  }).join('');
+
+  const extraCount = upcoming.length - 3;
+  const extraBadge = extraCount > 0 ? `<span class="nab-more">+${extraCount}</span>` : '';
+
+  // Determine bar urgency: any HIGH within 30min = urgent, any within 1h = warning
+  const hasUrgentHigh = upcoming.some(e => e.impact === 'HIGH' && e.ms < 30 * 60000);
+  const hasWarningHigh = upcoming.some(e => e.impact === 'HIGH' && e.ms < 60 * 60000);
+  bar.className = 'news-alert-bar' +
+    (hasUrgentHigh ? ' nab--urgent' : hasWarningHigh ? ' nab--warning' : '');
+
+  document.getElementById('nab-chips').innerHTML = chips + extraBadge;
+  bar.style.display = '';
+}
+
+function startNewsAlertTimer() {
+  // Update every 30 seconds for countdown accuracy
+  if (_newsAlertTimer) clearInterval(_newsAlertTimer);
+  updateNewsAlertBar();
+  _newsAlertTimer = setInterval(updateNewsAlertBar, 30000);
 }
 
 // ─── Formatters ───────────────────────────────────────────────────────────────

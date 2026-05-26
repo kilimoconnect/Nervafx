@@ -471,6 +471,114 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 400px; }
   .v2t-chip { padding: 1px 4px; font-size: 8px; }
 }
 
+/* ─── News Alert Notification Bar ─────────────────────────────────────────── */
+.news-alert-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px 8px;
+  padding: 4px 12px;
+  background: rgba(46, 38, 5, 0.85);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: var(--radius-sm);
+  flex-wrap: wrap;
+  flex-shrink: 1;
+  min-width: 0;
+}
+.news-alert-bar.nab--warning {
+  background: rgba(46, 30, 5, 0.9);
+  border-color: rgba(245, 158, 11, 0.5);
+}
+.news-alert-bar.nab--urgent {
+  background: rgba(50, 10, 10, 0.9);
+  border-color: rgba(239, 68, 68, 0.5);
+}
+.news-alert-bar.nab--urgent .nab-dot {
+  background: #ef4444;
+  animation: nab-pulse-urgent 0.8s ease-in-out infinite;
+}
+.news-alert-bar.nab--urgent .nab-label { color: #f87171; }
+.nab-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #f59e0b; flex-shrink: 0;
+  animation: nab-pulse 1.6s ease-in-out infinite;
+}
+@keyframes nab-pulse {
+  0%, 100% { opacity: 1;   box-shadow: 0 0 0 0 rgba(245,158,11,0.5); }
+  50%       { opacity: 0.7; box-shadow: 0 0 0 5px rgba(245,158,11,0); }
+}
+@keyframes nab-pulse-urgent {
+  0%, 100% { opacity: 1;   box-shadow: 0 0 0 0 rgba(239,68,68,0.6); }
+  50%       { opacity: 0.5; box-shadow: 0 0 0 6px rgba(239,68,68,0); }
+}
+.nab-label {
+  font-size: 9px; font-weight: 800;
+  letter-spacing: 1px; text-transform: uppercase;
+  color: #f59e0b; flex-shrink: 0;
+}
+.nab-chips {
+  display: flex; align-items: center; gap: 4px;
+  flex-wrap: wrap;
+}
+.nab-chip {
+  display: inline-flex; align-items: center; gap: 3px;
+  flex-shrink: 0;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(245,158,11,0.2);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 9px; font-weight: 600;
+  cursor: default;
+}
+.nab-chip.nab-high {
+  border-color: rgba(239,68,68,0.3);
+  background: rgba(239,68,68,0.08);
+}
+.nab-chip.nab-med {
+  border-color: rgba(245,158,11,0.25);
+  background: rgba(245,158,11,0.06);
+}
+.nab-imp { font-size: 8px; }
+.nab-cur {
+  font-weight: 800;
+  color: var(--text);
+  font-size: 9px;
+}
+.nab-name {
+  color: var(--text-muted);
+  font-size: 9px;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nab-when {
+  font-weight: 800;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  color: #fbbf24;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: rgba(245,158,11,0.12);
+}
+.nab-chip.nab-high .nab-when {
+  color: #fca5a5;
+  background: rgba(239,68,68,0.15);
+}
+.nab-more {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text-dim);
+  padding: 1px 5px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 3px;
+}
+@media (max-width: 700px) {
+  .news-alert-bar { padding: 3px 8px; }
+  .nab-label { display: none; }
+  .nab-name { max-width: 80px; }
+  .nab-chip { padding: 1px 4px; font-size: 8px; }
+}
+
 /* ── V2 Confluence Gate Overlay (sections gated by engine alignment) ──── */
 .v2-gate-overlay {
   display: none;
