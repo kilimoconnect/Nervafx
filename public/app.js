@@ -1874,6 +1874,118 @@ function impulseLabel(score) {
   return                   { text: 'Flat',      cls: 'imp-flat' };
 }
 
+/**
+ * Generate plain-English analysis for an M15 Impulse Move.
+ * Covers: spread pressure (45/90/180), state, impulse quality, velocity,
+ * body ratio, consecutive run, and full volume analysis.
+ */
+function _m15ImpulseAnalysis(s, d) {
+  const parts = [];
+  const dirWord = d.bias === 'BUY' ? 'bullish' : 'bearish';
+  const [base, quote] = s.instrument.split('_');
+
+  // ── 1. Spread pressure across timeframes ─────────────────────────────
+  const sign45  = Math.sign(d.v45);
+  const sign90  = Math.sign(d.v90);
+  const sign180 = Math.sign(d.v180);
+  if (sign45 === sign90 && sign90 === sign180)
+    parts.push(`All timeframes (45M/90M/180M) confirm ${dirWord} pressure — full alignment.`);
+  else if (sign45 === sign90)
+    parts.push(`45M and 90M aligned ${dirWord}, but 180M diverges — shorter-term move.`);
+  else if (sign45 !== sign90)
+    parts.push(`45M and 90M disagree — mixed pressure, be cautious.`);
+
+  // ── 2. State ─────────────────────────────────────────────────────────
+  const state = s.state || '';
+  if (state === 'EXPANDING')        parts.push('Spread expanding — divergence growing, pressure building.');
+  else if (state === 'COMPRESSING') parts.push('Spread compressing — currencies converging, move may be slowing.');
+  else if (state === 'REVERSING')   parts.push('Spread reversing — short-term direction flipping.');
+  else if (state === 'STEADY')      parts.push('Spread steady — stable pace, no acceleration or deceleration.');
+  else if (state === 'FLAT')        parts.push('Spread flat — no meaningful movement.');
+
+  // ── 3. Impulse quality ───────────────────────────────────────────────
+  if (d.imp >= 60)      parts.push(`Strong impulse (${d.imp}/100) — high-conviction directional candles.`);
+  else if (d.imp >= 40) parts.push(`Trending impulse (${d.imp}/100) — decent candle quality, moderate conviction.`);
+  else if (d.imp >= 20) parts.push(`Weak impulse (${d.imp}/100) — candles lack conviction, move is fragile.`);
+  else                  parts.push(`Flat impulse (${d.imp}/100) — no real directional drive in candles.`);
+
+  // ── 4. Velocity ──────────────────────────────────────────────────────
+  if (d.vel >= 2.0)      parts.push(`Velocity ${d.vel.toFixed(1)}× — current candle much larger than average. Fast move.`);
+  else if (d.vel >= 1.2) parts.push(`Velocity ${d.vel.toFixed(1)}× — above-average candle size. Moderate pace.`);
+  else if (d.vel >= 0.8) parts.push(`Velocity ${d.vel.toFixed(1)}× — normal candle size. Average pace.`);
+  else                   parts.push(`Velocity ${d.vel.toFixed(1)}× — small candles. Slow, low-energy move.`);
+
+  // ── 5. Body ratio ────────────────────────────────────────────────────
+  const bodyPct = Math.round(d.body * 100);
+  if (d.body >= 0.70)      parts.push(`Body ${bodyPct}% — candles are mostly body, very little wick. Clean directional.`);
+  else if (d.body >= 0.50) parts.push(`Body ${bodyPct}% — more body than wick. Decent directional candles.`);
+  else if (d.body >= 0.30) parts.push(`Body ${bodyPct}% — significant wicks. Indecision and rejection present.`);
+  else                     parts.push(`Body ${bodyPct}% — mostly wicks. Price is being rejected, low conviction.`);
+
+  // ── 6. Consecutive directional run ───────────────────────────────────
+  if (d.cons >= 4)      parts.push(`${d.cons} consecutive candles in same direction — strong sustained run, watch for exhaustion.`);
+  else if (d.cons >= 3) parts.push(`${d.cons} consecutive candles — good directional persistence.`);
+  else if (d.cons >= 2) parts.push(`${d.cons} consecutive candles — early directional build.`);
+  else                  parts.push(`Only ${d.cons} candle in direction — too early to confirm trend.`);
+
+  // ── 7. Volume analysis ───────────────────────────────────────────────
+  if (d.volGrade) {
+    const gradeDesc = {
+      INSTITUTIONAL: 'Institutional-grade volume — 24% strong-move rate, highest conviction.',
+      STRONG:        'Strong volume — 12% strong-move rate, good participation.',
+      NORMAL:        'Normal volume — acceptable, needs candle quality to confirm.',
+      WEAK:          'Weak volume — present but not driving price.',
+      DEAD:          'Dead volume — no participation behind this move.',
+    };
+    parts.push(gradeDesc[d.volGrade] || `Volume: ${d.volGrade}.`);
+
+    const effPct = (d.volEff * 100).toFixed(0);
+    if (d.volEff >= 0.10)      parts.push(`Vol efficiency ${effPct}% — institutional signature, 74% produce strong moves.`);
+    else if (d.volEff >= 0.05) parts.push(`Vol efficiency ${effPct}% — volume converting to price, ~50% strong-move rate.`);
+    else if (d.volEff >= 0.01) parts.push(`Vol efficiency ${effPct}% — some conversion but not conviction-level.`);
+    else                       parts.push(`Vol efficiency near 0% — volume absorbed without price progress.`);
+
+    if (d.rv >= 2.0)       parts.push(`RV ${d.rv.toFixed(1)}× — volume spike above session average.`);
+    else if (d.rv >= 1.5)  parts.push(`RV ${d.rv.toFixed(1)}× — above average, no proven edge below 2.0×.`);
+    else if (d.rv < 0.5)   parts.push(`RV ${d.rv.toFixed(1)}× — very low volume, market quiet.`);
+
+    if (d.volPers >= 3)       parts.push(`Volume sustained ${d.volPers} candles — watch for exhaustion.`);
+    else if (d.volPers >= 1)  parts.push(`Volume elevated ${d.volPers} candle(s) — participation building.`);
+  }
+
+  // ── 8. Overall verdict ───────────────────────────────────────────────
+  const allAligned = sign45 === sign90 && sign90 === sign180;
+  const strongImp  = d.imp >= 50;
+  const cleanBody  = d.body >= 0.50;
+  const goodVel    = d.vel >= 1.2;
+  const goodEff    = d.volEff >= 0.05;
+  const instVol    = d.volGrade === 'INSTITUTIONAL' || d.volGrade === 'STRONG';
+  const deadVol    = d.volGrade === 'DEAD' || d.rv < 0.5;
+
+  if (allAligned && strongImp && cleanBody && goodEff)
+    parts.push('⟶ HIGH CONVICTION — aligned pressure, strong impulse, clean candles, efficient volume.');
+  else if (allAligned && strongImp && cleanBody)
+    parts.push('⟶ STRONG MOVE — aligned with good impulse and body ratio. Volume ordinary.');
+  else if (allAligned && strongImp && instVol)
+    parts.push('⟶ STRONG MOVE — aligned impulse backed by institutional volume.');
+  else if (allAligned && strongImp)
+    parts.push('⟶ GOOD IMPULSE — aligned pressure with decent impulse. Watch candle quality.');
+  else if (allAligned && deadVol)
+    parts.push('⟶ LOW QUALITY — aligned but dead volume. Move lacks participation.');
+  else if (allAligned)
+    parts.push('⟶ ALIGNED — all timeframes agree but impulse/candle quality is modest.');
+  else if (strongImp && goodEff && state === 'EXPANDING')
+    parts.push('⟶ EXPANDING — strong impulse with volume, but timeframes not fully aligned. Fast move.');
+  else if (state === 'COMPRESSING')
+    parts.push('⟶ FADING — pressure compressing. Move may be exhausting.');
+  else if (state === 'REVERSING')
+    parts.push('⟶ CAUTION — spread reversing. Wait for re-alignment.');
+  else
+    parts.push('⟶ MIXED — conditions don\'t fully confirm. Reduce size or wait.');
+
+  return parts.join(' ');
+}
+
 function renderM15Spreads(data) {
   const el = document.getElementById('m15-spreads-list');
   const section = document.getElementById('section-m15-spreads');
@@ -1894,6 +2006,8 @@ function renderM15Spreads(data) {
 
   el.innerHTML = spreads.map(s => {
     const v45  = parseFloat(s.smooth_45m) || 0;
+    const v90  = parseFloat(s.smooth_90m) || 0;
+    const v180 = parseFloat(s.smooth_180m) || 0;
     const cls  = v45 >= 0 ? 'buy' : 'sell';
     const bias = cls === 'buy' ? 'BUY' : 'SELL';
     const imp  = s.impulse_score || 0;
@@ -1908,6 +2022,11 @@ function renderM15Spreads(data) {
     const volGrade = vol?.participation_grade || '';
     const volScore = vol ? Math.round(parseFloat(vol.participation_score) || 0) : 0;
     const volEff   = vol ? parseFloat(vol.volume_efficiency) || 0 : 0;
+    const volPers  = vol ? parseFloat(vol.volume_persistence) || 0 : 0;
+
+    // Build analysis text
+    const analysis = _m15ImpulseAnalysis(s, { v45, v90, v180, imp, vel, body, cons, rv, volGrade, volScore, volEff, volPers, bias, il });
+
     return `
       <div class="spread-row m15-row">
         <div class="spread-accent ${cls}"></div>
@@ -1927,7 +2046,8 @@ function renderM15Spreads(data) {
         <span class="m15-imp-lbl">RV</span><span class="m15-imp-val ${rv >= 1.5 ? 'vol-institutional' : rv >= 1.0 ? 'vol-strong' : 'vol-weak'}">${rv.toFixed(1)}×</span>
         <span class="m15-imp-lbl">Eff</span><span class="m15-imp-val ${volEff >= 0.05 ? 'vol-strong' : volEff >= 0.01 ? 'vol-normal' : 'vol-weak'}">${(volEff * 100).toFixed(0)}%</span>
         ${_volGradeBadge(volGrade)}` : ''}
-      </div>`;
+      </div>
+      <div class="fp-explain m15-explain">${analysis}</div>`;
   }).join('');
 }
 
