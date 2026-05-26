@@ -20,6 +20,19 @@ const LOOKBACKS          = [3, 6, 12];   // M15 candle counts → 45M / 90M / 18
 const FETCH              = 20;           // candles pulled per instrument (newest-first)
 const MIN_CANDLES        = 14;           // refIdx(0) + offset(1) + maxLB(12) + 1
 
+/**
+ * Compute Directional Efficiency from OHLC candles (ascending order).
+ * DE = (|final_close - initial_open| / sum(high - low)) × 100
+ */
+function computeDE(candles) {
+  if (!candles || candles.length < 2) return 0;
+  const netMove = Math.abs(candles[candles.length - 1].close - candles[0].open);
+  let totalTravel = 0;
+  for (const c of candles) totalTravel += c.high - c.low;
+  if (totalTravel === 0) return 0;
+  return Math.min(100, (netMove / totalTravel) * 100);
+}
+
 // Simple EMA: (prev + current) / 2 — identical to smooth.js
 function ema(prev, current) {
   if (prev === null || prev === undefined) return current;
@@ -52,9 +65,16 @@ async function calculateLatestM15Spreads() {
     const raw = await fetchCandles(instrument, { count: FETCH, granularity: 'M15' });
 
     // Keep only completed candles; store newest-first for positional indexing
+    // Full OHLC retained for DE computation (close also used for spread calc)
     const complete = raw
       .filter(c => c.complete === true)
-      .map(c => ({ time: new Date(c.time).toISOString(), close: parseFloat(c.mid.c) }))
+      .map(c => ({
+        time:  new Date(c.time).toISOString(),
+        open:  parseFloat(c.mid.o),
+        high:  parseFloat(c.mid.h),
+        low:   parseFloat(c.mid.l),
+        close: parseFloat(c.mid.c),
+      }))
       .reverse()   // OANDA returns ascending when using count; reverse → newest first
       .slice(0, FETCH);
 
@@ -132,7 +152,7 @@ async function calculateLatestM15Spreads() {
     };
   }
 
-  // ── 5. Compute pair spreads (raw & smooth) for all 28 instruments ────────────
+  // ── 5. Compute pair spreads (raw & smooth) + DE for all 28 instruments ─────
   const rows = config.instruments.map(instrument => {
     const [base, quote] = instrument.split('_');
     const nb = normCurrent[base],    nq = normCurrent[quote];
@@ -146,6 +166,10 @@ async function calculateLatestM15Spreads() {
     const smooth_90m  = sb[6]  - sq[6];
     const smooth_180m = sb[12] - sq[12];
 
+    // Compute DE from the OANDA candles we already have (ascending order)
+    const candlesAsc = arrays[instrument].slice().reverse(); // newest-first → oldest-first
+    const de = Math.round(computeDE(candlesAsc) * 10) / 10;
+
     return {
       time: refTime,
       instrument,
@@ -156,13 +180,24 @@ async function calculateLatestM15Spreads() {
       smooth_90m,
       smooth_180m,
       state: computeState(smooth_45m, smooth_90m),
+      de_combined: de,
     };
   });
 
   // ── 6. Upsert to m15_pair_spreads ────────────────────────────────────────────
-  const { error } = await supabase
+  let { error } = await supabase
     .from('m15_pair_spreads')
     .upsert(rows, { onConflict: 'time,instrument', ignoreDuplicates: false });
+
+  // Graceful fallback: if de_combined column doesn't exist yet, retry without it
+  if (error && error.message && error.message.includes('de_combined')) {
+    console.warn('[M15] de_combined column missing — upserting without DE (run migration)');
+    const rowsNoDe = rows.map(({ de_combined, ...rest }) => rest);
+    const retry = await supabase
+      .from('m15_pair_spreads')
+      .upsert(rowsNoDe, { onConflict: 'time,instrument', ignoreDuplicates: false });
+    error = retry.error;
+  }
 
   if (error) throw new Error(`[M15] Upsert error: ${error.message}`);
 

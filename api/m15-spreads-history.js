@@ -16,13 +16,20 @@ module.exports = async function handler(req, res) {
     const allRows = [];
     const PAGE = 1000;
     let offset = 0;
+    // Try with de_combined first; fall back to without if column doesn't exist yet
+    let selectCols = 'time, instrument, smooth_45m, smooth_90m, state, de_combined';
     while (true) {
       const { data, error } = await sb
         .from('m15_pair_spreads')
-        .select('time, instrument, smooth_45m, smooth_90m, state')
+        .select(selectCols)
         .gte('time', since)
         .order('time', { ascending: true })
         .range(offset, offset + PAGE - 1);
+      if (error && offset === 0 && error.message?.includes('de_combined')) {
+        // Column doesn't exist yet — retry without it
+        selectCols = 'time, instrument, smooth_45m, smooth_90m, state';
+        continue;
+      }
       if (error) throw error;
       if (!data || !data.length) break;
       allRows.push(...data);

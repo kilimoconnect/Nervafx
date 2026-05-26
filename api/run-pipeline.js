@@ -275,24 +275,30 @@ module.exports = async function handler(req, res) {
   // If cron-backtest-sync missed a run or was slow, the pipeline self-heals
   // by syncing stale instruments inline before proceeding.
   await step('candle_sync', async () => {
-    const STALE_MS = 2 * 60 * 60 * 1000; // 2 hours — if latest candle is older, sync it
+    // M15: ALWAYS sync — DE history depends on backtest_candles M15 being
+    // current every hour. Only fetches new candles since last stored time,
+    // so it's fast (~5-10s) when cron-backtest-sync already ran at :00.
+    // H1: only sync if stale (>2h), since strength.js only needs the latest.
+    const STALE_MS_H1  = 2 * 60 * 60 * 1000;  // 2 hours
     const PARALLEL = 7;
     const TFS = ['M15', 'H1'];
 
     for (const tf of TFS) {
-      // Check freshest candle for this timeframe (single query, not per-instrument)
-      const { data: newest } = await sb.from('backtest_candles')
-        .select('time')
-        .eq('timeframe', tf)
-        .eq('complete', true)
-        .order('time', { ascending: false })
-        .limit(1);
+      if (tf === 'H1') {
+        // H1: check staleness before syncing
+        const { data: newest } = await sb.from('backtest_candles')
+          .select('time')
+          .eq('timeframe', tf)
+          .eq('complete', true)
+          .order('time', { ascending: false })
+          .limit(1);
 
-      const latestTime = newest?.[0]?.time ? new Date(newest[0].time).getTime() : 0;
-      const age = Date.now() - latestTime;
+        const latestTime = newest?.[0]?.time ? new Date(newest[0].time).getTime() : 0;
+        const age = Date.now() - latestTime;
 
-      if (age <= STALE_MS) continue; // fresh enough
-      console.log(`[PIPELINE] ${tf} candles stale (${(age / 3600000).toFixed(1)}h old) — syncing...`);
+        if (age <= STALE_MS_H1) continue; // H1 fresh enough
+      }
+      console.log(`[PIPELINE] Syncing ${tf} candles...`);
 
       // Sync all instruments for this timeframe in parallel batches
       let synced = 0;

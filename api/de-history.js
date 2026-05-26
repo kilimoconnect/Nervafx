@@ -80,20 +80,21 @@ module.exports = async function handler(req, res) {
 
         // Walk through candles once using a sliding window approach
         // Candles are sorted ascending — for each hour, find the cutoff index
+        // Convert time to epoch ms for reliable comparison (Supabase may return
+        // various timestamp formats that sort incorrectly as strings).
         const parsed = candles.map(c => ({
-          open: +c.open, high: +c.high, low: +c.low, close: +c.close, time: c.time
+          open: +c.open, high: +c.high, low: +c.low, close: +c.close,
+          ms: new Date(c.time).getTime(),
         }));
         const hours = [...hourSet].sort();
 
         let searchStart = 0; // optimise: start search from last found position
         for (const hourKey of hours) {
-          const cutoffDate = new Date(hourKey + ':00Z');
-          cutoffDate.setUTCHours(cutoffDate.getUTCHours() + 1);
-          const cutoff = cutoffDate.toISOString();
+          const cutoffMs = new Date(hourKey + ':00Z').getTime() + 3600000; // +1 hour
 
-          // Find index of first candle >= cutoff (binary-ish, but sequential is fine since hours are sorted)
+          // Find index of first candle >= cutoff
           let cutIdx = searchStart;
-          while (cutIdx < parsed.length && parsed[cutIdx].time < cutoff) cutIdx++;
+          while (cutIdx < parsed.length && parsed[cutIdx].ms < cutoffMs) cutIdx++;
 
           if (cutIdx < 2) continue;
           const windowStart = Math.max(0, cutIdx - 20);

@@ -657,6 +657,7 @@
     _arcSessionDays = 0;
     _fpCcsData = null;
     _fpM15Data = null;
+    _fpDeData  = null;
     _fpLoading = null;
     _fpCcsTimes = [];
   }
@@ -1139,6 +1140,7 @@
       _fpCcsTimes = Object.keys(merged).sort();
 
       const m15 = {};
+      const m15De = {};  // DE from M15 history (stored per-pipeline-run)
       for (const r of (dm15.rows || [])) {
         // Normalize M15 timestamps to hour boundary (M15 stores at :15/:30/:45, not :00)
         const raw = r.time?.slice(0, 16)?.replace(' ', 'T') || '';
@@ -1151,15 +1153,31 @@
           v90: parseFloat(r.smooth_90m) || 0,
           state: r.state || null,
         };
+        // Capture DE from M15 history if present (from pipeline-stored de_combined)
+        if (r.de_combined != null && +r.de_combined > 0) {
+          if (!m15De[t]) m15De[t] = {};
+          m15De[t][r.instrument] = parseFloat(r.de_combined);
+        }
       }
       _fpM15Data = m15;
 
       // DE index: time → { instrument → de_combined }
+      // Primary source: de-history API (computed from backtest_candles)
+      // Supplementary: de_combined from m15-spreads-history (pipeline-stored)
       const de = {};
       for (const r of (dDE.rows || [])) {
         const t = (r.time || '').slice(0, 16).replace(' ', 'T');
         if (!de[t]) de[t] = {};
         de[t][r.instrument] = parseFloat(r.de_combined) || 0;
+      }
+      // Merge M15-stored DE as fallback for hours missing from de-history
+      for (const t of Object.keys(m15De)) {
+        if (!de[t]) de[t] = {};
+        for (const inst of Object.keys(m15De[t])) {
+          if (!de[t][inst] || de[t][inst] === 0) {
+            de[t][inst] = m15De[t][inst];
+          }
+        }
       }
       _fpDeData = de;
     });

@@ -8,7 +8,8 @@
   "functions": {
     "api/news-parse.js":          { "maxDuration": 30 },
     "api/run-pipeline.js":        { "maxDuration": 120 },
-    "api/cron-backtest-sync.js":  { "maxDuration": 300 }
+    "api/cron-backtest-sync.js":  { "maxDuration": 300 },
+    "api/de-history.js":          { "maxDuration": 60 }
   },
   "rewrites": [
     { "source": "/",       "destination": "/home.html" },
