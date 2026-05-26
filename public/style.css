@@ -1447,11 +1447,28 @@ section.card:has(.v2-gate-overlay.visible) { min-height: 220px; }
 .fp-rc-state {
   font-size: 8px;
 }
+.fp-rc-vol {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 1px;
+}
+.fp-arc-vol-val {
+  font-size: 8px;
+  font-weight: 600;
+}
+.fp-rc-vol .vol-grade-badge {
+  font-size: 7px;
+  padding: 0 3px;
+  line-height: 1.4;
+}
 @media (max-width: 700px) {
   .fp-arc-th-time { min-width: 90px; }
   .fp-arc-td-cell { padding: 4px 5px; }
   .fp-rc-name { font-size: 10px; }
   .fp-rc-meta { gap: 4px; font-size: 8px; }
+  .fp-rc-vol { gap: 3px; }
+  .fp-arc-vol-val { font-size: 7px; }
 }
 
 /* ─── Risk list ────────────────────────────────────────────────────────────── */

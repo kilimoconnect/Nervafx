@@ -16,6 +16,7 @@ const { writeJournalEntry } = require('./journalEngine');
 const { runOutcomeReviews } = require('./outcomeReview');
 const { backfillSessionActivity } = require('./sessionActivity');
 const { generateMarketNarrative }        = require('./narrativeEngine');
+const { calculateFlowPerformance }       = require('./flowPerformance');
 
 async function step(name, fn) {
   try {
@@ -77,6 +78,7 @@ async function hourlyUpdate() {
   await step('smooth',        () => smoothLatest());
   await step('spreads',       () => calculateLatestSpreads());
   await step('m15_spreads',   () => calculateLatestM15Spreads());
+  await step('flow_perf',    () => calculateFlowPerformance());
   await step('sentiment',     () => calculateLatestSentiment());
   await step('states',        () => calculateLatestStates());
   await step('signals',       () => calculateLatestSignals());

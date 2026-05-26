@@ -655,11 +655,8 @@
     _arcSessionRows = null;
     _arcSessionLoading = null;
     _arcSessionDays = 0;
-    _fpCcsData = null;
-    _fpM15Data = null;
-    _fpDeData  = null;
+    _fpData    = null;
     _fpLoading = null;
-    _fpCcsTimes = [];
   }
 
   // Metric definitions — V2 institutional model
@@ -1107,80 +1104,16 @@
 
   // ─── Flow Performance Archive ──────────────────────────────────────────────
 
-  let _fpCcsData = null;  // { time → { ccy → { h3, h6 } } }
-  let _fpM15Data = null;  // { time → { instrument → { v45, v90, state } } }
-  let _fpDeData  = null;  // { time → { instrument → de_combined } }
+  let _fpData    = null;  // Pre-computed flow performance rows from API
   let _fpLoading = null;
-  let _fpCcsTimes = [];
 
   async function _loadFpData() {
-    if (_fpCcsData && _fpM15Data) return;
+    if (_fpData) return;
     if (_fpLoading) return _fpLoading;
     const need = _arcFilterDays || 30;
-    _fpLoading = Promise.all([
-      api(`/api/strength-history?days=${need}&tf=3h`),
-      api(`/api/strength-history?days=${need}&tf=6h`),
-      api(`/api/m15-spreads-history?days=${need}`).catch(() => ({ rows: [] })),
-      api(`/api/de-history?days=${need}`).catch(() => ({ rows: [] })),
-    ]).then(([d3, d6, dm15, dDE]) => {
-      const merged = {};
-      for (const r of (d3.rows || [])) {
-        const t = r.time?.slice(0, 16)?.replace(' ', 'T') || '';
-        if (!merged[t]) merged[t] = {};
-        if (!merged[t][r.currency]) merged[t][r.currency] = {};
-        merged[t][r.currency].h3 = parseFloat(r.smooth_3h ?? 0) || 0;
-      }
-      for (const r of (d6.rows || [])) {
-        const t = r.time?.slice(0, 16)?.replace(' ', 'T') || '';
-        if (!merged[t]) merged[t] = {};
-        if (!merged[t][r.currency]) merged[t][r.currency] = {};
-        merged[t][r.currency].h6 = parseFloat(r.smooth_6h ?? 0) || 0;
-      }
-      _fpCcsData = merged;
-      _fpCcsTimes = Object.keys(merged).sort();
-
-      const m15 = {};
-      const m15De = {};  // DE from M15 history (stored per-pipeline-run)
-      for (const r of (dm15.rows || [])) {
-        // Normalize M15 timestamps to hour boundary (M15 stores at :15/:30/:45, not :00)
-        const raw = r.time?.slice(0, 16)?.replace(' ', 'T') || '';
-        const dt = new Date(raw + ':00Z');
-        dt.setUTCMinutes(0, 0, 0);
-        const t = dt.toISOString().slice(0, 16);
-        if (!m15[t]) m15[t] = {};
-        m15[t][r.instrument] = {
-          v45: parseFloat(r.smooth_45m) || 0,
-          v90: parseFloat(r.smooth_90m) || 0,
-          state: r.state || null,
-        };
-        // Capture DE from M15 history if present (from pipeline-stored de_combined)
-        if (r.de_combined != null && +r.de_combined > 0) {
-          if (!m15De[t]) m15De[t] = {};
-          m15De[t][r.instrument] = parseFloat(r.de_combined);
-        }
-      }
-      _fpM15Data = m15;
-
-      // DE index: time → { instrument → de_combined }
-      // Primary source: de-history API (computed from backtest_candles)
-      // Supplementary: de_combined from m15-spreads-history (pipeline-stored)
-      const de = {};
-      for (const r of (dDE.rows || [])) {
-        const t = (r.time || '').slice(0, 16).replace(' ', 'T');
-        if (!de[t]) de[t] = {};
-        de[t][r.instrument] = parseFloat(r.de_combined) || 0;
-      }
-      // Merge M15-stored DE as fallback for hours missing from de-history
-      for (const t of Object.keys(m15De)) {
-        if (!de[t]) de[t] = {};
-        for (const inst of Object.keys(m15De[t])) {
-          if (!de[t][inst] || de[t][inst] === 0) {
-            de[t][inst] = m15De[t][inst];
-          }
-        }
-      }
-      _fpDeData = de;
-    });
+    _fpLoading = api(`/api/flow-performance?days=${need}`).then(d => {
+      _fpData = d.rows || [];
+    }).catch(() => { _fpData = []; });
     return _fpLoading;
   }
 
@@ -1190,7 +1123,7 @@
     try {
       bodyEl.innerHTML = '<div class="arc-loading"><span class="spinner"></span> Loading flow performance…</div>';
       const [sessions] = await Promise.all([_loadSessionRows(), _loadFpData()]);
-      if (!sessions?.length || !_fpCcsData) { bodyEl.innerHTML = '<p class="me-empty">No data available.</p>'; return; }
+      if (!sessions?.length || !_fpData?.length) { bodyEl.innerHTML = '<p class="me-empty">No data available.</p>'; return; }
       const filteredSess = _filterSessionRows(sessions);
       if (!filteredSess.length) { bodyEl.innerHTML = '<p class="me-empty">No sessions for this filter.</p>'; return; }
       renderFlowPerfArchive(bodyEl, filteredSess);
@@ -1200,7 +1133,7 @@
   }
 
   function _renderFilteredFlowPerf() {
-    if (!_fpCcsData || !_fpM15Data || !_arcSessionRows) return;
+    if (!_fpData || !_arcSessionRows) return;
     const bodyEl = document.getElementById('arc-flowperf-body');
     if (!bodyEl) return;
     const filteredSess = _filterSessionRows(_arcSessionRows);
@@ -1212,19 +1145,22 @@
     const tz = (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC');
     const SESS_COLOR = { ASIA: '#f59e0b', LONDON: '#0ea5e9', NEW_YORK: '#a855f7' };
     const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York' };
-    const PAIRS = new Set([
-      'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
-      'EUR_GBP','EUR_JPY','EUR_CHF','EUR_CAD','EUR_AUD','EUR_NZD',
-      'GBP_JPY','GBP_CHF','GBP_CAD','GBP_AUD','GBP_NZD',
-      'AUD_JPY','AUD_CHF','AUD_CAD','AUD_NZD',
-      'NZD_JPY','NZD_CHF','NZD_CAD','CAD_JPY','CAD_CHF','CHF_JPY',
-    ]);
     const RANK_CLR = ['#4ade80', '#60a5fa', '#facc15', '#94a3b8'];
     const STATUS_CLR = { STRONG: '#22c55e', ALIGNED: '#0ea5e9', PARTIAL: '#a855f7', BUILDING: '#f59e0b', AGAINST: '#ef4444', WAIT: '#64748b' };
-    const ccsIndex = _fpCcsData;
-    const m15Index = _fpM15Data;
-    const deIndex  = _fpDeData || {};
-    const ccsTimes = _fpCcsTimes;
+    const ST_SHORT = { EXPANDING: 'Exp', COMPRESSING: 'Comp', REVERSING: 'Rev', STEADY: 'Stdy', FLAT: 'Flat' };
+    const ST_CLR   = { EXPANDING: '#22c55e', COMPRESSING: '#f97316', REVERSING: '#ef4444', STEADY: '#94a3b8', FLAT: '#475569' };
+    const VOL_GRD_CLS = { INSTITUTIONAL: 'vol-institutional', STRONG: 'vol-strong', NORMAL: 'vol-normal', WEAK: 'vol-weak', DEAD: 'vol-dead' };
+
+    // Index flow_performance rows by time key → [ rows ]
+    const fpByTime = {};
+    const fpTimes  = new Set();
+    for (const r of _fpData) {
+      const t = (r.time || '').slice(0, 16).replace(' ', 'T');
+      if (!fpByTime[t]) fpByTime[t] = [];
+      fpByTime[t].push(r);
+      fpTimes.add(t);
+    }
+    const allTimes = [...fpTimes].sort();
 
     // Group sessions by date
     const sorted = [...sessions]
@@ -1258,120 +1194,32 @@
         const sessEnd   = sess.session_end   || `${date}T23:59:59Z`;
         const startKey  = sessStart.slice(0, 16).replace(' ', 'T');
         const endKey    = sessEnd.slice(0, 16).replace(' ', 'T');
-        const sessionTimes = ccsTimes.filter(t => t >= startKey && t < endKey);
-        if (!sessionTimes.length) continue;
 
-        // Derive flow pairs from 3H currency strength — try hours from latest back
-        let allStrong = [], allWeak = [];
-        for (let ti = sessionTimes.length - 1; ti >= 0; ti--) {
-          const snap = ccsIndex[sessionTimes[ti]] || {};
-          const ccyScored = Object.entries(snap)
-            .map(([ccy, vals]) => ({ ccy, h3: vals.h3 || 0 }))
-            .sort((a, b) => b.h3 - a.h3);
-          const s = ccyScored.filter(c => c.h3 > 0).slice(0, 2).map(c => c.ccy);
-          const w = ccyScored.filter(c => c.h3 < 0).slice(-2).reverse().map(c => c.ccy);
-          if (s.length && w.length) { allStrong = s; allWeak = w; break; }
-        }
-        if (!allStrong.length || !allWeak.length) continue;
-
-        // Build flow pairs
-        const flowPairs = [];
-        for (const st of allStrong) {
-          for (const wk of allWeak) {
-            if (st === wk) continue;
-            const fwd = `${st}_${wk}`, rev = `${wk}_${st}`;
-            if (PAIRS.has(fwd))      flowPairs.push({ instrument: fwd, dir: 'BUY' });
-            else if (PAIRS.has(rev)) flowPairs.push({ instrument: rev, dir: 'SELL' });
-          }
-        }
-        if (!flowPairs.length) continue;
-
-        // Compute hourly metrics for each pair
-        const pairs = flowPairs.slice(0, 4).map(fp => {
-          const [b, q] = fp.instrument.split('_');
-          const flowSign = fp.dir === 'BUY' ? 1 : -1;
-          const hourly = sessionTimes.map(t => {
-            const snap = ccsIndex[t] || {};
-            const bv3 = snap[b]?.h3 ?? null, qv3 = snap[q]?.h3 ?? null;
-            const bv6 = snap[b]?.h6 ?? null, qv6 = snap[q]?.h6 ?? null;
-            const spread3H = (bv3 != null && qv3 != null) ? bv3 - qv3 : null;
-            const spread6H = (bv6 != null && qv6 != null) ? bv6 - qv6 : null;
-
-            const m15Snap = (m15Index[t] || {})[fp.instrument];
-            const v45 = m15Snap?.v45 ?? null;
-            const v90 = m15Snap?.v90 ?? null;
-
-            let state = null;
-            if (v45 != null && v90 != null) {
-              const dir45 = v45 * flowSign;
-              const dir90 = v90 * flowSign;
-              if (Math.abs(v45) < 0.00005)                state = 'FLAT';
-              else if (dir45 < 0)                          state = 'REVERSING';
-              else if (dir45 > dir90 * 1.1)                state = 'EXPANDING';
-              else if (dir45 < dir90 * 0.85 && dir90 > 0) state = 'COMPRESSING';
-              else                                         state = 'STEADY';
-            }
-
-            const M15_CONFIRM_MIN = 0.00008;
-            const m15Confirms = v45 != null ? (Math.sign(v45) === flowSign && Math.abs(v45) >= M15_CONFIRM_MIN) : null;
-            const h3Confirms  = spread3H != null ? Math.sign(spread3H) === flowSign : null;
-            const h6Confirms  = spread6H != null ? Math.sign(spread6H) === flowSign : null;
-            const accel = (v45 != null && v90 != null) ? v45 - v90 : null;
-            const accelSign = accel != null ? Math.sign(accel) === flowSign : null;
-
-            const htfCount = [h3Confirms, h6Confirms].filter(x => x === true).length;
-            let status;
-            if (m15Confirms && htfCount === 2)       status = 'STRONG';
-            else if (m15Confirms && htfCount === 1)  status = 'ALIGNED';
-            else if (m15Confirms && htfCount === 0)  status = 'PARTIAL';
-            else if (!m15Confirms && htfCount >= 1)  status = 'BUILDING';
-            else if (m15Confirms === false)          status = 'AGAINST';
-            else                                     status = 'WAIT';
-
-            let perfScore = 0;
-            if (v45 != null)      perfScore += (v45 * flowSign) * 10000 * 3;
-            if (spread3H != null) perfScore += (spread3H * flowSign) * 10000 * 2;
-            if (spread6H != null) perfScore += (spread6H * flowSign) * 10000 * 1;
-            if (m15Confirms) perfScore += 15;
-            if (h3Confirms)  perfScore += 10;
-            if (h6Confirms)  perfScore += 5;
-            if (accelSign)   perfScore += 10;
-            if (state === 'EXPANDING' && m15Confirms)    perfScore += 15;
-            if (state === 'REVERSING')                   perfScore -= 10;
-            if (state === 'COMPRESSING' && !m15Confirms) perfScore -= 15;
-
-            const deSnap = deIndex[t] || {};
-            const deCombined = deSnap[fp.instrument] || 0;
-            const finalScore = (0.75 * perfScore) + (0.25 * deCombined);
-
-            return { time: t, status, perfScore, deCombined, finalScore, state };
-          });
-          return { ...fp, hourly, flowSign, base: b, quote: q };
+        // Find flow_performance rows within this session window
+        const sessionTimes = allTimes.filter(t => t >= startKey && t < endKey);
+        // Filter to times that have non-WAIT data
+        const validTimes = sessionTimes.filter(t => {
+          const rows = fpByTime[t] || [];
+          return rows.some(r => r.status && r.status !== 'WAIT');
         });
-
-        // Check we have data — include hours where any pair has a computed status (not just score !== 0)
-        const validTimes = sessionTimes.filter(t => pairs.some(p => {
-          const h = p.hourly.find(h => h.time === t);
-          return h && h.status && h.status !== 'WAIT';
-        }));
         if (!validTimes.length) continue;
 
-        // Compute per-hour independent rankings (rank by finalScore)
-        const hourlyRanks = {};
+        // Get strong/weak from the latest row's stored currencies
+        const latestRows = fpByTime[validTimes[validTimes.length - 1]] || [];
+        const strongStr = latestRows[0]?.strong_currencies || '';
+        const weakStr   = latestRows[0]?.weak_currencies || '';
+        const allStrong = strongStr ? strongStr.split(',') : [];
+        const allWeak   = weakStr   ? weakStr.split(',')   : [];
+
+        // Determine max rank across all times
+        let maxRank = 0;
         for (const t of validTimes) {
-          const scored = pairs.map(p => {
-            const h = p.hourly.find(h => h.time === t);
-            return { pair: p, ...(h || {}) };
-          }).filter(s => s.perfScore != null)
-            .sort((a, b) => (b.finalScore || b.perfScore) - (a.finalScore || a.perfScore));
-          scored.forEach((s, i) => { s.rank = i + 1; });
-          hourlyRanks[t] = scored;
+          const rows = fpByTime[t] || [];
+          for (const r of rows) { if (r.rank > maxRank) maxRank = r.rank; }
         }
+        if (!maxRank) continue;
 
-        const maxRanks = Math.max(...Object.values(hourlyRanks).map(r => r.length), 0);
-        if (!maxRanks) continue;
-
-        // Build rank-based table: rows = rank positions, columns = hours
+        // Build rank-based table
         html += `<div class="bd-session-block">
           <div class="bd-session-header" style="color:${sessColor}">${sessLabel}
             <span style="font-size:10px;color:var(--text-dim);margin-left:8px">${allStrong.map(c => c + ' ↑').join(' ')} ${allWeak.map(c => c + ' ↓').join(' ')}</span>
@@ -1385,31 +1233,37 @@
         }
         html += '</tr></thead><tbody>';
 
-        // One row per rank position
-        for (let rank = 1; rank <= maxRanks; rank++) {
+        for (let rank = 1; rank <= maxRank; rank++) {
           const rankClr = RANK_CLR[rank - 1] || '#64748b';
           html += `<tr><td class="fp-arc-td-rank" style="color:${rankClr};font-weight:800">${rank}</td>`;
 
           for (const t of validTimes) {
-            const ranked = hourlyRanks[t] || [];
-            const entry = ranked.find(r => r.rank === rank);
-            if (!entry || !entry.pair) {
+            const rows = fpByTime[t] || [];
+            const entry = rows.find(r => r.rank === rank);
+            if (!entry) {
               html += '<td class="fp-arc-td-cell">—</td>';
               continue;
             }
-            const p = entry.pair;
-            const dirCls = p.dir === 'BUY' ? 'buy' : 'sell';
-            const pairLabel = p.instrument.replace('_', '/');
+            const dirCls = entry.dir === 'BUY' ? 'buy' : 'sell';
+            const pairLabel = entry.instrument.replace('_', '/');
             const statusClr = STATUS_CLR[entry.status] || '#64748b';
-            const deVal = entry.deCombined || 0;
+            const deVal = entry.de_combined || 0;
             const DE_CLR = deVal >= 30 ? '#4ade80' : deVal >= 20 ? '#60a5fa' : deVal >= 8 ? '#facc15' : '#f87171';
             const deHtml = deVal > 0 ? `<span style="color:${DE_CLR}">E${Math.round(deVal)}</span>` : '';
-            const ST_SHORT = { EXPANDING: 'Exp', COMPRESSING: 'Comp', REVERSING: 'Rev', STEADY: 'Stdy', FLAT: 'Flat' };
-            const ST_CLR = { EXPANDING: '#22c55e', COMPRESSING: '#f97316', REVERSING: '#ef4444', STEADY: '#94a3b8', FLAT: '#475569' };
+
+            const vGrade = entry.vol_grade || '';
+            const vCls   = VOL_GRD_CLS[vGrade] || '';
+            const volBadge = vGrade ? `<span class="vol-grade-badge ${vCls}">${vGrade}</span>` : '';
+            const rv  = entry.vol_rv  || 0;
+            const eff = entry.vol_eff || 0;
+            const rvHtml  = rv  ? `<span class="fp-arc-vol-val" style="color:${rv >= 2 ? '#4ade80' : rv >= 1.5 ? '#60a5fa' : '#64748b'}">RV ${rv.toFixed(1)}</span>` : '';
+            const effHtml = eff ? `<span class="fp-arc-vol-val" style="color:${eff >= 0.10 ? '#4ade80' : eff >= 0.05 ? '#60a5fa' : '#64748b'}">Eff ${(eff * 100).toFixed(0)}%</span>` : '';
+            const volRow  = (volBadge || rvHtml || effHtml) ? `<div class="fp-rc-vol">${volBadge}${rvHtml}${effHtml}</div>` : '';
 
             html += `<td class="fp-arc-td-cell">
-              <div class="fp-rc-pair"><span class="fp-rc-name">${pairLabel}</span><span class="spread-bias ${dirCls}">${p.dir}</span></div>
+              <div class="fp-rc-pair"><span class="fp-rc-name">${pairLabel}</span><span class="spread-bias ${dirCls}">${entry.dir}</span></div>
               <div class="fp-rc-meta"><span class="fp-rc-status" style="color:${statusClr}">${entry.status}</span><span class="fp-rc-state" style="color:${ST_CLR[entry.state] || '#64748b'}">${ST_SHORT[entry.state] || ''}</span>${deHtml}</div>
+              ${volRow}
             </td>`;
           }
           html += '</tr>';
