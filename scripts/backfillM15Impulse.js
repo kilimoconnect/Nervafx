@@ -96,13 +96,14 @@ async function run() {
       });
     }
 
-    // Upsert in batches
-    for (let i = 0; i < updates.length; i += 500) {
-      const batch = updates.slice(i, i + 500);
+    // Update rows individually (can't upsert partial rows without NOT NULL columns)
+    for (let i = 0; i < updates.length; i++) {
+      const { id, ...fields } = updates[i];
       const { error } = await supabase
         .from('m15_pair_spreads')
-        .upsert(batch, { onConflict: 'id', ignoreDuplicates: false });
-      if (error) throw new Error(`${instrument} upsert: ${error.message}`);
+        .update(fields)
+        .eq('id', id);
+      if (error) throw new Error(`${instrument} update id=${id}: ${error.message}`);
     }
 
     totalUpdated += updates.length;
