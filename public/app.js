@@ -1104,14 +1104,20 @@ function buildChart(data, tf) {
   strengthData = data;
   document.getElementById('strength-time').textContent = 'As of ' + fmtTime(data.time);
 
-  const currencies = [...data.currencies].sort((a, b) => {
-    const av = parseFloat(a[`smooth_${tf}h`] ?? a[`normalized_${tf}h`] ?? 0);
-    const bv = parseFloat(b[`smooth_${tf}h`] ?? b[`normalized_${tf}h`] ?? 0);
-    return bv - av;
-  });
+  const getVal = (c, t) => {
+    if (t === 'combined') {
+      const v3  = parseFloat(c.smooth_3h  ?? c.normalized_3h  ?? 0);
+      const v6  = parseFloat(c.smooth_6h  ?? c.normalized_6h  ?? 0);
+      const v12 = parseFloat(c.smooth_12h ?? c.normalized_12h ?? 0);
+      return (v3 + v6 + v12) / 3;
+    }
+    return parseFloat(c[`smooth_${t}h`] ?? c[`normalized_${t}h`] ?? 0);
+  };
+
+  const currencies = [...data.currencies].sort((a, b) => getVal(b, tf) - getVal(a, tf));
 
   const labels       = currencies.map(c => c.currency);
-  const values       = currencies.map(c => parseFloat(c[`smooth_${tf}h`] ?? c[`normalized_${tf}h`] ?? 0));
+  const values       = currencies.map(c => getVal(c, tf));
   const colors       = values.map(v => v >= 0 ? 'rgba(22,163,74,0.85)' : 'rgba(220,38,38,0.85)');
   const borderColors = values.map(v => v >= 0 ? '#16a34a' : '#dc2626');
 
