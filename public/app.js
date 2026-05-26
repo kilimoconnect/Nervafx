@@ -1339,6 +1339,99 @@ function _volGradeBadge(grade) {
   return `<span class="vol-grade-badge ${cls}">${text}</span>`;
 }
 
+/**
+ * Generate plain-English analysis for a Strength Flow pair.
+ * Combines status, DE, and volume data into a verdict + bullet points.
+ * @param {Object} p — { pair, dir, status, de, volGrade, volRV, volEff, volPers, volScore }
+ * @returns {{ verdict: string, points: string[], cls: string }}
+ */
+function _flowPairAnalysis(p) {
+  const points = [];
+  const dir = p.dir === 'BUY' ? 'buying' : 'selling';
+  const pairLabel = p.pair;
+
+  // ── 1. Timeframe alignment (status) ──────────────────────────────────
+  const STATUS_DESC = {
+    STRONG:   'All timeframes aligned — M15, 3H, and 6H all confirm ' + dir + '.',
+    ALIGNED:  'Two timeframes aligned — M15 confirms ' + dir + ', one higher timeframe agrees.',
+    PARTIAL:  'M15 confirms ' + dir + ' but higher timeframes are mixed.',
+    BUILDING: 'Higher timeframes favour ' + dir + ' but M15 hasn\'t confirmed yet — wait for M15 entry.',
+    AGAINST:  'M15 is moving against the flow direction — momentum is counter-trend.',
+    WAIT:     'No clear alignment yet — not enough data to confirm direction.',
+  };
+  points.push(STATUS_DESC[p.status] || 'Status: ' + p.status);
+
+  // ── 2. Directional Efficiency (DE) ───────────────────────────────────
+  if (p.de > 0) {
+    if (p.de >= 30)      points.push('Price action is clean and trending (DE ' + p.de + '%) — moves translate into real directional progress.');
+    else if (p.de >= 20) points.push('Directional price action (DE ' + p.de + '%) — decent move quality with some noise.');
+    else if (p.de >= 8)  points.push('Mixed price action (DE ' + p.de + '%) — moves are choppy, expect false signals and whipsaws.');
+    else                 points.push('Choppy/noisy price action (DE ' + p.de + '%) — most of the movement is back-and-forth, not directional. High risk of stop-outs.');
+  }
+
+  // ── 3. Volume analysis ───────────────────────────────────────────────
+  if (!p.volGrade) {
+    points.push('No volume data available for this candle.');
+  } else {
+    // Relative Volume
+    if (p.volRV >= 2.0)       points.push('Volume spike at ' + p.volRV.toFixed(1) + '× session average — institutional-level activity, 15% chance of a strong move.');
+    else if (p.volRV >= 1.5)  points.push('Above-average volume (' + p.volRV.toFixed(1) + '×) — elevated interest, but volume alone doesn\'t confirm direction.');
+    else if (p.volRV >= 1.0)  points.push('Volume is at session average (' + p.volRV.toFixed(1) + '×) — normal market participation.');
+    else if (p.volRV >= 0.5)  points.push('Below-average volume (' + p.volRV.toFixed(1) + '×) — low participation, moves may lack follow-through.');
+    else                      points.push('Volume nearly dead (' + p.volRV.toFixed(1) + '×) — avoid trading in dead markets.');
+
+    // Volume Efficiency — the strongest single predictor
+    const effPct = (p.volEff * 100).toFixed(0);
+    if (p.volEff >= 0.10)      points.push('Excellent volume efficiency (' + effPct + '%) — smart money signature. 74% of candles like this produce strong moves.');
+    else if (p.volEff >= 0.05) points.push('Good volume efficiency (' + effPct + '%) — volume is translating into price movement. ~50% of these candles produce strong moves.');
+    else if (p.volEff >= 0.01) points.push('Moderate efficiency (' + effPct + '%) — some price movement per unit of volume, but not conviction-level.');
+    else                       points.push('Low efficiency (' + effPct + '%) — volume is being absorbed without directional progress. Likely ranging or accumulation.');
+
+    // Persistence
+    if (p.volPers >= 3)       points.push('Volume sustained for ' + p.volPers + ' consecutive candles — check for exhaustion (extended moves often reverse).');
+    else if (p.volPers >= 1)  points.push('Volume has been elevated for ' + p.volPers + ' candle(s) — building participation, potential momentum ignition.');
+    else                      points.push('No sustained volume yet — this could be a one-off spike or the start of something.');
+  }
+
+  // ── 4. Overall verdict ───────────────────────────────────────────────
+  let verdict, verdictCls;
+  const hasGoodVol = p.volEff >= 0.05 || (p.volRV >= 1.5 && p.volGrade !== 'WEAK' && p.volGrade !== 'DEAD');
+  const hasCleanDE = p.de >= 20;
+  const isAligned  = p.status === 'STRONG' || p.status === 'ALIGNED';
+  const isBuilding = p.status === 'BUILDING';
+
+  if (isAligned && hasCleanDE && hasGoodVol) {
+    verdict = 'High conviction — aligned flow with clean price action and institutional volume.';
+    verdictCls = 'sfa-go';
+  } else if (isAligned && hasCleanDE) {
+    verdict = 'Good setup — flow is aligned and price action is clean, but volume is ordinary.';
+    verdictCls = 'sfa-good';
+  } else if (isAligned && hasGoodVol) {
+    verdict = 'Volume is there but price action is messy — tighten stops, expect noise.';
+    verdictCls = 'sfa-caution';
+  } else if (isBuilding && hasCleanDE) {
+    verdict = 'Building — higher timeframes favour this direction. Wait for M15 confirmation before entry.';
+    verdictCls = 'sfa-wait';
+  } else if (isBuilding) {
+    verdict = 'Building but conditions aren\'t clean yet — patience, wait for alignment + efficiency.';
+    verdictCls = 'sfa-wait';
+  } else if (p.status === 'AGAINST') {
+    verdict = 'Counter-trend on M15 — don\'t fight the short-term momentum. Wait for it to turn.';
+    verdictCls = 'sfa-avoid';
+  } else if (p.volGrade === 'DEAD' || p.volRV < 0.5) {
+    verdict = 'Dead volume — no participation, nothing to trade here.';
+    verdictCls = 'sfa-avoid';
+  } else if (isAligned && !hasCleanDE && !hasGoodVol) {
+    verdict = 'Aligned but low quality — choppy DE and weak volume. Risk of false breakouts.';
+    verdictCls = 'sfa-caution';
+  } else {
+    verdict = 'Wait — conditions are mixed, no clear edge.';
+    verdictCls = 'sfa-wait';
+  }
+
+  return { verdict, points, cls: verdictCls };
+}
+
 function renderFlowPerformance(strengthData, m15Data) {
   const el = document.getElementById('flow-perf-list');
   if (!el) return;
@@ -2343,7 +2436,10 @@ function _meSessionExplain(s, label, status) {
       const vol = _volDataCache[fp.pair];
       const volGrade = vol?.participation_grade || '';
       const volRV    = vol ? parseFloat(vol.relative_volume) || 0 : 0;
-      return { pair: fp.pair.replace('_', '/'), dir: fp.dir, status: fp.status, finalScore, de: Math.round(deCombined), volGrade, volRV };
+      const volEff   = vol ? parseFloat(vol.volume_efficiency) || 0 : 0;
+      const volPers  = vol ? parseFloat(vol.volume_persistence) || 0 : 0;
+      const volScore = vol ? parseFloat(vol.participation_score) || 0 : 0;
+      return { pair: fp.pair.replace('_', '/'), dir: fp.dir, status: fp.status, finalScore, de: Math.round(deCombined), volGrade, volRV, volEff, volPers, volScore };
     }).sort((a, b) => b.finalScore - a.finalScore);
   }
 
@@ -2441,7 +2537,10 @@ function _meSessionExplain(s, label, status) {
         const vol = _volDataCache[fp.instrument];
         const volGrade = vol?.participation_grade || '';
         const volRV    = vol ? parseFloat(vol.relative_volume) || 0 : 0;
-        return { pair: fp.instrument.replace('_', '/'), dir: fp.dir, status: fpStatus, finalScore, de: Math.round(deCombined), volGrade, volRV };
+        const volEff   = vol ? parseFloat(vol.volume_efficiency) || 0 : 0;
+        const volPers  = vol ? parseFloat(vol.volume_persistence) || 0 : 0;
+        const volScore = vol ? parseFloat(vol.participation_score) || 0 : 0;
+        return { pair: fp.instrument.replace('_', '/'), dir: fp.dir, status: fpStatus, finalScore, de: Math.round(deCombined), volGrade, volRV, volEff, volPers, volScore };
       }).sort((a, b) => b.finalScore - a.finalScore);
     }
   }
@@ -2465,13 +2564,22 @@ function _meSessionExplain(s, label, status) {
       const volColor = VOL_GRADE_COLOR[p.volGrade] || '#64748b';
       const volShort = VOL_GRADE_SHORT[p.volGrade] || '';
       const volHtml = p.volGrade ? `<span class="me-flow-vol" style="color:${volColor}">${p.volRV.toFixed(1)}× ${volShort}</span>` : '';
-      return `<div class="me-flow-row">
-        <span class="me-flow-rank">#${i + 1}</span>
-        <span class="me-flow-dir ${dirCls}">${p.dir}</span>
-        <span class="me-flow-pair">${p.pair}</span>
-        <span class="me-flow-status" style="color:${statusColor}">${p.status}</span>
-        ${deHtml}
-        ${volHtml}
+      const analysis = _flowPairAnalysis(p);
+      const uid = 'sfa-' + name + '-' + i;
+      return `<div class="me-flow-pair-block">
+        <div class="me-flow-row">
+          <span class="me-flow-rank">#${i + 1}</span>
+          <span class="me-flow-dir ${dirCls}">${p.dir}</span>
+          <span class="me-flow-pair">${p.pair}</span>
+          <span class="me-flow-status" style="color:${statusColor}">${p.status}</span>
+          ${deHtml}
+          ${volHtml}
+          <button class="sfa-toggle" onclick="var el=document.getElementById('${uid}');el.style.display=el.style.display==='none'?'':'none';this.textContent=el.style.display==='none'?'▸':'▾'" title="Show analysis">▸</button>
+        </div>
+        <div class="sfa-panel" id="${uid}" style="display:none">
+          <div class="sfa-verdict ${analysis.cls}">${analysis.verdict}</div>
+          <ul class="sfa-points">${analysis.points.map(pt => `<li>${pt}</li>`).join('')}</ul>
+        </div>
       </div>`;
     }).join('');
     const hasChoppy = rankedPairs.some(p => p.de > 0 && p.de < 20);
