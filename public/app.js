@@ -908,7 +908,13 @@ function renderLiveOpportunities(states) {
     return;
   }
 
-  const live = (states || []).filter(s => s.state === 'READY_TO_ENTER' && hasCsigCurrency(s.instrument));
+  // Data-driven thresholds: 6H < 0.002 = 36% WR (dead zone), conf < 60 = 35% WR (noise)
+  const live = (states || []).filter(s =>
+    s.state === 'READY_TO_ENTER' &&
+    hasCsigCurrency(s.instrument) &&
+    Math.abs(parseFloat(s.spread_6h) || 0) >= 0.002 &&
+    (s.confidence || 0) >= 60
+  );
 
   if (!live.length) {
     el.innerHTML = '<p class="empty-state" style="color:var(--text-muted)">No live opportunities right now — monitoring active setups</p>';
@@ -960,8 +966,10 @@ function renderLiveOpportunities(states) {
 
 function computeTopSetups(states) {
   const priority = { READY: 3, PULLBACK: 2, TREND: 1 };
+  // Data-driven: 6H < 0.002 = 36% WR, conf < 55 = noise
   return [...states]
-    .filter(s => s.state !== 'NO_TRADE' && s.confidence > 0 && !s.session_blocked)
+    .filter(s => s.state !== 'NO_TRADE' && (s.confidence || 0) >= 55 && !s.session_blocked
+      && Math.abs(parseFloat(s.spread_6h) || 0) >= 0.002)
     .sort((a, b) => {
       const pa = priority[a.phase] || 0, pb = priority[b.phase] || 0;
       return pa !== pb ? pb - pa : b.confidence - a.confidence;
@@ -1093,9 +1101,10 @@ function renderSignals(data, statesArr, journalEntries) {
   (statesArr || []).forEach(s => { stateMap[s.instrument] = s; });
 
   // Seed watchlist with pairs currently in an actionable state
+  // Data-driven: 6H < 0.002 = 36% WR (dead zone), filter out noise
   const watchlist = new Map();
   (statesArr || [])
-    .filter(s => WATCHLIST_STATES.has(s.state))
+    .filter(s => WATCHLIST_STATES.has(s.state) && Math.abs(parseFloat(s.spread_6h) || 0) >= 0.002)
     .forEach(s => watchlist.set(s.instrument, s));
 
   // Augment with pairs tracked by the journal (cross-session persistence).
