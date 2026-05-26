@@ -1412,13 +1412,25 @@ function _volGradeBadge(grade) {
 /**
  * Generate plain-English analysis for a Strength Flow pair.
  * Combines status, DE, and volume data into a verdict + bullet points.
+ *
+ * Thresholds based on 1-year backtest (709K rows, active sessions):
+ *   Grade     Strong-move rate
+ *   DEAD      0.0%  — never produces a strong move
+ *   WEAK      5.4%  — low quality, volume without efficiency
+ *   NORMAL   10.9%  — decent, needs confirmation
+ *   STRONG   12.4%  — good conditions
+ *   INST     23.6%  — high conviction
+ *
+ *   RV 2.0+  15.4%  — only RV level with real edge (below = noise)
+ *   Eff ≥5%  49.7%  — strongest single predictor
+ *   Eff ≥10% 74.0%  — institutional conviction
+ *
  * @param {Object} p — { pair, dir, status, de, volGrade, volRV, volEff, volPers, volScore }
  * @returns {{ verdict: string, points: string[], cls: string }}
  */
 function _flowPairAnalysis(p) {
   const points = [];
   const dir = p.dir === 'BUY' ? 'buying' : 'selling';
-  const pairLabel = p.pair;
 
   // ── 1. Timeframe alignment (status) ──────────────────────────────────
   const STATUS_DESC = {
@@ -1433,69 +1445,93 @@ function _flowPairAnalysis(p) {
 
   // ── 2. Directional Efficiency (DE) ───────────────────────────────────
   if (p.de > 0) {
-    if (p.de >= 30)      points.push('Price action is clean and trending (DE ' + p.de + '%) — moves translate into real directional progress.');
-    else if (p.de >= 20) points.push('Directional price action (DE ' + p.de + '%) — decent move quality with some noise.');
-    else if (p.de >= 8)  points.push('Mixed price action (DE ' + p.de + '%) — moves are choppy, expect false signals and whipsaws.');
-    else                 points.push('Choppy/noisy price action (DE ' + p.de + '%) — most of the movement is back-and-forth, not directional. High risk of stop-outs.');
+    if (p.de >= 30)      points.push('Clean trending price action (DE ' + p.de + '%) — moves are directional and sustained.');
+    else if (p.de >= 20) points.push('Directional price action (DE ' + p.de + '%) — decent quality with some noise.');
+    else if (p.de >= 8)  points.push('Mixed price action (DE ' + p.de + '%) — choppy, expect false signals and whipsaws.');
+    else                 points.push('Choppy price action (DE ' + p.de + '%) — movement is back-and-forth, not directional. High stop-out risk.');
   }
 
-  // ── 3. Volume analysis ───────────────────────────────────────────────
+  // ── 3. Volume analysis (data-driven thresholds) ──────────────────────
   if (!p.volGrade) {
-    points.push('No volume data available for this candle.');
+    points.push('No volume data available.');
   } else {
-    // Relative Volume
-    if (p.volRV >= 2.0)       points.push('Volume spike at ' + p.volRV.toFixed(1) + '× session average — institutional-level activity, 15% chance of a strong move.');
-    else if (p.volRV >= 1.5)  points.push('Above-average volume (' + p.volRV.toFixed(1) + '×) — elevated interest, but volume alone doesn\'t confirm direction.');
-    else if (p.volRV >= 1.0)  points.push('Volume is at session average (' + p.volRV.toFixed(1) + '×) — normal market participation.');
-    else if (p.volRV >= 0.5)  points.push('Below-average volume (' + p.volRV.toFixed(1) + '×) — low participation, moves may lack follow-through.');
-    else                      points.push('Volume nearly dead (' + p.volRV.toFixed(1) + '×) — avoid trading in dead markets.');
+    // Volume Grade — the composite verdict (efficiency-weighted)
+    const GRADE_DESC = {
+      INSTITUTIONAL: 'Institutional-grade volume (score ' + Math.round(p.volScore) + ') — 24% of candles at this level produce strong moves. Highest conviction.',
+      STRONG:        'Strong volume participation (score ' + Math.round(p.volScore) + ') — 12% strong-move rate. Good conditions for directional trades.',
+      NORMAL:        'Normal volume (score ' + Math.round(p.volScore) + ') — 11% strong-move rate. Acceptable but needs other confirmations.',
+      WEAK:          'Weak volume (score ' + Math.round(p.volScore) + ') — only 5% produce strong moves. Volume is present but not translating into price movement.',
+      DEAD:          'Dead volume (score ' + Math.round(p.volScore) + ') — 0% of candles at this level produce strong moves. No participation.',
+    };
+    points.push(GRADE_DESC[p.volGrade] || 'Volume grade: ' + p.volGrade);
 
     // Volume Efficiency — the strongest single predictor
     const effPct = (p.volEff * 100).toFixed(0);
-    if (p.volEff >= 0.10)      points.push('Excellent volume efficiency (' + effPct + '%) — smart money signature. 74% of candles like this produce strong moves.');
-    else if (p.volEff >= 0.05) points.push('Good volume efficiency (' + effPct + '%) — volume is translating into price movement. ~50% of these candles produce strong moves.');
-    else if (p.volEff >= 0.01) points.push('Moderate efficiency (' + effPct + '%) — some price movement per unit of volume, but not conviction-level.');
-    else                       points.push('Low efficiency (' + effPct + '%) — volume is being absorbed without directional progress. Likely ranging or accumulation.');
+    if (p.volEff >= 0.10)      points.push('Efficiency ' + effPct + '% — institutional signature. 74% of candles like this produce strong moves.');
+    else if (p.volEff >= 0.05) points.push('Efficiency ' + effPct + '% — volume translating into price. ~50% strong-move rate.');
+    else if (p.volEff >= 0.01) points.push('Efficiency ' + effPct + '% — some directional movement but not conviction-level.');
+    else                       points.push('Efficiency near 0% — volume absorbed without price progress. Ranging or accumulation.');
+
+    // Relative Volume — only meaningful at extremes
+    if (p.volRV >= 2.0)       points.push('RV ' + p.volRV.toFixed(1) + '× — volume spike well above session average. 15% strong-move rate at this level.');
+    else if (p.volRV >= 1.5)  points.push('RV ' + p.volRV.toFixed(1) + '× — above average, but RV alone has no edge below 2.0×.');
+    else if (p.volRV < 0.5)   points.push('RV ' + p.volRV.toFixed(1) + '× — very low volume. Market is quiet.');
+    // Skip RV 0.5-1.5 — it's noise, no edge (6-7% across all buckets)
 
     // Persistence
-    if (p.volPers >= 3)       points.push('Volume sustained for ' + p.volPers + ' consecutive candles — check for exhaustion (extended moves often reverse).');
-    else if (p.volPers >= 1)  points.push('Volume has been elevated for ' + p.volPers + ' candle(s) — building participation, potential momentum ignition.');
-    else                      points.push('No sustained volume yet — this could be a one-off spike or the start of something.');
+    if (p.volPers >= 3)       points.push('Volume sustained ' + p.volPers + ' candles — watch for exhaustion, extended moves often reverse.');
+    else if (p.volPers >= 1)  points.push('Volume elevated for ' + p.volPers + ' candle(s) — participation building.');
+    // Skip pers=0 — nothing useful to say
   }
 
   // ── 4. Overall verdict ───────────────────────────────────────────────
   let verdict, verdictCls;
-  const hasGoodVol = p.volEff >= 0.05 || (p.volRV >= 1.5 && p.volGrade !== 'WEAK' && p.volGrade !== 'DEAD');
-  const hasCleanDE = p.de >= 20;
   const isAligned  = p.status === 'STRONG' || p.status === 'ALIGNED';
   const isBuilding = p.status === 'BUILDING';
+  const hasCleanDE = p.de >= 20;
+  const hasGoodEff = p.volEff >= 0.05;                    // 50% strong-move rate
+  const hasInstVol = p.volGrade === 'INSTITUTIONAL' || p.volGrade === 'STRONG';
+  const isDead     = p.volGrade === 'DEAD' || p.volRV < 0.5;
+  const isWeak     = p.volGrade === 'WEAK' || p.volGrade === 'DEAD';
 
-  if (isAligned && hasCleanDE && hasGoodVol) {
-    verdict = 'High conviction — aligned flow with clean price action and institutional volume.';
+  if (isAligned && hasCleanDE && hasGoodEff) {
+    verdict = 'High conviction — all timeframes aligned, clean DE, and efficient volume. Best conditions.';
+    verdictCls = 'sfa-go';
+  } else if (isAligned && hasCleanDE && hasInstVol) {
+    verdict = 'Strong setup — aligned flow with directional DE and strong volume participation.';
     verdictCls = 'sfa-go';
   } else if (isAligned && hasCleanDE) {
-    verdict = 'Good setup — flow is aligned and price action is clean, but volume is ordinary.';
+    verdict = 'Good setup — aligned with clean price action. Volume is ordinary — wait for efficiency to confirm.';
     verdictCls = 'sfa-good';
-  } else if (isAligned && hasGoodVol) {
-    verdict = 'Volume is there but price action is messy — tighten stops, expect noise.';
+  } else if (isAligned && hasGoodEff) {
+    verdict = 'Volume efficiency is good but DE is choppy — tighten stops, the move may not sustain.';
     verdictCls = 'sfa-caution';
+  } else if (isAligned && !hasCleanDE && isWeak) {
+    verdict = 'Aligned but low quality — choppy DE and weak/dead volume. Likely false breakout territory.';
+    verdictCls = 'sfa-avoid';
+  } else if (isAligned && !hasCleanDE) {
+    verdict = 'Aligned but choppy — direction is right but price action is noisy. Reduce size.';
+    verdictCls = 'sfa-caution';
+  } else if (isBuilding && hasCleanDE && hasGoodEff) {
+    verdict = 'Building with good conditions — wait for M15 to confirm, then this could be high conviction.';
+    verdictCls = 'sfa-wait';
   } else if (isBuilding && hasCleanDE) {
-    verdict = 'Building — higher timeframes favour this direction. Wait for M15 confirmation before entry.';
+    verdict = 'Building — higher timeframes favour this direction. Wait for M15 confirmation.';
+    verdictCls = 'sfa-wait';
+  } else if (isBuilding && isWeak) {
+    verdict = 'Building but volume is weak — no urgency, wait for both M15 alignment and volume.';
     verdictCls = 'sfa-wait';
   } else if (isBuilding) {
-    verdict = 'Building but conditions aren\'t clean yet — patience, wait for alignment + efficiency.';
+    verdict = 'Building — patience, wait for M15 + volume efficiency to confirm.';
     verdictCls = 'sfa-wait';
   } else if (p.status === 'AGAINST') {
-    verdict = 'Counter-trend on M15 — don\'t fight the short-term momentum. Wait for it to turn.';
+    verdict = 'Counter-trend — M15 is moving against the flow. Don\'t fight short-term momentum.';
     verdictCls = 'sfa-avoid';
-  } else if (p.volGrade === 'DEAD' || p.volRV < 0.5) {
-    verdict = 'Dead volume — no participation, nothing to trade here.';
+  } else if (isDead) {
+    verdict = 'Dead market — zero participation, nothing to trade.';
     verdictCls = 'sfa-avoid';
-  } else if (isAligned && !hasCleanDE && !hasGoodVol) {
-    verdict = 'Aligned but low quality — choppy DE and weak volume. Risk of false breakouts.';
-    verdictCls = 'sfa-caution';
   } else {
-    verdict = 'Wait — conditions are mixed, no clear edge.';
+    verdict = 'No clear edge — conditions are mixed. Wait for alignment + efficiency.';
     verdictCls = 'sfa-wait';
   }
 
