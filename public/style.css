@@ -1273,6 +1273,10 @@ section.card:has(.v2-gate-overlay.visible) { min-height: 220px; }
   margin-top: 2px;
   margin-bottom: 6px;
 }
+.scanner-explain {
+  margin-bottom: 4px;
+  padding-left: 12px;
+}
 @media (max-width: 600px) {
   .fp-explain, .m15-explain {
     word-break: break-word;
