@@ -1219,6 +1219,47 @@ section.card:has(.v2-gate-overlay.visible) { min-height: 220px; }
 .m15-imp-val.imp-weak   { color: #f59e0b; }
 .m15-imp-val.imp-flat   { color: #64748b; }
 
+/* ─── Volume Analysis Badges ──────────────────────────────────────────────── */
+.m15-vol-sep {
+  color: var(--text-dim);
+  opacity: 0.3;
+  margin: 0 2px;
+}
+.vol-grade-badge {
+  font-size: 8px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+.vol-grade-badge.vol-institutional { color: #22c55e; background: rgba(34,197,94,0.12); }
+.vol-grade-badge.vol-strong        { color: #0ea5e9; background: rgba(14,165,233,0.12); }
+.vol-grade-badge.vol-normal        { color: #94a3b8; background: rgba(148,163,184,0.10); }
+.vol-grade-badge.vol-weak          { color: #f59e0b; background: rgba(245,158,11,0.12); }
+.vol-grade-badge.vol-dead          { color: #64748b; background: rgba(100,116,139,0.10); }
+
+/* Volume color classes for inline values */
+.vol-institutional { color: #22c55e !important; }
+.vol-strong        { color: #0ea5e9 !important; }
+.vol-normal        { color: #94a3b8 !important; }
+.vol-weak          { color: #f59e0b !important; }
+.vol-dead          { color: #64748b !important; }
+
+/* FP volume detail row */
+.fp-vol-row {
+  border-top: 1px solid rgba(148,163,184,0.08);
+  padding-top: 3px;
+  margin-top: 2px;
+}
+
+/* ME flow volume badge */
+.me-flow-vol {
+  font-size: 10px;
+  font-weight: 600;
+  margin-left: 4px;
+}
+
 /* ─── Archive Flow Performance (rank-based layout) ───────────────────────── */
 .fp-arc-table {
   width: 100%;

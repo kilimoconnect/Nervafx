@@ -87,6 +87,7 @@ let strengthChart = null;
 let activeTF = '6';
 let strengthData = null;
 let _m15DataCache = null;   // Cached M15 spreads for flow ranking across components
+let _volDataCache = {};     // Cached volume analysis: instrument → latest volume row
 let _firstLoad = true;
 // Currencies that currently meet the Currency Signals threshold (strong + weak combined).
 // Set<string> — populated by renderCurrencySignals() before the section renderers run.
@@ -1307,6 +1308,37 @@ function _fpExplain(fp) {
   return `${fp.base} ${baseWord}, ${fp.quote} ${quoteWord}. ${statusMsg}${impulseMsg}${momMsg}${stateMsg}${effMsg}`;
 }
 
+// ─── Volume Analysis helpers ─────────────────────────────────────────────────
+
+function _buildVolMap(volData) {
+  const map = {};
+  if (!volData?.rows?.length) return map;
+  // Rows are sorted by time asc — last row per instrument is the latest
+  for (const r of volData.rows) map[r.instrument] = r;
+  return map;
+}
+
+function _volGradeBadge(grade) {
+  if (!grade) return '';
+  const VOL_GRADE_CLS = {
+    INSTITUTIONAL: 'vol-institutional',
+    STRONG: 'vol-strong',
+    NORMAL: 'vol-normal',
+    WEAK: 'vol-weak',
+    DEAD: 'vol-dead',
+  };
+  const VOL_GRADE_SHORT = {
+    INSTITUTIONAL: 'Inst',
+    STRONG: 'Strong',
+    NORMAL: 'Normal',
+    WEAK: 'Weak',
+    DEAD: 'Dead',
+  };
+  const cls = VOL_GRADE_CLS[grade] || 'vol-normal';
+  const text = VOL_GRADE_SHORT[grade] || grade;
+  return `<span class="vol-grade-badge ${cls}">${text}</span>`;
+}
+
 function renderFlowPerformance(strengthData, m15Data) {
   const el = document.getElementById('flow-perf-list');
   if (!el) return;
@@ -1458,7 +1490,16 @@ function renderFlowPerformance(strengthData, m15Data) {
     const deCombined = m15 ? parseFloat(m15.de_combined) || 0 : 0;
     const deLabel = deCombined >= 30 ? 'Institutional' : deCombined >= 20 ? 'Clean' : deCombined >= 8 ? 'Mixed' : 'Noisy';
 
-    return { ...fp, v45, v90, v180, spread3H, spread6H, state, accel, m15Confirms, h3Confirms, h6Confirms, accelSign, perfScore, status, statusCls, momentum, h3Base, h3Quote, base, quote, deCombined, deLabel, impulseScore, impulseAligned };
+    // Volume analysis
+    const vol = _volDataCache[fp.instrument];
+    const volRV    = vol ? parseFloat(vol.relative_volume) || 0 : 0;
+    const volAcc   = vol ? parseFloat(vol.volume_acceleration) || 0 : 0;
+    const volPers  = vol ? parseFloat(vol.volume_persistence) || 0 : 0;
+    const volEff   = vol ? parseFloat(vol.volume_efficiency) || 0 : 0;
+    const volScore = vol ? parseFloat(vol.participation_score) || 0 : 0;
+    const volGrade = vol?.participation_grade || '';
+
+    return { ...fp, v45, v90, v180, spread3H, spread6H, state, accel, m15Confirms, h3Confirms, h6Confirms, accelSign, perfScore, status, statusCls, momentum, h3Base, h3Quote, base, quote, deCombined, deLabel, impulseScore, impulseAligned, volRV, volAcc, volPers, volEff, volScore, volGrade };
   });
 
   // 5. Rank by enhanced score: 75% flow score + 25% DE (ranking booster, not standalone)
@@ -1520,6 +1561,16 @@ function renderFlowPerformance(strengthData, m15Data) {
             <span class="fp-lbl">Impulse</span>
             <span class="fp-imp-badge ${fp.impulseScore >= 60 ? 'imp-strong' : fp.impulseScore >= 40 ? 'imp-trend' : fp.impulseScore >= 20 ? 'imp-weak' : 'imp-flat'}">${fp.impulseScore >= 60 ? 'Strong' : fp.impulseScore >= 40 ? 'Trending' : fp.impulseScore >= 20 ? 'Weak' : 'Flat'} ${fp.impulseScore}</span>
             <span class="fp-imp-dir ${fp.impulseAligned ? 'green' : 'red'}">${fp.impulseAligned ? '▲ Aligned' : '▼ Counter'}</span>
+          </div>` : ''}
+          ${fp.volGrade ? `<div class="fp-detail-row fp-vol-row">
+            <span class="fp-lbl">Vol</span>
+            ${_volGradeBadge(fp.volGrade)}
+            <span class="fp-lbl">RV</span>
+            <span class="fp-val ${fp.volRV >= 1.5 ? 'vol-institutional' : fp.volRV >= 1.0 ? 'vol-strong' : 'vol-weak'}">${fp.volRV.toFixed(1)}×</span>
+            <span class="fp-lbl">Pers</span>
+            <span class="fp-val">${fp.volPers}/4</span>
+            <span class="fp-lbl">Eff</span>
+            <span class="fp-val ${fp.volEff >= 0.5 ? 'vol-strong' : fp.volEff >= 0.25 ? 'vol-normal' : 'vol-weak'}">${(fp.volEff * 100).toFixed(0)}%</span>
           </div>` : ''}
           <div class="fp-detail-row fp-ccy-row">
             <span class="fp-ccy-chip ${(fp.h3Base ?? 0) >= 0 ? 'strong' : 'weak'}">${fp.base} ${fmt(fp.h3Base ?? 0, 5)}</span>
@@ -1598,6 +1649,12 @@ function renderM15Spreads(data) {
     const vel  = s.velocity || 0;
     const body = s.body_ratio || 0;
     const cons = s.consec_dir || 0;
+    // Volume analysis
+    const vol = _volDataCache[s.instrument];
+    const rv  = vol ? parseFloat(vol.relative_volume) || 0 : 0;
+    const volGrade = vol?.participation_grade || '';
+    const volScore = vol ? Math.round(parseFloat(vol.participation_score) || 0) : 0;
+    const volEff   = vol ? parseFloat(vol.volume_efficiency) || 0 : 0;
     return `
       <div class="spread-row m15-row">
         <div class="spread-accent ${cls}"></div>
@@ -1613,6 +1670,10 @@ function renderM15Spreads(data) {
         <span class="m15-imp-lbl">Body</span><span class="m15-imp-val">${Math.round(body * 100)}%</span>
         <span class="m15-imp-lbl">Run</span><span class="m15-imp-val">${cons}/4</span>
         <span class="m15-imp-lbl">Score</span><span class="m15-imp-val ${il.cls}">${imp}</span>
+        ${vol ? `<span class="m15-vol-sep">│</span>
+        <span class="m15-imp-lbl">RV</span><span class="m15-imp-val ${rv >= 1.5 ? 'vol-institutional' : rv >= 1.0 ? 'vol-strong' : 'vol-weak'}">${rv.toFixed(1)}×</span>
+        <span class="m15-imp-lbl">Eff</span><span class="m15-imp-val ${volEff >= 0.5 ? 'vol-strong' : volEff >= 0.25 ? 'vol-normal' : 'vol-weak'}">${(volEff * 100).toFixed(0)}%</span>
+        ${_volGradeBadge(volGrade)}` : ''}
       </div>`;
   }).join('');
 }
@@ -2278,7 +2339,11 @@ function _meSessionExplain(s, label, status) {
       if (spread6H != null && Math.sign(spread6H) === flowSign) perfScore += 5;
       const deCombined = fp.de || 0;
       const finalScore = (0.75 * perfScore) + (0.25 * deCombined);
-      return { pair: fp.pair.replace('_', '/'), dir: fp.dir, status: fp.status, finalScore, de: Math.round(deCombined) };
+      // Volume analysis (use stored instrument name with underscore)
+      const vol = _volDataCache[fp.pair];
+      const volGrade = vol?.participation_grade || '';
+      const volRV    = vol ? parseFloat(vol.relative_volume) || 0 : 0;
+      return { pair: fp.pair.replace('_', '/'), dir: fp.dir, status: fp.status, finalScore, de: Math.round(deCombined), volGrade, volRV };
     }).sort((a, b) => b.finalScore - a.finalScore);
   }
 
@@ -2372,7 +2437,11 @@ function _meSessionExplain(s, label, status) {
         else                                     fpStatus = 'WAIT';
         const deCombined = m15 ? parseFloat(m15.de_combined) || 0 : 0;
         const finalScore = (0.75 * perfScore) + (0.25 * deCombined);
-        return { pair: fp.instrument.replace('_', '/'), dir: fp.dir, status: fpStatus, finalScore, de: Math.round(deCombined) };
+        // Volume analysis
+        const vol = _volDataCache[fp.instrument];
+        const volGrade = vol?.participation_grade || '';
+        const volRV    = vol ? parseFloat(vol.relative_volume) || 0 : 0;
+        return { pair: fp.instrument.replace('_', '/'), dir: fp.dir, status: fpStatus, finalScore, de: Math.round(deCombined), volGrade, volRV };
       }).sort((a, b) => b.finalScore - a.finalScore);
     }
   }
@@ -2386,17 +2455,23 @@ function _meSessionExplain(s, label, status) {
       if (v >= 8)  return { text: 'Mixed',       color: '#f59e0b' };
       return              { text: 'Choppy',       color: '#ef4444' };
     };
+    const VOL_GRADE_COLOR = { INSTITUTIONAL: '#22c55e', STRONG: '#0ea5e9', NORMAL: '#94a3b8', WEAK: '#f59e0b', DEAD: '#64748b' };
+    const VOL_GRADE_SHORT = { INSTITUTIONAL: 'Inst', STRONG: 'Strng', NORMAL: 'Norm', WEAK: 'Weak', DEAD: 'Dead' };
     const pairRows = rankedPairs.map((p, i) => {
       const dirCls = p.dir === 'BUY' ? 'buy' : 'sell';
       const statusColor = p.status === 'STRONG' ? '#22c55e' : p.status === 'ALIGNED' ? '#0ea5e9' : p.status === 'PARTIAL' ? '#a855f7' : p.status === 'BUILDING' ? '#f59e0b' : p.status === 'AGAINST' ? '#ef4444' : '#64748b';
       const dl = deLabel(p.de);
       const deHtml = p.de > 0 ? `<span class="me-flow-de" style="color:${dl.color}">DE ${p.de}% ${dl.text}</span>` : '';
+      const volColor = VOL_GRADE_COLOR[p.volGrade] || '#64748b';
+      const volShort = VOL_GRADE_SHORT[p.volGrade] || '';
+      const volHtml = p.volGrade ? `<span class="me-flow-vol" style="color:${volColor}">${p.volRV.toFixed(1)}× ${volShort}</span>` : '';
       return `<div class="me-flow-row">
         <span class="me-flow-rank">#${i + 1}</span>
         <span class="me-flow-dir ${dirCls}">${p.dir}</span>
         <span class="me-flow-pair">${p.pair}</span>
         <span class="me-flow-status" style="color:${statusColor}">${p.status}</span>
         ${deHtml}
+        ${volHtml}
       </div>`;
     }).join('');
     const hasChoppy = rankedPairs.some(p => p.de > 0 && p.de < 20);
@@ -4588,7 +4663,7 @@ async function refresh() {
     // Wait for plan to load first (prevents 403 cascade on cold start)
     if (_userPlanReady) await _userPlanReady;
 
-    const [strength, signals, states, risk, actions, quality, spreads, m15Data, sessionData, journalData, profileData] = await Promise.all([
+    const [strength, signals, states, risk, actions, quality, spreads, m15Data, sessionData, journalData, profileData, volData] = await Promise.all([
       api('/api/strength').catch(() => ({ currencies: [] })),
       api('/api/signals').catch(() => ({ signals: [] })),
       api('/api/states').catch(() => ({ states: [] })),
@@ -4600,6 +4675,7 @@ async function refresh() {
       api('/api/session').catch(() => ({ session: null })),
       api('/api/journal?limit=5').catch(() => ({ entries: [] })),
       api('/api/profile').catch(() => ({})),
+      api('/api/volume-analysis?days=1').catch(() => ({ rows: [] })),
     ]);
 
     // Fetch news calendar (non-blocking) — must run AFTER _userTz is set
@@ -4628,6 +4704,7 @@ async function refresh() {
     renderTopSetups(states.states || []);
     renderSignals(signals, states.states || [], journalData?.entries || []);
     _m15DataCache = m15Data;   // Cache for ME card flow ranking + scanner
+    _volDataCache = _buildVolMap(volData);  // Cache volume analysis: instrument → latest row
     renderStates(states, m15Data);
     renderSpreads(spreads);
     renderRanking12H(spreads, strength);
