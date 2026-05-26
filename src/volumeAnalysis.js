@@ -84,18 +84,21 @@ function computeVolumeMetrics(candles, sessionAvgs) {
     const volume_efficiency = normVol > 0.01 ? netMove / normVol : 0;
 
     // ─── Participation Score (0–100 composite) ──────────────────────────
-    // Weights: relative_volume 35%, acceleration_signal 20%,
-    //          persistence 25%, efficiency 20%
+    // Weights based on 1-year backtest strong-move prediction rates:
+    //   efficiency 40% (strongest: 0.8%→74% hit rate across buckets)
+    //   persistence 25% (moderate: 6.6%→10.9%)
+    //   relative_volume 20% (noisy until 2×+: 6.8%→15.4%)
+    //   acceleration 15% (contextual, supports other signals)
     const rvScore   = Math.min(100, relative_volume * 50);          // 2× = 100
     const accScore  = Math.min(100, Math.max(0, (volume_acceleration / sessAvg + 0.5) * 100)); // normalize
     const persScore = Math.min(100, persistence * 25);              // 4 consecutive = 100
-    const effScore  = Math.min(100, volume_efficiency * 100000);    // scaled for forex pip moves
+    const effScore  = Math.min(100, volume_efficiency * 1000);      // 0.10 = 100, 0.05 = 50, 0.01 = 10
 
     const participation_score = Math.round(
-      rvScore   * 0.35 +
-      accScore  * 0.20 +
+      rvScore   * 0.20 +
+      accScore  * 0.15 +
       persScore * 0.25 +
-      effScore  * 0.20
+      effScore  * 0.40
     );
 
     // ─── Grade ──────────────────────────────────────────────────────────
