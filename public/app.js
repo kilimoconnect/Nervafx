@@ -2034,8 +2034,10 @@ function renderM15Spreads(data) {
         <span class="spread-bias ${cls}">${bias}</span>
         <span class="sb-behavior ${s.state}">${clean(s.state || '')}</span>
         <span class="m15-imp-badge ${il.cls}">${il.text}</span>
-        <span class="spread-val">${fmt(v45, 5)}</span>
-        <div class="spread-bar-wrap"><div class="spread-bar-fill ${cls}" style="width:${pct}%"></div></div>
+        <div class="m15-val-bar">
+          <span class="spread-val">${fmt(v45, 5)}</span>
+          <div class="spread-bar-wrap"><div class="spread-bar-fill ${cls}" style="width:${pct}%"></div></div>
+        </div>
       </div>
       <div class="m15-imp-detail">
         <span class="m15-imp-lbl">Vel</span><span class="m15-imp-val">${vel.toFixed(1)}×</span>

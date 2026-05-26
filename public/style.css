@@ -1854,9 +1854,15 @@ section.card:has(.v2-gate-overlay.visible) { min-height: 220px; }
 .sb-behavior.FLAT          { background: #1a1d24; color: #4b5563; }
 .sb-behavior.STEADY        { background: #1a2230; color: #60a5fa; }
 
-/* M15 row — extra column for state badge */
+/* M15 row — extra column for state badge; value+bar share last cell */
 .m15-row {
   grid-template-columns: 6px 72px 38px 86px 58px 1fr;
+}
+.m15-val-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 /* ─── Invalidation warning ─────────────────────────────────────────────────── */
