@@ -63,9 +63,9 @@ async function run() {
       close: parseFloat(c.close),
     }));
 
-    // Fetch existing m15_pair_spreads rows for this instrument
+    // Fetch existing m15_pair_spreads rows for this instrument (need time+instrument for upsert)
     const spreadRows = await fetchAll('m15_pair_spreads',
-      'id, time',
+      'time, instrument, spread_45m, spread_90m, spread_180m, smooth_45m, smooth_90m, smooth_180m, state, de_combined',
       { _gte: ['time', since], _eq: ['instrument', instrument] }
     );
 
@@ -86,24 +86,31 @@ async function run() {
       const de = Math.round(computeDE(relevant) * 10) / 10;
 
       updates.push({
-        id:             row.id,
+        time:           row.time,
+        instrument:     row.instrument,
+        spread_45m:     row.spread_45m,
+        spread_90m:     row.spread_90m,
+        spread_180m:    row.spread_180m,
+        smooth_45m:     row.smooth_45m,
+        smooth_90m:     row.smooth_90m,
+        smooth_180m:    row.smooth_180m,
+        state:          row.state,
+        de_combined:    de,
         impulse_score:  impulse.impulse_score,
         impulse_dir:    impulse.impulse_dir,
         velocity:       impulse.velocity,
         body_ratio:     impulse.body_ratio,
         consec_dir:     impulse.consec_dir,
-        de_combined:    de,
       });
     }
 
-    // Update rows individually (can't upsert partial rows without NOT NULL columns)
-    for (let i = 0; i < updates.length; i++) {
-      const { id, ...fields } = updates[i];
+    // Upsert in batches (full rows so NOT NULL constraints are satisfied)
+    for (let i = 0; i < updates.length; i += 500) {
+      const batch = updates.slice(i, i + 500);
       const { error } = await supabase
         .from('m15_pair_spreads')
-        .update(fields)
-        .eq('id', id);
-      if (error) throw new Error(`${instrument} update id=${id}: ${error.message}`);
+        .upsert(batch, { onConflict: 'time,instrument', ignoreDuplicates: false });
+      if (error) throw new Error(`${instrument} upsert: ${error.message}`);
     }
 
     totalUpdated += updates.length;

@@ -74,7 +74,7 @@ async function run() {
 
   // ── 2. Fetch all M15 pair spreads ──────────────────────────────────────
   console.log('[BACKFILL] Fetching m15_pair_spreads...');
-  const m15Rows = await fetchAll('m15_pair_spreads', 'time, instrument, smooth_45m, smooth_90m, smooth_180m, de_combined, state', { gte: ['time', since] });
+  const m15Rows = await fetchAll('m15_pair_spreads', 'time, instrument, smooth_45m, smooth_90m, smooth_180m, de_combined, state, impulse_score, impulse_dir, velocity', { gte: ['time', since] });
   console.log(`[BACKFILL] ${m15Rows.length} m15 rows`);
 
   // Index by hour → { instrument → row }
@@ -143,7 +143,10 @@ async function run() {
 
       const v45  = m15 ? parseFloat(m15.smooth_45m)  || 0 : 0;
       const v90  = m15 ? parseFloat(m15.smooth_90m)  || 0 : 0;
+      const impulseScore = m15 ? (m15.impulse_score || 0) : 0;
+      const impulseDir   = m15 ? (m15.impulse_dir   || 0) : 0;
       const flowSign = fp.dir === 'BUY' ? 1 : -1;
+      const impulseAligned = impulseDir === flowSign;
 
       let state = null;
       const dir45 = v45 * flowSign;
@@ -168,11 +171,19 @@ async function run() {
       perfScore += (v45 * flowSign) * 10000 * 3;
       perfScore += (spread3H * flowSign) * 10000 * 2;
       perfScore += (spread6H * flowSign) * 10000 * 1;
-      if (m15Confirms) perfScore += 10;
+
+      if (impulseAligned && impulseScore >= 40) perfScore += impulseScore * 0.5;
+      else if (impulseAligned)                  perfScore += impulseScore * 0.25;
+      else if (impulseScore >= 40)              perfScore -= impulseScore * 0.3;
+
+      if (m15Confirms && impulseScore >= 40) perfScore += 20;
+      else if (m15Confirms)                  perfScore += 10;
       if (h3Confirms)  perfScore += 10;
       if (h6Confirms)  perfScore += 5;
       if (accelSign)   perfScore += 10;
+
       if (state === 'EXPANDING' && m15Confirms) perfScore += 15;
+      if (state === 'EXPANDING' && impulseAligned && impulseScore >= 50) perfScore += 10;
       if (state === 'REVERSING')                       perfScore -= 10;
       if (state === 'COMPRESSING' && !m15Confirms)     perfScore -= 15;
 
@@ -186,10 +197,11 @@ async function run() {
       else                                     status = 'WAIT';
 
       let momentum;
-      if (accelSign && Math.abs(v45) > 0.0003)         momentum = 'Accelerating';
-      else if (!accelSign && Math.abs(accel) > 0.0002)  momentum = 'Fading';
-      else if (Math.abs(v45) < 0.0002)                  momentum = 'Flat';
-      else                                               momentum = 'Steady';
+      if (impulseScore >= 50 && impulseAligned)              momentum = 'Impulsive';
+      else if (accelSign && Math.abs(v45) > 0.0003)         momentum = 'Accelerating';
+      else if (!accelSign && Math.abs(accel) > 0.0002)      momentum = 'Fading';
+      else if (Math.abs(v45) < 0.0002)                      momentum = 'Flat';
+      else                                                   momentum = 'Steady';
 
       const deCombined = m15 ? parseFloat(m15.de_combined) || 0 : 0;
       const finalScore = (0.75 * perfScore) + (0.25 * deCombined);
@@ -199,7 +211,7 @@ async function run() {
       const volGrade = vol?.participation_grade || '';
       const volPers  = vol ? parseFloat(vol.volume_persistence) || 0 : 0;
 
-      return { instrument: fp.instrument, dir: fp.dir, v45, v90, spread3H, spread6H, state, perfScore, finalScore, status, momentum, deCombined, volRV, volEff, volGrade, volPers };
+      return { instrument: fp.instrument, dir: fp.dir, v45, v90, spread3H, spread6H, state, perfScore, finalScore, status, momentum, deCombined, volRV, volEff, volGrade, volPers, impulseScore, impulseAligned };
     });
 
     scored.sort((a, b) => b.finalScore - a.finalScore);
@@ -226,8 +238,8 @@ async function run() {
         vol_eff:            Math.round(s.volEff * 100000) / 100000,
         vol_grade:          s.volGrade || null,
         vol_pers:           s.volPers,
-        impulse_score:      null,
-        impulse_aligned:    null,
+        impulse_score:      s.impulseScore,
+        impulse_aligned:    s.impulseAligned,
         strong_currencies:  strong.join(','),
         weak_currencies:    weak.join(','),
       });
