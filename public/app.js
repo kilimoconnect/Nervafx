@@ -1321,67 +1321,115 @@ function renderRanking12H(spreadsData, strengthData) {
  * Tells the user what is happening and what it means for trading.
  */
 function _fpExplain(fp) {
-  const pairName = fp.instrument.replace('_', '/');
   const dirWord = fp.dir === 'BUY' ? 'buying' : 'selling';
   const baseWord = fp.dir === 'BUY' ? 'strengthening' : 'weakening';
   const quoteWord = fp.dir === 'BUY' ? 'weakening' : 'strengthening';
+  const parts = [];
 
-  // Alignment summary
-  const aligned = [fp.m15Confirms, fp.h3Confirms, fp.h6Confirms].filter(x => x === true).length;
-  const against = [fp.m15Confirms, fp.h3Confirms, fp.h6Confirms].filter(x => x === false).length;
+  // ── 1. Currency flow context ─────────────────────────────────────────
+  parts.push(`${fp.base} ${baseWord}, ${fp.quote} ${quoteWord}.`);
 
-  // Status explanation
-  let statusMsg = '';
+  // ── 2. Timeframe alignment (status) ──────────────────────────────────
   switch (fp.status) {
-    case 'STRONG':
-      statusMsg = `All timeframes confirm ${dirWord} pressure.`;
-      break;
-    case 'ALIGNED':
-      statusMsg = `M15 and one higher timeframe confirm the ${fp.dir.toLowerCase()} direction.`;
-      break;
-    case 'PARTIAL':
-      statusMsg = `M15 confirms but higher timeframes not yet aligned.`;
-      break;
-    case 'BUILDING':
-      statusMsg = `Higher timeframes support but M15 hasn't confirmed yet — setup building.`;
-      break;
-    case 'AGAINST':
-      statusMsg = `M15 is moving against the expected direction — wait for reversal.`;
-      break;
-    default:
-      statusMsg = `Waiting for clearer signals.`;
+    case 'STRONG':   parts.push(`All timeframes confirm ${dirWord} pressure.`); break;
+    case 'ALIGNED':  parts.push(`M15 and one higher TF confirm ${dirWord}.`); break;
+    case 'PARTIAL':  parts.push(`M15 confirms but higher TFs not aligned.`); break;
+    case 'BUILDING': parts.push(`Higher TFs support but M15 hasn't confirmed — setup building.`); break;
+    case 'AGAINST':  parts.push(`M15 moving against flow — wait for reversal.`); break;
+    default:         parts.push(`Waiting for clearer signals.`);
   }
 
-  // Impulse context (real price action)
-  let impulseMsg = '';
+  // ── 3. Impulse quality (real M15 price action) ───────────────────────
   if (fp.impulseScore >= 60 && fp.impulseAligned)
-    impulseMsg = ' Strong impulse move in flow direction.';
+    parts.push('Strong impulse aligned with flow — high conviction candles.');
   else if (fp.impulseScore >= 40 && fp.impulseAligned)
-    impulseMsg = ' Price action trending with flow.';
+    parts.push('Trending impulse with flow — decent candle quality.');
+  else if (fp.impulseScore >= 60 && !fp.impulseAligned)
+    parts.push('Strong impulse AGAINST flow — don\'t fight this.');
   else if (fp.impulseScore >= 40 && !fp.impulseAligned)
-    impulseMsg = ' Price impulse opposing the flow — caution.';
+    parts.push('Counter-trend impulse — price fighting the flow direction.');
+  else if (fp.impulseScore >= 20)
+    parts.push('Weak impulse — candles lack conviction.');
 
-  // Momentum context
-  let momMsg = '';
-  if (fp.momentum === 'Impulsive') momMsg = ' M15 candles show impulsive momentum.';
-  else if (fp.momentum === 'Accelerating') momMsg = ' Momentum is accelerating.';
-  else if (fp.momentum === 'Fading') momMsg = ' Momentum is fading — move may be slowing.';
-  else if (fp.momentum === 'Flat') momMsg = ' No momentum — price is flat.';
+  // ── 4. Momentum ──────────────────────────────────────────────────────
+  if (fp.momentum === 'Impulsive')        parts.push('Impulsive momentum — fast directional candles.');
+  else if (fp.momentum === 'Accelerating') parts.push('Momentum accelerating — move is picking up speed.');
+  else if (fp.momentum === 'Fading')       parts.push('Momentum fading — move may be exhausting.');
+  else if (fp.momentum === 'Flat')         parts.push('Flat momentum — no directional drive.');
 
-  // State context
-  let stateMsg = '';
-  if (fp.state === 'EXPANDING') stateMsg = ' Spread is expanding — pressure building.';
-  else if (fp.state === 'COMPRESSING') stateMsg = ' Spread is compressing — pressure easing.';
-  else if (fp.state === 'REVERSING') stateMsg = ' Short-term is reversing against the flow.';
+  // ── 5. M15 spread state ──────────────────────────────────────────────
+  if (fp.state === 'EXPANDING')        parts.push('Spread expanding — divergence growing between currencies.');
+  else if (fp.state === 'COMPRESSING') parts.push('Spread compressing — currencies converging, pressure easing.');
+  else if (fp.state === 'REVERSING')   parts.push('Spread reversing — short-term direction flipping.');
+  else if (fp.state === 'STEADY')      parts.push('Spread steady — stable pace, no acceleration.');
 
-  // Efficiency context
-  let effMsg = '';
-  if (fp.deCombined >= 30) effMsg = ' Clean trending movement.';
-  else if (fp.deCombined >= 20) effMsg = ' Directional movement.';
-  else if (fp.deCombined >= 8) effMsg = ' Mixed movement quality.';
-  else if (fp.deCombined > 0) effMsg = ' Noisy/choppy price action.';
+  // ── 6. Directional Efficiency (DE) ───────────────────────────────────
+  if (fp.deCombined >= 30)      parts.push(`DE ${Math.round(fp.deCombined)}% — clean trending price action, moves are sustained.`);
+  else if (fp.deCombined >= 20) parts.push(`DE ${Math.round(fp.deCombined)}% — directional but with some noise.`);
+  else if (fp.deCombined >= 8)  parts.push(`DE ${Math.round(fp.deCombined)}% — mixed/choppy, expect whipsaws.`);
+  else if (fp.deCombined > 0)   parts.push(`DE ${Math.round(fp.deCombined)}% — noisy, price going back and forth.`);
 
-  return `${fp.base} ${baseWord}, ${fp.quote} ${quoteWord}. ${statusMsg}${impulseMsg}${momMsg}${stateMsg}${effMsg}`;
+  // ── 7. Volume analysis ───────────────────────────────────────────────
+  if (fp.volGrade) {
+    // Grade (composite verdict)
+    const gradeDesc = {
+      INSTITUTIONAL: 'Institutional-grade volume — 24% strong-move rate, highest conviction.',
+      STRONG:        'Strong volume participation — 12% strong-move rate, good conditions.',
+      NORMAL:        'Normal volume — acceptable, needs other confirmations.',
+      WEAK:          'Weak volume — present but not translating into price movement.',
+      DEAD:          'Dead volume — no participation, nothing to trade.',
+    };
+    parts.push(gradeDesc[fp.volGrade] || `Volume: ${fp.volGrade}.`);
+
+    // Efficiency (strongest predictor)
+    const effPct = (fp.volEff * 100).toFixed(0);
+    if (fp.volEff >= 0.10)      parts.push(`Vol efficiency ${effPct}% — institutional signature, 74% produce strong moves.`);
+    else if (fp.volEff >= 0.05) parts.push(`Vol efficiency ${effPct}% — volume translating into price, ~50% strong-move rate.`);
+    else if (fp.volEff >= 0.01) parts.push(`Vol efficiency ${effPct}% — some movement but not conviction-level.`);
+    else                        parts.push(`Vol efficiency near 0% — volume absorbed, ranging or accumulation.`);
+
+    // RV (only mention at meaningful levels)
+    if (fp.volRV >= 2.0)       parts.push(`RV ${fp.volRV.toFixed(1)}× — volume spike above session average.`);
+    else if (fp.volRV >= 1.5)  parts.push(`RV ${fp.volRV.toFixed(1)}× — above average, but no proven edge below 2.0×.`);
+    else if (fp.volRV < 0.5)   parts.push(`RV ${fp.volRV.toFixed(1)}× — very low volume, market quiet.`);
+
+    // Persistence
+    if (fp.volPers >= 3)       parts.push(`Volume sustained ${fp.volPers} candles — watch for exhaustion.`);
+    else if (fp.volPers >= 1)  parts.push(`Volume elevated for ${fp.volPers} candle(s) — participation building.`);
+  }
+
+  // ── 8. Overall takeaway ──────────────────────────────────────────────
+  const isAligned  = fp.status === 'STRONG' || fp.status === 'ALIGNED';
+  const hasCleanDE = fp.deCombined >= 20;
+  const hasGoodEff = fp.volEff >= 0.05;
+  const hasInstVol = fp.volGrade === 'INSTITUTIONAL' || fp.volGrade === 'STRONG';
+  const isDead     = fp.volGrade === 'DEAD' || fp.volRV < 0.5;
+  const isWeak     = fp.volGrade === 'WEAK' || fp.volGrade === 'DEAD';
+
+  if (isAligned && hasCleanDE && hasGoodEff)
+    parts.push('⟶ HIGH CONVICTION — aligned flow, clean DE, efficient volume.');
+  else if (isAligned && hasCleanDE && hasInstVol)
+    parts.push('⟶ STRONG SETUP — aligned with good DE and volume participation.');
+  else if (isAligned && hasCleanDE)
+    parts.push('⟶ GOOD SETUP — aligned with clean price action. Volume ordinary — wait for efficiency.');
+  else if (isAligned && hasGoodEff)
+    parts.push('⟶ CAUTION — efficient volume but DE is choppy. Tighten stops.');
+  else if (isAligned && isWeak)
+    parts.push('⟶ LOW QUALITY — aligned but weak volume and choppy DE. Likely false breakout.');
+  else if (isAligned)
+    parts.push('⟶ MIXED — direction is right but conditions are noisy. Reduce size.');
+  else if (fp.status === 'BUILDING' && hasCleanDE && hasGoodEff)
+    parts.push('⟶ WATCH — building with good conditions. Wait for M15 to confirm.');
+  else if (fp.status === 'BUILDING')
+    parts.push('⟶ WAIT — setup building. Need M15 confirmation + volume.');
+  else if (fp.status === 'AGAINST')
+    parts.push('⟶ AVOID — counter-trend. Don\'t fight short-term momentum.');
+  else if (isDead)
+    parts.push('⟶ DEAD — no participation, nothing to trade.');
+  else
+    parts.push('⟶ NO EDGE — conditions mixed. Wait for alignment + efficiency.');
+
+  return parts.join(' ');
 }
 
 // ─── Volume Analysis helpers ─────────────────────────────────────────────────
