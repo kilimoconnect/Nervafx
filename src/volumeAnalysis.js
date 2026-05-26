@@ -201,8 +201,49 @@ async function calculateLatestVolumeAnalysis() {
   const RECENT = 8;  // 2 hours of M15 candles
   const allRows = [];
 
+  // ── Pre-fetch session averages for ALL instruments in one query ──────
+  // Use existing m15_volume_analysis rows from the last 20 days to avoid
+  // re-scanning backtest_candles (saves ~28 queries × 20-day reads).
+  const avgSince = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
+  const sessAvgsByInst = {};
+
+  // Fetch aggregated avg(volume) grouped by instrument + session from existing data
+  // Supabase doesn't support GROUP BY via PostgREST, so fetch recent volume rows
+  // and compute in-memory (still much faster than 28 separate candle queries).
+  const PAGE = 1000;
+  const recentVols = [];
+  let offset = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from('m15_volume_analysis')
+      .select('instrument, session, volume')
+      .gte('time', avgSince)
+      .range(offset, offset + PAGE - 1);
+    if (error) break; // graceful — fall back to per-instrument if table is empty
+    if (!data?.length) break;
+    recentVols.push(...data);
+    if (data.length < PAGE) break;
+    offset += PAGE;
+  }
+
+  // Build per-instrument per-session averages
+  const accum = {}; // { instrument → { session → { sum, count } } }
+  for (const r of recentVols) {
+    if (!accum[r.instrument]) accum[r.instrument] = {};
+    if (!accum[r.instrument][r.session]) accum[r.instrument][r.session] = { sum: 0, count: 0 };
+    accum[r.instrument][r.session].sum   += r.volume;
+    accum[r.instrument][r.session].count += 1;
+  }
+  for (const inst of INSTRUMENTS) {
+    sessAvgsByInst[inst] = {};
+    for (const sess of ['ASIA', 'LONDON', 'NEW_YORK', 'LOW_LIQUIDITY']) {
+      const a = accum[inst]?.[sess];
+      sessAvgsByInst[inst][sess] = (a && a.count > 10) ? a.sum / a.count : 1;
+    }
+  }
+
+  // ── Process each instrument ─────────────────────────────────────────
   for (const instrument of INSTRUMENTS) {
-    // Fetch recent M15 candles
     const { data: recent, error } = await supabase
       .from('backtest_candles')
       .select('time, instrument, open, high, low, close, volume')
@@ -225,15 +266,11 @@ async function calculateLatestVolumeAnalysis() {
       volume:     c.volume || 0,
     }));
 
-    // Get session averages (20-day lookback)
-    const sessAvgs = await fetchSessionAverages(instrument, candles[0].time);
-
-    const rows = computeVolumeMetrics(candles, sessAvgs);
+    const rows = computeVolumeMetrics(candles, sessAvgsByInst[instrument]);
     allRows.push(...rows);
   }
 
   if (allRows.length) {
-    // Upsert in batches
     for (let i = 0; i < allRows.length; i += 500) {
       const batch = allRows.slice(i, i + 500);
       const { error } = await supabase
