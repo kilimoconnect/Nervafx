@@ -1108,12 +1108,13 @@
   let _fpLoading = null;
 
   async function _loadFpData() {
-    if (_fpData) return;
+    if (_fpData && _fpData.length) return;
     if (_fpLoading) return _fpLoading;
     const need = _arcFilterDays || 30;
     _fpLoading = api(`/api/flow-performance?days=${need}`).then(d => {
       _fpData = d.rows || [];
-    }).catch(() => { _fpData = []; });
+      console.log('[FP] Loaded', _fpData.length, 'flow performance rows');
+    }).catch(e => { console.error('[FP] Load error:', e.message); _fpData = []; });
     return _fpLoading;
   }
 
@@ -1123,6 +1124,7 @@
     try {
       bodyEl.innerHTML = '<div class="arc-loading"><span class="spinner"></span> Loading flow performance…</div>';
       const [sessions] = await Promise.all([_loadSessionRows(), _loadFpData()]);
+      console.log('[FP] sessions:', sessions?.length, 'fpData:', _fpData?.length);
       if (!sessions?.length || !_fpData?.length) { bodyEl.innerHTML = '<p class="me-empty">No data available.</p>'; return; }
       const filteredSess = _filterSessionRows(sessions);
       if (!filteredSess.length) { bodyEl.innerHTML = '<p class="me-empty">No sessions for this filter.</p>'; return; }
