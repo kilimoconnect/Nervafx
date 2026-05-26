@@ -247,9 +247,9 @@
     <div class="jpage-filter-group">
       <span class="jpage-filter-label">Period</span>
       <div class="jpage-pills" id="filter-date">
-        <button class="jpage-pill active" data-val="">All</button>
+        <button class="jpage-pill" data-val="">All</button>
         <button class="jpage-pill" data-val="today">Today</button>
-        <button class="jpage-pill" data-val="7d">7 Days</button>
+        <button class="jpage-pill active" data-val="7d">7 Days</button>
         <button class="jpage-pill" data-val="30d">30 Days</button>
       </div>
     </div>
@@ -321,7 +321,7 @@
   let _allEntries     = [];
   let _journalEntries = {}; // id → entry, for modal
   let _filterSession   = '';
-  let _filterDate      = '';
+  let _filterDate      = '7d';
   let _filterSearch    = '';
   let _filterCsig      = false;
   let _csigCurrencies  = new Set(); // populated from live strength data — used by modal setup filter
