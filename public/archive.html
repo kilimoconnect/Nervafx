@@ -1116,7 +1116,7 @@
   async function _loadFpData() {
     if (_fpCcsData && _fpM15Data) return;
     if (_fpLoading) return _fpLoading;
-    const need = Math.min(_arcFilterDays || 30, 30);
+    const need = _arcFilterDays || 30;
     _fpLoading = Promise.all([
       api(`/api/strength-history?days=${need}&tf=3h`),
       api(`/api/strength-history?days=${need}&tf=6h`),
@@ -1239,7 +1239,7 @@
 
     let html = '';
 
-    for (const date of Object.keys(byDate).sort((a, b) => b.localeCompare(a)).slice(0, 14)) {
+    for (const date of Object.keys(byDate).sort((a, b) => b.localeCompare(a)).slice(0, 60)) {
       const d = new Date(date + 'T12:00:00Z');
       const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: tz });
       html += `<div class="bd-day-block"><div class="bc-date-header">${dayLabel}</div>`;
