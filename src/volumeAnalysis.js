@@ -297,46 +297,59 @@ async function backfillVolumeAnalysis({ since, onProgress } = {}) {
 
     if (!allCandles.length) continue;
 
-    // Compute session averages from ALL candles (will use rolling window internally)
-    // For backfill, compute averages in 20-day rolling windows
-    const WINDOW_DAYS = 20;
+    // ── Efficient O(n) sliding-window session averages ──────────────────
+    // Pre-tag each candle with its session and epoch ms
+    const WINDOW_MS = 20 * 24 * 60 * 60 * 1000; // 20 days
+    const tagged = allCandles.map(c => ({
+      ...c,
+      session: getSession(new Date(c.time).getUTCHours()),
+      ms:      new Date(c.time).getTime(),
+    }));
+
+    // Build per-session ring buffers: { session → [{ms, vol}] }
+    // Use a deque (array with pointer) per session for the trailing window
+    const sessQueues = {
+      ASIA:          [],
+      LONDON:        [],
+      NEW_YORK:      [],
+      LOW_LIQUIDITY: [],
+    };
+    const sessSums = { ASIA: 0, LONDON: 0, NEW_YORK: 0, LOW_LIQUIDITY: 0 };
+    const sessHeads = { ASIA: 0, LONDON: 0, NEW_YORK: 0, LOW_LIQUIDITY: 0 };
+
     const rows = [];
     let persistence = 0;
 
-    // Pre-compute session averages at each point using a trailing window
-    for (let i = 0; i < allCandles.length; i++) {
-      const c        = allCandles[i];
-      const utcHour  = new Date(c.time).getUTCHours();
-      const session  = getSession(utcHour);
+    for (let i = 0; i < tagged.length; i++) {
+      const c       = tagged[i];
+      const session = c.session;
+      const cutoff  = c.ms - WINDOW_MS;
 
-      // Compute trailing session average (same session, last WINDOW_DAYS)
-      const cutoff = new Date(c.time).getTime() - WINDOW_DAYS * 24 * 60 * 60 * 1000;
-      let sessSum = 0, sessCount = 0;
-      // Look back up to 20 days × 4 candles/hour × 24 hours = ~1920 candles
-      const lookStart = Math.max(0, i - 2000);
-      for (let j = lookStart; j < i; j++) {
-        const prev = allCandles[j];
-        if (new Date(prev.time).getTime() < cutoff) continue;
-        if (getSession(new Date(prev.time).getUTCHours()) === session) {
-          sessSum += prev.volume || 0;
-          sessCount++;
-        }
+      // Add current candle to its session queue BEFORE computing average
+      // (we want average of PRIOR candles, not including current)
+      // So compute average first, then add.
+
+      // Evict expired entries from this session's queue
+      const q    = sessQueues[session];
+      let   head = sessHeads[session];
+      while (head < q.length && q[head].ms < cutoff) {
+        sessSums[session] -= q[head].vol;
+        head++;
       }
-      const sessAvg = sessCount > 10 ? sessSum / sessCount : (c.volume || 1);
+      sessHeads[session] = head;
+
+      const sessCount = q.length - head;
+      const sessAvg   = sessCount > 10 ? sessSums[session] / sessCount : (c.volume || 1);
 
       // A. Relative Volume
       const relative_volume = sessAvg > 0 ? c.volume / sessAvg : 0;
 
       // B. Volume Acceleration
-      const prevVol = i > 0 ? (allCandles[i - 1].volume || 0) : c.volume;
+      const prevVol = i > 0 ? tagged[i - 1].volume : c.volume;
       const volume_acceleration = c.volume - prevVol;
 
       // C. Volume Persistence
-      if (relative_volume >= 1.2) {
-        persistence++;
-      } else {
-        persistence = 0;
-      }
+      if (relative_volume >= 1.2) { persistence++; } else { persistence = 0; }
 
       // D. Volume Efficiency
       const netMove = Math.abs(c.close - c.open);
@@ -350,10 +363,7 @@ async function backfillVolumeAnalysis({ since, onProgress } = {}) {
       const effScore  = Math.min(100, volume_efficiency * 100000);
 
       const participation_score = Math.round(
-        rvScore   * 0.35 +
-        accScore  * 0.20 +
-        persScore * 0.25 +
-        effScore  * 0.20
+        rvScore * 0.35 + accScore * 0.20 + persScore * 0.25 + effScore * 0.20
       );
 
       let participation_grade;
@@ -375,6 +385,10 @@ async function backfillVolumeAnalysis({ since, onProgress } = {}) {
         participation_score,
         participation_grade,
       });
+
+      // NOW add current candle to its session queue (for future averages)
+      sessQueues[session].push({ ms: c.ms, vol: c.volume });
+      sessSums[session] += c.volume;
     }
 
     // Upsert in batches
