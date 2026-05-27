@@ -1045,6 +1045,7 @@ function computeTopSetups(states) {
 
 function renderTopSetups(states) {
   const el = document.getElementById('top-setups');
+  if (!el) return;
   const noSignal = _csigDataLoaded && !_csigCurrencies.size;
   if (noSignal) { el.innerHTML = '<p class="empty-state">No currency signal — at least two currencies must qualify before setups appear</p>'; return; }
   if (!states?.length) { el.innerHTML = '<p class="empty-state">No setups forming</p>'; return; }
@@ -1427,10 +1428,12 @@ function renderStates(data, m15Data) {
 
 function renderSpreads(data) {
   if (!data?.spreads) return;
+  const el = document.getElementById('spreads-list');
+  if (!el) return;
   // Use server-sorted order (weighted: 40% 12H + 35% 6H + 15% 3H + 10% accel)
   const sorted = data.spreads;
   const maxScore = Math.max(...sorted.map(s => s.weighted_score || 0), 0.0001);
-  document.getElementById('spreads-list').innerHTML = sorted.map(s => {
+  el.innerHTML = sorted.map(s => {
     const v6  = parseFloat(s.spread_6h);
     const cls = v6 >= 0 ? 'buy' : 'sell';
     const pct = Math.round(((s.weighted_score || 0) / maxScore) * 100);
@@ -2518,6 +2521,7 @@ function updateV2ThresholdBar(hourlyRows) {
 function renderRisk(data) {
   if (!data) return;
   const el       = document.getElementById('risk-list');
+  if (!el) return;
   const noSignal = _csigDataLoaded && !_csigCurrencies.size;
   if (noSignal) { el.innerHTML = '<p class="empty-state">No currency signal — at least two currencies must qualify before trades are approved</p>'; return; }
 
