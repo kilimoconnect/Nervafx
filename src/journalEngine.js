@@ -17,6 +17,8 @@ const { supabase } = require('./supabase');
 const { getCurrentSession } = require('./sessionEngine');
 const { getMarketEnergyData } = require('./sessionActivity');
 
+const ENERGY_PHASES = ['ENTRY', 'READY', 'COMPRESSION', 'PULLBACK', 'MONITORING'];
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function floorHour(date = new Date()) {
@@ -205,55 +207,117 @@ async function collectAiAnalysis() {
   }));
 }
 
+async function collectEnergySignals() {
+  // Fetch active energy signal pairs with phase monitoring data
+  const { data: pairs, error: pErr } = await supabase
+    .from('energy_signal_pairs')
+    .select('instrument, dir, strong_ccy, weak_ccy, phase, phase_changed_at, trigger_energy, trigger_session, triggered_at, v45, v90, spread_3h, spread_6h, de_combined, impulse_score, impulse_aligned, m15_state, energy_level, new_energy_event, energy_event_type, active')
+    .eq('active', true)
+    .order('energy_level', { ascending: false });
+
+  if (pErr) console.warn('[JOURNAL] collectEnergySignals pairs:', pErr.message);
+
+  // Fetch currency direction states
+  const { data: states, error: sErr } = await supabase
+    .from('energy_currency_state')
+    .select('currency, direction, smooth_3h, smooth_6h, energy_at_trigger, trigger_session, threshold_met, active, energy_event_type');
+
+  if (sErr) console.warn('[JOURNAL] collectEnergySignals states:', sErr.message);
+
+  const activePairs = (pairs || []).filter(p => p.active);
+  const currencyStates = (states || []);
+
+  // Phase breakdown
+  const phaseBreakdown = {};
+  for (const phase of ENERGY_PHASES) phaseBreakdown[phase] = [];
+  for (const p of activePairs) {
+    const ph = p.phase || 'MONITORING';
+    if (!phaseBreakdown[ph]) phaseBreakdown[ph] = [];
+    phaseBreakdown[ph].push(p);
+  }
+
+  // Currency breakdown
+  const strongCurrencies = currencyStates.filter(s => s.direction === 'STRONG' && s.active);
+  const weakCurrencies   = currencyStates.filter(s => s.direction === 'WEAK' && s.active);
+
+  const peakEnergy = activePairs.length ? Math.max(...activePairs.map(p => p.energy_level || 0)) : 0;
+
+  return {
+    pairs: activePairs,
+    currencyStates,
+    strongCurrencies,
+    weakCurrencies,
+    phaseBreakdown,
+    peakEnergy,
+    totalPairs: activePairs.length,
+  };
+}
+
 // ─── Summary builder ──────────────────────────────────────────────────────────
 
-function buildSummary({ session, sentiment, states, signals, aiAnalysis, topSetups, m15Impulses, trackedPullbacks, newPullbackCount, marketEnergy }) {
+function buildSummary({ session, sentiment, signals, energySignals, m15Impulses, marketEnergy }) {
   const lines = [];
 
-  // 1. Market Energy Analysis (primary)
-  if (marketEnergy?.sessions?.length) {
-    const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York' };
-    const sessLines = marketEnergy.sessions
-      .filter(s => s.session_name !== 'LOW_LIQUIDITY')
-      .map(s => {
-        const name = SESS_LABEL[s.session_name] || s.session_name;
-        const cycle = (s.energy_cycle || '').replace(/_/g, ' ');
-        const eng   = Math.round(s.market_energy || 0);
-        const brd   = Math.round(s.breadth_score || 0);
-        const liq   = Math.round(s.liquidity_score || 0);
-        const bull  = Math.round(s.bullish_breadth || 0);
-        const bear  = Math.round(s.bearish_breadth || 0);
-        const strong = s.strongest_ccy || '—';
-        const weak   = s.weakest_ccy || '—';
-        return `${name}: ${cycle} E:${eng} Mom:${brd} Liq:${liq} ▲${bull}%/▼${bear}% ${strong}↑ ${weak}↓`;
-      });
-    lines.push(sessLines.join(' | '));
+  // 1. Energy Direction overview (primary)
+  if (energySignals && energySignals.totalPairs > 0) {
+    const es = energySignals;
+    const strongStr = es.strongCurrencies.map(c => c.currency).join(',') || 'none';
+    const weakStr   = es.weakCurrencies.map(c => c.currency).join(',') || 'none';
+    lines.push(`Energy ${Math.round(es.peakEnergy)}: Strong ${strongStr} | Weak ${weakStr} | ${es.totalPairs} pairs active.`);
 
-    if (marketEnergy.marketCycle) {
-      lines.push(`Market cycle: ${marketEnergy.marketCycle.replace(/_/g, ' ')}.`);
+    // Phase breakdown — only show phases that have pairs
+    const phaseStrs = [];
+    for (const phase of ENERGY_PHASES) {
+      const pairs = es.phaseBreakdown[phase] || [];
+      if (pairs.length) {
+        const pairStr = pairs.slice(0, 3).map(p => pairLabel(p.instrument)).join(', ');
+        const suffix = pairs.length > 3 ? ` +${pairs.length - 3}` : '';
+        phaseStrs.push(`${phase}(${pairs.length}): ${pairStr}${suffix}`);
+      }
     }
+    if (phaseStrs.length) lines.push(phaseStrs.join(' | '));
   } else {
-    lines.push(`${session.label}: No market energy data available.`);
+    // Fallback to market energy session data
+    if (marketEnergy?.sessions?.length) {
+      const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York' };
+      const sessLines = marketEnergy.sessions
+        .filter(s => s.session_name !== 'LOW_LIQUIDITY')
+        .map(s => {
+          const name = SESS_LABEL[s.session_name] || s.session_name;
+          const eng  = Math.round(s.market_energy || 0);
+          return `${name}: E:${eng}`;
+        });
+      lines.push(sessLines.join(' | ') + ' — no energy pairs active.');
+    } else {
+      lines.push(`${session.label}: No energy data available.`);
+    }
   }
 
-  // 2. Top setups (if any)
-  if (topSetups.length > 0) {
-    const setStr = topSetups.slice(0, 3).map(s =>
-      `${pairLabel(s.instrument)} ${s.bias} ${s.confidence}%`
-    ).join(', ');
-    lines.push(`Top setups: ${setStr}.`);
-  }
-
-  // 3. Signals
+  // 2. Signals
   if (signals.entered.length > 0) {
     const sigStr = signals.entered.map(s => `${pairLabel(s.instrument)} ${s.signal}`).join(', ');
     lines.push(`Entries: ${sigStr}.`);
   }
 
-  // 4. M15 impulse moves
+  // 3. M15 impulse moves (filtered to energy pairs)
   if (m15Impulses && m15Impulses.length > 0) {
-    const m15Str = m15Impulses.map(r => `${pairLabel(r.instrument)} ${r.bias}`).join(', ');
-    lines.push(`M15 impulses: ${m15Str}.`);
+    const energyPairSet = energySignals?.pairs?.length
+      ? new Set(energySignals.pairs.map(p => p.instrument))
+      : null;
+    const filtered = energyPairSet
+      ? m15Impulses.filter(r => energyPairSet.has(r.instrument))
+      : m15Impulses;
+    if (filtered.length) {
+      const m15Str = filtered.slice(0, 5).map(r => `${pairLabel(r.instrument)} ${r.bias}`).join(', ');
+      lines.push(`M15 impulses: ${m15Str}.`);
+    }
+  }
+
+  // 4. Sentiment context
+  if (sentiment) {
+    const env = sentiment.environment || 'unknown';
+    const conf = Math.round(sentiment.confidence || 0);
+    lines.push(`Sentiment: ${env} (${conf}% conf).`);
   }
 
   return lines.join(' ');
@@ -267,7 +331,7 @@ async function writeJournalEntry() {
   const session = getCurrentSession(now);
 
   // Collect everything in parallel
-  const [sentiment, statesResult, strengthResult, pairRankings, signals, aiAnalysis, m15Impulses, prevTracked] = await Promise.all([
+  const [sentiment, statesResult, strengthResult, pairRankings, signals, aiAnalysis, m15Impulses, prevTracked, energySignals] = await Promise.all([
     collectSentiment(),
     collectStates(),
     collectStrength(),
@@ -276,6 +340,7 @@ async function writeJournalEntry() {
     collectAiAnalysis(),
     collectM15Impulses().catch(() => []),
     collectTrackedPullbacks(),
+    collectEnergySignals().catch(() => ({ pairs: [], currencyStates: [], strongCurrencies: [], weakCurrencies: [], phaseBreakdown: {}, peakEnergy: 0, totalPairs: 0 })),
   ]);
 
   // Unwrap timestamped results
@@ -284,38 +349,40 @@ async function writeJournalEntry() {
   const currencyStrength = strengthResult.currencies;
   const strengthAsOf     = strengthResult.as_of;
 
-  // ── Cumulative pullback tracker ────────────────────────────────────────────
-  // Build a state map for fast lookup
-  const stateMap = {};
-  states.forEach(s => { stateMap[s.instrument] = s; });
-
-  // Carry forward existing tracked pairs — drop only on confirmed reversal/bias-flip/trend-complete.
-  // NO_TRADE with matching bias = 6H spread temporarily collapsed but 12H still intact → keep
-  // tracking; the setup may recover. Only drop when direction is structurally gone.
-  const carried = [];
-  for (const t of prevTracked) {
-    const cur = stateMap[t.instrument];
-    if (!cur) { carried.push(t); continue; }                       // no current data → keep
-    if (cur.state === 'REVERSAL_DEVELOPING') continue;             // 6H flipped against 12H
-    if (cur.state === 'REVERSAL_CONFIRMED') continue;              // full reversal — 12H also flipped
-    if (!cur.bias || cur.bias === 'NONE') continue;                // lost directional bias
-    if (cur.bias !== t.bias) continue;                             // direction flipped
-    if (cur.state === 'TREND') continue;                           // episode completed
-    // NO_TRADE with same bias: 6H spread too small but 12H intact → pause, don't evict
-    carried.push({ ...t, latest_state: cur.state, latest_conf: cur.confidence });
+  // ── Energy-based phase tracker ──────────────────────────────────────────────
+  // Track energy signal pairs by phase (replaces old pullback tracker).
+  // Carry forward previous tracked pairs, update phase from energy_signal_pairs.
+  const energyPairMap = {};
+  for (const p of (energySignals.pairs || [])) {
+    energyPairMap[p.instrument] = p;
   }
 
-  // Add pairs entering pullback for the first time this cycle
+  // Carry forward tracked pairs — drop if pair is no longer active in energy signals
+  const carried = [];
+  for (const t of prevTracked) {
+    const cur = energyPairMap[t.instrument];
+    if (!cur) continue;                                            // pair deactivated → drop
+    if (cur.dir !== t.bias) continue;                              // direction reversed → drop
+    carried.push({
+      ...t,
+      latest_state: cur.phase,
+      latest_conf:  cur.de_combined || 0,
+      energy_level: cur.energy_level || 0,
+    });
+  }
+
+  // Add new energy pairs not previously tracked
   const trackedSet = new Set(carried.map(t => t.instrument));
   const newEntries = [];
-  for (const s of states) {
-    if (['PULLBACK_STARTING', 'PULLBACK_ACTIVE', 'BASE_FORMING'].includes(s.state) && !trackedSet.has(s.instrument)) {
+  for (const p of (energySignals.pairs || [])) {
+    if (!trackedSet.has(p.instrument)) {
       newEntries.push({
-        instrument:   s.instrument,
-        bias:         s.bias,
-        entered_at:   hourTs.toISOString(),
-        latest_state: s.state,
-        latest_conf:  s.confidence,
+        instrument:   p.instrument,
+        bias:         p.dir,
+        entered_at:   p.triggered_at || hourTs.toISOString(),
+        latest_state: p.phase,
+        latest_conf:  p.de_combined || 0,
+        energy_level: p.energy_level || 0,
       });
     }
   }
@@ -323,24 +390,31 @@ async function writeJournalEntry() {
   const tracked_pullback_pairs = [...carried, ...newEntries];
   const new_pullback_pairs     = newEntries.length;
 
-  // Derive counts from tracked set (pullback/ready) + raw current-hour (trend/no-trade)
+  // Phase-based counts from energy signal pairs
+  const entry_pairs       = (energySignals.phaseBreakdown?.ENTRY || []).length;
+  const ready_pairs       = (energySignals.phaseBreakdown?.READY || []).length;
+  const compression_pairs = (energySignals.phaseBreakdown?.COMPRESSION || []).length;
+  const pullback_pairs    = (energySignals.phaseBreakdown?.PULLBACK || []).length;
+  const monitoring_pairs  = (energySignals.phaseBreakdown?.MONITORING || []).length;
+
+  // Legacy counts from market_states (still useful for broad market view)
   const trend_pairs    = states.filter(s => s.state === 'TREND').length;
   const no_trade_pairs = states.filter(s => s.state === 'NO_TRADE').length;
-  const pullback_pairs = tracked_pullback_pairs.filter(t => ['PULLBACK_STARTING', 'PULLBACK_ACTIVE', 'BASE_FORMING'].includes(t.latest_state)).length;
-  const ready_pairs    = tracked_pullback_pairs.filter(t => t.latest_state === 'READY_TO_ENTER').length;
 
-  // Top 5 setups by confidence
-  const topSetups = [...states]
-    .filter(s => s.state !== 'NO_TRADE' && s.confidence > 0)
-    .sort((a, b) => b.confidence - a.confidence)
+  // Top setups: energy pairs in ENTRY/READY phase, sorted by DE combo score
+  const topSetups = (energySignals.pairs || [])
+    .filter(p => p.phase === 'ENTRY' || p.phase === 'READY')
+    .sort((a, b) => (b.de_combined || 0) - (a.de_combined || 0))
     .slice(0, 5)
-    .map(s => ({
-      instrument:      s.instrument,
-      state:           s.state,
-      bias:            s.bias,
-      confidence:      s.confidence,
-      spread_behavior: s.spread_behavior || null,
-      reason:          s.reason || null,
+    .map(p => ({
+      instrument:    p.instrument,
+      phase:         p.phase,
+      bias:          p.dir,
+      de_combined:   p.de_combined || 0,
+      energy_level:  p.energy_level || 0,
+      impulse_score: p.impulse_score || 0,
+      strong_ccy:    p.strong_ccy,
+      weak_ccy:      p.weak_ccy,
     }));
 
   // Compact sentiment details for storage
@@ -385,10 +459,7 @@ async function writeJournalEntry() {
 
   // Build narrative summary
   const summary = buildSummary({
-    session, sentiment, states, signals, aiAnalysis, topSetups, m15Impulses,
-    trackedPullbacks: tracked_pullback_pairs,
-    newPullbackCount: new_pullback_pairs,
-    marketEnergy,
+    session, sentiment, signals, energySignals, m15Impulses, marketEnergy,
   });
 
   // Preserve existing m15_impulses if fresh collection came back empty
@@ -402,6 +473,33 @@ async function writeJournalEntry() {
       .maybeSingle();
     if (existing?.m15_impulses?.length) m15ImpulsesFinal = existing.m15_impulses;
   }
+
+  // Compose energy snapshot for storage
+  const energy_snapshot = {
+    peak_energy:       energySignals.peakEnergy,
+    total_pairs:       energySignals.totalPairs,
+    strong_currencies: energySignals.strongCurrencies.map(c => ({ currency: c.currency, smooth_3h: c.smooth_3h, smooth_6h: c.smooth_6h })),
+    weak_currencies:   energySignals.weakCurrencies.map(c => ({ currency: c.currency, smooth_3h: c.smooth_3h, smooth_6h: c.smooth_6h })),
+    phase_counts: {
+      ENTRY:       entry_pairs,
+      READY:       ready_pairs,
+      COMPRESSION: compression_pairs,
+      PULLBACK:    pullback_pairs,
+      MONITORING:  monitoring_pairs,
+    },
+    pairs: (energySignals.pairs || []).map(p => ({
+      instrument:    p.instrument,
+      dir:           p.dir,
+      phase:         p.phase,
+      strong_ccy:    p.strong_ccy,
+      weak_ccy:      p.weak_ccy,
+      energy_level:  p.energy_level,
+      de_combined:   p.de_combined,
+      impulse_score: p.impulse_score,
+      v45:           p.v45,
+      spread_3h:     p.spread_3h,
+    })),
+  };
 
   // Compose journal row
   const row = {
@@ -425,6 +523,7 @@ async function writeJournalEntry() {
     m15_impulses:            m15ImpulsesFinal,
     tracked_pullback_pairs,
     new_pullback_pairs,
+    energy_snapshot,
     summary,
   };
 

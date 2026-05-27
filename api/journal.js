@@ -25,7 +25,7 @@ module.exports = async function handler(req, res) {
 
     const { data, error } = await sb
       .from('hourly_market_journal')
-      .select('id, time, session_name, session_quality, risk_sentiment, risk_confidence, trend_pairs, pullback_pairs, ready_pairs, no_trade_pairs, new_pullback_pairs, tracked_pullback_pairs, top_setups, risk_sentiment_details, currency_strength, ai_analysis, signals_summary, m15_impulses, summary, outcome_6h, outcome_12h, outcome_24h, created_at')
+      .select('id, time, session_name, session_quality, risk_sentiment, risk_confidence, trend_pairs, pullback_pairs, ready_pairs, no_trade_pairs, new_pullback_pairs, tracked_pullback_pairs, top_setups, risk_sentiment_details, currency_strength, ai_analysis, signals_summary, m15_impulses, energy_snapshot, summary, outcome_6h, outcome_12h, outcome_24h, created_at')
       .order('time', { ascending: false })
       .limit(limit);
 

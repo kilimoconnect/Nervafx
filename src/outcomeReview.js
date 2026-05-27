@@ -96,13 +96,21 @@ async function generateAiVerdict(journalEntry, setupOutcomes, windowHours) {
 
   // Build the setup performance summary for the prompt
   const setupLines = setupOutcomes.map(so => {
-    const { instrument, bias, confidence, state, outcome, spreadDelta } = so;
+    const { instrument, bias, outcome, spreadDelta, phase, de_combined, energy_level, impulse_score, strong_ccy, weak_ccy } = so;
     const pair = instrument.replace('_', '/');
     const d6   = spreadDelta ? spreadDelta.delta6h : null;
     const dir  = d6 != null ? (d6 > 0 ? 'positive' : d6 < 0 ? 'negative' : 'flat') : 'unknown';
     const mag  = d6 != null ? Math.abs(d6).toFixed(6) : 'unknown';
 
-    return `  ${pair} [${bias} @ ${confidence}% | ${state}]: spread moved ${dir} by ${mag} → ${outcome}`;
+    // Energy model format
+    if (phase) {
+      const deStr = de_combined != null ? `DE:${de_combined}` : '';
+      const impStr = impulse_score != null ? `imp:${impulse_score}` : '';
+      const ccyStr = strong_ccy && weak_ccy ? `${strong_ccy}↑/${weak_ccy}↓` : '';
+      return `  ${pair} [${bias} | ${phase} ${deStr} ${impStr} ${ccyStr}]: spread moved ${dir} by ${mag} → ${outcome}`;
+    }
+    // Legacy format fallback
+    return `  ${pair} [${bias} @ ${so.confidence}% | ${so.state}]: spread moved ${dir} by ${mag} → ${outcome}`;
   }).join('\n');
 
   const correctCount   = setupOutcomes.filter(s => s.outcome === 'CORRECT').length;
@@ -112,12 +120,32 @@ async function generateAiVerdict(journalEntry, setupOutcomes, windowHours) {
 
   const sentimentCorrect = evaluateSentimentCorrectness(journalEntry, setupOutcomes);
 
-  const prompt = `You are reviewing the performance of an automated forex strength-based trading system.
+  // Build energy context if available
+  const es = journalEntry.energy_snapshot;
+  let energyContext = '';
+  if (es && es.total_pairs > 0) {
+    const strongStr = (es.strong_currencies || []).map(c => c.currency).join(', ') || 'none';
+    const weakStr   = (es.weak_currencies || []).map(c => c.currency).join(', ') || 'none';
+    const pc = es.phase_counts || {};
+    energyContext = `
+- Energy: peak ${Math.round(es.peak_energy || 0)}, ${es.total_pairs} pairs active
+- Currency direction: Strong [${strongStr}] | Weak [${weakStr}]
+- Phase breakdown: ENTRY(${pc.ENTRY || 0}) READY(${pc.READY || 0}) COMPRESSION(${pc.COMPRESSION || 0}) PULLBACK(${pc.PULLBACK || 0}) MONITORING(${pc.MONITORING || 0})`;
+  }
+
+  const prompt = `You are reviewing the performance of an energy-driven forex trading system.
+
+The system uses an Energy Direction model:
+- Market energy ≥ 50 triggers currency direction evaluation
+- Currencies are classified as STRONG (3H+6H aligned positive) or WEAK (aligned negative)
+- Pairs are formed: one STRONG currency + one WEAK currency
+- Each pair progresses through phases: MONITORING → PULLBACK → COMPRESSION → READY → ENTRY
+- ENTRY = highest conviction (multi-TF confirmation), READY = momentum returning after pullback
+- DE combined score measures directional energy, impulse score measures M15 momentum
 
 JOURNAL ENTRY (${windowHours} hours ago):
 - Session: ${journalEntry.session_name} [${journalEntry.session_quality}]
-- Risk Sentiment: ${journalEntry.risk_sentiment} (confidence: ${journalEntry.risk_confidence}%)
-- Market scan: ${journalEntry.trend_pairs} trend, ${journalEntry.pullback_pairs} pullback, ${journalEntry.ready_pairs} ready-to-enter, ${journalEntry.no_trade_pairs} no-trade
+- Risk Sentiment: ${journalEntry.risk_sentiment} (confidence: ${journalEntry.risk_confidence}%)${energyContext}
 - Summary at the time: "${journalEntry.summary}"
 
 SETUP PERFORMANCE (${windowHours}H outcome):
@@ -126,13 +154,15 @@ ${setupLines || '  No active setups were recorded this cycle.'}
 SCORECARD: ${correctCount} correct, ${incorrectCount} incorrect, ${flatCount} flat out of ${totalSetups} setups.
 
 Write a concise performance review covering:
-1. Which calls were right and why they likely worked (or didn't)
-2. Whether sentiment (${journalEntry.risk_sentiment}) correctly filtered or incorrectly blocked trades
-3. One specific pattern or rule the system should note for future reference
-4. An accuracy score from 0–100 for this cycle
+1. Which energy phases produced correct calls and which didn't — did ENTRY/READY phase setups follow through?
+2. Whether the currency direction classification (strong/weak) held over the ${windowHours}H window
+3. Whether sentiment (${journalEntry.risk_sentiment}) correctly filtered or incorrectly blocked trades
+4. One specific pattern or rule the system should note for future energy-based decisions
+5. An accuracy score from 0–100 for this cycle
 
 Rules:
 - Be direct and specific. No filler phrases.
+- Reference energy phases and currency directions, not generic terms.
 - Do not use raw decimals. Describe direction and magnitude in qualitative terms (e.g. "strong continuation", "small adverse move", "flat — no follow-through").
 - Maximum 5 sentences for the verdict.
 
@@ -191,7 +221,7 @@ async function reviewWindow(hours, column) {
 
   const { data: entries, error } = await supabase
     .from('hourly_market_journal')
-    .select('id, time, session_name, session_quality, risk_sentiment, risk_confidence, risk_sentiment_details, trend_pairs, pullback_pairs, ready_pairs, no_trade_pairs, top_setups, summary')
+    .select('id, time, session_name, session_quality, risk_sentiment, risk_confidence, risk_sentiment_details, trend_pairs, pullback_pairs, ready_pairs, no_trade_pairs, top_setups, energy_snapshot, summary')
     .lte('time', cutoff)   // entry must be old enough for this window
     .is(column, null)      // not yet reviewed for this window
     .order('time', { ascending: false })
@@ -222,10 +252,18 @@ async function reviewWindow(hours, column) {
       const outcome     = classifyOutcome(setup.bias, spreadDelta);
 
       setupOutcomes.push({
-        instrument:  setup.instrument,
-        bias:        setup.bias,
-        confidence:  setup.confidence,
-        state:       setup.state,
+        instrument:    setup.instrument,
+        bias:          setup.bias,
+        // Energy model fields (new format)
+        phase:         setup.phase || null,
+        de_combined:   setup.de_combined || null,
+        energy_level:  setup.energy_level || null,
+        impulse_score: setup.impulse_score || null,
+        strong_ccy:    setup.strong_ccy || null,
+        weak_ccy:      setup.weak_ccy || null,
+        // Legacy fields (old format, may be null on new entries)
+        confidence:    setup.confidence || setup.de_combined || 0,
+        state:         setup.state || setup.phase || null,
         outcome,
         spreadDelta,
       });
@@ -235,18 +273,32 @@ async function reviewWindow(hours, column) {
     const aiVerdict = await generateAiVerdict(entry, setupOutcomes, hours);
 
     // Compose the outcome object
+    // Energy context at time of entry
+    const es = entry.energy_snapshot;
+    const energySummary = es ? {
+      peak_energy:   es.peak_energy,
+      total_pairs:   es.total_pairs,
+      phase_counts:  es.phase_counts,
+      strong_currencies: (es.strong_currencies || []).map(c => c.currency),
+      weak_currencies:   (es.weak_currencies || []).map(c => c.currency),
+    } : null;
+
     const outcomeData = {
       reviewed_at:          new Date().toISOString(),
       window_hours:         hours,
       setups:               setupOutcomes.map(so => ({
-        instrument:   so.instrument,
-        bias:         so.bias,
-        confidence:   so.confidence,
-        state:        so.state,
-        outcome:      so.outcome,
-        delta6h:      so.spreadDelta?.delta6h ?? null,
-        delta12h:     so.spreadDelta?.delta12h ?? null,
-        candles_seen: so.spreadDelta?.candles ?? 0,
+        instrument:    so.instrument,
+        bias:          so.bias,
+        phase:         so.phase,
+        de_combined:   so.de_combined,
+        energy_level:  so.energy_level,
+        impulse_score: so.impulse_score,
+        strong_ccy:    so.strong_ccy,
+        weak_ccy:      so.weak_ccy,
+        outcome:       so.outcome,
+        delta6h:       so.spreadDelta?.delta6h ?? null,
+        delta12h:      so.spreadDelta?.delta12h ?? null,
+        candles_seen:  so.spreadDelta?.candles ?? 0,
       })),
       correct_count:        setupOutcomes.filter(s => s.outcome === 'CORRECT').length,
       incorrect_count:      setupOutcomes.filter(s => s.outcome === 'INCORRECT').length,
@@ -254,6 +306,7 @@ async function reviewWindow(hours, column) {
       total_setups:         setupOutcomes.length,
       accuracy_score:       aiVerdict.accuracy_score,
       sentiment_correct:    evaluateSentimentCorrectness(entry, setupOutcomes),
+      energy_snapshot:      energySummary,
       verdict:              aiVerdict.verdict,
       sentiment_assessment: aiVerdict.sentiment_assessment,
     };
