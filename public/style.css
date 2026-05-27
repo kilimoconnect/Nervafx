@@ -6322,7 +6322,7 @@ body::after {
   background: var(--bg-card);
   border-bottom: 1px solid var(--border);
   position: sticky;
-  top: 56px;
+  top: var(--header-h, 44px);
   z-index: 90;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;

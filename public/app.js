@@ -84,6 +84,11 @@ function logout() {
 
 // ─── Collapsible header panels ───────────────────────────────────────────────
 
+function _syncHeaderHeight() {
+  const h = document.querySelector('.header');
+  if (h) document.documentElement.style.setProperty('--header-h', h.offsetHeight + 'px');
+}
+
 function toggleHdrPanel(name) {
   const panel = document.getElementById('hdr-panel-' + name);
   const btn   = document.getElementById('hdr-toggle-' + name);
@@ -97,6 +102,7 @@ function toggleHdrPanel(name) {
     panel.style.display = '';
     if (btn) btn.classList.add('active');
   }
+  _syncHeaderHeight();
 }
 
 // Update alert badge count (called when news/env/m15 bars become visible)
@@ -124,8 +130,13 @@ document.addEventListener('click', function(e) {
   if (!e.target.closest('.header')) {
     document.querySelectorAll('.hdr-panel').forEach(p => { p.style.display = 'none'; });
     document.querySelectorAll('.hdr-icon-btn').forEach(b => { b.classList.remove('active'); });
+    _syncHeaderHeight();
   }
 });
+
+// Sync header height on load + resize
+window.addEventListener('load', _syncHeaderHeight);
+window.addEventListener('resize', _syncHeaderHeight);
 
 const REFRESH_MS = 60000;
 let strengthChart = null;
