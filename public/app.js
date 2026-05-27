@@ -1990,10 +1990,20 @@ function renderFlowPerformance(strengthData, m15Data) {
   if (!el) return;
 
   // Use pre-computed flow performance data (includes DE, volume, impulse — no plan gate)
-  const scored = _buildFpScored(strengthData, m15Data);
+  let scored = _buildFpScored(strengthData, m15Data);
   if (!scored || !scored.length) {
     el.innerHTML = '<p class="empty-state">No strength data yet</p>';
     return;
+  }
+
+  // Filter to only show pairs that exist in energy signal pairs (energy-driven monitoring)
+  if (_energySignalsCache?.pairs?.length) {
+    const energyPairSet = new Set(_energySignalsCache.pairs.filter(p => p.active).map(p => p.instrument));
+    scored = scored.filter(fp => energyPairSet.has(fp.instrument));
+    if (!scored.length) {
+      el.innerHTML = '<p class="empty-state">No energy signal pairs matched</p>';
+      return;
+    }
   }
 
   // Render ranked cards with detail rows
