@@ -1,8 +1,8 @@
 {
   "version": 2,
   "crons": [
-    { "path": "/api/cron-backtest-sync", "schedule": "0 * * * *" },
-    { "path": "/api/run-pipeline?force=1", "schedule": "8 * * * *" },
+    { "path": "/api/cron-backtest-sync", "schedule": "1 * * * *" },
+    { "path": "/api/run-pipeline?force=1", "schedule": "3 * * * *" },
     { "path": "/api/email-notify?type=digest", "schedule": "0 21 * * 1-5" }
   ],
   "functions": {

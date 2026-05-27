@@ -1,6 +1,6 @@
 const { config } = require('./config');
-const { fetchAndParseCandles, sleep, RATE_LIMIT_DELAY } = require('./oanda');
-const { upsertCandles } = require('./supabase');
+const { fetchCandles, fetchAndParseCandles, sleep, RATE_LIMIT_DELAY } = require('./oanda');
+const { supabase, upsertCandles } = require('./supabase');
 const { runFullQualityCheck } = require('./quality');
 const { repairAll } = require('./repair');
 const { calculateLatestStrength } = require('./strength');
@@ -20,6 +20,8 @@ const { calculateFlowPerformance }       = require('./flowPerformance');
 const { calculateLatestVolumeAnalysis }  = require('./volumeAnalysis');
 const { calculateEnergyDirection }       = require('./energyDirection');
 
+const PARALLEL = 7; // instruments fetched in parallel (OANDA rate-limit safe)
+
 async function step(name, fn) {
   try {
     await fn();
@@ -29,19 +31,82 @@ async function step(name, fn) {
   }
 }
 
+/**
+ * Sync candles for a specific timeframe (H1 or M15) from OANDA → backtest_candles.
+ * Fetches incrementally from the last stored candle per instrument.
+ */
+async function syncCandles(timeframe) {
+  let totalSynced = 0;
+
+  for (let i = 0; i < config.instruments.length; i += PARALLEL) {
+    const batch = config.instruments.slice(i, i + PARALLEL);
+    const results = await Promise.allSettled(batch.map(async (inst) => {
+      // Find latest stored candle for this instrument + timeframe
+      const { data: latest } = await supabase
+        .from('backtest_candles')
+        .select('time')
+        .eq('instrument', inst)
+        .eq('timeframe', timeframe)
+        .order('time', { ascending: false })
+        .limit(1);
+
+      let fromISO;
+      if (latest?.length) {
+        const lt = new Date(latest[0].time);
+        lt.setSeconds(lt.getSeconds() + 1);
+        fromISO = lt.toISOString();
+      } else {
+        fromISO = new Date(Date.now() - 7 * 86400000).toISOString();
+      }
+      if (new Date(fromISO) >= new Date()) return 0;
+
+      // Use count-based fetch (no 'to') to avoid "Time is in the future" on practice accounts
+      const raw = await fetchCandles(inst, {
+        from: fromISO,
+        granularity: timeframe,
+      });
+      const candles = raw.filter(c => c.complete).map(c => ({
+        instrument: inst, timeframe, time: c.time,
+        open: parseFloat(c.mid.o), high: parseFloat(c.mid.h),
+        low: parseFloat(c.mid.l), close: parseFloat(c.mid.c),
+        volume: c.volume, complete: true, source: 'OANDA',
+      }));
+      if (!candles.length) return 0;
+
+      for (let j = 0; j < candles.length; j += 500) {
+        const b = candles.slice(j, j + 500);
+        const { error } = await supabase
+          .from('backtest_candles')
+          .upsert(b, { onConflict: 'instrument,timeframe,time', ignoreDuplicates: true });
+        if (error) throw new Error(`${inst}/${timeframe}: ${error.message}`);
+      }
+      return candles.length;
+    }));
+
+    for (const r of results) {
+      if (r.status === 'fulfilled') totalSynced += (r.value || 0);
+      else console.error(`[UPDATE] ${timeframe} sync error: ${r.reason?.message || r.reason}`);
+    }
+    if (i + PARALLEL < config.instruments.length) await sleep(150);
+  }
+
+  return totalSynced;
+}
+
 async function hourlyUpdate() {
   console.log(`[UPDATE] ${new Date().toISOString()} - Starting hourly update...`);
 
-  // ── Phase 1: Fetch candles ──────────────────────────────────────────────────
-  for (const instrument of config.instruments) {
-    try {
-      const candles = await fetchAndParseCandles(instrument, { count: 5 });
-      if (candles.length > 0) await upsertCandles(candles);
-      await sleep(RATE_LIMIT_DELAY);
-    } catch (err) {
-      console.error(`[UPDATE] ${instrument}: ${err.message}`);
-    }
-  }
+  // ── Phase 1: Sync candles (M15 + H1) from OANDA → backtest_candles ─────────
+  // M15 is needed for volume analysis, m15_spreads, energy direction, DE history
+  // H1 is needed for strength, smooth, spreads, signals
+  await step('sync_m15', async () => {
+    const n = await syncCandles('M15');
+    if (n > 0) console.log(`[UPDATE]   synced ${n} M15 candles`);
+  });
+  await step('sync_h1', async () => {
+    const n = await syncCandles('H1');
+    if (n > 0) console.log(`[UPDATE]   synced ${n} H1 candles`);
+  });
 
   // ── Phase 1: Quality check + repair ────────────────────────────────────────
   let check;
