@@ -17,6 +17,7 @@ const { runOutcomeReviews } = require('./outcomeReview');
 const { backfillSessionActivity } = require('./sessionActivity');
 const { generateMarketNarrative }        = require('./narrativeEngine');
 const { calculateFlowPerformance }       = require('./flowPerformance');
+const { calculateLatestVolumeAnalysis }  = require('./volumeAnalysis');
 const { calculateEnergyDirection }       = require('./energyDirection');
 
 async function step(name, fn) {
@@ -79,6 +80,7 @@ async function hourlyUpdate() {
   await step('smooth',        () => smoothLatest());
   await step('spreads',       () => calculateLatestSpreads());
   await step('m15_spreads',   () => calculateLatestM15Spreads());
+  await step('volume_analysis', () => calculateLatestVolumeAnalysis());
   await step('flow_perf',    () => calculateFlowPerformance());
   await step('sentiment',     () => calculateLatestSentiment());
   await step('states',        () => calculateLatestStates());
