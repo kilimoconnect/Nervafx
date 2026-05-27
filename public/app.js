@@ -3,11 +3,9 @@
 
 // ─── Auth guard ───────────────────────────────────────────────────────────────
 function _clearAuth() {
-  localStorage.removeItem('nfx_token');
-  localStorage.removeItem('nfx_refresh_token');
-  localStorage.removeItem('nfx_user');
-  localStorage.removeItem('nfx_plan');
-  localStorage.removeItem('nfx_plan_uid');
+  // Clear ALL nfx_ cached data so next login starts completely fresh
+  const keys = Object.keys(localStorage).filter(k => k.startsWith('nfx_'));
+  keys.forEach(k => localStorage.removeItem(k));
 }
 
 async function _refreshToken() {
