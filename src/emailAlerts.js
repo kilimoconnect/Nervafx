@@ -108,81 +108,80 @@ function directionAlertEmail(data) {
   const weakCcys = currencies.filter(c => c.direction === 'WEAK');
   const droppedCcys = currencies.filter(c => c.eventType === 'DROPPED');
 
-  // Short event labels for mobile
   const evtLabel = t => t === 'CONTINUATION' ? 'Continue' : t === 'REVERSAL' ? 'Reversal' : t === 'NEW' ? 'New' : t === 'DROPPED' ? 'Dropped' : t;
-  const evtColor = t => t === 'CONTINUATION' ? '#0ea5e9' : t === 'NEW' ? '#22c55e' : t === 'REVERSAL' ? '#f59e0b' : '#64748b';
+  const evtTagClass = t => t === 'CONTINUATION' ? 'tag-blue' : t === 'NEW' ? 'tag-green' : t === 'REVERSAL' ? 'tag-amber' : 'tag-gray';
+  const borderClass = dir => dir === 'STRONG' ? 'row-green' : 'row-red';
 
-  // Currency chips — stacked rows, mobile-friendly
-  const ccyChips = currencies
+  // Currency rows — table-based for email client compatibility
+  const ccyRows = currencies
     .filter(c => c.eventType && c.direction !== 'NEUTRAL')
     .map(c => {
       const isStrong = c.direction === 'STRONG';
-      const color = isStrong ? '#22c55e' : '#ef4444';
-      const arrow = isStrong ? '▲' : '▼';
-      const ec = evtColor(c.eventType);
+      const color = isStrong ? '#4ade80' : '#f87171';
+      const arrow = isStrong ? 'Strong' : 'Weak';
       const h3 = (c.smooth_3h * 10000).toFixed(1);
       const h6 = (c.smooth_6h * 10000).toFixed(1);
-      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #1e293b">
-        <div>
-          <span style="color:${color};font-weight:700;font-size:16px">${arrow} ${c.currency}</span>
-          <span style="color:${color};font-size:13px;margin-left:6px">${c.direction}</span>
-        </div>
-        <div style="text-align:right">
-          <span style="color:${ec};font-weight:600;font-size:12px;background:${ec}15;padding:2px 8px;border-radius:4px">${evtLabel(c.eventType)}</span>
-          <div style="color:#64748b;font-size:11px;margin-top:3px">${h3} / ${h6}</div>
-        </div>
-      </div>`;
+      return `<table width="100%" cellpadding="0" cellspacing="0" style="border-bottom:1px solid rgba(30,41,59,0.6)"><tr>
+        <td style="padding:10px 14px">
+          <span class="val" style="color:${color}">${c.currency}</span>
+          <span class="dim" style="margin-left:6px">${arrow}</span>
+        </td>
+        <td style="padding:10px 14px;text-align:right">
+          <span class="${evtTagClass(c.eventType)} tag">${evtLabel(c.eventType)}</span>
+          <div class="dim" style="margin-top:3px">3H ${h3} / 6H ${h6}</div>
+        </td>
+      </tr></table>`;
     }).join('');
 
   const droppedHtml = droppedCcys.length ? `
-    <div style="padding:8px 12px;color:#64748b;font-size:12px">
-      Dropped: ${droppedCcys.map(c => `<span style="text-decoration:line-through">${c.currency}</span>`).join(', ')} — now neutral
+    <div style="padding:8px 14px" class="dim">
+      Dropped: ${droppedCcys.map(c => `<span style="text-decoration:line-through">${c.currency}</span>`).join(', ')}
     </div>` : '';
 
-  // Pair rows — 3-column max, short labels
-  const pairChips = pairs.map(p => {
+  // Pair rows — table-based
+  const pairRows = pairs.map(p => {
     const isBuy = p.dir === 'BUY';
-    const dirColor = isBuy ? '#22c55e' : '#ef4444';
-    const dirArrow = isBuy ? '▲' : '▼';
-    const ec = evtColor(p.eventType);
-    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid #1e293b">
-      <div>
-        <span style="color:#fff;font-weight:600;font-size:14px">${p.instrument.replace('_', '/')}</span>
-        <span style="color:${dirColor};font-weight:600;font-size:13px;margin-left:6px">${dirArrow} ${p.dir}</span>
-      </div>
-      <div style="text-align:right">
-        <span style="color:${ec};font-weight:600;font-size:12px">${evtLabel(p.eventType)}</span>
-        <div style="color:#64748b;font-size:11px;margin-top:2px">${p.strong_ccy}↑ ${p.weak_ccy}↓</div>
-      </div>
-    </div>`;
+    const dirColor = isBuy ? '#4ade80' : '#f87171';
+    const dirArrow = isBuy ? 'BUY' : 'SELL';
+    return `<table width="100%" cellpadding="0" cellspacing="0" style="border-bottom:1px solid rgba(30,41,59,0.6)"><tr>
+      <td style="padding:10px 14px">
+        <span class="val">${p.instrument.replace('_', '/')}</span>
+        <span style="color:${dirColor};font-weight:600;font-size:12px;margin-left:6px">${dirArrow}</span>
+      </td>
+      <td style="padding:10px 14px;text-align:right">
+        <span class="${evtTagClass(p.eventType)} tag">${evtLabel(p.eventType)}</span>
+        <div class="dim" style="margin-top:3px">${p.strong_ccy} / ${p.weak_ccy}</div>
+      </td>
+    </tr></table>`;
   }).join('');
 
   const removedHtml = removedPairs?.length ? `
-    <div style="padding:8px 12px;color:#64748b;font-size:12px">
+    <div style="padding:8px 14px" class="dim">
       Removed: ${removedPairs.map(p => `<span style="text-decoration:line-through">${p.replace('_','/')}</span>`).join(', ')}
     </div>` : '';
 
   return {
-    subject: `Energy Direction — ${strongCcys.map(c=>c.currency).join(',')} strong, ${weakCcys.map(c=>c.currency).join(',')} weak — NervaFX`,
+    subject: `Direction Alert — ${strongCcys.map(c=>c.currency).join(',')} strong / ${weakCcys.map(c=>c.currency).join(',')} weak`,
     html: baseLayout(`
-      <h2>Energy Direction Confirmed</h2>
-      <p>Energy bar <strong style="color:#f59e0b">${Math.round(triggerEnergy)}</strong> crossed threshold during <strong>${sessionLabel}</strong>${timeStr ? ` at ${timeStr}` : ''}. Directions locked.</p>
+      <h2>Direction Alert</h2>
+      <p class="sub">${sessionLabel} session &middot; Energy ${Math.round(triggerEnergy)}${timeStr ? ` &middot; ${timeStr}` : ''}</p>
 
       <div class="card">
-        <div class="card-title">Currency Directions</div>
-        ${ccyChips}
-        ${droppedHtml}
+        <div class="card-hd">Currencies</div>
+        <div class="card-bd">${ccyRows}${droppedHtml}</div>
       </div>
 
       <div class="card">
-        <div class="card-title">Signal Pairs (${pairs.length})</div>
-        ${pairChips}
-        ${removedHtml}
+        <div class="card-hd">Signal Pairs (${pairs.length})</div>
+        <div class="card-bd">${pairRows}${removedHtml}</div>
       </div>
 
-      <p style="font-size:13px;color:#94a3b8">Monitoring phase cycle: MONITORING → PULLBACK → COMPRESSION → READY → ENTRY. You'll be notified when a pair reaches ENTRY.</p>
-      <p style="text-align:center;margin:24px 0"><a class="cta" href="https://nervafx.com">View Dashboard</a></p>
-      <p style="color:#94a3b8;font-size:12px">Energy directions are analytical observations, not trade recommendations.</p>
+      <div class="section">
+        <p class="sm">Phase cycle: Monitoring &rarr; Pullback &rarr; Compression &rarr; Ready &rarr; Entry. You will be notified when a pair reaches Entry.</p>
+      </div>
+
+      <p style="text-align:center;margin:24px 0 16px"><a class="cta" href="https://nervafx.com">Open Dashboard</a></p>
+      <p class="sm" style="text-align:center">Analytical observations only — not trade recommendations.</p>
     `),
   };
 }
@@ -190,67 +189,68 @@ function directionAlertEmail(data) {
 function phaseAlertEmail(data) {
   const { pair, signal } = data;
   const isBuy = signal.signal === 'BUY';
-  const dirColor = isBuy ? '#22c55e' : '#ef4444';
-  const dirArrow = isBuy ? '▲' : '▼';
+  const dirColor = isBuy ? '#4ade80' : '#f87171';
+  const dirBg = isBuy ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)';
+  const dirBorder = isBuy ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)';
   const pairLabel = pair.instrument.replace('_', '/');
 
   return {
-    subject: `${signal.signal} ${pairLabel} — Entry Signal — NervaFX`,
+    subject: `Entry Signal — ${signal.signal} ${pairLabel}`,
     html: baseLayout(`
-      <h2>Entry Signal Confirmed</h2>
-      <p><strong>${pairLabel}</strong> has reached the <strong>ENTRY</strong> phase with all gates passed.</p>
+      <h2>Entry Signal</h2>
+      <p class="sub">${pairLabel} reached the Entry phase — all gates passed</p>
 
-      <div style="background:#1e293b;border:2px solid ${dirColor};border-radius:12px;padding:20px;margin:16px 0;text-align:center">
-        <div style="font-size:28px;color:${dirColor};font-weight:800;margin:0 0 8px">${dirArrow} ${signal.signal} ${pairLabel}</div>
-        <div style="color:#94a3b8;font-size:14px">${pair.strong_ccy} ↑ Strong · ${pair.weak_ccy} ↓ Weak</div>
+      <div style="background:${dirBg};border:1px solid ${dirBorder};border-radius:8px;padding:20px;margin:16px 0;text-align:center">
+        <div style="font-size:24px;color:${dirColor};font-weight:800;letter-spacing:-0.3px">${signal.signal} ${pairLabel}</div>
+        <div class="dim" style="margin-top:6px">${pair.strong_ccy} strong / ${pair.weak_ccy} weak</div>
       </div>
 
       <div class="card">
-        <div class="card-title">Trade Levels</div>
-        <table style="width:100%;border-collapse:collapse">
-          <tr>
-            <td style="padding:8px 0;color:#94a3b8;font-size:13px">Entry</td>
-            <td style="padding:8px 0;color:#fff;font-weight:600;text-align:right">${Number(signal.entry_price).toFixed(5)}</td>
-          </tr>
-          <tr>
-            <td style="padding:8px 0;color:#94a3b8;font-size:13px">Stop Loss</td>
-            <td style="padding:8px 0;color:#ef4444;font-weight:600;text-align:right">${Number(signal.stop_loss).toFixed(5)}</td>
-          </tr>
-          <tr>
-            <td style="padding:8px 0;color:#94a3b8;font-size:13px">Take Profit</td>
-            <td style="padding:8px 0;color:#22c55e;font-weight:600;text-align:right">${Number(signal.take_profit).toFixed(5)}</td>
-          </tr>
-          <tr style="border-top:1px solid #334155">
-            <td style="padding:8px 0;color:#94a3b8;font-size:13px">Risk:Reward</td>
-            <td style="padding:8px 0;color:#f59e0b;font-weight:600;text-align:right">1:${signal.risk_reward}</td>
-          </tr>
-        </table>
+        <div class="card-hd">Trade Levels</div>
+        <div class="card-bd">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
+              <td style="padding:10px 14px" class="sm">Entry</td>
+              <td style="padding:10px 14px;text-align:right" class="val">${Number(signal.entry_price).toFixed(5)}</td>
+            </tr>
+            <tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
+              <td style="padding:10px 14px" class="sm">Stop Loss</td>
+              <td style="padding:10px 14px;text-align:right;color:#f87171;font-weight:700;font-size:14px">${Number(signal.stop_loss).toFixed(5)}</td>
+            </tr>
+            <tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
+              <td style="padding:10px 14px" class="sm">Take Profit</td>
+              <td style="padding:10px 14px;text-align:right;color:#4ade80;font-weight:700;font-size:14px">${Number(signal.take_profit).toFixed(5)}</td>
+            </tr>
+            <tr>
+              <td style="padding:10px 14px;border-top:1px solid #1e293b" class="sm">Risk : Reward</td>
+              <td style="padding:10px 14px;border-top:1px solid #1e293b;text-align:right;color:#fbbf24;font-weight:700;font-size:14px">1:${signal.risk_reward}</td>
+            </tr>
+          </table>
+        </div>
       </div>
 
       <div class="card">
-        <div class="card-title">Confirmation Scores</div>
-        <table style="width:100%;border-collapse:collapse">
-          <tr>
-            <td style="padding:6px 0;color:#94a3b8;font-size:13px">DE Combined</td>
-            <td style="padding:6px 0;color:#fff;text-align:right">${pair.de_combined || '—'}</td>
-          </tr>
-          <tr>
-            <td style="padding:6px 0;color:#94a3b8;font-size:13px">Impulse</td>
-            <td style="padding:6px 0;color:#fff;text-align:right">${pair.impulse_score || '—'} ${pair.impulse_aligned ? '✓ Aligned' : ''}</td>
-          </tr>
-          <tr>
-            <td style="padding:6px 0;color:#94a3b8;font-size:13px">Energy Level</td>
-            <td style="padding:6px 0;color:#f59e0b;text-align:right">${pair.energy_level || '—'}</td>
-          </tr>
-          <tr>
-            <td style="padding:6px 0;color:#94a3b8;font-size:13px">Phase Path</td>
-            <td style="padding:6px 0;color:#94a3b8;text-align:right;font-size:12px">MONITORING → PULLBACK → COMPRESSION → READY → <strong style="color:#22c55e">ENTRY</strong></td>
-          </tr>
-        </table>
+        <div class="card-hd">Confirmation</div>
+        <div class="card-bd">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
+              <td style="padding:10px 14px" class="sm">DE Combined</td>
+              <td style="padding:10px 14px;text-align:right" class="val">${pair.de_combined || '--'}</td>
+            </tr>
+            <tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
+              <td style="padding:10px 14px" class="sm">Impulse</td>
+              <td style="padding:10px 14px;text-align:right" class="val">${pair.impulse_score || '--'}${pair.impulse_aligned ? ' <span class="tag tag-green">Aligned</span>' : ''}</td>
+            </tr>
+            <tr>
+              <td style="padding:10px 14px" class="sm">Energy Level</td>
+              <td style="padding:10px 14px;text-align:right;color:#fbbf24;font-weight:700;font-size:14px">${pair.energy_level || '--'}</td>
+            </tr>
+          </table>
+        </div>
       </div>
 
-      <p style="text-align:center;margin:24px 0"><a class="cta" href="https://nervafx.com">View Full Analysis →</a></p>
-      <p style="color:#94a3b8;font-size:13px">This is a system-generated signal, not financial advice. Always apply your own risk management.</p>
+      <p style="text-align:center;margin:24px 0 16px"><a class="cta" href="https://nervafx.com">View Analysis</a></p>
+      <p class="sm" style="text-align:center">System-generated signal — not financial advice.</p>
     `),
   };
 }
@@ -259,66 +259,70 @@ function dailyDigestEmail(data) {
   const { date, energyEvents, pairs, entryPairs, sessions } = data;
 
   const eventRows = (energyEvents || []).map(ev => `
-    <div style="background:#0f172a;border-radius:6px;padding:10px 14px;margin:6px 0">
-      <span style="color:#f59e0b;font-weight:600">${Math.round(ev.energy)}</span>
-      <span style="color:#94a3b8"> @ ${ev.time ? new Date(ev.time).toISOString().slice(11, 16) : '?'} UTC</span>
-      <span style="color:#64748b"> (${SESS_LABEL[ev.session] || ev.session})</span>
-    </div>`
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-bottom:1px solid rgba(30,41,59,0.6)"><tr>
+      <td style="padding:10px 14px">
+        <span class="val" style="color:#fbbf24">${Math.round(ev.energy)}</span>
+        <span class="dim" style="margin-left:6px">${SESS_LABEL[ev.session] || ev.session}</span>
+      </td>
+      <td style="padding:10px 14px;text-align:right" class="sm">${ev.time ? new Date(ev.time).toISOString().slice(11, 16) : '?'} UTC</td>
+    </tr></table>`
   ).join('');
 
-  const pairSummary = (pairs || []).slice(0, 6).map(p => {
+  const pairRows = (pairs || []).slice(0, 6).map(p => {
     const isBuy = p.dir === 'BUY';
-    const color = isBuy ? '#22c55e' : '#ef4444';
-    return `<tr>
-      <td style="padding:6px 8px;color:#fff">${p.instrument.replace('_','/')}</td>
-      <td style="padding:6px 8px;color:${color};font-weight:600">${p.dir}</td>
-      <td style="padding:6px 8px;color:#94a3b8">${p.phase}</td>
-      <td style="padding:6px 8px;color:#94a3b8">${Math.round(p.de_combined || 0)}</td>
-    </tr>`;
+    const color = isBuy ? '#4ade80' : '#f87171';
+    return `<table width="100%" cellpadding="0" cellspacing="0" style="border-bottom:1px solid rgba(30,41,59,0.6)"><tr>
+      <td style="padding:10px 14px">
+        <span class="val" style="font-size:13px">${p.instrument.replace('_','/')}</span>
+        <span style="color:${color};font-weight:600;font-size:12px;margin-left:6px">${p.dir}</span>
+      </td>
+      <td style="padding:10px 14px;text-align:right">
+        <span class="tag tag-gray">${p.phase}</span>
+        <span class="dim" style="margin-left:6px">DE ${Math.round(p.de_combined || 0)}</span>
+      </td>
+    </tr></table>`;
   }).join('');
 
   const entryHtml = entryPairs?.length ? `
-    <div class="card" style="border-color:rgba(34,197,94,0.4)">
-      <div class="card-title" style="color:#22c55e">🎯 Entry Signals Fired</div>
-      <p style="margin:0;color:#cbd5e1">${entryPairs.map(p => `<strong>${p.instrument.replace('_','/')}</strong> ${p.dir}`).join(', ')}</p>
+    <div class="card" style="border-color:rgba(34,197,94,0.3)">
+      <div class="card-hd" style="color:#4ade80">Entry Signals</div>
+      <div class="card-bd">
+        ${entryPairs.map(p => `<table width="100%" cellpadding="0" cellspacing="0" style="border-bottom:1px solid rgba(30,41,59,0.6)"><tr><td style="padding:10px 14px" class="val">${p.instrument.replace('_','/')}</td><td style="padding:10px 14px;text-align:right"><span class="tag tag-green">${p.signal || p.dir}</span></td></tr></table>`).join('')}
+      </div>
     </div>` : '';
 
-  const sessionCards = (sessions || []).map(s => {
+  const sessionMetrics = (sessions || []).map(s => {
     const energy = Math.round(parseFloat(s.market_energy) || 0);
-    return `<span class="metric">${SESS_LABEL[s.session_name] || s.session_name}: <strong>${energy}</strong></span>`;
+    return `<span class="metric">${SESS_LABEL[s.session_name] || s.session_name}: <b>${energy}</b></span>`;
   }).join(' ');
 
   return {
-    subject: `Daily Digest — ${date} — NervaFX`,
+    subject: `Daily Digest — ${date}`,
     html: baseLayout(`
-      <h2>Daily Market Digest</h2>
-      <p>Summary for <strong>${date}</strong></p>
+      <h2>Daily Digest</h2>
+      <p class="sub">${date}</p>
 
-      ${sessionCards ? `<div class="card"><div class="card-title">Session Energy</div><p style="margin:0">${sessionCards}</p></div>` : ''}
+      ${sessionMetrics ? `
+      <div class="card">
+        <div class="card-hd">Session Energy</div>
+        <div style="padding:12px 14px">${sessionMetrics}</div>
+      </div>` : ''}
 
       ${eventRows ? `
       <div class="card">
-        <div class="card-title">Energy Events</div>
-        ${eventRows || '<p style="color:#94a3b8">No bars crossed threshold today.</p>'}
+        <div class="card-hd">Energy Events</div>
+        <div class="card-bd">${eventRows}</div>
       </div>` : ''}
 
       ${entryHtml}
 
-      ${pairSummary ? `
+      ${pairRows ? `
       <div class="card">
-        <div class="card-title">Signal Pairs</div>
-        <table style="width:100%;border-collapse:collapse">
-          <thead><tr style="border-bottom:1px solid #334155;color:#64748b;font-size:12px">
-            <th style="padding:6px 8px;text-align:left">Pair</th>
-            <th style="padding:6px 8px;text-align:left">Dir</th>
-            <th style="padding:6px 8px;text-align:left">Phase</th>
-            <th style="padding:6px 8px;text-align:left">DE</th>
-          </tr></thead>
-          <tbody>${pairSummary}</tbody>
-        </table>
+        <div class="card-hd">Signal Pairs</div>
+        <div class="card-bd">${pairRows}</div>
       </div>` : ''}
 
-      <p style="text-align:center;margin:24px 0"><a class="cta" href="https://nervafx.com">Open Dashboard →</a></p>
+      <p style="text-align:center;margin:24px 0 16px"><a class="cta" href="https://nervafx.com">Open Dashboard</a></p>
     `),
   };
 }

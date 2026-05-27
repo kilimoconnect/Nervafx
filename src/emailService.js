@@ -39,34 +39,64 @@ function send(apiKey, payload) {
 function baseLayout(content) {
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<!--[if mso]><style>table,td{font-family:Arial,sans-serif!important}</style><![endif]-->
 <style>
-  body { margin:0; padding:0; background:#0b1120; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; }
-  .wrap { max-width:600px; margin:0 auto; background:#111827; border-radius:12px; overflow:hidden; }
-  .header { background:linear-gradient(135deg,#1e293b,#0f172a); padding:24px 32px; text-align:center; }
-  .body { padding:28px 32px; color:#e2e8f0; font-size:15px; line-height:1.6; }
-  .body h2 { color:#fff; font-size:20px; margin:0 0 12px; }
-  .body p { margin:0 0 14px; }
-  .cta { display:inline-block; padding:12px 28px; background:linear-gradient(135deg,#f59e0b,#d97706); color:#0f172a; font-weight:700; text-decoration:none; border-radius:8px; font-size:15px; }
-  .card { background:#1e293b; border:1px solid #334155; border-radius:8px; padding:16px; margin:12px 0; }
-  .card-title { color:#f59e0b; font-weight:700; font-size:14px; margin:0 0 8px; text-transform:uppercase; letter-spacing:0.5px; }
-  .metric { display:inline-block; background:#0f172a; border:1px solid #334155; border-radius:6px; padding:6px 12px; margin:3px 4px; font-size:13px; color:#94a3b8; }
-  .metric strong { color:#fff; }
-  .signal-buy { color:#22c55e; font-weight:700; }
-  .signal-sell { color:#ef4444; font-weight:700; }
-  .badge { display:inline-block; padding:3px 10px; border-radius:4px; font-size:12px; font-weight:600; }
-  .badge-green { background:rgba(34,197,94,0.15); color:#22c55e; }
-  .badge-red { background:rgba(239,68,68,0.15); color:#ef4444; }
-  .badge-amber { background:rgba(245,158,11,0.15); color:#f59e0b; }
-  .footer { padding:20px 32px; text-align:center; color:#64748b; font-size:12px; border-top:1px solid #1e293b; }
-  .footer a { color:#94a3b8; text-decoration:underline; }
-  .divider { height:1px; background:#334155; margin:20px 0; }
+  body{margin:0;padding:0;background:#0a0e1a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  .outer{max-width:600px;margin:0 auto;background:#111827}
+  .accent{height:3px;background:linear-gradient(90deg,#f59e0b,#d97706,#f59e0b)}
+  .hdr{padding:24px 24px 18px;text-align:center;border-bottom:1px solid #1e293b}
+  .cnt{padding:32px 24px;color:#cbd5e1;font-size:14px;line-height:1.7}
+  .cnt h2{color:#f1f5f9;font-size:18px;font-weight:700;margin:0 0 6px;letter-spacing:-0.2px}
+  .cnt .sub{color:#94a3b8;font-size:13px;margin:0 0 20px}
+  .cnt p{margin:0 0 14px}
+  .section{margin:20px 0}
+  .section-label{font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1.2px;margin:0 0 10px;padding-bottom:8px;border-bottom:1px solid #1e293b}
+  .row{display:block;padding:10px 14px;background:#0f172a;border-radius:6px;margin:6px 0}
+  .row-bordered{border-left:3px solid #334155}
+  .row-green{border-left-color:#22c55e}
+  .row-red{border-left-color:#ef4444}
+  .row-amber{border-left-color:#f59e0b}
+  .tag{display:inline-block;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600;line-height:18px}
+  .tag-green{background:rgba(34,197,94,0.12);color:#4ade80}
+  .tag-red{background:rgba(239,68,68,0.12);color:#f87171}
+  .tag-amber{background:rgba(245,158,11,0.12);color:#fbbf24}
+  .tag-blue{background:rgba(14,165,233,0.12);color:#38bdf8}
+  .tag-gray{background:rgba(100,116,139,0.12);color:#94a3b8}
+  .val{color:#f1f5f9;font-weight:700;font-size:14px}
+  .dim{color:#64748b;font-size:12px}
+  .sm{font-size:12px;color:#94a3b8}
+  .cta{display:inline-block;padding:12px 32px;background:#f59e0b;color:#0f172a;font-weight:700;text-decoration:none;border-radius:6px;font-size:14px;letter-spacing:0.2px}
+  .card{background:#0f172a;border:1px solid #1e293b;border-radius:8px;overflow:hidden;margin:16px 0}
+  .card-hd{padding:12px 14px;border-bottom:1px solid #1e293b;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1.2px}
+  .card-bd{padding:4px 0}
+  .card-row{padding:0;border-bottom:1px solid rgba(30,41,59,0.6)}
+  .card-row:last-child{border-bottom:none}
+  .metric{display:inline-block;background:#0f172a;border:1px solid #1e293b;border-radius:4px;padding:5px 10px;margin:2px 3px;font-size:12px;color:#94a3b8}
+  .metric b{color:#f1f5f9}
+  .ftr{padding:24px;text-align:center;border-top:1px solid #1e293b}
+  .ftr-brand{font-size:12px;font-weight:600;color:#475569;margin:0 0 6px}
+  .ftr-links{font-size:11px;color:#475569;margin:0}
+  .ftr-links a{color:#64748b;text-decoration:none;border-bottom:1px solid #334155}
+  .signal-buy{color:#4ade80;font-weight:700}
+  .signal-sell{color:#f87171;font-weight:700}
+  .divider{height:1px;background:#1e293b;margin:20px 0}
+  @media only screen and (max-width:480px){
+    .cnt{padding:24px 16px}
+    .hdr{padding:20px 16px 16px}
+    .ftr{padding:20px 16px}
+    .card-row{padding:9px 12px}
+    .row{padding:9px 12px}
+  }
 </style></head>
-<body><div style="padding:20px"><div class="wrap">
-  <div class="header"><a href="https://nervafx.com" style="text-decoration:none"><img src="https://nervafx.com/nervafx-logo.png" alt="NervaFX" width="180" style="display:inline-block;max-width:180px;height:auto;border:0" /></a></div>
-  <div class="body">${content}</div>
-  <div class="footer">
-    <p>NervaFX — Currency Strength & Market Energy Engine</p>
-    <p><a href="{{unsubscribeUrl}}">Unsubscribe</a> · <a href="https://nervafx.com">nervafx.com</a></p>
+<body><div style="padding:12px 8px"><div class="outer">
+  <div class="accent"></div>
+  <div class="hdr">
+    <a href="https://nervafx.com" style="text-decoration:none"><img src="https://nervafx.com/nervafx-logo.png" alt="NervaFX" width="160" style="display:inline-block;max-width:160px;height:auto;border:0" /></a>
+  </div>
+  <div class="cnt">${content}</div>
+  <div class="ftr">
+    <p class="ftr-brand">NervaFX</p>
+    <p class="ftr-links"><a href="https://nervafx.com">Dashboard</a></p>
   </div>
 </div></div></body></html>`;
 }
