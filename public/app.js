@@ -2645,11 +2645,11 @@ function renderEnergySignals(data) {
 
   if (statusEl) {
     if (thresholdMet) {
-      statusEl.innerHTML = `<span style="color:#22c55e;font-weight:700">ACTIVE</span> — Energy ${Math.round(energy)} above threshold (50). Directions confirmed.`;
+      statusEl.innerHTML = `<span style="color:#22c55e;font-weight:700">ACTIVE</span> — Directions confirmed.`;
     } else if (energy >= 35) {
-      statusEl.innerHTML = `<span style="color:#f59e0b;font-weight:700">BUILDING</span> — Energy ${Math.round(energy)}, approaching threshold. Monitoring...`;
+      statusEl.innerHTML = `<span style="color:#f59e0b;font-weight:700">BUILDING</span> — Approaching threshold.`;
     } else {
-      statusEl.innerHTML = `<span style="color:#94a3b8;font-weight:700">LOW</span> — Energy ${Math.round(energy)}. Existing directions persist.`;
+      statusEl.innerHTML = `<span style="color:#94a3b8;font-weight:700">LOW</span> — Existing directions persist.`;
     }
   }
 
