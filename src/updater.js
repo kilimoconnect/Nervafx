@@ -175,4 +175,4 @@ async function runAnalysis() {
   console.log('[ANALYZE] Complete.');
 }
 
-module.exports = { hourlyUpdate, runAnalysis };
+module.exports = { hourlyUpdate, runAnalysis, syncCandles };
