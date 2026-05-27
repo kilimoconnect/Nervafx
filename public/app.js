@@ -3239,7 +3239,7 @@ function _meSessionExplain(s, label, status) {
       const dirCls = p.dir === 'BUY' ? 'buy' : 'sell';
       const statusColor = p.status === 'ENTRY' ? '#22c55e' : p.status === 'READY' ? '#3b82f6' : p.status === 'PULLBACK' ? '#f59e0b' : p.status === 'COMPRESSION' ? '#a78bfa' : p.status === 'STRONG' ? '#22c55e' : p.status === 'ALIGNED' ? '#0ea5e9' : p.status === 'PARTIAL' ? '#a855f7' : p.status === 'BUILDING' ? '#f59e0b' : p.status === 'AGAINST' ? '#ef4444' : '#64748b';
       const dl = deLabel(p.de);
-      const deHtml = p.de > 0 ? `<span class="me-flow-de" style="color:${dl.color}">DE ${p.de}% ${dl.text}</span>` : '';
+      const deHtml = `<span class="me-flow-de" style="color:${dl.color}">DE ${p.de}% ${dl.text}</span>`;
       const volColor = VOL_GRADE_COLOR[p.volGrade] || '#64748b';
       const volShort = VOL_GRADE_SHORT[p.volGrade] || '';
       const volHtml = p.volGrade ? `<span class="me-flow-vol" style="color:${volColor}">${p.volRV.toFixed(1)}× ${volShort}</span>` : '';
