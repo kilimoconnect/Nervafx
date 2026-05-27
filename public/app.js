@@ -3188,7 +3188,7 @@ function _meSessionExplain(s, label, status) {
       return {
         pair: p.instrument.replace('_', '/'), dir: p.dir,
         status: p.phase || 'MONITORING',
-        finalScore, de: Math.round(de),
+        finalScore, de: Math.round(de * 10) / 10,
         volGrade: vol?.participation_grade || '',
         volRV:  vol ? parseFloat(vol.relative_volume) || 0 : 0,
         volEff: vol ? parseFloat(vol.volume_efficiency) || 0 : 0,
@@ -3216,7 +3216,7 @@ function _meSessionExplain(s, label, status) {
         const vol = _volDataCache[fp.pair];
         return {
           pair: fp.pair.replace('_', '/'), dir: fp.dir, status: fp.status || 'WAIT',
-          finalScore, de: Math.round(deCombined),
+          finalScore, de: Math.round(deCombined * 10) / 10,
           volGrade: vol?.participation_grade || '', volRV: vol ? parseFloat(vol.relative_volume) || 0 : 0,
           volEff: vol ? parseFloat(vol.volume_efficiency) || 0 : 0, volPers: vol ? parseFloat(vol.volume_persistence) || 0 : 0, volScore: 0,
         };
@@ -3239,7 +3239,7 @@ function _meSessionExplain(s, label, status) {
       const dirCls = p.dir === 'BUY' ? 'buy' : 'sell';
       const statusColor = p.status === 'ENTRY' ? '#22c55e' : p.status === 'READY' ? '#3b82f6' : p.status === 'PULLBACK' ? '#f59e0b' : p.status === 'COMPRESSION' ? '#a78bfa' : p.status === 'STRONG' ? '#22c55e' : p.status === 'ALIGNED' ? '#0ea5e9' : p.status === 'PARTIAL' ? '#a855f7' : p.status === 'BUILDING' ? '#f59e0b' : p.status === 'AGAINST' ? '#ef4444' : '#64748b';
       const dl = deLabel(p.de);
-      const deHtml = p.de > 0 ? `<span class="me-flow-de" style="color:${dl.color}">DE ${p.de}% ${dl.text}</span>` : '';
+      const deHtml = `<span class="me-flow-de" style="color:${dl.color}">DE ${p.de}% ${dl.text}</span>`;
       const volColor = VOL_GRADE_COLOR[p.volGrade] || '#64748b';
       const volShort = VOL_GRADE_SHORT[p.volGrade] || '';
       const volHtml = p.volGrade ? `<span class="me-flow-vol" style="color:${volColor}">${p.volRV.toFixed(1)}× ${volShort}</span>` : '';
