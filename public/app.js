@@ -5363,7 +5363,7 @@ async function refresh() {
       api('/api/session').catch(() => ({ session: null })),
       api('/api/journal?limit=5').catch(() => ({ entries: [] })),
       api('/api/profile').catch(() => ({})),
-      api('/api/volume-analysis?days=1').catch(() => ({ rows: [] })),
+      api('/api/volume-analysis?days=2').catch(() => ({ rows: [] })),
       api('/api/flow-performance?days=1').catch(() => ({ rows: [] })),
       api('/api/energy-signals').catch(() => ({ currencies: [], pairs: [], energy: 0, thresholdMet: false })),
     ]);
