@@ -67,35 +67,35 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // Scan every hourly bar across all sessions to find the peak single bar
-    let peakBarEnergy = 0;
-    let peakBarTime = null;
-    let peakBarSession = null;
+    // Find the LAST (most recent) hourly bar that crossed 50.
+    // That's the bar that set or confirmed the current direction.
+    // Collect all hourly bars, sort by time, find the latest one >= 50.
+    const allBars = [];
     for (const s of (sessions || [])) {
       const hourly = s.details?.hourly || [];
       for (const h of hourly) {
-        const hEnergy = parseFloat(h.market_energy) || 0;
-        if (hEnergy > peakBarEnergy) {
-          peakBarEnergy = hEnergy;
-          peakBarTime = h.time || null;
-          peakBarSession = s.session_name;
-        }
-      }
-      // Also consider session-level as a bar (in case hourly is empty)
-      const sessEnergy = parseFloat(s.market_energy) || 0;
-      if (sessEnergy > peakBarEnergy) {
-        peakBarEnergy = sessEnergy;
-        peakBarSession = s.session_name;
+        allBars.push({
+          energy: parseFloat(h.market_energy) || 0,
+          time: h.time || null,
+          session: s.session_name,
+        });
       }
     }
+    // Sort by time descending (most recent first)
+    allBars.sort((a, b) => (b.time || '').localeCompare(a.time || ''));
+
+    // Last bar that crossed threshold
+    const triggerBar = allBars.find(b => b.energy >= 50);
+    const triggerEnergy = triggerBar?.energy || 0;
+    const thresholdMet = triggerEnergy >= 50;
 
     res.json({
       currencies: currencies || [],
       pairs: pairs || [],
-      energy: peakBarEnergy,
-      peakBarTime,
-      peakBarSession,
-      thresholdMet: peakBarEnergy >= 50,
+      energy: triggerEnergy,
+      peakBarTime: triggerBar?.time || null,
+      peakBarSession: triggerBar?.session || null,
+      thresholdMet,
     });
   } catch (e) {
     console.error('[ENERGY-SIGNALS-API]', e.message);
