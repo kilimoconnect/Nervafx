@@ -2655,9 +2655,22 @@ function renderEnergySignals(data) {
     if (!activePairs.length) {
       pairsEl.innerHTML = '<div class="es-no-data">No active signal pairs. Energy threshold must be met with aligned currencies.</div>';
     } else {
-      // Sort: ENTRY first, then READY, PULLBACK, COMPRESSION, MONITORING
+      // Sort: most active movement first, then by phase
+      // Active = higher |v45|, EXPANDING m15, higher impulse
       const phaseOrder = { ENTRY: 0, READY: 1, PULLBACK: 2, COMPRESSION: 3, MONITORING: 4 };
-      activePairs.sort((a,b) => (phaseOrder[a.phase] ?? 5) - (phaseOrder[b.phase] ?? 5));
+      const m15Bonus = { EXPANDING: 3, STEADY: 1, COMPRESSING: 0, REVERSING: -1, FLAT: -2 };
+      activePairs.sort((a, b) => {
+        const aMove = Math.abs(parseFloat(a.v45) || 0) * 10000;
+        const bMove = Math.abs(parseFloat(b.v45) || 0) * 10000;
+        const aImp = a.impulse_score || 0;
+        const bImp = b.impulse_score || 0;
+        const aM15 = m15Bonus[(a.m15_state || '').toUpperCase()] || 0;
+        const bM15 = m15Bonus[(b.m15_state || '').toUpperCase()] || 0;
+        // Composite: phase weight + movement + impulse + m15 state
+        const aScore = -(phaseOrder[a.phase] ?? 5) * 10 + aMove + aImp * 0.3 + aM15 * 5;
+        const bScore = -(phaseOrder[b.phase] ?? 5) * 10 + bMove + bImp * 0.3 + bM15 * 5;
+        return bScore - aScore;
+      });
 
       pairsEl.innerHTML = activePairs.map(p => {
         const pairLabel = p.instrument.replace('_', '/');
