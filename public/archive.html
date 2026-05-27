@@ -484,6 +484,20 @@
         return location.replace('/login.html');
       }
     } catch (_) { return location.replace('/login.html'); }
+
+    // Plan gate — archive requires premium
+    const plan = localStorage.getItem('nfx_plan') || 'free';
+    if (plan !== 'premium') {
+      document.addEventListener('DOMContentLoaded', function () {
+        const main = document.querySelector('.arc-main');
+        if (main) main.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;text-align:center;gap:16px;">'
+          + '<span style="font-size:48px;">📦</span>'
+          + '<h2 style="font-size:20px;font-weight:700;color:var(--text);margin:0;">Archive</h2>'
+          + '<p style="font-size:13px;color:var(--text-muted);max-width:400px;line-height:1.6;">Browse historical session data, journal entries, and trade outcomes across all sessions. Requires Premium plan.</p>'
+          + '<a href="/app#pricing" onclick="event.preventDefault();window.location=\'/app\'" style="display:inline-block;padding:10px 24px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-size:13px;font-weight:600;text-decoration:none;margin-top:8px;">Back to Dashboard</a>'
+          + '</div>';
+      });
+    }
   })();
 
   const _userTz = localStorage.getItem('nfx_tz') || 'auto';
