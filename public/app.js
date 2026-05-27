@@ -2686,7 +2686,7 @@ function renderEnergySignals(data) {
           const h6Cls = h6 > 0 ? 'pos' : h6 < 0 ? 'neg' : '';
           let eventHtml = '';
           if (c.energy_event_type) {
-            const evCls = c.energy_event_type === 'CONTINUATION' ? 'continuation' : c.energy_event_type === 'REVERSAL' ? 'reversal' : 'new-event';
+            const evCls = c.energy_event_type === 'CONTINUATION' ? 'continuation' : c.energy_event_type === 'REVERSAL' ? 'reversal' : c.energy_event_type === 'DROPPED' ? 'reversal' : 'new-event';
             eventHtml = `<span class="es-ccy-event ${evCls}">${c.energy_event_type}</span>`;
           }
           return `<div class="es-ccy-row">
@@ -3150,37 +3150,54 @@ function _meSessionExplain(s, label, status) {
   let rankedPairs = null;
 
   if (status === 'ACTIVE' && _energySignalsCache?.pairs?.length) {
-    // Use top 4 energy signal pairs sorted by M15 movement
-    const m15Bonus = { EXPANDING: 3, STEADY: 1, COMPRESSING: 0, REVERSING: -1, FLAT: -2 };
-    const sorted = [..._energySignalsCache.pairs]
-      .filter(p => p.active)
-      .sort((a, b) => {
-        const aMove = Math.abs(parseFloat(a.v45) || 0) * 10000;
-        const bMove = Math.abs(parseFloat(b.v45) || 0) * 10000;
-        const aM15 = m15Bonus[(a.m15_state || '').toUpperCase()] || 0;
-        const bM15 = m15Bonus[(b.m15_state || '').toUpperCase()] || 0;
-        const aImp = a.impulse_score || 0;
-        const bImp = b.impulse_score || 0;
-        return (bMove + bM15 * 5 + bImp * 0.3) - (aMove + aM15 * 5 + aImp * 0.3);
-      })
-      .slice(0, 4);
+    // Use same ranking as Flow Performance: perfScore + DE → finalScore
+    const scored = [..._energySignalsCache.pairs].filter(p => p.active).map(p => {
+      const flowSign = p.dir === 'BUY' ? 1 : -1;
+      const v45 = parseFloat(p.v45) || 0;
+      const v90 = parseFloat(p.v90) || 0;
+      const sp3 = parseFloat(p.spread_3h) || 0;
+      const sp6 = parseFloat(p.spread_6h) || 0;
+      const de  = parseFloat(p.de_combined) || 0;
+      const imp = p.impulse_score || 0;
+      const impulseAligned = !!p.impulse_aligned;
+      const m15State = (p.m15_state || 'FLAT').toUpperCase();
+      const m15Confirms = (v45 * flowSign) > 0;
+      const h3Confirms  = (sp3 * flowSign) > 0;
+      const h6Confirms  = (sp6 * flowSign) > 0;
+      const accelSign   = Math.sign(v45 - v90) === flowSign;
 
-    if (sorted.length) {
-      rankedPairs = sorted.map(p => {
-        const de = parseFloat(p.de_combined) || 0;
-        const vol = _volDataCache[p.instrument];
-        const volGrade = vol?.participation_grade || '';
-        const volRV    = vol ? parseFloat(vol.relative_volume) || 0 : 0;
-        const volEff   = vol ? parseFloat(vol.volume_efficiency) || 0 : 0;
-        const volPers  = vol ? parseFloat(vol.volume_persistence) || 0 : 0;
-        return {
-          pair: p.instrument.replace('_', '/'), dir: p.dir,
-          status: p.phase || 'MONITORING',
-          finalScore: Math.abs(parseFloat(p.v45) || 0) * 10000,
-          de: Math.round(de), volGrade, volRV, volEff, volPers, volScore: 0,
-        };
-      });
-    }
+      let perfScore = 0;
+      perfScore += (v45 * flowSign) * 10000 * 3;
+      perfScore += (sp3 * flowSign) * 10000 * 2;
+      perfScore += (sp6 * flowSign) * 10000 * 1;
+      if (impulseAligned && imp >= 40) perfScore += imp * 0.5;
+      else if (impulseAligned)         perfScore += imp * 0.25;
+      else if (imp >= 40)              perfScore -= imp * 0.3;
+      if (m15Confirms && imp >= 40)    perfScore += 20;
+      else if (m15Confirms)            perfScore += 10;
+      if (h3Confirms)  perfScore += 10;
+      if (h6Confirms)  perfScore += 5;
+      if (accelSign)   perfScore += 10;
+      if (m15State === 'EXPANDING' && m15Confirms)                 perfScore += 15;
+      if (m15State === 'EXPANDING' && impulseAligned && imp >= 50) perfScore += 10;
+      if (m15State === 'REVERSING')                                perfScore -= 10;
+      if (m15State === 'COMPRESSING' && !m15Confirms)              perfScore -= 15;
+
+      const finalScore = (0.75 * perfScore) + (0.25 * de);
+      const vol = _volDataCache[p.instrument];
+      return {
+        pair: p.instrument.replace('_', '/'), dir: p.dir,
+        status: p.phase || 'MONITORING',
+        finalScore, de: Math.round(de),
+        volGrade: vol?.participation_grade || '',
+        volRV:  vol ? parseFloat(vol.relative_volume) || 0 : 0,
+        volEff: vol ? parseFloat(vol.volume_efficiency) || 0 : 0,
+        volPers: vol ? parseFloat(vol.volume_persistence) || 0 : 0,
+        volScore: 0,
+      };
+    });
+    scored.sort((a, b) => b.finalScore - a.finalScore);
+    if (scored.length) rankedPairs = scored.slice(0, 4);
   }
 
   // COMPLETED sessions: use stored flow_performance from session details

@@ -131,13 +131,11 @@ async function calculateEnergyDirection() {
     energySessions = fb || [];
   }
 
-  // Scan ALL hourly bars across today's sessions to find the best energy
-  // that crossed the threshold. Direction is set by the peak bar, not just
-  // the current one — once set, direction persists.
+  // Scan ALL hourly bars across today's sessions to find the LAST bar that
+  // crossed ≥50. This is the trigger bar — directions are snapshotted from
+  // the strength at that moment and persist until a NEW bar crosses ≥50.
   let currentEnergy = 0;  // live session-level energy (for display)
-  let peakEnergy = 0;     // highest hourly energy today
-  let peakSession = null;
-  let peakHour = null;
+  const allBars = [];     // every hourly bar with energy ≥ threshold
 
   for (const es of energySessions) {
     const sessEnergy = parseFloat(es.market_energy) || 0;
@@ -147,28 +145,28 @@ async function calculateEnergyDirection() {
       currentEnergy = sessEnergy;
     }
 
-    // Scan hourly bars inside this session's details
+    // Collect hourly bars that crossed the threshold
     const hourly = es.details?.hourly || [];
     for (const h of hourly) {
       const hEnergy = parseFloat(h.market_energy) || 0;
-      if (hEnergy > peakEnergy) {
-        peakEnergy = hEnergy;
-        peakSession = es.session_name;
-        peakHour = h.time;
+      if (hEnergy >= ENERGY_THRESHOLD) {
+        allBars.push({ energy: hEnergy, time: h.time, session: es.session_name });
       }
-    }
-
-    // Also consider the session-level average as a bar
-    if (sessEnergy > peakEnergy) {
-      peakEnergy = sessEnergy;
-      peakSession = es.session_name;
     }
   }
 
-  // If current session didn't have data, use peak as current for display
-  if (!currentEnergy) currentEnergy = peakEnergy;
+  // Sort by time descending — the LAST bar to cross ≥50 is the trigger
+  allBars.sort((a, b) => new Date(b.time) - new Date(a.time));
+  const triggerBar = allBars[0] || null;
 
-  console.log(`[ENERGY_DIR] Current energy: ${currentEnergy} | Peak today: ${peakEnergy} (${peakSession}${peakHour ? ' @ ' + peakHour : ''})`);
+  const triggerEnergy = triggerBar ? triggerBar.energy : 0;
+  const triggerSession = triggerBar ? triggerBar.session : null;
+  const triggerHour = triggerBar ? triggerBar.time : null;
+
+  // If current session didn't have data, use trigger energy for display
+  if (!currentEnergy) currentEnergy = triggerEnergy;
+
+  console.log(`[ENERGY_DIR] Current energy: ${currentEnergy} | Trigger bar: ${triggerEnergy} (${triggerSession}${triggerHour ? ' @ ' + triggerHour : ''})`);
 
   // ── 2. Fetch latest currency strength (3H + 6H) ───────────────────────────
   const { data: csRows, error: csErr } = await supabase
@@ -216,12 +214,22 @@ async function calculateEnergyDirection() {
   }
 
   // ── 5. Evaluate energy threshold ───────────────────────────────────────────
-  // Use PEAK energy today — if any bar crossed the threshold, direction is set
-  const thresholdMet = peakEnergy >= ENERGY_THRESHOLD;
+  const thresholdMet = triggerEnergy >= ENERGY_THRESHOLD;
 
-  // Check if this is a NEW energy event (was below threshold, now above)
-  const prevThresholdMet = Object.values(stateMap).some(s => s.active && s.threshold_met);
-  const isNewEnergyEvent = thresholdMet && !prevThresholdMet;
+  // Check if this is a NEW energy event by comparing trigger bar time against
+  // the stored triggered_at. A new bar crossing ≥50 AFTER the stored trigger
+  // time means we must re-evaluate directions with fresh strength.
+  const prevTriggeredAt = Object.values(stateMap)
+    .filter(s => s.active && s.triggered_at)
+    .map(s => new Date(s.triggered_at).getTime())
+    .sort((a, b) => b - a)[0] || 0;
+
+  const triggerBarTime = triggerHour ? new Date(triggerHour).getTime() : 0;
+  const hasActiveDirections = Object.values(stateMap).some(s => s.active);
+  const isNewEnergyEvent = thresholdMet && (
+    !hasActiveDirections ||                    // no directions exist yet
+    (triggerBarTime > prevTriggeredAt)          // new bar is newer than last trigger
+  );
 
   let currencyUpdates = [];
   let newPairs = [];
@@ -251,7 +259,7 @@ async function calculateEnergyDirection() {
     strong.sort((a, b) => b.score - a.score);
     weak.sort((a, b) => b.score - a.score);
 
-    console.log(`[ENERGY_DIR] NEW energy event — peak bar ${peakEnergy} (${peakSession}${peakHour ? ' @ ' + peakHour : ''}). Snapshotting directions. Strong: ${strong.map(s=>s.currency).join(',')} | Weak: ${weak.map(w=>w.currency).join(',')}`);
+    console.log(`[ENERGY_DIR] ═══ NEW ENERGY EVENT — bar ${triggerEnergy} @ ${triggerHour} (${triggerSession}) ═══`);
 
     // ── 7. Snapshot currency directions with trigger-time strength ─────────
     const newDirections = new Map();
@@ -272,10 +280,24 @@ async function calculateEnergyDirection() {
       const snap = strengthSnapshot.get(ccy) || { h3: ccyMap[ccy]?.smooth_3h || 0, h6: ccyMap[ccy]?.smooth_6h || 0 };
 
       let energyEventType = null;
-      if (prev?.active) {
-        energyEventType = (newDir === prevDir && newDir !== 'NEUTRAL') ? 'CONTINUATION' : 'REVERSAL';
-      } else {
-        energyEventType = 'NEW';
+      if (prev?.active && newDir !== 'NEUTRAL') {
+        energyEventType = (newDir === prevDir) ? 'CONTINUATION' : 'REVERSAL';
+      } else if (prev?.active && newDir === 'NEUTRAL') {
+        energyEventType = 'DROPPED';   // was active, now neutral
+      } else if (newDir !== 'NEUTRAL') {
+        energyEventType = 'NEW';        // wasn't active before
+      }
+      // else: was neutral, still neutral → no event type
+
+      // Log per-currency change
+      if (energyEventType === 'CONTINUATION') {
+        console.log(`[ENERGY_DIR]   ${ccy}: ${newDir} → CONTINUE (was ${prevDir}, still ${newDir})`);
+      } else if (energyEventType === 'REVERSAL') {
+        console.log(`[ENERGY_DIR]   ${ccy}: ${newDir} → REVERSAL (was ${prevDir}, now ${newDir})`);
+      } else if (energyEventType === 'DROPPED') {
+        console.log(`[ENERGY_DIR]   ${ccy}: NEUTRAL → DROPPED (was ${prevDir})`);
+      } else if (energyEventType === 'NEW') {
+        console.log(`[ENERGY_DIR]   ${ccy}: ${newDir} → NEW (was ${prevDir || 'inactive'})`);
       }
 
       currencyUpdates.push({
@@ -283,9 +305,9 @@ async function calculateEnergyDirection() {
         direction: newDir,
         smooth_3h: snap.h3,           // snapshot at trigger time — locked
         smooth_6h: snap.h6,           // snapshot at trigger time — locked
-        energy_at_trigger: peakEnergy,
-        trigger_session: peakSession,
-        triggered_at: now.toISOString(),
+        energy_at_trigger: triggerEnergy,
+        trigger_session: triggerSession,
+        triggered_at: triggerHour || now.toISOString(),  // use bar time, not "now"
         threshold_met: true,
         active: newDir !== 'NEUTRAL',
         energy_event_type: energyEventType,
@@ -304,34 +326,43 @@ async function calculateEnergyDirection() {
           instrument = rev; dir = 'SELL';
         } else continue;
 
+        // Determine if this pair is new, continuing, or reversed
+        const prevPair = pairMap[instrument];
+        let pairEventType = 'NEW';
+        if (prevPair?.active) {
+          pairEventType = (prevPair.dir === dir) ? 'CONTINUATION' : 'REVERSAL';
+        }
+
+        console.log(`[ENERGY_DIR]   ${instrument.replace('_','/')} ${dir} (${s.currency}↑ ${w.currency}↓) → ${pairEventType}${pairEventType === 'REVERSAL' ? ` (was ${prevPair.dir})` : ''}`);
+
         newPairs.push({
           instrument, dir,
           strong_ccy: s.currency,
           weak_ccy: w.currency,
-          trigger_energy: peakEnergy,
-          trigger_session: peakSession,
+          trigger_energy: triggerEnergy,
+          trigger_session: triggerSession,
+          triggered_at: triggerHour || now.toISOString(),
         });
       }
     }
-  } else if (thresholdMet || Object.values(stateMap).some(s => s.active)) {
+
+    // Log pairs that will be removed (were active, not in new set)
+    const newPairInstruments = new Set(newPairs.map(p => p.instrument));
+    for (const p of (existingPairs || [])) {
+      if (p.active && !newPairInstruments.has(p.instrument)) {
+        console.log(`[ENERGY_DIR]   ${p.instrument.replace('_','/')} ${p.dir} → REMOVED (${p.strong_ccy}↑ ${p.weak_ccy}↓ no longer valid)`);
+      }
+    }
+  } else if (hasActiveDirections) {
     // ── Directions already locked — keep them unchanged ──────────────────
     // No re-evaluation of strong/weak. Strength values stay as snapshotted.
     // Only M15 phase data gets updated (handled below in section 9–10).
-    console.log(`[ENERGY_DIR] Directions locked (peak ${peakEnergy}). No new energy event — keeping existing directions.`);
+    console.log(`[ENERGY_DIR] Directions locked. No new energy bar since last trigger — keeping existing directions & pairs.`);
 
-    // Keep existing currency states exactly as they are
-    for (const ccy of CURRENCIES) {
-      const prev = stateMap[ccy];
-      if (prev) {
-        currencyUpdates.push({
-          ...prev,
-          threshold_met: thresholdMet,
-          // DO NOT update smooth_3h/smooth_6h — keep snapshotted values
-        });
-      }
-    }
+    // Keep existing currency states exactly as they are — don't touch anything
+    // (no currencyUpdates needed, they won't be upserted)
 
-    // Keep existing active pairs
+    // Keep existing active pairs for M15 phase updates
     for (const p of (existingPairs || [])) {
       if (p.active) {
         newPairs.push({
@@ -347,7 +378,7 @@ async function calculateEnergyDirection() {
     }
   } else {
     // No threshold met and no existing directions — nothing to do
-    console.log(`[ENERGY_DIR] Energy ${peakEnergy} below threshold. No existing directions.`);
+    console.log(`[ENERGY_DIR] Energy below threshold (trigger: ${triggerEnergy}). No existing directions.`);
   }
 
   // ── 9. Fetch M15 data for all active pairs ─────────────────────────────────
@@ -367,7 +398,9 @@ async function calculateEnergyDirection() {
     }
   }
 
-  // Also get 3H spreads for pairs
+  // Also get 3H/6H spreads for pairs — use LIVE strength for monitoring
+  // (phase detection and signal entry gates need current market conditions)
+  // but fall back to snapshotted values if live data is missing
   let spreadMap = {};
   if (pairInstruments.length) {
     for (const inst of pairInstruments) {
@@ -407,13 +440,13 @@ async function calculateEnergyDirection() {
     // Detect new energy event for this specific pair
     let newEnergyEvent = false;
     let energyEventType = null;
-    if (isNewEnergyEvent && prev?.active) {
+    if (isNewEnergyEvent) {
       newEnergyEvent = true;
-      // Check if direction stayed same
-      energyEventType = prev.dir === p.dir ? 'CONTINUATION' : 'REVERSAL';
-    } else if (isNewEnergyEvent && !prev) {
-      newEnergyEvent = true;
-      energyEventType = 'NEW';
+      if (prev?.active) {
+        energyEventType = prev.dir === p.dir ? 'CONTINUATION' : 'REVERSAL';
+      } else {
+        energyEventType = 'NEW';
+      }
     }
 
     return {
@@ -436,7 +469,7 @@ async function calculateEnergyDirection() {
       m15_state: m15State,
       new_energy_event: newEnergyEvent,
       energy_event_type: energyEventType,
-      energy_level: peakEnergy,
+      energy_level: p.trigger_energy || triggerEnergy,
       active: true,
       last_updated: now.toISOString(),
     };
@@ -473,7 +506,7 @@ async function calculateEnergyDirection() {
 
   const phases = {};
   for (const p of pairRows) phases[p.phase] = (phases[p.phase] || 0) + 1;
-  console.log(`[ENERGY_DIR] ${pairRows.length} pairs | Energy: ${currentEnergy} | Phases: ${JSON.stringify(phases)}`);
+  console.log(`[ENERGY_DIR] ${pairRows.length} pairs | Trigger: ${triggerEnergy} (${triggerSession || 'none'}) | New event: ${isNewEnergyEvent} | Phases: ${JSON.stringify(phases)}`);
 
   return {
     energy: currentEnergy,
