@@ -23,7 +23,7 @@ module.exports = async function handler(req, res) {
 
   try {
     const sb = getClient();
-    const gate = await requirePlan(sb, req, 'pro');
+    const gate = await requirePlan(sb, req, 'free');
     if (gate.error) return res.status(gate.status).json({ error: gate.error, upgrade: gate.upgrade });
 
     const days       = Math.min(730, parseInt(req.query?.days || '7', 10) || 7);
