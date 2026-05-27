@@ -1568,12 +1568,13 @@ function _fpExplain(fp) {
     };
     parts.push(gradeDesc[fp.volGrade] || `Volume: ${fp.volGrade}.`);
 
-    // Efficiency (strongest predictor)
-    const effPct = (fp.volEff * 100).toFixed(0);
-    if (fp.volEff >= 0.10)      parts.push(`Vol efficiency ${effPct}% — institutional signature, 74% produce strong moves.`);
-    else if (fp.volEff >= 0.05) parts.push(`Vol efficiency ${effPct}% — volume translating into price, ~50% strong-move rate.`);
-    else if (fp.volEff >= 0.01) parts.push(`Vol efficiency ${effPct}% — some movement but not conviction-level.`);
-    else                        parts.push(`Vol efficiency near 0% — volume absorbed, ranging or accumulation.`);
+    // Efficiency (real data: median ~0.0002, p90 ~0.018, max ~0.06)
+    const effBps = (fp.volEff * 10000).toFixed(1);
+    if (fp.volEff >= 0.01)        parts.push(`Vol efficiency ${effBps} bps — institutional signature, volume driving price efficiently.`);
+    else if (fp.volEff >= 0.001)  parts.push(`Vol efficiency ${effBps} bps — good, volume translating into price movement.`);
+    else if (fp.volEff >= 0.0002) parts.push(`Vol efficiency ${effBps} bps — some movement but not conviction-level.`);
+    else if (fp.volEff > 0)       parts.push(`Vol efficiency ${effBps} bps — low, volume mostly absorbed.`);
+    else                          parts.push(`Vol efficiency near 0 — volume absorbed, ranging or accumulation.`);
 
     // RV (only mention at meaningful levels)
     if (fp.volRV >= 2.0)       parts.push(`RV ${fp.volRV.toFixed(1)}× — volume spike above session average.`);
@@ -1588,7 +1589,7 @@ function _fpExplain(fp) {
   // ── 8. Overall takeaway ──────────────────────────────────────────────
   const isAligned  = fp.status === 'STRONG' || fp.status === 'ALIGNED';
   const hasCleanDE = fp.deCombined >= 20;
-  const hasGoodEff = fp.volEff >= 0.05;
+  const hasGoodEff = fp.volEff >= 0.001;
   const hasInstVol = fp.volGrade === 'INSTITUTIONAL' || fp.volGrade === 'STRONG';
   const isDead     = fp.volGrade === 'DEAD' || fp.volRV < 0.5;
   const isWeak     = fp.volGrade === 'WEAK' || fp.volGrade === 'DEAD';
@@ -1706,12 +1707,13 @@ function _flowPairAnalysis(p) {
     };
     points.push(GRADE_DESC[p.volGrade] || 'Volume grade: ' + p.volGrade);
 
-    // Volume Efficiency
-    const effPct = (p.volEff * 100).toFixed(0);
-    if (p.volEff >= 0.10)      points.push('Efficiency ' + effPct + '% — institutional signature. Volume driving price efficiently.');
-    else if (p.volEff >= 0.05) points.push('Efficiency ' + effPct + '% — volume translating into price movement.');
-    else if (p.volEff >= 0.01) points.push('Efficiency ' + effPct + '% — some directional movement but not conviction-level.');
-    else                       points.push('Efficiency near 0% — volume absorbed without price progress.');
+    // Volume Efficiency (real data range: median ~0.0002, p90 ~0.018, max ~0.06)
+    const effBps = (p.volEff * 10000).toFixed(1); // basis points for readable display
+    if (p.volEff >= 0.01)        points.push('Efficiency ' + effBps + ' bps — institutional signature. Volume driving price efficiently.');
+    else if (p.volEff >= 0.001)  points.push('Efficiency ' + effBps + ' bps — good, volume translating into price movement.');
+    else if (p.volEff >= 0.0002) points.push('Efficiency ' + effBps + ' bps — some directional movement, not yet conviction-level.');
+    else if (p.volEff > 0)       points.push('Efficiency ' + effBps + ' bps — low, volume mostly absorbed without price progress.');
+    else                          points.push('Efficiency near 0 — volume absorbed without price progress.');
 
     // Relative Volume
     if (p.volRV >= 2.0)       points.push('RV ' + p.volRV.toFixed(1) + '× — volume spike above session average.');
@@ -1727,7 +1729,7 @@ function _flowPairAnalysis(p) {
   let verdict, verdictCls;
   const hasCleanDE = p.de >= 20;
   const hasTrendDE = p.de >= 30;
-  const hasGoodEff = p.volEff >= 0.05;
+  const hasGoodEff = p.volEff >= 0.001; // p75+ in real data (~top 20%)
   const hasInstVol = p.volGrade === 'INSTITUTIONAL' || p.volGrade === 'STRONG';
   const isDead     = p.volGrade === 'DEAD' || p.volRV < 0.5;
   const isWeak     = p.volGrade === 'WEAK' || p.volGrade === 'DEAD';
@@ -2068,7 +2070,7 @@ function renderFlowPerformance(strengthData, m15Data) {
             <span class="fp-lbl">Pers</span>
             <span class="fp-val">${fp.volPers}/4</span>
             <span class="fp-lbl">Eff</span>
-            <span class="fp-val ${fp.volEff >= 0.05 ? 'vol-strong' : fp.volEff >= 0.01 ? 'vol-normal' : 'vol-weak'}">${(fp.volEff * 100).toFixed(0)}%</span>
+            <span class="fp-val ${fp.volEff >= 0.01 ? 'vol-strong' : fp.volEff >= 0.001 ? 'vol-normal' : 'vol-weak'}">${(fp.volEff * 10000).toFixed(1)} bps</span>
           </div>` : ''}
           <div class="fp-detail-row fp-ccy-row">
             <span class="fp-ccy-chip ${(fp.h3Base ?? 0) >= 0 ? 'strong' : 'weak'}">${fp.base} ${fmt(fp.h3Base ?? 0, 5)}</span>
@@ -2184,11 +2186,12 @@ function _m15ImpulseAnalysis(s, d) {
     };
     parts.push(gradeDesc[d.volGrade] || `Volume: ${d.volGrade}.`);
 
-    const effPct = (d.volEff * 100).toFixed(0);
-    if (d.volEff >= 0.10)      parts.push(`Vol efficiency ${effPct}% — institutional signature, 74% produce strong moves.`);
-    else if (d.volEff >= 0.05) parts.push(`Vol efficiency ${effPct}% — volume converting to price, ~50% strong-move rate.`);
-    else if (d.volEff >= 0.01) parts.push(`Vol efficiency ${effPct}% — some conversion but not conviction-level.`);
-    else                       parts.push(`Vol efficiency near 0% — volume absorbed without price progress.`);
+    const effBps = (d.volEff * 10000).toFixed(1);
+    if (d.volEff >= 0.01)        parts.push(`Vol efficiency ${effBps} bps — institutional signature, volume driving price efficiently.`);
+    else if (d.volEff >= 0.001)  parts.push(`Vol efficiency ${effBps} bps — good, volume converting to price movement.`);
+    else if (d.volEff >= 0.0002) parts.push(`Vol efficiency ${effBps} bps — some conversion but not conviction-level.`);
+    else if (d.volEff > 0)       parts.push(`Vol efficiency ${effBps} bps — low, volume mostly absorbed.`);
+    else                          parts.push(`Vol efficiency near 0 — volume absorbed without price progress.`);
 
     if (d.rv >= 2.0)       parts.push(`RV ${d.rv.toFixed(1)}× — volume spike above session average.`);
     else if (d.rv >= 1.5)  parts.push(`RV ${d.rv.toFixed(1)}× — above average, no proven edge below 2.0×.`);
@@ -2203,7 +2206,7 @@ function _m15ImpulseAnalysis(s, d) {
   const strongImp  = d.imp >= 50;
   const cleanBody  = d.body >= 0.50;
   const goodVel    = d.vel >= 1.2;
-  const goodEff    = d.volEff >= 0.05;
+  const goodEff    = d.volEff >= 0.001;
   const instVol    = d.volGrade === 'INSTITUTIONAL' || d.volGrade === 'STRONG';
   const deadVol    = d.volGrade === 'DEAD' || d.rv < 0.5;
 
@@ -2291,7 +2294,7 @@ function renderM15Spreads(data) {
         <span class="m15-imp-lbl">Score</span><span class="m15-imp-val ${il.cls}">${imp}</span>
         ${vol ? `<span class="m15-vol-sep">│</span>
         <span class="m15-imp-lbl">RV</span><span class="m15-imp-val ${rv >= 1.5 ? 'vol-institutional' : rv >= 1.0 ? 'vol-strong' : 'vol-weak'}">${rv.toFixed(1)}×</span>
-        <span class="m15-imp-lbl">Eff</span><span class="m15-imp-val ${volEff >= 0.05 ? 'vol-strong' : volEff >= 0.01 ? 'vol-normal' : 'vol-weak'}">${(volEff * 100).toFixed(0)}%</span>
+        <span class="m15-imp-lbl">Eff</span><span class="m15-imp-val ${volEff >= 0.01 ? 'vol-strong' : volEff >= 0.001 ? 'vol-normal' : 'vol-weak'}">${(volEff * 10000).toFixed(1)} bps</span>
         ${_volGradeBadge(volGrade)}` : ''}
       </div>
       <div class="fp-explain m15-explain">${analysis}</div>`;
