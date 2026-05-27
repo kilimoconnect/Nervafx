@@ -250,7 +250,7 @@ async function calculateEnergyDirection() {
     strong.sort((a, b) => b.score - a.score);
     weak.sort((a, b) => b.score - a.score);
 
-    console.log(`[ENERGY_DIR] Threshold met (${currentEnergy}). Strong: ${strong.map(s=>s.currency).join(',')} | Weak: ${weak.map(w=>w.currency).join(',')}`);
+    console.log(`[ENERGY_DIR] Threshold met — peak bar ${peakEnergy} (${peakSession}${peakHour ? ' @ ' + peakHour : ''}). Strong: ${strong.map(s=>s.currency).join(',')} | Weak: ${weak.map(w=>w.currency).join(',')}`);
 
     // ── 7. Update currency directions ──────────────────────────────────────
     const newDirections = new Map();
@@ -274,7 +274,7 @@ async function calculateEnergyDirection() {
         direction: newDir,
         smooth_3h: ccyMap[ccy]?.smooth_3h || 0,
         smooth_6h: ccyMap[ccy]?.smooth_6h || 0,
-        energy_at_trigger: currentEnergy,
+        energy_at_trigger: peakEnergy,
         trigger_session: peakSession,
         triggered_at: now.toISOString(),
         threshold_met: true,
@@ -299,7 +299,7 @@ async function calculateEnergyDirection() {
           instrument, dir,
           strong_ccy: s.currency,
           weak_ccy: w.currency,
-          trigger_energy: currentEnergy,
+          trigger_energy: peakEnergy,
           trigger_session: peakSession,
         });
       }
@@ -421,7 +421,7 @@ async function calculateEnergyDirection() {
       m15_state: m15State,
       new_energy_event: newEnergyEvent,
       energy_event_type: energyEventType,
-      energy_level: currentEnergy,
+      energy_level: peakEnergy,
       active: true,
       last_updated: now.toISOString(),
     };
