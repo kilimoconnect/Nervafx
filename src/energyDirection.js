@@ -275,7 +275,7 @@ async function calculateEnergyDirection() {
         smooth_3h: ccyMap[ccy]?.smooth_3h || 0,
         smooth_6h: ccyMap[ccy]?.smooth_6h || 0,
         energy_at_trigger: currentEnergy,
-        trigger_session: energySession,
+        trigger_session: peakSession,
         triggered_at: now.toISOString(),
         threshold_met: true,
         active: newDir !== 'NEUTRAL',
@@ -300,7 +300,7 @@ async function calculateEnergyDirection() {
           strong_ccy: s.currency,
           weak_ccy: w.currency,
           trigger_energy: currentEnergy,
-          trigger_session: energySession,
+          trigger_session: peakSession,
         });
       }
     }
