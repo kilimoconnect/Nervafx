@@ -109,7 +109,7 @@ function _updateAlertBadge() {
   const panel = document.getElementById('hdr-panel-alerts');
   if (!panel) return;
   let count = 0;
-  const bars = ['v2-threshold-bar', 'news-alert-bar', 'm15-impulse-bar'];
+  const bars = ['news-alert-bar', 'm15-impulse-bar'];
   for (const id of bars) {
     const el = document.getElementById(id);
     if (el && el.style.display !== 'none') count++;
