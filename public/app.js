@@ -2092,10 +2092,21 @@ function _energyPairSet() {
   return new Set(_energySignalsCache.pairs.filter(p => p.active).map(p => p.instrument));
 }
 
+// Map instrument → signal dir (BUY/SELL) from energy pairs
+function _energyPairDirMap() {
+  if (!_energySignalsCache?.pairs?.length) return {};
+  const m = {};
+  for (const p of _energySignalsCache.pairs) {
+    if (p.active) m[p.instrument] = p.dir;
+  }
+  return m;
+}
+
 // Notification bar filter — only energy signal pairs with impulse_score ≥ 30
-// AND all TFs same sign. Sorted by impulse quality.
+// AND all TFs same sign AND M15 direction matches signal flow. Sorted by impulse quality.
 function getM15Impulses(data) {
   const epSet = _energyPairSet();
+  const dirMap = _energyPairDirMap();
   return (data?.spreads || [])
     .filter(s => {
       if (epSet && !epSet.has(s.instrument)) return false; // must be an energy signal pair
@@ -2106,7 +2117,14 @@ function getM15Impulses(data) {
       if (Math.sign(s45) !== Math.sign(s90))  return false;
       if (Math.sign(s45) !== Math.sign(s180)) return false;
       if (Math.abs(s45) < CS_THRESHOLD) return false;
-      return (s.impulse_score || 0) >= 30; // minimum impulse quality
+      if ((s.impulse_score || 0) < 30) return false;
+      // M15 must move WITH the signal direction, not against it
+      const signalDir = dirMap[s.instrument];
+      if (signalDir) {
+        const flowSign = signalDir === 'BUY' ? 1 : -1;
+        if (Math.sign(s45) !== flowSign) return false;
+      }
+      return true;
     })
     .sort((a, b) => (b.impulse_score || 0) - (a.impulse_score || 0));
 }
@@ -2262,12 +2280,15 @@ function renderM15Spreads(data) {
 
   const maxImp = spreads[0]?.impulse_score || 1;
 
+  const dirMap = _energyPairDirMap();
   el.innerHTML = spreads.map(s => {
     const v45  = parseFloat(s.smooth_45m) || 0;
     const v90  = parseFloat(s.smooth_90m) || 0;
     const v180 = parseFloat(s.smooth_180m) || 0;
-    const cls  = v45 >= 0 ? 'buy' : 'sell';
-    const bias = cls === 'buy' ? 'BUY' : 'SELL';
+    // Use signal pair direction, fall back to v45 sign
+    const signalDir = dirMap[s.instrument];
+    const bias = signalDir || (v45 >= 0 ? 'BUY' : 'SELL');
+    const cls  = bias === 'BUY' ? 'buy' : 'sell';
     const imp  = s.impulse_score || 0;
     const pct  = Math.round((imp / maxImp) * 100);
     const il   = impulseLabel(imp);
@@ -2341,10 +2362,12 @@ function updateM15Bar(data) {
   const visible     = impulse.slice(0, MAX_BAR_CHIPS);
   const hiddenCount = impulse.length - visible.length;
 
+  const barDirMap = _energyPairDirMap();
   document.getElementById('m15-bar-chips').innerHTML = visible.map(s => {
     const v45  = parseFloat(s.smooth_45m) || 0;
-    const bias = v45 >= 0 ? 'BUY' : 'SELL';
-    const dir  = v45 >= 0 ? 'buy' : 'sell';
+    const signalDir = barDirMap[s.instrument];
+    const bias = signalDir || (v45 >= 0 ? 'BUY' : 'SELL');
+    const dir  = bias === 'BUY' ? 'buy' : 'sell';
     const imp  = s.impulse_score || 0;
     const il   = impulseLabel(imp);
     const stateLabel = s.state === 'COMPRESSING' ? ' ▾' : ' ▲';
