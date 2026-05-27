@@ -7,7 +7,6 @@ const { calculateLatestStrength } = require('./strength');
 const { smoothLatest } = require('./smooth');
 const { calculateLatestSpreads } = require('./spread');
 const { calculateLatestM15Spreads } = require('./m15');
-const { calculateLatestStates } = require('./stateDetect');
 const { calculateLatestSignals } = require('./signals');
 const { checkLatestSignals } = require('./risk');
 const { processLatestActions } = require('./actions');
@@ -147,12 +146,11 @@ async function hourlyUpdate() {
   await step('m15_spreads',   () => calculateLatestM15Spreads());
   await step('volume_analysis', () => calculateLatestVolumeAnalysis());
   await step('sentiment',     () => calculateLatestSentiment());
-  await step('states',        () => calculateLatestStates());
+  await step('session_activity',    () => backfillSessionActivity());
+  await step('energy_direction',   () => calculateEnergyDirection());
   await step('signals',       () => calculateLatestSignals());
   await step('risk',          () => checkLatestSignals());
   await step('actions',       () => processLatestActions());
-  await step('session_activity',    () => backfillSessionActivity());
-  await step('energy_direction',   () => calculateEnergyDirection());
   await step('flow_perf',          () => calculateFlowPerformance());
   await step('market_narrative',    () => generateMarketNarrative());
   await step('journal',             () => writeJournalEntry());
@@ -164,14 +162,14 @@ async function hourlyUpdate() {
 
 async function runAnalysis() {
   console.log(`[ANALYZE] ${new Date().toISOString()} - Running engine on current data...`);
-  await step('strength',  () => calculateLatestStrength());
-  await step('smooth',    () => smoothLatest());
-  await step('spreads',   () => calculateLatestSpreads());
-  await step('sentiment', () => calculateLatestSentiment());
-  await step('states',    () => calculateLatestStates());
-  await step('signals',  () => calculateLatestSignals());
-  await step('risk',     () => checkLatestSignals());
-  await step('actions',  () => processLatestActions());
+  await step('strength',          () => calculateLatestStrength());
+  await step('smooth',            () => smoothLatest());
+  await step('spreads',           () => calculateLatestSpreads());
+  await step('sentiment',         () => calculateLatestSentiment());
+  await step('energy_direction',  () => calculateEnergyDirection());
+  await step('signals',           () => calculateLatestSignals());
+  await step('risk',              () => checkLatestSignals());
+  await step('actions',           () => processLatestActions());
   console.log('[ANALYZE] Complete.');
 }
 

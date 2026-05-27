@@ -1,14 +1,38 @@
+'use strict';
+
+/**
+ * Trade Signals — Energy-driven
+ *
+ * Reads from energy_signal_pairs (written by energyDirection.js) instead
+ * of the old market_states table. Only pairs that the energy engine is
+ * actively monitoring can produce signals.
+ *
+ * Signal logic:
+ *   ENTRY phase + gates passed → BUY / SELL  (with entry, SL, TP)
+ *   READY phase                → WAIT        (approaching entry)
+ *   COMPRESSION phase          → WAIT        (coiling, watch for breakout)
+ *   PULLBACK phase             → WAIT        (retracing, not ready)
+ *   MONITORING phase           → NO_TRADE    (just watching)
+ *   No energy pair             → NO_TRADE
+ *
+ * Entry gates (all must pass for BUY/SELL):
+ *   1. Phase = ENTRY
+ *   2. 3H spread aligned with flow direction
+ *   3. 3H re-expanding: |3H| > |6H| × 0.8
+ *   4. Impulse aligned with flow
+ *   5. SL within ATR × 3 (not too wide)
+ *   6. Valid entry/SL prices
+ */
+
 const { config } = require('./config');
 const { supabase } = require('./supabase');
 
-const MIN_CONFIDENCE = 75;
 const RISK_REWARD = 2.0;
 const MAX_STOP_ATR_MULTIPLE = 3;
 const SL_CANDLE_LOOKBACK = 6;
 
 // ─── Candle helpers ───────────────────────────────────────────────────────────
 
-// Pre-fetch all H1 candles per instrument into memory for backfill use.
 async function buildCandleLookup() {
   const lookup = {};
   for (const instrument of config.instruments) {
@@ -18,10 +42,11 @@ async function buildCandleLookup() {
       .eq('instrument', instrument)
       .eq('timeframe', config.granularity)
       .eq('complete', true)
-      .order('time', { ascending: true });
+      .order('time', { ascending: false })
+      .limit(SL_CANDLE_LOOKBACK + 2);
 
     if (error) throw new Error(`Candle fetch (${instrument}): ${error.message}`);
-    lookup[instrument] = (data || []).map(c => ({
+    lookup[instrument] = (data || []).reverse().map(c => ({
       time: new Date(c.time).toISOString(),
       high: parseFloat(c.high),
       low: parseFloat(c.low),
@@ -31,12 +56,9 @@ async function buildCandleLookup() {
   return lookup;
 }
 
-// Get the N candles at or before time T for an instrument from the in-memory lookup.
-function getCandlesAtTime(lookup, instrument, time, count = SL_CANDLE_LOOKBACK) {
+function getRecentCandles(lookup, instrument, count = SL_CANDLE_LOOKBACK) {
   const candles = lookup[instrument] || [];
-  const idx = candles.findIndex(c => c.time === time);
-  if (idx < 0) return [];
-  return candles.slice(Math.max(0, idx - count + 1), idx + 1);
+  return candles.slice(-count);
 }
 
 function avgRange(candles) {
@@ -44,129 +66,145 @@ function avgRange(candles) {
   return candles.reduce((sum, c) => sum + (c.high - c.low), 0) / candles.length;
 }
 
-// ─── Signal logic ─────────────────────────────────────────────────────────────
+// ─── Signal builders ──────────────────────────────────────────────────────────
 
-function buildSignal(state, candles) {
-  const { time, instrument, bias, state: mktState, confidence, spread_3h, spread_6h, spread_12h } = state;
+function noTrade(time, instrument, reason) {
+  return {
+    time, instrument, signal: 'NO_TRADE', direction: null, confidence: 0,
+    entry_type: null, entry_price: null, stop_loss: null, take_profit: null,
+    risk_reward: null, market_state: null, reason,
+  };
+}
 
-  // NO_TRADE conditions
-  if (mktState === 'NO_TRADE' || mktState === 'REVERSAL_RISK') {
-    return noTrade(time, instrument, confidence, mktState, `State is ${mktState}.`);
-  }
+function waitSignal(time, instrument, phase, dir, de, reason) {
+  return {
+    time, instrument, signal: 'WAIT',
+    direction: dir === 'BUY' ? 'LONG' : 'SHORT',
+    confidence: Math.round(de || 0),
+    entry_type: null, entry_price: null, stop_loss: null, take_profit: null,
+    risk_reward: null, market_state: phase, reason,
+  };
+}
 
-  // WAIT — pullback in progress
-  if (mktState === 'PULLBACK_STARTING') {
-    return wait(time, instrument, confidence, mktState, bias,
-      `${bias} pullback starting — 3H momentum compressing. Watch for 3H to re-expand.`);
-  }
-  if (mktState === 'PULLBACK_ACTIVE') {
-    return wait(time, instrument, confidence, mktState, bias,
-      `${bias} pullback active — 3H compressing. Wait for 3H re-expansion → entry trigger.`);
-  }
+// ─── Core signal logic ────────────────────────────────────────────────────────
 
-  // WAIT if TREND (no pullback yet)
-  if (mktState === 'TREND') {
-    return wait(time, instrument, confidence, mktState, bias,
-      `${bias} trend active. Watch for 3H momentum to weaken (compression zone = pullback entry forming).`);
-  }
-  if (mktState === 'BASE_FORMING') {
-    return wait(time, instrument, confidence, mktState, bias,
-      `${bias} deep pullback at floor — coiling. Wait for 3H re-expansion.`);
-  }
-  if (mktState === 'REVERSAL_CONFIRMED') {
-    return wait(time, instrument, confidence, mktState, bias,
-      `Reversal confirmed ${bias}. Await first pullback before entry.`);
-  }
-  if (mktState === 'REVERSAL_DEVELOPING' || mktState === 'REVERSAL_RISK') {
-    return noTrade(time, instrument, confidence, mktState,
-      `${mktState}: structural uncertainty — no entry.`);
-  }
+function buildSignalFromEnergy(pair, candles, now) {
+  const { instrument, dir, phase, strong_ccy, weak_ccy,
+          v45, spread_3h, spread_6h, de_combined,
+          impulse_score, impulse_aligned } = pair;
 
-  // READY_TO_ENTER triggers BUY/SELL — state machine is the quality gate,
-  // not a confidence floor. User profile (min_rr, max_trades, etc.) is the filter.
-  if (mktState !== 'READY_TO_ENTER') {
-    return noTrade(time, instrument, confidence, mktState,
-      `State ${mktState} does not meet signal criteria.`);
+  const time = now.toISOString();
+  const pairLabel = instrument.replace('_', '/');
+  const flowSign = dir === 'BUY' ? 1 : -1;
+  const sp3 = parseFloat(spread_3h) || 0;
+  const sp6 = parseFloat(spread_6h) || 0;
+  const de  = parseFloat(de_combined) || 0;
+  const imp = impulse_score || 0;
+
+  // ── Phase-based routing ─────────────────────────────────────────────────
+
+  if (phase === 'MONITORING') {
+    return noTrade(time, instrument,
+      `${pairLabel} monitoring (${strong_ccy}↑ ${weak_ccy}↓). No pullback cycle started yet.`);
   }
 
-  // Gate on 3H re-expansion: only enter when |3H| > |6H| × 0.9 (momentum re-expanding).
-  // If 3H is still stalling/compressing, emit WAIT so the risk engine sees no signal until
-  // the next candle confirms re-expansion.
-  const a3 = Math.abs(spread_3h || 0);
-  const a6 = Math.abs(spread_6h || 0);
-  if (a6 > 0 && a3 <= a6 * 0.9) {
-    return wait(time, instrument, confidence, mktState, bias,
-      '3H stalling — re-expansion must confirm before entry.');
+  if (phase === 'PULLBACK') {
+    return waitSignal(time, instrument, phase, dir, de,
+      `${pairLabel} ${dir} pullback active — M15 retracing against flow. Wait for compression or re-expansion.`);
   }
+
+  if (phase === 'COMPRESSION') {
+    return waitSignal(time, instrument, phase, dir, de,
+      `${pairLabel} ${dir} compressing after pullback — range tightening. Watch for breakout.`);
+  }
+
+  if (phase === 'READY') {
+    return waitSignal(time, instrument, phase, dir, de,
+      `${pairLabel} ${dir} momentum returning (DE:${Math.round(de)}, imp:${imp}). Approaching entry — need multi-TF confirmation.`);
+  }
+
+  // ── ENTRY phase — run entry gates ───────────────────────────────────────
+
+  if (phase !== 'ENTRY') {
+    return noTrade(time, instrument, `${pairLabel} phase ${phase} — no signal.`);
+  }
+
+  // Gate 1: 3H must be aligned with flow direction
+  const h3Aligned = sp3 * flowSign > 0;
+  if (!h3Aligned) {
+    return waitSignal(time, instrument, phase, dir, de,
+      `${pairLabel} ENTRY phase but 3H not aligned (${(sp3*10000).toFixed(1)}). Waiting for 3H confirmation.`);
+  }
+
+  // Gate 2: 3H re-expanding — |3H| > |6H| × 0.8
+  const a3 = Math.abs(sp3);
+  const a6 = Math.abs(sp6);
+  if (a6 > 0 && a3 <= a6 * 0.8) {
+    return waitSignal(time, instrument, phase, dir, de,
+      `${pairLabel} ENTRY phase but 3H stalling (${(a3*10000).toFixed(1)} vs 6H ${(a6*10000).toFixed(1)}). Wait for re-expansion.`);
+  }
+
+  // Gate 3: Impulse must be aligned
+  if (!impulse_aligned) {
+    return waitSignal(time, instrument, phase, dir, de,
+      `${pairLabel} ENTRY phase but impulse not aligned (score:${imp}). Wait for M15 impulse confirmation.`);
+  }
+
+  // ── Calculate entry, SL, TP ─────────────────────────────────────────────
 
   if (!candles || candles.length < 2) {
-    return noTrade(time, instrument, confidence, mktState, 'Insufficient candle data for SL calculation.');
+    return waitSignal(time, instrument, phase, dir, de,
+      `${pairLabel} ENTRY phase — insufficient candle data for SL calculation.`);
   }
 
   const entry = candles[candles.length - 1].close;
   const atr = avgRange(candles);
 
-  if (bias === 'BUY') {
+  if (dir === 'BUY') {
     const stopLoss = Math.min(...candles.map(c => c.low));
     const risk = entry - stopLoss;
 
-    if (risk <= 0) return noTrade(time, instrument, confidence, mktState, 'Stop loss above entry price.');
+    if (risk <= 0) return waitSignal(time, instrument, phase, dir, de, `${pairLabel} ENTRY — SL above entry.`);
     if (risk > atr * MAX_STOP_ATR_MULTIPLE) {
-      return noTrade(time, instrument, confidence, mktState,
-        `Stop distance ${risk.toFixed(5)} exceeds ATR×${MAX_STOP_ATR_MULTIPLE} (${(atr * MAX_STOP_ATR_MULTIPLE).toFixed(5)}).`);
+      return waitSignal(time, instrument, phase, dir, de,
+        `${pairLabel} ENTRY — stop too wide (${risk.toFixed(5)} > ATR×${MAX_STOP_ATR_MULTIPLE}).`);
     }
 
     const takeProfit = entry + (risk * RISK_REWARD);
     return {
       time, instrument,
-      signal: 'BUY',
-      direction: 'LONG',
-      confidence,
-      entry_type: 'H1_CLOSE_CONTINUATION',
-      entry_price: entry,
-      stop_loss: stopLoss,
-      take_profit: takeProfit,
-      risk_reward: RISK_REWARD,
-      market_state: mktState,
-      reason: `BUY entry: pullback completed, 3H re-expanding. Entry: ${entry.toFixed(5)}, SL: ${stopLoss.toFixed(5)}, TP: ${takeProfit.toFixed(5)}.`,
+      signal: 'BUY', direction: 'LONG',
+      confidence: Math.round(de),
+      entry_type: 'ENERGY_ENTRY',
+      entry_price: entry, stop_loss: stopLoss, take_profit: takeProfit,
+      risk_reward: RISK_REWARD, market_state: 'ENTRY',
+      reason: `BUY ${pairLabel}: ${strong_ccy}↑ ${weak_ccy}↓ ENTRY confirmed. DE:${Math.round(de)} imp:${imp}✓ 3H+M15 aligned. Entry: ${entry.toFixed(5)}, SL: ${stopLoss.toFixed(5)}, TP: ${takeProfit.toFixed(5)}.`,
     };
   }
 
-  if (bias === 'SELL') {
+  if (dir === 'SELL') {
     const stopLoss = Math.max(...candles.map(c => c.high));
     const risk = stopLoss - entry;
 
-    if (risk <= 0) return noTrade(time, instrument, confidence, mktState, 'Stop loss below entry price.');
+    if (risk <= 0) return waitSignal(time, instrument, phase, dir, de, `${pairLabel} ENTRY — SL below entry.`);
     if (risk > atr * MAX_STOP_ATR_MULTIPLE) {
-      return noTrade(time, instrument, confidence, mktState,
-        `Stop distance ${risk.toFixed(5)} exceeds ATR×${MAX_STOP_ATR_MULTIPLE} (${(atr * MAX_STOP_ATR_MULTIPLE).toFixed(5)}).`);
+      return waitSignal(time, instrument, phase, dir, de,
+        `${pairLabel} ENTRY — stop too wide (${risk.toFixed(5)} > ATR×${MAX_STOP_ATR_MULTIPLE}).`);
     }
 
     const takeProfit = entry - (risk * RISK_REWARD);
     return {
       time, instrument,
-      signal: 'SELL',
-      direction: 'SHORT',
-      confidence,
-      entry_type: 'H1_CLOSE_CONTINUATION',
-      entry_price: entry,
-      stop_loss: stopLoss,
-      take_profit: takeProfit,
-      risk_reward: RISK_REWARD,
-      market_state: mktState,
-      reason: `SELL entry: pullback completed, 3H re-expanding. Entry: ${entry.toFixed(5)}, SL: ${stopLoss.toFixed(5)}, TP: ${takeProfit.toFixed(5)}.`,
+      signal: 'SELL', direction: 'SHORT',
+      confidence: Math.round(de),
+      entry_type: 'ENERGY_ENTRY',
+      entry_price: entry, stop_loss: stopLoss, take_profit: takeProfit,
+      risk_reward: RISK_REWARD, market_state: 'ENTRY',
+      reason: `SELL ${pairLabel}: ${strong_ccy}↑ ${weak_ccy}↓ ENTRY confirmed. DE:${Math.round(de)} imp:${imp}✓ 3H+M15 aligned. Entry: ${entry.toFixed(5)}, SL: ${stopLoss.toFixed(5)}, TP: ${takeProfit.toFixed(5)}.`,
     };
   }
 
-  return noTrade(time, instrument, confidence, mktState, 'Bias is NONE; no signal.');
-}
-
-function noTrade(time, instrument, confidence, mktState, reason) {
-  return { time, instrument, signal: 'NO_TRADE', direction: null, confidence, entry_type: null, entry_price: null, stop_loss: null, take_profit: null, risk_reward: null, market_state: mktState, reason };
-}
-
-function wait(time, instrument, confidence, mktState, bias, reason) {
-  return { time, instrument, signal: 'WAIT', direction: bias === 'BUY' ? 'LONG' : 'SHORT', confidence, entry_type: null, entry_price: null, stop_loss: null, take_profit: null, risk_reward: null, market_state: mktState, reason };
+  return noTrade(time, instrument, `${pairLabel} — no directional bias.`);
 }
 
 // ─── Data layer ───────────────────────────────────────────────────────────────
@@ -179,83 +217,51 @@ async function upsertSignals(rows) {
   if (error) throw new Error(`Signal upsert error: ${error.message}`);
 }
 
-// ─── Backfill ─────────────────────────────────────────────────────────────────
-
-async function backfillSignals() {
-  console.log('[SIGNAL] Fetching market states and candle data...');
-
-  const candleLookup = await buildCandleLookup();
-
-  // Fetch all market states per instrument in order
-  let total = 0;
-  let buyCount = 0;
-  let sellCount = 0;
-  const BATCH = 500;
-  let batch = [];
-
-  for (const instrument of config.instruments) {
-    const { data: states, error } = await supabase
-      .from('market_states')
-      .select('time, instrument, bias, state, confidence, spread_3h, spread_6h, spread_12h')
-      .eq('instrument', instrument)
-      .order('time', { ascending: true });
-
-    if (error) throw new Error(`State fetch (${instrument}): ${error.message}`);
-
-    for (const state of states || []) {
-      const time = new Date(state.time).toISOString();
-      const candles = getCandlesAtTime(candleLookup, instrument, time);
-      const row = buildSignal(state, candles);
-
-      batch.push(row);
-      if (row.signal === 'BUY') buyCount++;
-      if (row.signal === 'SELL') sellCount++;
-
-      if (batch.length >= BATCH) {
-        await upsertSignals(batch);
-        total += batch.length;
-        batch = [];
-      }
-    }
-  }
-
-  if (batch.length > 0) {
-    await upsertSignals(batch);
-    total += batch.length;
-  }
-
-  console.log(`[SIGNAL] Backfill done. ${total} rows. BUY: ${buyCount}, SELL: ${sellCount}`);
-  return { total, buyCount, sellCount };
-}
-
-// ─── Incremental ──────────────────────────────────────────────────────────────
+// ─── Incremental (runs every pipeline cycle) ──────────────────────────────────
 
 async function calculateLatestSignals() {
+  const now = new Date();
+  const hourTs = new Date(now);
+  hourTs.setMinutes(0, 0, 0);
+
+  // Fetch active energy signal pairs
+  const { data: energyPairs, error: epErr } = await supabase
+    .from('energy_signal_pairs')
+    .select('instrument, dir, strong_ccy, weak_ccy, phase, v45, v90, spread_3h, spread_6h, de_combined, impulse_score, impulse_aligned, m15_state, energy_level')
+    .eq('active', true);
+
+  if (epErr) throw new Error(`Energy pairs fetch: ${epErr.message}`);
+
+  if (!energyPairs?.length) {
+    console.log('[SIGNAL] No active energy pairs — no signals to generate.');
+    return [];
+  }
+
+  // Fetch candles for SL calculation
   const candleLookup = await buildCandleLookup();
   const rows = [];
 
-  for (const instrument of config.instruments) {
-    const { data: states } = await supabase
-      .from('market_states')
-      .select('time, instrument, bias, state, confidence, spread_3h, spread_6h, spread_12h')
-      .eq('instrument', instrument)
-      .order('time', { ascending: false })
-      .limit(1);
-
-    if (!states || states.length === 0) continue;
-
-    const state = states[0];
-    const time = new Date(state.time).toISOString();
-    const candles = getCandlesAtTime(candleLookup, instrument, time);
-    rows.push(buildSignal(state, candles));
+  for (const pair of energyPairs) {
+    const candles = getRecentCandles(candleLookup, pair.instrument);
+    const signal = buildSignalFromEnergy(pair, candles, hourTs);
+    rows.push(signal);
   }
 
   await upsertSignals(rows);
-  console.log(`[SIGNAL] Stored ${rows.length} signals for latest candle`);
+
+  const buys  = rows.filter(r => r.signal === 'BUY').length;
+  const sells = rows.filter(r => r.signal === 'SELL').length;
+  const waits = rows.filter(r => r.signal === 'WAIT').length;
+  console.log(`[SIGNAL] ${rows.length} signals: ${buys} BUY, ${sells} SELL, ${waits} WAIT, ${rows.length - buys - sells - waits} NO_TRADE`);
+
   return rows;
 }
 
-// ─── Display ──────────────────────────────────────────────────────────────────
+// Legacy stubs for CLI compatibility (index.js backfill/print commands)
+async function backfillSignals() {
+  console.log('[SIGNAL] Backfill not available — signals are now energy-driven (real-time only).');
+  return { total: 0, buyCount: 0, sellCount: 0 };
+}
 
 async function printLatestSignals() {
   const { data, error } = await supabase
@@ -267,29 +273,24 @@ async function printLatestSignals() {
   if (error) throw new Error(error.message);
 
   const order = { BUY: 0, SELL: 1, WAIT: 2, NO_TRADE: 3 };
-  const sorted = (data || []).sort((a, b) => {
-    const so = (order[a.signal] ?? 9) - (order[b.signal] ?? 9);
-    return so !== 0 ? so : b.confidence - a.confidence;
-  });
-
-  const active = sorted.filter(r => r.signal === 'BUY' || r.signal === 'SELL');
-  const waiting = sorted.filter(r => r.signal === 'WAIT');
-  const inactive = sorted.filter(r => r.signal === 'NO_TRADE');
+  const sorted = (data || []).sort((a, b) => (order[a.signal] ?? 9) - (order[b.signal] ?? 9));
 
   console.log('\n=== ACTIVE SIGNALS ===');
-  if (active.length === 0) console.log('  None');
+  const active = sorted.filter(r => r.signal === 'BUY' || r.signal === 'SELL');
+  if (!active.length) console.log('  None');
   for (const r of active) {
-    console.log(`  ${r.instrument.padEnd(8)} ${r.signal.padEnd(5)} conf:${String(r.confidence).padStart(3)}  entry:${Number(r.entry_price).toFixed(5)}  SL:${Number(r.stop_loss).toFixed(5)}  TP:${Number(r.take_profit).toFixed(5)}  RR:${r.risk_reward}`);
+    console.log(`  ${r.instrument.padEnd(8)} ${r.signal.padEnd(5)}  entry:${Number(r.entry_price).toFixed(5)}  SL:${Number(r.stop_loss).toFixed(5)}  TP:${Number(r.take_profit).toFixed(5)}`);
     console.log(`  → ${r.reason}`);
   }
 
   console.log('\n=== WAITING ===');
-  if (waiting.length === 0) console.log('  None');
+  const waiting = sorted.filter(r => r.signal === 'WAIT');
+  if (!waiting.length) console.log('  None');
   for (const r of waiting) {
-    console.log(`  ${r.instrument.padEnd(8)} ${r.signal.padEnd(5)} ${(r.direction || '').padEnd(6)} conf:${String(r.confidence).padStart(3)}  ${r.reason}`);
+    console.log(`  ${r.instrument.padEnd(8)} ${r.signal.padEnd(5)} ${(r.direction || '').padEnd(6)}  ${r.reason}`);
   }
 
-  console.log(`\n=== NO TRADE: ${inactive.length} pairs ===`);
+  console.log(`\n=== NO TRADE: ${sorted.filter(r => r.signal === 'NO_TRADE').length} pairs ===`);
 }
 
-module.exports = { backfillSignals, calculateLatestSignals, printLatestSignals, buildSignal, getCandlesAtTime, avgRange };
+module.exports = { calculateLatestSignals, backfillSignals, printLatestSignals, buildSignalFromEnergy, getRecentCandles, avgRange };

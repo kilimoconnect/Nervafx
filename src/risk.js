@@ -152,8 +152,8 @@ async function checkSignal(signal, dailyState, rc) {
   if (!signal.risk_reward || signal.risk_reward < rc.minRR)
     return reject(signal, `RR ${signal.risk_reward} below minimum ${rc.minRR}.`, rc);
 
-  if (signal.market_state !== 'READY_TO_ENTER')
-    return reject(signal, `Market state is ${signal.market_state}, not READY_TO_ENTER.`, rc);
+  if (signal.market_state !== 'ENTRY')
+    return reject(signal, `Phase is ${signal.market_state}, not ENTRY.`, rc);
 
   if (!signal.entry_price || !signal.stop_loss || !signal.take_profit)
     return reject(signal, 'Missing entry, stop loss, or take profit.', rc);
