@@ -313,13 +313,6 @@ function buildSummary({ session, sentiment, signals, energySignals, m15Impulses,
     }
   }
 
-  // 4. Sentiment context
-  if (sentiment) {
-    const env = sentiment.environment || 'unknown';
-    const conf = Math.round(sentiment.confidence || 0);
-    lines.push(`Sentiment: ${env} (${conf}% conf).`);
-  }
-
   return lines.join(' ');
 }
 
