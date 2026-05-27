@@ -104,97 +104,85 @@ function directionAlertEmail(data) {
   const sessionLabel = SESS_LABEL[triggerSession] || triggerSession || 'Unknown';
   const timeStr = triggerHour ? new Date(triggerHour).toISOString().replace('T', ' ').slice(0, 16) + ' UTC' : '';
 
-  // Currency rows
   const strongCcys = currencies.filter(c => c.direction === 'STRONG');
   const weakCcys = currencies.filter(c => c.direction === 'WEAK');
+  const droppedCcys = currencies.filter(c => c.eventType === 'DROPPED');
 
-  const ccyRows = currencies
+  // Short event labels for mobile
+  const evtLabel = t => t === 'CONTINUATION' ? 'Continue' : t === 'REVERSAL' ? 'Reversal' : t === 'NEW' ? 'New' : t === 'DROPPED' ? 'Dropped' : t;
+  const evtColor = t => t === 'CONTINUATION' ? '#0ea5e9' : t === 'NEW' ? '#22c55e' : t === 'REVERSAL' ? '#f59e0b' : '#64748b';
+
+  // Currency chips — stacked rows, mobile-friendly
+  const ccyChips = currencies
     .filter(c => c.eventType && c.direction !== 'NEUTRAL')
     .map(c => {
       const isStrong = c.direction === 'STRONG';
       const color = isStrong ? '#22c55e' : '#ef4444';
       const arrow = isStrong ? '▲' : '▼';
-      const evtColor = c.eventType === 'CONTINUATION' ? '#0ea5e9'
-        : c.eventType === 'NEW' ? '#22c55e'
-        : c.eventType === 'REVERSAL' ? '#f59e0b'
-        : '#64748b';
+      const ec = evtColor(c.eventType);
       const h3 = (c.smooth_3h * 10000).toFixed(1);
       const h6 = (c.smooth_6h * 10000).toFixed(1);
-      return `<tr>
-        <td style="padding:8px;color:${color};font-weight:700;font-size:15px">${arrow} ${c.currency}</td>
-        <td style="padding:8px;color:${color}">${c.direction}</td>
-        <td style="padding:8px"><span style="color:${evtColor};font-weight:600;font-size:12px;background:${evtColor}15;padding:2px 8px;border-radius:4px">${c.eventType}</span></td>
-        <td style="padding:8px;color:#94a3b8;font-size:13px">3H: ${h3} · 6H: ${h6}</td>
-      </tr>`;
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #1e293b">
+        <div>
+          <span style="color:${color};font-weight:700;font-size:16px">${arrow} ${c.currency}</span>
+          <span style="color:${color};font-size:13px;margin-left:6px">${c.direction}</span>
+        </div>
+        <div style="text-align:right">
+          <span style="color:${ec};font-weight:600;font-size:12px;background:${ec}15;padding:2px 8px;border-radius:4px">${evtLabel(c.eventType)}</span>
+          <div style="color:#64748b;font-size:11px;margin-top:3px">${h3} / ${h6}</div>
+        </div>
+      </div>`;
     }).join('');
 
-  // Dropped currencies
-  const droppedCcys = currencies.filter(c => c.eventType === 'DROPPED');
   const droppedHtml = droppedCcys.length ? `
-    <p style="color:#94a3b8;font-size:13px;margin:8px 0 0">
-      Dropped: ${droppedCcys.map(c => `<span style="color:#64748b;text-decoration:line-through">${c.currency}</span>`).join(', ')} → now NEUTRAL
-    </p>` : '';
+    <div style="padding:8px 12px;color:#64748b;font-size:12px">
+      Dropped: ${droppedCcys.map(c => `<span style="text-decoration:line-through">${c.currency}</span>`).join(', ')} — now neutral
+    </div>` : '';
 
-  // New/continuing pairs
-  const pairRows = pairs.map(p => {
+  // Pair rows — 3-column max, short labels
+  const pairChips = pairs.map(p => {
     const isBuy = p.dir === 'BUY';
     const dirColor = isBuy ? '#22c55e' : '#ef4444';
     const dirArrow = isBuy ? '▲' : '▼';
-    const evtColor = p.eventType === 'CONTINUATION' ? '#0ea5e9'
-      : p.eventType === 'NEW' ? '#22c55e'
-      : p.eventType === 'REVERSAL' ? '#f59e0b'
-      : '#64748b';
-    return `<tr>
-      <td style="padding:6px 8px;color:#fff;font-weight:600">${p.instrument.replace('_', '/')}</td>
-      <td style="padding:6px 8px;color:${dirColor};font-weight:600">${dirArrow} ${p.dir}</td>
-      <td style="padding:6px 8px"><span style="color:${evtColor};font-weight:600;font-size:12px">${p.eventType}</span></td>
-      <td style="padding:6px 8px;color:#94a3b8;font-size:13px">${p.strong_ccy}↑ ${p.weak_ccy}↓</td>
-    </tr>`;
+    const ec = evtColor(p.eventType);
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid #1e293b">
+      <div>
+        <span style="color:#fff;font-weight:600;font-size:14px">${p.instrument.replace('_', '/')}</span>
+        <span style="color:${dirColor};font-weight:600;font-size:13px;margin-left:6px">${dirArrow} ${p.dir}</span>
+      </div>
+      <div style="text-align:right">
+        <span style="color:${ec};font-weight:600;font-size:12px">${evtLabel(p.eventType)}</span>
+        <div style="color:#64748b;font-size:11px;margin-top:2px">${p.strong_ccy}↑ ${p.weak_ccy}↓</div>
+      </div>
+    </div>`;
   }).join('');
 
-  // Removed pairs
   const removedHtml = removedPairs?.length ? `
-    <p style="color:#94a3b8;font-size:13px;margin:12px 0 0">
-      Removed: ${removedPairs.map(p => `<span style="color:#64748b;text-decoration:line-through">${p.replace('_','/')}</span>`).join(', ')}
-    </p>` : '';
+    <div style="padding:8px 12px;color:#64748b;font-size:12px">
+      Removed: ${removedPairs.map(p => `<span style="text-decoration:line-through">${p.replace('_','/')}</span>`).join(', ')}
+    </div>` : '';
 
   return {
-    subject: `⚡ Energy Direction — ${strongCcys.map(c=>c.currency).join(',')}↑ ${weakCcys.map(c=>c.currency).join(',')}↓ — NervaFX`,
+    subject: `Energy Direction — ${strongCcys.map(c=>c.currency).join(',')} strong, ${weakCcys.map(c=>c.currency).join(',')} weak — NervaFX`,
     html: baseLayout(`
-      <h2>⚡ Energy Direction Confirmed</h2>
-      <p>Energy bar <strong style="color:#f59e0b">${Math.round(triggerEnergy)}</strong> crossed the threshold during <strong>${sessionLabel}</strong> session${timeStr ? ` at ${timeStr}` : ''}. Currency directions have been evaluated and locked.</p>
+      <h2>Energy Direction Confirmed</h2>
+      <p>Energy bar <strong style="color:#f59e0b">${Math.round(triggerEnergy)}</strong> crossed threshold during <strong>${sessionLabel}</strong>${timeStr ? ` at ${timeStr}` : ''}. Directions locked.</p>
 
       <div class="card">
         <div class="card-title">Currency Directions</div>
-        <table style="width:100%;border-collapse:collapse">
-          <thead><tr style="border-bottom:1px solid #334155;color:#64748b;font-size:12px;text-transform:uppercase">
-            <th style="padding:6px 8px;text-align:left">Currency</th>
-            <th style="padding:6px 8px;text-align:left">Direction</th>
-            <th style="padding:6px 8px;text-align:left">Status</th>
-            <th style="padding:6px 8px;text-align:left">Strength</th>
-          </tr></thead>
-          <tbody>${ccyRows}</tbody>
-        </table>
+        ${ccyChips}
         ${droppedHtml}
       </div>
 
       <div class="card">
         <div class="card-title">Signal Pairs (${pairs.length})</div>
-        <table style="width:100%;border-collapse:collapse">
-          <thead><tr style="border-bottom:1px solid #334155;color:#64748b;font-size:12px;text-transform:uppercase">
-            <th style="padding:6px 8px;text-align:left">Pair</th>
-            <th style="padding:6px 8px;text-align:left">Direction</th>
-            <th style="padding:6px 8px;text-align:left">Status</th>
-            <th style="padding:6px 8px;text-align:left">Flow</th>
-          </tr></thead>
-          <tbody>${pairRows}</tbody>
-        </table>
+        ${pairChips}
         ${removedHtml}
       </div>
 
-      <p>These pairs are now being monitored through the M15 phase cycle: <strong>MONITORING → PULLBACK → COMPRESSION → READY → ENTRY</strong>. You'll receive another alert when any pair reaches ENTRY.</p>
-      <p style="text-align:center;margin:24px 0"><a class="cta" href="https://nervafx.com">View Dashboard →</a></p>
-      <p style="color:#94a3b8;font-size:13px">Energy directions are analytical observations, not trade recommendations.</p>
+      <p style="font-size:13px;color:#94a3b8">Monitoring phase cycle: MONITORING → PULLBACK → COMPRESSION → READY → ENTRY. You'll be notified when a pair reaches ENTRY.</p>
+      <p style="text-align:center;margin:24px 0"><a class="cta" href="https://nervafx.com">View Dashboard</a></p>
+      <p style="color:#94a3b8;font-size:12px">Energy directions are analytical observations, not trade recommendations.</p>
     `),
   };
 }
@@ -207,9 +195,9 @@ function phaseAlertEmail(data) {
   const pairLabel = pair.instrument.replace('_', '/');
 
   return {
-    subject: `🎯 ${signal.signal} ${pairLabel} — Entry Signal Confirmed — NervaFX`,
+    subject: `${signal.signal} ${pairLabel} — Entry Signal — NervaFX`,
     html: baseLayout(`
-      <h2>🎯 Entry Signal Confirmed</h2>
+      <h2>Entry Signal Confirmed</h2>
       <p><strong>${pairLabel}</strong> has reached the <strong>ENTRY</strong> phase with all gates passed.</p>
 
       <div style="background:#1e293b;border:2px solid ${dirColor};border-radius:12px;padding:20px;margin:16px 0;text-align:center">
