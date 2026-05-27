@@ -146,7 +146,6 @@ async function hourlyUpdate() {
   await step('spreads',       () => calculateLatestSpreads());
   await step('m15_spreads',   () => calculateLatestM15Spreads());
   await step('volume_analysis', () => calculateLatestVolumeAnalysis());
-  await step('flow_perf',    () => calculateFlowPerformance());
   await step('sentiment',     () => calculateLatestSentiment());
   await step('states',        () => calculateLatestStates());
   await step('signals',       () => calculateLatestSignals());
@@ -154,6 +153,7 @@ async function hourlyUpdate() {
   await step('actions',       () => processLatestActions());
   await step('session_activity',    () => backfillSessionActivity());
   await step('energy_direction',   () => calculateEnergyDirection());
+  await step('flow_perf',          () => calculateFlowPerformance());
   await step('market_narrative',    () => generateMarketNarrative());
   await step('journal',             () => writeJournalEntry());
   await step('outcomes',         () => runOutcomeReviews());

@@ -1,11 +1,12 @@
 'use strict';
 
 /**
- * Flow Performance Engine — Pre-computed flow pair rankings
+ * Flow Performance Engine — Energy-driven pair analysis
  *
- * Runs each pipeline cycle (after m15_spreads + volume_analysis).
- * Derives flow pairs from 3H currency strength (top 2 strong vs top 2 weak),
- * computes status, state, DE, volume, perfScore, and saves to `flow_performance`.
+ * Runs each pipeline cycle (after volume_analysis + energy_direction).
+ * Uses energy_signal_pairs as the pair source — only analyzes pairs
+ * that the energy engine has selected. Enriches each pair with M15
+ * momentum, 3H/6H alignment, DE, volume, impulse, and performance score.
  *
  * DB table: flow_performance
  *   PK: (time, instrument)
@@ -17,16 +18,6 @@
  */
 
 const { supabase } = require('./supabase');
-const { config }   = require('./config');
-
-const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
-const PAIRS = new Set([
-  'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
-  'EUR_GBP','EUR_JPY','EUR_CHF','EUR_CAD','EUR_AUD','EUR_NZD',
-  'GBP_JPY','GBP_CHF','GBP_CAD','GBP_AUD','GBP_NZD',
-  'AUD_JPY','AUD_CHF','AUD_CAD','AUD_NZD',
-  'NZD_JPY','NZD_CHF','NZD_CAD','CAD_JPY','CAD_CHF','CHF_JPY',
-]);
 
 function getSession(utcHour) {
   if (utcHour >= 23 || utcHour < 7)  return 'ASIA';
@@ -37,66 +28,53 @@ function getSession(utcHour) {
 
 /**
  * Calculate and store flow performance for the current pipeline run.
+ * Pair source: energy_signal_pairs (active only).
  */
 async function calculateFlowPerformance() {
   const now = new Date();
-  // Round to current hour bucket (same as backfill) so times align with session windows
   const hourBucket = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours()));
   const time = hourBucket.toISOString();
   const session = getSession(now.getUTCHours());
 
-  // ── 1. Fetch latest currency strength (3H + 6H) ────────────────────────
+  // ── 1. Fetch active energy signal pairs ────────────────────────────────
+  const { data: energyPairs, error: epErr } = await supabase
+    .from('energy_signal_pairs')
+    .select('instrument, dir, strong_ccy, weak_ccy, phase')
+    .eq('active', true);
+
+  if (epErr) throw new Error(`FP energy pairs fetch: ${epErr.message}`);
+  if (!energyPairs?.length) {
+    console.log('[FLOW_PERF] No active energy signal pairs');
+    return { rows: 0 };
+  }
+
+  const fpInstruments = energyPairs.map(p => p.instrument);
+
+  // ── 2. Fetch latest currency strength (3H + 6H) ────────────────────────
   const { data: csRows, error: csErr } = await supabase
     .from('currency_strength')
     .select('currency, smooth_3h, smooth_6h')
     .order('time', { ascending: false })
-    .limit(8); // latest row per currency (8 currencies)
+    .limit(8);
 
   if (csErr) throw new Error(`FP strength fetch: ${csErr.message}`);
-  if (!csRows?.length) { console.log('[FLOW_PERF] No strength data'); return { rows: 0 }; }
 
-  // Build currency maps — latest row per currency
   const ccyMap3H = {}, ccyMap6H = {};
   const seen = new Set();
-  for (const r of csRows) {
+  for (const r of (csRows || [])) {
     if (seen.has(r.currency)) continue;
     seen.add(r.currency);
     ccyMap3H[r.currency] = parseFloat(r.smooth_3h) || 0;
     ccyMap6H[r.currency] = parseFloat(r.smooth_6h) || 0;
   }
 
-  // Derive strong/weak currencies from 3H
-  const ranked = CURRENCIES
-    .filter(c => ccyMap3H[c] !== undefined)
-    .sort((a, b) => ccyMap3H[b] - ccyMap3H[a]);
-  const strong = ranked.filter(c => ccyMap3H[c] > 0).slice(0, 2);
-  const weak   = ranked.filter(c => ccyMap3H[c] < 0).slice(-2).reverse();
-
-  if (!strong.length || !weak.length) {
-    console.log('[FLOW_PERF] No clear strong/weak currencies');
-    return { rows: 0 };
-  }
-
-  // ── 2. Build flow pairs (strong vs weak) ────────────────────────────────
-  const flowPairs = [];
-  for (const st of strong) {
-    for (const wk of weak) {
-      if (st === wk) continue;
-      const fwd = `${st}_${wk}`, rev = `${wk}_${st}`;
-      if (PAIRS.has(fwd))      flowPairs.push({ instrument: fwd, dir: 'BUY' });
-      else if (PAIRS.has(rev)) flowPairs.push({ instrument: rev, dir: 'SELL' });
-    }
-  }
-  if (!flowPairs.length) { console.log('[FLOW_PERF] No valid flow pairs'); return { rows: 0 }; }
-
-  // ── 3. Fetch M15 pair spreads (latest per instrument) ───────────────────
-  const fpInstruments = flowPairs.map(fp => fp.instrument);
+  // ── 3. Fetch M15 pair spreads ──────────────────────────────────────────
   const { data: m15Rows, error: m15Err } = await supabase
     .from('m15_pair_spreads')
     .select('instrument, smooth_45m, smooth_90m, smooth_180m, de_combined, state, impulse_score, impulse_dir, velocity')
     .in('instrument', fpInstruments)
     .order('time', { ascending: false })
-    .limit(fpInstruments.length * 2); // buffer for duplicates
+    .limit(fpInstruments.length * 2);
 
   if (m15Err) throw new Error(`FP m15 fetch: ${m15Err.message}`);
 
@@ -105,7 +83,7 @@ async function calculateFlowPerformance() {
     if (!m15Map[r.instrument]) m15Map[r.instrument] = r;
   }
 
-  // ── 4. Fetch volume analysis (latest per instrument) ────────────────────
+  // ── 4. Fetch volume analysis ───────────────────────────────────────────
   const { data: volRows, error: volErr } = await supabase
     .from('m15_volume_analysis')
     .select('instrument, relative_volume, volume_efficiency, participation_grade, volume_persistence')
@@ -120,32 +98,35 @@ async function calculateFlowPerformance() {
     if (!volMap[r.instrument]) volMap[r.instrument] = r;
   }
 
-  // ── 5. Score each flow pair ─────────────────────────────────────────────
-  const scored = flowPairs.slice(0, 4).map(fp => {
-    const [base, quote] = fp.instrument.split('_');
-    const m15 = m15Map[fp.instrument];
-    const vol = volMap[fp.instrument];
+  // ── 5. Score each energy signal pair ───────────────────────────────────
+  // Collect unique strong/weak currencies from energy pairs
+  const strongSet = new Set(), weakSet = new Set();
+
+  const scored = energyPairs.map(ep => {
+    const [base, quote] = ep.instrument.split('_');
+    const m15 = m15Map[ep.instrument];
+    const vol = volMap[ep.instrument];
+
+    strongSet.add(ep.strong_ccy);
+    weakSet.add(ep.weak_ccy);
 
     const v45  = m15 ? parseFloat(m15.smooth_45m)  || 0 : 0;
     const v90  = m15 ? parseFloat(m15.smooth_90m)  || 0 : 0;
-    const v180 = m15 ? parseFloat(m15.smooth_180m) || 0 : 0;
     const impulseScore = m15 ? (m15.impulse_score || 0) : 0;
     const impulseDir   = m15 ? (m15.impulse_dir   || 0) : 0;
 
-    const flowSign = fp.dir === 'BUY' ? 1 : -1;
+    const flowSign = ep.dir === 'BUY' ? 1 : -1;
     const impulseAligned = impulseDir === flowSign;
 
-    // M15 state (computed from smoothed spreads — same logic as client)
+    // M15 state
     let state = null;
-    if (v45 != null && v90 != null) {
-      const dir45 = v45 * flowSign;
-      const dir90 = v90 * flowSign;
-      if (Math.abs(v45) < 0.00005)                   state = 'FLAT';
-      else if (dir45 < 0)                             state = 'REVERSING';
-      else if (dir45 > dir90 * 1.1)                   state = 'EXPANDING';
-      else if (dir45 < dir90 * 0.85 && dir90 > 0)    state = 'COMPRESSING';
-      else                                            state = 'STEADY';
-    }
+    const dir45 = v45 * flowSign;
+    const dir90 = v90 * flowSign;
+    if (Math.abs(v45) < 0.00005)                   state = 'FLAT';
+    else if (dir45 < 0)                             state = 'REVERSING';
+    else if (dir45 > dir90 * 1.1)                   state = 'EXPANDING';
+    else if (dir45 < dir90 * 0.85 && dir90 > 0)    state = 'COMPRESSING';
+    else                                            state = 'STEADY';
 
     const spread3H = (ccyMap3H[base] ?? 0) - (ccyMap3H[quote] ?? 0);
     const spread6H = (ccyMap6H[base] ?? 0) - (ccyMap6H[quote] ?? 0);
@@ -197,7 +178,7 @@ async function calculateFlowPerformance() {
     else if (Math.abs(v45) < 0.0002)                      momentum = 'Flat';
     else                                                   momentum = 'Steady';
 
-    // DE
+    // DE + final score
     const deCombined = m15 ? parseFloat(m15.de_combined) || 0 : 0;
     const finalScore = (0.75 * perfScore) + (0.25 * deCombined);
 
@@ -208,7 +189,7 @@ async function calculateFlowPerformance() {
     const volPers  = vol ? parseFloat(vol.volume_persistence) || 0 : 0;
 
     return {
-      instrument: fp.instrument, dir: fp.dir, v45, v90,
+      instrument: ep.instrument, dir: ep.dir, v45, v90,
       spread3H, spread6H, state, perfScore, finalScore,
       status, momentum, deCombined,
       volRV, volEff, volGrade, volPers,
@@ -218,6 +199,9 @@ async function calculateFlowPerformance() {
 
   // ── 6. Rank and build DB rows ──────────────────────────────────────────
   scored.sort((a, b) => b.finalScore - a.finalScore);
+
+  const strongCcys = [...strongSet].join(',');
+  const weakCcys   = [...weakSet].join(',');
 
   const dbRows = scored.map((s, idx) => ({
     time:               time,
@@ -241,8 +225,8 @@ async function calculateFlowPerformance() {
     vol_pers:           s.volPers,
     impulse_score:      s.impulseScore,
     impulse_aligned:    s.impulseAligned,
-    strong_currencies:  strong.join(','),
-    weak_currencies:    weak.join(','),
+    strong_currencies:  strongCcys,
+    weak_currencies:    weakCcys,
   }));
 
   // ── 7. Upsert to flow_performance ──────────────────────────────────────
@@ -254,7 +238,7 @@ async function calculateFlowPerformance() {
     if (error) throw new Error(`FP upsert: ${error.message}`);
   }
 
-  console.log(`[FLOW_PERF] Stored ${dbRows.length} flow pairs (${strong.join('+')} vs ${weak.join('+')})`);
+  console.log(`[FLOW_PERF] Stored ${dbRows.length} flow pairs (strong: ${strongCcys} | weak: ${weakCcys})`);
   return { rows: dbRows.length };
 }
 
