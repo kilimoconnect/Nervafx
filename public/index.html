@@ -448,6 +448,19 @@
   </script>
 
   <script>
+    // ── Fresh login: force full reload to clear any stale cached state ────────
+    (function() {
+      const params = new URLSearchParams(window.location.search);
+      if (params.has('fresh')) {
+        params.delete('fresh');
+        const clean = params.toString();
+        const url = window.location.pathname + (clean ? '?' + clean : '');
+        history.replaceState(null, '', url);
+        window.location.reload();
+        return;
+      }
+    })();
+
     // ── PLAN SWITCHER ─────────────────────────────────────────────────────────
     const PLAN_LEVELS = { free: 0, pro: 1, premium: 2 };
     const REQUIRE_LEVELS = { pro: 1, premium: 2 };

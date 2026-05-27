@@ -810,7 +810,7 @@
           localStorage.setItem('nfx_needs_setup', 'true');
           location.replace('/setup');
         } else {
-          location.replace('/app');
+          location.href = '/app?fresh=1';
         }
       } catch (e) {
         console.error('OAuth callback error:', e);
@@ -1126,7 +1126,7 @@
         localStorage.setItem('nfx_user',           JSON.stringify(data.user));
 
         showMsg('✓ Welcome back — redirecting…', 'success');
-        setTimeout(() => location.replace('/app'), 800);
+        setTimeout(() => { location.href = '/app?fresh=1'; }, 800);
 
       } catch (err) {
         showMsg('Network error — check your connection and try again.', 'error');
