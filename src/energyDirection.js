@@ -131,23 +131,44 @@ async function calculateEnergyDirection() {
     energySessions = fb || [];
   }
 
-  // Get the best energy: current session or highest available
-  let currentEnergy = 0;
-  let energySession = null;
+  // Scan ALL hourly bars across today's sessions to find the best energy
+  // that crossed the threshold. Direction is set by the peak bar, not just
+  // the current one — once set, direction persists.
+  let currentEnergy = 0;  // live session-level energy (for display)
+  let peakEnergy = 0;     // highest hourly energy today
+  let peakSession = null;
+  let peakHour = null;
+
   for (const es of energySessions) {
-    const e = parseFloat(es.market_energy) || 0;
-    if (es.session_name === session) {
-      currentEnergy = e;
-      energySession = es.session_name;
-      break;
+    const sessEnergy = parseFloat(es.market_energy) || 0;
+
+    // Track current session energy for display
+    if (es.session_name === session && sessEnergy > currentEnergy) {
+      currentEnergy = sessEnergy;
     }
-    if (e > currentEnergy) {
-      currentEnergy = e;
-      energySession = es.session_name;
+
+    // Scan hourly bars inside this session's details
+    const hourly = es.details?.hourly || [];
+    for (const h of hourly) {
+      const hEnergy = parseFloat(h.market_energy) || 0;
+      if (hEnergy > peakEnergy) {
+        peakEnergy = hEnergy;
+        peakSession = es.session_name;
+        peakHour = h.time;
+      }
+    }
+
+    // Also consider the session-level average as a bar
+    if (sessEnergy > peakEnergy) {
+      peakEnergy = sessEnergy;
+      peakSession = es.session_name;
     }
   }
 
-  console.log(`[ENERGY_DIR] Current energy: ${currentEnergy} (session: ${energySession})`);
+  // If current session didn't have data, use peak as current for display
+  if (!currentEnergy) currentEnergy = peakEnergy;
+
+  console.log(`[ENERGY_DIR] Current energy: ${currentEnergy} | Peak today: ${peakEnergy} (${peakSession}${peakHour ? ' @ ' + peakHour : ''})`);
 
   // ── 2. Fetch latest currency strength (3H + 6H) ───────────────────────────
   const { data: csRows, error: csErr } = await supabase
@@ -195,7 +216,8 @@ async function calculateEnergyDirection() {
   }
 
   // ── 5. Evaluate energy threshold ───────────────────────────────────────────
-  const thresholdMet = currentEnergy >= ENERGY_THRESHOLD;
+  // Use PEAK energy today — if any bar crossed the threshold, direction is set
+  const thresholdMet = peakEnergy >= ENERGY_THRESHOLD;
 
   // Check if this is a NEW energy event (was below threshold, now above)
   const prevThresholdMet = Object.values(stateMap).some(s => s.active && s.threshold_met);
