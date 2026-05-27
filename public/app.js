@@ -2086,13 +2086,19 @@ function renderFlowPerformance(strengthData, m15Data) {
 
 // ─── M15 Pair Ranking ─────────────────────────────────────────────────────────
 
-// Notification bar filter — requires impulse_score ≥ 30 AND all TFs same sign
-// AND pair must contain a qualifying currency (same gate as scanner/watchlist).
-// Sorted by impulse quality (actual price action) instead of spread magnitude.
+// Energy pair set — built once per refresh from cached energy signal pairs
+function _energyPairSet() {
+  if (!_energySignalsCache?.pairs?.length) return null;
+  return new Set(_energySignalsCache.pairs.filter(p => p.active).map(p => p.instrument));
+}
+
+// Notification bar filter — only energy signal pairs with impulse_score ≥ 30
+// AND all TFs same sign. Sorted by impulse quality.
 function getM15Impulses(data) {
+  const epSet = _energyPairSet();
   return (data?.spreads || [])
     .filter(s => {
-      if (!hasCsigCurrency(s.instrument)) return false; // must match currency signals
+      if (epSet && !epSet.has(s.instrument)) return false; // must be an energy signal pair
       if (s.state === 'FLAT' || s.state === 'REVERSING') return false;
       const s45  = parseFloat(s.smooth_45m)  || 0;
       const s90  = parseFloat(s.smooth_90m)  || 0;
@@ -2105,11 +2111,15 @@ function getM15Impulses(data) {
     .sort((a, b) => (b.impulse_score || 0) - (a.impulse_score || 0));
 }
 
-// Card filter — all active states (not FLAT) · |smooth_45m| >= CS_THRESHOLD (±0.00100)
-// Sorted by impulse_score (actual price action quality) instead of spread magnitude.
+// Card filter — only energy signal pairs with active M15 states (not FLAT)
+// Sorted by impulse_score (actual price action quality).
 function getM15AllActive(data) {
+  const epSet = _energyPairSet();
   return (data?.spreads || [])
-    .filter(s => s.state !== 'FLAT' && Math.abs(parseFloat(s.smooth_45m) || 0) >= CS_THRESHOLD)
+    .filter(s => {
+      if (epSet && !epSet.has(s.instrument)) return false;
+      return s.state !== 'FLAT' && Math.abs(parseFloat(s.smooth_45m) || 0) >= CS_THRESHOLD;
+    })
     .sort((a, b) => (b.impulse_score || 0) - (a.impulse_score || 0));
 }
 
