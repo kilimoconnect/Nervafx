@@ -1672,17 +1672,17 @@ function _volGradeBadge(grade) {
 function _flowPairAnalysis(p) {
   const points = [];
   const dir = p.dir === 'BUY' ? 'buying' : 'selling';
+  const phase = (p.status || '').toUpperCase();
 
-  // ── 1. Timeframe alignment (status) ──────────────────────────────────
-  const STATUS_DESC = {
-    STRONG:   'All timeframes aligned — M15, 3H, and 6H all confirm ' + dir + '.',
-    ALIGNED:  'Two timeframes aligned — M15 confirms ' + dir + ', one higher timeframe agrees.',
-    PARTIAL:  'M15 confirms ' + dir + ' but higher timeframes are mixed.',
-    BUILDING: 'Higher timeframes favour ' + dir + ' but M15 hasn\'t confirmed yet — wait for M15 entry.',
-    AGAINST:  'M15 is moving against the flow direction — momentum is counter-trend.',
-    WAIT:     'No clear alignment yet — not enough data to confirm direction.',
+  // ── 1. Energy phase description ──────────────────────────────────────
+  const PHASE_DESC = {
+    ENTRY:       'ENTRY phase — energy confirmed, M15 aligned with flow, pullback completed. Execute on next M15 confirmation candle.',
+    READY:       'READY phase — compression complete, price coiling for breakout. Watch M15 for expansion into ' + dir + ' direction.',
+    COMPRESSION: 'COMPRESSION phase — M15 range tightening after pullback. Energy building — breakout imminent if volume confirms.',
+    PULLBACK:    'PULLBACK phase — M15 retracing against the ' + dir + ' flow. Normal behaviour — wait for pullback to complete before entry.',
+    MONITORING:  'MONITORING phase — energy triggered ' + dir + ' direction but M15 hasn\'t started the sequence yet. Watch for initial pullback.',
   };
-  points.push(STATUS_DESC[p.status] || 'Status: ' + p.status);
+  points.push(PHASE_DESC[phase] || 'Phase: ' + phase);
 
   // ── 2. Directional Efficiency (DE) ───────────────────────────────────
   if (p.de > 0) {
@@ -1696,84 +1696,120 @@ function _flowPairAnalysis(p) {
   if (!p.volGrade) {
     points.push('No volume data available.');
   } else {
-    // Volume Grade — the composite verdict (efficiency-weighted)
+    // Volume Grade
     const GRADE_DESC = {
-      INSTITUTIONAL: 'Institutional-grade volume (score ' + Math.round(p.volScore) + ') — 24% of candles at this level produce strong moves. Highest conviction.',
-      STRONG:        'Strong volume participation (score ' + Math.round(p.volScore) + ') — 12% strong-move rate. Good conditions for directional trades.',
-      NORMAL:        'Normal volume (score ' + Math.round(p.volScore) + ') — 11% strong-move rate. Acceptable but needs other confirmations.',
-      WEAK:          'Weak volume (score ' + Math.round(p.volScore) + ') — only 5% produce strong moves. Volume is present but not translating into price movement.',
-      DEAD:          'Dead volume (score ' + Math.round(p.volScore) + ') — 0% of candles at this level produce strong moves. No participation.',
+      INSTITUTIONAL: 'Institutional-grade volume — 24% strong-move rate. Highest conviction.',
+      STRONG:        'Strong volume participation — 12% strong-move rate. Good conditions for directional trades.',
+      NORMAL:        'Normal volume — 11% strong-move rate. Acceptable but needs phase + DE confirmation.',
+      WEAK:          'Weak volume — only 5% produce strong moves. Volume present but not translating into price.',
+      DEAD:          'Dead volume — 0% strong-move rate. No participation at this level.',
     };
     points.push(GRADE_DESC[p.volGrade] || 'Volume grade: ' + p.volGrade);
 
-    // Volume Efficiency — the strongest single predictor
+    // Volume Efficiency
     const effPct = (p.volEff * 100).toFixed(0);
-    if (p.volEff >= 0.10)      points.push('Efficiency ' + effPct + '% — institutional signature. 74% of candles like this produce strong moves.');
-    else if (p.volEff >= 0.05) points.push('Efficiency ' + effPct + '% — volume translating into price. ~50% strong-move rate.');
+    if (p.volEff >= 0.10)      points.push('Efficiency ' + effPct + '% — institutional signature. Volume driving price efficiently.');
+    else if (p.volEff >= 0.05) points.push('Efficiency ' + effPct + '% — volume translating into price movement.');
     else if (p.volEff >= 0.01) points.push('Efficiency ' + effPct + '% — some directional movement but not conviction-level.');
-    else                       points.push('Efficiency near 0% — volume absorbed without price progress. Ranging or accumulation.');
+    else                       points.push('Efficiency near 0% — volume absorbed without price progress.');
 
-    // Relative Volume — only meaningful at extremes
-    if (p.volRV >= 2.0)       points.push('RV ' + p.volRV.toFixed(1) + '× — volume spike well above session average. 15% strong-move rate at this level.');
-    else if (p.volRV >= 1.5)  points.push('RV ' + p.volRV.toFixed(1) + '× — above average, but RV alone has no edge below 2.0×.');
+    // Relative Volume
+    if (p.volRV >= 2.0)       points.push('RV ' + p.volRV.toFixed(1) + '× — volume spike above session average.');
+    else if (p.volRV >= 1.5)  points.push('RV ' + p.volRV.toFixed(1) + '× — above average volume.');
     else if (p.volRV < 0.5)   points.push('RV ' + p.volRV.toFixed(1) + '× — very low volume. Market is quiet.');
-    // Skip RV 0.5-1.5 — it's noise, no edge (6-7% across all buckets)
 
     // Persistence
-    if (p.volPers >= 3)       points.push('Volume sustained ' + p.volPers + ' candles — watch for exhaustion, extended moves often reverse.');
+    if (p.volPers >= 3)       points.push('Volume sustained ' + p.volPers + ' candles — watch for exhaustion.');
     else if (p.volPers >= 1)  points.push('Volume elevated for ' + p.volPers + ' candle(s) — participation building.');
-    // Skip pers=0 — nothing useful to say
   }
 
-  // ── 4. Overall verdict ───────────────────────────────────────────────
+  // ── 4. Overall verdict (energy phase × DE × volume) ──────────────────
   let verdict, verdictCls;
-  const isAligned  = p.status === 'STRONG' || p.status === 'ALIGNED';
-  const isBuilding = p.status === 'BUILDING';
   const hasCleanDE = p.de >= 20;
-  const hasGoodEff = p.volEff >= 0.05;                    // 50% strong-move rate
+  const hasTrendDE = p.de >= 30;
+  const hasGoodEff = p.volEff >= 0.05;
   const hasInstVol = p.volGrade === 'INSTITUTIONAL' || p.volGrade === 'STRONG';
   const isDead     = p.volGrade === 'DEAD' || p.volRV < 0.5;
   const isWeak     = p.volGrade === 'WEAK' || p.volGrade === 'DEAD';
 
-  if (isAligned && hasCleanDE && hasGoodEff) {
-    verdict = 'High conviction — all timeframes aligned, clean DE, and efficient volume. Best conditions.';
-    verdictCls = 'sfa-go';
-  } else if (isAligned && hasCleanDE && hasInstVol) {
-    verdict = 'Strong setup — aligned flow with directional DE and strong volume participation.';
-    verdictCls = 'sfa-go';
-  } else if (isAligned && hasCleanDE) {
-    verdict = 'Good setup — aligned with clean price action. Volume is ordinary — wait for efficiency to confirm.';
-    verdictCls = 'sfa-good';
-  } else if (isAligned && hasGoodEff) {
-    verdict = 'Volume efficiency is good but DE is choppy — tighten stops, the move may not sustain.';
-    verdictCls = 'sfa-caution';
-  } else if (isAligned && !hasCleanDE && isWeak) {
-    verdict = 'Aligned but low quality — choppy DE and weak/dead volume. Likely false breakout territory.';
-    verdictCls = 'sfa-avoid';
-  } else if (isAligned && !hasCleanDE) {
-    verdict = 'Aligned but choppy — direction is right but price action is noisy. Reduce size.';
-    verdictCls = 'sfa-caution';
-  } else if (isBuilding && hasCleanDE && hasGoodEff) {
-    verdict = 'Building with good conditions — wait for M15 to confirm, then this could be high conviction.';
-    verdictCls = 'sfa-wait';
-  } else if (isBuilding && hasCleanDE) {
-    verdict = 'Building — higher timeframes favour this direction. Wait for M15 confirmation.';
-    verdictCls = 'sfa-wait';
-  } else if (isBuilding && isWeak) {
-    verdict = 'Building but volume is weak — no urgency, wait for both M15 alignment and volume.';
-    verdictCls = 'sfa-wait';
-  } else if (isBuilding) {
-    verdict = 'Building — patience, wait for M15 + volume efficiency to confirm.';
-    verdictCls = 'sfa-wait';
-  } else if (p.status === 'AGAINST') {
-    verdict = 'Counter-trend — M15 is moving against the flow. Don\'t fight short-term momentum.';
-    verdictCls = 'sfa-avoid';
-  } else if (isDead) {
-    verdict = 'Dead market — zero participation, nothing to trade.';
-    verdictCls = 'sfa-avoid';
+  if (phase === 'ENTRY') {
+    // ENTRY = best phase — verdict depends on DE + volume quality
+    if (hasTrendDE && hasGoodEff) {
+      verdict = 'High conviction ENTRY — trending DE, efficient volume, and M15 confirmed. Best conditions to execute.';
+      verdictCls = 'sfa-go';
+    } else if (hasTrendDE && hasInstVol) {
+      verdict = 'Strong ENTRY — clean trending DE with strong volume participation. Execute with confidence.';
+      verdictCls = 'sfa-go';
+    } else if (hasTrendDE) {
+      verdict = 'Good ENTRY — trending DE and M15 confirmed. Volume is ordinary — valid trade, standard size.';
+      verdictCls = 'sfa-go';
+    } else if (hasCleanDE && hasGoodEff) {
+      verdict = 'Solid ENTRY — directional DE with efficient volume. Good setup, execute.';
+      verdictCls = 'sfa-go';
+    } else if (hasCleanDE) {
+      verdict = 'Valid ENTRY — directional DE, M15 aligned. Volume is average — reduce size slightly.';
+      verdictCls = 'sfa-good';
+    } else if (isDead) {
+      verdict = 'ENTRY phase but dead volume and weak DE — likely false signal. Skip or wait for next cycle.';
+      verdictCls = 'sfa-avoid';
+    } else {
+      verdict = 'ENTRY phase but choppy DE — M15 confirmed but price action is noisy. Tighten stops, reduce size.';
+      verdictCls = 'sfa-caution';
+    }
+  } else if (phase === 'READY') {
+    // READY = compression done, about to break out
+    if (hasTrendDE && hasGoodEff) {
+      verdict = 'READY with strong conditions — DE trending and volume efficient. Watch M15 for breakout candle to enter.';
+      verdictCls = 'sfa-good';
+    } else if (hasCleanDE) {
+      verdict = 'READY — compression complete, DE is directional. Watch for M15 expansion to trigger entry.';
+      verdictCls = 'sfa-good';
+    } else if (isDead) {
+      verdict = 'READY phase but no volume participation — breakout may fizzle. Wait for volume to confirm.';
+      verdictCls = 'sfa-caution';
+    } else {
+      verdict = 'READY — coiling for breakout. Wait for M15 expansion candle before committing.';
+      verdictCls = 'sfa-wait';
+    }
+  } else if (phase === 'COMPRESSION') {
+    // COMPRESSION = building energy
+    if (hasCleanDE && hasInstVol) {
+      verdict = 'COMPRESSION with strong volume and clean DE — energy building for breakout. Be ready.';
+      verdictCls = 'sfa-wait';
+    } else if (hasCleanDE) {
+      verdict = 'COMPRESSION — M15 range tightening with directional DE. Breakout approaching, prepare entry.';
+      verdictCls = 'sfa-wait';
+    } else {
+      verdict = 'COMPRESSION — price coiling but conditions aren\'t ideal yet. Wait for READY phase.';
+      verdictCls = 'sfa-wait';
+    }
+  } else if (phase === 'PULLBACK') {
+    // PULLBACK = retracing, normal part of the sequence
+    if (hasTrendDE) {
+      verdict = 'PULLBACK in a trending market — healthy retracement. DE is clean, wait for pullback to complete then enter.';
+      verdictCls = 'sfa-wait';
+    } else if (hasCleanDE) {
+      verdict = 'PULLBACK — M15 retracing against flow. Normal sequence, wait for compression or reversal candle.';
+      verdictCls = 'sfa-wait';
+    } else {
+      verdict = 'PULLBACK with weak DE — could be a trend reversal rather than a pullback. Monitor closely.';
+      verdictCls = 'sfa-caution';
+    }
   } else {
-    verdict = 'No clear edge — conditions are mixed. Wait for alignment + efficiency.';
-    verdictCls = 'sfa-wait';
+    // MONITORING = initial state, waiting for sequence to begin
+    if (isDead) {
+      verdict = 'MONITORING — no M15 sequence started and volume is dead. Nothing to trade yet.';
+      verdictCls = 'sfa-avoid';
+    } else if (hasTrendDE && hasGoodEff) {
+      verdict = 'MONITORING but strong conditions — trending DE and efficient volume. Watch for M15 pullback to start the sequence.';
+      verdictCls = 'sfa-wait';
+    } else if (hasCleanDE) {
+      verdict = 'MONITORING — energy direction set, DE is directional. Wait for M15 to begin the pullback → entry sequence.';
+      verdictCls = 'sfa-wait';
+    } else {
+      verdict = 'MONITORING — energy direction set but no M15 action yet. Wait for the sequence to develop.';
+      verdictCls = 'sfa-wait';
+    }
   }
 
   return { verdict, points, cls: verdictCls };
