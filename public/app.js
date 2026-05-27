@@ -1782,6 +1782,7 @@ function _flowPairAnalysis(p) {
 // ─── Build scored flow pairs from pre-computed API or client-side fallback ────
 
 let _fpPrecomputed = null; // Pre-computed flow performance rows from API
+let _energySignalsCache = null; // Cached energy signal pairs from API
 
 function _buildFpScored(strengthData, m15Data) {
   // ── Primary: use pre-computed FP data (free plan — includes all metrics) ──
@@ -3061,168 +3062,66 @@ function _meSessionExplain(s, label, status) {
   else if (agr >= 25) lines.push(`Mixed agreement (${agr}) — partial alignment, some conflict.`);
   else lines.push(`Low agreement (${agr}) — currencies giving conflicting signals.`);
 
-  // Currency leadership — list actionable pairs ranked by Flow Performance score
-  // ACTIVE: score using live M15 + currency strength data
-  // COMPLETED: use stored flow_performance from session details, or fall back to live scoring
-  const _FP_PAIRS = new Set([
-    'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
-    'EUR_GBP','EUR_JPY','EUR_CHF','EUR_CAD','EUR_AUD','EUR_NZD',
-    'GBP_JPY','GBP_CHF','GBP_CAD','GBP_AUD','GBP_NZD',
-    'AUD_JPY','AUD_CHF','AUD_CAD','AUD_NZD',
-    'NZD_JPY','NZD_CHF','NZD_CAD','CAD_JPY','CAD_CHF','CHF_JPY',
-  ]);
+  // Currency leadership — best 4 moving pairs from energy signal pairs
+  // ACTIVE session: use live energy signal pairs sorted by movement
+  // COMPLETED session: use stored flow_performance from session details
   let rankedPairs = null;
 
-  // Try stored flow_performance first (COMPLETED sessions have this pre-computed)
-  const storedFP = s.details?.flow_performance;
-  if (storedFP && storedFP.length) {
-    // Re-score from stored values to get proper ranking
-    rankedPairs = storedFP.map(fp => {
-      const [b, q] = fp.pair.split('_');
-      const flowSign = fp.dir === 'BUY' ? 1 : -1;
-      const v45 = fp.m15 != null ? fp.m15 : null;
-      const spread3H = fp.h3 != null ? fp.h3 : null;
-      const spread6H = fp.h6 != null ? fp.h6 : null;
-      let perfScore = 0;
-      if (v45 != null)      perfScore += (v45 * flowSign) * 10000 * 4;
-      if (spread3H != null) perfScore += (spread3H * flowSign) * 10000 * 2;
-      if (spread6H != null) perfScore += (spread6H * flowSign) * 10000 * 1;
-      if (v45 != null && Math.sign(v45) === flowSign) perfScore += 15;
-      if (spread3H != null && Math.sign(spread3H) === flowSign) perfScore += 10;
-      if (spread6H != null && Math.sign(spread6H) === flowSign) perfScore += 5;
-      const deCombined = fp.de || 0;
-      const finalScore = (0.75 * perfScore) + (0.25 * deCombined);
-      // Volume analysis (use stored instrument name with underscore)
-      const vol = _volDataCache[fp.pair];
-      const volGrade = vol?.participation_grade || '';
-      const volRV    = vol ? parseFloat(vol.relative_volume) || 0 : 0;
-      const volEff   = vol ? parseFloat(vol.volume_efficiency) || 0 : 0;
-      const volPers  = vol ? parseFloat(vol.volume_persistence) || 0 : 0;
-      const volScore = vol ? parseFloat(vol.participation_score) || 0 : 0;
-      return { pair: fp.pair.replace('_', '/'), dir: fp.dir, status: fp.status, finalScore, de: Math.round(deCombined), volGrade, volRV, volEff, volPers, volScore };
-    }).sort((a, b) => b.finalScore - a.finalScore);
-  }
+  if (status === 'ACTIVE' && _energySignalsCache?.pairs?.length) {
+    // Use top 4 energy signal pairs sorted by M15 movement
+    const m15Bonus = { EXPANDING: 3, STEADY: 1, COMPRESSING: 0, REVERSING: -1, FLAT: -2 };
+    const sorted = [..._energySignalsCache.pairs]
+      .filter(p => p.active)
+      .sort((a, b) => {
+        const aMove = Math.abs(parseFloat(a.v45) || 0) * 10000;
+        const bMove = Math.abs(parseFloat(b.v45) || 0) * 10000;
+        const aM15 = m15Bonus[(a.m15_state || '').toUpperCase()] || 0;
+        const bM15 = m15Bonus[(b.m15_state || '').toUpperCase()] || 0;
+        const aImp = a.impulse_score || 0;
+        const bImp = b.impulse_score || 0;
+        return (bMove + bM15 * 5 + bImp * 0.3) - (aMove + aM15 * 5 + aImp * 0.3);
+      })
+      .slice(0, 4);
 
-  // If no stored data (COMPLETED sessions have flow_performance in details), try pre-computed API
-  if (!rankedPairs || !rankedPairs.length) {
-    if (_fpPrecomputed && _fpPrecomputed.length) {
-      // Use pre-computed flow performance data (free — includes DE, volume, impulse)
-      const latestTime = _fpPrecomputed[_fpPrecomputed.length - 1].time;
-      const latestHour = (latestTime || '').slice(0, 13);
-      const latest = _fpPrecomputed.filter(r => (r.time || '').slice(0, 13) === latestHour);
-      if (latest.length) {
-        rankedPairs = latest.sort((a, b) => (a.rank || 99) - (b.rank || 99)).map(r => {
-          const deCombined = parseFloat(r.de_combined) || 0;
-          return {
-            pair: r.instrument.replace('_', '/'), dir: r.dir, status: r.status || 'WAIT',
-            finalScore: parseFloat(r.final_score) || 0, de: Math.round(deCombined),
-            volGrade: r.vol_grade || '', volRV: parseFloat(r.vol_rv) || 0,
-            volEff: parseFloat(r.vol_eff) || 0, volPers: parseFloat(r.vol_pers) || 0, volScore: 0,
-          };
-        });
-      }
-    }
-  }
-
-  // Fallback: compute from live M15 + currency strength (requires pro APIs)
-  if (!rankedPairs || !rankedPairs.length) {
-    let allStrong, allWeak;
-    if (status === 'ACTIVE' && strengthData?.currencies?.length) {
-      const flow = getSmoothed3HFlow(strengthData.currencies);
-      allStrong = flow.strong;
-      allWeak   = flow.weak;
-    } else {
-      allStrong = (s.strongest_ccy || '').split(',').filter(Boolean);
-      allWeak   = (s.weakest_ccy   || '').split(',').filter(Boolean);
-    }
-    if (allStrong.length && allWeak.length) {
-      const flowPairs = [];
-      for (const st of allStrong) {
-        for (const wk of allWeak) {
-          if (st === wk) continue;
-          const fwd = `${st}_${wk}`, rev = `${wk}_${st}`;
-          if (_FP_PAIRS.has(fwd))      flowPairs.push({ instrument: fwd, dir: 'BUY' });
-          else if (_FP_PAIRS.has(rev)) flowPairs.push({ instrument: rev, dir: 'SELL' });
-        }
-      }
-      // Score using live M15 + currency strength
-      const m15Map = {};
-      if (_m15DataCache?.spreads?.length) {
-        for (const sp of _m15DataCache.spreads) m15Map[sp.instrument] = sp;
-      }
-      const ccyMap3H = {}, ccyMap6H = {};
-      if (strengthData?.currencies?.length) {
-        for (const c of strengthData.currencies) {
-          ccyMap3H[c.currency] = parseFloat(c.smooth_3h ?? c.normalized_3h) || 0;
-          ccyMap6H[c.currency] = parseFloat(c.smooth_6h ?? c.normalized_6h) || 0;
-        }
-      }
-      rankedPairs = flowPairs.slice(0, 4).map(fp => {
-        const [b, q] = fp.instrument.split('_');
-        const flowSign = fp.dir === 'BUY' ? 1 : -1;
-        const m15 = m15Map[fp.instrument];
-        const v45 = m15 ? parseFloat(m15.smooth_45m) || 0 : null;
-        const v90 = m15 ? parseFloat(m15.smooth_90m) || 0 : null;
-        const impulseScore = m15 ? (m15.impulse_score || 0) : 0;
-        const impulseDir   = m15 ? (m15.impulse_dir   || 0) : 0;
-        const impulseAligned = impulseDir === flowSign;
-        const h3B = ccyMap3H[b] ?? null, h3Q = ccyMap3H[q] ?? null;
-        const h6B = ccyMap6H[b] ?? null, h6Q = ccyMap6H[q] ?? null;
-        const spread3H = (h3B != null && h3Q != null) ? h3B - h3Q : null;
-        const spread6H = (h6B != null && h6Q != null) ? h6B - h6Q : null;
-        const M15_CONFIRM_MIN = 0.00008;
-        const m15Confirms = v45 != null ? (Math.sign(v45) === flowSign && Math.abs(v45) >= M15_CONFIRM_MIN) : null;
-        const h3Confirms  = spread3H != null ? Math.sign(spread3H) === flowSign : null;
-        const h6Confirms  = spread6H != null ? Math.sign(spread6H) === flowSign : null;
-        const accel = (v45 != null && v90 != null) ? v45 - v90 : null;
-        const accelSign = accel != null ? Math.sign(accel) === flowSign : null;
-        let perfScore = 0;
-        // Currency strength spreads
-        if (v45 != null)      perfScore += (v45 * flowSign) * 10000 * 3;
-        if (spread3H != null) perfScore += (spread3H * flowSign) * 10000 * 2;
-        if (spread6H != null) perfScore += (spread6H * flowSign) * 10000 * 1;
-        // Real M15 price action impulse
-        if (impulseAligned && impulseScore >= 40) perfScore += impulseScore * 0.5;
-        else if (impulseAligned)                  perfScore += impulseScore * 0.25;
-        else if (impulseScore >= 40)              perfScore -= impulseScore * 0.3;
-        // Alignment bonuses scaled by impulse
-        if (m15Confirms && impulseScore >= 40) perfScore += 20;
-        else if (m15Confirms)                  perfScore += 10;
-        if (h3Confirms)  perfScore += 10;
-        if (h6Confirms)  perfScore += 5;
-        if (accelSign)   perfScore += 10;
-        let state = null;
-        if (v45 != null && v90 != null) {
-          const d45 = v45 * flowSign, d90 = v90 * flowSign;
-          if (Math.abs(v45) < 0.00005) state = 'FLAT';
-          else if (d45 < 0) state = 'REVERSING';
-          else if (d45 > d90 * 1.1) state = 'EXPANDING';
-          else if (d45 < d90 * 0.85 && d90 > 0) state = 'COMPRESSING';
-          else state = 'STEADY';
-        }
-        if (state === 'EXPANDING' && m15Confirms) perfScore += 15;
-        if (state === 'EXPANDING' && impulseAligned && impulseScore >= 50) perfScore += 10;
-        if (state === 'REVERSING') perfScore -= 10;
-        if (state === 'COMPRESSING' && !m15Confirms) perfScore -= 15;
-        const htfCount = [h3Confirms, h6Confirms].filter(x => x === true).length;
-        let fpStatus;
-        if (m15Confirms && htfCount === 2)       fpStatus = 'STRONG';
-        else if (m15Confirms && htfCount === 1)  fpStatus = 'ALIGNED';
-        else if (m15Confirms && htfCount === 0)  fpStatus = 'PARTIAL';
-        else if (!m15Confirms && htfCount >= 1)  fpStatus = 'BUILDING';
-        else if (m15Confirms === false)          fpStatus = 'AGAINST';
-        else                                     fpStatus = 'WAIT';
-        const deCombined = m15 ? parseFloat(m15.de_combined) || 0 : 0;
-        const finalScore = (0.75 * perfScore) + (0.25 * deCombined);
-        // Volume analysis
-        const vol = _volDataCache[fp.instrument];
+    if (sorted.length) {
+      rankedPairs = sorted.map(p => {
+        const de = parseFloat(p.de_combined) || 0;
+        const vol = _volDataCache[p.instrument];
         const volGrade = vol?.participation_grade || '';
         const volRV    = vol ? parseFloat(vol.relative_volume) || 0 : 0;
         const volEff   = vol ? parseFloat(vol.volume_efficiency) || 0 : 0;
         const volPers  = vol ? parseFloat(vol.volume_persistence) || 0 : 0;
-        const volScore = vol ? parseFloat(vol.participation_score) || 0 : 0;
-        return { pair: fp.instrument.replace('_', '/'), dir: fp.dir, status: fpStatus, finalScore, de: Math.round(deCombined), volGrade, volRV, volEff, volPers, volScore };
-      }).sort((a, b) => b.finalScore - a.finalScore);
+        return {
+          pair: p.instrument.replace('_', '/'), dir: p.dir,
+          status: p.phase || 'MONITORING',
+          finalScore: Math.abs(parseFloat(p.v45) || 0) * 10000,
+          de: Math.round(de), volGrade, volRV, volEff, volPers, volScore: 0,
+        };
+      });
+    }
+  }
+
+  // COMPLETED sessions: use stored flow_performance from session details
+  if (!rankedPairs || !rankedPairs.length) {
+    const storedFP = s.details?.flow_performance;
+    if (storedFP && storedFP.length) {
+      rankedPairs = storedFP.map(fp => {
+        const flowSign = fp.dir === 'BUY' ? 1 : -1;
+        const v45 = fp.m15 != null ? fp.m15 : null;
+        const spread3H = fp.h3 != null ? fp.h3 : null;
+        let perfScore = 0;
+        if (v45 != null)      perfScore += (v45 * flowSign) * 10000 * 4;
+        if (spread3H != null) perfScore += (spread3H * flowSign) * 10000 * 2;
+        const deCombined = fp.de || 0;
+        const finalScore = (0.75 * perfScore) + (0.25 * deCombined);
+        const vol = _volDataCache[fp.pair];
+        return {
+          pair: fp.pair.replace('_', '/'), dir: fp.dir, status: fp.status || 'WAIT',
+          finalScore, de: Math.round(deCombined),
+          volGrade: vol?.participation_grade || '', volRV: vol ? parseFloat(vol.relative_volume) || 0 : 0,
+          volEff: vol ? parseFloat(vol.volume_efficiency) || 0 : 0, volPers: vol ? parseFloat(vol.volume_persistence) || 0 : 0, volScore: 0,
+        };
+      }).sort((a, b) => b.finalScore - a.finalScore).slice(0, 4);
     }
   }
 
@@ -3239,7 +3138,7 @@ function _meSessionExplain(s, label, status) {
     const VOL_GRADE_SHORT = { INSTITUTIONAL: 'Inst', STRONG: 'Strng', NORMAL: 'Norm', WEAK: 'Weak', DEAD: 'Dead' };
     const pairRows = rankedPairs.map((p, i) => {
       const dirCls = p.dir === 'BUY' ? 'buy' : 'sell';
-      const statusColor = p.status === 'STRONG' ? '#22c55e' : p.status === 'ALIGNED' ? '#0ea5e9' : p.status === 'PARTIAL' ? '#a855f7' : p.status === 'BUILDING' ? '#f59e0b' : p.status === 'AGAINST' ? '#ef4444' : '#64748b';
+      const statusColor = p.status === 'ENTRY' ? '#22c55e' : p.status === 'READY' ? '#3b82f6' : p.status === 'PULLBACK' ? '#f59e0b' : p.status === 'COMPRESSION' ? '#a78bfa' : p.status === 'STRONG' ? '#22c55e' : p.status === 'ALIGNED' ? '#0ea5e9' : p.status === 'PARTIAL' ? '#a855f7' : p.status === 'BUILDING' ? '#f59e0b' : p.status === 'AGAINST' ? '#ef4444' : '#64748b';
       const dl = deLabel(p.de);
       const deHtml = p.de > 0 ? `<span class="me-flow-de" style="color:${dl.color}">DE ${p.de}% ${dl.text}</span>` : '';
       const volColor = VOL_GRADE_COLOR[p.volGrade] || '#64748b';
@@ -5497,6 +5396,7 @@ async function refresh() {
     _m15DataCache = m15Data;   // Cache for ME card flow ranking + scanner
     _volDataCache = _buildVolMap(volData);  // Cache volume analysis: instrument → latest row
     _fpPrecomputed = fpData?.rows || [];    // Pre-computed flow performance (free plan — all metrics baked in)
+    _energySignalsCache = energySignals;    // Energy signal pairs for Strength Flow
     renderStates(states, m15Data);
     renderSpreads(spreads);
     renderRanking12H(spreads, strength);
