@@ -170,6 +170,17 @@
 
     <!-- ── Energy Status Banner ── -->
     <section class="card span-full" id="section-energy-banner">
+      <div class="plan-lock-overlay" data-require="pro">
+        <span class="plan-lock-icon">⚡</span>
+        <span class="plan-lock-title">Energy Engine</span>
+        <span class="plan-lock-desc">Real-time energy threshold detection with currency direction analysis. See which currencies are strong vs weak and get phase-based entry signals on the best pairs.</span>
+        <ul class="plan-lock-features">
+          <li>Energy threshold monitoring (50+ triggers)</li>
+          <li>3H &amp; 6H currency direction alignment</li>
+          <li>M15 phase tracking: Pullback → Compression → Entry</li>
+        </ul>
+        <a href="/home.html#pricing" class="plan-lock-btn">Upgrade →</a>
+      </div>
       <div class="es-banner" id="es-banner">
         <div class="es-banner-left">
           <div class="es-energy-ring" id="es-energy-ring">
@@ -186,6 +197,17 @@
 
     <!-- ── Active Currencies: strong vs weak ── -->
     <section class="card span-full" id="section-energy-currencies">
+      <div class="plan-lock-overlay" data-require="pro">
+        <span class="plan-lock-icon">💱</span>
+        <span class="plan-lock-title">Currency Direction</span>
+        <span class="plan-lock-desc">Energy-confirmed currency strength and weakness. See which currencies are driving the market and in which direction — updated every pipeline cycle.</span>
+        <ul class="plan-lock-features">
+          <li>Strong vs Weak currency grid</li>
+          <li>3H &amp; 6H smoothed strength values</li>
+          <li>Continuation &amp; reversal event detection</li>
+        </ul>
+        <a href="/home.html#pricing" class="plan-lock-btn">Upgrade →</a>
+      </div>
       <h2 class="card-title"><i data-lucide="arrow-up-down"></i> Currency Direction <span class="sub">energy-confirmed strong &amp; weak</span></h2>
       <div class="es-currencies" id="es-currencies">
         <div class="es-no-data">Waiting for energy threshold...</div>
@@ -194,6 +216,17 @@
 
     <!-- ── Active Signal Pairs ── -->
     <section class="card span-full" id="section-energy-pairs">
+      <div class="plan-lock-overlay" data-require="pro">
+        <span class="plan-lock-icon">🎯</span>
+        <span class="plan-lock-title">Signal Pairs</span>
+        <span class="plan-lock-desc">Energy-driven pair monitoring with M15 phase detection. Track the best pairs from pullback through compression to entry — with volume, DE, and impulse analysis.</span>
+        <ul class="plan-lock-features">
+          <li>Phase-based monitoring: MONITORING → ENTRY</li>
+          <li>Volume participation &amp; efficiency analysis</li>
+          <li>Directional Efficiency (DE) quality scoring</li>
+        </ul>
+        <a href="/home.html#pricing" class="plan-lock-btn">Upgrade →</a>
+      </div>
       <h2 class="card-title"><i data-lucide="crosshair"></i> Signal Pairs <span class="sub">energy-driven pair monitoring</span></h2>
       <div class="es-pairs" id="es-pairs">
         <div class="es-no-data">No active pairs</div>
@@ -321,7 +354,7 @@
     </div>
   </div>
 
-  <script src="app.js?v=11"></script>
+  <script src="app.js?v=12"></script>
 
   <script>
     // Show Admin button only for the admin user (checked via JWT sub claim)
