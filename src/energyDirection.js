@@ -226,8 +226,10 @@ async function calculateEnergyDirection() {
   let currencyUpdates = [];
   let newPairs = [];
 
-  if (thresholdMet) {
-    // ── 6. Identify aligned currencies (3H and 6H same direction) ──────────
+  if (isNewEnergyEvent) {
+    // ── 6. NEW energy event — snapshot currencies from CURRENT strength ────
+    // This is the ONLY time directions are evaluated. Strength values are
+    // locked in and persist until the next bar crosses ≥50.
     const strong = [];
     const weak = [];
 
@@ -246,34 +248,41 @@ async function calculateEnergyDirection() {
       }
     }
 
-    // Sort by combined strength/weakness
     strong.sort((a, b) => b.score - a.score);
     weak.sort((a, b) => b.score - a.score);
 
-    console.log(`[ENERGY_DIR] Threshold met — peak bar ${peakEnergy} (${peakSession}${peakHour ? ' @ ' + peakHour : ''}). Strong: ${strong.map(s=>s.currency).join(',')} | Weak: ${weak.map(w=>w.currency).join(',')}`);
+    console.log(`[ENERGY_DIR] NEW energy event — peak bar ${peakEnergy} (${peakSession}${peakHour ? ' @ ' + peakHour : ''}). Snapshotting directions. Strong: ${strong.map(s=>s.currency).join(',')} | Weak: ${weak.map(w=>w.currency).join(',')}`);
 
-    // ── 7. Update currency directions ──────────────────────────────────────
+    // ── 7. Snapshot currency directions with trigger-time strength ─────────
     const newDirections = new Map();
-    for (const s of strong) newDirections.set(s.currency, 'STRONG');
-    for (const w of weak)   newDirections.set(w.currency, 'WEAK');
+    const strengthSnapshot = new Map(); // lock in the values at trigger time
+    for (const s of strong) {
+      newDirections.set(s.currency, 'STRONG');
+      strengthSnapshot.set(s.currency, { h3: s.h3, h6: s.h6 });
+    }
+    for (const w of weak) {
+      newDirections.set(w.currency, 'WEAK');
+      strengthSnapshot.set(w.currency, { h3: w.h3, h6: w.h6 });
+    }
 
     for (const ccy of CURRENCIES) {
       const newDir = newDirections.get(ccy) || 'NEUTRAL';
       const prev = stateMap[ccy];
       const prevDir = prev?.direction || 'NEUTRAL';
+      const snap = strengthSnapshot.get(ccy) || { h3: ccyMap[ccy]?.smooth_3h || 0, h6: ccyMap[ccy]?.smooth_6h || 0 };
 
       let energyEventType = null;
-      if (isNewEnergyEvent && prev?.active) {
+      if (prev?.active) {
         energyEventType = (newDir === prevDir && newDir !== 'NEUTRAL') ? 'CONTINUATION' : 'REVERSAL';
-      } else if (isNewEnergyEvent) {
+      } else {
         energyEventType = 'NEW';
       }
 
       currencyUpdates.push({
         currency: ccy,
         direction: newDir,
-        smooth_3h: ccyMap[ccy]?.smooth_3h || 0,
-        smooth_6h: ccyMap[ccy]?.smooth_6h || 0,
+        smooth_3h: snap.h3,           // snapshot at trigger time — locked
+        smooth_6h: snap.h6,           // snapshot at trigger time — locked
         energy_at_trigger: peakEnergy,
         trigger_session: peakSession,
         triggered_at: now.toISOString(),
@@ -283,7 +292,7 @@ async function calculateEnergyDirection() {
       });
     }
 
-    // ── 8. Form pairs (strong × weak) ──────────────────────────────────────
+    // ── 8. Form pairs from snapshotted directions ──────────────────────────
     for (const s of strong) {
       for (const w of weak) {
         const fwd = `${s.currency}_${w.currency}`;
@@ -304,17 +313,20 @@ async function calculateEnergyDirection() {
         });
       }
     }
-  } else {
-    // Energy below threshold — keep existing directions (they persist)
-    // Just update threshold_met flag
+  } else if (thresholdMet || Object.values(stateMap).some(s => s.active)) {
+    // ── Directions already locked — keep them unchanged ──────────────────
+    // No re-evaluation of strong/weak. Strength values stay as snapshotted.
+    // Only M15 phase data gets updated (handled below in section 9–10).
+    console.log(`[ENERGY_DIR] Directions locked (peak ${peakEnergy}). No new energy event — keeping existing directions.`);
+
+    // Keep existing currency states exactly as they are
     for (const ccy of CURRENCIES) {
       const prev = stateMap[ccy];
       if (prev) {
         currencyUpdates.push({
           ...prev,
-          threshold_met: false,
-          smooth_3h: ccyMap[ccy]?.smooth_3h || prev.smooth_3h,
-          smooth_6h: ccyMap[ccy]?.smooth_6h || prev.smooth_6h,
+          threshold_met: thresholdMet,
+          // DO NOT update smooth_3h/smooth_6h — keep snapshotted values
         });
       }
     }
@@ -333,6 +345,9 @@ async function calculateEnergyDirection() {
         });
       }
     }
+  } else {
+    // No threshold met and no existing directions — nothing to do
+    console.log(`[ENERGY_DIR] Energy ${peakEnergy} below threshold. No existing directions.`);
   }
 
   // ── 9. Fetch M15 data for all active pairs ─────────────────────────────────
