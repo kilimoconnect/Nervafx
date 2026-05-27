@@ -685,6 +685,10 @@
   </div>
 
   <script>
+    // ── Clear stale plan cache on login page ─────────────────────────────────
+    // Prevents old plan UI flash when switching between accounts
+    localStorage.removeItem('nfx_plan');
+
     // ── GSAP entrance animations ──────────────────────────────────────────────
     window.addEventListener('DOMContentLoaded', () => {
       /* Auto-switch to signup tab if ?tab=signup in URL */
