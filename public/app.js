@@ -5466,8 +5466,6 @@ async function refresh() {
     renderActions(actions);
     renderQuality(quality);
     renderJournal(journalData);
-    renderEnergySignals(energySignals);
-
     document.getElementById('status-dot').className = 'status-dot online';
 
     // First load: run GSAP entrance + hydrate icons
