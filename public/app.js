@@ -82,6 +82,51 @@ function logout() {
   location.replace('/login.html');
 }
 
+// ─── Collapsible header panels ───────────────────────────────────────────────
+
+function toggleHdrPanel(name) {
+  const panel = document.getElementById('hdr-panel-' + name);
+  const btn   = document.getElementById('hdr-toggle-' + name);
+  if (!panel) return;
+  const isOpen = panel.style.display !== 'none';
+  // Close all panels first
+  document.querySelectorAll('.hdr-panel').forEach(p => { p.style.display = 'none'; });
+  document.querySelectorAll('.hdr-icon-btn').forEach(b => { b.classList.remove('active'); });
+  // Toggle the requested one
+  if (!isOpen) {
+    panel.style.display = '';
+    if (btn) btn.classList.add('active');
+  }
+}
+
+// Update alert badge count (called when news/env/m15 bars become visible)
+function _updateAlertBadge() {
+  const panel = document.getElementById('hdr-panel-alerts');
+  if (!panel) return;
+  let count = 0;
+  const bars = ['v2-threshold-bar', 'news-alert-bar', 'm15-impulse-bar'];
+  for (const id of bars) {
+    const el = document.getElementById(id);
+    if (el && el.style.display !== 'none') count++;
+  }
+  const badge = document.getElementById('hdr-alert-badge');
+  if (!badge) return;
+  if (count > 0) {
+    badge.textContent = count;
+    badge.style.display = '';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+// Close panels when clicking outside header
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.header')) {
+    document.querySelectorAll('.hdr-panel').forEach(p => { p.style.display = 'none'; });
+    document.querySelectorAll('.hdr-icon-btn').forEach(b => { b.classList.remove('active'); });
+  }
+});
+
 const REFRESH_MS = 60000;
 let strengthChart = null;
 let activeTF = '6';
@@ -558,6 +603,7 @@ function updateNewsAlertBar() {
 
   if (!upcoming.length) {
     bar.style.display = 'none';
+    _updateAlertBadge();
     return;
   }
 
@@ -593,6 +639,7 @@ function updateNewsAlertBar() {
 
   document.getElementById('nab-chips').innerHTML = chips + extraBadge;
   bar.style.display = '';
+  _updateAlertBadge();
 }
 
 function startNewsAlertTimer() {
@@ -2240,6 +2287,7 @@ function updateM15Bar(data) {
   if (timeEl && data.time) timeEl.textContent = fmtTime(data.time);
 
   bar.style.display = 'flex';
+  _updateAlertBadge();
 }
 
 // ─── V2 Environment Gate ─────────────────────────────────────────────────────
@@ -2443,6 +2491,7 @@ function updateV2ThresholdBar(hourlyRows) {
   if (timeEl && latest.time_utc) timeEl.textContent = fmtTime(latest.time_utc);
 
   bar.style.display = 'flex';
+  _updateAlertBadge();
 }
 
 // ─── Risk / approved trades ───────────────────────────────────────────────────
