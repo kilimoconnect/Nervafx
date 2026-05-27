@@ -120,12 +120,10 @@ async function syncInstrument(sb, instrument, timeframe) {
     fromISO = fallback.toISOString();
   }
 
-  const toISO = new Date().toISOString();
-  if (new Date(fromISO) >= new Date(toISO)) return 0;
+  if (new Date(fromISO) >= new Date()) return 0;
 
   const raw = await fetchCandles(instrument, {
     from: fromISO,
-    to: toISO,
     granularity: timeframe,
   });
 

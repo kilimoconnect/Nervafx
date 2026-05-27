@@ -28,6 +28,7 @@ const { runOutcomeReviews }              = require('../src/outcomeReview');
 const { sendSignalAlerts }              = require('../src/emailAlerts');
 const { calculateLatestVolumeAnalysis } = require('../src/volumeAnalysis');
 const { calculateFlowPerformance }     = require('../src/flowPerformance');
+const { calculateEnergyDirection }     = require('../src/energyDirection');
 
 const ADMIN_ID = '140f3854-2c85-488c-8e0a-0f965d562654';
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
@@ -321,7 +322,7 @@ module.exports = async function handler(req, res) {
           }
           if (new Date(fromISO) >= new Date()) return 0;
 
-          const raw = await fetchCandles(inst, { from: fromISO, to: new Date().toISOString(), granularity: tf });
+          const raw = await fetchCandles(inst, { from: fromISO, granularity: tf });
           const candles = raw.filter(c => c.complete).map(c => ({
             instrument: inst, timeframe: tf, time: c.time,
             open: parseFloat(c.mid.o), high: parseFloat(c.mid.h),
@@ -358,6 +359,7 @@ module.exports = async function handler(req, res) {
   await step('risk',             () => checkLatestSignals());
   await step('actions',          () => processLatestActions());
   await step('session_backfill', () => backfillSessionActivity());
+  await step('energy_direction', () => calculateEnergyDirection());
   await step('market_narrative', () => generateMarketNarrative());
   await step('journal',          () => writeJournalEntry());
   await step('outcomes',         () => runOutcomeReviews());
