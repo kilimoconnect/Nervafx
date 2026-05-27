@@ -2558,6 +2558,170 @@ function renderActions(actions) {
     </div>`).join('');
 }
 
+// ─── Energy Signals Tab ──────────────────────────────────────────────────────
+
+function renderEnergySignals(data) {
+  if (!data) return;
+  const { currencies, pairs, energy, thresholdMet } = data;
+
+  // ── Banner ──
+  const ringEl = document.getElementById('es-energy-ring');
+  const numEl = document.getElementById('es-energy-num');
+  const statusEl = document.getElementById('es-banner-status');
+  const rightEl = document.getElementById('es-banner-right');
+
+  if (ringEl && numEl) {
+    const pct = Math.min(100, Math.max(0, energy));
+    const col = energy >= 60 ? '#22c55e' : energy >= 50 ? '#3b82f6' : energy >= 35 ? '#f59e0b' : '#475569';
+    ringEl.style.setProperty('--es-ring-color', col);
+    ringEl.style.setProperty('--es-ring-pct', pct + '%');
+    numEl.textContent = Math.round(energy);
+    numEl.style.color = col;
+  }
+
+  if (statusEl) {
+    if (thresholdMet) {
+      statusEl.innerHTML = `<span style="color:#22c55e;font-weight:700">ACTIVE</span> — Energy ${Math.round(energy)} above threshold (50). Directions confirmed.`;
+    } else if (energy >= 35) {
+      statusEl.innerHTML = `<span style="color:#f59e0b;font-weight:700">BUILDING</span> — Energy ${Math.round(energy)}, approaching threshold. Monitoring...`;
+    } else {
+      statusEl.innerHTML = `<span style="color:#94a3b8;font-weight:700">LOW</span> — Energy ${Math.round(energy)}. Existing directions persist.`;
+    }
+  }
+
+  // Event chips in banner
+  if (rightEl) {
+    const events = new Set();
+    for (const p of (pairs || [])) {
+      if (p.new_energy_event && p.energy_event_type) events.add(p.energy_event_type);
+    }
+    let chips = '';
+    if (events.has('CONTINUATION')) chips += '<span class="es-event-chip continuation">Continuation</span>';
+    if (events.has('REVERSAL'))     chips += '<span class="es-event-chip reversal">Reversal</span>';
+    if (events.has('NEW'))          chips += '<span class="es-event-chip new-event">New Signal</span>';
+    if (!thresholdMet && !pairs?.length) chips += '<span class="es-event-chip below">Below Threshold</span>';
+    rightEl.innerHTML = chips;
+  }
+
+  // ── Currencies ──
+  const ccyEl = document.getElementById('es-currencies');
+  if (ccyEl) {
+    const active = (currencies || []).filter(c => c.active && c.direction !== 'NEUTRAL');
+    const strong = active.filter(c => c.direction === 'STRONG').sort((a,b) => (b.smooth_3h||0) - (a.smooth_3h||0));
+    const weak   = active.filter(c => c.direction === 'WEAK').sort((a,b) => (a.smooth_3h||0) - (b.smooth_3h||0));
+
+    if (!strong.length && !weak.length) {
+      ccyEl.innerHTML = '<div class="es-no-data">No confirmed currency directions. Energy threshold not yet met or no aligned currencies.</div>';
+    } else {
+      const renderCol = (items, cls, title) => {
+        if (!items.length) return '';
+        const rows = items.map(c => {
+          const h3 = parseFloat(c.smooth_3h) || 0;
+          const h6 = parseFloat(c.smooth_6h) || 0;
+          const h3Cls = h3 > 0 ? 'pos' : h3 < 0 ? 'neg' : '';
+          const h6Cls = h6 > 0 ? 'pos' : h6 < 0 ? 'neg' : '';
+          let eventHtml = '';
+          if (c.energy_event_type) {
+            const evCls = c.energy_event_type === 'CONTINUATION' ? 'continuation' : c.energy_event_type === 'REVERSAL' ? 'reversal' : 'new-event';
+            eventHtml = `<span class="es-ccy-event ${evCls}">${c.energy_event_type}</span>`;
+          }
+          return `<div class="es-ccy-row">
+            <span class="es-ccy-name">${c.currency}</span>
+            <div class="es-ccy-vals">
+              <span class="es-ccy-val ${h3Cls}" title="3H">${(h3*10000).toFixed(1)}</span>
+              <span class="es-ccy-val ${h6Cls}" title="6H">${(h6*10000).toFixed(1)}</span>
+              ${eventHtml}
+            </div>
+          </div>`;
+        }).join('');
+        return `<div class="es-ccy-col ${cls}">
+          <div class="es-ccy-col-title">${title}</div>
+          ${rows}
+        </div>`;
+      };
+      ccyEl.innerHTML = renderCol(strong, 'strong', 'Strong') + renderCol(weak, 'weak', 'Weak');
+    }
+  }
+
+  // ── Signal Pairs ──
+  const pairsEl = document.getElementById('es-pairs');
+  if (pairsEl) {
+    const activePairs = (pairs || []).filter(p => p.active);
+
+    if (!activePairs.length) {
+      pairsEl.innerHTML = '<div class="es-no-data">No active signal pairs. Energy threshold must be met with aligned currencies.</div>';
+    } else {
+      // Sort: ENTRY first, then READY, PULLBACK, COMPRESSION, MONITORING
+      const phaseOrder = { ENTRY: 0, READY: 1, PULLBACK: 2, COMPRESSION: 3, MONITORING: 4 };
+      activePairs.sort((a,b) => (phaseOrder[a.phase] ?? 5) - (phaseOrder[b.phase] ?? 5));
+
+      pairsEl.innerHTML = activePairs.map(p => {
+        const pairLabel = p.instrument.replace('_', '/');
+        const dirCls = p.dir === 'BUY' ? 'buy' : 'sell';
+        const phaseCls = (p.phase || 'monitoring').toLowerCase();
+        const v45 = parseFloat(p.v45) || 0;
+        const v90 = parseFloat(p.v90) || 0;
+        const de = parseFloat(p.de_combined) || 0;
+        const imp = p.impulse_score || 0;
+        const sp3 = parseFloat(p.spread_3h) || 0;
+        const sp6 = parseFloat(p.spread_6h) || 0;
+        const m15State = (p.m15_state || 'FLAT').toLowerCase();
+
+        // Energy event badge
+        let eventHtml = '';
+        if (p.new_energy_event && p.energy_event_type) {
+          const evCls = p.energy_event_type === 'CONTINUATION' ? 'continuation' : 'reversal';
+          const evIcon = p.energy_event_type === 'CONTINUATION' ? '↗' : '↻';
+          eventHtml = `<div class="es-pair-event ${evCls}">${evIcon} Energy ${p.energy_event_type}</div>`;
+        }
+
+        return `<div class="es-pair-card phase-${phaseCls}">
+          <div class="es-pair-head">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="es-pair-name">${pairLabel}</span>
+              <span class="es-pair-dir ${dirCls}">${p.dir}</span>
+            </div>
+            <span class="es-pair-phase ${phaseCls}">${p.phase || 'MONITORING'}</span>
+          </div>
+          <div class="es-pair-m15">
+            <span class="es-m15-state ${m15State}">M15: ${(p.m15_state || 'FLAT')}</span>
+            <span style="font-size:10px;color:var(--muted)">${p.strong_ccy} vs ${p.weak_ccy}</span>
+          </div>
+          <div class="es-pair-metrics">
+            <div class="es-metric">
+              <div class="es-metric-label">V45</div>
+              <div class="es-metric-val" style="color:${v45 > 0 ? '#4ade80' : v45 < 0 ? '#f87171' : '#94a3b8'}">${(v45*10000).toFixed(1)}</div>
+            </div>
+            <div class="es-metric">
+              <div class="es-metric-label">3H</div>
+              <div class="es-metric-val" style="color:${sp3 > 0 ? '#4ade80' : sp3 < 0 ? '#f87171' : '#94a3b8'}">${(sp3*10000).toFixed(1)}</div>
+            </div>
+            <div class="es-metric">
+              <div class="es-metric-label">DE</div>
+              <div class="es-metric-val" style="color:${de >= 40 ? '#4ade80' : de >= 20 ? '#f59e0b' : '#94a3b8'}">${Math.round(de)}</div>
+            </div>
+            <div class="es-metric">
+              <div class="es-metric-label">V90</div>
+              <div class="es-metric-val" style="color:${v90 > 0 ? '#4ade80' : v90 < 0 ? '#f87171' : '#94a3b8'}">${(v90*10000).toFixed(1)}</div>
+            </div>
+            <div class="es-metric">
+              <div class="es-metric-label">6H</div>
+              <div class="es-metric-val" style="color:${sp6 > 0 ? '#4ade80' : sp6 < 0 ? '#f87171' : '#94a3b8'}">${(sp6*10000).toFixed(1)}</div>
+            </div>
+            <div class="es-metric">
+              <div class="es-metric-label">Impulse</div>
+              <div class="es-metric-val" style="color:${imp >= 50 ? '#4ade80' : imp >= 30 ? '#f59e0b' : '#94a3b8'}">${Math.round(imp)}${p.impulse_aligned ? '✓' : ''}</div>
+            </div>
+          </div>
+          ${eventHtml}
+        </div>`;
+      }).join('');
+    }
+  }
+
+  hydrateIcons();
+}
+
 // ─── Trading Session ──────────────────────────────────────────────────────────
 
 const SESSION_TIMELINE = [
@@ -5271,7 +5435,7 @@ async function refresh() {
     // Wait for plan to load first (prevents 403 cascade on cold start)
     if (_userPlanReady) await _userPlanReady;
 
-    const [strength, signals, states, risk, actions, quality, spreads, m15Data, sessionData, journalData, profileData, volData, fpData] = await Promise.all([
+    const [strength, signals, states, risk, actions, quality, spreads, m15Data, sessionData, journalData, profileData, volData, fpData, energySignals] = await Promise.all([
       api('/api/strength').catch(() => ({ currencies: [] })),
       api('/api/signals').catch(() => ({ signals: [] })),
       api('/api/states').catch(() => ({ states: [] })),
@@ -5285,6 +5449,7 @@ async function refresh() {
       api('/api/profile').catch(() => ({})),
       api('/api/volume-analysis?days=1').catch(() => ({ rows: [] })),
       api('/api/flow-performance?days=1').catch(() => ({ rows: [] })),
+      api('/api/energy-signals').catch(() => ({ currencies: [], pairs: [], energy: 0, thresholdMet: false })),
     ]);
 
     // Fetch news calendar (non-blocking) — must run AFTER _userTz is set
@@ -5325,6 +5490,7 @@ async function refresh() {
     renderActions(actions);
     renderQuality(quality);
     renderJournal(journalData);
+    renderEnergySignals(energySignals);
 
     document.getElementById('status-dot').className = 'status-dot online';
 

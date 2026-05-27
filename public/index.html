@@ -108,7 +108,6 @@
   <nav class="dash-tabs" id="dash-tabs">
     <button class="dash-tab active" data-tab="overview">Overview</button>
     <button class="dash-tab" data-tab="signals">Signals</button>
-    <button class="dash-tab" data-tab="scanner">Scanner</button>
     <button class="dash-tab" data-tab="intelligence">Intelligence</button>
     <button class="dash-tab" data-tab="backtest" data-require-plan="premium">Backtesting</button>
     <a href="/archive" class="dash-tab" data-require-plan="premium" style="text-decoration:none">Archive</a>
@@ -176,137 +175,36 @@
   <!-- ═══ TAB 2: SIGNALS ═══ -->
   <main class="grid tab-panel" id="tab-signals" data-tab="signals">
 
-    <section class="card span-2" id="section-currency-signals">
-      <div class="plan-lock-overlay" data-require="pro">
-        <span class="plan-lock-icon">⚡</span>
-        <span class="plan-lock-title">Currency Signals</span>
-        <span class="plan-lock-desc">Multi-timeframe currency strength filtered to only the pairs where 3H and 6H momentum both push the same direction above the signal threshold. No guesswork — only confirmed directional pressure.</span>
-        <ul class="plan-lock-features">
-          <li>Combined 3H + 6H + 12H strength filter</li>
-          <li>Strong &amp; weak currency rankings</li>
-          <li>Automatically highlights highest-conviction pairs</li>
-        </ul>
-        <a href="/home.html#pricing" class="plan-lock-btn">Upgrade →</a>
+    <!-- ── Energy Status Banner ── -->
+    <section class="card span-full" id="section-energy-banner">
+      <div class="es-banner" id="es-banner">
+        <div class="es-banner-left">
+          <div class="es-energy-ring" id="es-energy-ring">
+            <span class="es-energy-num" id="es-energy-num">--</span>
+          </div>
+          <div class="es-banner-info">
+            <h2 class="es-banner-title">Energy Engine</h2>
+            <span class="es-banner-status" id="es-banner-status">Waiting for data...</span>
+          </div>
+        </div>
+        <div class="es-banner-right" id="es-banner-right"></div>
       </div>
-      <h2 class="card-title"><i data-lucide="zap"></i> Currency Signals <span class="sub">combined &gt; ±0.00100 &amp; 3H confirms</span> <span id="cs-sig-time" class="strength-time" style="margin-left:auto;font-size:9px"></span></h2>
-      <div id="currency-signals-body" class="cs-sig-body"></div>
     </section>
 
-    <section class="card span-3" id="section-live">
-      <div class="plan-lock-overlay" data-require="pro">
-        <span class="plan-lock-icon">⚡</span>
-        <span class="plan-lock-title">Live Opportunities</span>
-        <span class="plan-lock-desc">Real-time alerts when currency strength, momentum, and market structure align for a high-probability entry — updated every hour.</span>
-        <ul class="plan-lock-features">
-          <li>Entry price, stop-loss &amp; target pre-calculated</li>
-          <li>Confidence score per signal</li>
-          <li>Active across all 4 trading sessions</li>
-        </ul>
-        <a href="/home.html#pricing" class="plan-lock-btn">Upgrade →</a>
+    <!-- ── Active Currencies: strong vs weak ── -->
+    <section class="card span-full" id="section-energy-currencies">
+      <h2 class="card-title"><i data-lucide="arrow-up-down"></i> Currency Direction <span class="sub">energy-confirmed strong &amp; weak</span></h2>
+      <div class="es-currencies" id="es-currencies">
+        <div class="es-no-data">Waiting for energy threshold...</div>
       </div>
-      <h2 class="card-title live-title"><i data-lucide="zap"></i> Live Opportunities <span class="sub">entry active or ready to enter</span></h2>
-      <div id="live-opportunities" class="live-grid"></div>
     </section>
 
-    <section class="card span-3" id="section-top">
-      <div class="plan-lock-overlay" data-require="pro">
-        <span class="plan-lock-icon">📊</span>
-        <span class="plan-lock-title">Top Setups</span>
-        <span class="plan-lock-desc">All 28 pairs ranked by multi-timeframe alignment across 3H, 6H, and 12H. See exactly which setups are building right now — pullback, forming, or watching.</span>
-        <ul class="plan-lock-features">
-          <li>Strength trend scored across 3 timeframes</li>
-          <li>Pullback, forming &amp; watching phases shown</li>
-          <li>Auto-updated every hour</li>
-        </ul>
-        <a href="/home.html#pricing" class="plan-lock-btn">Upgrade →</a>
+    <!-- ── Active Signal Pairs ── -->
+    <section class="card span-full" id="section-energy-pairs">
+      <h2 class="card-title"><i data-lucide="crosshair"></i> Signal Pairs <span class="sub">energy-driven pair monitoring</span></h2>
+      <div class="es-pairs" id="es-pairs">
+        <div class="es-no-data">No active pairs</div>
       </div>
-      <h2 class="card-title"><i data-lucide="bar-chart-2"></i> Top Setups <span class="sub">all active phases — pullback, forming, watching</span></h2>
-      <div id="top-setups" class="top-setups-grid"></div>
-    </section>
-
-    <section class="card span-2" id="section-signals">
-      <div class="plan-lock-overlay" data-require="pro">
-        <span class="plan-lock-icon">🎯</span>
-        <span class="plan-lock-title">Trade Watchlist</span>
-        <span class="plan-lock-desc">Pairs that need your attention right now — in pullback, ready to enter, or entry active. Filtered by currency strength alignment.</span>
-        <ul class="plan-lock-features">
-          <li>Only PULLBACK · READY · ENTRY states shown</li>
-          <li>BUY / SELL direction &amp; confidence score</li>
-          <li>Next action &amp; TF alignment per pair</li>
-        </ul>
-        <a href="/home.html#pricing" class="plan-lock-btn">Upgrade →</a>
-      </div>
-      <h2 class="card-title"><i data-lucide="crosshair"></i> Trade Watchlist <span class="sub">pullback · ready · entry active</span></h2>
-      <div id="watchlist-list"></div>
-    </section>
-
-    <section class="card" id="section-m15-spreads">
-      <div class="plan-lock-overlay" data-require="pro">
-        <span class="plan-lock-icon">📈</span>
-        <span class="plan-lock-title">M15 Impulse Detection</span>
-        <span class="plan-lock-desc">Identifies pairs where 45M, 90M, and 180M momentum are all expanding in the same direction — the clearest short-term pressure moves, confirmed across all three M15 timeframes.</span>
-        <ul class="plan-lock-features">
-          <li>45M / 90M / 180M alignment filter</li>
-          <li>EXPANDING state detection only</li>
-          <li>Live impulse notification bar at top of screen</li>
-        </ul>
-        <a href="/home.html#pricing" class="plan-lock-btn">Upgrade →</a>
-      </div>
-      <h2 class="card-title"><i data-lucide="activity"></i> M15 Impulse Moves <span class="sub">45M · 90M · 180M pressure · all states</span></h2>
-      <div id="m15-spreads-list" class="spreads-list"></div>
-    </section>
-
-  </main>
-
-  <!-- ═══ TAB 3: SCANNER ═══ -->
-  <main class="grid tab-panel" id="tab-scanner" data-tab="scanner">
-
-    <section class="card" id="section-states">
-      <div class="plan-lock-overlay" data-require="pro">
-        <span class="plan-lock-icon">🗺️</span>
-        <span class="plan-lock-title">Full Market Scanner</span>
-        <span class="plan-lock-desc">All 28 pairs at a glance — phase, direction, confidence, and timeframe alignment in one compact view. Know the state of every market instantly.</span>
-        <ul class="plan-lock-features">
-          <li>All 28 pairs sorted by opportunity priority</li>
-          <li>Phase, direction &amp; TF arrows per row</li>
-          <li>Updated on every hourly candle close</li>
-        </ul>
-        <a href="/home.html#pricing" class="plan-lock-btn">Upgrade →</a>
-      </div>
-      <h2 class="card-title"><i data-lucide="table-2"></i> Full Market Scanner <span class="sub">all 28 pairs · phase &amp; direction</span></h2>
-      <div id="states-table" class="states-table scanner-table"></div>
-    </section>
-
-    <section class="card" id="section-spreads">
-      <div class="plan-lock-overlay" data-require="pro">
-        <span class="plan-lock-icon">📋</span>
-        <span class="plan-lock-title">Weighted Pair Ranking</span>
-        <span class="plan-lock-desc">All 28 pairs scored by a composite of 12H, 6H, and 3H strength with momentum acceleration. Focus on the strongest setups — ignore the noise.</span>
-        <ul class="plan-lock-features">
-          <li>Multi-timeframe composite score per pair</li>
-          <li>Momentum acceleration factored in</li>
-          <li>Eliminates weak &amp; choppy pairs automatically</li>
-        </ul>
-        <a href="/home.html#pricing" class="plan-lock-btn">Upgrade →</a>
-      </div>
-      <h2 class="card-title"><i data-lucide="list-ordered"></i> Pair Ranking <span class="sub">by weighted score (12H·6H·3H·accel)</span></h2>
-      <div id="spreads-list" class="spreads-list"></div>
-    </section>
-
-    <section class="card" id="section-risk">
-      <div class="plan-lock-overlay" data-require="pro">
-        <span class="plan-lock-icon">🛡️</span>
-        <span class="plan-lock-title">Approved Trades</span>
-        <span class="plan-lock-desc">Specific trade plans approved only when strength, structure, and sentiment fully align. Risk is pre-calculated — no manual analysis required.</span>
-        <ul class="plan-lock-features">
-          <li>Entry, stop-loss &amp; take-profit levels</li>
-          <li>Position size based on your account risk %</li>
-          <li>Only approved in confirmed market conditions</li>
-        </ul>
-        <a href="/home.html#pricing" class="plan-lock-btn">Upgrade →</a>
-      </div>
-      <h2 class="card-title"><i data-lucide="shield-check"></i> Approved Trades</h2>
-      <div id="risk-list" class="risk-list"></div>
     </section>
 
   </main>

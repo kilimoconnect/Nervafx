@@ -17,6 +17,7 @@ const { runOutcomeReviews } = require('./outcomeReview');
 const { backfillSessionActivity } = require('./sessionActivity');
 const { generateMarketNarrative }        = require('./narrativeEngine');
 const { calculateFlowPerformance }       = require('./flowPerformance');
+const { calculateEnergyDirection }       = require('./energyDirection');
 
 async function step(name, fn) {
   try {
@@ -85,6 +86,7 @@ async function hourlyUpdate() {
   await step('risk',          () => checkLatestSignals());
   await step('actions',       () => processLatestActions());
   await step('session_activity',    () => backfillSessionActivity());
+  await step('energy_direction',   () => calculateEnergyDirection());
   await step('market_narrative',    () => generateMarketNarrative());
   await step('journal',             () => writeJournalEntry());
   await step('outcomes',         () => runOutcomeReviews());
