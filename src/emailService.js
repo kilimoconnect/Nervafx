@@ -472,6 +472,7 @@ async function sendBulk(recipients, template) {
 module.exports = {
   sendEmail,
   sendBulk,
+  baseLayout,
   confirmationEmail,
   welcomeEmail,
   signalAlertEmail,

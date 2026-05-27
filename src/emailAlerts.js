@@ -1,52 +1,33 @@
 'use strict';
 
-const {
-  sendEmail,
-  confluenceAlertEmail,
-  approvedTradesEmail,
-  impulseAlertEmail,
-} = require('./emailService');
+/**
+ * Email Alerts — Energy-driven notification system
+ *
+ * Three alert types aligned with the energy signal structure:
+ *
+ *   1. DIRECTION ALERT  — New energy bar ≥50 confirmed new/changed directions
+ *      Trigger: isNewEnergyEvent = true in calculateEnergyDirection()
+ *      Content: strong/weak currencies, per-currency event type, signal pairs
+ *      Cooldown: 4 hours
+ *
+ *   2. PHASE ALERT — A signal pair reached ENTRY phase (trade ready)
+ *      Trigger: any energy_signal_pair moves to ENTRY phase
+ *      Content: BUY/SELL with entry/SL/TP, DE score, currency context
+ *      Cooldown: 2 hours per pair
+ *
+ *   3. DAILY DIGEST — End-of-day summary
+ *      Trigger: after NY session closes (21:00 UTC)
+ *      Content: day's energy events, phase progression, outcomes
+ *      Cooldown: 24 hours
+ *
+ * Runs at the end of each pipeline cycle via sendSignalAlerts(sb).
+ */
 
-const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York' };
-const SKIP_SESSIONS = new Set(['LOW_LIQUIDITY', 'DEAD_HOURS']);
+const { sendEmail, baseLayout } = require('./emailService');
 
-// ── V2 Engine Thresholds (must stay in sync with public/app.js) ──────────────
-const V2_THRESHOLDS = [
-  { key: 'market_energy',       label: 'Energy',  min: 50, optimal: 65 },
-  { key: 'tradability_score',   label: 'Trad',    min: 55, optimal: 70 },
-  { key: 'movement_score',      label: 'Mov',     min: 35, optimal: 70 },
-  { key: 'breadth_score',       label: 'Brd',     min: 65, optimal: 80 },
-  { key: 'agreement_score',     label: 'Agr',     min: 60, optimal: 75 },
-  { key: 'directional_control', label: 'DirCtrl', min: 30, optimal: 45 },
-  { key: 'volatility_quality',  label: 'VolQ',    min: 30, optimal: 60 },
-  { key: 'volatility_score',    label: 'Vol',     min: 40, optimal: 70 },
-  { key: 'momentum_score',      label: 'Mom',     min: 30, optimal: 60, signed: true },
-  { key: 'chaos_score',         label: 'Chaos',   max: 35, warnAbove: 50 },
-  { key: 'false_breakout_risk', label: 'FBRisk',  max: 15, warnAbove: 30 },
-];
-const V2_FIRE_PCT = 0.60;
-
-function evaluateConfluence(hourlyRow) {
-  if (!hourlyRow) return null;
-  const results = [];
-  for (const t of V2_THRESHOLDS) {
-    const val = parseFloat(hourlyRow[t.key]) || 0;
-    const pass = t.max !== undefined ? val <= t.max : val >= t.min;
-    results.push({
-      key: t.key, label: t.label, value: Math.round(val),
-      threshold: t.min !== undefined ? t.min : t.max,
-      optimal: t.optimal, pass, inverted: t.max !== undefined, signed: t.signed,
-    });
-  }
-  const passed = results.filter(r => r.pass).length;
-  const total  = results.length;
-  const pct    = total > 0 ? passed / total : 0;
-  return { results, passed, total, pct, fired: pct >= V2_FIRE_PCT };
-}
+const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York', LOW_LIQUIDITY: 'Off-hours' };
 
 // ── Deduplication ────────────────────────────────────────────────────────────
-// Uses a Supabase table `email_alert_log` to prevent sending the same alert
-// type within a cooldown window. If the table doesn't exist, alerts send anyway.
 
 async function wasRecentlySent(sb, alertType, cooldownMinutes = 120) {
   try {
@@ -59,7 +40,6 @@ async function wasRecentlySent(sb, alertType, cooldownMinutes = 120) {
       .limit(1);
     return data && data.length > 0;
   } catch (_) {
-    // Table may not exist yet — allow sending
     return false;
   }
 }
@@ -72,201 +52,477 @@ async function logAlertSent(sb, alertType, details) {
       sent_at: new Date().toISOString(),
     });
   } catch (_) {
-    console.warn('[email-alert] could not log alert (table may not exist)');
+    console.warn('[EMAIL] Could not log alert');
   }
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Subscribers ─────────────────────────────────────────────────────────────
 
 async function getSubscribedUsers(sb) {
   const { data: allUsers, error: userErr } = await sb.auth.admin.listUsers({ perPage: 1000 });
   if (userErr) {
-    console.error('[email-alert] listUsers error:', userErr.message);
+    console.error('[EMAIL] listUsers error:', userErr.message);
     return [];
   }
-  if (!allUsers?.users?.length) {
-    console.warn('[email-alert] no auth users found');
-    return [];
-  }
-  console.log(`[email-alert] found ${allUsers.users.length} auth users`);
+  if (!allUsers?.users?.length) return [];
 
-  const { data: prefs, error: prefErr } = await sb
+  const { data: prefs } = await sb
     .from('email_preferences')
     .select('user_id, signal_alerts, unsubscribed');
 
-  if (prefErr) {
-    console.warn('[email-alert] email_preferences query error:', prefErr.message, '— sending to all users');
-  }
-
   const prefMap = {};
-  for (const p of prefs || []) prefMap[p.user_id] = p;
+  for (const p of (prefs || [])) prefMap[p.user_id] = p;
 
-  const filtered = allUsers.users.filter(u => {
-    if (!u.email) return false; // skip users without email
+  return allUsers.users.filter(u => {
+    if (!u.email) return false;
     const p = prefMap[u.id];
     if (p?.unsubscribed) return false;
     if (p?.signal_alerts === false) return false;
     return true;
   });
-
-  console.log(`[email-alert] ${filtered.length} users pass subscription filter (${(prefs || []).length} have preferences)`);
-  return filtered;
 }
 
-async function getLatestHourlyRow(sb) {
-  const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-  const { data } = await sb
-    .from('hourly_session_activity')
-    .select('*')
-    .gte('time_utc', twoHoursAgo)
-    .order('time_utc', { ascending: false })
-    .limit(5);
-  if (!data?.length) return null;
-  // Find latest non-LOW_LIQUIDITY row
-  return data.find(r => !SKIP_SESSIONS.has(r.session_name)) || null;
+async function sendToAll(sb, recipients, template, alertType, details) {
+  let sent = 0;
+  for (const u of recipients) {
+    try {
+      await sendEmail(u.email, template);
+      sent++;
+    } catch (e) {
+      console.error(`[EMAIL] ${alertType} failed for ${u.email}:`, e.message);
+    }
+  }
+  await logAlertSent(sb, alertType, details);
+  console.log(`[EMAIL] ${alertType} sent to ${sent}/${recipients.length} users`);
+  return sent;
 }
 
-async function getM15Impulses(sb) {
-  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-  const { data } = await sb
-    .from('m15_pair_spreads')
-    .select('instrument, state, spread_45m')
-    .gte('time', oneHourAgo)
-    .eq('state', 'EXPANDING')
-    .order('time', { ascending: false });
-  if (!data?.length) return [];
+// ── Email Templates ─────────────────────────────────────────────────────────
 
-  const seen = new Set();
-  return data.filter(s => {
-    if (seen.has(s.instrument)) return false;
-    seen.add(s.instrument);
-    return true;
-  }).map(s => ({
-    instrument: s.instrument,
-    direction: parseFloat(s.spread_45m) > 0 ? 'BUY' : 'SELL',
-    state: 'EXPANDING',
-  }));
+function directionAlertEmail(data) {
+  const { triggerEnergy, triggerSession, triggerHour, currencies, pairs, removedPairs } = data;
+  const sessionLabel = SESS_LABEL[triggerSession] || triggerSession || 'Unknown';
+  const timeStr = triggerHour ? new Date(triggerHour).toISOString().replace('T', ' ').slice(0, 16) + ' UTC' : '';
+
+  // Currency rows
+  const strongCcys = currencies.filter(c => c.direction === 'STRONG');
+  const weakCcys = currencies.filter(c => c.direction === 'WEAK');
+
+  const ccyRows = currencies
+    .filter(c => c.eventType && c.direction !== 'NEUTRAL')
+    .map(c => {
+      const isStrong = c.direction === 'STRONG';
+      const color = isStrong ? '#22c55e' : '#ef4444';
+      const arrow = isStrong ? '▲' : '▼';
+      const evtColor = c.eventType === 'CONTINUATION' ? '#0ea5e9'
+        : c.eventType === 'NEW' ? '#22c55e'
+        : c.eventType === 'REVERSAL' ? '#f59e0b'
+        : '#64748b';
+      const h3 = (c.smooth_3h * 10000).toFixed(1);
+      const h6 = (c.smooth_6h * 10000).toFixed(1);
+      return `<tr>
+        <td style="padding:8px;color:${color};font-weight:700;font-size:15px">${arrow} ${c.currency}</td>
+        <td style="padding:8px;color:${color}">${c.direction}</td>
+        <td style="padding:8px"><span style="color:${evtColor};font-weight:600;font-size:12px;background:${evtColor}15;padding:2px 8px;border-radius:4px">${c.eventType}</span></td>
+        <td style="padding:8px;color:#94a3b8;font-size:13px">3H: ${h3} · 6H: ${h6}</td>
+      </tr>`;
+    }).join('');
+
+  // Dropped currencies
+  const droppedCcys = currencies.filter(c => c.eventType === 'DROPPED');
+  const droppedHtml = droppedCcys.length ? `
+    <p style="color:#94a3b8;font-size:13px;margin:8px 0 0">
+      Dropped: ${droppedCcys.map(c => `<span style="color:#64748b;text-decoration:line-through">${c.currency}</span>`).join(', ')} → now NEUTRAL
+    </p>` : '';
+
+  // New/continuing pairs
+  const pairRows = pairs.map(p => {
+    const isBuy = p.dir === 'BUY';
+    const dirColor = isBuy ? '#22c55e' : '#ef4444';
+    const dirArrow = isBuy ? '▲' : '▼';
+    const evtColor = p.eventType === 'CONTINUATION' ? '#0ea5e9'
+      : p.eventType === 'NEW' ? '#22c55e'
+      : p.eventType === 'REVERSAL' ? '#f59e0b'
+      : '#64748b';
+    return `<tr>
+      <td style="padding:6px 8px;color:#fff;font-weight:600">${p.instrument.replace('_', '/')}</td>
+      <td style="padding:6px 8px;color:${dirColor};font-weight:600">${dirArrow} ${p.dir}</td>
+      <td style="padding:6px 8px"><span style="color:${evtColor};font-weight:600;font-size:12px">${p.eventType}</span></td>
+      <td style="padding:6px 8px;color:#94a3b8;font-size:13px">${p.strong_ccy}↑ ${p.weak_ccy}↓</td>
+    </tr>`;
+  }).join('');
+
+  // Removed pairs
+  const removedHtml = removedPairs?.length ? `
+    <p style="color:#94a3b8;font-size:13px;margin:12px 0 0">
+      Removed: ${removedPairs.map(p => `<span style="color:#64748b;text-decoration:line-through">${p.replace('_','/')}</span>`).join(', ')}
+    </p>` : '';
+
+  return {
+    subject: `⚡ Energy Direction — ${strongCcys.map(c=>c.currency).join(',')}↑ ${weakCcys.map(c=>c.currency).join(',')}↓ — NervaFX`,
+    html: baseLayout(`
+      <h2>⚡ Energy Direction Confirmed</h2>
+      <p>Energy bar <strong style="color:#f59e0b">${Math.round(triggerEnergy)}</strong> crossed the threshold during <strong>${sessionLabel}</strong> session${timeStr ? ` at ${timeStr}` : ''}. Currency directions have been evaluated and locked.</p>
+
+      <div class="card">
+        <div class="card-title">Currency Directions</div>
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr style="border-bottom:1px solid #334155;color:#64748b;font-size:12px;text-transform:uppercase">
+            <th style="padding:6px 8px;text-align:left">Currency</th>
+            <th style="padding:6px 8px;text-align:left">Direction</th>
+            <th style="padding:6px 8px;text-align:left">Status</th>
+            <th style="padding:6px 8px;text-align:left">Strength</th>
+          </tr></thead>
+          <tbody>${ccyRows}</tbody>
+        </table>
+        ${droppedHtml}
+      </div>
+
+      <div class="card">
+        <div class="card-title">Signal Pairs (${pairs.length})</div>
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr style="border-bottom:1px solid #334155;color:#64748b;font-size:12px;text-transform:uppercase">
+            <th style="padding:6px 8px;text-align:left">Pair</th>
+            <th style="padding:6px 8px;text-align:left">Direction</th>
+            <th style="padding:6px 8px;text-align:left">Status</th>
+            <th style="padding:6px 8px;text-align:left">Flow</th>
+          </tr></thead>
+          <tbody>${pairRows}</tbody>
+        </table>
+        ${removedHtml}
+      </div>
+
+      <p>These pairs are now being monitored through the M15 phase cycle: <strong>MONITORING → PULLBACK → COMPRESSION → READY → ENTRY</strong>. You'll receive another alert when any pair reaches ENTRY.</p>
+      <p style="text-align:center;margin:24px 0"><a class="cta" href="https://nervafx.com">View Dashboard →</a></p>
+      <p style="color:#94a3b8;font-size:13px">Energy directions are analytical observations, not trade recommendations.</p>
+    `),
+  };
 }
 
-async function getApprovedTrades(sb) {
-  const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-  const { data } = await sb
-    .from('risk_checks')
-    .select('instrument, direction, confidence, entry_price, stop_loss, take_profit, signal')
-    .eq('status', 'APPROVED')
-    .gte('time', twoHoursAgo)
-    .order('confidence', { ascending: false })
-    .limit(10);
-  return data || [];
+function phaseAlertEmail(data) {
+  const { pair, signal } = data;
+  const isBuy = signal.signal === 'BUY';
+  const dirColor = isBuy ? '#22c55e' : '#ef4444';
+  const dirArrow = isBuy ? '▲' : '▼';
+  const pairLabel = pair.instrument.replace('_', '/');
+
+  return {
+    subject: `🎯 ${signal.signal} ${pairLabel} — Entry Signal Confirmed — NervaFX`,
+    html: baseLayout(`
+      <h2>🎯 Entry Signal Confirmed</h2>
+      <p><strong>${pairLabel}</strong> has reached the <strong>ENTRY</strong> phase with all gates passed.</p>
+
+      <div style="background:#1e293b;border:2px solid ${dirColor};border-radius:12px;padding:20px;margin:16px 0;text-align:center">
+        <div style="font-size:28px;color:${dirColor};font-weight:800;margin:0 0 8px">${dirArrow} ${signal.signal} ${pairLabel}</div>
+        <div style="color:#94a3b8;font-size:14px">${pair.strong_ccy} ↑ Strong · ${pair.weak_ccy} ↓ Weak</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Trade Levels</div>
+        <table style="width:100%;border-collapse:collapse">
+          <tr>
+            <td style="padding:8px 0;color:#94a3b8;font-size:13px">Entry</td>
+            <td style="padding:8px 0;color:#fff;font-weight:600;text-align:right">${Number(signal.entry_price).toFixed(5)}</td>
+          </tr>
+          <tr>
+            <td style="padding:8px 0;color:#94a3b8;font-size:13px">Stop Loss</td>
+            <td style="padding:8px 0;color:#ef4444;font-weight:600;text-align:right">${Number(signal.stop_loss).toFixed(5)}</td>
+          </tr>
+          <tr>
+            <td style="padding:8px 0;color:#94a3b8;font-size:13px">Take Profit</td>
+            <td style="padding:8px 0;color:#22c55e;font-weight:600;text-align:right">${Number(signal.take_profit).toFixed(5)}</td>
+          </tr>
+          <tr style="border-top:1px solid #334155">
+            <td style="padding:8px 0;color:#94a3b8;font-size:13px">Risk:Reward</td>
+            <td style="padding:8px 0;color:#f59e0b;font-weight:600;text-align:right">1:${signal.risk_reward}</td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Confirmation Scores</div>
+        <table style="width:100%;border-collapse:collapse">
+          <tr>
+            <td style="padding:6px 0;color:#94a3b8;font-size:13px">DE Combined</td>
+            <td style="padding:6px 0;color:#fff;text-align:right">${pair.de_combined || '—'}</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0;color:#94a3b8;font-size:13px">Impulse</td>
+            <td style="padding:6px 0;color:#fff;text-align:right">${pair.impulse_score || '—'} ${pair.impulse_aligned ? '✓ Aligned' : ''}</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0;color:#94a3b8;font-size:13px">Energy Level</td>
+            <td style="padding:6px 0;color:#f59e0b;text-align:right">${pair.energy_level || '—'}</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0;color:#94a3b8;font-size:13px">Phase Path</td>
+            <td style="padding:6px 0;color:#94a3b8;text-align:right;font-size:12px">MONITORING → PULLBACK → COMPRESSION → READY → <strong style="color:#22c55e">ENTRY</strong></td>
+          </tr>
+        </table>
+      </div>
+
+      <p style="text-align:center;margin:24px 0"><a class="cta" href="https://nervafx.com">View Full Analysis →</a></p>
+      <p style="color:#94a3b8;font-size:13px">This is a system-generated signal, not financial advice. Always apply your own risk management.</p>
+    `),
+  };
+}
+
+function dailyDigestEmail(data) {
+  const { date, energyEvents, pairs, entryPairs, sessions } = data;
+
+  const eventRows = (energyEvents || []).map(ev => `
+    <div style="background:#0f172a;border-radius:6px;padding:10px 14px;margin:6px 0">
+      <span style="color:#f59e0b;font-weight:600">${Math.round(ev.energy)}</span>
+      <span style="color:#94a3b8"> @ ${ev.time ? new Date(ev.time).toISOString().slice(11, 16) : '?'} UTC</span>
+      <span style="color:#64748b"> (${SESS_LABEL[ev.session] || ev.session})</span>
+    </div>`
+  ).join('');
+
+  const pairSummary = (pairs || []).slice(0, 6).map(p => {
+    const isBuy = p.dir === 'BUY';
+    const color = isBuy ? '#22c55e' : '#ef4444';
+    return `<tr>
+      <td style="padding:6px 8px;color:#fff">${p.instrument.replace('_','/')}</td>
+      <td style="padding:6px 8px;color:${color};font-weight:600">${p.dir}</td>
+      <td style="padding:6px 8px;color:#94a3b8">${p.phase}</td>
+      <td style="padding:6px 8px;color:#94a3b8">${Math.round(p.de_combined || 0)}</td>
+    </tr>`;
+  }).join('');
+
+  const entryHtml = entryPairs?.length ? `
+    <div class="card" style="border-color:rgba(34,197,94,0.4)">
+      <div class="card-title" style="color:#22c55e">🎯 Entry Signals Fired</div>
+      <p style="margin:0;color:#cbd5e1">${entryPairs.map(p => `<strong>${p.instrument.replace('_','/')}</strong> ${p.dir}`).join(', ')}</p>
+    </div>` : '';
+
+  const sessionCards = (sessions || []).map(s => {
+    const energy = Math.round(parseFloat(s.market_energy) || 0);
+    return `<span class="metric">${SESS_LABEL[s.session_name] || s.session_name}: <strong>${energy}</strong></span>`;
+  }).join(' ');
+
+  return {
+    subject: `Daily Digest — ${date} — NervaFX`,
+    html: baseLayout(`
+      <h2>Daily Market Digest</h2>
+      <p>Summary for <strong>${date}</strong></p>
+
+      ${sessionCards ? `<div class="card"><div class="card-title">Session Energy</div><p style="margin:0">${sessionCards}</p></div>` : ''}
+
+      ${eventRows ? `
+      <div class="card">
+        <div class="card-title">Energy Events</div>
+        ${eventRows || '<p style="color:#94a3b8">No bars crossed threshold today.</p>'}
+      </div>` : ''}
+
+      ${entryHtml}
+
+      ${pairSummary ? `
+      <div class="card">
+        <div class="card-title">Signal Pairs</div>
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr style="border-bottom:1px solid #334155;color:#64748b;font-size:12px">
+            <th style="padding:6px 8px;text-align:left">Pair</th>
+            <th style="padding:6px 8px;text-align:left">Dir</th>
+            <th style="padding:6px 8px;text-align:left">Phase</th>
+            <th style="padding:6px 8px;text-align:left">DE</th>
+          </tr></thead>
+          <tbody>${pairSummary}</tbody>
+        </table>
+      </div>` : ''}
+
+      <p style="text-align:center;margin:24px 0"><a class="cta" href="https://nervafx.com">Open Dashboard →</a></p>
+    `),
+  };
 }
 
 // ── Main entry point ─────────────────────────────────────────────────────────
 
 async function sendSignalAlerts(sb) {
   if (!process.env.BREVO_API_KEY) {
-    console.log('[email-alert] BREVO_API_KEY not set — skipping');
+    console.log('[EMAIL] BREVO_API_KEY not set — skipping');
     return;
   }
 
-  console.log('[email-alert] checking conditions...');
+  console.log('[EMAIL] Checking alert conditions...');
 
-  // 1. Get latest hourly V2 data and evaluate confluence
-  const latestRow = await getLatestHourlyRow(sb);
-  const confluence = evaluateConfluence(latestRow);
-  const confluenceActive = confluence?.fired || false;
-  const sessionName = latestRow?.session_name ? (SESS_LABEL[latestRow.session_name] || latestRow.session_name) : null;
-
-  console.log(`[email-alert] session: ${sessionName || 'N/A'}, confluence: ${confluenceActive ? 'ACTIVE' : 'NOT MET'} (${confluence?.passed || 0}/${confluence?.total || 11})`);
-
-  // 2. Get M15 impulses and approved trades
-  const [impulses, trades] = await Promise.all([
-    getM15Impulses(sb),
-    getApprovedTrades(sb),
-  ]);
-
-  console.log(`[email-alert] impulses: ${impulses.length}, trades: ${trades.length}`);
-
-  // 3. Get subscribers
+  // Get subscribers
   let recipients;
   try {
     recipients = await getSubscribedUsers(sb);
   } catch (e) {
-    console.error('[email-alert] failed to get subscribers:', e.message);
+    console.error('[EMAIL] Failed to get subscribers:', e.message);
     return;
   }
-  console.log(`[email-alert] ${recipients.length} subscribed users`);
   if (!recipients.length) {
-    console.log('[email-alert] no subscribed users found — check auth.users and email_preferences table');
+    console.log('[EMAIL] No subscribed users — skipping');
     return;
   }
+  console.log(`[EMAIL] ${recipients.length} subscribed users`);
 
   const emailsSent = [];
 
-  // ── Engine Confluence alert (2h cooldown) ─────────────────────────────────
-  // Always send when confluence fires — this is the primary market-ready signal
-  if (confluenceActive) {
-    const alreadySent = await wasRecentlySent(sb, 'confluence', 120);
+  // ── 1. DIRECTION ALERT — check if energyDirection flagged a new event ─────
+  // Read from energy_currency_state: if any currency has energy_event_type set
+  // and was triggered recently (within last 2 hours), it's a new event
+  const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  const { data: currStates } = await sb
+    .from('energy_currency_state')
+    .select('*')
+    .order('currency', { ascending: true });
+
+  const hasRecentTrigger = (currStates || []).some(s =>
+    s.energy_event_type && s.triggered_at && s.triggered_at > twoHoursAgo
+  );
+
+  if (hasRecentTrigger) {
+    const alreadySent = await wasRecentlySent(sb, 'direction', 240);
     if (!alreadySent) {
-      const confluenceData = {
-        ...confluence,
-        session: sessionName,
-      };
-      const template = confluenceAlertEmail(confluenceData);
-      for (const u of recipients) {
-        try { await sendEmail(u.email, template); } catch (e) {
-          console.error(`[email-alert] confluence failed for ${u.email}:`, e.message);
-        }
-      }
-      await logAlertSent(sb, 'confluence', { passed: confluence.passed, total: confluence.total });
-      emailsSent.push('confluence');
-      console.log(`[email-alert] confluence email sent to ${recipients.length} users`);
+      // Fetch active pairs for the email
+      const { data: activePairs } = await sb
+        .from('energy_signal_pairs')
+        .select('instrument, dir, strong_ccy, weak_ccy, phase, new_energy_event, energy_event_type')
+        .eq('active', true);
+
+      // Fetch recently deactivated pairs (removed in this event)
+      const { data: inactivePairs } = await sb
+        .from('energy_signal_pairs')
+        .select('instrument')
+        .eq('active', false)
+        .gte('last_updated', twoHoursAgo);
+
+      const triggerState = (currStates || []).find(s => s.energy_at_trigger);
+      const template = directionAlertEmail({
+        triggerEnergy: triggerState?.energy_at_trigger || 0,
+        triggerSession: triggerState?.trigger_session || '',
+        triggerHour: triggerState?.triggered_at || '',
+        currencies: (currStates || []).map(c => ({
+          currency: c.currency,
+          direction: c.direction,
+          eventType: c.energy_event_type,
+          smooth_3h: parseFloat(c.smooth_3h) || 0,
+          smooth_6h: parseFloat(c.smooth_6h) || 0,
+        })),
+        pairs: (activePairs || []).map(p => ({
+          instrument: p.instrument,
+          dir: p.dir,
+          strong_ccy: p.strong_ccy,
+          weak_ccy: p.weak_ccy,
+          eventType: p.energy_event_type || 'NEW',
+        })),
+        removedPairs: (inactivePairs || []).map(p => p.instrument),
+      });
+
+      await sendToAll(sb, recipients, template, 'direction', {
+        energy: triggerState?.energy_at_trigger,
+        strong: (currStates || []).filter(c => c.direction === 'STRONG').map(c => c.currency),
+        weak: (currStates || []).filter(c => c.direction === 'WEAK').map(c => c.currency),
+        pairs: (activePairs || []).length,
+      });
+      emailsSent.push('direction');
     } else {
-      console.log('[email-alert] confluence already sent within 2h — skipping');
+      console.log('[EMAIL] Direction alert already sent within 4h — skipping');
     }
   }
 
-  // ── Approved Trades alert (2h cooldown, requires confluence) ─────────────
-  if (confluenceActive && trades.length > 0) {
-    const alreadySent = await wasRecentlySent(sb, 'approved_trades', 120);
-    if (!alreadySent) {
-      const template = approvedTradesEmail(trades, confluence);
-      for (const u of recipients) {
-        try { await sendEmail(u.email, template); } catch (e) {
-          console.error(`[email-alert] trades failed for ${u.email}:`, e.message);
+  // ── 2. PHASE ALERT — any pair in ENTRY phase with BUY/SELL signal ─────────
+  const { data: entryPairs } = await sb
+    .from('energy_signal_pairs')
+    .select('*')
+    .eq('active', true)
+    .eq('phase', 'ENTRY');
+
+  if (entryPairs?.length) {
+    // Check for entry signals in trade_signals
+    const { data: entrySignals } = await sb
+      .from('trade_signals')
+      .select('*')
+      .in('signal', ['BUY', 'SELL'])
+      .in('instrument', entryPairs.map(p => p.instrument))
+      .order('time', { ascending: false })
+      .limit(entryPairs.length);
+
+    if (entrySignals?.length) {
+      // Deduplicate: one alert per pair per cooldown
+      for (const sig of entrySignals) {
+        const alertKey = `phase_entry_${sig.instrument}`;
+        const alreadySent = await wasRecentlySent(sb, alertKey, 120);
+        if (alreadySent) {
+          console.log(`[EMAIL] Phase alert for ${sig.instrument} already sent within 2h — skipping`);
+          continue;
         }
+
+        const pair = entryPairs.find(p => p.instrument === sig.instrument);
+        if (!pair) continue;
+
+        const template = phaseAlertEmail({ pair, signal: sig });
+        await sendToAll(sb, recipients, template, alertKey, {
+          instrument: sig.instrument,
+          signal: sig.signal,
+          entry: sig.entry_price,
+        });
+        emailsSent.push(`entry:${sig.instrument}`);
       }
-      await logAlertSent(sb, 'approved_trades', { count: trades.length, pairs: trades.map(t => t.instrument) });
-      emailsSent.push(`${trades.length} trades`);
-      console.log(`[email-alert] approved trades email sent to ${recipients.length} users`);
-    } else {
-      console.log('[email-alert] approved trades already sent within 2h — skipping');
     }
   }
 
-  // ── M15 Impulse alert (1h cooldown) ──────────────────────────────────────
-  // Impulses fire independently of confluence — they are real-time momentum events
-  if (impulses.length > 0) {
-    const alreadySent = await wasRecentlySent(sb, 'impulse', 60);
+  // ── 3. DAILY DIGEST — after NY session closes (21:00-23:59 UTC) ───────────
+  const now = new Date();
+  const utcHour = now.getUTCHours();
+  if (utcHour >= 21 && utcHour <= 23) {
+    const alreadySent = await wasRecentlySent(sb, 'daily_digest', 1440);
     if (!alreadySent) {
-      const confluenceData = confluence || { results: [], passed: 0, total: 11, pct: 0, fired: false };
-      const template = impulseAlertEmail(impulses, confluenceData);
-      for (const u of recipients) {
-        try { await sendEmail(u.email, template); } catch (e) {
-          console.error(`[email-alert] impulse failed for ${u.email}:`, e.message);
+      const todayStr = now.toISOString().slice(0, 10);
+
+      // Get today's sessions
+      const { data: sessions } = await sb
+        .from('market_energy_sessions')
+        .select('session_name, market_energy, details')
+        .eq('session_date', todayStr);
+
+      // Collect energy events (bars that crossed threshold)
+      const energyEvents = [];
+      for (const s of (sessions || [])) {
+        for (const h of (s.details?.hourly || [])) {
+          if ((parseFloat(h.market_energy) || 0) >= 50) {
+            energyEvents.push({ energy: h.market_energy, time: h.time, session: s.session_name });
+          }
         }
       }
-      await logAlertSent(sb, 'impulse', { count: impulses.length, pairs: impulses.map(i => i.instrument) });
-      emailsSent.push(`${impulses.length} impulses`);
-      console.log(`[email-alert] impulse email sent to ${recipients.length} users`);
+
+      // Get active pairs
+      const { data: allPairs } = await sb
+        .from('energy_signal_pairs')
+        .select('instrument, dir, phase, de_combined')
+        .eq('active', true)
+        .order('de_combined', { ascending: false });
+
+      // Get any entry signals from today
+      const { data: todayEntries } = await sb
+        .from('trade_signals')
+        .select('instrument, signal')
+        .in('signal', ['BUY', 'SELL'])
+        .gte('time', todayStr)
+        .order('time', { ascending: false });
+
+      const template = dailyDigestEmail({
+        date: todayStr,
+        energyEvents,
+        pairs: allPairs || [],
+        entryPairs: todayEntries || [],
+        sessions: sessions || [],
+      });
+
+      await sendToAll(sb, recipients, template, 'daily_digest', { date: todayStr });
+      emailsSent.push('digest');
     } else {
-      console.log('[email-alert] impulse already sent within 1h — skipping');
+      console.log('[EMAIL] Daily digest already sent today — skipping');
     }
   }
 
   if (emailsSent.length) {
-    console.log(`[email-alert] done — sent: ${emailsSent.join(', ')} to ${recipients.length} users`);
+    console.log(`[EMAIL] Done — sent: ${emailsSent.join(', ')}`);
   } else {
-    console.log(`[email-alert] done — nothing sent (confluence: ${confluenceActive ? 'yes' : 'no'}, impulses: ${impulses.length}, trades: ${trades.length})`);
+    console.log('[EMAIL] Done — no alerts triggered');
   }
 }
 
