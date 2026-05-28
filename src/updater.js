@@ -18,6 +18,7 @@ const { generateMarketNarrative }        = require('./narrativeEngine');
 const { calculateFlowPerformance }       = require('./flowPerformance');
 const { calculateLatestVolumeAnalysis }  = require('./volumeAnalysis');
 const { calculateEnergyDirection }       = require('./energyDirection');
+const { sendSignalAlerts }              = require('./emailAlerts');
 
 const PARALLEL = 7; // instruments fetched in parallel (OANDA rate-limit safe)
 
@@ -155,6 +156,7 @@ async function hourlyUpdate() {
   await step('market_narrative',    () => generateMarketNarrative());
   await step('journal',             () => writeJournalEntry());
   await step('outcomes',         () => runOutcomeReviews());
+  await step('email_alerts',    () => sendSignalAlerts(supabase));
 
   console.log('[UPDATE] Complete.');
   return { status: 'CLEAN', check };
