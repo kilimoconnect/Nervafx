@@ -389,16 +389,16 @@ async function api(path, opts = {}) {
 let _userPlanReady = null; // resolved once plan is loaded
 
 async function loadUserPlan() {
-  // Instantly apply cached plan ONLY if it belongs to the current user
+  // Instantly apply cached plan if it belongs to the current user.
+  // Never flash "free" for a known premium/admin user — trust the cache
+  // and let the API confirm or correct in the background.
   const cached     = localStorage.getItem('nfx_plan');
   const cachedUid  = localStorage.getItem('nfx_plan_uid');
   const currentUid = (JSON.parse(localStorage.getItem('nfx_user') || '{}') || {}).id;
   if (cached && cachedUid && cachedUid === currentUid && typeof applyPlan === 'function') {
     applyPlan(cached);
-  } else if (typeof applyPlan === 'function') {
-    // Different user or no cache — reset to free until API confirms
-    applyPlan('free');
   }
+  // If no valid cache, DON'T apply 'free' yet — wait for API
 
   try {
     const sub = await api('/api/subscription');
@@ -407,10 +407,12 @@ async function loadUserPlan() {
     localStorage.setItem('nfx_plan_uid', currentUid || '');
     if (typeof applyPlan === 'function') applyPlan(plan);
   } catch (_) {
-    // Not logged in or endpoint error — stay on free
-    localStorage.setItem('nfx_plan', 'free');
-    localStorage.setItem('nfx_plan_uid', currentUid || '');
-    if (typeof applyPlan === 'function') applyPlan('free');
+    // Only fall back to free if there's no valid cache
+    if (!cached || cachedUid !== currentUid) {
+      localStorage.setItem('nfx_plan', 'free');
+      localStorage.setItem('nfx_plan_uid', currentUid || '');
+      if (typeof applyPlan === 'function') applyPlan('free');
+    }
   }
 }
 
