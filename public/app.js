@@ -1853,7 +1853,7 @@ function _buildFpScored(strengthData, m15Data) {
         }
       }
 
-      return latest.sort((a, b) => (a.rank || 99) - (b.rank || 99)).map(r => {
+      return latest.sort((a, b) => (b.final_score || 0) - (a.final_score || 0)).map(r => {
         const [base, quote] = r.instrument.split('_');
         const flowSign = r.dir === 'BUY' ? 1 : -1;
         const v45 = parseFloat(r.v45) || 0;
@@ -2023,75 +2023,79 @@ function renderFlowPerformance(strengthData, m15Data) {
     }
   }
 
-  // Render ranked cards with detail rows
-  const maxPerf = scored[0]?.finalScore || 1;
-
+  // Render ranked cards — Signal Pairs style with M15 & 3H metric grid
   const rows = scored.map((fp, idx) => {
     const cls = fp.dir === 'BUY' ? 'buy' : 'sell';
-    const perfPct = Math.min(100, Math.max(0, Math.round((fp.finalScore / maxPerf) * 100)));
-
-    // M15 state badge
-    const stateLabel = fp.state ? fp.state.charAt(0) + fp.state.slice(1).toLowerCase() : '—';
-    const STATE_CLS = { EXPANDING: 'fp-st-exp', COMPRESSING: 'fp-st-comp', REVERSING: 'fp-st-rev', STEADY: 'fp-st-stdy', FLAT: 'fp-st-flat' };
-    const stateCls = STATE_CLS[fp.state] || 'fp-st-flat';
-
-    // Timeframe alignment dots
-    const dot = (confirms) => confirms === true ? '<span class="fp-dot green"></span>'
-      : confirms === false ? '<span class="fp-dot red"></span>'
-      : '<span class="fp-dot grey"></span>';
+    const pairLabel = fp.instrument.replace('_', '/');
+    const m15State = (fp.state || 'FLAT').toLowerCase();
+    const v45 = fp.v45 || 0;
+    const v90 = fp.v90 || 0;
+    const sp3 = fp.spread3H || 0;
+    const sp6 = fp.spread6H || 0;
+    const de  = fp.deCombined || 0;
+    const imp = fp.impulseScore || 0;
 
     // Build simple explanation for the user
     const explain = _fpExplain(fp);
 
+    // Volume row (if data available)
+    const volRow = fp.volGrade ? `<div class="fp-detail-row fp-vol-row">
+      <span class="fp-lbl">Vol</span>
+      ${_volGradeBadge(fp.volGrade)}
+      <span class="fp-lbl">RV</span>
+      <span class="fp-val ${fp.volRV >= 1.5 ? 'vol-institutional' : fp.volRV >= 1.0 ? 'vol-strong' : 'vol-weak'}">${fp.volRV.toFixed(1)}x</span>
+      <span class="fp-lbl">Pers</span>
+      <span class="fp-val">${fp.volPers}/4</span>
+      <span class="fp-lbl">Eff</span>
+      <span class="fp-val ${fp.volEff >= 0.01 ? 'vol-strong' : fp.volEff >= 0.001 ? 'vol-normal' : 'vol-weak'}">${(fp.volEff * 10000).toFixed(1)} bps</span>
+    </div>` : '';
+
     return `
       <div class="fp-card">
-        <div class="fp-header">
-          <span class="fp-rank">#${idx + 1}</span>
-          <span class="spread-accent ${cls}"></span>
-          <span class="spread-pair">${pair(fp.instrument)}</span>
-          <span class="spread-bias ${cls}">${fp.dir}</span>
+        <div class="es-pair-head">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="fp-rank">#${idx + 1}</span>
+            <span class="es-pair-name">${pairLabel}</span>
+            <span class="es-pair-dir ${cls}">${fp.dir}</span>
+          </div>
           <span class="fp-status ${fp.statusCls}">${fp.status}</span>
         </div>
-        <div class="fp-bar-wrap"><div class="fp-bar-fill ${cls}" style="width:${perfPct}%"></div></div>
+        <div class="es-pair-m15">
+          <span class="es-m15-state ${m15State}">M15: ${(fp.state || 'FLAT')}</span>
+          <span style="font-size:10px;color:var(--muted)">${fp.base} vs ${fp.quote}</span>
+        </div>
+        <div class="es-pair-metrics">
+          <div class="es-metric">
+            <div class="es-metric-label">V45</div>
+            <div class="es-metric-val" style="color:${v45 > 0 ? '#4ade80' : v45 < 0 ? '#f87171' : '#94a3b8'}">${(v45*10000).toFixed(1)}</div>
+          </div>
+          <div class="es-metric">
+            <div class="es-metric-label">3H</div>
+            <div class="es-metric-val" style="color:${sp3 > 0 ? '#4ade80' : sp3 < 0 ? '#f87171' : '#94a3b8'}">${(sp3*10000).toFixed(1)}</div>
+          </div>
+          <div class="es-metric">
+            <div class="es-metric-label">DE</div>
+            <div class="es-metric-val" style="color:${de >= 40 ? '#4ade80' : de >= 20 ? '#f59e0b' : '#94a3b8'}">${Math.round(de)}</div>
+          </div>
+          <div class="es-metric">
+            <div class="es-metric-label">V90</div>
+            <div class="es-metric-val" style="color:${v90 > 0 ? '#4ade80' : v90 < 0 ? '#f87171' : '#94a3b8'}">${(v90*10000).toFixed(1)}</div>
+          </div>
+          <div class="es-metric">
+            <div class="es-metric-label">6H</div>
+            <div class="es-metric-val" style="color:${sp6 > 0 ? '#4ade80' : sp6 < 0 ? '#f87171' : '#94a3b8'}">${(sp6*10000).toFixed(1)}</div>
+          </div>
+          <div class="es-metric">
+            <div class="es-metric-label">Impulse</div>
+            <div class="es-metric-val" style="color:${imp >= 50 ? '#4ade80' : imp >= 30 ? '#f59e0b' : '#94a3b8'}">${Math.round(imp)}${fp.impulseAligned ? '<span style="color:#4ade80">&#10003;</span>' : ''}</div>
+          </div>
+        </div>
         <div class="fp-explain">${explain}</div>
-        <div class="fp-details">
-          <div class="fp-detail-row">
-            <span class="fp-lbl">M15</span>
-            <span class="fp-val ${fp.m15Confirms ? 'green' : fp.m15Confirms === false ? 'red' : ''}">${fp.v45 != null ? fmt(fp.v45, 5) : '—'}</span>
-            <span class="fp-lbl">3H</span>
-            <span class="fp-val ${fp.h3Confirms ? 'green' : fp.h3Confirms === false ? 'red' : ''}">${fp.spread3H != null ? fmt(fp.spread3H, 5) : '—'}</span>
-            <span class="fp-lbl">6H</span>
-            <span class="fp-val ${fp.h6Confirms ? 'green' : fp.h6Confirms === false ? 'red' : ''}">${fp.spread6H != null ? fmt(fp.spread6H, 5) : '—'}</span>
-          </div>
-          <div class="fp-detail-row">
-            <span class="fp-lbl">State</span>
-            <span class="fp-state-badge ${stateCls}">${stateLabel}</span>
-            <span class="fp-lbl">Mom</span>
-            <span class="fp-val ${fp.momentum === 'Impulsive' ? 'green' : ''}">${fp.momentum}</span>
-            <span class="fp-lbl">Align</span>
-            <span class="fp-dots">${dot(fp.m15Confirms)}${dot(fp.h3Confirms)}${dot(fp.h6Confirms)}</span>
-            ${fp.deCombined > 0 ? `<span class="fp-lbl">Eff</span><span class="fp-val fp-de-${fp.deLabel.toLowerCase()}">${Math.round(fp.deCombined)}</span>` : ''}
-          </div>
-          ${fp.impulseScore > 0 ? `<div class="fp-detail-row fp-impulse-row">
-            <span class="fp-lbl">Impulse</span>
-            <span class="fp-imp-badge ${fp.impulseScore >= 60 ? 'imp-strong' : fp.impulseScore >= 40 ? 'imp-trend' : fp.impulseScore >= 20 ? 'imp-weak' : 'imp-flat'}">${fp.impulseScore >= 60 ? 'Strong' : fp.impulseScore >= 40 ? 'Trending' : fp.impulseScore >= 20 ? 'Weak' : 'Flat'} ${fp.impulseScore}</span>
-            <span class="fp-imp-dir ${fp.impulseAligned ? 'green' : 'red'}">${fp.impulseAligned ? '▲ Aligned' : '▼ Counter'}</span>
-          </div>` : ''}
-          ${fp.volGrade ? `<div class="fp-detail-row fp-vol-row">
-            <span class="fp-lbl">Vol</span>
-            ${_volGradeBadge(fp.volGrade)}
-            <span class="fp-lbl">RV</span>
-            <span class="fp-val ${fp.volRV >= 1.5 ? 'vol-institutional' : fp.volRV >= 1.0 ? 'vol-strong' : 'vol-weak'}">${fp.volRV.toFixed(1)}×</span>
-            <span class="fp-lbl">Pers</span>
-            <span class="fp-val">${fp.volPers}/4</span>
-            <span class="fp-lbl">Eff</span>
-            <span class="fp-val ${fp.volEff >= 0.01 ? 'vol-strong' : fp.volEff >= 0.001 ? 'vol-normal' : 'vol-weak'}">${(fp.volEff * 10000).toFixed(1)} bps</span>
-          </div>` : ''}
-          <div class="fp-detail-row fp-ccy-row">
-            <span class="fp-ccy-chip ${(fp.h3Base ?? 0) >= 0 ? 'strong' : 'weak'}">${fp.base} ${fmt(fp.h3Base ?? 0, 5)}</span>
-            <span class="fp-ccy-vs">vs</span>
-            <span class="fp-ccy-chip ${(fp.h3Quote ?? 0) <= 0 ? 'weak' : 'strong'}">${fp.quote} ${fmt(fp.h3Quote ?? 0, 5)}</span>
-          </div>
+        ${volRow}
+        <div class="fp-detail-row fp-ccy-row">
+          <span class="fp-ccy-chip ${(fp.h3Base ?? 0) >= 0 ? 'strong' : 'weak'}">${fp.base} ${fmt(fp.h3Base ?? 0, 5)}</span>
+          <span class="fp-ccy-vs">vs</span>
+          <span class="fp-ccy-chip ${(fp.h3Quote ?? 0) <= 0 ? 'weak' : 'strong'}">${fp.quote} ${fmt(fp.h3Quote ?? 0, 5)}</span>
         </div>
       </div>`;
   }).join('');
