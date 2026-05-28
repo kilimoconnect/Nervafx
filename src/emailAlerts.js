@@ -448,12 +448,12 @@ async function sendSignalAlerts(sb) {
     }
   }
 
-  // ── 2. PHASE ALERT — any pair in ENTRY phase with BUY/SELL signal ─────────
+  // ── 2. PHASE ALERT — any pair in ENTRY or MOVING phase with BUY/SELL signal
   const { data: entryPairs } = await sb
     .from('energy_signal_pairs')
     .select('*')
     .eq('active', true)
-    .eq('phase', 'ENTRY');
+    .in('phase', ['ENTRY', 'MOVING']);
 
   if (entryPairs?.length) {
     // Check for entry signals in trade_signals
