@@ -282,73 +282,135 @@ function phaseAlertEmail(data) {
 }
 
 function dailyDigestEmail(data) {
-  const { date, energyEvents, pairs, entryPairs, sessions } = data;
+  const { date, energyEvents, pairs, currencies, sessions } = data;
 
-  const eventRows = (energyEvents || []).map(ev => `
-    <table width="100%" cellpadding="0" cellspacing="0" style="border-bottom:1px solid rgba(30,41,59,0.6)"><tr>
-      <td style="padding:10px 14px">
-        <span class="val" style="color:#fbbf24">${Math.round(ev.energy)}</span>
-        <span class="dim" style="margin-left:6px">${SESS_LABEL[ev.session] || ev.session}</span>
-      </td>
-      <td style="padding:10px 14px;text-align:right" class="sm">${ev.time ? new Date(ev.time).toISOString().slice(11, 16) : '?'} UTC</td>
-    </tr></table>`
-  ).join('');
+  // ── Currency Directions ──
+  const strong = (currencies || []).filter(c => c.direction === 'STRONG');
+  const weak   = (currencies || []).filter(c => c.direction === 'WEAK');
 
-  const pairRows = (pairs || []).slice(0, 6).map(p => {
-    const isBuy = p.dir === 'BUY';
-    const color = isBuy ? '#4ade80' : '#f87171';
-    return `<table width="100%" cellpadding="0" cellspacing="0" style="border-bottom:1px solid rgba(30,41,59,0.6)"><tr>
-      <td style="padding:10px 14px">
-        <span class="val" style="font-size:13px">${p.instrument.replace('_','/')}</span>
-        <span style="color:${color};font-weight:600;font-size:12px;margin-left:6px">${p.dir}</span>
+  const ccyRow = (c, cls) => {
+    const h3 = (parseFloat(c.smooth_3h) || 0) * 10000;
+    const h6 = (parseFloat(c.smooth_6h) || 0) * 10000;
+    const evTag = c.energy_event_type
+      ? `<span class="tag tag-${c.energy_event_type === 'CONTINUATION' ? 'blue' : c.energy_event_type === 'NEW' ? 'green' : 'amber'}">${c.energy_event_type}</span>`
+      : '';
+    return `<tr>
+      <td style="padding:8px 14px"><span class="val">${c.currency}</span></td>
+      <td style="padding:8px 14px;text-align:right">
+        <span class="dim">${h3.toFixed(1)}</span>
+        <span class="dim" style="margin-left:8px">${h6.toFixed(1)}</span>
+        ${evTag}
       </td>
-      <td style="padding:10px 14px;text-align:right">
-        <span class="tag tag-gray">${p.phase}</span>
-        <span class="dim" style="margin-left:6px">DE ${Math.round(p.de_combined || 0)}</span>
-      </td>
-    </tr></table>`;
-  }).join('');
+    </tr>`;
+  };
 
-  const entryHtml = entryPairs?.length ? `
-    <div class="card" style="border-color:rgba(34,197,94,0.3)">
-      <div class="card-hd" style="color:#4ade80">Entry Signals</div>
+  const directionsHtml = (strong.length || weak.length) ? `
+    <div class="card">
+      <div class="card-hd">Currency Directions</div>
       <div class="card-bd">
-        ${entryPairs.map(p => `<table width="100%" cellpadding="0" cellspacing="0" style="border-bottom:1px solid rgba(30,41,59,0.6)"><tr><td style="padding:10px 14px" class="val">${p.instrument.replace('_','/')}</td><td style="padding:10px 14px;text-align:right"><span class="tag tag-green">${p.signal || p.dir}</span></td></tr></table>`).join('')}
+        ${strong.length ? `<table width="100%" cellpadding="0" cellspacing="0">
+          <tr><td colspan="2" style="padding:10px 14px;color:#4ade80;font-weight:700;font-size:11px;text-transform:uppercase">Strong</td></tr>
+          ${strong.map(c => ccyRow(c, 'strong')).join('')}
+        </table>` : ''}
+        ${weak.length ? `<table width="100%" cellpadding="0" cellspacing="0" style="${strong.length ? 'border-top:1px solid rgba(30,41,59,0.6)' : ''}">
+          <tr><td colspan="2" style="padding:10px 14px;color:#f87171;font-weight:700;font-size:11px;text-transform:uppercase">Weak</td></tr>
+          ${weak.map(c => ccyRow(c, 'weak')).join('')}
+        </table>` : ''}
       </div>
     </div>` : '';
 
-  const sessionMetrics = (sessions || []).map(s => {
+  // ── Session Summary ──
+  const sessionRows = (sessions || []).map(s => {
     const energy = Math.round(parseFloat(s.market_energy) || 0);
-    return `<span class="metric">${SESS_LABEL[s.session_name] || s.session_name}: <b>${energy}</b></span>`;
-  }).join(' ');
+    const trad   = s.tradability_grade || '';
+    const liq    = s.liquidity_grade || '';
+    const state  = s.energy_cycle || '';
+    return `<tr>
+      <td style="padding:8px 14px"><span class="val">${SESS_LABEL[s.session_name] || s.session_name}</span></td>
+      <td style="padding:8px 14px;text-align:center"><span style="color:#fbbf24;font-weight:700">${energy}</span></td>
+      <td style="padding:8px 14px;text-align:center" class="dim">${trad}</td>
+      <td style="padding:8px 14px;text-align:right"><span class="tag tag-gray">${state}</span></td>
+    </tr>`;
+  }).join('');
+
+  const sessionsHtml = sessionRows ? `
+    <div class="card">
+      <div class="card-hd">Session Summary</div>
+      <div class="card-bd">
+        <table width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="padding:6px 14px" class="sm dim">Session</td>
+            <td style="padding:6px 14px;text-align:center" class="sm dim">Energy</td>
+            <td style="padding:6px 14px;text-align:center" class="sm dim">Tradability</td>
+            <td style="padding:6px 14px;text-align:right" class="sm dim">State</td>
+          </tr>
+          ${sessionRows}
+        </table>
+      </div>
+    </div>` : '';
+
+  // ── Energy Events (bars that crossed 50) ──
+  const eventRows = (energyEvents || []).map(ev => `
+    <tr>
+      <td style="padding:8px 14px">
+        <span class="val" style="color:#fbbf24">${Math.round(ev.energy)}</span>
+        <span class="dim" style="margin-left:6px">${SESS_LABEL[ev.session] || ev.session}</span>
+      </td>
+      <td style="padding:8px 14px;text-align:right" class="sm">${ev.time ? new Date(ev.time).toISOString().slice(11, 16) : '?'} UTC</td>
+    </tr>`
+  ).join('');
+
+  const eventsHtml = eventRows ? `
+    <div class="card">
+      <div class="card-hd">Energy Crosses</div>
+      <div class="card-bd"><table width="100%" cellpadding="0" cellspacing="0">${eventRows}</table></div>
+    </div>` : '';
+
+  // ── Signal Pairs (top 8 by phase priority) ──
+  const PHASE_ORDER = { ENTRY: 0, MOVING: 1, COMPRESSION: 2, PULLBACK: 3, MONITORING: 4 };
+  const PHASE_COLOR = { ENTRY: '#22c55e', MOVING: '#fbbf24', COMPRESSION: '#a78bfa', PULLBACK: '#f59e0b', MONITORING: '#64748b' };
+  const sorted = (pairs || []).sort((a, b) => (PHASE_ORDER[a.phase] ?? 9) - (PHASE_ORDER[b.phase] ?? 9));
+
+  const pairRows = sorted.slice(0, 8).map(p => {
+    const color = p.dir === 'BUY' ? '#4ade80' : '#f87171';
+    const phColor = PHASE_COLOR[p.phase] || '#64748b';
+    return `<tr>
+      <td style="padding:8px 14px">
+        <span class="val" style="font-size:13px">${p.instrument.replace('_','/')}</span>
+        <span style="color:${color};font-weight:600;font-size:12px;margin-left:6px">${p.dir}</span>
+      </td>
+      <td style="padding:8px 14px;text-align:right">
+        <span style="color:${phColor};font-weight:600;font-size:11px">${p.phase}</span>
+        <span class="dim" style="margin-left:6px">DE ${Math.round(p.de_combined || 0)}%</span>
+      </td>
+    </tr>`;
+  }).join('');
+
+  const pairsHtml = pairRows ? `
+    <div class="card">
+      <div class="card-hd">Signal Pairs</div>
+      <div class="card-bd"><table width="100%" cellpadding="0" cellspacing="0">${pairRows}</table></div>
+    </div>` : '';
+
+  // ── Phase Flow Summary ──
+  const phases = {};
+  for (const p of (pairs || [])) phases[p.phase] = (phases[p.phase] || 0) + 1;
+  const phaseText = Object.entries(phases)
+    .sort((a, b) => (PHASE_ORDER[a[0]] ?? 9) - (PHASE_ORDER[b[0]] ?? 9))
+    .map(([ph, n]) => `${ph}(${n})`).join(' · ');
 
   return {
-    subject: `Daily Digest — ${date}`,
+    subject: `NervaFX Daily Digest — ${date}`,
     html: baseLayout(`
       <h2>Daily Digest</h2>
-      <p class="sub">${date}</p>
+      <p class="sub">${date}${phaseText ? ` · ${phaseText}` : ''}</p>
 
-      ${sessionMetrics ? `
-      <div class="card">
-        <div class="card-hd">Session Energy</div>
-        <div style="padding:12px 14px">${sessionMetrics}</div>
-      </div>` : ''}
+      ${directionsHtml}
+      ${sessionsHtml}
+      ${eventsHtml}
+      ${pairsHtml}
 
-      ${eventRows ? `
-      <div class="card">
-        <div class="card-hd">Energy Events</div>
-        <div class="card-bd">${eventRows}</div>
-      </div>` : ''}
-
-      ${entryHtml}
-
-      ${pairRows ? `
-      <div class="card">
-        <div class="card-hd">Signal Pairs</div>
-        <div class="card-bd">${pairRows}</div>
-      </div>` : ''}
-
-      <p style="text-align:center;margin:24px 0 16px"><a class="cta" href="https://nervafx.com">Open Dashboard</a></p>
+      <p style="text-align:center;margin:24px 0 16px"><a class="cta" href="https://nervafx.com/app">Open Dashboard</a></p>
     `),
   };
 }
@@ -497,11 +559,12 @@ async function sendSignalAlerts(sb) {
     if (!alreadySent) {
       const todayStr = now.toISOString().slice(0, 10);
 
-      // Get today's sessions
+      // Get today's sessions with summary data
       const { data: sessions } = await sb
         .from('market_energy_sessions')
-        .select('session_name, market_energy, details')
-        .eq('session_date', todayStr);
+        .select('session_name, market_energy, details, energy_cycle, tradability_grade, liquidity_grade')
+        .eq('session_date', todayStr)
+        .order('session_name');
 
       // Collect energy events (bars that crossed threshold)
       const energyEvents = [];
@@ -513,26 +576,24 @@ async function sendSignalAlerts(sb) {
         }
       }
 
-      // Get active pairs
+      // Get currency directions
+      const { data: digestCurrencies } = await sb
+        .from('energy_currency_state')
+        .select('currency, direction, smooth_3h, smooth_6h, energy_event_type, active')
+        .eq('active', true)
+        .order('currency');
+
+      // Get active signal pairs
       const { data: allPairs } = await sb
         .from('energy_signal_pairs')
         .select('instrument, dir, phase, de_combined')
-        .eq('active', true)
-        .order('de_combined', { ascending: false });
-
-      // Get any entry signals from today
-      const { data: todayEntries } = await sb
-        .from('trade_signals')
-        .select('instrument, signal')
-        .in('signal', ['BUY', 'SELL'])
-        .gte('time', todayStr)
-        .order('time', { ascending: false });
+        .eq('active', true);
 
       const template = dailyDigestEmail({
         date: todayStr,
         energyEvents,
+        currencies: digestCurrencies || [],
         pairs: allPairs || [],
-        entryPairs: todayEntries || [],
         sessions: sessions || [],
       });
 
