@@ -3224,24 +3224,27 @@ function _meSessionExplain(s, label, status) {
   }
 
   // COMPLETED sessions: use stored flow_performance from session details
+  // Now reads pre-computed data from flow_performance table (includes final_score, vol, impulse)
   if (!rankedPairs || !rankedPairs.length) {
     const storedFP = s.details?.flow_performance;
     if (storedFP && storedFP.length) {
       rankedPairs = storedFP.map(fp => {
-        const flowSign = fp.dir === 'BUY' ? 1 : -1;
-        const v45 = fp.m15 != null ? fp.m15 : null;
-        const spread3H = fp.h3 != null ? fp.h3 : null;
-        let perfScore = 0;
-        if (v45 != null)      perfScore += (v45 * flowSign) * 10000 * 4;
-        if (spread3H != null) perfScore += (spread3H * flowSign) * 10000 * 2;
         const deCombined = fp.de || 0;
-        const finalScore = (0.75 * perfScore) + (0.25 * deCombined);
-        const vol = _volDataCache[fp.pair];
+        // Use pre-computed final_score if available, otherwise recalculate
+        let finalScore = fp.final_score;
+        if (finalScore == null) {
+          const flowSign = fp.dir === 'BUY' ? 1 : -1;
+          let perfScore = 0;
+          if (fp.m15 != null) perfScore += (fp.m15 * flowSign) * 10000 * 3;
+          if (fp.h3  != null) perfScore += (fp.h3  * flowSign) * 10000 * 2;
+          if (fp.h6  != null) perfScore += (fp.h6  * flowSign) * 10000 * 1;
+          finalScore = (0.75 * perfScore) + (0.25 * deCombined);
+        }
         return {
           pair: fp.pair.replace('_', '/'), dir: fp.dir, status: fp.status || 'WAIT',
           finalScore, de: Math.round(deCombined * 10) / 10,
-          volGrade: vol?.participation_grade || '', volRV: vol ? parseFloat(vol.relative_volume) || 0 : 0,
-          volEff: vol ? parseFloat(vol.volume_efficiency) || 0 : 0, volPers: vol ? parseFloat(vol.volume_persistence) || 0 : 0, volScore: 0,
+          volGrade: fp.vol_grade || '', volRV: fp.vol_rv || 0,
+          volEff: 0, volPers: 0, volScore: 0,
         };
       }).sort((a, b) => b.finalScore - a.finalScore).slice(0, 4);
     }

@@ -1043,86 +1043,54 @@ function _flowFromFullMethod(csSnap, m15Snap) {
 
 /**
  * Build flow performance pair details for a session (stored in details.flow_performance).
- * Matches the frontend renderFlowPerformance scoring: M15 + 3H + 6H alignment/status + DE.
- * DE uses M15 last 20 candles only.
+ * Reads from the pre-computed flow_performance table (written by calculateFlowPerformance)
+ * which runs earlier in the pipeline. Falls back to legacy CS-based calculation if no data.
  */
-function _flowPerfForSession(g, csFlowIndex, m15FlowIndex, m15CandlesByPair) {
-  if (!csFlowIndex) return null;
-  const hours = g.rows.map(r => (r.time_utc || '').slice(0, 16).replace(' ', 'T')).reverse();
-  for (const t of hours) {
-    const csSnap = csFlowIndex[t];
-    if (!csSnap || Object.keys(csSnap).length < 4) continue;
-    const m15Snap = m15FlowIndex ? m15FlowIndex[t] : null;
+async function _flowPerfForSession(g) {
+  // Get time range for this session
+  const sessionTimes = g.rows.map(r => r.time_utc).filter(Boolean).sort();
+  if (!sessionTimes.length) return null;
 
-    // Derive currencies
-    const scored = Object.entries(csSnap)
-      .map(([ccy, v]) => ({ ccy, s3h: v.s3h, s6h: v.s6h }))
-      .sort((a, b) => b.s3h - a.s3h);
-    const strong = scored.slice(0, 2).map(e => e.ccy);
-    const weak   = scored.slice(-2).map(e => e.ccy);
+  const firstHour = sessionTimes[0].slice(0, 13) + ':00:00';
+  const lastHour  = sessionTimes[sessionTimes.length - 1].slice(0, 13) + ':00:00';
 
-    // Build flow pairs
-    const flowPairs = [];
-    for (const st of strong) {
-      for (const wk of weak) {
-        if (st === wk) continue;
-        const fwd = `${st}_${wk}`;
-        const rev = `${wk}_${st}`;
-        if (FLOW_PAIRS_SET.has(fwd))      flowPairs.push({ instrument: fwd, dir: 'BUY' });
-        else if (FLOW_PAIRS_SET.has(rev)) flowPairs.push({ instrument: rev, dir: 'SELL' });
-      }
-    }
-    if (!flowPairs.length) return null;
+  // Read pre-computed flow_performance for this session's time range
+  const { data: fpRows, error } = await supabase
+    .from('flow_performance')
+    .select('instrument, dir, status, state, momentum, perf_score, final_score, de_combined, spread_3h, spread_6h, v45, v90, vol_rv, vol_eff, vol_grade, vol_pers, impulse_score, impulse_aligned, time')
+    .gte('time', firstHour)
+    .lte('time', lastHour)
+    .order('time', { ascending: false })
+    .limit(200);
 
-    // Score each pair (matching frontend logic)
-    const results = flowPairs.slice(0, 4).map(fp => {
-      const [base, quote] = fp.instrument.split('_');
-      const flowSign = fp.dir === 'BUY' ? 1 : -1;
-      const m15 = m15Snap ? m15Snap[fp.instrument] : null;
-      const v45 = m15 ? m15.v45 : null;
-      const v90 = m15 ? m15.v90 : null;
-      const h3Base  = csSnap[base]?.s3h  ?? null;
-      const h3Quote = csSnap[quote]?.s3h ?? null;
-      const h6Base  = csSnap[base]?.s6h  ?? null;
-      const h6Quote = csSnap[quote]?.s6h ?? null;
-      const spread3H = (h3Base != null && h3Quote != null) ? h3Base - h3Quote : null;
-      const spread6H = (h6Base != null && h6Quote != null) ? h6Base - h6Quote : null;
+  if (error || !fpRows?.length) return null;
 
-      const m15Confirms = v45 != null ? Math.sign(v45) === flowSign : null;
-      const h3Confirms  = spread3H != null ? Math.sign(spread3H) === flowSign : null;
-      const h6Confirms  = spread6H != null ? Math.sign(spread6H) === flowSign : null;
-
-      const htfCount = [h3Confirms, h6Confirms].filter(x => x === true).length;
-      let status;
-      if (m15Confirms && htfCount === 2)      status = 'STRONG';
-      else if (m15Confirms && htfCount === 1) status = 'ALIGNED';
-      else if (m15Confirms && htfCount === 0) status = 'PARTIAL';
-      else if (!m15Confirms && htfCount >= 1) status = 'BUILDING';
-      else if (m15Confirms === false)         status = 'AGAINST';
-      else                                    status = 'WAIT';
-
-      // Directional Efficiency from M15 last 20 candles only
-      let deCombined = 0;
-      if (m15CandlesByPair && m15CandlesByPair[fp.instrument]) {
-        const sessEnd = g.rows[g.rows.length - 1]?.time_utc || '';
-        const m15ForPair = m15CandlesByPair[fp.instrument].filter(c => c.time <= sessEnd);
-        deCombined = round1(computeDE(m15ForPair.slice(-20)));
-      }
-
-      return {
-        pair: fp.instrument,
-        dir:  fp.dir,
-        status,
-        m15:  v45 != null ? round1(v45 * 100000) / 100000 : null,
-        h3:   spread3H != null ? round1(spread3H * 100000) / 100000 : null,
-        h6:   spread6H != null ? round1(spread6H * 100000) / 100000 : null,
-        de:   deCombined,
-      };
-    });
-
-    return results;
+  // Group by instrument, take latest entry for each
+  const byInst = {};
+  for (const r of fpRows) {
+    if (!byInst[r.instrument]) byInst[r.instrument] = r;
   }
-  return null;
+
+  // Sort by final_score descending, take top entries
+  const sorted = Object.values(byInst).sort((a, b) => (b.final_score || 0) - (a.final_score || 0));
+
+  return sorted.slice(0, 6).map(r => ({
+    pair:   r.instrument,
+    dir:    r.dir,
+    status: r.status || 'WAIT',
+    m15:    r.v45,
+    h3:     r.spread_3h,
+    h6:     r.spread_6h,
+    de:     r.de_combined || 0,
+    state:  r.state,
+    momentum: r.momentum,
+    perf_score:  r.perf_score,
+    final_score: r.final_score,
+    vol_grade:   r.vol_grade,
+    vol_rv:      r.vol_rv,
+    impulse_score:   r.impulse_score,
+    impulse_aligned: r.impulse_aligned,
+  }));
 }
 
 /**
@@ -1281,7 +1249,7 @@ function buildSessionRows(hourRows, csFlowIndex, m15FlowIndex, m15CandlesByPair)
       details: {
         hours: g.rows.length,
         flow_method: csFlowIndex ? 'smooth_3h+6h+m15' : 'candle_modal',
-        flow_performance: _flowPerfForSession(g, csFlowIndex, m15FlowIndex, m15CandlesByPair),
+        flow_performance: await _flowPerfForSession(g),
         hourly: g.rows.map(r => ({
           time:                r.time_utc,
           energy_cycle:        r.energy_cycle,
