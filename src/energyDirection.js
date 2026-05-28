@@ -47,7 +47,7 @@ function getSession(utcHour) {
  *   PULLBACK   → M15 retraces against flow direction
  *   COMPRESSION → after pullback, M15 range tightens (low |v45|)
  *   ENTRY       → after compression/pullback, momentum returns in flow direction (trade now)
- *   MOVING      → strong confirmation: M15 + 3H aligned + impulse (already moving)
+ *   MOVING      → strong confirmation: M15 + 3H aligned + impulse (already moving, late entry)
  */
 function detectPhase(prevPhase, dir, v45, v90, spread3h, impulseScore, impulseAligned, deCombo) {
   const flowSign = dir === 'BUY' ? 1 : -1;
@@ -56,17 +56,17 @@ function detectPhase(prevPhase, dir, v45, v90, spread3h, impulseScore, impulseAl
   const h3Dir = spread3h * flowSign;
   const absV45 = Math.abs(v45);
 
-  // MOVING: strong multi-timeframe confirmation — price already moving
+  // MOVING: strong multi-timeframe confirmation (already in motion — late entry)
   if (v45Dir > 0.00008 && h3Dir > 0 && impulseAligned && impulseScore >= 40 && deCombo >= 35) {
     return 'MOVING';
   }
 
-  // ENTRY: momentum returning in flow direction after pullback/compression — trade now
+  // ENTRY: momentum returning in flow direction after pullback/compression (trade now)
   if ((prevPhase === 'PULLBACK' || prevPhase === 'COMPRESSION') && v45Dir > 0.00005 && h3Dir > 0) {
     return 'ENTRY';
   }
 
-  // Also detect ENTRY from fresh 3H push or M15 push after any non-moving phase
+  // Also detect ENTRY from fresh 3H push or M15 push after any non-entry phase
   if (prevPhase !== 'MONITORING' && v45Dir > 0.00010 && absV45 > Math.abs(v90) * 1.05) {
     return 'ENTRY';
   }
@@ -131,35 +131,40 @@ async function calculateEnergyDirection() {
     energySessions = fb || [];
   }
 
-  // Scan ALL hourly bars across today's sessions.
-  // - currentEnergy = most recent hourly bar's energy (for display)
-  // - triggerBar = any bar that crossed ≥50 (for direction logic)
-  const allBars = [];
-  const thresholdBars = [];
+  // Scan ALL hourly bars across today's sessions to find the LAST bar that
+  // crossed ≥50. This is the trigger bar — directions are snapshotted from
+  // the strength at that moment and persist until a NEW bar crosses ≥50.
+  let currentEnergy = 0;  // live session-level energy (for display)
+  const allBars = [];     // every hourly bar with energy ≥ threshold
 
   for (const es of energySessions) {
+    const sessEnergy = parseFloat(es.market_energy) || 0;
+
+    // Track current session energy for display
+    if (es.session_name === session && sessEnergy > currentEnergy) {
+      currentEnergy = sessEnergy;
+    }
+
+    // Collect hourly bars that crossed the threshold
     const hourly = es.details?.hourly || [];
     for (const h of hourly) {
       const hEnergy = parseFloat(h.market_energy) || 0;
-      allBars.push({ energy: hEnergy, time: h.time, session: es.session_name });
       if (hEnergy >= ENERGY_THRESHOLD) {
-        thresholdBars.push({ energy: hEnergy, time: h.time, session: es.session_name });
+        allBars.push({ energy: hEnergy, time: h.time, session: es.session_name });
       }
     }
   }
 
-  // Sort by time descending — most recent first
+  // Sort by time descending — the LAST bar to cross ≥50 is the trigger
   allBars.sort((a, b) => new Date(b.time) - new Date(a.time));
-  thresholdBars.sort((a, b) => new Date(b.time) - new Date(a.time));
+  const triggerBar = allBars[0] || null;
 
-  // Current energy = most recent hourly bar (what we display)
-  const currentEnergy = allBars[0]?.energy || 0;
-
-  // Trigger bar = most recent bar that crossed ≥50 (for direction logic)
-  const triggerBar = thresholdBars[0] || null;
   const triggerEnergy = triggerBar ? triggerBar.energy : 0;
   const triggerSession = triggerBar ? triggerBar.session : null;
   const triggerHour = triggerBar ? triggerBar.time : null;
+
+  // If current session didn't have data, use trigger energy for display
+  if (!currentEnergy) currentEnergy = triggerEnergy;
 
   console.log(`[ENERGY_DIR] Current energy: ${currentEnergy} | Trigger bar: ${triggerEnergy} (${triggerSession}${triggerHour ? ' @ ' + triggerHour : ''})`);
 
@@ -211,24 +216,20 @@ async function calculateEnergyDirection() {
   // ── 5. Evaluate energy threshold ───────────────────────────────────────────
   const thresholdMet = triggerEnergy >= ENERGY_THRESHOLD;
 
-  // Directions FREEZE once set and persist indefinitely — even if energy drops.
-  // A NEW cross = energy was below 50 on the previous bar, now crosses above 50.
-  // We detect this by checking if the most recent bar before the trigger was < 50.
+  // Check if this is a NEW energy event by comparing trigger bar time against
+  // the stored triggered_at. A new bar crossing ≥50 AFTER the stored trigger
+  // time means we must re-evaluate directions with fresh strength.
+  const prevTriggeredAt = Object.values(stateMap)
+    .filter(s => s.active && s.triggered_at)
+    .map(s => new Date(s.triggered_at).getTime())
+    .sort((a, b) => b - a)[0] || 0;
+
+  const triggerBarTime = triggerHour ? new Date(triggerHour).getTime() : 0;
   const hasActiveDirections = Object.values(stateMap).some(s => s.active);
-
-  // Check for a fresh cross: the bar immediately before the trigger bar was < 50
-  let isFreshCross = false;
-  if (thresholdMet && allBars.length >= 2) {
-    // allBars sorted by time desc — [0] is latest, find the bar just before trigger
-    const triggerTime = new Date(triggerHour).getTime();
-    const barBeforeTrigger = allBars.find(b => new Date(b.time).getTime() < triggerTime);
-    isFreshCross = !barBeforeTrigger || barBeforeTrigger.energy < ENERGY_THRESHOLD;
-  } else if (thresholdMet && allBars.length === 1) {
-    isFreshCross = true; // only one bar and it crossed — first cross ever
-  }
-
-  // Fresh cross above 50 = redefine directions (whether first time or re-cross)
-  const isNewEnergyEvent = thresholdMet && isFreshCross;
+  const isNewEnergyEvent = thresholdMet && (
+    !hasActiveDirections ||                    // no directions exist yet
+    (triggerBarTime > prevTriggeredAt)          // new bar is newer than last trigger
+  );
 
   let currencyUpdates = [];
   let newPairs = [];
@@ -353,11 +354,13 @@ async function calculateEnergyDirection() {
       }
     }
   } else if (hasActiveDirections) {
-    // ── Directions FROZEN — persist regardless of current energy level ────
-    // Once set, directions never reset on their own. They only change when
-    // a NEW cross above 50 happens (which requires active=false first).
-    // M15 phase data still gets updated (handled below in section 9–10).
-    console.log(`[ENERGY_DIR] Directions FROZEN (energy: ${currentEnergy}). Keeping existing directions & pairs.`);
+    // ── Directions already locked — keep them unchanged ──────────────────
+    // No re-evaluation of strong/weak. Strength values stay as snapshotted.
+    // Only M15 phase data gets updated (handled below in section 9–10).
+    console.log(`[ENERGY_DIR] Directions locked. No new energy bar since last trigger — keeping existing directions & pairs.`);
+
+    // Keep existing currency states exactly as they are — don't touch anything
+    // (no currencyUpdates needed, they won't be upserted)
 
     // Keep existing active pairs for M15 phase updates
     for (const p of (existingPairs || [])) {
@@ -374,8 +377,8 @@ async function calculateEnergyDirection() {
       }
     }
   } else {
-    // No active directions and energy below threshold — nothing to do
-    console.log(`[ENERGY_DIR] Energy below threshold (${currentEnergy}). No existing directions.`);
+    // No threshold met and no existing directions — nothing to do
+    console.log(`[ENERGY_DIR] Energy below threshold (trigger: ${triggerEnergy}). No existing directions.`);
   }
 
   // ── 9. Fetch M15 data for all active pairs ─────────────────────────────────
