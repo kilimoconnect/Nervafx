@@ -1461,18 +1461,10 @@ async function backfillSessionActivity({ fullRewrite = false } = {}) {
     const todayRows = allSessionRows.filter(sr => sr.session_date === todayStr);
 
     if (todayRows.length) {
-      const { data: existing } = await supabase
-        .from('market_energy_sessions')
-        .select('session_name')
-        .eq('session_date', todayStr);
-      const existingNames = new Set((existing || []).map(r => r.session_name));
-
-      const toUpsert = todayRows.filter(
-        sr => sr.session_name === activeSession || !existingNames.has(sr.session_name)
-      );
-      if (toUpsert.length) {
-        await upsertMarketEnergySessions(toUpsert);
-      }
+      // Always upsert ALL of today's sessions — previous sessions may have
+      // gained new hourly bars since their last upsert (e.g. LONDON's final
+      // hour arrives after NEW_YORK becomes the active session).
+      await upsertMarketEnergySessions(todayRows);
     }
   }
 
