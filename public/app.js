@@ -1853,7 +1853,8 @@ function _buildFpScored(strengthData, m15Data) {
         }
       }
 
-      return latest.sort((a, b) => (b.final_score || 0) - (a.final_score || 0)).map(r => {
+      // Build scored array with client-side ranking (same formula as Signal Pairs)
+      const mapped = latest.map(r => {
         const [base, quote] = r.instrument.split('_');
         const flowSign = r.dir === 'BUY' ? 1 : -1;
         const v45 = parseFloat(r.v45) || 0;
@@ -1863,12 +1864,34 @@ function _buildFpScored(strengthData, m15Data) {
         const deCombined = parseFloat(r.de_combined) || 0;
         const impulseScore = r.impulse_score || 0;
         const impulseAligned = !!r.impulse_aligned;
+        const m15State = (r.state || 'FLAT').toUpperCase();
 
         // Derive alignment checks for dots + explain
         const M15_CONFIRM_MIN = 0.00008;
         const m15Confirms = Math.sign(v45) === flowSign && Math.abs(v45) >= M15_CONFIRM_MIN;
         const h3Confirms = Math.sign(spread3H) === flowSign;
         const h6Confirms = Math.sign(spread6H) === flowSign;
+        const accel = v45 - v90;
+        const accelSign = Math.sign(accel) === flowSign;
+
+        // Compute perfScore — identical to Signal Pairs client-side formula
+        let perfScore = 0;
+        perfScore += (v45 * flowSign) * 10000 * 3;
+        perfScore += (spread3H * flowSign) * 10000 * 2;
+        perfScore += (spread6H * flowSign) * 10000 * 1;
+        if (impulseAligned && impulseScore >= 40) perfScore += impulseScore * 0.5;
+        else if (impulseAligned)                  perfScore += impulseScore * 0.25;
+        else if (impulseScore >= 40)              perfScore -= impulseScore * 0.3;
+        if (m15Confirms && impulseScore >= 40)    perfScore += 20;
+        else if (m15Confirms)                     perfScore += 10;
+        if (h3Confirms)  perfScore += 10;
+        if (h6Confirms)  perfScore += 5;
+        if (accelSign)   perfScore += 10;
+        if (m15State === 'EXPANDING' && m15Confirms)                          perfScore += 15;
+        if (m15State === 'EXPANDING' && impulseAligned && impulseScore >= 50) perfScore += 10;
+        if (m15State === 'REVERSING')                                         perfScore -= 10;
+        if (m15State === 'COMPRESSING' && !m15Confirms)                       perfScore -= 15;
+        const finalScore = (0.75 * perfScore) + (0.25 * deCombined);
 
         const STATUS_CLS = { STRONG: 'fp-strong', ALIGNED: 'fp-aligned', PARTIAL: 'fp-partial', BUILDING: 'fp-building', AGAINST: 'fp-against', WAIT: 'fp-wait' };
 
@@ -1881,10 +1904,8 @@ function _buildFpScored(strengthData, m15Data) {
           statusCls: STATUS_CLS[r.status] || 'fp-wait',
           momentum: r.momentum || 'No data',
           m15Confirms, h3Confirms, h6Confirms,
-          accel: v45 - v90,
-          accelSign: Math.sign(v45 - v90) === flowSign,
-          perfScore: parseFloat(r.perf_score) || 0,
-          finalScore: parseFloat(r.final_score) || 0,
+          accel, accelSign,
+          perfScore, finalScore,
           deCombined,
           deLabel: deCombined >= 30 ? 'Institutional' : deCombined >= 20 ? 'Clean' : deCombined >= 8 ? 'Mixed' : 'Noisy',
           impulseScore, impulseAligned,
@@ -1897,6 +1918,8 @@ function _buildFpScored(strengthData, m15Data) {
           h3Quote: ccyMap3H[quote] ?? null,
         };
       });
+      mapped.sort((a, b) => b.finalScore - a.finalScore);
+      return mapped;
     }
   }
 
