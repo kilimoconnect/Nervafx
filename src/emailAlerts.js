@@ -380,17 +380,22 @@ async function sendSignalAlerts(sb) {
   const emailsSent = [];
 
   // ── 1. DIRECTION ALERT — check if energyDirection flagged a new event ─────
-  // Read from energy_currency_state: if any currency has energy_event_type set
-  // and was triggered recently (within last 2 hours), it's a new event
-  const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  // Check signal pairs for new_energy_event = true (set by the engine in the
+  // current pipeline run). This is reliable because the flag is written at
+  // pipeline time, not at the bar time which can be hours earlier.
   const { data: currStates } = await sb
     .from('energy_currency_state')
     .select('*')
     .order('currency', { ascending: true });
 
-  const hasRecentTrigger = (currStates || []).some(s =>
-    s.energy_event_type && s.triggered_at && s.triggered_at > twoHoursAgo
-  );
+  const { data: eventPairs } = await sb
+    .from('energy_signal_pairs')
+    .select('new_energy_event')
+    .eq('active', true)
+    .eq('new_energy_event', true)
+    .limit(1);
+
+  const hasRecentTrigger = eventPairs && eventPairs.length > 0;
 
   if (hasRecentTrigger) {
     const alreadySent = await wasRecentlySent(sb, 'direction', 240);
@@ -401,12 +406,13 @@ async function sendSignalAlerts(sb) {
         .select('instrument, dir, strong_ccy, weak_ccy, phase, new_energy_event, energy_event_type')
         .eq('active', true);
 
-      // Fetch recently deactivated pairs (removed in this event)
+      // Fetch recently deactivated pairs (removed in this event — updated within last 2h)
+      const recentCutoff = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
       const { data: inactivePairs } = await sb
         .from('energy_signal_pairs')
         .select('instrument')
         .eq('active', false)
-        .gte('last_updated', twoHoursAgo);
+        .gte('last_updated', recentCutoff);
 
       const triggerState = (currStates || []).find(s => s.energy_at_trigger);
       const template = directionAlertEmail({
