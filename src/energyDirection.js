@@ -216,20 +216,12 @@ async function calculateEnergyDirection() {
   // ── 5. Evaluate energy threshold ───────────────────────────────────────────
   const thresholdMet = triggerEnergy >= ENERGY_THRESHOLD;
 
-  // Check if this is a NEW energy event by comparing trigger bar time against
-  // the stored triggered_at. A new bar crossing ≥50 AFTER the stored trigger
-  // time means we must re-evaluate directions with fresh strength.
-  const prevTriggeredAt = Object.values(stateMap)
-    .filter(s => s.active && s.triggered_at)
-    .map(s => new Date(s.triggered_at).getTime())
-    .sort((a, b) => b - a)[0] || 0;
-
-  const triggerBarTime = triggerHour ? new Date(triggerHour).getTime() : 0;
+  // Directions FREEZE once set and persist until energy drops below threshold
+  // and then rises again. A new hourly bar crossing ≥50 while directions are
+  // already active does NOT re-evaluate — that would defeat the freeze.
+  // New event = threshold met AND no active directions (first trigger or reset).
   const hasActiveDirections = Object.values(stateMap).some(s => s.active);
-  const isNewEnergyEvent = thresholdMet && (
-    !hasActiveDirections ||                    // no directions exist yet
-    (triggerBarTime > prevTriggeredAt)          // new bar is newer than last trigger
-  );
+  const isNewEnergyEvent = thresholdMet && !hasActiveDirections;
 
   let currencyUpdates = [];
   let newPairs = [];
@@ -353,11 +345,11 @@ async function calculateEnergyDirection() {
         console.log(`[ENERGY_DIR]   ${p.instrument.replace('_','/')} ${p.dir} → REMOVED (${p.strong_ccy}↑ ${p.weak_ccy}↓ no longer valid)`);
       }
     }
-  } else if (hasActiveDirections) {
-    // ── Directions already locked — keep them unchanged ──────────────────
+  } else if (thresholdMet && hasActiveDirections) {
+    // ── Directions FROZEN — energy still above threshold ─────────────────
     // No re-evaluation of strong/weak. Strength values stay as snapshotted.
     // Only M15 phase data gets updated (handled below in section 9–10).
-    console.log(`[ENERGY_DIR] Directions locked. No new energy bar since last trigger — keeping existing directions & pairs.`);
+    console.log(`[ENERGY_DIR] Directions FROZEN. Energy above threshold — keeping existing directions & pairs.`);
 
     // Keep existing currency states exactly as they are — don't touch anything
     // (no currencyUpdates needed, they won't be upserted)
@@ -376,6 +368,30 @@ async function calculateEnergyDirection() {
         });
       }
     }
+  } else if (!thresholdMet && hasActiveDirections) {
+    // ── Energy dropped below threshold — RESET directions ────────────────
+    // Deactivate all currencies so next time energy crosses 50, fresh
+    // directions are snapshotted. This is what makes the freeze cycle work.
+    console.log(`[ENERGY_DIR] Energy dropped below threshold (${triggerEnergy}). Resetting directions for next cycle.`);
+
+    for (const ccy of CURRENCIES) {
+      const prev = stateMap[ccy];
+      if (prev?.active) {
+        currencyUpdates.push({
+          currency: ccy,
+          direction: 'NEUTRAL',
+          smooth_3h: prev.smooth_3h,
+          smooth_6h: prev.smooth_6h,
+          energy_at_trigger: prev.energy_at_trigger,
+          trigger_session: prev.trigger_session,
+          triggered_at: prev.triggered_at,
+          threshold_met: false,
+          active: false,
+          energy_event_type: 'DROPPED',
+        });
+      }
+    }
+    // No pairs to update — they'll be deactivated in section 11
   } else {
     // No threshold met and no existing directions — nothing to do
     console.log(`[ENERGY_DIR] Energy below threshold (trigger: ${triggerEnergy}). No existing directions.`);
