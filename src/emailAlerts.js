@@ -27,6 +27,11 @@ const { sendEmail, baseLayout } = require('./emailService');
 
 const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York', LOW_LIQUIDITY: 'Off-hours' };
 
+// Admin — permanent premium, never expires
+const ADMIN_UIDS = new Set([
+  '140f3854-2c85-488c-8e0a-0f965d562654', // Henry Muleke
+]);
+
 // ── Deduplication ────────────────────────────────────────────────────────────
 
 async function wasRecentlySent(sb, alertType, cooldownMinutes = 120) {
@@ -66,6 +71,15 @@ async function getSubscribedUsers(sb) {
   }
   if (!allUsers?.users?.length) return [];
 
+  // Fetch subscriptions to filter by plan (pro/premium only)
+  const { data: subs } = await sb
+    .from('subscriptions')
+    .select('user_id, plan, status, expires_at');
+
+  const subMap = {};
+  for (const s of (subs || [])) subMap[s.user_id] = s;
+
+  // Fetch email preferences
   const { data: prefs } = await sb
     .from('email_preferences')
     .select('user_id, signal_alerts, unsubscribed');
@@ -75,6 +89,18 @@ async function getSubscribedUsers(sb) {
 
   return allUsers.users.filter(u => {
     if (!u.email) return false;
+
+    // Plan gate — only pro, premium, or admin
+    if (ADMIN_UIDS.has(u.id)) {
+      // Admin always gets alerts
+    } else {
+      const sub = subMap[u.id];
+      if (!sub || sub.plan === 'free') return false;
+      // Skip expired paid plans
+      if (sub.expires_at && new Date(sub.expires_at) < new Date()) return false;
+    }
+
+    // Email preferences
     const p = prefMap[u.id];
     if (p?.unsubscribed) return false;
     if (p?.signal_alerts === false) return false;
