@@ -806,6 +806,18 @@
           full_name:  ((profile.first_name || '') + ' ' + (profile.last_name || '')).trim(),
         }));
 
+        // Pre-fetch plan before redirect so dashboard never flashes "free"
+        try {
+          const subRes = await fetch('/api/subscription', {
+            headers: { 'Authorization': 'Bearer ' + accessToken },
+          });
+          if (subRes.ok) {
+            const sub = await subRes.json();
+            localStorage.setItem('nfx_plan', sub.plan || 'free');
+            localStorage.setItem('nfx_plan_uid', profile.id || '');
+          }
+        } catch (_) { /* plan will load on dashboard */ }
+
         if (!profile.timezone) {
           localStorage.setItem('nfx_needs_setup', 'true');
           location.replace('/setup');
@@ -1124,6 +1136,18 @@
         localStorage.setItem('nfx_token',         data.token);
         localStorage.setItem('nfx_refresh_token', data.refresh_token || '');
         localStorage.setItem('nfx_user',           JSON.stringify(data.user));
+
+        // Pre-fetch plan before redirect so dashboard never flashes "free"
+        try {
+          const subRes = await fetch('/api/subscription', {
+            headers: { 'Authorization': 'Bearer ' + data.token },
+          });
+          if (subRes.ok) {
+            const sub = await subRes.json();
+            localStorage.setItem('nfx_plan', sub.plan || 'free');
+            localStorage.setItem('nfx_plan_uid', data.user.id || '');
+          }
+        } catch (_) { /* plan will load on dashboard */ }
 
         showMsg('✓ Welcome back — redirecting…', 'success');
         setTimeout(() => { location.href = '/app?fresh=1'; }, 800);

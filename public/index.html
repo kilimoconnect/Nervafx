@@ -354,7 +354,7 @@
     </div>
   </div>
 
-  <script src="app.js?v=17"></script>
+  <script src="app.js?v=18"></script>
 
   <script>
     // Show Admin button only for the admin user (checked via JWT sub claim)
@@ -455,8 +455,16 @@
       localStorage.setItem('nfx_plan_preview', plan);
     }
 
-    // Init — use cached plan to avoid Free→Premium flash; loadUserPlan() confirms from DB
-    applyPlan(localStorage.getItem('nfx_plan') || 'free');
+    // Init — use cached plan only if it belongs to the current user
+    (function() {
+      var cached    = localStorage.getItem('nfx_plan');
+      var cachedUid = localStorage.getItem('nfx_plan_uid');
+      var user      = JSON.parse(localStorage.getItem('nfx_user') || '{}');
+      if (cached && cachedUid && cachedUid === (user.id || '')) {
+        applyPlan(cached);
+      }
+      // Otherwise don't apply 'free' — loadUserPlan() in app.js will set it from API
+    })();
 
     // ── Upgrade modal — context-aware: hides current plan, shows proration ──
     function showUpgradeModal(highlightPlan) {
