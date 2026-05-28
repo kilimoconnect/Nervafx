@@ -1119,7 +1119,7 @@ function _flowCcyForSession(g, csFlowIndex, m15FlowIndex, side) {
 
 // ─── Build per-session rows for market_energy_sessions ──────────────────────
 
-function buildSessionRows(hourRows, csFlowIndex, m15FlowIndex, m15CandlesByPair) {
+async function buildSessionRows(hourRows, csFlowIndex, m15FlowIndex, m15CandlesByPair) {
   const groups = {};
   for (const r of hourRows) {
     let date = r.time_utc.slice(0, 10);
@@ -1141,7 +1141,7 @@ function buildSessionRows(hourRows, csFlowIndex, m15FlowIndex, m15CandlesByPair)
   const sessHistory = {};
   let prevFlowBullPct = 50;
 
-  return sortedKeys.map(key => {
+  return Promise.all(sortedKeys.map(async key => {
     const g   = groups[key];
     const n   = field => g.rows.map(r => parseFloat(r[field]) || 0);
     const avg = arr   => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
@@ -1291,7 +1291,7 @@ function buildSessionRows(hourRows, csFlowIndex, m15FlowIndex, m15CandlesByPair)
     sessHistory[g.session].push({ movement: mov, breadth: brd, agreement: agr, volatility: vol, energy: eng, bullPct });
 
     return row;
-  });
+  }));
 }
 
 // Fields computed in-memory — stored inside the `details` JSON column
@@ -1450,7 +1450,7 @@ async function backfillSessionActivity({ fullRewrite = false } = {}) {
   const csFlowIndex    = await fetchCurrencyStrengthFlow(daysCover);
   const m15FlowIndex   = await fetchM15FlowIndex(daysCover);
   const m15CandleData  = await fetchM15Candles(daysCover);
-  const allSessionRows = buildSessionRows(rows, csFlowIndex, m15FlowIndex, m15CandleData);
+  const allSessionRows = await buildSessionRows(rows, csFlowIndex, m15FlowIndex, m15CandleData);
 
   if (fullRewrite) {
     await upsertMarketEnergySessions(allSessionRows);
@@ -1504,7 +1504,7 @@ async function calculateLatestSessionActivity() {
   const csFlowIndex   = await fetchCurrencyStrengthFlow(2);
   const m15FlowIndex  = await fetchM15FlowIndex(2);
   const m15CandleData = await fetchM15Candles(2);
-  const sessionRows = buildSessionRows(allRows, csFlowIndex, m15FlowIndex, m15CandleData);
+  const sessionRows = await buildSessionRows(allRows, csFlowIndex, m15FlowIndex, m15CandleData);
   const currentOnly = sessionRows.filter(
     sr => sr.session_name === activeSession && sr.session_date === todayStr
   );
