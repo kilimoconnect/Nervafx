@@ -1677,8 +1677,8 @@ function _flowPairAnalysis(p) {
 
   // ── 1. Energy phase description ──────────────────────────────────────
   const PHASE_DESC = {
-    ENTRY:       'ENTRY phase — energy confirmed, M15 aligned with flow, pullback completed. Execute on next M15 confirmation candle.',
-    READY:       'READY phase — compression complete, price coiling for breakout. Watch M15 for expansion into ' + dir + ' direction.',
+    MOVING:      'MOVING phase — energy confirmed, M15 aligned with flow, already in motion. Late entry — monitor for exhaustion.',
+    ENTRY:       'ENTRY phase — compression complete, conditions aligned. Execute on next M15 confirmation candle into ' + dir + ' direction.',
     COMPRESSION: 'COMPRESSION phase — M15 range tightening after pullback. Energy building — breakout imminent if volume confirms.',
     PULLBACK:    'PULLBACK phase — M15 retracing against the ' + dir + ' flow. Normal behaviour — wait for pullback to complete before entry.',
     MONITORING:  'MONITORING phase — energy triggered ' + dir + ' direction but M15 hasn\'t started the sequence yet. Watch for initial pullback.',
@@ -1734,16 +1734,40 @@ function _flowPairAnalysis(p) {
   const isDead     = p.volGrade === 'DEAD' || p.volRV < 0.5;
   const isWeak     = p.volGrade === 'WEAK' || p.volGrade === 'DEAD';
 
-  if (phase === 'ENTRY') {
-    // ENTRY = best phase — verdict depends on DE + volume quality
+  if (phase === 'MOVING') {
+    // MOVING = already in motion — late entry risk
     if (hasTrendDE && hasGoodEff) {
-      verdict = 'High conviction ENTRY — trending DE, efficient volume, and M15 confirmed. Best conditions to execute.';
+      verdict = 'MOVING with strong momentum — trending DE and efficient volume. Already running — late entry, watch for exhaustion.';
+      verdictCls = 'sfa-caution';
+    } else if (hasTrendDE && hasInstVol) {
+      verdict = 'MOVING with institutional volume — clean trend but already in motion. Reduced R:R, tighten stops.';
+      verdictCls = 'sfa-caution';
+    } else if (hasTrendDE) {
+      verdict = 'MOVING — trending DE, M15 confirmed but price already extended. Late entry — reduce size.';
+      verdictCls = 'sfa-caution';
+    } else if (hasCleanDE && hasGoodEff) {
+      verdict = 'MOVING — directional DE with volume. Already running — only enter on pullback retest.';
+      verdictCls = 'sfa-caution';
+    } else if (hasCleanDE) {
+      verdict = 'MOVING — directional DE but already extended. Wait for next cycle or pullback.';
+      verdictCls = 'sfa-wait';
+    } else if (isDead) {
+      verdict = 'MOVING phase but dead volume and weak DE — momentum fading. Skip this cycle.';
+      verdictCls = 'sfa-avoid';
+    } else {
+      verdict = 'MOVING phase but choppy DE — price running without clean structure. Avoid chasing.';
+      verdictCls = 'sfa-avoid';
+    }
+  } else if (phase === 'ENTRY') {
+    // ENTRY = trade now — best phase for execution
+    if (hasTrendDE && hasGoodEff) {
+      verdict = 'High conviction ENTRY — trending DE, efficient volume, conditions aligned. Best time to execute.';
       verdictCls = 'sfa-go';
     } else if (hasTrendDE && hasInstVol) {
       verdict = 'Strong ENTRY — clean trending DE with strong volume participation. Execute with confidence.';
       verdictCls = 'sfa-go';
     } else if (hasTrendDE) {
-      verdict = 'Good ENTRY — trending DE and M15 confirmed. Volume is ordinary — valid trade, standard size.';
+      verdict = 'Good ENTRY — trending DE, conditions aligned. Volume is ordinary — valid trade, standard size.';
       verdictCls = 'sfa-go';
     } else if (hasCleanDE && hasGoodEff) {
       verdict = 'Solid ENTRY — directional DE with efficient volume. Good setup, execute.';
@@ -1755,23 +1779,8 @@ function _flowPairAnalysis(p) {
       verdict = 'ENTRY phase but dead volume and weak DE — likely false signal. Skip or wait for next cycle.';
       verdictCls = 'sfa-avoid';
     } else {
-      verdict = 'ENTRY phase but choppy DE — M15 confirmed but price action is noisy. Tighten stops, reduce size.';
+      verdict = 'ENTRY phase but choppy DE — conditions aligned but price action is noisy. Tighten stops, reduce size.';
       verdictCls = 'sfa-caution';
-    }
-  } else if (phase === 'READY') {
-    // READY = compression done, about to break out
-    if (hasTrendDE && hasGoodEff) {
-      verdict = 'READY with strong conditions — DE trending and volume efficient. Watch M15 for breakout candle to enter.';
-      verdictCls = 'sfa-good';
-    } else if (hasCleanDE) {
-      verdict = 'READY — compression complete, DE is directional. Watch for M15 expansion to trigger entry.';
-      verdictCls = 'sfa-good';
-    } else if (isDead) {
-      verdict = 'READY phase but no volume participation — breakout may fizzle. Wait for volume to confirm.';
-      verdictCls = 'sfa-caution';
-    } else {
-      verdict = 'READY — coiling for breakout. Wait for M15 expansion candle before committing.';
-      verdictCls = 'sfa-wait';
     }
   } else if (phase === 'COMPRESSION') {
     // COMPRESSION = building energy
@@ -1782,7 +1791,7 @@ function _flowPairAnalysis(p) {
       verdict = 'COMPRESSION — M15 range tightening with directional DE. Breakout approaching, prepare entry.';
       verdictCls = 'sfa-wait';
     } else {
-      verdict = 'COMPRESSION — price coiling but conditions aren\'t ideal yet. Wait for READY phase.';
+      verdict = 'COMPRESSION — price coiling but conditions aren\'t ideal yet. Wait for ENTRY phase.';
       verdictCls = 'sfa-wait';
     }
   } else if (phase === 'PULLBACK') {
@@ -3263,7 +3272,7 @@ function _meSessionExplain(s, label, status) {
     const VOL_GRADE_SHORT = { INSTITUTIONAL: 'Inst', STRONG: 'Strng', NORMAL: 'Norm', WEAK: 'Weak', DEAD: 'Dead' };
     const pairRows = rankedPairs.map((p, i) => {
       const dirCls = p.dir === 'BUY' ? 'buy' : 'sell';
-      const statusColor = p.status === 'ENTRY' ? '#22c55e' : p.status === 'READY' ? '#3b82f6' : p.status === 'PULLBACK' ? '#f59e0b' : p.status === 'COMPRESSION' ? '#a78bfa' : p.status === 'STRONG' ? '#22c55e' : p.status === 'ALIGNED' ? '#0ea5e9' : p.status === 'PARTIAL' ? '#a855f7' : p.status === 'BUILDING' ? '#f59e0b' : p.status === 'AGAINST' ? '#ef4444' : '#64748b';
+      const statusColor = p.status === 'MOVING' ? '#f59e0b' : p.status === 'ENTRY' ? '#22c55e' : p.status === 'PULLBACK' ? '#f59e0b' : p.status === 'COMPRESSION' ? '#a78bfa' : p.status === 'STRONG' ? '#22c55e' : p.status === 'ALIGNED' ? '#0ea5e9' : p.status === 'PARTIAL' ? '#a855f7' : p.status === 'BUILDING' ? '#f59e0b' : p.status === 'AGAINST' ? '#ef4444' : '#64748b';
       const dl = deLabel(p.de);
       const deHtml = `<span class="me-flow-de" style="color:${dl.color}">DE ${p.de}% ${dl.text}</span>`;
       const volColor = VOL_GRADE_COLOR[p.volGrade] || '#64748b';

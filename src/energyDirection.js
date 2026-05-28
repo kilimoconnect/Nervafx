@@ -46,8 +46,8 @@ function getSession(utcHour) {
  *   MONITORING  → pair just formed, watching M15
  *   PULLBACK   → M15 retraces against flow direction
  *   COMPRESSION → after pullback, M15 range tightens (low |v45|)
- *   READY       → after compression/pullback, momentum returns in flow direction
- *   ENTRY       → strong confirmation: M15 + 3H aligned + impulse
+ *   ENTRY       → after compression/pullback, momentum returns in flow direction (trade now)
+ *   MOVING      → strong confirmation: M15 + 3H aligned + impulse (already moving)
  */
 function detectPhase(prevPhase, dir, v45, v90, spread3h, impulseScore, impulseAligned, deCombo) {
   const flowSign = dir === 'BUY' ? 1 : -1;
@@ -56,19 +56,19 @@ function detectPhase(prevPhase, dir, v45, v90, spread3h, impulseScore, impulseAl
   const h3Dir = spread3h * flowSign;
   const absV45 = Math.abs(v45);
 
-  // ENTRY: strong multi-timeframe confirmation
+  // MOVING: strong multi-timeframe confirmation — price already moving
   if (v45Dir > 0.00008 && h3Dir > 0 && impulseAligned && impulseScore >= 40 && deCombo >= 35) {
+    return 'MOVING';
+  }
+
+  // ENTRY: momentum returning in flow direction after pullback/compression — trade now
+  if ((prevPhase === 'PULLBACK' || prevPhase === 'COMPRESSION') && v45Dir > 0.00005 && h3Dir > 0) {
     return 'ENTRY';
   }
 
-  // READY: momentum returning in flow direction after pullback/compression
-  if ((prevPhase === 'PULLBACK' || prevPhase === 'COMPRESSION') && v45Dir > 0.00005 && h3Dir > 0) {
-    return 'READY';
-  }
-
-  // Also detect READY from fresh 3H push or M15 push after any non-entry phase
+  // Also detect ENTRY from fresh 3H push or M15 push after any non-moving phase
   if (prevPhase !== 'MONITORING' && v45Dir > 0.00010 && absV45 > Math.abs(v90) * 1.05) {
-    return 'READY';
+    return 'ENTRY';
   }
 
   // COMPRESSION: low M15 movement after pullback
@@ -77,16 +77,16 @@ function detectPhase(prevPhase, dir, v45, v90, spread3h, impulseScore, impulseAl
   }
 
   // PULLBACK: M15 moving against flow direction
-  if (v45Dir < -0.00003 && prevPhase !== 'ENTRY') {
+  if (v45Dir < -0.00003 && prevPhase !== 'MOVING') {
     return 'PULLBACK';
   }
 
-  // If we had READY/ENTRY and conditions fade, go back to monitoring
-  if (prevPhase === 'ENTRY' && (v45Dir < 0 || !impulseAligned || impulseScore < 25)) {
+  // If we had ENTRY/MOVING and conditions fade, go back to monitoring
+  if (prevPhase === 'MOVING' && (v45Dir < 0 || !impulseAligned || impulseScore < 25)) {
     return 'MONITORING';
   }
 
-  if (prevPhase === 'READY' && v45Dir < 0.00003) {
+  if (prevPhase === 'ENTRY' && v45Dir < 0.00003) {
     return 'MONITORING';
   }
 

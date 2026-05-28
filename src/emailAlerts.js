@@ -203,7 +203,7 @@ function directionAlertEmail(data) {
       </div>
 
       <div class="section">
-        <p class="sm">Phase cycle: Monitoring &rarr; Pullback &rarr; Compression &rarr; Ready &rarr; Entry. You will be notified when a pair reaches Entry.</p>
+        <p class="sm">Phase cycle: Monitoring &rarr; Pullback &rarr; Compression &rarr; Entry &rarr; Moving. You will be notified when a pair reaches Entry.</p>
       </div>
 
       <p style="text-align:center;margin:24px 0 16px"><a class="cta" href="https://nervafx.com">Open Dashboard</a></p>
