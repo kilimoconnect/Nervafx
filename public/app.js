@@ -728,6 +728,10 @@ function fmtShort(iso) {
 // Replace underscores with spaces for display (e.g. READY_TO_ENTER → READY TO ENTER)
 function clean(s) { return s ? s.replace(/_/g, ' ') : s; }
 
+// Energy direction phase rename: DB may still have old names
+const _PHASE_RENAME = { READY: 'ENTRY', ENTRY: 'MOVING' };
+function mapPhase(p) { return _PHASE_RENAME[p] || p; }
+
 // ── Session-hour timezone helpers ─────────────────────────────────────────────
 
 // Minutes the user's timezone is ahead of UTC right now (DST-aware)
@@ -2790,7 +2794,8 @@ function renderEnergySignals(data) {
       pairsEl.innerHTML = activePairs.map(p => {
         const pairLabel = p.instrument.replace('_', '/');
         const dirCls = p.dir === 'BUY' ? 'buy' : 'sell';
-        const phaseCls = (p.phase || 'monitoring').toLowerCase();
+        const rawPhase = mapPhase(p.phase || 'MONITORING');
+        const phaseCls = rawPhase.toLowerCase();
         const v45 = parseFloat(p.v45) || 0;
         const v90 = parseFloat(p.v90) || 0;
         const de = parseFloat(p.de_combined) || 0;
@@ -2813,7 +2818,7 @@ function renderEnergySignals(data) {
               <span class="es-pair-name">${pairLabel}</span>
               <span class="es-pair-dir ${dirCls}">${p.dir}</span>
             </div>
-            <span class="es-pair-phase ${phaseCls}">${p.phase || 'MONITORING'}</span>
+            <span class="es-pair-phase ${phaseCls}">${rawPhase}</span>
           </div>
           <div class="es-pair-m15">
             <span class="es-m15-state ${m15State}">M15: ${(p.m15_state || 'FLAT')}</span>
@@ -3219,7 +3224,7 @@ function _meSessionExplain(s, label, status) {
       const vol = _volDataCache[p.instrument];
       return {
         pair: p.instrument.replace('_', '/'), dir: p.dir,
-        status: p.phase || 'MONITORING',
+        status: mapPhase(p.phase || 'MONITORING'),
         finalScore, de: Math.round(de * 10) / 10,
         volGrade: vol?.participation_grade || '',
         volRV:  vol ? parseFloat(vol.relative_volume) || 0 : 0,
@@ -3250,7 +3255,7 @@ function _meSessionExplain(s, label, status) {
           finalScore = (0.75 * perfScore) + (0.25 * deCombined);
         }
         return {
-          pair: fp.pair.replace('_', '/'), dir: fp.dir, status: fp.status || 'WAIT',
+          pair: fp.pair.replace('_', '/'), dir: fp.dir, status: mapPhase(fp.status || 'WAIT'),
           finalScore, de: Math.round(deCombined * 10) / 10,
           volGrade: fp.vol_grade || '', volRV: fp.vol_rv || 0,
           volEff: 0, volPers: 0, volScore: 0,
