@@ -131,40 +131,35 @@ async function calculateEnergyDirection() {
     energySessions = fb || [];
   }
 
-  // Scan ALL hourly bars across today's sessions to find the LAST bar that
-  // crossed ≥50. This is the trigger bar — directions are snapshotted from
-  // the strength at that moment and persist until a NEW bar crosses ≥50.
-  let currentEnergy = 0;  // live session-level energy (for display)
-  const allBars = [];     // every hourly bar with energy ≥ threshold
+  // Scan ALL hourly bars across today's sessions.
+  // - currentEnergy = most recent hourly bar's energy (for display)
+  // - triggerBar = any bar that crossed ≥50 (for direction logic)
+  const allBars = [];
+  const thresholdBars = [];
 
   for (const es of energySessions) {
-    const sessEnergy = parseFloat(es.market_energy) || 0;
-
-    // Track current session energy for display
-    if (es.session_name === session && sessEnergy > currentEnergy) {
-      currentEnergy = sessEnergy;
-    }
-
-    // Collect hourly bars that crossed the threshold
     const hourly = es.details?.hourly || [];
     for (const h of hourly) {
       const hEnergy = parseFloat(h.market_energy) || 0;
+      allBars.push({ energy: hEnergy, time: h.time, session: es.session_name });
       if (hEnergy >= ENERGY_THRESHOLD) {
-        allBars.push({ energy: hEnergy, time: h.time, session: es.session_name });
+        thresholdBars.push({ energy: hEnergy, time: h.time, session: es.session_name });
       }
     }
   }
 
-  // Sort by time descending — the LAST bar to cross ≥50 is the trigger
+  // Sort by time descending — most recent first
   allBars.sort((a, b) => new Date(b.time) - new Date(a.time));
-  const triggerBar = allBars[0] || null;
+  thresholdBars.sort((a, b) => new Date(b.time) - new Date(a.time));
 
+  // Current energy = most recent hourly bar (what we display)
+  const currentEnergy = allBars[0]?.energy || 0;
+
+  // Trigger bar = most recent bar that crossed ≥50 (for direction logic)
+  const triggerBar = thresholdBars[0] || null;
   const triggerEnergy = triggerBar ? triggerBar.energy : 0;
   const triggerSession = triggerBar ? triggerBar.session : null;
   const triggerHour = triggerBar ? triggerBar.time : null;
-
-  // If current session didn't have data, use trigger energy for display
-  if (!currentEnergy) currentEnergy = triggerEnergy;
 
   console.log(`[ENERGY_DIR] Current energy: ${currentEnergy} | Trigger bar: ${triggerEnergy} (${triggerSession}${triggerHour ? ' @ ' + triggerHour : ''})`);
 
