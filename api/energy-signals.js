@@ -84,7 +84,10 @@ module.exports = async function handler(req, res) {
     // Sort by time descending (most recent first)
     allBars.sort((a, b) => (b.time || '').localeCompare(a.time || ''));
 
-    // Last bar that crossed threshold
+    // Current energy = most recent bar (for display ring)
+    const currentEnergy = allBars[0]?.energy || 0;
+
+    // Trigger bar = the bar that first crossed 50 (for threshold logic)
     const triggerBar = allBars.find(b => b.energy >= 50);
     const triggerEnergy = triggerBar?.energy || 0;
     const thresholdMet = triggerEnergy >= 50;
@@ -92,7 +95,8 @@ module.exports = async function handler(req, res) {
     res.json({
       currencies: currencies || [],
       pairs: pairs || [],
-      energy: triggerEnergy,
+      energy: currentEnergy,
+      triggerEnergy,
       peakBarTime: triggerBar?.time || null,
       peakBarSession: triggerBar?.session || null,
       thresholdMet,
