@@ -2036,10 +2036,52 @@ function renderFlowPerformance(strengthData, m15Data) {
     return;
   }
 
-  // Filter to only show pairs that exist in energy signal pairs (energy-driven monitoring)
+  // Use Signal Pairs ranking order — same pairs, same sort, FP details
   if (_energySignalsCache?.pairs?.length) {
-    const energyPairSet = new Set(_energySignalsCache.pairs.filter(p => p.active).map(p => p.instrument));
-    scored = scored.filter(fp => energyPairSet.has(fp.instrument));
+    const activePairs = _energySignalsCache.pairs.filter(p => p.active);
+    if (!activePairs.length) {
+      el.innerHTML = '<p class="empty-state">No energy signal pairs matched</p>';
+      return;
+    }
+    // Compute _finalScore on signal pairs (same formula as renderEnergySignals)
+    activePairs.forEach(p => {
+      const v45 = parseFloat(p.v45) || 0;
+      const v90 = parseFloat(p.v90) || 0;
+      const sp3 = parseFloat(p.spread_3h) || 0;
+      const sp6 = parseFloat(p.spread_6h) || 0;
+      const de  = parseFloat(p.de_combined) || 0;
+      const imp = p.impulse_score || 0;
+      const flowSign = p.dir === 'BUY' ? 1 : -1;
+      const impulseAligned = !!p.impulse_aligned;
+      const m15Confirms = Math.sign(v45) === flowSign && Math.abs(v45) >= 0.00008;
+      const h3Confirms  = Math.sign(sp3) === flowSign;
+      const h6Confirms  = Math.sign(sp6) === flowSign;
+      const accelSign = Math.sign(v45 - v90) === flowSign;
+      const m15State = (p.m15_state || 'FLAT').toUpperCase();
+      let perfScore = 0;
+      perfScore += (v45 * flowSign) * 10000 * 3;
+      perfScore += (sp3 * flowSign) * 10000 * 2;
+      perfScore += (sp6 * flowSign) * 10000 * 1;
+      if (impulseAligned && imp >= 40) perfScore += imp * 0.5;
+      else if (impulseAligned)         perfScore += imp * 0.25;
+      else if (imp >= 40)              perfScore -= imp * 0.3;
+      if (m15Confirms && imp >= 40)    perfScore += 20;
+      else if (m15Confirms)            perfScore += 10;
+      if (h3Confirms)  perfScore += 10;
+      if (h6Confirms)  perfScore += 5;
+      if (accelSign)   perfScore += 10;
+      if (m15State === 'EXPANDING' && m15Confirms)                    perfScore += 15;
+      if (m15State === 'EXPANDING' && impulseAligned && imp >= 50)    perfScore += 10;
+      if (m15State === 'REVERSING')                                   perfScore -= 10;
+      if (m15State === 'COMPRESSING' && !m15Confirms)                 perfScore -= 15;
+      p._finalScore = (0.75 * perfScore) + (0.25 * de);
+    });
+    activePairs.sort((a, b) => b._finalScore - a._finalScore);
+
+    // Reorder FP scored to match signal pairs order, keep FP details
+    const fpMap = {};
+    for (const fp of scored) fpMap[fp.instrument] = fp;
+    scored = activePairs.map(p => fpMap[p.instrument]).filter(Boolean);
     if (!scored.length) {
       el.innerHTML = '<p class="empty-state">No energy signal pairs matched</p>';
       return;
