@@ -628,10 +628,9 @@ async function sendSignalAlerts(sb) {
     });
     rankedPairs.sort((a, b) => b._finalScore - a._finalScore);
 
-    // Only ENTRY or MOVING phase pairs qualify for alerts, take top 3
+    // All ENTRY or MOVING phase pairs qualify for alerts (ranked by score)
     const qualifyingPairs = rankedPairs
-      .filter(p => p.phase === 'ENTRY' || p.phase === 'MOVING')
-      .slice(0, 3);
+      .filter(p => p.phase === 'ENTRY' || p.phase === 'MOVING');
 
     // Dedup key: date + instrument. Once sent for a pair today, don't re-send.
     const todayKey = new Date().toISOString().slice(0, 10);

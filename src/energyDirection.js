@@ -56,18 +56,24 @@ function detectPhase(prevPhase, dir, v45, v90, spread3h, impulseScore, impulseAl
   const h3Dir = spread3h * flowSign;
   const absV45 = Math.abs(v45);
 
-  // MOVING: strong multi-timeframe confirmation (already in motion — late entry)
-  if (v45Dir > 0.00008 && h3Dir > 0 && impulseAligned && impulseScore >= 40 && deCombo >= 35) {
+  // MOVING: only reachable FROM ENTRY — strong multi-TF confirmation (already in motion)
+  if (prevPhase === 'ENTRY' && v45Dir > 0.00008 && h3Dir > 0 && impulseAligned && impulseScore >= 40 && deCombo >= 35) {
     return 'MOVING';
   }
 
-  // ENTRY: momentum returning in flow direction after pullback/compression (trade now)
+  // ENTRY: momentum returning in flow direction (trade now)
+  // Can be reached from PULLBACK, COMPRESSION, or directly when conditions are strong
   if ((prevPhase === 'PULLBACK' || prevPhase === 'COMPRESSION') && v45Dir > 0.00005 && h3Dir > 0) {
     return 'ENTRY';
   }
 
-  // Also detect ENTRY from fresh 3H push or M15 push after any non-entry phase
-  if (prevPhase !== 'MONITORING' && v45Dir > 0.00010 && absV45 > Math.abs(v90) * 1.05) {
+  // ENTRY from fresh strong push (any non-ENTRY/MOVING phase)
+  if (prevPhase !== 'ENTRY' && prevPhase !== 'MOVING' && v45Dir > 0.00008 && h3Dir > 0 && impulseAligned && impulseScore >= 40) {
+    return 'ENTRY';
+  }
+
+  // Also detect ENTRY from M15 acceleration after any non-entry phase
+  if (prevPhase !== 'MONITORING' && prevPhase !== 'ENTRY' && prevPhase !== 'MOVING' && v45Dir > 0.00010 && absV45 > Math.abs(v90) * 1.05) {
     return 'ENTRY';
   }
 
