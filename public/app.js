@@ -4630,8 +4630,8 @@ const METRIC_CHART_CONFIG = {
     ],
   },
   de: {
-    field: 'de_score', label: 'Dir Efficiency', title: 'Directional Efficiency',
-    unit: '%', decimals: 0, v2Threshold: 50,
+    field: null, label: 'Dir Efficiency', title: 'Directional Efficiency — Top 5 Pairs',
+    unit: '%', decimals: 0, sessionLevel: true,
     thresholds: [
       { min: 55, color: '#22c55e', label: 'Strong directional' },
       { min: 45, color: '#0ea5e9', label: 'Directional' },
@@ -4639,13 +4639,11 @@ const METRIC_CHART_CONFIG = {
       { min: 0,  color: '#ef4444', label: 'Choppy' },
     ],
     guide: [
-      '<strong>Directional Efficiency (DE)</strong> measures how much of each candle\'s range is directional (body vs wicks). Averaged across all 28 pairs per hour.',
-      '<strong>55+</strong>: Strong directional movement — candles are mostly body, clean institutional flow. Top 22% of hours.',
-      '<strong>45-54</strong>: Directional — market is moving with purpose. Avg movement 44, agreement 55, energy 46. Top half of hours.',
-      '<strong>35-44</strong>: Mixed conditions — some direction but significant wicks and noise.',
-      '<strong>Below 35</strong>: Choppy — high wick-to-body ratio, price is being rejected, indecision dominates.',
-      '<strong>Green bars</strong> indicate DE ≥ 45 — the market is moving directionally with conviction.',
-      'When DE is high alongside high Agreement and Movement, conditions strongly favour trend-following entries.',
+      '<strong>Directional Efficiency (DE)</strong> measures how much of each candle\'s range is directional (body vs wicks).',
+      '<strong>55+</strong>: Strong directional — candles are mostly body, clean institutional flow.',
+      '<strong>45-54</strong>: Directional — market moving with purpose.',
+      '<strong>35-44</strong>: Mixed — some direction but significant wicks and noise.',
+      '<strong>Below 35</strong>: Choppy — price being rejected, indecision dominates.',
     ],
   },
   tradability: {
@@ -4846,6 +4844,22 @@ async function _fetchAndRenderMetricChart(modal, key) {
 async function _fetchAndRenderSessionMetric(modal, key) {
   const cfg = METRIC_CHART_CONFIG[key];
 
+  // DE: ranked top 5 pairs per hour
+  if (key === 'de') {
+    try {
+      const data = await api('/api/de-history?days=5');
+      const deRows = data?.rows || [];
+      if (!deRows.length) {
+        modal.querySelector('.me-modal-body').innerHTML = '<p class="me-empty">No DE data available.</p>';
+        return;
+      }
+      _renderDERankedView(modal.querySelector('.me-modal-body'), deRows, cfg);
+    } catch (e) {
+      modal.querySelector('.me-modal-body').innerHTML = `<p class="me-empty">Failed to load: ${e.message}</p>`;
+    }
+    return;
+  }
+
   try {
     const data = await api('/api/market-energy-history?days=9');
     const rows = Array.isArray(data) ? data : (data.rows || []);
@@ -4857,6 +4871,97 @@ async function _fetchAndRenderSessionMetric(modal, key) {
   } catch (e) {
     modal.querySelector('.me-modal-body').innerHTML = `<p class="me-empty">Failed to load: ${e.message}</p>`;
   }
+}
+
+function _renderDERankedView(container, deRows, cfg) {
+  const tz = (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC');
+
+  // Group by hour: { 'YYYY-MM-DDTHH': [{ instrument, de_combined }] }
+  const byHour = {};
+  for (const r of deRows) {
+    const hourKey = (r.time || '').slice(0, 13); // YYYY-MM-DDTHH
+    if (!byHour[hourKey]) byHour[hourKey] = [];
+    const de = parseFloat(r.de_combined) || 0;
+    if (de > 0) byHour[hourKey].push({ instrument: r.instrument, de });
+  }
+
+  // Sort hours descending (most recent first)
+  const hours = Object.keys(byHour).sort((a, b) => b.localeCompare(a));
+  if (!hours.length) { container.innerHTML = '<p class="me-empty">No DE data.</p>'; return; }
+
+  // Group hours by date
+  const byDate = {};
+  for (const h of hours) {
+    const timeStr = h + ':00:00Z';
+    const d = new Date(timeStr);
+    // Use _groupDate-like logic: ASIA hour 23 belongs to next day
+    const utcH = d.getUTCHours();
+    let dateKey;
+    if (utcH >= 23) {
+      const next = new Date(d.getTime() + 86400000);
+      dateKey = next.toISOString().slice(0, 10);
+    } else {
+      dateKey = d.toISOString().slice(0, 10);
+    }
+    if (!byDate[dateKey]) byDate[dateKey] = [];
+    byDate[dateKey].push(h);
+  }
+
+  const dates = Object.keys(byDate).sort((a, b) => b.localeCompare(a)).slice(0, 5);
+
+  const deColor = v => v >= 55 ? '#22c55e' : v >= 45 ? '#0ea5e9' : v >= 35 ? '#f59e0b' : '#ef4444';
+
+  let html = '';
+  for (const date of dates) {
+    const d = new Date(date + 'T12:00:00Z');
+    const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz });
+    html += `<div style="margin-bottom:20px">
+      <div style="font-size:13px;font-weight:700;color:#e2e8f0;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.06)">${dayLabel}</div>`;
+
+    const dayHours = byDate[date].sort((a, b) => a.localeCompare(b));
+    for (const h of dayHours) {
+      const pairs = byHour[h];
+      if (!pairs.length) continue;
+      // Sort by DE descending, take top 5
+      pairs.sort((a, b) => b.de - a.de);
+      const top5 = pairs.slice(0, 5);
+      const avg = Math.round(pairs.reduce((s, p) => s + p.de, 0) / pairs.length);
+      const avgCol = deColor(avg);
+
+      const localTime = new Intl.DateTimeFormat('en-GB', {
+        timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false,
+      }).format(new Date(h + ':00:00Z'));
+
+      html += `<div style="margin-bottom:12px;padding:10px 12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:8px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <span style="font-size:12px;font-weight:700;color:#94a3b8">${localTime}</span>
+          <span style="font-size:11px;color:${avgCol};font-weight:600">Avg ${avg}%</span>
+        </div>`;
+
+      for (let i = 0; i < top5.length; i++) {
+        const p = top5[i];
+        const col = deColor(p.de);
+        const pct = Math.min(100, Math.round(p.de));
+        const pairLabel = p.instrument.replace('_', '/');
+        html += `<div style="display:flex;align-items:center;gap:8px;padding:3px 0">
+          <span style="font-size:10px;color:#64748b;min-width:16px">#${i + 1}</span>
+          <span style="font-size:11px;font-weight:600;color:#e2e8f0;min-width:62px">${pairLabel}</span>
+          <div style="flex:1;height:5px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden">
+            <div style="width:${pct}%;height:100%;background:${col};border-radius:3px"></div>
+          </div>
+          <span style="font-size:11px;font-weight:700;color:${col};min-width:32px;text-align:right">${Math.round(p.de)}%</span>
+        </div>`;
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+
+  // Guide
+  const guideHtml = cfg.guide.map(g => `<p style="margin:0 0 8px;font-size:12px;color:#94a3b8;line-height:1.6">${g}</p>`).join('');
+  html += `<div style="padding:14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:10px">${guideHtml}</div>`;
+
+  container.innerHTML = html;
 }
 
 function _renderMetricBars(container, rows, key) {
