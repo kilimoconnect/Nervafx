@@ -1291,25 +1291,33 @@ function renderCurrencySignals(data) {
 
 // ─── Currency strength chart ──────────────────────────────────────────────────
 
-// Derive per-currency M15 strength from M15 pair spreads (smooth_45m).
+// Derive per-currency M15 strength from M15 pair spreads.
 // For each pair, base gets +spread, quote gets -spread, then average per currency.
-function _m15CurrencyStrength() {
+// Returns { v45: { USD: 0.001, ... }, v90: { USD: 0.0008, ... } }
+function _m15CurrencyStrengthAll() {
   const spreads = _m15DataCache?.spreads || [];
-  if (!spreads.length) return {};
-  const sums = {}, counts = {};
+  if (!spreads.length) return { v45: {}, v90: {} };
+  const s45 = {}, c45 = {}, s90 = {}, c90 = {};
   for (const s of spreads) {
-    const v = parseFloat(s.smooth_45m) || 0;
+    const v45 = parseFloat(s.smooth_45m) || 0;
+    const v90 = parseFloat(s.smooth_90m) || 0;
     const [base, quote] = s.instrument.split('_');
-    sums[base]   = (sums[base]   || 0) + v;
-    counts[base] = (counts[base] || 0) + 1;
-    sums[quote]   = (sums[quote]   || 0) - v;
-    counts[quote] = (counts[quote] || 0) + 1;
+    s45[base]  = (s45[base]  || 0) + v45;  c45[base]  = (c45[base]  || 0) + 1;
+    s45[quote] = (s45[quote] || 0) - v45;  c45[quote] = (c45[quote] || 0) + 1;
+    s90[base]  = (s90[base]  || 0) + v90;  c90[base]  = (c90[base]  || 0) + 1;
+    s90[quote] = (s90[quote] || 0) - v90;  c90[quote] = (c90[quote] || 0) + 1;
   }
-  const result = {};
-  for (const ccy of Object.keys(sums)) {
-    result[ccy] = counts[ccy] > 0 ? sums[ccy] / counts[ccy] : 0;
+  const r45 = {}, r90 = {};
+  for (const ccy of Object.keys(s45)) {
+    r45[ccy] = c45[ccy] > 0 ? s45[ccy] / c45[ccy] : 0;
+    r90[ccy] = c90[ccy] > 0 ? s90[ccy] / c90[ccy] : 0;
   }
-  return result;
+  return { v45: r45, v90: r90 };
+}
+
+// Convenience: just V45 (backward compat for chart TF toggle etc)
+function _m15CurrencyStrength() {
+  return _m15CurrencyStrengthAll().v45;
 }
 
 function buildChart(data, tf) {
@@ -2861,9 +2869,10 @@ function renderEnergySignals(data) {
   const ccyEl = document.getElementById('es-currencies');
   if (ccyEl) {
     const active = (currencies || []).filter(c => c.active && c.direction !== 'NEUTRAL');
-    const m15Str = _m15CurrencyStrength();
-    // Rank by combined M15+3H+6H performance (absolute strength)
-    const perfScore = c => Math.abs(m15Str[c.currency] || 0) + Math.abs(parseFloat(c.smooth_3h) || 0) + Math.abs(parseFloat(c.smooth_6h) || 0);
+    const m15All = _m15CurrencyStrengthAll();
+    const m15Str = m15All.v45;
+    // Rank by M15 V45 + V90 (current momentum is the primary ranking factor)
+    const perfScore = c => Math.abs(m15All.v45[c.currency] || 0) + Math.abs(m15All.v90[c.currency] || 0);
     const strong = active.filter(c => c.direction === 'STRONG').sort((a,b) => perfScore(b) - perfScore(a));
     const weak   = active.filter(c => c.direction === 'WEAK').sort((a,b) => perfScore(b) - perfScore(a));
 
