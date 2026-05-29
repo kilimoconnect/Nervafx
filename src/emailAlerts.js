@@ -520,17 +520,15 @@ async function sendSignalAlerts(sb) {
     .select('*')
     .order('currency', { ascending: true });
 
-  const { data: eventPairs } = await sb
-    .from('energy_signal_pairs')
-    .select('new_energy_event')
-    .eq('active', true)
-    .eq('new_energy_event', true)
-    .limit(1);
+  // Direction alert triggers when active directions exist.
+  // Dedup by triggered_at hour — one email per energy event.
+  const hasActiveDirections = (currStates || []).some(s => s.active && s.direction !== 'NEUTRAL');
+  const triggerTs = (currStates || []).find(s => s.triggered_at)?.triggered_at || '';
+  const directionKey = `direction_${(triggerTs || '').slice(0, 13)}`; // YYYY-MM-DDTHH
 
-  const hasRecentTrigger = eventPairs && eventPairs.length > 0;
-
-  if (hasRecentTrigger) {
-    {
+  if (hasActiveDirections && triggerTs) {
+    const dirAlreadySent = await wasAlreadySent(sb, directionKey);
+    if (!dirAlreadySent) {
       // Fetch active pairs for the email
       const { data: activePairs } = await sb
         .from('energy_signal_pairs')
@@ -575,6 +573,8 @@ async function sendSignalAlerts(sb) {
         pairs: (activePairs || []).length,
       });
       emailsSent.push('direction');
+    } else {
+      console.log(`[EMAIL] Direction alert already sent for this event (${directionKey}) — skipping`);
     }
   }
 
