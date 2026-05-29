@@ -2861,13 +2861,15 @@ function renderEnergySignals(data) {
   const ccyEl = document.getElementById('es-currencies');
   if (ccyEl) {
     const active = (currencies || []).filter(c => c.active && c.direction !== 'NEUTRAL');
-    const strong = active.filter(c => c.direction === 'STRONG').sort((a,b) => (b.smooth_3h||0) - (a.smooth_3h||0));
-    const weak   = active.filter(c => c.direction === 'WEAK').sort((a,b) => (a.smooth_3h||0) - (b.smooth_3h||0));
+    const m15Str = _m15CurrencyStrength();
+    // Rank by combined M15+3H+6H performance (absolute strength)
+    const perfScore = c => Math.abs(m15Str[c.currency] || 0) + Math.abs(parseFloat(c.smooth_3h) || 0) + Math.abs(parseFloat(c.smooth_6h) || 0);
+    const strong = active.filter(c => c.direction === 'STRONG').sort((a,b) => perfScore(b) - perfScore(a));
+    const weak   = active.filter(c => c.direction === 'WEAK').sort((a,b) => perfScore(b) - perfScore(a));
 
     if (!strong.length && !weak.length) {
       ccyEl.innerHTML = '<div class="es-no-data">No confirmed currency directions. Energy threshold not yet met or no aligned currencies.</div>';
     } else {
-      const m15Str = _m15CurrencyStrength();
       const renderCol = (items, cls, title) => {
         if (!items.length) return '';
         const rows = items.map(c => {
