@@ -3055,7 +3055,7 @@ async function openPairAnalysis(instrument) {
 }
 
 function renderPairAnalysis(data, container) {
-  const { instrument, h1Candles, m15Candles, pair, signal, priceStats } = data;
+  const { instrument, h1Candles, m15Candles, pair, tradeLevels, signalSent, priceStats } = data;
   const isJPY = instrument.includes('JPY');
   const dec = isJPY ? 3 : 5;
   const pipMul = isJPY ? 100 : 10000;
@@ -3095,22 +3095,33 @@ function renderPairAnalysis(data, container) {
       </div>`;
   }
 
-  // ── Trade Levels (from signal or candles) ──
+  // ── Trade Levels (personalized per user, only shown after signal email sent) ──
   let levelsHtml = '';
-  if (signal && signal.entry_price) {
-    const entry = Number(signal.entry_price);
-    const sl    = Number(signal.stop_loss);
-    const tp    = Number(signal.take_profit);
-    const rr    = signal.risk_reward || '—';
+  if (tradeLevels) {
+    const entry = Number(tradeLevels.entry_price);
+    const sl    = Number(tradeLevels.stop_loss);
+    const tp    = Number(tradeLevels.take_profit);
+    const rr    = tradeLevels.risk_reward || '—';
+    const lots  = tradeLevels.lot_size;
+    const risk  = tradeLevels.risk_amount;
     levelsHtml = `
       <div style="margin-bottom:16px;padding:14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:10px">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b;margin-bottom:10px">Trade Levels</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;text-align:center">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b;margin-bottom:10px">Your Trade Levels</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center">
           <div><div class="pa-stat-label">Entry</div><div class="pa-stat-val">${entry.toFixed(dec)}</div></div>
           <div><div class="pa-stat-label">Stop Loss</div><div class="pa-stat-val" style="color:#f87171">${sl.toFixed(dec)}</div></div>
           <div><div class="pa-stat-label">Take Profit</div><div class="pa-stat-val" style="color:#4ade80">${tp.toFixed(dec)}</div></div>
-          <div><div class="pa-stat-label">RR</div><div class="pa-stat-val" style="color:#fbbf24">1:${rr}</div></div>
         </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.04)">
+          <div><div class="pa-stat-label">Risk : Reward</div><div class="pa-stat-val" style="color:#fbbf24">1:${rr}</div></div>
+          ${lots ? `<div><div class="pa-stat-label">Lot Size</div><div class="pa-stat-val" style="color:#60a5fa">${lots}</div></div>` : '<div></div>'}
+          ${risk ? `<div><div class="pa-stat-label">Risk</div><div class="pa-stat-val">$${risk.toFixed(2)}</div></div>` : '<div></div>'}
+        </div>
+      </div>`;
+  } else if (signalSent === false && pair && (pair.phase === 'ENTRY' || pair.phase === 'MOVING')) {
+    levelsHtml = `
+      <div style="margin-bottom:16px;padding:14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:10px;text-align:center">
+        <div style="font-size:11px;color:#64748b">Trade levels will appear here once the signal email is sent for this pair.</div>
       </div>`;
   }
 
@@ -3209,7 +3220,7 @@ function renderPairAnalysis(data, container) {
 
   // ── Chart with TF toggle + Volume ──
   // Store candle data globally so TF toggle can switch without re-fetching
-  window._paCandles = { h1: h1Candles, m15: m15Candles, signal, isJPY };
+  window._paCandles = { h1: h1Candles, m15: m15Candles, tradeLevels, isJPY };
 
   container.innerHTML = `
     ${statsHtml}
@@ -3231,7 +3242,7 @@ function renderPairAnalysis(data, container) {
   `;
 
   // Default: H1 view
-  _paRenderCharts(h1Candles, signal, isJPY);
+  _paRenderCharts(h1Candles, tradeLevels, isJPY);
 }
 
 function _paSwitchTF(tf) {
@@ -3239,14 +3250,14 @@ function _paSwitchTF(tf) {
   if (!d) return;
   document.querySelectorAll('.pa-tf-btn').forEach(b => b.classList.toggle('active', b.dataset.patf === tf));
   const candles = tf === 'm15' ? d.m15 : d.h1;
-  _paRenderCharts(candles, d.signal, d.isJPY);
+  _paRenderCharts(candles, d.tradeLevels, d.isJPY);
 }
 
-function _paRenderCharts(candles, signal, isJPY) {
+function _paRenderCharts(candles, tradeLevels, isJPY) {
   if (!candles || candles.length < 2) return;
   const ctx    = document.getElementById('pa-chart')?.getContext('2d');
   const volCtx = document.getElementById('pa-vol-chart')?.getContext('2d');
-  if (ctx) _renderCandlestickChart(ctx, candles, signal, isJPY);
+  if (ctx) _renderCandlestickChart(ctx, candles, tradeLevels, isJPY);
   if (volCtx) _renderVolumeChart(volCtx, candles);
 }
 
@@ -3301,7 +3312,7 @@ function _renderVolumeChart(ctx, candles) {
   });
 }
 
-function _renderCandlestickChart(ctx, candles, signal, isJPY) {
+function _renderCandlestickChart(ctx, candles, levels, isJPY) {
   if (_paChart) _paChart.destroy();
 
   const dec = isJPY ? 3 : 5;
@@ -3337,22 +3348,22 @@ function _renderCandlestickChart(ctx, candles, signal, isJPY) {
     },
   ];
 
-  // SL/TP/Entry horizontal lines
-  if (signal?.entry_price) {
-    datasets.push({ label: 'Entry', data: candles.map(() => +signal.entry_price), borderColor: '#60a5fa', borderWidth: 1, borderDash: [5, 3], pointRadius: 0, fill: false });
+  // SL/TP/Entry horizontal lines (only if trade levels available)
+  if (levels?.entry_price) {
+    datasets.push({ label: 'Entry', data: candles.map(() => +levels.entry_price), borderColor: '#60a5fa', borderWidth: 1, borderDash: [5, 3], pointRadius: 0, fill: false });
   }
-  if (signal?.stop_loss) {
-    datasets.push({ label: 'SL', data: candles.map(() => +signal.stop_loss), borderColor: '#f87171', borderWidth: 1, borderDash: [5, 3], pointRadius: 0, fill: false });
+  if (levels?.stop_loss) {
+    datasets.push({ label: 'SL', data: candles.map(() => +levels.stop_loss), borderColor: '#f87171', borderWidth: 1, borderDash: [5, 3], pointRadius: 0, fill: false });
   }
-  if (signal?.take_profit) {
-    datasets.push({ label: 'TP', data: candles.map(() => +signal.take_profit), borderColor: '#4ade80', borderWidth: 1, borderDash: [5, 3], pointRadius: 0, fill: false });
+  if (levels?.take_profit) {
+    datasets.push({ label: 'TP', data: candles.map(() => +levels.take_profit), borderColor: '#4ade80', borderWidth: 1, borderDash: [5, 3], pointRadius: 0, fill: false });
   }
 
   // Y-axis bounds with padding
   let allVals = [...highData, ...lowData];
-  if (signal?.entry_price) allVals.push(+signal.entry_price);
-  if (signal?.stop_loss)   allVals.push(+signal.stop_loss);
-  if (signal?.take_profit) allVals.push(+signal.take_profit);
+  if (levels?.entry_price) allVals.push(+levels.entry_price);
+  if (levels?.stop_loss)   allVals.push(+levels.stop_loss);
+  if (levels?.take_profit) allVals.push(+levels.take_profit);
   const yMin = Math.min(...allVals);
   const yMax = Math.max(...allVals);
   const yPad = (yMax - yMin) * 0.1 || 0.001;
