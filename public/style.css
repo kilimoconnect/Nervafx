@@ -7594,6 +7594,24 @@ body::after {
 }
 .es-ccy-val.pos { color: #4ade80; }
 .es-ccy-val.neg { color: #f87171; }
+.es-ccy-hdr {
+  display: flex;
+  align-items: center;
+  padding: 0 0 4px;
+  margin-bottom: 2px;
+}
+.es-ccy-hdr span:first-child { flex: 1; }
+.es-ccy-hdr span:last-child { min-width: 70px; }
+.es-ccy-hdr-lbl {
+  font-size: 9px;
+  font-weight: 600;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  min-width: 36px;
+  text-align: center;
+  margin-right: 10px;
+}
 .es-ccy-event {
   font-size: 9px;
   font-weight: 700;

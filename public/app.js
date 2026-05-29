@@ -2867,11 +2867,14 @@ function renderEnergySignals(data) {
     if (!strong.length && !weak.length) {
       ccyEl.innerHTML = '<div class="es-no-data">No confirmed currency directions. Energy threshold not yet met or no aligned currencies.</div>';
     } else {
+      const m15Str = _m15CurrencyStrength();
       const renderCol = (items, cls, title) => {
         if (!items.length) return '';
         const rows = items.map(c => {
+          const m15 = m15Str[c.currency] || 0;
           const h3 = parseFloat(c.smooth_3h) || 0;
           const h6 = parseFloat(c.smooth_6h) || 0;
+          const m15Cls = m15 > 0 ? 'pos' : m15 < 0 ? 'neg' : '';
           const h3Cls = h3 > 0 ? 'pos' : h3 < 0 ? 'neg' : '';
           const h6Cls = h6 > 0 ? 'pos' : h6 < 0 ? 'neg' : '';
           let eventHtml = '';
@@ -2882,6 +2885,7 @@ function renderEnergySignals(data) {
           return `<div class="es-ccy-row">
             <span class="es-ccy-name">${c.currency}</span>
             <div class="es-ccy-vals">
+              <span class="es-ccy-val ${m15Cls}" title="M15">${(m15*10000).toFixed(1)}</span>
               <span class="es-ccy-val ${h3Cls}" title="3H">${(h3*10000).toFixed(1)}</span>
               <span class="es-ccy-val ${h6Cls}" title="6H">${(h6*10000).toFixed(1)}</span>
               ${eventHtml}
@@ -2890,6 +2894,7 @@ function renderEnergySignals(data) {
         }).join('');
         return `<div class="es-ccy-col ${cls}">
           <div class="es-ccy-col-title">${title}</div>
+          <div class="es-ccy-hdr"><span></span><span class="es-ccy-hdr-lbl">M15</span><span class="es-ccy-hdr-lbl">3H</span><span class="es-ccy-hdr-lbl">6H</span><span></span></div>
           ${rows}
         </div>`;
       };
