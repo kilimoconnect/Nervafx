@@ -226,57 +226,23 @@ function phaseAlertEmail(data) {
   const pairLabel = pair.instrument.replace('_', '/');
   const [baseCcy, quoteCcy] = pair.instrument.split('_');
 
-  // ── M15 Market Driver Analysis ──
-  // Determine which currency is driving the move based on M15 strength
-  const baseM15  = (m15CcyStrength || {})[baseCcy]  || 0;
-  const quoteM15 = (m15CcyStrength || {})[quoteCcy] || 0;
-  const baseStrong  = baseM15 > 0.00005;
-  const baseWeak    = baseM15 < -0.00005;
-  const quoteStrong = quoteM15 > 0.00005;
-  const quoteWeak   = quoteM15 < -0.00005;
-
-  let driverText = '';
-  let driverIcon = '';
-  if (isBuy) {
-    // BUY = base strong and/or quote weak
-    if (baseStrong && quoteWeak) {
-      driverText = `Both currencies driving: ${baseCcy} strength + ${quoteCcy} weakness`;
-      driverIcon = '⚡';
-    } else if (baseStrong && quoteStrong) {
-      driverText = `${baseCcy} leading — both strong but ${baseCcy} outpacing ${quoteCcy}`;
-      driverIcon = '💪';
-    } else if (baseStrong) {
-      driverText = `${baseCcy} strength driving this move`;
-      driverIcon = '💪';
-    } else if (quoteWeak) {
-      driverText = `${quoteCcy} weakness driving this move`;
-      driverIcon = '🔻';
-    } else {
-      driverText = `M15 momentum building — no clear single driver yet`;
-      driverIcon = '⏳';
-    }
-  } else {
-    // SELL = base weak and/or quote strong
-    if (baseWeak && quoteStrong) {
-      driverText = `Both currencies driving: ${baseCcy} weakness + ${quoteCcy} strength`;
-      driverIcon = '⚡';
-    } else if (baseWeak && quoteWeak) {
-      driverText = `${baseCcy} leading — both weak but ${baseCcy} falling faster than ${quoteCcy}`;
-      driverIcon = '🔻';
-    } else if (baseWeak) {
-      driverText = `${baseCcy} weakness driving this move`;
-      driverIcon = '🔻';
-    } else if (quoteStrong) {
-      driverText = `${quoteCcy} strength driving this move`;
-      driverIcon = '💪';
-    } else {
-      driverText = `M15 momentum building — no clear single driver yet`;
-      driverIcon = '⏳';
+  // ── M15 Dominant Currency ──
+  // Find the single currency with the highest absolute M15 strength across all currencies.
+  // That's the one driving the market — user should focus on its pairs.
+  let dominantCcy = null;
+  let dominantVal = 0;
+  let dominantPips = '0.0';
+  let dominantDir = '';
+  for (const [ccy, val] of Object.entries(m15CcyStrength || {})) {
+    if (Math.abs(val) > Math.abs(dominantVal)) {
+      dominantCcy = ccy;
+      dominantVal = val;
     }
   }
-
-  const basePips  = (baseM15  * 10000).toFixed(1);
-  const quotePips = (quoteM15 * 10000).toFixed(1);
+  if (dominantCcy) {
+    dominantPips = (Math.abs(dominantVal) * 10000).toFixed(1);
+    dominantDir = dominantVal > 0 ? 'strong' : 'weak';
+  }
   const isJPY = pair.instrument.includes('JPY');
   const decimals = isJPY ? 3 : 5;
 
@@ -302,24 +268,15 @@ function phaseAlertEmail(data) {
         <div class="dim" style="margin-top:6px">${pair.strong_ccy} strong / ${pair.weak_ccy} weak</div>
       </div>
 
-      <div class="card">
-        <div class="card-hd">M15 Market Driver</div>
+      ${dominantCcy ? `<div class="card">
+        <div class="card-hd">Market Focus</div>
         <div class="card-bd">
-          <div style="padding:12px 14px;font-size:13px;font-weight:600;color:#e2e8f0">
-            ${driverIcon} ${driverText}
+          <div style="padding:14px;text-align:center">
+            <div style="font-size:20px;font-weight:800;color:${dominantVal > 0 ? '#4ade80' : '#f87171'};letter-spacing:-0.3px">${dominantCcy}</div>
+            <div style="font-size:13px;font-weight:600;color:#e2e8f0;margin-top:4px">${dominantCcy} is ${dominantDir} (${dominantPips} pips) — focus on ${dominantCcy} pairs</div>
           </div>
-          <table width="100%" cellpadding="0" cellspacing="0">
-            <tr style="border-top:1px solid rgba(30,41,59,0.6)">
-              <td style="padding:10px 14px" class="sm">${baseCcy} M15</td>
-              <td style="padding:10px 14px;text-align:right;color:${baseM15 >= 0 ? '#4ade80' : '#f87171'};font-weight:700;font-size:13px">${baseM15 >= 0 ? '+' : ''}${basePips} pips</td>
-            </tr>
-            <tr style="border-top:1px solid rgba(30,41,59,0.6)">
-              <td style="padding:10px 14px" class="sm">${quoteCcy} M15</td>
-              <td style="padding:10px 14px;text-align:right;color:${quoteM15 >= 0 ? '#4ade80' : '#f87171'};font-weight:700;font-size:13px">${quoteM15 >= 0 ? '+' : ''}${quotePips} pips</td>
-            </tr>
-          </table>
         </div>
-      </div>
+      </div>` : ''}
 
       <div class="card">
         <div class="card-hd">Trade Levels</div>
