@@ -1227,12 +1227,14 @@ function renderCurrencySignals(data) {
   const timeEl = document.getElementById('cs-sig-time');
   if (timeEl && data.time) timeEl.textContent = 'as of ' + fmtShort(data.time);
 
-  // Compute combined (equal-weight avg 3H+6H+12H) + extract 3H for each currency
+  // Compute combined (equal-weight avg 3H+6H+12H) + extract each TF for each currency
+  const m15Str = _m15CurrencyStrength();
   const scored = currencies.map(c => {
     const v3  = parseFloat(c.smooth_3h  ?? c.normalized_3h)  || 0;
     const v6  = parseFloat(c.smooth_6h  ?? c.normalized_6h)  || 0;
     const v12 = parseFloat(c.smooth_12h ?? c.normalized_12h) || 0;
-    return { cur: c.currency, combined: (v3 + v6 + v12) / 3, h3: v3, h6: v6, h12: v12 };
+    const vm15 = m15Str[c.currency] || 0;
+    return { cur: c.currency, combined: (v3 + v6 + v12) / 3, m15: vm15, h3: v3, h6: v6, h12: v12 };
   });
 
   const strong = scored
@@ -1266,12 +1268,13 @@ function renderCurrencySignals(data) {
       <div class="cs-sig-col ${side}">
         <div class="cs-sig-col-title">${isStrong ? '💪 Strong' : '🔻 Weak'}</div>
         <div class="cs-sig-head">
-          <span>CCY</span><span>Combined</span><span>3H</span><span>6H</span><span>12H</span>
+          <span>CCY</span><span>Combined</span><span class="plan-pro-only">M15</span><span>3H</span><span>6H</span><span>12H</span>
         </div>
         ${list.map(c => `
           <div class="cs-sig-row">
             <span class="cs-sig-cur">${c.cur}</span>
             <span class="cs-sig-combo ${isStrong ? 'pos' : 'neg'}">${c.combined >= 0 ? '+' : ''}${c.combined.toFixed(5)}</span>
+            <span class="cs-sig-val plan-pro-only ${c.m15 >= 0 ? 'pos' : 'neg'}">${c.m15 >= 0 ? '+' : ''}${c.m15.toFixed(5)}</span>
             <span class="cs-sig-val ${c.h3  >= 0 ? 'pos' : 'neg'}">${c.h3  >= 0 ? '+' : ''}${c.h3.toFixed(5)}</span>
             <span class="cs-sig-val ${c.h6  >= 0 ? 'pos' : 'neg'}">${c.h6  >= 0 ? '+' : ''}${c.h6.toFixed(5)}</span>
             <span class="cs-sig-val ${c.h12 >= 0 ? 'pos' : 'neg'}">${c.h12 >= 0 ? '+' : ''}${c.h12.toFixed(5)}</span>
@@ -1284,12 +1287,37 @@ function renderCurrencySignals(data) {
 
 // ─── Currency strength chart ──────────────────────────────────────────────────
 
+// Derive per-currency M15 strength from M15 pair spreads (smooth_45m).
+// For each pair, base gets +spread, quote gets -spread, then average per currency.
+function _m15CurrencyStrength() {
+  const spreads = _m15DataCache?.spreads || [];
+  if (!spreads.length) return {};
+  const sums = {}, counts = {};
+  for (const s of spreads) {
+    const v = parseFloat(s.smooth_45m) || 0;
+    const [base, quote] = s.instrument.split('_');
+    sums[base]   = (sums[base]   || 0) + v;
+    counts[base] = (counts[base] || 0) + 1;
+    sums[quote]   = (sums[quote]   || 0) - v;
+    counts[quote] = (counts[quote] || 0) + 1;
+  }
+  const result = {};
+  for (const ccy of Object.keys(sums)) {
+    result[ccy] = counts[ccy] > 0 ? sums[ccy] / counts[ccy] : 0;
+  }
+  return result;
+}
+
 function buildChart(data, tf) {
   if (!data?.currencies) return;
   strengthData = data;
   document.getElementById('strength-time').textContent = 'As of ' + fmtTime(data.time);
 
+  // M15 currency strength — derived from M15 pair spreads
+  const m15Strength = (tf === 'm15') ? _m15CurrencyStrength() : null;
+
   const getVal = (c, t) => {
+    if (t === 'm15') return m15Strength?.[c.currency] || 0;
     if (t === 'combined') {
       const v3  = parseFloat(c.smooth_3h  ?? c.normalized_3h  ?? 0);
       const v6  = parseFloat(c.smooth_6h  ?? c.normalized_6h  ?? 0);

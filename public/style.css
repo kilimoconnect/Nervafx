@@ -3433,6 +3433,9 @@ section.card:has(.v2-gate-overlay.visible) { min-height: 220px; }
   padding: 6px 0;
 }
 
+/* Hide M15 / pro-only columns for free plan */
+body.plan-free .plan-pro-only { display: none !important; }
+
 /* ─── Market Journal ────────────────────────────────────────────────────────── */
 
 
