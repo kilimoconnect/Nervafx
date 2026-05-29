@@ -3365,13 +3365,7 @@ function _renderCandlestickChart(ctx, candles, signal, isJPY) {
       maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: {
-          display: true, position: 'top',
-          labels: {
-            filter: item => ['Close', 'Entry', 'SL', 'TP'].includes(item.text),
-            color: '#94a3b8', font: { size: 10 }, boxWidth: 12, padding: 8,
-          },
-        },
+        legend: { display: false },
         tooltip: {
           callbacks: {
             label: function(c2) {
