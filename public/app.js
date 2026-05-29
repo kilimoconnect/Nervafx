@@ -3715,6 +3715,15 @@ function _meSessionExplain(s, label, status) {
   else if (mov >= 35) lines.push(`Moderate movement (${mov}) — some pairs are active.`);
   else lines.push(`Low movement (${mov}) — most pairs are quiet.`);
 
+  // Directional Efficiency
+  const _dePairsN = (_energySignalsCache?.pairs || []).filter(p => p.active && p.de_combined);
+  const _deAvgN = _dePairsN.length
+    ? Math.round(_dePairsN.reduce((sum, p) => sum + (parseFloat(p.de_combined) || 0), 0) / _dePairsN.length)
+    : 0;
+  if (_deAvgN >= 30) lines.push(`High directional efficiency (${_deAvgN}%) — clean institutional-quality movement across signal pairs.`);
+  else if (_deAvgN >= 15) lines.push(`Moderate directional efficiency (${_deAvgN}%) — decent movement quality.`);
+  else if (_deAvgN > 0) lines.push(`Low directional efficiency (${_deAvgN}%) — choppy, noisy price action.`);
+
   // Breadth / participation
   if (brd >= 60) lines.push(`Wide breadth (${brd}) — ${activePct}% of pairs participating.`);
   else if (brd >= 35) lines.push(`Moderate breadth (${brd}) — ${activePct}% of pairs active.`);
@@ -4053,8 +4062,15 @@ function _meSessionCard(name, s, status, hourlyRows) {
   const cycleColor = ME_CYCLE_COLOR[cycle] || '#64748b';
   const cycleLabel = ME_CYCLE_LABEL[cycle] || cycle;
 
+  // Compute average DE from active energy signal pairs
+  const _dePairs = (_energySignalsCache?.pairs || []).filter(p => p.active && p.de_combined);
+  const _deAvg = _dePairs.length
+    ? Math.round(_dePairs.reduce((sum, p) => sum + (parseFloat(p.de_combined) || 0), 0) / _dePairs.length)
+    : 0;
+
   const comps = [
     { label: 'Movement',   val: s.movement_score,   norm: s.norm_movement,   prev: s.prev_movement   },
+    { label: 'Dir Efficiency', val: _deAvg,          norm: null,              prev: null               },
     { label: 'Breadth',    val: s.breadth_score,     norm: s.norm_breadth,    prev: s.prev_breadth    },
     { label: 'Agreement',  val: s.agreement_score,   norm: s.norm_agreement,  prev: s.prev_agreement  },
     { label: 'Volatility', val: s.volatility_score,  norm: s.norm_volatility, prev: null              },
