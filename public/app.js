@@ -3005,7 +3005,7 @@ function renderEnergySignals(data) {
             </div>
           </div>
           ${eventHtml}
-          <div style="margin-top:8px;text-align:right"><span class="es-pair-open-btn">View Analysis →</span></div>
+          <div style="margin-top:8px;text-align:right" class="plan-premium-only"><span class="es-pair-open-btn">View Analysis →</span></div>
         </div>`;
       }).join('');
     }
@@ -3031,6 +3031,10 @@ document.getElementById('pair-analysis-overlay')?.addEventListener('click', func
 });
 
 async function openPairAnalysis(instrument) {
+  // Premium only — don't open for free/pro
+  const plan = localStorage.getItem('nfx_plan') || 'free';
+  if (plan !== 'premium') return;
+
   const overlay = document.getElementById('pair-analysis-overlay');
   const body    = document.getElementById('pa-body');
   const hdr     = document.getElementById('pa-pair');
