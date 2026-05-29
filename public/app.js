@@ -6104,6 +6104,12 @@ async function refresh() {
 
     updateHeader(risk);
     renderSession(sessionData);
+    // Set caches BEFORE fetchMarketActivity so ME cards can read energy signal pairs
+    _m15DataCache = m15Data;   // Cache for ME card flow ranking + scanner
+    _volDataCache = _buildVolMap(volData);  // Cache volume analysis: instrument → latest row
+    _fpPrecomputed = fpData?.rows || [];    // Pre-computed flow performance (free plan — all metrics baked in)
+    _energySignalsCache = energySignals;    // Energy signal pairs for Strength Flow + DE engine
+    _scheduleEnergyRefresh(energySignals);  // Auto-retry if empty, periodic background refresh
     applyV2Gate(); // Gate sections before render — will update once fetchMarketActivity resolves
     fetchMarketActivity(); // non-blocking — separate fetch, renders independently + updates V2 gate
     // fetchMomentumSignal(); // disabled — momentum bar removed from header
@@ -6112,11 +6118,6 @@ async function refresh() {
     renderLiveOpportunities(states.states || []);
     renderTopSetups(states.states || []);
     renderSignals(signals, states.states || [], journalData?.entries || []);
-    _m15DataCache = m15Data;   // Cache for ME card flow ranking + scanner
-    _volDataCache = _buildVolMap(volData);  // Cache volume analysis: instrument → latest row
-    _fpPrecomputed = fpData?.rows || [];    // Pre-computed flow performance (free plan — all metrics baked in)
-    _energySignalsCache = energySignals;    // Energy signal pairs for Strength Flow
-    _scheduleEnergyRefresh(energySignals);  // Auto-retry if empty, periodic background refresh
     renderStates(states, m15Data);
     renderSpreads(spreads);
     renderRanking12H(spreads, strength);
