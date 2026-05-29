@@ -3020,6 +3020,8 @@ let _paChart = null; // candlestick chart instance
 function closePairAnalysis() {
   document.getElementById('pair-analysis-overlay').style.display = 'none';
   if (_paChart) { _paChart.destroy(); _paChart = null; }
+  if (_paVolChart) { _paVolChart.destroy(); _paVolChart = null; }
+  window._paCandles = null;
 }
 
 // Close on overlay click (not inner card)
@@ -3205,12 +3207,22 @@ function renderPairAnalysis(data, container) {
       </div>`;
   }
 
-  // ── Chart ──
+  // ── Chart with TF toggle + Volume ──
+  // Store candle data globally so TF toggle can switch without re-fetching
+  window._paCandles = { h1: h1Candles, m15: m15Candles, signal, isJPY };
+
   container.innerHTML = `
     ${statsHtml}
     <div style="margin-bottom:16px;padding:14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:10px">
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b;margin-bottom:10px">Price — 48h H1 Candles</div>
-      <div style="height:280px"><canvas id="pa-chart"></canvas></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b">Price</div>
+        <div style="display:flex;gap:4px">
+          <button class="pa-tf-btn active" data-patf="h1" onclick="_paSwitchTF('h1')">H1 · 48h</button>
+          <button class="pa-tf-btn" data-patf="m15" onclick="_paSwitchTF('m15')">M15 · 6h</button>
+        </div>
+      </div>
+      <div style="height:260px"><canvas id="pa-chart"></canvas></div>
+      <div style="height:80px;margin-top:4px"><canvas id="pa-vol-chart"></canvas></div>
     </div>
     ${levelsHtml}
     ${metricsHtml}
@@ -3218,11 +3230,75 @@ function renderPairAnalysis(data, container) {
     ${signal?.reason ? `<div style="padding:12px 14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:10px;font-size:11px;color:#94a3b8;line-height:1.6">${signal.reason}</div>` : ''}
   `;
 
-  // Render candlestick chart
-  if (h1Candles.length >= 2) {
-    const ctx = document.getElementById('pa-chart')?.getContext('2d');
-    if (ctx) _renderCandlestickChart(ctx, h1Candles, signal, isJPY);
-  }
+  // Default: H1 view
+  _paRenderCharts(h1Candles, signal, isJPY);
+}
+
+function _paSwitchTF(tf) {
+  const d = window._paCandles;
+  if (!d) return;
+  document.querySelectorAll('.pa-tf-btn').forEach(b => b.classList.toggle('active', b.dataset.patf === tf));
+  const candles = tf === 'm15' ? d.m15 : d.h1;
+  _paRenderCharts(candles, d.signal, d.isJPY);
+}
+
+function _paRenderCharts(candles, signal, isJPY) {
+  if (!candles || candles.length < 2) return;
+  const ctx    = document.getElementById('pa-chart')?.getContext('2d');
+  const volCtx = document.getElementById('pa-vol-chart')?.getContext('2d');
+  if (ctx) _renderCandlestickChart(ctx, candles, signal, isJPY);
+  if (volCtx) _renderVolumeChart(volCtx, candles);
+}
+
+let _paVolChart = null;
+
+function _renderVolumeChart(ctx, candles) {
+  if (_paVolChart) _paVolChart.destroy();
+
+  const labels = candles.map(c => {
+    const d = new Date(c.time);
+    return `${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}`;
+  });
+  const volumes = candles.map(c => c.volume || 0);
+  const avgVol  = volumes.reduce((s, v) => s + v, 0) / (volumes.length || 1);
+  const colors  = candles.map((c, i) => {
+    const bull = c.close >= c.open;
+    const high = volumes[i] > avgVol * 1.5;
+    if (bull && high) return 'rgba(34,197,94,0.7)';
+    if (bull)         return 'rgba(34,197,94,0.35)';
+    if (high)         return 'rgba(239,68,68,0.7)';
+    return 'rgba(239,68,68,0.35)';
+  });
+
+  _paVolChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        data: volumes,
+        backgroundColor: colors,
+        borderWidth: 0,
+        borderRadius: 2,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: c => `Vol: ${c.raw.toLocaleString()}` } },
+      },
+      scales: {
+        x: {
+          display: false,
+        },
+        y: {
+          ticks: { color: '#475569', font: { size: 9 }, callback: v => v >= 1000 ? (v/1000).toFixed(0) + 'k' : v },
+          grid: { color: 'rgba(255,255,255,0.03)' },
+        },
+      },
+    },
+  });
 }
 
 function _renderCandlestickChart(ctx, candles, signal, isJPY) {

@@ -3465,6 +3465,22 @@ body.plan-free .plan-pro-only { display: none !important; }
   transition: all 0.15s;
 }
 
+/* Pair analysis TF toggle */
+.pa-tf-btn {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: #64748b;
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.pa-tf-btn:hover { border-color: rgba(59,130,246,0.4); color: #94a3b8; }
+.pa-tf-btn.active { background: #2563eb; border-color: #2563eb; color: #fff; }
+
 /* ─── Market Journal ────────────────────────────────────────────────────────── */
 
 
