@@ -2869,10 +2869,9 @@ function renderEnergySignals(data) {
   const ccyEl = document.getElementById('es-currencies');
   if (ccyEl) {
     const active = (currencies || []).filter(c => c.active && c.direction !== 'NEUTRAL');
-    const m15All = _m15CurrencyStrengthAll();
-    const m15Str = m15All.v45;
-    // Rank by M15 V45 + V90 (current momentum is the primary ranking factor)
-    const perfScore = c => Math.abs(m15All.v45[c.currency] || 0) + Math.abs(m15All.v90[c.currency] || 0);
+    const m15Str = _m15CurrencyStrength();
+    // Rank by |M15| + |3H| + |6H| combined performance
+    const perfScore = c => Math.abs(m15Str[c.currency] || 0) + Math.abs(parseFloat(c.smooth_3h) || 0) + Math.abs(parseFloat(c.smooth_6h) || 0);
     const strong = active.filter(c => c.direction === 'STRONG').sort((a,b) => perfScore(b) - perfScore(a));
     const weak   = active.filter(c => c.direction === 'WEAK').sort((a,b) => perfScore(b) - perfScore(a));
 
