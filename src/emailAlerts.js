@@ -218,12 +218,65 @@ function directionAlertEmail(data) {
 }
 
 function phaseAlertEmail(data) {
-  const { pair, signal } = data;
+  const { pair, signal, m15CcyStrength } = data;
   const isBuy = signal.signal === 'BUY';
   const dirColor = isBuy ? '#4ade80' : '#f87171';
   const dirBg = isBuy ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)';
   const dirBorder = isBuy ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)';
   const pairLabel = pair.instrument.replace('_', '/');
+  const [baseCcy, quoteCcy] = pair.instrument.split('_');
+
+  // ── M15 Market Driver Analysis ──
+  // Determine which currency is driving the move based on M15 strength
+  const baseM15  = (m15CcyStrength || {})[baseCcy]  || 0;
+  const quoteM15 = (m15CcyStrength || {})[quoteCcy] || 0;
+  const baseStrong  = baseM15 > 0.00005;
+  const baseWeak    = baseM15 < -0.00005;
+  const quoteStrong = quoteM15 > 0.00005;
+  const quoteWeak   = quoteM15 < -0.00005;
+
+  let driverText = '';
+  let driverIcon = '';
+  if (isBuy) {
+    // BUY = base strong and/or quote weak
+    if (baseStrong && quoteWeak) {
+      driverText = `Both currencies driving: ${baseCcy} strength + ${quoteCcy} weakness`;
+      driverIcon = '⚡';
+    } else if (baseStrong && quoteStrong) {
+      driverText = `${baseCcy} leading — both strong but ${baseCcy} outpacing ${quoteCcy}`;
+      driverIcon = '💪';
+    } else if (baseStrong) {
+      driverText = `${baseCcy} strength driving this move`;
+      driverIcon = '💪';
+    } else if (quoteWeak) {
+      driverText = `${quoteCcy} weakness driving this move`;
+      driverIcon = '🔻';
+    } else {
+      driverText = `M15 momentum building — no clear single driver yet`;
+      driverIcon = '⏳';
+    }
+  } else {
+    // SELL = base weak and/or quote strong
+    if (baseWeak && quoteStrong) {
+      driverText = `Both currencies driving: ${baseCcy} weakness + ${quoteCcy} strength`;
+      driverIcon = '⚡';
+    } else if (baseWeak && quoteWeak) {
+      driverText = `${baseCcy} leading — both weak but ${baseCcy} falling faster than ${quoteCcy}`;
+      driverIcon = '🔻';
+    } else if (baseWeak) {
+      driverText = `${baseCcy} weakness driving this move`;
+      driverIcon = '🔻';
+    } else if (quoteStrong) {
+      driverText = `${quoteCcy} strength driving this move`;
+      driverIcon = '💪';
+    } else {
+      driverText = `M15 momentum building — no clear single driver yet`;
+      driverIcon = '⏳';
+    }
+  }
+
+  const basePips  = (baseM15  * 10000).toFixed(1);
+  const quotePips = (quoteM15 * 10000).toFixed(1);
   const isJPY = pair.instrument.includes('JPY');
   const decimals = isJPY ? 3 : 5;
 
@@ -247,6 +300,25 @@ function phaseAlertEmail(data) {
       <div style="background:${dirBg};border:1px solid ${dirBorder};border-radius:8px;padding:20px;margin:16px 0;text-align:center">
         <div style="font-size:24px;color:${dirColor};font-weight:800;letter-spacing:-0.3px">${signal.signal} ${pairLabel}</div>
         <div class="dim" style="margin-top:6px">${pair.strong_ccy} strong / ${pair.weak_ccy} weak</div>
+      </div>
+
+      <div class="card">
+        <div class="card-hd">M15 Market Driver</div>
+        <div class="card-bd">
+          <div style="padding:12px 14px;font-size:13px;font-weight:600;color:#e2e8f0">
+            ${driverIcon} ${driverText}
+          </div>
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr style="border-top:1px solid rgba(30,41,59,0.6)">
+              <td style="padding:10px 14px" class="sm">${baseCcy} M15</td>
+              <td style="padding:10px 14px;text-align:right;color:${baseM15 >= 0 ? '#4ade80' : '#f87171'};font-weight:700;font-size:13px">${baseM15 >= 0 ? '+' : ''}${basePips} pips</td>
+            </tr>
+            <tr style="border-top:1px solid rgba(30,41,59,0.6)">
+              <td style="padding:10px 14px" class="sm">${quoteCcy} M15</td>
+              <td style="padding:10px 14px;text-align:right;color:${quoteM15 >= 0 ? '#4ade80' : '#f87171'};font-weight:700;font-size:13px">${quoteM15 >= 0 ? '+' : ''}${quotePips} pips</td>
+            </tr>
+          </table>
+        </div>
       </div>
 
       <div class="card">
@@ -604,6 +676,34 @@ async function sendSignalAlerts(sb) {
 
     const SL_CANDLE_LOOKBACK = 2; // SL from last 2 completed candles
 
+    // Compute M15 per-currency strength from m15_pair_spreads (smooth_45m)
+    // Same derivation as frontend: for each pair, base gets +spread, quote gets -spread
+    let m15CcyStrength = {};
+    try {
+      const { data: m15Spreads } = await sb
+        .from('m15_pair_spreads')
+        .select('instrument, smooth_45m')
+        .order('time', { ascending: false })
+        .limit(28); // latest hour's rows (28 instruments)
+
+      if (m15Spreads?.length) {
+        const sums = {}, counts = {};
+        for (const s of m15Spreads) {
+          const v = parseFloat(s.smooth_45m) || 0;
+          const [base, quote] = s.instrument.split('_');
+          sums[base]   = (sums[base]   || 0) + v;
+          counts[base] = (counts[base] || 0) + 1;
+          sums[quote]   = (sums[quote]   || 0) - v;
+          counts[quote] = (counts[quote] || 0) + 1;
+        }
+        for (const ccy of Object.keys(sums)) {
+          m15CcyStrength[ccy] = counts[ccy] > 0 ? sums[ccy] / counts[ccy] : 0;
+        }
+      }
+    } catch (e) {
+      console.warn('[EMAIL] M15 currency strength fetch failed:', e.message);
+    }
+
     for (const pair of qualifyingPairs) {
       // Dedup key includes the energy event timestamp — won't re-send for same event
       const alertKey = `phase_entry_${pair.instrument}_${currentTriggeredAt}`;
@@ -663,7 +763,7 @@ async function sendSignalAlerts(sb) {
         };
 
         try {
-          const template = phaseAlertEmail({ pair, signal });
+          const template = phaseAlertEmail({ pair, signal, m15CcyStrength });
           await sendEmail(u._sendTo || u.email, template);
           sent++;
         } catch (e) {
