@@ -4847,30 +4847,37 @@ async function _fetchAndRenderSessionMetric(modal, key) {
   // DE: fetch flow_performance, compute hourly avg DE, render same as other engines
   if (key === 'de') {
     try {
-      const data = await api('/api/flow-performance?days=9');
-      const fpRows = data?.rows || [];
-      console.log('[DE] flow_performance rows:', fpRows.length, 'sample:', fpRows[0]);
-      if (!fpRows.length) {
-        modal.querySelector('.me-modal-body').innerHTML = '<p class="me-empty">No flow performance data available.</p>';
+      // Use de-history API — computes DE from raw M15 candles per pair per hour
+      const data = await api('/api/de-history?days=9');
+      const deRows = data?.rows || [];
+      if (!deRows.length) {
+        modal.querySelector('.me-modal-body').innerHTML = '<p class="me-empty">No DE data available.</p>';
         return;
       }
-      // Group by time → compute avg DE per hour
-      const byTime = {};
-      for (const r of fpRows) {
-        const t = (r.time || '').slice(0, 13); // YYYY-MM-DDTHH
-        if (!byTime[t]) byTime[t] = { de: [], session: r.session, time: r.time };
+      // Group by hour → compute avg DE across all pairs
+      const byHour = {};
+      for (const r of deRows) {
+        const hourKey = (r.time || '').slice(0, 13); // YYYY-MM-DDTHH
+        if (!byHour[hourKey]) byHour[hourKey] = { values: [], time: r.time + ':00Z' };
         const de = parseFloat(r.de_combined) || 0;
-        byTime[t].de.push(de);  // include all values (even 0) to show bars
+        if (de > 0) byHour[hourKey].values.push(de);
       }
-      // Build rows compatible with _renderMetricBars
-      const SESSION_MAP = { 'ASIA': 'ASIA', 'LONDON': 'LONDON', 'NEW_YORK': 'NEW_YORK', 'Asia': 'ASIA', 'London': 'LONDON', 'New York': 'NEW_YORK', 'New_York': 'NEW_YORK' };
-      const hourlyRows = Object.values(byTime)
-        .map(g => ({
-          time_utc: g.time,
-          session_name: SESSION_MAP[g.session] || g.session || 'LONDON',
-          de_avg: g.de.length ? Math.round(g.de.reduce((s, v) => s + v, 0) / g.de.length) : 0,
-        }));
-      console.log('[DE] hourly rows:', hourlyRows.length, 'sample:', hourlyRows[0]);
+      function _deGetSession(utcH) {
+        if (utcH >= 23 || utcH < 7) return 'ASIA';
+        if (utcH >= 7 && utcH < 13) return 'LONDON';
+        if (utcH >= 13 && utcH < 21) return 'NEW_YORK';
+        return 'LOW_LIQUIDITY';
+      }
+      const hourlyRows = Object.entries(byHour)
+        .filter(([, g]) => g.values.length > 0)
+        .map(([, g]) => {
+          const h = new Date(g.time).getUTCHours();
+          return {
+            time_utc: g.time,
+            session_name: _deGetSession(h),
+            de_avg: Math.round(g.values.reduce((s, v) => s + v, 0) / g.values.length),
+          };
+        });
       if (!hourlyRows.length) {
         modal.querySelector('.me-modal-body').innerHTML = '<p class="me-empty">No DE data available.</p>';
         return;
