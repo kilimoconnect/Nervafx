@@ -960,19 +960,20 @@ section.card:has(.v2-gate-overlay.visible) { min-height: 220px; }
   height: 200px;
 }
 
-.tf-toggle { margin-left: auto; display: flex; gap: 4px; }
+.tf-toggle { margin-left: auto; display: flex; flex-wrap: wrap; gap: 4px; }
 
 .tf-btn {
   background: var(--bg);
   border: 1px solid var(--border);
   color: var(--text-muted);
   font-family: var(--font);
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 600;
-  padding: 5px 14px;
+  padding: 4px 10px;
   border-radius: 5px;
   cursor: pointer;
   transition: all 0.15s;
+  white-space: nowrap;
 }
 .tf-btn:hover { border-color: var(--accent); color: var(--text); }
 .tf-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
@@ -2986,8 +2987,9 @@ section.card:has(.v2-gate-overlay.visible) { min-height: 220px; }
     gap: 6px;
   }
 
-  /* TF toggle buttons */
-  .tf-toggle { margin-left: 0; }
+  /* TF toggle buttons — full width, wrap into rows on mobile */
+  .tf-toggle { margin-left: 0; width: 100%; justify-content: flex-start; gap: 3px; }
+  .tf-btn { font-size: 10px; padding: 4px 8px; }
 
   /* ── Journal entry header — CSS Grid: two explicit rows, chevron spans both ── */
   .jrn-header {
