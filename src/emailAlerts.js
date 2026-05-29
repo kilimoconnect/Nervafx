@@ -24,7 +24,8 @@
  */
 
 const { sendEmail, baseLayout } = require('./emailService');
-const { buildCandleLookup, getRecentCandles, avgRange } = require('./signals');
+const { buildCandleLookup, getRecentCandles } = require('./signals');
+const { getPipSize, pipValueUSD, calcPositionSize } = require('./risk');
 
 const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York', LOW_LIQUIDITY: 'Off-hours' };
 
@@ -220,6 +221,19 @@ function phaseAlertEmail(data) {
   const dirBg = isBuy ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)';
   const dirBorder = isBuy ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)';
   const pairLabel = pair.instrument.replace('_', '/');
+  const isJPY = pair.instrument.includes('JPY');
+  const decimals = isJPY ? 3 : 5;
+
+  // Position sizing row (only if lot_size available)
+  const posRow = signal.lot_size ? `
+            <tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
+              <td style="padding:10px 14px" class="sm">Lot Size</td>
+              <td style="padding:10px 14px;text-align:right;color:#60a5fa;font-weight:700;font-size:14px">${signal.lot_size} lots</td>
+            </tr>
+            <tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
+              <td style="padding:10px 14px" class="sm">Risk Amount</td>
+              <td style="padding:10px 14px;text-align:right" class="val">$${Number(signal.risk_amount).toFixed(2)}</td>
+            </tr>` : '';
 
   return {
     subject: `Entry Signal — ${signal.signal} ${pairLabel}`,
@@ -238,20 +252,20 @@ function phaseAlertEmail(data) {
           <table width="100%" cellpadding="0" cellspacing="0">
             <tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
               <td style="padding:10px 14px" class="sm">Entry</td>
-              <td style="padding:10px 14px;text-align:right" class="val">${Number(signal.entry_price).toFixed(5)}</td>
+              <td style="padding:10px 14px;text-align:right" class="val">${Number(signal.entry_price).toFixed(decimals)}</td>
             </tr>
             <tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
               <td style="padding:10px 14px" class="sm">Stop Loss</td>
-              <td style="padding:10px 14px;text-align:right;color:#f87171;font-weight:700;font-size:14px">${Number(signal.stop_loss).toFixed(5)}</td>
+              <td style="padding:10px 14px;text-align:right;color:#f87171;font-weight:700;font-size:14px">${Number(signal.stop_loss).toFixed(decimals)}</td>
             </tr>
             <tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
               <td style="padding:10px 14px" class="sm">Take Profit</td>
-              <td style="padding:10px 14px;text-align:right;color:#4ade80;font-weight:700;font-size:14px">${Number(signal.take_profit).toFixed(5)}</td>
+              <td style="padding:10px 14px;text-align:right;color:#4ade80;font-weight:700;font-size:14px">${Number(signal.take_profit).toFixed(decimals)}</td>
             </tr>
-            <tr>
-              <td style="padding:10px 14px;border-top:1px solid #1e293b" class="sm">Risk : Reward</td>
-              <td style="padding:10px 14px;border-top:1px solid #1e293b;text-align:right;color:#fbbf24;font-weight:700;font-size:14px">1:${signal.risk_reward}</td>
-            </tr>
+            <tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
+              <td style="padding:10px 14px" class="sm">Risk : Reward</td>
+              <td style="padding:10px 14px;text-align:right;color:#fbbf24;font-weight:700;font-size:14px">1:${signal.risk_reward}</td>
+            </tr>${posRow}
           </table>
         </div>
       </div>
@@ -578,8 +592,14 @@ async function sendSignalAlerts(sb) {
       console.error('[EMAIL] Failed to build candle lookup:', e.message);
     }
 
-    const RISK_REWARD = 2.0;
-    const SL_CANDLE_LOOKBACK = 6;
+    // Load user profiles for per-user RR, account size, lot sizing
+    const { data: profiles } = await sb
+      .from('profiles')
+      .select('id, account_size, max_daily_risk_pct, max_trades, min_rr');
+    const profileMap = {};
+    for (const p of (profiles || [])) profileMap[p.id] = p;
+
+    const SL_CANDLE_LOOKBACK = 2; // SL from last 2 completed candles
 
     for (const pair of qualifyingPairs) {
       // Dedup key includes the energy event timestamp — won't re-send for same event
@@ -590,47 +610,71 @@ async function sendSignalAlerts(sb) {
         continue;
       }
 
-      // Calculate entry/SL/TP from candles (same logic as signals.js)
+      // Calculate entry/SL from candles
       // Entry = close of most recent completed candle
-      // SL = swing low (BUY) or swing high (SELL) of last 6 candles
-      // TP = entry ± risk × 2 (1:2 RR)
+      // SL = swing low (BUY) or swing high (SELL) of last 2 candles
       const candles = getRecentCandles(candleLookup, pair.instrument, SL_CANDLE_LOOKBACK);
-      let entryPrice = 0, stopLoss = 0, takeProfit = 0, riskReward = '—';
+      let entryPrice = 0, stopLoss = 0;
 
       if (candles.length >= 2) {
         entryPrice = candles[candles.length - 1].close;
         if (pair.dir === 'BUY') {
           stopLoss = Math.min(...candles.map(c => c.low));
-          const risk = entryPrice - stopLoss;
-          if (risk > 0) {
-            takeProfit = entryPrice + (risk * RISK_REWARD);
-            riskReward = RISK_REWARD;
-          }
         } else {
           stopLoss = Math.max(...candles.map(c => c.high));
-          const risk = stopLoss - entryPrice;
-          if (risk > 0) {
-            takeProfit = entryPrice - (risk * RISK_REWARD);
-            riskReward = RISK_REWARD;
-          }
         }
       }
 
-      const signal = {
-        signal: pair.dir,
-        entry_price: entryPrice,
-        stop_loss: stopLoss,
-        take_profit: takeProfit,
-        risk_reward: riskReward,
-      };
+      const stopDistance = Math.abs(entryPrice - stopLoss);
 
-      const template = phaseAlertEmail({ pair, signal });
-      await sendToAll(sb, recipients, template, alertKey, {
+      // Send personalized email per user (each has their own RR, lot size, TP)
+      let sent = 0;
+      for (const u of recipients) {
+        const prof = profileMap[u.id] || {};
+        const userRR        = parseFloat(prof.min_rr) || 2.0;
+        const accountSize   = parseFloat(prof.account_size) || 10000;
+        const maxDailyPct   = parseFloat(prof.max_daily_risk_pct) || 2;
+        const maxTrades     = parseInt(prof.max_trades) || 3;
+        const riskPercent   = (maxDailyPct / 100) / maxTrades; // per-trade risk %
+        const riskAmount    = accountSize * riskPercent;
+
+        // TP based on user's RR setting
+        const dir = pair.dir === 'BUY' ? 1 : -1;
+        const takeProfit = entryPrice > 0 && stopDistance > 0
+          ? entryPrice + (dir * stopDistance * userRR) : 0;
+
+        // Lot size based on user's account size and risk
+        const lotSize = stopDistance > 0 && entryPrice > 0
+          ? calcPositionSize(pair.instrument, riskAmount, stopDistance, entryPrice)
+          : null;
+
+        const signal = {
+          signal: pair.dir,
+          entry_price: entryPrice,
+          stop_loss: stopLoss,
+          take_profit: takeProfit,
+          risk_reward: userRR,
+          lot_size: lotSize,
+          risk_amount: riskAmount,
+          account_size: accountSize,
+        };
+
+        try {
+          const template = phaseAlertEmail({ pair, signal });
+          await sendEmail(u.email, template);
+          sent++;
+        } catch (e) {
+          console.error(`[EMAIL] phase_entry failed for ${u.email}:`, e.message);
+        }
+      }
+
+      await logAlertSent(sb, alertKey, {
         instrument: pair.instrument,
         signal: pair.dir,
         triggered_at: currentTriggeredAt,
         rank: qualifyingPairs.indexOf(pair) + 1,
       });
+      console.log(`[EMAIL] ${alertKey} sent to ${sent}/${recipients.length} users`);
       emailsSent.push(`entry:${pair.instrument}`);
     }
   }

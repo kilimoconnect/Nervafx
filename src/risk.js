@@ -344,4 +344,4 @@ async function printRiskReport(userId = null) {
   console.log(`\nTotal approved: ${approved.length} | Total risk committed: $${totalRisk.toFixed(2)}`);
 }
 
-module.exports = { backfillRiskChecks, checkLatestSignals, printRiskReport };
+module.exports = { backfillRiskChecks, checkLatestSignals, printRiskReport, getPipSize, pipValueUSD, calcPositionSize };
