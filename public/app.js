@@ -4629,6 +4629,22 @@ const METRIC_CHART_CONFIG = {
       '<strong>Above 50</strong>: energized market — conditions favor active trading with clear setups.',
     ],
   },
+  de: {
+    field: null, label: 'Dir Efficiency', title: 'Directional Efficiency',
+    unit: '%', decimals: 0, sessionLevel: true,
+    thresholds: [
+      { min: 30, color: '#22c55e', label: 'Institutional quality' },
+      { min: 15, color: '#f59e0b', label: 'Moderate quality' },
+      { min: 0,  color: '#ef4444', label: 'Choppy / noisy' },
+    ],
+    guide: [
+      '<strong>Directional Efficiency (DE)</strong> = net price movement / total candle travel x 100. Measures how efficiently price converts movement into directional progress.',
+      '<strong>30+</strong>: Institutional-quality movement — price moves cleanly in one direction with minimal wasted travel.',
+      '<strong>15-29</strong>: Moderate efficiency — decent movement quality but some noise and retracement.',
+      '<strong>Below 15</strong>: Choppy, noisy price action — high wick-to-body ratio, indecision, false moves.',
+      'DE is averaged across all active energy signal pairs. It tells you whether the market is moving with conviction or just churning.',
+    ],
+  },
   tradability: {
     field: 'tradability_score', label: 'Tradability Score', title: 'Hourly Session Tradability',
     unit: '', decimals: 0, v2Threshold: 55,
@@ -4826,6 +4842,45 @@ async function _fetchAndRenderMetricChart(modal, key) {
 
 async function _fetchAndRenderSessionMetric(modal, key) {
   const cfg = METRIC_CHART_CONFIG[key];
+
+  // DE: show current average from signal pairs (no hourly history)
+  if (key === 'de') {
+    const body = modal.querySelector('.me-modal-body');
+    const pairs = (_energySignalsCache?.pairs || []).filter(p => p.active && p.de_combined);
+    if (!pairs.length) {
+      body.innerHTML = '<p class="me-empty">No active signal pairs with DE data.</p>';
+      return;
+    }
+    pairs.sort((a, b) => (parseFloat(b.de_combined) || 0) - (parseFloat(a.de_combined) || 0));
+    const avg = Math.round(pairs.reduce((s, p) => s + (parseFloat(p.de_combined) || 0), 0) / pairs.length);
+    const avgColor = avg >= 30 ? '#22c55e' : avg >= 15 ? '#f59e0b' : '#ef4444';
+    const guideHtml = cfg.guide.map(g => `<p style="margin:0 0 8px;font-size:12px;color:#94a3b8;line-height:1.6">${g}</p>`).join('');
+
+    body.innerHTML = `
+      <div style="text-align:center;padding:16px 0 12px">
+        <div style="font-size:32px;font-weight:800;color:${avgColor}">${avg}%</div>
+        <div style="font-size:11px;color:#64748b;margin-top:4px">Average DE across ${pairs.length} active signal pairs</div>
+      </div>
+      <div style="margin:0 0 16px">
+        ${pairs.map(p => {
+          const de = Math.round(parseFloat(p.de_combined) || 0);
+          const col = de >= 30 ? '#22c55e' : de >= 15 ? '#f59e0b' : '#ef4444';
+          const pct = Math.min(100, de);
+          return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+            <span style="font-size:12px;font-weight:600;color:#e2e8f0;min-width:70px">${p.instrument.replace('_','/')}</span>
+            <span style="font-size:10px;color:${p.dir === 'BUY' ? '#4ade80' : '#f87171'};min-width:30px">${p.dir}</span>
+            <div style="flex:1;height:6px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden">
+              <div style="width:${pct}%;height:100%;background:${col};border-radius:3px"></div>
+            </div>
+            <span style="font-size:12px;font-weight:700;color:${col};min-width:32px;text-align:right">${de}%</span>
+          </div>`;
+        }).join('')}
+      </div>
+      <div style="padding:14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:10px">${guideHtml}</div>
+    `;
+    return;
+  }
+
   try {
     const data = await api('/api/market-energy-history?days=9');
     const rows = Array.isArray(data) ? data : (data.rows || []);
@@ -5308,6 +5363,7 @@ function _meMarketCycleBanner(cycle, latestHourly) {
     <span class="me-cycle-banner-label">Market Cycle</span>
     <span class="me-cycle-banner-val" style="--bc:${color}">${label}</span>
     ${engineBtn('energy', 'Energy')}
+    ${engineBtn('de', 'Dir Efficiency')}
     ${engineBtn('tradability', 'Tradability')}
     ${engineBtn('movement', 'Movement')}
     ${engineBtn('breadth', 'Breadth')}
