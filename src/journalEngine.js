@@ -138,12 +138,18 @@ async function collectTrackedPullbacks() {
 }
 
 async function collectM15Impulses() {
-  // Matches getM15AllActive() on the dashboard: all non-FLAT states, |smooth_45m| >= threshold.
-  // The notification bar uses a stricter filter (EXPANDING + TF-aligned) separately.
+  // Only show M15 impulses for active energy signal pairs
   const CS_THRESHOLD = 0.00100;
 
-  // Use latest timestamp that has non-FLAT rows — avoids the top-of-hour window
-  // where the M15 pipeline may have just written fresh FLAT candles for all pairs.
+  // Get active signal pairs to filter
+  const { data: signalPairs } = await supabase
+    .from('energy_signal_pairs')
+    .select('instrument')
+    .eq('active', true);
+  const signalSet = new Set((signalPairs || []).map(p => p.instrument));
+  if (!signalSet.size) return [];
+
+  // Use latest timestamp that has non-FLAT rows
   const { data: latest } = await supabase
     .from('m15_pair_spreads')
     .select('time')
@@ -161,7 +167,7 @@ async function collectM15Impulses() {
     .neq('state', 'FLAT');
 
   return (rows || [])
-    .filter(r => Math.abs(parseFloat(r.smooth_45m) || 0) >= CS_THRESHOLD)
+    .filter(r => signalSet.has(r.instrument) && Math.abs(parseFloat(r.smooth_45m) || 0) >= CS_THRESHOLD)
     .sort((a, b) => Math.abs(parseFloat(b.smooth_45m)) - Math.abs(parseFloat(a.smooth_45m)))
     .map(r => ({
       instrument:  r.instrument,
