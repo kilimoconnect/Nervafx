@@ -3438,9 +3438,10 @@ section.card:has(.v2-gate-overlay.visible) { min-height: 220px; }
 /* Hide M15 / pro-only columns for free plan */
 body.plan-free .plan-pro-only { display: none !important; }
 
-/* Hide premium-only elements for free and pro plans */
+/* Hide premium-only elements for free and pro plans, show for premium */
 body.plan-free .plan-premium-only { display: none !important; }
 body.plan-pro .plan-premium-only { display: none !important; }
+body.plan-premium .plan-premium-only { display: block !important; }
 
 /* ─── Pair Analysis Modal ─────────────────────────────────────────────────── */
 .pa-stat {
