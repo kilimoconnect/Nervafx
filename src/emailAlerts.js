@@ -131,7 +131,7 @@ async function sendToAll(sb, recipients, template, alertType, details) {
 // ── Email Templates ─────────────────────────────────────────────────────────
 
 function directionAlertEmail(data) {
-  const { triggerEnergy, triggerSession, triggerHour, currencies, pairs, removedPairs } = data;
+  const { marketFocusHtml, triggerEnergy, triggerSession, triggerHour, currencies, pairs, removedPairs } = data;
   const sessionLabel = SESS_LABEL[triggerSession] || triggerSession || 'Unknown';
   const timeStr = triggerHour ? new Date(triggerHour).toISOString().replace('T', ' ').slice(0, 16) + ' UTC' : '';
 
@@ -197,6 +197,8 @@ function directionAlertEmail(data) {
       <h2>Direction Alert</h2>
       <p class="sub">${sessionLabel} session &middot; Energy ${Math.round(triggerEnergy)}${timeStr ? ` &middot; ${timeStr}` : ''}</p>
 
+      ${marketFocusHtml || ''}
+
       <div class="card">
         <div class="card-hd">Currencies</div>
         <div class="card-bd">${ccyRows}${droppedHtml}</div>
@@ -218,31 +220,12 @@ function directionAlertEmail(data) {
 }
 
 function phaseAlertEmail(data) {
-  const { pair, signal, m15CcyStrength } = data;
+  const { pair, signal, marketFocusHtml } = data;
   const isBuy = signal.signal === 'BUY';
   const dirColor = isBuy ? '#4ade80' : '#f87171';
   const dirBg = isBuy ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)';
   const dirBorder = isBuy ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)';
   const pairLabel = pair.instrument.replace('_', '/');
-  const [baseCcy, quoteCcy] = pair.instrument.split('_');
-
-  // ── M15 Dominant Currency ──
-  // Find the single currency with the highest absolute M15 strength across all currencies.
-  // That's the one driving the market — user should focus on its pairs.
-  let dominantCcy = null;
-  let dominantVal = 0;
-  let dominantPips = '0.0';
-  let dominantDir = '';
-  for (const [ccy, val] of Object.entries(m15CcyStrength || {})) {
-    if (Math.abs(val) > Math.abs(dominantVal)) {
-      dominantCcy = ccy;
-      dominantVal = val;
-    }
-  }
-  if (dominantCcy) {
-    dominantPips = (Math.abs(dominantVal) * 10000).toFixed(1);
-    dominantDir = dominantVal > 0 ? 'strong' : 'weak';
-  }
   const isJPY = pair.instrument.includes('JPY');
   const decimals = isJPY ? 3 : 5;
 
@@ -268,15 +251,7 @@ function phaseAlertEmail(data) {
         <div class="dim" style="margin-top:6px">${pair.strong_ccy} strong / ${pair.weak_ccy} weak</div>
       </div>
 
-      ${dominantCcy ? `<div class="card">
-        <div class="card-hd">Market Focus</div>
-        <div class="card-bd">
-          <div style="padding:14px;text-align:center">
-            <div style="font-size:20px;font-weight:800;color:${dominantVal > 0 ? '#4ade80' : '#f87171'};letter-spacing:-0.3px">${dominantCcy}</div>
-            <div style="font-size:13px;font-weight:600;color:#e2e8f0;margin-top:4px">${dominantCcy} is ${dominantDir} (${dominantPips} pips) — focus on ${dominantCcy} pairs</div>
-          </div>
-        </div>
-      </div>` : ''}
+      ${marketFocusHtml || ''}
 
       <div class="card">
         <div class="card-hd">Trade Levels</div>
@@ -329,7 +304,7 @@ function phaseAlertEmail(data) {
 }
 
 function dailyDigestEmail(data) {
-  const { date, energyEvents, pairs, currencies, sessions } = data;
+  const { marketFocusHtml, date, energyEvents, pairs, currencies, sessions } = data;
 
   // ── Currency Directions ──
   const strong = (currencies || []).filter(c => c.direction === 'STRONG');
@@ -452,6 +427,7 @@ function dailyDigestEmail(data) {
       <h2>Daily Digest</h2>
       <p class="sub">${date}${phaseText ? ` · ${phaseText}` : ''}</p>
 
+      ${marketFocusHtml || ''}
       ${directionsHtml}
       ${sessionsHtml}
       ${eventsHtml}
@@ -487,6 +463,55 @@ async function sendSignalAlerts(sb) {
   console.log(`[EMAIL] ${recipients.length} subscribed users`);
 
   const emailsSent = [];
+
+  // ── M15 dominant currency — shared by all email types ─────────────────────
+  // Derive per-currency M15 strength from m15_pair_spreads (smooth_45m)
+  let m15CcyStrength = {};
+  let dominantCcy = null, dominantVal = 0;
+  try {
+    const { data: m15Spreads } = await sb
+      .from('m15_pair_spreads')
+      .select('instrument, smooth_45m')
+      .order('time', { ascending: false })
+      .limit(28);
+
+    if (m15Spreads?.length) {
+      const sums = {}, counts = {};
+      for (const s of m15Spreads) {
+        const v = parseFloat(s.smooth_45m) || 0;
+        const [base, quote] = s.instrument.split('_');
+        sums[base]   = (sums[base]   || 0) + v;
+        counts[base] = (counts[base] || 0) + 1;
+        sums[quote]   = (sums[quote]   || 0) - v;
+        counts[quote] = (counts[quote] || 0) + 1;
+      }
+      for (const ccy of Object.keys(sums)) {
+        m15CcyStrength[ccy] = counts[ccy] > 0 ? sums[ccy] / counts[ccy] : 0;
+      }
+      // Find the single currency with highest absolute M15 strength
+      for (const [ccy, val] of Object.entries(m15CcyStrength)) {
+        if (Math.abs(val) > Math.abs(dominantVal)) { dominantCcy = ccy; dominantVal = val; }
+      }
+    }
+  } catch (e) {
+    console.warn('[EMAIL] M15 currency strength fetch failed:', e.message);
+  }
+
+  const dominantPips = dominantCcy ? (Math.abs(dominantVal) * 10000).toFixed(1) : '0';
+  const dominantDir  = dominantVal > 0 ? 'strong' : 'weak';
+  const dominantColor = dominantVal > 0 ? '#4ade80' : '#f87171';
+
+  // Reusable HTML block for Market Focus card
+  const marketFocusHtml = dominantCcy ? `
+    <div class="card">
+      <div class="card-hd">Market Focus</div>
+      <div class="card-bd">
+        <div style="padding:14px;text-align:center">
+          <div style="font-size:20px;font-weight:800;color:${dominantColor};letter-spacing:-0.3px">${dominantCcy}</div>
+          <div style="font-size:13px;font-weight:600;color:#e2e8f0;margin-top:4px">${dominantCcy} is ${dominantDir} (${dominantPips} pips) — focus on ${dominantCcy} pairs</div>
+        </div>
+      </div>
+    </div>` : '';
 
   // ── 1. DIRECTION ALERT — check if energyDirection flagged a new event ─────
   // Check signal pairs for new_energy_event = true (set by the engine in the
@@ -525,6 +550,7 @@ async function sendSignalAlerts(sb) {
 
       const triggerState = (currStates || []).find(s => s.energy_at_trigger);
       const template = directionAlertEmail({
+        marketFocusHtml,
         triggerEnergy: triggerState?.energy_at_trigger || 0,
         triggerSession: triggerState?.trigger_session || '',
         triggerHour: triggerState?.triggered_at || '',
@@ -612,9 +638,8 @@ async function sendSignalAlerts(sb) {
       .filter(p => p.phase === 'ENTRY' || p.phase === 'MOVING')
       .slice(0, 3);
 
-    // Get current energy event's triggered_at to track per-event sends
-    const triggerState = (currStates || []).find(s => s.triggered_at);
-    const currentTriggeredAt = triggerState?.triggered_at || '';
+    // Dedup key: date + instrument. Once sent for a pair today, don't re-send.
+    const todayKey = new Date().toISOString().slice(0, 10);
 
     // Build candle lookup for entry/SL/TP calculation (same as signals.js)
     let candleLookup = {};
@@ -633,37 +658,9 @@ async function sendSignalAlerts(sb) {
 
     const SL_CANDLE_LOOKBACK = 2; // SL from last 2 completed candles
 
-    // Compute M15 per-currency strength from m15_pair_spreads (smooth_45m)
-    // Same derivation as frontend: for each pair, base gets +spread, quote gets -spread
-    let m15CcyStrength = {};
-    try {
-      const { data: m15Spreads } = await sb
-        .from('m15_pair_spreads')
-        .select('instrument, smooth_45m')
-        .order('time', { ascending: false })
-        .limit(28); // latest hour's rows (28 instruments)
-
-      if (m15Spreads?.length) {
-        const sums = {}, counts = {};
-        for (const s of m15Spreads) {
-          const v = parseFloat(s.smooth_45m) || 0;
-          const [base, quote] = s.instrument.split('_');
-          sums[base]   = (sums[base]   || 0) + v;
-          counts[base] = (counts[base] || 0) + 1;
-          sums[quote]   = (sums[quote]   || 0) - v;
-          counts[quote] = (counts[quote] || 0) + 1;
-        }
-        for (const ccy of Object.keys(sums)) {
-          m15CcyStrength[ccy] = counts[ccy] > 0 ? sums[ccy] / counts[ccy] : 0;
-        }
-      }
-    } catch (e) {
-      console.warn('[EMAIL] M15 currency strength fetch failed:', e.message);
-    }
-
     for (const pair of qualifyingPairs) {
-      // Dedup key includes the energy event timestamp — won't re-send for same event
-      const alertKey = `phase_entry_${pair.instrument}_${currentTriggeredAt}`;
+      // Dedup: one signal per pair per day — won't re-send until tomorrow
+      const alertKey = `phase_entry_${pair.instrument}_${todayKey}`;
       const alreadySent = await wasRecentlySent(sb, alertKey, 1440); // 24h window
       if (alreadySent) {
         console.log(`[EMAIL] Phase alert for ${pair.instrument} already sent for this energy event — skipping`);
@@ -720,7 +717,7 @@ async function sendSignalAlerts(sb) {
         };
 
         try {
-          const template = phaseAlertEmail({ pair, signal, m15CcyStrength });
+          const template = phaseAlertEmail({ pair, signal, marketFocusHtml });
           await sendEmail(u._sendTo || u.email, template);
           sent++;
         } catch (e) {
@@ -731,7 +728,7 @@ async function sendSignalAlerts(sb) {
       await logAlertSent(sb, alertKey, {
         instrument: pair.instrument,
         signal: pair.dir,
-        triggered_at: currentTriggeredAt,
+        date: todayKey,
         rank: qualifyingPairs.indexOf(pair) + 1,
       });
       console.log(`[EMAIL] ${alertKey} sent to ${sent}/${recipients.length} users`);
@@ -778,6 +775,7 @@ async function sendSignalAlerts(sb) {
         .eq('active', true);
 
       const template = dailyDigestEmail({
+        marketFocusHtml,
         date: todayStr,
         energyEvents,
         currencies: digestCurrencies || [],
