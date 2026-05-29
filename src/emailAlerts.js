@@ -36,14 +36,12 @@ const ADMIN_UIDS = new Set([
 
 // ── Deduplication ────────────────────────────────────────────────────────────
 
-async function wasRecentlySent(sb, alertType, cooldownMinutes = 120) {
+async function wasAlreadySent(sb, alertKey) {
   try {
-    const since = new Date(Date.now() - cooldownMinutes * 60 * 1000).toISOString();
     const { data } = await sb
       .from('email_alert_log')
       .select('id')
-      .eq('alert_type', alertType)
-      .gte('sent_at', since)
+      .eq('alert_type', alertKey)
       .limit(1);
     return data && data.length > 0;
   } catch (_) {
@@ -656,6 +654,13 @@ async function sendSignalAlerts(sb) {
     const SL_CANDLE_LOOKBACK = 2; // SL from last 2 completed candles
 
     for (const pair of qualifyingPairs) {
+      // One signal email per pair per day
+      const signalKey = `signal_${pair.instrument}_${todayKey}`;
+      if (await wasAlreadySent(sb, signalKey)) {
+        console.log(`[EMAIL] Signal for ${pair.instrument} already sent today — skipping`);
+        continue;
+      }
+
       // Calculate entry/SL from candles
       // Entry = close of most recent completed candle
       // SL = swing low (BUY) or swing high (SELL) of last 2 candles
@@ -714,7 +719,7 @@ async function sendSignalAlerts(sb) {
         }
       }
 
-      await logAlertSent(sb, alertKey, {
+      await logAlertSent(sb, signalKey, {
         instrument: pair.instrument,
         signal: pair.dir,
         date: todayKey,
@@ -729,7 +734,10 @@ async function sendSignalAlerts(sb) {
   const now = new Date();
   const utcHour = now.getUTCHours();
   if (utcHour >= 21 && utcHour <= 23) {
-    {
+    const digestKey = `daily_digest_${now.toISOString().slice(0, 10)}`;
+    if (await wasAlreadySent(sb, digestKey)) {
+      console.log('[EMAIL] Daily digest already sent today — skipping');
+    } else {
       const todayStr = now.toISOString().slice(0, 10);
 
       // Get today's sessions with summary data
@@ -771,7 +779,7 @@ async function sendSignalAlerts(sb) {
         sessions: sessions || [],
       });
 
-      await sendToAll(sb, recipients, template, 'daily_digest', { date: todayStr });
+      await sendToAll(sb, recipients, template, digestKey, { date: todayStr });
       emailsSent.push('digest');
     }
   }
