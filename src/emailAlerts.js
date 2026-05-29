@@ -725,7 +725,7 @@ async function sendSignalAlerts(sb) {
         date: todayKey,
         rank: qualifyingPairs.indexOf(pair) + 1,
       });
-      console.log(`[EMAIL] ${alertKey} sent to ${sent}/${recipients.length} users`);
+      console.log(`[EMAIL] ${signalKey} sent to ${sent}/${recipients.length} users`);
       emailsSent.push(`entry:${pair.instrument}`);
     }
   }
