@@ -102,19 +102,26 @@ async function collectPairRankings() {
 }
 
 async function collectSignals() {
-  // Signals written in the last 90 minutes (captures this cycle's output)
-  const since = new Date(Date.now() - 90 * 60 * 1000).toISOString();
-  const { data: rows } = await supabase
-    .from('trade_signals')
-    .select('instrument, signal, direction, confidence, reason, time')
-    .gte('time', since)
-    .order('time', { ascending: false });
+  // Source from energy_signal_pairs (same as Signal Pairs card on dashboard)
+  const { data: pairs } = await supabase
+    .from('energy_signal_pairs')
+    .select('instrument, dir, phase, strong_ccy, weak_ccy, de_combined, impulse_score, impulse_aligned, spread_3h, v45')
+    .eq('active', true);
 
-  const all = rows || [];
+  const all = (pairs || []).map(p => ({
+    instrument: p.instrument,
+    signal: (p.phase === 'ENTRY' || p.phase === 'MOVING') ? p.dir : 'WAIT',
+    direction: p.dir === 'BUY' ? 'LONG' : 'SHORT',
+    confidence: Math.round(parseFloat(p.de_combined) || 0),
+    reason: `${p.dir} ${p.instrument.replace('_','/')}: ${p.strong_ccy}↑ ${p.weak_ccy}↓ phase ${p.phase}. DE:${Math.round(p.de_combined||0)} imp:${p.impulse_score||0}${p.impulse_aligned?'✓':''}`,
+    phase: p.phase,
+    entry_price: null, stop_loss: null, take_profit: null, position_size: null,
+  }));
+
   return {
     entered:   all.filter(s => s.signal === 'BUY' || s.signal === 'SELL'),
     waiting:   all.filter(s => s.signal === 'WAIT'),
-    no_trade:  all.filter(s => s.signal === 'NO_TRADE'),
+    no_trade:  [],
   };
 }
 
@@ -441,9 +448,9 @@ async function writeJournalEntry() {
 
   // Signals summary for storage
   const signals_summary = {
-    entered:   signals.entered.map(s => ({ instrument: s.instrument, signal: s.signal, confidence: s.confidence, reason: s.reason })),
-    waiting:   signals.waiting.map(s => ({ instrument: s.instrument, confidence: s.confidence })),
-    no_trade:  signals.no_trade.map(s => ({ instrument: s.instrument })),
+    entered:   signals.entered.map(s => ({ instrument: s.instrument, signal: s.signal, confidence: s.confidence, reason: s.reason, phase: s.phase })),
+    waiting:   signals.waiting.map(s => ({ instrument: s.instrument, confidence: s.confidence, phase: s.phase })),
+    no_trade:  [],
   };
 
   // Fetch market energy for summary
