@@ -3228,65 +3228,94 @@ function renderPairAnalysis(data, container) {
 function _renderCandlestickChart(ctx, candles, signal, isJPY) {
   if (_paChart) _paChart.destroy();
 
+  const dec = isJPY ? 3 : 5;
   const labels = candles.map(c => {
     const d = new Date(c.time);
     return `${String(d.getUTCMonth()+1).padStart(2,'0')}/${String(d.getUTCDate()).padStart(2,'0')} ${String(d.getUTCHours()).padStart(2,'0')}:00`;
   });
 
-  // Build OHLC as floating bars (low→high for wicks, open→close for bodies)
-  const bodyData = candles.map(c => {
-    const bull = c.close >= c.open;
-    return [bull ? c.open : c.close, bull ? c.close : c.open];
-  });
-  const wickData = candles.map(c => [c.low, c.high]);
-  const bodyColors = candles.map(c => c.close >= c.open ? 'rgba(34,197,94,0.85)' : 'rgba(239,68,68,0.85)');
-  const wickColors = candles.map(c => c.close >= c.open ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)');
+  // Line chart with high/low band + colored close line
+  const closeData = candles.map(c => c.close);
+  const highData  = candles.map(c => c.high);
+  const lowData   = candles.map(c => c.low);
+  const pointColors = candles.map(c => c.close >= c.open ? '#22c55e' : '#ef4444');
 
   const datasets = [
-    { label: 'Body', data: bodyData, backgroundColor: bodyColors, borderColor: bodyColors, borderWidth: 1, borderRadius: 1, barPercentage: 0.6 },
-    { label: 'Wick', data: wickData, backgroundColor: wickColors, borderColor: wickColors, borderWidth: 1, barPercentage: 0.1 },
+    {
+      label: 'High', data: highData, borderColor: 'transparent',
+      backgroundColor: 'rgba(148,163,184,0.06)', pointRadius: 0,
+      fill: '+1', tension: 0.1,
+    },
+    {
+      label: 'Low', data: lowData, borderColor: 'transparent',
+      backgroundColor: 'transparent', pointRadius: 0, fill: false, tension: 0.1,
+    },
+    {
+      label: 'Close', data: closeData, borderColor: '#60a5fa', borderWidth: 2,
+      pointRadius: 3, pointBackgroundColor: pointColors, pointBorderColor: pointColors,
+      pointBorderWidth: 0, fill: false, tension: 0.15,
+      segment: { borderColor: c2 => {
+        const i = c2.p0DataIndex;
+        return candles[i+1] && candles[i+1].close >= candles[i].close ? '#22c55e' : '#ef4444';
+      }},
+    },
   ];
 
-  // Add SL/TP/Entry as horizontal line datasets
+  // SL/TP/Entry horizontal lines
   if (signal?.entry_price) {
-    const val = +signal.entry_price;
-    datasets.push({ label: 'Entry', data: candles.map(() => val), type: 'line', pointRadius: 0, borderColor: '#60a5fa', borderWidth: 1, borderDash: [4, 4], fill: false, order: -1 });
+    datasets.push({ label: 'Entry', data: candles.map(() => +signal.entry_price), borderColor: '#60a5fa', borderWidth: 1, borderDash: [5, 3], pointRadius: 0, fill: false });
   }
   if (signal?.stop_loss) {
-    const val = +signal.stop_loss;
-    datasets.push({ label: 'SL', data: candles.map(() => val), type: 'line', pointRadius: 0, borderColor: '#f87171', borderWidth: 1, borderDash: [4, 4], fill: false, order: -1 });
+    datasets.push({ label: 'SL', data: candles.map(() => +signal.stop_loss), borderColor: '#f87171', borderWidth: 1, borderDash: [5, 3], pointRadius: 0, fill: false });
   }
   if (signal?.take_profit) {
-    const val = +signal.take_profit;
-    datasets.push({ label: 'TP', data: candles.map(() => val), type: 'line', pointRadius: 0, borderColor: '#4ade80', borderWidth: 1, borderDash: [4, 4], fill: false, order: -1 });
+    datasets.push({ label: 'TP', data: candles.map(() => +signal.take_profit), borderColor: '#4ade80', borderWidth: 1, borderDash: [5, 3], pointRadius: 0, fill: false });
   }
 
+  // Y-axis bounds with padding
+  let allVals = [...highData, ...lowData];
+  if (signal?.entry_price) allVals.push(+signal.entry_price);
+  if (signal?.stop_loss)   allVals.push(+signal.stop_loss);
+  if (signal?.take_profit) allVals.push(+signal.take_profit);
+  const yMin = Math.min(...allVals);
+  const yMax = Math.max(...allVals);
+  const yPad = (yMax - yMin) * 0.1 || 0.001;
+
   _paChart = new Chart(ctx, {
-    type: 'bar',
+    type: 'line',
     data: { labels, datasets },
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: { display: false },
+        legend: {
+          display: true, position: 'top',
+          labels: {
+            filter: item => ['Close', 'Entry', 'SL', 'TP'].includes(item.text),
+            color: '#94a3b8', font: { size: 10 }, boxWidth: 12, padding: 8,
+          },
+        },
         tooltip: {
           callbacks: {
-            label: function(ctx) {
-              const c = candles[ctx.dataIndex];
-              return ctx.datasetIndex === 0
-                ? `O:${c.open.toFixed(isJPY?3:5)} H:${c.high.toFixed(isJPY?3:5)} L:${c.low.toFixed(isJPY?3:5)} C:${c.close.toFixed(isJPY?3:5)}`
-                : '';
+            label: function(c2) {
+              if (c2.dataset.label === 'High' || c2.dataset.label === 'Low') return null;
+              const c = candles[c2.dataIndex];
+              if (c2.dataset.label === 'Close') {
+                return `O:${c.open.toFixed(dec)} H:${c.high.toFixed(dec)} L:${c.low.toFixed(dec)} C:${c.close.toFixed(dec)}`;
+              }
+              return `${c2.dataset.label}: ${c2.raw.toFixed(dec)}`;
             }
           }
         },
       },
       scales: {
         x: {
-          stacked: true,
           ticks: { color: '#64748b', font: { size: 9 }, maxRotation: 45, autoSkip: true, maxTicksLimit: 12 },
           grid: { color: 'rgba(255,255,255,0.03)' },
         },
         y: {
+          min: yMin - yPad, max: yMax + yPad,
           ticks: { color: '#64748b', font: { size: 10 }, callback: v => v.toFixed(isJPY ? 2 : 4) },
           grid: { color: 'rgba(255,255,255,0.04)' },
         },
