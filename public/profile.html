@@ -407,6 +407,14 @@
       <div class="section-label">Email Notifications</div>
       <div class="pcard" id="card-email">
         <div class="field">
+          <div class="field-label">Notification Email <span class="field-hint">Leave empty to use your registered email</span></div>
+          <div class="input-wrap">
+            <input id="notification-email" type="email" placeholder="alerts@example.com" autocomplete="email" />
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:6px">Signals, digests, and all NervaFX notifications will be sent to this address instead of your account email.</div>
+        </div>
+        <div class="divider"></div>
+        <div class="field">
           <label style="display:flex;align-items:center;gap:12px;cursor:pointer">
             <input type="checkbox" id="pref-signal-alerts" checked style="width:18px;height:18px;accent-color:#3b82f6;cursor:pointer">
             <div>
@@ -745,6 +753,7 @@
       try {
         const res  = await fetch('/api/email-preferences', { headers: { 'Authorization': 'Bearer ' + token } });
         const data = await res.json();
+        if (data.notification_email)            document.getElementById('notification-email').value     = data.notification_email;
         if (data.signal_alerts !== undefined)   document.getElementById('pref-signal-alerts').checked   = data.signal_alerts;
         if (data.daily_digest !== undefined)    document.getElementById('pref-daily-digest').checked    = data.daily_digest;
         if (data.upgrade_prompts !== undefined) document.getElementById('pref-upgrade-prompts').checked = data.upgrade_prompts;
@@ -759,9 +768,10 @@
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
           body: JSON.stringify({
-            signal_alerts:   document.getElementById('pref-signal-alerts').checked,
-            daily_digest:    document.getElementById('pref-daily-digest').checked,
-            upgrade_prompts: document.getElementById('pref-upgrade-prompts').checked,
+            notification_email: document.getElementById('notification-email').value.trim(),
+            signal_alerts:      document.getElementById('pref-signal-alerts').checked,
+            daily_digest:       document.getElementById('pref-daily-digest').checked,
+            upgrade_prompts:    document.getElementById('pref-upgrade-prompts').checked,
           }),
         });
         const data = await res.json();

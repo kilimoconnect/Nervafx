@@ -59,6 +59,12 @@ module.exports = async function handler(req, res) {
       for (const key of allowed) {
         if (req.body[key] !== undefined) updates[key] = !!req.body[key];
       }
+      // Notification email — optional override for where alerts are sent
+      if (req.body.notification_email !== undefined) {
+        const raw = (req.body.notification_email || '').trim();
+        // Allow empty string (clear override → use registered email)
+        updates.notification_email = raw || null;
+      }
 
       const { data, error } = await sb
         .from('email_preferences')

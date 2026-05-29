@@ -81,10 +81,10 @@ async function getSubscribedUsers(sb) {
   const subMap = {};
   for (const s of (subs || [])) subMap[s.user_id] = s;
 
-  // Fetch email preferences
+  // Fetch email preferences (including notification_email override)
   const { data: prefs } = await sb
     .from('email_preferences')
-    .select('user_id, signal_alerts, unsubscribed');
+    .select('user_id, signal_alerts, unsubscribed, notification_email');
 
   const prefMap = {};
   for (const p of (prefs || [])) prefMap[p.user_id] = p;
@@ -106,6 +106,9 @@ async function getSubscribedUsers(sb) {
     const p = prefMap[u.id];
     if (p?.unsubscribed) return false;
     if (p?.signal_alerts === false) return false;
+
+    // Use notification_email if set, otherwise registered email
+    u._sendTo = p?.notification_email || u.email;
     return true;
   });
 }
@@ -114,10 +117,10 @@ async function sendToAll(sb, recipients, template, alertType, details) {
   let sent = 0;
   for (const u of recipients) {
     try {
-      await sendEmail(u.email, template);
+      await sendEmail(u._sendTo || u.email, template);
       sent++;
     } catch (e) {
-      console.error(`[EMAIL] ${alertType} failed for ${u.email}:`, e.message);
+      console.error(`[EMAIL] ${alertType} failed for ${u._sendTo || u.email}:`, e.message);
     }
   }
   await logAlertSent(sb, alertType, details);
@@ -661,10 +664,10 @@ async function sendSignalAlerts(sb) {
 
         try {
           const template = phaseAlertEmail({ pair, signal });
-          await sendEmail(u.email, template);
+          await sendEmail(u._sendTo || u.email, template);
           sent++;
         } catch (e) {
-          console.error(`[EMAIL] phase_entry failed for ${u.email}:`, e.message);
+          console.error(`[EMAIL] phase_entry failed for ${u._sendTo || u.email}:`, e.message);
         }
       }
 
