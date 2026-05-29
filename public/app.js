@@ -3238,7 +3238,6 @@ function renderPairAnalysis(data, container) {
     ${levelsHtml}
     ${metricsHtml}
     ${narrativeHtml}
-    ${signal?.reason ? `<div style="padding:12px 14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:10px;font-size:11px;color:#94a3b8;line-height:1.6">${signal.reason}</div>` : ''}
   `;
 
   // Default: H1 view
