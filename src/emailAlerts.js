@@ -24,6 +24,7 @@
  */
 
 const { sendEmail, baseLayout } = require('./emailService');
+const { buildCandleLookup, getRecentCandles, avgRange } = require('./signals');
 
 const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York', LOW_LIQUIDITY: 'Off-hours' };
 
@@ -569,6 +570,17 @@ async function sendSignalAlerts(sb) {
     const triggerState = (currStates || []).find(s => s.triggered_at);
     const currentTriggeredAt = triggerState?.triggered_at || '';
 
+    // Build candle lookup for entry/SL/TP calculation (same as signals.js)
+    let candleLookup = {};
+    try {
+      candleLookup = await buildCandleLookup();
+    } catch (e) {
+      console.error('[EMAIL] Failed to build candle lookup:', e.message);
+    }
+
+    const RISK_REWARD = 2.0;
+    const SL_CANDLE_LOOKBACK = 6;
+
     for (const pair of qualifyingPairs) {
       // Dedup key includes the energy event timestamp — won't re-send for same event
       const alertKey = `phase_entry_${pair.instrument}_${currentTriggeredAt}`;
@@ -578,23 +590,38 @@ async function sendSignalAlerts(sb) {
         continue;
       }
 
-      // Get trade signal for entry/SL/TP levels (if available)
-      const { data: sigRows } = await sb
-        .from('trade_signals')
-        .select('*')
-        .eq('instrument', pair.instrument)
-        .in('signal', ['BUY', 'SELL'])
-        .order('time', { ascending: false })
-        .limit(1);
+      // Calculate entry/SL/TP from candles (same logic as signals.js)
+      // Entry = close of most recent completed candle
+      // SL = swing low (BUY) or swing high (SELL) of last 6 candles
+      // TP = entry ± risk × 2 (1:2 RR)
+      const candles = getRecentCandles(candleLookup, pair.instrument, SL_CANDLE_LOOKBACK);
+      let entryPrice = 0, stopLoss = 0, takeProfit = 0, riskReward = '—';
 
-      // Build signal object — use pair.dir as authoritative direction
-      const sig = sigRows?.[0] || {};
+      if (candles.length >= 2) {
+        entryPrice = candles[candles.length - 1].close;
+        if (pair.dir === 'BUY') {
+          stopLoss = Math.min(...candles.map(c => c.low));
+          const risk = entryPrice - stopLoss;
+          if (risk > 0) {
+            takeProfit = entryPrice + (risk * RISK_REWARD);
+            riskReward = RISK_REWARD;
+          }
+        } else {
+          stopLoss = Math.max(...candles.map(c => c.high));
+          const risk = stopLoss - entryPrice;
+          if (risk > 0) {
+            takeProfit = entryPrice - (risk * RISK_REWARD);
+            riskReward = RISK_REWARD;
+          }
+        }
+      }
+
       const signal = {
         signal: pair.dir,
-        entry_price: sig.entry_price || 0,
-        stop_loss: sig.stop_loss || 0,
-        take_profit: sig.take_profit || 0,
-        risk_reward: sig.risk_reward || '—',
+        entry_price: entryPrice,
+        stop_loss: stopLoss,
+        take_profit: takeProfit,
+        risk_reward: riskReward,
       };
 
       const template = phaseAlertEmail({ pair, signal });

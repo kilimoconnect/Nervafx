@@ -293,4 +293,4 @@ async function printLatestSignals() {
   console.log(`\n=== NO TRADE: ${sorted.filter(r => r.signal === 'NO_TRADE').length} pairs ===`);
 }
 
-module.exports = { calculateLatestSignals, backfillSignals, printLatestSignals, buildSignalFromEnergy, getRecentCandles, avgRange };
+module.exports = { calculateLatestSignals, backfillSignals, printLatestSignals, buildSignalFromEnergy, buildCandleLookup, getRecentCandles, avgRange };
