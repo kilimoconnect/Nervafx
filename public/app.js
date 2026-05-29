@@ -4849,6 +4849,7 @@ async function _fetchAndRenderSessionMetric(modal, key) {
     try {
       const data = await api('/api/flow-performance?days=9');
       const fpRows = data?.rows || [];
+      console.log('[DE] flow_performance rows:', fpRows.length, 'sample:', fpRows[0]);
       if (!fpRows.length) {
         modal.querySelector('.me-modal-body').innerHTML = '<p class="me-empty">No flow performance data available.</p>';
         return;
@@ -4859,17 +4860,17 @@ async function _fetchAndRenderSessionMetric(modal, key) {
         const t = (r.time || '').slice(0, 13); // YYYY-MM-DDTHH
         if (!byTime[t]) byTime[t] = { de: [], session: r.session, time: r.time };
         const de = parseFloat(r.de_combined) || 0;
-        if (de > 0) byTime[t].de.push(de);
+        byTime[t].de.push(de);  // include all values (even 0) to show bars
       }
       // Build rows compatible with _renderMetricBars
       const SESSION_MAP = { 'ASIA': 'ASIA', 'LONDON': 'LONDON', 'NEW_YORK': 'NEW_YORK', 'Asia': 'ASIA', 'London': 'LONDON', 'New York': 'NEW_YORK', 'New_York': 'NEW_YORK' };
       const hourlyRows = Object.values(byTime)
-        .filter(g => g.de.length > 0)
         .map(g => ({
           time_utc: g.time,
           session_name: SESSION_MAP[g.session] || g.session || 'LONDON',
-          de_avg: Math.round(g.de.reduce((s, v) => s + v, 0) / g.de.length),
+          de_avg: g.de.length ? Math.round(g.de.reduce((s, v) => s + v, 0) / g.de.length) : 0,
         }));
+      console.log('[DE] hourly rows:', hourlyRows.length, 'sample:', hourlyRows[0]);
       if (!hourlyRows.length) {
         modal.querySelector('.me-modal-body').innerHTML = '<p class="me-empty">No DE data available.</p>';
         return;
