@@ -510,44 +510,101 @@ async function sendSignalAlerts(sb) {
     }
   }
 
-  // ── 2. PHASE ALERT — any pair in ENTRY or MOVING phase with BUY/SELL signal
-  const { data: entryPairs } = await sb
+  // ── 2. PHASE ALERT — top 3 Signal Pairs in ENTRY/MOVING phase ──────────────
+  // Source: energy_signal_pairs only (same data as the dashboard Signal Pairs card).
+  // Direction comes from the pair's `dir` column — NOT from trade_signals.
+  // Ranking: same client-side formula as the dashboard (perfScore + DE → finalScore).
+  // Limit: max 3 alerts per energy event. Once sent for a pair in this energy
+  // event (same triggered_at), it won't re-send until a new energy event occurs.
+  const { data: allActivePairs } = await sb
     .from('energy_signal_pairs')
     .select('*')
-    .eq('active', true)
-    .in('phase', ['ENTRY', 'MOVING']);
+    .eq('active', true);
 
-  if (entryPairs?.length) {
-    // Check for entry signals in trade_signals
-    const { data: entrySignals } = await sb
-      .from('trade_signals')
-      .select('*')
-      .in('signal', ['BUY', 'SELL'])
-      .in('instrument', entryPairs.map(p => p.instrument))
-      .order('time', { ascending: false })
-      .limit(entryPairs.length);
+  if (allActivePairs?.length) {
+    // Rank pairs using the same scoring formula as the dashboard
+    const rankedPairs = allActivePairs.map(p => {
+      const v45 = parseFloat(p.v45) || 0;
+      const v90 = parseFloat(p.v90) || 0;
+      const sp3 = parseFloat(p.spread_3h) || 0;
+      const sp6 = parseFloat(p.spread_6h) || 0;
+      const de  = parseFloat(p.de_combined) || 0;
+      const imp = p.impulse_score || 0;
+      const flowSign = p.dir === 'BUY' ? 1 : -1;
+      const impulseAligned = !!p.impulse_aligned;
+      const m15Confirms = Math.sign(v45) === flowSign && Math.abs(v45) >= 0.00008;
+      const h3Confirms  = Math.sign(sp3) === flowSign;
+      const h6Confirms  = Math.sign(sp6) === flowSign;
+      const accelSign = Math.sign(v45 - v90) === flowSign;
+      const m15State = (p.m15_state || 'FLAT').toUpperCase();
 
-    if (entrySignals?.length) {
-      // Deduplicate: one alert per pair per cooldown
-      for (const sig of entrySignals) {
-        const alertKey = `phase_entry_${sig.instrument}`;
-        const alreadySent = await wasRecentlySent(sb, alertKey, 120);
-        if (alreadySent) {
-          console.log(`[EMAIL] Phase alert for ${sig.instrument} already sent within 2h — skipping`);
-          continue;
-        }
+      let perfScore = 0;
+      perfScore += (v45 * flowSign) * 10000 * 3;
+      perfScore += (sp3 * flowSign) * 10000 * 2;
+      perfScore += (sp6 * flowSign) * 10000 * 1;
+      if (impulseAligned && imp >= 40) perfScore += imp * 0.5;
+      else if (impulseAligned)         perfScore += imp * 0.25;
+      else if (imp >= 40)              perfScore -= imp * 0.3;
+      if (m15Confirms && imp >= 40)    perfScore += 20;
+      else if (m15Confirms)            perfScore += 10;
+      if (h3Confirms)  perfScore += 10;
+      if (h6Confirms)  perfScore += 5;
+      if (accelSign)   perfScore += 10;
+      if (m15State === 'EXPANDING' && m15Confirms)                    perfScore += 15;
+      if (m15State === 'EXPANDING' && impulseAligned && imp >= 50)    perfScore += 10;
+      if (m15State === 'REVERSING')                                   perfScore -= 10;
+      if (m15State === 'COMPRESSING' && !m15Confirms)                 perfScore -= 15;
 
-        const pair = entryPairs.find(p => p.instrument === sig.instrument);
-        if (!pair) continue;
+      p._finalScore = (0.75 * perfScore) + (0.25 * de);
+      return p;
+    });
+    rankedPairs.sort((a, b) => b._finalScore - a._finalScore);
 
-        const template = phaseAlertEmail({ pair, signal: sig });
-        await sendToAll(sb, recipients, template, alertKey, {
-          instrument: sig.instrument,
-          signal: sig.signal,
-          entry: sig.entry_price,
-        });
-        emailsSent.push(`entry:${sig.instrument}`);
+    // Only ENTRY or MOVING phase pairs qualify for alerts, take top 3
+    const qualifyingPairs = rankedPairs
+      .filter(p => p.phase === 'ENTRY' || p.phase === 'MOVING')
+      .slice(0, 3);
+
+    // Get current energy event's triggered_at to track per-event sends
+    const triggerState = (currStates || []).find(s => s.triggered_at);
+    const currentTriggeredAt = triggerState?.triggered_at || '';
+
+    for (const pair of qualifyingPairs) {
+      // Dedup key includes the energy event timestamp — won't re-send for same event
+      const alertKey = `phase_entry_${pair.instrument}_${currentTriggeredAt}`;
+      const alreadySent = await wasRecentlySent(sb, alertKey, 1440); // 24h window
+      if (alreadySent) {
+        console.log(`[EMAIL] Phase alert for ${pair.instrument} already sent for this energy event — skipping`);
+        continue;
       }
+
+      // Get trade signal for entry/SL/TP levels (if available)
+      const { data: sigRows } = await sb
+        .from('trade_signals')
+        .select('*')
+        .eq('instrument', pair.instrument)
+        .in('signal', ['BUY', 'SELL'])
+        .order('time', { ascending: false })
+        .limit(1);
+
+      // Build signal object — use pair.dir as authoritative direction
+      const sig = sigRows?.[0] || {};
+      const signal = {
+        signal: pair.dir,
+        entry_price: sig.entry_price || 0,
+        stop_loss: sig.stop_loss || 0,
+        take_profit: sig.take_profit || 0,
+        risk_reward: sig.risk_reward || '—',
+      };
+
+      const template = phaseAlertEmail({ pair, signal });
+      await sendToAll(sb, recipients, template, alertKey, {
+        instrument: pair.instrument,
+        signal: pair.dir,
+        triggered_at: currentTriggeredAt,
+        rank: qualifyingPairs.indexOf(pair) + 1,
+      });
+      emailsSent.push(`entry:${pair.instrument}`);
     }
   }
 
