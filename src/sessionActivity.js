@@ -353,6 +353,7 @@ function processHours(hourKeys, byTime, onlyLast = false) {
     // ── Per-pair hourly calculations ────────────────────────────────────────
     const hourlyMoves  = [];
     const hourlyRanges = [];
+    const hourlyDEs    = []; // Directional Efficiency per pair
     let activePairs    = 0;
     let bullishMag = 0, bearishMag = 0;
     let agrAligned = 0, agrTotal = 0;
@@ -373,6 +374,12 @@ function processHours(hourKeys, byTime, onlyLast = false) {
       // Hourly candle range
       const hourlyRange = (c.high - c.low) / c.open;
       hourlyRanges.push(hourlyRange);
+
+      // Directional Efficiency: body / range × 100 (how directional is the candle)
+      const range = c.high - c.low;
+      if (range > 0) {
+        hourlyDEs.push(Math.abs(c.close - c.open) / range * 100);
+      }
 
       // Breadth: is this pair "active" this hour?
       if (hourlyMove >= scale.breadthThreshold) {
@@ -408,6 +415,13 @@ function processHours(hourKeys, byTime, onlyLast = false) {
     }
 
     if (!hourlyMoves.length) { prevCandles = candles; continue; }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // ENGINE 13: Directional Efficiency (avg body/range across all pairs)
+    // ═══════════════════════════════════════════════════════════════════════
+    const deScore = hourlyDEs.length > 0
+      ? round1(hourlyDEs.reduce((s, v) => s + v, 0) / hourlyDEs.length)
+      : 0;
 
     // ═══════════════════════════════════════════════════════════════════════
     // ENGINE 1: Movement
@@ -605,6 +619,8 @@ function processHours(hourKeys, byTime, onlyLast = false) {
       compression_streak:    compressionStreak,
       // Engine 12: Energy Cycle
       energy_cycle:          energyCycle,
+      // Engine 13: Directional Efficiency
+      de_score:              deScore,
     });
 
     // Track for next hour's momentum calculation
@@ -645,6 +661,7 @@ const HOURLY_COLS = new Set([
   'currency_leadership_gap',
   'tradability_score',
   'false_breakout_risk',
+  'de_score',
 ]);
 
 function toHourlyRow(r) {

@@ -4630,7 +4630,7 @@ const METRIC_CHART_CONFIG = {
     ],
   },
   de: {
-    field: 'de_avg', label: 'Dir Efficiency', title: 'Directional Efficiency',
+    field: 'de_score', label: 'Dir Efficiency', title: 'Directional Efficiency',
     unit: '%', decimals: 0, v2Threshold: 25,
     thresholds: [
       { min: 30, color: '#22c55e', label: 'Institutional quality' },
@@ -4843,51 +4843,6 @@ async function _fetchAndRenderMetricChart(modal, key) {
 
 async function _fetchAndRenderSessionMetric(modal, key) {
   const cfg = METRIC_CHART_CONFIG[key];
-
-  // DE: fetch flow_performance, compute hourly avg DE, render same as other engines
-  if (key === 'de') {
-    try {
-      // Use de-history API — computes DE from raw M15 candles per pair per hour
-      const data = await api('/api/de-history?days=9');
-      const deRows = data?.rows || [];
-      if (!deRows.length) {
-        modal.querySelector('.me-modal-body').innerHTML = '<p class="me-empty">No DE data available.</p>';
-        return;
-      }
-      // Group by hour → compute avg DE across all pairs
-      const byHour = {};
-      for (const r of deRows) {
-        const hourKey = (r.time || '').slice(0, 13); // YYYY-MM-DDTHH
-        if (!byHour[hourKey]) byHour[hourKey] = { values: [], time: r.time + ':00Z' };
-        const de = parseFloat(r.de_combined) || 0;
-        if (de > 0) byHour[hourKey].values.push(de);
-      }
-      function _deGetSession(utcH) {
-        if (utcH >= 23 || utcH < 7) return 'ASIA';
-        if (utcH >= 7 && utcH < 13) return 'LONDON';
-        if (utcH >= 13 && utcH < 21) return 'NEW_YORK';
-        return 'LOW_LIQUIDITY';
-      }
-      const hourlyRows = Object.entries(byHour)
-        .filter(([, g]) => g.values.length > 0)
-        .map(([, g]) => {
-          const h = new Date(g.time).getUTCHours();
-          return {
-            time_utc: g.time,
-            session_name: _deGetSession(h),
-            de_avg: Math.round(g.values.reduce((s, v) => s + v, 0) / g.values.length),
-          };
-        });
-      if (!hourlyRows.length) {
-        modal.querySelector('.me-modal-body').innerHTML = '<p class="me-empty">No DE data available.</p>';
-        return;
-      }
-      _renderMetricBars(modal.querySelector('.me-modal-body'), hourlyRows, key);
-    } catch (e) {
-      modal.querySelector('.me-modal-body').innerHTML = `<p class="me-empty">Failed to load: ${e.message}</p>`;
-    }
-    return;
-  }
 
   try {
     const data = await api('/api/market-energy-history?days=9');
