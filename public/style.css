@@ -3464,6 +3464,14 @@ body.plan-free .plan-pro-only { display: none !important; }
   background: rgba(59,130,246,0.04);
   transition: all 0.15s;
 }
+.es-pair-open-btn {
+  font-size: 10px;
+  font-weight: 600;
+  color: #60a5fa;
+  letter-spacing: 0.3px;
+  transition: color 0.15s;
+}
+.es-pair-card:hover .es-pair-open-btn { color: #93c5fd; }
 
 /* Pair analysis TF toggle */
 .pa-tf-btn {

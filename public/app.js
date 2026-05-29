@@ -3005,6 +3005,7 @@ function renderEnergySignals(data) {
             </div>
           </div>
           ${eventHtml}
+          <div style="margin-top:8px;text-align:right"><span class="es-pair-open-btn">View Analysis →</span></div>
         </div>`;
       }).join('');
     }
