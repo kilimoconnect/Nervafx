@@ -2727,6 +2727,54 @@ function renderActions(actions) {
 
 // ─── Energy Signals Tab ──────────────────────────────────────────────────────
 
+// Background refresh for energy signals — retries on empty data + periodic updates
+let _energyRefreshTimer = null;
+let _energyRetryCount = 0;
+const ENERGY_RETRY_MAX = 5;
+const ENERGY_RETRY_MS = 5000;    // 5s between retries when data is empty
+const ENERGY_POLL_MS  = 30000;   // 30s periodic background refresh
+
+async function _energyRefreshTick() {
+  try {
+    const fresh = await api('/api/energy-signals').catch(() => null);
+    if (!fresh) return;
+    _energySignalsCache = fresh;
+    renderEnergySignals(fresh);
+    // Also re-render flow performance since it depends on energy pairs
+    renderFlowPerformance(null, _m15DataCache);
+    hydrateIcons();
+
+    const hasData = (fresh.currencies?.length > 0) || (fresh.pairs?.length > 0) || (fresh.energy > 0);
+    if (!hasData && _energyRetryCount < ENERGY_RETRY_MAX) {
+      // Still empty — keep retrying at fast interval
+      _energyRetryCount++;
+      _energyRefreshTimer = setTimeout(_energyRefreshTick, ENERGY_RETRY_MS);
+    } else {
+      // Data arrived or retries exhausted — switch to periodic polling
+      _energyRetryCount = 0;
+      _energyRefreshTimer = setTimeout(_energyRefreshTick, ENERGY_POLL_MS);
+    }
+  } catch (_) {
+    // On error, retry after poll interval
+    _energyRefreshTimer = setTimeout(_energyRefreshTick, ENERGY_POLL_MS);
+  }
+}
+
+function _scheduleEnergyRefresh(initialData) {
+  // Clear any existing timer
+  if (_energyRefreshTimer) { clearTimeout(_energyRefreshTimer); _energyRefreshTimer = null; }
+  _energyRetryCount = 0;
+
+  const hasData = (initialData?.currencies?.length > 0) || (initialData?.pairs?.length > 0) || (initialData?.energy > 0);
+  if (!hasData) {
+    // Empty on first load — start fast retries
+    _energyRefreshTimer = setTimeout(_energyRefreshTick, ENERGY_RETRY_MS);
+  } else {
+    // Data present — just poll periodically to keep it fresh
+    _energyRefreshTimer = setTimeout(_energyRefreshTick, ENERGY_POLL_MS);
+  }
+}
+
 function renderEnergySignals(data) {
   if (!data) return;
   const { currencies, pairs, energy, thresholdMet } = data;
@@ -5603,6 +5651,7 @@ async function refresh() {
     _volDataCache = _buildVolMap(volData);  // Cache volume analysis: instrument → latest row
     _fpPrecomputed = fpData?.rows || [];    // Pre-computed flow performance (free plan — all metrics baked in)
     _energySignalsCache = energySignals;    // Energy signal pairs for Strength Flow
+    _scheduleEnergyRefresh(energySignals);  // Auto-retry if empty, periodic background refresh
     renderStates(states, m15Data);
     renderSpreads(spreads);
     renderRanking12H(spreads, strength);
