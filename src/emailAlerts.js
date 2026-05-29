@@ -532,11 +532,7 @@ async function sendSignalAlerts(sb) {
   const hasRecentTrigger = eventPairs && eventPairs.length > 0;
 
   if (hasRecentTrigger) {
-    // Dedup per energy event: use triggered_at hour so each new cross gets its own alert
-    const triggerTs = (currStates || []).find(s => s.triggered_at)?.triggered_at || '';
-    const directionKey = `direction_${(triggerTs || '').slice(0, 13)}`; // YYYY-MM-DDTHH
-    const alreadySent = await wasRecentlySent(sb, directionKey, 1440);
-    if (!alreadySent) {
+    {
       // Fetch active pairs for the email
       const { data: activePairs } = await sb
         .from('energy_signal_pairs')
@@ -581,8 +577,6 @@ async function sendSignalAlerts(sb) {
         pairs: (activePairs || []).length,
       });
       emailsSent.push('direction');
-    } else {
-      console.log(`[EMAIL] Direction alert already sent for this energy event (${directionKey}) — skipping`);
     }
   }
 
@@ -662,14 +656,6 @@ async function sendSignalAlerts(sb) {
     const SL_CANDLE_LOOKBACK = 2; // SL from last 2 completed candles
 
     for (const pair of qualifyingPairs) {
-      // Dedup: one signal per pair per day — won't re-send until tomorrow
-      const alertKey = `phase_entry_${pair.instrument}_${todayKey}`;
-      const alreadySent = await wasRecentlySent(sb, alertKey, 1440); // 24h window
-      if (alreadySent) {
-        console.log(`[EMAIL] Phase alert for ${pair.instrument} already sent for this energy event — skipping`);
-        continue;
-      }
-
       // Calculate entry/SL from candles
       // Entry = close of most recent completed candle
       // SL = swing low (BUY) or swing high (SELL) of last 2 candles
@@ -743,8 +729,7 @@ async function sendSignalAlerts(sb) {
   const now = new Date();
   const utcHour = now.getUTCHours();
   if (utcHour >= 21 && utcHour <= 23) {
-    const alreadySent = await wasRecentlySent(sb, 'daily_digest', 1440);
-    if (!alreadySent) {
+    {
       const todayStr = now.toISOString().slice(0, 10);
 
       // Get today's sessions with summary data
@@ -788,8 +773,6 @@ async function sendSignalAlerts(sb) {
 
       await sendToAll(sb, recipients, template, 'daily_digest', { date: todayStr });
       emailsSent.push('digest');
-    } else {
-      console.log('[EMAIL] Daily digest already sent today — skipping');
     }
   }
 
