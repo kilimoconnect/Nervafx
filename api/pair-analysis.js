@@ -17,7 +17,7 @@ module.exports = async function handler(req, res) {
 
   try {
     const sb = getClient();
-    const gate = await requirePlan(sb, req, 'pro');
+    const gate = await requirePlan(sb, req, 'premium');
     if (gate.error) return res.status(gate.status).json({ error: gate.error, upgrade: gate.upgrade });
 
     const instrument = req.query.instrument;
