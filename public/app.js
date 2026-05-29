@@ -1875,7 +1875,10 @@ function _flowPairAnalysis(p) {
 let _fpPrecomputed = null; // Pre-computed flow performance rows from API
 let _energySignalsCache = null; // Cached energy signal pairs from API
 
-function _buildFpScored(strengthData, m15Data) {
+function _buildFpScored(strengthArg, m15Data) {
+  // Use passed strength data or fall back to global cache
+  const sData = strengthArg || strengthData;
+
   // ── Primary: use pre-computed FP data (free plan — includes all metrics) ──
   if (_fpPrecomputed && _fpPrecomputed.length) {
     // Get latest hour's rows (they're sorted by time asc, so last group)
@@ -1885,8 +1888,8 @@ function _buildFpScored(strengthData, m15Data) {
     if (latest.length) {
       // Build currency strength maps for the explain function (base/quote display)
       const ccyMap3H = {};
-      if (strengthData?.currencies?.length) {
-        for (const c of strengthData.currencies) {
+      if (sData?.currencies?.length) {
+        for (const c of sData.currencies) {
           ccyMap3H[c.currency] = parseFloat(c.smooth_3h ?? c.normalized_3h) || 0;
         }
       }
@@ -1962,7 +1965,7 @@ function _buildFpScored(strengthData, m15Data) {
   }
 
   // ── Fallback: client-side computation (same as before for premium with live m15 data) ──
-  const { strong, weak } = getSmoothed3HFlow(strengthData?.currencies);
+  const { strong, weak } = getSmoothed3HFlow(sData?.currencies);
   if (!strong.length || !weak.length) return null;
 
   const PAIRS = new Set([
@@ -1987,8 +1990,8 @@ function _buildFpScored(strengthData, m15Data) {
   const m15Map = {};
   if (m15Data?.spreads?.length) { for (const s of m15Data.spreads) m15Map[s.instrument] = s; }
   const ccyMap3H = {}, ccyMap6H = {};
-  if (strengthData?.currencies?.length) {
-    for (const c of strengthData.currencies) {
+  if (sData?.currencies?.length) {
+    for (const c of sData.currencies) {
       ccyMap3H[c.currency] = parseFloat(c.smooth_3h ?? c.normalized_3h) || 0;
       ccyMap6H[c.currency] = parseFloat(c.smooth_6h ?? c.normalized_6h) || 0;
     }
