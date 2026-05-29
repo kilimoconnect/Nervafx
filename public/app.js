@@ -4631,7 +4631,7 @@ const METRIC_CHART_CONFIG = {
   },
   de: {
     field: 'de_score', label: 'Dir Efficiency', title: 'Directional Efficiency',
-    unit: '%', decimals: 0, v2Threshold: 45,
+    unit: '%', decimals: 0, v2Threshold: 50,
     thresholds: [
       { min: 55, color: '#22c55e', label: 'Strong directional' },
       { min: 45, color: '#0ea5e9', label: 'Directional' },
