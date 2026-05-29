@@ -846,9 +846,7 @@ function updateHeader(risk) {
   const dailyRisk = Number(s.dailyRisk ?? 0);
   const riskPct   = balance > 0 ? (dailyRisk / balance) * 100 : 0;
 
-  document.getElementById('stat-balance').textContent = balance > 0 ? `Balance: $${balance.toLocaleString()}` : 'Balance: Set in Profile';
-  document.getElementById('stat-risk').textContent    = `Daily Risk: ${riskPct.toFixed(2)}% / ${maxPct}%`;
-  document.getElementById('stat-trades').textContent  = `Open: ${open} / ${maxTr}`;
+  document.getElementById('stat-balance').textContent = balance > 0 ? `Account Size: $${balance.toLocaleString()}` : 'Account Size: Set in Profile';
   document.getElementById('status-dot').className     = 'status-dot online';
   document.getElementById('last-update').textContent  = 'Updated ' + fmtNow();
 }
