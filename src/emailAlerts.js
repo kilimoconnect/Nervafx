@@ -532,7 +532,10 @@ async function sendSignalAlerts(sb) {
   const hasRecentTrigger = eventPairs && eventPairs.length > 0;
 
   if (hasRecentTrigger) {
-    const alreadySent = await wasRecentlySent(sb, 'direction', 240);
+    // Dedup per energy event: use triggered_at hour so each new cross gets its own alert
+    const triggerTs = (currStates || []).find(s => s.triggered_at)?.triggered_at || '';
+    const directionKey = `direction_${(triggerTs || '').slice(0, 13)}`; // YYYY-MM-DDTHH
+    const alreadySent = await wasRecentlySent(sb, directionKey, 1440);
     if (!alreadySent) {
       // Fetch active pairs for the email
       const { data: activePairs } = await sb
@@ -571,7 +574,7 @@ async function sendSignalAlerts(sb) {
         removedPairs: (inactivePairs || []).map(p => p.instrument),
       });
 
-      await sendToAll(sb, recipients, template, 'direction', {
+      await sendToAll(sb, recipients, template, directionKey, {
         energy: triggerState?.energy_at_trigger,
         strong: (currStates || []).filter(c => c.direction === 'STRONG').map(c => c.currency),
         weak: (currStates || []).filter(c => c.direction === 'WEAK').map(c => c.currency),
@@ -579,7 +582,7 @@ async function sendSignalAlerts(sb) {
       });
       emailsSent.push('direction');
     } else {
-      console.log('[EMAIL] Direction alert already sent within 4h — skipping');
+      console.log(`[EMAIL] Direction alert already sent for this energy event (${directionKey}) — skipping`);
     }
   }
 
