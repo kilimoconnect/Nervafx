@@ -4630,8 +4630,8 @@ const METRIC_CHART_CONFIG = {
     ],
   },
   de: {
-    field: null, label: 'Dir Efficiency', title: 'Directional Efficiency — Top 5 Pairs',
-    unit: '%', decimals: 0, sessionLevel: true,
+    field: 'de_score', label: 'Dir Efficiency', title: 'Directional Efficiency',
+    unit: '%', decimals: 0, v2Threshold: 50,
     thresholds: [
       { min: 55, color: '#22c55e', label: 'Strong directional' },
       { min: 45, color: '#0ea5e9', label: 'Directional' },
@@ -4639,11 +4639,12 @@ const METRIC_CHART_CONFIG = {
       { min: 0,  color: '#ef4444', label: 'Choppy' },
     ],
     guide: [
-      '<strong>Directional Efficiency (DE)</strong> measures how much of each candle\'s range is directional (body vs wicks).',
-      '<strong>55+</strong>: Strong directional — candles are mostly body, clean institutional flow.',
-      '<strong>45-54</strong>: Directional — market moving with purpose.',
-      '<strong>35-44</strong>: Mixed — some direction but significant wicks and noise.',
-      '<strong>Below 35</strong>: Choppy — price being rejected, indecision dominates.',
+      '<strong>Directional Efficiency (DE)</strong> measures how much of each candle\'s range is directional (body vs wicks). Averaged across all 28 pairs per hour.',
+      '<strong>55+</strong>: Strong directional movement — candles are mostly body, clean institutional flow.',
+      '<strong>45-54</strong>: Directional — market is moving with purpose.',
+      '<strong>35-44</strong>: Mixed conditions — some direction but significant wicks and noise.',
+      '<strong>Below 35</strong>: Choppy — high wick-to-body ratio, price is being rejected, indecision dominates.',
+      '<strong>Green bars</strong> indicate DE ≥ 50 — the market is moving directionally with conviction.',
     ],
   },
   tradability: {
@@ -4843,22 +4844,6 @@ async function _fetchAndRenderMetricChart(modal, key) {
 
 async function _fetchAndRenderSessionMetric(modal, key) {
   const cfg = METRIC_CHART_CONFIG[key];
-
-  // DE: ranked top 5 pairs per hour
-  if (key === 'de') {
-    try {
-      const data = await api('/api/de-history?days=5');
-      const deRows = data?.rows || [];
-      if (!deRows.length) {
-        modal.querySelector('.me-modal-body').innerHTML = '<p class="me-empty">No DE data available.</p>';
-        return;
-      }
-      _renderDERankedView(modal.querySelector('.me-modal-body'), deRows, cfg);
-    } catch (e) {
-      modal.querySelector('.me-modal-body').innerHTML = `<p class="me-empty">Failed to load: ${e.message}</p>`;
-    }
-    return;
-  }
 
   try {
     const data = await api('/api/market-energy-history?days=9');
