@@ -3265,9 +3265,13 @@ let _paVolChart = null;
 function _renderVolumeChart(ctx, candles) {
   if (_paVolChart) _paVolChart.destroy();
 
+  const tz = (_userTz === 'auto')
+    ? Intl.DateTimeFormat().resolvedOptions().timeZone
+    : (_userTz || 'UTC');
   const labels = candles.map(c => {
-    const d = new Date(c.time);
-    return `${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}`;
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false,
+    }).format(new Date(c.time));
   });
   const volumes = candles.map(c => c.volume || 0);
   const avgVol  = volumes.reduce((s, v) => s + v, 0) / (volumes.length || 1);
@@ -3315,9 +3319,13 @@ function _renderCandlestickChart(ctx, candles, levels, isJPY) {
   if (_paChart) _paChart.destroy();
 
   const dec = isJPY ? 3 : 5;
+  const tz = (_userTz === 'auto')
+    ? Intl.DateTimeFormat().resolvedOptions().timeZone
+    : (_userTz || 'UTC');
   const labels = candles.map(c => {
-    const d = new Date(c.time);
-    return `${String(d.getUTCMonth()+1).padStart(2,'0')}/${String(d.getUTCDate()).padStart(2,'0')} ${String(d.getUTCHours()).padStart(2,'0')}:00`;
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone: tz, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
+    }).format(new Date(c.time));
   });
 
   // Line chart with high/low band + colored close line
