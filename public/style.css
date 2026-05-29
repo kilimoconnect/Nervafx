@@ -3438,6 +3438,33 @@ section.card:has(.v2-gate-overlay.visible) { min-height: 220px; }
 /* Hide M15 / pro-only columns for free plan */
 body.plan-free .plan-pro-only { display: none !important; }
 
+/* ─── Pair Analysis Modal ─────────────────────────────────────────────────── */
+.pa-stat {
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 8px;
+}
+.pa-stat-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+.pa-stat-val {
+  font-size: 14px;
+  font-weight: 700;
+  color: #e2e8f0;
+  font-variant-numeric: tabular-nums;
+}
+.es-pair-card:hover {
+  border-color: rgba(59,130,246,0.3);
+  background: rgba(59,130,246,0.04);
+  transition: all 0.15s;
+}
+
 /* ─── Market Journal ────────────────────────────────────────────────────────── */
 
 

@@ -2966,7 +2966,7 @@ function renderEnergySignals(data) {
           eventHtml = `<div class="es-pair-event ${evCls}">${evIcon} Energy ${p.energy_event_type}</div>`;
         }
 
-        return `<div class="es-pair-card phase-${phaseCls}">
+        return `<div class="es-pair-card phase-${phaseCls}" onclick="openPairAnalysis('${p.instrument}')" style="cursor:pointer">
           <div class="es-pair-head">
             <div style="display:flex;align-items:center;gap:8px">
               <span class="es-pair-name">${pairLabel}</span>
@@ -3011,6 +3011,288 @@ function renderEnergySignals(data) {
   }
 
   hydrateIcons();
+}
+
+// ─── Pair Analysis Modal ─────────────────────────────────────────────────────
+
+let _paChart = null; // candlestick chart instance
+
+function closePairAnalysis() {
+  document.getElementById('pair-analysis-overlay').style.display = 'none';
+  if (_paChart) { _paChart.destroy(); _paChart = null; }
+}
+
+// Close on overlay click (not inner card)
+document.getElementById('pair-analysis-overlay')?.addEventListener('click', function(e) {
+  if (e.target === this) closePairAnalysis();
+});
+
+async function openPairAnalysis(instrument) {
+  const overlay = document.getElementById('pair-analysis-overlay');
+  const body    = document.getElementById('pa-body');
+  const hdr     = document.getElementById('pa-pair');
+  const sub     = document.getElementById('pa-sub');
+  if (!overlay || !body) return;
+
+  // Find cached pair data
+  const cachedPair = (_energySignalsCache?.pairs || []).find(p => p.instrument === instrument && p.active);
+  const pairLabel = instrument.replace('_', '/');
+  const dirCls = cachedPair?.dir === 'BUY' ? '#4ade80' : '#f87171';
+
+  hdr.innerHTML = `<span style="color:${dirCls}">${cachedPair?.dir || ''}</span> ${pairLabel}`;
+  sub.textContent = cachedPair ? `${cachedPair.strong_ccy} strong / ${cachedPair.weak_ccy} weak · Phase: ${mapPhase(cachedPair.phase || 'MONITORING')}` : '';
+  body.innerHTML = '<div style="text-align:center;color:#64748b;padding:40px 0"><span class="spinner"></span> Loading analysis...</div>';
+  overlay.style.display = 'block';
+
+  try {
+    const data = await api(`/api/pair-analysis?instrument=${instrument}`);
+    renderPairAnalysis(data, body);
+  } catch (e) {
+    body.innerHTML = `<div style="text-align:center;color:#fca5a5;padding:40px 0">Failed to load analysis: ${e.message}</div>`;
+  }
+}
+
+function renderPairAnalysis(data, container) {
+  const { instrument, h1Candles, m15Candles, pair, signal, priceStats } = data;
+  const isJPY = instrument.includes('JPY');
+  const dec = isJPY ? 3 : 5;
+  const pipMul = isJPY ? 100 : 10000;
+  const isBuy = pair?.dir === 'BUY';
+
+  // ── Price Stats Card ──
+  let statsHtml = '';
+  if (priceStats) {
+    const chgColor = priceStats.changeDir === 'UP' ? '#4ade80' : '#f87171';
+    const chgArrow = priceStats.changeDir === 'UP' ? '▲' : '▼';
+    statsHtml = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+        <div class="pa-stat">
+          <div class="pa-stat-label">Current Price</div>
+          <div class="pa-stat-val">${priceStats.close.toFixed(dec)}</div>
+        </div>
+        <div class="pa-stat">
+          <div class="pa-stat-label">48h Change</div>
+          <div class="pa-stat-val" style="color:${chgColor}">${chgArrow} ${Math.abs(priceStats.changePips)} pips</div>
+        </div>
+        <div class="pa-stat">
+          <div class="pa-stat-label">48h High</div>
+          <div class="pa-stat-val" style="color:#4ade80">${priceStats.high48.toFixed(dec)}</div>
+        </div>
+        <div class="pa-stat">
+          <div class="pa-stat-label">48h Low</div>
+          <div class="pa-stat-val" style="color:#f87171">${priceStats.low48.toFixed(dec)}</div>
+        </div>
+        <div class="pa-stat">
+          <div class="pa-stat-label">48h Range</div>
+          <div class="pa-stat-val">${priceStats.rangePips.toFixed(1)} pips</div>
+        </div>
+        <div class="pa-stat">
+          <div class="pa-stat-label">Avg Volume</div>
+          <div class="pa-stat-val">${priceStats.avgVolume.toLocaleString()}</div>
+        </div>
+      </div>`;
+  }
+
+  // ── Trade Levels (from signal or candles) ──
+  let levelsHtml = '';
+  if (signal && signal.entry_price) {
+    const entry = Number(signal.entry_price);
+    const sl    = Number(signal.stop_loss);
+    const tp    = Number(signal.take_profit);
+    const rr    = signal.risk_reward || '—';
+    levelsHtml = `
+      <div style="margin-bottom:16px;padding:14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:10px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b;margin-bottom:10px">Trade Levels</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;text-align:center">
+          <div><div class="pa-stat-label">Entry</div><div class="pa-stat-val">${entry.toFixed(dec)}</div></div>
+          <div><div class="pa-stat-label">Stop Loss</div><div class="pa-stat-val" style="color:#f87171">${sl.toFixed(dec)}</div></div>
+          <div><div class="pa-stat-label">Take Profit</div><div class="pa-stat-val" style="color:#4ade80">${tp.toFixed(dec)}</div></div>
+          <div><div class="pa-stat-label">RR</div><div class="pa-stat-val" style="color:#fbbf24">1:${rr}</div></div>
+        </div>
+      </div>`;
+  }
+
+  // ── Strength Metrics ──
+  let metricsHtml = '';
+  if (pair) {
+    const v45 = parseFloat(pair.v45) || 0;
+    const v90 = parseFloat(pair.v90) || 0;
+    const sp3 = parseFloat(pair.spread_3h) || 0;
+    const sp6 = parseFloat(pair.spread_6h) || 0;
+    const de  = parseFloat(pair.de_combined) || 0;
+    const imp = pair.impulse_score || 0;
+    const flowSign = isBuy ? 1 : -1;
+    const m15Aligned = Math.sign(v45) === flowSign && Math.abs(v45) >= 0.00008;
+    const h3Aligned  = Math.sign(sp3) === flowSign;
+    const h6Aligned  = Math.sign(sp6) === flowSign;
+    const dot = ok => ok ? '<span style="color:#4ade80">●</span>' : '<span style="color:#f87171">●</span>';
+
+    metricsHtml = `
+      <div style="margin-bottom:16px;padding:14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:10px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b;margin-bottom:10px">Timeframe Alignment</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;text-align:center">
+          <div>
+            <div class="pa-stat-label">M15 ${dot(m15Aligned)}</div>
+            <div class="pa-stat-val" style="color:${v45 > 0 ? '#4ade80' : v45 < 0 ? '#f87171' : '#94a3b8'}">${(v45*10000).toFixed(1)}</div>
+          </div>
+          <div>
+            <div class="pa-stat-label">3H ${dot(h3Aligned)}</div>
+            <div class="pa-stat-val" style="color:${sp3 > 0 ? '#4ade80' : sp3 < 0 ? '#f87171' : '#94a3b8'}">${(sp3*10000).toFixed(1)}</div>
+          </div>
+          <div>
+            <div class="pa-stat-label">6H ${dot(h6Aligned)}</div>
+            <div class="pa-stat-val" style="color:${sp6 > 0 ? '#4ade80' : sp6 < 0 ? '#f87171' : '#94a3b8'}">${(sp6*10000).toFixed(1)}</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;text-align:center;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.04)">
+          <div><div class="pa-stat-label">DE</div><div class="pa-stat-val" style="color:${de >= 30 ? '#4ade80' : de >= 15 ? '#f59e0b' : '#94a3b8'}">${Math.round(de)}%</div></div>
+          <div><div class="pa-stat-label">Impulse</div><div class="pa-stat-val" style="color:${imp >= 50 ? '#4ade80' : imp >= 30 ? '#f59e0b' : '#94a3b8'}">${Math.round(imp)}${pair.impulse_aligned ? '✓' : ''}</div></div>
+          <div><div class="pa-stat-label">M15 State</div><div class="pa-stat-val">${(pair.m15_state || 'FLAT')}</div></div>
+        </div>
+      </div>`;
+  }
+
+  // ── Narrative Analysis ──
+  let narrativeHtml = '';
+  if (pair && priceStats) {
+    const parts = [];
+    const dirWord = isBuy ? 'bullish' : 'bearish';
+    const v45 = parseFloat(pair.v45) || 0;
+    const sp3 = parseFloat(pair.spread_3h) || 0;
+    const sp6 = parseFloat(pair.spread_6h) || 0;
+    const flowSign = isBuy ? 1 : -1;
+
+    // Price context
+    if (priceStats.changeDir === (isBuy ? 'UP' : 'DOWN')) {
+      parts.push(`Price has moved ${Math.abs(priceStats.changePips)} pips ${dirWord} over 48 hours, confirming the signal direction.`);
+    } else {
+      parts.push(`Price moved ${Math.abs(priceStats.changePips)} pips against the signal over 48 hours — entry may catch a reversal.`);
+    }
+
+    // Timeframe alignment
+    const aligned = [v45 * flowSign > 0, sp3 * flowSign > 0, sp6 * flowSign > 0].filter(Boolean).length;
+    if (aligned === 3) parts.push(`All timeframes (M15, 3H, 6H) confirm ${dirWord} pressure — full alignment.`);
+    else if (aligned === 2) parts.push(`Two of three timeframes aligned ${dirWord} — partial confirmation.`);
+    else if (aligned === 1) parts.push(`Only one timeframe aligned — weak confirmation, higher risk.`);
+    else parts.push(`No timeframes aligned with signal — conditions are mixed.`);
+
+    // M15 state
+    const state = (pair.m15_state || 'FLAT').toUpperCase();
+    if (state === 'EXPANDING') parts.push('M15 spread is expanding — momentum is building in the signal direction.');
+    else if (state === 'COMPRESSING') parts.push('M15 spread is compressing — momentum is fading, watch for re-expansion.');
+    else if (state === 'REVERSING') parts.push('M15 spread is reversing — short-term pressure is against the signal.');
+    else if (state === 'STEADY') parts.push('M15 spread is steady — holding direction at a consistent pace.');
+
+    // DE quality
+    const de = parseFloat(pair.de_combined) || 0;
+    if (de >= 30) parts.push(`Directional efficiency is high (${Math.round(de)}%) — clean, institutional-quality movement.`);
+    else if (de >= 15) parts.push(`Directional efficiency is moderate (${Math.round(de)}%) — decent but not exceptional.`);
+    else parts.push(`Directional efficiency is low (${Math.round(de)}%) — choppy, mixed price action.`);
+
+    // Range context
+    if (priceStats.rangePips > 0) {
+      const currentPos = ((priceStats.close - priceStats.low48) / priceStats.range48) * 100;
+      if (isBuy && currentPos > 80) parts.push(`Price is near the 48h high (${Math.round(currentPos)}% of range) — extended, potential for pullback.`);
+      else if (!isBuy && currentPos < 20) parts.push(`Price is near the 48h low (${Math.round(currentPos)}% of range) — extended, potential for bounce.`);
+      else if (isBuy && currentPos < 40) parts.push(`Price is in the lower half of the 48h range — good entry zone for longs.`);
+      else if (!isBuy && currentPos > 60) parts.push(`Price is in the upper half of the 48h range — good entry zone for shorts.`);
+    }
+
+    narrativeHtml = `
+      <div style="margin-bottom:16px;padding:14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:10px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b;margin-bottom:10px">Analysis</div>
+        <div style="font-size:12px;color:#cbd5e1;line-height:1.7">${parts.join(' ')}</div>
+      </div>`;
+  }
+
+  // ── Chart ──
+  container.innerHTML = `
+    ${statsHtml}
+    <div style="margin-bottom:16px;padding:14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:10px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b;margin-bottom:10px">Price — 48h H1 Candles</div>
+      <div style="height:280px"><canvas id="pa-chart"></canvas></div>
+    </div>
+    ${levelsHtml}
+    ${metricsHtml}
+    ${narrativeHtml}
+    ${signal?.reason ? `<div style="padding:12px 14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:10px;font-size:11px;color:#94a3b8;line-height:1.6">${signal.reason}</div>` : ''}
+  `;
+
+  // Render candlestick chart
+  if (h1Candles.length >= 2) {
+    const ctx = document.getElementById('pa-chart')?.getContext('2d');
+    if (ctx) _renderCandlestickChart(ctx, h1Candles, signal, isJPY);
+  }
+}
+
+function _renderCandlestickChart(ctx, candles, signal, isJPY) {
+  if (_paChart) _paChart.destroy();
+
+  const labels = candles.map(c => {
+    const d = new Date(c.time);
+    return `${String(d.getUTCMonth()+1).padStart(2,'0')}/${String(d.getUTCDate()).padStart(2,'0')} ${String(d.getUTCHours()).padStart(2,'0')}:00`;
+  });
+
+  // Build OHLC as floating bars (low→high for wicks, open→close for bodies)
+  const bodyData = candles.map(c => {
+    const bull = c.close >= c.open;
+    return [bull ? c.open : c.close, bull ? c.close : c.open];
+  });
+  const wickData = candles.map(c => [c.low, c.high]);
+  const bodyColors = candles.map(c => c.close >= c.open ? 'rgba(34,197,94,0.85)' : 'rgba(239,68,68,0.85)');
+  const wickColors = candles.map(c => c.close >= c.open ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)');
+
+  const datasets = [
+    { label: 'Body', data: bodyData, backgroundColor: bodyColors, borderColor: bodyColors, borderWidth: 1, borderRadius: 1, barPercentage: 0.6 },
+    { label: 'Wick', data: wickData, backgroundColor: wickColors, borderColor: wickColors, borderWidth: 1, barPercentage: 0.1 },
+  ];
+
+  // Add SL/TP/Entry as horizontal line datasets
+  if (signal?.entry_price) {
+    const val = +signal.entry_price;
+    datasets.push({ label: 'Entry', data: candles.map(() => val), type: 'line', pointRadius: 0, borderColor: '#60a5fa', borderWidth: 1, borderDash: [4, 4], fill: false, order: -1 });
+  }
+  if (signal?.stop_loss) {
+    const val = +signal.stop_loss;
+    datasets.push({ label: 'SL', data: candles.map(() => val), type: 'line', pointRadius: 0, borderColor: '#f87171', borderWidth: 1, borderDash: [4, 4], fill: false, order: -1 });
+  }
+  if (signal?.take_profit) {
+    const val = +signal.take_profit;
+    datasets.push({ label: 'TP', data: candles.map(() => val), type: 'line', pointRadius: 0, borderColor: '#4ade80', borderWidth: 1, borderDash: [4, 4], fill: false, order: -1 });
+  }
+
+  _paChart = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) {
+              const c = candles[ctx.dataIndex];
+              return ctx.datasetIndex === 0
+                ? `O:${c.open.toFixed(isJPY?3:5)} H:${c.high.toFixed(isJPY?3:5)} L:${c.low.toFixed(isJPY?3:5)} C:${c.close.toFixed(isJPY?3:5)}`
+                : '';
+            }
+          }
+        },
+      },
+      scales: {
+        x: {
+          stacked: true,
+          ticks: { color: '#64748b', font: { size: 9 }, maxRotation: 45, autoSkip: true, maxTicksLimit: 12 },
+          grid: { color: 'rgba(255,255,255,0.03)' },
+        },
+        y: {
+          ticks: { color: '#64748b', font: { size: 10 }, callback: v => v.toFixed(isJPY ? 2 : 4) },
+          grid: { color: 'rgba(255,255,255,0.04)' },
+        },
+      },
+    },
+  });
 }
 
 // ─── Trading Session ──────────────────────────────────────────────────────────
