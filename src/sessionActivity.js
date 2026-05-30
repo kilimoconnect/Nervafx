@@ -119,27 +119,35 @@ async function fetchHourlyCandles(limit = 300) {
 
 async function fetchHourlyVolumes(hourKeys) {
   if (!hourKeys.length) return {};
-  // Fetch M15 candles with volume for the hours we need
-  const earliest = hourKeys.sort()[0];
-  const { data, error } = await supabase
-    .from('backtest_candles')
-    .select('time, volume, instrument')
-    .eq('timeframe', 'M15')
-    .eq('complete', true)
-    .gte('time', earliest)
-    .order('time', { ascending: true });
-
-  if (error || !data?.length) return {};
-
-  // Group M15 volumes into their parent hour
-  // M15 candle at 14:00 belongs to hour 14:00, candle at 14:45 belongs to hour 14:00
+  // Only fetch last 48h of M15 volumes (keeps query size reasonable)
+  const since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
   const byHour = {};
-  for (const c of data) {
-    const d = new Date(c.time);
-    d.setUTCMinutes(0, 0, 0);
-    const hk = d.toISOString();
-    byHour[hk] = (byHour[hk] || 0) + (c.volume || 0);
+  const PAGE = 5000;
+  let offset = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from('backtest_candles')
+      .select('time, volume')
+      .eq('timeframe', 'M15')
+      .eq('complete', true)
+      .gte('time', since)
+      .order('time', { ascending: true })
+      .range(offset, offset + PAGE - 1);
+
+    if (error || !data?.length) break;
+
+    for (const c of data) {
+      const d = new Date(c.time);
+      d.setUTCMinutes(0, 0, 0);
+      const hk = d.toISOString();
+      byHour[hk] = (byHour[hk] || 0) + (c.volume || 0);
+    }
+
+    if (data.length < PAGE) break;
+    offset += PAGE;
   }
+
   return byHour;
 }
 
