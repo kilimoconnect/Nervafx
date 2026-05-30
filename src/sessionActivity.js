@@ -115,41 +115,6 @@ async function fetchHourlyCandles(limit = 300) {
   return byTime;
 }
 
-// ─── M15 volume aggregation (4 × M15 candles = 1 hour) ───────────────────────
-
-async function fetchHourlyVolumes(hourKeys) {
-  if (!hourKeys.length) return {};
-  // Fetch per-instrument to stay within Supabase row limits
-  // Each instrument has ~192 M15 candles in 48h — well within limits
-  const since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
-  const byHour = {};
-
-  // Batch instruments (7 at a time like candle sync)
-  for (let i = 0; i < config.instruments.length; i += 7) {
-    const batch = config.instruments.slice(i, i + 7);
-    const results = await Promise.all(batch.map(inst =>
-      supabase.from('backtest_candles')
-        .select('time, volume')
-        .eq('instrument', inst)
-        .eq('timeframe', 'M15')
-        .eq('complete', true)
-        .gte('time', since)
-        .order('time', { ascending: true })
-        .limit(200)
-    ));
-    for (const { data } of results) {
-      for (const c of (data || [])) {
-        const d = new Date(c.time);
-        d.setUTCMinutes(0, 0, 0);
-        const hk = d.toISOString();
-        byHour[hk] = (byHour[hk] || 0) + (c.volume || 0);
-      }
-    }
-  }
-
-  return byHour;
-}
-
 // ─── Session classification ───────────────────────────────────────────────────
 
 function classifyHour(isoTime) {
@@ -697,7 +662,6 @@ const HOURLY_COLS = new Set([
   'tradability_score',
   'false_breakout_risk',
   'de_score',
-  'hourly_volume',
 ]);
 
 function toHourlyRow(r) {
@@ -1491,16 +1455,6 @@ async function backfillSessionActivity({ fullRewrite = false } = {}) {
 
   const rows = processHours(hourKeys, byTime);
   if (!rows.length) return;
-
-  // Fetch M15 volumes and inject into hourly rows
-  try {
-    const hourlyVolumes = await fetchHourlyVolumes(hourKeys);
-    for (const r of rows) {
-      r.hourly_volume = hourlyVolumes[r.time_utc] || 0;
-    }
-  } catch (e) {
-    console.warn('[SESSION_ACTIVITY] Volume fetch failed:', e.message);
-  }
 
   const { error } = await supabase
     .from('hourly_session_activity')

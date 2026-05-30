@@ -3922,7 +3922,6 @@ function _meHourlyTrend(hourlyRows) {
   // ── Score metrics (numeric rows with delta badges) ──
   const scoreMetrics = [
     { key: 'market_energy',       label: 'Energy' },
-    { key: 'hourly_volume',       label: 'Volume', isVolume: true },
     { key: 'tradability_score',   label: 'Trad' },
     { key: 'movement_score',      label: 'Mov' },
     { key: 'breadth_score',       label: 'Brd' },
@@ -3978,12 +3977,6 @@ function _meHourlyTrend(hourlyRows) {
   const scoreRows = scoreMetrics.map(m => {
     const vals = hourlyRows.map(h => Math.round(parseFloat(h[m.key]) || 0));
     const cells = vals.map((v, i) => {
-      if (m.isVolume) {
-        // Format volume: 1234 → 1.2k
-        const display = v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v;
-        const vColor = v >= 5000 ? '#22c55e' : v >= 2000 ? '#0ea5e9' : v >= 500 ? '#94a3b8' : '#475569';
-        return `<td class="me-ht-td"><span class="me-ht-val" style="color:${vColor}">${display}</span>${changeBadge(vals, i)}</td>`;
-      }
       if (m.isMomentum) {
         const display = v > 0 ? `+${v}` : `${v}`;
         return `<td class="me-ht-td"><span class="me-ht-val" style="color:${momColor(v)}">${display}</span>${changeBadge(vals, i)}</td>`;
@@ -4984,7 +4977,6 @@ function _renderMetricBars(container, rows, key) {
     .formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value || '';
   const SKIP_SESSIONS = new Set(['LOW_LIQUIDITY', 'DEAD_HOURS']);
 
-  const showVolume = key === 'energy'; // dual bar: energy + volume
   const byDate = {};
   for (const r of rows) {
     if (SKIP_SESSIONS.has(r.session_name)) continue;
@@ -4994,7 +4986,6 @@ function _renderMetricBars(container, rows, key) {
       time: r.time_utc,
       session: r.session_name,
       value: Math.round(parseFloat(r[cfg.field]) || 0),
-      volume: showVolume ? (parseFloat(r.hourly_volume) || 0) : 0,
     });
   }
 
@@ -5008,7 +4999,6 @@ function _renderMetricBars(container, rows, key) {
     .sort((a, b) => b.localeCompare(a))
     .slice(0, 6);
   const maxVal = Math.max(80, ...rows.map(r => parseFloat(r[cfg.field]) || 0));
-  const maxVol = showVolume ? Math.max(1, ...rows.map(r => parseFloat(r.hourly_volume) || 0)) : 1;
 
   let html = '<div class="bc-chart-wrap">';
 
@@ -5037,11 +5027,9 @@ function _renderMetricBars(container, rows, key) {
     });
     labelRow += '</div>';
 
-    const volLegend = showVolume ? '<div style="display:flex;gap:12px;justify-content:flex-end;margin-bottom:4px;font-size:9px;color:#64748b"><span style="display:flex;align-items:center;gap:3px"><span style="width:8px;height:8px;border-radius:2px;background:#f59e0b"></span>Energy</span><span style="display:flex;align-items:center;gap:3px"><span style="width:8px;height:8px;border-radius:2px;background:rgba(96,165,250,0.5)"></span>Volume</span></div>' : '';
     html += `<div class="bc-day-block">
       <div class="bc-date-header">${dayLabel}</div>
       ${labelRow}
-      ${volLegend}
       <div class="bc-unified-chart">`;
 
     let prevSess = '';
@@ -5062,30 +5050,13 @@ function _renderMetricBars(container, rows, key) {
       }
       prevSess = b.session;
 
-      if (showVolume) {
-        const volPct = Math.round((b.volume / maxVol) * 100);
-        const volK = b.volume >= 1000 ? (b.volume / 1000).toFixed(0) + 'k' : b.volume;
-        html += `<div class="${cls}" title="${SESS_LABEL[b.session] || b.session}: Energy ${b.value}, Vol ${volK} at ${localTime} ${tzLabel}" style="min-width:32px">
-          <span class="bc-bar-val" style="font-size:8px">${b.value}</span>
-          <div class="bc-bar-inner" style="flex-direction:row;gap:1px">
-            <div style="flex:1;height:100%;display:flex;flex-direction:column;justify-content:flex-end">
-              <div class="bc-bar-fill" style="height:${pct}%;background:${barColor};border-radius:2px 2px 0 0"></div>
-            </div>
-            <div style="flex:1;height:100%;display:flex;flex-direction:column;justify-content:flex-end">
-              <div class="bc-bar-fill" style="height:${volPct}%;background:rgba(96,165,250,0.5);border-radius:2px 2px 0 0"></div>
-            </div>
-          </div>
-          <span class="bc-bar-hour" style="font-size:7px">${localHour}</span>
-        </div>`;
-      } else {
-        html += `<div class="${cls}" title="${SESS_LABEL[b.session] || b.session}: ${b.value}${cfg.unit} at ${localTime} ${tzLabel}">
-          <span class="bc-bar-val">${b.value}</span>
-          <div class="bc-bar-inner">
-            <div class="bc-bar-fill" style="height:${pct}%;background:${barColor}"></div>
-          </div>
-          <span class="bc-bar-hour">${localHour}</span>
-        </div>`;
-      }
+      html += `<div class="${cls}" title="${SESS_LABEL[b.session] || b.session}: ${b.value}${cfg.unit} at ${localTime} ${tzLabel}">
+        <span class="bc-bar-val">${b.value}</span>
+        <div class="bc-bar-inner">
+          <div class="bc-bar-fill" style="height:${pct}%;background:${barColor}"></div>
+        </div>
+        <span class="bc-bar-hour">${localHour}</span>
+      </div>`;
     }
     html += '</div>';
 
