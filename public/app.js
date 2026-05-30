@@ -2516,7 +2516,11 @@ function updateM15Bar(data) {
   }
 
   const timeEl = document.getElementById('m15-bar-time');
-  if (timeEl && data.time) timeEl.textContent = fmtTime(data.time);
+  if (timeEl && data.time) {
+    // M15 candle timestamp = open time; add 15min to show close time (when data is current to)
+    const closeTime = new Date(new Date(data.time).getTime() + 15 * 60 * 1000).toISOString();
+    timeEl.textContent = fmtTime(closeTime);
+  }
 
   bar.style.display = 'flex';
   _updateAlertBadge();
