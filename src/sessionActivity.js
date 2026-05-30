@@ -115,6 +115,34 @@ async function fetchHourlyCandles(limit = 300) {
   return byTime;
 }
 
+// ─── M15 volume aggregation (4 × M15 candles = 1 hour) ───────────────────────
+
+async function fetchHourlyVolumes(hourKeys) {
+  if (!hourKeys.length) return {};
+  // Fetch M15 candles with volume for the hours we need
+  const earliest = hourKeys.sort()[0];
+  const { data, error } = await supabase
+    .from('backtest_candles')
+    .select('time, volume, instrument')
+    .eq('timeframe', 'M15')
+    .eq('complete', true)
+    .gte('time', earliest)
+    .order('time', { ascending: true });
+
+  if (error || !data?.length) return {};
+
+  // Group M15 volumes into their parent hour
+  // M15 candle at 14:00 belongs to hour 14:00, candle at 14:45 belongs to hour 14:00
+  const byHour = {};
+  for (const c of data) {
+    const d = new Date(c.time);
+    d.setUTCMinutes(0, 0, 0);
+    const hk = d.toISOString();
+    byHour[hk] = (byHour[hk] || 0) + (c.volume || 0);
+  }
+  return byHour;
+}
+
 // ─── Session classification ───────────────────────────────────────────────────
 
 function classifyHour(isoTime) {
@@ -662,6 +690,7 @@ const HOURLY_COLS = new Set([
   'tradability_score',
   'false_breakout_risk',
   'de_score',
+  'hourly_volume',
 ]);
 
 function toHourlyRow(r) {
@@ -1455,6 +1484,16 @@ async function backfillSessionActivity({ fullRewrite = false } = {}) {
 
   const rows = processHours(hourKeys, byTime);
   if (!rows.length) return;
+
+  // Fetch M15 volumes and inject into hourly rows
+  try {
+    const hourlyVolumes = await fetchHourlyVolumes(hourKeys);
+    for (const r of rows) {
+      r.hourly_volume = hourlyVolumes[r.time_utc] || 0;
+    }
+  } catch (e) {
+    console.warn('[SESSION_ACTIVITY] Volume fetch failed:', e.message);
+  }
 
   const { error } = await supabase
     .from('hourly_session_activity')

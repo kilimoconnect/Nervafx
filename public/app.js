@@ -3922,6 +3922,7 @@ function _meHourlyTrend(hourlyRows) {
   // ── Score metrics (numeric rows with delta badges) ──
   const scoreMetrics = [
     { key: 'market_energy',       label: 'Energy' },
+    { key: 'hourly_volume',       label: 'Volume', isVolume: true },
     { key: 'tradability_score',   label: 'Trad' },
     { key: 'movement_score',      label: 'Mov' },
     { key: 'breadth_score',       label: 'Brd' },
@@ -3977,6 +3978,12 @@ function _meHourlyTrend(hourlyRows) {
   const scoreRows = scoreMetrics.map(m => {
     const vals = hourlyRows.map(h => Math.round(parseFloat(h[m.key]) || 0));
     const cells = vals.map((v, i) => {
+      if (m.isVolume) {
+        // Format volume: 1234 → 1.2k
+        const display = v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v;
+        const vColor = v >= 5000 ? '#22c55e' : v >= 2000 ? '#0ea5e9' : v >= 500 ? '#94a3b8' : '#475569';
+        return `<td class="me-ht-td"><span class="me-ht-val" style="color:${vColor}">${display}</span>${changeBadge(vals, i)}</td>`;
+      }
       if (m.isMomentum) {
         const display = v > 0 ? `+${v}` : `${v}`;
         return `<td class="me-ht-td"><span class="me-ht-val" style="color:${momColor(v)}">${display}</span>${changeBadge(vals, i)}</td>`;
