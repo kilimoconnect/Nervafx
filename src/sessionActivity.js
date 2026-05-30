@@ -119,33 +119,32 @@ async function fetchHourlyCandles(limit = 300) {
 
 async function fetchHourlyVolumes(hourKeys) {
   if (!hourKeys.length) return {};
-  // Only fetch last 48h of M15 volumes (keeps query size reasonable)
+  // Fetch per-instrument to stay within Supabase row limits
+  // Each instrument has ~192 M15 candles in 48h — well within limits
   const since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
   const byHour = {};
-  const PAGE = 5000;
-  let offset = 0;
 
-  while (true) {
-    const { data, error } = await supabase
-      .from('backtest_candles')
-      .select('time, volume')
-      .eq('timeframe', 'M15')
-      .eq('complete', true)
-      .gte('time', since)
-      .order('time', { ascending: true })
-      .range(offset, offset + PAGE - 1);
-
-    if (error || !data?.length) break;
-
-    for (const c of data) {
-      const d = new Date(c.time);
-      d.setUTCMinutes(0, 0, 0);
-      const hk = d.toISOString();
-      byHour[hk] = (byHour[hk] || 0) + (c.volume || 0);
+  // Batch instruments (7 at a time like candle sync)
+  for (let i = 0; i < config.instruments.length; i += 7) {
+    const batch = config.instruments.slice(i, i + 7);
+    const results = await Promise.all(batch.map(inst =>
+      supabase.from('backtest_candles')
+        .select('time, volume')
+        .eq('instrument', inst)
+        .eq('timeframe', 'M15')
+        .eq('complete', true)
+        .gte('time', since)
+        .order('time', { ascending: true })
+        .limit(200)
+    ));
+    for (const { data } of results) {
+      for (const c of (data || [])) {
+        const d = new Date(c.time);
+        d.setUTCMinutes(0, 0, 0);
+        const hk = d.toISOString();
+        byHour[hk] = (byHour[hk] || 0) + (c.volume || 0);
+      }
     }
-
-    if (data.length < PAGE) break;
-    offset += PAGE;
   }
 
   return byHour;
