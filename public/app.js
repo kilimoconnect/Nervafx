@@ -2916,9 +2916,14 @@ function renderEnergySignals(data) {
     }
   }
 
-  // ── Signal Pairs ──
+  // ── Signal Pairs (hidden on weekends — market closed) ──
   const pairsEl = document.getElementById('es-pairs');
-  if (pairsEl) {
+  const pairsSection = document.getElementById('section-energy-pairs');
+  const dayOfWeek = new Date().getUTCDay(); // 0=Sun, 6=Sat
+  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+  if (pairsSection) pairsSection.style.display = isWeekend ? 'none' : '';
+
+  if (pairsEl && !isWeekend) {
     const activePairs = (pairs || []).filter(p => p.active);
 
     if (!activePairs.length) {
