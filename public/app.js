@@ -2079,7 +2079,7 @@ function renderFlowPerformance(strengthData, m15Data) {
   // Use pre-computed flow performance data (includes DE, volume, impulse — no plan gate)
   let scored = _buildFpScored(strengthData, m15Data);
   if (!scored || !scored.length) {
-    el.innerHTML = '<p class="empty-state">No strength data yet</p>';
+    el.innerHTML = '<p class="empty-state">No strength data — please refresh the page</p>';
     return;
   }
 
@@ -3481,7 +3481,7 @@ function renderSession(data) {
   const tl = data?.timeline || SESSION_TIMELINE;
 
   if (!s) {
-    el.innerHTML = '<p class="empty-state">Session data unavailable</p>';
+    el.innerHTML = '<p class="empty-state">Session data unavailable — please refresh the page</p>';
     return;
   }
 
@@ -5587,7 +5587,7 @@ function renderMarketEnergy(sessions, expansionPressure, marketCycle, currentSes
   if (!el) return;
 
   if (!sessions || !sessions.length) {
-    el.innerHTML = '<p class="me-empty">No energy data — run pipeline to populate.</p>';
+    el.innerHTML = '<p class="me-empty">No energy data available — please refresh the page to load.</p>';
     return;
   }
 
@@ -5653,7 +5653,7 @@ async function fetchMarketActivity() {
     }
   } catch (_) {
     const el = document.getElementById('market-activity-display');
-    if (el) el.innerHTML = '<p class="me-empty">Market Energy unavailable.</p>';
+    if (el) el.innerHTML = '<p class="me-empty">Market Energy unavailable — please refresh the page.</p>';
   }
 }
 
