@@ -8103,8 +8103,29 @@ setTimeout(_btInit, 500);
 
 // Boot — wait for plan to load before first refresh to avoid cold-start 403 cascade
 showSkeletons();
+let _bootRetries = 0;
+const BOOT_RETRY_MAX = 6;
+const BOOT_RETRY_MS = 5000;
+
 (async function boot() {
   if (_userPlanReady) await _userPlanReady;
-  refresh();
-  setInterval(refresh, REFRESH_MS);
+  await refresh();
+
+  // If key data didn't populate, auto-retry every 5s (Vercel cold start / transient)
+  function checkAndRetry() {
+    const hasStrength = strengthData?.currencies?.length > 0;
+    const hasEnergy   = _energySignalsCache?.pairs?.length > 0 || _energySignalsCache?.energy > 0;
+    if (!hasStrength && !hasEnergy && _bootRetries < BOOT_RETRY_MAX) {
+      _bootRetries++;
+      console.log(`[BOOT] No data on load — retry ${_bootRetries}/${BOOT_RETRY_MAX} in ${BOOT_RETRY_MS/1000}s`);
+      setTimeout(async () => {
+        await refresh();
+        checkAndRetry();
+      }, BOOT_RETRY_MS);
+    } else {
+      // Data loaded or retries exhausted — switch to normal 60s cycle
+      setInterval(refresh, REFRESH_MS);
+    }
+  }
+  checkAndRetry();
 })();
