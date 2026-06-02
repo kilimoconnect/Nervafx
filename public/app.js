@@ -6200,6 +6200,16 @@ function renderJournal(data) {
 
 // ─── Main refresh ─────────────────────────────────────────────────────────────
 
+async function manualRefresh() {
+  const btn = document.getElementById('hdr-refresh-btn');
+  if (btn) { btn.disabled = true; btn.style.opacity = '0.4'; btn.querySelector('i')?.classList.add('spin'); }
+  try {
+    await refresh();
+  } finally {
+    if (btn) { btn.disabled = false; btn.style.opacity = ''; btn.querySelector('i')?.classList.remove('spin'); }
+  }
+}
+
 async function refresh() {
   try {
     // Wait for plan to load first (prevents 403 cascade on cold start)
