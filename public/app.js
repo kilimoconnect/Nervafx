@@ -4674,11 +4674,11 @@ const METRIC_CHART_CONFIG = {
   },
   dispersion: {
     field: 'dispersion_score', label: 'Currency Dispersion', title: 'Hourly Currency Dispersion',
-    unit: '', decimals: 0, v2Threshold: 40,
+    unit: '', decimals: 0, v2Threshold: 55,
     thresholds: [
-      { min: 60, color: '#22c55e', label: 'High dispersion — strong trends' },
-      { min: 40, color: '#0ea5e9', label: 'Moderate dispersion' },
-      { min: 20, color: '#f59e0b', label: 'Low dispersion' },
+      { min: 75, color: '#22c55e', label: 'High dispersion — strong trends' },
+      { min: 55, color: '#0ea5e9', label: 'Moderate — directional flow' },
+      { min: 35, color: '#f59e0b', label: 'Low dispersion' },
       { min: 0,  color: '#ef4444', label: 'Flat — currencies converging' },
     ],
     guide: [
