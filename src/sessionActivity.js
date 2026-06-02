@@ -115,6 +115,35 @@ async function fetchHourlyCandles(limit = 300) {
   return byTime;
 }
 
+// ─── 12H Currency Strength index for dispersion engine ───────────────────────
+
+async function _fetchCsStrengthIndex(earliest) {
+  try {
+    const index = {};
+    const PAGE = 5000;
+    let offset = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from('currency_strength')
+        .select('time, currency, smooth_12h')
+        .gte('time', earliest)
+        .order('time', { ascending: true })
+        .range(offset, offset + PAGE - 1);
+      if (error || !data?.length) break;
+      for (const r of data) {
+        const hk = new Date(r.time).toISOString();
+        if (!index[hk]) index[hk] = {};
+        index[hk][r.currency] = parseFloat(r.smooth_12h) || 0;
+      }
+      if (data.length < PAGE) break;
+      offset += PAGE;
+    }
+    return index;
+  } catch (_) {
+    return {};
+  }
+}
+
 // ─── Session classification ───────────────────────────────────────────────────
 
 function classifyHour(isoTime) {
@@ -256,7 +285,7 @@ function classifyEnergyCycle(mov, brd, agr, vol, streak, accel, prev, session) {
 
 // ─── Core computation engine ──────────────────────────────────────────────────
 
-function processHours(hourKeys, byTime, onlyLast = false) {
+function processHours(hourKeys, byTime, onlyLast = false, _csStrengthIndex = null) {
   const TOTAL = config.instruments.length; // 28
 
   // Current session tracking
@@ -351,12 +380,19 @@ function processHours(hourKeys, byTime, onlyLast = false) {
       : 0;
 
     // ═══════════════════════════════════════════════════════════════════════
-    // ENGINE 14: Currency Dispersion (strongest − weakest, normalized 0-100)
-    // Large dispersion = currencies diverging = pairs trend
-    // Small dispersion = currencies converging = pairs range
+    // ENGINE 14: Currency Dispersion (strongest − weakest 12H strength, 0-100)
+    // Uses pre-fetched smooth_12h from currency_strength table — the real
+    // multi-session capital flow that drives tradable trends.
+    // Falls back to session-level ccyStrength gap if 12H data unavailable.
     // ═══════════════════════════════════════════════════════════════════════
-    const DISPERSION_CAP = 0.008; // gap of 0.008 = score 100
-    const dispersionScore = round1(Math.min(100, (currencyLeadershipGap / DISPERSION_CAP) * 100));
+    const DISPERSION_CAP = 0.006; // 12H gap of 60 pips (0.006) = score 100
+    let dispersionGap = currencyLeadershipGap; // fallback
+    const csHourData = _csStrengthIndex?.[hk];
+    if (csHourData && Object.keys(csHourData).length >= 4) {
+      const vals12H = Object.values(csHourData).sort((a, b) => b - a);
+      dispersionGap = vals12H[0] - vals12H[vals12H.length - 1];
+    }
+    const dispersionScore = round1(Math.min(100, (dispersionGap / DISPERSION_CAP) * 100));
 
     // ── Per-pair hourly calculations ────────────────────────────────────────
     const hourlyMoves  = [];
@@ -1463,11 +1499,13 @@ async function computeSessionSummaries() {
 
 async function backfillSessionActivity({ fullRewrite = false } = {}) {
   console.log('[SESSION_ACTIVITY] Backfill: fetching candles…');
-  const byTime   = await fetchHourlyCandles(300);
+  const byTime   = await fetchHourlyCandles(500);
   const hourKeys = Object.keys(byTime).sort();
   if (!hourKeys.length) { console.log('[SESSION_ACTIVITY] No candles.'); return; }
 
-  const rows = processHours(hourKeys, byTime);
+  // Fetch 12H currency strength for dispersion engine
+  const csIndex = await _fetchCsStrengthIndex(hourKeys[0]);
+  const rows = processHours(hourKeys, byTime, false, csIndex);
   if (!rows.length) return;
 
   const { error } = await supabase
@@ -1510,7 +1548,8 @@ async function calculateLatestSessionActivity() {
   const hourKeys = Object.keys(byTime).sort();
   if (hourKeys.length < 2) return;
 
-  const allRows = processHours(hourKeys, byTime);
+  const csIndex = await _fetchCsStrengthIndex(hourKeys[0]);
+  const allRows = processHours(hourKeys, byTime, false, csIndex);
   const row = allRows[allRows.length - 1];
   if (!row) return;
 
