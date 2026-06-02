@@ -491,20 +491,23 @@ function processHours(hourKeys, byTime, onlyLast = false) {
     );
 
     // ═══════════════════════════════════════════════════════════════════════
-    // ENGINE 8: Market Energy (per PDF formula)
-    // energy_base = 0.30×movement + 0.25×breadth + 0.20×agreement
-    //            + 0.15×directional_control + 0.10×volatility_quality
-    // energy = energy_base × session_quality
+    // ENGINE 8: Market Energy (dispersion-driven formula)
+    // energy_base = 0.30×dispersion + 0.25×breadth + 0.25×agreement
+    //            + 0.20×movement
+    // energy = energy_base × volatility_quality_modifier
+    //
+    // Dispersion (currency separation) is the primary driver because
+    // tradable trends come from currencies diverging. Volatility acts
+    // as a quality modifier rather than a core component.
     // ═══════════════════════════════════════════════════════════════════════
     const energyBase = round1(
-      0.30 * movementScore +
+      0.30 * dispersionScore +
       0.25 * breadthScore +
-      0.20 * agreementScore +
-      0.15 * directionalControl +
-      0.10 * volatilityQuality
+      0.25 * agreementScore +
+      0.20 * movementScore
     );
 
-    // Session quality penalizes chaotic/dead conditions, rewards healthy
+    // Volatility acts as a quality modifier (not a core component)
     const sessionQualityMult = volatilityType === 'CHAOTIC' ? 0.65
                              : volatilityType === 'DEAD'    ? 0.55
                              : volatilityType === 'EVENT'   ? 0.75
