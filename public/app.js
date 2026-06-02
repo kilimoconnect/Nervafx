@@ -5272,133 +5272,125 @@ function _renderMeAnalysisModal() {
 
 
   const loading = '<span class="me-ai-loading">Analyzing…</span>';
+  const mcColor = ME_MARKET_CYCLE_COLOR[mc] || '#64748b';
+  const mcLabel = ME_MARKET_CYCLE_LABEL[mc] || (mc||'—').replace(/_/g,' ');
 
-  // ── Cycle section ────────────────────────────────────────────────────────────
-  const cycleHtml = d
-    ? `<div class="me-di-cycle-row">
-        ${biasBadge(d.cycle?.bias)}
-        <span class="me-di-cycle-condition">${d.cycle?.condition || '—'}</span>
+  if (!d) {
+    modal.innerHTML = `<div class="me-modal-panel" role="dialog"><div class="me-modal-header"><div class="me-modal-title"><span class="me-modal-title-label">Decision Intelligence</span></div><button class="me-modal-close" onclick="closeMeAiAnalysis()">✕</button></div><div class="me-modal-body" style="text-align:center;padding:40px">${loading}</div></div>`;
+    return;
+  }
+
+  // ── Decision Action (top banner) ──
+  const actColor = { TRADE: '#22c55e', WAIT: '#f59e0b', REDUCE: '#ef4444' };
+  const decisionHtml = d.decision ? `
+    <div style="padding:16px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <span style="font-size:16px;font-weight:800;color:${actColor[d.decision.action]||'#64748b'}">${d.decision.action}</span>
+        <span style="font-size:12px;color:#94a3b8;font-weight:600">${d.decision.environment || ''}</span>
       </div>
-      ${d.cycle?.narrative ? `<p class="me-di-narrative">${d.cycle.narrative}</p>` : ''}
-      <div class="me-di-trigger-row">
-        <span class="me-di-row-label">Trigger</span>
-        <span class="me-di-trigger-text">${d.cycle?.trigger || '—'}</span>
-      </div>`
-    : loading;
+      <p style="font-size:12px;color:#cbd5e1;line-height:1.6;margin:0 0 8px">${d.decision.reason || ''}</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px">
+        <div><span style="color:#64748b">Best Setup:</span> <span style="color:#e2e8f0">${d.decision.best_setup || '—'}</span></div>
+        <div><span style="color:#64748b">Risk Trap:</span> <span style="color:#fca5a5">${d.decision.risk_trap || '—'}</span></div>
+      </div>
+    </div>` : '';
 
-  // ── Session cards ─────────────────────────────────────────────────────────────
+  // ── Engine Conflicts ──
+  const conflictsHtml = d.engine_conflicts?.conflicts?.length ? `
+    <div style="margin-bottom:16px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#f59e0b;margin-bottom:8px">Engine Conflicts Detected</div>
+      ${d.engine_conflicts.conflicts.map(c => `
+        <div style="padding:10px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:8px;margin-bottom:6px">
+          <div style="font-size:11px;font-weight:700;color:#fbbf24">${c.conflict}</div>
+          <div style="font-size:11px;color:#94a3b8;margin-top:2px">${c.meaning}</div>
+          <div style="font-size:11px;color:#cbd5e1;margin-top:2px">${c.implication}</div>
+        </div>`).join('')}
+    </div>` : '';
+
+  // ── Session Flow ──
+  const flowHtml = d.session_flow ? `
+    <div style="padding:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:8px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;color:#60a5fa;margin-bottom:4px">${d.session_flow.pattern || ''}</div>
+      <div style="font-size:11px;color:#cbd5e1;line-height:1.5">${d.session_flow.interpretation || ''}</div>
+    </div>` : '';
+
+  // ── Expansion Probability ──
+  const expProb = d.expansion_probability;
+  const expColor = expProb?.score >= 60 ? '#22c55e' : expProb?.score >= 35 ? '#f59e0b' : '#ef4444';
+  const expHtml = expProb ? `
+    <div style="display:flex;align-items:center;gap:12px;padding:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:8px;margin-bottom:16px">
+      <div style="text-align:center;min-width:60px">
+        <div style="font-size:22px;font-weight:800;color:${expColor}">${expProb.score}%</div>
+        <div style="font-size:9px;font-weight:600;color:${expColor}">${expProb.label}</div>
+      </div>
+      <div style="font-size:11px;color:#94a3b8;line-height:1.5">${expProb.factors || ''}</div>
+    </div>` : '';
+
+  // ── Cycle + Confidence ──
+  const cycleConf = d.cycle?.confidence || 0;
+  const cycleHtml = `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+      <span style="font-size:12px;font-weight:700;color:#e2e8f0">${d.cycle?.classification || mc || '—'}</span>
+      <span style="font-size:10px;color:#64748b">Confidence: <strong style="color:${cycleConf>=70?'#22c55e':cycleConf>=40?'#f59e0b':'#ef4444'}">${cycleConf}%</strong></span>
+    </div>
+    <p style="font-size:12px;color:#cbd5e1;line-height:1.6;margin:0">${d.cycle?.narrative || ''}</p>`;
+
+  // ── Session Intelligence ──
+  const QUAL_COLOR = { STRONG: '#22c55e', MODERATE: '#0ea5e9', WEAK: '#f59e0b', AVOID: '#ef4444' };
   const sessCards = ['ASIA', 'LONDON', 'NEW_YORK'].map(key => {
-    const s     = byName[key] || {};
-    const ai    = d?.sessions?.[key] || null;
+    const ai = d.sessions?.[key];
+    if (!ai) return '';
     const color = SESS_COLOR[key];
-    const cycle = s.energy_cycle || '';
-    const mom   = s.energy_momentum;
-
-    const metrics = `
-      <div class="me-modal-metrics">
-        <div class="me-modal-metric"><span>Mov</span><strong>${Math.round(s.movement_score||0)}</strong>${pct(s.norm_movement)}</div>
-        <div class="me-modal-metric"><span>Brd</span><strong>${Math.round(s.breadth_score||0)}</strong>${pct(s.norm_breadth)}</div>
-        <div class="me-modal-metric"><span>Agr</span><strong>${Math.round(s.agreement_score||0)}</strong>${pct(s.norm_agreement)}</div>
-        <div class="me-modal-metric"><span>Vol</span><strong>${Math.round(s.volatility_score||0)}</strong>${pct(s.norm_volatility)}</div>
-        <div class="me-modal-metric"><span>Energy</span><strong>${Math.round(s.market_energy||0)}</strong>${pct(s.norm_energy)}</div>
-        <div class="me-modal-metric"><span>Trad</span><strong>${Math.round(s.tradability_score||0)}</strong></div>
-        <div class="me-modal-metric"><span>Dir</span><strong>${Math.round(s.directional_control||0)}</strong></div>
-      </div>`;
-
-    const momHtml = mom
-      ? `<span class="me-modal-momentum" style="color:${ME_MOMENTUM_COLOR[mom]||'#64748b'}">${ME_MOMENTUM_LABEL[mom]||''}</span>`
-      : '';
-
-    const sessAiHtml = ai
-      ? `<div class="me-di-sess-ai">
-          <div class="me-di-ai-row">
-            <span class="me-di-row-label">Flow</span>
-            <span class="me-di-flow-text">${ai.flow || '—'}</span>
-          </div>
-          ${ai.analysis ? `<p class="me-di-sess-analysis">${ai.analysis}</p>` : ''}
-          <div class="me-di-ai-row me-di-signal-row">
-            <span class="me-di-row-label">Signal</span>
-            <span class="me-di-signal-text">${ai.signal || '—'}</span>
-          </div>
-          <div class="me-di-ai-row me-di-watch-row">
-            <span class="me-di-row-label">Watch</span>
-            <span class="me-di-watch-text">${ai.watch || '—'}</span>
-          </div>
-        </div>`
-      : `<div class="me-di-sess-ai">${loading}</div>`;
-
-    return `<div class="me-modal-sess-card">
-      <div class="me-modal-sess-head">
-        <span class="me-modal-sess-name" style="color:${color}">${SESS_LABEL[key]}</span>
-        <span class="me-modal-cycle-badge" style="--bc:${ME_CYCLE_COLOR[cycle]||'#64748b'}">${ME_CYCLE_LABEL[cycle]||cycle}</span>
-        ${momHtml}
+    const qCol = QUAL_COLOR[ai.quality] || '#64748b';
+    return `<div style="padding:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <span style="font-size:12px;font-weight:700;color:${color}">${SESS_LABEL[key]}</span>
+        <span style="font-size:10px;font-weight:700;color:${qCol}">${ai.quality || '—'}</span>
       </div>
-      ${metrics}
-      ${sessAiHtml}
+      <p style="font-size:11px;color:#cbd5e1;line-height:1.5;margin:0">${ai.intelligence || ''}</p>
     </div>`;
   }).join('');
 
-  // ── Currency leadership ───────────────────────────────────────────────────────
-  const currencyHtml = d?.currencies
-    ? `<div class="me-di-ccy-grid">
-        <div class="me-di-ccy-card me-di-ccy-leader">
-          <span class="me-di-ccy-label">Leader</span>
-          <p class="me-di-ccy-text">${d.currencies.leader || '—'}</p>
-        </div>
-        <div class="me-di-ccy-card me-di-ccy-laggard">
-          <span class="me-di-ccy-label">Laggard</span>
-          <p class="me-di-ccy-text">${d.currencies.laggard || '—'}</p>
-        </div>
-        <div class="me-di-ccy-card me-di-ccy-theme">
-          <span class="me-di-ccy-label">Theme</span>
-          <p class="me-di-ccy-text">${d.currencies.theme || '—'}</p>
-        </div>
-      </div>`
-    : loading;
-
-  // ── Previous Sessions ──────────────────────────────────────────────────────────
-  const PREV_SESS_COLOR = { ASIA: '#f59e0b', LONDON: '#0ea5e9', NEW_YORK: '#a855f7' };
-  const PREV_SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York' };
-  const prevSessHtml = d?.previous_sessions?.length
-    ? `<div class="me-di-prev-list">${d.previous_sessions.map(ps => {
-        const color = PREV_SESS_COLOR[ps.session] || '#64748b';
-        const label = PREV_SESS_LABEL[ps.session] || ps.session;
-        return `<div class="me-di-prev-card">
-          <div class="me-di-prev-head">
-            <span class="me-di-prev-sess" style="color:${color}">${label}</span>
-            <span class="me-di-prev-date">${ps.date || ''}</span>
-          </div>
-          <p class="me-di-prev-summary">${ps.summary || '—'}</p>
-          <div class="me-di-ai-row"><span class="me-di-row-label">Impact</span><span class="me-di-prev-impact">${ps.impact || '—'}</span></div>
-        </div>`;
-      }).join('')}</div>`
-    : '<p class="me-di-no-prev">No previous session data available.</p>';
-
-  // ── Summary ───────────────────────────────────────────────────────────────────
-  const summaryHtml = d?.summary
-    ? `<div class="me-di-summary-head">
-        ${biasBadge(d.summary.bias)}
-        <span class="me-di-summary-label">Overall Bias</span>
+  // ── Historical Comparison ──
+  const histHtml = d.historical_comparison ? `
+    <div style="padding:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:8px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <span style="font-size:10px;font-weight:700;text-transform:uppercase;color:#64748b">vs Previous</span>
+        <span style="font-size:10px;font-weight:700;color:${d.historical_comparison.trend==='IMPROVING'?'#22c55e':d.historical_comparison.trend==='DETERIORATING'?'#ef4444':'#94a3b8'}">${d.historical_comparison.trend || ''}</span>
       </div>
-      ${d.summary.playbook ? `<p class="me-di-playbook">${d.summary.playbook}</p>` : ''}
-      <div class="me-di-summary-rows">
-        <div class="me-di-sum-row">
-          <span class="me-di-row-label">Priority</span>
-          <span class="me-di-sum-text me-di-priority-text">${d.summary.priority || '—'}</span>
-        </div>
-        <div class="me-di-sum-row">
-          <span class="me-di-row-label">Risk</span>
-          <span class="me-di-sum-text me-di-risk-text">${d.summary.risk || '—'}</span>
-        </div>
-        <div class="me-di-sum-row">
-          <span class="me-di-row-label">Opportunity</span>
-          <span class="me-di-sum-text me-di-opp-text">${d.summary.opportunity || '—'}</span>
-        </div>
-      </div>`
-    : loading;
+      <p style="font-size:11px;color:#cbd5e1;line-height:1.5;margin:0">${d.historical_comparison.vs_previous || ''}</p>
+    </div>` : '';
 
-  const mcColor = ME_MARKET_CYCLE_COLOR[mc] || '#64748b';
-  const mcLabel = ME_MARKET_CYCLE_LABEL[mc] || (mc||'—').replace(/_/g,' ');
+  // ── What Changes Bias ──
+  const biasHtml = d.what_changes_bias ? `
+    <div style="padding:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:8px;margin-bottom:16px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:8px">Current Bias: <span style="color:${BIAS_COLOR[d.what_changes_bias.current_bias]||'#64748b'}">${d.what_changes_bias.current_bias || '—'}</span></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px">
+        <div><div style="color:#22c55e;font-weight:600;margin-bottom:3px">To Turn Bullish</div><div style="color:#94a3b8;line-height:1.5">${d.what_changes_bias.to_bullish || '—'}</div></div>
+        <div><div style="color:#ef4444;font-weight:600;margin-bottom:3px">To Turn Bearish</div><div style="color:#94a3b8;line-height:1.5">${d.what_changes_bias.to_bearish || '—'}</div></div>
+      </div>
+    </div>` : '';
+
+  // ── Currency ──
+  const currencyHtml = d.currencies ? `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
+      <div style="padding:10px;background:rgba(34,197,94,0.05);border:1px solid rgba(34,197,94,0.15);border-radius:8px">
+        <div style="font-size:10px;font-weight:700;color:#22c55e;margin-bottom:3px">Leader</div>
+        <div style="font-size:11px;color:#cbd5e1;line-height:1.4">${d.currencies.leader || '—'}</div>
+      </div>
+      <div style="padding:10px;background:rgba(239,68,68,0.05);border:1px solid rgba(239,68,68,0.15);border-radius:8px">
+        <div style="font-size:10px;font-weight:700;color:#ef4444;margin-bottom:3px">Laggard</div>
+        <div style="font-size:11px;color:#cbd5e1;line-height:1.4">${d.currencies.laggard || '—'}</div>
+      </div>
+    </div>
+    <div style="font-size:11px;color:#94a3b8;line-height:1.5;margin-bottom:16px">${d.currencies.theme || ''}</div>` : '';
+
+  // ── Playbook ──
+  const playbookHtml = d.summary ? `
+    <div style="padding:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:8px">
+      <p style="font-size:12px;color:#e2e8f0;line-height:1.6;margin:0 0 8px">${d.summary.playbook || ''}</p>
+      <div style="font-size:11px;color:#64748b"><strong>Watch:</strong> <span style="color:#60a5fa">${d.summary.priority_metric || ''}</span></div>
+    </div>` : '';
 
   modal.innerHTML = `
     <div class="me-modal-panel" role="dialog" aria-modal="true">
@@ -5409,9 +5401,11 @@ function _renderMeAnalysisModal() {
         </div>
         <button class="me-modal-close" onclick="closeMeAiAnalysis()" aria-label="Close">✕</button>
       </div>
-
       <div class="me-modal-body">
-        <h3 class="me-di-group-heading">Live Analysis</h3>
+        ${decisionHtml}
+        ${conflictsHtml}
+        ${flowHtml}
+        ${expHtml}
 
         <section class="me-modal-section">
           <h3 class="me-modal-section-title">Market Cycle</h3>
@@ -5419,24 +5413,22 @@ function _renderMeAnalysisModal() {
         </section>
 
         <section class="me-modal-section">
-          <h3 class="me-modal-section-title">Session Conditions</h3>
-          <div class="me-modal-sess-grid">${sessCards}</div>
+          <h3 class="me-modal-section-title">Session Intelligence</h3>
+          <div style="display:flex;flex-direction:column;gap:8px">${sessCards}</div>
         </section>
 
+        ${histHtml}
+
         <section class="me-modal-section">
-          <h3 class="me-modal-section-title">Currency Leadership</h3>
+          <h3 class="me-modal-section-title">Currency Flow</h3>
           ${currencyHtml}
         </section>
 
-        <section class="me-modal-section">
-          <h3 class="me-modal-section-title">Summary & Playbook</h3>
-          ${summaryHtml}
-        </section>
-
-        <h3 class="me-di-group-heading">Previous Session Analysis</h3>
+        ${biasHtml}
 
         <section class="me-modal-section">
-          ${prevSessHtml}
+          <h3 class="me-modal-section-title">Playbook</h3>
+          ${playbookHtml}
         </section>
       </div>
     </div>`;

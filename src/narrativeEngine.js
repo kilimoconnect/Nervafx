@@ -7,135 +7,17 @@ const { getMarketEnergyData } = require('./sessionActivity');
 const TABLE = 'market_energy_narrative';
 
 function fv(v) { return Math.round(parseFloat(v) || 0); }
-function pct(v) {
-  if (v == null) return 'n/a';
-  return `${v >= 0 ? '+' : ''}${v}%avg`;
-}
-function prev(v) {
-  if (v == null) return '';
-  return ` (${v >= 0 ? '+' : ''}${v}%prev)`;
-}
 
-function buildPrompt(sessions, ep, marketCycle, prevSessions) {
-  const active = sessions.filter(s => s.session_name !== 'LOW_LIQUIDITY');
-  const byName = Object.fromEntries(active.map(s => [s.session_name, s]));
-
-  const lines = active.map(s =>
-    `  ${s.session_name.padEnd(10)} cycle=${s.energy_cycle||'?'} momentum=${s.energy_momentum||'n/a'}
-    Mov:${fv(s.movement_score)} (${pct(s.norm_movement)})  Mom:${fv(s.breadth_score)} (${pct(s.norm_breadth)})  Agr:${fv(s.agreement_score)} (${pct(s.norm_agreement)})
-    Vol:${fv(s.volatility_score)} (${pct(s.norm_volatility)})  Energy:${fv(s.market_energy)} (${pct(s.norm_energy)}${prev(s.prev_energy)})  Dom:${fv(s.dominance_score)}%
-    Bull:${fv(s.bullish_breadth)}%  Bear:${fv(s.bearish_breadth)}%  Strong:${s.strongest_ccy||'?'}  Weak:${s.weakest_ccy||'?'}`
-  ).join('\n\n');
-
-  const flowStr = ep?.carryOver?.length > 1
-    ? '\nSESSION FLOW: ' + ep.carryOver.map(c => `${c.session}(E:${c.energy} Mom:${c.breadth} ${c.cycle})`).join(' → ')
-    : '';
-
-  const epText = (!ep || ep.streak === 0)
-    ? 'None'
-    : `${ep.risk} | streak:${ep.streak} sessions (${ep.chain.join('→')}) | score:${ep.score}`;
-
-  const a  = byName['ASIA'];
-  const l  = byName['LONDON'];
-  const ny = byName['NEW_YORK'];
-
-  const prevBlock = (prevSessions && prevSessions.length)
-    ? '\n━━━ PREVIOUS 3 SESSIONS (for context & comparison) ━━━\n' +
-      prevSessions.map(s => `  ${s.session_date} ${s.session_name.padEnd(10)} cycle=${s.energy_cycle||'?'} E:${fv(s.market_energy)} Mov:${fv(s.movement_score)} Mom:${fv(s.breadth_score)} Liq:${fv(s.liquidity_score)} Bull:${fv(s.bullish_breadth)}% Bear:${fv(s.bearish_breadth)}% Strong:${s.strongest_ccy||'?'} Weak:${s.weakest_ccy||'?'}`).join('\n') + '\n'
-    : '';
-
-  return `You are a senior institutional forex analyst. Produce a deep, data-driven briefing. Output ONLY a raw JSON object — no markdown fences, no explanation.
-
-━━━ SESSION DATA ━━━
-${lines}${flowStr}
-
-EXPANSION PRESSURE: ${epText}
-MARKET CYCLE CLASSIFICATION: ${marketCycle || 'UNKNOWN'}
-
-━━━ DEFINITIONS ━━━
-%avg  = % deviation vs this session's own 14-day historical average
-%prev = % deviation vs the previous occurrence of the same session
-COMPRESSION = suppressed participation (breadth low, pairs not moving)
-EXPANSION   = broad coordinated directional move
-Bull%/Bear% = magnitude-weighted directional pressure (not raw pair count)
-Dom%        = one-sidedness (0=balanced, 100=one direction only)
-Energy      = composite of movement × breadth × agreement
-
-━━━ DATA SNAPSHOT (LIVE) ━━━
-Asia   — Mov:${fv(a?.movement_score)} Mom:${fv(a?.breadth_score)} Agr:${fv(a?.agreement_score)} Energy:${fv(a?.market_energy)} Bull:${fv(a?.bullish_breadth)}% Bear:${fv(a?.bearish_breadth)}% Dom:${fv(a?.dominance_score)}% Strong:${a?.strongest_ccy||'?'} Weak:${a?.weakest_ccy||'?'}
-London — Mov:${fv(l?.movement_score)} Mom:${fv(l?.breadth_score)} Agr:${fv(l?.agreement_score)} Energy:${fv(l?.market_energy)} Bull:${fv(l?.bullish_breadth)}% Bear:${fv(l?.bearish_breadth)}% Dom:${fv(l?.dominance_score)}% Strong:${l?.strongest_ccy||'?'} Weak:${l?.weakest_ccy||'?'}
-NY     — Mov:${fv(ny?.movement_score)} Mom:${fv(ny?.breadth_score)} Agr:${fv(ny?.agreement_score)} Energy:${fv(ny?.market_energy)} Bull:${fv(ny?.bullish_breadth)}% Bear:${fv(ny?.bearish_breadth)}% Dom:${fv(ny?.dominance_score)}% Strong:${ny?.strongest_ccy||'?'} Weak:${ny?.weakest_ccy||'?'}
-${prevBlock}
-━━━ OUTPUT SCHEMA ━━━
-Return exactly this structure:
-
-{
-  "cycle": {
-    "bias": "NEUTRAL",
-    "condition": "6-8 word label for current cycle state",
-    "narrative": "2-3 sentences. What this cycle phase means, which metrics confirm it, and what it implies for directional opportunity. Reference actual numbers.",
-    "trigger": "Specific metric + exact threshold that would shift the bias. E.g.: London breadth rising above 38 sustained for 2 sessions with agreement >50 would confirm bullish expansion."
-  },
-  "sessions": {
-    "ASIA": {
-      "flow": "≤10 words: dominant ccy and against what",
-      "analysis": "2-3 sentences specific to Asia. Reference Asia's actual numbers: its cycle, breadth vs average, dominant currency, bull/bear split, what the momentum means.",
-      "signal": "Single most actionable insight citing at least one specific number.",
-      "watch": "Exact metric + number threshold that would shift conditions."
-    },
-    "LONDON": {
-      "flow": "≤10 words",
-      "analysis": "2-3 sentences specific to London data.",
-      "signal": "Actionable insight with number.",
-      "watch": "Metric + threshold."
-    },
-    "NEW_YORK": {
-      "flow": "≤10 words",
-      "analysis": "2-3 sentences specific to New York data.",
-      "signal": "Actionable insight with number.",
-      "watch": "Metric + threshold."
-    }
-  },
-  "currencies": {
-    "leader": "Which currency is strongest across sessions and why — cite bull%, Dom%, or consistency.",
-    "laggard": "Which currency is weakest across sessions and why — cite bear%, Dom%, or consistency.",
-    "theme": "Cross-session currency theme: are the same currencies dominating each session, or is there divergence? What does this mean for pair selection?"
-  },
-  "previous_sessions": [
-    {
-      "session": "ASIA or LONDON or NEW_YORK",
-      "date": "YYYY-MM-DD",
-      "summary": "1-2 sentences: what happened in that session — key cycle, energy level, dominant currencies, and how it compares to today's live data.",
-      "impact": "1 sentence: how this previous session's outcome affects current conditions or expectations."
-    }
-  ],
-  "summary": {
-    "bias": "NEUTRAL",
-    "playbook": "2-3 sentences: what a trader should actually do right now given these conditions. Be direct — wait, position, watch X. Reference conditions and compare to previous sessions.",
-    "priority": "The single most important metric to monitor in the next session, with the exact threshold that matters.",
-    "risk": "The main risk or trap in current conditions. Be specific.",
-    "opportunity": "The best realistic setup if conditions improve. Name the currency pair direction if possible."
-  }
-}
-
-━━━ FIELD RULES ━━━
-cycle.bias / summary.bias: BULLISH | BEARISH | NEUTRAL | MIXED
-  — BULLISH: bull% consistently > bear%, Dom% >20 across 2+ sessions, strong ccy recurring
-  — BEARISH: opposite
-  — MIXED: sessions conflict directionally
-  — NEUTRAL: Dom% <15 across all sessions, no clear ccy leadership
-
-analysis, narrative, playbook: write as a professional analyst. Use numbers from the data. Do not use filler phrases like "it is important to note" or "overall". Be direct and specific.`;
-}
+// ── Data collection ─────────────────────────────────────────────────────────
 
 async function fetchPreviousSessions() {
   const cutoff = new Date();
   cutoff.setUTCDate(cutoff.getUTCDate() - 3);
   const today = new Date().toISOString().slice(0, 10);
 
-  const { data, error } = await supabase
+  const { data } = await supabase
     .from('market_energy_sessions')
-    .select('session_date, session_name, energy_cycle, market_energy, movement_score, breadth_score, liquidity_score, bullish_breadth, bearish_breadth, strongest_ccy, weakest_ccy')
+    .select('session_date, session_name, energy_cycle, market_energy, movement_score, breadth_score, agreement_score, dominance_score, bullish_breadth, bearish_breadth, strongest_ccy, weakest_ccy, tradability_score, tradability_grade, directional_control, volatility_type')
     .gte('session_date', cutoff.toISOString().slice(0, 10))
     .lt('session_date', today)
     .neq('session_name', 'LOW_LIQUIDITY')
@@ -143,23 +25,182 @@ async function fetchPreviousSessions() {
     .order('session_name', { ascending: true })
     .limit(9);
 
-  if (error) { console.error('[NARRATIVE] prev sessions:', error.message); return []; }
-  return (data || []).slice(0, 3);
+  return (data || []).slice(0, 6);
 }
+
+async function fetchHourlyTrend() {
+  const since = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
+  const { data } = await supabase
+    .from('hourly_session_activity')
+    .select('time_utc, session_name, market_energy, dispersion_score, movement_score, breadth_score, agreement_score, directional_control, tradability_score, de_score')
+    .gte('time_utc', since)
+    .order('time_utc', { ascending: true })
+    .limit(12);
+  return data || [];
+}
+
+async function fetchEnergyPairs() {
+  const { data } = await supabase
+    .from('energy_signal_pairs')
+    .select('instrument, dir, phase, de_combined, impulse_score, impulse_aligned')
+    .eq('active', true);
+  return data || [];
+}
+
+// ── Prompt builder ──────────────────────────────────────────────────────────
+
+function buildPrompt(sessions, ep, marketCycle, prevSessions, hourlyTrend, energyPairs) {
+  const active = sessions.filter(s => s.session_name !== 'LOW_LIQUIDITY');
+  const byName = Object.fromEntries(active.map(s => [s.session_name, s]));
+
+  const sessBlock = active.map(s =>
+    `${s.session_name}: cycle=${s.energy_cycle||'?'} Energy=${fv(s.market_energy)} Disp=${fv(s.dispersion_score||0)} Mov=${fv(s.movement_score)} Brd=${fv(s.breadth_score)} Agr=${fv(s.agreement_score)} Dir=${fv(s.directional_control||0)} Trad=${fv(s.tradability_score||0)} VolType=${s.volatility_type||'?'} Bull=${fv(s.bullish_breadth)}% Bear=${fv(s.bearish_breadth)}% Dom=${fv(s.dominance_score)}% Strong=${s.strongest_ccy||'?'} Weak=${s.weakest_ccy||'?'}`
+  ).join('\n');
+
+  // Session flow
+  const flowStr = ep?.carryOver?.length > 1
+    ? 'SESSION FLOW: ' + ep.carryOver.map(c => `${c.session}(E:${c.energy} Brd:${c.breadth} ${c.cycle})`).join(' → ')
+    : '';
+
+  // Hourly trend (last 12h)
+  const trendBlock = hourlyTrend.length
+    ? 'HOURLY TREND (last 12h):\n' + hourlyTrend.map(h =>
+        `  ${h.time_utc.slice(11,16)} ${(h.session_name||'').padEnd(10)} E=${fv(h.market_energy)} Disp=${fv(h.dispersion_score)} Mov=${fv(h.movement_score)} Brd=${fv(h.breadth_score)} Agr=${fv(h.agreement_score)} Dir=${fv(h.directional_control)} Trad=${fv(h.tradability_score)} DE=${fv(h.de_score)}`
+      ).join('\n')
+    : '';
+
+  // Previous sessions for comparison
+  const prevBlock = prevSessions.length
+    ? 'PREVIOUS SESSIONS:\n' + prevSessions.map(s =>
+        `  ${s.session_date} ${s.session_name.padEnd(10)} cycle=${s.energy_cycle||'?'} E=${fv(s.market_energy)} Brd=${fv(s.breadth_score)} Agr=${fv(s.agreement_score||0)} Dir=${fv(s.directional_control||0)} Trad=${fv(s.tradability_score||0)} Strong=${s.strongest_ccy||'?'} Weak=${s.weakest_ccy||'?'}`
+      ).join('\n')
+    : '';
+
+  // Active signal pairs
+  const pairsBlock = energyPairs.length
+    ? 'ACTIVE SIGNAL PAIRS:\n' + energyPairs.map(p =>
+        `  ${p.instrument.replace('_','/')} ${p.dir} phase=${p.phase} DE=${fv(p.de_combined)} imp=${p.impulse_score||0}${p.impulse_aligned?'✓':''}`
+      ).join('\n')
+    : 'No active signal pairs.';
+
+  return `You are a senior institutional forex trading intelligence engine. Your job is to produce ACTIONABLE intelligence, NOT metric commentary.
+
+CRITICAL RULES:
+- NEVER repeat metric values back. The user already sees the dashboard.
+- ALWAYS explain IMPLICATIONS and CONTRADICTIONS between metrics.
+- ALWAYS compare to previous sessions when data is available.
+- ALWAYS give specific thresholds for what would change the bias.
+- Be direct. No filler phrases. Every sentence must add value.
+
+━━━ LIVE SESSION DATA ━━━
+${sessBlock}
+${flowStr}
+
+${trendBlock}
+
+${prevBlock}
+
+${pairsBlock}
+
+EXPANSION PRESSURE: ${(!ep || ep.streak === 0) ? 'None' : `${ep.risk} | streak:${ep.streak} (${ep.chain?.join('→')||''})`}
+MARKET CYCLE: ${marketCycle || 'UNKNOWN'}
+
+━━━ OUTPUT SCHEMA (return raw JSON, no markdown) ━━━
+{
+  "engine_conflicts": {
+    "detected": true/false,
+    "conflicts": [
+      {
+        "conflict": "High Breadth (71) + Low Agreement (32)",
+        "meaning": "Many pairs moving but not in same direction — capital rotating, not trending",
+        "implication": "Avoid trend-following. Watch for rotation to resolve into direction."
+      }
+    ]
+  },
+  "session_flow": {
+    "pattern": "Asia Expansion → London Low Participation → NY ?",
+    "interpretation": "1-2 sentences: what the session-to-session transition means. Was momentum carried forward or abandoned?",
+    "follow_through": true/false
+  },
+  "expansion_probability": {
+    "score": 38,
+    "label": "LOW/MODERATE/HIGH",
+    "factors": "1-2 sentences: what drives the probability up or down right now"
+  },
+  "historical_comparison": {
+    "vs_previous": "1-2 sentences comparing current session to the same session yesterday. Cite specific numbers that changed.",
+    "trend": "IMPROVING/DETERIORATING/STABLE"
+  },
+  "cycle": {
+    "classification": "LOW_PARTICIPATION/COMPRESSION/EXPANSION/TRANSITION/etc",
+    "confidence": 82,
+    "narrative": "2 sentences max. What this cycle means for trading. No metric repetition."
+  },
+  "sessions": {
+    "ASIA": {
+      "intelligence": "2 sentences of actual intelligence. Explain contradictions, implications, what the data MEANS for trading.",
+      "quality": "STRONG/MODERATE/WEAK/AVOID"
+    },
+    "LONDON": {
+      "intelligence": "2 sentences",
+      "quality": "STRONG/MODERATE/WEAK/AVOID"
+    },
+    "NEW_YORK": {
+      "intelligence": "2 sentences",
+      "quality": "STRONG/MODERATE/WEAK/AVOID"
+    }
+  },
+  "currencies": {
+    "leader": "Which currency is leading and WHY (not just 'USD is strong')",
+    "laggard": "Which currency is weakest and WHY",
+    "theme": "1 sentence: cross-session currency theme"
+  },
+  "what_changes_bias": {
+    "to_bullish": "Specific conditions: e.g. Agreement > 55 + Dispersion > 40 + AUD maintains leadership",
+    "to_bearish": "Specific conditions",
+    "current_bias": "NEUTRAL/BULLISH/BEARISH/MIXED"
+  },
+  "decision": {
+    "action": "TRADE/WAIT/REDUCE",
+    "environment": "3-5 word label e.g. 'Low Participation Rotation'",
+    "reason": "1-2 sentences: why this action, what would change it",
+    "best_setup": "If TRADE: name the pair and direction. If WAIT: what to watch.",
+    "risk_trap": "The main trap in current conditions"
+  },
+  "summary": {
+    "playbook": "2-3 sentences: what a trader should do RIGHT NOW. Be direct.",
+    "priority_metric": "The ONE metric to watch and its threshold"
+  }
+}
+
+FIELD RULES:
+- expansion_probability.score: 0-100 based on dispersion trend + breadth + agreement + energy momentum
+- cycle.confidence: 0-100 how clear the cycle classification is
+- engine_conflicts: detect when metrics CONTRADICT each other (high breadth + low agreement, high movement + low directional control, etc)
+- what_changes_bias: must cite SPECIFIC numbers and conditions, not vague statements
+- decision.action: TRADE only if tradability > 50 AND agreement > 45 AND dispersion > 35
+- All text: professional analyst tone. Every sentence must contain insight, not description.`;
+}
+
+// ── Main ────────────────────────────────────────────────────────────────────
 
 async function generateMarketNarrative() {
   const data = await getMarketEnergyData();
   if (!data?.sessions?.length) throw new Error('No session data available');
 
   const { sessions, expansionPressure, marketCycle } = data;
-  const prevSessions = await fetchPreviousSessions();
+  const [prevSessions, hourlyTrend, energyPairs] = await Promise.all([
+    fetchPreviousSessions(),
+    fetchHourlyTrend(),
+    fetchEnergyPairs(),
+  ]);
 
-  const prompt     = buildPrompt(sessions, expansionPressure, marketCycle, prevSessions);
-  const ai         = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const prompt = buildPrompt(sessions, expansionPressure, marketCycle, prevSessions, hourlyTrend, energyPairs);
+  const ai     = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   const completion = await ai.chat.completions.create({
     model:           'gpt-4o-mini',
-    max_tokens:      2200,
-    temperature:     0.3,
+    max_tokens:      3000,
+    temperature:     0.25,
     response_format: { type: 'json_object' },
     messages:        [{ role: 'user', content: prompt }],
   });
