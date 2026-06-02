@@ -5464,19 +5464,11 @@ function _meMarketCycleBanner(cycle, latestHourly) {
     <span class="me-cycle-banner-label">Market Cycle</span>
     <span class="me-cycle-banner-val" style="--bc:${color}">${label}</span>
     ${engineBtn('energy', 'Energy')}
-    ${engineBtn('de', 'Dir Efficiency')}
     ${engineBtn('dispersion', 'Dispersion')}
     ${engineBtn('tradability', 'Tradability')}
     ${engineBtn('movement', 'Movement')}
     ${engineBtn('breadth', 'Breadth')}
     ${engineBtn('agreement', 'Agreement')}
-    ${engineBtn('dircontrol', 'Dir Control')}
-    ${engineBtn('volquality', 'Vol Quality')}
-    ${engineBtn('volatility', 'Volatility')}
-    ${engineBtn('momentum', 'Momentum')}
-    ${engineBtn('chaos', 'Chaos')}
-    ${engineBtn('fbr', 'FB Risk')}
-    ${engineBtn('liquidity', 'Liquidity')}
     <button class="me-ai-toggle me-btn-ai premium-only" onclick="openMeAiAnalysis()">AI Analysis</button>
   </div>`;
 }
