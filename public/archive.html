@@ -322,6 +322,8 @@
   <main class="arc-main">
     <div class="arc-tabs">
       <button class="arc-tab active" data-section="energy" onclick="switchArchiveTab(this)">Energy</button>
+      <button class="arc-tab" data-section="de" onclick="switchArchiveTab(this)">Dir Efficiency</button>
+      <button class="arc-tab" data-section="dispersion" onclick="switchArchiveTab(this)">Dispersion</button>
       <button class="arc-tab" data-section="tradability" onclick="switchArchiveTab(this)">Tradability</button>
       <button class="arc-tab" data-section="movement" onclick="switchArchiveTab(this)">Movement</button>
       <button class="arc-tab" data-section="breadth" onclick="switchArchiveTab(this)">Breadth</button>
@@ -375,6 +377,18 @@
       <div class="arc-section-header"><i data-lucide="zap"></i> Hourly Market Energy</div>
       <div class="arc-section-desc">Weighted composite: 30% movement + 25% breadth + 20% agreement + 15% directional control + 10% volatility quality, scaled by session quality (healthy×1.1, chaotic×0.65). Green bars = energy buildup streaks.</div>
       <div id="arc-energy-body"><div class="arc-loading"><span class="spinner"></span> Loading energy data…</div></div>
+    </section>
+
+    <section class="arc-section" id="arc-de" style="display:none">
+      <div class="arc-section-header"><i data-lucide="target"></i> Hourly Directional Efficiency</div>
+      <div class="arc-section-desc">Measures how much of each candle's range is directional (body vs wicks), averaged across all 28 pairs. 55+ = strong directional, 45+ = directional, 35+ = mixed, &lt;35 = choppy. Green bars = DE ≥ 50.</div>
+      <div id="arc-de-body"><div class="arc-loading"><span class="spinner"></span> Loading DE data…</div></div>
+    </section>
+
+    <section class="arc-section" id="arc-dispersion" style="display:none">
+      <div class="arc-section-header"><i data-lucide="git-branch"></i> Hourly Currency Dispersion</div>
+      <div class="arc-section-desc">Strongest currency − weakest currency, normalized 0-100. Large dispersion = currencies diverging = pairs trend. Small dispersion = currencies converging = pairs range. The single strongest predictor of tradable conditions. Green bars = dispersion ≥ 40.</div>
+      <div id="arc-dispersion-body"><div class="arc-loading"><span class="spinner"></span> Loading dispersion data…</div></div>
     </section>
 
     <section class="arc-section" id="arc-tradability" style="display:none">
@@ -676,6 +690,8 @@
   // Metric definitions — V2 institutional model
   const ARC_METRICS = {
     energy:     { field: 'market_energy',         label: 'Energy',       unit: '',  highThresh: 50, midThresh: 30, peakWord: 'energy',             v2Threshold: 50 },
+    de:         { field: 'de_score',              label: 'Dir Efficiency', unit: '%', highThresh: 55, midThresh: 35, peakWord: 'directional efficiency', v2Threshold: 50 },
+    dispersion: { field: 'dispersion_score',      label: 'Dispersion',   unit: '',  highThresh: 50, midThresh: 25, peakWord: 'currency dispersion', v2Threshold: 40 },
     tradability:{ field: 'tradability_score',      label: 'Tradability',  unit: '',  highThresh: 55, midThresh: 35, peakWord: 'tradability',        v2Threshold: 55 },
     movement:   { field: 'movement_score',         label: 'Movement',     unit: '',  highThresh: 40, midThresh: 20, peakWord: 'movement',           v2Threshold: 35 },
     breadth:    { field: 'breadth_score',           label: 'Breadth',      unit: '',  highThresh: 40, midThresh: 20, peakWord: 'breadth',            v2Threshold: 65 },
@@ -1302,6 +1318,8 @@
     // Score metric rows (9 rows)
     const SCORE_ROWS = [
       { key: 'market_energy',       label: 'Energy' },
+      { key: 'de_score',            label: 'DE' },
+      { key: 'dispersion_score',    label: 'Disp' },
       { key: 'tradability_score',   label: 'Trad' },
       { key: 'movement_score',      label: 'Mov' },
       { key: 'breadth_score',       label: 'Brd' },
