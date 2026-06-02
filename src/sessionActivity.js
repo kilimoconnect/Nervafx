@@ -350,6 +350,14 @@ function processHours(hourKeys, byTime, onlyLast = false) {
       ? round1((strengthVals[0] - strengthVals[strengthVals.length - 1]) * 10000) / 10000
       : 0;
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // ENGINE 14: Currency Dispersion (strongest − weakest, normalized 0-100)
+    // Large dispersion = currencies diverging = pairs trend
+    // Small dispersion = currencies converging = pairs range
+    // ═══════════════════════════════════════════════════════════════════════
+    const DISPERSION_CAP = 0.008; // gap of 0.008 = score 100
+    const dispersionScore = round1(Math.min(100, (currencyLeadershipGap / DISPERSION_CAP) * 100));
+
     // ── Per-pair hourly calculations ────────────────────────────────────────
     const hourlyMoves  = [];
     const hourlyRanges = [];
@@ -621,6 +629,8 @@ function processHours(hourKeys, byTime, onlyLast = false) {
       energy_cycle:          energyCycle,
       // Engine 13: Directional Efficiency
       de_score:              deScore,
+      // Engine 14: Currency Dispersion
+      dispersion_score:      dispersionScore,
     });
 
     // Track for next hour's momentum calculation
@@ -662,6 +672,7 @@ const HOURLY_COLS = new Set([
   'tradability_score',
   'false_breakout_risk',
   'de_score',
+  'dispersion_score',
 ]);
 
 function toHourlyRow(r) {

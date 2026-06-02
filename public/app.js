@@ -4671,6 +4671,27 @@ const METRIC_CHART_CONFIG = {
       '<strong>Green bars</strong> indicate DE ≥ 50 — the market is moving directionally with conviction.',
     ],
   },
+  dispersion: {
+    field: 'dispersion_score', label: 'Currency Dispersion', title: 'Hourly Currency Dispersion',
+    unit: '', decimals: 0, v2Threshold: 40,
+    thresholds: [
+      { min: 60, color: '#22c55e', label: 'High dispersion — strong trends' },
+      { min: 40, color: '#0ea5e9', label: 'Moderate dispersion' },
+      { min: 20, color: '#f59e0b', label: 'Low dispersion' },
+      { min: 0,  color: '#ef4444', label: 'Flat — currencies converging' },
+    ],
+    guide: [
+      '<strong>Currency Dispersion</strong> = strongest currency − weakest currency, normalized to 0-100. Measures how far apart the 8 major currencies are spreading.',
+      '<strong>Large dispersion</strong> means currencies are diverging — capital is flowing directionally. Pairs trend. This is the single strongest predictor of tradable conditions.',
+      '<strong>Small dispersion</strong> means currencies are converging — no clear winners or losers. Pairs range and chop.',
+      '<strong>60+</strong>: High dispersion — strong institutional capital flow. Best environment for trend-following entries.',
+      '<strong>40-59</strong>: Moderate — some separation, selective trading.',
+      '<strong>20-39</strong>: Low — currencies clustered, limited edge.',
+      '<strong>Below 20</strong>: Flat — all currencies near zero, no trends.',
+      '<strong>Green bars</strong> indicate dispersion ≥ 40 — enough currency separation for directional trades.',
+      '<strong>Dispersion rising</strong> = energy building. <strong>Dispersion falling</strong> = energy decaying.',
+    ],
+  },
   tradability: {
     field: 'tradability_score', label: 'Tradability Score', title: 'Hourly Session Tradability',
     unit: '', decimals: 0, v2Threshold: 55,
@@ -5443,6 +5464,7 @@ function _meMarketCycleBanner(cycle, latestHourly) {
     <span class="me-cycle-banner-val" style="--bc:${color}">${label}</span>
     ${engineBtn('energy', 'Energy')}
     ${engineBtn('de', 'Dir Efficiency')}
+    ${engineBtn('dispersion', 'Dispersion')}
     ${engineBtn('tradability', 'Tradability')}
     ${engineBtn('movement', 'Movement')}
     ${engineBtn('breadth', 'Breadth')}
