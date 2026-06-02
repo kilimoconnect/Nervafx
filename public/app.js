@@ -2838,7 +2838,7 @@ function renderEnergySignals(data) {
 
   if (ringEl && numEl) {
     const pct = Math.min(100, Math.max(0, energy));
-    const col = energy >= 60 ? '#22c55e' : energy >= 50 ? '#3b82f6' : energy >= 35 ? '#f59e0b' : '#475569';
+    const col = energy >= 60 ? '#22c55e' : energy >= 45 ? '#3b82f6' : energy >= 30 ? '#f59e0b' : '#475569';
     ringEl.style.setProperty('--es-ring-color', col);
     ringEl.style.setProperty('--es-ring-pct', pct + '%');
     numEl.textContent = Math.round(energy);
@@ -4638,7 +4638,7 @@ const METRIC_CHART_CONFIG = {
   },
   energy: {
     field: 'market_energy', label: 'Market Energy', title: 'Hourly Session Energy',
-    unit: '', decimals: 0, v2Threshold: 50,
+    unit: '', decimals: 0, v2Threshold: 60,
     thresholds: [
       { min: 60, color: '#22c55e', label: 'High energy' },
       { min: 30, color: '#f59e0b', label: 'Moderate energy' },

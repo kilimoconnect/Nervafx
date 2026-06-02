@@ -84,10 +84,10 @@ module.exports = async function handler(req, res) {
     // Sort by time descending (most recent first)
     allBars.sort((a, b) => (b.time || '').localeCompare(a.time || ''));
 
-    // Trigger bar = most recent bar that crossed ≥50 (sets directions)
-    const triggerBar = allBars.find(b => b.energy >= 50);
+    // Trigger bar = most recent bar that crossed ≥60 (sets directions)
+    const triggerBar = allBars.find(b => b.energy >= 60);
     const triggerEnergy = triggerBar?.energy || 0;
-    const thresholdMet = triggerEnergy >= 50;
+    const thresholdMet = triggerEnergy >= 60;
 
     // Display energy = trigger bar energy when active (the level that set
     // directions), otherwise the most recent bar's energy
