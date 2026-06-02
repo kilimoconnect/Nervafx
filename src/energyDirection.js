@@ -177,7 +177,7 @@ async function calculateEnergyDirection() {
   // ── 2. Fetch latest currency strength (3H + 6H) ───────────────────────────
   const { data: csRows, error: csErr } = await supabase
     .from('currency_strength')
-    .select('currency, smooth_3h, smooth_6h')
+    .select('currency, smooth_3h, smooth_6h, smooth_12h')
     .order('time', { ascending: false })
     .limit(8);
 
@@ -187,15 +187,37 @@ async function calculateEnergyDirection() {
     return { pairs: 0 };
   }
 
+  const CS_COMBINED_THRESHOLD = 0.00100; // Currency Signals gate
+
   const ccyMap = {};
   const seen = new Set();
   for (const r of csRows) {
     if (seen.has(r.currency)) continue;
     seen.add(r.currency);
+    const h3  = parseFloat(r.smooth_3h)  || 0;
+    const h6  = parseFloat(r.smooth_6h)  || 0;
+    const h12 = parseFloat(r.smooth_12h) || 0;
     ccyMap[r.currency] = {
-      smooth_3h: parseFloat(r.smooth_3h) || 0,
-      smooth_6h: parseFloat(r.smooth_6h) || 0,
+      smooth_3h:  h3,
+      smooth_6h:  h6,
+      smooth_12h: h12,
+      combined:   (h3 + h6 + h12) / 3,
     };
+  }
+
+  // ── Currency Signals gate ──────────────────────────────────────────────────
+  // At least one currency must qualify: |combined| > 0.00100 AND 3H confirms
+  // direction. If no currency qualifies, energy crossing 50 is insufficient
+  // to confirm directional flow.
+  const csQualifies = Object.values(ccyMap).some(d => {
+    const absCombo = Math.abs(d.combined);
+    if (absCombo < CS_COMBINED_THRESHOLD) return false;
+    // 3H must confirm same direction as combined
+    return (d.combined > 0 && d.smooth_3h > 0) || (d.combined < 0 && d.smooth_3h < 0);
+  });
+
+  if (!csQualifies) {
+    console.log('[ENERGY_DIR] Currency Signals gate: no currency exceeds ±0.00100 combined — directions not confirmed');
   }
 
   // ── 3. Load existing currency state ────────────────────────────────────────
@@ -232,7 +254,8 @@ async function calculateEnergyDirection() {
 
   const triggerBarTime = triggerHour ? new Date(triggerHour).getTime() : 0;
   const hasActiveDirections = Object.values(stateMap).some(s => s.active);
-  const isNewEnergyEvent = thresholdMet && (
+  // Energy event requires: threshold met + new bar + Currency Signals gate
+  const isNewEnergyEvent = thresholdMet && csQualifies && (
     !hasActiveDirections ||                    // no directions exist yet
     (triggerBarTime > prevTriggeredAt)          // new bar is newer than last trigger
   );
