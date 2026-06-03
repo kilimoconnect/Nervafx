@@ -127,7 +127,7 @@ async function sendToAll(sb, recipients, template, alertType, details) {
 // ── Email Templates ─────────────────────────────────────────────────────────
 
 function directionAlertEmail(data) {
-  const { marketFocusHtml, triggerEnergy, triggerSession, triggerHour, currencies, pairs, removedPairs } = data;
+  const { marketFocusHtml, triggerEnergy, triggerSession, triggerHour, currencies, pairs, removedPairs, newsEvents } = data;
   const sessionLabel = SESS_LABEL[triggerSession] || triggerSession || 'Unknown';
   const timeStr = triggerHour ? new Date(triggerHour).toISOString().replace('T', ' ').slice(0, 16) + ' UTC' : '';
 
@@ -187,6 +187,29 @@ function directionAlertEmail(data) {
       Removed: ${removedPairs.map(p => `<span style="text-decoration:line-through">${p.replace('_','/')}</span>`).join(', ')}
     </div>` : '';
 
+  // News section — upcoming medium/high impact
+  const IMPACT_COLOR = { high: '#ef4444', medium: '#f59e0b' };
+  const IMPACT_ICON = { high: '🔴', medium: '🟡' };
+  const newsRows = (newsEvents || []).length ? `
+    <div class="card">
+      <div class="card-hd">Upcoming News (next 24h)</div>
+      <div class="card-bd">
+        <table width="100%" cellpadding="0" cellspacing="0">
+          ${newsEvents.map(n => {
+            const t = new Date(n.event_time);
+            const timeStr = t.toISOString().slice(11, 16) + ' UTC';
+            const impColor = IMPACT_COLOR[n.impact] || '#94a3b8';
+            const impIcon = IMPACT_ICON[n.impact] || '';
+            return `<tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
+              <td style="padding:8px 14px;width:55px" class="sm">${timeStr}</td>
+              <td style="padding:8px 14px;width:35px"><span style="color:${impColor};font-weight:700;font-size:11px">${n.currency}</span></td>
+              <td style="padding:8px 14px;font-size:12px;color:#cbd5e1">${impIcon} ${n.event_name}</td>
+            </tr>`;
+          }).join('')}
+        </table>
+      </div>
+    </div>` : '';
+
   return {
     subject: `Direction Alert — ${strongCcys.map(c=>c.currency).join(',')} strong / ${weakCcys.map(c=>c.currency).join(',')} weak`,
     html: baseLayout(`
@@ -204,6 +227,8 @@ function directionAlertEmail(data) {
         <div class="card-hd">Signal Pairs (${pairs.length})</div>
         <div class="card-bd">${pairRows}${removedHtml}</div>
       </div>
+
+      ${newsRows}
 
       <div class="section">
         <p class="sm">Phase cycle: Monitoring &rarr; Pullback &rarr; Compression &rarr; Entry &rarr; Moving. You will be notified when a pair reaches Entry.</p>
@@ -440,6 +465,22 @@ async function sendSignalAlerts(sb) {
   const triggerTs = (currStates || []).find(s => s.triggered_at)?.triggered_at || '';
   const directionKey = `direction_${(triggerTs || '').slice(0, 13)}`; // YYYY-MM-DDTHH
 
+  // Fetch upcoming medium/high impact news (next 24h)
+  let upcomingNews = [];
+  try {
+    const now = new Date();
+    const next24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const { data: newsRows } = await sb
+      .from('forex_news')
+      .select('event_time, currency, event_name, impact')
+      .gte('event_time', now.toISOString())
+      .lte('event_time', next24h.toISOString())
+      .in('impact', ['medium', 'high'])
+      .order('event_time', { ascending: true })
+      .limit(15);
+    upcomingNews = newsRows || [];
+  } catch (_) {}
+
   if (hasActiveDirections && triggerTs) {
     const dirAlreadySent = await wasAlreadySent(sb, directionKey);
     if (!dirAlreadySent) {
@@ -478,6 +519,7 @@ async function sendSignalAlerts(sb) {
           eventType: p.energy_event_type || 'NEW',
         })),
         removedPairs: (inactivePairs || []).map(p => p.instrument),
+        newsEvents: upcomingNews || [],
       });
 
       await sendToAll(sb, recipients, template, directionKey, {

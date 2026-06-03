@@ -5351,6 +5351,57 @@ function _renderMeAnalysisModal() {
     </div>`;
   }).join('');
 
+  // ── Session Metrics Table ──
+  const metricKeys = ['market_energy','dispersion_score','tradability_score','movement_score','breadth_score','agreement_score','directional_control','de_score'];
+  const metricLabels = ['Energy','Dispersion','Tradability','Movement','Breadth','Agreement','Dir Control','DE'];
+  const sessMetricTable = `
+    <div style="overflow-x:auto;margin-bottom:16px">
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead><tr style="border-bottom:1px solid rgba(255,255,255,0.08)">
+          <th style="text-align:left;padding:6px 8px;color:#64748b;font-weight:600">Metric</th>
+          ${['ASIA','LONDON','NEW_YORK'].map(k => `<th style="text-align:center;padding:6px 8px;color:${SESS_COLOR[k]};font-weight:700">${SESS_LABEL[k]}</th>`).join('')}
+        </tr></thead>
+        <tbody>${metricKeys.map((mk, i) => {
+          const vals = ['ASIA','LONDON','NEW_YORK'].map(k => Math.round(parseFloat(byName[k]?.[mk]) || 0));
+          const max = Math.max(...vals);
+          return `<tr style="border-bottom:1px solid rgba(255,255,255,0.04)">
+            <td style="padding:5px 8px;color:#94a3b8;font-weight:600">${metricLabels[i]}</td>
+            ${vals.map(v => {
+              const col = v === max && v > 0 ? '#4ade80' : v < 20 ? '#ef4444' : '#e2e8f0';
+              return `<td style="text-align:center;padding:5px 8px;color:${col};font-weight:700">${v}</td>`;
+            }).join('')}
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+    </div>`;
+
+  // ── Currency Strength Bars ──
+  const csData = [];
+  try {
+    const strengthEl = strengthData?.currencies || [];
+    for (const c of strengthEl) {
+      csData.push({ ccy: c.currency, val: parseFloat(c.smooth_3h ?? c.normalized_3h) || 0 });
+    }
+  } catch (_) {}
+  csData.sort((a, b) => b.val - a.val);
+  const maxCsAbs = Math.max(0.0001, ...csData.map(c => Math.abs(c.val)));
+  const csBarHtml = csData.length ? `
+    <div style="margin-bottom:16px;padding:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:8px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b;margin-bottom:8px">Currency Strength (3H)</div>
+      ${csData.map(c => {
+        const pct = Math.round(Math.abs(c.val) / maxCsAbs * 100);
+        const col = c.val > 0 ? '#22c55e' : '#ef4444';
+        const pips = (c.val * 10000).toFixed(1);
+        return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0">
+          <span style="min-width:28px;font-size:11px;font-weight:700;color:#e2e8f0">${c.ccy}</span>
+          <div style="flex:1;height:6px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden;direction:${c.val >= 0 ? 'ltr' : 'rtl'}">
+            <div style="width:${pct}%;height:100%;background:${col};border-radius:3px"></div>
+          </div>
+          <span style="min-width:40px;text-align:right;font-size:10px;font-weight:600;color:${col}">${c.val >= 0 ? '+' : ''}${pips}</span>
+        </div>`;
+      }).join('')}
+    </div>` : '';
+
   // ── Historical Comparison ──
   const histHtml = d.historical_comparison ? `
     <div style="padding:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:8px;margin-bottom:16px">
@@ -5416,6 +5467,13 @@ function _renderMeAnalysisModal() {
           <h3 class="me-modal-section-title">Session Intelligence</h3>
           <div style="display:flex;flex-direction:column;gap:8px">${sessCards}</div>
         </section>
+
+        <section class="me-modal-section">
+          <h3 class="me-modal-section-title">Session Metrics Comparison</h3>
+          ${sessMetricTable}
+        </section>
+
+        ${csBarHtml}
 
         ${histHtml}
 
