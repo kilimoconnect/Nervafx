@@ -47,14 +47,27 @@ async function fetchEnergyPairs() {
   return data || [];
 }
 
+async function fetchCurrencyStrength() {
+  const { data } = await supabase
+    .from('currency_strength')
+    .select('currency, smooth_3h, smooth_6h, smooth_12h')
+    .order('time', { ascending: false })
+    .limit(8);
+  if (!data?.length) return [];
+  // Deduplicate (latest per currency)
+  const seen = new Set();
+  return data.filter(r => { if (seen.has(r.currency)) return false; seen.add(r.currency); return true; })
+    .sort((a, b) => (parseFloat(b.smooth_3h) || 0) - (parseFloat(a.smooth_3h) || 0));
+}
+
 // ── Prompt builder ──────────────────────────────────────────────────────────
 
-function buildPrompt(sessions, ep, marketCycle, prevSessions, hourlyTrend, energyPairs) {
+function buildPrompt(sessions, ep, marketCycle, prevSessions, hourlyTrend, energyPairs, ccyStrength) {
   const active = sessions.filter(s => s.session_name !== 'LOW_LIQUIDITY');
   const byName = Object.fromEntries(active.map(s => [s.session_name, s]));
 
   const sessBlock = active.map(s =>
-    `${s.session_name}: cycle=${s.energy_cycle||'?'} Energy=${fv(s.market_energy)} Disp=${fv(s.dispersion_score||0)} Mov=${fv(s.movement_score)} Brd=${fv(s.breadth_score)} Agr=${fv(s.agreement_score)} Dir=${fv(s.directional_control||0)} Trad=${fv(s.tradability_score||0)} VolType=${s.volatility_type||'?'} Bull=${fv(s.bullish_breadth)}% Bear=${fv(s.bearish_breadth)}% Dom=${fv(s.dominance_score)}% Strong=${s.strongest_ccy||'?'} Weak=${s.weakest_ccy||'?'}`
+    `${s.session_name}: cycle=${s.energy_cycle||'?'} Energy=${fv(s.market_energy)} Mov=${fv(s.movement_score)} Brd=${fv(s.breadth_score)} Agr=${fv(s.agreement_score)} Dir=${fv(s.directional_control||0)} Trad=${fv(s.tradability_score||0)} VolType=${s.volatility_type||'?'} Bull=${fv(s.bullish_breadth)}% Bear=${fv(s.bearish_breadth)}% Dom=${fv(s.dominance_score)}% Strong=${s.strongest_ccy||'?'} Weak=${s.weakest_ccy||'?'}`
   ).join('\n');
 
   // Session flow
@@ -78,10 +91,22 @@ function buildPrompt(sessions, ep, marketCycle, prevSessions, hourlyTrend, energ
 
   // Active signal pairs
   const pairsBlock = energyPairs.length
-    ? 'ACTIVE SIGNAL PAIRS:\n' + energyPairs.map(p =>
+    ? 'ACTIVE SIGNAL PAIRS (' + energyPairs.length + '):\n' +
+      '  ENTRY/MOVING: ' + energyPairs.filter(p => p.phase === 'ENTRY' || p.phase === 'MOVING').map(p => `${p.instrument.replace('_','/')} ${p.dir}`).join(', ') + '\n' +
+      energyPairs.map(p =>
         `  ${p.instrument.replace('_','/')} ${p.dir} phase=${p.phase} DE=${fv(p.de_combined)} imp=${p.impulse_score||0}${p.impulse_aligned?'✓':''}`
       ).join('\n')
     : 'No active signal pairs.';
+
+  // Current currency strength (3H ranked strongest→weakest)
+  const ccyBlock = ccyStrength.length
+    ? 'CURRENT CURRENCY STRENGTH (3H, in pips):\n' + ccyStrength.map(c => {
+        const h3 = ((parseFloat(c.smooth_3h)||0)*10000).toFixed(1);
+        const h12 = ((parseFloat(c.smooth_12h)||0)*10000).toFixed(1);
+        return `  ${c.currency} 3H=${h3} 12H=${h12}`;
+      }).join('\n') + '\n  Strongest: ' + ccyStrength[0].currency + ' | Weakest: ' + ccyStrength[ccyStrength.length-1].currency +
+      '\n  3H Dispersion: ' + (((parseFloat(ccyStrength[0].smooth_3h)||0) - (parseFloat(ccyStrength[ccyStrength.length-1].smooth_3h)||0))*10000).toFixed(1) + ' pips'
+    : '';
 
   return `You are a senior institutional forex trading intelligence engine. Your job is to produce ACTIONABLE intelligence, NOT metric commentary.
 
@@ -101,6 +126,8 @@ ${trendBlock}
 ${prevBlock}
 
 ${pairsBlock}
+
+${ccyBlock}
 
 EXPANSION PRESSURE: ${(!ep || ep.streak === 0) ? 'None' : `${ep.risk} | streak:${ep.streak} (${ep.chain?.join('→')||''})`}
 MARKET CYCLE: ${marketCycle || 'UNKNOWN'}
@@ -189,13 +216,14 @@ async function generateMarketNarrative() {
   if (!data?.sessions?.length) throw new Error('No session data available');
 
   const { sessions, expansionPressure, marketCycle } = data;
-  const [prevSessions, hourlyTrend, energyPairs] = await Promise.all([
+  const [prevSessions, hourlyTrend, energyPairs, ccyStrength] = await Promise.all([
     fetchPreviousSessions(),
     fetchHourlyTrend(),
     fetchEnergyPairs(),
+    fetchCurrencyStrength(),
   ]);
 
-  const prompt = buildPrompt(sessions, expansionPressure, marketCycle, prevSessions, hourlyTrend, energyPairs);
+  const prompt = buildPrompt(sessions, expansionPressure, marketCycle, prevSessions, hourlyTrend, energyPairs, ccyStrength);
   const ai     = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   const completion = await ai.chat.completions.create({
     model:           'gpt-4o-mini',
