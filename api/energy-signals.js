@@ -87,11 +87,16 @@ module.exports = async function handler(req, res) {
     // Trigger bar = most recent bar that crossed ≥60 (sets directions)
     const triggerBar = allBars.find(b => b.energy >= 60);
     const triggerEnergy = triggerBar?.energy || 0;
-    const thresholdMet = triggerEnergy >= 60;
 
-    // Display energy = trigger bar energy when active (the level that set
-    // directions), otherwise the most recent bar's energy
-    const displayEnergy = thresholdMet ? triggerEnergy : (allBars[0]?.energy || 0);
+    // Directions persist across days — check if active directions exist in the DB.
+    // thresholdMet is true if EITHER today has a trigger bar ≥60 OR directions
+    // are still active from a previous trigger (they only reset on a new cross).
+    const hasActiveDirections = (currencies || []).some(c => c.active && c.direction !== 'NEUTRAL');
+    const hasActivePairs = (pairs || []).some(p => p.active);
+    const thresholdMet = (triggerEnergy >= 60) || hasActiveDirections || hasActivePairs;
+
+    // Display energy = trigger bar energy when we have one, otherwise most recent bar
+    const displayEnergy = triggerEnergy >= 60 ? triggerEnergy : (allBars[0]?.energy || 0);
 
     res.json({
       currencies: currencies || [],
