@@ -1323,7 +1323,8 @@ function _m15CurrencyStrength() {
 function buildChart(data, tf) {
   if (!data?.currencies) return;
   strengthData = data;
-  document.getElementById('strength-time').textContent = 'As of ' + fmtTime(data.time);
+  // Show current time (data refreshes every 15 min via pipeline)
+  document.getElementById('strength-time').textContent = 'As of ' + fmtTime(new Date().toISOString());
 
   // M15 currency strength — derived from M15 pair spreads
   const needsM15 = (tf === 'm15' || tf === 'c2' || tf === 'c3');
