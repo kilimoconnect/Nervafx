@@ -178,6 +178,7 @@ async function m15Update() {
 
   // Fast engines that use M15 data
   await step('m15_spreads',       () => calculateLatestM15Spreads());
+  await step('volume_analysis',   () => calculateLatestVolumeAnalysis());
   await step('strength',          () => calculateLatestStrength());
   await step('smooth',            () => smoothLatest());
   await step('spreads',           () => calculateLatestSpreads());
