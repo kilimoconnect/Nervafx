@@ -135,10 +135,24 @@ if (command === 'load') {
       .then(() => process.exit(0))
       .catch(err => { console.error(err); process.exit(1); });
   } else {
-    hourlyUpdate().then(r => {
-      console.log(`[UPDATE] status: ${r.status}`);
-      process.exit(r.status === 'FAILED' ? 1 : 0);
-    }).catch(err => { console.error(err); process.exit(1); });
+    // Auto-detect: run full pipeline near the top of hour (:00-:05),
+    // lightweight M15 pipeline at other times (:15, :30, :45)
+    const minute = new Date().getUTCMinutes();
+    const isHourlyRun = minute <= 5;
+    if (isHourlyRun) {
+      console.log(`[UPDATE] Hourly run (minute ${minute})`);
+      hourlyUpdate().then(r => {
+        console.log(`[UPDATE] status: ${r.status}`);
+        process.exit(r.status === 'FAILED' ? 1 : 0);
+      }).catch(err => { console.error(err); process.exit(1); });
+    } else {
+      const { m15Update } = require('./updater');
+      console.log(`[UPDATE] M15 run (minute ${minute})`);
+      m15Update().then(r => {
+        console.log(`[M15-UPDATE] status: ${r.status}`);
+        process.exit(0);
+      }).catch(err => { console.error(err); process.exit(1); });
+    }
   }
 } else if (command === 'ai') {
   // Standalone AI analysis — useful for testing, always runs regardless of market hours

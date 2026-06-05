@@ -162,6 +162,34 @@ async function hourlyUpdate() {
   return { status: 'CLEAN', check };
 }
 
+/**
+ * Lightweight M15 update — runs at :16, :31, :46 (between hourly runs).
+ * Only syncs M15 candles and runs fast engines that depend on M15 data.
+ * Skips: H1 sync, quality check, repair, session_activity, journal, outcomes.
+ */
+async function m15Update() {
+  console.log(`[M15-UPDATE] ${new Date().toISOString()} - Starting M15 update...`);
+
+  // Only sync M15 candles (fast — no H1 sync, no quality check)
+  await step('sync_m15', async () => {
+    const n = await syncCandles('M15');
+    if (n > 0) console.log(`[M15-UPDATE]   synced ${n} M15 candles`);
+  });
+
+  // Fast engines that use M15 data
+  await step('m15_spreads',       () => calculateLatestM15Spreads());
+  await step('strength',          () => calculateLatestStrength());
+  await step('smooth',            () => smoothLatest());
+  await step('spreads',           () => calculateLatestSpreads());
+  await step('energy_direction',  () => calculateEnergyDirection());
+  await step('signals',           () => calculateLatestSignals());
+  await step('flow_perf',         () => calculateFlowPerformance());
+  await step('email_alerts',      () => sendSignalAlerts(supabase));
+
+  console.log('[M15-UPDATE] Complete.');
+  return { status: 'OK' };
+}
+
 async function runAnalysis() {
   console.log(`[ANALYZE] ${new Date().toISOString()} - Running engine on current data...`);
   await step('strength',          () => calculateLatestStrength());
@@ -175,4 +203,4 @@ async function runAnalysis() {
   console.log('[ANALYZE] Complete.');
 }
 
-module.exports = { hourlyUpdate, runAnalysis, syncCandles };
+module.exports = { hourlyUpdate, m15Update, runAnalysis, syncCandles };
