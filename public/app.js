@@ -2078,8 +2078,58 @@ function renderFlowPerformance(strengthData, m15Data) {
 
   // Use pre-computed flow performance data (includes DE, volume, impulse — no plan gate)
   let scored = _buildFpScored(strengthData, m15Data);
+
+  // Fallback: if no FP data (e.g. low liquidity / off-hours), build from signal pairs
+  if ((!scored || !scored.length) && _energySignalsCache?.pairs?.length) {
+    const activePairs = _energySignalsCache.pairs.filter(p => p.active);
+    scored = activePairs.map(p => {
+      const [base, quote] = p.instrument.split('_');
+      const v45 = parseFloat(p.v45) || 0;
+      const v90 = parseFloat(p.v90) || 0;
+      const sp3 = parseFloat(p.spread_3h) || 0;
+      const sp6 = parseFloat(p.spread_6h) || 0;
+      const de  = parseFloat(p.de_combined) || 0;
+      const imp = p.impulse_score || 0;
+      const flowSign = p.dir === 'BUY' ? 1 : -1;
+      const impulseAligned = !!p.impulse_aligned;
+      const m15Confirms = Math.sign(v45) === flowSign && Math.abs(v45) >= 0.00008;
+      const h3Confirms  = Math.sign(sp3) === flowSign;
+      const h6Confirms  = Math.sign(sp6) === flowSign;
+      const accel = v45 - v90;
+      const accelSign = Math.sign(accel) === flowSign;
+      const m15State = (p.m15_state || 'FLAT').toUpperCase();
+      let perfScore = (v45 * flowSign) * 10000 * 3 + (sp3 * flowSign) * 10000 * 2 + (sp6 * flowSign) * 10000;
+      if (impulseAligned && imp >= 40) perfScore += imp * 0.5;
+      if (m15Confirms) perfScore += 10;
+      if (h3Confirms) perfScore += 10;
+      if (h6Confirms) perfScore += 5;
+      if (accelSign) perfScore += 10;
+      const finalScore = (0.75 * perfScore) + (0.25 * de);
+      const htfCount = [h3Confirms, h6Confirms].filter(Boolean).length;
+      let status, statusCls;
+      if (m15Confirms && htfCount === 2)      { status = 'STRONG';   statusCls = 'fp-strong'; }
+      else if (m15Confirms && htfCount === 1) { status = 'ALIGNED';  statusCls = 'fp-aligned'; }
+      else if (m15Confirms)                   { status = 'PARTIAL';  statusCls = 'fp-partial'; }
+      else if (htfCount >= 1)                 { status = 'BUILDING'; statusCls = 'fp-building'; }
+      else                                    { status = 'WAIT';     statusCls = 'fp-wait'; }
+      let momentum = imp >= 50 && impulseAligned ? 'Impulsive' : accelSign ? 'Accelerating' : 'Steady';
+      return {
+        instrument: p.instrument, dir: p.dir, base, quote,
+        v45, v90, v180: null, spread3H: sp3, spread6H: sp6,
+        state: p.m15_state || 'FLAT', status, statusCls, momentum,
+        m15Confirms, h3Confirms, h6Confirms, accel, accelSign,
+        perfScore, finalScore, deCombined: de,
+        deLabel: de >= 30 ? 'Institutional' : de >= 20 ? 'Clean' : de >= 8 ? 'Mixed' : 'Noisy',
+        impulseScore: imp, impulseAligned,
+        volRV: 0, volEff: 0, volGrade: '', volPers: 0, volAcc: 0, volScore: 0,
+        h3Base: null, h3Quote: null,
+      };
+    });
+    scored.sort((a, b) => b.finalScore - a.finalScore);
+  }
+
   if (!scored || !scored.length) {
-    el.innerHTML = '<p class="empty-state">No strength data — please refresh the page</p>';
+    el.innerHTML = '<p class="empty-state">No data — please refresh the page</p>';
     return;
   }
 
