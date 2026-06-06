@@ -534,7 +534,97 @@ async function sendSignalAlerts(sb) {
     }
   }
 
-  // ── 2. DAILY DIGEST — after NY session closes (21:00-23:59 UTC) ───────────
+  // ── 2. BREAKOUT ENTRY ALERT — M15 structure break detected ─────────────────
+  try {
+    const { data: entryPairs } = await sb
+      .from('m15_structure_watch')
+      .select('instrument, direction, state, entry_price, impulse_high, impulse_low, pullback_high, pullback_low, invalidation_price')
+      .eq('state', 'ENTRY_READY');
+
+    if (entryPairs?.length) {
+      const todayKey = new Date().toISOString().slice(0, 10);
+      for (const ep of entryPairs) {
+        const breakoutKey = `breakout_${ep.instrument}_${todayKey}`;
+        if (await wasAlreadySent(sb, breakoutKey)) {
+          console.log(`[EMAIL] Breakout for ${ep.instrument} already sent today — skipping`);
+          continue;
+        }
+
+        const isBuy = ep.direction === 'BUY';
+        const dirColor = isBuy ? '#4ade80' : '#f87171';
+        const dirBg = isBuy ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)';
+        const dirBorder = isBuy ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)';
+        const pairLabel = ep.instrument.replace('_', '/');
+        const isJPY = ep.instrument.includes('JPY');
+        const d = isJPY ? 3 : 5;
+
+        const template = {
+          subject: `Breakout Entry — ${ep.direction} ${pairLabel}`,
+          html: baseLayout(`
+            <h2>Structure Breakout</h2>
+            <p class="sub">${pairLabel} — M15 price structure break confirmed</p>
+
+            <div style="background:${dirBg};border:1px solid ${dirBorder};border-radius:8px;padding:20px;margin:16px 0;text-align:center">
+              <div style="font-size:24px;color:${dirColor};font-weight:800">${ep.direction} ${pairLabel}</div>
+              <div class="dim" style="margin-top:6px">M15 Compression Breakout Entry</div>
+            </div>
+
+            ${marketFocusHtml || ''}
+
+            <div class="card">
+              <div class="card-hd">Structure Levels</div>
+              <div class="card-bd">
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
+                    <td style="padding:10px 14px" class="sm">Entry Price</td>
+                    <td style="padding:10px 14px;text-align:right;color:#60a5fa;font-weight:700;font-size:14px">${ep.entry_price ? ep.entry_price.toFixed(d) : '—'}</td>
+                  </tr>
+                  <tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
+                    <td style="padding:10px 14px" class="sm">Invalidation</td>
+                    <td style="padding:10px 14px;text-align:right;color:#f87171;font-weight:700;font-size:14px">${ep.invalidation_price ? ep.invalidation_price.toFixed(d) : '—'}</td>
+                  </tr>
+                  ${ep.impulse_high ? `<tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
+                    <td style="padding:10px 14px" class="sm">Impulse High</td>
+                    <td style="padding:10px 14px;text-align:right" class="val">${ep.impulse_high.toFixed(d)}</td>
+                  </tr>` : ''}
+                  ${ep.impulse_low ? `<tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
+                    <td style="padding:10px 14px" class="sm">Impulse Low</td>
+                    <td style="padding:10px 14px;text-align:right" class="val">${ep.impulse_low.toFixed(d)}</td>
+                  </tr>` : ''}
+                  ${ep.pullback_high ? `<tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
+                    <td style="padding:10px 14px" class="sm">Pullback High</td>
+                    <td style="padding:10px 14px;text-align:right" class="val">${ep.pullback_high.toFixed(d)}</td>
+                  </tr>` : ''}
+                  ${ep.pullback_low ? `<tr>
+                    <td style="padding:10px 14px" class="sm">Pullback Low</td>
+                    <td style="padding:10px 14px;text-align:right" class="val">${ep.pullback_low.toFixed(d)}</td>
+                  </tr>` : ''}
+                </table>
+              </div>
+            </div>
+
+            <div class="section">
+              <p class="sm">M15 candle closed past the pullback level, confirming structure break. Invalidation at ${ep.invalidation_price ? ep.invalidation_price.toFixed(d) : '—'}.</p>
+            </div>
+
+            <p style="text-align:center;margin:24px 0 16px"><a class="cta" href="https://nervafx.com/app">View on Dashboard</a></p>
+            <p class="sm" style="text-align:center">Analytical observation — not financial advice.</p>
+          `),
+        };
+
+        await sendToAll(sb, recipients, template, breakoutKey, {
+          instrument: ep.instrument,
+          direction: ep.direction,
+          entry: ep.entry_price,
+        });
+        emailsSent.push(`breakout:${ep.instrument}`);
+      }
+    }
+  } catch (e) {
+    console.error('[EMAIL] Breakout alert error:', e.message);
+  }
+
+  // ── 3. DAILY DIGEST — after NY session closes (21:00-23:59 UTC) ───────────
   const now = new Date();
   const utcHour = now.getUTCHours();
   if (utcHour >= 21 && utcHour <= 23) {

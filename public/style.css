@@ -3480,6 +3480,10 @@ body.plan-premium .plan-premium-only { display: block !important; }
 }
 .es-pair-card:hover .es-pair-open-btn { color: #93c5fd; }
 
+/* Compression Breakout */
+.cb-lbl { color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+.cb-val { color: #e2e8f0; font-weight: 600; font-variant-numeric: tabular-nums; }
+
 /* Pair analysis TF toggle */
 .pa-tf-btn {
   background: rgba(255,255,255,0.04);

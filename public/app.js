@@ -3498,6 +3498,100 @@ function _renderCandlestickChart(ctx, candles, levels, isJPY) {
   });
 }
 
+// ─── Compression Breakout Structure Watch ─────────────────────────────────────
+
+async function fetchCompressionBreakout() {
+  try {
+    const data = await api('/api/compression-breakout');
+    renderCompressionBreakout(data);
+  } catch (_) {}
+}
+
+function renderCompressionBreakout(data) {
+  if (!data) return;
+  const { baseline, structures, summary } = data;
+
+  // ── Baseline Banner ──
+  const baseEl = document.getElementById('cb-baseline');
+  if (baseEl && baseline) {
+    const active = baseline.active;
+    const locked = baseline.baseline_locked;
+    const recovery = baseline.recovery_detected;
+    let statusText, statusColor;
+    if (recovery) {
+      statusText = 'Recovery — Directional Discovery';
+      statusColor = '#22c55e';
+    } else if (locked) {
+      statusText = 'Baseline Locked — Energy Rising';
+      statusColor = '#0ea5e9';
+    } else if (active) {
+      statusText = 'Compression Active — Energy ' + Math.round(baseline.baseline_energy);
+      statusColor = '#f59e0b';
+    } else {
+      statusText = 'No Compression';
+      statusColor = '#64748b';
+    }
+    baseEl.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:8px">
+      <span style="width:8px;height:8px;border-radius:50%;background:${statusColor}"></span>
+      <span style="font-size:11px;font-weight:600;color:${statusColor}">${statusText}</span>
+      ${summary ? `<span style="margin-left:auto;font-size:10px;color:#64748b">${summary.entry_ready} ready · ${summary.structure_formed} formed · ${summary.pullback_active + summary.impulse_detected} building</span>` : ''}
+    </div>`;
+  }
+
+  // ── Structure Cards ──
+  const el = document.getElementById('cb-structures');
+  if (!el) return;
+
+  if (!structures?.length) {
+    el.innerHTML = '<div class="es-no-data">No pairs in structure watch. Active signal pairs will appear here.</div>';
+    return;
+  }
+
+  const STATE_COLOR = {
+    ENTRY_READY: '#22c55e', STRUCTURE_FORMED: '#0ea5e9',
+    PULLBACK_ACTIVE: '#f59e0b', IMPULSE_DETECTED: '#a855f7',
+    WATCHING: '#475569',
+  };
+  const STATE_LABEL = {
+    ENTRY_READY: 'ENTRY READY', STRUCTURE_FORMED: 'STRUCTURE FORMED',
+    PULLBACK_ACTIVE: 'PULLBACK', IMPULSE_DETECTED: 'IMPULSE',
+    WATCHING: 'WATCHING',
+  };
+  const isJPY = inst => inst.includes('JPY');
+  const dec = inst => isJPY(inst) ? 3 : 5;
+
+  el.innerHTML = structures.map(s => {
+    const col = STATE_COLOR[s.state] || '#475569';
+    const label = STATE_LABEL[s.state] || s.state;
+    const dirCls = s.direction === 'BUY' ? 'buy' : 'sell';
+    const d = dec(s.instrument);
+    const pairLabel = s.instrument.replace('_', '/');
+
+    let detailHtml = '';
+    if (s.state !== 'WATCHING') {
+      const rows = [];
+      if (s.impulse_high) rows.push(`<span class="cb-lbl">Imp High</span><span class="cb-val">${s.impulse_high.toFixed(d)}</span>`);
+      if (s.impulse_low) rows.push(`<span class="cb-lbl">Imp Low</span><span class="cb-val">${s.impulse_low.toFixed(d)}</span>`);
+      if (s.pullback_high) rows.push(`<span class="cb-lbl">PB High</span><span class="cb-val" style="color:#f87171">${s.pullback_high.toFixed(d)}</span>`);
+      if (s.pullback_low) rows.push(`<span class="cb-lbl">PB Low</span><span class="cb-val" style="color:#4ade80">${s.pullback_low.toFixed(d)}</span>`);
+      if (s.entry_price) rows.push(`<span class="cb-lbl">Entry</span><span class="cb-val" style="color:#60a5fa;font-weight:700">${s.entry_price.toFixed(d)}</span>`);
+      if (s.invalidation_price) rows.push(`<span class="cb-lbl">Invalid</span><span class="cb-val" style="color:#f87171">${s.invalidation_price.toFixed(d)}</span>`);
+      detailHtml = `<div style="display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin-top:6px;font-size:10px">${rows.join('')}</div>`;
+    }
+
+    return `<div style="padding:10px 12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:8px;border-left:3px solid ${col};margin-bottom:6px">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:13px;font-weight:700;color:#e2e8f0">${pairLabel}</span>
+          <span class="es-pair-dir ${dirCls}" style="font-size:10px">${s.direction}</span>
+        </div>
+        <span style="font-size:10px;font-weight:700;color:${col};letter-spacing:0.5px">${label}</span>
+      </div>
+      ${detailHtml}
+    </div>`;
+  }).join('');
+}
+
 // ─── Trading Session ──────────────────────────────────────────────────────────
 
 const SESSION_TIMELINE = [
@@ -6384,6 +6478,7 @@ async function refresh() {
     renderQuality(quality);
     renderJournal(journalData);
     renderEnergySignals(energySignals);
+    fetchCompressionBreakout(); // non-blocking
 
     document.getElementById('status-dot').className = 'status-dot online';
 
