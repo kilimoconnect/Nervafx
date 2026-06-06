@@ -172,7 +172,17 @@ async function updateM15StructureWatch() {
       invalidation_price: null,
     };
 
-    // Update direction from signal pair
+    // Direction change = new directional discovery → reset structure
+    if (existing.direction && existing.direction !== sp.dir) {
+      console.log(`[COMP-BRK] ${sp.instrument} direction changed ${existing.direction}→${sp.dir} — resetting structure`);
+      existing.state = 'WATCHING';
+      existing.impulse_high = null;
+      existing.impulse_low = null;
+      existing.pullback_high = null;
+      existing.pullback_low = null;
+      existing.entry_price = null;
+      existing.invalidation_price = null;
+    }
     existing.direction = sp.dir;
 
     // Run state machine
@@ -180,10 +190,13 @@ async function updateM15StructureWatch() {
     results.push(updated);
   }
 
-  // Deactivate pairs no longer in signal pairs
+  // Only remove pairs that are no longer in signal pairs AND had a direction reversal
+  // or were explicitly removed. Pairs persist across sessions — they only get removed
+  // when the energy engine removes them from signal pairs (direction change/reversal).
   const activeInstruments = new Set(signalPairs.map(p => p.instrument));
   for (const w of (existingWatch || [])) {
     if (!activeInstruments.has(w.instrument) && w.state !== 'INACTIVE') {
+      console.log(`[COMP-BRK] ${w.instrument} removed from signal pairs — deactivating structure`);
       results.push({ ...w, state: 'INACTIVE', updated_at: new Date().toISOString() });
     }
   }
@@ -215,15 +228,10 @@ function processStructure(state, candles, direction) {
   const latest = candles[candles.length - 1];
   const prev   = candles[candles.length - 2];
 
-  // Reset if invalidated — start fresh
+  // Invalidated or inactive — do not process further
+  // Pair stays removed until a new directional discovery re-adds it
   if (state.state === 'INVALIDATED' || state.state === 'INACTIVE') {
-    state.state = 'WATCHING';
-    state.impulse_high = null;
-    state.impulse_low = null;
-    state.pullback_high = null;
-    state.pullback_low = null;
-    state.entry_price = null;
-    state.invalidation_price = null;
+    return state;
   }
 
   // ── WATCHING → detect impulse ──
@@ -241,9 +249,10 @@ function processStructure(state, candles, direction) {
 
   // ── IMPULSE_DETECTED → detect pullback ──
   if (state.state === 'IMPULSE_DETECTED') {
-    // Check invalidation first
+    // Check invalidation — pair removed from watchlist
     if (isInvalidated(state, latest, isBuy)) {
-      state.state = 'WATCHING';
+      state.state = 'INVALIDATED';
+      console.log(`[COMP-BRK] ${state.instrument} INVALIDATED at ${state.state}`);
       return state;
     }
 
@@ -324,7 +333,8 @@ function processStructure(state, candles, direction) {
   // ── ENTRY_READY → stays until consumed or invalidated ──
   if (state.state === 'ENTRY_READY') {
     if (isInvalidated(state, latest, isBuy)) {
-      state.state = 'WATCHING';
+      state.state = 'INVALIDATED';
+      console.log(`[COMP-BRK] ${state.instrument} INVALIDATED after ENTRY_READY`);
     }
   }
 
