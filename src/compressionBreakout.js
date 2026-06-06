@@ -248,8 +248,37 @@ function processStructure(state, candles, direction) {
   }
 
   // ── IMPULSE_DETECTED → detect pullback ──
+  // Pullback = any candle that moves against the impulse direction.
+  // Even 1 candle counts — the charts show 1-3 candle pullbacks.
   if (state.state === 'IMPULSE_DETECTED') {
-    // Check invalidation — pair removed from watchlist
+    if (isInvalidated(state, latest, isBuy)) {
+      state.state = 'INVALIDATED';
+      console.log(`[COMP-BRK] ${state.instrument} INVALIDATED at IMPULSE_DETECTED`);
+      return state;
+    }
+
+    if (isBuy) {
+      // BUY: any candle with a lower low than previous = pullback starting
+      if (latest.low < prev.low || latest.close < prev.close) {
+        state.state = 'PULLBACK_ACTIVE';
+        state.pullback_low = latest.low;
+        state.pullback_high = state.impulse_high; // high before pullback
+      }
+    } else {
+      // SELL: any candle with a higher high than previous = pullback starting
+      if (latest.high > prev.high || latest.close > prev.close) {
+        state.state = 'PULLBACK_ACTIVE';
+        state.pullback_high = latest.high;
+        state.pullback_low = state.impulse_low; // low before pullback
+      }
+    }
+    return state;
+  }
+
+  // ── PULLBACK_ACTIVE → track swing + detect structure + detect break ──
+  // Combines PULLBACK + STRUCTURE_FORMED + ENTRY detection in one state.
+  // As soon as pullback swing is established and price breaks past it → ENTRY.
+  if (state.state === 'PULLBACK_ACTIVE' || state.state === 'STRUCTURE_FORMED') {
     if (isInvalidated(state, latest, isBuy)) {
       state.state = 'INVALIDATED';
       console.log(`[COMP-BRK] ${state.instrument} INVALIDATED at ${state.state}`);
@@ -257,72 +286,42 @@ function processStructure(state, candles, direction) {
     }
 
     if (isBuy) {
-      // BUY: impulse was up, pullback = price drops
-      if (latest.close < prev.close && latest.close < state.impulse_high) {
-        state.state = 'PULLBACK_ACTIVE';
-        state.pullback_low = latest.low;
-      }
-    } else {
-      // SELL: impulse was down, pullback = price rises
-      if (latest.close > prev.close && latest.close > state.impulse_low) {
-        state.state = 'PULLBACK_ACTIVE';
-        state.pullback_high = latest.high;
-      }
-    }
-    return state;
-  }
-
-  // ── PULLBACK_ACTIVE → detect structure formation ──
-  if (state.state === 'PULLBACK_ACTIVE') {
-    if (isInvalidated(state, latest, isBuy)) {
-      state.state = 'WATCHING';
-      return state;
-    }
-
-    if (isBuy) {
-      // Track pullback low (trough)
+      // Track pullback low (deepest retrace)
       if (latest.low < (state.pullback_low || Infinity)) {
         state.pullback_low = latest.low;
       }
-      // Structure formed: price turns back up (higher low created)
-      if (latest.close > prev.close && latest.low > state.pullback_low) {
-        state.state = 'STRUCTURE_FORMED';
-        state.pullback_high = Math.max(...candles.slice(-5).map(c => c.high)); // recent high before pullback
-        state.entry_price = state.pullback_high; // BUY: break above pullback high
-        state.invalidation_price = state.pullback_low; // below pullback low = invalid
-      }
-    } else {
-      // Track pullback high (peak)
-      if (latest.high > (state.pullback_high || 0)) {
-        state.pullback_high = latest.high;
-      }
-      // Structure formed: price turns back down (lower high created)
-      if (latest.close < prev.close && latest.high < state.pullback_high) {
-        state.state = 'STRUCTURE_FORMED';
-        state.pullback_low = Math.min(...candles.slice(-5).map(c => c.low)); // recent low before pullback
-        state.entry_price = state.pullback_low; // SELL: break below pullback low
-        state.invalidation_price = state.pullback_high; // above pullback high = invalid
-      }
-    }
-    return state;
-  }
+      // Pullback high = the swing high before the pullback
+      if (!state.pullback_high) state.pullback_high = state.impulse_high;
 
-  // ── STRUCTURE_FORMED → detect break entry ──
-  if (state.state === 'STRUCTURE_FORMED') {
-    if (isInvalidated(state, latest, isBuy)) {
-      state.state = 'WATCHING';
-      return state;
-    }
+      // Structure formed when price stops making new lows (current low > pullback_low)
+      if (state.state === 'PULLBACK_ACTIVE' && latest.low > state.pullback_low) {
+        state.state = 'STRUCTURE_FORMED';
+        state.entry_price = state.pullback_high;
+        state.invalidation_price = state.pullback_low;
+      }
 
-    if (isBuy) {
-      // BUY: M15 close above pullback high
-      if (latest.close > state.entry_price) {
+      // Break entry: M15 close above pullback high
+      if (state.state === 'STRUCTURE_FORMED' && latest.close > state.entry_price) {
         state.state = 'ENTRY_READY';
         state.entry_price = latest.close;
       }
     } else {
-      // SELL: M15 close below pullback low
-      if (latest.close < state.entry_price) {
+      // Track pullback high (highest retrace)
+      if (latest.high > (state.pullback_high || 0)) {
+        state.pullback_high = latest.high;
+      }
+      // Pullback low = the swing low before the pullback
+      if (!state.pullback_low) state.pullback_low = state.impulse_low;
+
+      // Structure formed when price stops making new highs (current high < pullback_high)
+      if (state.state === 'PULLBACK_ACTIVE' && latest.high < state.pullback_high) {
+        state.state = 'STRUCTURE_FORMED';
+        state.entry_price = state.pullback_low;
+        state.invalidation_price = state.pullback_high;
+      }
+
+      // Break entry: M15 close below pullback low
+      if (state.state === 'STRUCTURE_FORMED' && latest.close < state.entry_price) {
         state.state = 'ENTRY_READY';
         state.entry_price = latest.close;
       }
