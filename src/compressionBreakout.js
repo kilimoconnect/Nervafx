@@ -343,29 +343,42 @@ function processStructure(state, candles, direction) {
 
 function detectImpulse(candles, direction) {
   const isBuy = direction === 'BUY';
-  const recent = candles.slice(-8); // last 8 M15 candles (2 hours)
+  const recent = candles.slice(-10); // last 10 M15 candles (~2.5 hours)
+  if (recent.length < 4) return null;
 
-  // Count consecutive directional candles from the end
-  let streak = 0;
-  for (let i = recent.length - 1; i >= 0; i--) {
-    const c = recent[i];
-    const bullish = c.close > c.open;
-    if ((isBuy && bullish) || (!isBuy && !bullish)) streak++;
-    else break;
+  // Scan sliding windows of 3-8 candles for a net directional move
+  // Doesn't require consecutive same-direction candles — mixed candles
+  // within an impulse still count if net move is directional enough
+  let bestImpulse = null;
+
+  for (let winSize = 3; winSize <= Math.min(8, recent.length); winSize++) {
+    const window = recent.slice(-winSize);
+    const windowHigh = Math.max(...window.map(c => c.high));
+    const windowLow  = Math.min(...window.map(c => c.low));
+    const netMove    = window[window.length - 1].close - window[0].open;
+    const midPrice   = (windowHigh + windowLow) / 2;
+    const totalRange = (windowHigh - windowLow) / midPrice;
+
+    // Net move must be in the signal direction and meet minimum size
+    const directional = isBuy ? netMove > 0 : netMove < 0;
+    if (!directional) continue;
+    if (totalRange < IMPULSE_MIN_MOVE) continue;
+
+    // Directional efficiency: net move / total range > 40%
+    // Ensures the move is predominantly in one direction
+    const efficiency = Math.abs(netMove) / (windowHigh - windowLow);
+    if (efficiency < 0.35) continue;
+
+    // Count how many candles closed in the signal direction (majority rule)
+    const dirCount = window.filter(c => isBuy ? c.close > c.open : c.close < c.open).length;
+    if (dirCount < winSize * 0.5) continue; // at least half must be directional
+
+    if (!bestImpulse || totalRange > bestImpulse.moveSize) {
+      bestImpulse = { high: windowHigh, low: windowLow, streak: winSize, moveSize: totalRange };
+    }
   }
 
-  if (streak < IMPULSE_MIN_CANDLES) return null;
-
-  // Measure impulse size
-  const impulseCandles = recent.slice(-streak);
-  const impulseHigh = Math.max(...impulseCandles.map(c => c.high));
-  const impulseLow  = Math.min(...impulseCandles.map(c => c.low));
-  const midPrice    = (impulseHigh + impulseLow) / 2;
-  const moveSize    = (impulseHigh - impulseLow) / midPrice;
-
-  if (moveSize < IMPULSE_MIN_MOVE) return null;
-
-  return { high: impulseHigh, low: impulseLow, streak, moveSize };
+  return bestImpulse;
 }
 
 function isInvalidated(state, candle, isBuy) {
