@@ -181,58 +181,288 @@ function signalAlertEmail(signals, sessionSummary) {
 }
 
 function dailyDigestEmail(data) {
-  const { date, sessions, topSetups, marketCycle, momentumSignal } = data;
+  const {
+    marketFocusHtml, date, energyEvents, currencies, pairs, sessions,
+    flowSpreadPairs, latestHourly, m15Latest, flowPerfPairs, newsEvents,
+  } = data;
 
-  const sessionCards = (sessions || []).map(s => {
-    const cycle = s.energy_cycle || 'N/A';
-    const energy = Math.round(s.market_energy || 0);
-    const mom = Math.round(s.breadth_score || 0);
-    return `<div class="card">
-      <div class="card-title">${s.session_name}</div>
-      <span class="metric"><strong>${cycle}</strong></span>
-      <span class="metric">Energy <strong>${energy}</strong></span>
-      <span class="metric">Mom <strong>${mom}</strong></span>
-      <span class="metric">▲${Math.round(s.bullish_breadth || 0)}% / ▼${Math.round(s.bearish_breadth || 0)}%</span>
+  const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York', LOW_LIQUIDITY: 'Off-hours' };
+  const PHASE_COLOR = { ENTRY: '#22c55e', MOVING: '#fbbf24', COMPRESSION: '#a78bfa', PULLBACK: '#f59e0b', MONITORING: '#64748b' };
+
+  // ── Market Pulse (energy, dispersion, tradability, DE, cycle) ──
+  const pulseHtml = latestHourly ? (() => {
+    const e = Math.round(parseFloat(latestHourly.market_energy) || 0);
+    const d = Math.round(parseFloat(latestHourly.dispersion_score) || 0);
+    const t = Math.round(parseFloat(latestHourly.tradability_score) || 0);
+    const de = Math.round(parseFloat(latestHourly.de_score) || 0);
+    const exp = Math.round(parseFloat(latestHourly.expansion_readiness) || 0);
+    const cycle = latestHourly.energy_cycle || '—';
+    const eColor = e >= 60 ? '#4ade80' : e >= 40 ? '#fbbf24' : '#64748b';
+    return `
+    <div class="card">
+      <div class="card-hd">Market Pulse</div>
+      <div class="card-bd">
+        <table width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="padding:12px 14px;text-align:center;width:33%">
+              <div style="font-size:22px;font-weight:800;color:${eColor}">${e}</div>
+              <div class="dim" style="font-size:11px;margin-top:2px">Energy</div>
+            </td>
+            <td style="padding:12px 14px;text-align:center;width:33%">
+              <div style="font-size:22px;font-weight:800;color:#60a5fa">${d}</div>
+              <div class="dim" style="font-size:11px;margin-top:2px">Dispersion</div>
+            </td>
+            <td style="padding:12px 14px;text-align:center;width:33%">
+              <div style="font-size:22px;font-weight:800;color:#a78bfa">${de}</div>
+              <div class="dim" style="font-size:11px;margin-top:2px">DE Score</div>
+            </td>
+          </tr>
+          <tr style="border-top:1px solid rgba(30,41,59,0.6)">
+            <td style="padding:10px 14px;text-align:center">
+              <div style="font-size:14px;font-weight:700;color:#e2e8f0">${t}</div>
+              <div class="dim" style="font-size:11px">Tradability</div>
+            </td>
+            <td style="padding:10px 14px;text-align:center">
+              <div style="font-size:14px;font-weight:700;color:#e2e8f0">${exp}</div>
+              <div class="dim" style="font-size:11px">Expansion</div>
+            </td>
+            <td style="padding:10px 14px;text-align:center">
+              <span class="tag tag-blue">${cycle}</span>
+            </td>
+          </tr>
+        </table>
+      </div>
     </div>`;
-  }).join('');
+  })() : '';
 
-  const setupRows = (topSetups || []).slice(0, 5).map(s => {
-    const dir = s.direction === 'BUY'
-      ? '<span class="signal-buy">BUY</span>'
-      : '<span class="signal-sell">SELL</span>';
-    return `<tr>
-      <td style="padding:6px;color:#fff">${s.instrument.replace('_', '/')}</td>
-      <td style="padding:6px">${dir}</td>
-      <td style="padding:6px;color:#cbd5e1">${s.confidence}%</td>
+
+
+  // ── Session Summary ──
+  const sessionRows = (sessions || []).map(s => {
+    const energy = Math.round(parseFloat(s.market_energy) || 0);
+    const trad = s.tradability_grade || '';
+    const liq = s.liquidity_grade || '';
+    const state = s.energy_cycle || '';
+    const eColor = energy >= 60 ? '#4ade80' : energy >= 40 ? '#fbbf24' : '#64748b';
+    return `<tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
+      <td style="padding:10px 14px"><span class="val">${SESS_LABEL[s.session_name] || s.session_name}</span></td>
+      <td style="padding:10px 14px;text-align:center"><span style="color:${eColor};font-weight:700">${energy}</span></td>
+      <td style="padding:10px 14px;text-align:center" class="dim">${trad}</td>
+      <td style="padding:10px 14px;text-align:right"><span class="tag tag-gray">${state}</span></td>
     </tr>`;
   }).join('');
 
-  const momHtml = momentumSignal ? `
-    <div class="card" style="border-color:rgba(34,197,94,0.4)">
-      <div class="card-title" style="color:#22c55e">🚀 Momentum Continuation</div>
-      <p style="margin:0;color:#cbd5e1">${momentumSignal.streak} consecutive rises in ${momentumSignal.session} — continuation likely.</p>
+  const sessionsHtml = sessionRows ? `
+    <div class="card">
+      <div class="card-hd">Sessions</div>
+      <div class="card-bd">
+        <table width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="padding:6px 14px" class="sm dim">Session</td>
+            <td style="padding:6px 14px;text-align:center" class="sm dim">Energy</td>
+            <td style="padding:6px 14px;text-align:center" class="sm dim">Tradability</td>
+            <td style="padding:6px 14px;text-align:right" class="sm dim">Cycle</td>
+          </tr>
+          ${sessionRows}
+        </table>
+      </div>
     </div>` : '';
 
-  return {
-    subject: `Daily Market Digest — ${date}`,
-    html: baseLayout(`
-      <h2>Daily Market Digest</h2>
-      <p>Here's your end-of-day summary for <strong>${date}</strong>.</p>
-      ${marketCycle ? `<p>Market cycle: <span class="badge badge-amber">${marketCycle}</span></p>` : ''}
-      ${momHtml}
-      <div class="divider"></div>
-      <h2 style="font-size:16px">Session Energy</h2>
-      ${sessionCards || '<p style="color:#94a3b8">No session data available.</p>'}
-      ${setupRows ? `
-        <div class="divider"></div>
-        <h2 style="font-size:16px">Top Setups</h2>
-        <table style="width:100%;border-collapse:collapse">
-          <thead><tr style="border-bottom:1px solid #334155;color:#94a3b8;font-size:13px;text-align:left">
-            <th style="padding:6px">Pair</th><th style="padding:6px">Direction</th><th style="padding:6px">Confidence</th>
-          </tr></thead>
-          <tbody>${setupRows}</tbody>
+  // ── Currency Directions ──
+  const strong = (currencies || []).filter(c => c.direction === 'STRONG');
+  const weak = (currencies || []).filter(c => c.direction === 'WEAK');
+
+  const ccyRow = (c) => {
+    const isStrong = c.direction === 'STRONG';
+    const color = isStrong ? '#4ade80' : '#f87171';
+    const h3 = ((parseFloat(c.smooth_3h) || 0) * 10000).toFixed(1);
+    const h6 = ((parseFloat(c.smooth_6h) || 0) * 10000).toFixed(1);
+    const evTag = c.energy_event_type
+      ? `<span class="tag tag-${c.energy_event_type === 'CONTINUATION' ? 'blue' : c.energy_event_type === 'NEW' ? 'green' : 'amber'}">${c.energy_event_type}</span>`
+      : '';
+    return `<tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
+      <td style="padding:8px 14px"><span class="val" style="color:${color}">${c.currency}</span></td>
+      <td style="padding:8px 14px;text-align:right">
+        <span class="dim">3H ${h3}</span>
+        <span class="dim" style="margin-left:6px">6H ${h6}</span>
+        ${evTag}
+      </td>
+    </tr>`;
+  };
+
+  const directionsHtml = (strong.length || weak.length) ? `
+    <div class="card">
+      <div class="card-hd">Currency Directions</div>
+      <div class="card-bd">
+        ${strong.length ? `<table width="100%" cellpadding="0" cellspacing="0">
+          <tr><td colspan="2" style="padding:10px 14px;color:#4ade80;font-weight:700;font-size:11px;text-transform:uppercase">Strong</td></tr>
+          ${strong.map(c => ccyRow(c)).join('')}
         </table>` : ''}
-      <p style="text-align:center;margin:24px 0"><a class="cta" href="https://nervafx.com">Open Dashboard →</a></p>
+        ${weak.length ? `<table width="100%" cellpadding="0" cellspacing="0" style="${strong.length ? 'border-top:1px solid rgba(30,41,59,0.6)' : ''}">
+          <tr><td colspan="2" style="padding:10px 14px;color:#f87171;font-weight:700;font-size:11px;text-transform:uppercase">Weak</td></tr>
+          ${weak.map(c => ccyRow(c)).join('')}
+        </table>` : ''}
+      </div>
+    </div>` : '';
+
+  // ── Flow Spread Pairs (≥ 30p) ──
+  const spreadHtml = (flowSpreadPairs || []).length ? (() => {
+    const rows = flowSpreadPairs.slice(0, 8).map(p => {
+      const isBuy = p.dir === 'BUY';
+      const dirColor = isBuy ? '#4ade80' : '#f87171';
+      return `<tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
+        <td style="padding:8px 14px">
+          <span class="val">${p.instrument.replace('_','/')}</span>
+          <span style="color:${dirColor};font-weight:600;font-size:12px;margin-left:6px">${p.dir}</span>
+        </td>
+        <td style="padding:8px 14px;text-align:center" class="dim">${p.strong_ccy} ↑ ${p.weak_ccy} ↓</td>
+        <td style="padding:8px 14px;text-align:right"><span style="color:#60a5fa;font-weight:700">${p.spreadPips.toFixed(1)}p</span></td>
+      </tr>`;
+    }).join('');
+    return `
+    <div class="card">
+      <div class="card-hd">Flow Spread Pairs (≥30p)</div>
+      <div class="card-bd">
+        <table width="100%" cellpadding="0" cellspacing="0">${rows}</table>
+      </div>
+    </div>`;
+  })() : '';
+
+  // ── Flow Performance (top active pairs with M15 enrichment) ──
+  const flowPerfHtml = (flowPerfPairs || []).length ? (() => {
+    const rows = flowPerfPairs.slice(0, 6).map(p => {
+      const isBuy = p.dir === 'BUY';
+      const dirColor = isBuy ? '#4ade80' : '#f87171';
+      const stateColor = p.state === 'EXPANDING' ? '#4ade80' : p.state === 'HOLDING' ? '#fbbf24' : '#64748b';
+      const de = Math.round(p.de_combined || 0);
+      return `<tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
+        <td style="padding:8px 14px">
+          <span class="val" style="font-size:13px">${p.instrument.replace('_','/')}</span>
+          <span style="color:${dirColor};font-weight:600;font-size:11px;margin-left:4px">${p.dir}</span>
+        </td>
+        <td style="padding:8px 14px;text-align:center"><span style="color:${stateColor};font-size:11px;font-weight:600">${p.state || '—'}</span></td>
+        <td style="padding:8px 14px;text-align:center" class="dim">${p.vol_grade || '—'}</td>
+        <td style="padding:8px 14px;text-align:right"><span class="dim">DE ${de}%</span></td>
+      </tr>`;
+    }).join('');
+    return `
+    <div class="card">
+      <div class="card-hd">Flow Performance</div>
+      <div class="card-bd">
+        <table width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="padding:6px 14px" class="sm dim">Pair</td>
+            <td style="padding:6px 14px;text-align:center" class="sm dim">State</td>
+            <td style="padding:6px 14px;text-align:center" class="sm dim">Vol</td>
+            <td style="padding:6px 14px;text-align:right" class="sm dim">DE</td>
+          </tr>
+          ${rows}
+        </table>
+      </div>
+    </div>`;
+  })() : '';
+
+  // ── Energy Events ──
+  const eventRows = (energyEvents || []).map(ev => `
+    <tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
+      <td style="padding:8px 14px">
+        <span class="val" style="color:#fbbf24">${Math.round(ev.energy)}</span>
+        <span class="dim" style="margin-left:6px">${SESS_LABEL[ev.session] || ev.session}</span>
+      </td>
+      <td style="padding:8px 14px;text-align:right" class="sm">${ev.time ? new Date(ev.time).toISOString().slice(11, 16) : '?'} UTC</td>
+    </tr>`
+  ).join('');
+
+  const eventsHtml = eventRows ? `
+    <div class="card">
+      <div class="card-hd">Energy Crosses</div>
+      <div class="card-bd"><table width="100%" cellpadding="0" cellspacing="0">${eventRows}</table></div>
+    </div>` : '';
+
+  // ── M15 Energy ──
+  const m15Html = m15Latest ? (() => {
+    const e15 = Math.round(parseFloat(m15Latest.energy) || 0);
+    const e15Color = e15 >= 60 ? '#4ade80' : e15 >= 40 ? '#fbbf24' : '#64748b';
+    const sess = SESS_LABEL[m15Latest.session_name] || m15Latest.session_name || '';
+    return `
+    <div style="padding:10px 14px;border-bottom:1px solid rgba(30,41,59,0.6)">
+      <span class="dim">Latest M15 Energy:</span>
+      <span style="color:${e15Color};font-weight:700;margin-left:6px">${e15}</span>
+      <span class="dim" style="margin-left:6px">(${sess})</span>
+    </div>`;
+  })() : '';
+
+  // ── Signal Pairs ──
+  const PHASE_ORDER = { ENTRY: 0, MOVING: 1, COMPRESSION: 2, PULLBACK: 3, MONITORING: 4 };
+  const sorted = (pairs || []).sort((a, b) => (PHASE_ORDER[a.phase] ?? 9) - (PHASE_ORDER[b.phase] ?? 9));
+
+  const pairRows = sorted.slice(0, 8).map(p => {
+    const color = p.dir === 'BUY' ? '#4ade80' : '#f87171';
+    const phColor = PHASE_COLOR[p.phase] || '#64748b';
+    return `<tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
+      <td style="padding:8px 14px">
+        <span class="val" style="font-size:13px">${p.instrument.replace('_','/')}</span>
+        <span style="color:${color};font-weight:600;font-size:12px;margin-left:6px">${p.dir}</span>
+      </td>
+      <td style="padding:8px 14px;text-align:right">
+        <span style="color:${phColor};font-weight:600;font-size:11px">${p.phase}</span>
+        <span class="dim" style="margin-left:6px">DE ${Math.round(p.de_combined || 0)}%</span>
+      </td>
+    </tr>`;
+  }).join('');
+
+  const pairsHtml = pairRows ? `
+    <div class="card">
+      <div class="card-hd">Signal Pairs (${pairs.length})</div>
+      <div class="card-bd"><table width="100%" cellpadding="0" cellspacing="0">${pairRows}</table></div>
+    </div>` : '';
+
+  // ── News Outlook ──
+  const newsHtml = (newsEvents || []).length ? (() => {
+    const rows = newsEvents.slice(0, 10).map(n => {
+      const t = new Date(n.event_time);
+      const timeStr = t.toISOString().slice(11, 16) + ' UTC';
+      const impColor = n.impact === 'high' ? '#ef4444' : '#f59e0b';
+      const impIcon = n.impact === 'high' ? '🔴' : '🟡';
+      return `<tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
+        <td style="padding:6px 14px;width:55px" class="sm">${timeStr}</td>
+        <td style="padding:6px 14px;width:35px"><span style="color:${impColor};font-weight:700;font-size:11px">${n.currency}</span></td>
+        <td style="padding:6px 14px;font-size:12px;color:#cbd5e1">${impIcon} ${n.event_name}</td>
+      </tr>`;
+    }).join('');
+    return `
+    <div class="card">
+      <div class="card-hd">Upcoming News (24h)</div>
+      <div class="card-bd"><table width="100%" cellpadding="0" cellspacing="0">${rows}</table></div>
+    </div>`;
+  })() : '';
+
+  // ── Phase Summary line ──
+  const phases = {};
+  for (const p of (pairs || [])) phases[p.phase] = (phases[p.phase] || 0) + 1;
+  const phaseText = Object.entries(phases)
+    .sort((a, b) => (PHASE_ORDER[a[0]] ?? 9) - (PHASE_ORDER[b[0]] ?? 9))
+    .map(([ph, n]) => `${ph}(${n})`).join(' · ');
+
+  return {
+    subject: `NervaFX Daily Digest — ${date}`,
+    html: baseLayout(`
+      <h2>Daily Digest</h2>
+      <p class="sub">${date}${phaseText ? ` · ${phaseText}` : ''}</p>
+
+      ${marketFocusHtml || ''}
+      ${pulseHtml}
+      ${sessionsHtml}
+      ${m15Html}
+      ${eventsHtml}
+      ${directionsHtml}
+      ${spreadHtml}
+      ${flowPerfHtml}
+      ${pairsHtml}
+      ${newsHtml}
+
+      <p style="text-align:center;margin:24px 0 16px"><a class="cta" href="https://nervafx.com">Open Dashboard</a></p>
+      <p class="sm" style="text-align:center">Market observations — not trade recommendations.</p>
     `),
   };
 }
@@ -462,6 +692,43 @@ function impulseAlertEmail(impulses, confluenceData) {
   };
 }
 
+function flowSpreadAlertEmail(pairs) {
+  const pairCells = pairs.map(p => {
+    const isBuy = p.dir === 'BUY';
+    const borderColor = isBuy ? '#22c55e' : '#ef4444';
+    const dirLabel = isBuy ? '▲ BUY' : '▼ SELL';
+    const dirColor = isBuy ? '#22c55e' : '#ef4444';
+    const inst = p.instrument.replace('_', '/');
+    return `<td style="padding:4px;width:50%">
+      <div style="background:#1e293b;border:1px solid ${borderColor};border-radius:8px;padding:12px 14px">
+        <div style="color:#fff;font-weight:700;font-size:15px;margin:0 0 4px">${inst}</div>
+        <div style="color:${dirColor};font-size:13px;font-weight:600">${dirLabel}</div>
+        <div style="color:#94a3b8;font-size:11px;margin-top:4px">${p.strong_ccy} ↑ ${p.weak_ccy} ↓</div>
+        <div style="color:#60a5fa;font-size:14px;font-weight:700;margin-top:4px">${p.spreadPips.toFixed(1)}p</div>
+      </div>
+    </td>`;
+  });
+  const tableRows = [];
+  for (let i = 0; i < pairCells.length; i += 2) {
+    const cell1 = pairCells[i];
+    const cell2 = pairCells[i + 1] || '<td style="padding:4px;width:50%"></td>';
+    tableRows.push(`<tr>${cell1}${cell2}</tr>`);
+  }
+
+  return {
+    subject: `${pairs.length} Flow Spread Pair${pairs.length > 1 ? 's' : ''} Active (≥30p) — NervaFX`,
+    html: baseLayout(`
+      <h2>Flow Spread Alert</h2>
+      <p>${pairs.length} pair${pairs.length > 1 ? 's' : ''} with currency spread <strong>≥ 30 pips</strong> detected. Direction derived from 3H + 6H aligned currency strength.</p>
+      <table style="width:100%;border-collapse:collapse;border-spacing:0;margin:16px 0">
+        ${tableRows.join('\n        ')}
+      </table>
+      <p style="text-align:center;margin:24px 0"><a class="cta" href="https://nervafx.com/flow-pairs.html">View All Pairs →</a></p>
+      <p style="color:#94a3b8;font-size:13px">Flow spread pairs are market observations based on currency strength divergence, not trade recommendations.</p>
+    `),
+  };
+}
+
 // ── Send helpers ─────────────────────────────────────────────────────────────
 
 async function sendEmail(to, template) {
@@ -512,4 +779,5 @@ module.exports = {
   confluenceAlertEmail,
   approvedTradesEmail,
   impulseAlertEmail,
+  flowSpreadAlertEmail,
 };

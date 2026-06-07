@@ -23,7 +23,7 @@
  * Runs at the end of each pipeline cycle via sendSignalAlerts(sb).
  */
 
-const { sendEmail, baseLayout } = require('./emailService');
+const { sendEmail, baseLayout, flowSpreadAlertEmail, dailyDigestEmail } = require('./emailService');
 
 const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York', LOW_LIQUIDITY: 'Off-hours' };
 
@@ -236,141 +236,6 @@ function directionAlertEmail(data) {
 
       <p style="text-align:center;margin:24px 0 16px"><a class="cta" href="https://nervafx.com">Open Dashboard</a></p>
       <p class="sm" style="text-align:center">Analytical observations only — not trade recommendations.</p>
-    `),
-  };
-}
-
-function dailyDigestEmail(data) {
-  const { marketFocusHtml, date, energyEvents, pairs, currencies, sessions } = data;
-
-  // ── Currency Directions ──
-  const strong = (currencies || []).filter(c => c.direction === 'STRONG');
-  const weak   = (currencies || []).filter(c => c.direction === 'WEAK');
-
-  const ccyRow = (c, cls) => {
-    const h3 = (parseFloat(c.smooth_3h) || 0) * 10000;
-    const h6 = (parseFloat(c.smooth_6h) || 0) * 10000;
-    const evTag = c.energy_event_type
-      ? `<span class="tag tag-${c.energy_event_type === 'CONTINUATION' ? 'blue' : c.energy_event_type === 'NEW' ? 'green' : 'amber'}">${c.energy_event_type}</span>`
-      : '';
-    return `<tr>
-      <td style="padding:8px 14px"><span class="val">${c.currency}</span></td>
-      <td style="padding:8px 14px;text-align:right">
-        <span class="dim">${h3.toFixed(1)}</span>
-        <span class="dim" style="margin-left:8px">${h6.toFixed(1)}</span>
-        ${evTag}
-      </td>
-    </tr>`;
-  };
-
-  const directionsHtml = (strong.length || weak.length) ? `
-    <div class="card">
-      <div class="card-hd">Currency Directions</div>
-      <div class="card-bd">
-        ${strong.length ? `<table width="100%" cellpadding="0" cellspacing="0">
-          <tr><td colspan="2" style="padding:10px 14px;color:#4ade80;font-weight:700;font-size:11px;text-transform:uppercase">Strong</td></tr>
-          ${strong.map(c => ccyRow(c, 'strong')).join('')}
-        </table>` : ''}
-        ${weak.length ? `<table width="100%" cellpadding="0" cellspacing="0" style="${strong.length ? 'border-top:1px solid rgba(30,41,59,0.6)' : ''}">
-          <tr><td colspan="2" style="padding:10px 14px;color:#f87171;font-weight:700;font-size:11px;text-transform:uppercase">Weak</td></tr>
-          ${weak.map(c => ccyRow(c, 'weak')).join('')}
-        </table>` : ''}
-      </div>
-    </div>` : '';
-
-  // ── Session Summary ──
-  const sessionRows = (sessions || []).map(s => {
-    const energy = Math.round(parseFloat(s.market_energy) || 0);
-    const trad   = s.tradability_grade || '';
-    const liq    = s.liquidity_grade || '';
-    const state  = s.energy_cycle || '';
-    return `<tr>
-      <td style="padding:8px 14px"><span class="val">${SESS_LABEL[s.session_name] || s.session_name}</span></td>
-      <td style="padding:8px 14px;text-align:center"><span style="color:#fbbf24;font-weight:700">${energy}</span></td>
-      <td style="padding:8px 14px;text-align:center" class="dim">${trad}</td>
-      <td style="padding:8px 14px;text-align:right"><span class="tag tag-gray">${state}</span></td>
-    </tr>`;
-  }).join('');
-
-  const sessionsHtml = sessionRows ? `
-    <div class="card">
-      <div class="card-hd">Session Summary</div>
-      <div class="card-bd">
-        <table width="100%" cellpadding="0" cellspacing="0">
-          <tr>
-            <td style="padding:6px 14px" class="sm dim">Session</td>
-            <td style="padding:6px 14px;text-align:center" class="sm dim">Energy</td>
-            <td style="padding:6px 14px;text-align:center" class="sm dim">Tradability</td>
-            <td style="padding:6px 14px;text-align:right" class="sm dim">State</td>
-          </tr>
-          ${sessionRows}
-        </table>
-      </div>
-    </div>` : '';
-
-  // ── Energy Events (bars that crossed 50) ──
-  const eventRows = (energyEvents || []).map(ev => `
-    <tr>
-      <td style="padding:8px 14px">
-        <span class="val" style="color:#fbbf24">${Math.round(ev.energy)}</span>
-        <span class="dim" style="margin-left:6px">${SESS_LABEL[ev.session] || ev.session}</span>
-      </td>
-      <td style="padding:8px 14px;text-align:right" class="sm">${ev.time ? new Date(ev.time).toISOString().slice(11, 16) : '?'} UTC</td>
-    </tr>`
-  ).join('');
-
-  const eventsHtml = eventRows ? `
-    <div class="card">
-      <div class="card-hd">Energy Crosses</div>
-      <div class="card-bd"><table width="100%" cellpadding="0" cellspacing="0">${eventRows}</table></div>
-    </div>` : '';
-
-  // ── Signal Pairs (top 8 by phase priority) ──
-  const PHASE_ORDER = { ENTRY: 0, MOVING: 1, COMPRESSION: 2, PULLBACK: 3, MONITORING: 4 };
-  const PHASE_COLOR = { ENTRY: '#22c55e', MOVING: '#fbbf24', COMPRESSION: '#a78bfa', PULLBACK: '#f59e0b', MONITORING: '#64748b' };
-  const sorted = (pairs || []).sort((a, b) => (PHASE_ORDER[a.phase] ?? 9) - (PHASE_ORDER[b.phase] ?? 9));
-
-  const pairRows = sorted.slice(0, 8).map(p => {
-    const color = p.dir === 'BUY' ? '#4ade80' : '#f87171';
-    const phColor = PHASE_COLOR[p.phase] || '#64748b';
-    return `<tr>
-      <td style="padding:8px 14px">
-        <span class="val" style="font-size:13px">${p.instrument.replace('_','/')}</span>
-        <span style="color:${color};font-weight:600;font-size:12px;margin-left:6px">${p.dir}</span>
-      </td>
-      <td style="padding:8px 14px;text-align:right">
-        <span style="color:${phColor};font-weight:600;font-size:11px">${p.phase}</span>
-        <span class="dim" style="margin-left:6px">DE ${Math.round(p.de_combined || 0)}%</span>
-      </td>
-    </tr>`;
-  }).join('');
-
-  const pairsHtml = pairRows ? `
-    <div class="card">
-      <div class="card-hd">Signal Pairs</div>
-      <div class="card-bd"><table width="100%" cellpadding="0" cellspacing="0">${pairRows}</table></div>
-    </div>` : '';
-
-  // ── Phase Flow Summary ──
-  const phases = {};
-  for (const p of (pairs || [])) phases[p.phase] = (phases[p.phase] || 0) + 1;
-  const phaseText = Object.entries(phases)
-    .sort((a, b) => (PHASE_ORDER[a[0]] ?? 9) - (PHASE_ORDER[b[0]] ?? 9))
-    .map(([ph, n]) => `${ph}(${n})`).join(' · ');
-
-  return {
-    subject: `NervaFX Daily Digest — ${date}`,
-    html: baseLayout(`
-      <h2>Daily Digest</h2>
-      <p class="sub">${date}${phaseText ? ` · ${phaseText}` : ''}</p>
-
-      ${marketFocusHtml || ''}
-      ${directionsHtml}
-      ${sessionsHtml}
-      ${eventsHtml}
-      ${pairsHtml}
-
-      <p style="text-align:center;margin:24px 0 16px"><a class="cta" href="https://nervafx.com/app">Open Dashboard</a></p>
     `),
   };
 }
@@ -624,8 +489,114 @@ async function sendSignalAlerts(sb) {
     console.error('[EMAIL] Breakout alert error:', e.message);
   }
 
-  // ── 3. DAILY DIGEST — after NY session closes (21:00-23:59 UTC) ───────────
-  const now = new Date();
+  // ── 3. FLOW SPREAD ALERT — pairs with spread ≥ 30 pips (hourly, only on change) ──
+  try {
+    const SPREAD_THRESHOLD = 30;
+    const VALID_PAIRS = new Set([
+      'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
+      'EUR_GBP','EUR_JPY','EUR_CHF','EUR_CAD','EUR_AUD','EUR_NZD',
+      'GBP_JPY','GBP_CHF','GBP_CAD','GBP_AUD','GBP_NZD',
+      'AUD_JPY','AUD_CHF','AUD_CAD','AUD_NZD',
+      'NZD_JPY','NZD_CHF','NZD_CAD','CAD_JPY','CAD_CHF','CHF_JPY',
+    ]);
+    const CCYS = ['USD','EUR','GBP','JPY','CHF','CAD','AUD','NZD'];
+
+    // Fetch latest currency strength (3H + 6H)
+    const { data: csRows } = await sb
+      .from('currency_strength')
+      .select('currency, smooth_3h, smooth_6h')
+      .order('time', { ascending: false })
+      .limit(8);
+
+    if (csRows?.length) {
+      const ccyMap = {};
+      for (const r of csRows) {
+        if (!ccyMap[r.currency]) {
+          ccyMap[r.currency] = {
+            h3: parseFloat(r.smooth_3h) || 0,
+            h6: parseFloat(r.smooth_6h) || 0,
+          };
+        }
+      }
+
+      // Determine strong/weak currencies
+      const strong = [], weak = [];
+      for (const ccy of CCYS) {
+        const d = ccyMap[ccy];
+        if (!d) continue;
+        if (d.h3 > 0.00005 && d.h6 > 0.00005) strong.push({ ccy, score: d.h3 + d.h6 });
+        else if (d.h3 < -0.00005 && d.h6 < -0.00005) weak.push({ ccy, score: Math.abs(d.h3 + d.h6) });
+      }
+      strong.sort((a, b) => b.score - a.score);
+      weak.sort((a, b) => b.score - a.score);
+
+      // Form pairs with spread ≥ 30p
+      const spreadPairs = [];
+      for (const s of strong) {
+        for (const w of weak) {
+          const fwd = `${s.ccy}_${w.ccy}`;
+          const rev = `${w.ccy}_${s.ccy}`;
+          let instrument, dir;
+          if (VALID_PAIRS.has(fwd)) { instrument = fwd; dir = 'BUY'; }
+          else if (VALID_PAIRS.has(rev)) { instrument = rev; dir = 'SELL'; }
+          else continue;
+
+          const [base, quote] = instrument.split('_');
+          const spread = Math.abs((ccyMap[base]?.h3 || 0) - (ccyMap[quote]?.h3 || 0));
+          const spreadPips = spread * 10000;
+          if (spreadPips >= SPREAD_THRESHOLD) {
+            spreadPairs.push({ instrument, dir, strong_ccy: s.ccy, weak_ccy: w.ccy, spreadPips });
+          }
+        }
+      }
+      spreadPairs.sort((a, b) => b.spreadPips - a.spreadPips);
+
+      if (spreadPairs.length > 0) {
+        // Dedup: create a hash from the sorted instrument list to detect changes
+        const pairListHash = spreadPairs.map(p => `${p.instrument}_${p.dir}`).sort().join('|');
+        const hourKey = now.toISOString().slice(0, 13); // YYYY-MM-DDTHH
+        const flowSpreadKey = `flowspread_${hourKey}`;
+
+        // Check if already sent this hour
+        const flowAlreadySent = await wasAlreadySent(sb, flowSpreadKey);
+        if (!flowAlreadySent) {
+          // Check if the list changed compared to last sent
+          let listChanged = true;
+          try {
+            const { data: lastLog } = await sb
+              .from('email_alert_log')
+              .select('details')
+              .like('alert_type', 'flowspread_%')
+              .order('sent_at', { ascending: false })
+              .limit(1);
+            if (lastLog?.length && lastLog[0].details?.pairListHash) {
+              listChanged = lastLog[0].details.pairListHash !== pairListHash;
+            }
+          } catch (_) {}
+
+          if (listChanged) {
+            const template = flowSpreadAlertEmail(spreadPairs);
+            await sendToAll(sb, recipients, template, flowSpreadKey, {
+              pairListHash,
+              pairs: spreadPairs.map(p => p.instrument),
+              count: spreadPairs.length,
+            });
+            emailsSent.push('flowspread');
+          } else {
+            console.log('[EMAIL] Flow spread pairs unchanged — skipping');
+          }
+        } else {
+          console.log('[EMAIL] Flow spread alert already sent this hour — skipping');
+        }
+      } else {
+        console.log('[EMAIL] No pairs meet 30p spread threshold — no flow spread email');
+      }
+    }
+  } catch (e) {
+    console.error('[EMAIL] Flow spread alert error:', e.message);
+  }
+
+  // ── 4. DAILY DIGEST — after NY session closes (21:00-23:59 UTC) ───────────
   const utcHour = now.getUTCHours();
   if (utcHour >= 21 && utcHour <= 23) {
     const digestKey = `daily_digest_${now.toISOString().slice(0, 10)}`;
@@ -664,6 +635,81 @@ async function sendSignalAlerts(sb) {
         .select('instrument, dir, phase, de_combined')
         .eq('active', true);
 
+      // Get flow spread pairs (≥ 30p)
+      let flowSpreadPairs = [];
+      try {
+        const { data: csData } = await sb
+          .from('currency_strength')
+          .select('currency, smooth_3h, smooth_6h')
+          .order('time', { ascending: false })
+          .limit(8);
+        if (csData?.length) {
+          const cMap = {};
+          for (const r of csData) {
+            if (!cMap[r.currency]) cMap[r.currency] = { h3: parseFloat(r.smooth_3h) || 0, h6: parseFloat(r.smooth_6h) || 0 };
+          }
+          const CCYS_D = ['USD','EUR','GBP','JPY','CHF','CAD','AUD','NZD'];
+          const VALID_D = new Set(['EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD','EUR_GBP','EUR_JPY','EUR_CHF','EUR_CAD','EUR_AUD','EUR_NZD','GBP_JPY','GBP_CHF','GBP_CAD','GBP_AUD','GBP_NZD','AUD_JPY','AUD_CHF','AUD_CAD','AUD_NZD','NZD_JPY','NZD_CHF','NZD_CAD','CAD_JPY','CAD_CHF','CHF_JPY']);
+          const strD = [], wkD = [];
+          for (const c of CCYS_D) {
+            const d = cMap[c]; if (!d) continue;
+            if (d.h3 > 0.00005 && d.h6 > 0.00005) strD.push({ ccy: c, score: d.h3 + d.h6 });
+            else if (d.h3 < -0.00005 && d.h6 < -0.00005) wkD.push({ ccy: c, score: Math.abs(d.h3 + d.h6) });
+          }
+          for (const s of strD) {
+            for (const w of wkD) {
+              const fwd = `${s.ccy}_${w.ccy}`, rev = `${w.ccy}_${s.ccy}`;
+              let inst, dir;
+              if (VALID_D.has(fwd)) { inst = fwd; dir = 'BUY'; }
+              else if (VALID_D.has(rev)) { inst = rev; dir = 'SELL'; }
+              else continue;
+              const [b, q] = inst.split('_');
+              const sp = Math.abs((cMap[b]?.h3 || 0) - (cMap[q]?.h3 || 0)) * 10000;
+              if (sp >= 30) flowSpreadPairs.push({ instrument: inst, dir, strong_ccy: s.ccy, weak_ccy: w.ccy, spreadPips: sp });
+            }
+          }
+          flowSpreadPairs.sort((a, b) => b.spreadPips - a.spreadPips);
+        }
+      } catch (_) {}
+
+      // Get latest hourly activity for dispersion/DE context
+      let latestHourly = null;
+      try {
+        const { data: haRows } = await sb
+          .from('hourly_session_activity')
+          .select('market_energy, dispersion_score, tradability_score, de_score, energy_cycle, expansion_readiness')
+          .order('time_utc', { ascending: false })
+          .limit(1);
+        if (haRows?.length) latestHourly = haRows[0];
+      } catch (_) {}
+
+      // Get latest M15 energy bar
+      let m15Latest = null;
+      try {
+        const { data: m15Rows } = await sb
+          .from('m15_energy_bars')
+          .select('time, energy, session_name')
+          .order('time', { ascending: false })
+          .limit(1);
+        if (m15Rows?.length) m15Latest = m15Rows[0];
+      } catch (_) {}
+
+      // Get flow performance (top pairs by final_score)
+      let flowPerfPairs = [];
+      try {
+        const { data: fpRows } = await sb
+          .from('flow_performance')
+          .select('instrument, dir, status, state, de_combined, final_score, vol_grade, momentum')
+          .order('time', { ascending: false })
+          .limit(28);
+        // Dedupe by instrument (keep latest)
+        const seen = new Set();
+        for (const r of (fpRows || [])) {
+          if (!seen.has(r.instrument)) { seen.add(r.instrument); flowPerfPairs.push(r); }
+        }
+        flowPerfPairs.sort((a, b) => (b.final_score || 0) - (a.final_score || 0));
+      } catch (_) {}
+
       const template = dailyDigestEmail({
         marketFocusHtml,
         date: todayStr,
@@ -671,6 +717,11 @@ async function sendSignalAlerts(sb) {
         currencies: digestCurrencies || [],
         pairs: allPairs || [],
         sessions: sessions || [],
+        flowSpreadPairs,
+        latestHourly,
+        m15Latest,
+        flowPerfPairs,
+        newsEvents: upcomingNews || [],
       });
 
       await sendToAll(sb, recipients, template, digestKey, { date: todayStr });
