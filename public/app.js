@@ -3764,9 +3764,14 @@ function _renderInlineM15Bars(container, bars) {
     });
   }
 
+  // Filter out weekends (Saturday=6, Sunday=0) and take last 2 trading days
   const todayStr = new Date().toISOString().slice(0, 10);
   const dates = Object.keys(byDate)
-    .filter(d => d === todayStr ? byDate[d].length >= 1 : byDate[d].length >= 8)
+    .filter(d => {
+      const dow = new Date(d + 'T12:00:00Z').getUTCDay();
+      if (dow === 0 || dow === 6) return false; // skip Sat/Sun
+      return d === todayStr ? byDate[d].length >= 1 : byDate[d].length >= 8;
+    })
     .sort((a, b) => b.localeCompare(a))
     .slice(0, 2);
 
