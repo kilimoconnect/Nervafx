@@ -4847,12 +4847,10 @@ function _renderBreadthBars(container, rows) {
   html += `<div class="bc-guide">
     <div class="bc-guide-title">How to read this chart</div>
     <ul class="bc-guide-list">
-      <li><strong>Breadth</strong> measures what percentage of 28 pairs are actively moving each hour (above session-calibrated threshold). Higher = broader participation.</li>
+      <li><strong>Breadth</strong> measures how many pairs are actively moving each hour. Higher = broader participation.</li>
       <li><strong>Rising bars</strong> mean more pairs are engaging — the market is gaining strength and trends are more likely to continue.</li>
       <li><strong>Falling bars</strong> mean participation is fading — fewer pairs are active, reversals or ranging conditions may follow.</li>
-      <li><strong>Green bars</strong> highlight 3+ consecutive hourly increases (both &ge;10) — a continuation signal suggesting the move has broad support and is likely to persist.</li>
-      <li><strong>Low breadth</strong> (under 15) means weak participation — avoid trading as moves lack conviction.</li>
-      <li><strong>High breadth</strong> (above 50) with agreement means strong trending conditions — ideal for trend-following entries.</li>
+      <li><strong>Green bars</strong> highlight sustained breadth buildup — a continuation signal suggesting the move has broad support.</li>
     </ul>
   </div>`;
 
@@ -4878,12 +4876,10 @@ const METRIC_CHART_CONFIG = {
       { min: 0,  color: '#ef4444', label: 'Weak movement' },
     ],
     guide: [
-      '<strong>Movement</strong> measures average pair movement normalized by session-calibrated caps (Asia 0.12%, London 0.15%, NY 0.18%). Higher = bigger price action.',
+      '<strong>Movement</strong> measures average price action across all pairs, adjusted for each trading session. Higher = bigger price action.',
       '<strong>Rising bars</strong> mean price action is accelerating — pairs are covering more ground and breakout conditions are more likely.',
       '<strong>Falling bars</strong> mean movement is contracting — pairs are slowing down, expect tighter ranges.',
-      '<strong>Green bars</strong> indicate the value met the V2 engine threshold (≥35) — this engine is contributing to the Engine Confluence signal.',
-      '<strong>Below 20</strong>: very quiet market — avoid entries, spreads may widen.',
-      '<strong>Above 60</strong>: strong movement — ideal for breakout and trend strategies.',
+      '<strong>Green bars</strong> indicate strong movement — this engine is contributing to the Engine Confluence signal.',
     ],
   },
   agreement: {
@@ -4895,12 +4891,10 @@ const METRIC_CHART_CONFIG = {
       { min: 0,  color: '#ef4444', label: 'Weak/conflicting' },
     ],
     guide: [
-      '<strong>Agreement</strong> = currency alignment x pair alignment x &radic;breadth. Measures whether pairs move consistently with currency strength AND hourly direction matches session trend.',
+      '<strong>Agreement</strong> measures whether pairs are moving consistently with each other and with currency strength.',
       '<strong>Rising bars</strong> mean currencies and pairs are aligning — institutional flow is becoming clear and consistent.',
       '<strong>Falling bars</strong> mean currencies are diverging — mixed signals, no clear theme.',
-      '<strong>Green bars</strong> indicate the value met the V2 engine threshold (≥60) — this engine is contributing to the Engine Confluence signal.',
-      '<strong>Below 25</strong>: conflicting signals — avoid directional trades, market is choppy.',
-      '<strong>Above 50</strong>: strong consensus — trend-following setups are high-probability.',
+      '<strong>Green bars</strong> indicate strong agreement — this engine is contributing to the Engine Confluence signal.',
     ],
   },
   volatility: {
@@ -4912,12 +4906,10 @@ const METRIC_CHART_CONFIG = {
       { min: 0,  color: '#22c55e', label: 'Low volatility' },
     ],
     guide: [
-      '<strong>Volatility</strong> measures raw hourly range normalized by session-calibrated caps. Does not distinguish organized vs chaotic — see Vol Quality for that.',
+      '<strong>Volatility</strong> measures raw price range each hour. Does not distinguish organized vs chaotic — see Vol Quality for that.',
       '<strong>Rising bars</strong> mean the market is becoming more active — larger hourly ranges.',
       '<strong>Falling bars</strong> mean the market is calming down — tighter ranges, less movement.',
-      '<strong>Green bars</strong> indicate the value met the V2 engine threshold (≥40) — this engine is contributing to the Engine Confluence signal.',
-      '<strong>Below 25</strong>: calm market — standard position sizing and tighter stops work well.',
-      '<strong>Above 55</strong>: high volatility — check Vol Quality to determine if it is healthy or chaotic.',
+      '<strong>Green bars</strong> indicate elevated volatility — this engine is contributing to the Engine Confluence signal.',
     ],
   },
   energy: {
@@ -4929,13 +4921,11 @@ const METRIC_CHART_CONFIG = {
       { min: 0,  color: '#ef4444', label: 'Low energy' },
     ],
     guide: [
-      '<strong>Market Energy</strong> = 30% dispersion + 25% breadth + 25% agreement + 20% movement, scaled by volatility quality modifier.',
-      '<strong>Dispersion</strong> (currency separation) is the primary driver — tradable trends come from currencies diverging, not just raw volatility.',
+      '<strong>Market Energy</strong> is a composite measure of overall market activity and trading potential.',
       '<strong>Rising bars</strong> mean currencies are spreading apart, more pairs are active, and there is more to trade.',
       '<strong>Falling bars</strong> mean currencies are converging — fewer opportunities, lower conviction.',
-      '<strong>Green bars</strong> indicate the value met the V2 engine threshold (≥50) — this engine is contributing to the Engine Confluence signal.',
-      '<strong>Volatility</strong> acts as a quality modifier: Healthy ×1.10, Normal ×0.90, Event ×0.75, Chaotic ×0.65, Dead ×0.55.',
-      '<strong>Above 50</strong>: energized market — conditions favor active trading with clear setups.',
+      '<strong>Green bars</strong> indicate strong energy — this engine is contributing to the Engine Confluence signal.',
+      '<strong>High energy</strong> = energized market — conditions favor active trading with clear setups.',
     ],
   },
   de: {
@@ -4948,12 +4938,10 @@ const METRIC_CHART_CONFIG = {
       { min: 0,  color: '#ef4444', label: 'Choppy' },
     ],
     guide: [
-      '<strong>Directional Efficiency (DE)</strong> measures how much of each candle\'s range is directional (body vs wicks). Averaged across all 28 pairs per hour.',
-      '<strong>55+</strong>: Strong directional movement — candles are mostly body, clean institutional flow.',
-      '<strong>45-54</strong>: Directional — market is moving with purpose.',
-      '<strong>35-44</strong>: Mixed conditions — some direction but significant wicks and noise.',
-      '<strong>Below 35</strong>: Choppy — high wick-to-body ratio, price is being rejected, indecision dominates.',
-      '<strong>Green bars</strong> indicate DE ≥ 50 — the market is moving directionally with conviction.',
+      '<strong>Directional Efficiency (DE)</strong> measures how cleanly price moves in one direction across all pairs.',
+      '<strong>High DE</strong>: Strong directional movement — clean institutional flow.',
+      '<strong>Low DE</strong>: Choppy — price is being rejected, indecision dominates.',
+      '<strong>Green bars</strong> indicate strong directional movement — the market is moving with conviction.',
     ],
   },
   dispersion: {
@@ -4966,14 +4954,10 @@ const METRIC_CHART_CONFIG = {
       { min: 0,  color: '#ef4444', label: 'Flat — currencies converging' },
     ],
     guide: [
-      '<strong>Currency Dispersion</strong> = strongest currency − weakest currency, normalized to 0-100. Measures how far apart the 8 major currencies are spreading.',
-      '<strong>Large dispersion</strong> means currencies are diverging — capital is flowing directionally. Pairs trend. This is the single strongest predictor of tradable conditions.',
+      '<strong>Currency Dispersion</strong> measures how far apart the major currencies are spreading.',
+      '<strong>Large dispersion</strong> means currencies are diverging — capital is flowing directionally. Pairs trend.',
       '<strong>Small dispersion</strong> means currencies are converging — no clear winners or losers. Pairs range and chop.',
-      '<strong>60+</strong>: High dispersion — strong institutional capital flow. Best environment for trend-following entries.',
-      '<strong>40-59</strong>: Moderate — some separation, selective trading.',
-      '<strong>20-39</strong>: Low — currencies clustered, limited edge.',
-      '<strong>Below 20</strong>: Flat — all currencies near zero, no trends.',
-      '<strong>Green bars</strong> indicate dispersion ≥ 40 — enough currency separation for directional trades.',
+      '<strong>Green bars</strong> indicate enough currency separation for directional trades.',
       '<strong>Dispersion rising</strong> = energy building. <strong>Dispersion falling</strong> = energy decaying.',
     ],
   },
@@ -4987,13 +4971,10 @@ const METRIC_CHART_CONFIG = {
       { min: 0,  color: '#ef4444', label: 'Avoid' },
     ],
     guide: [
-      '<strong>Tradability</strong> = geometric mean of (energy, agreement, directional control, breadth) x volatility quality factor. ALL components must be strong — one weak link drags it down.',
-      '<strong>70+</strong>: Strong Trend — high-conviction setups across multiple pairs. Full position sizing.',
-      '<strong>55-69</strong>: Tradable — good conditions for selective entries with standard risk.',
-      '<strong>40-54</strong>: Selective — only take A+ setups with reduced size. Some components are weak.',
-      '<strong>25-39</strong>: Dangerous — poor conditions, high risk of getting stopped out. Avoid or scale down heavily.',
-      '<strong>Below 25</strong>: Avoid — market is dead, chaotic, or structurally broken. No edge.',
-      '<strong>Green bars</strong> indicate the value met the V2 engine threshold (≥55) — this engine is contributing to the Engine Confluence signal.',
+      '<strong>Tradability</strong> is an overall assessment of how tradable current conditions are. All key components must align — one weak link drags it down.',
+      '<strong>High tradability</strong>: Strong conditions — high-conviction setups across multiple pairs.',
+      '<strong>Low tradability</strong>: Poor conditions — market is dead, chaotic, or structurally broken. Avoid.',
+      '<strong>Green bars</strong> indicate tradable conditions — this engine is contributing to the Engine Confluence signal.',
     ],
   },
   dircontrol: {
@@ -5005,12 +4986,10 @@ const METRIC_CHART_CONFIG = {
       { min: 0,  color: '#ef4444', label: 'Split / no bias' },
     ],
     guide: [
-      '<strong>Directional Control</strong> measures how one-sided market pressure is — 0% = evenly split bull/bear, 100% = fully one-directional.',
-      '<strong>High control + high breadth</strong> = institutional conviction. Many pairs moving the same way with clear force.',
+      '<strong>Directional Control</strong> measures how one-sided market pressure is.',
+      '<strong>High control</strong> = institutional conviction. Many pairs moving the same way with clear force.',
       '<strong>Low control</strong> means bulls and bears are evenly matched — choppy, range-bound conditions.',
-      '<strong>Green bars</strong> indicate the value met the V2 engine threshold (≥30) — this engine is contributing to the Engine Confluence signal.',
-      '<strong>Below 20%</strong>: split market — avoid directional trades, use range strategies.',
-      '<strong>Above 60%</strong>: strong bias — trend trades and momentum entries have the best edge.',
+      '<strong>Green bars</strong> indicate strong directional bias — this engine is contributing to the Engine Confluence signal.',
     ],
   },
   volquality: {
@@ -5022,13 +5001,11 @@ const METRIC_CHART_CONFIG = {
       { min: 0,  color: '#ef4444', label: 'Poor quality' },
     ],
     guide: [
-      '<strong>Volatility Quality</strong> = raw volatility x quality multiplier. Healthy x1.0, Normal x0.75, Event x0.50, Chaotic x0.30, Dead x0.20.',
-      '<strong>Healthy volatility</strong> (high vol + high agreement + good directional control) = organized moves you can trade.',
-      '<strong>Chaotic volatility</strong> (high vol + low agreement + low control) = erratic whipsaw — dangerous.',
-      '<strong>Event volatility</strong> = sudden spike vs previous hour. Often news-driven, unpredictable.',
-      '<strong>Below 15</strong>: dead or chaotic — volatility is either absent or harmful. Avoid.',
-      '<strong>Above 40</strong>: quality environment — price action is organized and tradable.',
-      '<strong>Green bars</strong> indicate the value met the V2 engine threshold (≥30) — this engine is contributing to the Engine Confluence signal.',
+      '<strong>Volatility Quality</strong> assesses whether volatility is organized and tradable, or erratic and dangerous.',
+      '<strong>Healthy volatility</strong> = organized moves you can trade.',
+      '<strong>Chaotic volatility</strong> = erratic whipsaw — dangerous.',
+      '<strong>Event volatility</strong> = sudden spike, often news-driven and unpredictable.',
+      '<strong>Green bars</strong> indicate quality volatility — this engine is contributing to the Engine Confluence signal.',
     ],
   },
   liquidity: {
@@ -5040,12 +5017,12 @@ const METRIC_CHART_CONFIG = {
       { min: 0,  color: '#ef4444', label: 'Low liquidity' },
     ],
     guide: [
-      '<strong>Liquidity</strong> is a derived proxy based on energy magnitude, breadth coherence, directional bias, and flow persistence.',
+      '<strong>Liquidity</strong> estimates market depth and execution quality per session.',
       '<strong>Asia session</strong> typically has lower liquidity — wider spreads on EUR/USD, GBP pairs.',
       '<strong>London session</strong> has peak liquidity — the best time for most major pairs.',
       '<strong>New York session</strong> has strong liquidity, especially during the London-NY overlap.',
-      '<strong>Below 30</strong>: thin market — spreads widen, slippage risk increases. Use limit orders.',
-      '<strong>Above 60</strong>: deep market — tight spreads, reliable fills. Ideal for larger positions.',
+      '<strong>Low liquidity</strong>: thin market — spreads widen, slippage risk increases.',
+      '<strong>High liquidity</strong>: deep market — tight spreads, reliable fills.',
     ],
   },
   breadth: {
@@ -5057,12 +5034,10 @@ const METRIC_CHART_CONFIG = {
       { min: 0,  color: '#ef4444', label: 'Low breadth' },
     ],
     guide: [
-      '<strong>Breadth</strong> measures what percentage of 28 pairs are actively moving each hour (above session-calibrated threshold). Higher = broader participation.',
+      '<strong>Breadth</strong> measures how many pairs are actively moving each hour. Higher = broader participation.',
       '<strong>Rising bars</strong> mean more pairs are engaging — the market is gaining strength and trends are more likely to continue.',
       '<strong>Falling bars</strong> mean participation is fading — fewer pairs are active, reversals or ranging conditions may follow.',
-      '<strong>Green bars</strong> indicate the value met the V2 engine threshold (≥65) — this engine is contributing to the Engine Confluence signal.',
-      '<strong>Low breadth</strong> (under 15) means weak participation — avoid trading as moves lack conviction.',
-      '<strong>High breadth</strong> (above 50) with agreement means strong trending conditions — ideal for trend-following entries.',
+      '<strong>Green bars</strong> indicate broad market participation — this engine is contributing to the Engine Confluence signal.',
     ],
   },
   momentum: {
@@ -5074,12 +5049,10 @@ const METRIC_CHART_CONFIG = {
       { min: 0,  color: '#ef4444', label: 'Low momentum' },
     ],
     guide: [
-      '<strong>Momentum</strong> measures the magnitude and persistence of directional price moves across currency pairs. Positive = bullish bias, negative = bearish bias.',
+      '<strong>Momentum</strong> measures the magnitude and persistence of directional price moves across currency pairs.',
       '<strong>Rising bars</strong> mean directional pressure is intensifying — moves are gaining follow-through.',
       '<strong>Falling bars</strong> mean momentum is fading — potential exhaustion or reversal.',
-      '<strong>Green bars</strong> indicate the value met the V2 engine threshold (≥30) — this engine is contributing to the Engine Confluence signal.',
-      '<strong>Below 15</strong>: weak momentum — no clear directional bias, avoid momentum strategies.',
-      '<strong>Above 50</strong>: strong momentum — high conviction directional moves, trend trades are favored.',
+      '<strong>Green bars</strong> indicate strong momentum — this engine is contributing to the Engine Confluence signal.',
     ],
   },
   chaos: {
@@ -5094,9 +5067,7 @@ const METRIC_CHART_CONFIG = {
       '<strong>Chaos</strong> measures erratic, unpredictable market behavior — high chaos = whipsaw, random noise, and false signals.',
       '<strong>Low values are good</strong> — orderly markets with clean price action are easier to trade.',
       '<strong>Rising bars</strong> mean conditions are deteriorating — more noise, more false breakouts.',
-      '<strong>Green bars</strong> indicate the value is at or below the V2 engine threshold (≤35) — this engine is contributing to the Engine Confluence signal.',
-      '<strong>Below 35</strong>: orderly market — price action is clean and tradable.',
-      '<strong>Above 50</strong>: dangerous chaos — erratic moves, avoid or reduce position size significantly.',
+      '<strong>Green bars</strong> indicate orderly market conditions — this engine is contributing to the Engine Confluence signal.',
     ],
   },
   fbr: {
@@ -5111,9 +5082,7 @@ const METRIC_CHART_CONFIG = {
       '<strong>False Breakout Risk</strong> measures the likelihood that breakout moves will reverse — high FBR = traps and fakeouts.',
       '<strong>Low values are good</strong> — breakouts are more likely to follow through when FBR is low.',
       '<strong>Rising bars</strong> mean more pairs are experiencing failed breakouts — be cautious with breakout entries.',
-      '<strong>Green bars</strong> indicate the value is at or below the V2 engine threshold (≤15) — this engine is contributing to the Engine Confluence signal.',
-      '<strong>Below 15</strong>: breakouts are reliable — good conditions for breakout strategies.',
-      '<strong>Above 30</strong>: high false breakout risk — avoid breakout entries, favor pullback and range strategies.',
+      '<strong>Green bars</strong> indicate reliable breakout conditions — this engine is contributing to the Engine Confluence signal.',
     ],
   },
 };
@@ -5443,8 +5412,8 @@ function _renderMetricBars(container, rows, key) {
     dayLines.push(`Peak of ${dayMax}${cfg.unit} at ${peakTime} during ${peakSess}.`);
 
     if (cfg.v2Threshold !== undefined) {
-      if (thresholdPasses > 0) dayLines.push(`${thresholdPasses}/${values.length} bars met V2 threshold (${thresholdOp}${cfg.v2Threshold}) — contributing to Engine Confluence.`);
-      else dayLines.push(`No bars met V2 threshold (${thresholdOp}${cfg.v2Threshold}) — not contributing to Engine Confluence.`);
+      if (thresholdPasses > 0) dayLines.push(`${thresholdPasses}/${values.length} bars met engine threshold — contributing to Engine Confluence.`);
+      else dayLines.push(`No bars met engine threshold — not contributing to Engine Confluence.`);
     }
 
     for (const g of sessGroups) {
@@ -5476,9 +5445,7 @@ function _renderMetricBars(container, rows, key) {
     <ul class="bc-guide-list">${cfg.guide.map(g => `<li>${g}</li>`).join('')}</ul>
   </div>`;
 
-  const thresholdLabel = cfg.v2Threshold !== undefined
-    ? `Met V2 threshold (${cfg.inverted ? '≤' : '≥'}${cfg.v2Threshold})`
-    : 'Met threshold';
+  const thresholdLabel = 'Met engine threshold';
   html += `<div class="bc-legend">
     <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#f59e0b"></span> Asia</span>
     <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#0ea5e9"></span> London</span>
@@ -5602,9 +5569,7 @@ function _renderM15MetricBars(container, bars, key) {
   html += '</div>';
 
   // Legend
-  const thresholdLabel = cfg.v2Threshold !== undefined
-    ? `Met V2 threshold (${cfg.inverted ? '≤' : '≥'}${cfg.v2Threshold})`
-    : 'Met threshold';
+  const thresholdLabel = 'Met engine threshold';
   html += `<div class="bc-legend">
     <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#f59e0b"></span> Asia</span>
     <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#0ea5e9"></span> London</span>

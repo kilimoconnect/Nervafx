@@ -375,85 +375,85 @@
 
     <section class="arc-section" id="arc-energy">
       <div class="arc-section-header"><i data-lucide="zap"></i> Hourly Market Energy</div>
-      <div class="arc-section-desc">Weighted composite: 30% dispersion + 25% breadth + 25% agreement + 20% movement, scaled by volatility quality modifier (healthy×1.1, chaotic×0.65). Dispersion (currency separation) is the primary driver. Green bars = energy buildup streaks.</div>
+      <div class="arc-section-desc">Composite measure of overall market activity and trading potential. Higher energy = more tradable conditions. Green bars = energy buildup streaks.</div>
       <div id="arc-energy-body"><div class="arc-loading"><span class="spinner"></span> Loading energy data…</div></div>
     </section>
 
     <section class="arc-section" id="arc-de" style="display:none">
       <div class="arc-section-header"><i data-lucide="target"></i> Hourly Directional Efficiency</div>
-      <div class="arc-section-desc">Measures how much of each candle's range is directional (body vs wicks), averaged across all 28 pairs. 55+ = strong directional, 45+ = directional, 35+ = mixed, &lt;35 = choppy. Green bars = DE ≥ 50.</div>
+      <div class="arc-section-desc">Measures how cleanly price moves in one direction. Higher values = stronger directional conviction across pairs. Green bars = strong directional movement.</div>
       <div id="arc-de-body"><div class="arc-loading"><span class="spinner"></span> Loading DE data…</div></div>
     </section>
 
     <section class="arc-section" id="arc-dispersion" style="display:none">
       <div class="arc-section-header"><i data-lucide="git-branch"></i> Hourly Currency Dispersion</div>
-      <div class="arc-section-desc">Strongest currency − weakest currency, normalized 0-100. Large dispersion = currencies diverging = pairs trend. Small dispersion = currencies converging = pairs range. The single strongest predictor of tradable conditions. Green bars = dispersion ≥ 40.</div>
+      <div class="arc-section-desc">How far apart the major currencies are spreading. Large dispersion = currencies diverging = pairs trend. Small dispersion = currencies converging = pairs range. Green bars = strong currency separation.</div>
       <div id="arc-dispersion-body"><div class="arc-loading"><span class="spinner"></span> Loading dispersion data…</div></div>
     </section>
 
     <section class="arc-section" id="arc-tradability" style="display:none">
       <div class="arc-section-header"><i data-lucide="shield-check"></i> Hourly Tradability</div>
-      <div class="arc-section-desc">Geometric-mean gate of energy, agreement, directional control, and breadth — all components must be strong. Scaled by volatility quality factor. 70+ = Strong Trend, 55+ = Tradable, 40+ = Selective, 25+ = Dangerous, &lt;25 = Avoid.</div>
+      <div class="arc-section-desc">Overall assessment of how tradable current conditions are. All key components must align — one weak link drags the score down. Higher = better trading environment.</div>
       <div id="arc-tradability-body"><div class="arc-loading"><span class="spinner"></span> Loading tradability data…</div></div>
     </section>
 
     <section class="arc-section" id="arc-movement" style="display:none">
       <div class="arc-section-header"><i data-lucide="move"></i> Hourly Movement</div>
-      <div class="arc-section-desc">Average pair movement normalized by session-calibrated caps (Asia 0.12%, London 0.15%, NY 0.18%). Higher = bigger price action. Green bars = 3+ consecutive increases.</div>
+      <div class="arc-section-desc">Average price movement across all pairs, adjusted for each trading session. Higher = bigger price action. Green bars = sustained movement buildup.</div>
       <div id="arc-movement-body"><div class="arc-loading"><span class="spinner"></span> Loading movement data…</div></div>
     </section>
 
     <section class="arc-section" id="arc-breadth" style="display:none">
       <div class="arc-section-header"><i data-lucide="bar-chart-3"></i> Hourly Breadth (Participation)</div>
-      <div class="arc-section-desc">Percentage of 28 pairs actively moving each hour (exceeding session-calibrated threshold). Higher = broader market participation. Green bars = sustained breadth buildup.</div>
+      <div class="arc-section-desc">How many pairs are actively moving each hour. Higher = broader market participation. Green bars = sustained breadth buildup.</div>
       <div id="arc-breadth-body"><div class="arc-loading"><span class="spinner"></span> Loading breadth data…</div></div>
     </section>
 
     <section class="arc-section" id="arc-agreement" style="display:none">
       <div class="arc-section-header"><i data-lucide="check-check"></i> Hourly Agreement</div>
-      <div class="arc-section-desc">Currency alignment × pair alignment × √breadth. Measures whether pairs move consistently with currency strength AND hourly direction matches session trend. High = clear institutional flow.</div>
+      <div class="arc-section-desc">Measures whether pairs are moving consistently with each other and with currency strength. High agreement = clear institutional flow.</div>
       <div id="arc-agreement-body"><div class="arc-loading"><span class="spinner"></span> Loading agreement data…</div></div>
     </section>
 
     <section class="arc-section" id="arc-dircontrol" style="display:none">
       <div class="arc-section-header"><i data-lucide="compass"></i> Hourly Directional Control</div>
-      <div class="arc-section-desc">How one-sided the market pressure is — 0% = evenly split bull/bear, 100% = fully one-directional. High control + high breadth = institutional conviction.</div>
+      <div class="arc-section-desc">How one-sided market pressure is. High control = strong directional bias. Low control = bulls and bears evenly matched.</div>
       <div id="arc-dircontrol-body"><div class="arc-loading"><span class="spinner"></span> Loading directional control data…</div></div>
     </section>
 
     <section class="arc-section" id="arc-volquality" style="display:none">
       <div class="arc-section-header"><i data-lucide="heart-pulse"></i> Hourly Volatility Quality</div>
-      <div class="arc-section-desc">Volatility score × quality multiplier (Healthy ×1.0, Normal ×0.75, Event ×0.50, Chaotic ×0.30, Dead ×0.20). Rewards organized volatility, penalizes choppy conditions.</div>
+      <div class="arc-section-desc">Assesses whether volatility is organized and tradable, or erratic and dangerous. Rewards healthy volatility, penalizes chaotic conditions.</div>
       <div id="arc-volquality-body"><div class="arc-loading"><span class="spinner"></span> Loading volatility quality data…</div></div>
     </section>
 
     <section class="arc-section" id="arc-volatility" style="display:none">
       <div class="arc-section-header"><i data-lucide="activity"></i> Hourly Volatility (Raw)</div>
-      <div class="arc-section-desc">Raw hourly range normalized by session-calibrated caps. Unlike Vol Quality, this doesn't account for whether volatility is organized or chaotic. Green bars = consecutive increases.</div>
+      <div class="arc-section-desc">Raw price range each hour. Unlike Vol Quality, this doesn't distinguish between organized and chaotic volatility. Green bars = consecutive increases.</div>
       <div id="arc-volatility-body"><div class="arc-loading"><span class="spinner"></span> Loading volatility data…</div></div>
     </section>
 
     <section class="arc-section" id="arc-momentum" style="display:none">
       <div class="arc-section-header"><i data-lucide="trending-up"></i> Hourly Momentum</div>
-      <div class="arc-section-desc">Magnitude and persistence of directional price moves. V2 engine threshold ≥30. Green bars = met threshold, contributing to Engine Confluence.</div>
+      <div class="arc-section-desc">Magnitude and persistence of directional price moves. Green bars = strong momentum contributing to overall market assessment.</div>
       <div id="arc-momentum-body"><div class="arc-loading"><span class="spinner"></span> Loading momentum data…</div></div>
     </section>
 
     <section class="arc-section" id="arc-chaos" style="display:none">
       <div class="arc-section-header"><i data-lucide="flame"></i> Hourly Chaos Score</div>
-      <div class="arc-section-desc">Measures erratic, unpredictable market behavior — whipsaw, noise, false signals. Lower is better. V2 engine threshold ≤35. Green bars = orderly market (at or below threshold).</div>
+      <div class="arc-section-desc">Measures erratic, unpredictable market behavior — whipsaw, noise, false signals. Lower is better. Green bars = orderly market conditions.</div>
       <div id="arc-chaos-body"><div class="arc-loading"><span class="spinner"></span> Loading chaos data…</div></div>
     </section>
 
     <section class="arc-section" id="arc-fbr" style="display:none">
       <div class="arc-section-header"><i data-lucide="shield-alert"></i> Hourly False Breakout Risk</div>
-      <div class="arc-section-desc">Likelihood that breakout moves will reverse — traps and fakeouts. Lower is better. V2 engine threshold ≤15. Green bars = reliable breakouts (at or below threshold).</div>
+      <div class="arc-section-desc">Likelihood that breakout moves will reverse — traps and fakeouts. Lower is better. Green bars = reliable breakout conditions.</div>
       <div id="arc-fbr-body"><div class="arc-loading"><span class="spinner"></span> Loading false breakout risk data…</div></div>
     </section>
 
     <section class="arc-section" id="arc-liquidity" style="display:none">
       <div class="arc-section-header"><i data-lucide="droplets"></i> Session Liquidity</div>
-      <div class="arc-section-desc">Derived liquidity proxy per session (not hourly). Based on energy magnitude, breadth coherence, directional bias, and flow persistence. Color-coded: green ≥50, yellow ≥30, orange ≥15, grey &lt;15.</div>
+      <div class="arc-section-desc">Derived liquidity estimate per session. Reflects market depth and how easily trades can be executed without slippage.</div>
       <div id="arc-liquidity-body"><div class="arc-loading"><span class="spinner"></span> Loading liquidity data…</div></div>
     </section>
 
@@ -937,8 +937,8 @@
         dayLines.push(`Peak ${metric.peakWord} of ${dayMax} at ${peakTime} during ${peakSess}.`);
       }
       if (metric.v2Threshold !== undefined && !metric.canBeNegative) {
-        if (thresholdPasses > 0) dayLines.push(`${thresholdPasses}/${vals.length} bars met V2 threshold (${thresholdOp}${metric.v2Threshold}) — contributing to Engine Confluence.`);
-        else dayLines.push(`No bars met V2 threshold (${thresholdOp}${metric.v2Threshold}) — not contributing to Engine Confluence.`);
+        if (thresholdPasses > 0) dayLines.push(`${thresholdPasses}/${vals.length} bars met engine threshold — contributing to Engine Confluence.`);
+        else dayLines.push(`No bars met engine threshold — not contributing to Engine Confluence.`);
       }
 
       for (const g of sessGroups) {
@@ -1071,7 +1071,7 @@
       html += `<div class="bc-day-explain">
         <ul class="bc-explain-list">
           <li>M15 avg ${dayAvg}${metric.unit} — peak ${dayMax}${metric.unit} at ${peakTime} (${peakSess}).</li>
-          <li>${dateBars.length} M15 bars — ${thresholdPasses} met threshold (${metric.inverted ? '≤' : '≥'}${metric.v2Threshold}).</li>
+          <li>${dateBars.length} M15 bars — ${thresholdPasses} met engine threshold.</li>
         </ul>
       </div></div>`;
     }
