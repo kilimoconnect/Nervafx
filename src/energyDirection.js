@@ -372,7 +372,7 @@ async function calculateEnergyDirection() {
       });
     }
 
-    // ── 8. Form pairs from snapshotted directions ──────────────────────────
+    // ── 8. Form pairs from snapshotted directions (spread ≥ 30p only) ─────
     for (const s of strong) {
       for (const w of weak) {
         const fwd = `${s.currency}_${w.currency}`;
@@ -383,6 +383,11 @@ async function calculateEnergyDirection() {
         } else if (VALID_PAIRS.has(rev)) {
           instrument = rev; dir = 'SELL';
         } else continue;
+
+        // Only include pairs with currency spread ≥ 30 pips
+        const [base, quote] = instrument.split('_');
+        const spreadPips = Math.abs((ccyMap[base]?.smooth_3h || 0) - (ccyMap[quote]?.smooth_3h || 0)) * 10000;
+        if (spreadPips < 30) continue;
 
         // Determine if this pair is new, continuing, or reversed
         const prevPair = pairMap[instrument];
@@ -420,9 +425,15 @@ async function calculateEnergyDirection() {
     // Keep existing currency states exactly as they are — don't touch anything
     // (no currencyUpdates needed, they won't be upserted)
 
-    // Keep existing active pairs for M15 phase updates
+    // Keep existing active pairs for M15 phase updates (only if spread still ≥ 30p)
     for (const p of (existingPairs || [])) {
       if (p.active) {
+        const [base, quote] = p.instrument.split('_');
+        const spreadPips = Math.abs((ccyMap[base]?.smooth_3h || 0) - (ccyMap[quote]?.smooth_3h || 0)) * 10000;
+        if (spreadPips < 30) {
+          console.log(`[ENERGY_DIR]   ${p.instrument.replace('_','/')} ${p.dir} → REMOVED (spread ${spreadPips.toFixed(1)}p < 30p)`);
+          continue;
+        }
         newPairs.push({
           instrument: p.instrument,
           dir: p.dir,

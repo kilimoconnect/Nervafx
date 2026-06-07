@@ -3013,10 +3013,10 @@ function renderEnergySignals(data) {
   if (pairsSection) pairsSection.style.display = isWeekend ? 'none' : '';
 
   if (pairsEl && !isWeekend) {
-    const activePairs = (pairs || []).filter(p => p.active);
+    const activePairs = (pairs || []).filter(p => p.active && Math.abs(parseFloat(p.spread_3h) || 0) * 10000 >= 30);
 
     if (!activePairs.length) {
-      pairsEl.innerHTML = '<div class="es-no-data">No active signal pairs. Energy threshold must be met with aligned currencies.</div>';
+      pairsEl.innerHTML = '<div class="es-no-data">No active pairs with spread ≥ 30 pips.</div>';
     } else {
       // Sort using same scoring as Flow Performance:
       // perfScore = directional V45 × 3 + 3H × 2 + 6H × 1 + impulse + alignment bonuses
@@ -3547,7 +3547,7 @@ async function fetchCompressionBreakout() {
 
 function renderCompressionBreakout(data) {
   if (!data) return;
-  const { baseline, structures, summary } = data;
+  let { baseline, structures, summary } = data;
 
   // ── Baseline Banner ──
   const baseEl = document.getElementById('cb-baseline');
@@ -3580,8 +3580,19 @@ function renderCompressionBreakout(data) {
   const el = document.getElementById('cb-structures');
   if (!el) return;
 
+  // Filter structures to only pairs with spread ≥ 30p (from energy signal pairs cache)
+  const _spreadPairsSet = new Set();
+  if (_energySignalsCache?.pairs) {
+    for (const p of _energySignalsCache.pairs) {
+      if (p.active && Math.abs(parseFloat(p.spread_3h) || 0) * 10000 >= 30) {
+        _spreadPairsSet.add(p.instrument);
+      }
+    }
+  }
+  structures = (structures || []).filter(s => _spreadPairsSet.has(s.instrument));
+
   if (!structures?.length) {
-    el.innerHTML = '<div class="es-no-data">No pairs in structure watch. Active signal pairs will appear here.</div>';
+    el.innerHTML = '<div class="es-no-data">No pairs in structure watch with spread ≥ 30 pips.</div>';
     return;
   }
 
