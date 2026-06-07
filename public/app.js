@@ -3731,7 +3731,7 @@ async function fetchInlineM15EnergyBars() {
   const el = document.getElementById('m15-energy-bars-display');
   if (!el) return;
   try {
-    const data = await api('/api/m15-energy?days=3');
+    const data = await api('/api/m15-energy?days=5');
     const bars = data.bars || [];
     if (!bars.length) {
       el.innerHTML = '<p class="me-empty">No M15 energy data yet — will populate on next pipeline run.</p>';
@@ -5204,7 +5204,7 @@ async function _metricToggleTf(btn, key, tf) {
   } else {
     content.innerHTML = '<div class="me-loading"><span class="spinner"></span> Loading M15…</div>';
     try {
-      const data = await api('/api/m15-energy?days=3');
+      const data = await api('/api/m15-energy?days=5');
       const bars = data.bars || [];
       if (!bars.length) { content.innerHTML = '<p class="me-empty">No M15 energy data yet.</p>'; return; }
       _renderM15MetricBars(content, bars, key);
