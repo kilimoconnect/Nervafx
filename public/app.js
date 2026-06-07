@@ -3725,6 +3725,140 @@ function renderSession(data) {
     <div class="session-timeline">${timelineHtml}</div>`;
 }
 
+// ─── Inline M15 Energy Bars (below Trading Session) ──────────────────────────
+
+async function fetchInlineM15EnergyBars() {
+  const el = document.getElementById('m15-energy-bars-display');
+  if (!el) return;
+  try {
+    const data = await api('/api/m15-energy?days=2');
+    const bars = data.bars || [];
+    if (!bars.length) {
+      el.innerHTML = '<p class="me-empty">No M15 energy data yet — will populate on next pipeline run.</p>';
+      return;
+    }
+    _renderInlineM15Bars(el, bars);
+  } catch (e) {
+    el.innerHTML = `<p class="me-empty">Failed to load M15 energy: ${e.message}</p>`;
+  }
+}
+
+function _renderInlineM15Bars(container, bars) {
+  const SESS_COLOR = { ASIA: '#f59e0b', LONDON: '#0ea5e9', NEW_YORK: '#a855f7', LOW_LIQUIDITY: '#475569' };
+  const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York', LOW_LIQUIDITY: 'Low Liq.' };
+  const tz = (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC');
+  const tzLabel = new Intl.DateTimeFormat('en-GB', { timeZone: tz, timeZoneName: 'short' })
+    .formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value || '';
+  const SKIP = new Set(['LOW_LIQUIDITY', 'DEAD_HOURS']);
+  const ENERGY_THRESHOLD = 60;
+
+  const byDate = {};
+  for (const r of bars) {
+    if (SKIP.has(r.session_name)) continue;
+    const date = _groupDate(r);
+    if (!byDate[date]) byDate[date] = [];
+    byDate[date].push({
+      time: r.time_utc,
+      session: r.session_name,
+      energy: Math.round(parseFloat(r.market_energy) || 0),
+    });
+  }
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const dates = Object.keys(byDate)
+    .filter(d => d === todayStr ? byDate[d].length >= 1 : byDate[d].length >= 8)
+    .sort((a, b) => b.localeCompare(a))
+    .slice(0, 2);
+
+  if (!dates.length) { container.innerHTML = '<p class="me-empty">No M15 energy data for active sessions.</p>'; return; }
+
+  const maxVal = Math.max(80, ...dates.flatMap(d => byDate[d].map(b => b.energy)));
+
+  let html = '<div class="bc-chart-wrap bc-m15">';
+
+  for (const date of dates) {
+    const dateBars = byDate[date].sort((a, b) => a.time.localeCompare(b.time));
+    const d = new Date(date + 'T12:00:00Z');
+    const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz });
+    const values = dateBars.map(b => b.energy);
+
+    // Session groups for labels
+    const sessGroups = [];
+    let curGroup = null;
+    for (const b of dateBars) {
+      if (!curGroup || curGroup.session !== b.session) {
+        curGroup = { session: b.session, count: 0 };
+        sessGroups.push(curGroup);
+      }
+      curGroup.count++;
+    }
+
+    let labelRow = '<div class="bc-label-row">';
+    sessGroups.forEach((g, gi) => {
+      if (gi > 0) labelRow += '<div class="bc-label-spacer"></div>';
+      const color = SESS_COLOR[g.session] || '#64748b';
+      labelRow += `<div class="bc-label-span" style="flex:${g.count};color:${color}">${SESS_LABEL[g.session] || g.session}</div>`;
+    });
+    labelRow += '</div>';
+
+    html += `<div class="bc-day-block">
+      <div class="bc-date-header">${dayLabel}</div>
+      ${labelRow}
+      <div class="bc-unified-chart">`;
+
+    let prevSess = '';
+    for (let i = 0; i < dateBars.length; i++) {
+      const b = dateBars[i];
+      const color = SESS_COLOR[b.session] || '#64748b';
+      const pct = Math.round((b.energy / maxVal) * 100);
+      const localTime = new Date(b.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
+      const meetsThreshold = b.energy >= ENERGY_THRESHOLD;
+      const barColor = meetsThreshold ? '#22c55e' : color;
+      const cls = meetsThreshold ? 'bc-bar bc-bar-streak' : 'bc-bar';
+
+      if (b.session !== prevSess && prevSess !== '') {
+        html += '<div class="bc-sess-divider"></div>';
+      }
+      prevSess = b.session;
+
+      html += `<div class="${cls}" title="${SESS_LABEL[b.session] || b.session}: ${b.energy} energy at ${localTime} ${tzLabel}">
+        <span class="bc-bar-val">${b.energy}</span>
+        <div class="bc-bar-inner">
+          <div class="bc-bar-fill" style="height:${pct}%;background:${barColor}"></div>
+        </div>
+        <span class="bc-bar-hour">${localTime.replace(':', '')}</span>
+      </div>`;
+    }
+    html += '</div>';
+
+    // Summary line
+    const dayAvg = Math.round(values.reduce((a, b) => a + b, 0) / values.length);
+    const dayMax = Math.max(...values);
+    const aboveThreshold = values.filter(v => v >= ENERGY_THRESHOLD).length;
+    const peakBar = dateBars[values.indexOf(dayMax)];
+    const peakTime = new Date(peakBar.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
+    const peakSess = SESS_LABEL[peakBar.session] || peakBar.session;
+
+    html += `<div class="bc-day-explain">
+      <ul class="bc-explain-list">
+        <li>Avg ${dayAvg} — peak ${dayMax} at ${peakTime} (${peakSess}). ${aboveThreshold}/${values.length} bars above 60.</li>
+      </ul>
+    </div></div>`;
+  }
+
+  html += '</div>';
+
+  // Legend
+  html += `<div class="bc-legend">
+    <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#f59e0b"></span> Asia</span>
+    <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#0ea5e9"></span> London</span>
+    <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#a855f7"></span> New York</span>
+    <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#22c55e"></span> Energy ≥ 60</span>
+  </div>`;
+
+  container.innerHTML = html;
+}
+
 // ─── Market Energy ────────────────────────────────────────────────────────────
 
 const ME_SESSION_COLOR = { ASIA: '#10b981', LONDON: '#3b82f6', NEW_YORK: '#a855f7', LOW_LIQUIDITY: '#475569' };
@@ -6624,6 +6758,7 @@ async function refresh() {
 
     updateHeader(risk);
     renderSession(sessionData);
+    fetchInlineM15EnergyBars(); // non-blocking — M15 energy bars below session
     // Set caches BEFORE fetchMarketActivity so ME cards can read energy signal pairs
     _m15DataCache = m15Data;   // Cache for ME card flow ranking + scanner
     _volDataCache = _buildVolMap(volData);  // Cache volume analysis: instrument → latest row
