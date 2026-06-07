@@ -2129,16 +2129,21 @@ function renderFlowPerformance(strengthData, m15Data) {
     scored.sort((a, b) => b.finalScore - a.finalScore);
   }
 
+  // Filter to pairs with spread ≥ 30 pips
+  if (scored?.length) {
+    scored = scored.filter(fp => Math.abs(fp.spread3H || 0) * 10000 >= 30);
+  }
+
   if (!scored || !scored.length) {
-    el.innerHTML = '<p class="empty-state">No data — please refresh the page</p>';
+    el.innerHTML = '<p class="empty-state">No pairs with spread ≥ 30 pips.</p>';
     return;
   }
 
   // Use Signal Pairs ranking order — same pairs, same sort, FP details
   if (_energySignalsCache?.pairs?.length) {
-    const activePairs = _energySignalsCache.pairs.filter(p => p.active);
+    const activePairs = _energySignalsCache.pairs.filter(p => p.active && Math.abs(parseFloat(p.spread_3h) || 0) * 10000 >= 30);
     if (!activePairs.length) {
-      el.innerHTML = '<p class="empty-state">No energy signal pairs matched</p>';
+      el.innerHTML = '<p class="empty-state">No pairs with spread ≥ 30 pips.</p>';
       return;
     }
     // Compute _finalScore on signal pairs (same formula as renderEnergySignals)
