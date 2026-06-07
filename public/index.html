@@ -483,6 +483,24 @@
         }
       });
 
+      // Position M15 energy bars: premium = below Trading Session, others = bottom
+      const m15Section = document.getElementById('section-m15-energy-bars');
+      const sessionSection = document.getElementById('section-session');
+      const overviewTab = document.getElementById('tab-overview');
+      if (m15Section && overviewTab) {
+        if (plan === 'premium') {
+          // Insert right after Trading Session
+          if (sessionSection && sessionSection.nextElementSibling !== m15Section) {
+            sessionSection.after(m15Section);
+          }
+        } else {
+          // Move to bottom of overview tab
+          if (overviewTab.lastElementChild !== m15Section) {
+            overviewTab.appendChild(m15Section);
+          }
+        }
+      }
+
       // For free plan: hide M15 impulse notification bar
       const m15Bar = document.getElementById('m15-impulse-bar');
       if (m15Bar && plan === 'free') m15Bar.style.display = 'none';
