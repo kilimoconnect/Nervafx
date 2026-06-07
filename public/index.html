@@ -115,7 +115,7 @@
       <div id="session-display" class="session-display"></div>
     </section>
 
-    <section class="card span-3" id="section-m15-energy-bars" style="display:none">
+    <section class="card span-3 plan-premium-only" id="section-m15-energy-bars">
       <h2 class="card-title"><i data-lucide="bar-chart-2"></i> M15 Energy Bars <span class="sub">15-minute market energy</span></h2>
       <div id="m15-energy-bars-display"><div class="me-loading"><span class="spinner"></span> Loading M15 energy…</div></div>
     </section>
@@ -472,9 +472,9 @@
         }
       });
 
-      // M15 energy bars: visible only for premium, hidden for free/pro
+      // M15 energy bars: visible only for premium
       const m15Section = document.getElementById('section-m15-energy-bars');
-      if (m15Section) m15Section.style.display = plan === 'premium' ? '' : 'none';
+      if (m15Section) m15Section.classList.toggle('plan-premium-only', plan !== 'premium');
 
       // For free plan: hide M15 impulse notification bar
       const m15Bar = document.getElementById('m15-impulse-bar');
