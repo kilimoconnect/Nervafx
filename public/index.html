@@ -115,6 +115,11 @@
       <div id="session-display" class="session-display"></div>
     </section>
 
+    <section class="card span-3" id="section-m15-energy-bars" style="display:none">
+      <h2 class="card-title"><i data-lucide="bar-chart-2"></i> M15 Energy Bars <span class="sub">15-minute market energy</span></h2>
+      <div id="m15-energy-bars-display"><div class="me-loading"><span class="spinner"></span> Loading M15 energy…</div></div>
+    </section>
+
     <section class="card span-3" id="section-market-activity">
       <h2 class="card-title"><i data-lucide="zap"></i> Market Energy <span class="sub">energy cycle · expansion readiness · session intelligence</span></h2>
       <div id="market-activity-display" class="ma-display"><div class="me-loading"><span class="spinner"></span> Loading market energy…</div></div>
@@ -164,22 +169,6 @@
       </div>
       <h2 class="card-title"><i data-lucide="activity"></i> Flow Performance <span class="sub">M15 &amp; 3H</span></h2>
       <div id="flow-perf-list" class="spreads-list"></div>
-    </section>
-
-    <section class="card span-3" id="section-m15-energy-bars">
-      <div class="plan-lock-overlay" data-require="premium">
-        <span class="plan-lock-icon">📊</span>
-        <span class="plan-lock-title">M15 Energy Bars</span>
-        <span class="plan-lock-desc">See market energy at 15-minute resolution — 4× the detail of hourly bars. Track energy build-ups, compressions, and expansions as they develop within each session.</span>
-        <ul class="plan-lock-features">
-          <li>15-minute energy, movement, breadth &amp; dispersion</li>
-          <li>Session-colored bars with threshold highlights</li>
-          <li>Hover to reveal exact values</li>
-        </ul>
-        <a href="/home.html#pricing" class="plan-lock-btn">Upgrade →</a>
-      </div>
-      <h2 class="card-title"><i data-lucide="bar-chart-2"></i> M15 Energy Bars <span class="sub">15-minute market energy</span></h2>
-      <div id="m15-energy-bars-display"><div class="me-loading"><span class="spinner"></span> Loading M15 energy…</div></div>
     </section>
 
   </main>
@@ -483,22 +472,9 @@
         }
       });
 
-      // Position M15 energy bars: premium = below Trading Session, others = bottom
-      (function positionM15Bars() {
-        const m15 = document.getElementById('section-m15-energy-bars');
-        const tab = document.getElementById('tab-overview');
-        const sess = document.getElementById('section-session');
-        if (!m15 || !tab) return;
-        // Remove from current position first
-        m15.remove();
-        if (plan === 'premium' && sess) {
-          // Insert right after Trading Session
-          sess.insertAdjacentElement('afterend', m15);
-        } else {
-          // Append to bottom of overview tab
-          tab.appendChild(m15);
-        }
-      })();
+      // M15 energy bars: visible only for premium, hidden for free/pro
+      const m15Section = document.getElementById('section-m15-energy-bars');
+      if (m15Section) m15Section.style.display = plan === 'premium' ? '' : 'none';
 
       // For free plan: hide M15 impulse notification bar
       const m15Bar = document.getElementById('m15-impulse-bar');
