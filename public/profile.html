@@ -423,10 +423,30 @@
         <div class="divider"></div>
         <div class="field">
           <label style="display:flex;align-items:center;gap:12px;cursor:pointer">
-            <input type="checkbox" id="pref-signal-alerts" checked style="width:18px;height:18px;accent-color:#3b82f6;cursor:pointer">
+            <input type="checkbox" id="pref-direction-alerts" checked style="width:18px;height:18px;accent-color:#3b82f6;cursor:pointer">
             <div>
-              <div style="font-size:14px;font-weight:600;color:var(--text)">Signal Alerts</div>
-              <div style="font-size:12px;color:var(--muted);margin-top:2px">Get notified when new trade signals fire (BUY/SELL with 65%+ confidence)</div>
+              <div style="font-size:14px;font-weight:600;color:var(--text)">Direction Alerts</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px">New energy event detected — strong/weak currencies, signal pairs, and upcoming news</div>
+            </div>
+          </label>
+        </div>
+        <div class="divider"></div>
+        <div class="field">
+          <label style="display:flex;align-items:center;gap:12px;cursor:pointer">
+            <input type="checkbox" id="pref-flow-spread" checked style="width:18px;height:18px;accent-color:#3b82f6;cursor:pointer">
+            <div>
+              <div style="font-size:14px;font-weight:600;color:var(--text)">Flow Spread Alerts</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px">Hourly alert when pairs with currency spread ≥ 30 pips change — strongest divergences</div>
+            </div>
+          </label>
+        </div>
+        <div class="divider"></div>
+        <div class="field">
+          <label style="display:flex;align-items:center;gap:12px;cursor:pointer">
+            <input type="checkbox" id="pref-breakout-alerts" checked style="width:18px;height:18px;accent-color:#3b82f6;cursor:pointer">
+            <div>
+              <div style="font-size:14px;font-weight:600;color:var(--text)">Breakout Entry Alerts</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px">M15 structure breakout confirmed — entry price, invalidation level, and structure details</div>
             </div>
           </label>
         </div>
@@ -436,7 +456,7 @@
             <input type="checkbox" id="pref-daily-digest" checked style="width:18px;height:18px;accent-color:#3b82f6;cursor:pointer">
             <div>
               <div style="font-size:14px;font-weight:600;color:var(--text)">Daily Digest</div>
-              <div style="font-size:12px;color:var(--muted);margin-top:2px">End-of-day summary with session energy, top setups, and market conditions</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px">End-of-day summary with market pulse, sessions, currency directions, flow spread pairs, and news outlook</div>
             </div>
           </label>
         </div>
@@ -760,10 +780,16 @@
       try {
         const res  = await fetch('/api/email-preferences', { headers: { 'Authorization': 'Bearer ' + token } });
         const data = await res.json();
-        if (data.notification_email)            document.getElementById('notification-email').value     = data.notification_email;
-        if (data.signal_alerts !== undefined)   document.getElementById('pref-signal-alerts').checked   = data.signal_alerts;
-        if (data.daily_digest !== undefined)    document.getElementById('pref-daily-digest').checked    = data.daily_digest;
-        if (data.upgrade_prompts !== undefined) document.getElementById('pref-upgrade-prompts').checked = data.upgrade_prompts;
+        if (data.notification_email)               document.getElementById('notification-email').value        = data.notification_email;
+        if (data.direction_alerts !== undefined)    document.getElementById('pref-direction-alerts').checked   = data.direction_alerts;
+        if (data.flow_spread_alerts !== undefined)  document.getElementById('pref-flow-spread').checked        = data.flow_spread_alerts;
+        if (data.breakout_alerts !== undefined)     document.getElementById('pref-breakout-alerts').checked    = data.breakout_alerts;
+        if (data.daily_digest !== undefined)        document.getElementById('pref-daily-digest').checked       = data.daily_digest;
+        if (data.upgrade_prompts !== undefined)     document.getElementById('pref-upgrade-prompts').checked    = data.upgrade_prompts;
+        // Legacy: if old signal_alerts exists, apply to direction_alerts
+        if (data.signal_alerts !== undefined && data.direction_alerts === undefined) {
+          document.getElementById('pref-direction-alerts').checked = data.signal_alerts;
+        }
       } catch(e) { console.error('loadEmailPrefs:', e); }
     }
 
@@ -776,7 +802,9 @@
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
           body: JSON.stringify({
             notification_email: document.getElementById('notification-email').value.trim(),
-            signal_alerts:      document.getElementById('pref-signal-alerts').checked,
+            direction_alerts:   document.getElementById('pref-direction-alerts').checked,
+            flow_spread_alerts: document.getElementById('pref-flow-spread').checked,
+            breakout_alerts:    document.getElementById('pref-breakout-alerts').checked,
             daily_digest:       document.getElementById('pref-daily-digest').checked,
             upgrade_prompts:    document.getElementById('pref-upgrade-prompts').checked,
           }),

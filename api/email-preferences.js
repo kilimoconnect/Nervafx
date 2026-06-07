@@ -44,21 +44,26 @@ module.exports = async function handler(req, res) {
         .single();
 
       return res.json(data || {
-        user_id:         user.id,
-        signal_alerts:   true,
-        daily_digest:    true,
-        upgrade_prompts: true,
-        unsubscribed:    false,
+        user_id:            user.id,
+        signal_alerts:      true,
+        direction_alerts:   true,
+        flow_spread_alerts: true,
+        breakout_alerts:    true,
+        daily_digest:       true,
+        upgrade_prompts:    true,
+        unsubscribed:       false,
       });
     }
 
     // ── PATCH — update preferences ─────────────────────────────────────────
     if (req.method === 'PATCH') {
-      const allowed = ['signal_alerts', 'daily_digest', 'upgrade_prompts', 'unsubscribed'];
+      const allowed = ['signal_alerts', 'direction_alerts', 'flow_spread_alerts', 'breakout_alerts', 'daily_digest', 'upgrade_prompts', 'unsubscribed'];
       const updates = { user_id: user.id };
       for (const key of allowed) {
         if (req.body[key] !== undefined) updates[key] = !!req.body[key];
       }
+      // Sync legacy: direction_alerts maps to signal_alerts for backward compat
+      if (updates.direction_alerts !== undefined) updates.signal_alerts = updates.direction_alerts;
       // Notification email — optional override for where alerts are sent
       if (req.body.notification_email !== undefined) {
         const raw = (req.body.notification_email || '').trim();

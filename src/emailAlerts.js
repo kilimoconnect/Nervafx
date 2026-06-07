@@ -77,10 +77,10 @@ async function getSubscribedUsers(sb) {
   const subMap = {};
   for (const s of (subs || [])) subMap[s.user_id] = s;
 
-  // Fetch email preferences (including notification_email override)
+  // Fetch email preferences (including notification_email override and per-type toggles)
   const { data: prefs } = await sb
     .from('email_preferences')
-    .select('user_id, signal_alerts, unsubscribed, notification_email');
+    .select('*');
 
   const prefMap = {};
   for (const p of (prefs || [])) prefMap[p.user_id] = p;
@@ -101,17 +101,23 @@ async function getSubscribedUsers(sb) {
     // Email preferences
     const p = prefMap[u.id];
     if (p?.unsubscribed) return false;
+    // Legacy gate: if signal_alerts is explicitly false, skip all
     if (p?.signal_alerts === false) return false;
 
     // Use notification_email if set, otherwise registered email
     u._sendTo = p?.notification_email || u.email;
+    // Attach prefs for per-type filtering downstream
+    u._prefs = p || {};
     return true;
   });
 }
 
-async function sendToAll(sb, recipients, template, alertType, details) {
+async function sendToAll(sb, recipients, template, alertType, details, prefKey) {
   let sent = 0;
-  for (const u of recipients) {
+  const filtered = prefKey
+    ? recipients.filter(u => u._prefs?.[prefKey] !== false)
+    : recipients;
+  for (const u of filtered) {
     try {
       await sendEmail(u._sendTo || u.email, template);
       sent++;
@@ -120,7 +126,7 @@ async function sendToAll(sb, recipients, template, alertType, details) {
     }
   }
   await logAlertSent(sb, alertType, details);
-  console.log(`[EMAIL] ${alertType} sent to ${sent}/${recipients.length} users`);
+  console.log(`[EMAIL] ${alertType} sent to ${sent}/${filtered.length} users${prefKey ? ` (pref: ${prefKey})` : ''}`);
   return sent;
 }
 
@@ -392,7 +398,7 @@ async function sendSignalAlerts(sb) {
         strong: (currStates || []).filter(c => c.direction === 'STRONG').map(c => c.currency),
         weak: (currStates || []).filter(c => c.direction === 'WEAK').map(c => c.currency),
         pairs: (activePairs || []).length,
-      });
+      }, 'direction_alerts');
       emailsSent.push('direction');
     } else {
       console.log(`[EMAIL] Direction alert already sent for this event (${directionKey}) — skipping`);
@@ -481,7 +487,7 @@ async function sendSignalAlerts(sb) {
           instrument: ep.instrument,
           direction: ep.direction,
           entry: ep.entry_price,
-        });
+        }, 'breakout_alerts');
         emailsSent.push(`breakout:${ep.instrument}`);
       }
     }
@@ -580,7 +586,7 @@ async function sendSignalAlerts(sb) {
               pairListHash,
               pairs: spreadPairs.map(p => p.instrument),
               count: spreadPairs.length,
-            });
+            }, 'flow_spread_alerts');
             emailsSent.push('flowspread');
           } else {
             console.log('[EMAIL] Flow spread pairs unchanged — skipping');
@@ -724,7 +730,7 @@ async function sendSignalAlerts(sb) {
         newsEvents: upcomingNews || [],
       });
 
-      await sendToAll(sb, recipients, template, digestKey, { date: todayStr });
+      await sendToAll(sb, recipients, template, digestKey, { date: todayStr }, 'daily_digest');
       emailsSent.push('digest');
     }
   }
