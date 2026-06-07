@@ -17,7 +17,11 @@ module.exports = async function handler(req, res) {
     if (gate.error) return res.status(gate.status).json({ error: gate.error, upgrade: gate.upgrade });
     const days  = Math.min(730, parseInt(req.query?.days || '30', 10) || 30);
     const tf    = req.query?.tf || '3h';
+    const multi = req.query?.multi === '1'; // return both 3h + 6h for flow perf
     const field = tf === '12h' ? 'smooth_12h' : tf === '6h' ? 'smooth_6h' : 'smooth_3h';
+    const selectFields = multi
+      ? 'time, currency, smooth_3h, smooth_6h'
+      : `time, currency, ${field}`;
     const sb    = getClient();
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
@@ -28,7 +32,7 @@ module.exports = async function handler(req, res) {
     while (true) {
       const { data, error } = await sb
         .from('currency_strength')
-        .select(`time, currency, ${field}`)
+        .select(selectFields)
         .gte('time', since)
         .order('time', { ascending: true })
         .range(offset, offset + PAGE - 1);
