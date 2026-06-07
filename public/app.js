@@ -2510,49 +2510,94 @@ function renderM15Spreads(data) {
   }).join('');
 }
 
-// ─── M15 Impulse notification bar ─────────────────────────────────────────────
+// ─── Flow Spread Notification Bar ─────────────────────────────────────────────
+// Shows pairs with currency spread ≥ 30 pips (derived from live currency strength)
 
-function updateM15Bar(data) {
+const FP_BAR_SPREAD_THRESHOLD = 30; // pips
+const FP_BAR_VALID_PAIRS = new Set([
+  'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
+  'EUR_GBP','EUR_JPY','EUR_CHF','EUR_CAD','EUR_AUD','EUR_NZD',
+  'GBP_JPY','GBP_CHF','GBP_CAD','GBP_AUD','GBP_NZD',
+  'AUD_JPY','AUD_CHF','AUD_CAD','AUD_NZD',
+  'NZD_JPY','NZD_CHF','NZD_CAD','CAD_JPY','CAD_CHF','CHF_JPY',
+]);
+const FP_BAR_CCYS = ['USD','EUR','GBP','JPY','CHF','CAD','AUD','NZD'];
+
+function _getFlowSpreadPairs() {
+  const ccys = strengthData?.currencies;
+  if (!ccys?.length) return [];
+
+  // Build currency strength map (3H + 6H)
+  const ccyMap = {};
+  for (const c of ccys) {
+    ccyMap[c.currency] = {
+      h3: parseFloat(c.smooth_3h ?? c.normalized_3h) || 0,
+      h6: parseFloat(c.smooth_6h ?? c.normalized_6h) || 0,
+    };
+  }
+
+  // Determine strong/weak (both 3H + 6H aligned)
+  const strong = [], weak = [];
+  for (const ccy of FP_BAR_CCYS) {
+    const d = ccyMap[ccy];
+    if (!d) continue;
+    if (d.h3 > 0.00005 && d.h6 > 0.00005)        strong.push({ ccy, score: d.h3 + d.h6 });
+    else if (d.h3 < -0.00005 && d.h6 < -0.00005)  weak.push({ ccy, score: Math.abs(d.h3 + d.h6) });
+  }
+  strong.sort((a, b) => b.score - a.score);
+  weak.sort((a, b) => b.score - a.score);
+
+  // Form pairs
+  const pairs = [];
+  for (const s of strong) {
+    for (const w of weak) {
+      const fwd = `${s.ccy}_${w.ccy}`;
+      const rev = `${w.ccy}_${s.ccy}`;
+      let instrument, dir;
+      if (FP_BAR_VALID_PAIRS.has(fwd))       { instrument = fwd; dir = 'BUY'; }
+      else if (FP_BAR_VALID_PAIRS.has(rev))  { instrument = rev; dir = 'SELL'; }
+      else continue;
+
+      const [base, quote] = instrument.split('_');
+      const spread = Math.abs((ccyMap[base]?.h3 || 0) - (ccyMap[quote]?.h3 || 0));
+      const spreadPips = spread * 10000;
+      if (spreadPips >= FP_BAR_SPREAD_THRESHOLD) {
+        pairs.push({ instrument, dir, strong_ccy: s.ccy, weak_ccy: w.ccy, spreadPips });
+      }
+    }
+  }
+  pairs.sort((a, b) => b.spreadPips - a.spreadPips);
+  return pairs;
+}
+
+function updateM15Bar() {
   const bar = document.getElementById('m15-impulse-bar');
   if (!bar) return;
 
-  // M15 impulse bar is a Pro+ feature — never show on free plan
+  // Pro+ feature — hide on free plan
   if (document.body.classList.contains('plan-free')) {
     bar.style.display = 'none';
     return;
   }
 
-  // M15 bar only shows when Engine Confluence is active
-  if (!_v2Confluence.fired) {
+  const pairs = _getFlowSpreadPairs();
+
+  if (!pairs.length) {
     bar.style.display = 'none';
     return;
   }
 
-  const impulse = getM15Impulses(data);
+  // Show max 3 chips
+  const MAX_BAR_CHIPS = 3;
+  const visible     = pairs.slice(0, MAX_BAR_CHIPS);
+  const hiddenCount = pairs.length - visible.length;
 
-  if (!impulse.length) {
-    bar.style.display = 'none';
-    return;
-  }
-
-  // Show max 2 chips; surface hidden count via +N badge
-  const MAX_BAR_CHIPS = 2;
-  const visible     = impulse.slice(0, MAX_BAR_CHIPS);
-  const hiddenCount = impulse.length - visible.length;
-
-  const barDirMap = _energyPairDirMap();
-  document.getElementById('m15-bar-chips').innerHTML = visible.map(s => {
-    const v45  = parseFloat(s.smooth_45m) || 0;
-    const signalDir = barDirMap[s.instrument];
-    const bias = signalDir || (v45 >= 0 ? 'BUY' : 'SELL');
-    const dir  = bias === 'BUY' ? 'buy' : 'sell';
-    const imp  = s.impulse_score || 0;
-    const il   = impulseLabel(imp);
-    const stateLabel = s.state === 'COMPRESSING' ? ' ▾' : ' ▲';
+  document.getElementById('m15-bar-chips').innerHTML = visible.map(p => {
+    const dir = p.dir === 'BUY' ? 'buy' : 'sell';
     return `<span class="m15-bar-chip">
-      <span class="chip-pair">${pair(s.instrument)}</span>
-      <span class="chip-${dir}">${bias}${stateLabel}</span>
-      <span class="m15-imp-badge ${il.cls}">${il.text} ${imp}</span>
+      <span class="chip-pair">${pair(p.instrument)}</span>
+      <span class="chip-${dir}">${p.dir}</span>
+      <span class="m15-bar-spread">${p.spreadPips.toFixed(0)}p</span>
     </span>`;
   }).join('');
 
@@ -2564,13 +2609,6 @@ function updateM15Bar(data) {
   } else {
     if (moreEl) moreEl.style.display = 'none';
     if (linkEl) linkEl.style.display = 'none';
-  }
-
-  const timeEl = document.getElementById('m15-bar-time');
-  if (timeEl && data.time) {
-    // M15 candle timestamp = open time; add 15min to show close time (when data is current to)
-    const closeTime = new Date(new Date(data.time).getTime() + 15 * 60 * 1000).toISOString();
-    timeEl.textContent = fmtTime(closeTime);
   }
 
   bar.style.display = 'flex';
@@ -6130,10 +6168,9 @@ async function fetchMarketActivity() {
       (hourlyData.hourly || []),
     );
     updateV2ThresholdBar(hourlyData.hourly || []);
-    // Re-render M15 bar + card now that _v2Confluence is set
-    // (on first load, updateM15Bar ran before this async resolved → bar was hidden)
+    // Re-render flow spread bar + M15 card now that data is available
+    updateM15Bar();
     if (_m15DataCache) {
-      updateM15Bar(_m15DataCache);
       renderM15Spreads(_m15DataCache);
     }
   } catch (_) {
@@ -6748,7 +6785,7 @@ async function refresh() {
     renderRanking12H(spreads, strength);
     renderFlowPerformance(strength, m15Data);
     renderM15Spreads(m15Data);
-    updateM15Bar(m15Data);
+    updateM15Bar();
     renderRisk(risk);
     renderActions(actions);
     renderQuality(quality);

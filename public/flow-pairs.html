@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NervaFX — Flow Spread Pairs</title>
+  <link rel="icon" type="image/png" href="/nervafx-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=3" />
+  <style>
+    body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; padding: 0; margin: 0; }
+    .fp-page { max-width: 640px; margin: 0 auto; padding: 24px 16px; }
+    .fp-header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+    .fp-header h1 { font-size: 1.25rem; font-weight: 700; margin: 0; }
+    .fp-back { color: var(--accent); text-decoration: none; font-size: 0.85rem; font-weight: 600; }
+    .fp-back:hover { text-decoration: underline; }
+    .fp-subtitle { color: var(--text-dim); font-size: 0.8rem; margin-bottom: 16px; }
+    .fp-list { display: flex; flex-direction: column; gap: 8px; }
+    .fp-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; display: flex; align-items: center; gap: 12px; }
+    .fp-card-rank { font-size: 1rem; font-weight: 800; width: 24px; text-align: center; }
+    .fp-card-pair { font-weight: 700; font-size: 0.95rem; min-width: 80px; }
+    .fp-card-dir { font-size: 0.75rem; font-weight: 700; padding: 2px 8px; border-radius: 4px; text-transform: uppercase; }
+    .fp-card-dir.buy { background: rgba(34,197,94,0.15); color: #22c55e; }
+    .fp-card-dir.sell { background: rgba(239,68,68,0.15); color: #ef4444; }
+    .fp-card-meta { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+    .fp-card-ccys { font-size: 0.75rem; color: var(--text-dim); }
+    .fp-card-spread { font-size: 1.1rem; font-weight: 800; color: #60a5fa; text-align: right; min-width: 50px; }
+    .fp-empty { text-align: center; color: var(--text-dim); padding: 48px 16px; font-size: 0.9rem; }
+    .fp-time { color: var(--text-dim); font-size: 0.75rem; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <div class="fp-page">
+    <div class="fp-header">
+      <a href="/" class="fp-back">&larr; Dashboard</a>
+      <h1>Flow Spread Pairs</h1>
+    </div>
+    <p class="fp-subtitle">Pairs with currency spread &ge; 30 pips (3H + 6H aligned). Ranked by strength differential.</p>
+    <div class="fp-time" id="fp-time"></div>
+    <div class="fp-list" id="fp-list">
+      <div class="fp-empty">Loading...</div>
+    </div>
+  </div>
+
+  <script>
+    const SPREAD_THRESHOLD = 30;
+    const VALID_PAIRS = new Set([
+      'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
+      'EUR_GBP','EUR_JPY','EUR_CHF','EUR_CAD','EUR_AUD','EUR_NZD',
+      'GBP_JPY','GBP_CHF','GBP_CAD','GBP_AUD','GBP_NZD',
+      'AUD_JPY','AUD_CHF','AUD_CAD','AUD_NZD',
+      'NZD_JPY','NZD_CHF','NZD_CAD','CAD_JPY','CAD_CHF','CHF_JPY',
+    ]);
+    const CCYS = ['USD','EUR','GBP','JPY','CHF','CAD','AUD','NZD'];
+
+    async function load() {
+      try {
+        const res = await fetch('/api/strength');
+        const data = await res.json();
+        const ccys = data.currencies || [];
+        if (!ccys.length) { showEmpty('No currency strength data available.'); return; }
+
+        // Build strength map
+        const ccyMap = {};
+        for (const c of ccys) {
+          ccyMap[c.currency] = {
+            h3: parseFloat(c.smooth_3h ?? c.normalized_3h) || 0,
+            h6: parseFloat(c.smooth_6h ?? c.normalized_6h) || 0,
+          };
+        }
+
+        // Determine strong/weak
+        const strong = [], weak = [];
+        for (const ccy of CCYS) {
+          const d = ccyMap[ccy];
+          if (!d) continue;
+          if (d.h3 > 0.00005 && d.h6 > 0.00005) strong.push({ ccy, score: d.h3 + d.h6 });
+          else if (d.h3 < -0.00005 && d.h6 < -0.00005) weak.push({ ccy, score: Math.abs(d.h3 + d.h6) });
+        }
+        strong.sort((a, b) => b.score - a.score);
+        weak.sort((a, b) => b.score - a.score);
+
+        // Form pairs
+        const pairs = [];
+        for (const s of strong) {
+          for (const w of weak) {
+            const fwd = `${s.ccy}_${w.ccy}`;
+            const rev = `${w.ccy}_${s.ccy}`;
+            let instrument, dir;
+            if (VALID_PAIRS.has(fwd)) { instrument = fwd; dir = 'BUY'; }
+            else if (VALID_PAIRS.has(rev)) { instrument = rev; dir = 'SELL'; }
+            else continue;
+
+            const [base, quote] = instrument.split('_');
+            const spread = Math.abs((ccyMap[base]?.h3 || 0) - (ccyMap[quote]?.h3 || 0));
+            const spreadPips = spread * 10000;
+            if (spreadPips >= SPREAD_THRESHOLD) {
+              pairs.push({ instrument, dir, strong_ccy: s.ccy, weak_ccy: w.ccy, spreadPips });
+            }
+          }
+        }
+        pairs.sort((a, b) => b.spreadPips - a.spreadPips);
+
+        // Show time
+        if (data.time) {
+          const t = new Date(data.time);
+          document.getElementById('fp-time').textContent = 'Strength as of: ' + t.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) + ' UTC';
+        }
+
+        if (!pairs.length) { showEmpty('No pairs currently meet the 30p spread threshold.'); return; }
+
+        // Render
+        const RANK_CLR = ['#4ade80','#60a5fa','#facc15','#94a3b8','#a78bfa','#fb923c','#38bdf8','#f472b6','#64748b','#64748b'];
+        document.getElementById('fp-list').innerHTML = pairs.map((p, i) => {
+          const dirCls = p.dir === 'BUY' ? 'buy' : 'sell';
+          const pairLabel = p.instrument.replace('_', '/');
+          return `<div class="fp-card">
+            <div class="fp-card-rank" style="color:${RANK_CLR[i] || '#64748b'}">${i + 1}</div>
+            <div class="fp-card-pair">${pairLabel}</div>
+            <span class="fp-card-dir ${dirCls}">${p.dir}</span>
+            <div class="fp-card-meta">
+              <span class="fp-card-ccys">${p.strong_ccy} ↑ ${p.weak_ccy} ↓</span>
+            </div>
+            <div class="fp-card-spread">${p.spreadPips.toFixed(1)}p</div>
+          </div>`;
+        }).join('');
+      } catch (e) {
+        showEmpty('Failed to load: ' + e.message);
+      }
+    }
+
+    function showEmpty(msg) {
+      document.getElementById('fp-list').innerHTML = `<div class="fp-empty">${msg}</div>`;
+    }
+
+    load();
+    // Auto-refresh every 60 seconds
+    setInterval(load, 60000);
+  </script>
+</body>
+</html>

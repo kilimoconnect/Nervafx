@@ -408,6 +408,7 @@ section.card:has(.plan-lock-overlay.visible) { min-height: 400px; }
 .m15-bar-chip .chip-buy  { font-weight: 700; font-size: 9px; color: #4ade80; }
 .m15-bar-chip .chip-sell { font-weight: 700; font-size: 9px; color: #f87171; }
 .m15-bar-chip .chip-val  { font-family: var(--font-data); font-size: 9px; color: rgba(255,255,255,0.45); }
+.m15-bar-chip .m15-bar-spread { font-family: var(--font-data); font-size: 9px; font-weight: 700; color: #60a5fa; }
 .m15-bar-more {
   flex-shrink: 0;
   font-size: 9px;
