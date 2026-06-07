@@ -595,10 +595,24 @@
       const hourly = await _loadHourlyRows();
       for (const key of Object.keys(ARC_METRICS)) {
         const bodyEl = document.getElementById(`arc-${key}-body`);
-        if (bodyEl) {
+        if (!bodyEl) continue;
+        // Check if M15 toggle is active for this metric
+        const activeBtn = bodyEl.querySelector('.bc-tf-btn.active');
+        const isM15 = activeBtn && activeBtn.dataset.tf === 'm15';
+        if (isM15 && ARC_M15_FIELDS[key]) {
+          const content = bodyEl.querySelector('.bc-tf-content');
+          if (content) {
+            try {
+              const m15 = await _loadM15Rows();
+              const filtered = _arcFilterSession === 'ALL' ? m15 : m15.filter(r => r.session_name === _arcFilterSession);
+              renderM15MetricBars(content, filtered, ARC_METRICS[key], key);
+            } catch (_) {}
+          }
+        } else {
           const filtered = _filterRows(hourly, 'time_utc');
-          if (!filtered.length) bodyEl.innerHTML = '<p class="me-empty">No data for this filter.</p>';
-          else renderMetricBars(bodyEl, filtered, ARC_METRICS[key]);
+          const target = bodyEl.querySelector('.bc-tf-content') || bodyEl;
+          if (!filtered.length) target.innerHTML = '<p class="me-empty">No data for this filter.</p>';
+          else renderMetricBars(target, filtered, ARC_METRICS[key]);
         }
       }
       _renderFilteredBreakdown();
@@ -683,6 +697,8 @@
     _arcSessionRows = null;
     _arcSessionLoading = null;
     _arcSessionDays = 0;
+    _arcM15Rows = null;
+    _arcM15Loading = null;
     _fpData    = null;
     _fpLoading = null;
   }
@@ -704,18 +720,80 @@
     fbr:        { field: 'false_breakout_risk',     label: 'FB Risk',      unit: '',  highThresh: 15, midThresh: 30, peakWord: 'false breakout risk', v2Threshold: 15, inverted: true },
   };
 
+  // M15 field mapping (metrics available in m15_energy_bars)
+  const ARC_M15_FIELDS = {
+    energy:     'market_energy',
+    movement:   'movement_score',
+    breadth:    'breadth_score',
+    agreement:  'agreement_score',
+    dispersion: 'dispersion_score',
+  };
+
+  // M15 data cache
+  let _arcM15Rows = null;
+  let _arcM15Loading = null;
+
+  async function _loadM15Rows() {
+    const need = Math.min(7, _arcFilterDays || 3);
+    if (_arcM15Rows) return _arcM15Rows;
+    if (_arcM15Loading) return _arcM15Loading;
+    _arcM15Loading = api('/api/m15-energy?days=' + need).then(data => {
+      _arcM15Rows = data.bars || [];
+      return _arcM15Rows;
+    });
+    return _arcM15Loading;
+  }
+
   async function loadMetricArchive(metricKey) {
     const bodyEl = document.getElementById(`arc-${metricKey}-body`);
     if (!bodyEl) return;
+    const hasM15 = !!ARC_M15_FIELDS[metricKey];
+
     try {
       const rows = await _loadHourlyRows();
       const filtered = _filterRows(rows, 'time_utc');
       if (!filtered.length) { bodyEl.innerHTML = '<p class="me-empty">No hourly data available.</p>'; return; }
-      renderMetricBars(bodyEl, filtered, ARC_METRICS[metricKey]);
+
+      if (hasM15) {
+        bodyEl.innerHTML = `<div class="bc-tf-toggle">
+          <button class="bc-tf-btn active" data-tf="h1" onclick="arcToggleTf(this,'${metricKey}','h1')">H1</button>
+          <button class="bc-tf-btn" data-tf="m15" onclick="arcToggleTf(this,'${metricKey}','m15')">M15</button>
+        </div><div class="bc-tf-content"></div>`;
+        renderMetricBars(bodyEl.querySelector('.bc-tf-content'), filtered, ARC_METRICS[metricKey]);
+      } else {
+        renderMetricBars(bodyEl, filtered, ARC_METRICS[metricKey]);
+      }
     } catch (e) {
       bodyEl.innerHTML = `<p class="me-empty">Failed to load: ${e.message}</p>`;
     }
   }
+
+  window.arcToggleTf = async function(btn, metricKey, tf) {
+    const toggle = btn.closest('.bc-tf-toggle');
+    toggle.querySelectorAll('.bc-tf-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const content = toggle.nextElementSibling;
+
+    if (tf === 'h1') {
+      content.innerHTML = '<div class="arc-loading"><span class="spinner"></span> Loading…</div>';
+      try {
+        const rows = await _loadHourlyRows();
+        const filtered = _filterRows(rows, 'time_utc');
+        renderMetricBars(content, filtered, ARC_METRICS[metricKey]);
+      } catch (e) { content.innerHTML = `<p class="me-empty">Failed: ${e.message}</p>`; }
+    } else {
+      content.innerHTML = '<div class="arc-loading"><span class="spinner"></span> Loading M15…</div>';
+      try {
+        const bars = await _loadM15Rows();
+        if (!bars.length) { content.innerHTML = '<p class="me-empty">No M15 data yet.</p>'; return; }
+        // Filter by session if needed
+        const filtered = _arcFilterSession === 'ALL'
+          ? bars
+          : bars.filter(r => r.session_name === _arcFilterSession);
+        renderM15MetricBars(content, filtered, ARC_METRICS[metricKey], metricKey);
+      } catch (e) { content.innerHTML = `<p class="me-empty">Failed: ${e.message}</p>`; }
+    }
+  };
 
   // Helper: get grouping date for a hourly row (ASIA hour 23 → next day)
   function _arcGroupDate(r) {
@@ -882,6 +960,119 @@
 
       html += `<div class="bc-day-explain">
         <ul class="bc-explain-list">${dayLines.map(l => `<li>${l}</li>`).join('')}</ul>
+      </div></div>`;
+    }
+
+    html += '</div>';
+    container.innerHTML = html;
+  }
+
+  // ─── M15 Metric Bars (thin bars, 4× density) ──────────────────────────────
+
+  function renderM15MetricBars(container, bars, metric, metricKey) {
+    const field = ARC_M15_FIELDS[metricKey] || 'market_energy';
+    const SESS_COLOR = { ASIA: '#f59e0b', LONDON: '#0ea5e9', NEW_YORK: '#a855f7', LOW_LIQUIDITY: '#475569' };
+    const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York', LOW_LIQUIDITY: 'Low Liq.' };
+    const tz = (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC');
+    const tzLabel = new Intl.DateTimeFormat('en-GB', { timeZone: tz, timeZoneName: 'short' })
+      .formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value || '';
+    const SKIP = new Set(['LOW_LIQUIDITY', 'DEAD_HOURS']);
+
+    const byDate = {};
+    for (const r of bars) {
+      if (SKIP.has(r.session_name)) continue;
+      const date = _arcGroupDate(r);
+      if (!byDate[date]) byDate[date] = [];
+      byDate[date].push({
+        time: r.time_utc,
+        session: r.session_name,
+        val: Math.round(parseFloat(r[field]) || 0),
+      });
+    }
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const dates = Object.keys(byDate)
+      .filter(d => d === todayStr ? byDate[d].length >= 1 : byDate[d].length >= 8)
+      .sort((a, b) => b.localeCompare(a))
+      .slice(0, 5);
+
+    if (!dates.length) { container.innerHTML = '<p class="me-empty">No M15 data for this filter.</p>'; return; }
+
+    const maxVal = Math.max(80, ...dates.flatMap(d => byDate[d].map(b => b.val)));
+
+    let html = '<div class="bc-chart-wrap bc-m15">';
+
+    for (const date of dates) {
+      const dateBars = byDate[date].sort((a, b) => a.time.localeCompare(b.time));
+      const d = new Date(date + 'T12:00:00Z');
+      const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz });
+      const vals = dateBars.map(b => b.val);
+
+      const sessGroups = [];
+      let curGroup = null;
+      for (const b of dateBars) {
+        if (!curGroup || curGroup.session !== b.session) {
+          curGroup = { session: b.session, count: 0 };
+          sessGroups.push(curGroup);
+        }
+        curGroup.count++;
+      }
+
+      let labelRow = '<div class="bc-label-row">';
+      sessGroups.forEach((g, gi) => {
+        if (gi > 0) labelRow += '<div class="bc-label-spacer"></div>';
+        const color = SESS_COLOR[g.session] || '#64748b';
+        labelRow += `<div class="bc-label-span" style="flex:${g.count};color:${color}">${SESS_LABEL[g.session] || g.session}</div>`;
+      });
+      labelRow += '</div>';
+
+      html += `<div class="bc-day-block">
+        <div class="bc-date-header">${dayLabel}</div>
+        ${labelRow}
+        <div class="bc-unified-chart">`;
+
+      let prevSess = '';
+      for (let i = 0; i < dateBars.length; i++) {
+        const b = dateBars[i];
+        const color = SESS_COLOR[b.session] || '#64748b';
+        const pct = Math.round((b.val / maxVal) * 100);
+        const localTime = new Date(b.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
+        const meetsThreshold = metric.v2Threshold !== undefined
+          ? (metric.inverted ? b.val <= metric.v2Threshold : b.val >= metric.v2Threshold)
+          : false;
+        const barColor = meetsThreshold ? '#22c55e' : color;
+        const cls = meetsThreshold ? 'bc-bar bc-bar-streak' : 'bc-bar';
+
+        if (b.session !== prevSess && prevSess !== '') {
+          html += '<div class="bc-sess-divider"></div>';
+        }
+        prevSess = b.session;
+
+        html += `<div class="${cls}" title="${SESS_LABEL[b.session] || b.session}: ${b.val}${metric.unit} at ${localTime} ${tzLabel}">
+          <span class="bc-bar-val">${b.val}</span>
+          <div class="bc-bar-inner">
+            <div class="bc-bar-fill" style="height:${pct}%;background:${barColor}"></div>
+          </div>
+          <span class="bc-bar-hour">${localTime.replace(':', '')}</span>
+        </div>`;
+      }
+      html += '</div>';
+
+      // Day summary
+      const dayMax = Math.max(...vals);
+      const dayAvg = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+      const peakBar = dateBars[vals.indexOf(dayMax)];
+      const peakTime = new Date(peakBar.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
+      const peakSess = SESS_LABEL[peakBar.session] || peakBar.session;
+      const thresholdPasses = metric.v2Threshold !== undefined
+        ? vals.filter(v => metric.inverted ? v <= metric.v2Threshold : v >= metric.v2Threshold).length
+        : 0;
+
+      html += `<div class="bc-day-explain">
+        <ul class="bc-explain-list">
+          <li>M15 avg ${dayAvg}${metric.unit} — peak ${dayMax}${metric.unit} at ${peakTime} (${peakSess}).</li>
+          <li>${dateBars.length} M15 bars — ${thresholdPasses} met threshold (${metric.inverted ? '≤' : '≥'}${metric.v2Threshold}).</li>
+        </ul>
       </div></div>`;
     }
 

@@ -5018,8 +5018,19 @@ function closeMetricChart(key) {
   document.body.style.overflow = '';
 }
 
+// Metrics available in M15 energy bars (matching m15_energy_bars columns)
+const M15_METRIC_FIELDS = {
+  energy:     'market_energy',
+  movement:   'movement_score',
+  breadth:    'breadth_score',
+  agreement:  'agreement_score',
+  dispersion: 'dispersion_score',
+};
+
 async function _fetchAndRenderMetricChart(modal, key) {
   const cfg = METRIC_CHART_CONFIG[key];
+  const hasM15 = !!M15_METRIC_FIELDS[key];
+
   try {
     const data = await api('/api/session-activity?type=hourly&days=9');
     const rows = data.hourly || [];
@@ -5027,9 +5038,43 @@ async function _fetchAndRenderMetricChart(modal, key) {
       modal.querySelector('.me-modal-body').innerHTML = `<p class="me-empty">No hourly ${cfg.label.toLowerCase()} data available.</p>`;
       return;
     }
-    _renderMetricBars(modal.querySelector('.me-modal-body'), rows, key);
+    const body = modal.querySelector('.me-modal-body');
+    if (hasM15) {
+      // Add toggle buttons
+      body.innerHTML = `<div class="bc-tf-toggle">
+        <button class="bc-tf-btn active" data-tf="h1" onclick="_metricToggleTf(this,'${key}','h1')">H1</button>
+        <button class="bc-tf-btn" data-tf="m15" onclick="_metricToggleTf(this,'${key}','m15')">M15</button>
+      </div><div class="bc-tf-content"></div>`;
+      _renderMetricBars(body.querySelector('.bc-tf-content'), rows, key);
+    } else {
+      _renderMetricBars(body, rows, key);
+    }
   } catch (e) {
     modal.querySelector('.me-modal-body').innerHTML = `<p class="me-empty">Failed to load: ${e.message}</p>`;
+  }
+}
+
+async function _metricToggleTf(btn, key, tf) {
+  const toggle = btn.closest('.bc-tf-toggle');
+  toggle.querySelectorAll('.bc-tf-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const content = toggle.nextElementSibling;
+
+  if (tf === 'h1') {
+    content.innerHTML = '<div class="me-loading"><span class="spinner"></span> Loading…</div>';
+    try {
+      const data = await api('/api/session-activity?type=hourly&days=9');
+      const rows = data.hourly || [];
+      _renderMetricBars(content, rows, key);
+    } catch (e) { content.innerHTML = `<p class="me-empty">Failed: ${e.message}</p>`; }
+  } else {
+    content.innerHTML = '<div class="me-loading"><span class="spinner"></span> Loading M15…</div>';
+    try {
+      const data = await api('/api/m15-energy?days=3');
+      const bars = data.bars || [];
+      if (!bars.length) { content.innerHTML = '<p class="me-empty">No M15 energy data yet.</p>'; return; }
+      _renderM15MetricBars(content, bars, key);
+    } catch (e) { content.innerHTML = `<p class="me-empty">Failed: ${e.message}</p>`; }
   }
 }
 
@@ -5292,6 +5337,132 @@ function _renderMetricBars(container, rows, key) {
     <ul class="bc-guide-list">${cfg.guide.map(g => `<li>${g}</li>`).join('')}</ul>
   </div>`;
 
+  const thresholdLabel = cfg.v2Threshold !== undefined
+    ? `Met V2 threshold (${cfg.inverted ? '≤' : '≥'}${cfg.v2Threshold})`
+    : 'Met threshold';
+  html += `<div class="bc-legend">
+    <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#f59e0b"></span> Asia</span>
+    <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#0ea5e9"></span> London</span>
+    <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#a855f7"></span> New York</span>
+    <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#22c55e"></span> ${thresholdLabel}</span>
+  </div>`;
+
+  container.innerHTML = html;
+}
+
+function _renderM15MetricBars(container, bars, key) {
+  const cfg = METRIC_CHART_CONFIG[key];
+  const field = M15_METRIC_FIELDS[key] || 'market_energy';
+  const SESS_COLOR = { ASIA: '#f59e0b', LONDON: '#0ea5e9', NEW_YORK: '#a855f7', LOW_LIQUIDITY: '#475569' };
+  const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York', LOW_LIQUIDITY: 'Low Liq.' };
+  const tz = (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC');
+  const tzLabel = new Intl.DateTimeFormat('en-GB', { timeZone: tz, timeZoneName: 'short' })
+    .formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value || '';
+  const SKIP = new Set(['LOW_LIQUIDITY', 'DEAD_HOURS']);
+
+  const byDate = {};
+  for (const r of bars) {
+    if (SKIP.has(r.session_name)) continue;
+    const date = _groupDate(r);
+    if (!byDate[date]) byDate[date] = [];
+    byDate[date].push({
+      time: r.time_utc,
+      session: r.session_name,
+      value: Math.round(parseFloat(r[field]) || 0),
+    });
+  }
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const dates = Object.keys(byDate)
+    .filter(d => {
+      if (d === todayStr) return byDate[d].length >= 1;
+      return byDate[d].length >= 8; // need at least 2h of M15 data
+    })
+    .sort((a, b) => b.localeCompare(a))
+    .slice(0, 4); // fewer days since M15 = 4× density
+  const maxVal = Math.max(80, ...bars.map(r => parseFloat(r[field]) || 0));
+
+  let html = '<div class="bc-chart-wrap bc-m15">';
+
+  for (const date of dates) {
+    const dateBars = byDate[date].sort((a, b) => a.time.localeCompare(b.time));
+    const d = new Date(date + 'T12:00:00Z');
+    const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz });
+
+    const values = dateBars.map(b => b.value);
+
+    // Session groups
+    const sessGroups = [];
+    let curGroup = null;
+    for (const b of dateBars) {
+      if (!curGroup || curGroup.session !== b.session) {
+        curGroup = { session: b.session, count: 0 };
+        sessGroups.push(curGroup);
+      }
+      curGroup.count++;
+    }
+
+    let labelRow = '<div class="bc-label-row">';
+    sessGroups.forEach((g, gi) => {
+      if (gi > 0) labelRow += '<div class="bc-label-spacer"></div>';
+      const color = SESS_COLOR[g.session] || '#64748b';
+      labelRow += `<div class="bc-label-span" style="flex:${g.count};color:${color}">${SESS_LABEL[g.session] || g.session}</div>`;
+    });
+    labelRow += '</div>';
+
+    html += `<div class="bc-day-block">
+      <div class="bc-date-header">${dayLabel}</div>
+      ${labelRow}
+      <div class="bc-unified-chart">`;
+
+    let prevSess = '';
+    for (let i = 0; i < dateBars.length; i++) {
+      const b = dateBars[i];
+      const color = SESS_COLOR[b.session] || '#64748b';
+      const pct = Math.round((b.value / maxVal) * 100);
+      const localTime = new Date(b.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
+      const meetsThreshold = cfg.v2Threshold !== undefined
+        ? (cfg.inverted ? b.value <= cfg.v2Threshold : b.value >= cfg.v2Threshold)
+        : false;
+      const barColor = meetsThreshold ? '#22c55e' : color;
+      const cls = meetsThreshold ? 'bc-bar bc-bar-streak' : 'bc-bar';
+
+      if (b.session !== prevSess && prevSess !== '') {
+        html += '<div class="bc-sess-divider"></div>';
+      }
+      prevSess = b.session;
+
+      html += `<div class="${cls}" title="${SESS_LABEL[b.session] || b.session}: ${b.value}${cfg.unit} at ${localTime} ${tzLabel}">
+        <span class="bc-bar-val">${b.value}</span>
+        <div class="bc-bar-inner">
+          <div class="bc-bar-fill" style="height:${pct}%;background:${barColor}"></div>
+        </div>
+        <span class="bc-bar-hour">${localTime.replace(':', '')}</span>
+      </div>`;
+    }
+    html += '</div>';
+
+    // Per-day summary
+    const dayMax = Math.max(...values);
+    const dayAvg = Math.round(values.reduce((a, b) => a + b, 0) / values.length);
+    const peakBar = dateBars[values.indexOf(dayMax)];
+    const peakTime = new Date(peakBar.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
+    const peakSess = SESS_LABEL[peakBar.session] || peakBar.session;
+    const thresholdPasses = cfg.v2Threshold !== undefined
+      ? values.filter(v => cfg.inverted ? v <= cfg.v2Threshold : v >= cfg.v2Threshold).length
+      : 0;
+
+    html += `<div class="bc-day-explain">
+      <ul class="bc-explain-list">
+        <li>M15 avg ${dayAvg}${cfg.unit} — peak ${dayMax}${cfg.unit} at ${peakTime} (${peakSess}).</li>
+        <li>${dateBars.length} M15 bars — ${thresholdPasses} met threshold.</li>
+      </ul>
+    </div></div>`;
+  }
+
+  html += '</div>';
+
+  // Legend
   const thresholdLabel = cfg.v2Threshold !== undefined
     ? `Met V2 threshold (${cfg.inverted ? '≤' : '≥'}${cfg.v2Threshold})`
     : 'Met threshold';

@@ -20,6 +20,7 @@ const { calculateLatestVolumeAnalysis }  = require('./volumeAnalysis');
 const { calculateEnergyDirection }       = require('./energyDirection');
 const { sendSignalAlerts }              = require('./emailAlerts');
 const { runCompressionBreakout }       = require('./compressionBreakout');
+const { calculateM15Energy }           = require('./m15Energy');
 
 const PARALLEL = 7; // instruments fetched in parallel (OANDA rate-limit safe)
 
@@ -155,6 +156,7 @@ async function hourlyUpdate() {
   await step('session_activity',    () => backfillSessionActivity());
   await step('energy_direction',   () => calculateEnergyDirection());
   await step('compression_breakout', () => runCompressionBreakout());
+  await step('m15_energy',          () => calculateM15Energy());
   await step('market_narrative',    () => generateMarketNarrative());
   await step('journal',             () => writeJournalEntry());
   await step('outcomes',         () => runOutcomeReviews());
@@ -186,6 +188,7 @@ async function m15Update() {
   await step('spreads',           () => calculateLatestSpreads());
   await step('energy_direction',  () => calculateEnergyDirection());
   await step('compression_breakout', () => runCompressionBreakout());
+  await step('m15_energy',        () => calculateM15Energy());
   await step('signals',           () => calculateLatestSignals());
   await step('flow_perf',         () => calculateFlowPerformance());
   await step('email_alerts',      () => sendSignalAlerts(supabase));

@@ -4931,6 +4931,41 @@ body::after {
   border-radius: 2px;
 }
 
+/* M15 energy bar overrides — thin bars, 4× density */
+.bc-m15 .bc-unified-chart { gap: 0; height: 100px; }
+.bc-m15 .bc-bar { min-width: 0; gap: 0; }
+.bc-m15 .bc-bar-fill { max-width: 6px; border-radius: 1px 1px 0 0; }
+.bc-m15 .bc-bar-val { display: none; }
+.bc-m15 .bc-bar-hour { font-size: 6px; }
+.bc-m15 .bc-bar:not(:nth-child(4n+1)) .bc-bar-hour { visibility: hidden; }
+@media (max-width: 500px) {
+  .bc-m15 .bc-bar:not(:nth-child(8n+1)) .bc-bar-hour { visibility: hidden; }
+}
+.bc-m15 .bc-sess-divider { margin: 0; }
+.bc-m15 .bc-bar:hover .bc-bar-val { display: block; position: absolute; top: -14px; font-size: 8px; z-index: 2; }
+
+/* M15 toggle button group */
+.bc-tf-toggle { display: flex; gap: 4px; margin-bottom: 10px; }
+.bc-tf-btn {
+  padding: 4px 12px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.bc-tf-btn.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.bc-tf-btn:hover:not(.active) { border-color: var(--accent); color: var(--accent); }
+
 .me-empty {
   text-align: center;
   padding: 24px;
