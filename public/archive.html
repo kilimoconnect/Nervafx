@@ -702,6 +702,9 @@
     _fpCsData    = null;
     _fpCsLoading = null;
     _fpCsDays    = 0;
+    _fpM15Data   = null;
+    _fpM15Loading = null;
+    _fpM15Days   = 0;
   }
 
   // Metric definitions — V2 institutional model
@@ -1341,6 +1344,9 @@
   let _fpCsData    = null;  // Currency strength rows (3H + 6H) for flow perf
   let _fpCsLoading = null;
   let _fpCsDays    = 0;
+  let _fpM15Data   = null;  // flow_performance rows for M15 enrichment
+  let _fpM15Loading = null;
+  let _fpM15Days   = 0;
 
   async function _loadFpCsData() {
     const need = _arcFilterDays || 30;
@@ -1353,12 +1359,23 @@
     return _fpCsLoading;
   }
 
+  async function _loadFpM15Data() {
+    const need = _arcFilterDays || 30;
+    if (_fpM15Data && _fpM15Days >= need) return;
+    if (_fpM15Loading && _fpM15Days >= need) return _fpM15Loading;
+    _fpM15Loading = api(`/api/flow-performance?days=${need}`).then(d => {
+      _fpM15Data = d.rows || [];
+      _fpM15Days = need;
+    }).catch(e => { console.error('[FP] M15 load error:', e.message); _fpM15Data = []; });
+    return _fpM15Loading;
+  }
+
   async function loadFlowPerfArchive() {
     const bodyEl = document.getElementById('arc-flowperf-body');
     if (!bodyEl) return;
     try {
       bodyEl.innerHTML = '<div class="arc-loading"><span class="spinner"></span> Loading flow performance…</div>';
-      const [sessions] = await Promise.all([_loadSessionRows(), _loadFpCsData()]);
+      const [sessions] = await Promise.all([_loadSessionRows(), _loadFpCsData(), _loadFpM15Data()]);
       if (!sessions?.length || !_fpCsData?.length) { bodyEl.innerHTML = '<p class="me-empty">No data available.</p>'; return; }
       const filteredSess = _filterSessionRows(sessions);
       if (!filteredSess.length) { bodyEl.innerHTML = '<p class="me-empty">No sessions for this filter.</p>'; return; }
@@ -1430,9 +1447,23 @@
     const SESS_COLOR = { ASIA: '#f59e0b', LONDON: '#0ea5e9', NEW_YORK: '#a855f7' };
     const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York' };
     const RANK_CLR = ['#4ade80', '#60a5fa', '#facc15', '#94a3b8', '#a78bfa', '#fb923c', '#38bdf8', '#f472b6'];
+    const STATUS_CLR = { STRONG: '#22c55e', ALIGNED: '#0ea5e9', PARTIAL: '#a855f7', BUILDING: '#f59e0b', AGAINST: '#ef4444', WAIT: '#64748b' };
+    const ST_SHORT = { EXPANDING: 'Exp', COMPRESSING: 'Comp', REVERSING: 'Rev', STEADY: 'Stdy', FLAT: 'Flat' };
+    const ST_CLR   = { EXPANDING: '#22c55e', COMPRESSING: '#f97316', REVERSING: '#ef4444', STEADY: '#94a3b8', FLAT: '#475569' };
+    const VOL_GRD_CLS = { INSTITUTIONAL: 'vol-institutional', STRONG: 'vol-strong', NORMAL: 'vol-normal', WEAK: 'vol-weak', DEAD: 'vol-dead' };
 
     const hourlyStrength = _buildHourlyStrength();
     const allTimes = Object.keys(hourlyStrength).sort();
+
+    // Build M15 enrichment index: "YYYY-MM-DDTHH:MM|INSTRUMENT" → row
+    const m15Index = {};
+    if (_fpM15Data?.length) {
+      for (const r of _fpM15Data) {
+        const t = (r.time || '').slice(0, 16).replace(' ', 'T');
+        const key = t + '|' + r.instrument;
+        m15Index[key] = r;
+      }
+    }
 
     // Group sessions by date
     const sorted = [...sessions]
@@ -1513,9 +1544,35 @@
             const pairLabel = entry.instrument.replace('_', '/');
             const spreadPips = (entry.spread * 10000).toFixed(1);
 
+            // M15 enrichment: look up flow_performance row for this time + instrument
+            const m15Key = h.time + '|' + entry.instrument;
+            const m15 = m15Index[m15Key];
+
+            let m15Html = '';
+            if (m15) {
+              const statusClr = STATUS_CLR[m15.status] || '#64748b';
+              const stateShort = ST_SHORT[m15.state] || '';
+              const stateClr = ST_CLR[m15.state] || '#64748b';
+              const deVal = m15.de_combined || 0;
+              const DE_CLR = deVal >= 30 ? '#4ade80' : deVal >= 20 ? '#60a5fa' : deVal >= 8 ? '#facc15' : '#f87171';
+              const deHtml = deVal > 0 ? `<span style="color:${DE_CLR}">E${Math.round(deVal)}</span>` : '';
+
+              m15Html = `<div class="fp-rc-meta"><span class="fp-rc-status" style="color:${statusClr}">${m15.status}</span><span class="fp-rc-state" style="color:${stateClr}">${stateShort}</span>${deHtml}</div>`;
+
+              const vGrade = m15.vol_grade || '';
+              const vCls   = VOL_GRD_CLS[vGrade] || '';
+              const rv  = m15.vol_rv  || 0;
+              const eff = m15.vol_eff || 0;
+              const volBadge = vGrade ? `<span class="vol-grade-badge ${vCls}">${vGrade}</span>` : '';
+              const rvHtml  = rv  ? `<span class="fp-arc-vol-val" style="color:${rv >= 2 ? '#4ade80' : rv >= 1.5 ? '#60a5fa' : '#64748b'}">RV ${rv.toFixed(1)}</span>` : '';
+              const effHtml = eff ? `<span class="fp-arc-vol-val" style="color:${eff >= 0.10 ? '#4ade80' : eff >= 0.05 ? '#60a5fa' : '#64748b'}">Eff ${(eff * 100).toFixed(0)}%</span>` : '';
+              if (volBadge || rvHtml || effHtml) m15Html += `<div class="fp-rc-vol">${volBadge}${rvHtml}${effHtml}</div>`;
+            }
+
             html += `<td class="fp-arc-td-cell">
               <div class="fp-rc-pair"><span class="fp-rc-name">${pairLabel}</span><span class="spread-bias ${dirCls}">${entry.dir}</span></div>
               <div class="fp-rc-meta"><span style="color:var(--text-dim);font-size:10px">${entry.strong_ccy}↑ ${entry.weak_ccy}↓</span><span style="color:#60a5fa;font-size:10px;margin-left:4px">${spreadPips}p</span></div>
+              ${m15Html}
             </td>`;
           }
           html += '</tr>';
