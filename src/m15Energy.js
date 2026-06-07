@@ -252,8 +252,8 @@ function processM15Bar(candles, session, csHourData) {
 async function calculateM15Energy() {
   console.log('[M15-ENERGY] Computing M15 energy bars…');
 
-  // Fetch last 96 M15 candles (~24h) per pair
-  const byTime = await fetchM15Candles(96);
+  // Fetch last 192 M15 candles (~48h) per pair — ensures full day coverage
+  const byTime = await fetchM15Candles(192);
   const timeKeys = Object.keys(byTime).sort();
   if (!timeKeys.length) { console.log('[M15-ENERGY] No M15 candles.'); return; }
 
