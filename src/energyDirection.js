@@ -6,10 +6,8 @@
  * Runs each pipeline cycle (after session_activity + m15_spreads + flow_performance).
  *
  * System flow:
- *   1. Energy trigger via EITHER:
- *      a) Single hourly bar with energy ≥ threshold, OR
- *      b) 3 consecutive M15 bars with energy ≥ threshold
- *      Whichever fires LATEST becomes the active trigger.
+ *   1. Energy trigger: single H1 hourly bar with energy ≥ 55.
+ *      The LATEST qualifying bar becomes the active trigger.
  *   2. Currencies with aligned 3H + 6H → confirmed STRONG or WEAK
  *   3. Pairs formed: one STRONG currency + one WEAK currency
  *   4. Direction PERSISTS even if 3H/6H temporarily diverges
@@ -26,7 +24,6 @@ const { supabase } = require('./supabase');
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
 const ENERGY_THRESHOLD_H1 = 55;
-const ENERGY_THRESHOLD_M15 = 60;
 
 const VALID_PAIRS = new Set([
   'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
@@ -167,65 +164,16 @@ async function calculateEnergyDirection() {
 
   // Sort by time descending — the LAST bar to cross ≥ threshold is the trigger
   allBars.sort((a, b) => new Date(b.time) - new Date(a.time));
-  const hourlyTrigger = allBars[0] || null;
-
-  // ── 1b. Scan M15 energy bars for 3 consecutive bars ≥ threshold ───────────
-  // Any 3 consecutive M15 bars crossing ≥ threshold = alternative trigger.
-  // Query recent M15 bars (last ~24h) ordered by time ascending.
-  let m15Trigger = null;
-  {
-    const m15Since = new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString(); // last 48h
-    const { data: m15Bars, error: m15Err } = await supabase
-      .from('m15_energy_bars')
-      .select('time_utc, market_energy, session_name')
-      .gte('time_utc', m15Since)
-      .order('time_utc', { ascending: true });
-
-    if (m15Err) console.warn('[ENERGY_DIR] M15 bar fetch:', m15Err.message);
-
-    if (m15Bars?.length >= 3) {
-      // Walk through bars looking for 3 consecutive ≥ threshold
-      let streak = 0;
-      for (const bar of m15Bars) {
-        const e = parseFloat(bar.market_energy) || 0;
-        if (e >= ENERGY_THRESHOLD_M15) {
-          streak++;
-          if (streak >= 3) {
-            // Use this bar (the 3rd consecutive) as the M15 trigger
-            m15Trigger = {
-              energy: e,
-              time: bar.time_utc,
-              session: bar.session_name,
-              source: 'M15',
-            };
-            // Don't break — keep scanning for the LATEST 3-consecutive streak
-          }
-        } else {
-          streak = 0;
-        }
-      }
-    }
-  }
-
-  // ── 1c. Pick the LATEST trigger between hourly and M15 ────────────────────
-  let triggerBar = null;
-  if (hourlyTrigger && m15Trigger) {
-    const hTime = new Date(hourlyTrigger.time).getTime();
-    const mTime = new Date(m15Trigger.time).getTime();
-    triggerBar = mTime > hTime ? m15Trigger : hourlyTrigger;
-  } else {
-    triggerBar = hourlyTrigger || m15Trigger || null;
-  }
+  const triggerBar = allBars[0] || null;
 
   const triggerEnergy = triggerBar ? triggerBar.energy : 0;
   const triggerSession = triggerBar ? triggerBar.session : null;
   const triggerHour = triggerBar ? triggerBar.time : null;
-  const triggerSource = triggerBar?.source || 'H1';
 
   // If current session didn't have data, use trigger energy for display
   if (!currentEnergy) currentEnergy = triggerEnergy;
 
-  console.log(`[ENERGY_DIR] Current energy: ${currentEnergy} | Trigger bar: ${triggerEnergy} [${triggerSource}] (${triggerSession}${triggerHour ? ' @ ' + triggerHour : ''})`);
+  console.log(`[ENERGY_DIR] Current energy: ${currentEnergy} | Trigger bar: ${triggerEnergy} [H1] (${triggerSession}${triggerHour ? ' @ ' + triggerHour : ''})`);
 
   // ── 2. Fetch latest currency strength (3H + 6H + 12H) ──────────────────────
   const { data: csRows, error: csErr } = await supabase
@@ -273,9 +221,8 @@ async function calculateEnergyDirection() {
     pairMap[p.instrument] = p;
   }
 
-  // ── 5. Evaluate energy threshold ───────────────────────────────────────────
-  const triggerThreshold = triggerSource === 'M15' ? ENERGY_THRESHOLD_M15 : ENERGY_THRESHOLD_H1;
-  const thresholdMet = triggerEnergy >= triggerThreshold;
+  // ── 5. Evaluate energy threshold (H1 only) ─────────────────────────────────
+  const thresholdMet = triggerEnergy >= ENERGY_THRESHOLD_H1;
 
   // Check if this is a NEW energy event by comparing trigger bar time against
   // the stored triggered_at. A new bar crossing ≥ threshold AFTER the stored trigger
@@ -320,7 +267,7 @@ async function calculateEnergyDirection() {
     strong.sort((a, b) => b.score - a.score);
     weak.sort((a, b) => b.score - a.score);
 
-    console.log(`[ENERGY_DIR] ═══ NEW ENERGY EVENT — ${triggerSource} bar ${triggerEnergy} @ ${triggerHour} (${triggerSession}) ═══`);
+    console.log(`[ENERGY_DIR] ═══ NEW ENERGY EVENT — H1 bar ${triggerEnergy} @ ${triggerHour} (${triggerSession}) ═══`);
 
     // ── 7. Snapshot currency directions with trigger-time strength ─────────
     const newDirections = new Map();

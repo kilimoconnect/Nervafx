@@ -84,19 +84,20 @@ module.exports = async function handler(req, res) {
     // Sort by time descending (most recent first)
     allBars.sort((a, b) => (b.time || '').localeCompare(a.time || ''));
 
-    // Trigger bar = most recent bar that crossed ≥60 (sets directions)
-    const triggerBar = allBars.find(b => b.energy >= 60);
+    // Trigger bar = most recent hourly bar that crossed ≥55 (H1 threshold)
+    const ENERGY_THRESHOLD_H1 = 55;
+    const triggerBar = allBars.find(b => b.energy >= ENERGY_THRESHOLD_H1);
     const triggerEnergy = triggerBar?.energy || 0;
 
     // Directions persist across days — check if active directions exist in the DB.
     const hasActiveDirections = (currencies || []).some(c => c.active && c.direction !== 'NEUTRAL');
     const hasActivePairs = (pairs || []).some(p => p.active);
-    const thresholdMet = (triggerEnergy >= 60) || hasActiveDirections || hasActivePairs;
+    const thresholdMet = (triggerEnergy >= ENERGY_THRESHOLD_H1) || hasActiveDirections || hasActivePairs;
 
     // Display energy: use the stored trigger energy from DB when no today trigger bar
     // This preserves the energy level that originally confirmed directions
     let displayEnergy;
-    if (triggerEnergy >= 60) {
+    if (triggerEnergy >= ENERGY_THRESHOLD_H1) {
       // Today has a trigger bar — show it
       displayEnergy = triggerEnergy;
     } else if (hasActiveDirections) {
