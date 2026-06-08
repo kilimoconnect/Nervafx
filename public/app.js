@@ -2907,7 +2907,7 @@ function _scheduleEnergyRefresh(initialData) {
 
 function renderEnergySignals(data) {
   if (!data) return;
-  const { currencies, pairs, energy, thresholdMet } = data;
+  const { currencies, pairs, energy, thresholdMet, dispersionMet, dispersionScore } = data;
 
   // ── Banner ──
   const ringEl = document.getElementById('es-energy-ring');
@@ -2927,6 +2927,8 @@ function renderEnergySignals(data) {
   if (statusEl) {
     if (thresholdMet) {
       statusEl.innerHTML = `<span style="color:#22c55e;font-weight:700">ACTIVE</span> — Directions confirmed.`;
+    } else if (dispersionMet === false) {
+      statusEl.innerHTML = `<span style="color:#f59e0b;font-weight:700">WAITING</span> — Dispersion low (${dispersionScore || 0}). Need ≥ 60.`;
     } else if (energy >= 35) {
       statusEl.innerHTML = `<span style="color:#f59e0b;font-weight:700">BUILDING</span> — Approaching threshold.`;
     } else {
@@ -2950,7 +2952,12 @@ function renderEnergySignals(data) {
 
   // ── Currencies ──
   const ccyEl = document.getElementById('es-currencies');
-  if (ccyEl) {
+  if (ccyEl && !thresholdMet) {
+    const reason = dispersionMet === false
+      ? `Dispersion too low (${dispersionScore || 0}) — currencies not diverging enough. Need ≥ 60.`
+      : 'Energy threshold not yet met or no aligned currencies.';
+    ccyEl.innerHTML = `<div class="es-no-data">${reason}</div>`;
+  } else if (ccyEl) {
     const active = (currencies || []).filter(c => c.active && c.direction !== 'NEUTRAL');
     const m15Str = _m15CurrencyStrength();
     // Rank by |M15| + |3H| + |6H| combined performance
@@ -3003,6 +3010,9 @@ function renderEnergySignals(data) {
   if (pairsSection) pairsSection.style.display = isWeekend ? 'none' : '';
 
   if (pairsEl && !isWeekend) {
+    if (!thresholdMet) {
+      pairsEl.innerHTML = '<div class="es-no-data">Dispersion below threshold — signal pairs paused.</div>';
+    } else {
     const activePairs = (pairs || []).filter(p => p.active && Math.abs(parseFloat(p.spread_12h) || 0) * 10000 >= 20);
 
     if (!activePairs.length) {
@@ -3112,6 +3122,7 @@ function renderEnergySignals(data) {
         </div>`;
       }).join('');
     }
+    } // end else (thresholdMet)
   }
 
   hydrateIcons();

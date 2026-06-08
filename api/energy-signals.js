@@ -108,6 +108,34 @@ module.exports = async function handler(req, res) {
       displayEnergy = allBars[0]?.energy || 0;
     }
 
+    // Dispersion gate — check if H1 or M15 dispersion is green (≥ 60)
+    const DISPERSION_THRESHOLD = 60;
+    let dispersionMet = false;
+    let dispersionScore = 0;
+    try {
+      const { data: h1Rows } = await sb
+        .from('hourly_session_activity')
+        .select('dispersion_score')
+        .order('time_utc', { ascending: false })
+        .limit(1);
+      const h1Disp = parseFloat(h1Rows?.[0]?.dispersion_score) || 0;
+      dispersionScore = h1Disp;
+      if (h1Disp >= DISPERSION_THRESHOLD) dispersionMet = true;
+
+      if (!dispersionMet) {
+        const { data: m15Rows } = await sb
+          .from('m15_energy_bars')
+          .select('dispersion_score')
+          .order('time_utc', { ascending: false })
+          .limit(1);
+        const m15Disp = parseFloat(m15Rows?.[0]?.dispersion_score) || 0;
+        if (m15Disp > dispersionScore) dispersionScore = m15Disp;
+        if (m15Disp >= DISPERSION_THRESHOLD) dispersionMet = true;
+      }
+    } catch (_) {
+      dispersionMet = true; // fail-open
+    }
+
     res.json({
       currencies: currencies || [],
       pairs: pairs || [],
@@ -115,7 +143,9 @@ module.exports = async function handler(req, res) {
       triggerEnergy,
       peakBarTime: triggerBar?.time || null,
       peakBarSession: triggerBar?.session || null,
-      thresholdMet,
+      thresholdMet: thresholdMet && dispersionMet,
+      dispersionMet,
+      dispersionScore: Math.round(dispersionScore),
     });
   } catch (e) {
     console.error('[ENERGY-SIGNALS-API]', e.message);
