@@ -171,18 +171,20 @@ function directionAlertEmail(data) {
       Dropped: ${droppedCcys.map(c => `<span style="text-decoration:line-through">${c.currency}</span>`).join(', ')}
     </div>` : '';
 
-  // Pair rows — table-based
-  const pairRows = pairs.map(p => {
+  // Pair rows — M15 ranked pairs with spread pips
+  const pairRows = pairs.map((p, i) => {
     const isBuy = p.dir === 'BUY';
     const dirColor = isBuy ? '#4ade80' : '#f87171';
     const dirArrow = isBuy ? 'BUY' : 'SELL';
+    const spreadLabel = p.spreadPips ? `${p.spreadPips.toFixed(1)}p` : '';
     return `<table width="100%" cellpadding="0" cellspacing="0" style="border-bottom:1px solid rgba(30,41,59,0.6)"><tr>
       <td style="padding:10px 14px">
+        <span style="color:#64748b;font-size:11px;margin-right:6px">#${i + 1}</span>
         <span class="val">${p.instrument.replace('_', '/')}</span>
         <span style="color:${dirColor};font-weight:600;font-size:12px;margin-left:6px">${dirArrow}</span>
       </td>
       <td style="padding:10px 14px;text-align:right">
-        <span class="${evtTagClass(p.eventType)} tag">${evtLabel(p.eventType)}</span>
+        <span style="color:#e2e8f0;font-weight:600;font-size:13px">${spreadLabel}</span>
         <div class="dim" style="margin-top:3px">${p.strong_ccy} / ${p.weak_ccy}</div>
       </td>
     </tr></table>`;
@@ -230,7 +232,7 @@ function directionAlertEmail(data) {
       </div>
 
       <div class="card">
-        <div class="card-hd">Signal Pairs (${pairs.length})</div>
+        <div class="card-hd">Top M15 Pairs (${pairs.length})</div>
         <div class="card-bd">${pairRows}${removedHtml}</div>
       </div>
 
@@ -369,6 +371,34 @@ async function sendSignalAlerts(sb) {
         .eq('active', false)
         .gte('last_updated', recentCutoff);
 
+      // Fetch top 5 M15 pairs ranked by spread magnitude
+      let m15TopPairs = [];
+      try {
+        const { data: m15Rows } = await sb
+          .from('m15_pair_spreads')
+          .select('instrument, smooth_45m')
+          .order('time', { ascending: false })
+          .limit(28);
+        if (m15Rows?.length) {
+          m15TopPairs = m15Rows
+            .map(r => {
+              const spread = parseFloat(r.smooth_45m) || 0;
+              const [base, quote] = r.instrument.split('_');
+              return {
+                instrument: r.instrument,
+                dir: spread >= 0 ? 'BUY' : 'SELL',
+                strong_ccy: spread >= 0 ? base : quote,
+                weak_ccy: spread >= 0 ? quote : base,
+                spreadPips: Math.abs(spread) * 10000,
+              };
+            })
+            .sort((a, b) => b.spreadPips - a.spreadPips)
+            .slice(0, 5);
+        }
+      } catch (e) {
+        console.warn('[EMAIL] M15 top pairs fetch failed:', e.message);
+      }
+
       const triggerState = (currStates || []).find(s => s.energy_at_trigger);
       const template = directionAlertEmail({
         marketFocusHtml,
@@ -383,13 +413,7 @@ async function sendSignalAlerts(sb) {
           smooth_6h: parseFloat(c.smooth_6h) || 0,
           m15Strength: m15CcyStrength[c.currency] || 0,
         })),
-        pairs: (activePairs || []).map(p => ({
-          instrument: p.instrument,
-          dir: p.dir,
-          strong_ccy: p.strong_ccy,
-          weak_ccy: p.weak_ccy,
-          eventType: p.energy_event_type || 'NEW',
-        })),
+        pairs: m15TopPairs,
         removedPairs: (inactivePairs || []).map(p => p.instrument),
         newsEvents: upcomingNews || [],
       });
