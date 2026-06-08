@@ -526,7 +526,9 @@
       if (!r.ok) return;
       const p = await r.json();
       if (p.timezone) {
-        _userTz = p.timezone;
+        // Treat 'UTC' as 'auto' — user likely never explicitly chose UTC;
+        // it was the old setup default. Use browser-detected timezone instead.
+        _userTz = (p.timezone === 'UTC') ? 'auto' : p.timezone;
         try { localStorage.setItem('nfx_tz', _userTz); } catch (_) {}
       }
     } catch (_) {}
