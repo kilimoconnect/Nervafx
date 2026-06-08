@@ -32,7 +32,8 @@ const { config }   = require('./config');
 
 const COMPRESSION_THRESHOLD = 35;  // Energy below this = compression
 const IMPULSE_MIN_CANDLES   = 3;   // Minimum consecutive directional M15 candles
-const IMPULSE_MIN_MOVE      = 0.0015; // Minimum impulse move size (% of price)
+const IMPULSE_MIN_MOVE      = 0.003; // Minimum impulse move size (% of price) — ~24p on majors, ~35p on JPY
+const IMPULSE_LOOKBACK      = 20;  // M15 candles to scan for impulse (~5 hours)
 const PULLBACK_MIN_RETRACE  = 0.3;   // Pullback must retrace at least 30% of impulse
 
 // ─── Compression Baseline ────────────────────────────────────────────────────
@@ -136,7 +137,7 @@ async function updateM15StructureWatch() {
   const watchMap = {};
   for (const w of (existingWatch || [])) watchMap[w.instrument] = w;
 
-  // Get latest M15 candles for each pair (last 20 candles = 5 hours)
+  // Get latest M15 candles for each pair (last 30 candles = 7.5 hours)
   const results = [];
 
   for (const sp of signalPairs) {
@@ -147,7 +148,7 @@ async function updateM15StructureWatch() {
       .eq('timeframe', 'M15')
       .eq('complete', true)
       .order('time', { ascending: false })
-      .limit(20);
+      .limit(30);
 
     if (!candles || candles.length < 5) continue;
 
@@ -342,38 +343,40 @@ function processStructure(state, candles, direction) {
 
 function detectImpulse(candles, direction) {
   const isBuy = direction === 'BUY';
-  const recent = candles.slice(-10); // last 10 M15 candles (~2.5 hours)
+  const recent = candles.slice(-IMPULSE_LOOKBACK);
   if (recent.length < 4) return null;
 
-  // Scan sliding windows of 3-8 candles for a net directional move
-  // Doesn't require consecutive same-direction candles — mixed candles
-  // within an impulse still count if net move is directional enough
+  // Scan ALL starting positions × window sizes to find the strongest
+  // structural impulse move in the signal direction.
   let bestImpulse = null;
 
-  for (let winSize = 3; winSize <= Math.min(8, recent.length); winSize++) {
-    const window = recent.slice(-winSize);
-    const windowHigh = Math.max(...window.map(c => c.high));
-    const windowLow  = Math.min(...window.map(c => c.low));
-    const netMove    = window[window.length - 1].close - window[0].open;
-    const midPrice   = (windowHigh + windowLow) / 2;
-    const totalRange = (windowHigh - windowLow) / midPrice;
+  for (let start = 0; start < recent.length - 2; start++) {
+    for (let end = start + 2; end < recent.length; end++) {
+      const window = recent.slice(start, end + 1);
+      const windowHigh = Math.max(...window.map(c => c.high));
+      const windowLow  = Math.min(...window.map(c => c.low));
+      const netMove    = window[window.length - 1].close - window[0].open;
+      const midPrice   = (windowHigh + windowLow) / 2;
+      const totalRange = (windowHigh - windowLow) / midPrice;
 
-    // Net move must be in the signal direction and meet minimum size
-    const directional = isBuy ? netMove > 0 : netMove < 0;
-    if (!directional) continue;
-    if (totalRange < IMPULSE_MIN_MOVE) continue;
+      // Net move must be in the signal direction and meet minimum size
+      const directional = isBuy ? netMove > 0 : netMove < 0;
+      if (!directional) continue;
+      if (totalRange < IMPULSE_MIN_MOVE) continue;
 
-    // Directional efficiency: net move / total range > 40%
-    // Ensures the move is predominantly in one direction
-    const efficiency = Math.abs(netMove) / (windowHigh - windowLow);
-    if (efficiency < 0.35) continue;
+      // Directional efficiency: net move / total range > 30%
+      // Allows for wicks and minor retraces within the impulse
+      const efficiency = Math.abs(netMove) / (windowHigh - windowLow);
+      if (efficiency < 0.30) continue;
 
-    // Count how many candles closed in the signal direction (majority rule)
-    const dirCount = window.filter(c => isBuy ? c.close > c.open : c.close < c.open).length;
-    if (dirCount < winSize * 0.5) continue; // at least half must be directional
+      // At least 40% of candles should close in the signal direction
+      const dirCount = window.filter(c => isBuy ? c.close > c.open : c.close < c.open).length;
+      if (dirCount < window.length * 0.4) continue;
 
-    if (!bestImpulse || totalRange > bestImpulse.moveSize) {
-      bestImpulse = { high: windowHigh, low: windowLow, streak: winSize, moveSize: totalRange };
+      // Keep the LARGEST qualifying impulse (biggest structural move)
+      if (!bestImpulse || totalRange > bestImpulse.moveSize) {
+        bestImpulse = { high: windowHigh, low: windowLow, streak: window.length, moveSize: totalRange };
+      }
     }
   }
 
