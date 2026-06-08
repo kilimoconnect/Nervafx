@@ -851,7 +851,7 @@
       }).join('')}</div>` : ''}
       ${setups.length ? `<div class="jrn-setups">${setups.map(s => {
         const dir = s.bias === 'BUY' ? 'buy' : 'sell';
-        return `<div class="jrn-setup-row"><span class="jrn-setup-pair">${pair(s.instrument)}</span><span class="signal-dir ${dir}" style="font-size:9px">${s.bias}</span><span class="jrn-setup-state">${clean(s.state||'')}</span><span class="jrn-setup-conf">${s.confidence}%</span></div>`;
+        return `<div class="jrn-setup-row"><span class="jrn-setup-pair">${pair(s.instrument)}</span><span class="signal-dir ${dir}" style="font-size:9px">${s.bias}</span><span class="jrn-setup-state">${clean(s.state||s.phase||'')}</span><span class="jrn-setup-conf">${s.confidence ?? s.de_combined ?? '—'}%</span></div>`;
       }).join('')}</div>` : ''}
       ${waiting.length ? `<p class="jrn-waiting">${waiting.length} pair${waiting.length>1?'s':''} waiting for confirmation</p>` : ''}`);
   }
@@ -944,11 +944,12 @@
     }
 
     const rawSignals = sessionEntries.flatMap(x => (x.signals_summary?.entered || []));
-    // Deduplicate: keep only one signal per instrument (latest)
-    const seenInstr = new Set();
+    // Deduplicate: keep only one signal per instrument+direction (latest wins)
+    const seenSigKey = new Set();
     const dedupedSignals = rawSignals.filter(s => {
-      if (seenInstr.has(s.instrument)) return false;
-      seenInstr.add(s.instrument);
+      const key = `${s.instrument}_${s.signal}`;
+      if (seenSigKey.has(key)) return false;
+      seenSigKey.add(key);
       return true;
     });
 
@@ -975,7 +976,7 @@
           <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Liquidity</span><span class="jrn-sess-val" style="color:${liqColor}">${liq}</span></div>
           <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Pressure</span><span class="jrn-sess-val">▲${bull}% ▼${bear}%</span></div>
           <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Flow</span><span class="jrn-sess-val">${(() => { const cs = e.currency_strength; const ccys = Array.isArray(cs) ? cs : (cs?.currencies || []); const fl = getSmoothed3HFlow(ccys); return fl.strong.map(c => `<span style="color:#22c55e">${c}↑</span>`).join(' ') + ' ' + fl.weak.map(c => `<span style="color:#ef4444">${c}↓</span>`).join(' ') || '—'; })()}</span></div>
-          ${filteredSignals.length ? `<div class="jrn-sess-stat jrn-sess-full"><span class="jrn-sess-lbl">Signals</span><span class="jrn-sess-val">${filteredSignals.map(s => `${pair(s.instrument)} ${s.signal}`).join(', ')}</span></div>` : ''}
+          ${filteredSignals.length ? `<div class="jrn-sess-stat jrn-sess-full"><span class="jrn-sess-lbl">Signals</span><span class="jrn-sess-val">${[...new Map(filteredSignals.map(s => [`${s.instrument}_${s.signal}`, s])).values()].map(s => `${pair(s.instrument)} ${s.signal}`).join(', ')}</span></div>` : ''}
         </div>`);
     }
 

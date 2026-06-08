@@ -108,7 +108,13 @@ async function collectSignals() {
     .select('instrument, dir, phase, strong_ccy, weak_ccy, de_combined, impulse_score, impulse_aligned, spread_3h, v45')
     .eq('active', true);
 
-  const all = (pairs || []).map(p => ({
+  // Deduplicate by instrument (DB should have unique active rows, but guard against dupes)
+  const seenInstr = new Set();
+  const all = (pairs || []).filter(p => {
+    if (seenInstr.has(p.instrument)) return false;
+    seenInstr.add(p.instrument);
+    return true;
+  }).map(p => ({
     instrument: p.instrument,
     signal: (p.phase === 'ENTRY' || p.phase === 'MOVING') ? p.dir : 'WAIT',
     direction: p.dir === 'BUY' ? 'LONG' : 'SHORT',
@@ -416,6 +422,7 @@ async function writeJournalEntry() {
       instrument:    p.instrument,
       phase:         p.phase,
       bias:          p.dir,
+      confidence:    Math.round(p.de_combined || 0),
       de_combined:   p.de_combined || 0,
       energy_level:  p.energy_level || 0,
       impulse_score: p.impulse_score || 0,
