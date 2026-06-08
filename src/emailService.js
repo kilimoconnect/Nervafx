@@ -183,11 +183,10 @@ function signalAlertEmail(signals, sessionSummary) {
 function dailyDigestEmail(data) {
   const {
     marketFocusHtml, date, energyEvents, currencies, pairs, sessions,
-    flowSpreadPairs, latestHourly, m15Latest, flowPerfPairs, newsEvents,
+    flowSpreadPairs, latestHourly, flowPerfPairs, newsEvents,
   } = data;
 
   const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York', LOW_LIQUIDITY: 'Off-hours' };
-  const PHASE_COLOR = { ENTRY: '#22c55e', MOVING: '#fbbf24', COMPRESSION: '#a78bfa', PULLBACK: '#f59e0b', MONITORING: '#64748b' };
 
   // ── Market Pulse (energy, dispersion, tradability, DE, cycle) ──
   const pulseHtml = latestHourly ? (() => {
@@ -379,34 +378,17 @@ function dailyDigestEmail(data) {
       <div class="card-bd"><table width="100%" cellpadding="0" cellspacing="0">${eventRows}</table></div>
     </div>` : '';
 
-  // ── M15 Energy ──
-  const m15Html = m15Latest ? (() => {
-    const e15 = Math.round(parseFloat(m15Latest.energy) || 0);
-    const e15Color = e15 >= 60 ? '#4ade80' : e15 >= 40 ? '#fbbf24' : '#64748b';
-    const sess = SESS_LABEL[m15Latest.session_name] || m15Latest.session_name || '';
-    return `
-    <div style="padding:10px 14px;border-bottom:1px solid rgba(30,41,59,0.6)">
-      <span class="dim">Latest M15 Energy:</span>
-      <span style="color:${e15Color};font-weight:700;margin-left:6px">${e15}</span>
-      <span class="dim" style="margin-left:6px">(${sess})</span>
-    </div>`;
-  })() : '';
 
   // ── Signal Pairs ──
-  const PHASE_ORDER = { ENTRY: 0, MOVING: 1, COMPRESSION: 2, PULLBACK: 3, MONITORING: 4 };
-  const sorted = (pairs || []).sort((a, b) => (PHASE_ORDER[a.phase] ?? 9) - (PHASE_ORDER[b.phase] ?? 9));
-
-  const pairRows = sorted.slice(0, 8).map(p => {
+  const pairRows = (pairs || []).slice(0, 8).map(p => {
     const color = p.dir === 'BUY' ? '#4ade80' : '#f87171';
-    const phColor = PHASE_COLOR[p.phase] || '#64748b';
     return `<tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
       <td style="padding:8px 14px">
         <span class="val" style="font-size:13px">${p.instrument.replace('_','/')}</span>
         <span style="color:${color};font-weight:600;font-size:12px;margin-left:6px">${p.dir}</span>
       </td>
       <td style="padding:8px 14px;text-align:right">
-        <span style="color:${phColor};font-weight:600;font-size:11px">${p.phase}</span>
-        <span class="dim" style="margin-left:6px">DE ${Math.round(p.de_combined || 0)}%</span>
+        <span class="dim">${p.strong_ccy || ''}↑ ${p.weak_ccy || ''}↓</span>
       </td>
     </tr>`;
   }).join('');
@@ -437,23 +419,15 @@ function dailyDigestEmail(data) {
     </div>`;
   })() : '';
 
-  // ── Phase Summary line ──
-  const phases = {};
-  for (const p of (pairs || [])) phases[p.phase] = (phases[p.phase] || 0) + 1;
-  const phaseText = Object.entries(phases)
-    .sort((a, b) => (PHASE_ORDER[a[0]] ?? 9) - (PHASE_ORDER[b[0]] ?? 9))
-    .map(([ph, n]) => `${ph}(${n})`).join(' · ');
-
   return {
     subject: `NervaFX Daily Digest — ${date}`,
     html: baseLayout(`
       <h2>Daily Digest</h2>
-      <p class="sub">${date}${phaseText ? ` · ${phaseText}` : ''}</p>
+      <p class="sub">${date}</p>
 
       ${marketFocusHtml || ''}
       ${pulseHtml}
       ${sessionsHtml}
-      ${m15Html}
       ${eventsHtml}
       ${directionsHtml}
       ${spreadHtml}
