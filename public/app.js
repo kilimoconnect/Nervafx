@@ -3789,6 +3789,10 @@ function _renderInlineM15Bars(container, bars) {
   const tzLabel = new Intl.DateTimeFormat('en-GB', { timeZone: tz, timeZoneName: 'short' })
     .formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value || '';
   const SKIP = new Set(['LOW_LIQUIDITY', 'DEAD_HOURS']);
+
+  // Update subtitle with user's timezone
+  const subEl = document.getElementById('m15-bars-subtitle');
+  if (subEl) subEl.textContent = `15-minute market energy · ${tzLabel || tz}`;
   const ENERGY_THRESHOLD_M15 = 60;
 
   const byDate = {};
