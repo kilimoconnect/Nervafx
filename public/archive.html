@@ -477,7 +477,7 @@
 
     <section class="arc-section" id="arc-flowperf" style="display:none">
       <div class="arc-section-header"><i data-lucide="git-compare"></i> Flow Performance</div>
-      <div class="arc-section-desc">Hourly flow pairs derived from currency strength. Each hour independently determines strong/weak currencies (3H + 6H aligned) and forms pairs ranked by strength spread.</div>
+      <div class="arc-section-desc">Hourly flow pairs derived from 12H currency spread. Pairs with &ge; 30p spread ranked by strength differential.</div>
       <div id="arc-flowperf-body"><div class="arc-loading"><span class="spinner"></span> Loading flow performance…</div></div>
     </section>
 
@@ -1328,9 +1328,9 @@
   }
 
   // ─── Flow Performance Archive (Strength-Based) ─────────────────────────────
-  // Derives direction from hourly currency strength (3H + 6H aligned),
+  // Derives direction from 12H currency spread sign.
   // NOT from locked energy_signal_pairs. Each hour has its own independent
-  // strong/weak determination and pair formation.
+  // pair formation — all 28 pairs checked, ≥ 30p threshold.
 
   const FP_VALID_PAIRS = new Set([
     'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
@@ -1341,7 +1341,7 @@
   ]);
   const FP_CCYS = ['USD','EUR','GBP','JPY','CHF','CAD','AUD','NZD'];
 
-  let _fpCsData    = null;  // Currency strength rows (3H + 6H) for flow perf
+  let _fpCsData    = null;  // Currency strength rows (3H + 6H + 12H) for flow perf
   let _fpCsLoading = null;
   let _fpCsDays    = 0;
   let _fpM15Data   = null;  // flow_performance rows for M15 enrichment
@@ -1409,38 +1409,28 @@
     return byTime;
   }
 
-  // For a given hour's strength snapshot, determine strong/weak currencies and form pairs
+  // For a given hour's strength snapshot, form pairs from 12H spread
   function _deriveHourlyFlow(ccySnap) {
-    const strong = [], weak = [];
-    for (const ccy of FP_CCYS) {
-      const d = ccySnap[ccy];
-      if (!d) continue;
-      if (d.h3 > 0.00005 && d.h6 > 0.00005)        strong.push({ ccy, score: d.h3 + d.h6 });
-      else if (d.h3 < -0.00005 && d.h6 < -0.00005)  weak.push({ ccy, score: Math.abs(d.h3 + d.h6) });
-    }
-    strong.sort((a, b) => b.score - a.score);
-    weak.sort((a, b) => b.score - a.score);
-
     const pairs = [];
-    for (const s of strong) {
-      for (const w of weak) {
-        const fwd = `${s.ccy}_${w.ccy}`;
-        const rev = `${w.ccy}_${s.ccy}`;
-        let instrument, dir;
-        if (FP_VALID_PAIRS.has(fwd))       { instrument = fwd; dir = 'BUY'; }
-        else if (FP_VALID_PAIRS.has(rev))  { instrument = rev; dir = 'SELL'; }
-        else continue;
-
-        // Spread = base strength - quote strength (for ranking)
-        const [base, quote] = instrument.split('_');
-        const spread = (ccySnap[base]?.h12 || 0) - (ccySnap[quote]?.h12 || 0);
-        const spreadAbs = Math.abs(spread);
-        pairs.push({ instrument, dir, strong_ccy: s.ccy, weak_ccy: w.ccy, spread: spreadAbs });
-      }
+    const strongSet = [], weakSet = [];
+    for (const inst of FP_VALID_PAIRS) {
+      const [base, quote] = inst.split('_');
+      const h12b = ccySnap[base]?.h12 || 0;
+      const h12q = ccySnap[quote]?.h12 || 0;
+      const spread12h = h12b - h12q;
+      const spreadAbs = Math.abs(spread12h);
+      if (spreadAbs * 10000 < 30) continue;
+      const dir = spread12h >= 0 ? 'BUY' : 'SELL';
+      const strong_ccy = spread12h >= 0 ? base : quote;
+      const weak_ccy = spread12h >= 0 ? quote : base;
+      pairs.push({ instrument: inst, dir, strong_ccy, weak_ccy, spread: spreadAbs });
     }
+    // Derive unique strong/weak lists for header display
+    const sSet = new Set(), wSet = new Set();
+    for (const p of pairs) { sSet.add(p.strong_ccy); wSet.add(p.weak_ccy); }
     // Rank by absolute spread (widest = most conviction)
     pairs.sort((a, b) => b.spread - a.spread);
-    return { strong: strong.map(s => s.ccy), weak: weak.map(w => w.ccy), pairs };
+    return { strong: [...sSet], weak: [...wSet], pairs };
   }
 
   function renderFlowPerfArchive(container, sessions) {

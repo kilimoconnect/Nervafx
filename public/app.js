@@ -2536,44 +2536,24 @@ function _getFlowSpreadPairs() {
   const ccys = strengthData?.currencies;
   if (!ccys?.length) return [];
 
-  // Build currency strength map (3H + 6H + 12H)
-  const ccyMap = {};
+  // Build 12H strength map
+  const valMap = {};
   for (const c of ccys) {
-    ccyMap[c.currency] = {
-      h3: parseFloat(c.smooth_3h ?? c.normalized_3h) || 0,
-      h6: parseFloat(c.smooth_6h ?? c.normalized_6h) || 0,
-      h12: parseFloat(c.smooth_12h ?? c.normalized_12h) || 0,
-    };
+    valMap[c.currency] = parseFloat(c.smooth_12h ?? c.normalized_12h) || 0;
   }
 
-  // Determine strong/weak (both 3H + 6H aligned)
-  const strong = [], weak = [];
-  for (const ccy of FP_BAR_CCYS) {
-    const d = ccyMap[ccy];
-    if (!d) continue;
-    if (d.h3 > 0.00005 && d.h6 > 0.00005)        strong.push({ ccy, score: d.h3 + d.h6 });
-    else if (d.h3 < -0.00005 && d.h6 < -0.00005)  weak.push({ ccy, score: Math.abs(d.h3 + d.h6) });
-  }
-  strong.sort((a, b) => b.score - a.score);
-  weak.sort((a, b) => b.score - a.score);
-
-  // Form pairs (spread uses 12H)
+  // Form pairs from all 28 — direction from 12H spread sign
   const pairs = [];
-  for (const s of strong) {
-    for (const w of weak) {
-      const fwd = `${s.ccy}_${w.ccy}`;
-      const rev = `${w.ccy}_${s.ccy}`;
-      let instrument, dir;
-      if (FP_BAR_VALID_PAIRS.has(fwd))       { instrument = fwd; dir = 'BUY'; }
-      else if (FP_BAR_VALID_PAIRS.has(rev))  { instrument = rev; dir = 'SELL'; }
-      else continue;
-
-      const [base, quote] = instrument.split('_');
-      const spread = Math.abs((ccyMap[base]?.h12 || 0) - (ccyMap[quote]?.h12 || 0));
-      const spreadPips = spread * 10000;
-      if (spreadPips >= FP_BAR_SPREAD_THRESHOLD) {
-        pairs.push({ instrument, dir, strong_ccy: s.ccy, weak_ccy: w.ccy, spreadPips });
-      }
+  for (const inst of FP_BAR_VALID_PAIRS) {
+    const [base, quote] = inst.split('_');
+    if (valMap[base] == null || valMap[quote] == null) continue;
+    const spread12h = valMap[base] - valMap[quote];
+    const spreadPips = Math.abs(spread12h) * 10000;
+    if (spreadPips >= FP_BAR_SPREAD_THRESHOLD) {
+      const dir = spread12h >= 0 ? 'BUY' : 'SELL';
+      const strong_ccy = spread12h >= 0 ? base : quote;
+      const weak_ccy = spread12h >= 0 ? quote : base;
+      pairs.push({ instrument: inst, dir, strong_ccy, weak_ccy, spreadPips });
     }
   }
   pairs.sort((a, b) => b.spreadPips - a.spreadPips);

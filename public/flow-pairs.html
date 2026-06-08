@@ -37,7 +37,7 @@
       <a href="/" class="fp-back">&larr; Dashboard</a>
       <h1>Flow Spread Pairs</h1>
     </div>
-    <p class="fp-subtitle">Pairs with currency spread &ge; 30 pips (3H + 6H aligned). Ranked by strength differential.</p>
+    <p class="fp-subtitle">Pairs with 12H currency spread &ge; 30 pips. Ranked by strength differential.</p>
     <div class="fp-time" id="fp-time"></div>
     <div class="fp-list" id="fp-list">
       <div class="fp-empty">Loading...</div>
@@ -62,44 +62,31 @@
         const ccys = data.currencies || [];
         if (!ccys.length) { showEmpty('No currency strength data available.'); return; }
 
-        // Build strength map
-        const ccyMap = {};
+        // Build 12H strength map
+        const valMap = {};
         for (const c of ccys) {
-          ccyMap[c.currency] = {
-            h3: parseFloat(c.smooth_3h ?? c.normalized_3h) || 0,
-            h6: parseFloat(c.smooth_6h ?? c.normalized_6h) || 0,
-            h12: parseFloat(c.smooth_12h ?? c.normalized_12h) || 0,
-          };
+          valMap[c.currency] = parseFloat(c.smooth_12h ?? c.normalized_12h) || 0;
         }
 
-        // Determine strong/weak
-        const strong = [], weak = [];
-        for (const ccy of CCYS) {
-          const d = ccyMap[ccy];
-          if (!d) continue;
-          if (d.h3 > 0.00005 && d.h6 > 0.00005) strong.push({ ccy, score: d.h3 + d.h6 });
-          else if (d.h3 < -0.00005 && d.h6 < -0.00005) weak.push({ ccy, score: Math.abs(d.h3 + d.h6) });
-        }
-        strong.sort((a, b) => b.score - a.score);
-        weak.sort((a, b) => b.score - a.score);
-
-        // Form pairs
+        // Form pairs from all 28 — direction from 12H spread sign
+        const ALL_PAIRS = [
+          'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
+          'EUR_GBP','EUR_JPY','EUR_CHF','EUR_CAD','EUR_AUD','EUR_NZD',
+          'GBP_JPY','GBP_CHF','GBP_CAD','GBP_AUD','GBP_NZD',
+          'AUD_JPY','AUD_CHF','AUD_CAD','AUD_NZD',
+          'NZD_JPY','NZD_CHF','NZD_CAD','CAD_JPY','CAD_CHF','CHF_JPY',
+        ];
         const pairs = [];
-        for (const s of strong) {
-          for (const w of weak) {
-            const fwd = `${s.ccy}_${w.ccy}`;
-            const rev = `${w.ccy}_${s.ccy}`;
-            let instrument, dir;
-            if (VALID_PAIRS.has(fwd)) { instrument = fwd; dir = 'BUY'; }
-            else if (VALID_PAIRS.has(rev)) { instrument = rev; dir = 'SELL'; }
-            else continue;
-
-            const [base, quote] = instrument.split('_');
-            const spread = Math.abs((ccyMap[base]?.h12 || 0) - (ccyMap[quote]?.h12 || 0));
-            const spreadPips = spread * 10000;
-            if (spreadPips >= SPREAD_THRESHOLD) {
-              pairs.push({ instrument, dir, strong_ccy: s.ccy, weak_ccy: w.ccy, spreadPips });
-            }
+        for (const inst of ALL_PAIRS) {
+          const [base, quote] = inst.split('_');
+          if (valMap[base] == null || valMap[quote] == null) continue;
+          const spread12h = valMap[base] - valMap[quote];
+          const spreadPips = Math.abs(spread12h) * 10000;
+          if (spreadPips >= SPREAD_THRESHOLD) {
+            const dir = spread12h >= 0 ? 'BUY' : 'SELL';
+            const strong_ccy = spread12h >= 0 ? base : quote;
+            const weak_ccy = spread12h >= 0 ? quote : base;
+            pairs.push({ instrument: inst, dir, strong_ccy, weak_ccy, spreadPips });
           }
         }
         pairs.sort((a, b) => b.spreadPips - a.spreadPips);
