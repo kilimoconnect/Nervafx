@@ -3800,6 +3800,7 @@ function _renderInlineM15Bars(container, bars) {
       time: r.time_utc,
       session: r.session_name,
       energy: Math.round(parseFloat(r.market_energy) || 0),
+      volume: r.volume_score != null ? Math.round(parseFloat(r.volume_score)) : null,
     });
   }
 
@@ -3848,9 +3849,11 @@ function _renderInlineM15Bars(container, bars) {
     html += `<div class="bc-day-block">
       <div class="bc-date-header">${dayLabel}</div>
       ${labelRow}
+      <div class="bc-chart-container" style="position:relative">
       <div class="bc-unified-chart">`;
 
     let prevSess = '';
+    const volPoints = [];
     for (let i = 0; i < dateBars.length; i++) {
       const b = dateBars[i];
       const color = SESS_COLOR[b.session] || '#64748b';
@@ -3859,13 +3862,16 @@ function _renderInlineM15Bars(container, bars) {
       const meetsThreshold = b.energy >= ENERGY_THRESHOLD_M15;
       const barColor = meetsThreshold ? '#22c55e' : color;
       const cls = meetsThreshold ? 'bc-bar bc-bar-streak' : 'bc-bar';
+      const volTip = b.volume != null ? ` | Vol ${b.volume}` : '';
 
       if (b.session !== prevSess && prevSess !== '') {
         html += '<div class="bc-sess-divider"></div>';
       }
       prevSess = b.session;
 
-      html += `<div class="${cls}" title="${SESS_LABEL[b.session] || b.session}: ${b.energy} energy at ${localTime} ${tzLabel}">
+      if (b.volume != null) volPoints.push({ idx: i, vol: b.volume });
+
+      html += `<div class="${cls}" title="${SESS_LABEL[b.session] || b.session}: ${b.energy} energy${volTip} at ${localTime} ${tzLabel}">
         <span class="bc-bar-val">${b.energy}</span>
         <div class="bc-bar-inner">
           <div class="bc-bar-fill" style="height:${pct}%;background:${barColor}"></div>
@@ -3875,6 +3881,23 @@ function _renderInlineM15Bars(container, bars) {
     }
     html += '</div>';
 
+    // Volume line overlay (SVG)
+    if (volPoints.length > 1) {
+      const n = dateBars.length;
+      const maxVol = Math.max(100, ...volPoints.map(p => p.vol));
+      // Chart area: bars are ~75% of container height (value label top + hour label bottom)
+      // SVG spans full width, positioned over the bar area
+      const svgPts = volPoints.map(p => {
+        const x = ((p.idx + 0.5) / n) * 100;
+        const y = 100 - (p.vol / maxVol) * 75 - 5; // 5% bottom margin for hour labels
+        return `${x},${y}`;
+      }).join(' ');
+      html += `<svg class="bc-vol-line" viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2">
+        <polyline points="${svgPts}" fill="none" stroke="#f472b6" stroke-width="0.4" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/>
+      </svg>`;
+    }
+    html += '</div>'; // close bc-chart-container
+
     // Summary line
     const dayAvg = Math.round(values.reduce((a, b) => a + b, 0) / values.length);
     const dayMax = Math.max(...values);
@@ -3882,10 +3905,12 @@ function _renderInlineM15Bars(container, bars) {
     const peakBar = dateBars[values.indexOf(dayMax)];
     const peakTime = new Date(peakBar.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
     const peakSess = SESS_LABEL[peakBar.session] || peakBar.session;
+    const volVals = dateBars.filter(b => b.volume != null).map(b => b.volume);
+    const volAvg = volVals.length ? Math.round(volVals.reduce((a, b) => a + b, 0) / volVals.length) : null;
 
     html += `<div class="bc-day-explain">
       <ul class="bc-explain-list">
-        <li>Avg ${dayAvg} — peak ${dayMax} at ${peakTime} (${peakSess}). ${aboveThreshold}/${values.length} bars above ${ENERGY_THRESHOLD_M15}.</li>
+        <li>Avg ${dayAvg} — peak ${dayMax} at ${peakTime} (${peakSess}). ${aboveThreshold}/${values.length} bars above ${ENERGY_THRESHOLD_M15}.${volAvg != null ? ` Avg volume ${volAvg}.` : ''}</li>
       </ul>
     </div></div>`;
   }
@@ -3898,6 +3923,7 @@ function _renderInlineM15Bars(container, bars) {
     <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#0ea5e9"></span> London</span>
     <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#a855f7"></span> New York</span>
     <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#22c55e"></span> Energy ≥ 60</span>
+    <span class="bc-legend-item"><span style="display:inline-block;width:14px;height:2px;background:#f472b6;vertical-align:middle;margin-right:5px;border-radius:1px"></span> Volume</span>
   </div>`;
 
   container.innerHTML = html;

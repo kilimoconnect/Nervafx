@@ -37,6 +37,36 @@ module.exports = async function handler(req, res) {
       offset += PAGE;
     }
 
+    // Fetch aggregated M15 volume participation scores (avg across 28 instruments per time slot)
+    const volMap = {};
+    try {
+      let vOffset = 0;
+      while (true) {
+        const { data: vRows, error: vErr } = await sb
+          .from('m15_volume_analysis')
+          .select('time, participation_score')
+          .gte('time', since)
+          .order('time', { ascending: true })
+          .range(vOffset, vOffset + PAGE - 1);
+        if (vErr) { console.warn('[M15-ENERGY-API] volume fetch:', vErr.message); break; }
+        if (!vRows || !vRows.length) break;
+        for (const r of vRows) {
+          const key = r.time;
+          if (!volMap[key]) volMap[key] = { sum: 0, count: 0 };
+          volMap[key].sum += parseFloat(r.participation_score) || 0;
+          volMap[key].count++;
+        }
+        if (vRows.length < PAGE) break;
+        vOffset += PAGE;
+      }
+    } catch (_) {}
+
+    // Attach avg volume to each energy bar
+    for (const bar of allRows) {
+      const v = volMap[bar.time_utc];
+      bar.volume_score = v && v.count > 0 ? Math.round(v.sum / v.count) : null;
+    }
+
     res.json({ bars: allRows });
   } catch (e) {
     console.error('[M15-ENERGY-API]', e.message);
