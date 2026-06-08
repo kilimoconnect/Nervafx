@@ -352,10 +352,10 @@ async function calculateEnergyDirection() {
           instrument = rev; dir = 'SELL';
         } else continue;
 
-        // Only include pairs with 12H currency spread ≥ 30 pips
+        // Only include pairs with 3H currency spread ≥ 20 pips (Flow Performance)
         const [base, quote] = instrument.split('_');
-        const spreadPips = Math.abs((ccyMap[base]?.smooth_12h || 0) - (ccyMap[quote]?.smooth_12h || 0)) * 10000;
-        if (spreadPips < 20) continue;
+        const spreadPips = Math.abs((ccyMap[base]?.smooth_3h || 0) - (ccyMap[quote]?.smooth_3h || 0)) * 10000;
+        if (spreadPips < FLOW_SPREAD_THRESHOLD) continue;
 
         // Determine if this pair is new, continuing, or reversed
         const prevPair = pairMap[instrument];
@@ -393,13 +393,13 @@ async function calculateEnergyDirection() {
     // Keep existing currency states exactly as they are — don't touch anything
     // (no currencyUpdates needed, they won't be upserted)
 
-    // Keep existing active pairs for M15 phase updates (only if spread still ≥ 30p)
+    // Keep existing active pairs for M15 phase updates (only if 3H spread still ≥ 20p)
     for (const p of (existingPairs || [])) {
       if (p.active) {
         const [base, quote] = p.instrument.split('_');
-        const spreadPips = Math.abs((ccyMap[base]?.smooth_12h || 0) - (ccyMap[quote]?.smooth_12h || 0)) * 10000;
-        if (spreadPips < 20) {
-          console.log(`[ENERGY_DIR]   ${p.instrument.replace('_','/')} ${p.dir} → REMOVED (12H spread ${spreadPips.toFixed(1)}p < 20p)`);
+        const spreadPips = Math.abs((ccyMap[base]?.smooth_3h || 0) - (ccyMap[quote]?.smooth_3h || 0)) * 10000;
+        if (spreadPips < FLOW_SPREAD_THRESHOLD) {
+          console.log(`[ENERGY_DIR]   ${p.instrument.replace('_','/')} ${p.dir} → REMOVED (3H spread ${spreadPips.toFixed(1)}p < ${FLOW_SPREAD_THRESHOLD}p)`);
           continue;
         }
         newPairs.push({
