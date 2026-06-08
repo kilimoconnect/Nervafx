@@ -24,6 +24,8 @@ const { supabase } = require('./supabase');
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
 const ENERGY_THRESHOLD_H1 = 55;
+const FLOW_SPREAD_THRESHOLD = 20;  // 3H pair spread ≥ 20 pips
+const FLOW_SPREAD_MIN_PAIRS = 6;   // At least 6 pairs must qualify
 
 const VALID_PAIRS = new Set([
   'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
@@ -200,6 +202,18 @@ async function calculateEnergyDirection() {
     };
   }
 
+  // ── 2b. Count flow spread pairs (3H spread ≥ 20 pips) ───────────────────────
+  let flowSpreadCount = 0;
+  for (const inst of VALID_PAIRS) {
+    const [base, quote] = inst.split('_');
+    const bVal = ccyMap[base]?.smooth_3h || 0;
+    const qVal = ccyMap[quote]?.smooth_3h || 0;
+    const spreadPips = Math.abs(bVal - qVal) * 10000;
+    if (spreadPips >= FLOW_SPREAD_THRESHOLD) flowSpreadCount++;
+  }
+  const flowSpreadMet = flowSpreadCount >= FLOW_SPREAD_MIN_PAIRS;
+  console.log(`[ENERGY_DIR] Flow spread: ${flowSpreadCount} pairs ≥ ${FLOW_SPREAD_THRESHOLD}p (need ${FLOW_SPREAD_MIN_PAIRS}) → ${flowSpreadMet ? 'MET' : 'NOT MET'}`);
+
   // ── 3. Load existing currency state ────────────────────────────────────────
   const { data: existingState } = await supabase
     .from('energy_currency_state')
@@ -222,7 +236,11 @@ async function calculateEnergyDirection() {
   }
 
   // ── 5. Evaluate energy threshold (H1 only) ─────────────────────────────────
-  const thresholdMet = triggerEnergy >= ENERGY_THRESHOLD_H1;
+  const energyMet = triggerEnergy >= ENERGY_THRESHOLD_H1;
+  const thresholdMet = energyMet && flowSpreadMet;
+  if (energyMet && !flowSpreadMet) {
+    console.log(`[ENERGY_DIR] Energy ${triggerEnergy} ≥ ${ENERGY_THRESHOLD_H1} but flow spread NOT met (${flowSpreadCount}/${FLOW_SPREAD_MIN_PAIRS}) — directions NOT confirmed`);
+  }
 
   // Check if this is a NEW energy event by comparing trigger bar time against
   // the stored triggered_at. A new bar crossing ≥ threshold AFTER the stored trigger

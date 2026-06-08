@@ -89,10 +89,44 @@ module.exports = async function handler(req, res) {
     const triggerBar = allBars.find(b => b.energy >= ENERGY_THRESHOLD_H1);
     const triggerEnergy = triggerBar?.energy || 0;
 
+    // ── Flow spread check: 6+ pairs with 3H spread ≥ 20 pips ──
+    const FLOW_SPREAD_THRESHOLD = 20;
+    const FLOW_SPREAD_MIN_PAIRS = 6;
+    const VALID_PAIRS = [
+      'AUD_CAD','AUD_CHF','AUD_JPY','AUD_NZD','AUD_USD',
+      'CAD_CHF','CAD_JPY','CHF_JPY',
+      'EUR_AUD','EUR_CAD','EUR_CHF','EUR_GBP','EUR_JPY','EUR_NZD','EUR_USD',
+      'GBP_AUD','GBP_CAD','GBP_CHF','GBP_JPY','GBP_NZD','GBP_USD',
+      'NZD_CAD','NZD_CHF','NZD_JPY','NZD_USD',
+      'USD_CAD','USD_CHF','USD_JPY',
+    ];
+
+    // Build currency 3H strength map from currency_strength (same source as Flow Performance)
+    const { data: csRows } = await sb
+      .from('currency_strength')
+      .select('currency, smooth_3h')
+      .order('time', { ascending: false })
+      .limit(8);
+    const ccyStrength = {};
+    for (const r of (csRows || [])) {
+      if (!ccyStrength[r.currency]) ccyStrength[r.currency] = parseFloat(r.smooth_3h) || 0;
+    }
+
+    let flowSpreadCount = 0;
+    for (const inst of VALID_PAIRS) {
+      const [base, quote] = inst.split('_');
+      const bVal = ccyStrength[base] || 0;
+      const qVal = ccyStrength[quote] || 0;
+      const spreadPips = Math.abs(bVal - qVal) * 10000;
+      if (spreadPips >= FLOW_SPREAD_THRESHOLD) flowSpreadCount++;
+    }
+    const flowSpreadMet = flowSpreadCount >= FLOW_SPREAD_MIN_PAIRS;
+
     // Directions persist across days — check if active directions exist in the DB.
     const hasActiveDirections = (currencies || []).some(c => c.active && c.direction !== 'NEUTRAL');
     const hasActivePairs = (pairs || []).some(p => p.active);
-    const thresholdMet = (triggerEnergy >= ENERGY_THRESHOLD_H1) || hasActiveDirections || hasActivePairs;
+    const energyMet = triggerEnergy >= ENERGY_THRESHOLD_H1;
+    const thresholdMet = (energyMet && flowSpreadMet) || hasActiveDirections || hasActivePairs;
 
     // Display energy: use the stored trigger energy from DB when no today trigger bar
     // This preserves the energy level that originally confirmed directions
@@ -117,6 +151,8 @@ module.exports = async function handler(req, res) {
       peakBarTime: triggerBar?.time || null,
       peakBarSession: triggerBar?.session || null,
       thresholdMet,
+      flowSpreadCount,
+      flowSpreadMet,
     });
   } catch (e) {
     console.error('[ENERGY-SIGNALS-API]', e.message);
