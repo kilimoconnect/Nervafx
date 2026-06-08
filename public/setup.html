@@ -240,7 +240,8 @@
 
     // ── GSAP entrance + timezone init ──
     window.addEventListener('DOMContentLoaded', () => {
-      buildTzList('UTC');
+      const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+      buildTzList(browserTz);
       document.getElementById('timezone-select')?.addEventListener('change', e => {
         updateTzCurrent(e.target.value);
       });

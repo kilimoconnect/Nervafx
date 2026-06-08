@@ -852,7 +852,7 @@ function updateHeader(risk) {
 }
 
 let _profile = { account_size: null, max_daily_risk_pct: null, max_trades: null };
-let _userTz = 'UTC'; // overridden from profile on every refresh
+let _userTz = 'auto'; // overridden from profile on every refresh
 
 // ─── Session badge helper ─────────────────────────────────────────────────────
 
@@ -6867,8 +6867,10 @@ async function refresh() {
       _profile.account_size       = parseFloat(profileData.account_size)       || null;
       _profile.max_daily_risk_pct = parseFloat(profileData.max_daily_risk_pct) || null;
       _profile.max_trades         = parseInt(profileData.max_trades)            || null;
-      // Timezone: 'auto' = browser local, anything else = IANA name, fallback = auto (browser)
-      _userTz = profileData.timezone || 'auto';
+      // Timezone: use profile timezone if explicitly set to a real IANA zone.
+      // 'UTC' was the old setup default — treat as 'auto' (browser-detected) for better UX.
+      const profTz = profileData.timezone;
+      _userTz = (profTz && profTz !== 'UTC') ? profTz : 'auto';
       // Persist to localStorage so archive/journal pages can read it without a profile fetch
       try { localStorage.setItem('nfx_tz', _userTz); } catch (_) {}
     }
