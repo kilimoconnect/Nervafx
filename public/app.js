@@ -3881,19 +3881,39 @@ function _renderInlineM15Bars(container, bars) {
     }
     html += '</div>';
 
-    // Volume line overlay (SVG)
+    // Volume line overlay (EMA-smoothed, green=rising / red=falling)
     if (volPoints.length > 1) {
       const n = dateBars.length;
-      const maxVol = Math.max(100, ...volPoints.map(p => p.vol));
-      // Chart area: bars are ~75% of container height (value label top + hour label bottom)
-      // SVG spans full width, positioned over the bar area
-      const svgPts = volPoints.map(p => {
-        const x = ((p.idx + 0.5) / n) * 100;
-        const y = 100 - (p.vol / maxVol) * 75 - 5; // 5% bottom margin for hour labels
-        return `${x},${y}`;
-      }).join(' ');
+      // EMA smoothing (period 4 ≈ 1 hour of M15 bars)
+      const alpha = 2 / (4 + 1);
+      const smoothed = [];
+      let ema = volPoints[0].vol;
+      for (const p of volPoints) {
+        ema = p.vol * alpha + ema * (1 - alpha);
+        smoothed.push({ idx: p.idx, vol: ema });
+      }
+      const maxVol = Math.max(100, ...smoothed.map(p => p.vol));
+      const toXY = (p) => ({
+        x: ((p.idx + 0.5) / n) * 100,
+        y: 100 - (p.vol / maxVol) * 75 - 5,
+      });
+      // Build colored line segments: green when rising, red when falling
+      let segments = '';
+      for (let i = 1; i < smoothed.length; i++) {
+        const p0 = toXY(smoothed[i - 1]);
+        const p1 = toXY(smoothed[i]);
+        const rising = smoothed[i].vol >= smoothed[i - 1].vol;
+        const col = rising ? '#4ade80' : '#f87171';
+        segments += `<line x1="${p0.x}" y1="${p0.y}" x2="${p1.x}" y2="${p1.y}" stroke="${col}" stroke-width="0.5" stroke-linecap="round" opacity="0.85"/>`;
+      }
+      // Add small dots at each smoothed point
+      const dots = smoothed.map((p, i) => {
+        const pt = toXY(p);
+        const rising = i > 0 ? p.vol >= smoothed[i - 1].vol : true;
+        return `<circle cx="${pt.x}" cy="${pt.y}" r="0.4" fill="${rising ? '#4ade80' : '#f87171'}" opacity="0.9"/>`;
+      }).join('');
       html += `<svg class="bc-vol-line" viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2">
-        <polyline points="${svgPts}" fill="none" stroke="#f472b6" stroke-width="0.4" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/>
+        ${segments}${dots}
       </svg>`;
     }
     html += '</div>'; // close bc-chart-container
@@ -3923,7 +3943,8 @@ function _renderInlineM15Bars(container, bars) {
     <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#0ea5e9"></span> London</span>
     <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#a855f7"></span> New York</span>
     <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#22c55e"></span> Energy ≥ 60</span>
-    <span class="bc-legend-item"><span style="display:inline-block;width:14px;height:2px;background:#f472b6;vertical-align:middle;margin-right:5px;border-radius:1px"></span> Volume</span>
+    <span class="bc-legend-item"><span style="display:inline-block;width:14px;height:2px;background:#4ade80;vertical-align:middle;margin-right:5px;border-radius:1px"></span> Vol Rising</span>
+    <span class="bc-legend-item"><span style="display:inline-block;width:14px;height:2px;background:#f87171;vertical-align:middle;margin-right:5px;border-radius:1px"></span> Vol Falling</span>
   </div>`;
 
   container.innerHTML = html;
