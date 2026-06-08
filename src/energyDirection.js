@@ -273,42 +273,9 @@ async function calculateEnergyDirection() {
     pairMap[p.instrument] = p;
   }
 
-  // ── 4b. Fetch latest dispersion score (H1 + M15) ──────────────────────────
-  // Dispersion must also be ≥ 60 alongside energy to confirm directions.
-  const DISPERSION_THRESHOLD = 60;
-  let dispersionMet = false;
-  let dispersionScore = 0;
-  try {
-    const { data: h1Rows } = await supabase
-      .from('hourly_session_activity')
-      .select('dispersion_score')
-      .order('time_utc', { ascending: false })
-      .limit(1);
-    const h1Disp = parseFloat(h1Rows?.[0]?.dispersion_score) || 0;
-    dispersionScore = h1Disp;
-    if (h1Disp >= DISPERSION_THRESHOLD) dispersionMet = true;
-
-    if (!dispersionMet) {
-      const { data: m15Rows } = await supabase
-        .from('m15_energy_bars')
-        .select('dispersion_score')
-        .order('time_utc', { ascending: false })
-        .limit(1);
-      const m15Disp = parseFloat(m15Rows?.[0]?.dispersion_score) || 0;
-      if (m15Disp > dispersionScore) dispersionScore = m15Disp;
-      if (m15Disp >= DISPERSION_THRESHOLD) dispersionMet = true;
-    }
-  } catch (dispErr) {
-    console.warn('[ENERGY_DIR] Dispersion fetch error, failing open:', dispErr.message);
-    dispersionMet = true; // fail-open so engine still works if DB hiccups
-  }
-
-  console.log(`[ENERGY_DIR] Dispersion: ${dispersionScore} | Met: ${dispersionMet} (threshold: ${DISPERSION_THRESHOLD})`);
-
   // ── 5. Evaluate energy threshold ───────────────────────────────────────────
-  // Both energy AND dispersion must be met to confirm directions.
   const triggerThreshold = triggerSource === 'M15' ? ENERGY_THRESHOLD_M15 : ENERGY_THRESHOLD_H1;
-  const thresholdMet = triggerEnergy >= triggerThreshold && dispersionMet;
+  const thresholdMet = triggerEnergy >= triggerThreshold;
 
   // Check if this is a NEW energy event by comparing trigger bar time against
   // the stored triggered_at. A new bar crossing ≥ threshold AFTER the stored trigger
@@ -452,21 +419,6 @@ async function calculateEnergyDirection() {
         console.log(`[ENERGY_DIR]   ${p.instrument.replace('_','/')} ${p.dir} → REMOVED (${p.strong_ccy}↑ ${p.weak_ccy}↓ no longer valid)`);
       }
     }
-  } else if (hasActiveDirections && !dispersionMet) {
-    // ── Dispersion low — freeze signal pairs completely ──────────────────
-    // No phase updates, no additions, no removals. Pairs stay as they are.
-    console.log(`[ENERGY_DIR] Dispersion low (${dispersionScore}) — signal pairs frozen. No changes until dispersion ≥ ${DISPERSION_THRESHOLD}.`);
-    // Return early — skip all M15 phase updates and DB writes for pairs
-    return {
-      energy: currentEnergy,
-      thresholdMet: false,
-      isNewEnergyEvent: false,
-      dispersionMet: false,
-      dispersionScore,
-      pairs: (existingPairs || []).filter(p => p.active).length,
-      deactivated: 0,
-    };
-
   } else if (hasActiveDirections) {
     // ── Directions already locked — keep them unchanged ──────────────────
     // No re-evaluation of strong/weak. Strength values stay as snapshotted.
@@ -630,7 +582,7 @@ async function calculateEnergyDirection() {
 
   const phases = {};
   for (const p of pairRows) phases[p.phase] = (phases[p.phase] || 0) + 1;
-  console.log(`[ENERGY_DIR] ${pairRows.length} pairs | Trigger: ${triggerEnergy} (${triggerSession || 'none'}) | Dispersion: ${dispersionScore} (${dispersionMet ? 'MET' : 'LOW'}) | New event: ${isNewEnergyEvent} | Phases: ${JSON.stringify(phases)}`);
+  console.log(`[ENERGY_DIR] ${pairRows.length} pairs | Trigger: ${triggerEnergy} (${triggerSession || 'none'}) | New event: ${isNewEnergyEvent} | Phases: ${JSON.stringify(phases)}`);
 
   return {
     energy: currentEnergy,

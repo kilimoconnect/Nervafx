@@ -2907,7 +2907,7 @@ function _scheduleEnergyRefresh(initialData) {
 
 function renderEnergySignals(data) {
   if (!data) return;
-  const { currencies, pairs, energy, thresholdMet, dispersionMet, dispersionScore } = data;
+  const { currencies, pairs, energy, thresholdMet } = data;
 
   // ── Banner ──
   const ringEl = document.getElementById('es-energy-ring');
@@ -2927,8 +2927,6 @@ function renderEnergySignals(data) {
   if (statusEl) {
     if (thresholdMet) {
       statusEl.innerHTML = `<span style="color:#22c55e;font-weight:700">ACTIVE</span> — Directions confirmed.`;
-    } else if (dispersionMet === false) {
-      statusEl.innerHTML = `<span style="color:#f59e0b;font-weight:700">WAITING</span> — Dispersion low (${dispersionScore || 0}). Need ≥ 60.`;
     } else if (energy >= 35) {
       statusEl.innerHTML = `<span style="color:#f59e0b;font-weight:700">BUILDING</span> — Approaching threshold.`;
     } else {

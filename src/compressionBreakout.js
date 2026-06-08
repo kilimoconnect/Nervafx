@@ -117,31 +117,6 @@ async function updateCompressionBaseline() {
 // ─── M15 Price Structure Watch ───────────────────────────────────────────────
 
 async function updateM15StructureWatch() {
-  // Check dispersion — no new additions if dispersion < 60
-  const DISPERSION_THRESHOLD = 60;
-  let dispersionMet = false;
-  try {
-    const { data: h1Rows } = await supabase
-      .from('hourly_session_activity')
-      .select('dispersion_score')
-      .order('time_utc', { ascending: false })
-      .limit(1);
-    const h1Disp = parseFloat(h1Rows?.[0]?.dispersion_score) || 0;
-    if (h1Disp >= DISPERSION_THRESHOLD) dispersionMet = true;
-
-    if (!dispersionMet) {
-      const { data: m15Rows } = await supabase
-        .from('m15_energy_bars')
-        .select('dispersion_score')
-        .order('time_utc', { ascending: false })
-        .limit(1);
-      const m15Disp = parseFloat(m15Rows?.[0]?.dispersion_score) || 0;
-      if (m15Disp >= DISPERSION_THRESHOLD) dispersionMet = true;
-    }
-  } catch (_) {
-    dispersionMet = true; // fail-open
-  }
-
   // Get approved pairs from energy_signal_pairs
   const { data: signalPairs } = await supabase
     .from('energy_signal_pairs')
@@ -165,12 +140,6 @@ async function updateM15StructureWatch() {
   const results = [];
 
   for (const sp of signalPairs) {
-    // Dispersion gate: skip NEW pairs when dispersion is low — only monitor existing ones
-    const isExistingWatch = !!watchMap[sp.instrument];
-    if (!dispersionMet && !isExistingWatch) {
-      continue; // no new additions when dispersion < 60
-    }
-
     const { data: candles } = await supabase
       .from('backtest_candles')
       .select('time, open, high, low, close')
@@ -247,7 +216,7 @@ async function updateM15StructureWatch() {
   const ready = results.filter(r => r.state === 'ENTRY_READY');
   const structured = results.filter(r => r.state === 'STRUCTURE_FORMED');
   const watching = results.filter(r => r.state === 'WATCHING' || r.state === 'IMPULSE_DETECTED' || r.state === 'PULLBACK_ACTIVE');
-  console.log(`[COMP-BRK] M15 Structure: ${ready.length} ENTRY_READY, ${structured.length} STRUCTURE_FORMED, ${watching.length} watching, ${results.length} total${!dispersionMet ? ' (dispersion low — no new additions)' : ''}`);
+  console.log(`[COMP-BRK] M15 Structure: ${ready.length} ENTRY_READY, ${structured.length} STRUCTURE_FORMED, ${watching.length} watching, ${results.length} total`);
 
   return results;
 }
