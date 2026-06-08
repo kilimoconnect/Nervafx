@@ -2911,7 +2911,7 @@ function renderEnergySignals(data) {
 
   if (ringEl && numEl) {
     const pct = Math.min(100, Math.max(0, energy));
-    const col = energy >= 55 ? '#22c55e' : energy >= 45 ? '#3b82f6' : energy >= 30 ? '#f59e0b' : '#475569';
+    const col = energy >= 50 ? '#22c55e' : energy >= 40 ? '#3b82f6' : energy >= 25 ? '#f59e0b' : '#475569';
     ringEl.style.setProperty('--es-ring-color', col);
     ringEl.style.setProperty('--es-ring-pct', pct + '%');
     numEl.textContent = Math.round(energy);
@@ -2921,9 +2921,9 @@ function renderEnergySignals(data) {
   if (statusEl) {
     if (thresholdMet) {
       statusEl.innerHTML = `<span style="color:#22c55e;font-weight:700">ACTIVE</span> — Directions confirmed. <span style="color:#64748b;font-size:0.85em">(${flowSpreadCount || 0} pairs flowing)</span>`;
-    } else if (energy >= 55 && !flowSpreadMet) {
+    } else if (energy >= 50 && !flowSpreadMet) {
       statusEl.innerHTML = `<span style="color:#f59e0b;font-weight:700">ENERGY MET</span> — Waiting for flow spread (${flowSpreadCount || 0}/1 pairs ≥ 20p).`;
-    } else if (energy >= 35) {
+    } else if (energy >= 30) {
       statusEl.innerHTML = `<span style="color:#f59e0b;font-weight:700">BUILDING</span> — Approaching threshold.`;
     } else {
       statusEl.innerHTML = `<span style="color:#94a3b8;font-weight:700">LOW</span> — Existing directions persist.`;
@@ -2941,7 +2941,7 @@ function renderEnergySignals(data) {
     if (events.has('REVERSAL'))     chips += '<span class="es-event-chip reversal">Reversal</span>';
     if (events.has('NEW'))          chips += '<span class="es-event-chip new-event">New Signal</span>';
     if (!thresholdMet && !pairs?.length) {
-      if (energy >= 55 && !flowSpreadMet) {
+      if (energy >= 50 && !flowSpreadMet) {
         chips += '<span class="es-event-chip below">Low Flow Spread</span>';
       } else {
         chips += '<span class="es-event-chip below">Below Threshold</span>';
@@ -4294,7 +4294,7 @@ function _meSessionExplain(s, label, status) {
   }
 
   // Overall energy
-  if (energy >= 55) lines.push(`High energy (${energy}) — market is active and directional.`);
+  if (energy >= 50) lines.push(`High energy (${energy}) — market is active and directional.`);
   else if (energy >= 35) lines.push(`Moderate energy (${energy}) — conditions building, wait for confirmation.`);
   else lines.push(`Low energy (${energy}) — range-bound, avoid forcing trades.`);
 
@@ -4658,7 +4658,7 @@ function _meExpansionPressurePanel(ep) {
   let flowChain = '';
   if (ep?.carryOver?.length > 1) {
     const chips = ep.carryOver.map(c => {
-      const col = c.energy >= 55 ? '#22c55e' : c.energy >= 35 ? '#0ea5e9' : c.energy >= 15 ? '#f59e0b' : '#475569';
+      const col = c.energy >= 50 ? '#22c55e' : c.energy >= 30 ? '#0ea5e9' : c.energy >= 15 ? '#f59e0b' : '#475569';
       return `<span class="me-flow-chip"><span class="me-flow-sess">${c.session}</span><span class="me-flow-val" style="color:${col}">${c.energy}</span></span>`;
     }).join('<span class="me-flow-arrow">→</span>');
     flowChain = `<div class="me-flow-row">${chips}</div>`;
@@ -5013,10 +5013,10 @@ const METRIC_CHART_CONFIG = {
   },
   energy: {
     field: 'market_energy', label: 'Market Energy', title: 'Hourly Session Energy',
-    unit: '', decimals: 0, v2Threshold: 55, m15Threshold: 60,
+    unit: '', decimals: 0, v2Threshold: 50, m15Threshold: 60,
     thresholds: [
-      { min: 55, color: '#22c55e', label: 'High energy' },
-      { min: 30, color: '#f59e0b', label: 'Moderate energy' },
+      { min: 50, color: '#22c55e', label: 'High energy' },
+      { min: 25, color: '#f59e0b', label: 'Moderate energy' },
       { min: 0,  color: '#ef4444', label: 'Low energy' },
     ],
     guide: [

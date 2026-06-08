@@ -92,7 +92,7 @@ async function updateCompressionBaseline() {
     }
 
   } else if (baseline.active && baseline.baseline_locked) {
-    if (currentEnergy >= 55) {
+    if (currentEnergy >= 50) {
       // Energy recovered past threshold — directional discovery phase
       baseline.recovery_detected = true;
       console.log(`[COMP-BRK] Recovery! Energy ${currentEnergy} crossed 55 — directional discovery active`);
