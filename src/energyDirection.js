@@ -7,8 +7,8 @@
  *
  * System flow:
  *   1. Energy trigger via EITHER:
- *      a) Single hourly bar with energy ≥ 60, OR
- *      b) 3 consecutive M15 bars with energy ≥ 60
+ *      a) Single hourly bar with energy ≥ threshold, OR
+ *      b) 3 consecutive M15 bars with energy ≥ threshold
  *      Whichever fires LATEST becomes the active trigger.
  *   2. Currencies with aligned 3H + 6H → confirmed STRONG or WEAK
  *   3. Pairs formed: one STRONG currency + one WEAK currency
@@ -141,8 +141,8 @@ async function calculateEnergyDirection() {
   }
 
   // Scan ALL hourly bars across today's sessions to find the LAST bar that
-  // crossed ≥50. This is the trigger bar — directions are snapshotted from
-  // the strength at that moment and persist until a NEW bar crosses ≥50.
+  // crossed ≥ threshold. This is the trigger bar — directions are snapshotted from
+  // the strength at that moment and persist until a NEW bar crosses ≥ threshold.
   let currentEnergy = 0;  // live session-level energy (for display)
   const allBars = [];     // every hourly bar with energy ≥ threshold
 
@@ -164,12 +164,12 @@ async function calculateEnergyDirection() {
     }
   }
 
-  // Sort by time descending — the LAST bar to cross ≥50 is the trigger
+  // Sort by time descending — the LAST bar to cross ≥ threshold is the trigger
   allBars.sort((a, b) => new Date(b.time) - new Date(a.time));
   const hourlyTrigger = allBars[0] || null;
 
   // ── 1b. Scan M15 energy bars for 3 consecutive bars ≥ threshold ───────────
-  // Any 3 consecutive M15 bars crossing ≥60 = alternative trigger.
+  // Any 3 consecutive M15 bars crossing ≥ threshold = alternative trigger.
   // Query recent M15 bars (last ~24h) ordered by time ascending.
   let m15Trigger = null;
   {
@@ -276,7 +276,7 @@ async function calculateEnergyDirection() {
   const thresholdMet = triggerEnergy >= ENERGY_THRESHOLD;
 
   // Check if this is a NEW energy event by comparing trigger bar time against
-  // the stored triggered_at. A new bar crossing ≥50 AFTER the stored trigger
+  // the stored triggered_at. A new bar crossing ≥ threshold AFTER the stored trigger
   // time means we must re-evaluate directions with fresh strength.
   const prevTriggeredAt = Object.values(stateMap)
     .filter(s => s.active && s.triggered_at)
@@ -296,7 +296,7 @@ async function calculateEnergyDirection() {
   if (isNewEnergyEvent) {
     // ── 6. NEW energy event — snapshot currencies from CURRENT strength ────
     // This is the ONLY time directions are evaluated. Strength values are
-    // locked in and persist until the next bar crosses ≥50.
+    // locked in and persist until the next bar crosses ≥ threshold.
     const strong = [];
     const weak = [];
 
