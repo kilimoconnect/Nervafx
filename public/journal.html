@@ -337,7 +337,7 @@
       if (!r.ok) return;
       const p = await r.json();
       if (p.timezone) {
-        _userTz = p.timezone;
+        _userTz = (p.timezone === 'UTC') ? 'auto' : p.timezone;
         try { localStorage.setItem('nfx_tz', _userTz); } catch (_) {}
       }
     } catch (_) {}

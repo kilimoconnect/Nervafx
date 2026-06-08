@@ -151,18 +151,9 @@ let _csigCurrencies = new Set();
 // Distinguishes "still loading" (pass-through) from "loaded but nothing qualifies" (filter out).
 let _csigDataLoaded = false;
 
-// Helper: get grouping date for a hourly row (ASIA hour 23 → next day)
+// Helper: get user-local date for a hourly row
 function _groupDate(r) {
-  const date = r.time_utc.slice(0, 10);
-  if (r.session_name === 'ASIA') {
-    const h = new Date(r.time_utc).getUTCHours();
-    if (h === 23) {
-      const next = new Date(r.time_utc);
-      next.setUTCDate(next.getUTCDate() + 1);
-      return next.toISOString().slice(0, 10);
-    }
-  }
-  return date;
+  return _toLocalDate(r.time_utc);
 }
 
 // Returns true if strength data isn't loaded yet (pass-through) OR if either the
@@ -853,6 +844,9 @@ function updateHeader(risk) {
 
 let _profile = { account_size: null, max_daily_risk_pct: null, max_trades: null };
 let _userTz = 'auto'; // overridden from profile on every refresh
+function _tz() { return (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC'); }
+function _todayLocal() { return new Intl.DateTimeFormat('en-CA', { timeZone: _tz() }).format(new Date()); }
+function _toLocalDate(utcStr) { return new Intl.DateTimeFormat('en-CA', { timeZone: _tz(), year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(utcStr)); }
 
 // ─── Session badge helper ─────────────────────────────────────────────────────
 
@@ -3817,7 +3811,7 @@ function _renderInlineM15Bars(container, bars) {
   }
 
   // Filter out weekends (Saturday=6, Sunday=0) and take last 2 trading days
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = _todayLocal();
   const dates = Object.keys(byDate)
     .filter(d => {
       const dow = new Date(d + 'T12:00:00Z').getUTCDay();
@@ -4825,7 +4819,7 @@ function _renderBreadthBars(container, rows) {
   }
 
   // Sort dates descending; show today + last 5 working days (6 total)
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = _todayLocal();
   const dates = Object.keys(byDate)
     .filter(d => {
       if (d === todayStr) return byDate[d].length >= 1;
@@ -5323,20 +5317,11 @@ function _renderDERankedView(container, deRows, cfg) {
   const hours = Object.keys(byHour).sort((a, b) => b.localeCompare(a));
   if (!hours.length) { container.innerHTML = '<p class="me-empty">No DE data.</p>'; return; }
 
-  // Group hours by date
+  // Group hours by user-local date
   const byDate = {};
   for (const h of hours) {
     const timeStr = h + ':00:00Z';
-    const d = new Date(timeStr);
-    // Use _groupDate-like logic: ASIA hour 23 belongs to next day
-    const utcH = d.getUTCHours();
-    let dateKey;
-    if (utcH >= 23) {
-      const next = new Date(d.getTime() + 86400000);
-      dateKey = next.toISOString().slice(0, 10);
-    } else {
-      dateKey = d.toISOString().slice(0, 10);
-    }
+    const dateKey = _toLocalDate(timeStr);
     if (!byDate[dateKey]) byDate[dateKey] = [];
     byDate[dateKey].push(h);
   }
@@ -5419,7 +5404,7 @@ function _renderMetricBars(container, rows, key) {
     });
   }
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = _todayLocal();
   const dates = Object.keys(byDate)
     .filter(d => {
       if (d === todayStr) return byDate[d].length >= 1;
@@ -5584,7 +5569,7 @@ function _renderM15MetricBars(container, bars, key) {
     });
   }
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = _todayLocal();
   const dates = Object.keys(byDate)
     .filter(d => {
       if (d === todayStr) return byDate[d].length >= 1;
@@ -6163,7 +6148,7 @@ function _meHistoryPanel(rows, liveSessions) {
   const dayBlocks = days.map(date => {
     const dateLabel = (date === lastMarketDate && marketOpen)
       ? 'Today'
-      : new Date(date + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+      : new Date(date + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
 
     const sessOrder = ['ASIA', 'LONDON', 'NEW_YORK'];
     const sessMap   = Object.fromEntries(byDate[date].map(r => [r.session_name, r]));
