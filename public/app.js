@@ -3884,7 +3884,6 @@ function _renderInlineM15Bars(container, bars) {
     // Volume line overlay (EMA-smoothed, green=rising / red=falling)
     if (volPoints.length > 1) {
       const n = dateBars.length;
-      // EMA smoothing (period 4 ≈ 1 hour of M15 bars)
       const alpha = 2 / (4 + 1);
       const smoothed = [];
       let ema = volPoints[0].vol;
@@ -3892,42 +3891,37 @@ function _renderInlineM15Bars(container, bars) {
         ema = p.vol * alpha + ema * (1 - alpha);
         smoothed.push({ idx: p.idx, vol: ema });
       }
-      const maxVol = Math.max(100, ...smoothed.map(p => p.vol));
+      // Scale to actual data range so line uses full chart height
+      const minVol = Math.min(...smoothed.map(p => p.vol));
+      const maxVol = Math.max(...smoothed.map(p => p.vol));
+      const volRange = maxVol - minVol || 1;
+      // y: 15% top margin (bar values) to 85% (above hour labels)
       const toXY = (p) => ({
         x: ((p.idx + 0.5) / n) * 100,
-        y: 100 - (p.vol / maxVol) * 75 - 5,
+        y: 85 - ((p.vol - minVol) / volRange) * 65,
       });
-      // Build colored line segments: green when rising, red when falling
       let segments = '';
       for (let i = 1; i < smoothed.length; i++) {
         const p0 = toXY(smoothed[i - 1]);
         const p1 = toXY(smoothed[i]);
-        const rising = smoothed[i].vol >= smoothed[i - 1].vol;
-        const col = rising ? '#4ade80' : '#f87171';
+        const col = smoothed[i].vol >= smoothed[i - 1].vol ? '#4ade80' : '#f87171';
         segments += `<line x1="${p0.x}" y1="${p0.y}" x2="${p1.x}" y2="${p1.y}" stroke="${col}" stroke-width="0.5" stroke-linecap="round" opacity="0.85"/>`;
       }
-      // Add small dots at each smoothed point
-      const dots = smoothed.map((p, i) => {
-        const pt = toXY(p);
-        const rising = i > 0 ? p.vol >= smoothed[i - 1].vol : true;
-        return `<circle cx="${pt.x}" cy="${pt.y}" r="0.4" fill="${rising ? '#4ade80' : '#f87171'}" opacity="0.9"/>`;
-      }).join('');
-      // Peak volume marker
-      let peakVolMark = '';
-      if (smoothed.length) {
-        let peakIdx = 0;
-        for (let j = 1; j < smoothed.length; j++) {
-          if (smoothed[j].vol > smoothed[peakIdx].vol) peakIdx = j;
-        }
-        const pk = toXY(smoothed[peakIdx]);
-        const peakRawIdx = smoothed[peakIdx].idx;
-        const peakLocalTime = new Date(dateBars[peakRawIdx].time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
-        peakVolMark = `<polygon points="${pk.x},${pk.y - 2.5} ${pk.x + 1.2},${pk.y} ${pk.x},${pk.y + 2.5} ${pk.x - 1.2},${pk.y}" fill="#fbbf24" opacity="0.95"/>` +
-          `<text x="${pk.x}" y="${pk.y - 4}" text-anchor="middle" fill="#fbbf24" font-size="3" font-weight="700">Peak Vol ${peakLocalTime}</text>`;
+      // Peak volume marker + HTML label
+      let peakIdx = 0;
+      for (let j = 1; j < smoothed.length; j++) {
+        if (smoothed[j].vol > smoothed[peakIdx].vol) peakIdx = j;
       }
+      const pk = toXY(smoothed[peakIdx]);
+      const peakRawIdx = smoothed[peakIdx].idx;
+      const peakLocalTime = new Date(dateBars[peakRawIdx].time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
+      const peakDot = `<circle cx="${pk.x}" cy="${pk.y}" r="1" fill="#fbbf24" stroke="#000" stroke-width="0.3" opacity="0.95"/>`;
       html += `<svg class="bc-vol-line" viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2">
-        ${segments}${dots}${peakVolMark}
+        ${segments}${peakDot}
       </svg>`;
+      html += `<div style="position:absolute;left:${pk.x}%;top:${Math.max(2, pk.y - 8)}%;transform:translateX(-50%);pointer-events:none;z-index:3;white-space:nowrap">
+        <span style="font-size:9px;font-weight:700;color:#fbbf24;background:rgba(0,0,0,0.7);padding:1px 5px;border-radius:3px">▲ Peak Vol ${peakLocalTime}</span>
+      </div>`;
     }
     html += '</div>'; // close bc-chart-container
 
@@ -5665,10 +5659,12 @@ function _renderM15MetricBars(container, bars, key) {
         ema = p.vol * alpha + ema * (1 - alpha);
         smoothed.push({ idx: p.idx, vol: ema });
       }
-      const maxVol = Math.max(100, ...smoothed.map(p => p.vol));
+      const minVol = Math.min(...smoothed.map(p => p.vol));
+      const maxVol = Math.max(...smoothed.map(p => p.vol));
+      const volRange = maxVol - minVol || 1;
       const toXY = (p) => ({
         x: ((p.idx + 0.5) / n) * 100,
-        y: 100 - (p.vol / maxVol) * 75 - 5,
+        y: 85 - ((p.vol - minVol) / volRange) * 65,
       });
       let segments = '';
       for (let i = 1; i < smoothed.length; i++) {
@@ -5677,27 +5673,21 @@ function _renderM15MetricBars(container, bars, key) {
         const col = smoothed[i].vol >= smoothed[i - 1].vol ? '#4ade80' : '#f87171';
         segments += `<line x1="${p0.x}" y1="${p0.y}" x2="${p1.x}" y2="${p1.y}" stroke="${col}" stroke-width="0.5" stroke-linecap="round" opacity="0.85"/>`;
       }
-      const dots = smoothed.map((p, i) => {
-        const pt = toXY(p);
-        const rising = i > 0 ? p.vol >= smoothed[i - 1].vol : true;
-        return `<circle cx="${pt.x}" cy="${pt.y}" r="0.4" fill="${rising ? '#4ade80' : '#f87171'}" opacity="0.9"/>`;
-      }).join('');
-      // Peak volume marker
-      let peakVolMark = '';
-      if (smoothed.length) {
-        let peakIdx = 0;
-        for (let j = 1; j < smoothed.length; j++) {
-          if (smoothed[j].vol > smoothed[peakIdx].vol) peakIdx = j;
-        }
-        const pk = toXY(smoothed[peakIdx]);
-        const peakRawIdx = smoothed[peakIdx].idx;
-        const peakLocalTime = new Date(dateBars[peakRawIdx].time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
-        peakVolMark = `<polygon points="${pk.x},${pk.y - 2.5} ${pk.x + 1.2},${pk.y} ${pk.x},${pk.y + 2.5} ${pk.x - 1.2},${pk.y}" fill="#fbbf24" opacity="0.95"/>` +
-          `<text x="${pk.x}" y="${pk.y - 4}" text-anchor="middle" fill="#fbbf24" font-size="3" font-weight="700">Peak Vol ${peakLocalTime}</text>`;
+      // Peak volume marker + HTML label
+      let peakIdx = 0;
+      for (let j = 1; j < smoothed.length; j++) {
+        if (smoothed[j].vol > smoothed[peakIdx].vol) peakIdx = j;
       }
+      const pk = toXY(smoothed[peakIdx]);
+      const peakRawIdx = smoothed[peakIdx].idx;
+      const peakLocalTime = new Date(dateBars[peakRawIdx].time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
+      const peakDot = `<circle cx="${pk.x}" cy="${pk.y}" r="1" fill="#fbbf24" stroke="#000" stroke-width="0.3" opacity="0.95"/>`;
       html += `<svg class="bc-vol-line" viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2">
-        ${segments}${dots}${peakVolMark}
+        ${segments}${peakDot}
       </svg>`;
+      html += `<div style="position:absolute;left:${pk.x}%;top:${Math.max(2, pk.y - 8)}%;transform:translateX(-50%);pointer-events:none;z-index:3;white-space:nowrap">
+        <span style="font-size:9px;font-weight:700;color:#fbbf24;background:rgba(0,0,0,0.7);padding:1px 5px;border-radius:3px">▲ Peak Vol ${peakLocalTime}</span>
+      </div>`;
     }
     html += '</div>'; // close bc-chart-container
 
