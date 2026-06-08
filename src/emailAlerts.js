@@ -24,6 +24,7 @@
  */
 
 const { sendEmail, baseLayout, flowSpreadAlertEmail, dailyDigestEmail } = require('./emailService');
+const { getPipSize, pipValueUSD, calcPositionSize } = require('./risk');
 
 const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York', LOW_LIQUIDITY: 'Off-hours' };
 
@@ -85,6 +86,14 @@ async function getSubscribedUsers(sb) {
   const prefMap = {};
   for (const p of (prefs || [])) prefMap[p.user_id] = p;
 
+  // Fetch trading profiles (account_size, risk settings) for personalized emails
+  const { data: profiles } = await sb
+    .from('profiles')
+    .select('id, account_size, max_daily_risk_pct, max_trades, min_rr');
+
+  const profileMap = {};
+  for (const p of (profiles || [])) profileMap[p.id] = p;
+
   return allUsers.users.filter(u => {
     if (!u.email) return false;
 
@@ -108,6 +117,8 @@ async function getSubscribedUsers(sb) {
     u._sendTo = p?.notification_email || u.email;
     // Attach prefs for per-type filtering downstream
     u._prefs = p || {};
+    // Attach trading profile for personalized SL/TP/lot calculations
+    u._profile = profileMap[u.id] || null;
     return true;
   });
 }
@@ -462,6 +473,7 @@ async function sendSignalAlerts(sb) {
   }
 
   // ── 2. BREAKOUT ENTRY ALERT — M15 structure break detected ─────────────────
+  // Personalized per user: SL, TP, and lot size based on profile risk settings
   try {
     const { data: entryPairs } = await sb
       .from('m15_structure_watch')
@@ -478,72 +490,153 @@ async function sendSignalAlerts(sb) {
         }
 
         const isBuy = ep.direction === 'BUY';
+        const dirSign = isBuy ? 1 : -1;
         const dirColor = isBuy ? '#4ade80' : '#f87171';
         const dirBg = isBuy ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)';
         const dirBorder = isBuy ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)';
         const pairLabel = ep.instrument.replace('_', '/');
         const isJPY = ep.instrument.includes('JPY');
-        const d = isJPY ? 3 : 5;
+        const dec = isJPY ? 3 : 5;
+        const pipSize = getPipSize(ep.instrument);
 
-        const template = {
-          subject: `Breakout Entry — ${ep.direction} ${pairLabel}`,
-          html: baseLayout(`
-            <h2>Structure Breakout</h2>
-            <p class="sub">${pairLabel} — M15 price structure break confirmed</p>
+        // SL = invalidation price (already in structure data)
+        const entryPrice = ep.entry_price || 0;
+        const slPrice = ep.invalidation_price || 0;
+        const stopDistance = entryPrice && slPrice ? Math.abs(entryPrice - slPrice) : 0;
+        const slPips = stopDistance / pipSize;
 
-            <div style="background:${dirBg};border:1px solid ${dirBorder};border-radius:8px;padding:20px;margin:16px 0;text-align:center">
-              <div style="font-size:24px;color:${dirColor};font-weight:800">${ep.direction} ${pairLabel}</div>
-              <div class="dim" style="margin-top:6px">M15 Compression Breakout Entry</div>
-            </div>
+        // Send personalized email to each eligible user
+        const breakoutRecipients = recipients.filter(u => u._prefs?.breakout_alerts !== false);
+        let sentCount = 0;
+        for (const user of breakoutRecipients) {
+          try {
+            // User risk settings (defaults if no profile)
+            const prof = user._profile || {};
+            const accountSize = parseFloat(prof.account_size) || 10000;
+            const maxDailyRisk = (parseFloat(prof.max_daily_risk_pct) || 2) / 100;
+            const maxTrades = parseInt(prof.max_trades) || 3;
+            const minRR = parseFloat(prof.min_rr) || 2;
+            const riskPerTrade = maxDailyRisk / maxTrades;
+            const riskAmount = accountSize * riskPerTrade;
 
-            ${marketFocusHtml || ''}
+            // TP = entry + (SL distance × RR) in trade direction
+            const tpPrice = entryPrice && stopDistance
+              ? entryPrice + (dirSign * stopDistance * minRR)
+              : 0;
+            const tpPips = tpPrice ? (Math.abs(tpPrice - entryPrice) / pipSize) : 0;
 
-            <div class="card">
-              <div class="card-hd">Structure Levels</div>
-              <div class="card-bd">
-                <table width="100%" cellpadding="0" cellspacing="0">
-                  <tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
-                    <td style="padding:10px 14px" class="sm">Entry Price</td>
-                    <td style="padding:10px 14px;text-align:right;color:#60a5fa;font-weight:700;font-size:14px">${ep.entry_price ? ep.entry_price.toFixed(d) : '—'}</td>
-                  </tr>
-                  <tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
-                    <td style="padding:10px 14px" class="sm">Invalidation</td>
-                    <td style="padding:10px 14px;text-align:right;color:#f87171;font-weight:700;font-size:14px">${ep.invalidation_price ? ep.invalidation_price.toFixed(d) : '—'}</td>
-                  </tr>
-                  ${ep.impulse_high ? `<tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
-                    <td style="padding:10px 14px" class="sm">Impulse High</td>
-                    <td style="padding:10px 14px;text-align:right" class="val">${ep.impulse_high.toFixed(d)}</td>
-                  </tr>` : ''}
-                  ${ep.impulse_low ? `<tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
-                    <td style="padding:10px 14px" class="sm">Impulse Low</td>
-                    <td style="padding:10px 14px;text-align:right" class="val">${ep.impulse_low.toFixed(d)}</td>
-                  </tr>` : ''}
-                  ${ep.pullback_high ? `<tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
-                    <td style="padding:10px 14px" class="sm">Pullback High</td>
-                    <td style="padding:10px 14px;text-align:right" class="val">${ep.pullback_high.toFixed(d)}</td>
-                  </tr>` : ''}
-                  ${ep.pullback_low ? `<tr>
-                    <td style="padding:10px 14px" class="sm">Pullback Low</td>
-                    <td style="padding:10px 14px;text-align:right" class="val">${ep.pullback_low.toFixed(d)}</td>
-                  </tr>` : ''}
-                </table>
-              </div>
-            </div>
+            // Lot size from risk
+            const lotSize = entryPrice && stopDistance
+              ? calcPositionSize(ep.instrument, riskAmount, stopDistance, entryPrice)
+              : null;
 
-            <div class="section">
-              <p class="sm">M15 candle closed past the pullback level, confirming structure break. Invalidation at ${ep.invalidation_price ? ep.invalidation_price.toFixed(d) : '—'}.</p>
-            </div>
+            const riskStr = `$${riskAmount.toFixed(2)}`;
+            const lotStr = lotSize ? lotSize.toFixed(2) : '—';
+            const rrStr = minRR.toFixed(1);
 
-            <p style="text-align:center;margin:24px 0 16px"><a class="cta" href="https://nervafx.com/app">View on Dashboard</a></p>
-            <p class="sm" style="text-align:center">Analytical observation — not financial advice.</p>
-          `),
-        };
+            const template = {
+              subject: `Breakout Entry — ${ep.direction} ${pairLabel}`,
+              html: baseLayout(`
+                <h2>Structure Breakout</h2>
+                <p class="sub">${pairLabel} — M15 price structure break confirmed</p>
 
-        await sendToAll(sb, recipients, template, breakoutKey, {
+                <div style="background:${dirBg};border:1px solid ${dirBorder};border-radius:8px;padding:20px;margin:16px 0;text-align:center">
+                  <div style="font-size:24px;color:${dirColor};font-weight:800">${ep.direction} ${pairLabel}</div>
+                  <div class="dim" style="margin-top:6px">M15 Compression Breakout Entry</div>
+                </div>
+
+                ${marketFocusHtml || ''}
+
+                <div class="card">
+                  <div class="card-hd">Trade Setup</div>
+                  <div class="card-bd">
+                    <table width="100%" cellpadding="0" cellspacing="0">
+                      <tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
+                        <td style="padding:10px 14px" class="sm">Entry Price</td>
+                        <td style="padding:10px 14px;text-align:right;color:#60a5fa;font-weight:700;font-size:14px">${entryPrice ? entryPrice.toFixed(dec) : '—'}</td>
+                      </tr>
+                      <tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
+                        <td style="padding:10px 14px" class="sm">Stop Loss</td>
+                        <td style="padding:10px 14px;text-align:right;color:#f87171;font-weight:700;font-size:14px">${slPrice ? slPrice.toFixed(dec) : '—'}<span style="font-size:11px;color:#94a3b8;font-weight:400"> (${slPips.toFixed(1)} pips)</span></td>
+                      </tr>
+                      <tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
+                        <td style="padding:10px 14px" class="sm">Take Profit</td>
+                        <td style="padding:10px 14px;text-align:right;color:#4ade80;font-weight:700;font-size:14px">${tpPrice ? tpPrice.toFixed(dec) : '—'}<span style="font-size:11px;color:#94a3b8;font-weight:400"> (${tpPips.toFixed(1)} pips)</span></td>
+                      </tr>
+                      <tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
+                        <td style="padding:10px 14px" class="sm">Risk : Reward</td>
+                        <td style="padding:10px 14px;text-align:right;color:#60a5fa;font-weight:700;font-size:14px">1 : ${rrStr}</td>
+                      </tr>
+                    </table>
+                  </div>
+                </div>
+
+                <div class="card" style="margin-top:12px">
+                  <div class="card-hd">Position Sizing</div>
+                  <div class="card-bd">
+                    <table width="100%" cellpadding="0" cellspacing="0">
+                      <tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
+                        <td style="padding:10px 14px" class="sm">Account Size</td>
+                        <td style="padding:10px 14px;text-align:right" class="val">$${accountSize.toLocaleString()}</td>
+                      </tr>
+                      <tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
+                        <td style="padding:10px 14px" class="sm">Risk per Trade</td>
+                        <td style="padding:10px 14px;text-align:right" class="val">${(riskPerTrade * 100).toFixed(2)}% — ${riskStr}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:10px 14px" class="sm">Lot Size</td>
+                        <td style="padding:10px 14px;text-align:right;color:#60a5fa;font-weight:700;font-size:16px">${lotStr} lots</td>
+                      </tr>
+                    </table>
+                  </div>
+                </div>
+
+                <div class="card" style="margin-top:12px">
+                  <div class="card-hd">Structure Levels</div>
+                  <div class="card-bd">
+                    <table width="100%" cellpadding="0" cellspacing="0">
+                      ${ep.impulse_high ? `<tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
+                        <td style="padding:10px 14px" class="sm">Impulse High</td>
+                        <td style="padding:10px 14px;text-align:right" class="val">${ep.impulse_high.toFixed(dec)}</td>
+                      </tr>` : ''}
+                      ${ep.impulse_low ? `<tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
+                        <td style="padding:10px 14px" class="sm">Impulse Low</td>
+                        <td style="padding:10px 14px;text-align:right" class="val">${ep.impulse_low.toFixed(dec)}</td>
+                      </tr>` : ''}
+                      ${ep.pullback_high ? `<tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
+                        <td style="padding:10px 14px" class="sm">Pullback High</td>
+                        <td style="padding:10px 14px;text-align:right" class="val">${ep.pullback_high.toFixed(dec)}</td>
+                      </tr>` : ''}
+                      ${ep.pullback_low ? `<tr>
+                        <td style="padding:10px 14px" class="sm">Pullback Low</td>
+                        <td style="padding:10px 14px;text-align:right" class="val">${ep.pullback_low.toFixed(dec)}</td>
+                      </tr>` : ''}
+                    </table>
+                  </div>
+                </div>
+
+                <div class="section">
+                  <p class="sm">M15 candle closed past the pullback level, confirming structure break. SL at invalidation ${slPrice ? slPrice.toFixed(dec) : '—'}, TP at ${rrStr}R = ${tpPrice ? tpPrice.toFixed(dec) : '—'}.</p>
+                </div>
+
+                <p style="text-align:center;margin:24px 0 16px"><a class="cta" href="https://nervafx.com/app">View on Dashboard</a></p>
+                <p class="sm" style="text-align:center">Analytical observation — not financial advice. Position sizing based on your profile settings.</p>
+              `),
+            };
+
+            await sendEmail(user._sendTo || user.email, template);
+            sentCount++;
+          } catch (e) {
+            console.error(`[EMAIL] Breakout for ${ep.instrument} failed for ${user._sendTo || user.email}:`, e.message);
+          }
+        }
+
+        await logAlertSent(sb, breakoutKey, {
           instrument: ep.instrument,
           direction: ep.direction,
           entry: ep.entry_price,
-        }, 'breakout_alerts');
+        });
+        console.log(`[EMAIL] ${breakoutKey} sent to ${sentCount}/${breakoutRecipients.length} users (personalized)`);
         emailsSent.push(`breakout:${ep.instrument}`);
       }
     }
