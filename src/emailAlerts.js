@@ -617,7 +617,7 @@ async function sendSignalAlerts(sb) {
       // Get active signal pairs
       const { data: allPairs } = await sb
         .from('energy_signal_pairs')
-        .select('instrument, dir, strong_ccy, weak_ccy')
+        .select('instrument, dir, phase, de_combined')
         .eq('active', true);
 
       // Get flow spread pairs (≥ 30p) — 3H spread logic
@@ -661,6 +661,17 @@ async function sendSignalAlerts(sb) {
         if (haRows?.length) latestHourly = haRows[0];
       } catch (_) {}
 
+      // Get latest M15 energy bar
+      let m15Latest = null;
+      try {
+        const { data: m15Rows } = await sb
+          .from('m15_energy_bars')
+          .select('time, energy, session_name')
+          .order('time', { ascending: false })
+          .limit(1);
+        if (m15Rows?.length) m15Latest = m15Rows[0];
+      } catch (_) {}
+
       // Get flow performance (top pairs by final_score)
       let flowPerfPairs = [];
       try {
@@ -686,6 +697,7 @@ async function sendSignalAlerts(sb) {
         sessions: sessions || [],
         flowSpreadPairs,
         latestHourly,
+        m15Latest,
         flowPerfPairs,
         newsEvents: upcomingNews || [],
       });

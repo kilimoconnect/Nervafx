@@ -3,19 +3,23 @@
 /**
  * Energy Direction Engine — Energy-driven currency direction & pair monitoring
  *
- * Runs each pipeline cycle (after session_activity).
+ * Runs each pipeline cycle (after session_activity + m15_spreads + flow_performance).
  *
  * System flow:
- *   1. Energy trigger: single hourly bar with energy ≥ threshold
+ *   1. Energy trigger via EITHER:
+ *      a) Single hourly bar with energy ≥ 60, OR
+ *      b) 3 consecutive M15 bars with energy ≥ 60
+ *      Whichever fires LATEST becomes the active trigger.
  *   2. Currencies with aligned 3H + 6H → confirmed STRONG or WEAK
  *   3. Pairs formed: one STRONG currency + one WEAK currency
  *   4. Direction PERSISTS even if 3H/6H temporarily diverges
- *   5. Direction only changes when NEW hourly energy event fires
- *   6. New energy events flagged as CONTINUATION or REVERSAL per currency
+ *   5. Direction only changes when NEW energy event fires (H1 or M15)
+ *   6. M15 monitors for: PULLBACK → COMPRESSION → READY → ENTRY
+ *   7. New energy events flagged as CONTINUATION or REVERSAL per currency
  *
  * DB tables:
  *   energy_currency_state  — current confirmed direction per currency (8 rows max)
- *   energy_signal_pairs    — active pairs
+ *   energy_signal_pairs    — active pairs with phase monitoring
  */
 
 const { supabase } = require('./supabase');
@@ -36,6 +40,67 @@ function getSession(utcHour) {
   if (utcHour >= 7  && utcHour < 13) return 'LONDON';
   if (utcHour >= 13 && utcHour < 21) return 'NEW_YORK';
   return 'LOW_LIQUIDITY';
+}
+
+/**
+ * Determine phase for a pair based on M15 behavior relative to flow direction.
+ *
+ * Phase transitions:
+ *   MONITORING  → pair just formed, watching M15
+ *   PULLBACK   → M15 retraces against flow direction
+ *   COMPRESSION → after pullback, M15 range tightens (low |v45|)
+ *   ENTRY       → after compression/pullback, momentum returns in flow direction (trade now)
+ *   MOVING      → strong confirmation: M15 + 3H aligned + impulse (already moving, late entry)
+ */
+function detectPhase(prevPhase, dir, v45, v90, spread3h, impulseScore, impulseAligned, deCombo) {
+  const flowSign = dir === 'BUY' ? 1 : -1;
+  const v45Dir = v45 * flowSign;  // positive = with flow, negative = against
+  const v90Dir = v90 * flowSign;
+  const h3Dir = spread3h * flowSign;
+  const absV45 = Math.abs(v45);
+
+  // MOVING: only reachable FROM ENTRY — strong multi-TF confirmation (already in motion)
+  if (prevPhase === 'ENTRY' && v45Dir > 0.00008 && h3Dir > 0 && impulseAligned && impulseScore >= 40 && deCombo >= 35) {
+    return 'MOVING';
+  }
+
+  // ENTRY: momentum returning in flow direction (trade now)
+  // Can be reached from PULLBACK, COMPRESSION, or directly when conditions are strong
+  if ((prevPhase === 'PULLBACK' || prevPhase === 'COMPRESSION') && v45Dir > 0.00005 && h3Dir > 0) {
+    return 'ENTRY';
+  }
+
+  // ENTRY from fresh strong push (any non-ENTRY/MOVING phase)
+  if (prevPhase !== 'ENTRY' && prevPhase !== 'MOVING' && v45Dir > 0.00008 && h3Dir > 0 && impulseAligned && impulseScore >= 40) {
+    return 'ENTRY';
+  }
+
+  // Also detect ENTRY from M15 acceleration after any non-entry phase
+  if (prevPhase !== 'MONITORING' && prevPhase !== 'ENTRY' && prevPhase !== 'MOVING' && v45Dir > 0.00010 && absV45 > Math.abs(v90) * 1.05) {
+    return 'ENTRY';
+  }
+
+  // COMPRESSION: low M15 movement after pullback
+  if ((prevPhase === 'PULLBACK' || prevPhase === 'COMPRESSION') && absV45 < 0.00005) {
+    return 'COMPRESSION';
+  }
+
+  // PULLBACK: M15 moving against flow direction
+  if (v45Dir < -0.00003 && prevPhase !== 'MOVING') {
+    return 'PULLBACK';
+  }
+
+  // If we had ENTRY/MOVING and conditions fade, go back to monitoring
+  if (prevPhase === 'MOVING' && (v45Dir < 0 || !impulseAligned || impulseScore < 25)) {
+    return 'MONITORING';
+  }
+
+  if (prevPhase === 'ENTRY' && v45Dir < 0.00003) {
+    return 'MONITORING';
+  }
+
+  // Default: keep current phase or stay in MONITORING
+  return prevPhase || 'MONITORING';
 }
 
 /**
@@ -76,8 +141,8 @@ async function calculateEnergyDirection() {
   }
 
   // Scan ALL hourly bars across today's sessions to find the LAST bar that
-  // crossed threshold. This is the trigger bar — directions are snapshotted from
-  // the strength at that moment and persist until a NEW bar crosses threshold.
+  // crossed ≥50. This is the trigger bar — directions are snapshotted from
+  // the strength at that moment and persist until a NEW bar crosses ≥50.
   let currentEnergy = 0;  // live session-level energy (for display)
   const allBars = [];     // every hourly bar with energy ≥ threshold
 
@@ -99,18 +164,67 @@ async function calculateEnergyDirection() {
     }
   }
 
-  // Sort by time descending — the LAST bar to cross threshold is the trigger
+  // Sort by time descending — the LAST bar to cross ≥50 is the trigger
   allBars.sort((a, b) => new Date(b.time) - new Date(a.time));
-  const triggerBar = allBars[0] || null;
+  const hourlyTrigger = allBars[0] || null;
+
+  // ── 1b. Scan M15 energy bars for 3 consecutive bars ≥ threshold ───────────
+  // Any 3 consecutive M15 bars crossing ≥60 = alternative trigger.
+  // Query recent M15 bars (last ~24h) ordered by time ascending.
+  let m15Trigger = null;
+  {
+    const m15Since = new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString(); // last 48h
+    const { data: m15Bars, error: m15Err } = await supabase
+      .from('m15_energy_bars')
+      .select('time_utc, market_energy, session_name')
+      .gte('time_utc', m15Since)
+      .order('time_utc', { ascending: true });
+
+    if (m15Err) console.warn('[ENERGY_DIR] M15 bar fetch:', m15Err.message);
+
+    if (m15Bars?.length >= 3) {
+      // Walk through bars looking for 3 consecutive ≥ threshold
+      let streak = 0;
+      for (const bar of m15Bars) {
+        const e = parseFloat(bar.market_energy) || 0;
+        if (e >= ENERGY_THRESHOLD) {
+          streak++;
+          if (streak >= 3) {
+            // Use this bar (the 3rd consecutive) as the M15 trigger
+            m15Trigger = {
+              energy: e,
+              time: bar.time_utc,
+              session: bar.session_name,
+              source: 'M15',
+            };
+            // Don't break — keep scanning for the LATEST 3-consecutive streak
+          }
+        } else {
+          streak = 0;
+        }
+      }
+    }
+  }
+
+  // ── 1c. Pick the LATEST trigger between hourly and M15 ────────────────────
+  let triggerBar = null;
+  if (hourlyTrigger && m15Trigger) {
+    const hTime = new Date(hourlyTrigger.time).getTime();
+    const mTime = new Date(m15Trigger.time).getTime();
+    triggerBar = mTime > hTime ? m15Trigger : hourlyTrigger;
+  } else {
+    triggerBar = hourlyTrigger || m15Trigger || null;
+  }
 
   const triggerEnergy = triggerBar ? triggerBar.energy : 0;
   const triggerSession = triggerBar ? triggerBar.session : null;
   const triggerHour = triggerBar ? triggerBar.time : null;
+  const triggerSource = triggerBar?.source || 'H1';
 
   // If current session didn't have data, use trigger energy for display
   if (!currentEnergy) currentEnergy = triggerEnergy;
 
-  console.log(`[ENERGY_DIR] Current energy: ${currentEnergy} | Trigger bar: ${triggerEnergy} (${triggerSession}${triggerHour ? ' @ ' + triggerHour : ''})`);
+  console.log(`[ENERGY_DIR] Current energy: ${currentEnergy} | Trigger bar: ${triggerEnergy} [${triggerSource}] (${triggerSession}${triggerHour ? ' @ ' + triggerHour : ''})`);
 
   // ── 2. Fetch latest currency strength (3H + 6H + 12H) ──────────────────────
   const { data: csRows, error: csErr } = await supabase
@@ -182,7 +296,7 @@ async function calculateEnergyDirection() {
   if (isNewEnergyEvent) {
     // ── 6. NEW energy event — snapshot currencies from CURRENT strength ────
     // This is the ONLY time directions are evaluated. Strength values are
-    // locked in and persist until the next bar crosses threshold.
+    // locked in and persist until the next bar crosses ≥50.
     const strong = [];
     const weak = [];
 
@@ -204,7 +318,7 @@ async function calculateEnergyDirection() {
     strong.sort((a, b) => b.score - a.score);
     weak.sort((a, b) => b.score - a.score);
 
-    console.log(`[ENERGY_DIR] ═══ NEW ENERGY EVENT — H1 bar ${triggerEnergy} @ ${triggerHour} (${triggerSession}) ═══`);
+    console.log(`[ENERGY_DIR] ═══ NEW ENERGY EVENT — ${triggerSource} bar ${triggerEnergy} @ ${triggerHour} (${triggerSession}) ═══`);
 
     // ── 7. Snapshot currency directions with trigger-time strength ─────────
     const newDirections = new Map();
@@ -306,9 +420,13 @@ async function calculateEnergyDirection() {
   } else if (hasActiveDirections) {
     // ── Directions already locked — keep them unchanged ──────────────────
     // No re-evaluation of strong/weak. Strength values stay as snapshotted.
+    // Only M15 phase data gets updated (handled below in section 9–10).
     console.log(`[ENERGY_DIR] Directions locked. No new energy bar since last trigger — keeping existing directions & pairs.`);
 
-    // Keep existing active pairs (only if spread still ≥ 20p)
+    // Keep existing currency states exactly as they are — don't touch anything
+    // (no currencyUpdates needed, they won't be upserted)
+
+    // Keep existing active pairs for M15 phase updates (only if spread still ≥ 30p)
     for (const p of (existingPairs || [])) {
       if (p.active) {
         const [base, quote] = p.instrument.split('_');
@@ -333,24 +451,64 @@ async function calculateEnergyDirection() {
     console.log(`[ENERGY_DIR] Energy below threshold (trigger: ${triggerEnergy}). No existing directions.`);
   }
 
-  // ── 9. Compute spreads and build pair rows ──────────────────────────────────
+  // ── 9. Fetch M15 data for all active pairs ─────────────────────────────────
   const pairInstruments = newPairs.map(p => p.instrument);
 
+  let m15Map = {};
+  if (pairInstruments.length) {
+    const { data: m15Rows } = await supabase
+      .from('m15_pair_spreads')
+      .select('instrument, smooth_45m, smooth_90m, smooth_180m, de_combined, state, impulse_score, impulse_dir')
+      .in('instrument', pairInstruments)
+      .order('time', { ascending: false })
+      .limit(pairInstruments.length * 2);
+
+    for (const r of (m15Rows || [])) {
+      if (!m15Map[r.instrument]) m15Map[r.instrument] = r;
+    }
+  }
+
+  // Also get 3H/6H/12H spreads for pairs — use LIVE strength for monitoring
+  // (phase detection and signal entry gates need current market conditions)
+  // but fall back to snapshotted values if live data is missing
   let spreadMap = {};
   if (pairInstruments.length) {
     for (const inst of pairInstruments) {
       const [base, quote] = inst.split('_');
+      const h3base = ccyMap[base]?.smooth_3h || 0;
+      const h3quote = ccyMap[quote]?.smooth_3h || 0;
+      const h6base = ccyMap[base]?.smooth_6h || 0;
+      const h6quote = ccyMap[quote]?.smooth_6h || 0;
+      const h12base = ccyMap[base]?.smooth_12h || 0;
+      const h12quote = ccyMap[quote]?.smooth_12h || 0;
       spreadMap[inst] = {
-        spread_3h: (ccyMap[base]?.smooth_3h || 0) - (ccyMap[quote]?.smooth_3h || 0),
-        spread_6h: (ccyMap[base]?.smooth_6h || 0) - (ccyMap[quote]?.smooth_6h || 0),
-        spread_12h: (ccyMap[base]?.smooth_12h || 0) - (ccyMap[quote]?.smooth_12h || 0),
+        spread_3h: h3base - h3quote,
+        spread_6h: h6base - h6quote,
+        spread_12h: h12base - h12quote,
       };
     }
   }
 
+  // ── 10. Update phases for each pair ────────────────────────────────────────
   const pairRows = newPairs.map(p => {
+    const m15 = m15Map[p.instrument];
     const sp = spreadMap[p.instrument] || {};
     const prev = pairMap[p.instrument];
+
+    const v45 = m15 ? parseFloat(m15.smooth_45m) || 0 : 0;
+    const v90 = m15 ? parseFloat(m15.smooth_90m) || 0 : 0;
+    const deCombo = m15 ? parseFloat(m15.de_combined) || 0 : 0;
+    const impulseScore = m15 ? (m15.impulse_score || 0) : 0;
+    const impulseDir = m15 ? (m15.impulse_dir || 0) : 0;
+    const flowSign = p.dir === 'BUY' ? 1 : -1;
+    const impulseAligned = impulseDir === flowSign;
+    const m15State = m15?.state || 'FLAT';
+
+    const prevPhase = prev?.phase || 'MONITORING';
+    const phase = detectPhase(
+      prevPhase, p.dir, v45, v90,
+      sp.spread_3h || 0, impulseScore, impulseAligned, deCombo
+    );
 
     // Detect new energy event for this specific pair
     let newEnergyEvent = false;
@@ -369,20 +527,20 @@ async function calculateEnergyDirection() {
       dir: p.dir,
       strong_ccy: p.strong_ccy,
       weak_ccy: p.weak_ccy,
-      phase: 'MONITORING',
-      phase_changed_at: now.toISOString(),
+      phase,
+      phase_changed_at: phase !== prevPhase ? now.toISOString() : (prev?.phase_changed_at || now.toISOString()),
       trigger_energy: p.trigger_energy,
       trigger_session: p.trigger_session,
       triggered_at: p.triggered_at || now.toISOString(),
-      v45: 0,
-      v90: 0,
+      v45: Math.round(v45 * 100000) / 100000,
+      v90: Math.round(v90 * 100000) / 100000,
       spread_3h: Math.round((sp.spread_3h || 0) * 100000) / 100000,
       spread_6h: Math.round((sp.spread_6h || 0) * 100000) / 100000,
       spread_12h: Math.round((sp.spread_12h || 0) * 100000) / 100000,
-      de_combined: 0,
-      impulse_score: 0,
-      impulse_aligned: false,
-      m15_state: 'FLAT',
+      de_combined: Math.round(deCombo * 100) / 100,
+      impulse_score: impulseScore,
+      impulse_aligned: impulseAligned,
+      m15_state: m15State,
       new_energy_event: newEnergyEvent,
       energy_event_type: energyEventType,
       energy_level: p.trigger_energy || triggerEnergy,
