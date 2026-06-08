@@ -3885,7 +3885,7 @@ function _renderInlineM15Bars(container, bars) {
 
     html += `<div class="bc-day-explain">
       <ul class="bc-explain-list">
-        <li>Avg ${dayAvg} — peak ${dayMax} at ${peakTime} (${peakSess}). ${aboveThreshold}/${values.length} bars above 60.</li>
+        <li>Avg ${dayAvg} — peak ${dayMax} at ${peakTime} (${peakSess}). ${aboveThreshold}/${values.length} bars above ${ENERGY_THRESHOLD}.</li>
       </ul>
     </div></div>`;
   }
@@ -4953,9 +4953,9 @@ const METRIC_CHART_CONFIG = {
   },
   energy: {
     field: 'market_energy', label: 'Market Energy', title: 'Hourly Session Energy',
-    unit: '', decimals: 0, v2Threshold: 60,
+    unit: '', decimals: 0, v2Threshold: 55,
     thresholds: [
-      { min: 60, color: '#22c55e', label: 'High energy' },
+      { min: 55, color: '#22c55e', label: 'High energy' },
       { min: 30, color: '#f59e0b', label: 'Moderate energy' },
       { min: 0,  color: '#ef4444', label: 'Low energy' },
     ],
