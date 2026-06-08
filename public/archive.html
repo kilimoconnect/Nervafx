@@ -709,7 +709,7 @@
 
   // Metric definitions — V2 institutional model
   const ARC_METRICS = {
-    energy:     { field: 'market_energy',         label: 'Energy',       unit: '',  highThresh: 55, midThresh: 35, peakWord: 'energy',             v2Threshold: 55 },
+    energy:     { field: 'market_energy',         label: 'Energy',       unit: '',  highThresh: 55, midThresh: 35, peakWord: 'energy',             v2Threshold: 55, m15Threshold: 60 },
     de:         { field: 'de_score',              label: 'Dir Efficiency', unit: '%', highThresh: 55, midThresh: 35, peakWord: 'directional efficiency', v2Threshold: 50 },
     dispersion: { field: 'dispersion_score',      label: 'Dispersion',   unit: '',  highThresh: 60, midThresh: 35, peakWord: 'currency dispersion', v2Threshold: 60 },
     tradability:{ field: 'tradability_score',      label: 'Tradability',  unit: '',  highThresh: 55, midThresh: 35, peakWord: 'tradability',        v2Threshold: 55 },
@@ -1036,13 +1036,14 @@
         <div class="bc-unified-chart">`;
 
       let prevSess = '';
+      const m15Thresh = metric.m15Threshold !== undefined ? metric.m15Threshold : metric.v2Threshold;
       for (let i = 0; i < dateBars.length; i++) {
         const b = dateBars[i];
         const color = SESS_COLOR[b.session] || '#64748b';
         const pct = Math.round((b.val / maxVal) * 100);
         const localTime = new Date(b.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
-        const meetsThreshold = metric.v2Threshold !== undefined
-          ? (metric.inverted ? b.val <= metric.v2Threshold : b.val >= metric.v2Threshold)
+        const meetsThreshold = m15Thresh !== undefined
+          ? (metric.inverted ? b.val <= m15Thresh : b.val >= m15Thresh)
           : false;
         const barColor = meetsThreshold ? '#22c55e' : color;
         const cls = meetsThreshold ? 'bc-bar bc-bar-streak' : 'bc-bar';
@@ -1068,8 +1069,8 @@
       const peakBar = dateBars[vals.indexOf(dayMax)];
       const peakTime = new Date(peakBar.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
       const peakSess = SESS_LABEL[peakBar.session] || peakBar.session;
-      const thresholdPasses = metric.v2Threshold !== undefined
-        ? vals.filter(v => metric.inverted ? v <= metric.v2Threshold : v >= metric.v2Threshold).length
+      const thresholdPasses = m15Thresh !== undefined
+        ? vals.filter(v => metric.inverted ? v <= m15Thresh : v >= m15Thresh).length
         : 0;
 
       html += `<div class="bc-day-explain">

@@ -3789,7 +3789,7 @@ function _renderInlineM15Bars(container, bars) {
   const tzLabel = new Intl.DateTimeFormat('en-GB', { timeZone: tz, timeZoneName: 'short' })
     .formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value || '';
   const SKIP = new Set(['LOW_LIQUIDITY', 'DEAD_HOURS']);
-  const ENERGY_THRESHOLD = 55;
+  const ENERGY_THRESHOLD_M15 = 60;
 
   const byDate = {};
   for (const r of bars) {
@@ -3856,7 +3856,7 @@ function _renderInlineM15Bars(container, bars) {
       const color = SESS_COLOR[b.session] || '#64748b';
       const pct = Math.round((b.energy / maxVal) * 100);
       const localTime = new Date(b.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
-      const meetsThreshold = b.energy >= ENERGY_THRESHOLD;
+      const meetsThreshold = b.energy >= ENERGY_THRESHOLD_M15;
       const barColor = meetsThreshold ? '#22c55e' : color;
       const cls = meetsThreshold ? 'bc-bar bc-bar-streak' : 'bc-bar';
 
@@ -3878,14 +3878,14 @@ function _renderInlineM15Bars(container, bars) {
     // Summary line
     const dayAvg = Math.round(values.reduce((a, b) => a + b, 0) / values.length);
     const dayMax = Math.max(...values);
-    const aboveThreshold = values.filter(v => v >= ENERGY_THRESHOLD).length;
+    const aboveThreshold = values.filter(v => v >= ENERGY_THRESHOLD_M15).length;
     const peakBar = dateBars[values.indexOf(dayMax)];
     const peakTime = new Date(peakBar.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
     const peakSess = SESS_LABEL[peakBar.session] || peakBar.session;
 
     html += `<div class="bc-day-explain">
       <ul class="bc-explain-list">
-        <li>Avg ${dayAvg} — peak ${dayMax} at ${peakTime} (${peakSess}). ${aboveThreshold}/${values.length} bars above ${ENERGY_THRESHOLD}.</li>
+        <li>Avg ${dayAvg} — peak ${dayMax} at ${peakTime} (${peakSess}). ${aboveThreshold}/${values.length} bars above ${ENERGY_THRESHOLD_M15}.</li>
       </ul>
     </div></div>`;
   }
@@ -4953,7 +4953,7 @@ const METRIC_CHART_CONFIG = {
   },
   energy: {
     field: 'market_energy', label: 'Market Energy', title: 'Hourly Session Energy',
-    unit: '', decimals: 0, v2Threshold: 55,
+    unit: '', decimals: 0, v2Threshold: 55, m15Threshold: 60,
     thresholds: [
       { min: 55, color: '#22c55e', label: 'High energy' },
       { min: 30, color: '#f59e0b', label: 'Moderate energy' },
@@ -5561,13 +5561,14 @@ function _renderM15MetricBars(container, bars, key) {
       <div class="bc-unified-chart">`;
 
     let prevSess = '';
+    const m15Thresh = cfg.m15Threshold !== undefined ? cfg.m15Threshold : cfg.v2Threshold;
     for (let i = 0; i < dateBars.length; i++) {
       const b = dateBars[i];
       const color = SESS_COLOR[b.session] || '#64748b';
       const pct = Math.round((b.value / maxVal) * 100);
       const localTime = new Date(b.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
-      const meetsThreshold = cfg.v2Threshold !== undefined
-        ? (cfg.inverted ? b.value <= cfg.v2Threshold : b.value >= cfg.v2Threshold)
+      const meetsThreshold = m15Thresh !== undefined
+        ? (cfg.inverted ? b.value <= m15Thresh : b.value >= m15Thresh)
         : false;
       const barColor = meetsThreshold ? '#22c55e' : color;
       const cls = meetsThreshold ? 'bc-bar bc-bar-streak' : 'bc-bar';
@@ -5593,8 +5594,8 @@ function _renderM15MetricBars(container, bars, key) {
     const peakBar = dateBars[values.indexOf(dayMax)];
     const peakTime = new Date(peakBar.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
     const peakSess = SESS_LABEL[peakBar.session] || peakBar.session;
-    const thresholdPasses = cfg.v2Threshold !== undefined
-      ? values.filter(v => cfg.inverted ? v <= cfg.v2Threshold : v >= cfg.v2Threshold).length
+    const thresholdPasses = m15Thresh !== undefined
+      ? values.filter(v => cfg.inverted ? v <= m15Thresh : v >= m15Thresh).length
       : 0;
 
     html += `<div class="bc-day-explain">
