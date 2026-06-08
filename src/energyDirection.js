@@ -25,7 +25,7 @@ const { supabase } = require('./supabase');
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
 const ENERGY_THRESHOLD_H1 = 55;
 const FLOW_SPREAD_THRESHOLD = 20;  // 3H pair spread ≥ 20 pips
-const FLOW_SPREAD_MIN_PAIRS = 6;   // At least 6 pairs must qualify
+const FLOW_SPREAD_MIN_PAIRS = 1;   // At least 1 pair must qualify
 
 const VALID_PAIRS = new Set([
   'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',

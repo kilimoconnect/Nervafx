@@ -2922,7 +2922,7 @@ function renderEnergySignals(data) {
     if (thresholdMet) {
       statusEl.innerHTML = `<span style="color:#22c55e;font-weight:700">ACTIVE</span> — Directions confirmed. <span style="color:#64748b;font-size:0.85em">(${flowSpreadCount || 0} pairs flowing)</span>`;
     } else if (energy >= 55 && !flowSpreadMet) {
-      statusEl.innerHTML = `<span style="color:#f59e0b;font-weight:700">ENERGY MET</span> — Waiting for flow spread (${flowSpreadCount || 0}/6 pairs ≥ 20p).`;
+      statusEl.innerHTML = `<span style="color:#f59e0b;font-weight:700">ENERGY MET</span> — Waiting for flow spread (${flowSpreadCount || 0}/1 pairs ≥ 20p).`;
     } else if (energy >= 35) {
       statusEl.innerHTML = `<span style="color:#f59e0b;font-weight:700">BUILDING</span> — Approaching threshold.`;
     } else {

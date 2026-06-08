@@ -91,7 +91,7 @@ module.exports = async function handler(req, res) {
 
     // ── Flow spread check: 6+ pairs with 3H spread ≥ 20 pips ──
     const FLOW_SPREAD_THRESHOLD = 20;
-    const FLOW_SPREAD_MIN_PAIRS = 6;
+    const FLOW_SPREAD_MIN_PAIRS = 1;
     const VALID_PAIRS = [
       'AUD_CAD','AUD_CHF','AUD_JPY','AUD_NZD','AUD_USD',
       'CAD_CHF','CAD_JPY','CHF_JPY',
