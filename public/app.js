@@ -5561,6 +5561,7 @@ function _renderM15MetricBars(container, bars, key) {
       time: r.time_utc,
       session: r.session_name,
       value: Math.round(parseFloat(r[field]) || 0),
+      volume: r.volume_score != null ? Math.round(parseFloat(r.volume_score)) : null,
     });
   }
 
@@ -5602,13 +5603,16 @@ function _renderM15MetricBars(container, bars, key) {
     });
     labelRow += '</div>';
 
+    const isEnergy = key === 'energy';
     html += `<div class="bc-day-block">
       <div class="bc-date-header">${dayLabel}</div>
       ${labelRow}
+      <div class="bc-chart-container" style="position:relative">
       <div class="bc-unified-chart">`;
 
     let prevSess = '';
     const m15Thresh = cfg.m15Threshold !== undefined ? cfg.m15Threshold : cfg.v2Threshold;
+    const volPoints = [];
     for (let i = 0; i < dateBars.length; i++) {
       const b = dateBars[i];
       const color = SESS_COLOR[b.session] || '#64748b';
@@ -5619,13 +5623,16 @@ function _renderM15MetricBars(container, bars, key) {
         : false;
       const barColor = meetsThreshold ? '#22c55e' : color;
       const cls = meetsThreshold ? 'bc-bar bc-bar-streak' : 'bc-bar';
+      const volTip = isEnergy && b.volume != null ? ` | Vol ${b.volume}` : '';
 
       if (b.session !== prevSess && prevSess !== '') {
         html += '<div class="bc-sess-divider"></div>';
       }
       prevSess = b.session;
 
-      html += `<div class="${cls}" title="${SESS_LABEL[b.session] || b.session}: ${b.value}${cfg.unit} at ${localTime} ${tzLabel}">
+      if (isEnergy && b.volume != null) volPoints.push({ idx: i, vol: b.volume });
+
+      html += `<div class="${cls}" title="${SESS_LABEL[b.session] || b.session}: ${b.value}${cfg.unit}${volTip} at ${localTime} ${tzLabel}">
         <span class="bc-bar-val">${b.value}</span>
         <div class="bc-bar-inner">
           <div class="bc-bar-fill" style="height:${pct}%;background:${barColor}"></div>
@@ -5634,6 +5641,39 @@ function _renderM15MetricBars(container, bars, key) {
       </div>`;
     }
     html += '</div>';
+
+    // Volume line overlay (EMA-smoothed, green=rising / red=falling) — energy only
+    if (isEnergy && volPoints.length > 1) {
+      const n = dateBars.length;
+      const alpha = 2 / (4 + 1);
+      const smoothed = [];
+      let ema = volPoints[0].vol;
+      for (const p of volPoints) {
+        ema = p.vol * alpha + ema * (1 - alpha);
+        smoothed.push({ idx: p.idx, vol: ema });
+      }
+      const maxVol = Math.max(100, ...smoothed.map(p => p.vol));
+      const toXY = (p) => ({
+        x: ((p.idx + 0.5) / n) * 100,
+        y: 100 - (p.vol / maxVol) * 75 - 5,
+      });
+      let segments = '';
+      for (let i = 1; i < smoothed.length; i++) {
+        const p0 = toXY(smoothed[i - 1]);
+        const p1 = toXY(smoothed[i]);
+        const col = smoothed[i].vol >= smoothed[i - 1].vol ? '#4ade80' : '#f87171';
+        segments += `<line x1="${p0.x}" y1="${p0.y}" x2="${p1.x}" y2="${p1.y}" stroke="${col}" stroke-width="0.5" stroke-linecap="round" opacity="0.85"/>`;
+      }
+      const dots = smoothed.map((p, i) => {
+        const pt = toXY(p);
+        const rising = i > 0 ? p.vol >= smoothed[i - 1].vol : true;
+        return `<circle cx="${pt.x}" cy="${pt.y}" r="0.4" fill="${rising ? '#4ade80' : '#f87171'}" opacity="0.9"/>`;
+      }).join('');
+      html += `<svg class="bc-vol-line" viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2">
+        ${segments}${dots}
+      </svg>`;
+    }
+    html += '</div>'; // close bc-chart-container
 
     // Per-day summary
     const dayMax = Math.max(...values);
@@ -5662,6 +5702,8 @@ function _renderM15MetricBars(container, bars, key) {
     <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#0ea5e9"></span> London</span>
     <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#a855f7"></span> New York</span>
     <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#22c55e"></span> ${thresholdLabel}</span>
+    ${key === 'energy' ? `<span class="bc-legend-item"><span style="display:inline-block;width:14px;height:2px;background:#4ade80;vertical-align:middle;margin-right:5px;border-radius:1px"></span> Vol Rising</span>
+    <span class="bc-legend-item"><span style="display:inline-block;width:14px;height:2px;background:#f87171;vertical-align:middle;margin-right:5px;border-radius:1px"></span> Vol Falling</span>` : ''}
   </div>`;
 
   container.innerHTML = html;
