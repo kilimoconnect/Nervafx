@@ -673,6 +673,19 @@ async function sendSignalAlerts(sb) {
         if (m15Rows?.length) m15Latest = m15Rows[0];
       } catch (_) {}
 
+      // Get latest 12H currency strength for digest
+      let h12Map = {};
+      try {
+        const { data: csRows } = await sb
+          .from('currency_strength')
+          .select('currency, smooth_12h')
+          .order('time', { ascending: false })
+          .limit(8);
+        for (const r of (csRows || [])) {
+          if (!h12Map[r.currency]) h12Map[r.currency] = parseFloat(r.smooth_12h) || 0;
+        }
+      } catch (_) {}
+
       // Get flow performance (top pairs by final_score)
       let flowPerfPairs = [];
       try {
@@ -695,7 +708,7 @@ async function sendSignalAlerts(sb) {
         energyEvents,
         currencies: (digestCurrencies || []).map(c => ({
           ...c,
-          m15Strength: m15CcyStrength[c.currency] || 0,
+          smooth_12h: h12Map[c.currency] || 0,
         })),
         pairs: allPairs || [],
         sessions: sessions || [],

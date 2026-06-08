@@ -275,15 +275,15 @@ function dailyDigestEmail(data) {
   const ccyRow = (c) => {
     const isStrong = c.direction === 'STRONG';
     const color = isStrong ? '#4ade80' : '#f87171';
-    const m15 = ((parseFloat(c.m15Strength) || 0) * 10000).toFixed(1);
-    const m15Color = (parseFloat(c.m15Strength) || 0) > 0 ? '#4ade80' : (parseFloat(c.m15Strength) || 0) < 0 ? '#f87171' : '#94a3b8';
+    const h12 = ((parseFloat(c.smooth_12h) || 0) * 10000).toFixed(1);
+    const h12Color = (parseFloat(c.smooth_12h) || 0) > 0 ? '#4ade80' : (parseFloat(c.smooth_12h) || 0) < 0 ? '#f87171' : '#94a3b8';
     const evTag = c.energy_event_type
       ? `<span class="tag tag-${c.energy_event_type === 'CONTINUATION' ? 'blue' : c.energy_event_type === 'NEW' ? 'green' : 'amber'}">${c.energy_event_type}</span>`
       : '';
     return `<tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
       <td style="padding:8px 14px"><span class="val" style="color:${color}">${c.currency}</span></td>
       <td style="padding:8px 14px;text-align:right">
-        <span style="color:${m15Color};font-weight:600;font-size:12px">M15 ${m15}p</span>
+        <span style="color:${h12Color};font-weight:600;font-size:12px">12H ${h12}p</span>
         ${evTag}
       </td>
     </tr>`;
