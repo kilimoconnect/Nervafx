@@ -817,18 +817,13 @@
     }
   };
 
-  // Helper: get grouping date for a hourly row (ASIA hour 23 → next day)
+  // Helper: get the user-local date string for a hourly row
   function _arcGroupDate(r) {
-    const date = r.time_utc.slice(0, 10);
-    if (r.session_name === 'ASIA') {
-      const h = new Date(r.time_utc).getUTCHours();
-      if (h === 23) {
-        const next = new Date(r.time_utc);
-        next.setUTCDate(next.getUTCDate() + 1);
-        return next.toISOString().slice(0, 10);
-      }
-    }
-    return date;
+    const tz = (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC');
+    // Convert time_utc to user-local YYYY-MM-DD
+    const d = new Date(r.time_utc);
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+    return parts; // en-CA → YYYY-MM-DD
   }
 
   function renderMetricBars(container, rows, metric) {
@@ -847,7 +842,7 @@
       byDate[date].push({ time: r.time_utc, session: r.session_name, val: Math.round(parseFloat(r[metric.field]) || 0) });
     }
 
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC') }).format(new Date());
     const dates = Object.keys(byDate)
       .filter(d => byDate[d].length >= 1)
       .sort((a, b) => b.localeCompare(a));
@@ -1013,7 +1008,7 @@
       });
     }
 
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC') }).format(new Date());
     const dates = Object.keys(byDate)
       .filter(d => d === todayStr ? byDate[d].length >= 1 : byDate[d].length >= 8)
       .sort((a, b) => b.localeCompare(a))
@@ -1333,7 +1328,7 @@
     const dayBlocks = days.map(date => {
       const dateLabel = (date === lastMarketDate && marketOpen)
         ? 'Today'
-        : new Date(date + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+        : new Date(date + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
 
       const sessOrder = ['ASIA', 'LONDON', 'NEW_YORK'];
       const sessMap = Object.fromEntries(byDate[date].map(r => [r.session_name, r]));
