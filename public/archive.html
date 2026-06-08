@@ -477,7 +477,7 @@
 
     <section class="arc-section" id="arc-flowperf" style="display:none">
       <div class="arc-section-header"><i data-lucide="git-compare"></i> Flow Performance</div>
-      <div class="arc-section-desc">Hourly flow pairs derived from 3H currency spread. Pairs with &ge; 30p spread ranked by strength differential.</div>
+      <div class="arc-section-desc">Hourly flow pairs derived from 3H currency spread. Pairs with &ge; 20p spread ranked by strength differential.</div>
       <div id="arc-flowperf-body"><div class="arc-loading"><span class="spinner"></span> Loading flow performance…</div></div>
     </section>
 
@@ -1418,7 +1418,7 @@
       const h3q = ccySnap[quote]?.h3 || 0;
       const spread3h = h3b - h3q;
       const spreadAbs = Math.abs(spread3h);
-      if (spreadAbs * 10000 < 30) continue;
+      if (spreadAbs * 10000 < 20) continue;
       const dir = spread3h >= 0 ? 'BUY' : 'SELL';
       const strong_ccy = spread3h >= 0 ? base : quote;
       const weak_ccy = spread3h >= 0 ? quote : base;

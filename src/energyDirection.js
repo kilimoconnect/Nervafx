@@ -388,7 +388,7 @@ async function calculateEnergyDirection() {
         // Only include pairs with 12H currency spread ≥ 30 pips
         const [base, quote] = instrument.split('_');
         const spreadPips = Math.abs((ccyMap[base]?.smooth_12h || 0) - (ccyMap[quote]?.smooth_12h || 0)) * 10000;
-        if (spreadPips < 30) continue;
+        if (spreadPips < 20) continue;
 
         // Determine if this pair is new, continuing, or reversed
         const prevPair = pairMap[instrument];
@@ -431,8 +431,8 @@ async function calculateEnergyDirection() {
       if (p.active) {
         const [base, quote] = p.instrument.split('_');
         const spreadPips = Math.abs((ccyMap[base]?.smooth_12h || 0) - (ccyMap[quote]?.smooth_12h || 0)) * 10000;
-        if (spreadPips < 30) {
-          console.log(`[ENERGY_DIR]   ${p.instrument.replace('_','/')} ${p.dir} → REMOVED (12H spread ${spreadPips.toFixed(1)}p < 30p)`);
+        if (spreadPips < 20) {
+          console.log(`[ENERGY_DIR]   ${p.instrument.replace('_','/')} ${p.dir} → REMOVED (12H spread ${spreadPips.toFixed(1)}p < 20p)`);
           continue;
         }
         newPairs.push({

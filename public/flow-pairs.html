@@ -37,7 +37,7 @@
       <a href="/" class="fp-back">&larr; Dashboard</a>
       <h1>Flow Spread Pairs</h1>
     </div>
-    <p class="fp-subtitle">Pairs with 3H currency spread &ge; 30 pips. Ranked by strength differential.</p>
+    <p class="fp-subtitle">Pairs with 3H currency spread &ge; 20 pips. Ranked by strength differential.</p>
     <div class="fp-time" id="fp-time"></div>
     <div class="fp-list" id="fp-list">
       <div class="fp-empty">Loading...</div>
@@ -45,7 +45,7 @@
   </div>
 
   <script>
-    const SPREAD_THRESHOLD = 30;
+    const SPREAD_THRESHOLD = 20;
     const VALID_PAIRS = new Set([
       'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
       'EUR_GBP','EUR_JPY','EUR_CHF','EUR_CAD','EUR_AUD','EUR_NZD',
@@ -97,7 +97,7 @@
           document.getElementById('fp-time').textContent = 'Strength as of: ' + t.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) + ' UTC';
         }
 
-        if (!pairs.length) { showEmpty('No pairs currently meet the 30p spread threshold.'); return; }
+        if (!pairs.length) { showEmpty('No pairs currently meet the 20p spread threshold.'); return; }
 
         // Render
         const RANK_CLR = ['#4ade80','#60a5fa','#facc15','#94a3b8','#a78bfa','#fb923c','#38bdf8','#f472b6','#64748b','#64748b'];

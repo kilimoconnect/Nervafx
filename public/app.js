@@ -2135,7 +2135,7 @@ function renderFlowPerformance(strengthData, m15Data) {
 
   // Filter to pairs with 12H spread ≥ 30 pips
   if (scored?.length) {
-    scored = scored.filter(fp => Math.abs(fp.spread12H || 0) * 10000 >= 30);
+    scored = scored.filter(fp => Math.abs(fp.spread12H || 0) * 10000 >= 20);
   }
 
   if (!scored || !scored.length) {
@@ -2145,7 +2145,7 @@ function renderFlowPerformance(strengthData, m15Data) {
 
   // Use Signal Pairs ranking order — same pairs, same sort, FP details
   if (_energySignalsCache?.pairs?.length) {
-    const activePairs = _energySignalsCache.pairs.filter(p => p.active && Math.abs(parseFloat(p.spread_12h) || 0) * 10000 >= 30);
+    const activePairs = _energySignalsCache.pairs.filter(p => p.active && Math.abs(parseFloat(p.spread_12h) || 0) * 10000 >= 20);
     if (!activePairs.length) {
       el.innerHTML = '<p class="empty-state">No pairs with 12H spread ≥ 30 pips.</p>';
       return;
@@ -2522,7 +2522,7 @@ function renderM15Spreads(data) {
 // ─── Flow Spread Notification Bar ─────────────────────────────────────────────
 // Shows pairs with currency spread ≥ 30 pips (derived from live currency strength)
 
-const FP_BAR_SPREAD_THRESHOLD = 30; // pips
+const FP_BAR_SPREAD_THRESHOLD = 20; // pips
 const FP_BAR_VALID_PAIRS = new Set([
   'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
   'EUR_GBP','EUR_JPY','EUR_CHF','EUR_CAD','EUR_AUD','EUR_NZD',
@@ -3003,7 +3003,7 @@ function renderEnergySignals(data) {
   if (pairsSection) pairsSection.style.display = isWeekend ? 'none' : '';
 
   if (pairsEl && !isWeekend) {
-    const activePairs = (pairs || []).filter(p => p.active && Math.abs(parseFloat(p.spread_12h) || 0) * 10000 >= 30);
+    const activePairs = (pairs || []).filter(p => p.active && Math.abs(parseFloat(p.spread_12h) || 0) * 10000 >= 20);
 
     if (!activePairs.length) {
       pairsEl.innerHTML = '<div class="es-no-data">No active pairs with 12H spread ≥ 30 pips.</div>';
@@ -3574,7 +3574,7 @@ function renderCompressionBreakout(data) {
   const _spreadPairsSet = new Set();
   if (_energySignalsCache?.pairs) {
     for (const p of _energySignalsCache.pairs) {
-      if (p.active && Math.abs(parseFloat(p.spread_12h) || 0) * 10000 >= 30) {
+      if (p.active && Math.abs(parseFloat(p.spread_12h) || 0) * 10000 >= 20) {
         _spreadPairsSet.add(p.instrument);
       }
     }

@@ -497,7 +497,7 @@ async function sendSignalAlerts(sb) {
 
   // ── 3. FLOW SPREAD ALERT — pairs with spread ≥ 30 pips (hourly, only on change) ──
   try {
-    const SPREAD_THRESHOLD = 30;
+    const SPREAD_THRESHOLD = 20;
     const VALID_PAIRS = new Set([
       'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
       'EUR_GBP','EUR_JPY','EUR_CHF','EUR_CAD','EUR_AUD','EUR_NZD',
@@ -639,7 +639,7 @@ async function sendSignalAlerts(sb) {
             if (vMap[b] == null || vMap[q] == null) continue;
             const spread3h = vMap[b] - vMap[q];
             const sp = Math.abs(spread3h) * 10000;
-            if (sp >= 30) {
+            if (sp >= 20) {
               const dir = spread3h >= 0 ? 'BUY' : 'SELL';
               const strong_ccy = spread3h >= 0 ? b : q;
               const weak_ccy = spread3h >= 0 ? q : b;
