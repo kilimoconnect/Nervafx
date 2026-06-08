@@ -275,16 +275,15 @@ function dailyDigestEmail(data) {
   const ccyRow = (c) => {
     const isStrong = c.direction === 'STRONG';
     const color = isStrong ? '#4ade80' : '#f87171';
-    const h3 = ((parseFloat(c.smooth_3h) || 0) * 10000).toFixed(1);
-    const h6 = ((parseFloat(c.smooth_6h) || 0) * 10000).toFixed(1);
+    const m15 = ((parseFloat(c.m15Strength) || 0) * 10000).toFixed(1);
+    const m15Color = (parseFloat(c.m15Strength) || 0) > 0 ? '#4ade80' : (parseFloat(c.m15Strength) || 0) < 0 ? '#f87171' : '#94a3b8';
     const evTag = c.energy_event_type
       ? `<span class="tag tag-${c.energy_event_type === 'CONTINUATION' ? 'blue' : c.energy_event_type === 'NEW' ? 'green' : 'amber'}">${c.energy_event_type}</span>`
       : '';
     return `<tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
       <td style="padding:8px 14px"><span class="val" style="color:${color}">${c.currency}</span></td>
       <td style="padding:8px 14px;text-align:right">
-        <span class="dim">3H ${h3}</span>
-        <span class="dim" style="margin-left:6px">6H ${h6}</span>
+        <span style="color:${m15Color};font-weight:600;font-size:12px">M15 ${m15}p</span>
         ${evTag}
       </td>
     </tr>`;

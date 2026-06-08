@@ -152,8 +152,8 @@ function directionAlertEmail(data) {
       const isStrong = c.direction === 'STRONG';
       const color = isStrong ? '#4ade80' : '#f87171';
       const arrow = isStrong ? 'Strong' : 'Weak';
-      const h3 = (c.smooth_3h * 10000).toFixed(1);
-      const h6 = (c.smooth_6h * 10000).toFixed(1);
+      const m15 = (c.m15Strength * 10000).toFixed(1);
+      const m15Color = c.m15Strength > 0 ? '#4ade80' : c.m15Strength < 0 ? '#f87171' : '#94a3b8';
       return `<table width="100%" cellpadding="0" cellspacing="0" style="border-bottom:1px solid rgba(30,41,59,0.6)"><tr>
         <td style="padding:10px 14px">
           <span class="val" style="color:${color}">${c.currency}</span>
@@ -161,7 +161,7 @@ function directionAlertEmail(data) {
         </td>
         <td style="padding:10px 14px;text-align:right">
           <span class="${evtTagClass(c.eventType)} tag">${evtLabel(c.eventType)}</span>
-          <div class="dim" style="margin-top:3px">3H ${h3} / 6H ${h6}</div>
+          <div style="margin-top:3px;font-size:12px"><span style="color:${m15Color};font-weight:600">M15 ${m15}p</span></div>
         </td>
       </tr></table>`;
     }).join('');
@@ -381,6 +381,7 @@ async function sendSignalAlerts(sb) {
           eventType: c.energy_event_type,
           smooth_3h: parseFloat(c.smooth_3h) || 0,
           smooth_6h: parseFloat(c.smooth_6h) || 0,
+          m15Strength: m15CcyStrength[c.currency] || 0,
         })),
         pairs: (activePairs || []).map(p => ({
           instrument: p.instrument,
@@ -692,7 +693,10 @@ async function sendSignalAlerts(sb) {
         marketFocusHtml,
         date: todayStr,
         energyEvents,
-        currencies: digestCurrencies || [],
+        currencies: (digestCurrencies || []).map(c => ({
+          ...c,
+          m15Strength: m15CcyStrength[c.currency] || 0,
+        })),
         pairs: allPairs || [],
         sessions: sessions || [],
         flowSpreadPairs,
