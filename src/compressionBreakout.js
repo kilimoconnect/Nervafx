@@ -125,7 +125,17 @@ async function updateM15StructureWatch() {
     .eq('active', true);
 
   if (!signalPairs?.length) {
-    console.log('[COMP-BRK] No active signal pairs — skipping M15 structure watch');
+    console.log('[COMP-BRK] No active signal pairs — deactivating all structure watch entries');
+    // Deactivate all existing watch entries since no signal pairs are active
+    const { data: existingWatch } = await supabase
+      .from('m15_structure_watch')
+      .select('*');
+    const toDeactivate = (existingWatch || []).filter(w => w.state !== 'INACTIVE');
+    if (toDeactivate.length) {
+      const rows = toDeactivate.map(w => ({ ...w, state: 'INACTIVE', updated_at: new Date().toISOString() }));
+      await supabase.from('m15_structure_watch').upsert(rows, { onConflict: 'instrument' });
+      console.log(`[COMP-BRK] Deactivated ${rows.length} structure watch entries`);
+    }
     return [];
   }
 

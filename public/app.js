@@ -3572,19 +3572,17 @@ function renderCompressionBreakout(data) {
   const el = document.getElementById('cb-structures');
   if (!el) return;
 
-  // Filter structures to only pairs with spread ≥ 30p (from energy signal pairs cache)
+  // Filter structures to only pairs still in active signal pairs (3H spread ≥ 20p)
   const _spreadPairsSet = new Set();
   if (_energySignalsCache?.pairs) {
     for (const p of _energySignalsCache.pairs) {
-      if (p.active && Math.abs(parseFloat(p.spread_12h) || 0) * 10000 >= 20) {
-        _spreadPairsSet.add(p.instrument);
-      }
+      if (p.active) _spreadPairsSet.add(p.instrument);
     }
   }
   structures = (structures || []).filter(s => _spreadPairsSet.has(s.instrument));
 
   if (!structures?.length) {
-    el.innerHTML = '<div class="es-no-data">No pairs in structure watch with 12H spread ≥ 30 pips.</div>';
+    el.innerHTML = '<div class="es-no-data">No pairs in structure watch.</div>';
     return;
   }
 
