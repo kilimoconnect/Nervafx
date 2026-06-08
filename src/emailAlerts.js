@@ -507,30 +507,30 @@ async function sendSignalAlerts(sb) {
     ]);
     const CCYS = ['USD','EUR','GBP','JPY','CHF','CAD','AUD','NZD'];
 
-    // Fetch latest 12H currency strength
+    // Fetch latest 3H currency strength
     const { data: csRows } = await sb
       .from('currency_strength')
-      .select('currency, smooth_12h')
+      .select('currency, smooth_3h')
       .order('time', { ascending: false })
       .limit(8);
 
     if (csRows?.length) {
       const valMap = {};
       for (const r of csRows) {
-        if (!valMap[r.currency]) valMap[r.currency] = parseFloat(r.smooth_12h) || 0;
+        if (!valMap[r.currency]) valMap[r.currency] = parseFloat(r.smooth_3h) || 0;
       }
 
-      // Form pairs from all 28 — direction from 12H spread sign
+      // Form pairs from all 28 — direction from 3H spread sign
       const spreadPairs = [];
       for (const inst of VALID_PAIRS) {
         const [base, quote] = inst.split('_');
         if (valMap[base] == null || valMap[quote] == null) continue;
-        const spread12h = valMap[base] - valMap[quote];
-        const spreadPips = Math.abs(spread12h) * 10000;
+        const spread3h = valMap[base] - valMap[quote];
+        const spreadPips = Math.abs(spread3h) * 10000;
         if (spreadPips >= SPREAD_THRESHOLD) {
-          const dir = spread12h >= 0 ? 'BUY' : 'SELL';
-          const strong_ccy = spread12h >= 0 ? base : quote;
-          const weak_ccy = spread12h >= 0 ? quote : base;
+          const dir = spread3h >= 0 ? 'BUY' : 'SELL';
+          const strong_ccy = spread3h >= 0 ? base : quote;
+          const weak_ccy = spread3h >= 0 ? quote : base;
           spreadPairs.push({ instrument: inst, dir, strong_ccy, weak_ccy, spreadPips });
         }
       }
@@ -620,29 +620,29 @@ async function sendSignalAlerts(sb) {
         .select('instrument, dir, phase, de_combined')
         .eq('active', true);
 
-      // Get flow spread pairs (≥ 30p) — 12H spread logic
+      // Get flow spread pairs (≥ 30p) — 3H spread logic
       let flowSpreadPairs = [];
       try {
         const { data: csData } = await sb
           .from('currency_strength')
-          .select('currency, smooth_12h')
+          .select('currency, smooth_3h')
           .order('time', { ascending: false })
           .limit(8);
         if (csData?.length) {
           const vMap = {};
           for (const r of csData) {
-            if (!vMap[r.currency]) vMap[r.currency] = parseFloat(r.smooth_12h) || 0;
+            if (!vMap[r.currency]) vMap[r.currency] = parseFloat(r.smooth_3h) || 0;
           }
           const VALID_D = new Set(['EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD','EUR_GBP','EUR_JPY','EUR_CHF','EUR_CAD','EUR_AUD','EUR_NZD','GBP_JPY','GBP_CHF','GBP_CAD','GBP_AUD','GBP_NZD','AUD_JPY','AUD_CHF','AUD_CAD','AUD_NZD','NZD_JPY','NZD_CHF','NZD_CAD','CAD_JPY','CAD_CHF','CHF_JPY']);
           for (const inst of VALID_D) {
             const [b, q] = inst.split('_');
             if (vMap[b] == null || vMap[q] == null) continue;
-            const spread12h = vMap[b] - vMap[q];
-            const sp = Math.abs(spread12h) * 10000;
+            const spread3h = vMap[b] - vMap[q];
+            const sp = Math.abs(spread3h) * 10000;
             if (sp >= 30) {
-              const dir = spread12h >= 0 ? 'BUY' : 'SELL';
-              const strong_ccy = spread12h >= 0 ? b : q;
-              const weak_ccy = spread12h >= 0 ? q : b;
+              const dir = spread3h >= 0 ? 'BUY' : 'SELL';
+              const strong_ccy = spread3h >= 0 ? b : q;
+              const weak_ccy = spread3h >= 0 ? q : b;
               flowSpreadPairs.push({ instrument: inst, dir, strong_ccy, weak_ccy, spreadPips: sp });
             }
           }

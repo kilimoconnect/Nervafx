@@ -2536,23 +2536,23 @@ function _getFlowSpreadPairs() {
   const ccys = strengthData?.currencies;
   if (!ccys?.length) return [];
 
-  // Build 12H strength map
+  // Build 3H strength map
   const valMap = {};
   for (const c of ccys) {
-    valMap[c.currency] = parseFloat(c.smooth_12h ?? c.normalized_12h) || 0;
+    valMap[c.currency] = parseFloat(c.smooth_3h ?? c.normalized_3h) || 0;
   }
 
-  // Form pairs from all 28 — direction from 12H spread sign
+  // Form pairs from all 28 — direction from 3H spread sign
   const pairs = [];
   for (const inst of FP_BAR_VALID_PAIRS) {
     const [base, quote] = inst.split('_');
     if (valMap[base] == null || valMap[quote] == null) continue;
-    const spread12h = valMap[base] - valMap[quote];
-    const spreadPips = Math.abs(spread12h) * 10000;
+    const spread3h = valMap[base] - valMap[quote];
+    const spreadPips = Math.abs(spread3h) * 10000;
     if (spreadPips >= FP_BAR_SPREAD_THRESHOLD) {
-      const dir = spread12h >= 0 ? 'BUY' : 'SELL';
-      const strong_ccy = spread12h >= 0 ? base : quote;
-      const weak_ccy = spread12h >= 0 ? quote : base;
+      const dir = spread3h >= 0 ? 'BUY' : 'SELL';
+      const strong_ccy = spread3h >= 0 ? base : quote;
+      const weak_ccy = spread3h >= 0 ? quote : base;
       pairs.push({ instrument: inst, dir, strong_ccy, weak_ccy, spreadPips });
     }
   }

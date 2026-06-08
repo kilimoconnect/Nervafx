@@ -477,7 +477,7 @@
 
     <section class="arc-section" id="arc-flowperf" style="display:none">
       <div class="arc-section-header"><i data-lucide="git-compare"></i> Flow Performance</div>
-      <div class="arc-section-desc">Hourly flow pairs derived from 12H currency spread. Pairs with &ge; 30p spread ranked by strength differential.</div>
+      <div class="arc-section-desc">Hourly flow pairs derived from 3H currency spread. Pairs with &ge; 30p spread ranked by strength differential.</div>
       <div id="arc-flowperf-body"><div class="arc-loading"><span class="spinner"></span> Loading flow performance…</div></div>
     </section>
 
@@ -1328,7 +1328,7 @@
   }
 
   // ─── Flow Performance Archive (Strength-Based) ─────────────────────────────
-  // Derives direction from 12H currency spread sign.
+  // Derives direction from 3H currency spread sign.
   // NOT from locked energy_signal_pairs. Each hour has its own independent
   // pair formation — all 28 pairs checked, ≥ 30p threshold.
 
@@ -1409,20 +1409,19 @@
     return byTime;
   }
 
-  // For a given hour's strength snapshot, form pairs from 12H spread
+  // For a given hour's strength snapshot, form pairs from 3H spread
   function _deriveHourlyFlow(ccySnap) {
     const pairs = [];
-    const strongSet = [], weakSet = [];
     for (const inst of FP_VALID_PAIRS) {
       const [base, quote] = inst.split('_');
-      const h12b = ccySnap[base]?.h12 || 0;
-      const h12q = ccySnap[quote]?.h12 || 0;
-      const spread12h = h12b - h12q;
-      const spreadAbs = Math.abs(spread12h);
+      const h3b = ccySnap[base]?.h3 || 0;
+      const h3q = ccySnap[quote]?.h3 || 0;
+      const spread3h = h3b - h3q;
+      const spreadAbs = Math.abs(spread3h);
       if (spreadAbs * 10000 < 30) continue;
-      const dir = spread12h >= 0 ? 'BUY' : 'SELL';
-      const strong_ccy = spread12h >= 0 ? base : quote;
-      const weak_ccy = spread12h >= 0 ? quote : base;
+      const dir = spread3h >= 0 ? 'BUY' : 'SELL';
+      const strong_ccy = spread3h >= 0 ? base : quote;
+      const weak_ccy = spread3h >= 0 ? quote : base;
       pairs.push({ instrument: inst, dir, strong_ccy, weak_ccy, spread: spreadAbs });
     }
     // Derive unique strong/weak lists for header display
