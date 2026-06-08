@@ -144,7 +144,7 @@ async function sendToAll(sb, recipients, template, alertType, details, prefKey) 
 // ── Email Templates ─────────────────────────────────────────────────────────
 
 function directionAlertEmail(data) {
-  const { marketFocusHtml, triggerEnergy, triggerSession, triggerHour, currencies, pairs, removedPairs, newsEvents } = data;
+  const { marketFocusHtml, triggerEnergy, triggerSession, triggerHour, currencies, signalPairs, structureWatch, removedPairs, newsEvents } = data;
   const sessionLabel = SESS_LABEL[triggerSession] || triggerSession || 'Unknown';
   const timeStr = triggerHour ? new Date(triggerHour).toISOString().replace('T', ' ').slice(0, 16) + ' UTC' : '';
 
@@ -154,51 +154,91 @@ function directionAlertEmail(data) {
 
   const evtLabel = t => t === 'CONTINUATION' ? 'Continue' : t === 'REVERSAL' ? 'Reversal' : t === 'NEW' ? 'New' : t === 'DROPPED' ? 'Dropped' : t;
   const evtTagClass = t => t === 'CONTINUATION' ? 'tag-blue' : t === 'NEW' ? 'tag-green' : t === 'REVERSAL' ? 'tag-amber' : 'tag-gray';
-  const borderClass = dir => dir === 'STRONG' ? 'row-green' : 'row-red';
+  const pipsFmt = v => (v * 10000).toFixed(1);
+  const valColor = v => v > 0 ? '#4ade80' : v < 0 ? '#f87171' : '#94a3b8';
 
-  // Currency rows — table-based for email client compatibility
-  const ccyRows = currencies
-    .filter(c => c.eventType && c.direction !== 'NEUTRAL')
-    .map(c => {
-      const isStrong = c.direction === 'STRONG';
-      const color = isStrong ? '#4ade80' : '#f87171';
-      const arrow = isStrong ? 'Strong' : 'Weak';
-      const m15 = (c.m15Strength * 10000).toFixed(1);
-      const m15Color = c.m15Strength > 0 ? '#4ade80' : c.m15Strength < 0 ? '#f87171' : '#94a3b8';
-      return `<table width="100%" cellpadding="0" cellspacing="0" style="border-bottom:1px solid rgba(30,41,59,0.6)"><tr>
-        <td style="padding:10px 14px">
-          <span class="val" style="color:${color}">${c.currency}</span>
-          <span class="dim" style="margin-left:6px">${arrow}</span>
-        </td>
-        <td style="padding:10px 14px;text-align:right">
-          <span class="${evtTagClass(c.eventType)} tag">${evtLabel(c.eventType)}</span>
-          <div style="margin-top:3px;font-size:12px"><span style="color:${m15Color};font-weight:600">M15 ${m15}p</span></div>
-        </td>
-      </tr></table>`;
-    }).join('');
+  // ── Currency Direction table (Strong / Weak with 3H + 6H) ──
+  const ccyTableRow = (c) => {
+    const h3 = pipsFmt(c.smooth_3h);
+    const h6 = pipsFmt(c.smooth_6h);
+    return `<tr style="border-bottom:1px solid rgba(30,41,59,0.4)">
+      <td style="padding:8px 12px;font-weight:700;font-size:14px;color:#e2e8f0">${c.currency}</td>
+      <td style="padding:8px 8px;text-align:right;font-size:12px;color:${valColor(c.smooth_3h)}">${h3}</td>
+      <td style="padding:8px 8px;text-align:right;font-size:12px;color:${valColor(c.smooth_6h)}">${h6}</td>
+      <td style="padding:8px 12px;text-align:right"><span class="${evtTagClass(c.eventType)} tag" style="font-size:10px">${evtLabel(c.eventType)}</span></td>
+    </tr>`;
+  };
+
+  const ccyTableHeader = `<tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
+    <td style="padding:6px 12px;font-size:10px;color:#64748b;font-weight:600"></td>
+    <td style="padding:6px 8px;font-size:10px;color:#64748b;font-weight:600;text-align:right">3H</td>
+    <td style="padding:6px 8px;font-size:10px;color:#64748b;font-weight:600;text-align:right">6H</td>
+    <td style="padding:6px 12px;font-size:10px;color:#64748b;font-weight:600;text-align:right"></td>
+  </tr>`;
+
+  const strongRows = strongCcys.length ? `
+    <tr><td colspan="4" style="padding:10px 12px 4px;font-size:11px;font-weight:700;color:#4ade80;text-transform:uppercase;letter-spacing:0.5px">Strong</td></tr>
+    ${ccyTableHeader}
+    ${strongCcys.map(ccyTableRow).join('')}` : '';
+
+  const weakRows = weakCcys.length ? `
+    <tr><td colspan="4" style="padding:10px 12px 4px;font-size:11px;font-weight:700;color:#f87171;text-transform:uppercase;letter-spacing:0.5px">Weak</td></tr>
+    ${ccyTableHeader}
+    ${weakCcys.map(ccyTableRow).join('')}` : '';
 
   const droppedHtml = droppedCcys.length ? `
     <div style="padding:8px 14px" class="dim">
       Dropped: ${droppedCcys.map(c => `<span style="text-decoration:line-through">${c.currency}</span>`).join(', ')}
     </div>` : '';
 
-  // Pair rows — M15 ranked pairs with spread pips
-  const pairRows = pairs.map((p, i) => {
+  // ── Signal Pairs (from energy_signal_pairs with full metrics) ──
+  const phaseColor = p => p === 'ENTRY' ? '#22c55e' : p === 'MOVING' ? '#22c55e' : p === 'PULLBACK' ? '#f59e0b' : p === 'COMPRESSION' ? '#0ea5e9' : '#64748b';
+  const phaseLabel = p => (p || 'MONITORING').replace(/_/g, ' ');
+  const m15StateLabel = s => (s || '').replace(/_/g, ' ');
+  const m15StateColor = s => s === 'EXPANDING' ? '#22c55e' : s === 'REVERSING' ? '#f59e0b' : s === 'COMPRESSING' ? '#0ea5e9' : '#64748b';
+
+  const pairCards = (signalPairs || []).map(p => {
     const isBuy = p.dir === 'BUY';
     const dirColor = isBuy ? '#4ade80' : '#f87171';
-    const dirArrow = isBuy ? 'BUY' : 'SELL';
-    const spreadLabel = p.spreadPips ? `${p.spreadPips.toFixed(1)}p` : '';
-    return `<table width="100%" cellpadding="0" cellspacing="0" style="border-bottom:1px solid rgba(30,41,59,0.6)"><tr>
-      <td style="padding:10px 14px">
-        <span style="color:#64748b;font-size:11px;margin-right:6px">#${i + 1}</span>
-        <span class="val">${p.instrument.replace('_', '/')}</span>
-        <span style="color:${dirColor};font-weight:600;font-size:12px;margin-left:6px">${dirArrow}</span>
-      </td>
-      <td style="padding:10px 14px;text-align:right">
-        <span style="color:#e2e8f0;font-weight:600;font-size:13px">${spreadLabel}</span>
-        <div class="dim" style="margin-top:3px">${p.strong_ccy} / ${p.weak_ccy}</div>
-      </td>
-    </tr></table>`;
+    const v45Pips = (p.v45 * 10000).toFixed(1);
+    const v90Pips = (p.v90 * 10000).toFixed(1);
+    const h3Pips = (p.spread_3h * 10000).toFixed(1);
+    const h6Pips = (p.spread_6h * 10000).toFixed(1);
+    const de = Math.round(p.de_combined);
+    const imp = p.impulse_score;
+    const impCheck = p.impulse_aligned ? '✓' : '';
+    const evtType = p.energy_event_type;
+
+    return `<div class="card" style="margin-bottom:8px">
+      <div style="padding:12px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid rgba(30,41,59,0.4)">
+        <span class="val" style="font-size:15px">${p.instrument.replace('_', '/')}</span>
+        <span style="color:${dirColor};font-weight:700;font-size:12px">${p.dir}</span>
+        <span style="color:${phaseColor(p.phase)};font-size:11px;font-weight:600">${phaseLabel(p.phase)}</span>
+        ${p.m15_state ? `<span style="color:${m15StateColor(p.m15_state)};font-size:10px">M15: ${m15StateLabel(p.m15_state)}</span>` : ''}
+      </div>
+      <div style="padding:10px 14px">
+        <div class="dim" style="margin-bottom:6px;font-size:11px">${p.strong_ccy} vs ${p.weak_ccy}</div>
+        <table width="100%" cellpadding="0" cellspacing="0" style="font-size:12px">
+          <tr>
+            <td style="padding:3px 0;color:#64748b;width:40px">V45</td>
+            <td style="padding:3px 0;color:${valColor(p.v45)};font-weight:600">${v45Pips}</td>
+            <td style="padding:3px 0;color:#64748b;width:40px">3H</td>
+            <td style="padding:3px 0;color:${valColor(p.spread_3h)};font-weight:600">${h3Pips}</td>
+            <td style="padding:3px 0;color:#64748b;width:30px">DE</td>
+            <td style="padding:3px 0;color:#e2e8f0;font-weight:600">${de}</td>
+          </tr>
+          <tr>
+            <td style="padding:3px 0;color:#64748b">V90</td>
+            <td style="padding:3px 0;color:${valColor(p.v90)};font-weight:600">${v90Pips}</td>
+            <td style="padding:3px 0;color:#64748b">6H</td>
+            <td style="padding:3px 0;color:${valColor(p.spread_6h)};font-weight:600">${h6Pips}</td>
+            <td style="padding:3px 0;color:#64748b">Imp</td>
+            <td style="padding:3px 0;color:#e2e8f0;font-weight:600">${imp}${impCheck}</td>
+          </tr>
+        </table>
+        ${evtType ? `<div style="margin-top:6px;font-size:11px;color:#64748b">↗ Energy <span class="${evtTagClass(evtType)} tag" style="font-size:10px">${evtLabel(evtType)}</span></div>` : ''}
+      </div>
+    </div>`;
   }).join('');
 
   const removedHtml = removedPairs?.length ? `
@@ -206,7 +246,62 @@ function directionAlertEmail(data) {
       Removed: ${removedPairs.map(p => `<span style="text-decoration:line-through">${p.replace('_','/')}</span>`).join(', ')}
     </div>` : '';
 
-  // News section — upcoming medium/high impact
+  // ── Structure Watch (M15 compression breakout) ──
+  const swReady = (structureWatch || []).filter(s => s.state === 'ENTRY_READY');
+  const swFormed = (structureWatch || []).filter(s => s.state === 'STRUCTURE_FORMED');
+  const swBuilding = (structureWatch || []).filter(s => s.state === 'PULLBACK_ACTIVE' || s.state === 'IMPULSE_DETECTED');
+  const swTotal = swReady.length + swFormed.length + swBuilding.length;
+
+  const fmtPrice = (v, instr) => {
+    if (!v) return '—';
+    const dec = (instr || '').includes('JPY') ? 3 : 5;
+    return Number(v).toFixed(dec);
+  };
+
+  const swCards = swTotal > 0 ? (structureWatch || [])
+    .filter(s => s.state !== 'INACTIVE' && s.state !== 'INVALIDATED')
+    .map(s => {
+      const isBuy = s.direction === 'BUY';
+      const dirColor = isBuy ? '#4ade80' : '#f87171';
+      const stateColor = s.state === 'ENTRY_READY' ? '#22c55e' : s.state === 'STRUCTURE_FORMED' ? '#0ea5e9' : '#f59e0b';
+      const stateLabel = (s.state || '').replace(/_/g, ' ');
+      return `<table width="100%" cellpadding="0" cellspacing="0" style="border-bottom:1px solid rgba(30,41,59,0.4);margin-bottom:4px">
+        <tr>
+          <td style="padding:10px 14px">
+            <span class="val">${(s.instrument||'').replace('_','/')}</span>
+            <span style="color:${dirColor};font-weight:600;font-size:12px;margin-left:6px">${s.direction}</span>
+            <span style="color:${stateColor};font-size:11px;font-weight:600;margin-left:6px">${stateLabel}</span>
+          </td>
+        </tr>
+        <tr><td style="padding:0 14px 10px">
+          <table cellpadding="0" cellspacing="0" style="font-size:11px;color:#94a3b8">
+            <tr>
+              <td style="padding:2px 10px 2px 0">Imp High</td><td style="padding:2px 16px 2px 0;color:#e2e8f0;font-weight:600">${fmtPrice(s.impulse_high, s.instrument)}</td>
+              <td style="padding:2px 10px 2px 0">PB High</td><td style="padding:2px 0;color:#e2e8f0;font-weight:600">${fmtPrice(s.pullback_high, s.instrument)}</td>
+            </tr>
+            <tr>
+              <td style="padding:2px 10px 2px 0">Imp Low</td><td style="padding:2px 16px 2px 0;color:#e2e8f0;font-weight:600">${fmtPrice(s.impulse_low, s.instrument)}</td>
+              <td style="padding:2px 10px 2px 0">PB Low</td><td style="padding:2px 0;color:#e2e8f0;font-weight:600">${fmtPrice(s.pullback_low, s.instrument)}</td>
+            </tr>
+            ${s.entry_price ? `<tr>
+              <td style="padding:2px 10px 2px 0;color:#22c55e">Entry</td><td style="padding:2px 16px 2px 0;color:#22c55e;font-weight:600">${fmtPrice(s.entry_price, s.instrument)}</td>
+              <td style="padding:2px 10px 2px 0;color:#ef4444">Invalid</td><td style="padding:2px 0;color:#ef4444;font-weight:600">${fmtPrice(s.invalidation_price, s.instrument)}</td>
+            </tr>` : ''}
+          </table>
+        </td></tr>
+      </table>`;
+    }).join('') : '';
+
+  const structureHtml = swTotal > 0 ? `
+    <div class="card">
+      <div class="card-hd">Structure Watch</div>
+      <div class="card-bd">
+        <div style="padding:8px 14px" class="dim">${swReady.length} ready &middot; ${swFormed.length} formed &middot; ${swBuilding.length} building</div>
+        ${swCards}
+      </div>
+    </div>` : '';
+
+  // ── News section ──
   const IMPACT_COLOR = { high: '#ef4444', medium: '#f59e0b' };
   const IMPACT_ICON = { high: '🔴', medium: '🟡' };
   const newsRows = (newsEvents || []).length ? `
@@ -216,11 +311,11 @@ function directionAlertEmail(data) {
         <table width="100%" cellpadding="0" cellspacing="0">
           ${newsEvents.map(n => {
             const t = new Date(n.event_time);
-            const timeStr = t.toISOString().slice(11, 16) + ' UTC';
+            const nTimeStr = t.toISOString().slice(11, 16) + ' UTC';
             const impColor = IMPACT_COLOR[n.impact] || '#94a3b8';
             const impIcon = IMPACT_ICON[n.impact] || '';
             return `<tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
-              <td style="padding:8px 14px;width:55px" class="sm">${timeStr}</td>
+              <td style="padding:8px 14px;width:55px" class="sm">${nTimeStr}</td>
               <td style="padding:8px 14px;width:35px"><span style="color:${impColor};font-weight:700;font-size:11px">${n.currency}</span></td>
               <td style="padding:8px 14px;font-size:12px;color:#cbd5e1">${impIcon} ${n.event_name}</td>
             </tr>`;
@@ -238,20 +333,23 @@ function directionAlertEmail(data) {
       ${marketFocusHtml || ''}
 
       <div class="card">
-        <div class="card-hd">Currencies</div>
-        <div class="card-bd">${ccyRows}${droppedHtml}</div>
+        <div class="card-hd">Currency Direction</div>
+        <div class="card-bd">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            ${strongRows}${weakRows}
+          </table>
+          ${droppedHtml}
+        </div>
       </div>
 
       <div class="card">
-        <div class="card-hd">Top M15 Pairs (${pairs.length})</div>
-        <div class="card-bd">${pairRows}${removedHtml}</div>
+        <div class="card-hd">Signal Pairs (${(signalPairs || []).length})</div>
+        <div class="card-bd">${pairCards}${removedHtml}</div>
       </div>
+
+      ${structureHtml}
 
       ${newsRows}
-
-      <div class="section">
-        <p class="sm">Phase cycle: Monitoring &rarr; Pullback &rarr; Compression &rarr; Entry &rarr; Moving. You will be notified when a pair reaches Entry.</p>
-      </div>
 
       <p style="text-align:center;margin:24px 0 16px"><a class="cta" href="https://nervafx.com">Open Dashboard</a></p>
       <p class="sm" style="text-align:center">Analytical observations only — not trade recommendations.</p>
@@ -368,11 +466,12 @@ async function sendSignalAlerts(sb) {
   if (hasActiveDirections && triggerTs) {
     const dirAlreadySent = await wasAlreadySent(sb, directionKey);
     if (!dirAlreadySent) {
-      // Fetch active pairs for the email
+      // Fetch active signal pairs with full detail (same as dashboard Energy Engine)
       const { data: activePairs } = await sb
         .from('energy_signal_pairs')
-        .select('instrument, dir, strong_ccy, weak_ccy, phase, new_energy_event, energy_event_type')
-        .eq('active', true);
+        .select('instrument, dir, strong_ccy, weak_ccy, phase, v45, v90, spread_3h, spread_6h, de_combined, impulse_score, impulse_aligned, m15_state, energy_event_type')
+        .eq('active', true)
+        .order('de_combined', { ascending: false });
 
       // Fetch recently deactivated pairs (removed in this event — updated within last 2h)
       const recentCutoff = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
@@ -382,33 +481,15 @@ async function sendSignalAlerts(sb) {
         .eq('active', false)
         .gte('last_updated', recentCutoff);
 
-      // Fetch top 5 M15 pairs ranked by spread magnitude
-      let m15TopPairs = [];
+      // Fetch M15 structure watch for entry-ready / structure-formed pairs
+      let structureWatch = [];
       try {
-        const { data: m15Rows } = await sb
-          .from('m15_pair_spreads')
-          .select('instrument, smooth_45m')
-          .order('time', { ascending: false })
-          .limit(28);
-        if (m15Rows?.length) {
-          m15TopPairs = m15Rows
-            .map(r => {
-              const spread = parseFloat(r.smooth_45m) || 0;
-              const [base, quote] = r.instrument.split('_');
-              return {
-                instrument: r.instrument,
-                dir: spread >= 0 ? 'BUY' : 'SELL',
-                strong_ccy: spread >= 0 ? base : quote,
-                weak_ccy: spread >= 0 ? quote : base,
-                spreadPips: Math.abs(spread) * 10000,
-              };
-            })
-            .sort((a, b) => b.spreadPips - a.spreadPips)
-            .slice(0, 5);
-        }
-      } catch (e) {
-        console.warn('[EMAIL] M15 top pairs fetch failed:', e.message);
-      }
+        const { data: swRows } = await sb
+          .from('m15_structure_watch')
+          .select('instrument, direction, state, impulse_high, impulse_low, pullback_high, pullback_low, entry_price, invalidation_price')
+          .in('state', ['ENTRY_READY', 'STRUCTURE_FORMED', 'PULLBACK_ACTIVE', 'IMPULSE_DETECTED']);
+        structureWatch = swRows || [];
+      } catch (_) {}
 
       const triggerState = (currStates || []).find(s => s.energy_at_trigger);
       const template = directionAlertEmail({
@@ -422,9 +503,24 @@ async function sendSignalAlerts(sb) {
           eventType: c.energy_event_type,
           smooth_3h: parseFloat(c.smooth_3h) || 0,
           smooth_6h: parseFloat(c.smooth_6h) || 0,
-          m15Strength: m15CcyStrength[c.currency] || 0,
         })),
-        pairs: m15TopPairs,
+        signalPairs: (activePairs || []).map(p => ({
+          instrument: p.instrument,
+          dir: p.dir,
+          strong_ccy: p.strong_ccy,
+          weak_ccy: p.weak_ccy,
+          phase: p.phase,
+          v45: parseFloat(p.v45) || 0,
+          v90: parseFloat(p.v90) || 0,
+          spread_3h: parseFloat(p.spread_3h) || 0,
+          spread_6h: parseFloat(p.spread_6h) || 0,
+          de_combined: parseFloat(p.de_combined) || 0,
+          impulse_score: parseInt(p.impulse_score) || 0,
+          impulse_aligned: !!p.impulse_aligned,
+          m15_state: p.m15_state || '',
+          energy_event_type: p.energy_event_type || '',
+        })),
+        structureWatch,
         removedPairs: (inactivePairs || []).map(p => p.instrument),
         newsEvents: upcomingNews || [],
       });
