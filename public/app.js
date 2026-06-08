@@ -2917,7 +2917,7 @@ function renderEnergySignals(data) {
 
   if (ringEl && numEl) {
     const pct = Math.min(100, Math.max(0, energy));
-    const col = energy >= 60 ? '#22c55e' : energy >= 45 ? '#3b82f6' : energy >= 30 ? '#f59e0b' : '#475569';
+    const col = energy >= 55 ? '#22c55e' : energy >= 45 ? '#3b82f6' : energy >= 30 ? '#f59e0b' : '#475569';
     ringEl.style.setProperty('--es-ring-color', col);
     ringEl.style.setProperty('--es-ring-pct', pct + '%');
     numEl.textContent = Math.round(energy);
@@ -3789,7 +3789,7 @@ function _renderInlineM15Bars(container, bars) {
   const tzLabel = new Intl.DateTimeFormat('en-GB', { timeZone: tz, timeZoneName: 'short' })
     .formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value || '';
   const SKIP = new Set(['LOW_LIQUIDITY', 'DEAD_HOURS']);
-  const ENERGY_THRESHOLD = 60;
+  const ENERGY_THRESHOLD = 55;
 
   const byDate = {};
   for (const r of bars) {
@@ -4234,7 +4234,7 @@ function _meSessionExplain(s, label, status) {
   }
 
   // Overall energy
-  if (energy >= 60) lines.push(`High energy (${energy}) — market is active and directional.`);
+  if (energy >= 55) lines.push(`High energy (${energy}) — market is active and directional.`);
   else if (energy >= 35) lines.push(`Moderate energy (${energy}) — conditions building, wait for confirmation.`);
   else lines.push(`Low energy (${energy}) — range-bound, avoid forcing trades.`);
 
@@ -4598,7 +4598,7 @@ function _meExpansionPressurePanel(ep) {
   let flowChain = '';
   if (ep?.carryOver?.length > 1) {
     const chips = ep.carryOver.map(c => {
-      const col = c.energy >= 60 ? '#22c55e' : c.energy >= 35 ? '#0ea5e9' : c.energy >= 15 ? '#f59e0b' : '#475569';
+      const col = c.energy >= 55 ? '#22c55e' : c.energy >= 35 ? '#0ea5e9' : c.energy >= 15 ? '#f59e0b' : '#475569';
       return `<span class="me-flow-chip"><span class="me-flow-sess">${c.session}</span><span class="me-flow-val" style="color:${col}">${c.energy}</span></span>`;
     }).join('<span class="me-flow-arrow">→</span>');
     flowChain = `<div class="me-flow-row">${chips}</div>`;

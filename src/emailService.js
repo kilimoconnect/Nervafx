@@ -243,7 +243,7 @@ function dailyDigestEmail(data) {
     const trad = s.tradability_grade || '';
     const liq = s.liquidity_grade || '';
     const state = s.energy_cycle || '';
-    const eColor = energy >= 60 ? '#4ade80' : energy >= 40 ? '#fbbf24' : '#64748b';
+    const eColor = energy >= 55 ? '#4ade80' : energy >= 40 ? '#fbbf24' : '#64748b';
     return `<tr style="border-bottom:1px solid rgba(30,41,59,0.6)">
       <td style="padding:10px 14px"><span class="val">${SESS_LABEL[s.session_name] || s.session_name}</span></td>
       <td style="padding:10px 14px;text-align:center"><span style="color:${eColor};font-weight:700">${energy}</span></td>

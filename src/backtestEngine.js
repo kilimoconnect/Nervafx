@@ -1476,8 +1476,8 @@ function analyzeMoveDistance(snapshots) {
 
     // Split by energy level
     const lowE  = all.filter(a => a.energy < 30);
-    const midE  = all.filter(a => a.energy >= 30 && a.energy < 60);
-    const highE = all.filter(a => a.energy >= 60);
+    const midE  = all.filter(a => a.energy >= 30 && a.energy < 55);
+    const highE = all.filter(a => a.energy >= 55);
 
     const avg = (arr, fn) => arr.length ? Math.round(arr.reduce((s, a) => s + fn(a), 0) / arr.length) : 0;
 
@@ -1734,7 +1734,7 @@ function _classifyRegime(snap, prevSnap) {
   if (e.market_energy < 25 && e.agreement < 30) return 'COMPRESSION';
   if (e.volatility > 55 && e.agreement < 30) return 'CHOPPY';
   if (prevSnap && e.market_energy > prevSnap.energy.market_energy + 8 && e.market_energy >= 25) return 'BREAKOUT';
-  if (e.market_energy >= 60 && e.agreement >= 45) return 'EXPANSION';
+  if (e.market_energy >= 55 && e.agreement >= 45) return 'EXPANSION';
   if (e.market_energy >= 45 && e.volatility > 50 && e.agreement < 35) return 'EXHAUSTION';
   if (e.market_energy >= 25 && e.market_energy < 45) return 'TRANSITION';
   return 'BUILDING';
