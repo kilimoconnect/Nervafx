@@ -1097,8 +1097,21 @@
           const rising = di > 0 ? p.vol >= smoothed[di - 1].vol : true;
           return `<circle cx="${pt.x}" cy="${pt.y}" r="0.4" fill="${rising ? '#4ade80' : '#f87171'}" opacity="0.9"/>`;
         }).join('');
+        // Peak volume marker
+        let peakVolMark = '';
+        if (smoothed.length) {
+          let peakIdx = 0;
+          for (let j = 1; j < smoothed.length; j++) {
+            if (smoothed[j].vol > smoothed[peakIdx].vol) peakIdx = j;
+          }
+          const pk = toXY(smoothed[peakIdx]);
+          const peakRawIdx = smoothed[peakIdx].idx;
+          const peakLocalTime = new Date(dateBars[peakRawIdx].time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
+          peakVolMark = `<polygon points="${pk.x},${pk.y - 2.5} ${pk.x + 1.2},${pk.y} ${pk.x},${pk.y + 2.5} ${pk.x - 1.2},${pk.y}" fill="#fbbf24" opacity="0.95"/>` +
+            `<text x="${pk.x}" y="${pk.y - 4}" text-anchor="middle" fill="#fbbf24" font-size="3" font-weight="700">Peak Vol ${peakLocalTime}</text>`;
+        }
         html += `<svg class="bc-vol-line" viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2">
-          ${segments}${dots}
+          ${segments}${dots}${peakVolMark}
         </svg>`;
       }
       html += '</div>'; // close bc-chart-container
