@@ -25,7 +25,8 @@
 const { supabase } = require('./supabase');
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
-const ENERGY_THRESHOLD = 55;
+const ENERGY_THRESHOLD_H1 = 55;
+const ENERGY_THRESHOLD_M15 = 60;
 
 const VALID_PAIRS = new Set([
   'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
@@ -158,7 +159,7 @@ async function calculateEnergyDirection() {
     const hourly = es.details?.hourly || [];
     for (const h of hourly) {
       const hEnergy = parseFloat(h.market_energy) || 0;
-      if (hEnergy >= ENERGY_THRESHOLD) {
+      if (hEnergy >= ENERGY_THRESHOLD_H1) {
         allBars.push({ energy: hEnergy, time: h.time, session: es.session_name });
       }
     }
@@ -187,7 +188,7 @@ async function calculateEnergyDirection() {
       let streak = 0;
       for (const bar of m15Bars) {
         const e = parseFloat(bar.market_energy) || 0;
-        if (e >= ENERGY_THRESHOLD) {
+        if (e >= ENERGY_THRESHOLD_M15) {
           streak++;
           if (streak >= 3) {
             // Use this bar (the 3rd consecutive) as the M15 trigger
@@ -273,7 +274,8 @@ async function calculateEnergyDirection() {
   }
 
   // ── 5. Evaluate energy threshold ───────────────────────────────────────────
-  const thresholdMet = triggerEnergy >= ENERGY_THRESHOLD;
+  const triggerThreshold = triggerSource === 'M15' ? ENERGY_THRESHOLD_M15 : ENERGY_THRESHOLD_H1;
+  const thresholdMet = triggerEnergy >= triggerThreshold;
 
   // Check if this is a NEW energy event by comparing trigger bar time against
   // the stored triggered_at. A new bar crossing ≥ threshold AFTER the stored trigger
