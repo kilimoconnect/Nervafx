@@ -35,8 +35,11 @@ module.exports = async function handler(req, res) {
 
     const sb = getClient();
 
-    // ── Sign Up — Step 1: send confirmation code ─────────────────────────
+    // ── Sign Up — disabled ─────────────────────────────────────────────
     if (action === 'signup') {
+      return res.status(403).json({ error: 'Sign-up is currently disabled.' });
+    }
+    if (action === '_signup_disabled') {
       if (!password) return res.status(400).json({ error: 'password is required' });
       const { firstName = '', lastName = '' } = req.body;
 
@@ -67,8 +70,11 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // ── Confirm — Step 2: verify code and create account ─────────────────
+    // ── Confirm — disabled (signup flow) ───────────────────────────────
     if (action === 'confirm') {
+      return res.status(403).json({ error: 'Sign-up is currently disabled.' });
+    }
+    if (action === '_confirm_disabled') {
       const { code } = req.body || {};
       if (!code) return res.status(400).json({ error: 'Verification code is required' });
 
@@ -126,8 +132,11 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // ── Resend — resend the confirmation code ────────────────────────────
+    // ── Resend — disabled (signup flow) ────────────────────────────────
     if (action === 'resend') {
+      return res.status(403).json({ error: 'Sign-up is currently disabled.' });
+    }
+    if (action === '_resend_disabled') {
       cleanExpired();
       const key = email.toLowerCase();
       const pending = _pendingConfirmations.get(key);
