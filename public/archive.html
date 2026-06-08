@@ -515,7 +515,22 @@
     }
   })();
 
-  const _userTz = localStorage.getItem('nfx_tz') || 'auto';
+  let _userTz = localStorage.getItem('nfx_tz') || 'auto';
+
+  // Fetch profile timezone if not cached in localStorage
+  (async () => {
+    try {
+      const token = localStorage.getItem('nfx_token');
+      if (!token) return;
+      const r = await fetch('/api/profile', { headers: { Authorization: `Bearer ${token}` } });
+      if (!r.ok) return;
+      const p = await r.json();
+      if (p.timezone) {
+        _userTz = p.timezone;
+        try { localStorage.setItem('nfx_tz', _userTz); } catch (_) {}
+      }
+    } catch (_) {}
+  })();
 
   async function api(path) {
     const token = localStorage.getItem('nfx_token');

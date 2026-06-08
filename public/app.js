@@ -6865,6 +6865,8 @@ async function refresh() {
       _profile.max_trades         = parseInt(profileData.max_trades)            || null;
       // Timezone: 'auto' = browser local, anything else = IANA name, fallback = auto (browser)
       _userTz = profileData.timezone || 'auto';
+      // Persist to localStorage so archive/journal pages can read it without a profile fetch
+      try { localStorage.setItem('nfx_tz', _userTz); } catch (_) {}
     }
 
     // Today's news — called after _userTz is set so date is in user's timezone
