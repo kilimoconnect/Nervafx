@@ -452,6 +452,21 @@ async function calculateEnergyDirection() {
         console.log(`[ENERGY_DIR]   ${p.instrument.replace('_','/')} ${p.dir} → REMOVED (${p.strong_ccy}↑ ${p.weak_ccy}↓ no longer valid)`);
       }
     }
+  } else if (hasActiveDirections && !dispersionMet) {
+    // ── Dispersion low — freeze signal pairs completely ──────────────────
+    // No phase updates, no additions, no removals. Pairs stay as they are.
+    console.log(`[ENERGY_DIR] Dispersion low (${dispersionScore}) — signal pairs frozen. No changes until dispersion ≥ ${DISPERSION_THRESHOLD}.`);
+    // Return early — skip all M15 phase updates and DB writes for pairs
+    return {
+      energy: currentEnergy,
+      thresholdMet: false,
+      isNewEnergyEvent: false,
+      dispersionMet: false,
+      dispersionScore,
+      pairs: (existingPairs || []).filter(p => p.active).length,
+      deactivated: 0,
+    };
+
   } else if (hasActiveDirections) {
     // ── Directions already locked — keep them unchanged ──────────────────
     // No re-evaluation of strong/weak. Strength values stay as snapshotted.
