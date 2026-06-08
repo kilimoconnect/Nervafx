@@ -354,7 +354,36 @@ async function sendSignalAlerts(sb) {
     upcomingNews = newsRows || [];
   } catch (_) {}
 
-  if (hasActiveDirections && triggerTs) {
+  // Dispersion gate — only send direction alert if H1 or M15 dispersion is green (≥ 60)
+  let dispersionMet = false;
+  const DISPERSION_THRESHOLD = 60;
+  try {
+    // Check latest H1 dispersion
+    const { data: h1Rows } = await sb
+      .from('hourly_session_activity')
+      .select('dispersion_score')
+      .order('time_utc', { ascending: false })
+      .limit(1);
+    const h1Disp = parseFloat(h1Rows?.[0]?.dispersion_score) || 0;
+    if (h1Disp >= DISPERSION_THRESHOLD) dispersionMet = true;
+
+    // Check latest M15 dispersion if H1 didn't meet
+    if (!dispersionMet) {
+      const { data: m15Rows } = await sb
+        .from('m15_energy_bars')
+        .select('dispersion_score')
+        .order('time_utc', { ascending: false })
+        .limit(1);
+      const m15Disp = parseFloat(m15Rows?.[0]?.dispersion_score) || 0;
+      if (m15Disp >= DISPERSION_THRESHOLD) dispersionMet = true;
+    }
+    console.log(`[EMAIL] Dispersion gate: ${dispersionMet ? 'PASSED' : 'BLOCKED'} (H1: ${h1Rows?.[0]?.dispersion_score || 'N/A'}, threshold: ${DISPERSION_THRESHOLD})`);
+  } catch (e) {
+    console.warn('[EMAIL] Dispersion check failed, allowing alert:', e.message);
+    dispersionMet = true; // fail-open so alerts aren't silently lost
+  }
+
+  if (hasActiveDirections && triggerTs && dispersionMet) {
     const dirAlreadySent = await wasAlreadySent(sb, directionKey);
     if (!dirAlreadySent) {
       // Fetch active pairs for the email
@@ -428,6 +457,8 @@ async function sendSignalAlerts(sb) {
     } else {
       console.log(`[EMAIL] Direction alert already sent for this event (${directionKey}) — skipping`);
     }
+  } else if (hasActiveDirections && triggerTs && !dispersionMet) {
+    console.log(`[EMAIL] Direction alert blocked — dispersion below ${DISPERSION_THRESHOLD} (green threshold)`);
   }
 
   // ── 2. BREAKOUT ENTRY ALERT — M15 structure break detected ─────────────────
