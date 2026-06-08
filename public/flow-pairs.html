@@ -68,6 +68,7 @@
           ccyMap[c.currency] = {
             h3: parseFloat(c.smooth_3h ?? c.normalized_3h) || 0,
             h6: parseFloat(c.smooth_6h ?? c.normalized_6h) || 0,
+            h12: parseFloat(c.smooth_12h ?? c.normalized_12h) || 0,
           };
         }
 
@@ -94,7 +95,7 @@
             else continue;
 
             const [base, quote] = instrument.split('_');
-            const spread = Math.abs((ccyMap[base]?.h3 || 0) - (ccyMap[quote]?.h3 || 0));
+            const spread = Math.abs((ccyMap[base]?.h12 || 0) - (ccyMap[quote]?.h12 || 0));
             const spreadPips = spread * 10000;
             if (spreadPips >= SPREAD_THRESHOLD) {
               pairs.push({ instrument, dir, strong_ccy: s.ccy, weak_ccy: w.ccy, spreadPips });

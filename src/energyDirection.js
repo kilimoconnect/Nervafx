@@ -226,10 +226,10 @@ async function calculateEnergyDirection() {
 
   console.log(`[ENERGY_DIR] Current energy: ${currentEnergy} | Trigger bar: ${triggerEnergy} [${triggerSource}] (${triggerSession}${triggerHour ? ' @ ' + triggerHour : ''})`);
 
-  // ── 2. Fetch latest currency strength (3H + 6H) ───────────────────────────
+  // ── 2. Fetch latest currency strength (3H + 6H + 12H) ──────────────────────
   const { data: csRows, error: csErr } = await supabase
     .from('currency_strength')
-    .select('currency, smooth_3h, smooth_6h')
+    .select('currency, smooth_3h, smooth_6h, smooth_12h')
     .order('time', { ascending: false })
     .limit(8);
 
@@ -247,6 +247,7 @@ async function calculateEnergyDirection() {
     ccyMap[r.currency] = {
       smooth_3h: parseFloat(r.smooth_3h) || 0,
       smooth_6h: parseFloat(r.smooth_6h) || 0,
+      smooth_12h: parseFloat(r.smooth_12h) || 0,
     };
   }
 
@@ -384,9 +385,9 @@ async function calculateEnergyDirection() {
           instrument = rev; dir = 'SELL';
         } else continue;
 
-        // Only include pairs with currency spread ≥ 30 pips
+        // Only include pairs with 12H currency spread ≥ 30 pips
         const [base, quote] = instrument.split('_');
-        const spreadPips = Math.abs((ccyMap[base]?.smooth_3h || 0) - (ccyMap[quote]?.smooth_3h || 0)) * 10000;
+        const spreadPips = Math.abs((ccyMap[base]?.smooth_12h || 0) - (ccyMap[quote]?.smooth_12h || 0)) * 10000;
         if (spreadPips < 30) continue;
 
         // Determine if this pair is new, continuing, or reversed
@@ -429,9 +430,9 @@ async function calculateEnergyDirection() {
     for (const p of (existingPairs || [])) {
       if (p.active) {
         const [base, quote] = p.instrument.split('_');
-        const spreadPips = Math.abs((ccyMap[base]?.smooth_3h || 0) - (ccyMap[quote]?.smooth_3h || 0)) * 10000;
+        const spreadPips = Math.abs((ccyMap[base]?.smooth_12h || 0) - (ccyMap[quote]?.smooth_12h || 0)) * 10000;
         if (spreadPips < 30) {
-          console.log(`[ENERGY_DIR]   ${p.instrument.replace('_','/')} ${p.dir} → REMOVED (spread ${spreadPips.toFixed(1)}p < 30p)`);
+          console.log(`[ENERGY_DIR]   ${p.instrument.replace('_','/')} ${p.dir} → REMOVED (12H spread ${spreadPips.toFixed(1)}p < 30p)`);
           continue;
         }
         newPairs.push({
@@ -467,7 +468,7 @@ async function calculateEnergyDirection() {
     }
   }
 
-  // Also get 3H/6H spreads for pairs — use LIVE strength for monitoring
+  // Also get 3H/6H/12H spreads for pairs — use LIVE strength for monitoring
   // (phase detection and signal entry gates need current market conditions)
   // but fall back to snapshotted values if live data is missing
   let spreadMap = {};
@@ -478,9 +479,12 @@ async function calculateEnergyDirection() {
       const h3quote = ccyMap[quote]?.smooth_3h || 0;
       const h6base = ccyMap[base]?.smooth_6h || 0;
       const h6quote = ccyMap[quote]?.smooth_6h || 0;
+      const h12base = ccyMap[base]?.smooth_12h || 0;
+      const h12quote = ccyMap[quote]?.smooth_12h || 0;
       spreadMap[inst] = {
         spread_3h: h3base - h3quote,
         spread_6h: h6base - h6quote,
+        spread_12h: h12base - h12quote,
       };
     }
   }
@@ -532,6 +536,7 @@ async function calculateEnergyDirection() {
       v90: Math.round(v90 * 100000) / 100000,
       spread_3h: Math.round((sp.spread_3h || 0) * 100000) / 100000,
       spread_6h: Math.round((sp.spread_6h || 0) * 100000) / 100000,
+      spread_12h: Math.round((sp.spread_12h || 0) * 100000) / 100000,
       de_combined: Math.round(deCombo * 100) / 100,
       impulse_score: impulseScore,
       impulse_aligned: impulseAligned,

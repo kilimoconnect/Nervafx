@@ -1894,10 +1894,11 @@ function _buildFpScored(strengthArg, m15Data) {
     const latest = _fpPrecomputed.filter(r => (r.time || '').slice(0, 13) === latestHour);
     if (latest.length) {
       // Build currency strength maps for the explain function (base/quote display)
-      const ccyMap3H = {};
+      const ccyMap3H = {}, ccyMap12H = {};
       if (sData?.currencies?.length) {
         for (const c of sData.currencies) {
           ccyMap3H[c.currency] = parseFloat(c.smooth_3h ?? c.normalized_3h) || 0;
+          ccyMap12H[c.currency] = parseFloat(c.smooth_12h ?? c.normalized_12h) || 0;
         }
       }
 
@@ -1943,10 +1944,12 @@ function _buildFpScored(strengthArg, m15Data) {
 
         const STATUS_CLS = { STRONG: 'fp-strong', ALIGNED: 'fp-aligned', PARTIAL: 'fp-partial', BUILDING: 'fp-building', AGAINST: 'fp-against', WAIT: 'fp-wait' };
 
+        const spread12H = (ccyMap12H[base] || 0) - (ccyMap12H[quote] || 0);
+
         return {
           instrument: r.instrument, dir: r.dir, base, quote,
           v45, v90, v180: null,
-          spread3H, spread6H,
+          spread3H, spread6H, spread12H,
           state: r.state || 'FLAT',
           status: r.status || 'WAIT',
           statusCls: STATUS_CLS[r.status] || 'fp-wait',
@@ -2117,6 +2120,7 @@ function renderFlowPerformance(strengthData, m15Data) {
       return {
         instrument: p.instrument, dir: p.dir, base, quote,
         v45, v90, v180: null, spread3H: sp3, spread6H: sp6,
+        spread12H: parseFloat(p.spread_12h) || 0,
         state: p.m15_state || 'FLAT', status, statusCls, momentum,
         m15Confirms, h3Confirms, h6Confirms, accel, accelSign,
         perfScore, finalScore, deCombined: de,
@@ -2129,21 +2133,21 @@ function renderFlowPerformance(strengthData, m15Data) {
     scored.sort((a, b) => b.finalScore - a.finalScore);
   }
 
-  // Filter to pairs with spread ≥ 30 pips
+  // Filter to pairs with 12H spread ≥ 30 pips
   if (scored?.length) {
-    scored = scored.filter(fp => Math.abs(fp.spread3H || 0) * 10000 >= 30);
+    scored = scored.filter(fp => Math.abs(fp.spread12H || 0) * 10000 >= 30);
   }
 
   if (!scored || !scored.length) {
-    el.innerHTML = '<p class="empty-state">No pairs with spread ≥ 30 pips.</p>';
+    el.innerHTML = '<p class="empty-state">No pairs with 12H spread ≥ 30 pips.</p>';
     return;
   }
 
   // Use Signal Pairs ranking order — same pairs, same sort, FP details
   if (_energySignalsCache?.pairs?.length) {
-    const activePairs = _energySignalsCache.pairs.filter(p => p.active && Math.abs(parseFloat(p.spread_3h) || 0) * 10000 >= 30);
+    const activePairs = _energySignalsCache.pairs.filter(p => p.active && Math.abs(parseFloat(p.spread_12h) || 0) * 10000 >= 30);
     if (!activePairs.length) {
-      el.innerHTML = '<p class="empty-state">No pairs with spread ≥ 30 pips.</p>';
+      el.innerHTML = '<p class="empty-state">No pairs with 12H spread ≥ 30 pips.</p>';
       return;
     }
     // Compute _finalScore on signal pairs (same formula as renderEnergySignals)
@@ -2532,12 +2536,13 @@ function _getFlowSpreadPairs() {
   const ccys = strengthData?.currencies;
   if (!ccys?.length) return [];
 
-  // Build currency strength map (3H + 6H)
+  // Build currency strength map (3H + 6H + 12H)
   const ccyMap = {};
   for (const c of ccys) {
     ccyMap[c.currency] = {
       h3: parseFloat(c.smooth_3h ?? c.normalized_3h) || 0,
       h6: parseFloat(c.smooth_6h ?? c.normalized_6h) || 0,
+      h12: parseFloat(c.smooth_12h ?? c.normalized_12h) || 0,
     };
   }
 
@@ -2552,7 +2557,7 @@ function _getFlowSpreadPairs() {
   strong.sort((a, b) => b.score - a.score);
   weak.sort((a, b) => b.score - a.score);
 
-  // Form pairs
+  // Form pairs (spread uses 12H)
   const pairs = [];
   for (const s of strong) {
     for (const w of weak) {
@@ -2564,7 +2569,7 @@ function _getFlowSpreadPairs() {
       else continue;
 
       const [base, quote] = instrument.split('_');
-      const spread = Math.abs((ccyMap[base]?.h3 || 0) - (ccyMap[quote]?.h3 || 0));
+      const spread = Math.abs((ccyMap[base]?.h12 || 0) - (ccyMap[quote]?.h12 || 0));
       const spreadPips = spread * 10000;
       if (spreadPips >= FP_BAR_SPREAD_THRESHOLD) {
         pairs.push({ instrument, dir, strong_ccy: s.ccy, weak_ccy: w.ccy, spreadPips });
@@ -3018,10 +3023,10 @@ function renderEnergySignals(data) {
   if (pairsSection) pairsSection.style.display = isWeekend ? 'none' : '';
 
   if (pairsEl && !isWeekend) {
-    const activePairs = (pairs || []).filter(p => p.active && Math.abs(parseFloat(p.spread_3h) || 0) * 10000 >= 30);
+    const activePairs = (pairs || []).filter(p => p.active && Math.abs(parseFloat(p.spread_12h) || 0) * 10000 >= 30);
 
     if (!activePairs.length) {
-      pairsEl.innerHTML = '<div class="es-no-data">No active pairs with spread ≥ 30 pips.</div>';
+      pairsEl.innerHTML = '<div class="es-no-data">No active pairs with 12H spread ≥ 30 pips.</div>';
     } else {
       // Sort using same scoring as Flow Performance:
       // perfScore = directional V45 × 3 + 3H × 2 + 6H × 1 + impulse + alignment bonuses
@@ -3589,7 +3594,7 @@ function renderCompressionBreakout(data) {
   const _spreadPairsSet = new Set();
   if (_energySignalsCache?.pairs) {
     for (const p of _energySignalsCache.pairs) {
-      if (p.active && Math.abs(parseFloat(p.spread_3h) || 0) * 10000 >= 30) {
+      if (p.active && Math.abs(parseFloat(p.spread_12h) || 0) * 10000 >= 30) {
         _spreadPairsSet.add(p.instrument);
       }
     }
@@ -3597,7 +3602,7 @@ function renderCompressionBreakout(data) {
   structures = (structures || []).filter(s => _spreadPairsSet.has(s.instrument));
 
   if (!structures?.length) {
-    el.innerHTML = '<div class="es-no-data">No pairs in structure watch with spread ≥ 30 pips.</div>';
+    el.innerHTML = '<div class="es-no-data">No pairs in structure watch with 12H spread ≥ 30 pips.</div>';
     return;
   }
 

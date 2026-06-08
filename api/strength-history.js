@@ -20,7 +20,7 @@ module.exports = async function handler(req, res) {
     const multi = req.query?.multi === '1'; // return both 3h + 6h for flow perf
     const field = tf === '12h' ? 'smooth_12h' : tf === '6h' ? 'smooth_6h' : 'smooth_3h';
     const selectFields = multi
-      ? 'time, currency, smooth_3h, smooth_6h'
+      ? 'time, currency, smooth_3h, smooth_6h, smooth_12h'
       : `time, currency, ${field}`;
     const sb    = getClient();
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();

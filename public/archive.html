@@ -1403,6 +1403,7 @@
       byTime[t][r.currency] = {
         h3: parseFloat(r.smooth_3h) || 0,
         h6: parseFloat(r.smooth_6h) || 0,
+        h12: parseFloat(r.smooth_12h) || 0,
       };
     }
     return byTime;
@@ -1432,7 +1433,7 @@
 
         // Spread = base strength - quote strength (for ranking)
         const [base, quote] = instrument.split('_');
-        const spread = (ccySnap[base]?.h3 || 0) - (ccySnap[quote]?.h3 || 0);
+        const spread = (ccySnap[base]?.h12 || 0) - (ccySnap[quote]?.h12 || 0);
         const spreadAbs = Math.abs(spread);
         pairs.push({ instrument, dir, strong_ccy: s.ccy, weak_ccy: w.ccy, spread: spreadAbs });
       }
