@@ -2952,12 +2952,7 @@ function renderEnergySignals(data) {
 
   // ── Currencies ──
   const ccyEl = document.getElementById('es-currencies');
-  if (ccyEl && !thresholdMet) {
-    const reason = dispersionMet === false
-      ? `Dispersion too low (${dispersionScore || 0}) — currencies not diverging enough. Need ≥ 60.`
-      : 'Energy threshold not yet met or no aligned currencies.';
-    ccyEl.innerHTML = `<div class="es-no-data">${reason}</div>`;
-  } else if (ccyEl) {
+  if (ccyEl) {
     const active = (currencies || []).filter(c => c.active && c.direction !== 'NEUTRAL');
     const m15Str = _m15CurrencyStrength();
     // Rank by |M15| + |3H| + |6H| combined performance
@@ -3010,9 +3005,6 @@ function renderEnergySignals(data) {
   if (pairsSection) pairsSection.style.display = isWeekend ? 'none' : '';
 
   if (pairsEl && !isWeekend) {
-    if (!thresholdMet) {
-      pairsEl.innerHTML = '<div class="es-no-data">Dispersion below threshold — signal pairs paused.</div>';
-    } else {
     const activePairs = (pairs || []).filter(p => p.active && Math.abs(parseFloat(p.spread_12h) || 0) * 10000 >= 20);
 
     if (!activePairs.length) {
@@ -3122,7 +3114,6 @@ function renderEnergySignals(data) {
         </div>`;
       }).join('');
     }
-    } // end else (thresholdMet)
   }
 
   hydrateIcons();
