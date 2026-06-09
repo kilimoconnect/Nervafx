@@ -424,21 +424,42 @@ async function sendSignalAlerts(sb) {
     console.warn('[EMAIL] M15 currency strength fetch failed:', e.message);
   }
 
-  const dominantPips = dominantCcy ? (Math.abs(dominantVal) * 10000).toFixed(1) : '0';
-  const dominantDir  = dominantVal > 0 ? 'strong' : 'weak';
-  const dominantColor = dominantVal > 0 ? '#4ade80' : '#f87171';
+  // Reusable HTML block — M15 Currency Strength bar chart (all 8, ranked strong→weak)
+  let marketFocusHtml = '';
+  {
+    const ranked = Object.entries(m15CcyStrength)
+      .map(([ccy, val]) => ({ ccy, val, pips: (val * 10000).toFixed(1) }))
+      .sort((a, b) => b.val - a.val);
 
-  // Reusable HTML block for Market Focus card
-  const marketFocusHtml = dominantCcy ? `
-    <div class="card">
-      <div class="card-hd">Market Focus</div>
-      <div class="card-bd">
-        <div style="padding:14px;text-align:center">
-          <div style="font-size:20px;font-weight:800;color:${dominantColor};letter-spacing:-0.3px">${dominantCcy}</div>
-          <div style="font-size:13px;font-weight:600;color:#e2e8f0;margin-top:4px">${dominantCcy} is ${dominantDir} (${dominantPips} pips) — focus on ${dominantCcy} pairs</div>
-        </div>
-      </div>
-    </div>` : '';
+    if (ranked.length) {
+      const maxAbs = Math.max(...ranked.map(r => Math.abs(r.val)), 0.0001);
+
+      const rows = ranked.map(r => {
+        const pct = Math.round((Math.abs(r.val) / maxAbs) * 100);
+        const barWidth = Math.max(pct, 4); // minimum visible bar
+        const color = r.val > 0 ? '#4ade80' : r.val < 0 ? '#f87171' : '#64748b';
+        const pipStr = r.val >= 0 ? `+${r.pips}` : r.pips;
+        return `<tr>
+          <td style="padding:4px 8px 4px 12px;font-size:12px;font-weight:700;color:#e2e8f0;width:36px">${r.ccy}</td>
+          <td style="padding:4px 0;width:100%">
+            <table cellpadding="0" cellspacing="0" style="width:100%"><tr>
+              <td style="width:${barWidth}%;padding:0"><div style="background:${color};height:14px;border-radius:2px;min-width:4px"></div></td>
+              <td style="padding:0"></td>
+            </tr></table>
+          </td>
+          <td style="padding:4px 12px 4px 8px;font-size:11px;color:${color};font-weight:600;white-space:nowrap;text-align:right">${pipStr}</td>
+        </tr>`;
+      }).join('');
+
+      marketFocusHtml = `
+        <div class="card">
+          <div class="card-hd">M15 Currency Strength</div>
+          <div class="card-bd">
+            <table width="100%" cellpadding="0" cellspacing="0">${rows}</table>
+          </div>
+        </div>`;
+    }
+  }
 
   // ── 1. DIRECTION ALERT — check if energyDirection flagged a new event ─────
   // Check signal pairs for new_energy_event = true (set by the engine in the
