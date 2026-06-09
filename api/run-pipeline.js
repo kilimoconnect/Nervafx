@@ -24,7 +24,7 @@ const { backfillSessionActivity }        = require('../src/sessionActivity');
 const { generateMarketNarrative }        = require('../src/narrativeEngine');
 const { writeJournalEntry }              = require('../src/journalEngine');
 const { runOutcomeReviews }              = require('../src/outcomeReview');
-const { sendSignalAlerts, sendDirectionAlertNow } = require('../src/emailAlerts');
+const { sendSignalAlerts }              = require('../src/emailAlerts');
 const { calculateLatestVolumeAnalysis } = require('../src/volumeAnalysis');
 const { calculateFlowPerformance }     = require('../src/flowPerformance');
 const { calculateEnergyDirection }     = require('../src/energyDirection');
@@ -353,11 +353,7 @@ module.exports = async function handler(req, res) {
   await step('volume_analysis',  () => calculateLatestVolumeAnalysis());
   await step('sentiment',        () => calculateLatestSentiment());
   await step('session_backfill', () => backfillSessionActivity());
-  await step('energy_direction', async () => {
-    const result = await calculateEnergyDirection();
-    if (result?.isNewEnergyEvent) await sendDirectionAlertNow(sb);
-    return result;
-  });
+  await step('energy_direction', () => calculateEnergyDirection());
   await step('signals',          () => calculateLatestSignals());
   await step('risk',             () => checkLatestSignals());
   await step('actions',          () => processLatestActions());
