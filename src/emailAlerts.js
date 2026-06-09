@@ -425,6 +425,8 @@ async function sendSignalAlerts(sb) {
   }
 
   // Reusable HTML block — M15 Currency Strength bar chart (all 8, ranked strong→weak)
+  // Reusable HTML — M15 Currency Strength bars (all 8, ranked strong→weak)
+  // Uses simple table rows with inline-width bars — no nested tables.
   let marketFocusHtml = '';
   {
     const ranked = Object.entries(m15CcyStrength)
@@ -433,28 +435,24 @@ async function sendSignalAlerts(sb) {
 
     if (ranked.length) {
       const maxAbs = Math.max(...ranked.map(r => Math.abs(r.val)), 0.0001);
+      const MAX_BAR_PX = 180; // max bar width in pixels
 
       const rows = ranked.map(r => {
-        const pct = Math.round((Math.abs(r.val) / maxAbs) * 100);
-        const barWidth = Math.max(pct, 4); // minimum visible bar
+        const ratio = Math.abs(r.val) / maxAbs;
+        const barPx = Math.max(Math.round(ratio * MAX_BAR_PX), 6);
         const color = r.val > 0 ? '#4ade80' : r.val < 0 ? '#f87171' : '#64748b';
         const pipStr = r.val >= 0 ? `+${r.pips}` : r.pips;
         return `<tr>
-          <td style="padding:4px 8px 4px 12px;font-size:12px;font-weight:700;color:#e2e8f0;width:36px">${r.ccy}</td>
-          <td style="padding:4px 0;width:100%">
-            <table cellpadding="0" cellspacing="0" style="width:100%"><tr>
-              <td style="width:${barWidth}%;padding:0"><div style="background:${color};height:14px;border-radius:2px;min-width:4px"></div></td>
-              <td style="padding:0"></td>
-            </tr></table>
-          </td>
-          <td style="padding:4px 12px 4px 8px;font-size:11px;color:${color};font-weight:600;white-space:nowrap;text-align:right">${pipStr}</td>
+          <td style="padding:5px 10px 5px 14px;font-size:13px;font-weight:700;color:#e2e8f0;white-space:nowrap">${r.ccy}</td>
+          <td style="padding:5px 0"><!--[if mso]><v:rect xmlns:v="urn:schemas-microsoft-com:vml" style="width:${barPx}px;height:14px" strokecolor="${color}" fillcolor="${color}"><v:fill type="tile"/><v:textbox style="mso-fit-shape-to-text:true" inset="0,0,0,0"/></v:rect><![endif]--><!--[if !mso]><!--><div style="width:${barPx}px;height:14px;background:${color};border-radius:3px"></div><!--<![endif]--></td>
+          <td style="padding:5px 14px 5px 10px;font-size:12px;color:${color};font-weight:600;white-space:nowrap;text-align:right">${pipStr}</td>
         </tr>`;
       }).join('');
 
       marketFocusHtml = `
         <div class="card">
           <div class="card-hd">M15 Currency Strength</div>
-          <div class="card-bd">
+          <div class="card-bd" style="padding:6px 0">
             <table width="100%" cellpadding="0" cellspacing="0">${rows}</table>
           </div>
         </div>`;
