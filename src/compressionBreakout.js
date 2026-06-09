@@ -183,6 +183,18 @@ async function updateM15StructureWatch() {
       invalidation_price: null,
     };
 
+    // Re-activate if pair was INACTIVE or INVALIDATED but is back in signal pairs
+    if (existing.state === 'INACTIVE' || existing.state === 'INVALIDATED') {
+      console.log(`[COMP-BRK] ${sp.instrument} re-activated (was ${existing.state}) — resetting to WATCHING`);
+      existing.state = 'WATCHING';
+      existing.impulse_high = null;
+      existing.impulse_low = null;
+      existing.pullback_high = null;
+      existing.pullback_low = null;
+      existing.entry_price = null;
+      existing.invalidation_price = null;
+    }
+
     // Direction change = new directional discovery → reset structure
     if (existing.direction && existing.direction !== sp.dir) {
       console.log(`[COMP-BRK] ${sp.instrument} direction changed ${existing.direction}→${sp.dir} — resetting structure`);
