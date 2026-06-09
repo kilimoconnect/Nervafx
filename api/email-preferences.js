@@ -47,6 +47,7 @@ module.exports = async function handler(req, res) {
         user_id:            user.id,
         signal_alerts:      true,
         direction_alerts:   true,
+        cycle_alerts:       true,
         flow_spread_alerts: true,
         breakout_alerts:    true,
         daily_digest:       true,
@@ -57,7 +58,7 @@ module.exports = async function handler(req, res) {
 
     // ── PATCH — update preferences ─────────────────────────────────────────
     if (req.method === 'PATCH') {
-      const allowed = ['signal_alerts', 'direction_alerts', 'flow_spread_alerts', 'breakout_alerts', 'daily_digest', 'upgrade_prompts', 'unsubscribed'];
+      const allowed = ['signal_alerts', 'direction_alerts', 'cycle_alerts', 'flow_spread_alerts', 'breakout_alerts', 'daily_digest', 'upgrade_prompts', 'unsubscribed'];
       const updates = { user_id: user.id };
       for (const key of allowed) {
         if (req.body[key] !== undefined) updates[key] = !!req.body[key];

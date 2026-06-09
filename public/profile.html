@@ -453,6 +453,16 @@
         <div class="divider"></div>
         <div class="field">
           <label style="display:flex;align-items:center;gap:12px;cursor:pointer">
+            <input type="checkbox" id="pref-cycle-alerts" checked style="width:18px;height:18px;accent-color:#3b82f6;cursor:pointer">
+            <div>
+              <div style="font-size:14px;font-weight:600;color:var(--text)">Cycle Alerts</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px">Explosive cycle or Expansion + Impulse momentum detected — high-energy market conditions</div>
+            </div>
+          </label>
+        </div>
+        <div class="divider"></div>
+        <div class="field">
+          <label style="display:flex;align-items:center;gap:12px;cursor:pointer">
             <input type="checkbox" id="pref-daily-digest" checked style="width:18px;height:18px;accent-color:#3b82f6;cursor:pointer">
             <div>
               <div style="font-size:14px;font-weight:600;color:var(--text)">Daily Digest</div>
@@ -782,6 +792,7 @@
         const data = await res.json();
         if (data.notification_email)               document.getElementById('notification-email').value        = data.notification_email;
         if (data.direction_alerts !== undefined)    document.getElementById('pref-direction-alerts').checked   = data.direction_alerts;
+        if (data.cycle_alerts !== undefined)        document.getElementById('pref-cycle-alerts').checked       = data.cycle_alerts;
         if (data.flow_spread_alerts !== undefined)  document.getElementById('pref-flow-spread').checked        = data.flow_spread_alerts;
         if (data.breakout_alerts !== undefined)     document.getElementById('pref-breakout-alerts').checked    = data.breakout_alerts;
         if (data.daily_digest !== undefined)        document.getElementById('pref-daily-digest').checked       = data.daily_digest;
@@ -803,6 +814,7 @@
           body: JSON.stringify({
             notification_email: document.getElementById('notification-email').value.trim(),
             direction_alerts:   document.getElementById('pref-direction-alerts').checked,
+            cycle_alerts:       document.getElementById('pref-cycle-alerts').checked,
             flow_spread_alerts: document.getElementById('pref-flow-spread').checked,
             breakout_alerts:    document.getElementById('pref-breakout-alerts').checked,
             daily_digest:       document.getElementById('pref-daily-digest').checked,
