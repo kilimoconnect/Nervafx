@@ -599,7 +599,7 @@ async function sendSignalAlerts(sb) {
           const timeStr = h.time_utc ? new Date(h.time_utc).toISOString().slice(11, 16) + ' UTC' : '';
 
           const template = {
-            subject: `⚡ ${cycleLabel} cycle detected — Energy ${energy}`,
+            subject: `${cycleLabel} cycle detected — Energy ${energy}`,
             html: baseLayout(`
               ${marketFocusHtml}
               <div class="card">
