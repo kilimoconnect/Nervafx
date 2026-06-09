@@ -446,11 +446,32 @@ async function writeJournalEntry() {
     nzdjpy_score:    sentiment.nzdjpy_score,
   } : null;
 
-  // Compact currency strength (all three TFs so dashboard modal can render 3H/6H/12H bars).
-  // Store smooth_* as primary and normalized_* as fallback — normalized is always available
-  // immediately after strength calculation even if the smooth step hasn't run yet.
+  // Derive M15 per-currency strength from m15_pair_spreads (smooth_45m)
+  let m15CcyMap = {};
+  try {
+    const { data: m15Spreads } = await supabase
+      .from('m15_pair_spreads')
+      .select('instrument, smooth_45m')
+      .order('time', { ascending: false })
+      .limit(28);
+    if (m15Spreads?.length) {
+      const sums = {}, counts = {};
+      for (const s of m15Spreads) {
+        const v = parseFloat(s.smooth_45m) || 0;
+        const [base, quote] = s.instrument.split('_');
+        sums[base]   = (sums[base]   || 0) + v;  counts[base]  = (counts[base]  || 0) + 1;
+        sums[quote]  = (sums[quote]  || 0) - v;  counts[quote] = (counts[quote] || 0) + 1;
+      }
+      for (const ccy of Object.keys(sums)) {
+        m15CcyMap[ccy] = counts[ccy] > 0 ? sums[ccy] / counts[ccy] : 0;
+      }
+    }
+  } catch (_) {}
+
+  // Compact currency strength (all TFs so journal can render M15/3H/6H/12H bars).
   const currency_strength = currencyStrength.map(r => ({
     currency:      r.currency,
+    smooth_m15:    m15CcyMap[r.currency] || 0,
     smooth_3h:     r.smooth_3h,
     smooth_6h:     r.smooth_6h,
     smooth_12h:    r.smooth_12h,
