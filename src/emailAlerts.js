@@ -545,6 +545,94 @@ async function sendSignalAlerts(sb) {
     }
   }
 
+  // ── 1b. CYCLE ALERT — EXPLOSIVE or (EXPANSION + IMPULSE) ───────────────────
+  // Fires when the latest hourly bar has a high-energy cycle classification.
+  try {
+    const { data: latestHourly } = await sb
+      .from('hourly_session_activity')
+      .select('time_utc, session_name, market_energy, energy_cycle, momentum_type, momentum_score, tradability_score, movement_score, breadth_score, agreement_score')
+      .order('time_utc', { ascending: false })
+      .limit(1);
+
+    if (latestHourly?.length) {
+      const h = latestHourly[0];
+      const cycle = (h.energy_cycle || '').toUpperCase();
+      const momType = (h.momentum_type || '').toUpperCase();
+      const isExplosive = cycle === 'EXPLOSIVE';
+      const isExpansionImpulse = cycle === 'EXPANSION' && momType === 'IMPULSE';
+
+      if (isExplosive || isExpansionImpulse) {
+        const cycleKey = `cycle_${(h.time_utc || '').slice(0, 13)}`;
+        const cycleAlreadySent = await wasAlreadySent(sb, cycleKey);
+        if (!cycleAlreadySent) {
+          const cycleLabel = isExplosive ? 'EXPLOSIVE' : 'EXPANSION + IMPULSE';
+          const cycleColor = isExplosive ? '#ef4444' : '#22c55e';
+          const energy = Math.round(parseFloat(h.market_energy) || 0);
+          const trad = Math.round(parseFloat(h.tradability_score) || 0);
+          const mov = Math.round(parseFloat(h.movement_score) || 0);
+          const brd = Math.round(parseFloat(h.breadth_score) || 0);
+          const agr = Math.round(parseFloat(h.agreement_score) || 0);
+          const mom = Math.round(parseFloat(h.momentum_score) || 0);
+          const sessLabel = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York' }[h.session_name] || h.session_name;
+          const timeStr = h.time_utc ? new Date(h.time_utc).toISOString().slice(11, 16) + ' UTC' : '';
+
+          const template = {
+            subject: `⚡ ${cycleLabel} cycle detected — Energy ${energy}`,
+            html: baseLayout(`
+              ${marketFocusHtml}
+              <div class="card">
+                <div class="card-hd">Cycle Alert</div>
+                <div class="card-bd" style="padding:16px 14px;text-align:center">
+                  <div style="font-size:22px;font-weight:800;color:${cycleColor};letter-spacing:-0.3px">${cycleLabel}</div>
+                  <div style="font-size:13px;color:#94a3b8;margin-top:6px">${sessLabel} session · ${timeStr}</div>
+                </div>
+              </div>
+              <div class="card">
+                <div class="card-hd">Session Metrics</div>
+                <div class="card-bd" style="padding:10px 14px">
+                  <table width="100%" cellpadding="0" cellspacing="0" style="font-size:13px">
+                    <tr>
+                      <td style="padding:4px 0;color:#64748b">Energy</td>
+                      <td style="padding:4px 0;color:#f1f5f9;font-weight:700;text-align:right">${energy}</td>
+                      <td style="padding:4px 0;color:#64748b;padding-left:16px">Tradability</td>
+                      <td style="padding:4px 0;color:#f1f5f9;font-weight:700;text-align:right">${trad}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:4px 0;color:#64748b">Movement</td>
+                      <td style="padding:4px 0;color:#f1f5f9;font-weight:700;text-align:right">${mov}</td>
+                      <td style="padding:4px 0;color:#64748b;padding-left:16px">Breadth</td>
+                      <td style="padding:4px 0;color:#f1f5f9;font-weight:700;text-align:right">${brd}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:4px 0;color:#64748b">Agreement</td>
+                      <td style="padding:4px 0;color:#f1f5f9;font-weight:700;text-align:right">${agr}</td>
+                      <td style="padding:4px 0;color:#64748b;padding-left:16px">Momentum</td>
+                      <td style="padding:4px 0;color:#f1f5f9;font-weight:700;text-align:right">${mom} (${momType})</td>
+                    </tr>
+                  </table>
+                </div>
+              </div>
+              <p style="text-align:center;margin:24px 0 16px"><a class="cta" href="https://nervafx.com">Open Dashboard</a></p>
+              <p class="sm" style="text-align:center">Analytical observations only — not trade recommendations.</p>
+            `),
+          };
+
+          await sendToAll(sb, recipients, template, cycleKey, {
+            cycle: cycleLabel,
+            energy,
+            session: h.session_name,
+          }, 'cycle_alerts');
+          emailsSent.push('cycle');
+          console.log(`[EMAIL] Cycle alert sent: ${cycleLabel} — energy ${energy}, ${sessLabel} ${timeStr}`);
+        } else {
+          console.log(`[EMAIL] Cycle alert already sent for ${cycleKey} — skipping`);
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[EMAIL] Cycle alert error:', e.message);
+  }
+
   // ── 2. BREAKOUT ENTRY ALERT — M15 structure break detected ─────────────────
   // Personalized per user: SL, TP, and lot size based on profile risk settings
   try {
