@@ -257,7 +257,7 @@ function directionAlertEmail(data) {
   // ── Structure Watch (M15 compression breakout) ──
   const swReady = (structureWatch || []).filter(s => s.state === 'ENTRY_READY');
   const swFormed = (structureWatch || []).filter(s => s.state === 'STRUCTURE_FORMED');
-  const swBuilding = (structureWatch || []).filter(s => s.state === 'PULLBACK_ACTIVE' || s.state === 'IMPULSE_DETECTED');
+  const swBuilding = (structureWatch || []).filter(s => s.state === 'PULLBACK_ACTIVE');
   const swTotal = swReady.length + swFormed.length + swBuilding.length;
 
   const fmtPrice = (v, instr) => {
@@ -495,7 +495,7 @@ async function sendSignalAlerts(sb) {
         const { data: swRows } = await sb
           .from('m15_structure_watch')
           .select('instrument, direction, state, impulse_high, impulse_low, pullback_high, pullback_low, entry_price, invalidation_price')
-          .in('state', ['ENTRY_READY', 'STRUCTURE_FORMED', 'PULLBACK_ACTIVE', 'IMPULSE_DETECTED']);
+          .in('state', ['ENTRY_READY', 'STRUCTURE_FORMED', 'PULLBACK_ACTIVE']);
         structureWatch = swRows || [];
       } catch (_) {}
 

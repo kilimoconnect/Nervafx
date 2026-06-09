@@ -3551,7 +3551,7 @@ function renderCompressionBreakout(data) {
     baseEl.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:8px">
       <span style="width:8px;height:8px;border-radius:50%;background:${statusColor}"></span>
       <span style="font-size:11px;font-weight:600;color:${statusColor}">${statusText}</span>
-      ${summary ? `<span style="margin-left:auto;font-size:10px;color:#64748b">${summary.entry_ready} ready · ${summary.structure_formed} formed · ${summary.pullback_active + summary.impulse_detected} building</span>` : ''}
+      ${summary ? `<span style="margin-left:auto;font-size:10px;color:#64748b">${summary.entry_ready} ready · ${summary.structure_formed} formed · ${summary.pullback_active} pullback</span>` : ''}
     </div>`;
   }
 
@@ -3575,13 +3575,11 @@ function renderCompressionBreakout(data) {
 
   const STATE_COLOR = {
     ENTRY_READY: '#22c55e', STRUCTURE_FORMED: '#0ea5e9',
-    PULLBACK_ACTIVE: '#f59e0b', IMPULSE_DETECTED: '#a855f7',
-    WATCHING: '#475569',
+    PULLBACK_ACTIVE: '#f59e0b',
   };
   const STATE_LABEL = {
     ENTRY_READY: 'ENTRY READY', STRUCTURE_FORMED: 'STRUCTURE FORMED',
-    PULLBACK_ACTIVE: 'PULLBACK', IMPULSE_DETECTED: 'IMPULSE',
-    WATCHING: 'WATCHING',
+    PULLBACK_ACTIVE: 'PULLBACK',
   };
   const isJPY = inst => inst.includes('JPY');
   const dec = inst => isJPY(inst) ? 3 : 5;
@@ -3594,7 +3592,7 @@ function renderCompressionBreakout(data) {
     const pairLabel = s.instrument.replace('_', '/');
 
     let detailHtml = '';
-    if (s.state !== 'WATCHING') {
+    {
       const rows = [];
       if (s.impulse_high) rows.push(`<span class="cb-lbl">Imp High</span><span class="cb-val">${s.impulse_high.toFixed(d)}</span>`);
       if (s.impulse_low) rows.push(`<span class="cb-lbl">Imp Low</span><span class="cb-val">${s.impulse_low.toFixed(d)}</span>`);

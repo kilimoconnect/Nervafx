@@ -11,13 +11,11 @@
  *   Approved pairs generated from energy_signal_pairs
  *
  * M15 executes on approved pairs using price structure:
- *   WATCHING → IMPULSE_DETECTED → PULLBACK_ACTIVE →
- *   STRUCTURE_FORMED → ENTRY_READY
+ *   Direction confirmation = impulse (no separate detection needed).
+ *   PULLBACK_ACTIVE → STRUCTURE_FORMED → ENTRY_READY
  *
  * State machine per pair:
- *   WATCHING:           waiting for impulse move
- *   IMPULSE_DETECTED:   strong directional M15 move found
- *   PULLBACK_ACTIVE:    price retracing against impulse
+ *   PULLBACK_ACTIVE:    monitoring for pullback against the confirmed direction
  *   STRUCTURE_FORMED:   pullback created swing structure (lower high / higher low)
  *   ENTRY_READY:        M15 close broke past pullback level → trade ready
  *   INVALIDATED:        price broke past invalidation level
@@ -31,10 +29,7 @@ const { supabase } = require('./supabase');
 const { config }   = require('./config');
 
 const COMPRESSION_THRESHOLD = 35;  // Energy below this = compression
-const IMPULSE_MIN_CANDLES   = 3;   // Minimum consecutive directional M15 candles
-const IMPULSE_MIN_MOVE      = 0.003; // Minimum impulse move size (% of price) — ~24p on majors, ~35p on JPY
-const IMPULSE_LOOKBACK      = 20;  // M15 candles to scan for impulse (~5 hours)
-const PULLBACK_MIN_RETRACE  = 0.3;   // Pullback must retrace at least 30% of impulse
+const IMPULSE_LOOKBACK      = 20;  // M15 candles to derive impulse range from (~5 hours)
 
 // ─── Compression Baseline ────────────────────────────────────────────────────
 
@@ -171,45 +166,61 @@ async function updateM15StructureWatch() {
       close: parseFloat(c.close),
     }));
 
-    const existing = watchMap[sp.instrument] || {
-      instrument: sp.instrument,
-      direction: sp.dir,
-      state: 'WATCHING',
-      impulse_high: null,
-      impulse_low: null,
-      pullback_high: null,
-      pullback_low: null,
-      entry_price: null,
-      invalidation_price: null,
-    };
+    const existing = watchMap[sp.instrument] || null;
+    let needsInit = false;
 
-    // Re-activate if pair was INACTIVE or INVALIDATED but is back in signal pairs
-    if (existing.state === 'INACTIVE' || existing.state === 'INVALIDATED') {
-      console.log(`[COMP-BRK] ${sp.instrument} re-activated (was ${existing.state}) — resetting to WATCHING`);
-      existing.state = 'WATCHING';
-      existing.impulse_high = null;
-      existing.impulse_low = null;
-      existing.pullback_high = null;
-      existing.pullback_low = null;
-      existing.entry_price = null;
-      existing.invalidation_price = null;
+    let entry;
+    if (!existing) {
+      // Brand new pair — initialize
+      entry = {
+        instrument: sp.instrument,
+        direction: sp.dir,
+        state: null, // will be set below
+        impulse_high: null,
+        impulse_low: null,
+        pullback_high: null,
+        pullback_low: null,
+        entry_price: null,
+        invalidation_price: null,
+      };
+      needsInit = true;
+    } else {
+      entry = { ...existing };
+
+      // Re-activate if pair was INACTIVE or INVALIDATED but is back in signal pairs
+      if (entry.state === 'INACTIVE' || entry.state === 'INVALIDATED') {
+        console.log(`[COMP-BRK] ${sp.instrument} re-activated (was ${entry.state})`);
+        needsInit = true;
+      }
+
+      // Direction change → reset
+      if (entry.direction && entry.direction !== sp.dir) {
+        console.log(`[COMP-BRK] ${sp.instrument} direction changed ${entry.direction}→${sp.dir}`);
+        needsInit = true;
+      }
     }
 
-    // Direction change = new directional discovery → reset structure
-    if (existing.direction && existing.direction !== sp.dir) {
-      console.log(`[COMP-BRK] ${sp.instrument} direction changed ${existing.direction}→${sp.dir} — resetting structure`);
-      existing.state = 'WATCHING';
-      existing.impulse_high = null;
-      existing.impulse_low = null;
-      existing.pullback_high = null;
-      existing.pullback_low = null;
-      existing.entry_price = null;
-      existing.invalidation_price = null;
+    entry.direction = sp.dir;
+
+    // Skip WATCHING + IMPULSE_DETECTED entirely — direction confirmation IS the impulse.
+    // Use the recent M15 candle range as impulse levels and go straight to PULLBACK_ACTIVE.
+    if (needsInit) {
+      const recentWindow = asc.slice(-IMPULSE_LOOKBACK);
+      const impHigh = Math.max(...recentWindow.map(c => c.high));
+      const impLow  = Math.min(...recentWindow.map(c => c.low));
+
+      entry.state = 'PULLBACK_ACTIVE';
+      entry.impulse_high = impHigh;
+      entry.impulse_low = impLow;
+      entry.pullback_high = sp.dir === 'BUY' ? impHigh : null;
+      entry.pullback_low  = sp.dir === 'SELL' ? impLow : null;
+      entry.entry_price = null;
+      entry.invalidation_price = null;
+      console.log(`[COMP-BRK] ${sp.instrument} ${sp.dir} → PULLBACK_ACTIVE immediately (impulse H:${impHigh.toFixed(5)} L:${impLow.toFixed(5)})`);
     }
-    existing.direction = sp.dir;
 
     // Run state machine
-    const updated = processStructure(existing, asc, sp.dir);
+    const updated = processStructure(entry, asc, sp.dir);
     results.push(updated);
   }
 
@@ -238,8 +249,8 @@ async function updateM15StructureWatch() {
 
   const ready = results.filter(r => r.state === 'ENTRY_READY');
   const structured = results.filter(r => r.state === 'STRUCTURE_FORMED');
-  const watching = results.filter(r => r.state === 'WATCHING' || r.state === 'IMPULSE_DETECTED' || r.state === 'PULLBACK_ACTIVE');
-  console.log(`[COMP-BRK] M15 Structure: ${ready.length} ENTRY_READY, ${structured.length} STRUCTURE_FORMED, ${watching.length} watching, ${results.length} total`);
+  const pullback = results.filter(r => r.state === 'PULLBACK_ACTIVE');
+  console.log(`[COMP-BRK] M15 Structure: ${ready.length} ENTRY_READY, ${structured.length} STRUCTURE_FORMED, ${pullback.length} PULLBACK_ACTIVE, ${results.length} total`);
 
   return results;
 }
@@ -249,58 +260,14 @@ async function updateM15StructureWatch() {
 function processStructure(state, candles, direction) {
   const isBuy = direction === 'BUY';
   const latest = candles[candles.length - 1];
-  const prev   = candles[candles.length - 2];
 
   // Invalidated or inactive — do not process further
-  // Pair stays removed until a new directional discovery re-adds it
   if (state.state === 'INVALIDATED' || state.state === 'INACTIVE') {
     return state;
   }
 
-  // ── WATCHING → detect impulse ──
-  if (state.state === 'WATCHING') {
-    const impulse = detectImpulse(candles, direction);
-    if (impulse) {
-      state.state = 'IMPULSE_DETECTED';
-      state.impulse_high = impulse.high;
-      state.impulse_low = impulse.low;
-      state.pullback_high = null;
-      state.pullback_low = null;
-    }
-    return state;
-  }
-
-  // ── IMPULSE_DETECTED → detect pullback ──
-  // Pullback = any candle that moves against the impulse direction.
-  // Even 1 candle counts — the charts show 1-3 candle pullbacks.
-  if (state.state === 'IMPULSE_DETECTED') {
-    if (isInvalidated(state, latest, isBuy)) {
-      state.state = 'INVALIDATED';
-      console.log(`[COMP-BRK] ${state.instrument} INVALIDATED at IMPULSE_DETECTED`);
-      return state;
-    }
-
-    if (isBuy) {
-      // BUY: any candle with a lower low than previous = pullback starting
-      if (latest.low < prev.low || latest.close < prev.close) {
-        state.state = 'PULLBACK_ACTIVE';
-        state.pullback_low = latest.low;
-        state.pullback_high = state.impulse_high; // high before pullback
-      }
-    } else {
-      // SELL: any candle with a higher high than previous = pullback starting
-      if (latest.high > prev.high || latest.close > prev.close) {
-        state.state = 'PULLBACK_ACTIVE';
-        state.pullback_high = latest.high;
-        state.pullback_low = state.impulse_low; // low before pullback
-      }
-    }
-    return state;
-  }
-
-  // ── PULLBACK_ACTIVE → track swing + detect structure + detect break ──
-  // Combines PULLBACK + STRUCTURE_FORMED + ENTRY detection in one state.
-  // As soon as pullback swing is established and price breaks past it → ENTRY.
+  // ── PULLBACK_ACTIVE / STRUCTURE_FORMED → track swing + detect structure + entry ──
+  // Pairs always start at PULLBACK_ACTIVE (impulse is the direction confirmation itself).
   if (state.state === 'PULLBACK_ACTIVE' || state.state === 'STRUCTURE_FORMED') {
     if (isInvalidated(state, latest, isBuy)) {
       state.state = 'INVALIDATED';
@@ -309,41 +276,33 @@ function processStructure(state, candles, direction) {
     }
 
     if (isBuy) {
-      // Track pullback low (deepest retrace)
       if (latest.low < (state.pullback_low || Infinity)) {
         state.pullback_low = latest.low;
       }
-      // Pullback high = the swing high before the pullback
       if (!state.pullback_high) state.pullback_high = state.impulse_high;
 
-      // Structure formed when price stops making new lows (current low > pullback_low)
       if (state.state === 'PULLBACK_ACTIVE' && latest.low > state.pullback_low) {
         state.state = 'STRUCTURE_FORMED';
         state.entry_price = state.pullback_high;
         state.invalidation_price = state.pullback_low;
       }
 
-      // Break entry: M15 close above pullback high
       if (state.state === 'STRUCTURE_FORMED' && latest.close > state.entry_price) {
         state.state = 'ENTRY_READY';
         state.entry_price = latest.close;
       }
     } else {
-      // Track pullback high (highest retrace)
       if (latest.high > (state.pullback_high || 0)) {
         state.pullback_high = latest.high;
       }
-      // Pullback low = the swing low before the pullback
       if (!state.pullback_low) state.pullback_low = state.impulse_low;
 
-      // Structure formed when price stops making new highs (current high < pullback_high)
       if (state.state === 'PULLBACK_ACTIVE' && latest.high < state.pullback_high) {
         state.state = 'STRUCTURE_FORMED';
         state.entry_price = state.pullback_low;
         state.invalidation_price = state.pullback_high;
       }
 
-      // Break entry: M15 close below pullback low
       if (state.state === 'STRUCTURE_FORMED' && latest.close < state.entry_price) {
         state.state = 'ENTRY_READY';
         state.entry_price = latest.close;
@@ -363,47 +322,8 @@ function processStructure(state, candles, direction) {
   return state;
 }
 
-function detectImpulse(candles, direction) {
-  const isBuy = direction === 'BUY';
-  const recent = candles.slice(-IMPULSE_LOOKBACK);
-  if (recent.length < 4) return null;
-
-  // Scan ALL starting positions × window sizes to find the strongest
-  // structural impulse move in the signal direction.
-  let bestImpulse = null;
-
-  for (let start = 0; start < recent.length - 2; start++) {
-    for (let end = start + 2; end < recent.length; end++) {
-      const window = recent.slice(start, end + 1);
-      const windowHigh = Math.max(...window.map(c => c.high));
-      const windowLow  = Math.min(...window.map(c => c.low));
-      const netMove    = window[window.length - 1].close - window[0].open;
-      const midPrice   = (windowHigh + windowLow) / 2;
-      const totalRange = (windowHigh - windowLow) / midPrice;
-
-      // Net move must be in the signal direction and meet minimum size
-      const directional = isBuy ? netMove > 0 : netMove < 0;
-      if (!directional) continue;
-      if (totalRange < IMPULSE_MIN_MOVE) continue;
-
-      // Directional efficiency: net move / total range > 30%
-      // Allows for wicks and minor retraces within the impulse
-      const efficiency = Math.abs(netMove) / (windowHigh - windowLow);
-      if (efficiency < 0.30) continue;
-
-      // At least 40% of candles should close in the signal direction
-      const dirCount = window.filter(c => isBuy ? c.close > c.open : c.close < c.open).length;
-      if (dirCount < window.length * 0.4) continue;
-
-      // Keep the LARGEST qualifying impulse (biggest structural move)
-      if (!bestImpulse || totalRange > bestImpulse.moveSize) {
-        bestImpulse = { high: windowHigh, low: windowLow, streak: window.length, moveSize: totalRange };
-      }
-    }
-  }
-
-  return bestImpulse;
-}
+// detectImpulse removed — direction confirmation IS the impulse.
+// Pairs skip WATCHING/IMPULSE_DETECTED and start at PULLBACK_ACTIVE.
 
 function isInvalidated(state, candle, isBuy) {
   if (isBuy) {
