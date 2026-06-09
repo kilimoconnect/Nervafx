@@ -1040,4 +1040,166 @@ async function sendSignalAlerts(sb) {
   }
 }
 
-module.exports = { sendSignalAlerts };
+/**
+ * sendDirectionAlertNow(sb)
+ *
+ * Standalone direction email — called immediately after calculateEnergyDirection()
+ * detects isNewEnergyEvent. Sends the direction alert without waiting for the
+ * full sendSignalAlerts() pipeline. The dedup key (direction_YYYY-MM-DDTHH)
+ * prevents double-sending when sendSignalAlerts() runs later.
+ */
+async function sendDirectionAlertNow(sb) {
+  if (!process.env.BREVO_API_KEY) return;
+
+  try {
+    // Check if there's a new direction event to alert on
+    const { data: currStates } = await sb
+      .from('energy_currency_state')
+      .select('*')
+      .order('currency', { ascending: true });
+
+    const hasActiveDirections = (currStates || []).some(s => s.active && s.direction !== 'NEUTRAL');
+    const triggerTs = (currStates || []).find(s => s.triggered_at)?.triggered_at || '';
+    if (!hasActiveDirections || !triggerTs) return;
+
+    const directionKey = `direction_${(triggerTs || '').slice(0, 13)}`;
+    const dirAlreadySent = await wasAlreadySent(sb, directionKey);
+    if (dirAlreadySent) {
+      console.log(`[EMAIL] Direction alert already sent (${directionKey}) — skipping immediate send`);
+      return;
+    }
+
+    console.log('[EMAIL] New direction event detected — sending direction alert immediately...');
+
+    // Get subscribers
+    let recipients;
+    try {
+      recipients = await getSubscribedUsers(sb);
+    } catch (e) {
+      console.error('[EMAIL] Failed to get subscribers:', e.message);
+      return;
+    }
+    if (!recipients.length) return;
+
+    // M15 dominant currency for Market Focus card
+    let dominantCcy = null, dominantVal = 0;
+    try {
+      const { data: m15Spreads } = await sb
+        .from('m15_pair_spreads')
+        .select('instrument, smooth_45m')
+        .order('time', { ascending: false })
+        .limit(28);
+      if (m15Spreads?.length) {
+        const sums = {}, counts = {};
+        for (const s of m15Spreads) {
+          const v = parseFloat(s.smooth_45m) || 0;
+          const [base, quote] = s.instrument.split('_');
+          sums[base] = (sums[base] || 0) + v; counts[base] = (counts[base] || 0) + 1;
+          sums[quote] = (sums[quote] || 0) - v; counts[quote] = (counts[quote] || 0) + 1;
+        }
+        for (const [ccy, sum] of Object.entries(sums)) {
+          const avg = counts[ccy] > 0 ? sum / counts[ccy] : 0;
+          if (Math.abs(avg) > Math.abs(dominantVal)) { dominantCcy = ccy; dominantVal = avg; }
+        }
+      }
+    } catch (_) {}
+
+    const dominantPips = dominantCcy ? (Math.abs(dominantVal) * 10000).toFixed(1) : '0';
+    const dominantDir = dominantVal > 0 ? 'strong' : 'weak';
+    const dominantColor = dominantVal > 0 ? '#4ade80' : '#f87171';
+    const marketFocusHtml = dominantCcy ? `
+      <div class="card"><div class="card-hd">Market Focus</div><div class="card-bd">
+        <div style="padding:14px;text-align:center">
+          <div style="font-size:20px;font-weight:800;color:${dominantColor};letter-spacing:-0.3px">${dominantCcy}</div>
+          <div style="font-size:13px;font-weight:600;color:#e2e8f0;margin-top:4px">${dominantCcy} is ${dominantDir} (${dominantPips} pips) — focus on ${dominantCcy} pairs</div>
+        </div>
+      </div></div>` : '';
+
+    // Fetch active signal pairs
+    const { data: activePairs } = await sb
+      .from('energy_signal_pairs')
+      .select('instrument, dir, strong_ccy, weak_ccy, phase, v45, v90, spread_3h, spread_6h, de_combined, impulse_score, impulse_aligned, m15_state, energy_event_type')
+      .eq('active', true)
+      .order('de_combined', { ascending: false });
+
+    // Recently deactivated pairs
+    const recentCutoff = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    const { data: inactivePairs } = await sb
+      .from('energy_signal_pairs')
+      .select('instrument')
+      .eq('active', false)
+      .gte('last_updated', recentCutoff);
+
+    // Structure watch
+    let structureWatch = [];
+    try {
+      const { data: swRows } = await sb
+        .from('m15_structure_watch')
+        .select('instrument, direction, state, impulse_high, impulse_low, pullback_high, pullback_low, entry_price, invalidation_price')
+        .in('state', ['ENTRY_READY', 'STRUCTURE_FORMED', 'PULLBACK_ACTIVE', 'IMPULSE_DETECTED']);
+      structureWatch = swRows || [];
+    } catch (_) {}
+
+    // Upcoming news
+    let upcomingNews = [];
+    try {
+      const now = new Date();
+      const next24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+      const { data: newsRows } = await sb
+        .from('forex_news')
+        .select('event_time, currency, event_name, impact')
+        .gte('event_time', now.toISOString())
+        .lte('event_time', next24h.toISOString())
+        .in('impact', ['medium', 'high'])
+        .order('event_time', { ascending: true })
+        .limit(15);
+      upcomingNews = newsRows || [];
+    } catch (_) {}
+
+    const triggerState = (currStates || []).find(s => s.energy_at_trigger);
+    const template = directionAlertEmail({
+      marketFocusHtml,
+      triggerEnergy: triggerState?.energy_at_trigger || 0,
+      triggerSession: triggerState?.trigger_session || '',
+      triggerHour: triggerState?.triggered_at || '',
+      currencies: (currStates || []).map(c => ({
+        currency: c.currency,
+        direction: c.direction,
+        eventType: c.energy_event_type,
+        smooth_3h: parseFloat(c.smooth_3h) || 0,
+        smooth_6h: parseFloat(c.smooth_6h) || 0,
+      })),
+      signalPairs: (activePairs || []).map(p => ({
+        instrument: p.instrument,
+        dir: p.dir,
+        strong_ccy: p.strong_ccy,
+        weak_ccy: p.weak_ccy,
+        phase: p.phase,
+        v45: parseFloat(p.v45) || 0,
+        v90: parseFloat(p.v90) || 0,
+        spread_3h: parseFloat(p.spread_3h) || 0,
+        spread_6h: parseFloat(p.spread_6h) || 0,
+        de_combined: parseFloat(p.de_combined) || 0,
+        impulse_score: parseInt(p.impulse_score) || 0,
+        impulse_aligned: !!p.impulse_aligned,
+        m15_state: p.m15_state || '',
+        energy_event_type: p.energy_event_type || '',
+      })),
+      structureWatch,
+      removedPairs: (inactivePairs || []).map(p => p.instrument),
+      newsEvents: upcomingNews || [],
+    });
+
+    await sendToAll(sb, recipients, template, directionKey, {
+      energy: triggerState?.energy_at_trigger,
+      strong: (currStates || []).filter(c => c.direction === 'STRONG').map(c => c.currency),
+      weak: (currStates || []).filter(c => c.direction === 'WEAK').map(c => c.currency),
+      pairs: (activePairs || []).length,
+    }, 'direction_alerts');
+    console.log('[EMAIL] Direction alert sent immediately after energy direction');
+  } catch (e) {
+    console.error('[EMAIL] Immediate direction alert error:', e.message);
+  }
+}
+
+module.exports = { sendSignalAlerts, sendDirectionAlertNow };

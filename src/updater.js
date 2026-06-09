@@ -18,7 +18,7 @@ const { generateMarketNarrative }        = require('./narrativeEngine');
 const { calculateFlowPerformance }       = require('./flowPerformance');
 const { calculateLatestVolumeAnalysis }  = require('./volumeAnalysis');
 const { calculateEnergyDirection }       = require('./energyDirection');
-const { sendSignalAlerts }              = require('./emailAlerts');
+const { sendSignalAlerts, sendDirectionAlertNow } = require('./emailAlerts');
 const { runCompressionBreakout }       = require('./compressionBreakout');
 const { calculateM15Energy }           = require('./m15Energy');
 
@@ -154,7 +154,11 @@ async function hourlyUpdate() {
   await step('actions',       () => processLatestActions());
   await step('flow_perf',          () => calculateFlowPerformance());
   await step('session_activity',    () => backfillSessionActivity());
-  await step('energy_direction',   () => calculateEnergyDirection());
+  await step('energy_direction', async () => {
+    const result = await calculateEnergyDirection();
+    if (result?.isNewEnergyEvent) await sendDirectionAlertNow(supabase);
+    return result;
+  });
   await step('compression_breakout', () => runCompressionBreakout());
   await step('m15_energy',          () => calculateM15Energy());
   await step('market_narrative',    () => generateMarketNarrative());
@@ -186,7 +190,11 @@ async function m15Update() {
   await step('strength',          () => calculateLatestStrength());
   await step('smooth',            () => smoothLatest());
   await step('spreads',           () => calculateLatestSpreads());
-  await step('energy_direction',  () => calculateEnergyDirection());
+  await step('energy_direction', async () => {
+    const result = await calculateEnergyDirection();
+    if (result?.isNewEnergyEvent) await sendDirectionAlertNow(supabase);
+    return result;
+  });
   await step('compression_breakout', () => runCompressionBreakout());
   await step('m15_energy',        () => calculateM15Energy());
   await step('signals',           () => calculateLatestSignals());
