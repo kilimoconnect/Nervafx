@@ -210,11 +210,15 @@ function directionAlertEmail(data) {
     const evtType = p.energy_event_type;
 
     return `<div class="card" style="margin-bottom:8px">
-      <div style="padding:12px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid rgba(30,41,59,0.4)">
-        <span class="val" style="font-size:15px">${p.instrument.replace('_', '/')}</span>
-        <span style="color:${dirColor};font-weight:700;font-size:12px">${p.dir}</span>
-        <span style="color:${phaseColor(p.phase)};font-size:11px;font-weight:600">${phaseLabel(p.phase)}</span>
-        ${p.m15_state ? `<span style="color:${m15StateColor(p.m15_state)};font-size:10px">M15: ${m15StateLabel(p.m15_state)}</span>` : ''}
+      <div style="padding:12px 14px;border-bottom:1px solid rgba(30,41,59,0.4)">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+          <span class="val" style="font-size:15px">${p.instrument.replace('_', '/')}</span>
+          <span style="color:${dirColor};font-weight:700;font-size:12px">${p.dir}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="color:${phaseColor(p.phase)};font-size:11px;font-weight:600">${phaseLabel(p.phase)}</span>
+          ${p.m15_state ? `<span style="color:${m15StateColor(p.m15_state)};font-size:10px">M15: ${m15StateLabel(p.m15_state)}</span>` : ''}
+        </div>
       </div>
       <div style="padding:10px 14px">
         <div class="dim" style="margin-bottom:6px;font-size:11px">${p.strong_ccy} vs ${p.weak_ccy}</div>
