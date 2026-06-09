@@ -2861,6 +2861,8 @@ async function _energyRefreshTick() {
     renderEnergySignals(fresh);
     // Also re-render flow performance since it depends on energy pairs
     renderFlowPerformance(null, _m15DataCache);
+    // Refresh structure watch alongside signals
+    fetchCompressionBreakout();
     hydrateIcons();
 
     const hasData = (fresh.currencies?.length > 0) || (fresh.pairs?.length > 0) || (fresh.energy > 0);
