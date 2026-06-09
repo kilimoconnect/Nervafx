@@ -236,11 +236,7 @@ async function calculateEnergyDirection() {
   }
 
   // ── 5. Evaluate energy threshold (H1 only) ─────────────────────────────────
-  const energyMet = triggerEnergy >= ENERGY_THRESHOLD_H1;
-  const thresholdMet = energyMet && flowSpreadMet;
-  if (energyMet && !flowSpreadMet) {
-    console.log(`[ENERGY_DIR] Energy ${triggerEnergy} ≥ ${ENERGY_THRESHOLD_H1} but flow spread NOT met (${flowSpreadCount}/${FLOW_SPREAD_MIN_PAIRS}) — directions NOT confirmed`);
-  }
+  const thresholdMet = triggerEnergy >= ENERGY_THRESHOLD_H1;
 
   // Check if this is a NEW energy event by comparing trigger bar time against
   // the stored triggered_at. A new bar crossing ≥ threshold AFTER the stored trigger

@@ -2896,7 +2896,7 @@ function _scheduleEnergyRefresh(initialData) {
 
 function renderEnergySignals(data) {
   if (!data) return;
-  const { currencies, pairs, energy, thresholdMet, flowSpreadCount, flowSpreadMet } = data;
+  const { currencies, pairs, energy, thresholdMet } = data;
 
   // ── Banner ──
   const ringEl = document.getElementById('es-energy-ring');
@@ -2915,9 +2915,7 @@ function renderEnergySignals(data) {
 
   if (statusEl) {
     if (thresholdMet) {
-      statusEl.innerHTML = `<span style="color:#22c55e;font-weight:700">ACTIVE</span> — Directions confirmed. <span style="color:#64748b;font-size:0.85em">(${flowSpreadCount || 0} pairs flowing)</span>`;
-    } else if (energy >= 50 && !flowSpreadMet) {
-      statusEl.innerHTML = `<span style="color:#f59e0b;font-weight:700">ENERGY MET</span> — Waiting for flow spread (${flowSpreadCount || 0}/1 pairs ≥ 20p).`;
+      statusEl.innerHTML = `<span style="color:#22c55e;font-weight:700">ACTIVE</span> — Directions confirmed.`;
     } else if (energy >= 30) {
       statusEl.innerHTML = `<span style="color:#f59e0b;font-weight:700">BUILDING</span> — Approaching threshold.`;
     } else {
@@ -2935,13 +2933,7 @@ function renderEnergySignals(data) {
     if (events.has('CONTINUATION')) chips += '<span class="es-event-chip continuation">Continuation</span>';
     if (events.has('REVERSAL'))     chips += '<span class="es-event-chip reversal">Reversal</span>';
     if (events.has('NEW'))          chips += '<span class="es-event-chip new-event">New Signal</span>';
-    if (!thresholdMet && !pairs?.length) {
-      if (energy >= 50 && !flowSpreadMet) {
-        chips += '<span class="es-event-chip below">Low Flow Spread</span>';
-      } else {
-        chips += '<span class="es-event-chip below">Below Threshold</span>';
-      }
-    }
+    if (!thresholdMet && !pairs?.length) chips += '<span class="es-event-chip below">Below Threshold</span>';
     rightEl.innerHTML = chips;
   }
 
