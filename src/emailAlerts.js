@@ -545,7 +545,7 @@ async function sendSignalAlerts(sb) {
     }
   }
 
-  // ── 1b. CYCLE ALERT — EXPLOSIVE or (EXPANSION + IMPULSE) ───────────────────
+  // ── 1b. CYCLE ALERT — EXPLOSIVE or (EXPANSION + IMPULSE/EXPANSION momentum) ─
   // Fires when the latest hourly bar has a high-energy cycle classification.
   try {
     const { data: latestHourly } = await sb
@@ -560,12 +560,13 @@ async function sendSignalAlerts(sb) {
       const momType = (h.momentum_type || '').toUpperCase();
       const isExplosive = cycle === 'EXPLOSIVE';
       const isExpansionImpulse = cycle === 'EXPANSION' && momType === 'IMPULSE';
+      const isExpansionExpansion = cycle === 'EXPANSION' && momType === 'EXPANSION';
 
-      if (isExplosive || isExpansionImpulse) {
+      if (isExplosive || isExpansionImpulse || isExpansionExpansion) {
         const cycleKey = `cycle_${(h.time_utc || '').slice(0, 13)}`;
         const cycleAlreadySent = await wasAlreadySent(sb, cycleKey);
         if (!cycleAlreadySent) {
-          const cycleLabel = isExplosive ? 'EXPLOSIVE' : 'EXPANSION + IMPULSE';
+          const cycleLabel = isExplosive ? 'EXPLOSIVE' : `EXPANSION + ${momType}`;
           const cycleColor = isExplosive ? '#ef4444' : '#22c55e';
           const energy = Math.round(parseFloat(h.market_energy) || 0);
           const trad = Math.round(parseFloat(h.tradability_score) || 0);
