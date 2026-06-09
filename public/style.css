@@ -7705,7 +7705,9 @@ body::after {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 6px;
   margin-bottom: 10px;
+  flex-wrap: wrap;
 }
 .es-pair-name {
   font-family: var(--font-data);
@@ -7713,6 +7715,7 @@ body::after {
   font-weight: 800;
   color: var(--text);
   letter-spacing: -0.3px;
+  white-space: nowrap;
 }
 .es-pair-dir {
   font-size: 10px;

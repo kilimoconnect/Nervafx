@@ -2127,21 +2127,16 @@ function renderFlowPerformance(strengthData, m15Data) {
     scored.sort((a, b) => b.finalScore - a.finalScore);
   }
 
-  // Filter to pairs with 12H spread ≥ 30 pips
-  if (scored?.length) {
-    scored = scored.filter(fp => Math.abs(fp.spread12H || 0) * 10000 >= 20);
-  }
-
   if (!scored || !scored.length) {
-    el.innerHTML = '<p class="empty-state">No pairs with 12H spread ≥ 30 pips.</p>';
+    el.innerHTML = '<p class="empty-state">No active flow pairs.</p>';
     return;
   }
 
   // Use Signal Pairs ranking order — same pairs, same sort, FP details
   if (_energySignalsCache?.pairs?.length) {
-    const activePairs = _energySignalsCache.pairs.filter(p => p.active && Math.abs(parseFloat(p.spread_12h) || 0) * 10000 >= 20);
+    const activePairs = _energySignalsCache.pairs.filter(p => p.active);
     if (!activePairs.length) {
-      el.innerHTML = '<p class="empty-state">No pairs with 12H spread ≥ 30 pips.</p>';
+      el.innerHTML = '<p class="empty-state">No active flow pairs.</p>';
       return;
     }
     // Compute _finalScore on signal pairs (same formula as renderEnergySignals)
@@ -3005,10 +3000,10 @@ function renderEnergySignals(data) {
   if (pairsSection) pairsSection.style.display = isWeekend ? 'none' : '';
 
   if (pairsEl && !isWeekend) {
-    const activePairs = (pairs || []).filter(p => p.active && Math.abs(parseFloat(p.spread_12h) || 0) * 10000 >= 20);
+    const activePairs = (pairs || []).filter(p => p.active);
 
     if (!activePairs.length) {
-      pairsEl.innerHTML = '<div class="es-no-data">No active pairs with 12H spread ≥ 30 pips.</div>';
+      pairsEl.innerHTML = '<div class="es-no-data">No active signal pairs.</div>';
     } else {
       // Sort using same scoring as Flow Performance:
       // perfScore = directional V45 × 3 + 3H × 2 + 6H × 1 + impulse + alignment bonuses
