@@ -5008,8 +5008,7 @@ const METRIC_CHART_CONFIG = {
       '<strong>Market Energy</strong> is a composite measure of overall market activity and trading potential.',
       '<strong>Rising bars</strong> mean currencies are spreading apart, more pairs are active, and there is more to trade.',
       '<strong>Falling bars</strong> mean currencies are converging — fewer opportunities, lower conviction.',
-      '<strong>Green bars</strong> indicate strong energy — this engine is contributing to the Engine Confluence signal.',
-      '<strong>Pink bars</strong> = full confluence — Dispersion, Tradability, Movement, Breadth and Agreement were ALL green in that same hour. The highest-conviction conditions.',
+      '<strong>Pink bars</strong> = full confluence — energy ≥ 50 AND Dispersion, Tradability, Movement, Breadth and Agreement were ALL green in that same hour. The highest-conviction conditions.',
       '<strong>High energy</strong> = energized market — conditions favor active trading with clear setups.',
     ],
   },
@@ -5452,8 +5451,9 @@ function _renderMetricBars(container, rows, key) {
       const meetsThreshold = cfg.v2Threshold !== undefined
         ? (cfg.inverted ? b.value <= cfg.v2Threshold : b.value >= cfg.v2Threshold)
         : false;
-      const barColor = meetsThreshold ? '#22c55e' : color;
-      const cls = meetsThreshold ? 'bc-bar bc-bar-streak' : 'bc-bar';
+      // Energy bars: no green threshold coloring — only pink full-confluence marks
+      const barColor = (meetsThreshold && key !== 'energy') ? '#22c55e' : color;
+      const cls = (meetsThreshold && key !== 'energy') ? 'bc-bar bc-bar-streak' : 'bc-bar';
 
       if (b.session !== prevSess && prevSess !== '') {
         html += '<div class="bc-sess-divider"></div>';
@@ -5543,7 +5543,7 @@ function _renderMetricBars(container, rows, key) {
     <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#f59e0b"></span> Asia</span>
     <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#0ea5e9"></span> London</span>
     <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#a855f7"></span> New York</span>
-    <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#22c55e"></span> ${thresholdLabel}</span>
+    ${key !== 'energy' ? `<span class="bc-legend-item"><span class="bc-legend-dot" style="background:#22c55e"></span> ${thresholdLabel}</span>` : ''}
     ${key === 'energy' ? '<span class="bc-legend-item"><span class="bc-legend-dot" style="background:#ec4899"></span> Full confluence (all engines green)</span>' : ''}
   </div>`;
 

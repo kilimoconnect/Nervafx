@@ -906,9 +906,13 @@
         const localTime = new Date(b.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
         const localHour = localTime.slice(0, 2);
         // Threshold-based green: green when bar meets V2 engine threshold
+        // (energy bars keep session color — only pink full-confluence marks)
+        const isEnergyMetric = metric.field === 'market_energy';
         let barColor;
         if (metric.canBeNegative) {
           barColor = b.val > 0 ? '#22c55e' : b.val < 0 ? '#ef4444' : '#475569';
+        } else if (isEnergyMetric) {
+          barColor = color;
         } else if (metric.inverted) {
           barColor = (metric.v2Threshold !== undefined && b.val <= metric.v2Threshold) ? '#22c55e' : color;
         } else {
@@ -917,7 +921,7 @@
         const meetsThreshold = metric.v2Threshold !== undefined
           ? (metric.inverted ? b.val <= metric.v2Threshold : b.val >= metric.v2Threshold)
           : false;
-        const cls = meetsThreshold && !metric.canBeNegative ? 'bc-bar bc-bar-streak' : 'bc-bar';
+        const cls = meetsThreshold && !metric.canBeNegative && !isEnergyMetric ? 'bc-bar bc-bar-streak' : 'bc-bar';
         const displayVal = metric.canBeNegative && b.val > 0 ? `+${b.val}` : `${b.val}`;
 
         if (b.session !== prevSess && prevSess !== '') {
@@ -1010,7 +1014,7 @@
       <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f59e0b;margin-right:4px;vertical-align:middle"></span>Asia</span>
       <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#0ea5e9;margin-right:4px;vertical-align:middle"></span>London</span>
       <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#a855f7;margin-right:4px;vertical-align:middle"></span>New York</span>
-      ${metric.v2Threshold !== undefined ? '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;margin-right:4px;vertical-align:middle"></span>Met threshold</span>' : ''}
+      ${metric.v2Threshold !== undefined && metric.field !== 'market_energy' ? '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;margin-right:4px;vertical-align:middle"></span>Met threshold</span>' : ''}
       ${metric.field === 'market_energy' ? '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ec4899;margin-right:4px;vertical-align:middle"></span>Full confluence (all engines green)</span>' : ''}
     </div>`;
 
