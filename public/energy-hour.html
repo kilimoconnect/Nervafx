@@ -308,6 +308,12 @@
       const [base, quote] = m.instrument.split('_');
       return (strongSet.has(base) && weakSet.has(quote)) || (weakSet.has(base) && strongSet.has(quote));
     });
+    // Rank by 3H+6H combined pair spread (strength differential)
+    showMovers.sort((a, b) => {
+      const sa = Math.abs(((a.spread_3h || 0) + (a.spread_6h || 0)) / 2);
+      const sb = Math.abs(((b.spread_3h || 0) + (b.spread_6h || 0)) / 2);
+      return sb - sa;
+    });
     const maxRange = Math.max(...showMovers.map(m => m.range_pips), 0.1);
 
     // Direction at that moment — derived from which side is strong/weak
@@ -360,7 +366,7 @@
         <b>Dir</b> = direction at that moment from currency strength (strong vs weak), ▲/▼ = actual hour movement ·
         <b>Net</b> = hour close − open (pips) · <b>Range</b> = hour high − low · <b>Eff</b> = |net| / range (how directional the hour was) ·
         <b>DE-20</b> = directional efficiency over last 20 M15 bars · <b>3H/6H/12H</b> = pair strength spread (pips) · <b>Vol</b> = tick volume.
-        Ranked by range × efficiency.
+        Ranked by 3H+6H combined spread.
       </div>
     </div>`;
 
