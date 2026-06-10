@@ -527,51 +527,34 @@ function processHours(hourKeys, byTime, onlyLast = false, _csStrengthIndex = nul
     );
 
     // ═══════════════════════════════════════════════════════════════════════
-    // ENGINE 8: Market Energy (dispersion-driven formula)
-    // energy_base = 0.30×dispersion + 0.25×breadth + 0.25×agreement
-    //            + 0.20×movement
-    // energy = energy_base × volatility_quality_modifier
-    //
-    // Dispersion (currency separation) is the primary driver because
-    // tradable trends come from currencies diverging. Volatility acts
-    // as a quality modifier rather than a core component.
+    // ENGINE 8: Market Energy (participation-driven formula)
+    // energy = 0.45×breadth + 0.35×movement + 0.10×volatility
+    //        + 0.10×volatility_quality
     // ═══════════════════════════════════════════════════════════════════════
     const energyBase = round1(
-      0.30 * dispersionScore +
-      0.25 * breadthScore +
-      0.25 * agreementScore +
-      0.20 * movementScore
+      0.45 * breadthScore +
+      0.35 * movementScore +
+      0.10 * volatilityScore +
+      0.10 * volatilityQuality
     );
-
-    // Volatility acts as a quality modifier (not a core component)
-    const sessionQualityMult = volatilityType === 'CHAOTIC' ? 0.65
-                             : volatilityType === 'DEAD'    ? 0.55
-                             : volatilityType === 'EVENT'   ? 0.75
-                             : volatilityType === 'HEALTHY' ? 1.10
-                             :                                0.90; // NORMAL
-    const marketEnergy = round1(Math.min(100, energyBase * sessionQualityMult));
+    const marketEnergy = round1(Math.min(100, energyBase));
 
     // Acceleration (vs previous same-session energy)
     const prevSessEB   = prevSameSessionEnergy[session] ?? null;
     const acceleration = prevSessEB != null ? round1(energyBase - prevSessEB) : 0;
 
     // ═══════════════════════════════════════════════════════════════════════
-    // ENGINE 9: Tradability (geometric mean gate)
-    // All components must be strong for high tradability.
-    // tradability = geoMean(energy, agreement, directional_control, breadth) × volQuality_factor
+    // ENGINE 9: Tradability (weighted formula)
+    // tradability = 0.40×DE + 0.30×momentum + 0.20×agreement + 0.10×breadth
+    // Momentum is a delta (can be negative) — clamped at 0 so decaying
+    // momentum doesn't contribute.
     // ═══════════════════════════════════════════════════════════════════════
-    const volQualFactor = volatilityType === 'HEALTHY' ? 1.1
-                        : volatilityType === 'NORMAL'  ? 0.95
-                        : volatilityType === 'EVENT'   ? 0.7
-                        : volatilityType === 'CHAOTIC' ? 0.5
-                        :                                0.4; // DEAD
-    const tradComponents = [
-      Math.max(1, marketEnergy),
-      Math.max(1, agreementScore),
-      Math.max(1, directionalControl),
-      Math.max(1, breadthScore),
-    ];
-    const tradabilityScore = round1(Math.min(100, geoMean(tradComponents) * volQualFactor));
+    const tradabilityScore = round1(Math.min(100,
+      0.40 * deScore +
+      0.30 * Math.max(0, momentumScore) +
+      0.20 * agreementScore +
+      0.10 * breadthScore
+    ));
 
     // ═══════════════════════════════════════════════════════════════════════
     // ENGINE 10: False Breakout Risk (0-100)

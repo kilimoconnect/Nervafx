@@ -334,26 +334,22 @@ function processHours(hourKeys, byTime) {
     const momentumAccel = prevHourScores?.momentum != null ? round1(momentumScore - prevHourScores.momentum) : 0;
     const momentumType  = classifyMomentum(momentumScore, momentumAccel, movementScore);
 
-    // Market Energy (PDF formula)
+    // Market Energy — matches live engine (sessionActivity.js)
+    // energy = 0.45×breadth + 0.35×movement + 0.10×volatility + 0.10×vol_quality
     const energyBase = round1(
-      0.30 * movementScore +
-      0.25 * breadthScore +
-      0.20 * agreementScore +
-      0.15 * directionalControl +
+      0.45 * breadthScore +
+      0.35 * movementScore +
+      0.10 * volatilityScore +
       0.10 * volatilityQuality
     );
-
-    const sessionQualityMult = volatilityType === 'CHAOTIC' ? 0.65
-                             : volatilityType === 'DEAD'    ? 0.55
-                             : volatilityType === 'EVENT'   ? 0.75
-                             : volatilityType === 'HEALTHY' ? 1.10
-                             :                                0.90;
-    const marketEnergy = round1(Math.min(100, energyBase * sessionQualityMult));
+    const marketEnergy = round1(Math.min(100, energyBase));
 
     const prevSessEB   = prevSameSessionEnergy[session] ?? null;
     const acceleration = prevSessEB != null ? round1(energyBase - prevSessEB) : 0;
 
     // Tradability (geometric mean gate)
+    // NOTE: live engine now uses 0.40×DE + 0.30×momentum + 0.20×agreement +
+    // 0.10×breadth — DE is not computed in this backfill, so the old gate stays.
     const volQualFactor = volatilityType === 'HEALTHY' ? 1.1
                         : volatilityType === 'NORMAL'  ? 0.95
                         : volatilityType === 'EVENT'   ? 0.7

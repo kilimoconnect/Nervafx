@@ -296,22 +296,17 @@ function computeMarketEnergy(candles, sessionOpenPrices, session, prevHourScores
     ? Math.round(momentumScore - prevHourScores.momentum) : 0;
   const momentumType = classifyMomentum(momentumScore, momentumAccel, movementScore);
 
-  // ENGINE 8: Market Energy (V2 formula)
-  // energy_base = 0.30×movement + 0.25×breadth + 0.20×agreement + 0.15×directional_control + 0.10×volatility_quality
+  // ENGINE 8: Market Energy — matches live engine (sessionActivity.js)
+  // energy = 0.45×breadth + 0.35×movement + 0.10×volatility + 0.10×vol_quality
   const energyBase = Math.round(
-    (0.30 * movementScore + 0.25 * breadthScore + 0.20 * agreementScore +
-     0.15 * directionalControl + 0.10 * volatilityQuality) * 10
+    (0.45 * breadthScore + 0.35 * movementScore +
+     0.10 * volatilityScore + 0.10 * volatilityQuality) * 10
   ) / 10;
-
-  // Session quality multiplier by volatility type
-  const sessionQualityMult = volatilityType === 'CHAOTIC' ? 0.65
-                           : volatilityType === 'DEAD'    ? 0.55
-                           : volatilityType === 'EVENT'   ? 0.75
-                           : volatilityType === 'HEALTHY' ? 1.10
-                           :                                0.90; // NORMAL
-  const marketEnergy = Math.round(Math.min(100, energyBase * sessionQualityMult));
+  const marketEnergy = Math.round(Math.min(100, energyBase));
 
   // ENGINE 9: Tradability (geometric mean gate)
+  // NOTE: live engine now uses 0.40×DE + 0.30×momentum + 0.20×agreement +
+  // 0.10×breadth — DE is not computed in this backtest engine, so the old gate stays.
   const volQualFactor = volatilityType === 'HEALTHY' ? 1.1
                       : volatilityType === 'NORMAL'  ? 0.95
                       : volatilityType === 'EVENT'   ? 0.7
