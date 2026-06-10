@@ -4968,7 +4968,7 @@ const METRIC_CHART_CONFIG = {
   },
   agreement: {
     field: 'agreement_score', label: 'Agreement Score', title: 'Hourly Session Agreement',
-    unit: '', decimals: 0, v2Threshold: 80,
+    unit: '', decimals: 0, v2Threshold: 70,
     thresholds: [
       { min: 60, color: '#22c55e', label: 'Strong agreement' },
       { min: 35, color: '#f59e0b', label: 'Moderate agreement' },
@@ -5383,7 +5383,7 @@ function _renderMetricBars(container, rows, key) {
     (parseFloat(r.tradability_score) || 0) >= 55 &&
     (parseFloat(r.movement_score)    || 0) >= 35 &&
     (parseFloat(r.breadth_score)     || 0) >= 80 &&
-    (parseFloat(r.agreement_score)   || 0) >= 80;
+    (parseFloat(r.agreement_score)   || 0) >= 70;
 
   const byDate = {};
   for (const r of rows) {
