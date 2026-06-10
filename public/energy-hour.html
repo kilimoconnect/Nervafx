@@ -168,7 +168,7 @@
       <span class="eh-sep">/</span>
       <span class="eh-title-text">Hour Analysis</span>
     </div>
-    <a class="eh-back-btn" href="/app" onclick="if (history.length > 1) { history.back(); return false; }">&larr; Back</a>
+    <a class="eh-back-btn" href="/app" onclick="window.close(); setTimeout(function(){ location.href='/app'; }, 150); return false;">&times; Close</a>
   </div>
 
   <main class="eh-main">
