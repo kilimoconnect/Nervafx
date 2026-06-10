@@ -2908,7 +2908,7 @@ function renderEnergySignals(data) {
 
   if (ringEl && numEl) {
     const pct = Math.min(100, Math.max(0, energy));
-    const col = energy >= 50 ? '#22c55e' : energy >= 40 ? '#3b82f6' : energy >= 25 ? '#f59e0b' : '#475569';
+    const col = energy >= 70 ? '#22c55e' : energy >= 50 ? '#3b82f6' : energy >= 25 ? '#f59e0b' : '#475569';
     ringEl.style.setProperty('--es-ring-color', col);
     ringEl.style.setProperty('--es-ring-pct', pct + '%');
     numEl.textContent = Math.round(energy);
@@ -4998,7 +4998,7 @@ const METRIC_CHART_CONFIG = {
   },
   energy: {
     field: 'market_energy', label: 'Market Energy', title: 'Hourly Session Energy',
-    unit: '', decimals: 0, v2Threshold: 50, m15Threshold: 60,
+    unit: '', decimals: 0, v2Threshold: 70, m15Threshold: 60,
     thresholds: [
       { min: 50, color: '#22c55e', label: 'High energy' },
       { min: 25, color: '#f59e0b', label: 'Moderate energy' },
@@ -5008,7 +5008,7 @@ const METRIC_CHART_CONFIG = {
       '<strong>Market Energy</strong> is a composite measure of overall market activity and trading potential.',
       '<strong>Rising bars</strong> mean currencies are spreading apart, more pairs are active, and there is more to trade.',
       '<strong>Falling bars</strong> mean currencies are converging — fewer opportunities, lower conviction.',
-      '<strong>Pink bars</strong> = full confluence — energy ≥ 50 AND Dispersion, Tradability, Movement, Breadth and Agreement were ALL green in that same hour. The highest-conviction conditions.',
+      '<strong>Pink bars</strong> = full confluence — energy ≥ 70 AND Dispersion, Tradability, Movement, Breadth and Agreement were ALL green in that same hour. The highest-conviction conditions.',
       '<strong>High energy</strong> = energized market — conditions favor active trading with clear setups.',
     ],
   },

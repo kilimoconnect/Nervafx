@@ -246,7 +246,7 @@
     const localEnd  = new Date(hourDate.getTime() + 3600000).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
 
     const energy = Math.round(parseFloat(hour?.market_energy) || 0);
-    const eCol = energy >= 50 ? '#22c55e' : energy >= 25 ? '#f59e0b' : '#ef4444';
+    const eCol = energy >= 70 ? '#22c55e' : energy >= 40 ? '#f59e0b' : '#ef4444';
     const cycle = (hour?.energy_cycle || '').toUpperCase();
     const momType = (hour?.momentum_type || '').toUpperCase();
     const sess = SESS_LABEL[hour?.session_name] || hour?.session_name || '';

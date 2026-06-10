@@ -23,7 +23,7 @@
 const { supabase } = require('./supabase');
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
-const ENERGY_THRESHOLD_H1 = 50;
+const ENERGY_THRESHOLD_H1 = 70;
 const FLOW_SPREAD_THRESHOLD = 20;  // 3H pair spread ≥ 20 pips
 const FLOW_SPREAD_MIN_PAIRS = 1;   // At least 1 pair must qualify
 

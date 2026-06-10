@@ -43,8 +43,8 @@ module.exports = async function handler(req, res) {
     if (pErr) throw pErr;
 
     // Get peak single hourly bar energy (not session average).
-    // Direction is set by whichever hourly bar first crossed 50 — it persists
-    // until a new bar crosses 50 again. The number shown = peak bar today.
+    // Direction is set by whichever hourly bar first crossed the threshold —
+    // it persists until a new bar crosses again. The number shown = peak bar today.
     const todayStr = new Date().toISOString().slice(0, 10);
     let { data: sessions } = await sb
       .from('market_energy_sessions')
@@ -67,9 +67,8 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // Find the LAST (most recent) hourly bar that crossed 50.
+    // Find the LAST (most recent) hourly bar that crossed the threshold.
     // That's the bar that set or confirmed the current direction.
-    // Collect all hourly bars, sort by time, find the latest one >= 50.
     const allBars = [];
     for (const s of (sessions || [])) {
       const hourly = s.details?.hourly || [];
@@ -84,8 +83,8 @@ module.exports = async function handler(req, res) {
     // Sort by time descending (most recent first)
     allBars.sort((a, b) => (b.time || '').localeCompare(a.time || ''));
 
-    // Trigger bar = most recent hourly bar that crossed ≥55 (H1 threshold)
-    const ENERGY_THRESHOLD_H1 = 50;
+    // Trigger bar = most recent hourly bar that crossed the H1 threshold
+    const ENERGY_THRESHOLD_H1 = 70;
     const triggerBar = allBars.find(b => b.energy >= ENERGY_THRESHOLD_H1);
     const triggerEnergy = triggerBar?.energy || 0;
 
