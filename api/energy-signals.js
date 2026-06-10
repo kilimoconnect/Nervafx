@@ -42,62 +42,55 @@ module.exports = async function handler(req, res) {
       .order('trigger_energy', { ascending: false });
     if (pErr) throw pErr;
 
-    // Get peak single hourly bar energy (not session average).
-    // Direction is set by whichever hourly bar first crossed the threshold —
-    // it persists until a new bar crosses again. The number shown = peak bar today.
-    const todayStr = new Date().toISOString().slice(0, 10);
-    let { data: sessions } = await sb
-      .from('market_energy_sessions')
-      .select('session_name, market_energy, details')
-      .eq('session_date', todayStr)
-      .order('session_name', { ascending: true });
-
-    if (!sessions?.length) {
-      const { data: latest } = await sb
-        .from('market_energy_sessions')
-        .select('session_date')
-        .order('session_date', { ascending: false })
-        .limit(1);
-      if (latest?.[0]) {
-        const { data: fb } = await sb
-          .from('market_energy_sessions')
-          .select('session_name, market_energy, details')
-          .eq('session_date', latest[0].session_date);
-        sessions = fb || [];
-      }
-    }
-
-    // Find the LAST (most recent) hourly bar that crossed the threshold.
-    // That's the bar that set or confirmed the current direction.
-    const allBars = [];
-    for (const s of (sessions || [])) {
-      const hourly = s.details?.hourly || [];
-      for (const h of hourly) {
-        allBars.push({
-          energy: parseFloat(h.market_energy) || 0,
-          time: h.time || null,
-          session: s.session_name,
-        });
-      }
-    }
-    // Sort by time descending (most recent first)
-    allBars.sort((a, b) => (b.time || '').localeCompare(a.time || ''));
-
-    // Trigger bar = most recent hourly bar that crossed the H1 threshold
+    // Trigger bar = most recent FULL-CONFLUENCE hourly bar: energy ≥ threshold
+    // AND all five supporting engines green (same structure as pink bars).
+    // Mirrors src/energyDirection.js.
     const ENERGY_THRESHOLD_H1 = 60;
-    const triggerBar = allBars.find(b => b.energy >= ENERGY_THRESHOLD_H1);
+    const CONFLUENCE_THRESHOLDS = {
+      dispersion_score:  30,
+      tradability_score: 30,
+      movement_score:    35,
+      breadth_score:     80,
+      agreement_score:   35,
+    };
+    const isConfluenceBar = (r) => {
+      if ((parseFloat(r.market_energy) || 0) < ENERGY_THRESHOLD_H1) return false;
+      for (const [field, min] of Object.entries(CONFLUENCE_THRESHOLDS)) {
+        if ((parseFloat(r[field]) || 0) < min) return false;
+      }
+      return true;
+    };
+
+    const since = new Date(Date.now() - 72 * 3600000).toISOString();
+    const { data: hourlyRows } = await sb
+      .from('hourly_session_activity')
+      .select('time_utc, session_name, market_energy, dispersion_score, tradability_score, movement_score, breadth_score, agreement_score')
+      .gte('time_utc', since)
+      .order('time_utc', { ascending: false });
+
+    const triggerRow = (hourlyRows || []).find(isConfluenceBar) || null;
+    const triggerBar = triggerRow ? {
+      energy: parseFloat(triggerRow.market_energy) || 0,
+      time: triggerRow.time_utc,
+      session: triggerRow.session_name,
+    } : null;
     const triggerEnergy = triggerBar?.energy || 0;
+    const allBars = (hourlyRows || []).map(r => ({
+      energy: parseFloat(r.market_energy) || 0,
+      time: r.time_utc,
+      session: r.session_name,
+    }));
 
     // Directions persist across days — check if active directions exist in the DB.
     const hasActiveDirections = (currencies || []).some(c => c.active && c.direction !== 'NEUTRAL');
     const hasActivePairs = (pairs || []).some(p => p.active);
-    const thresholdMet = (triggerEnergy >= ENERGY_THRESHOLD_H1) || hasActiveDirections || hasActivePairs;
+    const thresholdMet = !!triggerBar || hasActiveDirections || hasActivePairs;
 
     // Display energy: use the stored trigger energy from DB when no today trigger bar
     // This preserves the energy level that originally confirmed directions
     let displayEnergy;
-    if (triggerEnergy >= ENERGY_THRESHOLD_H1) {
-      // Today has a trigger bar — show it
+    if (triggerBar) {
+      // Recent confluence trigger bar — show it
       displayEnergy = triggerEnergy;
     } else if (hasActiveDirections) {
       // Directions active from previous trigger — show stored energy_at_trigger

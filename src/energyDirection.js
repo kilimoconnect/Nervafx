@@ -24,6 +24,24 @@ const { supabase } = require('./supabase');
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
 const ENERGY_THRESHOLD_H1 = 60;
+
+// Full-confluence trigger: the bar must have energy ≥ threshold AND all five
+// supporting engines green (same structure as the pink confluence bars).
+const CONFLUENCE_THRESHOLDS = {
+  dispersion_score:  30,
+  tradability_score: 30,
+  movement_score:    35,
+  breadth_score:     80,
+  agreement_score:   35,
+};
+
+function isConfluenceBar(r) {
+  if ((parseFloat(r.market_energy) || 0) < ENERGY_THRESHOLD_H1) return false;
+  for (const [field, min] of Object.entries(CONFLUENCE_THRESHOLDS)) {
+    if ((parseFloat(r[field]) || 0) < min) return false;
+  }
+  return true;
+}
 const FLOW_SPREAD_THRESHOLD = 20;  // 3H pair spread ≥ 20 pips
 const FLOW_SPREAD_MIN_PAIRS = 1;   // At least 1 pair must qualify
 
@@ -140,33 +158,33 @@ async function calculateEnergyDirection() {
     energySessions = fb || [];
   }
 
-  // Scan ALL hourly bars across today's sessions to find the LAST bar that
-  // crossed ≥ threshold. This is the trigger bar — directions are snapshotted from
-  // the strength at that moment and persist until a NEW bar crosses ≥ threshold.
-  let currentEnergy = 0;  // live session-level energy (for display)
-  const allBars = [];     // every hourly bar with energy ≥ threshold
-
+  // Track current session-level energy for display
+  let currentEnergy = 0;
   for (const es of energySessions) {
     const sessEnergy = parseFloat(es.market_energy) || 0;
-
-    // Track current session energy for display
     if (es.session_name === session && sessEnergy > currentEnergy) {
       currentEnergy = sessEnergy;
     }
-
-    // Collect hourly bars that crossed the threshold
-    const hourly = es.details?.hourly || [];
-    for (const h of hourly) {
-      const hEnergy = parseFloat(h.market_energy) || 0;
-      if (hEnergy >= ENERGY_THRESHOLD_H1) {
-        allBars.push({ energy: hEnergy, time: h.time, session: es.session_name });
-      }
-    }
   }
 
-  // Sort by time descending — the LAST bar to cross ≥ threshold is the trigger
-  allBars.sort((a, b) => new Date(b.time) - new Date(a.time));
-  const triggerBar = allBars[0] || null;
+  // Scan recent hourly bars for the LAST full-confluence bar — energy ≥ threshold
+  // AND all five supporting engines green. This is the trigger bar — directions
+  // are snapshotted from strength at that moment and persist until the NEXT
+  // full-confluence bar.
+  const since = new Date(now.getTime() - 72 * 3600000).toISOString();
+  const { data: hourlyRows, error: hrErr } = await supabase
+    .from('hourly_session_activity')
+    .select('time_utc, session_name, market_energy, dispersion_score, tradability_score, movement_score, breadth_score, agreement_score')
+    .gte('time_utc', since)
+    .order('time_utc', { ascending: false });
+  if (hrErr) console.warn('[ENERGY_DIR] Hourly activity fetch:', hrErr.message);
+
+  const triggerRow = (hourlyRows || []).find(isConfluenceBar) || null;
+  const triggerBar = triggerRow ? {
+    energy: parseFloat(triggerRow.market_energy) || 0,
+    time: triggerRow.time_utc,
+    session: triggerRow.session_name,
+  } : null;
 
   const triggerEnergy = triggerBar ? triggerBar.energy : 0;
   const triggerSession = triggerBar ? triggerBar.session : null;
@@ -175,7 +193,7 @@ async function calculateEnergyDirection() {
   // If current session didn't have data, use trigger energy for display
   if (!currentEnergy) currentEnergy = triggerEnergy;
 
-  console.log(`[ENERGY_DIR] Current energy: ${currentEnergy} | Trigger bar: ${triggerEnergy} [H1] (${triggerSession}${triggerHour ? ' @ ' + triggerHour : ''})`);
+  console.log(`[ENERGY_DIR] Current energy: ${currentEnergy} | Confluence trigger bar: ${triggerEnergy} (${triggerSession}${triggerHour ? ' @ ' + triggerHour : ''})`);
 
   // ── 2. Fetch latest currency strength (3H + 6H + 12H) ──────────────────────
   const { data: csRows, error: csErr } = await supabase
@@ -235,8 +253,8 @@ async function calculateEnergyDirection() {
     pairMap[p.instrument] = p;
   }
 
-  // ── 5. Evaluate energy threshold (H1 only) ─────────────────────────────────
-  const thresholdMet = triggerEnergy >= ENERGY_THRESHOLD_H1;
+  // ── 5. Evaluate trigger — full-confluence bar required ─────────────────────
+  const thresholdMet = !!triggerBar;
 
   // Check if this is a NEW energy event by comparing trigger bar time against
   // the stored triggered_at. A new bar crossing ≥ threshold AFTER the stored trigger
