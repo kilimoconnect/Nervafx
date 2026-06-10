@@ -295,24 +295,28 @@
     }
 
     // ── Market movers table ──
-    const sigMap = {};
-    for (const sp of (signalPairs || [])) sigMap[sp.instrument] = sp;
+    // Rank currencies by 3H+6H combined strength at that hour:
+    // strong = top 3 (positive), weak = bottom 3 (negative).
+    const ranked = (currencies || [])
+      .map(c => ({ cur: c.currency, combined: ((c.smooth_3h || 0) + (c.smooth_6h || 0)) / 2 }))
+      .sort((a, b) => b.combined - a.combined);
+    const strongSet = new Set(ranked.slice(0, 3).filter(c => c.combined > 0).map(c => c.cur));
+    const weakSet   = new Set(ranked.slice(-3).filter(c => c.combined < 0).map(c => c.cur));
 
-    // Filter pairs by currency strength: one side strong, other side weak (3H+6H combined)
-    const CS_THRESHOLD = 0.00100; // 10 pips
-    const strongSet = new Set(), weakSet = new Set();
-    for (const c of (currencies || [])) {
-      const combined = ((c.smooth_3h || 0) + (c.smooth_6h || 0)) / 2;
-      if (combined >  CS_THRESHOLD) strongSet.add(c.currency);
-      if (combined < -CS_THRESHOLD) weakSet.add(c.currency);
-    }
     const allMovers = movers || [];
-    const filteredMovers = allMovers.filter(m => {
+    const showMovers = allMovers.filter(m => {
       const [base, quote] = m.instrument.split('_');
       return (strongSet.has(base) && weakSet.has(quote)) || (weakSet.has(base) && strongSet.has(quote));
     });
-    const showMovers = filteredMovers;
     const maxRange = Math.max(...showMovers.map(m => m.range_pips), 0.1);
+
+    // Direction at that moment — derived from which side is strong/weak
+    const pairDir = (inst) => {
+      const [base, quote] = inst.split('_');
+      if (strongSet.has(base) && weakSet.has(quote)) return 'BUY';
+      if (weakSet.has(base) && strongSet.has(quote)) return 'SELL';
+      return null;
+    };
 
     const strongChips = [...strongSet].map(c => `<span class="eh-chip" style="color:#4ade80;font-size:10px;padding:2px 8px">${c}</span>`).join('');
     const weakChips   = [...weakSet].map(c => `<span class="eh-chip" style="color:#f87171;font-size:10px;padding:2px 8px">${c}</span>`).join('');
@@ -322,7 +326,7 @@
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,0.04);font-size:10px;color:var(--text-muted)">
         <span style="font-weight:700">Strong:</span> ${strongChips || '<span>none</span>'}
         <span style="font-weight:700;margin-left:10px">Weak:</span> ${weakChips || '<span>none</span>'}
-        <span style="margin-left:auto">${showMovers.length}/${allMovers.length} pairs qualify (3H+6H &gt; &plusmn;10p)</span>
+        <span style="margin-left:auto">${showMovers.length}/${allMovers.length} pairs — top 3 strong &times; bottom 3 weak (3H+6H)</span>
       </div>
       <div class="eh-table-wrap"><table class="eh-table">
         <thead><tr>
@@ -331,14 +335,15 @@
         <tbody>
           ${!showMovers.length ? '<tr><td colspan="11" style="text-align:center;padding:18px;color:var(--text-muted)">No pairs qualify — no strong/weak currency combination at this hour.</td></tr>' : ''}
           ${showMovers.map((m, i) => {
-            const sig = sigMap[m.instrument];
+            const dir = pairDir(m.instrument); // direction at that moment (strength-derived)
             const up = m.dir === 'UP';
+            const isBuy = dir === 'BUY';
             const sCol = v => v == null ? '#64748b' : v > 0 ? '#4ade80' : v < 0 ? '#f87171' : '#94a3b8';
             const rangePct = Math.round((m.range_pips / maxRange) * 100);
             return `<tr class="eh-row" onclick="ehOpenChart('${m.instrument}')">
               <td class="eh-rank">${i + 1}</td>
-              <td><span class="eh-pair">${m.instrument.replace('_','/')}</span>${sig ? `<span class="eh-sig-badge">${sig.dir}</span>` : ''}</td>
-              <td class="${up ? 'eh-dir-up' : 'eh-dir-down'}">${up ? '▲' : '▼'}</td>
+              <td><span class="eh-pair">${m.instrument.replace('_','/')}</span></td>
+              <td><span style="color:${isBuy ? '#4ade80' : '#f87171'};font-weight:700">${dir || '—'}</span> <span class="${up ? 'eh-dir-up' : 'eh-dir-down'}" style="font-size:10px">${up ? '▲' : '▼'}</span></td>
               <td style="color:${up ? '#4ade80' : '#f87171'};font-weight:600">${m.net_pips > 0 ? '+' : ''}${m.net_pips}</td>
               <td><div class="eh-bar-cell"><div class="eh-mini-bar"><div class="eh-mini-fill" style="width:${rangePct}%;background:#60a5fa"></div></div><span>${m.range_pips}</span></div></td>
               <td>${m.efficiency}%</td>
@@ -352,6 +357,7 @@
         </tbody>
       </table></div>
       <div style="padding:10px 16px;font-size:10.5px;color:var(--text-muted);line-height:1.6;border-top:1px solid rgba(255,255,255,0.04)">
+        <b>Dir</b> = direction at that moment from currency strength (strong vs weak), ▲/▼ = actual hour movement ·
         <b>Net</b> = hour close − open (pips) · <b>Range</b> = hour high − low · <b>Eff</b> = |net| / range (how directional the hour was) ·
         <b>DE-20</b> = directional efficiency over last 20 M15 bars · <b>3H/6H/12H</b> = pair strength spread (pips) · <b>Vol</b> = tick volume.
         Ranked by range × efficiency.
