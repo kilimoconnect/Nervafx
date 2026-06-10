@@ -5009,6 +5009,7 @@ const METRIC_CHART_CONFIG = {
       '<strong>Rising bars</strong> mean currencies are spreading apart, more pairs are active, and there is more to trade.',
       '<strong>Falling bars</strong> mean currencies are converging — fewer opportunities, lower conviction.',
       '<strong>Green bars</strong> indicate strong energy — this engine is contributing to the Engine Confluence signal.',
+      '<strong>Gold bars</strong> = full confluence — Dispersion, Tradability, Movement, Breadth and Agreement were ALL green in that same hour. The highest-conviction conditions.',
       '<strong>High energy</strong> = energized market — conditions favor active trading with clear setups.',
     ],
   },
@@ -5377,6 +5378,14 @@ function _renderMetricBars(container, rows, key) {
     .formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value || '';
   const SKIP_SESSIONS = new Set(['LOW_LIQUIDITY', 'DEAD_HOURS']);
 
+  // Full engine confluence: all five supporting engines green in the same hour
+  const _allEnginesGreen = r =>
+    (parseFloat(r.dispersion_score)  || 0) >= 60 &&
+    (parseFloat(r.tradability_score) || 0) >= 55 &&
+    (parseFloat(r.movement_score)    || 0) >= 35 &&
+    (parseFloat(r.breadth_score)     || 0) >= 65 &&
+    (parseFloat(r.agreement_score)   || 0) >= 60;
+
   const byDate = {};
   for (const r of rows) {
     if (SKIP_SESSIONS.has(r.session_name)) continue;
@@ -5386,6 +5395,7 @@ function _renderMetricBars(container, rows, key) {
       time: r.time_utc,
       session: r.session_name,
       value: Math.round(parseFloat(r[cfg.field]) || 0),
+      confl: key === 'energy' && _allEnginesGreen(r),
     });
   }
 
@@ -5454,9 +5464,11 @@ function _renderMetricBars(container, rows, key) {
       const clickAttr = key === 'energy'
         ? ` onclick="window.open('/energy-hour.html?time=${encodeURIComponent((b.time || '').slice(0, 13))}','_blank')"`
         : '';
-      const clsFinal = key === 'energy' ? cls + ' bc-bar-click' : cls;
+      const isConfl = b.confl && meetsThreshold;
+      const clsFinal = (key === 'energy' ? cls + ' bc-bar-click' : cls) + (isConfl ? ' bc-bar-confl' : '');
+      const conflTip = isConfl ? ' — FULL CONFLUENCE: all engines green' : (key === 'energy' ? ' — click for hour analysis' : '');
 
-      html += `<div class="${clsFinal}"${clickAttr} title="${SESS_LABEL[b.session] || b.session}: ${b.value}${cfg.unit} at ${localTime} ${tzLabel}${key === 'energy' ? ' — click for hour analysis' : ''}">
+      html += `<div class="${clsFinal}"${clickAttr} title="${SESS_LABEL[b.session] || b.session}: ${b.value}${cfg.unit} at ${localTime} ${tzLabel}${conflTip}">
         <span class="bc-bar-val">${b.value}</span>
         <div class="bc-bar-inner">
           <div class="bc-bar-fill" style="height:${pct}%;background:${barColor}"></div>

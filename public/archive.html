@@ -834,12 +834,26 @@
       .formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value || '';
 
     const SKIP = new Set(['LOW_LIQUIDITY', 'DEAD_HOURS']);
+
+    // Full engine confluence: all five supporting engines green in the same hour
+    const _allEnginesGreen = r =>
+      (parseFloat(r.dispersion_score)  || 0) >= 60 &&
+      (parseFloat(r.tradability_score) || 0) >= 55 &&
+      (parseFloat(r.movement_score)    || 0) >= 35 &&
+      (parseFloat(r.breadth_score)     || 0) >= 65 &&
+      (parseFloat(r.agreement_score)   || 0) >= 60;
+
     const byDate = {};
     for (const r of rows) {
       if (SKIP.has(r.session_name)) continue;
       const date = _arcGroupDate(r);
       if (!byDate[date]) byDate[date] = [];
-      byDate[date].push({ time: r.time_utc, session: r.session_name, val: Math.round(parseFloat(r[metric.field]) || 0) });
+      byDate[date].push({
+        time: r.time_utc,
+        session: r.session_name,
+        val: Math.round(parseFloat(r[metric.field]) || 0),
+        confl: metric.field === 'market_energy' && _allEnginesGreen(r),
+      });
     }
 
     const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC') }).format(new Date());
@@ -916,9 +930,11 @@
         const clickAttr = isEnergyBar
           ? ` onclick="window.open('/energy-hour.html?time=${encodeURIComponent((b.time || '').slice(0, 13))}','_blank')"`
           : '';
-        const clsFinal = isEnergyBar ? cls + ' bc-bar-click' : cls;
+        const isConfl = b.confl && meetsThreshold;
+        const clsFinal = (isEnergyBar ? cls + ' bc-bar-click' : cls) + (isConfl ? ' bc-bar-confl' : '');
+        const conflTip = isConfl ? ' — FULL CONFLUENCE: all engines green' : (isEnergyBar ? ' — click for hour analysis' : '');
 
-        html += `<div class="${clsFinal}"${clickAttr} title="${SESS_LABEL[b.session] || b.session}: ${displayVal} at ${localTime} ${tzLabel}${isEnergyBar ? ' — click for hour analysis' : ''}">
+        html += `<div class="${clsFinal}"${clickAttr} title="${SESS_LABEL[b.session] || b.session}: ${displayVal} at ${localTime} ${tzLabel}${conflTip}">
           <span class="bc-bar-val" ${metric.canBeNegative && b.val < 0 ? 'style="color:#ef4444"' : ''}>${displayVal}</span>
           <div class="bc-bar-inner">
             <div class="bc-bar-fill" style="height:${pct}%;background:${barColor}"></div>

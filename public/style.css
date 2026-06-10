@@ -4775,6 +4775,13 @@ body::after {
   box-shadow: 0 0 8px rgba(34, 197, 94, 0.4);
 }
 
+/* Full engine confluence — energy bar where all other engines are green too */
+.bc-bar-confl .bc-bar-fill {
+  background: #fbbf24 !important;
+  box-shadow: 0 0 12px rgba(251, 191, 36, 0.6);
+}
+.bc-bar-confl .bc-bar-val { color: #fbbf24; font-weight: 800; }
+
 /* Clickable energy bars — hover feedback */
 .bc-bar-click { cursor: pointer; transition: transform 0.12s ease; }
 .bc-bar-click:hover { transform: translateY(-3px) scale(1.12); z-index: 3; }
