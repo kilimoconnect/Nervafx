@@ -215,6 +215,7 @@ function directionAlertEmail(data) {
           <td style="padding:12px 14px 4px">
             <span class="val" style="font-size:15px">${p.instrument.replace('_', '/')}</span>
             <span style="color:${dirColor};font-weight:700;font-size:12px;margin-left:8px">${p.dir}</span>
+            ${p.run_score != null ? `<span style="color:${p.run_score >= 70 ? '#4ade80' : p.run_score >= 45 ? '#f59e0b' : '#94a3b8'};font-weight:800;font-size:12px;margin-left:8px">${p.run_score}</span>` : ''}
           </td>
         </tr>
         <tr>
@@ -513,9 +514,31 @@ async function sendSignalAlerts(sb) {
       // Fetch active signal pairs with full detail (same as dashboard Energy Engine)
       const { data: activePairs } = await sb
         .from('energy_signal_pairs')
-        .select('instrument, dir, strong_ccy, weak_ccy, phase, v45, v90, spread_3h, spread_6h, de_combined, impulse_score, impulse_aligned, m15_state, energy_event_type')
-        .eq('active', true)
-        .order('de_combined', { ascending: false });
+        .select('instrument, dir, strong_ccy, weak_ccy, phase, v45, v90, spread_3h, spread_6h, spread_12h, de_combined, impulse_score, impulse_aligned, m15_state, energy_event_type')
+        .eq('active', true);
+
+      // Composite score — same model as dashboard signals tab / hour page:
+      // 40% spread alignment (3H/6H/12H weighted 45/35/20, signed in trade dir)
+      // + 35% recent price movement in trade dir (V45) + 25% structure (60% DE + 40% impulse)
+      const _pairsScored = (activePairs || []).map(p => {
+        const dirSign = p.dir === 'BUY' ? 1 : -1;
+        const spreadComp = dirSign * (
+          0.45 * ((parseFloat(p.spread_3h)  || 0) * 10000) +
+          0.35 * ((parseFloat(p.spread_6h)  || 0) * 10000) +
+          0.20 * ((parseFloat(p.spread_12h) || 0) * 10000)
+        );
+        const moveComp  = dirSign * (parseFloat(p.v45) || 0) * 10000;
+        const structPct = 0.6 * (parseFloat(p.de_combined) || 0) + 0.4 * (parseFloat(p.impulse_score) || 0);
+        return { ...p, _spreadComp: spreadComp, _moveComp: moveComp, _structPct: structPct };
+      });
+      const _maxSpread = Math.max(..._pairsScored.map(p => p._spreadComp), 1);
+      const _maxMove   = Math.max(..._pairsScored.map(p => p._moveComp), 1);
+      for (const p of _pairsScored) {
+        const spreadN = Math.max(0, p._spreadComp / _maxSpread) * 100;
+        const moveN   = Math.max(0, p._moveComp / _maxMove) * 100;
+        p.run_score = Math.round(0.40 * spreadN + 0.35 * moveN + 0.25 * p._structPct);
+      }
+      _pairsScored.sort((a, b) => b.run_score - a.run_score);
 
       // Fetch recently deactivated pairs (removed in this event — updated within last 2h)
       const recentCutoff = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
@@ -548,12 +571,13 @@ async function sendSignalAlerts(sb) {
           smooth_3h: parseFloat(c.smooth_3h) || 0,
           smooth_6h: parseFloat(c.smooth_6h) || 0,
         })),
-        signalPairs: (activePairs || []).map(p => ({
+        signalPairs: _pairsScored.map(p => ({
           instrument: p.instrument,
           dir: p.dir,
           strong_ccy: p.strong_ccy,
           weak_ccy: p.weak_ccy,
           phase: p.phase,
+          run_score: p.run_score,
           v45: parseFloat(p.v45) || 0,
           v90: parseFloat(p.v90) || 0,
           spread_3h: parseFloat(p.spread_3h) || 0,

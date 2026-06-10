@@ -2999,43 +2999,26 @@ function renderEnergySignals(data) {
     if (!activePairs.length) {
       pairsEl.innerHTML = '<div class="es-no-data">No active signal pairs.</div>';
     } else {
-      // Sort using same scoring as Flow Performance:
-      // perfScore = directional V45 × 3 + 3H × 2 + 6H × 1 + impulse + alignment bonuses
-      // finalScore = 0.75 × perfScore + 0.25 × DE
+      // Composite score — same model as the hour analysis page:
+      // 40% spread alignment (3H/6H/12H weighted 45/35/20, signed in trade dir)
+      // + 35% recent price movement in trade dir (V45)
+      // + 25% structure quality (60% DE + 40% impulse)
       activePairs.forEach(p => {
-        const v45 = parseFloat(p.v45) || 0;
-        const v90 = parseFloat(p.v90) || 0;
-        const sp3 = parseFloat(p.spread_3h) || 0;
-        const sp6 = parseFloat(p.spread_6h) || 0;
-        const de  = parseFloat(p.de_combined) || 0;
-        const imp = p.impulse_score || 0;
-        const flowSign = p.dir === 'BUY' ? 1 : -1;
-        const impulseAligned = !!p.impulse_aligned;
-        const m15Confirms = Math.sign(v45) === flowSign && Math.abs(v45) >= 0.00008;
-        const h3Confirms  = Math.sign(sp3) === flowSign;
-        const h6Confirms  = Math.sign(sp6) === flowSign;
-        const accel = v45 - v90;
-        const accelSign = Math.sign(accel) === flowSign;
-        const m15State = (p.m15_state || 'FLAT').toUpperCase();
-
-        let perfScore = 0;
-        perfScore += (v45 * flowSign) * 10000 * 3;
-        perfScore += (sp3 * flowSign) * 10000 * 2;
-        perfScore += (sp6 * flowSign) * 10000 * 1;
-        if (impulseAligned && imp >= 40) perfScore += imp * 0.5;
-        else if (impulseAligned)         perfScore += imp * 0.25;
-        else if (imp >= 40)              perfScore -= imp * 0.3;
-        if (m15Confirms && imp >= 40)    perfScore += 20;
-        else if (m15Confirms)            perfScore += 10;
-        if (h3Confirms)  perfScore += 10;
-        if (h6Confirms)  perfScore += 5;
-        if (accelSign)   perfScore += 10;
-        if (m15State === 'EXPANDING' && m15Confirms)                    perfScore += 15;
-        if (m15State === 'EXPANDING' && impulseAligned && imp >= 50)    perfScore += 10;
-        if (m15State === 'REVERSING')                                   perfScore -= 10;
-        if (m15State === 'COMPRESSING' && !m15Confirms)                 perfScore -= 15;
-
-        p._finalScore = (0.75 * perfScore) + (0.25 * de);
+        const dirSign = p.dir === 'BUY' ? 1 : -1;
+        p._spreadComp = dirSign * (
+          0.45 * ((parseFloat(p.spread_3h)  || 0) * 10000) +
+          0.35 * ((parseFloat(p.spread_6h)  || 0) * 10000) +
+          0.20 * ((parseFloat(p.spread_12h) || 0) * 10000)
+        );
+        p._moveComp  = dirSign * (parseFloat(p.v45) || 0) * 10000;
+        p._structPct = 0.6 * (parseFloat(p.de_combined) || 0) + 0.4 * (parseFloat(p.impulse_score) || 0);
+      });
+      const _maxSpread = Math.max(...activePairs.map(p => p._spreadComp), 1);
+      const _maxMove   = Math.max(...activePairs.map(p => p._moveComp), 1);
+      activePairs.forEach(p => {
+        const spreadN = Math.max(0, p._spreadComp / _maxSpread) * 100;
+        const moveN   = Math.max(0, p._moveComp / _maxMove) * 100;
+        p._finalScore = Math.round(0.40 * spreadN + 0.35 * moveN + 0.25 * p._structPct);
       });
       activePairs.sort((a, b) => b._finalScore - a._finalScore);
 
@@ -3065,6 +3048,7 @@ function renderEnergySignals(data) {
             <div style="display:flex;align-items:center;gap:8px">
               <span class="es-pair-name">${pairLabel}</span>
               <span class="es-pair-dir ${dirCls}">${p.dir}</span>
+              <span style="font-size:10px;font-weight:800;color:${p._finalScore >= 70 ? '#4ade80' : p._finalScore >= 45 ? '#f59e0b' : '#94a3b8'};background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:5px;padding:1px 7px">${p._finalScore}</span>
             </div>
             <span class="es-pair-phase ${phaseCls}">${rawPhase}</span>
           </div>
