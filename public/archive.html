@@ -605,6 +605,19 @@
   }
 
   async function _reloadAllArchive() {
+    // Show loading state immediately so the user knows the filter is being applied
+    const _loadingHtml = '<div class="arc-loading"><span class="spinner"></span> Loading…</div>';
+    for (const key of Object.keys(ARC_METRICS)) {
+      const bodyEl = document.getElementById(`arc-${key}-body`);
+      if (!bodyEl) continue;
+      const target = bodyEl.querySelector('.bc-tf-content') || bodyEl;
+      target.innerHTML = _loadingHtml;
+    }
+    for (const id of ['arc-breakdown-body', 'arc-ccystrength-body', 'arc-flowperf-body', 'arc-liquidity-body', 'arc-history-body']) {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = _loadingHtml;
+    }
+
     // Clear ccy strength cache so it refetches with new days
     _ccsCache = {};
 
