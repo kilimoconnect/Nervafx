@@ -391,10 +391,10 @@ async function sendSignalAlerts(sb) {
 
   const emailsSent = [];
 
-  // ── M15 dominant currency — shared by all email types ─────────────────────
-  // Derive per-currency M15 strength from m15_pair_spreads (smooth_45m)
+  // ── M15 + 6H currency strength — shared by all email types ────────────────
+  // M15 from m15_pair_spreads (smooth_45m), 6H from currency_strength (smooth_6h).
+  // Combined = (M15 + 6H) / 2 — short-term momentum confirmed by the bigger flow.
   let m15CcyStrength = {};
-  let dominantCcy = null, dominantVal = 0;
   try {
     const { data: m15Spreads } = await sb
       .from('m15_pair_spreads')
@@ -415,13 +415,30 @@ async function sendSignalAlerts(sb) {
       for (const ccy of Object.keys(sums)) {
         m15CcyStrength[ccy] = counts[ccy] > 0 ? sums[ccy] / counts[ccy] : 0;
       }
-      // Find the single currency with highest absolute M15 strength
-      for (const [ccy, val] of Object.entries(m15CcyStrength)) {
-        if (Math.abs(val) > Math.abs(dominantVal)) { dominantCcy = ccy; dominantVal = val; }
-      }
     }
   } catch (e) {
     console.warn('[EMAIL] M15 currency strength fetch failed:', e.message);
+  }
+
+  // 6H strength per currency, then combine with M15
+  try {
+    const { data: h6Rows } = await sb
+      .from('currency_strength')
+      .select('currency, smooth_6h')
+      .order('time', { ascending: false })
+      .limit(8);
+    const h6Map = {};
+    for (const r of (h6Rows || [])) {
+      if (h6Map[r.currency] == null) h6Map[r.currency] = parseFloat(r.smooth_6h) || 0;
+    }
+    const allCcys = new Set([...Object.keys(m15CcyStrength), ...Object.keys(h6Map)]);
+    const combined = {};
+    for (const ccy of allCcys) {
+      combined[ccy] = ((m15CcyStrength[ccy] || 0) + (h6Map[ccy] || 0)) / 2;
+    }
+    m15CcyStrength = combined;
+  } catch (e) {
+    console.warn('[EMAIL] 6H currency strength fetch failed:', e.message);
   }
 
   // Reusable HTML block — M15 Currency Strength bar chart (all 8, ranked strong→weak)
@@ -451,7 +468,7 @@ async function sendSignalAlerts(sb) {
 
       marketFocusHtml = `
         <div class="card">
-          <div class="card-hd">M15 Currency Strength</div>
+          <div class="card-hd">Currency Strength (M15 + 6H)</div>
           <div class="card-bd" style="padding:6px 0">
             <table width="100%" cellpadding="0" cellspacing="0">${rows}</table>
           </div>
