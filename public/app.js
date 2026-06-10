@@ -5047,7 +5047,7 @@ const METRIC_CHART_CONFIG = {
   },
   tradability: {
     field: 'tradability_score', label: 'Tradability Score', title: 'Hourly Session Tradability',
-    unit: '', decimals: 0, v2Threshold: 50,
+    unit: '', decimals: 0, v2Threshold: 30,
     thresholds: [
       { min: 55, color: '#22c55e', label: 'Tradable / Strong' },
       { min: 40, color: '#0ea5e9', label: 'Selective' },
@@ -5380,7 +5380,7 @@ function _renderMetricBars(container, rows, key) {
   // Full engine confluence: all five supporting engines green in the same hour
   const _allEnginesGreen = r =>
     (parseFloat(r.dispersion_score)  || 0) >= 30 &&
-    (parseFloat(r.tradability_score) || 0) >= 50 &&
+    (parseFloat(r.tradability_score) || 0) >= 30 &&
     (parseFloat(r.movement_score)    || 0) >= 35 &&
     (parseFloat(r.breadth_score)     || 0) >= 80 &&
     (parseFloat(r.agreement_score)   || 0) >= 35;
