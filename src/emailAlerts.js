@@ -5,7 +5,7 @@
  *
  * Three alert types aligned with the energy signal structure:
  *
- *   1. DIRECTION ALERT  — New energy bar ≥70 confirmed new/changed directions
+ *   1. DIRECTION ALERT  — New energy bar ≥60 confirmed new/changed directions
  *      Trigger: isNewEnergyEvent = true in calculateEnergyDirection()
  *      Content: strong/weak currencies, per-currency event type, signal pairs
  *      Cooldown: 4 hours
@@ -948,7 +948,7 @@ async function sendSignalAlerts(sb) {
       const energyEvents = [];
       for (const s of (sessions || [])) {
         for (const h of (s.details?.hourly || [])) {
-          if ((parseFloat(h.market_energy) || 0) >= 70) {
+          if ((parseFloat(h.market_energy) || 0) >= 60) {
             energyEvents.push({ energy: h.market_energy, time: h.time, session: s.session_name });
           }
         }

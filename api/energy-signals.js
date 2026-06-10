@@ -84,7 +84,7 @@ module.exports = async function handler(req, res) {
     allBars.sort((a, b) => (b.time || '').localeCompare(a.time || ''));
 
     // Trigger bar = most recent hourly bar that crossed the H1 threshold
-    const ENERGY_THRESHOLD_H1 = 70;
+    const ENERGY_THRESHOLD_H1 = 60;
     const triggerBar = allBars.find(b => b.energy >= ENERGY_THRESHOLD_H1);
     const triggerEnergy = triggerBar?.energy || 0;
 
