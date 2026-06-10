@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>NervaFX — Hour Analysis</title>
+  <link rel="icon" type="image/png" href="/nervafx-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <link rel="stylesheet" href="style.css" />
+
+  <style>
+    .grid { display: block !important; }
+
+    .eh-topbar {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 28px; height: 56px;
+      background: rgba(8,11,18,0.92);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+    .eh-topbar-left { display: flex; align-items: center; gap: 12px; }
+    .eh-logo img { height: 24px; display: block; }
+    .eh-sep { color: rgba(255,255,255,0.1); font-size: 20px; font-weight: 200; }
+    .eh-title-text { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+    .eh-back-btn {
+      display: flex; align-items: center; gap: 5px;
+      padding: 6px 12px; border-radius: 8px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); font-size: 11px; font-weight: 600;
+      cursor: pointer; text-decoration: none; transition: all 0.15s;
+    }
+    .eh-back-btn:hover { background: rgba(255,255,255,0.09); color: var(--text); }
+
+    .eh-main { max-width: 1100px; margin: 0 auto; padding: 20px 20px 80px; }
+
+    .eh-card {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px; margin-bottom: 18px; overflow: hidden;
+    }
+    .eh-card-hd {
+      padding: 12px 16px; font-size: 12px; font-weight: 700;
+      color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .eh-card-hd i { width: 15px; height: 15px; }
+    .eh-card-bd { padding: 14px 16px; }
+
+    /* ── Hour header ── */
+    .eh-hero { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+    .eh-energy-big { font-size: 44px; font-weight: 800; letter-spacing: -1px; line-height: 1; }
+    .eh-hero-meta { display: flex; flex-direction: column; gap: 4px; }
+    .eh-hero-time { font-size: 15px; font-weight: 700; color: var(--text); }
+    .eh-hero-sub  { font-size: 12px; color: var(--text-muted); }
+    .eh-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+    .eh-chip {
+      padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    /* ── Metrics grid ── */
+    .eh-metrics {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+      gap: 8px;
+    }
+    .eh-metric {
+      padding: 10px; border-radius: 8px;
+      background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);
+      text-align: center;
+    }
+    .eh-metric-val { font-size: 18px; font-weight: 800; }
+    .eh-metric-lbl { font-size: 9.5px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; margin-top: 2px; }
+
+    /* ── Movers table ── */
+    .eh-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .eh-table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 760px; }
+    .eh-table th {
+      padding: 7px 10px; text-align: right; font-size: 10px; font-weight: 700;
+      color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px;
+      border-bottom: 1px solid rgba(255,255,255,0.07); white-space: nowrap;
+    }
+    .eh-table th:first-child, .eh-table td:first-child { text-align: left; }
+    .eh-table th:nth-child(2), .eh-table td:nth-child(2) { text-align: left; }
+    .eh-table td {
+      padding: 8px 10px; text-align: right;
+      border-bottom: 1px solid rgba(255,255,255,0.04); white-space: nowrap;
+    }
+    .eh-row { cursor: pointer; transition: background 0.12s; }
+    .eh-row:hover { background: rgba(255,255,255,0.04); }
+    .eh-pair { font-weight: 700; color: var(--text); }
+    .eh-rank { color: var(--text-muted); font-size: 10px; }
+    .eh-dir-up   { color: #4ade80; font-weight: 700; }
+    .eh-dir-down { color: #f87171; font-weight: 700; }
+    .eh-sig-badge {
+      display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 4px;
+      font-size: 9px; font-weight: 700; background: rgba(34,197,94,0.12);
+      color: #4ade80; border: 1px solid rgba(34,197,94,0.3);
+    }
+    .eh-bar-cell { display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
+    .eh-mini-bar { width: 50px; height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; overflow: hidden; }
+    .eh-mini-fill { height: 100%; border-radius: 2px; }
+
+    /* ── Currency strength bars ── */
+    .eh-cs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
+    .eh-cs-block-label { font-size: 11px; font-weight: 700; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .eh-cs-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
+    .eh-cs-cur { font-size: 11px; font-weight: 700; color: var(--text); min-width: 32px; }
+    .eh-cs-bar-wrap { flex: 1; height: 6px; background: rgba(255,255,255,0.05); border-radius: 3px; overflow: hidden; }
+    .eh-cs-bar { height: 100%; border-radius: 3px; }
+    .eh-cs-num { font-size: 10px; font-weight: 600; min-width: 46px; text-align: right; }
+    .pos { color: #4ade80; } .neg { color: #f87171; }
+    .eh-cs-bar.pos { background: #4ade80; } .eh-cs-bar.neg { background: #f87171; }
+
+    /* ── Chart modal ── */
+    .eh-modal-overlay {
+      position: fixed; inset: 0; z-index: 300;
+      background: rgba(4,6,12,0.8); backdrop-filter: blur(6px);
+      display: none; align-items: center; justify-content: center; padding: 16px;
+    }
+    .eh-modal-overlay.open { display: flex; }
+    .eh-modal {
+      width: 100%; max-width: 860px; max-height: 92vh; overflow-y: auto;
+      background: #0b101c; border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 14px;
+    }
+    .eh-modal-hd {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 18px; border-bottom: 1px solid rgba(255,255,255,0.06);
+      position: sticky; top: 0; background: #0b101c; z-index: 2;
+    }
+    .eh-modal-title { font-size: 15px; font-weight: 800; color: var(--text); }
+    .eh-modal-close {
+      width: 30px; height: 30px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.04); color: var(--text-muted);
+      font-size: 16px; cursor: pointer; line-height: 1;
+    }
+    .eh-modal-bd { padding: 16px 18px; }
+    .eh-chart-stats { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 12px; }
+    .eh-chart-stat { font-size: 11px; color: var(--text-muted); }
+    .eh-chart-stat b { color: var(--text); font-size: 12px; }
+    #eh-chart-canvas { width: 100%; height: 340px; display: block; }
+    .eh-loading { display: flex; align-items: center; gap: 8px; padding: 24px; color: var(--text-muted); font-size: 12px; justify-content: center; }
+    .spinner {
+      width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.15);
+      border-top-color: #60a5fa; border-radius: 50%; animation: ehspin 0.7s linear infinite;
+    }
+    @keyframes ehspin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 640px) {
+      .eh-main { padding: 14px 12px 60px; }
+      .eh-energy-big { font-size: 36px; }
+      .eh-chips { margin-left: 0; width: 100%; }
+      #eh-chart-canvas { height: 260px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="eh-topbar">
+    <div class="eh-topbar-left">
+      <a class="eh-logo" href="/app"><img src="/nervafx-logo.png" alt="NervaFX" onerror="this.style.display='none'"></a>
+      <span class="eh-sep">/</span>
+      <span class="eh-title-text">Hour Analysis</span>
+    </div>
+    <a class="eh-back-btn" href="javascript:history.back()">&larr; Back</a>
+  </div>
+
+  <main class="eh-main">
+    <div id="eh-content"><div class="eh-loading"><span class="spinner"></span> Loading hour data…</div></div>
+  </main>
+
+  <!-- Chart modal -->
+  <div class="eh-modal-overlay" id="eh-modal" onclick="if(event.target===this)ehCloseModal()">
+    <div class="eh-modal">
+      <div class="eh-modal-hd">
+        <span class="eh-modal-title" id="eh-modal-title">—</span>
+        <button class="eh-modal-close" onclick="ehCloseModal()">&times;</button>
+      </div>
+      <div class="eh-modal-bd" id="eh-modal-body"></div>
+    </div>
+  </div>
+
+  <script>
+  // ── Auth gate ──
+  (function () {
+    const token = localStorage.getItem('nfx_token');
+    if (!token) return location.replace('/login.html');
+    try {
+      const pay = JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+      if (pay.exp && pay.exp * 1000 < Date.now()) {
+        localStorage.removeItem('nfx_token');
+        return location.replace('/login.html');
+      }
+    } catch (_) { return location.replace('/login.html'); }
+  })();
+
+  let _userTz = localStorage.getItem('nfx_tz') || 'auto';
+  function _tz() { return (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC'); }
+
+  async function api(path) {
+    const token = localStorage.getItem('nfx_token');
+    const r = await fetch(path, { headers: { Authorization: `Bearer ${token}` } });
+    if (r.status === 401) { location.replace('/login.html'); throw new Error('Unauthorized'); }
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || `${r.status}`);
+    return j;
+  }
+
+  const HOUR_KEY = (new URLSearchParams(location.search).get('time') || '').slice(0, 13);
+  const isJPY = inst => inst.includes('JPY');
+  const dec = inst => isJPY(inst) ? 3 : 5;
+  const pipsFmt = v => v == null ? '—' : (v * 10000).toFixed(1);
+
+  const CYCLE_COLOR = { EXPLOSIVE: '#ef4444', EXPANSION: '#22c55e', ACTIVE: '#0ea5e9', CONTRACTION: '#f59e0b', COMPRESSION: '#f59e0b', DORMANT: '#64748b', RECOVERY: '#a855f7' };
+  const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York', LOW_LIQUIDITY: 'Off-hours' };
+
+  async function load() {
+    const el = document.getElementById('eh-content');
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}$/.test(HOUR_KEY)) {
+      el.innerHTML = '<p style="color:var(--text-muted);font-size:13px">Invalid or missing hour. Open this page by clicking an energy bar.</p>';
+      return;
+    }
+    let data;
+    try {
+      data = await api('/api/energy-hour?time=' + encodeURIComponent(HOUR_KEY));
+    } catch (e) {
+      el.innerHTML = `<p style="color:var(--text-muted);font-size:13px">Failed to load: ${e.message}</p>`;
+      return;
+    }
+    render(data, el);
+    if (window.lucide) lucide.createIcons();
+  }
+
+  function render(data, el) {
+    const { hour, movers, currencies, signalPairs } = data;
+    const tz = _tz();
+    const hourDate = new Date(HOUR_KEY + ':00:00Z');
+    const localDay  = hourDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: tz });
+    const localTime = hourDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
+    const localEnd  = new Date(hourDate.getTime() + 3600000).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
+
+    const energy = Math.round(parseFloat(hour?.market_energy) || 0);
+    const eCol = energy >= 50 ? '#22c55e' : energy >= 25 ? '#f59e0b' : '#ef4444';
+    const cycle = (hour?.energy_cycle || '').toUpperCase();
+    const momType = (hour?.momentum_type || '').toUpperCase();
+    const sess = SESS_LABEL[hour?.session_name] || hour?.session_name || '';
+
+    // ── Hero ──
+    let html = `<div class="eh-card"><div class="eh-card-bd">
+      <div class="eh-hero">
+        <div class="eh-energy-big" style="color:${eCol}">${energy}</div>
+        <div class="eh-hero-meta">
+          <span class="eh-hero-time">${localDay}</span>
+          <span class="eh-hero-sub">${localTime}–${localEnd} local · ${sess} session · Market Energy</span>
+        </div>
+        <div class="eh-chips">
+          ${cycle ? `<span class="eh-chip" style="color:${CYCLE_COLOR[cycle] || '#94a3b8'}">${cycle}</span>` : ''}
+          ${momType ? `<span class="eh-chip" style="color:#93c5fd">Mom: ${momType}</span>` : ''}
+        </div>
+      </div>
+    </div></div>`;
+
+    // ── Hour metrics grid ──
+    if (hour) {
+      const metrics = [
+        { lbl: 'Tradability',  v: hour.tradability_score },
+        { lbl: 'Movement',     v: hour.movement_score },
+        { lbl: 'Breadth',      v: hour.breadth_score },
+        { lbl: 'Agreement',    v: hour.agreement_score },
+        { lbl: 'Dispersion',   v: hour.dispersion_score },
+        { lbl: 'Dir Effncy',   v: hour.de_score },
+        { lbl: 'Dir Control',  v: hour.directional_control },
+        { lbl: 'Momentum',     v: hour.momentum_score },
+        { lbl: 'Vol Quality',  v: hour.volatility_quality },
+        { lbl: 'Volatility',   v: hour.volatility_score },
+      ].filter(m => m.v != null && m.v !== '');
+      if (metrics.length) {
+        html += `<div class="eh-card">
+          <div class="eh-card-hd"><i data-lucide="gauge"></i> Hour Metrics</div>
+          <div class="eh-card-bd"><div class="eh-metrics">
+            ${metrics.map(m => {
+              const v = Math.round(parseFloat(m.v) || 0);
+              const c = v >= 50 ? '#22c55e' : v >= 25 ? '#f59e0b' : '#94a3b8';
+              return `<div class="eh-metric"><div class="eh-metric-val" style="color:${c}">${v}</div><div class="eh-metric-lbl">${m.lbl}</div></div>`;
+            }).join('')}
+          </div></div>
+        </div>`;
+      }
+    }
+
+    // ── Market movers table ──
+    const sigMap = {};
+    for (const sp of (signalPairs || [])) sigMap[sp.instrument] = sp;
+    const maxRange = Math.max(...(movers || []).map(m => m.range_pips), 0.1);
+
+    html += `<div class="eh-card">
+      <div class="eh-card-hd"><i data-lucide="trending-up"></i> Pairs Running The Market <span style="margin-left:auto;font-size:10px;font-weight:500;text-transform:none;letter-spacing:0">click a pair for 48h chart</span></div>
+      <div class="eh-table-wrap"><table class="eh-table">
+        <thead><tr>
+          <th>#</th><th>Pair</th><th>Dir</th><th>Net</th><th>Range</th><th>Eff</th><th>DE-20</th><th>3H</th><th>6H</th><th>12H</th><th>Vol</th>
+        </tr></thead>
+        <tbody>
+          ${(movers || []).map((m, i) => {
+            const sig = sigMap[m.instrument];
+            const up = m.dir === 'UP';
+            const sCol = v => v == null ? '#64748b' : v > 0 ? '#4ade80' : v < 0 ? '#f87171' : '#94a3b8';
+            const rangePct = Math.round((m.range_pips / maxRange) * 100);
+            return `<tr class="eh-row" onclick="ehOpenChart('${m.instrument}')">
+              <td class="eh-rank">${i + 1}</td>
+              <td><span class="eh-pair">${m.instrument.replace('_','/')}</span>${sig ? `<span class="eh-sig-badge">${sig.dir}</span>` : ''}</td>
+              <td class="${up ? 'eh-dir-up' : 'eh-dir-down'}">${up ? '▲' : '▼'}</td>
+              <td style="color:${up ? '#4ade80' : '#f87171'};font-weight:600">${m.net_pips > 0 ? '+' : ''}${m.net_pips}</td>
+              <td><div class="eh-bar-cell"><div class="eh-mini-bar"><div class="eh-mini-fill" style="width:${rangePct}%;background:#60a5fa"></div></div><span>${m.range_pips}</span></div></td>
+              <td>${m.efficiency}%</td>
+              <td style="color:${m.de20 >= 55 ? '#22c55e' : m.de20 >= 35 ? '#f59e0b' : '#94a3b8'}">${m.de20}%</td>
+              <td style="color:${sCol(m.spread_3h)}">${pipsFmt(m.spread_3h)}</td>
+              <td style="color:${sCol(m.spread_6h)}">${pipsFmt(m.spread_6h)}</td>
+              <td style="color:${sCol(m.spread_12h)}">${pipsFmt(m.spread_12h)}</td>
+              <td style="color:#94a3b8">${(m.volume || 0).toLocaleString()}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table></div>
+      <div style="padding:10px 16px;font-size:10.5px;color:var(--text-muted);line-height:1.6;border-top:1px solid rgba(255,255,255,0.04)">
+        <b>Net</b> = hour close − open (pips) · <b>Range</b> = hour high − low · <b>Eff</b> = |net| / range (how directional the hour was) ·
+        <b>DE-20</b> = directional efficiency over last 20 M15 bars · <b>3H/6H/12H</b> = pair strength spread (pips) · <b>Vol</b> = tick volume.
+        Ranked by range × efficiency.
+      </div>
+    </div>`;
+
+    // ── Currency strength ──
+    if (currencies?.length) {
+      const tfs = [
+        { lbl: '3H',  key: 'smooth_3h'  },
+        { lbl: '6H',  key: 'smooth_6h'  },
+        { lbl: '12H', key: 'smooth_12h' },
+      ];
+      html += `<div class="eh-card">
+        <div class="eh-card-hd"><i data-lucide="bar-chart-3"></i> Currency Strength At This Hour</div>
+        <div class="eh-card-bd"><div class="eh-cs-grid">
+          ${tfs.map(tf => {
+            const vals = currencies.map(c => ({ cur: c.currency, v: c[tf.key] || 0 })).sort((a, b) => b.v - a.v);
+            const maxAbs = Math.max(...vals.map(x => Math.abs(x.v)), 0.0001);
+            return `<div>
+              <div class="eh-cs-block-label">${tf.lbl} Strength</div>
+              ${vals.map(x => {
+                const pct = Math.max(4, Math.round((Math.abs(x.v) / maxAbs) * 100));
+                const cls = x.v >= 0 ? 'pos' : 'neg';
+                return `<div class="eh-cs-row">
+                  <span class="eh-cs-cur">${x.cur}</span>
+                  <div class="eh-cs-bar-wrap"><div class="eh-cs-bar ${cls}" style="width:${pct}%"></div></div>
+                  <span class="eh-cs-num ${cls}">${x.v >= 0 ? '+' : ''}${(x.v * 10000).toFixed(1)}</span>
+                </div>`;
+              }).join('')}
+            </div>`;
+          }).join('')}
+        </div></div>
+      </div>`;
+    }
+
+    el.innerHTML = html;
+  }
+
+  // ── Pair chart modal ──
+  window.ehOpenChart = async function(instrument) {
+    const overlay = document.getElementById('eh-modal');
+    const title = document.getElementById('eh-modal-title');
+    const body = document.getElementById('eh-modal-body');
+    title.textContent = instrument.replace('_', '/') + ' — 48h (M15)';
+    body.innerHTML = '<div class="eh-loading"><span class="spinner"></span> Loading candles…</div>';
+    overlay.classList.add('open');
+    document.body.style.overflow = 'hidden';
+
+    try {
+      const data = await api(`/api/energy-hour?time=${encodeURIComponent(HOUR_KEY)}&chart=${instrument}`);
+      const candles = (data.candles || []).map(c => ({
+        time: c.time, open: +c.open, high: +c.high, low: +c.low, close: +c.close, volume: +c.volume || 0,
+      }));
+      if (candles.length < 4) { body.innerHTML = '<p style="color:var(--text-muted);font-size:12px">Not enough candle data.</p>'; return; }
+
+      const d = dec(instrument);
+      const first = candles[0], last = candles[candles.length - 1];
+      const hi = Math.max(...candles.map(c => c.high));
+      const lo = Math.min(...candles.map(c => c.low));
+      const ps = isJPY(instrument) ? 0.01 : 0.0001;
+      const netPips = ((last.close - first.open) / ps).toFixed(1);
+      const netCol = last.close >= first.open ? '#4ade80' : '#f87171';
+
+      body.innerHTML = `
+        <div class="eh-chart-stats">
+          <span class="eh-chart-stat">48h: <b style="color:${netCol}">${netPips > 0 ? '+' : ''}${netPips} pips</b></span>
+          <span class="eh-chart-stat">High: <b>${hi.toFixed(d)}</b></span>
+          <span class="eh-chart-stat">Low: <b>${lo.toFixed(d)}</b></span>
+          <span class="eh-chart-stat">Last: <b>${last.close.toFixed(d)}</b></span>
+          <span class="eh-chart-stat" style="margin-left:auto"><span style="display:inline-block;width:10px;height:10px;background:rgba(96,165,250,0.25);border:1px solid #60a5fa;border-radius:2px;vertical-align:-1px"></span> selected hour</span>
+        </div>
+        <canvas id="eh-chart-canvas"></canvas>`;
+
+      drawChart(document.getElementById('eh-chart-canvas'), candles, data.hourStart, data.hourEnd, instrument);
+    } catch (e) {
+      body.innerHTML = `<p style="color:var(--text-muted);font-size:12px">Failed to load chart: ${e.message}</p>`;
+    }
+  };
+
+  window.ehCloseModal = function() {
+    document.getElementById('eh-modal').classList.remove('open');
+    document.body.style.overflow = '';
+  };
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') ehCloseModal(); });
+
+  function drawChart(canvas, candles, hourStartISO, hourEndISO, instrument) {
+    const dpr = window.devicePixelRatio || 1;
+    const cssW = canvas.clientWidth || canvas.parentElement.clientWidth;
+    const cssH = canvas.clientHeight || 340;
+    canvas.width = cssW * dpr; canvas.height = cssH * dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    const padL = 56, padR = 10, padT = 10, padB = 26;
+    const W = cssW - padL - padR, H = cssH - padT - padB;
+
+    const hi = Math.max(...candles.map(c => c.high));
+    const lo = Math.min(...candles.map(c => c.low));
+    const range = (hi - lo) || 1;
+    const yPad = range * 0.06;
+    const yMax = hi + yPad, yMin = lo - yPad;
+
+    const x = i => padL + (i / (candles.length - 1)) * W;
+    const y = v => padT + (1 - (v - yMin) / (yMax - yMin)) * H;
+
+    // Grid + y labels
+    ctx.font = '10px Inter, sans-serif';
+    ctx.fillStyle = '#64748b';
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    const d = dec(instrument);
+    for (let t = 0; t <= 4; t++) {
+      const v = yMin + (t / 4) * (yMax - yMin);
+      const yy = y(v);
+      ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(padL + W, yy); ctx.stroke();
+      ctx.textAlign = 'right';
+      ctx.fillText(v.toFixed(d), padL - 6, yy + 3);
+    }
+
+    // Selected-hour band
+    const hs = new Date(hourStartISO).getTime(), he = new Date(hourEndISO).getTime();
+    let bandStart = null, bandEnd = null;
+    candles.forEach((c, i) => {
+      const t = new Date(c.time).getTime();
+      if (t >= hs && t < he) {
+        if (bandStart === null) bandStart = i;
+        bandEnd = i;
+      }
+    });
+    if (bandStart !== null) {
+      const bx = x(Math.max(0, bandStart - 0.5));
+      const bw = x(Math.min(candles.length - 1, bandEnd + 0.5)) - bx;
+      ctx.fillStyle = 'rgba(96,165,250,0.12)';
+      ctx.fillRect(bx, padT, bw, H);
+      ctx.strokeStyle = 'rgba(96,165,250,0.5)';
+      ctx.strokeRect(bx, padT, bw, H);
+    }
+
+    // X time labels (every ~8h = 32 candles)
+    const tz = _tz();
+    ctx.fillStyle = '#64748b'; ctx.textAlign = 'center';
+    const step = Math.max(1, Math.round(candles.length / 6));
+    for (let i = 0; i < candles.length; i += step) {
+      const t = new Date(candles[i].time);
+      const lbl = t.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
+      ctx.fillText(lbl, x(i), cssH - 8);
+    }
+
+    // High-low wicks (thin candle silhouettes)
+    ctx.strokeStyle = 'rgba(148,163,184,0.25)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < candles.length; i++) {
+      const c = candles[i];
+      ctx.beginPath();
+      ctx.moveTo(x(i), y(c.high));
+      ctx.lineTo(x(i), y(c.low));
+      ctx.stroke();
+    }
+
+    // Close line
+    ctx.beginPath();
+    candles.forEach((c, i) => { i === 0 ? ctx.moveTo(x(i), y(c.close)) : ctx.lineTo(x(i), y(c.close)); });
+    ctx.strokeStyle = '#60a5fa'; ctx.lineWidth = 1.8;
+    ctx.lineJoin = 'round'; ctx.stroke();
+
+    // Last price dot
+    const lastC = candles[candles.length - 1];
+    ctx.beginPath();
+    ctx.arc(x(candles.length - 1), y(lastC.close), 3, 0, Math.PI * 2);
+    ctx.fillStyle = '#60a5fa'; ctx.fill();
+  }
+
+  load();
+  </script>
+</body>
+</html>
