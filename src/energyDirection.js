@@ -31,7 +31,7 @@ const CONFLUENCE_THRESHOLDS = {
   dispersion_score:  30,
   tradability_score: 30,
   movement_score:    35,
-  breadth_score:     80,
+  breadth_score:     70,
   agreement_score:   35,
 };
 

@@ -5095,7 +5095,7 @@ const METRIC_CHART_CONFIG = {
   },
   breadth: {
     field: 'breadth_score', label: 'Breadth Score', title: 'Hourly Session Breadth',
-    unit: '', decimals: 0, v2Threshold: 80,
+    unit: '', decimals: 0, v2Threshold: 70,
     thresholds: [
       { min: 50, color: '#22c55e', label: 'Strong breadth' },
       { min: 25, color: '#f59e0b', label: 'Moderate breadth' },
@@ -5366,7 +5366,7 @@ function _renderMetricBars(container, rows, key) {
     (parseFloat(r.dispersion_score)  || 0) >= 30 &&
     (parseFloat(r.tradability_score) || 0) >= 30 &&
     (parseFloat(r.movement_score)    || 0) >= 35 &&
-    (parseFloat(r.breadth_score)     || 0) >= 80 &&
+    (parseFloat(r.breadth_score)     || 0) >= 70 &&
     (parseFloat(r.agreement_score)   || 0) >= 35;
 
   const byDate = {};

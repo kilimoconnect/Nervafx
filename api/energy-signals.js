@@ -50,7 +50,7 @@ module.exports = async function handler(req, res) {
       dispersion_score:  30,
       tradability_score: 30,
       movement_score:    35,
-      breadth_score:     80,
+      breadth_score:     70,
       agreement_score:   35,
     };
     const isConfluenceBar = (r) => {
