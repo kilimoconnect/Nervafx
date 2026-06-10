@@ -5030,7 +5030,7 @@ const METRIC_CHART_CONFIG = {
   },
   dispersion: {
     field: 'dispersion_score', label: 'Currency Dispersion', title: 'Hourly Currency Dispersion',
-    unit: '', decimals: 0, v2Threshold: 60,
+    unit: '', decimals: 0, v2Threshold: 30,
     thresholds: [
       { min: 75, color: '#22c55e', label: 'High dispersion — strong trends' },
       { min: 55, color: '#0ea5e9', label: 'Moderate — directional flow' },
@@ -5379,7 +5379,7 @@ function _renderMetricBars(container, rows, key) {
 
   // Full engine confluence: all five supporting engines green in the same hour
   const _allEnginesGreen = r =>
-    (parseFloat(r.dispersion_score)  || 0) >= 60 &&
+    (parseFloat(r.dispersion_score)  || 0) >= 30 &&
     (parseFloat(r.tradability_score) || 0) >= 55 &&
     (parseFloat(r.movement_score)    || 0) >= 35 &&
     (parseFloat(r.breadth_score)     || 0) >= 80 &&

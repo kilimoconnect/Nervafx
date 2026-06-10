@@ -729,7 +729,7 @@
   const ARC_METRICS = {
     energy:     { field: 'market_energy',         label: 'Energy',       unit: '',  highThresh: 50, midThresh: 30, peakWord: 'energy',             v2Threshold: 70, m15Threshold: 60 },
     de:         { field: 'de_score',              label: 'Dir Efficiency', unit: '%', highThresh: 55, midThresh: 35, peakWord: 'directional efficiency', v2Threshold: 50 },
-    dispersion: { field: 'dispersion_score',      label: 'Dispersion',   unit: '',  highThresh: 60, midThresh: 35, peakWord: 'currency dispersion', v2Threshold: 60 },
+    dispersion: { field: 'dispersion_score',      label: 'Dispersion',   unit: '',  highThresh: 60, midThresh: 35, peakWord: 'currency dispersion', v2Threshold: 30 },
     tradability:{ field: 'tradability_score',      label: 'Tradability',  unit: '',  highThresh: 55, midThresh: 35, peakWord: 'tradability',        v2Threshold: 55 },
     movement:   { field: 'movement_score',         label: 'Movement',     unit: '',  highThresh: 40, midThresh: 20, peakWord: 'movement',           v2Threshold: 35 },
     breadth:    { field: 'breadth_score',           label: 'Breadth',      unit: '',  highThresh: 40, midThresh: 20, peakWord: 'breadth',            v2Threshold: 80 },
@@ -837,7 +837,7 @@
 
     // Full engine confluence: all five supporting engines green in the same hour
     const _allEnginesGreen = r =>
-      (parseFloat(r.dispersion_score)  || 0) >= 60 &&
+      (parseFloat(r.dispersion_score)  || 0) >= 30 &&
       (parseFloat(r.tradability_score) || 0) >= 55 &&
       (parseFloat(r.movement_score)    || 0) >= 35 &&
       (parseFloat(r.breadth_score)     || 0) >= 80 &&
