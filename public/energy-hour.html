@@ -308,12 +308,37 @@
       const [base, quote] = m.instrument.split('_');
       return (strongSet.has(base) && weakSet.has(quote)) || (weakSet.has(base) && strongSet.has(quote));
     });
-    // Rank by 3H+6H combined pair spread (strength differential)
-    showMovers.sort((a, b) => {
-      const sa = Math.abs(((a.spread_3h || 0) + (a.spread_6h || 0)) / 2);
-      const sb = Math.abs(((b.spread_3h || 0) + (b.spread_6h || 0)) / 2);
-      return sb - sa;
-    });
+    // Direction at that moment — derived from which side is strong/weak
+    const _pairDirEarly = (inst) => {
+      const [base, quote] = inst.split('_');
+      if (strongSet.has(base) && weakSet.has(quote)) return 'BUY';
+      if (weakSet.has(base) && strongSet.has(quote)) return 'SELL';
+      return null;
+    };
+
+    // ── Composite ranking: spread alignment + price movement + structure ──
+    // spreadComp: 3H/6H/12H spreads SIGNED in the trade direction (misaligned
+    //             timeframes subtract), weighted recent-first 45/35/20.
+    // moveComp:   hour net pips in the trade direction (against = negative).
+    // structPct:  structure quality — 60% hour efficiency + 40% DE-20.
+    for (const m of showMovers) {
+      const dirSign = _pairDirEarly(m.instrument) === 'SELL' ? -1 : 1;
+      m._spreadComp = dirSign * (
+        0.45 * ((m.spread_3h  || 0) * 10000) +
+        0.35 * ((m.spread_6h  || 0) * 10000) +
+        0.20 * ((m.spread_12h || 0) * 10000)
+      );
+      m._moveComp   = dirSign * (m.net_pips || 0);
+      m._structPct  = 0.6 * (m.efficiency || 0) + 0.4 * (m.de20 || 0);
+    }
+    const maxSpread = Math.max(...showMovers.map(m => m._spreadComp), 1);
+    const maxMove   = Math.max(...showMovers.map(m => m._moveComp), 1);
+    for (const m of showMovers) {
+      const spreadN = Math.max(0, m._spreadComp / maxSpread) * 100;
+      const moveN   = Math.max(0, m._moveComp / maxMove) * 100;
+      m._runScore = Math.round(0.40 * spreadN + 0.35 * moveN + 0.25 * m._structPct);
+    }
+    showMovers.sort((a, b) => b._runScore - a._runScore);
     const maxRange = Math.max(...showMovers.map(m => m.range_pips), 0.1);
 
     // Direction at that moment — derived from which side is strong/weak
@@ -336,10 +361,10 @@
       </div>
       <div class="eh-table-wrap"><table class="eh-table">
         <thead><tr>
-          <th>#</th><th>Pair</th><th>Dir</th><th>Net</th><th>Range</th><th>Eff</th><th>DE-20</th><th>3H</th><th>6H</th><th>12H</th><th>Vol</th>
+          <th>#</th><th>Pair</th><th>Dir</th><th>Score</th><th>Net</th><th>Range</th><th>Eff</th><th>DE-20</th><th>3H</th><th>6H</th><th>12H</th><th>Vol</th>
         </tr></thead>
         <tbody>
-          ${!showMovers.length ? '<tr><td colspan="11" style="text-align:center;padding:18px;color:var(--text-muted)">No pairs qualify — no strong/weak currency combination at this hour.</td></tr>' : ''}
+          ${!showMovers.length ? '<tr><td colspan="12" style="text-align:center;padding:18px;color:var(--text-muted)">No pairs qualify — no strong/weak currency combination at this hour.</td></tr>' : ''}
           ${showMovers.map((m, i) => {
             const dir = pairDir(m.instrument); // direction at that moment (strength-derived)
             const up = m.dir === 'UP';
@@ -350,6 +375,7 @@
               <td class="eh-rank">${i + 1}</td>
               <td><span class="eh-pair">${m.instrument.replace('_','/')}</span></td>
               <td><span style="color:${isBuy ? '#4ade80' : '#f87171'};font-weight:700">${dir || '—'}</span> <span class="${up ? 'eh-dir-up' : 'eh-dir-down'}" style="font-size:10px">${up ? '▲' : '▼'}</span></td>
+              <td style="color:${m._runScore >= 70 ? '#4ade80' : m._runScore >= 45 ? '#f59e0b' : '#94a3b8'};font-weight:700">${m._runScore}</td>
               <td style="color:${up ? '#4ade80' : '#f87171'};font-weight:600">${m.net_pips > 0 ? '+' : ''}${m.net_pips}</td>
               <td><div class="eh-bar-cell"><div class="eh-mini-bar"><div class="eh-mini-fill" style="width:${rangePct}%;background:#60a5fa"></div></div><span>${m.range_pips}</span></div></td>
               <td>${m.efficiency}%</td>
@@ -364,9 +390,9 @@
       </table></div>
       <div style="padding:10px 16px;font-size:10.5px;color:var(--text-muted);line-height:1.6;border-top:1px solid rgba(255,255,255,0.04)">
         <b>Dir</b> = direction at that moment from currency strength (strong vs weak), ▲/▼ = actual hour movement ·
+        <b>Score</b> = composite rank: 40% spread alignment (3H/6H/12H weighted 45/35/20, signed in trade direction) + 35% price movement in trade direction + 25% structure (60% efficiency, 40% DE-20) ·
         <b>Net</b> = hour close − open (pips) · <b>Range</b> = hour high − low · <b>Eff</b> = |net| / range (how directional the hour was) ·
         <b>DE-20</b> = directional efficiency over last 20 M15 bars · <b>3H/6H/12H</b> = pair strength spread (pips) · <b>Vol</b> = tick volume.
-        Ranked by 3H+6H combined spread.
       </div>
     </div>`;
 
