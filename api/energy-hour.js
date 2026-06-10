@@ -48,7 +48,9 @@ module.exports = async function handler(req, res) {
     const chartInst = req.query?.chart;
     if (chartInst) {
       if (!INSTRUMENTS.includes(chartInst)) return res.status(400).json({ error: 'invalid instrument' });
-      const from = new Date(hourEnd.getTime() - 48 * 3600000).toISOString();
+      // 36h before the hour + up to 12h after — so the post-hour follow-through is visible
+      const from = new Date(hourEnd.getTime() - 36 * 3600000).toISOString();
+      const to   = new Date(hourEnd.getTime() + 12 * 3600000).toISOString();
       const { data: candles, error } = await sb
         .from('backtest_candles')
         .select('time, open, high, low, close, volume')
@@ -56,7 +58,7 @@ module.exports = async function handler(req, res) {
         .eq('timeframe', 'M15')
         .eq('complete', true)
         .gte('time', from)
-        .lt('time', hourEnd.toISOString())
+        .lt('time', to)
         .order('time', { ascending: true })
         .limit(250);
       if (error) throw error;

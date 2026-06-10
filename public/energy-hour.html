@@ -346,7 +346,7 @@
             const isBuy = dir === 'BUY';
             const sCol = v => v == null ? '#64748b' : v > 0 ? '#4ade80' : v < 0 ? '#f87171' : '#94a3b8';
             const rangePct = Math.round((m.range_pips / maxRange) * 100);
-            return `<tr class="eh-row" onclick="ehOpenChart('${m.instrument}')">
+            return `<tr class="eh-row" onclick="ehOpenChart('${m.instrument}','${dir || ''}')">
               <td class="eh-rank">${i + 1}</td>
               <td><span class="eh-pair">${m.instrument.replace('_','/')}</span></td>
               <td><span style="color:${isBuy ? '#4ade80' : '#f87171'};font-weight:700">${dir || '—'}</span> <span class="${up ? 'eh-dir-up' : 'eh-dir-down'}" style="font-size:10px">${up ? '▲' : '▼'}</span></td>
@@ -404,7 +404,7 @@
   }
 
   // ── Pair chart modal ──
-  window.ehOpenChart = async function(instrument) {
+  window.ehOpenChart = async function(instrument, dir) {
     const overlay = document.getElementById('eh-modal');
     const title = document.getElementById('eh-modal-title');
     const body = document.getElementById('eh-modal-body');
@@ -428,17 +428,50 @@
       const netPips = ((last.close - first.open) / ps).toFixed(1);
       const netCol = last.close >= first.open ? '#4ade80' : '#f87171';
 
+      // ── 10-pip follow-through after the selected hour's close ──
+      // Target = hour close ± 10 pips in the signal direction.
+      let followThrough = null;
+      const heMs = new Date(data.hourEnd).getTime();
+      const hourCandles = candles.filter(c => {
+        const t = new Date(c.time).getTime();
+        return t >= new Date(data.hourStart).getTime() && t < heMs;
+      });
+      const afterCandles = candles.filter(c => new Date(c.time).getTime() >= heMs);
+      if (dir && hourCandles.length) {
+        const hourClose = hourCandles[hourCandles.length - 1].close;
+        const isBuy = dir === 'BUY';
+        const target = isBuy ? hourClose + 10 * ps : hourClose - 10 * ps;
+        let hitTime = null;
+        for (const c of afterCandles) {
+          if (isBuy ? c.high >= target : c.low <= target) { hitTime = new Date(c.time).getTime(); break; }
+        }
+        followThrough = {
+          dir, hourClose, target, hit: hitTime !== null,
+          minsToHit: hitTime !== null ? Math.round((hitTime - heMs) / 60000) + 15 : null,
+          checked: afterCandles.length > 0,
+        };
+      }
+
+      const ftStat = followThrough
+        ? (!followThrough.checked
+            ? `<span class="eh-chart-stat">+10p ${followThrough.dir}: <b style="color:#94a3b8">no data yet</b></span>`
+            : followThrough.hit
+              ? `<span class="eh-chart-stat">+10p ${followThrough.dir}: <b style="color:#4ade80">HIT in ${followThrough.minsToHit}m</b></span>`
+              : `<span class="eh-chart-stat">+10p ${followThrough.dir}: <b style="color:#f87171">NOT HIT</b></span>`)
+        : '';
+
       body.innerHTML = `
         <div class="eh-chart-stats">
           <span class="eh-chart-stat">48h: <b style="color:${netCol}">${netPips > 0 ? '+' : ''}${netPips} pips</b></span>
           <span class="eh-chart-stat">High: <b>${hi.toFixed(d)}</b></span>
           <span class="eh-chart-stat">Low: <b>${lo.toFixed(d)}</b></span>
           <span class="eh-chart-stat">Last: <b>${last.close.toFixed(d)}</b></span>
+          ${ftStat}
           <span class="eh-chart-stat" style="margin-left:auto"><span style="display:inline-block;width:10px;height:10px;background:rgba(96,165,250,0.25);border:1px solid #60a5fa;border-radius:2px;vertical-align:-1px"></span> selected hour</span>
         </div>
         <canvas id="eh-chart-canvas"></canvas>`;
 
-      drawChart(document.getElementById('eh-chart-canvas'), candles, data.hourStart, data.hourEnd, instrument);
+      drawChart(document.getElementById('eh-chart-canvas'), candles, data.hourStart, data.hourEnd, instrument, followThrough);
     } catch (e) {
       body.innerHTML = `<p style="color:var(--text-muted);font-size:12px">Failed to load chart: ${e.message}</p>`;
     }
@@ -450,7 +483,7 @@
   };
   document.addEventListener('keydown', e => { if (e.key === 'Escape') ehCloseModal(); });
 
-  function drawChart(canvas, candles, hourStartISO, hourEndISO, instrument) {
+  function drawChart(canvas, candles, hourStartISO, hourEndISO, instrument, followThrough) {
     const dpr = window.devicePixelRatio || 1;
     const cssW = canvas.clientWidth || canvas.parentElement.clientWidth;
     const cssH = canvas.clientHeight || 340;
@@ -528,6 +561,37 @@
     candles.forEach((c, i) => { i === 0 ? ctx.moveTo(x(i), y(c.close)) : ctx.lineTo(x(i), y(c.close)); });
     ctx.strokeStyle = '#60a5fa'; ctx.lineWidth = 1.8;
     ctx.lineJoin = 'round'; ctx.stroke();
+
+    // ── Follow-through lines: hour close + 10-pip target in signal direction ──
+    if (followThrough && bandEnd !== null) {
+      const fromX = x(Math.min(candles.length - 1, bandEnd + 0.5));
+      const toX = padL + W;
+      const closeY = y(followThrough.hourClose);
+      const targetY = y(followThrough.target);
+      const targetCol = followThrough.hit ? '#22c55e' : '#f87171';
+
+      // Hour close reference line (dashed grey)
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(fromX, closeY); ctx.lineTo(toX, closeY);
+      ctx.strokeStyle = 'rgba(148,163,184,0.6)'; ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // 10-pip target line (dashed, green if hit / red if not)
+      ctx.beginPath();
+      ctx.moveTo(fromX, targetY); ctx.lineTo(toX, targetY);
+      ctx.strokeStyle = targetCol; ctx.lineWidth = 1.4;
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Labels
+      ctx.font = '9px Inter, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillStyle = 'rgba(148,163,184,0.9)';
+      ctx.fillText('close', fromX + 4, closeY - 4);
+      ctx.fillStyle = targetCol;
+      ctx.fillText(`+10p ${followThrough.dir}${followThrough.hit ? ' ✓' : ''}`, fromX + 4, targetY - 4);
+    }
 
     // Last price dot
     const lastC = candles[candles.length - 1];
