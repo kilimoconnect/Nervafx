@@ -4777,10 +4777,10 @@ body::after {
 
 /* Full engine confluence — energy bar where all other engines are green too */
 .bc-bar-confl .bc-bar-fill {
-  background: #fbbf24 !important;
-  box-shadow: 0 0 12px rgba(251, 191, 36, 0.6);
+  background: #ec4899 !important;
+  box-shadow: 0 0 12px rgba(236, 72, 153, 0.6);
 }
-.bc-bar-confl .bc-bar-val { color: #fbbf24; font-weight: 800; }
+.bc-bar-confl .bc-bar-val { color: #ec4899; font-weight: 800; }
 
 /* Clickable energy bars — hover feedback */
 .bc-bar-click { cursor: pointer; transition: transform 0.12s ease; }

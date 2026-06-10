@@ -5009,7 +5009,7 @@ const METRIC_CHART_CONFIG = {
       '<strong>Rising bars</strong> mean currencies are spreading apart, more pairs are active, and there is more to trade.',
       '<strong>Falling bars</strong> mean currencies are converging — fewer opportunities, lower conviction.',
       '<strong>Green bars</strong> indicate strong energy — this engine is contributing to the Engine Confluence signal.',
-      '<strong>Gold bars</strong> = full confluence — Dispersion, Tradability, Movement, Breadth and Agreement were ALL green in that same hour. The highest-conviction conditions.',
+      '<strong>Pink bars</strong> = full confluence — Dispersion, Tradability, Movement, Breadth and Agreement were ALL green in that same hour. The highest-conviction conditions.',
       '<strong>High energy</strong> = energized market — conditions favor active trading with clear setups.',
     ],
   },
