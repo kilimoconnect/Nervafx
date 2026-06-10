@@ -1004,6 +1004,16 @@
     }
 
     html += '</div>';
+
+    // Legend
+    html += `<div class="bc-legend" style="margin-top:8px;display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:#94a3b8">
+      <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f59e0b;margin-right:4px;vertical-align:middle"></span>Asia</span>
+      <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#0ea5e9;margin-right:4px;vertical-align:middle"></span>London</span>
+      <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#a855f7;margin-right:4px;vertical-align:middle"></span>New York</span>
+      ${metric.v2Threshold !== undefined ? '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;margin-right:4px;vertical-align:middle"></span>Met threshold</span>' : ''}
+      ${metric.field === 'market_energy' ? '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ec4899;margin-right:4px;vertical-align:middle"></span>Full confluence (all engines green)</span>' : ''}
+    </div>`;
+
     container.innerHTML = html;
   }
 

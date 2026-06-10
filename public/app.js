@@ -5544,6 +5544,7 @@ function _renderMetricBars(container, rows, key) {
     <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#0ea5e9"></span> London</span>
     <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#a855f7"></span> New York</span>
     <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#22c55e"></span> ${thresholdLabel}</span>
+    ${key === 'energy' ? '<span class="bc-legend-item"><span class="bc-legend-dot" style="background:#ec4899"></span> Full confluence (all engines green)</span>' : ''}
   </div>`;
 
   container.innerHTML = html;
