@@ -3862,7 +3862,7 @@ function _renderInlineM15Bars(container, bars) {
 
       if (b.volume != null) volPoints.push({ idx: i, vol: b.volume });
 
-      html += `<div class="${cls}" onclick="window.open('/energy-hour.html?time=${encodeURIComponent((b.time || '').slice(0, 13))}','_blank')" style="cursor:pointer" title="${SESS_LABEL[b.session] || b.session}: ${b.energy} energy${volTip} at ${localTime} ${tzLabel} — click for hour analysis">
+      html += `<div class="${cls} bc-bar-click" onclick="window.open('/energy-hour.html?time=${encodeURIComponent((b.time || '').slice(0, 13))}','_blank')" title="${SESS_LABEL[b.session] || b.session}: ${b.energy} energy${volTip} at ${localTime} ${tzLabel} — click for hour analysis">
         <span class="bc-bar-val">${b.energy}</span>
         <div class="bc-bar-inner">
           <div class="bc-bar-fill" style="height:${pct}%;background:${barColor}"></div>
@@ -5452,10 +5452,11 @@ function _renderMetricBars(container, rows, key) {
 
       // Energy bars are clickable — open the hour drill-down page
       const clickAttr = key === 'energy'
-        ? ` onclick="window.open('/energy-hour.html?time=${encodeURIComponent((b.time || '').slice(0, 13))}','_blank')" style="cursor:pointer"`
+        ? ` onclick="window.open('/energy-hour.html?time=${encodeURIComponent((b.time || '').slice(0, 13))}','_blank')"`
         : '';
+      const clsFinal = key === 'energy' ? cls + ' bc-bar-click' : cls;
 
-      html += `<div class="${cls}"${clickAttr} title="${SESS_LABEL[b.session] || b.session}: ${b.value}${cfg.unit} at ${localTime} ${tzLabel}${key === 'energy' ? ' — click for hour analysis' : ''}">
+      html += `<div class="${clsFinal}"${clickAttr} title="${SESS_LABEL[b.session] || b.session}: ${b.value}${cfg.unit} at ${localTime} ${tzLabel}${key === 'energy' ? ' — click for hour analysis' : ''}">
         <span class="bc-bar-val">${b.value}</span>
         <div class="bc-bar-inner">
           <div class="bc-bar-fill" style="height:${pct}%;background:${barColor}"></div>
@@ -5627,10 +5628,11 @@ function _renderM15MetricBars(container, bars, key) {
       if (isEnergy && b.volume != null) volPoints.push({ idx: i, vol: b.volume });
 
       const m15ClickAttr = isEnergy
-        ? ` onclick="window.open('/energy-hour.html?time=${encodeURIComponent((b.time || '').slice(0, 13))}','_blank')" style="cursor:pointer"`
+        ? ` onclick="window.open('/energy-hour.html?time=${encodeURIComponent((b.time || '').slice(0, 13))}','_blank')"`
         : '';
+      const m15ClsFinal = isEnergy ? cls + ' bc-bar-click' : cls;
 
-      html += `<div class="${cls}"${m15ClickAttr} title="${SESS_LABEL[b.session] || b.session}: ${b.value}${cfg.unit}${volTip} at ${localTime} ${tzLabel}${isEnergy ? ' — click for hour analysis' : ''}">
+      html += `<div class="${m15ClsFinal}"${m15ClickAttr} title="${SESS_LABEL[b.session] || b.session}: ${b.value}${cfg.unit}${volTip} at ${localTime} ${tzLabel}${isEnergy ? ' — click for hour analysis' : ''}">
         <span class="bc-bar-val">${b.value}</span>
         <div class="bc-bar-inner">
           <div class="bc-bar-fill" style="height:${pct}%;background:${barColor}"></div>

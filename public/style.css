@@ -4775,6 +4775,16 @@ body::after {
   box-shadow: 0 0 8px rgba(34, 197, 94, 0.4);
 }
 
+/* Clickable energy bars — hover feedback */
+.bc-bar-click { cursor: pointer; transition: transform 0.12s ease; }
+.bc-bar-click:hover { transform: translateY(-3px) scale(1.12); z-index: 3; }
+.bc-bar-click:hover .bc-bar-fill {
+  filter: brightness(1.4);
+  box-shadow: 0 0 12px rgba(96, 165, 250, 0.65);
+}
+.bc-bar-click:hover .bc-bar-val { color: #60a5fa; font-weight: 800; }
+.bc-bar-click:hover .bc-bar-hour { color: #60a5fa; }
+
 .bc-bar-val {
   font-size: 9px;
   font-weight: 700;

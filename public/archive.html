@@ -914,10 +914,11 @@
         // Energy bars are clickable — open the hour drill-down page
         const isEnergyBar = metric.field === 'market_energy';
         const clickAttr = isEnergyBar
-          ? ` onclick="window.open('/energy-hour.html?time=${encodeURIComponent((b.time || '').slice(0, 13))}','_blank')" style="cursor:pointer"`
+          ? ` onclick="window.open('/energy-hour.html?time=${encodeURIComponent((b.time || '').slice(0, 13))}','_blank')"`
           : '';
+        const clsFinal = isEnergyBar ? cls + ' bc-bar-click' : cls;
 
-        html += `<div class="${cls}"${clickAttr} title="${SESS_LABEL[b.session] || b.session}: ${displayVal} at ${localTime} ${tzLabel}${isEnergyBar ? ' — click for hour analysis' : ''}">
+        html += `<div class="${clsFinal}"${clickAttr} title="${SESS_LABEL[b.session] || b.session}: ${displayVal} at ${localTime} ${tzLabel}${isEnergyBar ? ' — click for hour analysis' : ''}">
           <span class="bc-bar-val" ${metric.canBeNegative && b.val < 0 ? 'style="color:#ef4444"' : ''}>${displayVal}</span>
           <div class="bc-bar-inner">
             <div class="bc-bar-fill" style="height:${pct}%;background:${barColor}"></div>
@@ -1080,10 +1081,11 @@
         if (isEnergy && b.volume != null) volPoints.push({ idx: i, vol: b.volume });
 
         const m15ClickAttr = isEnergy
-          ? ` onclick="window.open('/energy-hour.html?time=${encodeURIComponent((b.time || '').slice(0, 13))}','_blank')" style="cursor:pointer"`
+          ? ` onclick="window.open('/energy-hour.html?time=${encodeURIComponent((b.time || '').slice(0, 13))}','_blank')"`
           : '';
+        const m15ClsFinal = isEnergy ? cls + ' bc-bar-click' : cls;
 
-        html += `<div class="${cls}"${m15ClickAttr} title="${SESS_LABEL[b.session] || b.session}: ${b.val}${metric.unit}${volTip} at ${localTime} ${tzLabel}${isEnergy ? ' — click for hour analysis' : ''}">
+        html += `<div class="${m15ClsFinal}"${m15ClickAttr} title="${SESS_LABEL[b.session] || b.session}: ${b.val}${metric.unit}${volTip} at ${localTime} ${tzLabel}${isEnergy ? ' — click for hour analysis' : ''}">
           <span class="bc-bar-val">${b.val}</span>
           <div class="bc-bar-inner">
             <div class="bc-bar-fill" style="height:${pct}%;background:${barColor}"></div>
