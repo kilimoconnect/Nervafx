@@ -277,23 +277,23 @@ async function calculateEnergyDirection() {
     // ── 6. NEW energy event — snapshot currencies from CURRENT strength ────
     // This is the ONLY time directions are evaluated. Strength values are
     // locked in and persist until the next bar crosses ≥ threshold.
-    const strong = [];
-    const weak = [];
+    // Rank currencies by combined 3H+6H strength — top 3 positive = strong,
+    // bottom 3 negative = weak (same approach as hour analysis page).
+    const ranked = CURRENCIES
+      .filter(ccy => ccyMap[ccy])
+      .map(ccy => {
+        const d = ccyMap[ccy];
+        const h3 = d.smooth_3h;
+        const h6 = d.smooth_6h;
+        const combined = (h3 + h6) / 2;
+        return { currency: ccy, h3, h6, combined };
+      })
+      .sort((a, b) => b.combined - a.combined);
 
-    for (const ccy of CURRENCIES) {
-      const d = ccyMap[ccy];
-      if (!d) continue;
-
-      const h3 = d.smooth_3h;
-      const h6 = d.smooth_6h;
-
-      // Both must agree on direction (same sign) with meaningful magnitude
-      if (h3 > 0.00005 && h6 > 0.00005) {
-        strong.push({ currency: ccy, h3, h6, score: h3 + h6 });
-      } else if (h3 < -0.00005 && h6 < -0.00005) {
-        weak.push({ currency: ccy, h3, h6, score: Math.abs(h3 + h6) });
-      }
-    }
+    const strong = ranked.slice(0, 3).filter(c => c.combined > 0)
+      .map(c => ({ currency: c.currency, h3: c.h3, h6: c.h6, score: Math.abs(c.combined) }));
+    const weak = ranked.slice(-3).filter(c => c.combined < 0)
+      .map(c => ({ currency: c.currency, h3: c.h3, h6: c.h6, score: Math.abs(c.combined) }));
 
     strong.sort((a, b) => b.score - a.score);
     weak.sort((a, b) => b.score - a.score);
