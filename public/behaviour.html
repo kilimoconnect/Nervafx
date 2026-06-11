@@ -72,7 +72,7 @@
     .bh-rib-col:hover .bh-rib-bar { transform: scaleY(1.03); opacity: 1; }
     .bh-rib-val { font-size: 10px; font-weight: 700; color: var(--bc); }
     .bh-rib-hr { font-size: 9px; color: var(--text-dim); white-space: nowrap; }
-    .bh-rib-beh { font-size: 8.5px; font-weight: 700; color: var(--bc); white-space: nowrap; overflow: hidden; max-width: 100%; text-overflow: ellipsis; }
+    .bh-rib-beh { font-size: 8.5px; font-weight: 700; color: var(--bc); white-space: nowrap; }
     .bh-rib-window { outline: 1.5px dashed rgba(96,165,250,0.45); outline-offset: 3px; border-radius: 6px; }
     .bh-legend { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
     .bh-legend-item { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--text-muted); }
@@ -198,16 +198,16 @@
 
   // ── Behaviour engine (mirrors dashboard narrator) ──────────────────────────
   const BEH = {
-    DEAD:        { label: 'Dead',        color: '#475569', desc: 'No participation — market closed or empty.' },
-    COMPRESSION: { label: 'Compression', color: '#7c3aed', desc: 'Energy stored below 35 — coiling for a release.' },
-    QUIET:       { label: 'Quiet',       color: '#64748b', desc: 'Low activity, no compression structure.' },
-    CHOP:        { label: 'Chop',        color: '#ef4444', desc: 'Chaotic volatility with no directional agreement.' },
-    BUILDING:    { label: 'Building',    color: '#10b981', desc: 'Momentum rising — energy climbing toward expansion.' },
-    ACTIVE:      { label: 'Active',      color: '#0ea5e9', desc: 'Moderate participation without full expansion.' },
-    EXPANSION:   { label: 'Expansion',   color: '#22c55e', desc: 'Energy ≥ 60 with healthy momentum — market running.' },
-    IMPULSE:     { label: 'Impulse',     color: '#fbbf24', desc: 'Explosive burst — strongest behaviour state.' },
-    FADING:      { label: 'Fading',      color: '#f97316', desc: 'Momentum decaying while activity unwinds.' },
-    EXHAUSTION:  { label: 'Exhaustion',  color: '#ef4444', desc: 'Move spent — high risk of reversal or stall.' },
+    DEAD:        { label: 'Dead',        short: 'Dead',   color: '#475569', desc: 'No participation — market closed or empty.' },
+    COMPRESSION: { label: 'Compression', short: 'Compr',  color: '#7c3aed', desc: 'Energy stored below 35 — coiling for a release.' },
+    QUIET:       { label: 'Quiet',       short: 'Quiet',  color: '#64748b', desc: 'Low activity, no compression structure.' },
+    CHOP:        { label: 'Chop',        short: 'Chop',   color: '#ef4444', desc: 'Chaotic volatility with no directional agreement.' },
+    BUILDING:    { label: 'Building',    short: 'Build',  color: '#10b981', desc: 'Momentum rising — energy climbing toward expansion.' },
+    ACTIVE:      { label: 'Active',      short: 'Activ',  color: '#0ea5e9', desc: 'Moderate participation without full expansion.' },
+    EXPANSION:   { label: 'Expansion',   short: 'Expan',  color: '#22c55e', desc: 'Energy ≥ 60 with healthy momentum — market running.' },
+    IMPULSE:     { label: 'Impulse',     short: 'Impls',  color: '#fbbf24', desc: 'Explosive burst — strongest behaviour state.' },
+    FADING:      { label: 'Fading',      short: 'Fade',   color: '#f97316', desc: 'Momentum decaying while activity unwinds.' },
+    EXHAUSTION:  { label: 'Exhaustion',  short: 'Exhst',  color: '#ef4444', desc: 'Move spent — high risk of reversal or stall.' },
   };
 
   function classifyHour(r) {
@@ -374,7 +374,7 @@
       return `<div class="bh-rib-col${i >= windowStartIdx ? ' bh-rib-window' : ''}" style="--bc:${beh.color}" title="${hrLabel(s.time)} — ${beh.label} (energy ${s.energy})">
         <span class="bh-rib-val">${s.energy}</span>
         <div class="bh-rib-bar" style="height:${hPct}%"></div>
-        <span class="bh-rib-beh">${beh.label}</span>
+        <span class="bh-rib-beh">${beh.short}</span>
         <span class="bh-rib-hr">${hrLabel(s.time)}</span>
       </div>`;
     }).join('')}</div>
