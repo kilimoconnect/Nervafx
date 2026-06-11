@@ -66,7 +66,8 @@
     .bh-hero-narr { font-size: 13px; color: var(--text); line-height: 1.5; max-width: 560px; }
 
     /* ── Timeline ribbon ── */
-    .bh-ribbon { display: flex; align-items: flex-end; gap: 4px; height: 130px; padding-top: 8px; }
+    .bh-ribbon-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
+    .bh-ribbon { display: flex; align-items: flex-end; gap: 4px; height: 130px; padding-top: 8px; min-width: 100%; }
     .bh-rib-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end; min-width: 0; }
     .bh-rib-bar { width: 100%; max-width: 46px; border-radius: 5px 5px 0 0; background: var(--bc); opacity: 0.9; transition: transform 0.12s; position: relative; }
     .bh-rib-col:hover .bh-rib-bar { transform: scaleY(1.03); opacity: 1; }
@@ -131,10 +132,33 @@
 
     @media (max-width: 640px) {
       .bh-main { padding: 14px 12px 60px; }
-      .bh-decision-big { font-size: 20px; padding: 10px 16px; }
-      .bh-ribbon { height: 100px; }
-      #bh-chart { height: 220px; }
+
+      /* Hero stacks vertically */
+      .bh-hero { flex-direction: column; align-items: flex-start; gap: 12px; }
+      .bh-decision-big { font-size: 20px; padding: 10px 18px; }
+      .bh-hero-narr { font-size: 12.5px; }
+
+      /* Ribbon becomes horizontally scrollable with fixed-width columns */
+      .bh-ribbon { height: 110px; width: max-content; gap: 3px; }
+      .bh-rib-col { flex: 0 0 44px; }
+      .bh-rib-bar { max-width: 38px; }
+      .bh-rib-hr { font-size: 8.5px; }
+      .bh-legend { gap: 7px; }
+      .bh-legend-item { font-size: 9px; }
+      .bh-legend-item:last-child { margin-left: 0 !important; width: 100%; }
+
+      #bh-chart { height: 200px; }
       .bh-hours { grid-template-columns: 1fr; }
+      .bh-hour-metrics { grid-template-columns: repeat(4, 1fr); }
+
+      /* Transitions: chips row on top, meaning below full-width */
+      .bh-trans-row { gap: 6px; padding: 10px 0; }
+      .bh-trans-time { min-width: 38px; font-size: 10px; }
+      .bh-trans-chip { font-size: 9px; padding: 2px 6px; }
+      .bh-trans-meaning { flex-basis: 100%; min-width: 0; font-size: 11px; padding-left: 2px; }
+
+      .bh-rationale { font-size: 12px; }
+      .bh-rule { font-size: 11px; }
     }
   </style>
 </head>
@@ -368,7 +392,7 @@
 
   function ribbonHtml(allSeq, windowStartIdx) {
     const maxE = Math.max(40, ...allSeq.map(s => s.energy));
-    return `<div class="bh-ribbon">${allSeq.map((s, i) => {
+    return `<div class="bh-ribbon-scroll" id="bh-ribbon-scroll"><div class="bh-ribbon">${allSeq.map((s, i) => {
       const beh = BEH[s.behaviour];
       const hPct = Math.max(6, Math.round(s.energy / maxE * 100));
       return `<div class="bh-rib-col${i >= windowStartIdx ? ' bh-rib-window' : ''}" style="--bc:${beh.color}" title="${hrLabel(s.time)} — ${beh.label} (energy ${s.energy})">
@@ -377,7 +401,7 @@
         <span class="bh-rib-beh">${beh.short}</span>
         <span class="bh-rib-hr">${hrLabel(s.time)}</span>
       </div>`;
-    }).join('')}</div>
+    }).join('')}</div></div>
     <div class="bh-legend">${Object.entries(BEH).map(([k, v]) =>
       `<span class="bh-legend-item"><span class="bh-legend-dot" style="background:${v.color}"></span>${v.label}</span>`).join('')}
       <span class="bh-legend-item" style="margin-left:auto"><span style="width:14px;border-top:1.5px dashed rgba(96,165,250,0.6);display:inline-block"></span>&nbsp;analysis window (last 6h)</span>
@@ -571,6 +595,9 @@
       </div>`;
 
     drawChart(document.getElementById('bh-chart'), ctxSeq);
+    // On narrow screens the ribbon scrolls — land on the latest hours (analysis window)
+    const rib = document.getElementById('bh-ribbon-scroll');
+    if (rib) rib.scrollLeft = rib.scrollWidth;
     if (window.lucide) lucide.createIcons();
   }
 
