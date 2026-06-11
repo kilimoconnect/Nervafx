@@ -171,6 +171,10 @@
   function hrLabel(t) {
     return new Date(t).toLocaleTimeString('en-GB', { timeZone: _tz(), hour: '2-digit', minute: '2-digit', hour12: false });
   }
+  // "LOW_PARTICIPATION" → "Low Participation"
+  function pretty(v) {
+    return String(v || '').toLowerCase().split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  }
 
   async function api(path) {
     const token = localStorage.getItem('nfx_token');
@@ -457,10 +461,10 @@
           <span class="bh-hour-badge">${beh.label.toUpperCase()}</span>
         </div>
         <div class="bh-hour-tags">
-          ${r.energy_cycle ? `<span class="bh-tag">Cycle: ${r.energy_cycle}</span>` : ''}
-          ${r.momentum_type ? `<span class="bh-tag">Mom: ${r.momentum_type}</span>` : ''}
-          ${r.volatility_type ? `<span class="bh-tag">Vol: ${r.volatility_type}</span>` : ''}
-          ${r.session_name ? `<span class="bh-tag">${(r.session_name || '').replace(/_/g, ' ')}</span>` : ''}
+          ${r.energy_cycle ? `<span class="bh-tag">Cycle: ${pretty(r.energy_cycle)}</span>` : ''}
+          ${r.momentum_type ? `<span class="bh-tag">Mom: ${pretty(r.momentum_type)}</span>` : ''}
+          ${r.volatility_type ? `<span class="bh-tag">Vol: ${pretty(r.volatility_type)}</span>` : ''}
+          ${r.session_name ? `<span class="bh-tag">${pretty(r.session_name)}</span>` : ''}
         </div>
         <div class="bh-hour-metrics">${metrics.map(m =>
           `<div class="bh-hm"><div class="bh-hm-val">${m.val}</div><div class="bh-hm-lbl">${m.lbl}</div></div>`).join('')}</div>
