@@ -4860,6 +4860,25 @@ body::after {
   line-height: 1.45;
   color: var(--text-muted);
 }
+.mbn-click {
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.12s;
+}
+.mbn-click:hover {
+  background: rgba(96, 165, 250, 0.05);
+  border-color: rgba(96, 165, 250, 0.35);
+  transform: translateY(-1px);
+}
+.mbn-more {
+  display: block;
+  margin-top: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #60a5fa;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.mbn-click:hover .mbn-more { opacity: 1; }
 
 .bc-bar-val {
   font-size: 9px;

@@ -4483,7 +4483,7 @@ function _mbnAnalyze(rows) {
   return { seq, decision, decisionColor, narrative };
 }
 
-function _mbnPanel(rows) {
+function _mbnPanel(rows, sessName, status) {
   const a = _mbnAnalyze(rows);
   if (!a) return '';
 
@@ -4494,13 +4494,18 @@ function _mbnPanel(rows) {
     return `<span class="mbn-chip" style="--bc:${beh.color}"><span class="mbn-chip-hr">${hr}</span><span class="mbn-chip-beh">${beh.label}</span></span>`;
   }).join('<span class="mbn-arrow">→</span>');
 
-  return `<div class="mbn-panel">
+  const url = status === 'ACTIVE'
+    ? `/behaviour.html?session=${encodeURIComponent(sessName || 'LIVE')}&mode=live`
+    : `/behaviour.html?session=${encodeURIComponent(sessName || 'LIVE')}&mode=past`;
+
+  return `<div class="mbn-panel mbn-click" onclick="event.stopPropagation(); window.open('${url}', '_blank')" title="Open full behaviour analysis">
     <div class="mbn-head">
       <span class="mbn-title">Behaviour Narrator</span>
       <span class="mbn-decision" style="--bc:${a.decisionColor}">${a.decision}</span>
     </div>
     <div class="mbn-chips">${chips}</div>
     <p class="mbn-text">${a.narrative}</p>
+    <span class="mbn-more">Full analysis →</span>
   </div>`;
 }
 
@@ -4721,7 +4726,7 @@ function _meSessionCard(name, s, status, hourlyRows) {
     const sessNames = MBN_SESS_HOURS[name] || [name];
     mbnRows = (hourlyRows || []).filter(h => sessNames.includes(h.session_name)).slice(-6);
   }
-  const mbnHtml = status !== 'UPCOMING' ? _mbnPanel(mbnRows) : '';
+  const mbnHtml = status !== 'UPCOMING' ? _mbnPanel(mbnRows, status === 'ACTIVE' ? 'LIVE' : name, status) : '';
 
   return `<div class="me-card${status === 'ACTIVE' ? ' me-card--active' : status === 'UPCOMING' ? ' me-card--upcoming' : ''}">
     <div class="me-card-head">

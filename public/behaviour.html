@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>NervaFX — Behaviour Analysis</title>
+  <link rel="icon" type="image/png" href="/nervafx-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <link rel="stylesheet" href="style.css" />
+
+  <style>
+    .grid { display: block !important; }
+
+    .bh-topbar {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 28px; height: 56px;
+      background: rgba(8,11,18,0.92);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+    .bh-topbar-left { display: flex; align-items: center; gap: 12px; }
+    .bh-logo img { height: 24px; display: block; }
+    .bh-sep { color: rgba(255,255,255,0.1); font-size: 20px; font-weight: 200; }
+    .bh-title-text { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+    .bh-back-btn {
+      display: flex; align-items: center; gap: 5px;
+      padding: 6px 12px; border-radius: 8px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); font-size: 11px; font-weight: 600;
+      cursor: pointer; text-decoration: none; transition: all 0.15s;
+    }
+    .bh-back-btn:hover { background: rgba(255,255,255,0.09); color: var(--text); }
+
+    .bh-main { max-width: 1100px; margin: 0 auto; padding: 20px 20px 80px; }
+
+    .bh-card {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px; margin-bottom: 18px; overflow: hidden;
+    }
+    .bh-card-hd {
+      padding: 12px 16px; font-size: 12px; font-weight: 700;
+      color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .bh-card-hd i { width: 15px; height: 15px; }
+    .bh-card-bd { padding: 14px 16px; }
+
+    /* ── Hero ── */
+    .bh-hero { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
+    .bh-decision-big {
+      font-size: 26px; font-weight: 800; letter-spacing: 0.5px; line-height: 1;
+      padding: 12px 22px; border-radius: 12px; border: 2px solid var(--bc); color: var(--bc);
+      background: color-mix(in srgb, var(--bc) 8%, transparent);
+    }
+    .bh-hero-meta { display: flex; flex-direction: column; gap: 5px; }
+    .bh-hero-sess { font-size: 16px; font-weight: 800; color: var(--text); }
+    .bh-hero-sub { font-size: 12px; color: var(--text-muted); }
+    .bh-hero-narr { font-size: 13px; color: var(--text); line-height: 1.5; max-width: 560px; }
+
+    /* ── Timeline ribbon ── */
+    .bh-ribbon { display: flex; align-items: flex-end; gap: 4px; height: 130px; padding-top: 8px; }
+    .bh-rib-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end; min-width: 0; }
+    .bh-rib-bar { width: 100%; max-width: 46px; border-radius: 5px 5px 0 0; background: var(--bc); opacity: 0.9; transition: transform 0.12s; position: relative; }
+    .bh-rib-col:hover .bh-rib-bar { transform: scaleY(1.03); opacity: 1; }
+    .bh-rib-val { font-size: 10px; font-weight: 700; color: var(--bc); }
+    .bh-rib-hr { font-size: 9px; color: var(--text-dim); white-space: nowrap; }
+    .bh-rib-beh { font-size: 8.5px; font-weight: 700; color: var(--bc); white-space: nowrap; overflow: hidden; max-width: 100%; text-overflow: ellipsis; }
+    .bh-rib-window { outline: 1.5px dashed rgba(96,165,250,0.45); outline-offset: 3px; border-radius: 6px; }
+    .bh-legend { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+    .bh-legend-item { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--text-muted); }
+    .bh-legend-dot { width: 8px; height: 8px; border-radius: 3px; }
+
+    /* ── Chart ── */
+    #bh-chart { width: 100%; height: 280px; display: block; }
+
+    /* ── Hour detail cards ── */
+    .bh-hours { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 10px; }
+    .bh-hour-card {
+      border: 1px solid rgba(255,255,255,0.06); border-left: 3px solid var(--bc);
+      border-radius: 10px; padding: 12px 14px; background: rgba(255,255,255,0.015);
+    }
+    .bh-hour-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .bh-hour-time { font-size: 13px; font-weight: 800; color: var(--text); }
+    .bh-hour-badge {
+      font-size: 10px; font-weight: 800; letter-spacing: 0.4px; color: var(--bc);
+      border: 1px solid var(--bc); border-radius: 5px; padding: 2px 8px;
+    }
+    .bh-hour-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 8px; }
+    .bh-hm { text-align: center; padding: 6px 2px; border-radius: 7px; background: rgba(255,255,255,0.025); }
+    .bh-hm-val { font-size: 14px; font-weight: 800; }
+    .bh-hm-lbl { font-size: 8.5px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; margin-top: 1px; }
+    .bh-hour-why { font-size: 11px; color: var(--text-muted); line-height: 1.5; margin: 0; }
+    .bh-hour-tags { display: flex; gap: 5px; margin-bottom: 8px; flex-wrap: wrap; }
+    .bh-tag { font-size: 9.5px; font-weight: 700; padding: 2px 7px; border-radius: 4px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); color: var(--text-muted); }
+
+    /* ── Transitions ── */
+    .bh-trans-row {
+      display: flex; align-items: center; gap: 10px; padding: 9px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04); flex-wrap: wrap;
+    }
+    .bh-trans-row:last-child { border-bottom: none; }
+    .bh-trans-time { font-size: 11px; color: var(--text-dim); min-width: 44px; font-weight: 600; }
+    .bh-trans-chip { font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 5px; border: 1px solid var(--bc); color: var(--bc); }
+    .bh-trans-arrow { color: var(--text-dim); font-size: 11px; }
+    .bh-trans-meaning { font-size: 11.5px; color: var(--text-muted); flex: 1; min-width: 200px; }
+
+    /* ── Decision rationale ── */
+    .bh-rationale { font-size: 12.5px; color: var(--text); line-height: 1.65; }
+    .bh-rationale .dim { color: var(--text-muted); }
+    .bh-rule {
+      margin-top: 10px; padding: 10px 12px; border-radius: 8px;
+      background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.06);
+      font-size: 11.5px; color: var(--text-muted); line-height: 1.55;
+    }
+    .bh-rule b { color: var(--text); }
+
+    .bh-loading { display: flex; align-items: center; gap: 8px; padding: 24px; color: var(--text-muted); font-size: 12px; justify-content: center; }
+    .spinner {
+      width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.15);
+      border-top-color: #60a5fa; border-radius: 50%; animation: bhspin 0.7s linear infinite;
+    }
+    @keyframes bhspin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 640px) {
+      .bh-main { padding: 14px 12px 60px; }
+      .bh-decision-big { font-size: 20px; padding: 10px 16px; }
+      .bh-ribbon { height: 100px; }
+      #bh-chart { height: 220px; }
+      .bh-hours { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bh-topbar">
+    <div class="bh-topbar-left">
+      <a class="bh-logo" href="/app"><img src="/nervafx-logo.png" alt="NervaFX" onerror="this.style.display='none'"></a>
+      <span class="bh-sep">/</span>
+      <span class="bh-title-text">Behaviour Analysis</span>
+    </div>
+    <a class="bh-back-btn" href="/app" onclick="window.close(); setTimeout(function(){ location.href='/app'; }, 150); return false;">&times; Close</a>
+  </div>
+
+  <main class="bh-main">
+    <div id="bh-content"><div class="bh-loading"><span class="spinner"></span> Loading behaviour data…</div></div>
+  </main>
+
+  <script>
+  // ── Auth gate ──
+  (function () {
+    const token = localStorage.getItem('nfx_token');
+    if (!token) return location.replace('/login.html');
+    try {
+      const pay = JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+      if (pay.exp && pay.exp * 1000 < Date.now()) {
+        localStorage.removeItem('nfx_token');
+        return location.replace('/login.html');
+      }
+    } catch (_) { return location.replace('/login.html'); }
+  })();
+
+  let _userTz = localStorage.getItem('nfx_tz') || 'auto';
+  function _tz() { return (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC'); }
+  function hrLabel(t) {
+    return new Date(t).toLocaleTimeString('en-GB', { timeZone: _tz(), hour: '2-digit', minute: '2-digit', hour12: false });
+  }
+
+  async function api(path) {
+    const token = localStorage.getItem('nfx_token');
+    const r = await fetch(path, { headers: { Authorization: `Bearer ${token}` } });
+    if (r.status === 401) { location.replace('/login.html'); throw new Error('Unauthorized'); }
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || `${r.status}`);
+    return j;
+  }
+
+  const params  = new URLSearchParams(location.search);
+  const SESSION = (params.get('session') || 'LIVE').toUpperCase();
+  const MODE    = params.get('mode') || 'live';   // live | past
+
+  const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York', LIVE: 'Live Market' };
+  const MBN_SESS_HOURS = {
+    ASIA:     ['ASIA'],
+    LONDON:   ['LONDON_OPEN', 'LONDON', 'LONDON_NY'],
+    NEW_YORK: ['LONDON_NY', 'NEW_YORK'],
+  };
+
+  // ── Behaviour engine (mirrors dashboard narrator) ──────────────────────────
+  const BEH = {
+    DEAD:        { label: 'Dead',        color: '#475569', desc: 'No participation — market closed or empty.' },
+    COMPRESSION: { label: 'Compression', color: '#7c3aed', desc: 'Energy stored below 35 — coiling for a release.' },
+    QUIET:       { label: 'Quiet',       color: '#64748b', desc: 'Low activity, no compression structure.' },
+    CHOP:        { label: 'Chop',        color: '#ef4444', desc: 'Chaotic volatility with no directional agreement.' },
+    BUILDING:    { label: 'Building',    color: '#10b981', desc: 'Momentum rising — energy climbing toward expansion.' },
+    ACTIVE:      { label: 'Active',      color: '#0ea5e9', desc: 'Moderate participation without full expansion.' },
+    EXPANSION:   { label: 'Expansion',   color: '#22c55e', desc: 'Energy ≥ 60 with healthy momentum — market running.' },
+    IMPULSE:     { label: 'Impulse',     color: '#fbbf24', desc: 'Explosive burst — strongest behaviour state.' },
+    FADING:      { label: 'Fading',      color: '#f97316', desc: 'Momentum decaying while activity unwinds.' },
+    EXHAUSTION:  { label: 'Exhaustion',  color: '#ef4444', desc: 'Move spent — high risk of reversal or stall.' },
+  };
+
+  function classifyHour(r) {
+    const e      = parseFloat(r.market_energy)   || 0;
+    const mom    = parseFloat(r.momentum_score)  || 0;
+    const agree  = parseFloat(r.agreement_score) || 0;
+    const momTyp = r.momentum_type   || '';
+    const cyc    = r.energy_cycle    || '';
+    const volTyp = r.volatility_type || '';
+
+    if (cyc === 'DEAD' || e < 12) return 'DEAD';
+    if (volTyp === 'CHAOTIC' && agree < 30) return 'CHOP';
+    if (cyc === 'EXPLOSIVE') return 'IMPULSE';
+    if (cyc === 'EXHAUSTION' || momTyp === 'EXHAUSTION') return 'EXHAUSTION';
+    if (e >= 60) return (momTyp === 'DECAY' || mom < -5) ? 'FADING' : 'EXPANSION';
+    if (e >= 35) {
+      if (momTyp === 'DECAY' || mom < -5) return 'FADING';
+      if (mom > 3 || momTyp === 'EXPANSION' || momTyp === 'IMPULSE' || cyc === 'TRANSITION') return 'BUILDING';
+      return 'ACTIVE';
+    }
+    if (cyc === 'COMPRESSION') return 'COMPRESSION';
+    return 'QUIET';
+  }
+
+  // Per-hour "why" explanation
+  function explainHour(r, beh) {
+    const e     = Math.round(parseFloat(r.market_energy)   || 0);
+    const mom   = Math.round(parseFloat(r.momentum_score)  || 0);
+    const agree = Math.round(parseFloat(r.agreement_score) || 0);
+    const move  = Math.round(parseFloat(r.movement_score)  || 0);
+    const brd   = Math.round(parseFloat(r.breadth_score)   || 0);
+    switch (beh) {
+      case 'DEAD':        return `Energy ${e} — effectively no market participation this hour.`;
+      case 'CHOP':        return `Chaotic volatility with agreement at only ${agree} — pairs moving against each other, no usable direction.`;
+      case 'IMPULSE':     return `Explosive cycle — energy ${e} with breadth ${brd}. The market accelerated sharply this hour.`;
+      case 'EXHAUSTION':  return `The move is spent — energy ${e} but momentum ${mom > 0 ? '+' : ''}${mom} and the cycle flags exhaustion. Reversal risk elevated.`;
+      case 'EXPANSION':   return `Energy ${e} above the expansion line with movement ${move} and breadth ${brd} — the market is running.`;
+      case 'FADING':      return `Activity unwinding — momentum ${mom > 0 ? '+' : ''}${mom} pulling energy ${e} back down.`;
+      case 'BUILDING':    return `Momentum ${mom > 0 ? '+' : ''}${mom} lifting energy to ${e} — pressure accumulating toward expansion.`;
+      case 'ACTIVE':      return `Energy ${e} in the middle zone — movement ${move}, agreement ${agree}. Tradable but selective.`;
+      case 'COMPRESSION': return `Energy ${e} below 35 — the market is coiling. Compression hours store the fuel for the next expansion.`;
+      default:            return `Energy ${e} — low activity, no structure forming yet.`;
+    }
+  }
+
+  // Transition meanings
+  function transitionMeaning(from, to) {
+    const F = BEH[from]?.label || from, T = BEH[to]?.label || to;
+    if ((from === 'COMPRESSION' || from === 'QUIET' || from === 'DEAD') && (to === 'EXPANSION' || to === 'IMPULSE'))
+      return `Compression released directly into ${T.toLowerCase()} — the strongest alert pattern.`;
+    if ((from === 'COMPRESSION' || from === 'QUIET') && to === 'BUILDING')
+      return 'Energy waking out of compression — first sign a move is loading.';
+    if (from === 'BUILDING' && (to === 'EXPANSION' || to === 'IMPULSE'))
+      return 'Build-up confirmed into expansion — the move is live.';
+    if ((from === 'EXPANSION' || from === 'IMPULSE') && (to === 'FADING' || to === 'EXHAUSTION'))
+      return 'Expansion rolling over — momentum decaying, late entries are dangerous.';
+    if ((from === 'EXPANSION' || from === 'IMPULSE') && to === 'COMPRESSION')
+      return 'Sharp cooldown after expansion — market resetting.';
+    if ((from === 'FADING' || from === 'EXHAUSTION') && (to === 'COMPRESSION' || to === 'QUIET'))
+      return 'Unwind complete — market back to storing energy.';
+    if (to === 'CHOP')
+      return 'Conditions degraded into chaos — agreement collapsed.';
+    if (from === 'CHOP')
+      return `Chaos resolving into ${T.toLowerCase()} — structure returning.`;
+    if ((from === 'EXPANSION' && to === 'EXPANSION') || (from === 'IMPULSE' && to === 'EXPANSION'))
+      return 'Expansion holding — trend continuation.';
+    return `${F} → ${T}.`;
+  }
+
+  function analyze(rows) {
+    if (!rows || rows.length < 2) return null;
+    const seq = rows.map(r => ({ time: r.time_utc, behaviour: classifyHour(r), energy: Math.round(parseFloat(r.market_energy) || 0), row: r }));
+    const last = seq[seq.length - 1], prev = seq[seq.length - 2];
+    const b = last.behaviour, pb = prev.behaviour;
+
+    let runLen = 0;
+    for (let i = seq.length - 1; i >= 0; i--) {
+      if (seq[i].behaviour === 'EXPANSION' || seq[i].behaviour === 'IMPULSE') runLen++; else break;
+    }
+    let compLen = 0;
+    for (let i = seq.length - 2; i >= 0; i--) {
+      const s = seq[i].behaviour;
+      if (s === 'COMPRESSION' || s === 'QUIET' || s === 'DEAD') compLen++; else break;
+    }
+
+    let decision, decisionColor, narrative, rule;
+    if (b === 'CHOP') {
+      decision = 'STAND ASIDE'; decisionColor = '#ef4444';
+      narrative = 'Conditions turned chaotic — direction unreliable, stand aside.';
+      rule = 'Latest hour classified CHOP: chaotic volatility with agreement under 30. No decision is tradable until structure returns.';
+    } else if (b === 'DEAD') {
+      decision = 'STAND ASIDE'; decisionColor = '#475569';
+      narrative = 'Market is dead — no participation.';
+      rule = 'Latest hour classified DEAD: energy below 12 or dead cycle. Nothing to trade.';
+    } else if ((b === 'EXPANSION' || b === 'IMPULSE') && (pb === 'COMPRESSION' || pb === 'QUIET' || pb === 'BUILDING' || pb === 'DEAD')) {
+      decision = 'ALERT'; decisionColor = '#22c55e';
+      narrative = compLen >= 2
+        ? `Expansion released after ${compLen + 1}h of compression — fresh move starting.`
+        : 'Behaviour shifted into expansion — fresh move starting.';
+      rule = `Transition rule fired: ${BEH[pb].label} → ${BEH[b].label}. A move out of a stored-energy state into expansion is the highest-value alert — direction usually follows through.`;
+    } else if ((b === 'EXPANSION' || b === 'IMPULSE') && runLen >= 2) {
+      decision = 'ALERT'; decisionColor = '#22c55e';
+      narrative = `Expansion sustained ${runLen}h — trend continuation in progress.`;
+      rule = `Continuation rule fired: ${runLen} consecutive expansion hours. Sustained expansion favours staying with the established direction over fading it.`;
+    } else if (b === 'EXPANSION' || b === 'IMPULSE') {
+      decision = 'ALERT'; decisionColor = '#22c55e';
+      narrative = 'Market expanding — energy and participation high.';
+      rule = 'Expansion rule fired: latest hour at or above the energy expansion line with healthy momentum.';
+    } else if ((b === 'FADING' || b === 'EXHAUSTION') && (pb === 'EXPANSION' || pb === 'IMPULSE' || pb === 'FADING')) {
+      decision = 'CAUTION'; decisionColor = '#f97316';
+      narrative = 'Expansion fading — momentum decaying, avoid fresh entries.';
+      rule = `Decay rule fired: ${BEH[pb].label} → ${BEH[b].label}. When expansion rolls into decay, existing moves can finish but fresh entries have poor odds.`;
+    } else if (b === 'FADING' || b === 'EXHAUSTION') {
+      decision = 'CAUTION'; decisionColor = '#f97316';
+      narrative = 'Momentum decaying — activity rolling over.';
+      rule = 'Decay rule fired: latest hour shows negative momentum or exhaustion classification.';
+    } else if (b === 'BUILDING') {
+      decision = 'WATCH'; decisionColor = '#f59e0b';
+      narrative = (pb === 'COMPRESSION' || pb === 'QUIET')
+        ? 'Energy building out of compression — expansion may follow.'
+        : 'Activity building — watch for expansion confirmation.';
+      rule = 'Build rule fired: momentum positive and energy climbing, but expansion is not yet confirmed. Wait for the next hour.';
+    } else if (b === 'COMPRESSION' && (pb === 'EXPANSION' || pb === 'IMPULSE' || pb === 'FADING' || pb === 'ACTIVE')) {
+      decision = 'WATCH'; decisionColor = '#7c3aed';
+      narrative = 'Market compressing after activity — energy storing for the next move.';
+      rule = 'Compression rule fired: market moved from activity into compression. Each additional compression hour increases the strength of the eventual release.';
+    } else if (b === 'COMPRESSION') {
+      decision = 'WATCH'; decisionColor = '#7c3aed';
+      narrative = `Compression ${compLen + 1}h deep — the longer it holds, the stronger the release.`;
+      rule = `Compression rule fired: ${compLen + 1} consecutive stored-energy hours. Watch for the first BUILDING or EXPANSION hour — that is the release.`;
+    } else if (b === 'ACTIVE') {
+      decision = 'WATCH'; decisionColor = '#0ea5e9';
+      narrative = 'Moderate activity without clear expansion — selective conditions.';
+      rule = 'Mid-zone rule: energy between 35 and 60 with flat momentum. Tradable for selective setups only.';
+    } else {
+      decision = 'WATCH'; decisionColor = '#64748b';
+      narrative = 'Low activity — waiting for behaviour to develop.';
+      rule = 'Default rule: no behaviour pattern matched — the market has not committed to anything yet.';
+    }
+
+    // Transition log across the window
+    const transitions = [];
+    for (let i = 1; i < seq.length; i++) {
+      if (seq[i].behaviour !== seq[i - 1].behaviour) {
+        transitions.push({
+          time: seq[i].time,
+          from: seq[i - 1].behaviour,
+          to: seq[i].behaviour,
+          meaning: transitionMeaning(seq[i - 1].behaviour, seq[i].behaviour),
+        });
+      }
+    }
+
+    return { seq, decision, decisionColor, narrative, rule, transitions, runLen, compLen };
+  }
+
+  // ── Rendering ───────────────────────────────────────────────────────────────
+
+  function ribbonHtml(allSeq, windowStartIdx) {
+    const maxE = Math.max(40, ...allSeq.map(s => s.energy));
+    return `<div class="bh-ribbon">${allSeq.map((s, i) => {
+      const beh = BEH[s.behaviour];
+      const hPct = Math.max(6, Math.round(s.energy / maxE * 100));
+      return `<div class="bh-rib-col${i >= windowStartIdx ? ' bh-rib-window' : ''}" style="--bc:${beh.color}" title="${hrLabel(s.time)} — ${beh.label} (energy ${s.energy})">
+        <span class="bh-rib-val">${s.energy}</span>
+        <div class="bh-rib-bar" style="height:${hPct}%"></div>
+        <span class="bh-rib-beh">${beh.label}</span>
+        <span class="bh-rib-hr">${hrLabel(s.time)}</span>
+      </div>`;
+    }).join('')}</div>
+    <div class="bh-legend">${Object.entries(BEH).map(([k, v]) =>
+      `<span class="bh-legend-item"><span class="bh-legend-dot" style="background:${v.color}"></span>${v.label}</span>`).join('')}
+      <span class="bh-legend-item" style="margin-left:auto"><span style="width:14px;border-top:1.5px dashed rgba(96,165,250,0.6);display:inline-block"></span>&nbsp;analysis window (last 6h)</span>
+    </div>`;
+  }
+
+  function drawChart(canvas, seq) {
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.clientWidth, H = canvas.clientHeight;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    const padL = 34, padR = 12, padT = 14, padB = 24;
+    const plotW = W - padL - padR, plotH = H - padT - padB;
+    const maxY = 100;
+    const x = i => padL + (seq.length === 1 ? plotW / 2 : i / (seq.length - 1) * plotW);
+    const y = v => padT + (1 - v / maxY) * plotH;
+
+    // Grid + threshold lines
+    ctx.font = '10px Inter, sans-serif';
+    ctx.textAlign = 'right';
+    for (const g of [0, 25, 50, 75, 100]) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+      ctx.beginPath(); ctx.moveTo(padL, y(g)); ctx.lineTo(W - padR, y(g)); ctx.stroke();
+      ctx.fillStyle = 'rgba(148,163,184,0.7)';
+      ctx.fillText(String(g), padL - 6, y(g) + 3);
+    }
+    // Compression line (35) and expansion line (60)
+    for (const [lvl, col, lbl] of [[35, '#7c3aed', 'compression'], [60, '#22c55e', 'expansion']]) {
+      ctx.strokeStyle = col; ctx.globalAlpha = 0.5; ctx.setLineDash([5, 4]);
+      ctx.beginPath(); ctx.moveTo(padL, y(lvl)); ctx.lineTo(W - padR, y(lvl)); ctx.stroke();
+      ctx.setLineDash([]); ctx.globalAlpha = 1;
+      ctx.textAlign = 'left'; ctx.fillStyle = col;
+      ctx.fillText(lbl, padL + 4, y(lvl) - 4);
+      ctx.textAlign = 'right';
+    }
+
+    // Energy line
+    ctx.strokeStyle = 'rgba(96,165,250,0.85)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    seq.forEach((s, i) => { i === 0 ? ctx.moveTo(x(i), y(s.energy)) : ctx.lineTo(x(i), y(s.energy)); });
+    ctx.stroke();
+
+    // Behaviour-coloured points
+    seq.forEach((s, i) => {
+      const col = BEH[s.behaviour].color;
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(x(i), y(s.energy), 5, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(8,11,18,0.9)'; ctx.lineWidth = 1.5; ctx.stroke();
+    });
+
+    // X labels
+    ctx.fillStyle = 'rgba(148,163,184,0.8)';
+    ctx.textAlign = 'center';
+    const step = Math.max(1, Math.ceil(seq.length / 12));
+    seq.forEach((s, i) => {
+      if (i % step === 0 || i === seq.length - 1) ctx.fillText(hrLabel(s.time), x(i), H - 8);
+    });
+  }
+
+  function hourCardsHtml(windowSeq) {
+    return `<div class="bh-hours">${windowSeq.slice().reverse().map(s => {
+      const beh = BEH[s.behaviour];
+      const r = s.row;
+      const mom = Math.round(parseFloat(r.momentum_score) || 0);
+      const metrics = [
+        { lbl: 'Energy',  val: s.energy },
+        { lbl: 'Move',    val: Math.round(parseFloat(r.movement_score) || 0) },
+        { lbl: 'Breadth', val: Math.round(parseFloat(r.breadth_score) || 0) },
+        { lbl: 'Agree',   val: Math.round(parseFloat(r.agreement_score) || 0) },
+        { lbl: 'Trade',   val: Math.round(parseFloat(r.tradability_score) || 0) },
+        { lbl: 'Momentum', val: (mom > 0 ? '+' : '') + mom },
+        { lbl: 'Disp',    val: Math.round(parseFloat(r.dispersion_score) || 0) },
+        { lbl: 'VolQ',    val: Math.round(parseFloat(r.volatility_quality) || 0) },
+      ];
+      return `<div class="bh-hour-card" style="--bc:${beh.color}">
+        <div class="bh-hour-head">
+          <span class="bh-hour-time">${hrLabel(s.time)}</span>
+          <span class="bh-hour-badge">${beh.label.toUpperCase()}</span>
+        </div>
+        <div class="bh-hour-tags">
+          ${r.energy_cycle ? `<span class="bh-tag">Cycle: ${r.energy_cycle}</span>` : ''}
+          ${r.momentum_type ? `<span class="bh-tag">Mom: ${r.momentum_type}</span>` : ''}
+          ${r.volatility_type ? `<span class="bh-tag">Vol: ${r.volatility_type}</span>` : ''}
+          ${r.session_name ? `<span class="bh-tag">${(r.session_name || '').replace(/_/g, ' ')}</span>` : ''}
+        </div>
+        <div class="bh-hour-metrics">${metrics.map(m =>
+          `<div class="bh-hm"><div class="bh-hm-val">${m.val}</div><div class="bh-hm-lbl">${m.lbl}</div></div>`).join('')}</div>
+        <p class="bh-hour-why">${explainHour(r, s.behaviour)}</p>
+      </div>`;
+    }).join('')}</div>`;
+  }
+
+  function transitionsHtml(transitions) {
+    if (!transitions.length) return '<p style="font-size:12px;color:var(--text-muted);margin:0">No behaviour transitions in this window — the market held one state throughout.</p>';
+    return transitions.slice().reverse().map(t => {
+      const f = BEH[t.from], to = BEH[t.to];
+      return `<div class="bh-trans-row">
+        <span class="bh-trans-time">${hrLabel(t.time)}</span>
+        <span class="bh-trans-chip" style="--bc:${f.color}">${f.label}</span>
+        <span class="bh-trans-arrow">→</span>
+        <span class="bh-trans-chip" style="--bc:${to.color}">${to.label}</span>
+        <span class="bh-trans-meaning">${t.meaning}</span>
+      </div>`;
+    }).join('');
+  }
+
+  async function load() {
+    const el = document.getElementById('bh-content');
+    let data;
+    try {
+      data = await api('/api/session-activity?type=hourly&days=2');
+    } catch (e) {
+      el.innerHTML = `<p style="color:var(--text-muted);font-size:13px">Failed to load: ${e.message}</p>`;
+      return;
+    }
+
+    let rows = (data.hourly || [])
+      .filter(h => h.session_name && h.session_name !== 'LOW_LIQUIDITY' && h.session_name !== 'DEAD_HOURS')
+      .sort((a, b) => a.time_utc.localeCompare(b.time_utc));
+
+    if (SESSION !== 'LIVE' && MODE === 'past') {
+      const names = MBN_SESS_HOURS[SESSION] || [SESSION];
+      rows = rows.filter(h => names.includes(h.session_name));
+    }
+
+    if (rows.length < 2) {
+      el.innerHTML = '<p style="color:var(--text-muted);font-size:13px">Not enough hourly data yet for this session.</p>';
+      return;
+    }
+
+    // Context = up to last 24 rows; analysis window = last 6
+    const context = rows.slice(-24);
+    const ctxSeq = context.map(r => ({ time: r.time_utc, behaviour: classifyHour(r), energy: Math.round(parseFloat(r.market_energy) || 0), row: r }));
+    const windowRows = rows.slice(-6);
+    const a = analyze(windowRows);
+    if (!a) {
+      el.innerHTML = '<p style="color:var(--text-muted);font-size:13px">Not enough hourly data yet for analysis.</p>';
+      return;
+    }
+
+    const windowStartIdx = Math.max(0, ctxSeq.length - a.seq.length);
+    const sessLabel = SESS_LABEL[SESSION] || SESSION;
+    const lastT = hrLabel(a.seq[a.seq.length - 1].time);
+    const firstT = hrLabel(a.seq[0].time);
+    const chain = a.seq.map(s => BEH[s.behaviour].label).join(' → ');
+
+    el.innerHTML = `
+      <div class="bh-card"><div class="bh-card-bd">
+        <div class="bh-hero">
+          <span class="bh-decision-big" style="--bc:${a.decisionColor}">${a.decision}</span>
+          <div class="bh-hero-meta">
+            <span class="bh-hero-sess">${sessLabel} — Market Behaviour</span>
+            <span class="bh-hero-sub">Analysis window ${firstT}–${lastT} (last 6 hours)</span>
+            <span class="bh-hero-narr">${a.narrative}</span>
+          </div>
+        </div>
+      </div></div>
+
+      <div class="bh-card">
+        <div class="bh-card-hd"><i data-lucide="activity"></i> Behaviour Timeline (24h context)</div>
+        <div class="bh-card-bd">${ribbonHtml(ctxSeq, windowStartIdx)}</div>
+      </div>
+
+      <div class="bh-card">
+        <div class="bh-card-hd"><i data-lucide="line-chart"></i> Energy &amp; Behaviour Curve</div>
+        <div class="bh-card-bd"><canvas id="bh-chart"></canvas></div>
+      </div>
+
+      <div class="bh-card">
+        <div class="bh-card-hd"><i data-lucide="git-branch"></i> Behaviour Transitions</div>
+        <div class="bh-card-bd">${transitionsHtml(a.transitions)}</div>
+      </div>
+
+      <div class="bh-card">
+        <div class="bh-card-hd"><i data-lucide="list"></i> Hour-by-Hour Analysis (newest first)</div>
+        <div class="bh-card-bd">${hourCardsHtml(a.seq)}</div>
+      </div>
+
+      <div class="bh-card">
+        <div class="bh-card-hd"><i data-lucide="brain"></i> Decision Rationale</div>
+        <div class="bh-card-bd">
+          <div class="bh-rationale">
+            The narrator read the last 6 hours as <span class="dim">${chain}</span> and issued
+            <b style="color:${a.decisionColor}">&nbsp;${a.decision}</b>.
+            <div class="bh-rule"><b>Rule that fired:</b> ${a.rule}</div>
+          </div>
+        </div>
+      </div>`;
+
+    drawChart(document.getElementById('bh-chart'), ctxSeq);
+    if (window.lucide) lucide.createIcons();
+  }
+
+  load();
+  // Refresh every 60s so the live view stays current
+  setInterval(load, 60000);
+  </script>
+</body>
+</html>
