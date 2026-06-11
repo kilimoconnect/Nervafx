@@ -250,15 +250,35 @@ async function updateM15StructureWatch() {
         // BUY:  M15 close ABOVE the H1 high at direction confirmation
         // SELL: M15 close BELOW the H1 low at direction confirmation
         if (sp.dir === 'BUY' && latest.close > entry.impulse_high) {
+          // SL = lowest low of last 2 H1 candles
+          const { data: slCandles } = await supabase
+            .from('backtest_candles')
+            .select('low')
+            .eq('instrument', sp.instrument)
+            .eq('timeframe', 'H1')
+            .eq('complete', true)
+            .order('time', { ascending: false })
+            .limit(2);
+          const sl = slCandles?.length ? Math.min(...slCandles.map(c => parseFloat(c.low))) : entry.impulse_low;
           entry.state = 'ENTRY';
           entry.entry_price = latest.close;
-          entry.invalidation_price = entry.impulse_low;
-          console.log(`[STRUCT] ${sp.instrument} BUY ENTRY — M15 close ${latest.close.toFixed(5)} > H1 high ${entry.impulse_high.toFixed(5)}`);
+          entry.invalidation_price = sl;
+          console.log(`[STRUCT] ${sp.instrument} BUY ENTRY — M15 close ${latest.close.toFixed(5)} > H1 high ${entry.impulse_high.toFixed(5)} | SL ${sl.toFixed(5)}`);
         } else if (sp.dir === 'SELL' && latest.close < entry.impulse_low) {
+          // SL = highest high of last 2 H1 candles
+          const { data: slCandles } = await supabase
+            .from('backtest_candles')
+            .select('high')
+            .eq('instrument', sp.instrument)
+            .eq('timeframe', 'H1')
+            .eq('complete', true)
+            .order('time', { ascending: false })
+            .limit(2);
+          const sl = slCandles?.length ? Math.max(...slCandles.map(c => parseFloat(c.high))) : entry.impulse_high;
           entry.state = 'ENTRY';
           entry.entry_price = latest.close;
-          entry.invalidation_price = entry.impulse_high;
-          console.log(`[STRUCT] ${sp.instrument} SELL ENTRY — M15 close ${latest.close.toFixed(5)} < H1 low ${entry.impulse_low.toFixed(5)}`);
+          entry.invalidation_price = sl;
+          console.log(`[STRUCT] ${sp.instrument} SELL ENTRY — M15 close ${latest.close.toFixed(5)} < H1 low ${entry.impulse_low.toFixed(5)} | SL ${sl.toFixed(5)}`);
         }
       }
     }
