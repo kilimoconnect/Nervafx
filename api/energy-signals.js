@@ -43,11 +43,10 @@ module.exports = async function handler(req, res) {
     if (pErr) throw pErr;
 
     // Trigger bar = most recent FULL-CONFLUENCE hourly bar: energy ≥ threshold
-    // AND all five supporting engines green (same structure as pink bars).
+    // AND all four supporting engines green (same structure as pink bars).
     // Mirrors src/energyDirection.js.
     const ENERGY_THRESHOLD_H1 = 60;
     const CONFLUENCE_THRESHOLDS = {
-      dispersion_score:  30,
       tradability_score: 30,
       movement_score:    35,
       breadth_score:     70,

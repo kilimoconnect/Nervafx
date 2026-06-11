@@ -5361,9 +5361,8 @@ function _renderMetricBars(container, rows, key) {
     .formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value || '';
   const SKIP_SESSIONS = new Set(['LOW_LIQUIDITY', 'DEAD_HOURS']);
 
-  // Full engine confluence: all five supporting engines green in the same hour
+  // Full engine confluence: all four supporting engines green in the same hour
   const _allEnginesGreen = r =>
-    (parseFloat(r.dispersion_score)  || 0) >= 30 &&
     (parseFloat(r.tradability_score) || 0) >= 30 &&
     (parseFloat(r.movement_score)    || 0) >= 35 &&
     (parseFloat(r.breadth_score)     || 0) >= 70 &&

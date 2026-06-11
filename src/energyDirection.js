@@ -25,10 +25,9 @@ const { supabase } = require('./supabase');
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
 const ENERGY_THRESHOLD_H1 = 60;
 
-// Full-confluence trigger: the bar must have energy ≥ threshold AND all five
+// Full-confluence trigger: the bar must have energy ≥ threshold AND all four
 // supporting engines green (same structure as the pink confluence bars).
 const CONFLUENCE_THRESHOLDS = {
-  dispersion_score:  30,
   tradability_score: 30,
   movement_score:    35,
   breadth_score:     70,
@@ -168,7 +167,7 @@ async function calculateEnergyDirection() {
   }
 
   // Scan recent hourly bars for the LAST full-confluence bar — energy ≥ threshold
-  // AND all five supporting engines green. This is the trigger bar — directions
+  // AND all four supporting engines green. This is the trigger bar — directions
   // are snapshotted from strength at that moment and persist until the NEXT
   // full-confluence bar.
   const since = new Date(now.getTime() - 72 * 3600000).toISOString();
