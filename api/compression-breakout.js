@@ -22,12 +22,12 @@ module.exports = async function handler(req, res) {
 
     const [baselineRes, watchRes] = await Promise.all([
       sb.from('compression_baseline').select('*').eq('id', 1).single(),
-      sb.from('m15_structure_watch').select('*').not('state', 'in', '("INACTIVE","INVALIDATED")').order('state'),
+      sb.from('m15_structure_watch').select('*').not('state', 'in', '("INACTIVE","REMOVED")').order('state'),
     ]);
 
     const baseline   = baselineRes.data || null;
     const structures = (watchRes.data || []).sort((a, b) => {
-      const order = { ENTRY_READY: 0, STRUCTURE_FORMED: 1, PULLBACK_ACTIVE: 2, IMPULSE_DETECTED: 3, WATCHING: 4 };
+      const order = { ENTRY: 0, APPROVED: 1, VALIDATING: 2 };
       return (order[a.state] ?? 9) - (order[b.state] ?? 9);
     });
 
@@ -35,11 +35,9 @@ module.exports = async function handler(req, res) {
       baseline,
       structures,
       summary: {
-        entry_ready:      structures.filter(s => s.state === 'ENTRY_READY').length,
-        structure_formed: structures.filter(s => s.state === 'STRUCTURE_FORMED').length,
-        pullback_active:  structures.filter(s => s.state === 'PULLBACK_ACTIVE').length,
-        impulse_detected: structures.filter(s => s.state === 'IMPULSE_DETECTED').length,
-        watching:         structures.filter(s => s.state === 'WATCHING').length,
+        entry:      structures.filter(s => s.state === 'ENTRY').length,
+        approved:   structures.filter(s => s.state === 'APPROVED').length,
+        validating: structures.filter(s => s.state === 'VALIDATING').length,
       },
     });
   } catch (e) {

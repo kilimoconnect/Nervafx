@@ -3517,27 +3517,24 @@ function renderCompressionBreakout(data) {
   // ── Baseline Banner ──
   const baseEl = document.getElementById('cb-baseline');
   if (baseEl && baseline) {
-    const active = baseline.active;
-    const locked = baseline.baseline_locked;
-    const recovery = baseline.recovery_detected;
     let statusText, statusColor;
-    if (recovery) {
-      statusText = 'Recovery — Directional Discovery';
+    if (summary?.entry > 0) {
+      statusText = 'Trade Entry Available';
       statusColor = '#22c55e';
-    } else if (locked) {
-      statusText = 'Baseline Locked — Energy Rising';
+    } else if (summary?.approved > 0) {
+      statusText = 'Approved — Waiting for Entry';
       statusColor = '#0ea5e9';
-    } else if (active) {
-      statusText = 'Compression Active — Energy ' + Math.round(baseline.baseline_energy);
+    } else if (summary?.validating > 0) {
+      statusText = 'Validating — 2h Persistence Check';
       statusColor = '#f59e0b';
     } else {
-      statusText = 'No Compression';
+      statusText = 'No Active Pairs';
       statusColor = '#64748b';
     }
     baseEl.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:8px">
       <span style="width:8px;height:8px;border-radius:50%;background:${statusColor}"></span>
       <span style="font-size:11px;font-weight:600;color:${statusColor}">${statusText}</span>
-      ${summary ? `<span style="margin-left:auto;font-size:10px;color:#64748b">${summary.entry_ready} ready · ${summary.structure_formed} formed · ${summary.pullback_active} pullback</span>` : ''}
+      ${summary ? `<span style="margin-left:auto;font-size:10px;color:#64748b">${summary.entry} entry · ${summary.approved} approved · ${summary.validating} validating</span>` : ''}
     </div>`;
   }
 
@@ -3560,12 +3557,12 @@ function renderCompressionBreakout(data) {
   }
 
   const STATE_COLOR = {
-    ENTRY_READY: '#22c55e', STRUCTURE_FORMED: '#0ea5e9',
-    PULLBACK_ACTIVE: '#f59e0b',
+    ENTRY: '#22c55e', APPROVED: '#0ea5e9',
+    VALIDATING: '#f59e0b',
   };
   const STATE_LABEL = {
-    ENTRY_READY: 'ENTRY READY', STRUCTURE_FORMED: 'STRUCTURE FORMED',
-    PULLBACK_ACTIVE: 'PULLBACK',
+    ENTRY: 'ENTRY', APPROVED: 'APPROVED',
+    VALIDATING: 'VALIDATING',
   };
   const isJPY = inst => inst.includes('JPY');
   const dec = inst => isJPY(inst) ? 3 : 5;
@@ -3580,11 +3577,10 @@ function renderCompressionBreakout(data) {
     let detailHtml = '';
     {
       const rows = [];
-      if (s.impulse_high) rows.push(`<span class="cb-lbl">Imp High</span><span class="cb-val">${s.impulse_high.toFixed(d)}</span>`);
-      if (s.impulse_low) rows.push(`<span class="cb-lbl">Imp Low</span><span class="cb-val">${s.impulse_low.toFixed(d)}</span>`);
-      if (s.pullback_high) rows.push(`<span class="cb-lbl">PB High</span><span class="cb-val" style="color:#f87171">${s.pullback_high.toFixed(d)}</span>`);
-      if (s.pullback_low) rows.push(`<span class="cb-lbl">PB Low</span><span class="cb-val" style="color:#4ade80">${s.pullback_low.toFixed(d)}</span>`);
-      if (s.entry_price) rows.push(`<span class="cb-lbl">Entry</span><span class="cb-val" style="color:#60a5fa;font-weight:700">${s.entry_price.toFixed(d)}</span>`);
+      const refLabel = s.direction === 'BUY' ? 'H1 High' : 'H1 Low';
+      const refVal = s.direction === 'BUY' ? s.impulse_high : s.impulse_low;
+      if (refVal) rows.push(`<span class="cb-lbl">${refLabel}</span><span class="cb-val" style="color:#60a5fa">${refVal.toFixed(d)}</span>`);
+      if (s.entry_price) rows.push(`<span class="cb-lbl">Entry</span><span class="cb-val" style="color:#22c55e;font-weight:700">${s.entry_price.toFixed(d)}</span>`);
       if (s.invalidation_price) rows.push(`<span class="cb-lbl">Invalid</span><span class="cb-val" style="color:#f87171">${s.invalidation_price.toFixed(d)}</span>`);
       detailHtml = `<div style="display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin-top:6px;font-size:10px">${rows.join('')}</div>`;
     }

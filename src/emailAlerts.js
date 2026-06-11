@@ -255,11 +255,11 @@ function directionAlertEmail(data) {
       Removed: ${removedPairs.map(p => `<span style="text-decoration:line-through">${p.replace('_','/')}</span>`).join(', ')}
     </div>` : '';
 
-  // ── Structure Watch (M15 compression breakout) ──
-  const swReady = (structureWatch || []).filter(s => s.state === 'ENTRY_READY');
-  const swFormed = (structureWatch || []).filter(s => s.state === 'STRUCTURE_FORMED');
-  const swBuilding = (structureWatch || []).filter(s => s.state === 'PULLBACK_ACTIVE');
-  const swTotal = swReady.length + swFormed.length + swBuilding.length;
+  // ── Trade Approval ──
+  const swEntry = (structureWatch || []).filter(s => s.state === 'ENTRY');
+  const swApproved = (structureWatch || []).filter(s => s.state === 'APPROVED');
+  const swValidating = (structureWatch || []).filter(s => s.state === 'VALIDATING');
+  const swTotal = swEntry.length + swApproved.length + swValidating.length;
 
   const fmtPrice = (v, instr) => {
     if (!v) return '—';
@@ -268,32 +268,30 @@ function directionAlertEmail(data) {
   };
 
   const swCards = swTotal > 0 ? (structureWatch || [])
-    .filter(s => s.state !== 'INACTIVE' && s.state !== 'INVALIDATED')
+    .filter(s => s.state !== 'INACTIVE' && s.state !== 'REMOVED')
     .map(s => {
       const isBuy = s.direction === 'BUY';
       const dirColor = isBuy ? '#4ade80' : '#f87171';
-      const stateColor = s.state === 'ENTRY_READY' ? '#22c55e' : s.state === 'STRUCTURE_FORMED' ? '#0ea5e9' : '#f59e0b';
-      const stateLabel = (s.state || '').replace(/_/g, ' ');
+      const stateColor = s.state === 'ENTRY' ? '#22c55e' : s.state === 'APPROVED' ? '#0ea5e9' : '#f59e0b';
+      const refLabel = isBuy ? 'H1 High' : 'H1 Low';
+      const refVal = isBuy ? s.impulse_high : s.impulse_low;
       return `<table width="100%" cellpadding="0" cellspacing="0" style="border-bottom:1px solid rgba(30,41,59,0.4);margin-bottom:4px">
         <tr>
           <td style="padding:10px 14px">
             <span class="val">${(s.instrument||'').replace('_','/')}</span>
             <span style="color:${dirColor};font-weight:600;font-size:12px;margin-left:6px">${s.direction}</span>
-            <span style="color:${stateColor};font-size:11px;font-weight:600;margin-left:6px">${stateLabel}</span>
+            <span style="color:${stateColor};font-size:11px;font-weight:600;margin-left:6px">${s.state}</span>
           </td>
         </tr>
         <tr><td style="padding:0 14px 10px">
           <table cellpadding="0" cellspacing="0" style="font-size:11px;color:#94a3b8">
             <tr>
-              <td style="padding:2px 10px 2px 0">Imp High</td><td style="padding:2px 16px 2px 0;color:#e2e8f0;font-weight:600">${fmtPrice(s.impulse_high, s.instrument)}</td>
-              <td style="padding:2px 10px 2px 0">PB High</td><td style="padding:2px 0;color:#e2e8f0;font-weight:600">${fmtPrice(s.pullback_high, s.instrument)}</td>
-            </tr>
-            <tr>
-              <td style="padding:2px 10px 2px 0">Imp Low</td><td style="padding:2px 16px 2px 0;color:#e2e8f0;font-weight:600">${fmtPrice(s.impulse_low, s.instrument)}</td>
-              <td style="padding:2px 10px 2px 0">PB Low</td><td style="padding:2px 0;color:#e2e8f0;font-weight:600">${fmtPrice(s.pullback_low, s.instrument)}</td>
+              <td style="padding:2px 10px 2px 0">${refLabel}</td><td style="padding:2px 0;color:#60a5fa;font-weight:600">${fmtPrice(refVal, s.instrument)}</td>
             </tr>
             ${s.entry_price ? `<tr>
-              <td style="padding:2px 10px 2px 0;color:#22c55e">Entry</td><td style="padding:2px 16px 2px 0;color:#22c55e;font-weight:600">${fmtPrice(s.entry_price, s.instrument)}</td>
+              <td style="padding:2px 10px 2px 0;color:#22c55e">Entry</td><td style="padding:2px 0;color:#22c55e;font-weight:600">${fmtPrice(s.entry_price, s.instrument)}</td>
+            </tr>` : ''}
+            ${s.invalidation_price ? `<tr>
               <td style="padding:2px 10px 2px 0;color:#ef4444">Invalid</td><td style="padding:2px 0;color:#ef4444;font-weight:600">${fmtPrice(s.invalidation_price, s.instrument)}</td>
             </tr>` : ''}
           </table>
@@ -303,9 +301,9 @@ function directionAlertEmail(data) {
 
   const structureHtml = swTotal > 0 ? `
     <div class="card">
-      <div class="card-hd">Structure Watch</div>
+      <div class="card-hd">Trade Approval</div>
       <div class="card-bd">
-        <div style="padding:8px 14px" class="dim">${swReady.length} ready &middot; ${swFormed.length} formed &middot; ${swBuilding.length} building</div>
+        <div style="padding:8px 14px" class="dim">${swEntry.length} entry &middot; ${swApproved.length} approved &middot; ${swValidating.length} validating</div>
         ${swCards}
       </div>
     </div>` : '';
@@ -554,7 +552,7 @@ async function sendSignalAlerts(sb) {
         const { data: swRows } = await sb
           .from('m15_structure_watch')
           .select('instrument, direction, state, impulse_high, impulse_low, pullback_high, pullback_low, entry_price, invalidation_price')
-          .in('state', ['ENTRY_READY', 'STRUCTURE_FORMED', 'PULLBACK_ACTIVE']);
+          .in('state', ['ENTRY', 'APPROVED', 'VALIDATING']);
         structureWatch = swRows || [];
       } catch (_) {}
 
@@ -700,7 +698,7 @@ async function sendSignalAlerts(sb) {
     const { data: entryPairs } = await sb
       .from('m15_structure_watch')
       .select('instrument, direction, state, entry_price, impulse_high, impulse_low, pullback_high, pullback_low, invalidation_price')
-      .eq('state', 'ENTRY_READY');
+      .eq('state', 'ENTRY');
 
     if (entryPairs?.length) {
       const todayKey = new Date().toISOString().slice(0, 10);

@@ -1,40 +1,36 @@
 'use strict';
 
 /**
- * Compression Breakout + M15 Price Structure Entry
+ * Expansion → Persistence Validation → Trade Approval
  *
- * H1 detects market-wide compression opportunity:
- *   Energy < 35 → compression baseline starts
- *   Energy keeps falling → baseline updates (tracks lowest)
- *   Energy starts rising → baseline locks
- *   Energy recovers / crosses threshold → directional discovery
- *   Approved pairs generated from energy_signal_pairs
+ * New pair lifecycle (replaces old compression breakout):
  *
- * M15 executes on approved pairs using price structure:
- *   Direction confirmation = impulse (no separate detection needed).
- *   PULLBACK_ACTIVE → STRUCTURE_FORMED → ENTRY_READY
+ *   1. VALIDATING:  Pair formed after confluence bar. Monitored for 2 hours.
+ *                   During this window, M15 high/low are tracked as reference levels.
  *
- * State machine per pair:
- *   PULLBACK_ACTIVE:    monitoring for pullback against the confirmed direction
- *   STRUCTURE_FORMED:   pullback created swing structure (lower high / higher low)
- *   ENTRY_READY:        M15 close broke past pullback level → trade ready
- *   INVALIDATED:        price broke past invalidation level
+ *   2. APPROVED:    After 2h, 3H currency strength still supports the pair
+ *                   (strong ccy 3H > 0, weak ccy 3H < 0). Trade approved.
+ *                   Waiting for M15 pullback entry:
+ *                     BUY  → M15 close below the 2h-window high
+ *                     SELL → M15 close above the 2h-window low
+ *
+ *   3. ENTRY:       Pullback condition met — trade entry signal.
+ *
+ *   4. REMOVED:     3H currency strength reversed (strong flipped negative
+ *                   or weak flipped positive). Pair removed at any stage.
  *
  * DB tables:
- *   compression_baseline     — single row tracking compression state
- *   m15_structure_watch      — per-pair structure tracking
+ *   m15_structure_watch  — per-pair state tracking (reuses existing table)
+ *   compression_baseline — kept for backward compat (updated but not critical)
  */
 
 const { supabase } = require('./supabase');
-const { config }   = require('./config');
 
-const COMPRESSION_THRESHOLD = 35;  // Energy below this = compression
-const IMPULSE_LOOKBACK      = 20;  // M15 candles to derive impulse range from (~5 hours)
+const VALIDATION_HOURS = 2;
 
-// ─── Compression Baseline ────────────────────────────────────────────────────
+// ─── Compression Baseline (kept for backward compat) ────────────────────────
 
 async function updateCompressionBaseline() {
-  // Get current market energy from latest hourly_session_activity
   const { data: latest } = await supabase
     .from('hourly_session_activity')
     .select('market_energy, time_utc')
@@ -44,9 +40,7 @@ async function updateCompressionBaseline() {
   if (!latest?.length) return null;
 
   const currentEnergy = parseFloat(latest[0].market_energy) || 0;
-  const prevEnergy    = latest.length > 1 ? (parseFloat(latest[1].market_energy) || 0) : currentEnergy;
 
-  // Get or create baseline
   const { data: existing } = await supabase
     .from('compression_baseline')
     .select('*')
@@ -63,46 +57,32 @@ async function updateCompressionBaseline() {
     recovery_detected: false,
   };
 
-  // State machine
-  if (currentEnergy < COMPRESSION_THRESHOLD && !baseline.active) {
-    // Enter compression
+  if (currentEnergy < 35 && !baseline.active) {
     baseline.active = true;
     baseline.baseline_energy = currentEnergy;
     baseline.baseline_locked = false;
     baseline.compression_start = latest[0].time_utc;
     baseline.lock_time = null;
     baseline.recovery_detected = false;
-    console.log(`[COMP-BRK] Compression started — energy ${currentEnergy}`);
-
   } else if (baseline.active && !baseline.baseline_locked) {
     if (currentEnergy < baseline.baseline_energy) {
-      // Energy still falling — update baseline
       baseline.baseline_energy = currentEnergy;
-      console.log(`[COMP-BRK] Baseline updated — energy ${currentEnergy}`);
     } else if (currentEnergy > baseline.baseline_energy + 3) {
-      // Energy rising — lock baseline
       baseline.baseline_locked = true;
       baseline.lock_time = latest[0].time_utc;
-      console.log(`[COMP-BRK] Baseline LOCKED at ${baseline.baseline_energy} — energy recovering to ${currentEnergy}`);
     }
-
   } else if (baseline.active && baseline.baseline_locked) {
     if (currentEnergy >= 60) {
-      // Energy recovered past threshold — directional discovery phase
       baseline.recovery_detected = true;
-      console.log(`[COMP-BRK] Recovery! Energy ${currentEnergy} crossed 60 — directional discovery active`);
     }
   }
 
-  // Reset if energy drops back below baseline after lock (false breakout)
   if (baseline.active && baseline.baseline_locked && currentEnergy < baseline.baseline_energy) {
     baseline.baseline_locked = false;
     baseline.baseline_energy = currentEnergy;
     baseline.recovery_detected = false;
-    console.log(`[COMP-BRK] Reset — energy fell back to ${currentEnergy}`);
   }
 
-  // Upsert
   await supabase
     .from('compression_baseline')
     .upsert({ ...baseline, updated_at: new Date().toISOString() }, { onConflict: 'id' });
@@ -110,18 +90,16 @@ async function updateCompressionBaseline() {
   return baseline;
 }
 
-// ─── M15 Price Structure Watch ───────────────────────────────────────────────
+// ─── Expansion → Persistence → Trade Approval ──────────────────────────────
 
 async function updateM15StructureWatch() {
-  // Get approved pairs from energy_signal_pairs
   const { data: signalPairs } = await supabase
     .from('energy_signal_pairs')
-    .select('instrument, dir, phase')
+    .select('instrument, dir, strong_ccy, weak_ccy, triggered_at')
     .eq('active', true);
 
   if (!signalPairs?.length) {
-    console.log('[COMP-BRK] No active signal pairs — deactivating all structure watch entries');
-    // Deactivate all existing watch entries since no signal pairs are active
+    console.log('[STRUCT] No active signal pairs — deactivating all');
     const { data: existingWatch } = await supabase
       .from('m15_structure_watch')
       .select('*');
@@ -129,215 +107,197 @@ async function updateM15StructureWatch() {
     if (toDeactivate.length) {
       const rows = toDeactivate.map(w => ({ ...w, state: 'INACTIVE', updated_at: new Date().toISOString() }));
       await supabase.from('m15_structure_watch').upsert(rows, { onConflict: 'instrument' });
-      console.log(`[COMP-BRK] Deactivated ${rows.length} structure watch entries`);
+      console.log(`[STRUCT] Deactivated ${rows.length} entries`);
     }
     return [];
   }
 
-  // Get existing structure watch states
+  // Fetch existing watch states
   const { data: existingWatch } = await supabase
     .from('m15_structure_watch')
     .select('*');
-
   const watchMap = {};
   for (const w of (existingWatch || [])) watchMap[w.instrument] = w;
 
-  // Get latest M15 candles for each pair (last 30 candles = 7.5 hours)
+  // Fetch current 3H currency strength for persistence checks
+  const { data: csRows } = await supabase
+    .from('currency_strength')
+    .select('currency, smooth_3h')
+    .order('time', { ascending: false })
+    .limit(8);
+  const strengthMap = {};
+  const seen3h = new Set();
+  for (const r of (csRows || [])) {
+    if (seen3h.has(r.currency)) continue;
+    seen3h.add(r.currency);
+    strengthMap[r.currency] = parseFloat(r.smooth_3h) || 0;
+  }
+
+  const now = new Date();
   const results = [];
 
   for (const sp of signalPairs) {
-    const { data: candles } = await supabase
+    const existing = watchMap[sp.instrument] || null;
+    const triggeredAt = sp.triggered_at ? new Date(sp.triggered_at) : now;
+    const hoursSinceTrigger = (now - triggeredAt) / 3600000;
+
+    // Check 3H persistence: strong ccy still positive, weak ccy still negative
+    const strong3h = strengthMap[sp.strong_ccy] ?? 0;
+    const weak3h = strengthMap[sp.weak_ccy] ?? 0;
+    const directionHolds = strong3h > 0 && weak3h < 0;
+
+    // Fetch latest M15 candle for current price
+    const { data: m15Candles } = await supabase
       .from('backtest_candles')
       .select('time, open, high, low, close')
       .eq('instrument', sp.instrument)
       .eq('timeframe', 'M15')
       .eq('complete', true)
       .order('time', { ascending: false })
-      .limit(30);
+      .limit(1);
 
-    if (!candles || candles.length < 5) continue;
-
-    // Reverse to ascending order
-    const asc = candles.reverse().map(c => ({
-      time: c.time,
-      open: parseFloat(c.open),
-      high: parseFloat(c.high),
-      low: parseFloat(c.low),
-      close: parseFloat(c.close),
-    }));
-
-    const existing = watchMap[sp.instrument] || null;
-    let needsInit = false;
+    if (!m15Candles?.length) continue;
+    const latest = {
+      time: m15Candles[0].time,
+      open: parseFloat(m15Candles[0].open),
+      high: parseFloat(m15Candles[0].high),
+      low: parseFloat(m15Candles[0].low),
+      close: parseFloat(m15Candles[0].close),
+    };
 
     let entry;
-    if (!existing) {
-      // Brand new pair — initialize
+    if (!existing || existing.state === 'INACTIVE' || existing.state === 'REMOVED') {
+      // New pair → fetch H1 candle at direction confirmation to get reference level
+      const { data: h1Candles } = await supabase
+        .from('backtest_candles')
+        .select('time, high, low')
+        .eq('instrument', sp.instrument)
+        .eq('timeframe', 'H1')
+        .lte('time', sp.triggered_at || now.toISOString())
+        .order('time', { ascending: false })
+        .limit(1);
+
+      const h1 = h1Candles?.[0];
+      const refHigh = h1 ? parseFloat(h1.high) : latest.high;
+      const refLow = h1 ? parseFloat(h1.low) : latest.low;
+
       entry = {
         instrument: sp.instrument,
         direction: sp.dir,
-        state: null, // will be set below
-        impulse_high: null,
-        impulse_low: null,
+        state: 'VALIDATING',
+        impulse_high: refHigh,   // H1 high at direction confirmation
+        impulse_low: refLow,     // H1 low at direction confirmation
         pullback_high: null,
         pullback_low: null,
         entry_price: null,
         invalidation_price: null,
       };
-      needsInit = true;
+      console.log(`[STRUCT] ${sp.instrument} ${sp.dir} → VALIDATING (H1 ref H:${refHigh.toFixed(5)} L:${refLow.toFixed(5)})`);
+
+    } else if (existing.direction !== sp.dir) {
+      // Direction changed → restart with new H1 reference
+      const { data: h1Candles } = await supabase
+        .from('backtest_candles')
+        .select('time, high, low')
+        .eq('instrument', sp.instrument)
+        .eq('timeframe', 'H1')
+        .lte('time', sp.triggered_at || now.toISOString())
+        .order('time', { ascending: false })
+        .limit(1);
+
+      const h1 = h1Candles?.[0];
+      const refHigh = h1 ? parseFloat(h1.high) : latest.high;
+      const refLow = h1 ? parseFloat(h1.low) : latest.low;
+
+      entry = {
+        ...existing,
+        direction: sp.dir,
+        state: 'VALIDATING',
+        impulse_high: refHigh,
+        impulse_low: refLow,
+        pullback_high: null,
+        pullback_low: null,
+        entry_price: null,
+        invalidation_price: null,
+      };
+      console.log(`[STRUCT] ${sp.instrument} direction changed → VALIDATING (H1 ref H:${refHigh.toFixed(5)} L:${refLow.toFixed(5)})`);
+
     } else {
       entry = { ...existing };
+    }
 
-      // Re-activate if pair was INACTIVE or INVALIDATED but is back in signal pairs
-      if (entry.state === 'INACTIVE' || entry.state === 'INVALIDATED') {
-        console.log(`[COMP-BRK] ${sp.instrument} re-activated (was ${entry.state})`);
-        needsInit = true;
-      }
+    // ── State machine ───────────────────────────────────────────────────────
 
-      // Direction change → reset
-      if (entry.direction && entry.direction !== sp.dir) {
-        console.log(`[COMP-BRK] ${sp.instrument} direction changed ${entry.direction}→${sp.dir}`);
-        needsInit = true;
+    if (entry.state === 'VALIDATING') {
+      // Wait for 2h persistence check
+      if (hoursSinceTrigger >= VALIDATION_HOURS) {
+        if (!directionHolds) {
+          entry.state = 'REMOVED';
+          console.log(`[STRUCT] ${sp.instrument} REMOVED — 3H reversed (${sp.strong_ccy}: ${strong3h.toFixed(5)}, ${sp.weak_ccy}: ${weak3h.toFixed(5)})`);
+        } else {
+          entry.state = 'APPROVED';
+          console.log(`[STRUCT] ${sp.instrument} APPROVED — 3H holds (${sp.strong_ccy}: +${strong3h.toFixed(5)}, ${sp.weak_ccy}: ${weak3h.toFixed(5)})`);
+        }
       }
     }
 
-    entry.direction = sp.dir;
-
-    // Skip WATCHING + IMPULSE_DETECTED entirely — direction confirmation IS the impulse.
-    // Use the recent M15 candle range as impulse levels and go straight to PULLBACK_ACTIVE.
-    if (needsInit) {
-      const recentWindow = asc.slice(-IMPULSE_LOOKBACK);
-      const impHigh = Math.max(...recentWindow.map(c => c.high));
-      const impLow  = Math.min(...recentWindow.map(c => c.low));
-
-      entry.state = 'PULLBACK_ACTIVE';
-      entry.impulse_high = impHigh;
-      entry.impulse_low = impLow;
-      entry.pullback_high = sp.dir === 'BUY' ? impHigh : null;
-      entry.pullback_low  = sp.dir === 'SELL' ? impLow : null;
-      entry.entry_price = null;
-      entry.invalidation_price = null;
-      console.log(`[COMP-BRK] ${sp.instrument} ${sp.dir} → PULLBACK_ACTIVE immediately (impulse H:${impHigh.toFixed(5)} L:${impLow.toFixed(5)})`);
+    if (entry.state === 'APPROVED') {
+      if (!directionHolds) {
+        entry.state = 'REMOVED';
+        console.log(`[STRUCT] ${sp.instrument} REMOVED — 3H reversed after approval`);
+      } else {
+        // Trade entry: price confirms direction by closing past the H1 reference level
+        // BUY:  M15 close ABOVE the H1 high at direction confirmation
+        // SELL: M15 close BELOW the H1 low at direction confirmation
+        if (sp.dir === 'BUY' && latest.close > entry.impulse_high) {
+          entry.state = 'ENTRY';
+          entry.entry_price = latest.close;
+          entry.invalidation_price = entry.impulse_low;
+          console.log(`[STRUCT] ${sp.instrument} BUY ENTRY — M15 close ${latest.close.toFixed(5)} > H1 high ${entry.impulse_high.toFixed(5)}`);
+        } else if (sp.dir === 'SELL' && latest.close < entry.impulse_low) {
+          entry.state = 'ENTRY';
+          entry.entry_price = latest.close;
+          entry.invalidation_price = entry.impulse_high;
+          console.log(`[STRUCT] ${sp.instrument} SELL ENTRY — M15 close ${latest.close.toFixed(5)} < H1 low ${entry.impulse_low.toFixed(5)}`);
+        }
+      }
     }
 
-    // Run state machine
-    const updated = processStructure(entry, asc, sp.dir);
-    results.push(updated);
+    if (entry.state === 'ENTRY') {
+      if (!directionHolds) {
+        entry.state = 'REMOVED';
+        console.log(`[STRUCT] ${sp.instrument} REMOVED — 3H reversed after entry`);
+      }
+    }
+
+    results.push(entry);
   }
 
-  // Only remove pairs that are no longer in signal pairs AND had a direction reversal
-  // or were explicitly removed. Pairs persist across sessions — they only get removed
-  // when the energy engine removes them from signal pairs (direction change/reversal).
+  // Deactivate pairs no longer in signal set
   const activeInstruments = new Set(signalPairs.map(p => p.instrument));
   for (const w of (existingWatch || [])) {
     if (!activeInstruments.has(w.instrument) && w.state !== 'INACTIVE') {
-      console.log(`[COMP-BRK] ${w.instrument} removed from signal pairs — deactivating structure`);
+      console.log(`[STRUCT] ${w.instrument} removed from signal pairs — INACTIVE`);
       results.push({ ...w, state: 'INACTIVE', updated_at: new Date().toISOString() });
     }
   }
 
   // Upsert all
   if (results.length) {
-    const rows = results.map(r => ({
-      ...r,
-      updated_at: new Date().toISOString(),
-    }));
+    const rows = results.map(r => ({ ...r, updated_at: new Date().toISOString() }));
     const { error } = await supabase
       .from('m15_structure_watch')
       .upsert(rows, { onConflict: 'instrument' });
-    if (error) console.error('[COMP-BRK] Upsert error:', error.message);
+    if (error) console.error('[STRUCT] Upsert error:', error.message);
   }
 
-  const ready = results.filter(r => r.state === 'ENTRY_READY');
-  const structured = results.filter(r => r.state === 'STRUCTURE_FORMED');
-  const pullback = results.filter(r => r.state === 'PULLBACK_ACTIVE');
-  console.log(`[COMP-BRK] M15 Structure: ${ready.length} ENTRY_READY, ${structured.length} STRUCTURE_FORMED, ${pullback.length} PULLBACK_ACTIVE, ${results.length} total`);
+  const validating = results.filter(r => r.state === 'VALIDATING');
+  const approved = results.filter(r => r.state === 'APPROVED');
+  const entry = results.filter(r => r.state === 'ENTRY');
+  const removed = results.filter(r => r.state === 'REMOVED');
+  console.log(`[STRUCT] ${validating.length} VALIDATING, ${approved.length} APPROVED, ${entry.length} ENTRY, ${removed.length} REMOVED, ${results.length} total`);
 
   return results;
-}
-
-// ─── Price Structure State Machine ───────────────────────────────────────────
-
-function processStructure(state, candles, direction) {
-  const isBuy = direction === 'BUY';
-  const latest = candles[candles.length - 1];
-
-  // Invalidated or inactive — do not process further
-  if (state.state === 'INVALIDATED' || state.state === 'INACTIVE') {
-    return state;
-  }
-
-  // ── PULLBACK_ACTIVE / STRUCTURE_FORMED → track swing + detect structure + entry ──
-  // Pairs always start at PULLBACK_ACTIVE (impulse is the direction confirmation itself).
-  if (state.state === 'PULLBACK_ACTIVE' || state.state === 'STRUCTURE_FORMED') {
-    if (isInvalidated(state, latest, isBuy)) {
-      state.state = 'INVALIDATED';
-      console.log(`[COMP-BRK] ${state.instrument} INVALIDATED at ${state.state}`);
-      return state;
-    }
-
-    if (isBuy) {
-      if (latest.low < (state.pullback_low || Infinity)) {
-        state.pullback_low = latest.low;
-      }
-      if (!state.pullback_high) state.pullback_high = state.impulse_high;
-
-      if (state.state === 'PULLBACK_ACTIVE' && latest.low > state.pullback_low) {
-        state.state = 'STRUCTURE_FORMED';
-        state.entry_price = state.pullback_high;
-        state.invalidation_price = state.pullback_low;
-      }
-
-      if (state.state === 'STRUCTURE_FORMED' && latest.close > state.entry_price) {
-        state.state = 'ENTRY_READY';
-        state.entry_price = latest.close;
-      }
-    } else {
-      if (latest.high > (state.pullback_high || 0)) {
-        state.pullback_high = latest.high;
-      }
-      if (!state.pullback_low) state.pullback_low = state.impulse_low;
-
-      if (state.state === 'PULLBACK_ACTIVE' && latest.high < state.pullback_high) {
-        state.state = 'STRUCTURE_FORMED';
-        state.entry_price = state.pullback_low;
-        state.invalidation_price = state.pullback_high;
-      }
-
-      if (state.state === 'STRUCTURE_FORMED' && latest.close < state.entry_price) {
-        state.state = 'ENTRY_READY';
-        state.entry_price = latest.close;
-      }
-    }
-    return state;
-  }
-
-  // ── ENTRY_READY → stays until consumed or invalidated ──
-  if (state.state === 'ENTRY_READY') {
-    if (isInvalidated(state, latest, isBuy)) {
-      state.state = 'INVALIDATED';
-      console.log(`[COMP-BRK] ${state.instrument} INVALIDATED after ENTRY_READY`);
-    }
-  }
-
-  return state;
-}
-
-// detectImpulse removed — direction confirmation IS the impulse.
-// Pairs skip WATCHING/IMPULSE_DETECTED and start at PULLBACK_ACTIVE.
-
-function isInvalidated(state, candle, isBuy) {
-  if (isBuy) {
-    // BUY: invalidated if close below impulse low
-    if (state.impulse_low && candle.close < state.impulse_low) return true;
-    // Or below pullback low (if structure formed)
-    if (state.state === 'STRUCTURE_FORMED' && state.invalidation_price && candle.close < state.invalidation_price) return true;
-  } else {
-    // SELL: invalidated if close above impulse high
-    if (state.impulse_high && candle.close > state.impulse_high) return true;
-    // Or above pullback high (if structure formed)
-    if (state.state === 'STRUCTURE_FORMED' && state.invalidation_price && candle.close > state.invalidation_price) return true;
-  }
-  return false;
 }
 
 // ─── Main entry point ────────────────────────────────────────────────────────
