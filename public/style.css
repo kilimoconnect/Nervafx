@@ -4792,6 +4792,75 @@ body::after {
 .bc-bar-click:hover .bc-bar-val { color: #60a5fa; font-weight: 800; }
 .bc-bar-click:hover .bc-bar-hour { color: #60a5fa; }
 
+/* ── Market Behaviour Narrator panel (session cards) ── */
+.mbn-panel {
+  margin: 8px 0;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+}
+.mbn-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.mbn-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.mbn-decision {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: var(--bc);
+  border: 1px solid var(--bc);
+  border-radius: 5px;
+  padding: 1px 7px;
+}
+.mbn-chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-bottom: 6px;
+}
+.mbn-chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--bc);
+}
+.mbn-chip-hr {
+  font-size: 8px;
+  color: var(--text-dim);
+  font-family: var(--font-data);
+  line-height: 1.2;
+}
+.mbn-chip-beh {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--bc);
+  line-height: 1.2;
+}
+.mbn-arrow {
+  font-size: 9px;
+  color: var(--text-dim);
+}
+.mbn-text {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
 .bc-bar-val {
   font-size: 9px;
   font-weight: 700;

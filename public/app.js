@@ -4369,6 +4369,141 @@ function _meHourlyTrend(hourlyRows) {
   </div>`;
 }
 
+// ─── Market Behaviour Narrator ───────────────────────────────────────────────
+// Reads the last 6 hours from the hourly breakdown → classifies each hour's
+// behaviour → detects the transition → produces an alert decision.
+
+// Which hourly session_name values belong to each session card
+const MBN_SESS_HOURS = {
+  ASIA:     ['ASIA'],
+  LONDON:   ['LONDON_OPEN', 'LONDON', 'LONDON_NY'],
+  NEW_YORK: ['LONDON_NY', 'NEW_YORK'],
+};
+
+const MBN_BEHAVIOUR = {
+  DEAD:        { label: 'Dead',     color: '#475569' },
+  COMPRESSION: { label: 'Compress', color: '#7c3aed' },
+  QUIET:       { label: 'Quiet',    color: '#64748b' },
+  CHOP:        { label: 'Chop',     color: '#ef4444' },
+  BUILDING:    { label: 'Building', color: '#10b981' },
+  ACTIVE:      { label: 'Active',   color: '#0ea5e9' },
+  EXPANSION:   { label: 'Expand',   color: '#22c55e' },
+  IMPULSE:     { label: 'Impulse',  color: '#fbbf24' },
+  FADING:      { label: 'Fading',   color: '#f97316' },
+  EXHAUSTION:  { label: 'Exhaust',  color: '#ef4444' },
+};
+
+function _mbnClassifyHour(r) {
+  const e      = parseFloat(r.market_energy)   || 0;
+  const mom    = parseFloat(r.momentum_score)  || 0;
+  const agree  = parseFloat(r.agreement_score) || 0;
+  const momTyp = r.momentum_type   || '';
+  const cyc    = r.energy_cycle    || '';
+  const volTyp = r.volatility_type || '';
+
+  if (cyc === 'DEAD' || e < 12) return 'DEAD';
+  if (volTyp === 'CHAOTIC' && agree < 30) return 'CHOP';
+  if (cyc === 'EXPLOSIVE') return 'IMPULSE';
+  if (cyc === 'EXHAUSTION' || momTyp === 'EXHAUSTION') return 'EXHAUSTION';
+  if (e >= 60) return (momTyp === 'DECAY' || mom < -5) ? 'FADING' : 'EXPANSION';
+  if (e >= 35) {
+    if (momTyp === 'DECAY' || mom < -5) return 'FADING';
+    if (mom > 3 || momTyp === 'EXPANSION' || momTyp === 'IMPULSE' || cyc === 'TRANSITION') return 'BUILDING';
+    return 'ACTIVE';
+  }
+  if (cyc === 'COMPRESSION') return 'COMPRESSION';
+  return 'QUIET';
+}
+
+function _mbnAnalyze(rows) {
+  if (!rows || rows.length < 2) return null;
+
+  const seq = rows.map(r => ({ time: r.time_utc, behaviour: _mbnClassifyHour(r), energy: Math.round(parseFloat(r.market_energy) || 0) }));
+  const last = seq[seq.length - 1];
+  const prev = seq[seq.length - 2];
+  const b = last.behaviour, pb = prev.behaviour;
+
+  // Sustained-expansion count (consecutive EXPANSION/IMPULSE ending now)
+  let runLen = 0;
+  for (let i = seq.length - 1; i >= 0; i--) {
+    if (seq[i].behaviour === 'EXPANSION' || seq[i].behaviour === 'IMPULSE') runLen++;
+    else break;
+  }
+  // Compression depth before the current hour
+  let compLen = 0;
+  for (let i = seq.length - 2; i >= 0; i--) {
+    if (seq[i].behaviour === 'COMPRESSION' || seq[i].behaviour === 'QUIET' || seq[i].behaviour === 'DEAD') compLen++;
+    else break;
+  }
+
+  let decision, decisionColor, narrative;
+
+  if (b === 'CHOP') {
+    decision = 'STAND ASIDE'; decisionColor = '#ef4444';
+    narrative = 'Conditions turned chaotic — direction unreliable, stand aside.';
+  } else if (b === 'DEAD') {
+    decision = 'STAND ASIDE'; decisionColor = '#475569';
+    narrative = 'Market is dead — no participation.';
+  } else if ((b === 'EXPANSION' || b === 'IMPULSE') && (pb === 'COMPRESSION' || pb === 'QUIET' || pb === 'BUILDING' || pb === 'DEAD')) {
+    decision = 'ALERT'; decisionColor = '#22c55e';
+    narrative = compLen >= 2
+      ? `Expansion released after ${compLen + 1}h of compression — fresh move starting.`
+      : 'Behaviour shifted into expansion — fresh move starting.';
+  } else if ((b === 'EXPANSION' || b === 'IMPULSE') && runLen >= 2) {
+    decision = 'ALERT'; decisionColor = '#22c55e';
+    narrative = `Expansion sustained ${runLen}h — trend continuation in progress.`;
+  } else if (b === 'EXPANSION' || b === 'IMPULSE') {
+    decision = 'ALERT'; decisionColor = '#22c55e';
+    narrative = 'Market expanding — energy and participation high.';
+  } else if ((b === 'FADING' || b === 'EXHAUSTION') && (pb === 'EXPANSION' || pb === 'IMPULSE' || pb === 'FADING')) {
+    decision = 'CAUTION'; decisionColor = '#f97316';
+    narrative = 'Expansion fading — momentum decaying, avoid fresh entries.';
+  } else if (b === 'FADING' || b === 'EXHAUSTION') {
+    decision = 'CAUTION'; decisionColor = '#f97316';
+    narrative = 'Momentum decaying — activity rolling over.';
+  } else if (b === 'BUILDING') {
+    decision = 'WATCH'; decisionColor = '#f59e0b';
+    narrative = pb === 'COMPRESSION' || pb === 'QUIET'
+      ? 'Energy building out of compression — expansion may follow.'
+      : 'Activity building — watch for expansion confirmation.';
+  } else if (b === 'COMPRESSION' && (pb === 'EXPANSION' || pb === 'IMPULSE' || pb === 'FADING' || pb === 'ACTIVE')) {
+    decision = 'WATCH'; decisionColor = '#7c3aed';
+    narrative = 'Market compressing after activity — energy storing for the next move.';
+  } else if (b === 'COMPRESSION') {
+    decision = 'WATCH'; decisionColor = '#7c3aed';
+    narrative = `Compression ${compLen + 1}h deep — the longer it holds, the stronger the release.`;
+  } else if (b === 'ACTIVE') {
+    decision = 'WATCH'; decisionColor = '#0ea5e9';
+    narrative = 'Moderate activity without clear expansion — selective conditions.';
+  } else {
+    decision = 'WATCH'; decisionColor = '#64748b';
+    narrative = 'Low activity — waiting for behaviour to develop.';
+  }
+
+  return { seq, decision, decisionColor, narrative };
+}
+
+function _mbnPanel(rows) {
+  const a = _mbnAnalyze(rows);
+  if (!a) return '';
+
+  const tz = (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC');
+  const chips = a.seq.map(h => {
+    const beh = MBN_BEHAVIOUR[h.behaviour] || { label: h.behaviour, color: '#64748b' };
+    const hr = new Date(h.time).toLocaleTimeString('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false });
+    return `<span class="mbn-chip" style="--bc:${beh.color}"><span class="mbn-chip-hr">${hr}</span><span class="mbn-chip-beh">${beh.label}</span></span>`;
+  }).join('<span class="mbn-arrow">→</span>');
+
+  return `<div class="mbn-panel">
+    <div class="mbn-head">
+      <span class="mbn-title">Behaviour Narrator</span>
+      <span class="mbn-decision" style="--bc:${a.decisionColor}">${a.decision}</span>
+    </div>
+    <div class="mbn-chips">${chips}</div>
+    <p class="mbn-text">${a.narrative}</p>
+  </div>`;
+}
+
 function _meSessionCard(name, s, status, hourlyRows) {
   const sessColor  = ME_SESSION_COLOR[name];
   const label      = ME_SESSION_LABEL[name];
@@ -4577,6 +4712,17 @@ function _meSessionCard(name, s, status, hourlyRows) {
 
   const { explainHtml, flowHtml: flowBlock } = _meSessionExplain(s, label, status) || { explainHtml: '', flowHtml: '' };
 
+  // Behaviour Narrator — live card reads the last 6 market hours; past session
+  // cards read the last 6 hours of that session's own window.
+  let mbnRows;
+  if (status === 'ACTIVE') {
+    mbnRows = (hourlyRows || []).slice(-6);
+  } else {
+    const sessNames = MBN_SESS_HOURS[name] || [name];
+    mbnRows = (hourlyRows || []).filter(h => sessNames.includes(h.session_name)).slice(-6);
+  }
+  const mbnHtml = status !== 'UPCOMING' ? _mbnPanel(mbnRows) : '';
+
   return `<div class="me-card${status === 'ACTIVE' ? ' me-card--active' : status === 'UPCOMING' ? ' me-card--upcoming' : ''}">
     <div class="me-card-head">
       <span class="me-card-sess" style="color:${sessColor}">${label}</span>
@@ -4585,6 +4731,7 @@ function _meSessionCard(name, s, status, hourlyRows) {
       ${statusHtml}
     </div>
     ${flowBlock}
+    ${mbnHtml}
     <div class="me-card-comps"><div class="me-avg-note">Session averages</div>${compRows}${tradBar}${dirRows}</div>
     <div class="me-card-foot">
       <div class="me-foot-energy">
@@ -4593,7 +4740,7 @@ function _meSessionCard(name, s, status, hourlyRows) {
       <span class="me-foot-item" style="color:${tradColor}">Tradability <strong>${tradScore}</strong></span>
       <span class="me-foot-item" style="color:${liqColor}">Liquidity <strong>${liqScore}</strong></span>
     </div>
-    ${status === 'ACTIVE' ? _meHourlyTrend(hourlyRows) : ''}
+    ${status === 'ACTIVE' ? _meHourlyTrend((hourlyRows || []).slice(-3)) : ''}
     ${explainHtml}
   </div>`;
 }
@@ -6209,11 +6356,11 @@ function renderMarketEnergy(sessions, expansionPressure, marketCycle, currentSes
   // Live cards: use whatever sessions the API returned (today or yesterday fallback)
   const byName = Object.fromEntries(sessions.map(s => [s.session_name, s]));
 
-  // Last 3 hourly candles (across all sessions) for the active session card
+  // Hourly candles (across all sessions) — cards slice what they need:
+  // last 3 for the live breakdown table, last 6 for the behaviour narrator.
   const allHourly = (hourlyRows || [])
     .filter(h => h.session_name && h.session_name !== 'LOW_LIQUIDITY' && h.session_name !== 'DEAD_HOURS')
     .sort((a, b) => a.time_utc.localeCompare(b.time_utc));
-  const lastThreeHourly = allHourly.slice(-3);
 
   const ORDER  = ['ASIA', 'LONDON', 'NEW_YORK'];
   // Sort: current (ACTIVE) top-left, then previous (most recent COMPLETED) top-right,
@@ -6235,7 +6382,7 @@ function renderMarketEnergy(sessions, expansionPressure, marketCycle, currentSes
   el.innerHTML = `
     ${_meMarketCycleBanner(marketCycle, latestHourlyRow)}
     <div class="me-card-grid">
-      ${sorted.map(({ name }) => _meSessionCard(name, byName[name] || null, _meSessionStatus(name, currentSession), lastThreeHourly)).join('')}
+      ${sorted.map(({ name }) => _meSessionCard(name, byName[name] || null, _meSessionStatus(name, currentSession), allHourly)).join('')}
     </div>
     ${_meExpansionPressurePanel(expansionPressure)}
     ${_meHistoryPanel(historyRows, sessions)}`;
