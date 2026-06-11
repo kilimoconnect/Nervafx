@@ -390,12 +390,12 @@
 
   // ── Rendering ───────────────────────────────────────────────────────────────
 
-  function ribbonHtml(allSeq, windowStartIdx) {
+  function ribbonHtml(allSeq, windowTimes) {
     const maxE = Math.max(40, ...allSeq.map(s => s.energy));
     return `<div class="bh-ribbon-scroll" id="bh-ribbon-scroll"><div class="bh-ribbon">${allSeq.map((s, i) => {
       const beh = BEH[s.behaviour];
       const hPct = Math.max(6, Math.round(s.energy / maxE * 100));
-      return `<div class="bh-rib-col${i >= windowStartIdx ? ' bh-rib-window' : ''}" style="--bc:${beh.color}" title="${hrLabel(s.time)} — ${beh.label} (energy ${s.energy})">
+      return `<div class="bh-rib-col${windowTimes.has(s.time) ? ' bh-rib-window' : ''}" style="--bc:${beh.color}" title="${hrLabel(s.time)} — ${beh.label} (energy ${s.energy})">
         <span class="bh-rib-val">${s.energy}</span>
         <div class="bh-rib-bar" style="height:${hPct}%"></div>
         <span class="bh-rib-beh">${beh.short}</span>
@@ -521,31 +521,35 @@
       return;
     }
 
-    let rows = (data.hourly || [])
+    const rows = (data.hourly || [])
       .filter(h => h.session_name && h.session_name !== 'LOW_LIQUIDITY' && h.session_name !== 'DEAD_HOURS')
       .sort((a, b) => a.time_utc.localeCompare(b.time_utc));
-
-    if (SESSION !== 'LIVE' && MODE === 'past') {
-      const names = MBN_SESS_HOURS[SESSION] || [SESSION];
-      rows = rows.filter(h => names.includes(h.session_name));
-    }
 
     if (rows.length < 2) {
       el.innerHTML = '<p style="color:var(--text-muted);font-size:13px">Not enough hourly data yet for this session.</p>';
       return;
     }
 
-    // Context = up to last 24 rows; analysis window = last 6
+    // Context = last 24 market hours across ALL sessions.
+    // Analysis window = last 6 hours of this card's own scope.
     const context = rows.slice(-24);
     const ctxSeq = context.map(r => ({ time: r.time_utc, behaviour: classifyHour(r), energy: Math.round(parseFloat(r.market_energy) || 0), row: r }));
-    const windowRows = rows.slice(-6);
+
+    let windowRows;
+    if (SESSION !== 'LIVE' && MODE === 'past') {
+      const names = MBN_SESS_HOURS[SESSION] || [SESSION];
+      windowRows = rows.filter(h => names.includes(h.session_name)).slice(-6);
+    } else {
+      windowRows = rows.slice(-6);
+    }
+
     const a = analyze(windowRows);
     if (!a) {
       el.innerHTML = '<p style="color:var(--text-muted);font-size:13px">Not enough hourly data yet for analysis.</p>';
       return;
     }
 
-    const windowStartIdx = Math.max(0, ctxSeq.length - a.seq.length);
+    const windowTimes = new Set(windowRows.map(r => r.time_utc));
     const sessLabel = SESS_LABEL[SESSION] || SESSION;
     const lastT = hrLabel(a.seq[a.seq.length - 1].time);
     const firstT = hrLabel(a.seq[0].time);
@@ -565,7 +569,7 @@
 
       <div class="bh-card">
         <div class="bh-card-hd"><i data-lucide="activity"></i> Behaviour Timeline (24h context)</div>
-        <div class="bh-card-bd">${ribbonHtml(ctxSeq, windowStartIdx)}</div>
+        <div class="bh-card-bd">${ribbonHtml(ctxSeq, windowTimes)}</div>
       </div>
 
       <div class="bh-card">
