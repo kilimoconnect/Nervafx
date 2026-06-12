@@ -82,8 +82,21 @@
     .bx-stat-lbl { font-size: 9.5px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; margin-top: 2px; }
 
     /* Chart scroll container */
-    .bx-chart-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; position: relative; }
+    .bx-chart-scroll {
+      overflow-x: auto; -webkit-overflow-scrolling: touch; position: relative;
+      cursor: grab;
+    }
+    .bx-chart-scroll.dragging { cursor: grabbing; }
+    .bx-chart-scroll::-webkit-scrollbar { height: 10px; }
+    .bx-chart-scroll::-webkit-scrollbar-track { background: rgba(255,255,255,0.03); border-radius: 5px; }
+    .bx-chart-scroll::-webkit-scrollbar-thumb { background: rgba(96,165,250,0.35); border-radius: 5px; }
+    .bx-chart-scroll::-webkit-scrollbar-thumb:hover { background: rgba(96,165,250,0.55); }
+    .bx-chart-scroll { scrollbar-color: rgba(96,165,250,0.35) rgba(255,255,255,0.03); }
     #bx-chart { height: 360px; display: block; }
+    .bx-scroll-hint {
+      padding: 4px 16px 0; font-size: 10px; color: var(--text-dim);
+      display: flex; align-items: center; gap: 5px;
+    }
 
     /* Tooltip */
     .bx-tip {
@@ -476,6 +489,39 @@
   });
   document.getElementById('bx-chart').addEventListener('mouseleave', () => { tipEl.style.display = 'none'; });
 
+  // ── Chart panning: drag to scroll + mouse wheel scrolls horizontally ──
+  (function () {
+    const scroll = document.getElementById('bx-chart-scroll');
+    let dragging = false, startX = 0, startScroll = 0, moved = false;
+
+    scroll.addEventListener('pointerdown', (ev) => {
+      if (ev.button !== 0) return;
+      dragging = true; moved = false;
+      startX = ev.clientX; startScroll = scroll.scrollLeft;
+      scroll.classList.add('dragging');
+    });
+    window.addEventListener('pointermove', (ev) => {
+      if (!dragging) return;
+      const dx = ev.clientX - startX;
+      if (Math.abs(dx) > 3) moved = true;
+      scroll.scrollLeft = startScroll - dx;
+      if (moved) tipEl.style.display = 'none';
+    });
+    window.addEventListener('pointerup', () => {
+      dragging = false;
+      scroll.classList.remove('dragging');
+    });
+
+    // Vertical wheel over the chart pans horizontally when there is overflow
+    scroll.addEventListener('wheel', (ev) => {
+      if (scroll.scrollWidth <= scroll.clientWidth) return;
+      if (Math.abs(ev.deltaY) > Math.abs(ev.deltaX)) {
+        ev.preventDefault();
+        scroll.scrollLeft += ev.deltaY;
+      }
+    }, { passive: false });
+  })();
+
   // ── Load + range switching ──
   function _finishRender() {
     renderStats(_points);
@@ -488,7 +534,7 @@
   }
 
   const MODE_NOTE = {
-    hourly: '· hourly — scroll horizontally',
+    hourly: '· hourly — drag the chart or scroll to pan through the full range',
     daily:  '· daily averages with peak markers',
     weekly: '· weekly averages with peak markers',
   };
