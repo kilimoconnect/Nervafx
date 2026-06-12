@@ -187,7 +187,7 @@
         <div id="sx-content"><div class="sx-loading"><span class="spinner"></span> Loading strength data…</div></div>
         <p style="margin:10px 0 0;font-size:10.5px;color:var(--text-dim)">
           Each column = one hour (one 15-minute bar on M15, one day in Daily avg). Top bar = strongest currency, bottom bar = weakest, values in pips.
-          Click a column for the full 8-currency ranking. Drag or scroll to pan. Data available back to May 2025 (M15 stores the last ~30 days).
+          Click a column for the full 8-currency ranking. Drag or scroll to pan. All timeframes archived back to May 2025.
         </p>
       </div>
     </div>
@@ -249,7 +249,6 @@
 
   // ── State ──
   const DATA_START = '2025-05-20';                   // oldest stored strength data
-  const M15_MAX_DAYS = 30;                           // m15_pair_spreads retains ~30 days of 15-min data
   const HOURLY_MAX_COLS = 2400;                      // beyond this hourly view auto-switches to daily
 
   let _tf = '3h';
@@ -272,7 +271,7 @@
     const key = `${src}:${days}`;
     if (_cache[key]) return _cache[key];
     const data = src === 'm15'
-      ? await api(`/api/m15-spreads-history?days=${days}`)
+      ? await api(`/api/m15-strength-history?days=${days}`)
       : await api(`/api/strength-history?days=${days}&multi=1`);
     _cache[key] = data.rows || [];
     return _cache[key];
@@ -295,22 +294,13 @@
   function hourMaps(rows) {
     const byHour = {};
     if (_tf === 'm15') {
-      const instByKey = {};
+      // m15_currency_strength archive: one row per 15-min with all 8 values
       for (const r of rows) {
         if (isWeekend(r.time)) continue;
         const k = r.time.slice(0, 16);
-        (instByKey[k] = instByKey[k] || {})[r.instrument] = parseFloat(r.smooth_45m) || 0;
-      }
-      for (const [k, insts] of Object.entries(instByKey)) {
-        const sums = {}, counts = {};
-        for (const [inst, v] of Object.entries(insts)) {
-          const [base, quote] = inst.split('_');
-          sums[base]  = (sums[base]  || 0) + v; counts[base]  = (counts[base]  || 0) + 1;
-          sums[quote] = (sums[quote] || 0) - v; counts[quote] = (counts[quote] || 0) + 1;
-        }
         const m = {};
-        for (const c of Object.keys(sums)) m[c] = sums[c] / counts[c];
-        byHour[k] = m;
+        for (const [c, v] of Object.entries(r.values || {})) m[c] = parseFloat(v) || 0;
+        if (Object.keys(m).length >= 2) byHour[k] = m;
       }
     } else {
       for (const r of rows) {
@@ -457,12 +447,8 @@
   function syncControls() {
     document.querySelectorAll('.sx-tf').forEach(b => b.classList.toggle('active', b.dataset.tf === _tf));
     document.querySelectorAll('.sx-mode').forEach(b => b.classList.toggle('active', b.dataset.mode === _mode));
-    // M15 raw data is too heavy for long ranges — disable them
     document.querySelectorAll('.sx-days').forEach(b => {
       const sel = b.dataset.days === 'all' ? 'all' : parseInt(b.dataset.days, 10);
-      const tooLong = _tf === 'm15' && (sel === 'all' || sel > M15_MAX_DAYS);
-      b.classList.toggle('disabled', tooLong);
-      b.disabled = tooLong;
       b.classList.toggle('active', String(_daysSel) === String(sel) && !document.getElementById('sx-date').value);
     });
   }
@@ -478,11 +464,6 @@
     if (dayFilter) {
       // Single day: fetch enough history to reach it, always hourly
       days = Math.min(730, Math.max(2, Math.ceil((Date.now() - new Date(dayFilter + 'T00:00:00').getTime()) / 86400000) + 1));
-      if (_tf === 'm15' && days > M15_MAX_DAYS) {
-        el.innerHTML = '<p style="font-size:12px;color:var(--text-muted)">M15 data is only stored for the last ~30 days — pick a recent date or switch timeframe.</p>';
-        syncControls();
-        return;
-      }
       mode = 'hourly';
     } else {
       days = daysOf(_daysSel);
@@ -518,8 +499,6 @@
     const tfBtn = ev.target.closest('.sx-tf');
     if (tfBtn) {
       _tf = tfBtn.dataset.tf;
-      // Clamp range if M15 selected with a long range active
-      if (_tf === 'm15' && (_daysSel === 'all' || _daysSel > M15_MAX_DAYS)) _daysSel = M15_MAX_DAYS;
       const dateVal = document.getElementById('sx-date').value;
       load(dateVal || null);
       return;

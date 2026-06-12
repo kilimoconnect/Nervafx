@@ -266,6 +266,18 @@ async function calculateLatestM15Spreads() {
 
   if (error) throw new Error(`[M15] Upsert error: ${error.message}`);
 
+  // ── 7. Archive compact per-currency strength (45M smooth) ───────────────────
+  // Feeds the long-range M15 history — m15_pair_spreads is too heavy to query
+  // over months, this table is one small row per timestamp.
+  const csRow = {
+    time: refTime,
+    values: Object.fromEntries(CURRENCIES.map(c => [c, smoothStrength[c][3]])),
+  };
+  const { error: csErr } = await supabase
+    .from('m15_currency_strength')
+    .upsert(csRow, { onConflict: 'time' });
+  if (csErr) console.warn('[M15] Currency strength archive upsert failed (run migration_m15_currency_strength.sql):', csErr.message);
+
   console.log(`[M15] Stored 28 M15 spreads for ${refTime}`);
   return { time: refTime, rows };
 }
