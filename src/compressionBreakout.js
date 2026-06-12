@@ -138,8 +138,7 @@ async function updateM15StructureWatch() {
 
   for (const sp of signalPairs) {
     const existing = watchMap[sp.instrument] || null;
-    const triggeredAt = sp.triggered_at ? new Date(sp.triggered_at) : now;
-    const hoursSinceTrigger = (now - triggeredAt) / 3600000;
+    const trigRef = sp.triggered_at || null;
 
     // Check 3H persistence: strong ccy still positive, weak ccy still negative
     const strong3h = strengthMap[sp.strong_ccy] ?? 0;
@@ -165,9 +164,18 @@ async function updateM15StructureWatch() {
       close: parseFloat(m15Candles[0].close),
     };
 
+    // Per-pair lifecycle:
+    //   NEW pair (or re-activated)            → fresh validation
+    //   REVERSAL (direction flipped)          → fresh validation
+    //   New energy event on a REMOVED pair    → fresh validation
+    //   CONTINUATION (same dir, any state)    → keep state and clock
+    const isNew = !existing || existing.state === 'INACTIVE';
+    const isReversal = !isNew && existing.direction !== sp.dir;
+    const isNewEvent = !isNew && trigRef && existing.trigger_ref !== trigRef;
+
     let entry;
-    if (!existing || existing.state === 'INACTIVE' || existing.state === 'REMOVED') {
-      // New pair → fetch H1 candle at direction confirmation to get reference level
+    if (isNew || isReversal || (isNewEvent && existing.state === 'REMOVED')) {
+      // (Re)start validation — H1 candle at direction confirmation = reference level
       const { data: h1Candles } = await supabase
         .from('backtest_candles')
         .select('time, high, low')
@@ -180,6 +188,7 @@ async function updateM15StructureWatch() {
       const h1 = h1Candles?.[0];
       const refHigh = h1 ? parseFloat(h1.high) : latest.high;
       const refLow = h1 ? parseFloat(h1.low) : latest.low;
+      const reason = isNew ? 'NEW' : isReversal ? 'REVERSAL' : 'NEW EVENT';
 
       entry = {
         instrument: sp.instrument,
@@ -191,52 +200,34 @@ async function updateM15StructureWatch() {
         pullback_low: null,
         entry_price: null,
         invalidation_price: null,
+        validation_started_at: now.toISOString(),  // per-pair 2h clock starts NOW
+        trigger_ref: trigRef,
       };
-      console.log(`[STRUCT] ${sp.instrument} ${sp.dir} → VALIDATING (H1 ref H:${refHigh.toFixed(5)} L:${refLow.toFixed(5)})`);
-
-    } else if (existing.direction !== sp.dir) {
-      // Direction changed → restart with new H1 reference
-      const { data: h1Candles } = await supabase
-        .from('backtest_candles')
-        .select('time, high, low')
-        .eq('instrument', sp.instrument)
-        .eq('timeframe', 'H1')
-        .lte('time', sp.triggered_at || now.toISOString())
-        .order('time', { ascending: false })
-        .limit(1);
-
-      const h1 = h1Candles?.[0];
-      const refHigh = h1 ? parseFloat(h1.high) : latest.high;
-      const refLow = h1 ? parseFloat(h1.low) : latest.low;
-
-      entry = {
-        ...existing,
-        direction: sp.dir,
-        state: 'VALIDATING',
-        impulse_high: refHigh,
-        impulse_low: refLow,
-        pullback_high: null,
-        pullback_low: null,
-        entry_price: null,
-        invalidation_price: null,
-      };
-      console.log(`[STRUCT] ${sp.instrument} direction changed → VALIDATING (H1 ref H:${refHigh.toFixed(5)} L:${refLow.toFixed(5)})`);
+      console.log(`[STRUCT] ${sp.instrument} ${sp.dir} → VALIDATING (${reason}, 2h clock started, H1 ref H:${refHigh.toFixed(5)} L:${refLow.toFixed(5)})`);
 
     } else {
       entry = { ...existing };
+      if (isNewEvent) entry.trigger_ref = trigRef;  // continuation event — keep state & clock
     }
+
+    // Per-pair validation clock — anchored to when THIS pair entered validation,
+    // never to the (possibly hours-old) confluence bar time.
+    const validationStart = entry.validation_started_at
+      ? new Date(entry.validation_started_at)
+      : (sp.triggered_at ? new Date(sp.triggered_at) : now);
+    const hoursValidating = (now - validationStart) / 3600000;
 
     // ── State machine ───────────────────────────────────────────────────────
 
     if (entry.state === 'VALIDATING') {
-      // Wait for 2h persistence check
-      if (hoursSinceTrigger >= VALIDATION_HOURS) {
+      // Wait the full per-pair 2h persistence window
+      if (hoursValidating >= VALIDATION_HOURS) {
         if (!directionHolds) {
           entry.state = 'REMOVED';
           console.log(`[STRUCT] ${sp.instrument} REMOVED — 3H reversed (${sp.strong_ccy}: ${strong3h.toFixed(5)}, ${sp.weak_ccy}: ${weak3h.toFixed(5)})`);
         } else {
           entry.state = 'APPROVED';
-          console.log(`[STRUCT] ${sp.instrument} APPROVED — 3H holds (${sp.strong_ccy}: +${strong3h.toFixed(5)}, ${sp.weak_ccy}: ${weak3h.toFixed(5)})`);
+          console.log(`[STRUCT] ${sp.instrument} APPROVED — 3H holds after ${hoursValidating.toFixed(1)}h (${sp.strong_ccy}: +${strong3h.toFixed(5)}, ${sp.weak_ccy}: ${weak3h.toFixed(5)})`);
         }
       }
     }
@@ -305,9 +296,15 @@ async function updateM15StructureWatch() {
   // Upsert all
   if (results.length) {
     const rows = results.map(r => ({ ...r, updated_at: new Date().toISOString() }));
-    const { error } = await supabase
+    let { error } = await supabase
       .from('m15_structure_watch')
       .upsert(rows, { onConflict: 'instrument' });
+    if (error && /validation_started_at|trigger_ref/.test(error.message)) {
+      // Columns not migrated yet — run supabase/migration_structure_validation.sql
+      console.warn('[STRUCT] validation_started_at/trigger_ref columns missing — apply migration_structure_validation.sql. Saving without per-pair clock.');
+      const stripped = rows.map(({ validation_started_at, trigger_ref, ...rest }) => rest);
+      ({ error } = await supabase.from('m15_structure_watch').upsert(stripped, { onConflict: 'instrument' }));
+    }
     if (error) console.error('[STRUCT] Upsert error:', error.message);
   }
 
