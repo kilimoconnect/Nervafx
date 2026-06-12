@@ -69,6 +69,8 @@
       color-scheme: dark;
     }
     .bx-date.active { background: rgba(96,165,250,0.15); border-color: rgba(96,165,250,0.5); color: #60a5fa; }
+    .bx-ctrl-sep { width: 1px; height: 18px; background: rgba(255,255,255,0.1); align-self: center; }
+    .bx-ranges { align-items: center; flex-wrap: wrap; }
 
     /* Stats */
     .bx-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
@@ -133,6 +135,10 @@
           <button class="bx-range-btn" data-days="180">180D</button>
           <button class="bx-range-btn" data-days="365">1Y</button>
           <input type="date" id="bx-date" class="bx-date" title="Show a single day" />
+          <span class="bx-ctrl-sep"></span>
+          <button class="bx-range-btn bx-mode-btn" data-mode="hourly">Hourly</button>
+          <button class="bx-range-btn bx-mode-btn" data-mode="daily">Daily avg</button>
+          <button class="bx-range-btn bx-mode-btn" data-mode="weekly">Weekly avg</button>
         </span>
       </div>
       <div class="bx-card-bd" id="bx-stats"><div class="bx-loading"><span class="spinner"></span> Loading…</div></div>
@@ -222,11 +228,12 @@
 
   // ── State ──
   let _days = 30;
-  let _points = [];     // currently plotted points
-  let _hourlyMode = true;
-  const _cache = {};    // days → rows
+  let _points = [];        // currently plotted points
+  let _mode = 'hourly';    // hourly | daily | weekly — current presentation
+  let _modeOverride = null;// user-chosen mode (sticky across range changes)
+  const _cache = {};       // days → rows
 
-  const HOURLY_MAX_DAYS = 30;  // beyond this, aggregate per day
+  const HOURLY_MAX_DAYS = 30;  // beyond this, default presentation = daily
 
   async function fetchRows(days) {
     if (_cache[days]) return _cache[days];
@@ -238,9 +245,31 @@
     return rows;
   }
 
-  function buildPoints(rows, days) {
-    if (days <= HOURLY_MAX_DAYS) {
-      _hourlyMode = true;
+  // Aggregate a group of hourly rows into one point (avg + peak + dominant behaviour)
+  function aggregate(groupRows, time) {
+    const energies = groupRows.map(r => parseFloat(r.market_energy) || 0);
+    const avg = Math.round(energies.reduce((a, b) => a + b, 0) / energies.length);
+    const peak = Math.round(Math.max(...energies));
+    const counts = {};
+    for (const r of groupRows) {
+      const b = classifyHour(r);
+      counts[b] = (counts[b] || 0) + 1;
+    }
+    const dominant = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+    return { time, energy: avg, peak, behaviour: dominant, hours: groupRows.length, counts };
+  }
+
+  // Monday of the week containing the given UTC date string (YYYY-MM-DD)
+  function weekStartOf(dateStr) {
+    const d = new Date(dateStr + 'T00:00:00Z');
+    const shift = (d.getUTCDay() + 6) % 7; // Mon=0 … Sun=6
+    d.setUTCDate(d.getUTCDate() - shift);
+    return d.toISOString().slice(0, 10);
+  }
+
+  function buildPoints(rows, mode) {
+    _mode = mode;
+    if (mode === 'hourly') {
       return rows.map(r => ({
         time: r.time_utc,
         energy: Math.round(parseFloat(r.market_energy) || 0),
@@ -248,41 +277,37 @@
         session: r.session_name,
       }));
     }
-    // Daily aggregation: avg + peak energy, dominant behaviour of the day
-    _hourlyMode = false;
-    const byDay = {};
+    const keyOf = mode === 'weekly'
+      ? r => weekStartOf(r.time_utc.slice(0, 10))
+      : r => r.time_utc.slice(0, 10);
+    const groups = {};
     for (const r of rows) {
-      const d = r.time_utc.slice(0, 10);
-      (byDay[d] = byDay[d] || []).push(r);
+      const k = keyOf(r);
+      (groups[k] = groups[k] || []).push(r);
     }
-    return Object.keys(byDay).sort().map(d => {
-      const dayRows = byDay[d];
-      const energies = dayRows.map(r => parseFloat(r.market_energy) || 0);
-      const avg = Math.round(energies.reduce((a, b) => a + b, 0) / energies.length);
-      const peak = Math.round(Math.max(...energies));
-      const counts = {};
-      for (const r of dayRows) {
-        const b = classifyHour(r);
-        counts[b] = (counts[b] || 0) + 1;
-      }
-      const dominant = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
-      return { time: d + 'T12:00:00Z', energy: avg, peak, behaviour: dominant, hours: dayRows.length, counts };
+    return Object.keys(groups).sort().map(k => {
+      const p = aggregate(groups[k], k + 'T12:00:00Z');
+      if (mode === 'weekly') p.days = new Set(groups[k].map(r => r.time_utc.slice(0, 10))).size;
+      return p;
     });
   }
 
   function renderStats(points) {
     const el = document.getElementById('bx-stats');
     if (!points.length) { el.innerHTML = '<p style="font-size:12px;color:var(--text-muted)">No data for this range.</p>'; return; }
+    const isHourly = _mode === 'hourly';
     const energies = points.map(p => p.energy);
     const avg = Math.round(energies.reduce((a, b) => a + b, 0) / energies.length);
-    const peak = Math.max(..._hourlyMode ? energies : points.map(p => p.peak));
-    const peakPt = _hourlyMode
+    const peak = Math.max(...(isHourly ? energies : points.map(p => p.peak)));
+    const peakPt = isHourly
       ? points.reduce((m, p) => p.energy > m.energy ? p : m, points[0])
       : points.reduce((m, p) => p.peak > m.peak ? p : m, points[0]);
     const expanding = points.filter(p => p.behaviour === 'EXPANSION' || p.behaviour === 'IMPULSE').length;
     const compressed = points.filter(p => p.behaviour === 'COMPRESSION' || p.behaviour === 'QUIET' || p.behaviour === 'DEAD').length;
-    const unit = _hourlyMode ? 'hours' : 'days';
-    const peakWhen = _hourlyMode ? `${dayLabel(peakPt.time)} ${hrLabel(peakPt.time)}` : dayLabel(peakPt.time);
+    const unit = isHourly ? 'hours' : _mode === 'weekly' ? 'weeks' : 'days';
+    const peakWhen = isHourly ? `${dayLabel(peakPt.time)} ${hrLabel(peakPt.time)}`
+      : _mode === 'weekly' ? `wk of ${dayLabel(peakPt.time)}`
+      : dayLabel(peakPt.time);
 
     el.innerHTML = `<div class="bx-stats">
       <div class="bx-stat"><div class="bx-stat-val">${points.length}</div><div class="bx-stat-lbl">${unit} plotted</div></div>
@@ -295,19 +320,31 @@
   }
 
   function renderLegend() {
+    const noteByMode = {
+      hourly: '',
+      daily: '<span class="bx-legend-item bx-tip-dim">point colour = dominant behaviour of the day · value = daily average energy · vertical line = day peak</span>',
+      weekly: '<span class="bx-legend-item bx-tip-dim">point colour = dominant behaviour of the week · value = weekly average energy · vertical line = week peak</span>',
+    };
     document.getElementById('bx-legend').innerHTML = Object.values(BEH).map(v =>
       `<span class="bx-legend-item"><span class="bx-legend-dot" style="background:${v.color}"></span>${v.label}</span>`).join('') +
-      (_hourlyMode ? '' : '<span class="bx-legend-item bx-tip-dim">point colour = dominant behaviour of the day · value = daily average energy</span>');
+      (noteByMode[_mode] || '');
   }
 
   // ── Chart ──
-  const PX_PER_POINT = 26;
   let _geom = null; // { x(), y(), points } for tooltip hit-testing
+
+  // Px per point adapts so the canvas never exceeds safe limits (e.g. a year
+  // of hourly bars), while aggregated modes keep comfortable spacing.
+  function pxPerPoint() {
+    if (_mode !== 'hourly') return 26;
+    return Math.max(5, Math.min(26, Math.floor(30000 / Math.max(1, _points.length))));
+  }
 
   function drawChart() {
     const scroll = document.getElementById('bx-chart-scroll');
     const canvas = document.getElementById('bx-chart');
     const containerW = scroll.clientWidth;
+    const PX_PER_POINT = pxPerPoint();
     const desiredW = Math.max(containerW, _points.length * PX_PER_POINT + 60);
     canvas.style.width = desiredW + 'px';
 
@@ -319,7 +356,7 @@
 
     const narrow = containerW < 480;
     const fontPx = narrow ? 9 : 10;
-    const ptR    = narrow ? 3 : 4.5;
+    const ptR    = Math.min(narrow ? 3 : 4.5, Math.max(2, PX_PER_POINT / 2 - 1));
     const padL = narrow ? 26 : 34, padR = 20, padT = 14, padB = narrow ? 20 : 24;
     const plotW = W - padL - padR, plotH = H - padT - padB;
     const maxY = 100;
@@ -352,7 +389,7 @@
     if (!seq.length) return;
 
     // Day separators in hourly mode
-    if (_hourlyMode) {
+    if (_mode === 'hourly') {
       ctx.strokeStyle = 'rgba(255,255,255,0.06)';
       let prevDay = null;
       seq.forEach((p, i) => {
@@ -364,8 +401,8 @@
       });
     }
 
-    // Peak band in daily mode (avg→peak vertical line)
-    if (!_hourlyMode) {
+    // Peak band in aggregated modes (avg→peak vertical line)
+    if (_mode !== 'hourly') {
       ctx.strokeStyle = 'rgba(96,165,250,0.25)';
       ctx.lineWidth = 2;
       seq.forEach((p, i) => {
@@ -390,7 +427,7 @@
 
     // X labels — adaptive density, clamped to edges
     ctx.fillStyle = 'rgba(148,163,184,0.8)';
-    const labelW = _hourlyMode ? 38 : 46;
+    const labelW = _mode === 'hourly' ? 38 : 46;
     const maxLabels = Math.max(2, Math.floor(plotW / labelW));
     const step = Math.max(1, Math.ceil(seq.length / maxLabels));
     const lastIdx = seq.length - 1;
@@ -402,7 +439,7 @@
       if (lx - labelW / 2 < 0) { lx = 2; align = 'left'; }
       else if (lx + labelW / 2 > W) { lx = W - 2; align = 'right'; }
       ctx.textAlign = align;
-      ctx.fillText(_hourlyMode ? hrLabel(p.time) : dayLabel(p.time), lx, H - 7);
+      ctx.fillText(_mode === 'hourly' ? hrLabel(p.time) : dayLabel(p.time), lx, H - 7);
     });
   }
 
@@ -421,9 +458,12 @@
     if (best < 0) { tipEl.style.display = 'none'; return; }
     const p = _points[best];
     const beh = BEH[p.behaviour] || { label: p.behaviour, color: '#64748b' };
-    tipEl.innerHTML = _hourlyMode
+    tipEl.innerHTML = _mode === 'hourly'
       ? `<span class="bx-tip-beh" style="color:${beh.color}">${beh.label}</span> · Energy <b>${p.energy}</b><br>
          <span class="bx-tip-dim">${fullLabel(p.time)}${p.session ? ' · ' + p.session.replace(/_/g, ' ') : ''}</span>`
+      : _mode === 'weekly'
+      ? `<span class="bx-tip-beh" style="color:${beh.color}">${beh.label}</span> (dominant) · Avg <b>${p.energy}</b> · Peak <b>${p.peak}</b><br>
+         <span class="bx-tip-dim">Week of ${dayLabel(p.time)} · ${p.days || '—'} days · ${p.hours} hours</span>`
       : `<span class="bx-tip-beh" style="color:${beh.color}">${beh.label}</span> (dominant) · Avg <b>${p.energy}</b> · Peak <b>${p.peak}</b><br>
          <span class="bx-tip-dim">${dayLabel(p.time)} · ${p.hours} hours</span>`;
     tipEl.style.display = 'block';
@@ -447,9 +487,20 @@
     if (window.lucide) lucide.createIcons();
   }
 
+  const MODE_NOTE = {
+    hourly: '· hourly — scroll horizontally',
+    daily:  '· daily averages with peak markers',
+    weekly: '· weekly averages with peak markers',
+  };
+
+  function _syncModeButtons(mode) {
+    document.querySelectorAll('.bx-mode-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.mode === mode));
+  }
+
   async function load(days) {
     _days = days;
-    document.querySelectorAll('.bx-range-btn').forEach(b =>
+    document.querySelectorAll('.bx-range-btn:not(.bx-mode-btn)').forEach(b =>
       b.classList.toggle('active', parseInt(b.dataset.days, 10) === days));
     const dateInput = document.getElementById('bx-date');
     dateInput.value = '';
@@ -465,10 +516,10 @@
       return;
     }
 
-    _points = buildPoints(rows, days);
-    document.getElementById('bx-mode-note').textContent = _hourlyMode
-      ? '· hourly — scroll horizontally'
-      : '· daily averages with peak markers';
+    const mode = _modeOverride || (days <= HOURLY_MAX_DAYS ? 'hourly' : 'daily');
+    _points = buildPoints(rows, mode);
+    _syncModeButtons(mode);
+    document.getElementById('bx-mode-note').textContent = MODE_NOTE[mode] || '';
     _finishRender();
   }
 
@@ -494,19 +545,22 @@
     }
 
     const dayRows = rows.filter(r => localDateOf(r.time_utc) === dateStr);
-    _hourlyMode = true;
-    _points = dayRows.map(r => ({
-      time: r.time_utc,
-      energy: Math.round(parseFloat(r.market_energy) || 0),
-      behaviour: classifyHour(r),
-      session: r.session_name,
-    }));
+    // A single day is always presented hourly
+    _points = buildPoints(dayRows, 'hourly');
+    _syncModeButtons('hourly');
     document.getElementById('bx-mode-note').textContent =
       `· ${new Date(dateStr + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'short', year: 'numeric' })}`;
     _finishRender();
   }
 
   document.getElementById('bx-ranges').addEventListener('click', (ev) => {
+    const modeBtn = ev.target.closest('.bx-mode-btn');
+    if (modeBtn) {
+      _modeOverride = modeBtn.dataset.mode;
+      // Mode switch returns to the current range view (single-day is hourly only)
+      load(_days);
+      return;
+    }
     const btn = ev.target.closest('.bx-range-btn');
     if (btn) load(parseInt(btn.dataset.days, 10));
   });
