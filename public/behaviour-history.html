@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>NervaFX — Behaviour History</title>
+  <link rel="icon" type="image/png" href="/nervafx-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <link rel="stylesheet" href="style.css" />
+
+  <style>
+    .grid { display: block !important; }
+
+    .bx-topbar {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 28px; height: 56px;
+      background: rgba(8,11,18,0.92);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+    .bx-topbar-left { display: flex; align-items: center; gap: 12px; }
+    .bx-logo img { height: 24px; display: block; }
+    .bx-sep { color: rgba(255,255,255,0.1); font-size: 20px; font-weight: 200; }
+    .bx-title-text { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+    .bx-back-btn {
+      display: flex; align-items: center; gap: 5px;
+      padding: 6px 12px; border-radius: 8px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); font-size: 11px; font-weight: 600;
+      cursor: pointer; text-decoration: none; transition: all 0.15s;
+    }
+    .bx-back-btn:hover { background: rgba(255,255,255,0.09); color: var(--text); }
+
+    .bx-main { max-width: 1200px; margin: 0 auto; padding: 20px 20px 80px; }
+
+    .bx-card {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px; margin-bottom: 18px; overflow: hidden;
+    }
+    .bx-card-hd {
+      padding: 12px 16px; font-size: 12px; font-weight: 700;
+      color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    }
+    .bx-card-hd i { width: 15px; height: 15px; }
+    .bx-card-bd { padding: 14px 16px; }
+
+    /* Range buttons */
+    .bx-ranges { display: flex; gap: 6px; margin-left: auto; }
+    .bx-range-btn {
+      padding: 4px 12px; border-radius: 7px; font-size: 11px; font-weight: 700;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); cursor: pointer; transition: all 0.15s;
+    }
+    .bx-range-btn:hover { color: var(--text); background: rgba(255,255,255,0.08); }
+    .bx-range-btn.active { background: rgba(96,165,250,0.15); border-color: rgba(96,165,250,0.5); color: #60a5fa; }
+
+    /* Stats */
+    .bx-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+    .bx-stat {
+      padding: 10px; border-radius: 8px; text-align: center;
+      background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);
+    }
+    .bx-stat-val { font-size: 19px; font-weight: 800; }
+    .bx-stat-lbl { font-size: 9.5px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; margin-top: 2px; }
+
+    /* Chart scroll container */
+    .bx-chart-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; position: relative; }
+    #bx-chart { height: 360px; display: block; }
+
+    /* Tooltip */
+    .bx-tip {
+      position: fixed; z-index: 200; pointer-events: none; display: none;
+      background: #0b101c; border: 1px solid rgba(255,255,255,0.12); border-radius: 8px;
+      padding: 8px 10px; font-size: 11px; color: var(--text); line-height: 1.5;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5); max-width: 220px;
+    }
+    .bx-tip-beh { font-weight: 800; }
+    .bx-tip-dim { color: var(--text-muted); }
+
+    .bx-legend { display: flex; gap: 10px; flex-wrap: wrap; padding: 10px 16px 14px; }
+    .bx-legend-item { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--text-muted); }
+    .bx-legend-dot { width: 8px; height: 8px; border-radius: 3px; }
+
+    .bx-loading { display: flex; align-items: center; gap: 8px; padding: 40px; color: var(--text-muted); font-size: 12px; justify-content: center; }
+    .spinner {
+      width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.15);
+      border-top-color: #60a5fa; border-radius: 50%; animation: bxspin 0.7s linear infinite;
+    }
+    @keyframes bxspin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 640px) {
+      .bx-main { padding: 14px 12px 60px; }
+      #bx-chart { height: 280px; }
+      .bx-ranges { width: 100%; margin-left: 0; }
+      .bx-legend-item { font-size: 9px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bx-topbar">
+    <div class="bx-topbar-left">
+      <a class="bx-logo" href="/app"><img src="/nervafx-logo.png" alt="NervaFX" onerror="this.style.display='none'"></a>
+      <span class="bx-sep">/</span>
+      <span class="bx-title-text">Behaviour History</span>
+    </div>
+    <a class="bx-back-btn" href="/app" onclick="window.close(); setTimeout(function(){ location.href='/app'; }, 150); return false;">&times; Close</a>
+  </div>
+
+  <main class="bx-main">
+    <div class="bx-card">
+      <div class="bx-card-hd">
+        <i data-lucide="bar-chart-3"></i> Period Stats
+        <span class="bx-ranges" id="bx-ranges">
+          <button class="bx-range-btn" data-days="7">7D</button>
+          <button class="bx-range-btn active" data-days="30">30D</button>
+          <button class="bx-range-btn" data-days="90">90D</button>
+          <button class="bx-range-btn" data-days="180">180D</button>
+          <button class="bx-range-btn" data-days="365">1Y</button>
+        </span>
+      </div>
+      <div class="bx-card-bd" id="bx-stats"><div class="bx-loading"><span class="spinner"></span> Loading…</div></div>
+    </div>
+
+    <div class="bx-card">
+      <div class="bx-card-hd"><i data-lucide="line-chart"></i> Energy &amp; Behaviour Curve <span class="bx-tip-dim" id="bx-mode-note" style="text-transform:none;letter-spacing:0;font-weight:500"></span></div>
+      <div class="bx-chart-scroll" id="bx-chart-scroll">
+        <canvas id="bx-chart"></canvas>
+      </div>
+      <div class="bx-legend" id="bx-legend"></div>
+    </div>
+  </main>
+
+  <div class="bx-tip" id="bx-tip"></div>
+
+  <script>
+  // ── Auth gate ──
+  (function () {
+    const token = localStorage.getItem('nfx_token');
+    if (!token) return location.replace('/login.html');
+    try {
+      const pay = JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+      if (pay.exp && pay.exp * 1000 < Date.now()) {
+        localStorage.removeItem('nfx_token');
+        return location.replace('/login.html');
+      }
+    } catch (_) { return location.replace('/login.html'); }
+  })();
+
+  let _userTz = localStorage.getItem('nfx_tz') || 'auto';
+  function _tz() { return (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC'); }
+  function hrLabel(t) {
+    return new Date(t).toLocaleTimeString('en-GB', { timeZone: _tz(), hour: '2-digit', minute: '2-digit', hour12: false });
+  }
+  function dayLabel(t) {
+    return new Date(t).toLocaleDateString('en-GB', { timeZone: _tz(), day: '2-digit', month: 'short' });
+  }
+  function fullLabel(t) {
+    return new Date(t).toLocaleString('en-GB', { timeZone: _tz(), weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
+  }
+
+  async function api(path) {
+    const token = localStorage.getItem('nfx_token');
+    const r = await fetch(path, { headers: { Authorization: `Bearer ${token}` } });
+    if (r.status === 401) { location.replace('/login.html'); throw new Error('Unauthorized'); }
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || `${r.status}`);
+    return j;
+  }
+
+  // ── Behaviour engine (same classification as the narrator) ─────────────────
+  const BEH = {
+    DEAD:        { label: 'Dead',        color: '#475569' },
+    COMPRESSION: { label: 'Compression', color: '#7c3aed' },
+    QUIET:       { label: 'Quiet',       color: '#64748b' },
+    CHOP:        { label: 'Chop',        color: '#ef4444' },
+    BUILDING:    { label: 'Building',    color: '#10b981' },
+    ACTIVE:      { label: 'Active',      color: '#0ea5e9' },
+    EXPANSION:   { label: 'Expansion',   color: '#22c55e' },
+    IMPULSE:     { label: 'Impulse',     color: '#fbbf24' },
+    FADING:      { label: 'Fading',      color: '#f97316' },
+    EXHAUSTION:  { label: 'Exhaustion',  color: '#ef4444' },
+  };
+
+  function classifyHour(r) {
+    const e      = parseFloat(r.market_energy)   || 0;
+    const mom    = parseFloat(r.momentum_score)  || 0;
+    const agree  = parseFloat(r.agreement_score) || 0;
+    const momTyp = r.momentum_type   || '';
+    const cyc    = r.energy_cycle    || '';
+    const volTyp = r.volatility_type || '';
+
+    if (cyc === 'DEAD' || e < 12) return 'DEAD';
+    if (volTyp === 'CHAOTIC' && agree < 30) return 'CHOP';
+    if (cyc === 'EXPLOSIVE') return 'IMPULSE';
+    if (cyc === 'EXHAUSTION' || momTyp === 'EXHAUSTION') return 'EXHAUSTION';
+    if (e >= 60) return (momTyp === 'DECAY' || mom < -5) ? 'FADING' : 'EXPANSION';
+    if (e >= 35) {
+      if (momTyp === 'DECAY' || mom < -5) return 'FADING';
+      if (mom > 3 || momTyp === 'EXPANSION' || momTyp === 'IMPULSE' || cyc === 'TRANSITION') return 'BUILDING';
+      return 'ACTIVE';
+    }
+    if (cyc === 'COMPRESSION') return 'COMPRESSION';
+    return 'QUIET';
+  }
+
+  // ── State ──
+  let _days = 30;
+  let _points = [];     // currently plotted points
+  let _hourlyMode = true;
+  const _cache = {};    // days → rows
+
+  const HOURLY_MAX_DAYS = 30;  // beyond this, aggregate per day
+
+  async function fetchRows(days) {
+    if (_cache[days]) return _cache[days];
+    const data = await api(`/api/session-activity?type=hourly&days=${days}`);
+    const rows = (data.hourly || [])
+      .filter(h => h.session_name && h.session_name !== 'LOW_LIQUIDITY' && h.session_name !== 'DEAD_HOURS')
+      .sort((a, b) => a.time_utc.localeCompare(b.time_utc));
+    _cache[days] = rows;
+    return rows;
+  }
+
+  function buildPoints(rows, days) {
+    if (days <= HOURLY_MAX_DAYS) {
+      _hourlyMode = true;
+      return rows.map(r => ({
+        time: r.time_utc,
+        energy: Math.round(parseFloat(r.market_energy) || 0),
+        behaviour: classifyHour(r),
+        session: r.session_name,
+      }));
+    }
+    // Daily aggregation: avg + peak energy, dominant behaviour of the day
+    _hourlyMode = false;
+    const byDay = {};
+    for (const r of rows) {
+      const d = r.time_utc.slice(0, 10);
+      (byDay[d] = byDay[d] || []).push(r);
+    }
+    return Object.keys(byDay).sort().map(d => {
+      const dayRows = byDay[d];
+      const energies = dayRows.map(r => parseFloat(r.market_energy) || 0);
+      const avg = Math.round(energies.reduce((a, b) => a + b, 0) / energies.length);
+      const peak = Math.round(Math.max(...energies));
+      const counts = {};
+      for (const r of dayRows) {
+        const b = classifyHour(r);
+        counts[b] = (counts[b] || 0) + 1;
+      }
+      const dominant = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+      return { time: d + 'T12:00:00Z', energy: avg, peak, behaviour: dominant, hours: dayRows.length, counts };
+    });
+  }
+
+  function renderStats(points) {
+    const el = document.getElementById('bx-stats');
+    if (!points.length) { el.innerHTML = '<p style="font-size:12px;color:var(--text-muted)">No data for this range.</p>'; return; }
+    const energies = points.map(p => p.energy);
+    const avg = Math.round(energies.reduce((a, b) => a + b, 0) / energies.length);
+    const peak = Math.max(..._hourlyMode ? energies : points.map(p => p.peak));
+    const peakPt = _hourlyMode
+      ? points.reduce((m, p) => p.energy > m.energy ? p : m, points[0])
+      : points.reduce((m, p) => p.peak > m.peak ? p : m, points[0]);
+    const expanding = points.filter(p => p.behaviour === 'EXPANSION' || p.behaviour === 'IMPULSE').length;
+    const compressed = points.filter(p => p.behaviour === 'COMPRESSION' || p.behaviour === 'QUIET' || p.behaviour === 'DEAD').length;
+    const unit = _hourlyMode ? 'hours' : 'days';
+    const peakWhen = _hourlyMode ? `${dayLabel(peakPt.time)} ${hrLabel(peakPt.time)}` : dayLabel(peakPt.time);
+
+    el.innerHTML = `<div class="bx-stats">
+      <div class="bx-stat"><div class="bx-stat-val">${points.length}</div><div class="bx-stat-lbl">${unit} plotted</div></div>
+      <div class="bx-stat"><div class="bx-stat-val">${avg}</div><div class="bx-stat-lbl">avg energy</div></div>
+      <div class="bx-stat"><div class="bx-stat-val" style="color:#fbbf24">${peak}</div><div class="bx-stat-lbl">peak (${peakWhen})</div></div>
+      <div class="bx-stat"><div class="bx-stat-val" style="color:#22c55e">${expanding}</div><div class="bx-stat-lbl">expansion ${unit}</div></div>
+      <div class="bx-stat"><div class="bx-stat-val" style="color:#7c3aed">${compressed}</div><div class="bx-stat-lbl">stored-energy ${unit}</div></div>
+      <div class="bx-stat"><div class="bx-stat-val" style="color:#0ea5e9">${Math.round(expanding / points.length * 100)}%</div><div class="bx-stat-lbl">time expanding</div></div>
+    </div>`;
+  }
+
+  function renderLegend() {
+    document.getElementById('bx-legend').innerHTML = Object.values(BEH).map(v =>
+      `<span class="bx-legend-item"><span class="bx-legend-dot" style="background:${v.color}"></span>${v.label}</span>`).join('') +
+      (_hourlyMode ? '' : '<span class="bx-legend-item bx-tip-dim">point colour = dominant behaviour of the day · value = daily average energy</span>');
+  }
+
+  // ── Chart ──
+  const PX_PER_POINT = 26;
+  let _geom = null; // { x(), y(), points } for tooltip hit-testing
+
+  function drawChart() {
+    const scroll = document.getElementById('bx-chart-scroll');
+    const canvas = document.getElementById('bx-chart');
+    const containerW = scroll.clientWidth;
+    const desiredW = Math.max(containerW, _points.length * PX_PER_POINT + 60);
+    canvas.style.width = desiredW + 'px';
+
+    const dpr = window.devicePixelRatio || 1;
+    const W = desiredW, H = canvas.clientHeight;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    const narrow = containerW < 480;
+    const fontPx = narrow ? 9 : 10;
+    const ptR    = narrow ? 3 : 4.5;
+    const padL = narrow ? 26 : 34, padR = 20, padT = 14, padB = narrow ? 20 : 24;
+    const plotW = W - padL - padR, plotH = H - padT - padB;
+    const maxY = 100;
+    const seq = _points;
+    const x = i => padL + (seq.length === 1 ? plotW / 2 : i / (seq.length - 1) * plotW);
+    const y = v => padT + (1 - v / maxY) * plotH;
+    _geom = { x, y, ptR };
+
+    ctx.clearRect(0, 0, W, H);
+
+    // Grid
+    ctx.font = `${fontPx}px Inter, sans-serif`;
+    ctx.textAlign = 'right';
+    for (const g of [0, 25, 50, 75, 100]) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+      ctx.beginPath(); ctx.moveTo(padL, y(g)); ctx.lineTo(W - padR, y(g)); ctx.stroke();
+      ctx.fillStyle = 'rgba(148,163,184,0.7)';
+      ctx.fillText(String(g), padL - 5, y(g) + 3);
+    }
+    // Threshold lines
+    for (const [lvl, col, lbl] of [[35, '#7c3aed', 'compression'], [60, '#22c55e', 'expansion']]) {
+      ctx.strokeStyle = col; ctx.globalAlpha = 0.5; ctx.setLineDash([5, 4]);
+      ctx.beginPath(); ctx.moveTo(padL, y(lvl)); ctx.lineTo(W - padR, y(lvl)); ctx.stroke();
+      ctx.setLineDash([]); ctx.globalAlpha = 1;
+      ctx.textAlign = 'left'; ctx.fillStyle = col;
+      ctx.fillText(lbl, padL + 4, y(lvl) - 4);
+      ctx.textAlign = 'right';
+    }
+
+    if (!seq.length) return;
+
+    // Day separators in hourly mode
+    if (_hourlyMode) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+      let prevDay = null;
+      seq.forEach((p, i) => {
+        const d = p.time.slice(0, 10);
+        if (prevDay && d !== prevDay) {
+          ctx.beginPath(); ctx.moveTo(x(i) - PX_PER_POINT / 2, padT); ctx.lineTo(x(i) - PX_PER_POINT / 2, H - padB); ctx.stroke();
+        }
+        prevDay = d;
+      });
+    }
+
+    // Peak band in daily mode (avg→peak vertical line)
+    if (!_hourlyMode) {
+      ctx.strokeStyle = 'rgba(96,165,250,0.25)';
+      ctx.lineWidth = 2;
+      seq.forEach((p, i) => {
+        ctx.beginPath(); ctx.moveTo(x(i), y(p.energy)); ctx.lineTo(x(i), y(p.peak)); ctx.stroke();
+      });
+      ctx.lineWidth = 1;
+    }
+
+    // Energy line
+    ctx.strokeStyle = 'rgba(96,165,250,0.85)';
+    ctx.lineWidth = narrow ? 1.5 : 2;
+    ctx.beginPath();
+    seq.forEach((p, i) => { i === 0 ? ctx.moveTo(x(i), y(p.energy)) : ctx.lineTo(x(i), y(p.energy)); });
+    ctx.stroke();
+
+    // Points
+    seq.forEach((p, i) => {
+      ctx.fillStyle = (BEH[p.behaviour] || {}).color || '#64748b';
+      ctx.beginPath(); ctx.arc(x(i), y(p.energy), ptR, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(8,11,18,0.9)'; ctx.lineWidth = 1.5; ctx.stroke();
+    });
+
+    // X labels — adaptive density, clamped to edges
+    ctx.fillStyle = 'rgba(148,163,184,0.8)';
+    const labelW = _hourlyMode ? 38 : 46;
+    const maxLabels = Math.max(2, Math.floor(plotW / labelW));
+    const step = Math.max(1, Math.ceil(seq.length / maxLabels));
+    const lastIdx = seq.length - 1;
+    seq.forEach((p, i) => {
+      const isLast = i === lastIdx;
+      if (i % step !== 0 && !isLast) return;
+      if (!isLast && lastIdx - i < step / 2) return;
+      let lx = x(i), align = 'center';
+      if (lx - labelW / 2 < 0) { lx = 2; align = 'left'; }
+      else if (lx + labelW / 2 > W) { lx = W - 2; align = 'right'; }
+      ctx.textAlign = align;
+      ctx.fillText(_hourlyMode ? hrLabel(p.time) : dayLabel(p.time), lx, H - 7);
+    });
+  }
+
+  // ── Tooltip ──
+  const tipEl = document.getElementById('bx-tip');
+  document.getElementById('bx-chart').addEventListener('mousemove', (ev) => {
+    if (!_geom || !_points.length) return;
+    const rect = ev.target.getBoundingClientRect();
+    const mx = ev.clientX - rect.left, my = ev.clientY - rect.top;
+    let best = -1, bestD = 18 * 18;
+    for (let i = 0; i < _points.length; i++) {
+      const dx = mx - _geom.x(i), dy = my - _geom.y(_points[i].energy);
+      const d = dx * dx + dy * dy;
+      if (d < bestD) { bestD = d; best = i; }
+    }
+    if (best < 0) { tipEl.style.display = 'none'; return; }
+    const p = _points[best];
+    const beh = BEH[p.behaviour] || { label: p.behaviour, color: '#64748b' };
+    tipEl.innerHTML = _hourlyMode
+      ? `<span class="bx-tip-beh" style="color:${beh.color}">${beh.label}</span> · Energy <b>${p.energy}</b><br>
+         <span class="bx-tip-dim">${fullLabel(p.time)}${p.session ? ' · ' + p.session.replace(/_/g, ' ') : ''}</span>`
+      : `<span class="bx-tip-beh" style="color:${beh.color}">${beh.label}</span> (dominant) · Avg <b>${p.energy}</b> · Peak <b>${p.peak}</b><br>
+         <span class="bx-tip-dim">${dayLabel(p.time)} · ${p.hours} hours</span>`;
+    tipEl.style.display = 'block';
+    const tw = tipEl.offsetWidth, th = tipEl.offsetHeight;
+    let tx = ev.clientX + 14, ty = ev.clientY - th - 10;
+    if (tx + tw > window.innerWidth - 8) tx = ev.clientX - tw - 14;
+    if (ty < 8) ty = ev.clientY + 14;
+    tipEl.style.left = tx + 'px';
+    tipEl.style.top = ty + 'px';
+  });
+  document.getElementById('bx-chart').addEventListener('mouseleave', () => { tipEl.style.display = 'none'; });
+
+  // ── Load + range switching ──
+  async function load(days) {
+    _days = days;
+    document.querySelectorAll('.bx-range-btn').forEach(b =>
+      b.classList.toggle('active', parseInt(b.dataset.days, 10) === days));
+    document.getElementById('bx-stats').innerHTML = '<div class="bx-loading"><span class="spinner"></span> Loading…</div>';
+    document.getElementById('bx-mode-note').textContent = '';
+
+    let rows;
+    try {
+      rows = await fetchRows(days);
+    } catch (e) {
+      document.getElementById('bx-stats').innerHTML = `<p style="font-size:12px;color:var(--text-muted)">Failed to load: ${e.message}</p>`;
+      return;
+    }
+
+    _points = buildPoints(rows, days);
+    document.getElementById('bx-mode-note').textContent = _hourlyMode
+      ? '· hourly — scroll horizontally'
+      : '· daily averages with peak markers';
+    renderStats(_points);
+    renderLegend();
+    drawChart();
+    // Land on the most recent data
+    const scroll = document.getElementById('bx-chart-scroll');
+    scroll.scrollLeft = scroll.scrollWidth;
+    if (window.lucide) lucide.createIcons();
+  }
+
+  document.getElementById('bx-ranges').addEventListener('click', (ev) => {
+    const btn = ev.target.closest('.bx-range-btn');
+    if (btn) load(parseInt(btn.dataset.days, 10));
+  });
+
+  let _resizeT = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(_resizeT);
+    _resizeT = setTimeout(drawChart, 150);
+  });
+
+  load(30);
+  if (window.lucide) lucide.createIcons();
+  </script>
+</body>
+</html>
