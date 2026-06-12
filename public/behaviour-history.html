@@ -152,13 +152,18 @@
           <button class="bx-range-btn bx-mode-btn" data-mode="hourly">Hourly</button>
           <button class="bx-range-btn bx-mode-btn" data-mode="daily">Daily avg</button>
           <button class="bx-range-btn bx-mode-btn" data-mode="weekly">Weekly avg</button>
+          <span class="bx-ctrl-sep"></span>
+          <button class="bx-range-btn bx-metric-btn active" data-metric="energy">Energy</button>
+          <button class="bx-range-btn bx-metric-btn" data-metric="movement">Movement</button>
+          <button class="bx-range-btn bx-metric-btn" data-metric="de">Dir Eff</button>
+          <button class="bx-range-btn bx-metric-btn" data-metric="momentum">Momentum</button>
         </span>
       </div>
       <div class="bx-card-bd" id="bx-stats"><div class="bx-loading"><span class="spinner"></span> Loading…</div></div>
     </div>
 
     <div class="bx-card">
-      <div class="bx-card-hd"><i data-lucide="line-chart"></i> Energy &amp; Behaviour Curve <span class="bx-tip-dim" id="bx-mode-note" style="text-transform:none;letter-spacing:0;font-weight:500"></span></div>
+      <div class="bx-card-hd"><i data-lucide="line-chart"></i> <span id="bx-chart-title">Energy</span>&nbsp;&amp; Behaviour Curve <span class="bx-tip-dim" id="bx-mode-note" style="text-transform:none;letter-spacing:0;font-weight:500"></span></div>
       <div class="bx-chart-scroll" id="bx-chart-scroll">
         <canvas id="bx-chart"></canvas>
       </div>
@@ -239,11 +244,21 @@
     return 'QUIET';
   }
 
+  // ── Metrics ──
+  // Energy is mostly participation; Movement is the true price-travel engine.
+  const METRICS = {
+    energy:   { field: 'market_energy',  label: 'Energy',   min: 0,   max: 100, thresholds: true },
+    movement: { field: 'movement_score', label: 'Movement', min: 0,   max: 100, thresholds: false },
+    de:       { field: 'de_score',       label: 'Dir Eff',  min: 0,   max: 100, thresholds: false },
+    momentum: { field: 'momentum_score', label: 'Momentum', min: -50, max: 50,  thresholds: false },
+  };
+
   // ── State ──
   let _days = 30;
   let _points = [];        // currently plotted points
   let _mode = 'hourly';    // hourly | daily | weekly — current presentation
   let _modeOverride = null;// user-chosen mode (sticky across range changes)
+  let _metric = 'energy';  // which engine is plotted
   const _cache = {};       // days → rows
 
   const HOURLY_MAX_DAYS = 30;  // beyond this, default presentation = daily
@@ -268,9 +283,10 @@
 
   // Aggregate a group of hourly rows into one point (avg + peak + dominant behaviour)
   function aggregate(groupRows, time) {
-    const energies = groupRows.map(r => parseFloat(r.market_energy) || 0);
-    const avg = Math.round(energies.reduce((a, b) => a + b, 0) / energies.length);
-    const peak = Math.round(Math.max(...energies));
+    const field = METRICS[_metric].field;
+    const vals = groupRows.map(r => parseFloat(r[field]) || 0);
+    const avg = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+    const peak = Math.round(Math.max(...vals));
     const counts = {};
     for (const r of groupRows) {
       const b = classifyHour(r);
@@ -291,9 +307,10 @@
   function buildPoints(rows, mode) {
     _mode = mode;
     if (mode === 'hourly') {
+      const field = METRICS[_metric].field;
       return rows.map(r => ({
         time: r.time_utc,
-        energy: Math.round(parseFloat(r.market_energy) || 0),
+        energy: Math.round(parseFloat(r[field]) || 0),
         behaviour: classifyHour(r),
         session: r.session_name,
       }));
@@ -334,7 +351,7 @@
 
     el.innerHTML = `<div class="bx-stats">
       <div class="bx-stat"><div class="bx-stat-val">${points.length}</div><div class="bx-stat-lbl">${unit} plotted</div></div>
-      <div class="bx-stat"><div class="bx-stat-val">${avg}</div><div class="bx-stat-lbl">avg energy</div></div>
+      <div class="bx-stat"><div class="bx-stat-val">${avg}</div><div class="bx-stat-lbl">avg ${METRICS[_metric].label.toLowerCase()}</div></div>
       <div class="bx-stat"><div class="bx-stat-val" style="color:#fbbf24">${peak}</div><div class="bx-stat-lbl">peak (${peakWhen})</div></div>
       <div class="bx-stat"><div class="bx-stat-val" style="color:#22c55e">${expanding}</div><div class="bx-stat-lbl">expansion ${unit}</div></div>
       <div class="bx-stat"><div class="bx-stat-val" style="color:#7c3aed">${compressed}</div><div class="bx-stat-lbl">stored-energy ${unit}</div></div>
@@ -382,31 +399,35 @@
     const ptR    = Math.min(narrow ? 3 : 4.5, Math.max(2, PX_PER_POINT / 2 - 1));
     const padL = narrow ? 26 : 34, padR = 20, padT = 14, padB = narrow ? 20 : 24;
     const plotW = W - padL - padR, plotH = H - padT - padB;
-    const maxY = 100;
+    const cfg = METRICS[_metric];
+    const minY = cfg.min, maxY = cfg.max;
     const seq = _points;
     const x = i => padL + (seq.length === 1 ? plotW / 2 : i / (seq.length - 1) * plotW);
-    const y = v => padT + (1 - v / maxY) * plotH;
+    const y = v => padT + (1 - (Math.max(minY, Math.min(maxY, v)) - minY) / (maxY - minY)) * plotH;
     _geom = { x, y, ptR };
 
     ctx.clearRect(0, 0, W, H);
 
-    // Grid
+    // Grid — 5 evenly spaced lines across the metric's domain
     ctx.font = `${fontPx}px Inter, sans-serif`;
     ctx.textAlign = 'right';
-    for (const g of [0, 25, 50, 75, 100]) {
-      ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    for (let gi = 0; gi <= 4; gi++) {
+      const g = minY + (maxY - minY) * gi / 4;
+      ctx.strokeStyle = g === 0 && minY < 0 ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.05)';
       ctx.beginPath(); ctx.moveTo(padL, y(g)); ctx.lineTo(W - padR, y(g)); ctx.stroke();
       ctx.fillStyle = 'rgba(148,163,184,0.7)';
-      ctx.fillText(String(g), padL - 5, y(g) + 3);
+      ctx.fillText(String(Math.round(g)), padL - 5, y(g) + 3);
     }
-    // Threshold lines
-    for (const [lvl, col, lbl] of [[35, '#7c3aed', 'compression'], [60, '#22c55e', 'expansion']]) {
-      ctx.strokeStyle = col; ctx.globalAlpha = 0.5; ctx.setLineDash([5, 4]);
-      ctx.beginPath(); ctx.moveTo(padL, y(lvl)); ctx.lineTo(W - padR, y(lvl)); ctx.stroke();
-      ctx.setLineDash([]); ctx.globalAlpha = 1;
-      ctx.textAlign = 'left'; ctx.fillStyle = col;
-      ctx.fillText(lbl, padL + 4, y(lvl) - 4);
-      ctx.textAlign = 'right';
+    // Threshold lines (energy only)
+    if (cfg.thresholds) {
+      for (const [lvl, col, lbl] of [[35, '#7c3aed', 'compression'], [60, '#22c55e', 'expansion']]) {
+        ctx.strokeStyle = col; ctx.globalAlpha = 0.5; ctx.setLineDash([5, 4]);
+        ctx.beginPath(); ctx.moveTo(padL, y(lvl)); ctx.lineTo(W - padR, y(lvl)); ctx.stroke();
+        ctx.setLineDash([]); ctx.globalAlpha = 1;
+        ctx.textAlign = 'left'; ctx.fillStyle = col;
+        ctx.fillText(lbl, padL + 4, y(lvl) - 4);
+        ctx.textAlign = 'right';
+      }
     }
 
     if (!seq.length) return;
@@ -481,8 +502,9 @@
     if (best < 0) { tipEl.style.display = 'none'; return; }
     const p = _points[best];
     const beh = BEH[p.behaviour] || { label: p.behaviour, color: '#64748b' };
+    const metricLbl = METRICS[_metric].label;
     tipEl.innerHTML = _mode === 'hourly'
-      ? `<span class="bx-tip-beh" style="color:${beh.color}">${beh.label}</span> · Energy <b>${p.energy}</b><br>
+      ? `<span class="bx-tip-beh" style="color:${beh.color}">${beh.label}</span> · ${metricLbl} <b>${p.energy}</b><br>
          <span class="bx-tip-dim">${fullLabel(p.time)}${p.session ? ' · ' + p.session.replace(/_/g, ' ') : ''}</span>`
       : _mode === 'weekly'
       ? `<span class="bx-tip-beh" style="color:${beh.color}">${beh.label}</span> (dominant) · Avg <b>${p.energy}</b> · Peak <b>${p.peak}</b><br>
@@ -534,6 +556,7 @@
 
   // ── Load + range switching ──
   function _finishRender() {
+    document.getElementById('bx-chart-title').textContent = METRICS[_metric].label;
     renderStats(_points);
     renderLegend();
     drawChart();
@@ -552,11 +575,13 @@
   function _syncModeButtons(mode) {
     document.querySelectorAll('.bx-mode-btn').forEach(b =>
       b.classList.toggle('active', b.dataset.mode === mode));
+    document.querySelectorAll('.bx-metric-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.metric === _metric));
   }
 
   async function load(days) {
     _days = days;
-    document.querySelectorAll('.bx-range-btn:not(.bx-mode-btn)').forEach(b =>
+    document.querySelectorAll('.bx-range-btn:not(.bx-mode-btn):not(.bx-metric-btn)').forEach(b =>
       b.classList.toggle('active', parseInt(b.dataset.days, 10) === days));
     const dateInput = document.getElementById('bx-date');
     dateInput.value = '';
@@ -585,7 +610,7 @@
   }
 
   async function loadDay(dateStr) {
-    document.querySelectorAll('.bx-range-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.bx-range-btn:not(.bx-mode-btn):not(.bx-metric-btn)').forEach(b => b.classList.remove('active'));
     document.getElementById('bx-date').classList.add('active');
     document.getElementById('bx-stats').innerHTML = '<div class="bx-loading"><span class="spinner"></span> Loading…</div>';
     document.getElementById('bx-mode-note').textContent = '';
@@ -610,6 +635,14 @@
   }
 
   document.getElementById('bx-ranges').addEventListener('click', (ev) => {
+    const metricBtn = ev.target.closest('.bx-metric-btn');
+    if (metricBtn) {
+      _metric = metricBtn.dataset.metric;
+      // Re-render the current view (single-day if a date is picked, else range)
+      const dateVal = document.getElementById('bx-date').value;
+      if (dateVal) loadDay(dateVal); else load(_days);
+      return;
+    }
     const modeBtn = ev.target.closest('.bx-mode-btn');
     if (modeBtn) {
       _modeOverride = modeBtn.dataset.mode;
