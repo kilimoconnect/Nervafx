@@ -415,20 +415,25 @@
     const ctx = canvas.getContext('2d');
     ctx.scale(dpr, dpr);
 
-    const padL = 34, padR = 22, padT = 14, padB = 24;
+    // Responsive sizing — everything shrinks on narrow screens
+    const narrow = W < 480;
+    const fontPx  = narrow ? 9 : 10;
+    const ptR     = narrow ? 3 : 5;
+    const lineW   = narrow ? 1.5 : 2;
+    const padL = narrow ? 26 : 34, padR = narrow ? 14 : 22, padT = 14, padB = narrow ? 20 : 24;
     const plotW = W - padL - padR, plotH = H - padT - padB;
     const maxY = 100;
     const x = i => padL + (seq.length === 1 ? plotW / 2 : i / (seq.length - 1) * plotW);
     const y = v => padT + (1 - v / maxY) * plotH;
 
     // Grid + threshold lines
-    ctx.font = '10px Inter, sans-serif';
+    ctx.font = `${fontPx}px Inter, sans-serif`;
     ctx.textAlign = 'right';
     for (const g of [0, 25, 50, 75, 100]) {
       ctx.strokeStyle = 'rgba(255,255,255,0.05)';
       ctx.beginPath(); ctx.moveTo(padL, y(g)); ctx.lineTo(W - padR, y(g)); ctx.stroke();
       ctx.fillStyle = 'rgba(148,163,184,0.7)';
-      ctx.fillText(String(g), padL - 6, y(g) + 3);
+      ctx.fillText(String(g), padL - 5, y(g) + 3);
     }
     // Compression line (35) and expansion line (60)
     for (const [lvl, col, lbl] of [[35, '#7c3aed', 'compression'], [60, '#22c55e', 'expansion']]) {
@@ -442,7 +447,7 @@
 
     // Energy line
     ctx.strokeStyle = 'rgba(96,165,250,0.85)';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = lineW;
     ctx.beginPath();
     seq.forEach((s, i) => { i === 0 ? ctx.moveTo(x(i), y(s.energy)) : ctx.lineTo(x(i), y(s.energy)); });
     ctx.stroke();
@@ -451,14 +456,14 @@
     seq.forEach((s, i) => {
       const col = BEH[s.behaviour].color;
       ctx.fillStyle = col;
-      ctx.beginPath(); ctx.arc(x(i), y(s.energy), 5, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x(i), y(s.energy), ptR, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = 'rgba(8,11,18,0.9)'; ctx.lineWidth = 1.5; ctx.stroke();
     });
 
     // X labels — fit as many as the width allows, never overlapping or
     // spilling past the canvas edges
     ctx.fillStyle = 'rgba(148,163,184,0.8)';
-    const labelW = 38; // approx width of "00:00" + breathing room
+    const labelW = narrow ? 34 : 38; // approx width of "00:00" + breathing room
     const maxLabels = Math.max(2, Math.floor(plotW / labelW));
     const step = Math.max(1, Math.ceil(seq.length / maxLabels));
     const lastIdx = seq.length - 1;
@@ -471,7 +476,7 @@
       if (lx - labelW / 2 < 0) { lx = 2; align = 'left'; }
       else if (lx + labelW / 2 > W) { lx = W - 2; align = 'right'; }
       ctx.textAlign = align;
-      ctx.fillText(hrLabel(s.time), lx, H - 8);
+      ctx.fillText(hrLabel(s.time), lx, H - 7);
     });
   }
 
@@ -609,6 +614,7 @@
         </div>
       </div>`;
 
+    _lastCtxSeq = ctxSeq;
     drawChart(document.getElementById('bh-chart'), ctxSeq);
     // On narrow screens the ribbon scrolls — land on the latest hours (analysis window)
     const rib = document.getElementById('bh-ribbon-scroll');
@@ -616,9 +622,21 @@
     if (window.lucide) lucide.createIcons();
   }
 
+  let _lastCtxSeq = null;
+
   load();
   // Refresh every 60s so the live view stays current
   setInterval(load, 60000);
+
+  // Redraw the chart when the viewport changes (rotation, resize)
+  let _resizeT = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(_resizeT);
+    _resizeT = setTimeout(() => {
+      const c = document.getElementById('bh-chart');
+      if (c && _lastCtxSeq) drawChart(c, _lastCtxSeq);
+    }, 150);
+  });
   </script>
 </body>
 </html>
