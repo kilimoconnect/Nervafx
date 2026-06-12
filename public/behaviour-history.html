@@ -248,11 +248,19 @@
 
   const HOURLY_MAX_DAYS = 30;  // beyond this, default presentation = daily
 
+  // Weekday in the user's timezone — used to drop weekend rows
+  const _wdFmt = new Intl.DateTimeFormat('en-US', { timeZone: _tz(), weekday: 'short' });
+  function isWeekend(t) {
+    const wd = _wdFmt.format(new Date(t));
+    return wd === 'Sat' || wd === 'Sun';
+  }
+
   async function fetchRows(days) {
     if (_cache[days]) return _cache[days];
     const data = await api(`/api/session-activity?type=hourly&days=${days}`);
     const rows = (data.hourly || [])
       .filter(h => h.session_name && h.session_name !== 'LOW_LIQUIDITY' && h.session_name !== 'DEAD_HOURS')
+      .filter(h => !isWeekend(h.time_utc))
       .sort((a, b) => a.time_utc.localeCompare(b.time_utc));
     _cache[days] = rows;
     return rows;
