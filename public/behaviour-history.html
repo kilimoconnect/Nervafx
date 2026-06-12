@@ -157,6 +157,10 @@
           <button class="bx-range-btn bx-metric-btn" data-metric="movement">Movement</button>
           <button class="bx-range-btn bx-metric-btn" data-metric="de">Dir Eff</button>
           <button class="bx-range-btn bx-metric-btn" data-metric="momentum">Momentum</button>
+          <button class="bx-range-btn bx-metric-btn" data-metric="dispersion">Dispersion</button>
+          <button class="bx-range-btn bx-metric-btn" data-metric="tradability">Tradability</button>
+          <button class="bx-range-btn bx-metric-btn" data-metric="breadth">Breadth</button>
+          <button class="bx-range-btn bx-metric-btn" data-metric="agreement">Agreement</button>
         </span>
       </div>
       <div class="bx-card-bd" id="bx-stats"><div class="bx-loading"><span class="spinner"></span> Loading…</div></div>
@@ -247,10 +251,14 @@
   // ── Metrics ──
   // Energy is mostly participation; Movement is the true price-travel engine.
   const METRICS = {
-    energy:   { field: 'market_energy',  label: 'Energy',   min: 0,   max: 100, thresholds: true },
-    movement: { field: 'movement_score', label: 'Movement', min: 0,   max: 100, thresholds: false },
-    de:       { field: 'de_score',       label: 'Dir Eff',  min: 0,   max: 100, thresholds: false },
-    momentum: { field: 'momentum_score', label: 'Momentum', min: -50, max: 50,  thresholds: false },
+    energy:      { field: 'market_energy',     label: 'Energy',      min: 0,   max: 100, thresholds: true },
+    movement:    { field: 'movement_score',    label: 'Movement',    min: 0,   max: 100, thresholds: false },
+    de:          { field: 'de_score',          label: 'Dir Eff',     min: 0,   max: 100, thresholds: false },
+    momentum:    { field: 'momentum_score',    label: 'Momentum',    min: -50, max: 50,  thresholds: false },
+    dispersion:  { field: 'dispersion_score',  label: 'Dispersion',  min: 0,   max: 100, thresholds: false },
+    tradability: { field: 'tradability_score', label: 'Tradability', min: 0,   max: 100, thresholds: false },
+    breadth:     { field: 'breadth_score',     label: 'Breadth',     min: 0,   max: 100, thresholds: false },
+    agreement:   { field: 'agreement_score',   label: 'Agreement',   min: 0,   max: 100, thresholds: false },
   };
 
   // ── State ──
