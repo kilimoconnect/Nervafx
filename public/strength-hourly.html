@@ -61,7 +61,15 @@
     }
     .sx-btn:hover { color: var(--text); background: rgba(255,255,255,0.08); }
     .sx-btn.active { background: rgba(96,165,250,0.15); border-color: rgba(96,165,250,0.5); color: #60a5fa; }
+    .sx-btn:disabled, .sx-btn.disabled { opacity: 0.35; cursor: not-allowed; }
     .sx-ctrl-sep { width: 1px; height: 18px; background: rgba(255,255,255,0.1); }
+    .sx-date {
+      padding: 3px 8px; border-radius: 7px; font-size: 11px; font-weight: 600;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); cursor: pointer; font-family: inherit; color-scheme: dark;
+    }
+    .sx-date.active { background: rgba(96,165,250,0.15); border-color: rgba(96,165,250,0.5); color: #60a5fa; }
+    .sx-note { font-size: 10.5px; color: var(--text-dim); text-transform: none; letter-spacing: 0; font-weight: 500; }
 
     /* ── Bars area ── */
     .sx-scroll {
@@ -152,8 +160,10 @@
   <main class="sx-main">
     <div class="sx-card">
       <div class="sx-card-hd">
-        <i data-lucide="trending-up"></i> Strongest vs Weakest per Hour
+        <i data-lucide="trending-up"></i> Strongest vs Weakest
+        <span class="sx-note" id="sx-note"></span>
         <span class="sx-ctrls" id="sx-ctrls">
+          <button class="sx-btn sx-tf" data-tf="m15">M15</button>
           <button class="sx-btn sx-tf active" data-tf="3h">3H</button>
           <button class="sx-btn sx-tf" data-tf="6h">6H</button>
           <button class="sx-btn sx-tf" data-tf="12h">12H</button>
@@ -163,19 +173,27 @@
           <button class="sx-btn sx-days active" data-days="2">2D</button>
           <button class="sx-btn sx-days" data-days="5">5D</button>
           <button class="sx-btn sx-days" data-days="10">10D</button>
+          <button class="sx-btn sx-days" data-days="30">30D</button>
+          <button class="sx-btn sx-days" data-days="90">90D</button>
+          <button class="sx-btn sx-days" data-days="365">1Y</button>
+          <button class="sx-btn sx-days" data-days="all">All</button>
+          <input type="date" id="sx-date" class="sx-date" title="Show a single day" />
+          <span class="sx-ctrl-sep"></span>
+          <button class="sx-btn sx-mode" data-mode="hourly">Hourly</button>
+          <button class="sx-btn sx-mode" data-mode="daily">Daily avg</button>
         </span>
       </div>
       <div class="sx-card-bd">
         <div id="sx-content"><div class="sx-loading"><span class="spinner"></span> Loading strength data…</div></div>
         <p style="margin:10px 0 0;font-size:10.5px;color:var(--text-dim)">
-          Each column = one hour. Top bar = strongest currency, bottom bar = weakest, values in pips.
-          Click a column for the full 8-currency ranking at that hour. Drag or scroll to pan.
+          Each column = one hour (or one day in Daily avg). Top bar = strongest currency, bottom bar = weakest, values in pips.
+          Click a column for the full 8-currency ranking. Drag or scroll to pan. Data available back to May 2025 (M15 limited to 10 days).
         </p>
       </div>
     </div>
   </main>
 
-  <!-- Hour detail modal -->
+  <!-- Detail modal -->
   <div class="sx-modal-overlay" id="sx-modal" onclick="if(event.target===this)sxCloseModal()">
     <div class="sx-modal">
       <div class="sx-modal-hd">
@@ -208,6 +226,12 @@
   function dayLabel(t) {
     return new Date(t).toLocaleDateString('en-GB', { timeZone: _tz(), weekday: 'short', day: '2-digit', month: 'short' });
   }
+  function dayLabelFull(t) {
+    return new Date(t).toLocaleDateString('en-GB', { timeZone: _tz(), day: '2-digit', month: 'short', year: 'numeric' });
+  }
+  function localDateOf(t) {
+    return new Date(t).toLocaleDateString('en-CA', { timeZone: _tz() }); // YYYY-MM-DD
+  }
   const _wdFmt = new Intl.DateTimeFormat('en-US', { timeZone: _tz(), weekday: 'short' });
   function isWeekend(t) {
     const wd = _wdFmt.format(new Date(t));
@@ -223,18 +247,33 @@
     return j;
   }
 
+  // ── State ──
+  const DATA_START = '2025-05-20';                   // oldest stored strength data
+  const M15_MAX_DAYS = 10;                           // M15 raw data is 15-min × 28 pairs — keep ranges short
+  const HOURLY_MAX_COLS = 2400;                      // beyond this hourly view auto-switches to daily
+
   let _tf = '3h';
-  let _daysSel = 2;
-  let _hours = [];          // [{ time, byCur: {USD: val,...}, strongest, weakest }]
-  const _cache = {};        // days → raw rows (multi fields)
+  let _daysSel = 2;       // number | 'all'
+  let _modeOverride = null;
+  let _mode = 'hourly';   // effective presentation
+  let _cols = [];         // plotted columns [{ time, label, sub, ranking, strongest, weakest }]
+  const _cache = {};      // `${src}:${days}` → rows
 
   const pips = v => (v * 10000);
   const fmt = v => (v >= 0 ? '+' : '') + pips(v).toFixed(1);
 
+  function daysOf(sel) {
+    if (sel === 'all') return Math.min(730, Math.ceil((Date.now() - new Date(DATA_START).getTime()) / 86400000) + 1);
+    return sel;
+  }
+
   async function fetchRows(days) {
-    const key = days;
+    const src = _tf === 'm15' ? 'm15' : 'cs';
+    const key = `${src}:${days}`;
     if (_cache[key]) return _cache[key];
-    const data = await api(`/api/strength-history?days=${days}&multi=1`);
+    const data = src === 'm15'
+      ? await api(`/api/m15-spreads-history?days=${days}`)
+      : await api(`/api/strength-history?days=${days}&multi=1`);
     _cache[key] = data.rows || [];
     return _cache[key];
   }
@@ -245,45 +284,100 @@
     return parseFloat(r[f]) || 0;
   }
 
-  function buildHours(rows) {
-    // Group by hour, keep the LAST reading per currency within each hour
+  // ── Build per-hour currency maps ────────────────────────────────────────────
+  // currency_strength rows → { hourKey: { CUR: val } }
+  // m15_pair_spreads rows  → last smooth_45m per instrument per hour → derive
+  //   per-currency average (base +v, quote −v), same as the journal engine.
+  function hourMaps(rows) {
     const byHour = {};
-    for (const r of rows) {
-      if (isWeekend(r.time)) continue;
-      const hk = r.time.slice(0, 13);
-      const h = (byHour[hk] = byHour[hk] || { time: hk + ':00:00Z', byCur: {} });
-      h.byCur[r.currency] = { time: r.time, val: valueOf(r) };
+    if (_tf === 'm15') {
+      const instByHour = {};
+      for (const r of rows) {
+        if (isWeekend(r.time)) continue;
+        const hk = r.time.slice(0, 13);
+        (instByHour[hk] = instByHour[hk] || {})[r.instrument] = parseFloat(r.smooth_45m) || 0;
+      }
+      for (const [hk, insts] of Object.entries(instByHour)) {
+        const sums = {}, counts = {};
+        for (const [inst, v] of Object.entries(insts)) {
+          const [base, quote] = inst.split('_');
+          sums[base]  = (sums[base]  || 0) + v; counts[base]  = (counts[base]  || 0) + 1;
+          sums[quote] = (sums[quote] || 0) - v; counts[quote] = (counts[quote] || 0) + 1;
+        }
+        const m = {};
+        for (const c of Object.keys(sums)) m[c] = sums[c] / counts[c];
+        byHour[hk] = m;
+      }
+    } else {
+      for (const r of rows) {
+        if (isWeekend(r.time)) continue;
+        const hk = r.time.slice(0, 13);
+        (byHour[hk] = byHour[hk] || {})[r.currency] = valueOf(r);
+      }
     }
-    return Object.keys(byHour).sort().map(hk => {
-      const h = byHour[hk];
-      const entries = Object.entries(h.byCur).map(([cur, o]) => ({ cur, val: o.val }));
-      if (entries.length < 2) return null;
-      entries.sort((a, b) => b.val - a.val);
-      return {
-        time: h.time,
-        ranking: entries,
-        strongest: entries[0],
-        weakest: entries[entries.length - 1],
-      };
+    return byHour;
+  }
+
+  function rankingOf(curMap) {
+    const entries = Object.entries(curMap).map(([cur, val]) => ({ cur, val }));
+    if (entries.length < 2) return null;
+    entries.sort((a, b) => b.val - a.val);
+    return entries;
+  }
+
+  function buildCols(rows, mode, dayFilter) {
+    const byHour = hourMaps(rows);
+    let hourKeys = Object.keys(byHour).sort();
+    if (dayFilter) hourKeys = hourKeys.filter(hk => localDateOf(hk + ':00:00Z') === dayFilter);
+
+    if (mode === 'hourly') {
+      return hourKeys.map(hk => {
+        const ranking = rankingOf(byHour[hk]);
+        if (!ranking) return null;
+        const time = hk + ':00:00Z';
+        return { time, label: hrLabel(time), sub: dayLabel(time), ranking, strongest: ranking[0], weakest: ranking[ranking.length - 1] };
+      }).filter(Boolean);
+    }
+
+    // Daily: average each currency across the day's hours (local date)
+    const byDay = {};
+    for (const hk of hourKeys) {
+      const d = localDateOf(hk + ':00:00Z');
+      (byDay[d] = byDay[d] || []).push(byHour[hk]);
+    }
+    return Object.keys(byDay).sort().map(d => {
+      const maps = byDay[d];
+      const sums = {}, counts = {};
+      for (const m of maps) {
+        for (const [c, v] of Object.entries(m)) {
+          sums[c] = (sums[c] || 0) + v; counts[c] = (counts[c] || 0) + 1;
+        }
+      }
+      const avg = {};
+      for (const c of Object.keys(sums)) avg[c] = sums[c] / counts[c];
+      const ranking = rankingOf(avg);
+      if (!ranking) return null;
+      const time = d + 'T12:00:00Z';
+      return { time, label: dayLabel(time), sub: '', ranking, strongest: ranking[0], weakest: ranking[ranking.length - 1], hours: maps.length };
     }).filter(Boolean);
   }
 
+  // ── Render ──
   function render() {
     const el = document.getElementById('sx-content');
-    if (!_hours.length) {
-      el.innerHTML = '<p style="font-size:12px;color:var(--text-muted)">No strength data for this range.</p>';
+    if (!_cols.length) {
+      el.innerHTML = '<p style="font-size:12px;color:var(--text-muted)">No strength data for this selection.</p>';
       return;
     }
-    const maxAbs = Math.max(0.00005, ..._hours.map(h => Math.max(Math.abs(h.strongest.val), Math.abs(h.weakest.val))));
+    const maxAbs = Math.max(0.00005, ..._cols.map(h => Math.max(Math.abs(h.strongest.val), Math.abs(h.weakest.val))));
 
-    let prevDay = null;
-    const cols = _hours.map((h, i) => {
+    let prevSub = null;
+    const cols = _cols.map((h, i) => {
       const sPct = Math.max(4, Math.round(Math.abs(h.strongest.val) / maxAbs * 100));
       const wPct = Math.max(4, Math.round(Math.abs(h.weakest.val) / maxAbs * 100));
-      const d = dayLabel(h.time);
-      const dayEdge = prevDay && d !== prevDay;
-      const showDay = dayEdge || i === 0;
-      prevDay = d;
+      const dayEdge = _mode === 'hourly' && prevSub && h.sub !== prevSub;
+      const showSub = _mode === 'hourly' && (dayEdge || i === 0);
+      prevSub = h.sub;
       return `<div class="sx-col${dayEdge ? ' day-edge' : ''}" onclick="sxOpenModal(${i})" title="Click for full ranking">
         <div class="sx-half">
           <span class="sx-val pos">${fmt(h.strongest.val)}</span>
@@ -296,13 +390,12 @@
           <span class="sx-cur neg">${h.weakest.cur}</span>
           <span class="sx-val neg">${fmt(h.weakest.val)}</span>
         </div>
-        <span class="sx-hr">${hrLabel(h.time)}</span>
-        <span class="sx-day">${showDay ? d : '&nbsp;'}</span>
+        <span class="sx-hr">${h.label}</span>
+        <span class="sx-day">${showSub ? h.sub : '&nbsp;'}</span>
       </div>`;
     }).join('');
 
     el.innerHTML = `<div class="sx-scroll" id="sx-scroll"><div class="sx-bars">${cols}</div></div>`;
-
     const scroll = document.getElementById('sx-scroll');
     scroll.scrollLeft = scroll.scrollWidth;
     attachPan(scroll);
@@ -323,7 +416,6 @@
       scroll.scrollLeft = startScroll - dx;
     });
     window.addEventListener('pointerup', () => { dragging = false; scroll.classList.remove('dragging'); });
-    // Suppress the click-through after a drag
     scroll.addEventListener('click', (ev) => { if (moved) { ev.stopPropagation(); ev.preventDefault(); } }, true);
     scroll.addEventListener('wheel', (ev) => {
       if (scroll.scrollWidth <= scroll.clientWidth) return;
@@ -331,11 +423,13 @@
     }, { passive: false });
   }
 
-  // ── Modal: full 8-currency ranking for one hour ──
+  // ── Modal ──
   window.sxOpenModal = function (idx) {
-    const h = _hours[idx];
+    const h = _cols[idx];
     if (!h) return;
-    document.getElementById('sx-modal-title').textContent = `${dayLabel(h.time)} ${hrLabel(h.time)} — ${_tf === 'c36' ? '3H+6H' : _tf.toUpperCase()}`;
+    const tfLbl = _tf === 'c36' ? '3H+6H' : _tf.toUpperCase();
+    const when = _mode === 'hourly' ? `${dayLabel(h.time)} ${hrLabel(h.time)}` : `${dayLabelFull(h.time)} (avg of ${h.hours || '—'} hours)`;
+    document.getElementById('sx-modal-title').textContent = `${when} — ${tfLbl}`;
     const maxAbs = Math.max(0.00005, ...h.ranking.map(e => Math.abs(e.val)));
     document.getElementById('sx-modal-body').innerHTML = h.ranking.map(e => {
       const pct = Math.round(Math.abs(e.val) / maxAbs * 50);
@@ -355,18 +449,64 @@
     document.getElementById('sx-modal').classList.remove('open');
   };
 
-  // ── Load + controls ──
-  async function load() {
+  // ── Controls state ──
+  function syncControls() {
+    document.querySelectorAll('.sx-tf').forEach(b => b.classList.toggle('active', b.dataset.tf === _tf));
+    document.querySelectorAll('.sx-mode').forEach(b => b.classList.toggle('active', b.dataset.mode === _mode));
+    // M15 raw data is too heavy for long ranges — disable them
+    document.querySelectorAll('.sx-days').forEach(b => {
+      const sel = b.dataset.days === 'all' ? 'all' : parseInt(b.dataset.days, 10);
+      const tooLong = _tf === 'm15' && (sel === 'all' || sel > M15_MAX_DAYS);
+      b.classList.toggle('disabled', tooLong);
+      b.disabled = tooLong;
+      b.classList.toggle('active', String(_daysSel) === String(sel) && !document.getElementById('sx-date').value);
+    });
+  }
+
+  // ── Load ──
+  async function load(dayFilter) {
     const el = document.getElementById('sx-content');
+    const note = document.getElementById('sx-note');
     el.innerHTML = '<div class="sx-loading"><span class="spinner"></span> Loading strength data…</div>';
+    note.textContent = '';
+
+    let days, mode;
+    if (dayFilter) {
+      // Single day: fetch enough history to reach it, always hourly
+      days = Math.min(730, Math.max(2, Math.ceil((Date.now() - new Date(dayFilter + 'T00:00:00').getTime()) / 86400000) + 1));
+      if (_tf === 'm15' && days > M15_MAX_DAYS) {
+        el.innerHTML = '<p style="font-size:12px;color:var(--text-muted)">M15 data is only available for the last 10 days — pick a recent date or switch timeframe.</p>';
+        syncControls();
+        return;
+      }
+      mode = 'hourly';
+    } else {
+      days = daysOf(_daysSel);
+      mode = _modeOverride || (days <= 10 ? 'hourly' : 'daily');
+    }
+
     let rows;
     try {
-      rows = await fetchRows(_daysSel);
+      rows = await fetchRows(days);
     } catch (e) {
       el.innerHTML = `<p style="font-size:12px;color:var(--text-muted)">Failed to load: ${e.message}</p>`;
       return;
     }
-    _hours = buildHours(rows);
+
+    let cols = buildCols(rows, mode, dayFilter || null);
+    // Hourly over a very long range gets unwieldy — fall back to daily
+    if (mode === 'hourly' && cols.length > HOURLY_MAX_COLS && !dayFilter) {
+      mode = 'daily';
+      cols = buildCols(rows, mode, null);
+      note.textContent = '· range too long for hourly — showing daily averages';
+    } else if (dayFilter) {
+      note.textContent = `· ${dayLabelFull(dayFilter + 'T12:00:00')}`;
+    } else if (mode === 'daily') {
+      note.textContent = '· daily averages';
+    }
+    _mode = mode;
+    _cols = cols;
+    syncControls();
     render();
   }
 
@@ -374,19 +514,40 @@
     const tfBtn = ev.target.closest('.sx-tf');
     if (tfBtn) {
       _tf = tfBtn.dataset.tf;
-      document.querySelectorAll('.sx-tf').forEach(b => b.classList.toggle('active', b === tfBtn));
-      load();
+      // Clamp range if M15 selected with a long range active
+      if (_tf === 'm15' && (_daysSel === 'all' || _daysSel > M15_MAX_DAYS)) _daysSel = M15_MAX_DAYS;
+      const dateVal = document.getElementById('sx-date').value;
+      load(dateVal || null);
+      return;
+    }
+    const mBtn = ev.target.closest('.sx-mode');
+    if (mBtn) {
+      _modeOverride = mBtn.dataset.mode;
+      document.getElementById('sx-date').value = '';
+      document.getElementById('sx-date').classList.remove('active');
+      load(null);
       return;
     }
     const dBtn = ev.target.closest('.sx-days');
-    if (dBtn) {
-      _daysSel = parseInt(dBtn.dataset.days, 10);
-      document.querySelectorAll('.sx-days').forEach(b => b.classList.toggle('active', b === dBtn));
-      load();
+    if (dBtn && !dBtn.disabled) {
+      _daysSel = dBtn.dataset.days === 'all' ? 'all' : parseInt(dBtn.dataset.days, 10);
+      document.getElementById('sx-date').value = '';
+      document.getElementById('sx-date').classList.remove('active');
+      load(null);
     }
   });
 
-  load();
+  const _dateInput = document.getElementById('sx-date');
+  _dateInput.max = new Date().toLocaleDateString('en-CA', { timeZone: _tz() });
+  _dateInput.min = DATA_START;
+  _dateInput.addEventListener('change', () => {
+    if (_dateInput.value) {
+      _dateInput.classList.add('active');
+      load(_dateInput.value);
+    }
+  });
+
+  load(null);
   if (window.lucide) lucide.createIcons();
   </script>
 </body>
