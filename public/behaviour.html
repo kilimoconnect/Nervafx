@@ -415,7 +415,7 @@
     const ctx = canvas.getContext('2d');
     ctx.scale(dpr, dpr);
 
-    const padL = 34, padR = 12, padT = 14, padB = 24;
+    const padL = 34, padR = 22, padT = 14, padB = 24;
     const plotW = W - padL - padR, plotH = H - padT - padB;
     const maxY = 100;
     const x = i => padL + (seq.length === 1 ? plotW / 2 : i / (seq.length - 1) * plotW);
@@ -455,12 +455,23 @@
       ctx.strokeStyle = 'rgba(8,11,18,0.9)'; ctx.lineWidth = 1.5; ctx.stroke();
     });
 
-    // X labels
+    // X labels — fit as many as the width allows, never overlapping or
+    // spilling past the canvas edges
     ctx.fillStyle = 'rgba(148,163,184,0.8)';
-    ctx.textAlign = 'center';
-    const step = Math.max(1, Math.ceil(seq.length / 12));
+    const labelW = 38; // approx width of "00:00" + breathing room
+    const maxLabels = Math.max(2, Math.floor(plotW / labelW));
+    const step = Math.max(1, Math.ceil(seq.length / maxLabels));
+    const lastIdx = seq.length - 1;
     seq.forEach((s, i) => {
-      if (i % step === 0 || i === seq.length - 1) ctx.fillText(hrLabel(s.time), x(i), H - 8);
+      const isLast = i === lastIdx;
+      if (i % step !== 0 && !isLast) return;
+      // Skip the regular label just before the last one if they'd collide
+      if (!isLast && lastIdx - i < step / 2) return;
+      let lx = x(i), align = 'center';
+      if (lx - labelW / 2 < 0) { lx = 2; align = 'left'; }
+      else if (lx + labelW / 2 > W) { lx = W - 2; align = 'right'; }
+      ctx.textAlign = align;
+      ctx.fillText(hrLabel(s.time), lx, H - 8);
     });
   }
 
