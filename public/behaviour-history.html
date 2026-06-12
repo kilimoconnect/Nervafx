@@ -298,9 +298,11 @@
         session: r.session_name,
       }));
     }
+    // Group by the user's LOCAL date — keeps day boundaries consistent with
+    // the weekend filter (Sunday-evening UTC hours belong to local Monday)
     const keyOf = mode === 'weekly'
-      ? r => weekStartOf(r.time_utc.slice(0, 10))
-      : r => r.time_utc.slice(0, 10);
+      ? r => weekStartOf(localDateOf(r.time_utc))
+      : r => localDateOf(r.time_utc);
     const groups = {};
     for (const r of rows) {
       const k = keyOf(r);
