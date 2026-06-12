@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>NervaFX — Hourly Strength Extremes</title>
+  <link rel="icon" type="image/png" href="/nervafx-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <link rel="stylesheet" href="style.css" />
+
+  <style>
+    .grid { display: block !important; }
+
+    .sx-topbar {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 28px; height: 56px;
+      background: rgba(8,11,18,0.92);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+    .sx-topbar-left { display: flex; align-items: center; gap: 12px; }
+    .sx-logo img { height: 24px; display: block; }
+    .sx-sep { color: rgba(255,255,255,0.1); font-size: 20px; font-weight: 200; }
+    .sx-title-text { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+    .sx-back-btn {
+      display: flex; align-items: center; gap: 5px;
+      padding: 6px 12px; border-radius: 8px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); font-size: 11px; font-weight: 600;
+      cursor: pointer; text-decoration: none; transition: all 0.15s;
+    }
+    .sx-back-btn:hover { background: rgba(255,255,255,0.09); color: var(--text); }
+
+    .sx-main { max-width: 1200px; margin: 0 auto; padding: 20px 20px 80px; }
+
+    .sx-card {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px; margin-bottom: 18px; overflow: hidden;
+    }
+    .sx-card-hd {
+      padding: 12px 16px; font-size: 12px; font-weight: 700;
+      color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    }
+    .sx-card-hd i { width: 15px; height: 15px; }
+    .sx-card-bd { padding: 14px 16px; }
+
+    .sx-ctrls { display: flex; gap: 6px; margin-left: auto; align-items: center; flex-wrap: wrap; }
+    .sx-btn {
+      padding: 4px 12px; border-radius: 7px; font-size: 11px; font-weight: 700;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); cursor: pointer; transition: all 0.15s;
+    }
+    .sx-btn:hover { color: var(--text); background: rgba(255,255,255,0.08); }
+    .sx-btn.active { background: rgba(96,165,250,0.15); border-color: rgba(96,165,250,0.5); color: #60a5fa; }
+    .sx-ctrl-sep { width: 1px; height: 18px; background: rgba(255,255,255,0.1); }
+
+    /* ── Bars area ── */
+    .sx-scroll {
+      overflow-x: auto; -webkit-overflow-scrolling: touch; cursor: grab;
+      scrollbar-color: rgba(96,165,250,0.35) rgba(255,255,255,0.03);
+    }
+    .sx-scroll.dragging { cursor: grabbing; }
+    .sx-scroll::-webkit-scrollbar { height: 10px; }
+    .sx-scroll::-webkit-scrollbar-track { background: rgba(255,255,255,0.03); border-radius: 5px; }
+    .sx-scroll::-webkit-scrollbar-thumb { background: rgba(96,165,250,0.35); border-radius: 5px; }
+    .sx-scroll::-webkit-scrollbar-thumb:hover { background: rgba(96,165,250,0.55); }
+
+    .sx-bars { display: flex; align-items: stretch; gap: 6px; padding: 8px 4px 4px; width: max-content; min-width: 100%; }
+    .sx-col {
+      display: flex; flex-direction: column; align-items: center;
+      width: 56px; flex: 0 0 56px; cursor: pointer; border-radius: 8px;
+      padding: 4px 2px; transition: background 0.12s;
+    }
+    .sx-col:hover { background: rgba(96,165,250,0.07); }
+    .sx-col.day-edge { border-left: 1px solid rgba(255,255,255,0.08); border-radius: 0; }
+
+    .sx-half { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 130px; width: 100%; }
+    .sx-half.bottom { justify-content: flex-start; }
+    .sx-val { font-size: 10px; font-weight: 800; font-family: var(--font-data); line-height: 1.2; }
+    .sx-cur { font-size: 10px; font-weight: 800; line-height: 1.3; }
+    .sx-bar { width: 22px; border-radius: 4px 4px 0 0; }
+    .sx-half.bottom .sx-bar { border-radius: 0 0 4px 4px; }
+    .sx-axis { width: 100%; border-top: 1px solid rgba(255,255,255,0.14); margin: 2px 0; }
+    .sx-hr { font-size: 9px; color: var(--text-dim); margin-top: 4px; white-space: nowrap; }
+    .sx-day { font-size: 8.5px; color: var(--text-dim); white-space: nowrap; }
+
+    .pos { color: #4ade80; } .neg { color: #f87171; }
+    .sx-bar.pos { background: #4ade80; } .sx-bar.neg { background: #f87171; }
+
+    /* ── Hour detail modal ── */
+    .sx-modal-overlay {
+      position: fixed; inset: 0; z-index: 300;
+      background: rgba(4,6,12,0.8); backdrop-filter: blur(6px);
+      display: none; align-items: center; justify-content: center; padding: 16px;
+    }
+    .sx-modal-overlay.open { display: flex; }
+    .sx-modal {
+      width: 100%; max-width: 420px; max-height: 90vh; overflow-y: auto;
+      background: #0b101c; border: 1px solid rgba(255,255,255,0.1); border-radius: 14px;
+    }
+    .sx-modal-hd {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 18px; border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .sx-modal-title { font-size: 14px; font-weight: 800; color: var(--text); }
+    .sx-modal-close {
+      width: 30px; height: 30px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.04); color: var(--text-muted);
+      font-size: 16px; cursor: pointer; line-height: 1;
+    }
+    .sx-modal-bd { padding: 14px 18px; }
+    .sx-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+    .sx-row-cur { font-size: 11px; font-weight: 800; min-width: 34px; color: var(--text); }
+    .sx-row-track { flex: 1; height: 7px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden; position: relative; }
+    .sx-row-fill { position: absolute; top: 0; bottom: 0; }
+    .sx-row-num { font-size: 11px; font-weight: 700; min-width: 52px; text-align: right; font-family: var(--font-data); }
+
+    .sx-loading { display: flex; align-items: center; gap: 8px; padding: 40px; color: var(--text-muted); font-size: 12px; justify-content: center; }
+    .spinner {
+      width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.15);
+      border-top-color: #60a5fa; border-radius: 50%; animation: sxspin 0.7s linear infinite;
+    }
+    @keyframes sxspin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 640px) {
+      .sx-main { padding: 14px 12px 60px; }
+      .sx-ctrls { width: 100%; margin-left: 0; }
+      .sx-col { width: 48px; flex-basis: 48px; }
+      .sx-half { height: 100px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="sx-topbar">
+    <div class="sx-topbar-left">
+      <a class="sx-logo" href="/app"><img src="/nervafx-logo.png" alt="NervaFX" onerror="this.style.display='none'"></a>
+      <span class="sx-sep">/</span>
+      <span class="sx-title-text">Hourly Strength Extremes</span>
+    </div>
+    <a class="sx-back-btn" href="/app" onclick="window.close(); setTimeout(function(){ location.href='/app'; }, 150); return false;">&times; Close</a>
+  </div>
+
+  <main class="sx-main">
+    <div class="sx-card">
+      <div class="sx-card-hd">
+        <i data-lucide="trending-up"></i> Strongest vs Weakest per Hour
+        <span class="sx-ctrls" id="sx-ctrls">
+          <button class="sx-btn sx-tf active" data-tf="3h">3H</button>
+          <button class="sx-btn sx-tf" data-tf="6h">6H</button>
+          <button class="sx-btn sx-tf" data-tf="12h">12H</button>
+          <button class="sx-btn sx-tf" data-tf="c36">3H+6H</button>
+          <span class="sx-ctrl-sep"></span>
+          <button class="sx-btn sx-days" data-days="1">1D</button>
+          <button class="sx-btn sx-days active" data-days="2">2D</button>
+          <button class="sx-btn sx-days" data-days="5">5D</button>
+          <button class="sx-btn sx-days" data-days="10">10D</button>
+        </span>
+      </div>
+      <div class="sx-card-bd">
+        <div id="sx-content"><div class="sx-loading"><span class="spinner"></span> Loading strength data…</div></div>
+        <p style="margin:10px 0 0;font-size:10.5px;color:var(--text-dim)">
+          Each column = one hour. Top bar = strongest currency, bottom bar = weakest, values in pips.
+          Click a column for the full 8-currency ranking at that hour. Drag or scroll to pan.
+        </p>
+      </div>
+    </div>
+  </main>
+
+  <!-- Hour detail modal -->
+  <div class="sx-modal-overlay" id="sx-modal" onclick="if(event.target===this)sxCloseModal()">
+    <div class="sx-modal">
+      <div class="sx-modal-hd">
+        <span class="sx-modal-title" id="sx-modal-title">—</span>
+        <button class="sx-modal-close" onclick="sxCloseModal()">&times;</button>
+      </div>
+      <div class="sx-modal-bd" id="sx-modal-body"></div>
+    </div>
+  </div>
+
+  <script>
+  // ── Auth gate ──
+  (function () {
+    const token = localStorage.getItem('nfx_token');
+    if (!token) return location.replace('/login.html');
+    try {
+      const pay = JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+      if (pay.exp && pay.exp * 1000 < Date.now()) {
+        localStorage.removeItem('nfx_token');
+        return location.replace('/login.html');
+      }
+    } catch (_) { return location.replace('/login.html'); }
+  })();
+
+  let _userTz = localStorage.getItem('nfx_tz') || 'auto';
+  function _tz() { return (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC'); }
+  function hrLabel(t) {
+    return new Date(t).toLocaleTimeString('en-GB', { timeZone: _tz(), hour: '2-digit', minute: '2-digit', hour12: false });
+  }
+  function dayLabel(t) {
+    return new Date(t).toLocaleDateString('en-GB', { timeZone: _tz(), weekday: 'short', day: '2-digit', month: 'short' });
+  }
+  const _wdFmt = new Intl.DateTimeFormat('en-US', { timeZone: _tz(), weekday: 'short' });
+  function isWeekend(t) {
+    const wd = _wdFmt.format(new Date(t));
+    return wd === 'Sat' || wd === 'Sun';
+  }
+
+  async function api(path) {
+    const token = localStorage.getItem('nfx_token');
+    const r = await fetch(path, { headers: { Authorization: `Bearer ${token}` } });
+    if (r.status === 401) { location.replace('/login.html'); throw new Error('Unauthorized'); }
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || `${r.status}`);
+    return j;
+  }
+
+  let _tf = '3h';
+  let _daysSel = 2;
+  let _hours = [];          // [{ time, byCur: {USD: val,...}, strongest, weakest }]
+  const _cache = {};        // days → raw rows (multi fields)
+
+  const pips = v => (v * 10000);
+  const fmt = v => (v >= 0 ? '+' : '') + pips(v).toFixed(1);
+
+  async function fetchRows(days) {
+    const key = days;
+    if (_cache[key]) return _cache[key];
+    const data = await api(`/api/strength-history?days=${days}&multi=1`);
+    _cache[key] = data.rows || [];
+    return _cache[key];
+  }
+
+  function valueOf(r) {
+    if (_tf === 'c36') return ((parseFloat(r.smooth_3h) || 0) + (parseFloat(r.smooth_6h) || 0)) / 2;
+    const f = _tf === '12h' ? 'smooth_12h' : _tf === '6h' ? 'smooth_6h' : 'smooth_3h';
+    return parseFloat(r[f]) || 0;
+  }
+
+  function buildHours(rows) {
+    // Group by hour, keep the LAST reading per currency within each hour
+    const byHour = {};
+    for (const r of rows) {
+      if (isWeekend(r.time)) continue;
+      const hk = r.time.slice(0, 13);
+      const h = (byHour[hk] = byHour[hk] || { time: hk + ':00:00Z', byCur: {} });
+      h.byCur[r.currency] = { time: r.time, val: valueOf(r) };
+    }
+    return Object.keys(byHour).sort().map(hk => {
+      const h = byHour[hk];
+      const entries = Object.entries(h.byCur).map(([cur, o]) => ({ cur, val: o.val }));
+      if (entries.length < 2) return null;
+      entries.sort((a, b) => b.val - a.val);
+      return {
+        time: h.time,
+        ranking: entries,
+        strongest: entries[0],
+        weakest: entries[entries.length - 1],
+      };
+    }).filter(Boolean);
+  }
+
+  function render() {
+    const el = document.getElementById('sx-content');
+    if (!_hours.length) {
+      el.innerHTML = '<p style="font-size:12px;color:var(--text-muted)">No strength data for this range.</p>';
+      return;
+    }
+    const maxAbs = Math.max(0.00005, ..._hours.map(h => Math.max(Math.abs(h.strongest.val), Math.abs(h.weakest.val))));
+
+    let prevDay = null;
+    const cols = _hours.map((h, i) => {
+      const sPct = Math.max(4, Math.round(Math.abs(h.strongest.val) / maxAbs * 100));
+      const wPct = Math.max(4, Math.round(Math.abs(h.weakest.val) / maxAbs * 100));
+      const d = dayLabel(h.time);
+      const dayEdge = prevDay && d !== prevDay;
+      const showDay = dayEdge || i === 0;
+      prevDay = d;
+      return `<div class="sx-col${dayEdge ? ' day-edge' : ''}" onclick="sxOpenModal(${i})" title="Click for full ranking">
+        <div class="sx-half">
+          <span class="sx-val pos">${fmt(h.strongest.val)}</span>
+          <span class="sx-cur pos">${h.strongest.cur}</span>
+          <div class="sx-bar pos" style="height:${sPct}%"></div>
+        </div>
+        <div class="sx-axis"></div>
+        <div class="sx-half bottom">
+          <div class="sx-bar neg" style="height:${wPct}%"></div>
+          <span class="sx-cur neg">${h.weakest.cur}</span>
+          <span class="sx-val neg">${fmt(h.weakest.val)}</span>
+        </div>
+        <span class="sx-hr">${hrLabel(h.time)}</span>
+        <span class="sx-day">${showDay ? d : '&nbsp;'}</span>
+      </div>`;
+    }).join('');
+
+    el.innerHTML = `<div class="sx-scroll" id="sx-scroll"><div class="sx-bars">${cols}</div></div>`;
+
+    const scroll = document.getElementById('sx-scroll');
+    scroll.scrollLeft = scroll.scrollWidth;
+    attachPan(scroll);
+  }
+
+  function attachPan(scroll) {
+    let dragging = false, startX = 0, startScroll = 0, moved = false;
+    scroll.addEventListener('pointerdown', (ev) => {
+      if (ev.button !== 0) return;
+      dragging = true; moved = false;
+      startX = ev.clientX; startScroll = scroll.scrollLeft;
+      scroll.classList.add('dragging');
+    });
+    window.addEventListener('pointermove', (ev) => {
+      if (!dragging) return;
+      const dx = ev.clientX - startX;
+      if (Math.abs(dx) > 3) moved = true;
+      scroll.scrollLeft = startScroll - dx;
+    });
+    window.addEventListener('pointerup', () => { dragging = false; scroll.classList.remove('dragging'); });
+    // Suppress the click-through after a drag
+    scroll.addEventListener('click', (ev) => { if (moved) { ev.stopPropagation(); ev.preventDefault(); } }, true);
+    scroll.addEventListener('wheel', (ev) => {
+      if (scroll.scrollWidth <= scroll.clientWidth) return;
+      if (Math.abs(ev.deltaY) > Math.abs(ev.deltaX)) { ev.preventDefault(); scroll.scrollLeft += ev.deltaY; }
+    }, { passive: false });
+  }
+
+  // ── Modal: full 8-currency ranking for one hour ──
+  window.sxOpenModal = function (idx) {
+    const h = _hours[idx];
+    if (!h) return;
+    document.getElementById('sx-modal-title').textContent = `${dayLabel(h.time)} ${hrLabel(h.time)} — ${_tf === 'c36' ? '3H+6H' : _tf.toUpperCase()}`;
+    const maxAbs = Math.max(0.00005, ...h.ranking.map(e => Math.abs(e.val)));
+    document.getElementById('sx-modal-body').innerHTML = h.ranking.map(e => {
+      const pct = Math.round(Math.abs(e.val) / maxAbs * 50);
+      const cls = e.val >= 0 ? 'pos' : 'neg';
+      const side = e.val >= 0
+        ? `left:50%;width:${pct}%;background:#4ade80`
+        : `right:50%;width:${pct}%;background:#f87171`;
+      return `<div class="sx-row">
+        <span class="sx-row-cur">${e.cur}</span>
+        <div class="sx-row-track"><div class="sx-row-fill" style="${side}"></div></div>
+        <span class="sx-row-num ${cls}">${fmt(e.val)}</span>
+      </div>`;
+    }).join('');
+    document.getElementById('sx-modal').classList.add('open');
+  };
+  window.sxCloseModal = function () {
+    document.getElementById('sx-modal').classList.remove('open');
+  };
+
+  // ── Load + controls ──
+  async function load() {
+    const el = document.getElementById('sx-content');
+    el.innerHTML = '<div class="sx-loading"><span class="spinner"></span> Loading strength data…</div>';
+    let rows;
+    try {
+      rows = await fetchRows(_daysSel);
+    } catch (e) {
+      el.innerHTML = `<p style="font-size:12px;color:var(--text-muted)">Failed to load: ${e.message}</p>`;
+      return;
+    }
+    _hours = buildHours(rows);
+    render();
+  }
+
+  document.getElementById('sx-ctrls').addEventListener('click', (ev) => {
+    const tfBtn = ev.target.closest('.sx-tf');
+    if (tfBtn) {
+      _tf = tfBtn.dataset.tf;
+      document.querySelectorAll('.sx-tf').forEach(b => b.classList.toggle('active', b === tfBtn));
+      load();
+      return;
+    }
+    const dBtn = ev.target.closest('.sx-days');
+    if (dBtn) {
+      _daysSel = parseInt(dBtn.dataset.days, 10);
+      document.querySelectorAll('.sx-days').forEach(b => b.classList.toggle('active', b === dBtn));
+      load();
+    }
+  });
+
+  load();
+  if (window.lucide) lucide.createIcons();
+  </script>
+</body>
+</html>
