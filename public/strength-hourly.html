@@ -187,7 +187,7 @@
         <div id="sx-content"><div class="sx-loading"><span class="spinner"></span> Loading strength data…</div></div>
         <p style="margin:10px 0 0;font-size:10.5px;color:var(--text-dim)">
           Each column = one hour (one 15-minute bar on M15, one day in Daily avg). Top bar = strongest currency, bottom bar = weakest, values in pips.
-          Click a column for the full 8-currency ranking. Drag or scroll to pan. Data available back to May 2025 (M15 limited to 10 days).
+          Click a column for the full 8-currency ranking. Drag or scroll to pan. Data available back to May 2025 (M15 stores the last ~30 days).
         </p>
       </div>
     </div>
@@ -249,7 +249,7 @@
 
   // ── State ──
   const DATA_START = '2025-05-20';                   // oldest stored strength data
-  const M15_MAX_DAYS = 10;                           // M15 raw data is 15-min × 28 pairs — keep ranges short
+  const M15_MAX_DAYS = 30;                           // m15_pair_spreads retains ~30 days of 15-min data
   const HOURLY_MAX_COLS = 2400;                      // beyond this hourly view auto-switches to daily
 
   let _tf = '3h';
@@ -479,7 +479,7 @@
       // Single day: fetch enough history to reach it, always hourly
       days = Math.min(730, Math.max(2, Math.ceil((Date.now() - new Date(dayFilter + 'T00:00:00').getTime()) / 86400000) + 1));
       if (_tf === 'm15' && days > M15_MAX_DAYS) {
-        el.innerHTML = '<p style="font-size:12px;color:var(--text-muted)">M15 data is only available for the last 10 days — pick a recent date or switch timeframe.</p>';
+        el.innerHTML = '<p style="font-size:12px;color:var(--text-muted)">M15 data is only stored for the last ~30 days — pick a recent date or switch timeframe.</p>';
         syncControls();
         return;
       }
