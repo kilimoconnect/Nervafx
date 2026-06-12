@@ -62,6 +62,13 @@
     }
     .bx-range-btn:hover { color: var(--text); background: rgba(255,255,255,0.08); }
     .bx-range-btn.active { background: rgba(96,165,250,0.15); border-color: rgba(96,165,250,0.5); color: #60a5fa; }
+    .bx-date {
+      padding: 3px 8px; border-radius: 7px; font-size: 11px; font-weight: 600;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); cursor: pointer; font-family: inherit;
+      color-scheme: dark;
+    }
+    .bx-date.active { background: rgba(96,165,250,0.15); border-color: rgba(96,165,250,0.5); color: #60a5fa; }
 
     /* Stats */
     .bx-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
@@ -125,6 +132,7 @@
           <button class="bx-range-btn" data-days="90">90D</button>
           <button class="bx-range-btn" data-days="180">180D</button>
           <button class="bx-range-btn" data-days="365">1Y</button>
+          <input type="date" id="bx-date" class="bx-date" title="Show a single day" />
         </span>
       </div>
       <div class="bx-card-bd" id="bx-stats"><div class="bx-loading"><span class="spinner"></span> Loading…</div></div>
@@ -429,10 +437,23 @@
   document.getElementById('bx-chart').addEventListener('mouseleave', () => { tipEl.style.display = 'none'; });
 
   // ── Load + range switching ──
+  function _finishRender() {
+    renderStats(_points);
+    renderLegend();
+    drawChart();
+    // Land on the most recent data
+    const scroll = document.getElementById('bx-chart-scroll');
+    scroll.scrollLeft = scroll.scrollWidth;
+    if (window.lucide) lucide.createIcons();
+  }
+
   async function load(days) {
     _days = days;
     document.querySelectorAll('.bx-range-btn').forEach(b =>
       b.classList.toggle('active', parseInt(b.dataset.days, 10) === days));
+    const dateInput = document.getElementById('bx-date');
+    dateInput.value = '';
+    dateInput.classList.remove('active');
     document.getElementById('bx-stats').innerHTML = '<div class="bx-loading"><span class="spinner"></span> Loading…</div>';
     document.getElementById('bx-mode-note').textContent = '';
 
@@ -448,18 +469,52 @@
     document.getElementById('bx-mode-note').textContent = _hourlyMode
       ? '· hourly — scroll horizontally'
       : '· daily averages with peak markers';
-    renderStats(_points);
-    renderLegend();
-    drawChart();
-    // Land on the most recent data
-    const scroll = document.getElementById('bx-chart-scroll');
-    scroll.scrollLeft = scroll.scrollWidth;
-    if (window.lucide) lucide.createIcons();
+    _finishRender();
+  }
+
+  // Single-day view — pick any date, see that day's hourly curve
+  function localDateOf(t) {
+    return new Date(t).toLocaleDateString('en-CA', { timeZone: _tz() }); // YYYY-MM-DD
+  }
+
+  async function loadDay(dateStr) {
+    document.querySelectorAll('.bx-range-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('bx-date').classList.add('active');
+    document.getElementById('bx-stats').innerHTML = '<div class="bx-loading"><span class="spinner"></span> Loading…</div>';
+    document.getElementById('bx-mode-note').textContent = '';
+
+    // Fetch enough history to cover the selected day (+1 margin for tz offset)
+    const daysBack = Math.min(730, Math.max(2, Math.ceil((Date.now() - new Date(dateStr + 'T00:00:00').getTime()) / 86400000) + 1));
+    let rows;
+    try {
+      rows = await fetchRows(daysBack);
+    } catch (e) {
+      document.getElementById('bx-stats').innerHTML = `<p style="font-size:12px;color:var(--text-muted)">Failed to load: ${e.message}</p>`;
+      return;
+    }
+
+    const dayRows = rows.filter(r => localDateOf(r.time_utc) === dateStr);
+    _hourlyMode = true;
+    _points = dayRows.map(r => ({
+      time: r.time_utc,
+      energy: Math.round(parseFloat(r.market_energy) || 0),
+      behaviour: classifyHour(r),
+      session: r.session_name,
+    }));
+    document.getElementById('bx-mode-note').textContent =
+      `· ${new Date(dateStr + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'short', year: 'numeric' })}`;
+    _finishRender();
   }
 
   document.getElementById('bx-ranges').addEventListener('click', (ev) => {
     const btn = ev.target.closest('.bx-range-btn');
     if (btn) load(parseInt(btn.dataset.days, 10));
+  });
+
+  const _dateInput = document.getElementById('bx-date');
+  _dateInput.max = new Date().toLocaleDateString('en-CA', { timeZone: _tz() });
+  _dateInput.addEventListener('change', () => {
+    if (_dateInput.value) loadDay(_dateInput.value);
   });
 
   let _resizeT = null;
