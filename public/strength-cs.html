@@ -380,6 +380,10 @@
         return { time: r.time, strongest: vals[0]?.cur, weakest: vals[vals.length - 1]?.cur, vals };
       });
 
+      // Build a time index so we can look up slot data for any streak
+      const slotByTime = {};
+      for (const sl of slots) slotByTime[sl.time] = sl;
+
       function findStreaks(field) {
         const result = [];
         let i = 0;
@@ -393,7 +397,9 @@
               const v = sl.vals.find(x => x.cur === ccy);
               return s + (v ? v.val : 0);
             }, 0) / len;
-            result.push({ ccy, len, startTime: slots[i].time, endTime: slots[j - 1].time, avgVal });
+            // Capture the midpoint slot's full ranking for pair building
+            const midSlot = slots[Math.floor((i + j - 1) / 2)];
+            result.push({ ccy, len, startTime: slots[i].time, endTime: slots[j - 1].time, avgVal, midVals: midSlot.vals });
           }
           i = j;
         }
@@ -404,7 +410,21 @@
       const weakStreaks   = findStreaks('weakest').map(s => ({ ...s, type: 'weak' }));
       const allStreaks = [...strongStreaks, ...weakStreaks].sort((a, b) => b.startTime.localeCompare(a.startTime));
 
-      // Best 3 pairs from recent streaks
+      // Per-streak pairs: strong ccy → pair with weakest currencies at that time, and vice versa
+      for (const s of allStreaks) {
+        const ranking = s.midVals;
+        if (s.type === 'strong') {
+          const top = [{ cur: s.ccy, val: (ranking.find(v => v.cur === s.ccy) || {}).val || 0 }];
+          const bot = ranking.slice(-3).reverse();
+          s.pairs = buildPairs(top, bot);
+        } else {
+          const top = ranking.slice(0, 3);
+          const bot = [{ cur: s.ccy, val: (ranking.find(v => v.cur === s.ccy) || {}).val || 0 }];
+          s.pairs = buildPairs(top, bot);
+        }
+      }
+
+      // Global best 3 pairs from recent streaks
       const now = Date.now();
       const strongScores = {}, weakScores = {};
       for (const s of strongStreaks) {
@@ -442,7 +462,7 @@
 
       html += `<div style="font-size:11px;color:var(--text-dim);margin-bottom:14px">
         Currencies holding #1 strongest or #1 weakest for 4+ consecutive 15-minute intervals.
-        Longer streaks indicate sustained directional commitment.
+        Each streak shows the best 3 tradeable pairs at that time.
       </div>`;
 
       // Group streaks by local date
@@ -483,8 +503,13 @@
             <div style="text-align:right;min-width:55px">
               <div style="font-size:13px;font-weight:800;color:${barColor}">${s.len}×15m</div>
               <div style="font-size:9px;color:var(--text-dim)">${durLabel}</div>
-            </div>
-          </div>`;
+            </div>`;
+
+          // Best 3 pairs for this streak
+          if (s.pairs?.length) {
+            html += `<div class="cs-pairs-row">${s.pairs.map(p => pairCardHTML(p, 'row')).join('')}</div>`;
+          }
+          html += `</div>`;
         }
         html += '</div></div>';
       }
