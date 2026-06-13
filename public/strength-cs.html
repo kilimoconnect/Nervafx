@@ -403,38 +403,55 @@
         }
       }
 
-      // Sort newest first
-      activeSlots.sort((a, b) => b.time.localeCompare(a.time));
-
-      // Compute pairs for each slot
+      // Merge same-time strong + weak into combined rows
+      // Key by time, each entry can have strong and/or weak
+      const mergedMap = {};
       for (const s of activeSlots) {
-        if (s.type === 'strong') {
-          const top = [{ cur: s.ccy, val: (s.vals.find(v => v.cur === s.ccy) || {}).val || 0 }];
-          const bot = s.vals.slice(-3).reverse();
-          s.pairs = buildPairs(top, bot);
+        const m = mergedMap[s.time] = mergedMap[s.time] || { time: s.time, vals: s.vals };
+        if (s.type === 'strong') { m.strongCcy = s.ccy; m.strongCount = s.count; }
+        else { m.weakCcy = s.ccy; m.weakCount = s.count; }
+      }
+
+      // Build pairs per merged row: use strong vs weak directly when both exist
+      const merged = Object.values(mergedMap);
+      for (const m of merged) {
+        if (m.strongCcy && m.weakCcy) {
+          const top = [{ cur: m.strongCcy, val: (m.vals.find(v => v.cur === m.strongCcy) || {}).val || 0 }];
+          const bot = [{ cur: m.weakCcy, val: (m.vals.find(v => v.cur === m.weakCcy) || {}).val || 0 }];
+          // Also add next strongest/weakest for more pair options
+          const top3 = m.vals.slice(0, 3);
+          const bot3 = m.vals.slice(-3).reverse();
+          m.pairs = buildPairs(top3, bot3);
+        } else if (m.strongCcy) {
+          const top = [{ cur: m.strongCcy, val: (m.vals.find(v => v.cur === m.strongCcy) || {}).val || 0 }];
+          const bot = m.vals.slice(-3).reverse();
+          m.pairs = buildPairs(top, bot);
         } else {
-          const top = s.vals.slice(0, 3);
-          const bot = [{ cur: s.ccy, val: (s.vals.find(v => v.cur === s.ccy) || {}).val || 0 }];
-          s.pairs = buildPairs(top, bot);
+          const top = m.vals.slice(0, 3);
+          const bot = [{ cur: m.weakCcy, val: (m.vals.find(v => v.cur === m.weakCcy) || {}).val || 0 }];
+          m.pairs = buildPairs(top, bot);
         }
       }
+
+      // Sort newest first
+      merged.sort((a, b) => b.time.localeCompare(a.time));
 
       let html = '';
 
       html += `<div style="font-size:11px;color:var(--text-dim);margin-bottom:14px">
         Each row is a 15-minute interval where a currency has held #1 strongest or weakest for 4+ consecutive intervals.
-        The count shows how long the streak has been running at that point.
+        When both strongest and weakest qualify at the same time, they are combined.
       </div>`;
 
       // Group by local date
       const byDate = {};
-      for (const s of activeSlots) {
-        const d = fmtFull(s.time);
-        (byDate[d] = byDate[d] || []).push(s);
+      for (const m of merged) {
+        const d = fmtFull(m.time);
+        (byDate[d] = byDate[d] || []).push(m);
       }
 
       for (const [dateLabel, items] of Object.entries(byDate)) {
-        const maxCount = Math.max(...items.map(s => s.count));
+        const maxCount = Math.max(...items.map(m => Math.max(m.strongCount || 0, m.weakCount || 0)));
         html += `<div style="margin-bottom:16px">`;
         html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
           <span style="font-size:12px;font-weight:700;color:#e2e8f0">${dateLabel}</span>
@@ -443,27 +460,33 @@
         </div>`;
         html += '<div class="cs-rows">';
 
-        for (const s of items) {
-          const t = fmtTime(s.time);
-          const isStrong = s.type === 'strong';
-          const barColor = isStrong ? '#22c55e' : '#ef4444';
-          const barW = Math.min(100, (s.count / 20) * 100);
+        for (const m of items) {
+          const t = fmtTime(m.time);
+          const hasBoth = m.strongCcy && m.weakCcy;
+          const topCount = Math.max(m.strongCount || 0, m.weakCount || 0);
+          const barW = Math.min(100, (topCount / 20) * 100);
 
-          html += `<div class="cs-row${s.count >= 8 ? ' highlight' : ''}" style="${s.count >= 8 ? 'border-color:rgba(245,158,11,0.25);background:rgba(245,158,11,0.06)' : ''}">
+          html += `<div class="cs-row${topCount >= 8 ? ' highlight' : ''}" style="${topCount >= 8 ? 'border-color:rgba(245,158,11,0.25);background:rgba(245,158,11,0.06)' : ''}${hasBoth ? ';border-left:3px solid #a78bfa' : ''}">
             <div class="cs-row-time">${t}</div>
-            <div class="cs-row-ccys">
-              <span class="${isStrong ? 'cs-strong' : 'cs-weak'}">${s.ccy}</span>
-              <span style="font-size:10px;color:var(--text-dim)">${isStrong ? 'Strongest' : 'Weakest'}</span>
-            </div>
+            <div class="cs-row-ccys" style="flex-direction:column;gap:2px">`;
+
+          if (m.strongCcy) {
+            html += `<div><span class="cs-strong">${m.strongCcy}</span> <span style="font-size:10px;color:var(--text-dim)">Strongest ${m.strongCount}×15m</span></div>`;
+          }
+          if (m.weakCcy) {
+            html += `<div><span class="cs-weak">${m.weakCcy}</span> <span style="font-size:10px;color:var(--text-dim)">Weakest ${m.weakCount}×15m</span></div>`;
+          }
+
+          html += `</div>
             <div class="cs-row-bar-wrap">
-              <div class="cs-row-bar" style="width:${barW}%;background:${barColor}"></div>
+              <div class="cs-row-bar" style="width:${barW}%;background:${hasBoth ? '#a78bfa' : (m.strongCcy ? '#22c55e' : '#ef4444')}"></div>
             </div>
             <div style="text-align:right;min-width:55px">
-              <div style="font-size:13px;font-weight:800;color:${barColor}">${s.count}×15m</div>
+              <div style="font-size:13px;font-weight:800;color:${hasBoth ? '#a78bfa' : (m.strongCcy ? '#22c55e' : '#ef4444')}">${topCount}×15m</div>
             </div>`;
 
-          if (s.pairs?.length) {
-            html += `<div class="cs-pairs-row">${s.pairs.map(p => pairCardHTML(p, 'row')).join('')}</div>`;
+          if (m.pairs?.length) {
+            html += `<div class="cs-pairs-row">${m.pairs.map(p => pairCardHTML(p, 'row')).join('')}</div>`;
           }
           html += `</div>`;
         }
