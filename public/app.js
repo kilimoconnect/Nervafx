@@ -4911,7 +4911,7 @@ function _switchCsTab(tab) {
 async function _renderCs6H(modal, tz) {
   const body = modal.querySelector('.cs-modal-body');
   try {
-    const data = await api('/api/strength-history?days=1&multi=1');
+    const data = await api('/api/strength-history?days=7&multi=1');
     const rows = data.rows || [];
     if (!rows.length) { body.innerHTML = '<p class="empty-state">No strength data</p>'; return; }
 
@@ -4923,7 +4923,6 @@ async function _renderCs6H(modal, tz) {
     }
 
     const hourKeys = Object.keys(byHour).sort();
-    // For each hour: find strongest and weakest by smooth_6h, convert to positive, sum
     const hourResults = [];
     for (const hk of hourKeys) {
       const currencies = byHour[hk];
@@ -4935,21 +4934,42 @@ async function _renderCs6H(modal, tz) {
       const weakest = sorted[sorted.length - 1];
       const sum = Math.abs(strongest.val) + Math.abs(weakest.val);
       const time = hk + ':00:00Z';
-      hourResults.push({ time, strongest, weakest, sum });
+      // Top 3 pairs when sum ≥ 30 pips
+      let pairs = null;
+      if (sum >= 0.003) {
+        const top3 = sorted.slice(0, 3);
+        const bot3 = sorted.slice(-3).reverse();
+        const candidates = [];
+        for (const s of top3) {
+          for (const w of bot3) {
+            if (s.cur === w.cur) continue;
+            const pn = `${s.cur}_${w.cur}`, rn = `${w.cur}_${s.cur}`;
+            if (CS_PAIRS.includes(pn)) candidates.push({ pair: pn, dir: 'BUY', strong: s.cur, weak: w.cur, spread: Math.abs(s.val) + Math.abs(w.val) });
+            else if (CS_PAIRS.includes(rn)) candidates.push({ pair: rn, dir: 'SELL', strong: s.cur, weak: w.cur, spread: Math.abs(s.val) + Math.abs(w.val) });
+          }
+        }
+        candidates.sort((a, b) => b.spread - a.spread);
+        pairs = candidates.slice(0, 3);
+      }
+      hourResults.push({ time, strongest, weakest, sum, sorted, pairs });
     }
 
-    // Show last 12 hours (most recent first)
-    const recent = hourResults.slice(-12).reverse();
+    const recent = hourResults.reverse();
     const pips = v => (v * 10000).toFixed(1);
+    const CS_THRESHOLD = 0.003; // 30 pips
 
-    let html = `<div style="font-size:10px;color:var(--text-dim);margin-bottom:10px">Strongest + Weakest by 6H strength (absolute values summed). Higher = more separation.</div>`;
-    html += '<div class="cs-rows">';
+    let html = `<div style="font-size:10px;color:var(--text-dim);margin-bottom:10px">Strongest + Weakest by 6H strength (absolute values summed). Rows highlighted at ≥30 pips with top 3 pairs.</div>`;
+    html += '<div class="cs-rows" style="max-height:60vh;overflow-y:auto">';
     for (const h of recent) {
       const t = new Date(h.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: tz });
       const d = new Date(h.time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', timeZone: tz });
       const barWidth = Math.min(100, (h.sum / 0.005) * 100);
-      const sumColor = h.sum >= 0.003 ? '#22c55e' : h.sum >= 0.0015 ? '#f59e0b' : '#64748b';
-      html += `<div class="cs-row">
+      const meetsThreshold = h.sum >= CS_THRESHOLD;
+      const sumColor = meetsThreshold ? '#22c55e' : h.sum >= 0.0015 ? '#f59e0b' : '#64748b';
+      const rowBg = meetsThreshold ? 'rgba(34,197,94,0.08)' : 'rgba(255,255,255,0.03)';
+      const rowBorder = meetsThreshold ? 'rgba(34,197,94,0.2)' : 'rgba(255,255,255,0.05)';
+
+      html += `<div class="cs-row" style="background:${rowBg};border-color:${rowBorder};flex-wrap:wrap">
         <div class="cs-row-time">${t}<span class="cs-row-date">${d}</span></div>
         <div class="cs-row-ccys">
           <span class="cs-strong">${h.strongest.cur} <span class="cs-val">+${pips(Math.abs(h.strongest.val))}</span></span>
@@ -4958,8 +4978,22 @@ async function _renderCs6H(modal, tz) {
         <div class="cs-row-bar-wrap">
           <div class="cs-row-bar" style="width:${barWidth}%;background:${sumColor}"></div>
         </div>
-        <div class="cs-row-sum" style="color:${sumColor}">${pips(h.sum)}</div>
-      </div>`;
+        <div class="cs-row-sum" style="color:${sumColor}">${pips(h.sum)}${meetsThreshold ? '<span style="font-size:8px;display:block;color:#22c55e">≥30</span>' : ''}</div>`;
+
+      // Show top 3 pairs when threshold met
+      if (meetsThreshold && h.pairs?.length) {
+        html += `<div style="width:100%;display:flex;gap:6px;margin-top:6px;padding-top:6px;border-top:1px solid rgba(34,197,94,0.12)">`;
+        for (const p of h.pairs) {
+          const dc = p.dir === 'BUY' ? '#22c55e' : '#ef4444';
+          html += `<div style="flex:1;padding:4px 6px;border-radius:4px;background:rgba(255,255,255,0.04);text-align:center">
+            <div style="font-size:11px;font-weight:800;color:#e2e8f0">${p.pair.replace('_','/')}</div>
+            <div style="font-size:9px;font-weight:700;color:${dc}">${p.dir}</div>
+            <div style="font-size:8px;color:var(--text-dim)"><span style="color:#22c55e">${p.strong}</span> vs <span style="color:#ef4444">${p.weak}</span></div>
+          </div>`;
+        }
+        html += `</div>`;
+      }
+      html += `</div>`;
     }
     html += '</div>';
     body.innerHTML = html;
