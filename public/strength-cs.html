@@ -368,6 +368,25 @@
         const data = await api(`/api/m15-strength-history?days=${_m15Days}`);
         _cache[key] = data.rows || [];
       }
+      // Also fetch 6H data to find which hours meet ≥30 threshold
+      const key6h = `6h:${_m15Days}`;
+      if (!_cache[key6h]) {
+        const data6h = await api(`/api/strength-history?days=${_m15Days}&multi=1`);
+        _cache[key6h] = data6h.rows || [];
+      }
+      const thresholdHours = new Set();
+      const byHour6h = {};
+      for (const r of _cache[key6h]) {
+        const hk = r.time.slice(0, 13);
+        (byHour6h[hk] = byHour6h[hk] || []).push(r);
+      }
+      for (const [hk, ccys] of Object.entries(byHour6h)) {
+        const sorted = ccys.map(c => ({ val: parseFloat(c.smooth_6h) || 0 })).sort((a, b) => b.val - a.val);
+        if (sorted.length < 2) continue;
+        const sum = Math.abs(sorted[0].val) + Math.abs(sorted[sorted.length - 1].val);
+        if (sum >= 0.003) thresholdHours.add(hk);
+      }
+
       const rows = _cache[key];
       const body = document.getElementById('cs-m15-body');
       if (!rows.length) { body.innerHTML = '<p style="color:var(--text-dim);text-align:center;padding:40px">No M15 data</p>'; return; }
@@ -408,7 +427,24 @@
 
       const strongStreaks = findStreaks('strongest').map(s => ({ ...s, type: 'strong' }));
       const weakStreaks   = findStreaks('weakest').map(s => ({ ...s, type: 'weak' }));
-      const allStreaks = [...strongStreaks, ...weakStreaks].sort((a, b) => b.startTime.localeCompare(a.startTime));
+
+      // Only keep streaks that overlap with at least one ≥30 pip hour
+      function overlapsThreshold(s) {
+        const startH = s.startTime.slice(0, 13);
+        const endH   = s.endTime.slice(0, 13);
+        // Check every hour the streak spans
+        const t0 = new Date(startH + ':00:00Z').getTime();
+        const t1 = new Date(endH + ':00:00Z').getTime();
+        for (let t = t0; t <= t1; t += 3600000) {
+          const hk = new Date(t).toISOString().slice(0, 13);
+          if (thresholdHours.has(hk)) return true;
+        }
+        return false;
+      }
+
+      const allStreaks = [...strongStreaks, ...weakStreaks]
+        .filter(overlapsThreshold)
+        .sort((a, b) => b.startTime.localeCompare(a.startTime));
 
       // Per-streak pairs: strong ccy → pair with weakest currencies at that time, and vice versa
       for (const s of allStreaks) {
