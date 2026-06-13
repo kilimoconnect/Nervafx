@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>NervaFX — Currency Strength Analysis</title>
+  <link rel="icon" type="image/png" href="/nervafx-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <link rel="stylesheet" href="style.css" />
+
+  <style>
+    .grid { display: block !important; }
+
+    .sx-topbar {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 28px; height: 56px;
+      background: rgba(8,11,18,0.92);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+    .sx-topbar-left { display: flex; align-items: center; gap: 12px; }
+    .sx-logo img { height: 24px; display: block; }
+    .sx-sep { color: rgba(255,255,255,0.1); font-size: 20px; font-weight: 200; }
+    .sx-title-text { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+    .sx-back-btn {
+      display: flex; align-items: center; gap: 5px;
+      padding: 6px 12px; border-radius: 8px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); font-size: 11px; font-weight: 600;
+      cursor: pointer; text-decoration: none; transition: all 0.15s;
+    }
+    .sx-back-btn:hover { background: rgba(255,255,255,0.09); color: var(--text); }
+
+    .sx-main { max-width: 900px; margin: 0 auto; padding: 20px 16px 80px; }
+
+    .sx-card {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px; margin-bottom: 18px; overflow: hidden;
+    }
+    .sx-card-hd {
+      padding: 12px 16px; font-size: 12px; font-weight: 700;
+      color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    }
+    .sx-card-hd i { width: 15px; height: 15px; }
+    .sx-card-bd { padding: 14px 16px; }
+
+    .sx-ctrls { display: flex; gap: 6px; margin-left: auto; align-items: center; flex-wrap: wrap; }
+    .sx-btn {
+      padding: 4px 12px; border-radius: 7px; font-size: 11px; font-weight: 700;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); cursor: pointer; transition: all 0.15s;
+    }
+    .sx-btn:hover { color: var(--text); background: rgba(255,255,255,0.08); }
+    .sx-btn.active { background: rgba(96,165,250,0.15); border-color: rgba(96,165,250,0.5); color: #60a5fa; }
+
+    /* ── Tab bar ── */
+    .cs-tabs {
+      display: flex; gap: 0; margin-bottom: 18px;
+      border-radius: 10px; overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .cs-tab {
+      flex: 1; padding: 12px 16px; text-align: center;
+      font-size: 13px; font-weight: 700; cursor: pointer;
+      background: rgba(255,255,255,0.02); color: var(--text-muted);
+      border: none; transition: all 0.15s;
+    }
+    .cs-tab:not(:last-child) { border-right: 1px solid rgba(255,255,255,0.08); }
+    .cs-tab:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+    .cs-tab.active { background: rgba(96,165,250,0.12); color: #60a5fa; }
+
+    /* ── Row styles ── */
+    .cs-rows { display: flex; flex-direction: column; gap: 6px; }
+    .cs-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px; border-radius: 8px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.05);
+      flex-wrap: wrap;
+    }
+    .cs-row.highlight {
+      background: rgba(34,197,94,0.08);
+      border-color: rgba(34,197,94,0.2);
+    }
+    .cs-row-time {
+      font-size: 12px; font-weight: 700; color: #e2e8f0;
+      min-width: 55px; white-space: nowrap;
+    }
+    .cs-row-date {
+      display: block; font-size: 9px; color: var(--text-dim); font-weight: 400;
+    }
+    .cs-row-ccys { display: flex; gap: 10px; flex: 1; min-width: 0; }
+    .cs-strong { font-size: 12px; font-weight: 700; color: #22c55e; }
+    .cs-weak { font-size: 12px; font-weight: 700; color: #ef4444; }
+    .cs-val { font-size: 10px; font-weight: 500; opacity: 0.7; }
+    .cs-row-bar-wrap {
+      flex: 0 0 80px; height: 8px; background: rgba(255,255,255,0.06);
+      border-radius: 4px; overflow: hidden;
+    }
+    .cs-row-bar { height: 100%; border-radius: 4px; transition: width 0.3s; }
+    .cs-row-sum { font-size: 14px; font-weight: 800; min-width: 44px; text-align: right; }
+    .cs-streak-count { font-size: 10px; font-weight: 500; opacity: 0.6; margin-left: 2px; }
+
+    /* ── Pairs inline ── */
+    .cs-pairs-row {
+      width: 100%; display: flex; gap: 8px; margin-top: 8px;
+      padding-top: 8px; border-top: 1px solid rgba(34,197,94,0.12);
+    }
+    .cs-pair-card {
+      flex: 1; min-width: 80px; padding: 8px 10px; border-radius: 6px;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06);
+      text-align: center;
+    }
+    .cs-pair-name { font-size: 14px; font-weight: 800; color: #e2e8f0; }
+    .cs-pair-dir { font-size: 10px; font-weight: 700; margin-top: 2px; }
+    .cs-pair-ccys { font-size: 9px; color: var(--text-dim); margin-top: 2px; }
+
+    /* ── Best pairs hero ── */
+    .cs-hero {
+      padding: 16px 18px; border-radius: 10px; margin-bottom: 16px;
+      background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.2);
+    }
+    .cs-hero-title {
+      font-size: 11px; font-weight: 700; color: #a5b4fc;
+      text-transform: uppercase; letter-spacing: .06em; margin-bottom: 10px;
+    }
+    .cs-hero-pairs { display: flex; gap: 10px; flex-wrap: wrap; }
+    .cs-hero-pair {
+      flex: 1; min-width: 120px; padding: 12px 14px; border-radius: 8px;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06);
+      text-align: center;
+    }
+    .cs-hero-pair-name { font-size: 18px; font-weight: 800; color: #e2e8f0; }
+    .cs-hero-pair-dir { font-size: 12px; font-weight: 700; margin-top: 3px; }
+    .cs-hero-pair-ccys { font-size: 10px; color: var(--text-dim); margin-top: 3px; }
+
+    /* ── Loading ── */
+    .cs-loading {
+      display: flex; align-items: center; justify-content: center;
+      gap: 10px; padding: 60px 20px; color: var(--text-dim); font-size: 13px;
+    }
+
+    @media (max-width: 600px) {
+      .sx-topbar { padding: 0 12px; height: 48px; }
+      .sx-main { padding: 12px 10px 60px; }
+      .sx-card-bd { padding: 10px 10px; }
+      .cs-row { gap: 6px; padding: 8px 10px; }
+      .cs-row-time { font-size: 11px; min-width: 48px; }
+      .cs-row-bar-wrap { flex: 0 0 50px; }
+      .cs-pair-card { padding: 6px 4px; }
+      .cs-pair-name { font-size: 12px; }
+      .cs-hero-pair { min-width: 90px; padding: 10px 8px; }
+      .cs-hero-pair-name { font-size: 15px; }
+      .cs-tabs { border-radius: 8px; }
+      .cs-tab { padding: 10px 8px; font-size: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="sx-topbar">
+    <div class="sx-topbar-left">
+      <a class="sx-logo" href="/app"><img src="/nervafx-icon.png" alt="NervaFX" onerror="this.style.display='none'"></a>
+      <span class="sx-sep">|</span>
+      <span class="sx-title-text">Currency Strength Analysis</span>
+    </div>
+    <a class="sx-back-btn" href="/app"><i data-lucide="arrow-left" style="width:13px;height:13px"></i> Dashboard</a>
+  </div>
+
+  <div class="sx-main">
+    <!-- Tab switcher -->
+    <div class="cs-tabs">
+      <button class="cs-tab active" data-tab="6h" onclick="switchTab('6h')">6H Strength Sum</button>
+      <button class="cs-tab" data-tab="m15" onclick="switchTab('m15')">15M Persistence</button>
+    </div>
+
+    <!-- Content area -->
+    <div id="cs-content">
+      <div class="cs-loading"><span class="spinner"></span> Loading...</div>
+    </div>
+  </div>
+
+  <script>
+  (function() {
+    'use strict';
+
+    const CS_PAIRS = [
+      'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
+      'EUR_GBP','EUR_JPY','EUR_CHF','EUR_CAD','EUR_AUD','EUR_NZD',
+      'GBP_JPY','GBP_CHF','GBP_CAD','GBP_AUD','GBP_NZD',
+      'AUD_JPY','AUD_CHF','AUD_CAD','AUD_NZD',
+      'NZD_JPY','NZD_CHF','NZD_CAD',
+      'CHF_JPY','CAD_JPY','CAD_CHF',
+    ];
+
+    const _tzStored = localStorage.getItem('nfx_tz');
+    function _tz() {
+      if (_tzStored && _tzStored !== 'auto') return _tzStored;
+      return Intl.DateTimeFormat().resolvedOptions().timeZone;
+    }
+
+    async function api(path) {
+      const token = localStorage.getItem('nfx_token');
+      const r = await fetch(path, { headers: { Authorization: `Bearer ${token}` } });
+      if (r.status === 401) { location.replace('/login.html'); throw new Error('Unauthorized'); }
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || `${r.status}`);
+      return j;
+    }
+
+    const pips = v => (v * 10000).toFixed(1);
+    const fmtTime = t => new Date(t).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: _tz() });
+    const fmtDay  = t => new Date(t).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', timeZone: _tz() });
+    const fmtFull = t => new Date(t).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', timeZone: _tz() });
+
+    let _tab = '6h';
+    let _6hDays = 7;
+    let _m15Days = 7;
+    const _cache = {};
+
+    function buildPairs(top3, bot3) {
+      const candidates = [];
+      for (const s of top3) {
+        for (const w of bot3) {
+          if (s.cur === w.cur) continue;
+          const pn = `${s.cur}_${w.cur}`, rn = `${w.cur}_${s.cur}`;
+          if (CS_PAIRS.includes(pn)) candidates.push({ pair: pn, dir: 'BUY', strong: s.cur, weak: w.cur, spread: Math.abs(s.val) + Math.abs(w.val) });
+          else if (CS_PAIRS.includes(rn)) candidates.push({ pair: rn, dir: 'SELL', strong: s.cur, weak: w.cur, spread: Math.abs(s.val) + Math.abs(w.val) });
+        }
+      }
+      candidates.sort((a, b) => b.spread - a.spread);
+      return candidates.slice(0, 3);
+    }
+
+    function pairCardHTML(p, size) {
+      const dc = p.dir === 'BUY' ? '#22c55e' : '#ef4444';
+      const cls = size === 'hero' ? 'cs-hero-pair' : 'cs-pair-card';
+      const nCls = size === 'hero' ? 'cs-hero-pair-name' : 'cs-pair-name';
+      const dCls = size === 'hero' ? 'cs-hero-pair-dir' : 'cs-pair-dir';
+      const cCls = size === 'hero' ? 'cs-hero-pair-ccys' : 'cs-pair-ccys';
+      return `<div class="${cls}">
+        <div class="${nCls}">${p.pair.replace('_','/')}</div>
+        <div class="${dCls}" style="color:${dc}">${p.dir}</div>
+        <div class="${cCls}"><span style="color:#22c55e">${p.strong}↑</span> vs <span style="color:#ef4444">${p.weak}↓</span>${p.spread ? `<span style="margin-left:4px;color:var(--text-dim)">${pips(p.spread)}p</span>` : ''}</div>
+      </div>`;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 6H TAB
+    // ═══════════════════════════════════════════════════════════════════════════
+    async function render6H() {
+      const el = document.getElementById('cs-content');
+      el.innerHTML = `<div class="sx-card"><div class="sx-card-hd"><i data-lucide="bar-chart-3"></i> 6H Strength Sum
+        <div class="sx-ctrls">
+          ${[7,14,30].map(d => `<button class="sx-btn ${_6hDays===d?'active':''}" onclick="set6HDays(${d})">${d}D</button>`).join('')}
+        </div>
+      </div><div class="sx-card-bd" id="cs-6h-body"><div class="cs-loading"><span class="spinner"></span> Loading 6H data...</div></div></div>`;
+      lucide.createIcons();
+
+      const key = `6h:${_6hDays}`;
+      if (!_cache[key]) {
+        const data = await api(`/api/strength-history?days=${_6hDays}&multi=1`);
+        _cache[key] = data.rows || [];
+      }
+      const rows = _cache[key];
+      const body = document.getElementById('cs-6h-body');
+      if (!rows.length) { body.innerHTML = '<p style="color:var(--text-dim);text-align:center;padding:40px">No strength data</p>'; return; }
+
+      const byHour = {};
+      for (const r of rows) {
+        const hk = r.time.slice(0, 13);
+        (byHour[hk] = byHour[hk] || []).push(r);
+      }
+
+      const hourKeys = Object.keys(byHour).sort();
+      const hourResults = [];
+      for (const hk of hourKeys) {
+        const currencies = byHour[hk];
+        const sorted = currencies
+          .map(c => ({ cur: c.currency, val: parseFloat(c.smooth_6h) || 0 }))
+          .sort((a, b) => b.val - a.val);
+        if (sorted.length < 2) continue;
+        const strongest = sorted[0];
+        const weakest = sorted[sorted.length - 1];
+        const sum = Math.abs(strongest.val) + Math.abs(weakest.val);
+        const time = hk + ':00:00Z';
+        let pairs = null;
+        if (sum >= 0.003) {
+          pairs = buildPairs(sorted.slice(0, 3), sorted.slice(-3).reverse());
+        }
+        hourResults.push({ time, strongest, weakest, sum, sorted, pairs });
+      }
+
+      const all = hourResults.reverse();
+      const CS_THRESHOLD = 0.003;
+
+      // Group by local date
+      const byDate = {};
+      for (const h of all) {
+        const d = fmtFull(h.time);
+        (byDate[d] = byDate[d] || []).push(h);
+      }
+
+      let html = `<div style="font-size:11px;color:var(--text-dim);margin-bottom:14px">
+        Strongest + Weakest currency by 6H strength each hour. Both values converted to positive and summed.
+        Rows at <span style="color:#22c55e;font-weight:700">≥30 pips</span> show the best 3 tradeable pairs.
+      </div>`;
+
+      for (const [dateLabel, hours] of Object.entries(byDate)) {
+        const thresholdCount = hours.filter(h => h.sum >= CS_THRESHOLD).length;
+        html += `<div style="margin-bottom:16px">`;
+        html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
+          <span style="font-size:12px;font-weight:700;color:#e2e8f0">${dateLabel}</span>
+          ${thresholdCount ? `<span style="font-size:10px;font-weight:600;color:#22c55e;background:rgba(34,197,94,0.1);padding:2px 8px;border-radius:4px">${thresholdCount} hour${thresholdCount>1?'s':''} ≥30</span>` : ''}
+        </div>`;
+        html += '<div class="cs-rows">';
+
+        for (const h of hours) {
+          const t = fmtTime(h.time);
+          const barWidth = Math.min(100, (h.sum / 0.006) * 100);
+          const meetsThreshold = h.sum >= CS_THRESHOLD;
+          const sumColor = meetsThreshold ? '#22c55e' : h.sum >= 0.0015 ? '#f59e0b' : '#64748b';
+
+          html += `<div class="cs-row${meetsThreshold ? ' highlight' : ''}">
+            <div class="cs-row-time">${t}</div>
+            <div class="cs-row-ccys">
+              <span class="cs-strong">${h.strongest.cur} <span class="cs-val">+${pips(Math.abs(h.strongest.val))}</span></span>
+              <span class="cs-weak">${h.weakest.cur} <span class="cs-val">-${pips(Math.abs(h.weakest.val))}</span></span>
+            </div>
+            <div class="cs-row-bar-wrap">
+              <div class="cs-row-bar" style="width:${barWidth}%;background:${sumColor}"></div>
+            </div>
+            <div class="cs-row-sum" style="color:${sumColor}">${pips(h.sum)}${meetsThreshold ? '<span style="font-size:8px;display:block;color:#22c55e">≥30</span>' : ''}</div>`;
+
+          if (meetsThreshold && h.pairs?.length) {
+            html += `<div class="cs-pairs-row">${h.pairs.map(p => pairCardHTML(p, 'row')).join('')}</div>`;
+          }
+          html += `</div>`;
+        }
+        html += '</div></div>';
+      }
+
+      body.innerHTML = html;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 15M TAB
+    // ═══════════════════════════════════════════════════════════════════════════
+    async function render15M() {
+      const el = document.getElementById('cs-content');
+      el.innerHTML = `<div class="sx-card"><div class="sx-card-hd"><i data-lucide="timer"></i> 15M Persistence Streaks
+        <div class="sx-ctrls">
+          ${[3,7,14,30].map(d => `<button class="sx-btn ${_m15Days===d?'active':''}" onclick="setM15Days(${d})">${d}D</button>`).join('')}
+        </div>
+      </div><div class="sx-card-bd" id="cs-m15-body"><div class="cs-loading"><span class="spinner"></span> Loading M15 data...</div></div></div>`;
+      lucide.createIcons();
+
+      const key = `m15:${_m15Days}`;
+      if (!_cache[key]) {
+        const data = await api(`/api/m15-strength-history?days=${_m15Days}`);
+        _cache[key] = data.rows || [];
+      }
+      const rows = _cache[key];
+      const body = document.getElementById('cs-m15-body');
+      if (!rows.length) { body.innerHTML = '<p style="color:var(--text-dim);text-align:center;padding:40px">No M15 data</p>'; return; }
+
+      rows.sort((a, b) => a.time.localeCompare(b.time));
+
+      const slots = rows.map(r => {
+        const vals = Object.entries(r.values || {}).map(([cur, v]) => ({ cur, val: parseFloat(v) || 0 }));
+        vals.sort((a, b) => b.val - a.val);
+        return { time: r.time, strongest: vals[0]?.cur, weakest: vals[vals.length - 1]?.cur, vals };
+      });
+
+      function findStreaks(field) {
+        const result = [];
+        let i = 0;
+        while (i < slots.length) {
+          const ccy = slots[i][field];
+          let j = i + 1;
+          while (j < slots.length && slots[j][field] === ccy) j++;
+          const len = j - i;
+          if (len >= 4) {
+            const avgVal = slots.slice(i, j).reduce((s, sl) => {
+              const v = sl.vals.find(x => x.cur === ccy);
+              return s + (v ? v.val : 0);
+            }, 0) / len;
+            result.push({ ccy, len, startTime: slots[i].time, endTime: slots[j - 1].time, avgVal });
+          }
+          i = j;
+        }
+        return result;
+      }
+
+      const strongStreaks = findStreaks('strongest').map(s => ({ ...s, type: 'strong' }));
+      const weakStreaks   = findStreaks('weakest').map(s => ({ ...s, type: 'weak' }));
+      const allStreaks = [...strongStreaks, ...weakStreaks].sort((a, b) => b.startTime.localeCompare(a.startTime));
+
+      // Best 3 pairs from recent streaks
+      const now = Date.now();
+      const strongScores = {}, weakScores = {};
+      for (const s of strongStreaks) {
+        const age = (now - new Date(s.endTime).getTime()) / 3600000;
+        const weight = s.len * Math.max(0.1, 1 - age / (24 * _m15Days));
+        strongScores[s.ccy] = (strongScores[s.ccy] || 0) + weight;
+      }
+      for (const s of weakStreaks) {
+        const age = (now - new Date(s.endTime).getTime()) / 3600000;
+        const weight = s.len * Math.max(0.1, 1 - age / (24 * _m15Days));
+        weakScores[s.ccy] = (weakScores[s.ccy] || 0) + weight;
+      }
+      const topStrong = Object.entries(strongScores).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([cur, w]) => ({ cur, val: w }));
+      const topWeak   = Object.entries(weakScores).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([cur, w]) => ({ cur, val: w }));
+
+      const bestPairs = [];
+      for (const s of topStrong) {
+        for (const w of topWeak) {
+          if (s.cur === w.cur) continue;
+          const pn = `${s.cur}_${w.cur}`, rn = `${w.cur}_${s.cur}`;
+          if (CS_PAIRS.includes(pn)) bestPairs.push({ pair: pn, dir: 'BUY', strong: s.cur, weak: w.cur, spread: 0 });
+          else if (CS_PAIRS.includes(rn)) bestPairs.push({ pair: rn, dir: 'SELL', strong: s.cur, weak: w.cur, spread: 0 });
+        }
+      }
+
+      let html = '';
+
+      // Hero: best pairs
+      if (bestPairs.length) {
+        html += `<div class="cs-hero">
+          <div class="cs-hero-title">Best 3 Pairs — Strong vs Weak (by streak dominance)</div>
+          <div class="cs-hero-pairs">${bestPairs.slice(0, 3).map(p => pairCardHTML(p, 'hero')).join('')}</div>
+        </div>`;
+      }
+
+      html += `<div style="font-size:11px;color:var(--text-dim);margin-bottom:14px">
+        Currencies holding #1 strongest or #1 weakest for 4+ consecutive 15-minute intervals.
+        Longer streaks indicate sustained directional commitment.
+      </div>`;
+
+      // Group streaks by local date
+      const byDate = {};
+      for (const s of allStreaks) {
+        const d = fmtFull(s.startTime);
+        (byDate[d] = byDate[d] || []).push(s);
+      }
+
+      for (const [dateLabel, streaks] of Object.entries(byDate)) {
+        const maxLen = Math.max(...streaks.map(s => s.len));
+        html += `<div style="margin-bottom:16px">`;
+        html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
+          <span style="font-size:12px;font-weight:700;color:#e2e8f0">${dateLabel}</span>
+          <span style="font-size:10px;font-weight:600;color:var(--text-dim)">${streaks.length} streak${streaks.length>1?'s':''}</span>
+          ${maxLen >= 8 ? `<span style="font-size:10px;font-weight:600;color:#f59e0b;background:rgba(245,158,11,0.1);padding:2px 8px;border-radius:4px">max ${maxLen}×15m</span>` : ''}
+        </div>`;
+        html += '<div class="cs-rows">';
+
+        for (const s of streaks) {
+          const start = fmtTime(s.startTime);
+          const end = fmtTime(s.endTime);
+          const isStrong = s.type === 'strong';
+          const barColor = isStrong ? '#22c55e' : '#ef4444';
+          const barW = Math.min(100, (s.len / 20) * 100);
+          const durationMin = s.len * 15;
+          const durLabel = durationMin >= 60 ? `${Math.floor(durationMin/60)}h${durationMin%60?durationMin%60+'m':''}` : `${durationMin}m`;
+
+          html += `<div class="cs-row${s.len >= 8 ? ' highlight' : ''}" style="${s.len >= 8 ? 'border-color:rgba(245,158,11,0.25);background:rgba(245,158,11,0.06)' : ''}">
+            <div class="cs-row-time">${start}–${end}</div>
+            <div class="cs-row-ccys">
+              <span class="${isStrong ? 'cs-strong' : 'cs-weak'}">${s.ccy}</span>
+              <span style="font-size:10px;color:var(--text-dim)">${isStrong ? 'Strongest' : 'Weakest'}</span>
+            </div>
+            <div class="cs-row-bar-wrap">
+              <div class="cs-row-bar" style="width:${barW}%;background:${barColor}"></div>
+            </div>
+            <div style="text-align:right;min-width:55px">
+              <div style="font-size:13px;font-weight:800;color:${barColor}">${s.len}×15m</div>
+              <div style="font-size:9px;color:var(--text-dim)">${durLabel}</div>
+            </div>
+          </div>`;
+        }
+        html += '</div></div>';
+      }
+
+      if (!allStreaks.length) {
+        html += '<p style="color:var(--text-dim);text-align:center;padding:40px">No 4-interval streaks found</p>';
+      }
+
+      body.innerHTML = html;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Tab switching + range controls
+    // ═══════════════════════════════════════════════════════════════════════════
+    window.switchTab = function(tab) {
+      _tab = tab;
+      document.querySelectorAll('.cs-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+      if (tab === '6h') render6H(); else render15M();
+    };
+
+    window.set6HDays = function(d) {
+      _6hDays = d;
+      render6H();
+    };
+
+    window.setM15Days = function(d) {
+      _m15Days = d;
+      render15M();
+    };
+
+    // Init
+    const params = new URLSearchParams(location.search);
+    _tab = params.get('tab') || '6h';
+    document.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      document.querySelectorAll('.cs-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === _tab));
+      if (_tab === '6h') render6H(); else render15M();
+    });
+  })();
+  </script>
+</body>
+</html>

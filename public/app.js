@@ -6504,8 +6504,8 @@ function _meMarketCycleBanner(cycle, latestHourly) {
     ${engineBtn('movement', 'Movement')}
     ${engineBtn('breadth', 'Breadth')}
     ${engineBtn('agreement', 'Agreement')}
-    <button class="me-ai-toggle me-btn-cs premium-only" onclick="openCsStrengthModal('6h')">CS 6H</button>
-    <button class="me-ai-toggle me-btn-cs premium-only" onclick="openCsStrengthModal('m15')">CS 15M</button>
+    <button class="me-ai-toggle me-btn-cs premium-only" onclick="location.href='/strength-cs.html?tab=6h'">CS 6H</button>
+    <button class="me-ai-toggle me-btn-cs premium-only" onclick="location.href='/strength-cs.html?tab=m15'">CS 15M</button>
     <button class="me-ai-toggle me-btn-ai premium-only" onclick="openMeAiAnalysis()">AI Analysis</button>
   </div>`;
 }
