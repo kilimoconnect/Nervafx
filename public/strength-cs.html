@@ -225,6 +225,9 @@
     let _6hDays = 7;
     let _m15Days = 7;
     const _cache = {};
+    const DATA_START = '2025-05-20';
+    function allDays() { return Math.min(730, Math.ceil((Date.now() - new Date(DATA_START).getTime()) / 86400000) + 1); }
+    const RANGE_OPTS = [7,14,30,90,365,'all'];
 
     function buildPairs(top3, bot3) {
       const candidates = [];
@@ -260,7 +263,7 @@
       const el = document.getElementById('cs-content');
       el.innerHTML = `<div class="sx-card"><div class="sx-card-hd"><i data-lucide="bar-chart-3"></i> 6H Strength Sum
         <div class="sx-ctrls">
-          ${[7,14,30].map(d => `<button class="sx-btn ${_6hDays===d?'active':''}" onclick="set6HDays(${d})">${d}D</button>`).join('')}
+          ${RANGE_OPTS.map(d => { const v = d === 'all' ? allDays() : d; const lbl = d === 'all' ? 'All' : d === 365 ? '1Y' : d+'D'; return `<button class="sx-btn ${_6hDays===v?'active':''}" onclick="set6HDays(${v})">${lbl}</button>`; }).join('')}
         </div>
       </div><div class="sx-card-bd" id="cs-6h-body"><div class="cs-loading"><span class="spinner"></span> Loading 6H data...</div></div></div>`;
       lucide.createIcons();
@@ -358,7 +361,7 @@
       const el = document.getElementById('cs-content');
       el.innerHTML = `<div class="sx-card"><div class="sx-card-hd"><i data-lucide="timer"></i> 15M Persistence Streaks
         <div class="sx-ctrls">
-          ${[3,7,14,30].map(d => `<button class="sx-btn ${_m15Days===d?'active':''}" onclick="setM15Days(${d})">${d}D</button>`).join('')}
+          ${RANGE_OPTS.map(d => { const v = d === 'all' ? allDays() : d; const lbl = d === 'all' ? 'All' : d === 365 ? '1Y' : d+'D'; return `<button class="sx-btn ${_m15Days===v?'active':''}" onclick="setM15Days(${v})">${lbl}</button>`; }).join('')}
         </div>
       </div><div class="sx-card-bd" id="cs-m15-body"><div class="cs-loading"><span class="spinner"></span> Loading M15 data...</div></div></div>`;
       lucide.createIcons();
