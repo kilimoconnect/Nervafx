@@ -4845,6 +4845,217 @@ function _updateMarketActivityBar() {
   }
 }
 
+// ─── Currency Strength Modals (CS 6H / CS 15M) ─────────────────────────────
+
+function openCsStrengthModal(tab) {
+  let modal = document.getElementById('cs-strength-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'cs-strength-modal';
+    modal.className = 'me-analysis-overlay';
+    modal.addEventListener('click', e => { if (e.target === modal) closeCsStrengthModal(); });
+    document.body.appendChild(modal);
+  }
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  _renderCsStrengthModal(modal, tab);
+}
+
+function closeCsStrengthModal() {
+  const modal = document.getElementById('cs-strength-modal');
+  if (modal) modal.style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+async function _renderCsStrengthModal(modal, tab) {
+  const tz = (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC');
+  const tzLabel = new Intl.DateTimeFormat('en-GB', { timeZone: tz, timeZoneName: 'short' })
+    .formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value || '';
+
+  modal.innerHTML = `<div class="me-modal-panel" style="max-width:520px">
+    <div class="me-modal-header">
+      <div class="me-modal-title">
+        <span class="me-modal-title-label">Currency Strength</span>
+        <span style="font-size:10px;color:var(--text-muted);margin-left:8px">${tzLabel}</span>
+      </div>
+      <button class="me-modal-close" onclick="closeCsStrengthModal()">✕</button>
+    </div>
+    <div style="display:flex;gap:6px;padding:8px 20px 0">
+      <button class="me-ai-toggle cs-tab-btn ${tab === '6h' ? 'active' : ''}" onclick="_switchCsTab('6h')" style="background:${tab === '6h' ? 'rgba(99,102,241,0.25)' : 'rgba(99,102,241,0.08)'};color:${tab === '6h' ? '#c7d2fe' : '#94a3b8'};border:1px solid rgba(99,102,241,${tab === '6h' ? '0.4' : '0.15'});padding:5px 14px;border-radius:5px;font-size:11px;font-weight:700;cursor:pointer">6H Sum</button>
+      <button class="me-ai-toggle cs-tab-btn ${tab === 'm15' ? 'active' : ''}" onclick="_switchCsTab('m15')" style="background:${tab === 'm15' ? 'rgba(99,102,241,0.25)' : 'rgba(99,102,241,0.08)'};color:${tab === 'm15' ? '#c7d2fe' : '#94a3b8'};border:1px solid rgba(99,102,241,${tab === 'm15' ? '0.4' : '0.15'});padding:5px 14px;border-radius:5px;font-size:11px;font-weight:700;cursor:pointer">15M Streak</button>
+    </div>
+    <div class="me-modal-body cs-modal-body" style="padding:16px 20px">
+      <div class="me-loading"><span class="spinner"></span> Loading…</div>
+    </div>
+  </div>`;
+
+  if (tab === '6h') await _renderCs6H(modal, tz);
+  else await _renderCs15M(modal, tz);
+}
+
+function _switchCsTab(tab) {
+  const modal = document.getElementById('cs-strength-modal');
+  if (modal) _renderCsStrengthModal(modal, tab);
+}
+
+// ── CS 6H: Hourly sum of strongest + weakest (converted to positive, added) ──
+async function _renderCs6H(modal, tz) {
+  const body = modal.querySelector('.cs-modal-body');
+  try {
+    const data = await api('/api/strength-history?days=1&multi=1');
+    const rows = data.rows || [];
+    if (!rows.length) { body.innerHTML = '<p class="empty-state">No strength data</p>'; return; }
+
+    // Group by hour
+    const byHour = {};
+    for (const r of rows) {
+      const hk = r.time.slice(0, 13);
+      (byHour[hk] = byHour[hk] || []).push(r);
+    }
+
+    const hourKeys = Object.keys(byHour).sort();
+    // For each hour: find strongest and weakest by smooth_6h, convert to positive, sum
+    const hourResults = [];
+    for (const hk of hourKeys) {
+      const currencies = byHour[hk];
+      const sorted = currencies
+        .map(c => ({ cur: c.currency, val: parseFloat(c.smooth_6h) || 0 }))
+        .sort((a, b) => b.val - a.val);
+      if (sorted.length < 2) continue;
+      const strongest = sorted[0];
+      const weakest = sorted[sorted.length - 1];
+      const sum = Math.abs(strongest.val) + Math.abs(weakest.val);
+      const time = hk + ':00:00Z';
+      hourResults.push({ time, strongest, weakest, sum });
+    }
+
+    // Show last 12 hours (most recent first)
+    const recent = hourResults.slice(-12).reverse();
+    const pips = v => (v * 10000).toFixed(1);
+
+    let html = `<div style="font-size:10px;color:var(--text-dim);margin-bottom:10px">Strongest + Weakest by 6H strength (absolute values summed). Higher = more separation.</div>`;
+    html += '<div class="cs-rows">';
+    for (const h of recent) {
+      const t = new Date(h.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: tz });
+      const d = new Date(h.time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', timeZone: tz });
+      const barWidth = Math.min(100, (h.sum / 0.005) * 100);
+      const sumColor = h.sum >= 0.003 ? '#22c55e' : h.sum >= 0.0015 ? '#f59e0b' : '#64748b';
+      html += `<div class="cs-row">
+        <div class="cs-row-time">${t}<span class="cs-row-date">${d}</span></div>
+        <div class="cs-row-ccys">
+          <span class="cs-strong">${h.strongest.cur} <span class="cs-val">+${pips(Math.abs(h.strongest.val))}</span></span>
+          <span class="cs-weak">${h.weakest.cur} <span class="cs-val">-${pips(Math.abs(h.weakest.val))}</span></span>
+        </div>
+        <div class="cs-row-bar-wrap">
+          <div class="cs-row-bar" style="width:${barWidth}%;background:${sumColor}"></div>
+        </div>
+        <div class="cs-row-sum" style="color:${sumColor}">${pips(h.sum)}</div>
+      </div>`;
+    }
+    html += '</div>';
+    body.innerHTML = html;
+  } catch (e) {
+    body.innerHTML = `<p class="empty-state">Error: ${e.message}</p>`;
+  }
+}
+
+// ── CS 15M: Currencies that stay strongest/weakest for 4 consecutive intervals ──
+async function _renderCs15M(modal, tz) {
+  const body = modal.querySelector('.cs-modal-body');
+  try {
+    const data = await api('/api/m15-strength-history?days=2');
+    const rows = data.rows || [];
+    if (!rows.length) { body.innerHTML = '<p class="empty-state">No M15 data</p>'; return; }
+
+    // Sort ascending by time
+    rows.sort((a, b) => a.time.localeCompare(b.time));
+
+    // For each 15-min slot, find strongest and weakest
+    const slots = rows.map(r => {
+      const vals = Object.entries(r.values || {}).map(([cur, v]) => ({ cur, val: parseFloat(v) || 0 }));
+      vals.sort((a, b) => b.val - a.val);
+      return { time: r.time, strongest: vals[0]?.cur, weakest: vals[vals.length - 1]?.cur, vals };
+    });
+
+    // Find streaks of 4+ consecutive for strongest or weakest
+    const streaks = [];
+    let i = 0;
+    while (i < slots.length) {
+      // Check strong streak
+      const refStrong = slots[i].strongest;
+      const refWeak = slots[i].weakest;
+      let sLen = 1, wLen = 1;
+      let j = i + 1;
+      while (j < slots.length && slots[j].strongest === refStrong) { sLen++; j++; }
+      j = i + 1;
+      while (j < slots.length && slots[j].weakest === refWeak) { wLen++; j++; }
+
+      if (sLen >= 4 || wLen >= 4) {
+        const len = Math.max(sLen, wLen);
+        const endIdx = i + len - 1;
+        const slotVals = slots[i].vals;
+        const strongVal = slotVals.find(v => v.cur === refStrong)?.val || 0;
+        const weakVal = slotVals.find(v => v.cur === refWeak)?.val || 0;
+        streaks.push({
+          startTime: slots[i].time,
+          endTime: slots[endIdx].time,
+          strongCcy: sLen >= 4 ? refStrong : null,
+          weakCcy: wLen >= 4 ? refWeak : null,
+          strongLen: sLen >= 4 ? sLen : 0,
+          weakLen: wLen >= 4 ? wLen : 0,
+          strongVal, weakVal
+        });
+      }
+      i++;
+    }
+
+    // Deduplicate: keep the longest streak per start currency, show most recent first
+    const seen = new Set();
+    const unique = [];
+    for (const s of streaks.reverse()) {
+      const key = `${s.strongCcy || ''}|${s.weakCcy || ''}|${s.startTime}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      unique.push(s);
+    }
+    const recent = unique.slice(0, 20);
+
+    const pips = v => (v * 10000).toFixed(1);
+    const fmtT = t => new Date(t).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: tz });
+    const fmtD = t => new Date(t).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', timeZone: tz });
+
+    let html = `<div style="font-size:10px;color:var(--text-dim);margin-bottom:10px">Currencies holding #1 strongest or #1 weakest for 4+ consecutive 15-minute intervals.</div>`;
+
+    if (!recent.length) {
+      html += '<p class="empty-state">No 4-interval streaks found in last 48h</p>';
+    } else {
+      html += '<div class="cs-rows">';
+      for (const s of recent) {
+        const start = fmtT(s.startTime);
+        const end = fmtT(s.endTime);
+        const day = fmtD(s.startTime);
+
+        let ccyHtml = '';
+        if (s.strongCcy) {
+          ccyHtml += `<span class="cs-strong">${s.strongCcy} <span class="cs-streak-count">${s.strongLen}×15m</span></span>`;
+        }
+        if (s.weakCcy) {
+          ccyHtml += `<span class="cs-weak">${s.weakCcy} <span class="cs-streak-count">${s.weakLen}×15m</span></span>`;
+        }
+
+        html += `<div class="cs-row">
+          <div class="cs-row-time">${start}–${end}<span class="cs-row-date">${day}</span></div>
+          <div class="cs-row-ccys">${ccyHtml}</div>
+        </div>`;
+      }
+      html += '</div>';
+    }
+    body.innerHTML = html;
+  } catch (e) {
+    body.innerHTML = `<p class="empty-state">Error: ${e.message}</p>`;
+  }
+}
+
 function openMeAiAnalysis() {
   let modal = document.getElementById('me-analysis-modal');
   if (!modal) {
@@ -6221,6 +6432,8 @@ function _meMarketCycleBanner(cycle, latestHourly) {
     ${engineBtn('movement', 'Movement')}
     ${engineBtn('breadth', 'Breadth')}
     ${engineBtn('agreement', 'Agreement')}
+    <button class="me-ai-toggle me-btn-cs premium-only" onclick="openCsStrengthModal('6h')">CS 6H</button>
+    <button class="me-ai-toggle me-btn-cs premium-only" onclick="openCsStrengthModal('m15')">CS 15M</button>
     <button class="me-ai-toggle me-btn-ai premium-only" onclick="openMeAiAnalysis()">AI Analysis</button>
   </div>`;
 }
