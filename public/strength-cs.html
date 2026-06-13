@@ -380,111 +380,77 @@
         return { time: r.time, strongest: vals[0]?.cur, weakest: vals[vals.length - 1]?.cur, vals };
       });
 
-      // Build a time index so we can look up slot data for any streak
-      const slotByTime = {};
-      for (const sl of slots) slotByTime[sl.time] = sl;
+      // Build per-slot running streak counts for strongest and weakest
+      // Each slot gets a count: how many consecutive intervals this currency has held #1
+      const activeSlots = []; // { time, ccy, type, count, vals }
 
-      function findStreaks(field) {
-        const result = [];
-        let i = 0;
-        while (i < slots.length) {
-          const ccy = slots[i][field];
-          let j = i + 1;
-          while (j < slots.length && slots[j][field] === ccy) j++;
-          const len = j - i;
-          if (len >= 4) {
-            const avgVal = slots.slice(i, j).reduce((s, sl) => {
-              const v = sl.vals.find(x => x.cur === ccy);
-              return s + (v ? v.val : 0);
-            }, 0) / len;
-            // Capture the midpoint slot's full ranking for pair building
-            const midSlot = slots[Math.floor((i + j - 1) / 2)];
-            result.push({ ccy, len, startTime: slots[i].time, endTime: slots[j - 1].time, avgVal, midVals: midSlot.vals });
-          }
-          i = j;
+      // Compute running counts for 'strongest'
+      let sCount = 1;
+      for (let i = 0; i < slots.length; i++) {
+        if (i > 0 && slots[i].strongest === slots[i - 1].strongest) sCount++;
+        else sCount = 1;
+        if (sCount >= 4) {
+          activeSlots.push({ time: slots[i].time, ccy: slots[i].strongest, type: 'strong', count: sCount, vals: slots[i].vals });
         }
-        return result;
+      }
+      // Compute running counts for 'weakest'
+      let wCount = 1;
+      for (let i = 0; i < slots.length; i++) {
+        if (i > 0 && slots[i].weakest === slots[i - 1].weakest) wCount++;
+        else wCount = 1;
+        if (wCount >= 4) {
+          activeSlots.push({ time: slots[i].time, ccy: slots[i].weakest, type: 'weak', count: wCount, vals: slots[i].vals });
+        }
       }
 
-      const strongStreaks = findStreaks('strongest').map(s => ({ ...s, type: 'strong' }));
-      const weakStreaks   = findStreaks('weakest').map(s => ({ ...s, type: 'weak' }));
-      const allStreaks = [...strongStreaks, ...weakStreaks].sort((a, b) => b.startTime.localeCompare(a.startTime));
+      // Sort newest first
+      activeSlots.sort((a, b) => b.time.localeCompare(a.time));
 
-      // Per-streak pairs: strong ccy → pair with weakest currencies at that time, and vice versa
-      for (const s of allStreaks) {
-        const ranking = s.midVals;
+      // Compute pairs for each slot
+      for (const s of activeSlots) {
         if (s.type === 'strong') {
-          const top = [{ cur: s.ccy, val: (ranking.find(v => v.cur === s.ccy) || {}).val || 0 }];
-          const bot = ranking.slice(-3).reverse();
+          const top = [{ cur: s.ccy, val: (s.vals.find(v => v.cur === s.ccy) || {}).val || 0 }];
+          const bot = s.vals.slice(-3).reverse();
           s.pairs = buildPairs(top, bot);
         } else {
-          const top = ranking.slice(0, 3);
-          const bot = [{ cur: s.ccy, val: (ranking.find(v => v.cur === s.ccy) || {}).val || 0 }];
+          const top = s.vals.slice(0, 3);
+          const bot = [{ cur: s.ccy, val: (s.vals.find(v => v.cur === s.ccy) || {}).val || 0 }];
           s.pairs = buildPairs(top, bot);
-        }
-      }
-
-      // Global best 3 pairs from recent streaks
-      const now = Date.now();
-      const strongScores = {}, weakScores = {};
-      for (const s of strongStreaks) {
-        const age = (now - new Date(s.endTime).getTime()) / 3600000;
-        const weight = s.len * Math.max(0.1, 1 - age / (24 * _m15Days));
-        strongScores[s.ccy] = (strongScores[s.ccy] || 0) + weight;
-      }
-      for (const s of weakStreaks) {
-        const age = (now - new Date(s.endTime).getTime()) / 3600000;
-        const weight = s.len * Math.max(0.1, 1 - age / (24 * _m15Days));
-        weakScores[s.ccy] = (weakScores[s.ccy] || 0) + weight;
-      }
-      const topStrong = Object.entries(strongScores).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([cur, w]) => ({ cur, val: w }));
-      const topWeak   = Object.entries(weakScores).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([cur, w]) => ({ cur, val: w }));
-
-      const bestPairs = [];
-      for (const s of topStrong) {
-        for (const w of topWeak) {
-          if (s.cur === w.cur) continue;
-          const pn = `${s.cur}_${w.cur}`, rn = `${w.cur}_${s.cur}`;
-          if (CS_PAIRS.includes(pn)) bestPairs.push({ pair: pn, dir: 'BUY', strong: s.cur, weak: w.cur, spread: 0 });
-          else if (CS_PAIRS.includes(rn)) bestPairs.push({ pair: rn, dir: 'SELL', strong: s.cur, weak: w.cur, spread: 0 });
         }
       }
 
       let html = '';
 
       html += `<div style="font-size:11px;color:var(--text-dim);margin-bottom:14px">
-        Currencies holding #1 strongest or #1 weakest for 4+ consecutive 15-minute intervals.
-        Each streak shows the best 3 tradeable pairs at that time.
+        Each row is a 15-minute interval where a currency has held #1 strongest or weakest for 4+ consecutive intervals.
+        The count shows how long the streak has been running at that point.
       </div>`;
 
-      // Group streaks by local date
+      // Group by local date
       const byDate = {};
-      for (const s of allStreaks) {
-        const d = fmtFull(s.startTime);
+      for (const s of activeSlots) {
+        const d = fmtFull(s.time);
         (byDate[d] = byDate[d] || []).push(s);
       }
 
-      for (const [dateLabel, streaks] of Object.entries(byDate)) {
-        const maxLen = Math.max(...streaks.map(s => s.len));
+      for (const [dateLabel, items] of Object.entries(byDate)) {
+        const maxCount = Math.max(...items.map(s => s.count));
         html += `<div style="margin-bottom:16px">`;
         html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
           <span style="font-size:12px;font-weight:700;color:#e2e8f0">${dateLabel}</span>
-          <span style="font-size:10px;font-weight:600;color:var(--text-dim)">${streaks.length} streak${streaks.length>1?'s':''}</span>
-          ${maxLen >= 8 ? `<span style="font-size:10px;font-weight:600;color:#f59e0b;background:rgba(245,158,11,0.1);padding:2px 8px;border-radius:4px">max ${maxLen}×15m</span>` : ''}
+          <span style="font-size:10px;font-weight:600;color:var(--text-dim)">${items.length} intervals</span>
+          ${maxCount >= 8 ? `<span style="font-size:10px;font-weight:600;color:#f59e0b;background:rgba(245,158,11,0.1);padding:2px 8px;border-radius:4px">max ${maxCount}×15m</span>` : ''}
         </div>`;
         html += '<div class="cs-rows">';
 
-        for (const s of streaks) {
-          const start = fmtTime(s.startTime);
-          const end = fmtTime(s.endTime);
+        for (const s of items) {
+          const t = fmtTime(s.time);
           const isStrong = s.type === 'strong';
           const barColor = isStrong ? '#22c55e' : '#ef4444';
-          const barW = Math.min(100, (s.len / 20) * 100);
-          const durationMin = s.len * 15;
-          const durLabel = durationMin >= 60 ? `${Math.floor(durationMin/60)}h${durationMin%60?durationMin%60+'m':''}` : `${durationMin}m`;
+          const barW = Math.min(100, (s.count / 20) * 100);
 
-          html += `<div class="cs-row${s.len >= 8 ? ' highlight' : ''}" style="${s.len >= 8 ? 'border-color:rgba(245,158,11,0.25);background:rgba(245,158,11,0.06)' : ''}">
-            <div class="cs-row-time">${start}–${end}</div>
+          html += `<div class="cs-row${s.count >= 8 ? ' highlight' : ''}" style="${s.count >= 8 ? 'border-color:rgba(245,158,11,0.25);background:rgba(245,158,11,0.06)' : ''}">
+            <div class="cs-row-time">${t}</div>
             <div class="cs-row-ccys">
               <span class="${isStrong ? 'cs-strong' : 'cs-weak'}">${s.ccy}</span>
               <span style="font-size:10px;color:var(--text-dim)">${isStrong ? 'Strongest' : 'Weakest'}</span>
@@ -493,11 +459,9 @@
               <div class="cs-row-bar" style="width:${barW}%;background:${barColor}"></div>
             </div>
             <div style="text-align:right;min-width:55px">
-              <div style="font-size:13px;font-weight:800;color:${barColor}">${s.len}×15m</div>
-              <div style="font-size:9px;color:var(--text-dim)">${durLabel}</div>
+              <div style="font-size:13px;font-weight:800;color:${barColor}">${s.count}×15m</div>
             </div>`;
 
-          // Best 3 pairs for this streak
           if (s.pairs?.length) {
             html += `<div class="cs-pairs-row">${s.pairs.map(p => pairCardHTML(p, 'row')).join('')}</div>`;
           }
