@@ -452,14 +452,6 @@
 
       let html = '';
 
-      // Hero: best pairs
-      if (bestPairs.length) {
-        html += `<div class="cs-hero">
-          <div class="cs-hero-title">Best 3 Pairs — Strong vs Weak (by streak dominance)</div>
-          <div class="cs-hero-pairs">${bestPairs.slice(0, 3).map(p => pairCardHTML(p, 'hero')).join('')}</div>
-        </div>`;
-      }
-
       html += `<div style="font-size:11px;color:var(--text-dim);margin-bottom:14px">
         Currencies holding #1 strongest or #1 weakest for 4+ consecutive 15-minute intervals.
         Each streak shows the best 3 tradeable pairs at that time.
