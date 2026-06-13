@@ -224,6 +224,8 @@
     let _tab = '6h';
     let _6hDays = 7;
     let _m15Days = 7;
+    let _6hDate = '';
+    let _m15Date = '';
     const _cache = {};
     const DATA_START = '2025-05-20';
     function allDays() { return Math.min(730, Math.ceil((Date.now() - new Date(DATA_START).getTime()) / 86400000) + 1); }
@@ -263,7 +265,9 @@
       const el = document.getElementById('cs-content');
       el.innerHTML = `<div class="sx-card"><div class="sx-card-hd"><i data-lucide="bar-chart-3"></i> 6H Strength Sum
         <div class="sx-ctrls">
-          ${RANGE_OPTS.map(d => { const v = d === 'all' ? allDays() : d; const lbl = d === 'all' ? 'All' : d === 365 ? '1Y' : d+'D'; return `<button class="sx-btn ${_6hDays===v?'active':''}" onclick="set6HDays(${v})">${lbl}</button>`; }).join('')}
+          ${RANGE_OPTS.map(d => { const v = d === 'all' ? allDays() : d; const lbl = d === 'all' ? 'All' : d === 365 ? '1Y' : d+'D'; return `<button class="sx-btn ${_6hDays===v&&!_6hDate?'active':''}" onclick="set6HDays(${v})">${lbl}</button>`; }).join('')}
+          <span class="sx-ctrl-sep"></span>
+          <input type="date" class="sx-date${_6hDate?' active':''}" value="${_6hDate}" min="${DATA_START}" max="${new Date().toISOString().slice(0,10)}" onchange="set6HDate(this.value)">
         </div>
       </div><div class="sx-card-bd" id="cs-6h-body"><div class="cs-loading"><span class="spinner"></span> Loading 6H data...</div></div></div>`;
       lucide.createIcons();
@@ -302,7 +306,13 @@
         hourResults.push({ time, strongest, weakest, sum, sorted, pairs });
       }
 
-      const all = hourResults.reverse();
+      let all = hourResults.reverse();
+      if (_6hDate) {
+        all = all.filter(h => {
+          const ld = new Date(h.time).toLocaleDateString('en-CA', { timeZone: _tz() });
+          return ld === _6hDate;
+        });
+      }
       const CS_THRESHOLD = 0.003;
 
       // Group by local date
@@ -361,7 +371,9 @@
       const el = document.getElementById('cs-content');
       el.innerHTML = `<div class="sx-card"><div class="sx-card-hd"><i data-lucide="timer"></i> 15M Persistence Streaks
         <div class="sx-ctrls">
-          ${RANGE_OPTS.map(d => { const v = d === 'all' ? allDays() : d; const lbl = d === 'all' ? 'All' : d === 365 ? '1Y' : d+'D'; return `<button class="sx-btn ${_m15Days===v?'active':''}" onclick="setM15Days(${v})">${lbl}</button>`; }).join('')}
+          ${RANGE_OPTS.map(d => { const v = d === 'all' ? allDays() : d; const lbl = d === 'all' ? 'All' : d === 365 ? '1Y' : d+'D'; return `<button class="sx-btn ${_m15Days===v&&!_m15Date?'active':''}" onclick="setM15Days(${v})">${lbl}</button>`; }).join('')}
+          <span class="sx-ctrl-sep"></span>
+          <input type="date" class="sx-date${_m15Date?' active':''}" value="${_m15Date}" min="${DATA_START}" max="${new Date().toISOString().slice(0,10)}" onchange="setM15Date(this.value)">
         </div>
       </div><div class="sx-card-bd" id="cs-m15-body"><div class="cs-loading"><span class="spinner"></span> Loading M15 data...</div></div></div>`;
       lucide.createIcons();
@@ -438,6 +450,14 @@
 
       // Sort newest first
       merged.sort((a, b) => b.time.localeCompare(a.time));
+      if (_m15Date) {
+        const filtered = merged.filter(m => {
+          const ld = new Date(m.time).toLocaleDateString('en-CA', { timeZone: _tz() });
+          return ld === _m15Date;
+        });
+        merged.length = 0;
+        merged.push(...filtered);
+      }
 
       let html = '';
 
@@ -513,12 +533,28 @@
     };
 
     window.set6HDays = function(d) {
-      _6hDays = d;
+      _6hDays = d; _6hDate = '';
+      render6H();
+    };
+    window.set6HDate = function(v) {
+      _6hDate = v;
+      if (v) {
+        const diff = Math.ceil((Date.now() - new Date(v).getTime()) / 86400000) + 1;
+        _6hDays = Math.max(diff, _6hDays);
+      }
       render6H();
     };
 
     window.setM15Days = function(d) {
-      _m15Days = d;
+      _m15Days = d; _m15Date = '';
+      render15M();
+    };
+    window.setM15Date = function(v) {
+      _m15Date = v;
+      if (v) {
+        const diff = Math.ceil((Date.now() - new Date(v).getTime()) / 86400000) + 1;
+        _m15Days = Math.max(diff, _m15Days);
+      }
       render15M();
     };
 
