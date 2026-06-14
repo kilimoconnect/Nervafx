@@ -238,6 +238,16 @@
     function allDays() { return Math.min(730, Math.ceil((Date.now() - new Date(DATA_START).getTime()) / 86400000) + 1); }
     const RANGE_OPTS = [7,14,30,90,365,'all'];
 
+    async function fetchCandleDirs(days) {
+      const key = `cdirs:${days}`;
+      if (_cache[key]) return _cache[key];
+      try {
+        const data = await api(`/api/candle-dirs?days=${days}`);
+        _cache[key] = data.dirs || {};
+      } catch (_) { _cache[key] = {}; }
+      return _cache[key];
+    }
+
     function buildPairs(top3, bot3) {
       const candidates = [];
       for (const s of top3) {
@@ -252,18 +262,20 @@
       return candidates.slice(0, 3);
     }
 
-    function countPrevDirs(pair, dir, hourIdx, allHours) {
-      const [base, quote] = pair.split('_');
-      let matching = 0;
+    function countPrevCandles(pair, dir, hourKey, candleDirs) {
+      const pairDirs = candleDirs[pair];
+      if (!pairDirs) return null;
+      const dt = new Date(hourKey + ':00:00Z');
+      let matching = 0, checked = 0;
       for (let i = 1; i <= 3; i++) {
-        const prev = allHours[hourIdx - i];
-        if (!prev?.sorted) break;
-        const bv = prev.sorted.find(c => c.cur === base)?.val ?? 0;
-        const qv = prev.sorted.find(c => c.cur === quote)?.val ?? 0;
-        const prevDir = bv > qv ? 'BUY' : 'SELL';
-        if (prevDir === dir) matching++;
+        const prev = new Date(dt.getTime() - i * 3600000);
+        const pk = prev.toISOString().slice(0, 13);
+        const d = pairDirs[pk];
+        if (d == null) continue;
+        checked++;
+        if ((dir === 'BUY' && d === 1) || (dir === 'SELL' && d === -1)) matching++;
       }
-      return matching;
+      return checked > 0 ? matching : null;
     }
 
     function pairCardHTML(p, size) {
@@ -330,11 +342,12 @@
         hourResults.push({ time, strongest, weakest, sum, sorted, pairs });
       }
 
-      for (let i = 0; i < hourResults.length; i++) {
-        const h = hourResults[i];
+      const candleDirs = await fetchCandleDirs(_6hDays);
+      for (const h of hourResults) {
+        const hk = h.time.slice(0, 13);
         if (h.pairs) {
           for (const p of h.pairs) {
-            p.prevCount = countPrevDirs(p.pair, p.dir, i, hourResults);
+            p.prevCount = countPrevCandles(p.pair, p.dir, hk, candleDirs);
           }
         }
       }
