@@ -3064,6 +3064,13 @@ async function renderEnergySignals(data) {
       activePairs.sort((a, b) => b._finalScore - a._finalScore);
 
       const candleDirs = await _fetchCandleDirs();
+      for (const p of activePairs) {
+        const pc = _countPrevCandles(p.instrument, p.dir, candleDirs);
+        p._prevCount = pc ? pc.count : -1;
+        p._prevTotal = pc ? pc.total : 0;
+      }
+      activePairs.sort((a, b) => b._prevCount - a._prevCount || b._finalScore - a._finalScore);
+
       pairsEl.innerHTML = activePairs.map(p => {
         const pairLabel = p.instrument.replace('_', '/');
         const dirCls = p.dir === 'BUY' ? 'buy' : 'sell';
@@ -3076,8 +3083,7 @@ async function renderEnergySignals(data) {
         const sp3 = parseFloat(p.spread_3h) || 0;
         const sp6 = parseFloat(p.spread_6h) || 0;
         const m15State = (p.m15_state || 'FLAT').toLowerCase();
-        const pc = _countPrevCandles(p.instrument, p.dir, candleDirs);
-        const pcBadge = _prevBadgeHtml(pc);
+        const pcBadge = p._prevTotal > 0 ? _prevBadgeHtml({ count: p._prevCount, total: p._prevTotal }) : '';
 
         // Energy event badge
         let eventHtml = '';
