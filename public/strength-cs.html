@@ -125,11 +125,12 @@
     .cs-pair-card {
       flex: 1; min-width: 80px; padding: 8px 10px; border-radius: 6px;
       background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06);
-      text-align: center; position: relative;
+      text-align: left; display: flex; align-items: center; gap: 8px;
     }
+    .cs-pair-info { flex: 1; min-width: 0; }
     .cs-pair-name { font-size: 14px; font-weight: 800; color: #e2e8f0; }
     .cs-pair-dir { font-size: 10px; font-weight: 700; margin-top: 2px; }
-    .cs-pair-ccys { font-size: 9px; color: var(--text-dim); margin-top: 2px; }
+    .cs-pair-ccys { font-size: 9px; color: var(--text-dim); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
     /* ── Best pairs hero ── */
     .cs-hero {
@@ -144,7 +145,7 @@
     .cs-hero-pair {
       flex: 1; min-width: 120px; padding: 12px 14px; border-radius: 8px;
       background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06);
-      text-align: center; position: relative;
+      text-align: left; display: flex; align-items: center; gap: 8px;
     }
     .cs-hero-pair-name { font-size: 18px; font-weight: 800; color: #e2e8f0; }
     .cs-hero-pair-dir { font-size: 12px; font-weight: 700; margin-top: 3px; }
@@ -163,10 +164,11 @@
       .cs-row { gap: 6px; padding: 8px 10px; }
       .cs-row-time { font-size: 11px; min-width: 48px; }
       .cs-row-bar-wrap { flex: 0 0 50px; }
-      .cs-pair-card { padding: 6px 4px; }
-      .cs-pair-name { font-size: 12px; }
-      .cs-hero-pair { min-width: 90px; padding: 10px 8px; }
-      .cs-hero-pair-name { font-size: 15px; }
+      .cs-pair-card { padding: 6px 6px; gap: 4px; }
+      .cs-pair-name { font-size: 11px; }
+      .cs-pair-ccys { font-size: 8px; }
+      .cs-hero-pair { min-width: 90px; padding: 8px 6px; gap: 4px; }
+      .cs-hero-pair-name { font-size: 14px; }
       .cs-tabs { border-radius: 8px; }
       .cs-tab { padding: 10px 8px; font-size: 12px; }
     }
@@ -285,13 +287,15 @@
       const dCls = size === 'hero' ? 'cs-hero-pair-dir' : 'cs-pair-dir';
       const cCls = size === 'hero' ? 'cs-hero-pair-ccys' : 'cs-pair-ccys';
       const prevBadge = p.prevCount != null
-        ? `<span style="position:absolute;top:4px;right:4px;font-size:11px;font-weight:800;padding:2px 7px;border-radius:4px;line-height:1.2;background:${p.prevCount >= 4 ? 'rgba(34,197,94,0.18);color:#22c55e;border:1px solid rgba(34,197,94,0.3)' : p.prevCount >= 3 ? 'rgba(245,158,11,0.18);color:#f59e0b;border:1px solid rgba(245,158,11,0.3)' : 'rgba(100,116,139,0.18);color:#94a3b8;border:1px solid rgba(100,116,139,0.2)'}">${p.prevCount}/5</span>`
+        ? `<span style="font-size:12px;font-weight:800;padding:2px 7px;border-radius:4px;line-height:1.2;white-space:nowrap;background:${p.prevCount >= 4 ? 'rgba(34,197,94,0.18);color:#22c55e;border:1px solid rgba(34,197,94,0.3)' : p.prevCount >= 3 ? 'rgba(245,158,11,0.18);color:#f59e0b;border:1px solid rgba(245,158,11,0.3)' : 'rgba(100,116,139,0.18);color:#94a3b8;border:1px solid rgba(100,116,139,0.2)'}">${p.prevCount}/5</span>`
         : '';
       return `<div class="${cls}">
+        <div class="cs-pair-info">
+          <div class="${nCls}">${p.pair.replace('_','/')}</div>
+          <div class="${dCls}" style="color:${dc}">${p.dir}</div>
+          <div class="${cCls}"><span style="color:#22c55e">${p.strong}↑</span> vs <span style="color:#ef4444">${p.weak}↓</span>${p.spread ? `<span style="margin-left:4px;color:var(--text-dim)">${pips(p.spread)}p</span>` : ''}</div>
+        </div>
         ${prevBadge}
-        <div class="${nCls}">${p.pair.replace('_','/')}</div>
-        <div class="${dCls}" style="color:${dc}">${p.dir}</div>
-        <div class="${cCls}"><span style="color:#22c55e">${p.strong}↑</span> vs <span style="color:#ef4444">${p.weak}↓</span>${p.spread ? `<span style="margin-left:4px;color:var(--text-dim)">${pips(p.spread)}p</span>` : ''}</div>
       </div>`;
     }
 
