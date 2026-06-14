@@ -50,11 +50,10 @@ async function fetchEnergyPairs() {
 async function fetchCurrencyStrength() {
   const { data } = await supabase
     .from('currency_strength')
-    .select('currency, smooth_3h, smooth_6h, smooth_12h')
+    .select('currency, smooth_3h, smooth_4h, smooth_6h, smooth_12h, smooth_1d')
     .order('time', { ascending: false })
     .limit(8);
   if (!data?.length) return [];
-  // Deduplicate (latest per currency)
   const seen = new Set();
   return data.filter(r => { if (seen.has(r.currency)) return false; seen.add(r.currency); return true; })
     .sort((a, b) => (parseFloat(b.smooth_3h) || 0) - (parseFloat(a.smooth_3h) || 0));
@@ -98,15 +97,29 @@ function buildPrompt(sessions, ep, marketCycle, prevSessions, hourlyTrend, energ
       ).join('\n')
     : 'No active signal pairs.';
 
-  // Current currency strength (3H ranked strongest→weakest)
-  const ccyBlock = ccyStrength.length
-    ? 'CURRENT CURRENCY STRENGTH (3H, in pips):\n' + ccyStrength.map(c => {
-        const h3 = ((parseFloat(c.smooth_3h)||0)*10000).toFixed(1);
-        const h12 = ((parseFloat(c.smooth_12h)||0)*10000).toFixed(1);
-        return `  ${c.currency} 3H=${h3} 12H=${h12}`;
-      }).join('\n') + '\n  Strongest: ' + ccyStrength[0].currency + ' | Weakest: ' + ccyStrength[ccyStrength.length-1].currency +
-      '\n  3H Dispersion: ' + (((parseFloat(ccyStrength[0].smooth_3h)||0) - (parseFloat(ccyStrength[ccyStrength.length-1].smooth_3h)||0))*10000).toFixed(1) + ' pips'
-    : '';
+  // Current currency strength (all timeframes, ranked by 3H)
+  let ccyBlock = '';
+  let csSumPips = 0;
+  let csSumMet = false;
+  if (ccyStrength.length) {
+    const h6Vals = ccyStrength.map(c => parseFloat(c.smooth_6h) || 0);
+    const strongest6h = Math.max(...h6Vals);
+    const weakest6h = Math.min(...h6Vals);
+    csSumPips = Math.round((Math.abs(strongest6h) + Math.abs(weakest6h)) * 10000);
+    csSumMet = csSumPips >= 40;
+
+    ccyBlock = 'CURRENT CURRENCY STRENGTH (pips):\n' + ccyStrength.map(c => {
+      const h3  = ((parseFloat(c.smooth_3h)||0)*10000).toFixed(1);
+      const h4  = ((parseFloat(c.smooth_4h)||0)*10000).toFixed(1);
+      const h6  = ((parseFloat(c.smooth_6h)||0)*10000).toFixed(1);
+      const h12 = ((parseFloat(c.smooth_12h)||0)*10000).toFixed(1);
+      const d1  = ((parseFloat(c.smooth_1d)||0)*10000).toFixed(1);
+      return `  ${c.currency} 3H=${h3} 4H=${h4} 6H=${h6} 12H=${h12} Daily=${d1}`;
+    }).join('\n') +
+    '\n  Strongest: ' + ccyStrength[0].currency + ' | Weakest: ' + ccyStrength[ccyStrength.length-1].currency +
+    '\n  3H Dispersion: ' + (((parseFloat(ccyStrength[0].smooth_3h)||0) - (parseFloat(ccyStrength[ccyStrength.length-1].smooth_3h)||0))*10000).toFixed(1) + ' pips' +
+    '\n  6H CS Sum (|strongest| + |weakest|): ' + csSumPips + 'p → ' + (csSumMet ? 'DIRECTION TRIGGER MET (≥40p)' : 'below threshold (need ≥40p)');
+  }
 
   return `You are a senior institutional forex trading intelligence engine. Your job is to produce ACTIONABLE intelligence, NOT metric commentary.
 
@@ -116,6 +129,8 @@ CRITICAL RULES:
 - ALWAYS compare to previous sessions when data is available.
 - ALWAYS give specific thresholds for what would change the bias.
 - Be direct. No filler phrases. Every sentence must add value.
+- Direction confirmation uses the 6H Currency Strength Sum (|strongest 6H| + |weakest 6H| in pips). ≥ 40 pips = direction trigger met.
+- Use all 5 currency strength timeframes (3H, 4H, 6H, 12H, Daily) to assess multi-timeframe alignment and divergences.
 
 ━━━ LIVE SESSION DATA ━━━
 ${sessBlock}
@@ -129,6 +144,7 @@ ${pairsBlock}
 
 ${ccyBlock}
 
+DIRECTION TRIGGER (6H CS Sum ≥ 40p): ${csSumMet ? 'MET (' + csSumPips + 'p) — directions confirmed' : 'NOT MET (' + csSumPips + 'p / 40p needed)'}
 EXPANSION PRESSURE: ${(!ep || ep.streak === 0) ? 'None' : `${ep.risk} | streak:${ep.streak} (${ep.chain?.join('→')||''})`}
 MARKET CYCLE: ${marketCycle || 'UNKNOWN'}
 
@@ -178,8 +194,10 @@ MARKET CYCLE: ${marketCycle || 'UNKNOWN'}
     }
   },
   "currencies": {
-    "leader": "Which currency is leading and WHY (not just 'USD is strong')",
-    "laggard": "Which currency is weakest and WHY",
+    "leader": "Which currency is leading and WHY — reference 3H/4H/6H/Daily alignment",
+    "laggard": "Which currency is weakest and WHY — reference 3H/4H/6H/Daily alignment",
+    "alignment": "Are 3H, 4H, 6H, 12H, Daily pointing the same direction for the leader/laggard? Note divergences.",
+    "direction_trigger": "Is the 6H CS Sum ≥ 40p met? What does this mean for directional conviction?",
     "theme": "1 sentence: cross-session currency theme"
   },
   "what_changes_bias": {
@@ -201,11 +219,13 @@ MARKET CYCLE: ${marketCycle || 'UNKNOWN'}
 }
 
 FIELD RULES:
-- expansion_probability.score: 0-100 based on dispersion trend + breadth + agreement + energy momentum
+- expansion_probability.score: 0-100 based on dispersion trend + breadth + agreement + 6H CS sum momentum
 - cycle.confidence: 0-100 how clear the cycle classification is
-- engine_conflicts: detect when metrics CONTRADICT each other (high breadth + low agreement, high movement + low directional control, etc)
-- what_changes_bias: must cite SPECIFIC numbers and conditions, not vague statements
-- decision.action: TRADE only if tradability > 50 AND agreement > 45 AND dispersion > 35
+- engine_conflicts: detect when metrics CONTRADICT each other (high breadth + low agreement, high movement + low directional control, 6H trigger met but poor agreement, etc)
+- what_changes_bias: must cite SPECIFIC numbers and conditions, not vague statements. Reference 6H CS Sum threshold (40p) when relevant.
+- decision.action: TRADE only if tradability > 50 AND agreement > 45 AND 6H CS Sum ≥ 40p (direction trigger met)
+- currencies: use ALL timeframes (3H, 4H, 6H, 12H, Daily) to assess multi-timeframe alignment. Divergences between short-term (3H/4H) and long-term (12H/Daily) are key signals.
+- direction_trigger: 6H CS Sum = |strongest 6H| + |weakest 6H| in pips. ≥ 40p = sufficient currency separation for directional trading. Below 40p = currencies too tightly clustered for confident direction.
 - All text: professional analyst tone. Every sentence must contain insight, not description.`;
 }
 
