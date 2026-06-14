@@ -2917,7 +2917,7 @@ function renderEnergySignals(data) {
 
   if (ringEl && numEl) {
     const pct = Math.min(100, Math.max(0, energy));
-    const col = energy >= 60 ? '#22c55e' : energy >= 45 ? '#3b82f6' : energy >= 25 ? '#f59e0b' : '#475569';
+    const col = energy >= 40 ? '#22c55e' : energy >= 25 ? '#f59e0b' : '#475569';
     ringEl.style.setProperty('--es-ring-color', col);
     ringEl.style.setProperty('--es-ring-pct', pct + '%');
     numEl.textContent = Math.round(energy);
@@ -2926,11 +2926,11 @@ function renderEnergySignals(data) {
 
   if (statusEl) {
     if (thresholdMet) {
-      statusEl.innerHTML = `<span style="color:#22c55e;font-weight:700">ACTIVE</span> — Directions confirmed.`;
-    } else if (energy >= 30) {
-      statusEl.innerHTML = `<span style="color:#f59e0b;font-weight:700">BUILDING</span> — Approaching threshold.`;
+      statusEl.innerHTML = `<span style="color:#22c55e;font-weight:700">ACTIVE</span> — 6H strength sum ≥ 40p, directions confirmed.`;
+    } else if (energy >= 25) {
+      statusEl.innerHTML = `<span style="color:#f59e0b;font-weight:700">BUILDING</span> — 6H sum ${Math.round(energy)}p, approaching 40p.`;
     } else {
-      statusEl.innerHTML = `<span style="color:#94a3b8;font-weight:700">LOW</span> — Existing directions persist.`;
+      statusEl.innerHTML = `<span style="color:#94a3b8;font-weight:700">LOW</span> — 6H sum ${Math.round(energy)}p. Existing directions persist.`;
     }
   }
 
