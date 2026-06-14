@@ -6621,7 +6621,7 @@ body::after {
 .bt-input {
   background: var(--card-bg); border: 1px solid var(--border);
   color: var(--text); padding: 8px 12px; border-radius: 6px;
-  font-size: 13px; font-family: inherit; min-width: 140px;
+  font-size: 13px; font-family: inherit; min-width: 140px; color-scheme: dark;
 }
 .bt-input:focus { outline: none; border-color: var(--accent); }
 
