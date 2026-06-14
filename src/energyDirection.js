@@ -6,14 +6,13 @@
  * Runs each pipeline cycle (after session_activity + m15_spreads + flow_performance).
  *
  * System flow:
- *   1. Energy trigger: single H1 hourly bar with energy ≥ 55.
- *      The LATEST qualifying bar becomes the active trigger.
+ *   1. Trigger: 6H currency strength sum (|strongest| + |weakest|) ≥ 40 pips
  *   2. Currencies with aligned 3H + 6H → confirmed STRONG or WEAK
  *   3. Pairs formed: one STRONG currency + one WEAK currency
  *   4. Direction PERSISTS even if 3H/6H temporarily diverges
- *   5. Direction only changes when NEW energy event fires (H1 or M15)
+ *   5. Direction only changes when NEW trigger event fires
  *   6. M15 monitors for: PULLBACK → COMPRESSION → READY → ENTRY
- *   7. New energy events flagged as CONTINUATION or REVERSAL per currency
+ *   7. New events flagged as CONTINUATION or REVERSAL per currency
  *
  * DB tables:
  *   energy_currency_state  — current confirmed direction per currency (8 rows max)
@@ -23,24 +22,9 @@
 const { supabase } = require('./supabase');
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
-const ENERGY_THRESHOLD_H1 = 60;
-
-// Full-confluence trigger: the bar must have energy ≥ threshold AND all four
-// supporting engines green (same structure as the pink confluence bars).
-const CONFLUENCE_THRESHOLDS = {
-  tradability_score: 30,
-  movement_score:    35,
-  breadth_score:     70,
-  agreement_score:   35,
-};
-
-function isConfluenceBar(r) {
-  if ((parseFloat(r.market_energy) || 0) < ENERGY_THRESHOLD_H1) return false;
-  for (const [field, min] of Object.entries(CONFLUENCE_THRESHOLDS)) {
-    if ((parseFloat(r[field]) || 0) < min) return false;
-  }
-  return true;
-}
+// Direction confirmation trigger: 6H currency strength sum ≥ 40 pips (0.004 raw).
+// Sum = |strongest smooth_6h| + |weakest smooth_6h|
+const CS_SUM_THRESHOLD = 0.004;
 const FLOW_SPREAD_THRESHOLD = 20;  // 3H pair spread ≥ 20 pips
 const FLOW_SPREAD_MIN_PAIRS = 1;   // At least 1 pair must qualify
 
@@ -166,38 +150,10 @@ async function calculateEnergyDirection() {
     }
   }
 
-  // Scan recent hourly bars for the LAST full-confluence bar — energy ≥ threshold
-  // AND all four supporting engines green. This is the trigger bar — directions
-  // are snapshotted from strength at that moment and persist until the NEXT
-  // full-confluence bar.
-  const since = new Date(now.getTime() - 72 * 3600000).toISOString();
-  const { data: hourlyRows, error: hrErr } = await supabase
-    .from('hourly_session_activity')
-    .select('time_utc, session_name, market_energy, dispersion_score, tradability_score, movement_score, breadth_score, agreement_score')
-    .gte('time_utc', since)
-    .order('time_utc', { ascending: false });
-  if (hrErr) console.warn('[ENERGY_DIR] Hourly activity fetch:', hrErr.message);
-
-  const triggerRow = (hourlyRows || []).find(isConfluenceBar) || null;
-  const triggerBar = triggerRow ? {
-    energy: parseFloat(triggerRow.market_energy) || 0,
-    time: triggerRow.time_utc,
-    session: triggerRow.session_name,
-  } : null;
-
-  const triggerEnergy = triggerBar ? triggerBar.energy : 0;
-  const triggerSession = triggerBar ? triggerBar.session : null;
-  const triggerHour = triggerBar ? triggerBar.time : null;
-
-  // If current session didn't have data, use trigger energy for display
-  if (!currentEnergy) currentEnergy = triggerEnergy;
-
-  console.log(`[ENERGY_DIR] Current energy: ${currentEnergy} | Confluence trigger bar: ${triggerEnergy} (${triggerSession}${triggerHour ? ' @ ' + triggerHour : ''})`);
-
   // ── 2. Fetch latest currency strength (3H + 6H + 12H) ──────────────────────
   const { data: csRows, error: csErr } = await supabase
     .from('currency_strength')
-    .select('currency, smooth_3h, smooth_6h, smooth_12h')
+    .select('currency, smooth_3h, smooth_6h, smooth_12h, time')
     .order('time', { ascending: false })
     .limit(8);
 
@@ -218,6 +174,34 @@ async function calculateEnergyDirection() {
       smooth_12h: parseFloat(r.smooth_12h) || 0,
     };
   }
+
+  // ── 2b. Direction trigger: 6H currency strength sum ≥ 40 pips ─────────────
+  const h6Values = CURRENCIES
+    .filter(ccy => ccyMap[ccy])
+    .map(ccy => ccyMap[ccy].smooth_6h);
+
+  let triggerBar = null;
+  if (h6Values.length >= 2) {
+    const strongest6h = Math.max(...h6Values);
+    const weakest6h = Math.min(...h6Values);
+    const csSum = Math.abs(strongest6h) + Math.abs(weakest6h);
+
+    if (csSum >= CS_SUM_THRESHOLD) {
+      const csTime = csRows[0]?.time || now.toISOString();
+      const roundedHour = new Date(new Date(csTime).setMinutes(0, 0, 0)).toISOString();
+      triggerBar = {
+        energy: Math.round(csSum * 10000),
+        time: roundedHour,
+        session: null,
+      };
+    }
+  }
+
+  const triggerEnergy = triggerBar ? triggerBar.energy : 0;
+  const triggerSession = triggerBar ? triggerBar.session : null;
+  const triggerHour = triggerBar ? triggerBar.time : null;
+
+  console.log(`[ENERGY_DIR] Current energy: ${currentEnergy} | 6H CS sum: ${triggerEnergy}p (threshold ${Math.round(CS_SUM_THRESHOLD * 10000)}p) ${triggerBar ? '→ TRIGGER' : '→ no trigger'}`);
 
   // ── 2b. Count flow spread pairs (3H spread ≥ 20 pips) ───────────────────────
   let flowSpreadCount = 0;
@@ -298,7 +282,7 @@ async function calculateEnergyDirection() {
     strong.sort((a, b) => b.score - a.score);
     weak.sort((a, b) => b.score - a.score);
 
-    console.log(`[ENERGY_DIR] ═══ NEW ENERGY EVENT — H1 bar ${triggerEnergy} @ ${triggerHour} (${triggerSession}) ═══`);
+    console.log(`[ENERGY_DIR] ═══ NEW ENERGY EVENT — 6H CS sum ${triggerEnergy}p @ ${triggerHour} ═══`);
 
     // ── 7. Snapshot currency directions with trigger-time strength ─────────
     const newDirections = new Map();

@@ -5,10 +5,10 @@
  *
  * New pair lifecycle (replaces old compression breakout):
  *
- *   1. VALIDATING:  Pair formed after confluence bar. Monitored for 2 hours.
+ *   1. VALIDATING:  Pair formed after confluence bar. Monitored for 1 hour.
  *                   During this window, M15 high/low are tracked as reference levels.
  *
- *   2. APPROVED:    After 2h, 3H currency strength still supports the pair
+ *   2. APPROVED:    After 1h, 3H currency strength still supports the pair
  *                   (strong ccy 3H > 0, weak ccy 3H < 0). Trade approved.
  *                   Waiting for M15 pullback entry:
  *                     BUY  → M15 close below the 2h-window high
@@ -26,7 +26,7 @@
 
 const { supabase } = require('./supabase');
 
-const VALIDATION_HOURS = 2;
+const VALIDATION_HOURS = 1;
 
 // ─── Compression Baseline (kept for backward compat) ────────────────────────
 
@@ -200,10 +200,10 @@ async function updateM15StructureWatch() {
         pullback_low: null,
         entry_price: null,
         invalidation_price: null,
-        validation_started_at: now.toISOString(),  // per-pair 2h clock starts NOW
+        validation_started_at: now.toISOString(),  // per-pair 1h clock starts NOW
         trigger_ref: trigRef,
       };
-      console.log(`[STRUCT] ${sp.instrument} ${sp.dir} → VALIDATING (${reason}, 2h clock started, H1 ref H:${refHigh.toFixed(5)} L:${refLow.toFixed(5)})`);
+      console.log(`[STRUCT] ${sp.instrument} ${sp.dir} → VALIDATING (${reason}, 1h clock started, H1 ref H:${refHigh.toFixed(5)} L:${refLow.toFixed(5)})`);
 
     } else {
       entry = { ...existing };

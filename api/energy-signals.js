@@ -42,71 +42,54 @@ module.exports = async function handler(req, res) {
       .order('trigger_energy', { ascending: false });
     if (pErr) throw pErr;
 
-    // Trigger bar = most recent FULL-CONFLUENCE hourly bar: energy ≥ threshold
-    // AND all four supporting engines green (same structure as pink bars).
-    // Mirrors src/energyDirection.js.
-    const ENERGY_THRESHOLD_H1 = 60;
-    const CONFLUENCE_THRESHOLDS = {
-      tradability_score: 30,
-      movement_score:    35,
-      breadth_score:     70,
-      agreement_score:   35,
-    };
-    const isConfluenceBar = (r) => {
-      if ((parseFloat(r.market_energy) || 0) < ENERGY_THRESHOLD_H1) return false;
-      for (const [field, min] of Object.entries(CONFLUENCE_THRESHOLDS)) {
-        if ((parseFloat(r[field]) || 0) < min) return false;
-      }
-      return true;
-    };
+    // Trigger: 6H currency strength sum ≥ 40 pips (mirrors src/energyDirection.js)
+    const CS_SUM_THRESHOLD = 0.004;
+    const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
 
-    const since = new Date(Date.now() - 72 * 3600000).toISOString();
-    const { data: hourlyRows } = await sb
-      .from('hourly_session_activity')
-      .select('time_utc, session_name, market_energy, dispersion_score, tradability_score, movement_score, breadth_score, agreement_score')
-      .gte('time_utc', since)
-      .order('time_utc', { ascending: false });
+    const { data: csRows } = await sb
+      .from('currency_strength')
+      .select('currency, smooth_6h')
+      .order('time', { ascending: false })
+      .limit(8);
 
-    const triggerRow = (hourlyRows || []).find(isConfluenceBar) || null;
-    const triggerBar = triggerRow ? {
-      energy: parseFloat(triggerRow.market_energy) || 0,
-      time: triggerRow.time_utc,
-      session: triggerRow.session_name,
-    } : null;
-    const triggerEnergy = triggerBar?.energy || 0;
-    const allBars = (hourlyRows || []).map(r => ({
-      energy: parseFloat(r.market_energy) || 0,
-      time: r.time_utc,
-      session: r.session_name,
-    }));
+    const ccyMap = {};
+    const seen = new Set();
+    for (const r of (csRows || [])) {
+      if (seen.has(r.currency)) continue;
+      seen.add(r.currency);
+      ccyMap[r.currency] = parseFloat(r.smooth_6h) || 0;
+    }
 
-    // Directions persist across days — check if active directions exist in the DB.
+    const h6Values = CURRENCIES.filter(c => ccyMap[c] !== undefined).map(c => ccyMap[c]);
+    let csSumPips = 0;
+    if (h6Values.length >= 2) {
+      const strongest = Math.max(...h6Values);
+      const weakest = Math.min(...h6Values);
+      csSumPips = Math.round((Math.abs(strongest) + Math.abs(weakest)) * 10000);
+    }
+    const csTrigger = csSumPips >= Math.round(CS_SUM_THRESHOLD * 10000);
+
     const hasActiveDirections = (currencies || []).some(c => c.active && c.direction !== 'NEUTRAL');
     const hasActivePairs = (pairs || []).some(p => p.active);
-    const thresholdMet = !!triggerBar || hasActiveDirections || hasActivePairs;
+    const thresholdMet = csTrigger || hasActiveDirections || hasActivePairs;
 
-    // Display energy: use the stored trigger energy from DB when no today trigger bar
-    // This preserves the energy level that originally confirmed directions
     let displayEnergy;
-    if (triggerBar) {
-      // Recent confluence trigger bar — show it
-      displayEnergy = triggerEnergy;
+    if (csTrigger) {
+      displayEnergy = csSumPips;
     } else if (hasActiveDirections) {
-      // Directions active from previous trigger — show stored energy_at_trigger
       const storedTrigger = (currencies || []).find(c => c.energy_at_trigger);
-      displayEnergy = storedTrigger?.energy_at_trigger || (allBars[0]?.energy || 0);
+      displayEnergy = storedTrigger?.energy_at_trigger || 0;
     } else {
-      // No active directions — show current energy
-      displayEnergy = allBars[0]?.energy || 0;
+      displayEnergy = csSumPips;
     }
 
     res.json({
       currencies: currencies || [],
       pairs: pairs || [],
       energy: displayEnergy,
-      triggerEnergy,
-      peakBarTime: triggerBar?.time || null,
-      peakBarSession: triggerBar?.session || null,
+      triggerEnergy: csSumPips,
+      peakBarTime: null,
+      peakBarSession: null,
       thresholdMet,
     });
   } catch (e) {
