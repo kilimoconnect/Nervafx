@@ -165,8 +165,10 @@
         <span class="sx-ctrls" id="sx-ctrls">
           <button class="sx-btn sx-tf" data-tf="m15">M15</button>
           <button class="sx-btn sx-tf active" data-tf="3h">3H</button>
+          <button class="sx-btn sx-tf" data-tf="4h">4H</button>
           <button class="sx-btn sx-tf" data-tf="6h">6H</button>
           <button class="sx-btn sx-tf" data-tf="12h">12H</button>
+          <button class="sx-btn sx-tf" data-tf="1d">Daily</button>
           <button class="sx-btn sx-tf" data-tf="c36">3H+6H</button>
           <span class="sx-ctrl-sep"></span>
           <button class="sx-btn sx-days" data-days="1">1D</button>
@@ -279,7 +281,8 @@
 
   function valueOf(r) {
     if (_tf === 'c36') return ((parseFloat(r.smooth_3h) || 0) + (parseFloat(r.smooth_6h) || 0)) / 2;
-    const f = _tf === '12h' ? 'smooth_12h' : _tf === '6h' ? 'smooth_6h' : 'smooth_3h';
+    const fMap = { '12h': 'smooth_12h', '6h': 'smooth_6h', '4h': 'smooth_4h', '1d': 'smooth_1d' };
+    const f = fMap[_tf] || 'smooth_3h';
     return parseFloat(r[f]) || 0;
   }
 

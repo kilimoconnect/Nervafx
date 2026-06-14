@@ -682,9 +682,11 @@
 
     const scored = currencies.map(c => {
       const v3  = parseFloat(c.smooth_3h  ?? c.normalized_3h)  || 0;
+      const v4  = parseFloat(c.smooth_4h  ?? c.normalized_4h)  || 0;
       const v6  = parseFloat(c.smooth_6h  ?? c.normalized_6h)  || 0;
       const v12 = parseFloat(c.smooth_12h ?? c.normalized_12h) || 0;
-      return { cur: c.currency, combined: (v3 + v6 + v12) / 3, h3: v3, h6: v6, h12: v12 };
+      const v1d = parseFloat(c.smooth_1d  ?? c.normalized_1d)  || 0;
+      return { cur: c.currency, combined: (v3 + v6 + v12) / 3, h3: v3, h4: v4, h6: v6, h12: v12, d1: v1d };
     });
 
     const strong = scored.filter(c => c.combined >  CS_THRESHOLD && c.h3 >  CS_THRESHOLD).sort((a, b) => b.combined - a.combined);
@@ -706,14 +708,16 @@
       return `
         <div class="cs-sig-col ${side}">
           <div class="cs-sig-col-title">${isStrong ? '💪 Strong' : '🔻 Weak'}</div>
-          <div class="cs-sig-head"><span>CCY</span><span>Combined</span><span>3H</span><span>6H</span><span>12H</span></div>
+          <div class="cs-sig-head"><span>CCY</span><span>Combined</span><span>3H</span><span>4H</span><span>6H</span><span>12H</span><span>Daily</span></div>
           ${list.map(c => `
             <div class="cs-sig-row">
               <span class="cs-sig-cur">${c.cur}</span>
               <span class="cs-sig-combo ${cls}">${fv(c.combined)}</span>
               <span class="cs-sig-val ${cls}">${fv(c.h3)}</span>
+              <span class="cs-sig-val ${cls}">${fv(c.h4)}</span>
               <span class="cs-sig-val ${cls}">${fv(c.h6)}</span>
               <span class="cs-sig-val ${cls}">${fv(c.h12)}</span>
+              <span class="cs-sig-val ${cls}">${fv(c.d1)}</span>
             </div>`).join('')}
         </div>`;
     }

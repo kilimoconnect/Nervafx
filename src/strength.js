@@ -3,7 +3,7 @@ const { supabase } = require('./supabase');
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
 const PAIRS_PER_CURRENCY = 7;
-const LOOKBACKS = [3, 6, 12];
+const LOOKBACKS = [3, 4, 6, 12, 24];
 
 function offsetISO(isoTime, hoursBack) {
   const t = new Date(isoTime);
@@ -104,11 +104,8 @@ function allTimestamps(lookup) {
 // Calculate strength rows for a single H1 timestamp.
 // Returns null if any required lookback candle is missing for any pair.
 function calculateAtTime(lookup, time) {
-  const raw = {
-    3: Object.fromEntries(CURRENCIES.map(c => [c, 0])),
-    6: Object.fromEntries(CURRENCIES.map(c => [c, 0])),
-    12: Object.fromEntries(CURRENCIES.map(c => [c, 0])),
-  };
+  const raw = {};
+  for (const lb of LOOKBACKS) raw[lb] = Object.fromEntries(CURRENCIES.map(c => [c, 0]));
 
   for (const instrument of config.instruments) {
     const [base, quote] = instrument.split('_');
@@ -133,11 +130,15 @@ function calculateAtTime(lookup, time) {
     time,
     currency,
     raw_3h: raw[3][currency],
+    raw_4h: raw[4][currency],
     raw_6h: raw[6][currency],
     raw_12h: raw[12][currency],
+    raw_1d: raw[24][currency],
     normalized_3h: raw[3][currency] / PAIRS_PER_CURRENCY,
+    normalized_4h: raw[4][currency] / PAIRS_PER_CURRENCY,
     normalized_6h: raw[6][currency] / PAIRS_PER_CURRENCY,
     normalized_12h: raw[12][currency] / PAIRS_PER_CURRENCY,
+    normalized_1d: raw[24][currency] / PAIRS_PER_CURRENCY,
   }));
 }
 
@@ -190,8 +191,8 @@ async function backfillStrength() {
 // "3H" = 3 completed H1 candles back. Weekend gaps are invisible because
 // there are no candles then; the 12th candle from Monday morning is Friday.
 async function calculateLatestStrength() {
-  const MIN_CANDLES = 13; // current (index 0) + max lookback (12)
-  const FETCH       = 20; // a little extra headroom
+  const MIN_CANDLES = 25; // current (index 0) + max lookback (24)
+  const FETCH       = 30; // a little extra headroom
 
   // Fetch last FETCH complete H1 candles per instrument, newest first
   const arrays = {};
@@ -213,11 +214,8 @@ async function calculateLatestStrength() {
   // Reference time = oldest "most recent candle" across all instruments
   const refTime = config.instruments.map(inst => arrays[inst][0].time).sort()[0];
 
-  const raw = {
-    3:  Object.fromEntries(CURRENCIES.map(c => [c, 0])),
-    6:  Object.fromEntries(CURRENCIES.map(c => [c, 0])),
-    12: Object.fromEntries(CURRENCIES.map(c => [c, 0])),
-  };
+  const raw = {};
+  for (const lb of LOOKBACKS) raw[lb] = Object.fromEntries(CURRENCIES.map(c => [c, 0]));
 
   for (const instrument of config.instruments) {
     const arr = arrays[instrument];
@@ -242,11 +240,15 @@ async function calculateLatestStrength() {
     time:           refTime,
     currency,
     raw_3h:         raw[3][currency],
+    raw_4h:         raw[4][currency],
     raw_6h:         raw[6][currency],
     raw_12h:        raw[12][currency],
+    raw_1d:         raw[24][currency],
     normalized_3h:  raw[3][currency]  / PAIRS_PER_CURRENCY,
+    normalized_4h:  raw[4][currency]  / PAIRS_PER_CURRENCY,
     normalized_6h:  raw[6][currency]  / PAIRS_PER_CURRENCY,
     normalized_12h: raw[12][currency] / PAIRS_PER_CURRENCY,
+    normalized_1d:  raw[24][currency] / PAIRS_PER_CURRENCY,
   }));
 
   await upsertStrengthRows(rows);

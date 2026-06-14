@@ -247,9 +247,11 @@ function renderJrnCsigSection(e) {
 
   const scored = currencies.map(c => {
     const v3  = parseFloat(c.smooth_3h  ?? c.normalized_3h)  || 0;
+    const v4  = parseFloat(c.smooth_4h  ?? c.normalized_4h)  || 0;
     const v6  = parseFloat(c.smooth_6h  ?? c.normalized_6h)  || 0;
     const v12 = parseFloat(c.smooth_12h ?? c.normalized_12h) || 0;
-    return { cur: c.currency, combined: (v3 + v6 + v12) / 3, h3: v3, h6: v6, h12: v12 };
+    const v1d = parseFloat(c.smooth_1d  ?? c.normalized_1d)  || 0;
+    return { cur: c.currency, combined: (v3 + v6 + v12) / 3, h3: v3, h4: v4, h6: v6, h12: v12, d1: v1d };
   });
 
   const strong = scored.filter(c => c.combined >  CS_THRESHOLD && c.h3 >  CS_THRESHOLD).sort((a, b) => b.combined - a.combined);
@@ -273,14 +275,16 @@ function renderJrnCsigSection(e) {
     return `
       <div class="cs-sig-col ${side}">
         <div class="cs-sig-col-title">${isStrong ? '💪 Strong' : '🔻 Weak'}</div>
-        <div class="cs-sig-head"><span>CCY</span><span>Combined</span><span>3H</span><span>6H</span><span>12H</span></div>
+        <div class="cs-sig-head"><span>CCY</span><span>Combined</span><span>3H</span><span>4H</span><span>6H</span><span>12H</span><span>Daily</span></div>
         ${list.map(c => `
           <div class="cs-sig-row">
             <span class="cs-sig-cur">${c.cur}</span>
             <span class="cs-sig-combo ${cls}">${fv(c.combined)}</span>
             <span class="cs-sig-val ${cls}">${fv(c.h3)}</span>
+            <span class="cs-sig-val ${cls}">${fv(c.h4)}</span>
             <span class="cs-sig-val ${cls}">${fv(c.h6)}</span>
             <span class="cs-sig-val ${cls}">${fv(c.h12)}</span>
+            <span class="cs-sig-val ${cls}">${fv(c.d1)}</span>
           </div>`).join('')}
       </div>`;
   }
@@ -1223,14 +1227,16 @@ function renderCurrencySignals(data) {
   const m15Str = _m15CurrencyStrength();
   const scored = currencies.map(c => {
     const v3  = parseFloat(c.smooth_3h  ?? c.normalized_3h)  || 0;
+    const v4  = parseFloat(c.smooth_4h  ?? c.normalized_4h)  || 0;
     const v6  = parseFloat(c.smooth_6h  ?? c.normalized_6h)  || 0;
     const v12 = parseFloat(c.smooth_12h ?? c.normalized_12h) || 0;
+    const v1d = parseFloat(c.smooth_1d  ?? c.normalized_1d)  || 0;
     const vm15 = m15Str[c.currency] || 0;
     return {
       cur: c.currency,
       combined: (vm15 + v3 + v6) / 3,  // M15+3H+6H
       c2: (vm15 + v3) / 2,             // M15+3H
-      m15: vm15, h3: v3, h6: v6, h12: v12,
+      m15: vm15, h3: v3, h4: v4, h6: v6, h12: v12, d1: v1d,
     };
   });
 
@@ -1265,7 +1271,7 @@ function renderCurrencySignals(data) {
       <div class="cs-sig-col ${side}">
         <div class="cs-sig-col-title">${isStrong ? '💪 Strong' : '🔻 Weak'}</div>
         <div class="cs-sig-head">
-          <span>CCY</span><span class="plan-pro-only">M15+3H</span><span class="plan-pro-only">M15+3H+6H</span><span class="plan-pro-only">M15</span><span>3H</span><span>6H</span><span>12H</span>
+          <span>CCY</span><span class="plan-pro-only">M15+3H</span><span class="plan-pro-only">M15+3H+6H</span><span class="plan-pro-only">M15</span><span>3H</span><span>4H</span><span>6H</span><span>12H</span><span>Daily</span>
         </div>
         ${list.map(c => `
           <div class="cs-sig-row">
@@ -1274,8 +1280,10 @@ function renderCurrencySignals(data) {
             <span class="cs-sig-combo plan-pro-only ${isStrong ? 'pos' : 'neg'}">${c.combined >= 0 ? '+' : ''}${c.combined.toFixed(5)}</span>
             <span class="cs-sig-val plan-pro-only ${c.m15 >= 0 ? 'pos' : 'neg'}">${c.m15 >= 0 ? '+' : ''}${c.m15.toFixed(5)}</span>
             <span class="cs-sig-val ${c.h3  >= 0 ? 'pos' : 'neg'}">${c.h3  >= 0 ? '+' : ''}${c.h3.toFixed(5)}</span>
+            <span class="cs-sig-val ${c.h4  >= 0 ? 'pos' : 'neg'}">${c.h4  >= 0 ? '+' : ''}${c.h4.toFixed(5)}</span>
             <span class="cs-sig-val ${c.h6  >= 0 ? 'pos' : 'neg'}">${c.h6  >= 0 ? '+' : ''}${c.h6.toFixed(5)}</span>
             <span class="cs-sig-val ${c.h12 >= 0 ? 'pos' : 'neg'}">${c.h12 >= 0 ? '+' : ''}${c.h12.toFixed(5)}</span>
+            <span class="cs-sig-val ${c.d1  >= 0 ? 'pos' : 'neg'}">${c.d1  >= 0 ? '+' : ''}${c.d1.toFixed(5)}</span>
           </div>`).join('')}
       </div>`;
   }
@@ -6504,8 +6512,17 @@ function _meMarketCycleBanner(cycle, latestHourly) {
     ${engineBtn('movement', 'Movement')}
     ${engineBtn('breadth', 'Breadth')}
     ${engineBtn('agreement', 'Agreement')}
-    <button class="me-ai-toggle me-btn-cs premium-only" onclick="location.href='/strength-cs.html?tab=6h'">CS 6H</button>
-    <button class="me-ai-toggle me-btn-cs premium-only" onclick="location.href='/strength-cs.html?tab=m15'">CS 15M</button>
+    ${(function() {
+      const ccys = strengthData?.currencies || [];
+      const h6 = ccys.map(c => parseFloat(c.smooth_6h) || 0);
+      let csGreen = false;
+      if (h6.length >= 2) {
+        const sum = Math.abs(Math.max(...h6)) + Math.abs(Math.min(...h6));
+        csGreen = sum >= 0.004;
+      }
+      const st = csGreen ? ' style="background:#22c55e;color:#fff;border-color:#22c55e"' : '';
+      return `<button class="me-ai-toggle me-btn-cs premium-only"${st} onclick="location.href='/strength-cs.html'">CS</button>`;
+    })()}
     <button class="me-ai-toggle me-btn-ai premium-only" onclick="openMeAiAnalysis()">AI Analysis</button>
   </div>`;
 }
