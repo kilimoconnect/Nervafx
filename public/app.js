@@ -1884,6 +1884,37 @@ function _flowPairAnalysis(p) {
 
 let _fpPrecomputed = null; // Pre-computed flow performance rows from API
 let _energySignalsCache = null; // Cached energy signal pairs from API
+let _candleDirsCache = null;
+
+async function _fetchCandleDirs() {
+  if (_candleDirsCache) return _candleDirsCache;
+  try {
+    const d = await api('/api/candle-dirs?days=1');
+    _candleDirsCache = d.dirs || {};
+  } catch (_) { _candleDirsCache = {}; }
+  return _candleDirsCache;
+}
+
+function _countPrevCandles(pair, dir, candleDirs) {
+  const pd = candleDirs[pair];
+  if (!pd) return null;
+  const keys = Object.keys(pd).sort().reverse().slice(0, 5);
+  if (!keys.length) return null;
+  let matching = 0;
+  for (const k of keys) {
+    if ((dir === 'BUY' && pd[k] === 1) || (dir === 'SELL' && pd[k] === -1)) matching++;
+  }
+  return { count: matching, total: keys.length };
+}
+
+function _prevBadgeHtml(pc) {
+  if (!pc) return '';
+  const t = Math.min(pc.total, 5);
+  const bg = pc.count >= 4 ? 'rgba(34,197,94,0.15)' : pc.count >= 3 ? 'rgba(245,158,11,0.15)' : 'rgba(100,116,139,0.15)';
+  const border = pc.count >= 4 ? 'rgba(34,197,94,0.3)' : pc.count >= 3 ? 'rgba(245,158,11,0.3)' : 'rgba(100,116,139,0.2)';
+  const color = pc.count >= 4 ? '#22c55e' : pc.count >= 3 ? '#f59e0b' : '#94a3b8';
+  return `<span style="font-size:10px;font-weight:800;padding:1px 6px;border-radius:4px;background:${bg};color:${color};border:1px solid ${border}">${pc.count}/${t}</span>`;
+}
 
 function _buildFpScored(strengthArg, m15Data) {
   // Use passed strength data or fall back to global cache
@@ -2867,7 +2898,8 @@ async function _energyRefreshTick() {
     const fresh = await api('/api/energy-signals').catch(() => null);
     if (!fresh) return;
     _energySignalsCache = fresh;
-    renderEnergySignals(fresh);
+    _candleDirsCache = null;
+    await renderEnergySignals(fresh);
     // Also re-render flow performance since it depends on energy pairs
     renderFlowPerformance(null, _m15DataCache);
     // Refresh structure watch alongside signals
@@ -2905,7 +2937,7 @@ function _scheduleEnergyRefresh(initialData) {
   }
 }
 
-function renderEnergySignals(data) {
+async function renderEnergySignals(data) {
   if (!data) return;
   const { currencies, pairs, energy, thresholdMet } = data;
 
@@ -3031,6 +3063,7 @@ function renderEnergySignals(data) {
       });
       activePairs.sort((a, b) => b._finalScore - a._finalScore);
 
+      const candleDirs = await _fetchCandleDirs();
       pairsEl.innerHTML = activePairs.map(p => {
         const pairLabel = p.instrument.replace('_', '/');
         const dirCls = p.dir === 'BUY' ? 'buy' : 'sell';
@@ -3043,6 +3076,8 @@ function renderEnergySignals(data) {
         const sp3 = parseFloat(p.spread_3h) || 0;
         const sp6 = parseFloat(p.spread_6h) || 0;
         const m15State = (p.m15_state || 'FLAT').toLowerCase();
+        const pc = _countPrevCandles(p.instrument, p.dir, candleDirs);
+        const pcBadge = _prevBadgeHtml(pc);
 
         // Energy event badge
         let eventHtml = '';
@@ -3058,6 +3093,7 @@ function renderEnergySignals(data) {
               <span class="es-pair-name">${pairLabel}</span>
               <span class="es-pair-dir ${dirCls}">${p.dir}</span>
               <span style="font-size:10px;font-weight:800;color:${p._finalScore >= 70 ? '#4ade80' : p._finalScore >= 45 ? '#f59e0b' : '#94a3b8'};background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:5px;padding:1px 7px">${p._finalScore}</span>
+              ${pcBadge}
             </div>
             <span class="es-pair-phase ${phaseCls}">${rawPhase}</span>
           </div>
@@ -3519,7 +3555,7 @@ async function fetchCompressionBreakout() {
   } catch (_) {}
 }
 
-function renderCompressionBreakout(data) {
+async function renderCompressionBreakout(data) {
   if (!data) return;
   let { baseline, structures, summary } = data;
 
@@ -3576,12 +3612,15 @@ function renderCompressionBreakout(data) {
   const isJPY = inst => inst.includes('JPY');
   const dec = inst => isJPY(inst) ? 3 : 5;
 
+  const candleDirs = await _fetchCandleDirs();
   el.innerHTML = structures.map(s => {
     const col = STATE_COLOR[s.state] || '#475569';
     const label = STATE_LABEL[s.state] || s.state;
     const dirCls = s.direction === 'BUY' ? 'buy' : 'sell';
     const d = dec(s.instrument);
     const pairLabel = s.instrument.replace('_', '/');
+    const pc = _countPrevCandles(s.instrument, s.direction, candleDirs);
+    const pcBadge = _prevBadgeHtml(pc);
 
     let detailHtml = '';
     {
@@ -3599,6 +3638,7 @@ function renderCompressionBreakout(data) {
         <div style="display:flex;align-items:center;gap:8px">
           <span style="font-size:13px;font-weight:700;color:#e2e8f0">${pairLabel}</span>
           <span class="es-pair-dir ${dirCls}" style="font-size:10px">${s.direction}</span>
+          ${pcBadge}
         </div>
         <span style="font-size:10px;font-weight:700;color:${col};letter-spacing:0.5px">${label}</span>
       </div>
