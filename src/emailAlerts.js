@@ -28,6 +28,49 @@ const { getPipSize, pipValueUSD, calcPositionSize } = require('./risk');
 
 const SESS_LABEL = { ASIA: 'Asia', LONDON: 'London', NEW_YORK: 'New York', LOW_LIQUIDITY: 'Off-hours' };
 
+async function fetchPrevCandleCounts(sb, pairs) {
+  if (!pairs?.length) return {};
+  const instruments = [...new Set(pairs.map(p => p.instrument || p))];
+  const since = new Date(Date.now() - 6 * 3600000).toISOString();
+  const { data } = await sb
+    .from('backtest_candles')
+    .select('instrument, time, open, close')
+    .eq('timeframe', 'H1')
+    .eq('complete', true)
+    .gte('time', since)
+    .in('instrument', instruments)
+    .order('time', { ascending: false })
+    .limit(instruments.length * 6);
+
+  const byPair = {};
+  for (const r of (data || [])) {
+    (byPair[r.instrument] = byPair[r.instrument] || []).push(r);
+  }
+
+  const result = {};
+  for (const p of pairs) {
+    const inst = p.instrument || p;
+    const dir = p.dir || p.direction;
+    const candles = (byPair[inst] || []).slice(0, 5);
+    let matching = 0;
+    for (const c of candles) {
+      const bullish = +c.close >= +c.open;
+      if ((dir === 'BUY' && bullish) || (dir === 'SELL' && !bullish)) matching++;
+    }
+    result[inst] = { count: matching, total: candles.length };
+  }
+  return result;
+}
+
+function prevCandleBadgeHtml(count, total) {
+  if (total === 0) return '';
+  const t = Math.min(total, 5);
+  const bg = count >= 4 ? '#166534' : count >= 3 ? '#78350f' : '#334155';
+  const border = count >= 4 ? '#22c55e' : count >= 3 ? '#f59e0b' : '#64748b';
+  const color = count >= 4 ? '#4ade80' : count >= 3 ? '#fbbf24' : '#94a3b8';
+  return `<span style="display:inline-block;font-size:11px;font-weight:800;padding:2px 8px;border-radius:4px;background:${bg};color:${color};border:1px solid ${border};margin-left:8px">${count}/${t}</span>`;
+}
+
 // Admin — permanent premium, never expires
 const ADMIN_UIDS = new Set([
   '140f3854-2c85-488c-8e0a-0f965d562654', // Henry Muleke
@@ -144,7 +187,7 @@ async function sendToAll(sb, recipients, template, alertType, details, prefKey) 
 // ── Email Templates ─────────────────────────────────────────────────────────
 
 function directionAlertEmail(data) {
-  const { marketFocusHtml, triggerEnergy, triggerSession, triggerHour, currencies, signalPairs, structureWatch, removedPairs, newsEvents } = data;
+  const { marketFocusHtml, triggerEnergy, triggerSession, triggerHour, currencies, signalPairs, structureWatch, removedPairs, newsEvents, prevCandleCounts } = data;
   const sessionLabel = SESS_LABEL[triggerSession] || triggerSession || 'Unknown';
   const timeStr = triggerHour ? new Date(triggerHour).toISOString().replace('T', ' ').slice(0, 16) + ' UTC' : '';
 
@@ -208,6 +251,8 @@ function directionAlertEmail(data) {
     const imp = p.impulse_score;
     const impCheck = p.impulse_aligned ? '✓' : '';
     const evtType = p.energy_event_type;
+    const pc = prevCandleCounts?.[p.instrument];
+    const pcBadge = pc ? prevCandleBadgeHtml(pc.count, pc.total) : '';
 
     return `<div class="card" style="margin-bottom:8px">
       <table width="100%" cellpadding="0" cellspacing="0" style="border-bottom:1px solid rgba(30,41,59,0.4)">
@@ -216,6 +261,7 @@ function directionAlertEmail(data) {
             <span class="val" style="font-size:15px">${p.instrument.replace('_', '/')}</span>
             <span style="color:${dirColor};font-weight:700;font-size:12px;margin-left:8px">${p.dir}</span>
             ${p.run_score != null ? `<span style="color:${p.run_score >= 70 ? '#4ade80' : p.run_score >= 45 ? '#f59e0b' : '#94a3b8'};font-weight:800;font-size:12px;margin-left:8px">${p.run_score}</span>` : ''}
+            ${pcBadge}
           </td>
         </tr>
         <tr>
@@ -556,6 +602,8 @@ async function sendSignalAlerts(sb) {
         structureWatch = swRows || [];
       } catch (_) {}
 
+      const prevCandleCounts = await fetchPrevCandleCounts(sb, _pairsScored);
+
       const triggerState = (currStates || []).find(s => s.energy_at_trigger);
       const template = directionAlertEmail({
         marketFocusHtml,
@@ -589,6 +637,7 @@ async function sendSignalAlerts(sb) {
         structureWatch,
         removedPairs: (inactivePairs || []).map(p => p.instrument),
         newsEvents: upcomingNews || [],
+        prevCandleCounts,
       });
 
       await sendToAll(sb, recipients, template, directionKey, {
@@ -701,6 +750,7 @@ async function sendSignalAlerts(sb) {
       .eq('state', 'ENTRY');
 
     if (entryPairs?.length) {
+      const entryPrevCounts = await fetchPrevCandleCounts(sb, entryPairs.map(p => ({ instrument: p.instrument, dir: p.direction })));
       const todayKey = new Date().toISOString().slice(0, 10);
       for (const ep of entryPairs) {
         const breakoutKey = `breakout_${ep.instrument}_${todayKey}`;
@@ -715,6 +765,8 @@ async function sendSignalAlerts(sb) {
         const dirBg = isBuy ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)';
         const dirBorder = isBuy ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)';
         const pairLabel = ep.instrument.replace('_', '/');
+        const epc = entryPrevCounts[ep.instrument];
+        const epcBadge = epc ? prevCandleBadgeHtml(epc.count, epc.total) : '';
         const isJPY = ep.instrument.includes('JPY');
         const dec = isJPY ? 3 : 5;
         const pipSize = getPipSize(ep.instrument);
@@ -761,7 +813,7 @@ async function sendSignalAlerts(sb) {
                 <p class="sub">${pairLabel} — M15 price structure break confirmed</p>
 
                 <div style="background:${dirBg};border:1px solid ${dirBorder};border-radius:8px;padding:20px;margin:16px 0;text-align:center">
-                  <div style="font-size:24px;color:${dirColor};font-weight:800">${ep.direction} ${pairLabel}</div>
+                  <div style="font-size:24px;color:${dirColor};font-weight:800">${ep.direction} ${pairLabel} ${epcBadge}</div>
                   <div class="dim" style="margin-top:6px">M15 Compression Breakout Entry</div>
                 </div>
 
