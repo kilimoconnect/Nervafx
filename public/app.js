@@ -1343,6 +1343,7 @@ function buildChart(data, tf) {
       const v12 = parseFloat(c.smooth_12h ?? c.normalized_12h ?? 0);
       return (v3() + v6() + v12) / 3;
     }
+    if (t === '24') return parseFloat(c.smooth_1d ?? c.normalized_1d ?? 0);
     return parseFloat(c[`smooth_${t}h`] ?? c[`normalized_${t}h`] ?? 0);
   };
 

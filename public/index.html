@@ -133,8 +133,10 @@
         <span class="tf-toggle">
           <span class="tf-pro-tip" data-tip="Upgrade to unlock"><button class="tf-btn" data-tf="m15">M15</button></span>
           <span class="tf-pro-tip" data-tip="Upgrade to unlock"><button class="tf-btn" data-tf="3">3H</button></span>
+          <span class="tf-pro-tip" data-tip="Upgrade to unlock"><button class="tf-btn" data-tf="4">4H</button></span>
           <span class="tf-pro-tip" data-tip="Upgrade to unlock"><button class="tf-btn active" data-tf="6">6H</button></span>
           <button class="tf-btn" data-tf="12">12H</button>
+          <button class="tf-btn" data-tf="24">Daily</button>
           <span class="tf-pro-tip" data-tip="Upgrade to unlock"><button class="tf-btn" data-tf="c2">M15+3H</button></span>
           <span class="tf-pro-tip" data-tip="Upgrade to unlock"><button class="tf-btn" data-tf="c3">M15+3H+6H</button></span>
           <a href="/strength-hourly.html" target="_blank" class="tf-btn premium-only" style="text-decoration:none" title="Strongest vs weakest currency per hour">Hourly ↗</a>
@@ -479,11 +481,12 @@
       const m15Bar = document.getElementById('m15-impulse-bar');
       if (m15Bar && plan === 'free') m15Bar.style.display = 'none';
 
-      // For free plan: disable 3H/6H tf buttons, force 12H
+      // For free plan: disable most tf buttons, allow 12H and Daily
       const tfBtns = document.querySelectorAll('.tf-btn');
       if (plan === 'free') {
+        const freeTFs = new Set(['12', '24']);
         tfBtns.forEach(btn => {
-          if (btn.dataset.tf !== '12') btn.disabled = true;
+          if (!freeTFs.has(btn.dataset.tf)) btn.disabled = true;
         });
         // Force 12H view
         const tf12 = document.querySelector('.tf-btn[data-tf="12"]');
