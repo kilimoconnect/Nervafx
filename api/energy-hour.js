@@ -186,13 +186,15 @@ module.exports = async function handler(req, res) {
       if (csTime?.length) {
         const { data: csRows } = await sb
           .from('currency_strength')
-          .select('currency, smooth_3h, smooth_6h, smooth_12h')
+          .select('currency, smooth_3h, smooth_4h, smooth_6h, smooth_12h, smooth_1d')
           .eq('time', csTime[0].time);
         currencies = (csRows || []).map(r => ({
           currency:   r.currency,
           smooth_3h:  parseFloat(r.smooth_3h)  || 0,
+          smooth_4h:  parseFloat(r.smooth_4h)  || 0,
           smooth_6h:  parseFloat(r.smooth_6h)  || 0,
           smooth_12h: parseFloat(r.smooth_12h) || 0,
+          smooth_1d:  parseFloat(r.smooth_1d)  || 0,
         }));
         currencies.sort((a, b) => b.smooth_3h - a.smooth_3h);
       }
