@@ -7,38 +7,47 @@ function ema(prevSmooth, currentNorm) {
   return (prevSmooth + currentNorm) / 2;
 }
 
-// Fetch all currency_strength rows for one currency, ordered ascending.
+// Fetch all currency_strength rows for one currency, ordered ascending (paginated).
 async function getRowsForCurrency(currency) {
-  const { data, error } = await supabase
-    .from('currency_strength')
-    .select('id, time, normalized_3h, normalized_4h, normalized_6h, normalized_12h, normalized_1d, smooth_3h, smooth_4h, smooth_6h, smooth_12h, smooth_1d')
-    .eq('currency', currency)
-    .order('time', { ascending: true });
-
-  if (error) throw new Error(`Fetch error (${currency}): ${error.message}`);
-  return data || [];
+  const PAGE = 1000;
+  const allRows = [];
+  let offset = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from('currency_strength')
+      .select('id, time, normalized_3h, normalized_4h, normalized_6h, normalized_12h, normalized_1d, smooth_3h, smooth_4h, smooth_6h, smooth_12h, smooth_1d')
+      .eq('currency', currency)
+      .order('time', { ascending: true })
+      .range(offset, offset + PAGE - 1);
+    if (error) throw new Error(`Fetch error (${currency}): ${error.message}`);
+    if (!data || !data.length) break;
+    allRows.push(...data);
+    if (data.length < PAGE) break;
+    offset += PAGE;
+  }
+  return allRows;
 }
 
-// Batch update smooth columns for a set of rows.
+// Batch update smooth columns for a set of rows (paginated to avoid payload limits).
 async function batchUpdateSmooth(rows) {
   if (rows.length === 0) return;
-
-  const updates = rows.map(r => ({
-    id: r.id,
-    time: r.time,
-    currency: r.currency,
-    smooth_3h: r.smooth_3h,
-    smooth_4h: r.smooth_4h,
-    smooth_6h: r.smooth_6h,
-    smooth_12h: r.smooth_12h,
-    smooth_1d: r.smooth_1d,
-  }));
-
-  const { error } = await supabase
-    .from('currency_strength')
-    .upsert(updates, { onConflict: 'id' });
-
-  if (error) throw new Error(`Smooth update error: ${error.message}`);
+  const BATCH = 500;
+  for (let i = 0; i < rows.length; i += BATCH) {
+    const chunk = rows.slice(i, i + BATCH).map(r => ({
+      id: r.id,
+      time: r.time,
+      currency: r.currency,
+      smooth_3h: r.smooth_3h,
+      smooth_4h: r.smooth_4h,
+      smooth_6h: r.smooth_6h,
+      smooth_12h: r.smooth_12h,
+      smooth_1d: r.smooth_1d,
+    }));
+    const { error } = await supabase
+      .from('currency_strength')
+      .upsert(chunk, { onConflict: 'id' });
+    if (error) throw new Error(`Smooth update error: ${error.message}`);
+  }
 }
 
 // Backfill smooth values for all historical rows of one currency.
