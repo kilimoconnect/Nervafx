@@ -252,15 +252,32 @@
       return candidates.slice(0, 3);
     }
 
+    function countPrevDirs(pair, dir, hourIdx, allHours) {
+      const [base, quote] = pair.split('_');
+      let matching = 0;
+      for (let i = 1; i <= 3; i++) {
+        const prev = allHours[hourIdx - i];
+        if (!prev?.sorted) break;
+        const bv = prev.sorted.find(c => c.cur === base)?.val ?? 0;
+        const qv = prev.sorted.find(c => c.cur === quote)?.val ?? 0;
+        const prevDir = bv > qv ? 'BUY' : 'SELL';
+        if (prevDir === dir) matching++;
+      }
+      return matching;
+    }
+
     function pairCardHTML(p, size) {
       const dc = p.dir === 'BUY' ? '#22c55e' : '#ef4444';
       const cls = size === 'hero' ? 'cs-hero-pair' : 'cs-pair-card';
       const nCls = size === 'hero' ? 'cs-hero-pair-name' : 'cs-pair-name';
       const dCls = size === 'hero' ? 'cs-hero-pair-dir' : 'cs-pair-dir';
       const cCls = size === 'hero' ? 'cs-hero-pair-ccys' : 'cs-pair-ccys';
+      const prevBadge = p.prevCount != null
+        ? `<span style="margin-left:6px;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:${p.prevCount === 3 ? 'rgba(34,197,94,0.15);color:#22c55e' : p.prevCount >= 2 ? 'rgba(245,158,11,0.15);color:#f59e0b' : 'rgba(100,116,139,0.15);color:#94a3b8'}">${p.prevCount}/3</span>`
+        : '';
       return `<div class="${cls}">
         <div class="${nCls}">${p.pair.replace('_','/')}</div>
-        <div class="${dCls}" style="color:${dc}">${p.dir}</div>
+        <div class="${dCls}" style="color:${dc}">${p.dir}${prevBadge}</div>
         <div class="${cCls}"><span style="color:#22c55e">${p.strong}↑</span> vs <span style="color:#ef4444">${p.weak}↓</span>${p.spread ? `<span style="margin-left:4px;color:var(--text-dim)">${pips(p.spread)}p</span>` : ''}</div>
       </div>`;
     }
@@ -311,6 +328,15 @@
           pairs = buildPairs(sorted.slice(0, 3), sorted.slice(-3).reverse());
         }
         hourResults.push({ time, strongest, weakest, sum, sorted, pairs });
+      }
+
+      for (let i = 0; i < hourResults.length; i++) {
+        const h = hourResults[i];
+        if (h.pairs) {
+          for (const p of h.pairs) {
+            p.prevCount = countPrevDirs(p.pair, p.dir, i, hourResults);
+          }
+        }
       }
 
       let all = hourResults.reverse();
