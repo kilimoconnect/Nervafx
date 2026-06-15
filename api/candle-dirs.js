@@ -1,10 +1,12 @@
 'use strict';
 
 /**
- * GET /api/candle-dirs?days=7
+ * GET /api/candle-dirs?days=7&tf=H1
  *
- * Returns H1 candle direction (BUY/SELL) for all pairs, keyed by instrument and hour.
+ * Returns candle direction (BUY/SELL) for all pairs, keyed by instrument and time slot.
  * BUY = close >= open, SELL = close < open.
+ * tf=H1 (default): keyed by hour  (2026-06-15T17)
+ * tf=M15:           keyed by minute (2026-06-15T17:15)
  * Used by CS page to show previous-candle direction agreement.
  */
 
@@ -30,6 +32,7 @@ module.exports = async function handler(req, res) {
     const gate = await requirePlan(sb, req, 'pro');
     if (gate.error) return res.status(gate.status).json({ error: gate.error, upgrade: gate.upgrade });
 
+    const tf   = req.query?.tf === 'M15' ? 'M15' : 'H1';
     const days = Math.min(365, parseInt(req.query?.days || '7', 10) || 7);
     const from = new Date(Date.now() - days * 86400000).toISOString();
 
@@ -40,7 +43,7 @@ module.exports = async function handler(req, res) {
       const { data, error } = await sb
         .from('backtest_candles')
         .select('instrument, time, open, close')
-        .eq('timeframe', 'H1')
+        .eq('timeframe', tf)
         .eq('complete', true)
         .gte('time', from)
         .in('instrument', PAIRS)
@@ -54,10 +57,11 @@ module.exports = async function handler(req, res) {
     }
 
     const dirs = {};
+    const sliceLen = tf === 'M15' ? 16 : 13;
     for (const r of allRows) {
-      const hk = r.time.slice(0, 13);
+      const key = r.time.slice(0, sliceLen);
       if (!dirs[r.instrument]) dirs[r.instrument] = {};
-      dirs[r.instrument][hk] = (+r.close >= +r.open) ? 1 : -1;
+      dirs[r.instrument][key] = (+r.close >= +r.open) ? 1 : -1;
     }
 
     res.json({ dirs });

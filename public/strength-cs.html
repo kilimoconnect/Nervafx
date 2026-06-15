@@ -281,6 +281,32 @@
       return checked > 0 ? matching : null;
     }
 
+    async function fetchM15CandleDirs(days) {
+      const key = `cdirs_m15:${days}`;
+      if (_cache[key]) return _cache[key];
+      try {
+        const data = await api(`/api/candle-dirs?days=${days}&tf=M15`);
+        _cache[key] = data.dirs || {};
+      } catch (_) { _cache[key] = {}; }
+      return _cache[key];
+    }
+
+    function countPrevM15Candles(pair, dir, timeKey, candleDirs) {
+      const pairDirs = candleDirs[pair];
+      if (!pairDirs) return null;
+      const dt = new Date(timeKey);
+      let matching = 0, checked = 0;
+      for (let i = 1; i <= 5; i++) {
+        const prev = new Date(dt.getTime() - i * 15 * 60000);
+        const pk = prev.toISOString().slice(0, 16);
+        const d = pairDirs[pk];
+        if (d == null) continue;
+        checked++;
+        if ((dir === 'BUY' && d === 1) || (dir === 'SELL' && d === -1)) matching++;
+      }
+      return checked > 0 ? matching : null;
+    }
+
     function pairCardHTML(p, size) {
       const dc = p.dir === 'BUY' ? '#22c55e' : '#ef4444';
       const cls = size === 'hero' ? 'cs-hero-pair' : 'cs-pair-card';
@@ -481,24 +507,31 @@
         else { m.weakCcy = s.ccy; m.weakCount = s.count; }
       }
 
-      // Build pairs per merged row: use strong vs weak directly when both exist
+      // Build pairs + compute sum per merged row
+      const M15_THRESHOLD = 0.0015;
       const merged = Object.values(mergedMap);
       for (const m of merged) {
-        if (m.strongCcy && m.weakCcy) {
-          const top = [{ cur: m.strongCcy, val: (m.vals.find(v => v.cur === m.strongCcy) || {}).val || 0 }];
-          const bot = [{ cur: m.weakCcy, val: (m.vals.find(v => v.cur === m.weakCcy) || {}).val || 0 }];
-          // Also add next strongest/weakest for more pair options
+        const sVal = Math.abs((m.vals.find(v => v.cur === (m.strongCcy || m.vals[0]?.cur)) || {}).val || 0);
+        const wVal = Math.abs((m.vals.find(v => v.cur === (m.weakCcy || m.vals[m.vals.length - 1]?.cur)) || {}).val || 0);
+        m.sum = sVal + wVal;
+        m.meetsThreshold = m.sum >= M15_THRESHOLD;
+
+        if (m.meetsThreshold) {
           const top3 = m.vals.slice(0, 3);
           const bot3 = m.vals.slice(-3).reverse();
           m.pairs = buildPairs(top3, bot3);
-        } else if (m.strongCcy) {
-          const top = [{ cur: m.strongCcy, val: (m.vals.find(v => v.cur === m.strongCcy) || {}).val || 0 }];
-          const bot = m.vals.slice(-3).reverse();
-          m.pairs = buildPairs(top, bot);
-        } else {
-          const top = m.vals.slice(0, 3);
-          const bot = [{ cur: m.weakCcy, val: (m.vals.find(v => v.cur === m.weakCcy) || {}).val || 0 }];
-          m.pairs = buildPairs(top, bot);
+        }
+      }
+
+      // Fetch M15 candle dirs and compute prev candle counts
+      const m15CandleDirs = await fetchM15CandleDirs(_m15Days);
+      for (const m of merged) {
+        if (m.pairs) {
+          for (const p of m.pairs) {
+            p.prevCount = countPrevM15Candles(p.pair, p.dir, m.time, m15CandleDirs);
+          }
+          m.pairs.sort((a, b) => (b.prevCount ?? -1) - (a.prevCount ?? -1) || b.spread - a.spread);
+          m.pairs = m.pairs.slice(0, 3);
         }
       }
 
@@ -517,7 +550,7 @@
 
       html += `<div style="font-size:11px;color:var(--text-dim);margin-bottom:14px">
         Each row is a 15-minute interval where a currency has held #1 strongest or weakest for 4+ consecutive intervals.
-        When both strongest and weakest qualify at the same time, they are combined.
+        Rows at <span style="color:#22c55e;font-weight:700">≥15 pips</span> show the best 3 tradeable pairs.
       </div>`;
 
       // Group by local date
@@ -528,11 +561,13 @@
       }
 
       for (const [dateLabel, items] of Object.entries(byDate)) {
+        const thresholdCount = items.filter(m => m.meetsThreshold).length;
         const maxCount = Math.max(...items.map(m => Math.max(m.strongCount || 0, m.weakCount || 0)));
         html += `<div style="margin-bottom:16px">`;
         html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
           <span style="font-size:12px;font-weight:700;color:#e2e8f0">${dateLabel}</span>
           <span style="font-size:10px;font-weight:600;color:var(--text-dim)">${items.length} intervals</span>
+          ${thresholdCount ? `<span style="font-size:10px;font-weight:600;color:#22c55e;background:rgba(34,197,94,0.1);padding:2px 8px;border-radius:4px">${thresholdCount} ≥15</span>` : ''}
           ${maxCount >= 8 ? `<span style="font-size:10px;font-weight:600;color:#f59e0b;background:rgba(245,158,11,0.1);padding:2px 8px;border-radius:4px">max ${maxCount}×15m</span>` : ''}
         </div>`;
         html += '<div class="cs-rows">';
@@ -542,8 +577,9 @@
           const hasBoth = m.strongCcy && m.weakCcy;
           const topCount = Math.max(m.strongCount || 0, m.weakCount || 0);
           const barW = Math.min(100, (topCount / 20) * 100);
+          const sumColor = m.meetsThreshold ? '#22c55e' : m.sum >= 0.0008 ? '#f59e0b' : '#64748b';
 
-          html += `<div class="cs-row${topCount >= 8 ? ' highlight' : ''}" style="${topCount >= 8 ? 'border-color:rgba(245,158,11,0.25);background:rgba(245,158,11,0.06)' : ''}${hasBoth ? ';border-left:3px solid #a78bfa' : ''}">
+          html += `<div class="cs-row${m.meetsThreshold ? ' highlight' : ''}" style="${topCount >= 8 ? 'border-color:rgba(245,158,11,0.25);background:rgba(245,158,11,0.06)' : ''}${hasBoth ? ';border-left:3px solid #a78bfa' : ''}">
             <div class="cs-row-time">${t}</div>
             <div class="cs-row-ccys" style="flex-direction:column;gap:2px">`;
 
@@ -559,10 +595,10 @@
               <div class="cs-row-bar" style="width:${barW}%;background:${hasBoth ? '#a78bfa' : (m.strongCcy ? '#22c55e' : '#ef4444')}"></div>
             </div>
             <div style="text-align:right;min-width:55px">
-              <div style="font-size:13px;font-weight:800;color:${hasBoth ? '#a78bfa' : (m.strongCcy ? '#22c55e' : '#ef4444')}">${topCount}×15m</div>
+              <div style="font-size:13px;font-weight:800;color:${sumColor}">${pips(m.sum)}${m.meetsThreshold ? '<span style="font-size:8px;display:block;color:#22c55e">≥15</span>' : ''}</div>
             </div>`;
 
-          if (m.pairs?.length) {
+          if (m.meetsThreshold && m.pairs?.length) {
             html += `<div class="cs-pairs-row">${m.pairs.map(p => pairCardHTML(p, 'row')).join('')}</div>`;
           }
           html += `</div>`;
