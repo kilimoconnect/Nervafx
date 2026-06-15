@@ -475,36 +475,13 @@
         return { time: r.time, strongest: vals[0]?.cur, weakest: vals[vals.length - 1]?.cur, vals };
       });
 
-      // Build per-slot running streak counts for strongest and weakest
-      // Each slot gets a count: how many consecutive intervals this currency has held #1
-      const activeSlots = []; // { time, ccy, type, count, vals }
-
-      // Compute running counts for 'strongest'
-      let sCount = 1;
-      for (let i = 0; i < slots.length; i++) {
-        if (i > 0 && slots[i].strongest === slots[i - 1].strongest) sCount++;
-        else sCount = 1;
-        if (sCount >= 4) {
-          activeSlots.push({ time: slots[i].time, ccy: slots[i].strongest, type: 'strong', count: sCount, vals: slots[i].vals });
-        }
-      }
-      // Compute running counts for 'weakest'
-      let wCount = 1;
-      for (let i = 0; i < slots.length; i++) {
-        if (i > 0 && slots[i].weakest === slots[i - 1].weakest) wCount++;
-        else wCount = 1;
-        if (wCount >= 4) {
-          activeSlots.push({ time: slots[i].time, ccy: slots[i].weakest, type: 'weak', count: wCount, vals: slots[i].vals });
-        }
-      }
-
-      // Merge same-time strong + weak into combined rows
-      // Key by time, each entry can have strong and/or weak
+      // Build merged rows — every M15 interval with strongest + weakest
       const mergedMap = {};
-      for (const s of activeSlots) {
-        const m = mergedMap[s.time] = mergedMap[s.time] || { time: s.time, vals: s.vals };
-        if (s.type === 'strong') { m.strongCcy = s.ccy; m.strongCount = s.count; }
-        else { m.weakCcy = s.ccy; m.weakCount = s.count; }
+      for (const s of slots) {
+        mergedMap[s.time] = {
+          time: s.time, vals: s.vals,
+          strongCcy: s.strongest, weakCcy: s.weakest,
+        };
       }
 
       // Build pairs + compute sum per merged row
@@ -549,7 +526,7 @@
       let html = '';
 
       html += `<div style="font-size:11px;color:var(--text-dim);margin-bottom:14px">
-        Each row is a 15-minute interval where a currency has held #1 strongest or weakest for 4+ consecutive intervals.
+        Strongest + Weakest currency by M15 strength each interval. Both values converted to positive and summed.
         Rows at <span style="color:#22c55e;font-weight:700">≥15 pips</span> show the best 3 tradeable pairs.
       </div>`;
 
@@ -567,36 +544,25 @@
         html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
           <span style="font-size:12px;font-weight:700;color:#e2e8f0">${dateLabel}</span>
           <span style="font-size:10px;font-weight:600;color:var(--text-dim)">${items.length} intervals</span>
-          ${thresholdCount ? `<span style="font-size:10px;font-weight:600;color:#22c55e;background:rgba(34,197,94,0.1);padding:2px 8px;border-radius:4px">${thresholdCount} ≥15</span>` : ''}
-          ${maxCount >= 8 ? `<span style="font-size:10px;font-weight:600;color:#f59e0b;background:rgba(245,158,11,0.1);padding:2px 8px;border-radius:4px">max ${maxCount}×15m</span>` : ''}
+          ${thresholdCount ? `<span style="font-size:10px;font-weight:600;color:#22c55e;background:rgba(34,197,94,0.1);padding:2px 8px;border-radius:4px">${thresholdCount} interval${thresholdCount>1?'s':''} ≥15</span>` : ''}
         </div>`;
         html += '<div class="cs-rows">';
 
         for (const m of items) {
           const t = fmtTime(m.time);
-          const hasBoth = m.strongCcy && m.weakCcy;
-          const topCount = Math.max(m.strongCount || 0, m.weakCount || 0);
-          const barW = Math.min(100, (topCount / 20) * 100);
+          const barWidth = Math.min(100, (m.sum / 0.003) * 100);
           const sumColor = m.meetsThreshold ? '#22c55e' : m.sum >= 0.0008 ? '#f59e0b' : '#64748b';
 
-          html += `<div class="cs-row${m.meetsThreshold ? ' highlight' : ''}" style="${topCount >= 8 ? 'border-color:rgba(245,158,11,0.25);background:rgba(245,158,11,0.06)' : ''}${hasBoth ? ';border-left:3px solid #a78bfa' : ''}">
+          html += `<div class="cs-row${m.meetsThreshold ? ' highlight' : ''}">
             <div class="cs-row-time">${t}</div>
-            <div class="cs-row-ccys" style="flex-direction:column;gap:2px">`;
-
-          if (m.strongCcy) {
-            html += `<div><span class="cs-strong">${m.strongCcy}</span> <span style="font-size:10px;color:var(--text-dim)">Strongest ${m.strongCount}×15m</span></div>`;
-          }
-          if (m.weakCcy) {
-            html += `<div><span class="cs-weak">${m.weakCcy}</span> <span style="font-size:10px;color:var(--text-dim)">Weakest ${m.weakCount}×15m</span></div>`;
-          }
-
-          html += `</div>
-            <div class="cs-row-bar-wrap">
-              <div class="cs-row-bar" style="width:${barW}%;background:${hasBoth ? '#a78bfa' : (m.strongCcy ? '#22c55e' : '#ef4444')}"></div>
+            <div class="cs-row-ccys">
+              <span class="cs-strong">${m.strongCcy} <span class="cs-val">+${pips(Math.abs((m.vals.find(v=>v.cur===m.strongCcy)||{}).val||0))}</span></span>
+              <span class="cs-weak">${m.weakCcy} <span class="cs-val">-${pips(Math.abs((m.vals.find(v=>v.cur===m.weakCcy)||{}).val||0))}</span></span>
             </div>
-            <div style="text-align:right;min-width:55px">
-              <div style="font-size:13px;font-weight:800;color:${sumColor}">${pips(m.sum)}${m.meetsThreshold ? '<span style="font-size:8px;display:block;color:#22c55e">≥15</span>' : ''}</div>
-            </div>`;
+            <div class="cs-row-bar-wrap">
+              <div class="cs-row-bar" style="width:${barWidth}%;background:${sumColor}"></div>
+            </div>
+            <div class="cs-row-sum" style="color:${sumColor}">${pips(m.sum)}${m.meetsThreshold ? '<span style="font-size:8px;display:block;color:#22c55e">≥15</span>' : ''}</div>`;
 
           if (m.meetsThreshold && m.pairs?.length) {
             html += `<div class="cs-pairs-row">${m.pairs.map(p => pairCardHTML(p, 'row')).join('')}</div>`;
@@ -606,8 +572,8 @@
         html += '</div></div>';
       }
 
-      if (!activeSlots.length) {
-        html += '<p style="color:var(--text-dim);text-align:center;padding:40px">No 4-interval streaks found</p>';
+      if (!merged.length) {
+        html += '<p style="color:var(--text-dim);text-align:center;padding:40px">No M15 strength data</p>';
       }
 
       body.innerHTML = html;
