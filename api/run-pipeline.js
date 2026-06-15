@@ -39,7 +39,7 @@ const INSTRUMENTS = [
   'NZD_JPY','NZD_CHF','NZD_CAD',
   'CAD_JPY','CAD_CHF','CHF_JPY',
 ];
-const LOOKBACKS = [3, 6, 12];
+const LOOKBACKS = [3, 4, 6, 12, 24];
 const PAIRS_PER_CURRENCY = 7;
 
 function getDB() {
@@ -69,10 +69,10 @@ async function verifyAdmin(sb, req) {
 // candle back from Monday morning lands on Friday, not a dead Saturday slot.
 
 async function runStrength(sb) {
-  const MIN_CANDLES = 13; // current (0) + max lookback (12) = 13 minimum
-  const FETCH       = 20; // a little extra headroom
+  const MAX_LB = Math.max(...LOOKBACKS);
+  const FETCH  = MAX_LB + 26;
+  const MIN_CANDLES = MAX_LB + 1;
 
-  // Fetch last FETCH complete H1 candles per instrument, newest first
   const arrays = {};
   for (const inst of INSTRUMENTS) {
     const { data, error } = await sb
@@ -89,53 +89,74 @@ async function runStrength(sb) {
     arrays[inst] = data.map(c => ({ time: new Date(c.time).toISOString(), close: parseFloat(c.close) }));
   }
 
-  // Reference time = the oldest "most recent candle" across all instruments
-  // (guards against one instrument being one candle ahead of the rest)
-  const refTime = INSTRUMENTS.map(inst => arrays[inst][0].time).sort()[0];
+  let common = new Set(arrays[INSTRUMENTS[0]].map(c => c.time));
+  for (let i = 1; i < INSTRUMENTS.length; i++) {
+    const s = new Set(arrays[INSTRUMENTS[i]].map(c => c.time));
+    common = new Set([...common].filter(t => s.has(t)));
+  }
+  const commonTimes = [...common].sort();
+  if (!commonTimes.length) throw new Error('No common candle timestamps');
 
-  // Compute raw strength using positional offsets — no timestamp arithmetic
-  const raw = {
-    3:  Object.fromEntries(CURRENCIES.map(c => [c, 0])),
-    6:  Object.fromEntries(CURRENCIES.map(c => [c, 0])),
-    12: Object.fromEntries(CURRENCIES.map(c => [c, 0])),
-  };
+  const { data: existing } = await sb
+    .from('currency_strength')
+    .select('time')
+    .in('time', commonTimes)
+    .eq('currency', 'USD');
+  const filled = new Set((existing || []).map(r => new Date(r.time).toISOString()));
 
-  for (const inst of INSTRUMENTS) {
-    const arr = arrays[inst];
-    const [base, quote] = inst.split('_');
+  const latest = commonTimes[commonTimes.length - 1];
+  const toCalc = commonTimes.filter(t => !filled.has(t) || t === latest);
 
-    // Starting index: first candle at or before refTime (normally 0, may be 1 if inst is 1 ahead)
-    const refIdx = arr.findIndex(c => c.time <= refTime);
-    if (refIdx === -1) throw new Error(`${inst}: no candle at or before ${refTime}`);
+  const allRows = [];
+  let gapsFilled = 0;
 
-    const closeNow = arr[refIdx].close;
-    for (const lb of LOOKBACKS) {
-      const pastIdx = refIdx + lb;
-      if (pastIdx >= arr.length)
-        throw new Error(`${inst}: not enough candles for ${lb}-candle lookback`);
-      const mv = (closeNow - arr[pastIdx].close) / arr[pastIdx].close;
-      raw[lb][base]  += mv;
-      raw[lb][quote] -= mv;
+  for (const refTime of toCalc) {
+    const raw = {};
+    for (const lb of LOOKBACKS) raw[lb] = Object.fromEntries(CURRENCIES.map(c => [c, 0]));
+
+    let ok = true;
+    for (const inst of INSTRUMENTS) {
+      const arr = arrays[inst];
+      const [base, quote] = inst.split('_');
+      const refIdx = arr.findIndex(c => c.time <= refTime);
+      if (refIdx === -1) { ok = false; break; }
+      const closeNow = arr[refIdx].close;
+      for (const lb of LOOKBACKS) {
+        if (refIdx + lb >= arr.length) { ok = false; break; }
+        const mv = (closeNow - arr[refIdx + lb].close) / arr[refIdx + lb].close;
+        raw[lb][base] += mv;
+        raw[lb][quote] -= mv;
+      }
+      if (!ok) break;
     }
+    if (!ok) continue;
+
+    for (const currency of CURRENCIES) {
+      allRows.push({
+        time: refTime, currency,
+        raw_3h:  raw[3][currency],  raw_4h:  raw[4][currency],
+        raw_6h:  raw[6][currency],  raw_12h: raw[12][currency],
+        raw_1d:  raw[24][currency],
+        normalized_3h:  raw[3][currency]  / PAIRS_PER_CURRENCY,
+        normalized_4h:  raw[4][currency]  / PAIRS_PER_CURRENCY,
+        normalized_6h:  raw[6][currency]  / PAIRS_PER_CURRENCY,
+        normalized_12h: raw[12][currency] / PAIRS_PER_CURRENCY,
+        normalized_1d:  raw[24][currency] / PAIRS_PER_CURRENCY,
+        smooth_3h: null, smooth_4h: null, smooth_6h: null,
+        smooth_12h: null, smooth_1d: null,
+      });
+    }
+    if (!filled.has(refTime)) gapsFilled++;
   }
 
-  const rows = CURRENCIES.map(currency => ({
-    time:           refTime,
-    currency,
-    raw_3h:         raw[3][currency],
-    raw_6h:         raw[6][currency],
-    raw_12h:        raw[12][currency],
-    normalized_3h:  raw[3][currency]  / PAIRS_PER_CURRENCY,
-    normalized_6h:  raw[6][currency]  / PAIRS_PER_CURRENCY,
-    normalized_12h: raw[12][currency] / PAIRS_PER_CURRENCY,
-  }));
+  for (let i = 0; i < allRows.length; i += 500) {
+    const { error } = await sb.from('currency_strength')
+      .upsert(allRows.slice(i, i + 500), { onConflict: 'time,currency', ignoreDuplicates: false });
+    if (error) throw new Error(`strength upsert: ${error.message}`);
+  }
 
-  const { error: upsErr } = await sb
-    .from('currency_strength')
-    .upsert(rows, { onConflict: 'time,currency', ignoreDuplicates: false });
-  if (upsErr) throw new Error(`strength upsert: ${upsErr.message}`);
-
-  return refTime;
+  if (gapsFilled > 0) console.log(`[PIPELINE] Backfilled ${gapsFilled} missing strength hours`);
+  return latest;
 }
 
 // ── Smooth ────────────────────────────────────────────────────────────────────
@@ -145,38 +166,54 @@ function ema(prev, cur) {
 }
 
 async function runSmooth(sb) {
-  const updates = [];
+  const allUpdates = [];
   for (const currency of CURRENCIES) {
-    const { data, error } = await sb
+    const { data: unsmoothed, error } = await sb
       .from('currency_strength')
-      .select('id, time, currency, normalized_3h, normalized_6h, normalized_12h')
+      .select('id, time, normalized_3h, normalized_4h, normalized_6h, normalized_12h, normalized_1d')
       .eq('currency', currency)
+      .is('smooth_3h', null)
+      .order('time', { ascending: true })
+      .limit(50);
+    if (error || !unsmoothed?.length) continue;
+
+    const { data: prev } = await sb
+      .from('currency_strength')
+      .select('smooth_3h, smooth_4h, smooth_6h, smooth_12h, smooth_1d')
+      .eq('currency', currency)
+      .lt('time', unsmoothed[0].time)
+      .not('smooth_3h', 'is', null)
       .order('time', { ascending: false })
-      .limit(2);
-    if (error || !data?.length) continue;
+      .limit(1);
 
-    const current  = data[0];
-    const previous = data[1] || null;
-    let p3 = null, p6 = null, p12 = null;
+    let p3 = prev?.[0]?.smooth_3h ?? null;
+    let p4 = prev?.[0]?.smooth_4h ?? null;
+    let p6 = prev?.[0]?.smooth_6h ?? null;
+    let p12 = prev?.[0]?.smooth_12h ?? null;
+    let p1d = prev?.[0]?.smooth_1d ?? null;
 
-    if (previous) {
-      const { data: pr } = await sb
-        .from('currency_strength')
-        .select('smooth_3h, smooth_6h, smooth_12h')
-        .eq('id', previous.id)
-        .single();
-      if (pr) { p3 = pr.smooth_3h; p6 = pr.smooth_6h; p12 = pr.smooth_12h; }
+    for (const row of unsmoothed) {
+      p3  = ema(p3,  row.normalized_3h);
+      p4  = ema(p4,  parseFloat(row.normalized_4h) || 0);
+      p6  = ema(p6,  row.normalized_6h);
+      p12 = ema(p12, row.normalized_12h);
+      p1d = ema(p1d, parseFloat(row.normalized_1d) || 0);
+      allUpdates.push({
+        id: row.id, time: row.time, currency,
+        smooth_3h: p3, smooth_4h: p4, smooth_6h: p6,
+        smooth_12h: p12, smooth_1d: p1d,
+      });
     }
-
-    updates.push({
-      id: current.id, time: current.time, currency,
-      smooth_3h:  ema(p3,  current.normalized_3h),
-      smooth_6h:  ema(p6,  current.normalized_6h),
-      smooth_12h: ema(p12, current.normalized_12h),
-    });
   }
-  const { error } = await sb.from('currency_strength').upsert(updates, { onConflict: 'id' });
-  if (error) throw new Error(`smooth upsert: ${error.message}`);
+
+  if (!allUpdates.length) return;
+  for (let i = 0; i < allUpdates.length; i += 500) {
+    const { error } = await sb.from('currency_strength')
+      .upsert(allUpdates.slice(i, i + 500), { onConflict: 'id' });
+    if (error) throw new Error(`smooth upsert: ${error.message}`);
+  }
+  if (allUpdates.length > 8)
+    console.log(`[PIPELINE] Smoothed ${allUpdates.length / 8} hours (including backfilled)`);
 }
 
 // ── Spreads ───────────────────────────────────────────────────────────────────
@@ -348,6 +385,20 @@ module.exports = async function handler(req, res) {
 
   await step('strength', async () => { strengthTime = await runStrength(sb); });
   await step('smooth',   () => runSmooth(sb));
+  await step('gap_verify', async () => {
+    const since = new Date(Date.now() - 24 * 3600000).toISOString();
+    const { data } = await sb
+      .from('currency_strength')
+      .select('time')
+      .eq('currency', 'USD')
+      .is('smooth_6h', null)
+      .gte('time', since);
+    if (data?.length) {
+      console.warn(`[PIPELINE] ${data.length} unsmoothed rows remain — re-running strength + smooth`);
+      await runStrength(sb);
+      await runSmooth(sb);
+    }
+  });
   await step('spreads',  () => runSpreads(sb));
   await step('m15_spreads',      () => calculateLatestM15Spreads());
   await step('volume_analysis',  () => calculateLatestVolumeAnalysis());

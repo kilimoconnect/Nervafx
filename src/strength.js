@@ -191,10 +191,10 @@ async function backfillStrength() {
 // "3H" = 3 completed H1 candles back. Weekend gaps are invisible because
 // there are no candles then; the 12th candle from Monday morning is Friday.
 async function calculateLatestStrength() {
-  const MIN_CANDLES = 25; // current (index 0) + max lookback (24)
-  const FETCH       = 30; // a little extra headroom
+  const MAX_LB = Math.max(...LOOKBACKS);
+  const FETCH  = MAX_LB + 26;
+  const MIN_CANDLES = MAX_LB + 1;
 
-  // Fetch last FETCH complete H1 candles per instrument, newest first
   const arrays = {};
   for (const instrument of config.instruments) {
     const { data, error } = await supabase
@@ -211,49 +211,65 @@ async function calculateLatestStrength() {
     arrays[instrument] = data.map(c => ({ time: new Date(c.time).toISOString(), close: parseFloat(c.close) }));
   }
 
-  // Reference time = oldest "most recent candle" across all instruments
-  const refTime = config.instruments.map(inst => arrays[inst][0].time).sort()[0];
+  let common = new Set(arrays[config.instruments[0]].map(c => c.time));
+  for (let i = 1; i < config.instruments.length; i++) {
+    const s = new Set(arrays[config.instruments[i]].map(c => c.time));
+    common = new Set([...common].filter(t => s.has(t)));
+  }
+  const commonTimes = [...common].sort();
+  if (!commonTimes.length) throw new Error('[STRENGTH] No common timestamps');
 
-  const raw = {};
-  for (const lb of LOOKBACKS) raw[lb] = Object.fromEntries(CURRENCIES.map(c => [c, 0]));
+  const { data: existing } = await supabase
+    .from('currency_strength')
+    .select('time')
+    .in('time', commonTimes)
+    .eq('currency', 'USD');
+  const filled = new Set((existing || []).map(r => new Date(r.time).toISOString()));
 
-  for (const instrument of config.instruments) {
-    const arr = arrays[instrument];
-    const [base, quote] = instrument.split('_');
+  const latest = commonTimes[commonTimes.length - 1];
+  const toCalc = commonTimes.filter(t => !filled.has(t) || t === latest);
 
-    // First candle at or before refTime (normally index 0)
-    const refIdx = arr.findIndex(c => c.time <= refTime);
-    if (refIdx === -1) throw new Error(`[STRENGTH] ${instrument}: no candle at or before ${refTime}`);
+  let gapsFilled = 0;
+  for (const refTime of toCalc) {
+    const raw = {};
+    for (const lb of LOOKBACKS) raw[lb] = Object.fromEntries(CURRENCIES.map(c => [c, 0]));
 
-    const closeNow = arr[refIdx].close;
-    for (const lb of LOOKBACKS) {
-      const pastIdx = refIdx + lb;
-      if (pastIdx >= arr.length)
-        throw new Error(`[STRENGTH] ${instrument}: not enough candles for ${lb}-candle lookback`);
-      const mv = (closeNow - arr[pastIdx].close) / arr[pastIdx].close;
-      raw[lb][base]  += mv;
-      raw[lb][quote] -= mv;
+    let ok = true;
+    for (const instrument of config.instruments) {
+      const arr = arrays[instrument];
+      const [base, quote] = instrument.split('_');
+      const refIdx = arr.findIndex(c => c.time <= refTime);
+      if (refIdx === -1) { ok = false; break; }
+      const closeNow = arr[refIdx].close;
+      for (const lb of LOOKBACKS) {
+        if (refIdx + lb >= arr.length) { ok = false; break; }
+        const mv = (closeNow - arr[refIdx + lb].close) / arr[refIdx + lb].close;
+        raw[lb][base] += mv;
+        raw[lb][quote] -= mv;
+      }
+      if (!ok) break;
     }
+    if (!ok) continue;
+
+    const rows = CURRENCIES.map(currency => ({
+      time: refTime, currency,
+      raw_3h:  raw[3][currency],  raw_4h:  raw[4][currency],
+      raw_6h:  raw[6][currency],  raw_12h: raw[12][currency],
+      raw_1d:  raw[24][currency],
+      normalized_3h:  raw[3][currency]  / PAIRS_PER_CURRENCY,
+      normalized_4h:  raw[4][currency]  / PAIRS_PER_CURRENCY,
+      normalized_6h:  raw[6][currency]  / PAIRS_PER_CURRENCY,
+      normalized_12h: raw[12][currency] / PAIRS_PER_CURRENCY,
+      normalized_1d:  raw[24][currency] / PAIRS_PER_CURRENCY,
+    }));
+
+    await upsertStrengthRows(rows);
+    if (!filled.has(refTime)) gapsFilled++;
   }
 
-  const rows = CURRENCIES.map(currency => ({
-    time:           refTime,
-    currency,
-    raw_3h:         raw[3][currency],
-    raw_4h:         raw[4][currency],
-    raw_6h:         raw[6][currency],
-    raw_12h:        raw[12][currency],
-    raw_1d:         raw[24][currency],
-    normalized_3h:  raw[3][currency]  / PAIRS_PER_CURRENCY,
-    normalized_4h:  raw[4][currency]  / PAIRS_PER_CURRENCY,
-    normalized_6h:  raw[6][currency]  / PAIRS_PER_CURRENCY,
-    normalized_12h: raw[12][currency] / PAIRS_PER_CURRENCY,
-    normalized_1d:  raw[24][currency] / PAIRS_PER_CURRENCY,
-  }));
-
-  await upsertStrengthRows(rows);
-  console.log(`[STRENGTH] Stored 8 currency scores for ${refTime}`);
-  return { time: refTime, rows };
+  if (gapsFilled > 0) console.log(`[STRENGTH] Backfilled ${gapsFilled} missing hours`);
+  console.log(`[STRENGTH] Latest: ${latest}`);
+  return { time: latest, rows: [], gapsFilled };
 }
 
 module.exports = { backfillStrength, calculateLatestStrength, buildCandleLookup, buildRecentCandleLookup, calculateAtTime };

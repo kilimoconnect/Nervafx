@@ -90,58 +90,56 @@ async function backfillSmooth() {
   return { total };
 }
 
-// Apply smoothing to the latest row for each currency.
+// Smooth all unsmoothed rows for each currency (handles gap backfills).
 // Called after calculateLatestStrength() in the hourly update.
 async function smoothLatest() {
-  const updates = [];
+  const allUpdates = [];
 
   for (const currency of CURRENCIES) {
-    const { data, error } = await supabase
+    const { data: unsmoothed, error } = await supabase
       .from('currency_strength')
-      .select('id, time, currency, normalized_3h, normalized_4h, normalized_6h, normalized_12h, normalized_1d')
+      .select('id, time, normalized_3h, normalized_4h, normalized_6h, normalized_12h, normalized_1d')
       .eq('currency', currency)
+      .is('smooth_3h', null)
+      .order('time', { ascending: true })
+      .limit(50);
+
+    if (error) throw new Error(`Fetch unsmoothed error (${currency}): ${error.message}`);
+    if (!unsmoothed?.length) continue;
+
+    const { data: prev } = await supabase
+      .from('currency_strength')
+      .select('smooth_3h, smooth_4h, smooth_6h, smooth_12h, smooth_1d')
+      .eq('currency', currency)
+      .lt('time', unsmoothed[0].time)
+      .not('smooth_3h', 'is', null)
       .order('time', { ascending: false })
-      .limit(2);
+      .limit(1);
 
-    if (error) throw new Error(`Fetch latest error (${currency}): ${error.message}`);
-    if (!data || data.length === 0) continue;
+    let p3 = prev?.[0]?.smooth_3h ?? null;
+    let p4 = prev?.[0]?.smooth_4h ?? null;
+    let p6 = prev?.[0]?.smooth_6h ?? null;
+    let p12 = prev?.[0]?.smooth_12h ?? null;
+    let p1d = prev?.[0]?.smooth_1d ?? null;
 
-    const current = data[0];
-    const previous = data[1] || null;
-
-    let prev3h = null, prev4h = null, prev6h = null, prev12h = null, prev1d = null;
-
-    if (previous) {
-      const { data: prevRow } = await supabase
-        .from('currency_strength')
-        .select('smooth_3h, smooth_4h, smooth_6h, smooth_12h, smooth_1d')
-        .eq('id', previous.id)
-        .single();
-
-      if (prevRow) {
-        prev3h  = prevRow.smooth_3h;
-        prev4h  = prevRow.smooth_4h;
-        prev6h  = prevRow.smooth_6h;
-        prev12h = prevRow.smooth_12h;
-        prev1d  = prevRow.smooth_1d;
-      }
+    for (const row of unsmoothed) {
+      p3  = ema(p3,  row.normalized_3h);
+      p4  = ema(p4,  parseFloat(row.normalized_4h) || 0);
+      p6  = ema(p6,  row.normalized_6h);
+      p12 = ema(p12, row.normalized_12h);
+      p1d = ema(p1d, parseFloat(row.normalized_1d) || 0);
+      allUpdates.push({
+        id: row.id, time: row.time, currency,
+        smooth_3h: p3, smooth_4h: p4, smooth_6h: p6,
+        smooth_12h: p12, smooth_1d: p1d,
+      });
     }
-
-    updates.push({
-      id: current.id,
-      time: current.time,
-      currency,
-      smooth_3h:  ema(prev3h,  current.normalized_3h),
-      smooth_4h:  ema(prev4h,  parseFloat(current.normalized_4h) || 0),
-      smooth_6h:  ema(prev6h,  current.normalized_6h),
-      smooth_12h: ema(prev12h, current.normalized_12h),
-      smooth_1d:  ema(prev1d,  parseFloat(current.normalized_1d) || 0),
-    });
   }
 
-  await batchUpdateSmooth(updates);
-  console.log(`[SMOOTH] Latest smoothing applied for ${updates.length} currencies`);
-  return updates;
+  await batchUpdateSmooth(allUpdates);
+  const hours = allUpdates.length / 8;
+  console.log(`[SMOOTH] Smoothed ${allUpdates.length} rows (${hours} hour${hours > 1 ? 's' : ''})`);
+  return allUpdates;
 }
 
 module.exports = { backfillSmooth, smoothLatest, smoothCurrency };
