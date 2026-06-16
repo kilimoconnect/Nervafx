@@ -1898,7 +1898,9 @@ async function _fetchCandleDirs() {
 function _countPrevCandles(pair, dir, candleDirs) {
   const pd = candleDirs[pair];
   if (!pd) return null;
-  const keys = Object.keys(pd).sort().reverse().slice(0, 5);
+  // Use the 5 candles before the current hour (exclude incomplete current candle)
+  const nowHour = new Date().toISOString().slice(0, 13);
+  const keys = Object.keys(pd).sort().reverse().filter(k => k < nowHour).slice(0, 5);
   if (!keys.length) return null;
   let matching = 0;
   for (const k of keys) {
