@@ -252,7 +252,9 @@ void PollCommands()
    if(arrStart < 0 || arrEnd < 0 || arrEnd <= arrStart + 1) { g_pendingCount = 0; return; }
 
    string arrContent = StringSubstr(response, arrStart + 1, arrEnd - arrStart - 1);
-   if(StringLen(StringTrimRight(StringTrimLeft(arrContent))) == 0) { g_pendingCount = 0; return; }
+   StringTrimLeft(arrContent);
+   StringTrimRight(arrContent);
+   if(StringLen(arrContent) == 0) { g_pendingCount = 0; return; }
 
    // Process each command object
    int pos = 0;
