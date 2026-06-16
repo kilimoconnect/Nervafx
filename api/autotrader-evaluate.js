@@ -25,17 +25,16 @@ async function evaluateAutoTrader(sb) {
   // Find users with auto trading enabled
   const { data: enabledUsers, error: settingsErr } = await sb
     .from('ea_settings')
-    .select('user_id, risk_pct, max_trades, direction_threshold')
+    .select('user_id')
     .eq('auto_trading_enabled', true);
   if (settingsErr) throw new Error(settingsErr.message);
   if (!enabledUsers?.length) return { evaluated: 0 };
 
-  // Get active signal pairs in ENTRY or MOVING phase
+  // Get active signal pairs
   const { data: signals } = await sb
     .from('energy_signal_pairs')
-    .select('instrument, dir, phase, de_combined, spread_6h')
-    .eq('active', true)
-    .in('phase', ['ENTRY', 'MOVING']);
+    .select('instrument, dir, phase, de_combined, spread_6h, energy_event_type, active')
+    .eq('active', true);
   if (!signals?.length) return { evaluated: enabledUsers.length, commands: 0 };
 
   let totalCommands = 0;
@@ -53,6 +52,17 @@ async function evaluateAutoTrader(sb) {
     if (hbAge > 60000) continue;
     if (!account.balance || account.balance <= 0) continue;
 
+    // Load profile risk settings
+    const { data: profile } = await sb
+      .from('profiles')
+      .select('max_trades, max_daily_risk_pct, min_rr')
+      .eq('id', user.user_id)
+      .single();
+
+    const maxTrades = profile?.max_trades || 3;
+    const riskPct   = profile?.max_daily_risk_pct || 2;
+    const minRR     = profile?.min_rr || 2;
+
     const openPositions = account.open_positions || [];
 
     // Get pending commands for this user
@@ -62,30 +72,59 @@ async function evaluateAutoTrader(sb) {
       .eq('user_id', user.user_id)
       .eq('status', 'pending');
     const pendingInstruments = new Set((pendingCmds || []).map(c => c.instrument));
-    const openInstruments = new Set(openPositions.map(p => p.instrument));
+    const openInstruments = new Map();
+    for (const p of openPositions) {
+      openInstruments.set(p.instrument, p);
+    }
 
-    const slotsAvailable = user.max_trades - openPositions.length - pendingInstruments.size;
+    // ── REVERSAL: close trades whose direction flipped ──
+    for (const sig of signals) {
+      if (sig.energy_event_type !== 'REVERSAL') continue;
+      const mt5Symbol = oandaToMt5(sig.instrument);
+      const pos = openInstruments.get(mt5Symbol);
+      if (!pos) continue;
+      // Signal dir flipped — close if position is now wrong-way
+      if (pos.dir !== sig.dir) {
+        const { error: cmdErr } = await sb
+          .from('ea_commands')
+          .insert({
+            user_id:        user.user_id,
+            instrument:     mt5Symbol,
+            action:         'CLOSE',
+            params:         { ticket: pos.ticket },
+            status:         'pending',
+            signal_pair_id: sig.instrument,
+          });
+        if (!cmdErr) {
+          totalCommands++;
+          pendingInstruments.add(mt5Symbol);
+        }
+      }
+    }
+
+    // ── ENTRY/MOVING: open new trades on direction confirmation ──
+    const entrySignals = signals.filter(s =>
+      s.phase === 'ENTRY' || s.phase === 'MOVING'
+    );
+
+    const slotsAvailable = maxTrades - openPositions.length - pendingInstruments.size;
     if (slotsAvailable <= 0) continue;
 
     let filled = 0;
-    for (const sig of signals) {
+    for (const sig of entrySignals) {
       if (filled >= slotsAvailable) break;
 
-      // Check score threshold
-      if ((sig.de_combined || 0) < user.direction_threshold) continue;
-
       const mt5Symbol = oandaToMt5(sig.instrument);
-
-      // Skip if already open or pending
       if (openInstruments.has(mt5Symbol)) continue;
       if (pendingInstruments.has(mt5Symbol)) continue;
 
-      // Calculate lot size from risk % and balance
-      const riskAmount = account.balance * (user.risk_pct / 100);
+      // Calculate lot size: risk per trade = (risk% / max_trades) of balance
+      const riskPerTrade = account.balance * (riskPct / 100) / maxTrades;
       const slPips = 30;
+      const tpPips = slPips * minRR;
       const pip = pipValue(mt5Symbol);
       const pipValuePerLot = pip * 100000;
-      let lots = riskAmount / (slPips * pipValuePerLot);
+      let lots = riskPerTrade / (slPips * pipValuePerLot);
       lots = Math.max(0.01, Math.round(lots * 100) / 100);
 
       const action = sig.dir === 'BUY' ? 'OPEN_BUY' : 'OPEN_SELL';
@@ -96,7 +135,7 @@ async function evaluateAutoTrader(sb) {
           user_id:        user.user_id,
           instrument:     mt5Symbol,
           action,
-          params:         { lots, sl_pips: slPips, tp_pips: slPips * 2 },
+          params:         { lots, sl_pips: slPips, tp_pips: tpPips },
           status:         'pending',
           signal_pair_id: sig.instrument,
         });

@@ -7346,7 +7346,7 @@ async function refresh() {
 
     // Cache profile — used by updateHeader and any section needing user settings
     if (profileData && !profileData.error) {
-      _profile.account_size       = parseFloat(profileData.account_size)       || null;
+      _profile.account_size       = parseFloat(profileData.broker_balance) || parseFloat(profileData.account_size) || null;
       _profile.max_daily_risk_pct = parseFloat(profileData.max_daily_risk_pct) || null;
       _profile.max_trades         = parseInt(profileData.max_trades)            || null;
       // Timezone: use profile timezone if explicitly set to a real IANA zone.

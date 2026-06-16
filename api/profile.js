@@ -31,10 +31,21 @@ module.exports = async function handler(req, res) {
         .eq('id', user.id)
         .single();
 
+      // Check for broker balance (EA connected within 60s)
+      const { data: eaAccount } = await sb
+        .from('ea_accounts')
+        .select('balance, last_heartbeat')
+        .eq('user_id', user.id)
+        .single();
+
+      const brokerConnected = eaAccount?.last_heartbeat
+        && (Date.now() - new Date(eaAccount.last_heartbeat).getTime()) < 60000;
+      const brokerBalance = brokerConnected && eaAccount.balance > 0
+        ? eaAccount.balance : null;
+
       const meta = user.user_metadata || {};
 
       if (error?.code === 'PGRST116' || !data) {
-        // No profile row yet — return auth metadata + hardcoded defaults
         return res.json({
           id:                 user.id,
           email:              user.email,
@@ -45,17 +56,17 @@ module.exports = async function handler(req, res) {
           max_trades:         3,
           min_rr:             2,
           timezone:           null,
+          broker_balance:     brokerBalance,
         });
       }
       if (error) throw error;
 
-      // Profile row exists — always merge auth metadata as fallback for names
-      // (setup.html creates the row without names, so the table columns may be blank)
       return res.json({
         ...data,
-        email:      user.email,
-        first_name: data.first_name || meta.first_name || '',
-        last_name:  data.last_name  || meta.last_name  || '',
+        email:          user.email,
+        first_name:     data.first_name || meta.first_name || '',
+        last_name:      data.last_name  || meta.last_name  || '',
+        broker_balance: brokerBalance,
       });
     }
 

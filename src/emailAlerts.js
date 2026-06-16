@@ -134,8 +134,26 @@ async function getSubscribedUsers(sb) {
     .from('profiles')
     .select('id, account_size, max_daily_risk_pct, max_trades, min_rr');
 
+  // Override account_size with broker balance when EA is connected
+  const { data: eaAccounts } = await sb
+    .from('ea_accounts')
+    .select('user_id, balance, last_heartbeat');
+  const brokerBalances = new Map();
+  if (eaAccounts?.length) {
+    const now = Date.now();
+    for (const a of eaAccounts) {
+      if (a.balance > 0 && (now - new Date(a.last_heartbeat).getTime()) < 60000) {
+        brokerBalances.set(a.user_id, a.balance);
+      }
+    }
+  }
+
   const profileMap = {};
-  for (const p of (profiles || [])) profileMap[p.id] = p;
+  for (const p of (profiles || [])) {
+    const bb = brokerBalances.get(p.id);
+    if (bb) p.account_size = bb;
+    profileMap[p.id] = p;
+  }
 
   return allUsers.users.filter(u => {
     if (!u.email) return false;

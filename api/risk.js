@@ -31,6 +31,16 @@ module.exports = async function handler(req, res) {
             if (profile.max_daily_risk_pct) maxDailyRiskPct = parseFloat(profile.max_daily_risk_pct);
             if (profile.max_trades)         maxTrades       = parseInt(profile.max_trades);
           }
+
+          // Prefer broker balance when EA connected
+          const { data: eaAcct } = await sb
+            .from('ea_accounts')
+            .select('balance, last_heartbeat')
+            .eq('user_id', user.id)
+            .single();
+          if (eaAcct?.balance > 0 && (Date.now() - new Date(eaAcct.last_heartbeat).getTime()) < 60000) {
+            accountSize = eaAcct.balance;
+          }
         }
       } catch (_) { /* fall back to defaults */ }
     }

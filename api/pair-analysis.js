@@ -87,8 +87,20 @@ module.exports = async function handler(req, res) {
     let tradeLevels = null;
     if (signalSent && pair && h1Candles.length >= 2 && (pair.phase === 'ENTRY' || pair.phase === 'MOVING')) {
       const userRR      = parseFloat(profile.min_rr) || 2.0;
-      const accountSize = parseFloat(profile.account_size) || 10000;
+      let   accountSize = parseFloat(profile.account_size) || 10000;
       const maxDailyPct = parseFloat(profile.max_daily_risk_pct) || 2;
+
+      // Prefer broker balance when EA connected
+      if (userId) {
+        const { data: eaAcct } = await sb
+          .from('ea_accounts')
+          .select('balance, last_heartbeat')
+          .eq('user_id', userId)
+          .single();
+        if (eaAcct?.balance > 0 && (Date.now() - new Date(eaAcct.last_heartbeat).getTime()) < 60000) {
+          accountSize = eaAcct.balance;
+        }
+      }
       const maxTrades   = parseInt(profile.max_trades) || 3;
       const riskPercent = (maxDailyPct / 100) / maxTrades;
       const riskAmount  = accountSize * riskPercent;

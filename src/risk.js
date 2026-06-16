@@ -11,6 +11,25 @@ async function loadAllProfiles() {
       .select('id, account_size, max_daily_risk_pct, max_trades, min_rr');
 
     if (error || !data || data.length === 0) return [];
+
+    // Override account_size with broker balance when EA is connected
+    const { data: accounts } = await supabase
+      .from('ea_accounts')
+      .select('user_id, balance, last_heartbeat');
+    if (accounts?.length) {
+      const now = Date.now();
+      const brokerMap = new Map();
+      for (const a of accounts) {
+        if (a.balance > 0 && (now - new Date(a.last_heartbeat).getTime()) < 60000) {
+          brokerMap.set(a.user_id, a.balance);
+        }
+      }
+      for (const p of data) {
+        const bb = brokerMap.get(p.id);
+        if (bb) p.account_size = bb;
+      }
+    }
+
     return data;
   } catch (_) {
     return [];

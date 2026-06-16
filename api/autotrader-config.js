@@ -31,6 +31,13 @@ module.exports = async function handler(req, res) {
         settings = created;
       }
 
+      // Read risk settings from user profile
+      const { data: profile } = await sb
+        .from('profiles')
+        .select('account_size, max_daily_risk_pct, max_trades, min_rr')
+        .eq('id', userId)
+        .single();
+
       const { data: account } = await sb
         .from('ea_accounts')
         .select('*')
@@ -50,60 +57,43 @@ module.exports = async function handler(req, res) {
         .limit(20);
 
       return res.json({
-        api_key:               settings.api_key,
-        risk_pct:              settings.risk_pct,
-        max_trades:            settings.max_trades,
-        direction_threshold:   settings.direction_threshold,
-        auto_trading_enabled:  settings.auto_trading_enabled,
-        broker_connected:      brokerConnected,
-        last_heartbeat:        account?.last_heartbeat || null,
-        account_number:        account?.account_number || null,
-        broker_name:           account?.broker_name || null,
-        balance:               account?.balance || 0,
-        equity:                account?.equity || 0,
-        floating_pl:           account?.floating_pl || 0,
-        margin_used:           account?.margin_used || 0,
-        margin_free:           account?.margin_free || 0,
-        open_positions:        account?.open_positions || [],
-        trade_history:         account?.trade_history || [],
-        pending_commands:      pending || [],
+        api_key:              settings.api_key,
+        auto_trading_enabled: settings.auto_trading_enabled,
+        // From profile
+        max_trades:           profile?.max_trades || 3,
+        max_daily_risk_pct:   profile?.max_daily_risk_pct || 2,
+        min_rr:               profile?.min_rr || 2,
+        account_size:         profile?.account_size || 10000,
+        // Broker state
+        broker_connected:     brokerConnected,
+        last_heartbeat:       account?.last_heartbeat || null,
+        account_number:       account?.account_number || null,
+        broker_name:          account?.broker_name || null,
+        balance:              account?.balance || 0,
+        equity:               account?.equity || 0,
+        floating_pl:          account?.floating_pl || 0,
+        margin_used:          account?.margin_used || 0,
+        margin_free:          account?.margin_free || 0,
+        open_positions:       account?.open_positions || [],
+        trade_history:        account?.trade_history || [],
+        pending_commands:     pending || [],
       });
     }
 
     if (req.method === 'POST') {
       const body = req.body || {};
-      const updates = {};
-
-      if (body.risk_pct != null) {
-        const v = parseFloat(body.risk_pct);
-        if (v < 0.1 || v > 5) return res.status(400).json({ error: 'risk_pct must be 0.1-5.0' });
-        updates.risk_pct = v;
-      }
-      if (body.max_trades != null) {
-        const v = parseInt(body.max_trades, 10);
-        if (v < 1 || v > 10) return res.status(400).json({ error: 'max_trades must be 1-10' });
-        updates.max_trades = v;
-      }
-      if (body.direction_threshold != null) {
-        const v = parseFloat(body.direction_threshold);
-        if (v < 30 || v > 100) return res.status(400).json({ error: 'direction_threshold must be 30-100' });
-        updates.direction_threshold = v;
-      }
-      if (body.auto_trading_enabled != null) {
-        updates.auto_trading_enabled = !!body.auto_trading_enabled;
-      }
-
-      if (!Object.keys(updates).length) return res.status(400).json({ error: 'No valid fields to update' });
-
-      updates.updated_at = new Date().toISOString();
+      if (body.auto_trading_enabled == null) return res.status(400).json({ error: 'auto_trading_enabled required' });
 
       const { error } = await sb
         .from('ea_settings')
-        .update(updates)
+        .update({
+          auto_trading_enabled: !!body.auto_trading_enabled,
+          updated_at: new Date().toISOString(),
+        })
         .eq('user_id', userId);
       if (error) throw new Error(error.message);
 
-      return res.json({ ok: true, ...updates });
+      return res.json({ ok: true, auto_trading_enabled: !!body.auto_trading_enabled });
     }
 
     return res.status(405).json({ error: 'GET or POST only' });

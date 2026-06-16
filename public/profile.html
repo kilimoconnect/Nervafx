@@ -313,19 +313,30 @@
       <div class="pcard" id="card-trading">
 
         <!-- Account Size -->
-        <div class="field">
+        <div class="field" id="account-size-field">
           <div class="field-label">Account Size <span class="field-hint">Your total trading capital</span></div>
-          <div class="input-wrap has-prefix">
-            <span class="input-prefix">$</span>
-            <input id="account-size" type="number" min="100" step="100" placeholder="10,000" />
+          <!-- Broker balance (shown when EA connected) -->
+          <div id="broker-balance-display" style="display:none">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+              <div style="font-size:24px;font-weight:700;color:#e2e8f0" id="broker-balance-value">$0</div>
+              <span style="font-size:10px;font-weight:600;background:#22c55e22;color:#22c55e;padding:2px 8px;border-radius:99px;letter-spacing:0.3px">FROM BROKER</span>
+            </div>
+            <div style="font-size:11px;color:var(--muted)">Live balance from your connected MT5 account</div>
           </div>
-          <div class="chips" id="size-chips">
-            <div class="chip" onclick="setSize(1000)">$1,000</div>
-            <div class="chip" onclick="setSize(5000)">$5,000</div>
-            <div class="chip" onclick="setSize(10000)">$10,000</div>
-            <div class="chip" onclick="setSize(25000)">$25,000</div>
-            <div class="chip" onclick="setSize(50000)">$50,000</div>
-            <div class="chip" onclick="setSize(100000)">$100K</div>
+          <!-- Manual input (shown when no broker) -->
+          <div id="manual-size-wrap">
+            <div class="input-wrap has-prefix">
+              <span class="input-prefix">$</span>
+              <input id="account-size" type="number" min="100" step="100" placeholder="10,000" />
+            </div>
+            <div class="chips" id="size-chips">
+              <div class="chip" onclick="setSize(1000)">$1,000</div>
+              <div class="chip" onclick="setSize(5000)">$5,000</div>
+              <div class="chip" onclick="setSize(10000)">$10,000</div>
+              <div class="chip" onclick="setSize(25000)">$25,000</div>
+              <div class="chip" onclick="setSize(50000)">$50,000</div>
+              <div class="chip" onclick="setSize(100000)">$100K</div>
+            </div>
           </div>
         </div>
 
@@ -572,7 +583,18 @@
         document.getElementById('last-name').value      = data.last_name     || '';
         document.getElementById('email-display').value  = data.email         || '';
         buildTzList(data.timezone || 'UTC');
-        document.getElementById('account-size').value   = data.account_size  || 10000;
+        // Account size: prefer broker balance if available
+        if (data.broker_balance) {
+          document.getElementById('broker-balance-display').style.display = 'block';
+          document.getElementById('broker-balance-value').textContent = '$' + Number(data.broker_balance).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          document.getElementById('manual-size-wrap').style.display = 'none';
+          document.getElementById('account-size').value = data.broker_balance;
+        } else {
+          document.getElementById('broker-balance-display').style.display = 'none';
+          document.getElementById('manual-size-wrap').style.display = 'block';
+          document.getElementById('account-size').value = data.account_size || 10000;
+          syncSizeChips(data.account_size || 10000);
+        }
         document.getElementById('risk-slider').value    = data.max_daily_risk_pct || 2;
         document.getElementById('trades-slider').value  = data.max_trades    || 3;
         document.getElementById('rr-slider').value      = data.min_rr        || 2;
@@ -580,7 +602,6 @@
         updateRisk(data.max_daily_risk_pct   || 2);
         updateTrades(data.max_trades         || 3);
         updateRR(data.min_rr                 || 2);
-        syncSizeChips(data.account_size      || 10000);
       } catch(e) { console.error('loadProfile:', e); }
     }
 
@@ -678,20 +699,24 @@
 
     // ── Save Trading ──
     async function saveTrading() {
-      const size = parseFloat(document.getElementById('account-size').value);
-      if (!size || size < 100) {
-        showSaveMsg('msg-trading', 'Account size must be ≥ $100', 'err');
-        return;
+      const hasBroker = document.getElementById('broker-balance-display').style.display !== 'none';
+      const payload = {
+        max_daily_risk_pct: parseFloat(document.getElementById('risk-slider').value),
+        max_trades:         parseInt(document.getElementById('trades-slider').value),
+        min_rr:             parseFloat(document.getElementById('rr-slider').value),
+      };
+      if (!hasBroker) {
+        const size = parseFloat(document.getElementById('account-size').value);
+        if (!size || size < 100) {
+          showSaveMsg('msg-trading', 'Account size must be ≥ $100', 'err');
+          return;
+        }
+        payload.account_size = size;
       }
       const btn = document.querySelector('#card-trading .btn-save');
       btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Saving…';
       try {
-        const data = await patchProfile({
-          account_size:       size,
-          max_daily_risk_pct: parseFloat(document.getElementById('risk-slider').value),
-          max_trades:         parseInt(document.getElementById('trades-slider').value),
-          min_rr:             parseFloat(document.getElementById('rr-slider').value),
-        });
+        const data = await patchProfile(payload);
         if (data.error) { showSaveMsg('msg-trading', data.error, 'err'); return; }
         showSaveMsg('msg-trading', '✓ Saved', 'ok');
       } catch(e) {

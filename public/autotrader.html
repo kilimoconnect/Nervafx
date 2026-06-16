@@ -248,34 +248,31 @@
         </div>
       </div>`;
 
-      // Card 3: Settings
+      // Card 3: Auto Trading Toggle + Profile Info
       html += `<div class="at-card">
-        <div class="at-card-hd"><i data-lucide="settings"></i> AutoTrader Settings</div>
+        <div class="at-card-hd"><i data-lucide="settings"></i> AutoTrader Control</div>
         <div class="at-setting">
-          <div><div class="at-setting-label">Auto Trading</div><div class="at-setting-desc">Enable automatic trade execution</div></div>
-          <label class="at-toggle">
-            <input type="checkbox" id="at-enabled" ${c.auto_trading_enabled ? 'checked' : ''}>
+          <div><div class="at-setting-label">Auto Trading</div><div class="at-setting-desc">Trades based on direction confirmation signals</div></div>
+          <label class="at-toggle" id="at-toggle-wrap">
+            <input type="checkbox" id="at-enabled" ${c.auto_trading_enabled ? 'checked' : ''} onchange="toggleAutoTrading(this.checked)">
             <div class="at-toggle-track"></div>
             <div class="at-toggle-thumb"></div>
           </label>
         </div>
-        <div class="at-setting">
-          <div><div class="at-setting-label">Risk Per Trade</div><div class="at-setting-desc">% of balance per trade (0.1 – 5.0)</div></div>
-          <div style="display:flex;align-items:center;gap:4px"><input class="at-input" id="at-risk" type="number" step="0.1" min="0.1" max="5" value="${c.risk_pct}"><span style="color:var(--text-dim);font-size:12px">%</span></div>
-        </div>
-        <div class="at-setting">
-          <div><div class="at-setting-label">Max Open Trades</div><div class="at-setting-desc">Maximum simultaneous positions (1 – 10)</div></div>
-          <input class="at-input" id="at-max" type="number" step="1" min="1" max="10" value="${c.max_trades}">
-        </div>
-        <div class="at-setting">
-          <div><div class="at-setting-label">Direction Score Threshold</div><div class="at-setting-desc">Minimum DE score to trigger trade (30 – 100)</div></div>
-          <input class="at-input" id="at-threshold" type="number" step="5" min="30" max="100" value="${c.direction_threshold}">
-        </div>
-        <button class="at-save-btn" id="at-save" onclick="saveSettings()">Save Settings</button>
-        <div class="at-saved" id="at-saved">Settings saved ✓</div>
+        <div class="at-saved" id="at-saved"></div>
 
-        <div style="margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.06)">
-          <div style="font-size:11px;font-weight:600;color:var(--text-dim);margin-bottom:6px">YOUR EA API KEY</div>
+        <div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.06)">
+          <div style="font-size:10px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Risk Settings <span style="font-weight:400;text-transform:none">(from <a href="/profile" style="color:#3b82f6;text-decoration:none">Profile</a>)</span></div>
+          <div class="at-metrics">
+            <div class="at-metric"><div class="at-metric-label">Max Trades</div><div class="at-metric-value" style="font-size:18px">${c.max_trades}</div></div>
+            <div class="at-metric"><div class="at-metric-label">Daily Risk</div><div class="at-metric-value" style="font-size:18px">${c.max_daily_risk_pct}%</div></div>
+            <div class="at-metric"><div class="at-metric-label">Min R:R</div><div class="at-metric-value" style="font-size:18px">1:${c.min_rr}</div></div>
+            <div class="at-metric"><div class="at-metric-label">Open Positions</div><div class="at-metric-value" style="font-size:18px">${positions.length}</div></div>
+          </div>
+        </div>
+
+        <div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.06)">
+          <div style="font-size:10px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Your EA API Key</div>
           <div class="at-apikey-wrap">
             <div class="at-apikey" id="at-key">${c.api_key}</div>
             <button class="at-copy-btn" onclick="copyKey()">Copy</button>
@@ -341,20 +338,17 @@
       lucide.createIcons();
     }
 
-    window.saveSettings = async function() {
-      const btn = document.getElementById('at-save');
-      btn.disabled = true; btn.textContent = 'Saving...';
-      const body = {
-        auto_trading_enabled: document.getElementById('at-enabled').checked,
-        risk_pct: parseFloat(document.getElementById('at-risk').value),
-        max_trades: parseInt(document.getElementById('at-max').value, 10),
-        direction_threshold: parseFloat(document.getElementById('at-threshold').value),
-      };
-      const res = await api('/api/autotrader-config', { method: 'POST', body: JSON.stringify(body) });
-      btn.disabled = false; btn.textContent = 'Save Settings';
+    window.toggleAutoTrading = async function(enabled) {
+      const res = await api('/api/autotrader-config', { method: 'POST', body: JSON.stringify({ auto_trading_enabled: enabled }) });
+      const saved = document.getElementById('at-saved');
       if (res.ok) {
-        Object.assign(_cfg, body);
-        const saved = document.getElementById('at-saved');
+        _cfg.auto_trading_enabled = enabled;
+        saved.textContent = enabled ? 'Auto trading enabled ✓' : 'Auto trading disabled';
+        saved.style.display = 'block';
+        setTimeout(() => saved.style.display = 'none', 2000);
+      } else {
+        document.getElementById('at-enabled').checked = !enabled;
+        saved.textContent = 'Failed to update';
         saved.style.display = 'block';
         setTimeout(() => saved.style.display = 'none', 2000);
       }
