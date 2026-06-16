@@ -21,7 +21,8 @@
     { "source": "/admin",   "destination": "/admin.html"   },
     { "source": "/journal",          "destination": "/journal.html" },
     { "source": "/payment-callback", "destination": "/payment-callback.html" },
-    { "source": "/archive",          "destination": "/archive.html" }
+    { "source": "/archive",          "destination": "/archive.html" },
+    { "source": "/autotrader",       "destination": "/autotrader.html" }
   ],
   "headers": [
     {

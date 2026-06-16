@@ -28,6 +28,7 @@ const { sendSignalAlerts }              = require('../src/emailAlerts');
 const { calculateLatestVolumeAnalysis } = require('../src/volumeAnalysis');
 const { calculateFlowPerformance }     = require('../src/flowPerformance');
 const { calculateEnergyDirection }     = require('../src/energyDirection');
+const { evaluateAutoTrader }           = require('./autotrader-evaluate');
 
 const ADMIN_ID = '140f3854-2c85-488c-8e0a-0f965d562654';
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
@@ -413,6 +414,7 @@ module.exports = async function handler(req, res) {
   await step('journal',          () => writeJournalEntry());
   await step('outcomes',         () => runOutcomeReviews());
   await step('email_alerts',     () => sendSignalAlerts(sb));
+  await step('autotrader',      () => evaluateAutoTrader(sb));
 
   return res.json({
     ok:           true,

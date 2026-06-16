@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AutoTrader — NervaFX</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="icon" href="/nervafx-icon.png">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    .sx-topbar {
+      position: sticky; top: 0; z-index: 100; height: 56px;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 20px; background: rgba(10, 14, 23, 0.85);
+      backdrop-filter: blur(12px); border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .sx-topbar-left { display: flex; align-items: center; gap: 10px; }
+    .sx-logo img { width: 28px; height: 28px; border-radius: 6px; }
+    .sx-sep { color: rgba(255,255,255,0.15); font-size: 18px; }
+    .sx-title-text { font-size: 15px; font-weight: 700; color: #e2e8f0; letter-spacing: -0.3px; }
+    .sx-back-btn {
+      font-size: 12px; font-weight: 600; color: var(--text-dim); text-decoration: none;
+      display: flex; align-items: center; gap: 4px; padding: 6px 10px; border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.08); transition: all 0.15s;
+    }
+    .sx-back-btn:hover { background: rgba(255,255,255,0.05); color: #e2e8f0; }
+    .sx-main { max-width: 700px; margin: 0 auto; padding: 20px 16px 60px; }
+
+    .at-card {
+      background: var(--bg-card, #111827); border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 10px; padding: 20px; margin-bottom: 16px;
+    }
+    .at-card-hd {
+      display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700;
+      color: #94a3b8; margin-bottom: 14px; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .at-card-hd i { width: 16px; height: 16px; }
+
+    /* Connection status */
+    .at-status { display: flex; align-items: center; gap: 10px; }
+    .at-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      animation: at-pulse 2s ease-in-out infinite;
+    }
+    .at-dot.on { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,0.5); }
+    .at-dot.off { background: #ef4444; box-shadow: 0 0 8px rgba(239,68,68,0.4); animation: none; }
+    @keyframes at-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .at-status-label { font-size: 14px; font-weight: 700; }
+    .at-status-sub { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+    /* Metrics grid */
+    .at-metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    .at-metric {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 8px; padding: 14px;
+    }
+    .at-metric-label { font-size: 10px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+    .at-metric-value { font-size: 22px; font-weight: 800; color: #e2e8f0; font-family: 'SF Mono', 'Fira Code', monospace; }
+    .at-metric-value.green { color: #22c55e; }
+    .at-metric-value.red { color: #ef4444; }
+
+    /* Settings */
+    .at-setting {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .at-setting:last-child { border-bottom: none; }
+    .at-setting-label { font-size: 13px; font-weight: 600; color: #e2e8f0; }
+    .at-setting-desc { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+    .at-input {
+      width: 80px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 6px; padding: 6px 10px; color: #e2e8f0; font-size: 14px; font-weight: 700;
+      font-family: 'SF Mono', monospace; text-align: right;
+    }
+    .at-input:focus { outline: none; border-color: #3b82f6; }
+
+    /* Toggle */
+    .at-toggle { position: relative; width: 52px; height: 28px; cursor: pointer; }
+    .at-toggle input { display: none; }
+    .at-toggle-track {
+      position: absolute; inset: 0; border-radius: 14px; background: rgba(255,255,255,0.1);
+      transition: background 0.2s;
+    }
+    .at-toggle input:checked + .at-toggle-track { background: #22c55e; }
+    .at-toggle-thumb {
+      position: absolute; top: 3px; left: 3px; width: 22px; height: 22px;
+      border-radius: 50%; background: #fff; transition: transform 0.2s;
+    }
+    .at-toggle input:checked ~ .at-toggle-thumb { transform: translateX(24px); }
+
+    /* API Key */
+    .at-apikey-wrap {
+      display: flex; align-items: center; gap: 8px; margin-top: 10px;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px; padding: 10px 12px;
+    }
+    .at-apikey {
+      flex: 1; font-family: 'SF Mono', monospace; font-size: 12px; color: #94a3b8;
+      word-break: break-all;
+    }
+    .at-copy-btn {
+      background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.3);
+      color: #3b82f6; font-size: 11px; font-weight: 700; padding: 5px 10px;
+      border-radius: 5px; cursor: pointer; white-space: nowrap;
+    }
+    .at-copy-btn:hover { background: rgba(59,130,246,0.25); }
+
+    /* Positions table */
+    .at-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .at-table th {
+      text-align: left; font-size: 10px; font-weight: 600; color: var(--text-dim);
+      text-transform: uppercase; padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .at-table td { padding: 8px; color: #e2e8f0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    .at-table .buy { color: #22c55e; font-weight: 700; }
+    .at-table .sell { color: #ef4444; font-weight: 700; }
+
+    /* Setup instructions */
+    .at-steps { counter-reset: step; }
+    .at-step {
+      position: relative; padding: 10px 0 10px 36px; font-size: 13px; color: #cbd5e1;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .at-step::before {
+      counter-increment: step; content: counter(step);
+      position: absolute; left: 0; top: 10px; width: 24px; height: 24px;
+      border-radius: 50%; background: rgba(59,130,246,0.15); color: #3b82f6;
+      font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+    }
+    .at-step code {
+      background: rgba(255,255,255,0.06); padding: 2px 6px; border-radius: 4px;
+      font-family: 'SF Mono', monospace; font-size: 11px;
+    }
+
+    .at-empty { text-align: center; padding: 20px; color: var(--text-dim); font-size: 13px; }
+    .at-save-btn {
+      width: 100%; margin-top: 14px; padding: 10px; border: none; border-radius: 8px;
+      background: #3b82f6; color: #fff; font-size: 13px; font-weight: 700;
+      cursor: pointer; transition: background 0.15s;
+    }
+    .at-save-btn:hover { background: #2563eb; }
+    .at-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .at-saved { color: #22c55e; font-size: 12px; font-weight: 600; text-align: center; margin-top: 8px; display: none; }
+
+    @media (max-width: 600px) {
+      .sx-topbar { padding: 0 12px; height: 48px; }
+      .sx-main { padding: 12px 10px 60px; }
+      .at-card { padding: 14px; }
+      .at-metrics { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+      .at-metric { padding: 10px; }
+      .at-metric-value { font-size: 18px; }
+      .at-input { width: 65px; font-size: 13px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="sx-topbar">
+    <div class="sx-topbar-left">
+      <a class="sx-logo" href="/app"><img src="/nervafx-icon.png" alt="NervaFX" onerror="this.style.display='none'"></a>
+      <span class="sx-sep">|</span>
+      <span class="sx-title-text">AutoTrader</span>
+    </div>
+    <a class="sx-back-btn" href="/app"><i data-lucide="arrow-left" style="width:13px;height:13px"></i> Dashboard</a>
+  </div>
+
+  <div class="sx-main" id="at-root">
+    <div style="text-align:center;padding:60px 0;color:var(--text-dim)">
+      <span class="spinner" style="display:inline-block;width:20px;height:20px;border:2px solid rgba(255,255,255,0.1);border-top-color:#3b82f6;border-radius:50%;animation:spin 0.6s linear infinite"></span>
+      <div style="margin-top:10px;font-size:13px">Loading AutoTrader...</div>
+    </div>
+  </div>
+
+  <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+
+  <script>
+  (function() {
+    'use strict';
+
+    const token = localStorage.getItem('nfx_token');
+    if (!token) return location.replace('/login.html');
+
+    let _cfg = null;
+    let _refreshTimer = null;
+
+    async function api(path, opts) {
+      const r = await fetch(path, { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, ...opts });
+      if (r.status === 401) return location.replace('/login.html');
+      return r.json();
+    }
+
+    async function loadConfig() {
+      _cfg = await api('/api/autotrader-config');
+      if (_cfg.error) {
+        document.getElementById('at-root').innerHTML = `<div class="at-card"><div class="at-empty">${_cfg.upgrade ? 'Pro plan required for AutoTrader. <a href="/profile" style="color:#3b82f6">Upgrade</a>' : _cfg.error}</div></div>`;
+        return;
+      }
+      render();
+    }
+
+    function fmtMoney(v) {
+      return '$' + Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function timeSince(iso) {
+      if (!iso) return 'Never';
+      const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+      if (s < 5) return 'Just now';
+      if (s < 60) return s + 's ago';
+      if (s < 3600) return Math.floor(s / 60) + 'm ago';
+      return Math.floor(s / 3600) + 'h ago';
+    }
+
+    function todayPL() {
+      const hist = _cfg.trade_history || [];
+      return hist.reduce((sum, t) => sum + (t.profit || 0), 0);
+    }
+
+    function render() {
+      const c = _cfg;
+      const connected = c.broker_connected;
+      const pl = todayPL() + (c.floating_pl || 0);
+      const plClass = pl >= 0 ? 'green' : 'red';
+      const positions = c.open_positions || [];
+      const commands = c.pending_commands || [];
+
+      let html = '';
+
+      // Card 1: Broker Connection
+      html += `<div class="at-card">
+        <div class="at-card-hd"><i data-lucide="wifi"></i> Broker Connection</div>
+        <div class="at-status">
+          <div class="at-dot ${connected ? 'on' : 'off'}"></div>
+          <div>
+            <div class="at-status-label" style="color:${connected ? '#22c55e' : '#ef4444'}">${connected ? 'Connected' : 'Disconnected'}</div>
+            <div class="at-status-sub">${c.broker_name || 'No broker'} ${c.account_number ? '· #' + c.account_number : ''} · ${timeSince(c.last_heartbeat)}</div>
+          </div>
+        </div>
+      </div>`;
+
+      // Card 2: Account Overview
+      html += `<div class="at-card">
+        <div class="at-card-hd"><i data-lucide="wallet"></i> Account Overview</div>
+        <div class="at-metrics">
+          <div class="at-metric"><div class="at-metric-label">Balance</div><div class="at-metric-value">${fmtMoney(c.balance)}</div></div>
+          <div class="at-metric"><div class="at-metric-label">Equity</div><div class="at-metric-value">${fmtMoney(c.equity)}</div></div>
+          <div class="at-metric"><div class="at-metric-label">Floating P/L</div><div class="at-metric-value ${(c.floating_pl || 0) >= 0 ? 'green' : 'red'}">${fmtMoney(c.floating_pl)}</div></div>
+          <div class="at-metric"><div class="at-metric-label">Today's P/L</div><div class="at-metric-value ${plClass}">${fmtMoney(pl)}</div></div>
+        </div>
+      </div>`;
+
+      // Card 3: Settings
+      html += `<div class="at-card">
+        <div class="at-card-hd"><i data-lucide="settings"></i> AutoTrader Settings</div>
+        <div class="at-setting">
+          <div><div class="at-setting-label">Auto Trading</div><div class="at-setting-desc">Enable automatic trade execution</div></div>
+          <label class="at-toggle">
+            <input type="checkbox" id="at-enabled" ${c.auto_trading_enabled ? 'checked' : ''}>
+            <div class="at-toggle-track"></div>
+            <div class="at-toggle-thumb"></div>
+          </label>
+        </div>
+        <div class="at-setting">
+          <div><div class="at-setting-label">Risk Per Trade</div><div class="at-setting-desc">% of balance per trade (0.1 – 5.0)</div></div>
+          <div style="display:flex;align-items:center;gap:4px"><input class="at-input" id="at-risk" type="number" step="0.1" min="0.1" max="5" value="${c.risk_pct}"><span style="color:var(--text-dim);font-size:12px">%</span></div>
+        </div>
+        <div class="at-setting">
+          <div><div class="at-setting-label">Max Open Trades</div><div class="at-setting-desc">Maximum simultaneous positions (1 – 10)</div></div>
+          <input class="at-input" id="at-max" type="number" step="1" min="1" max="10" value="${c.max_trades}">
+        </div>
+        <div class="at-setting">
+          <div><div class="at-setting-label">Direction Score Threshold</div><div class="at-setting-desc">Minimum DE score to trigger trade (30 – 100)</div></div>
+          <input class="at-input" id="at-threshold" type="number" step="5" min="30" max="100" value="${c.direction_threshold}">
+        </div>
+        <button class="at-save-btn" id="at-save" onclick="saveSettings()">Save Settings</button>
+        <div class="at-saved" id="at-saved">Settings saved ✓</div>
+
+        <div style="margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.06)">
+          <div style="font-size:11px;font-weight:600;color:var(--text-dim);margin-bottom:6px">YOUR EA API KEY</div>
+          <div class="at-apikey-wrap">
+            <div class="at-apikey" id="at-key">${c.api_key}</div>
+            <button class="at-copy-btn" onclick="copyKey()">Copy</button>
+          </div>
+        </div>
+      </div>`;
+
+      // Card 4: Open Positions
+      html += `<div class="at-card">
+        <div class="at-card-hd"><i data-lucide="trending-up"></i> Open Positions <span style="margin-left:auto;font-size:12px;color:#e2e8f0">${positions.length}</span></div>`;
+      if (positions.length) {
+        html += `<div style="overflow-x:auto"><table class="at-table">
+          <thead><tr><th>Pair</th><th>Dir</th><th>Lots</th><th>Price</th><th>SL</th><th>TP</th><th>P/L</th></tr></thead><tbody>`;
+        for (const p of positions) {
+          html += `<tr>
+            <td style="font-weight:700">${p.instrument}</td>
+            <td class="${(p.dir || '').toLowerCase()}">${p.dir}</td>
+            <td>${p.lots}</td>
+            <td>${p.open_price}</td>
+            <td>${p.sl || '—'}</td>
+            <td>${p.tp || '—'}</td>
+            <td style="color:${(p.profit || 0) >= 0 ? '#22c55e' : '#ef4444'};font-weight:700">${fmtMoney(p.profit)}</td>
+          </tr>`;
+        }
+        html += '</tbody></table></div>';
+      } else {
+        html += '<div class="at-empty">No open positions</div>';
+      }
+      html += '</div>';
+
+      // Card 5: Pending Commands
+      if (commands.length) {
+        html += `<div class="at-card">
+          <div class="at-card-hd"><i data-lucide="clock"></i> Recent Commands <span style="margin-left:auto;font-size:12px;color:#e2e8f0">${commands.length}</span></div>
+          <div style="overflow-x:auto"><table class="at-table">
+            <thead><tr><th>Pair</th><th>Action</th><th>Status</th><th>Time</th></tr></thead><tbody>`;
+        for (const cmd of commands) {
+          const sc = cmd.status === 'acked' ? '#22c55e' : cmd.status === 'failed' ? '#ef4444' : '#f59e0b';
+          html += `<tr>
+            <td style="font-weight:700">${cmd.instrument}</td>
+            <td>${cmd.action}</td>
+            <td style="color:${sc};font-weight:600">${cmd.status.toUpperCase()}</td>
+            <td style="color:var(--text-dim)">${timeSince(cmd.created_at)}</td>
+          </tr>`;
+        }
+        html += '</tbody></table></div></div>';
+      }
+
+      // Card 6: Setup Instructions
+      html += `<div class="at-card">
+        <div class="at-card-hd"><i data-lucide="book-open"></i> MT5 Setup Instructions</div>
+        <div class="at-steps">
+          <div class="at-step">Download the <strong>NervaFX_EA.mq5</strong> file from your account</div>
+          <div class="at-step">In MT5, go to <code>File → Open Data Folder → MQL5 → Experts</code> and paste the file</div>
+          <div class="at-step">Go to <code>Tools → Options → Expert Advisors</code> and add <code>https://nervafx.vercel.app</code> to allowed URLs</div>
+          <div class="at-step">Restart MT5, then drag <strong>NervaFX EA</strong> onto any chart</div>
+          <div class="at-step">Paste your API key (above) into the EA settings and click OK</div>
+          <div class="at-step">Click the <strong>AutoTrading</strong> button in the MT5 toolbar to enable</div>
+        </div>
+      </div>`;
+
+      document.getElementById('at-root').innerHTML = html;
+      lucide.createIcons();
+    }
+
+    window.saveSettings = async function() {
+      const btn = document.getElementById('at-save');
+      btn.disabled = true; btn.textContent = 'Saving...';
+      const body = {
+        auto_trading_enabled: document.getElementById('at-enabled').checked,
+        risk_pct: parseFloat(document.getElementById('at-risk').value),
+        max_trades: parseInt(document.getElementById('at-max').value, 10),
+        direction_threshold: parseFloat(document.getElementById('at-threshold').value),
+      };
+      const res = await api('/api/autotrader-config', { method: 'POST', body: JSON.stringify(body) });
+      btn.disabled = false; btn.textContent = 'Save Settings';
+      if (res.ok) {
+        Object.assign(_cfg, body);
+        const saved = document.getElementById('at-saved');
+        saved.style.display = 'block';
+        setTimeout(() => saved.style.display = 'none', 2000);
+      }
+    };
+
+    window.copyKey = function() {
+      const key = document.getElementById('at-key').textContent;
+      navigator.clipboard.writeText(key).then(() => {
+        const btn = event.target;
+        btn.textContent = 'Copied!';
+        setTimeout(() => btn.textContent = 'Copy', 1500);
+      });
+    };
+
+    loadConfig();
+    _refreshTimer = setInterval(loadConfig, 10000);
+  })();
+  </script>
+</body>
+</html>
