@@ -326,12 +326,13 @@
       html += `<div class="at-card">
         <div class="at-card-hd"><i data-lucide="book-open"></i> MT5 Setup Instructions</div>
         <div class="at-steps">
-          <div class="at-step"><a href="/api/ea-download" style="color:#3b82f6;font-weight:700;text-decoration:none" onclick="event.preventDefault();downloadEA()">Download NervaFX_EA.mq5</a> — click to save the EA file</div>
-          <div class="at-step">In MT5, go to <code>File → Open Data Folder → MQL5 → Experts</code> and paste the file</div>
-          <div class="at-step">Go to <code>Tools → Options → Expert Advisors</code> and add <code>https://nervafx.vercel.app</code> to allowed URLs</div>
-          <div class="at-step">Restart MT5, then drag <strong>NervaFX EA</strong> onto any chart</div>
-          <div class="at-step">Paste your API key (above) into the EA settings and click OK</div>
-          <div class="at-step">Click the <strong>AutoTrading</strong> button in the MT5 toolbar to enable</div>
+          <div class="at-step"><span style="background:#3b82f6;color:#fff;font-size:10px;font-weight:800;padding:1px 6px;border-radius:3px;margin-right:6px">1</span><a href="/api/ea-download" style="color:#3b82f6;font-weight:700;text-decoration:none" onclick="event.preventDefault();downloadEA()">Download NervaFX_EA.mq5</a> — save the source file to your computer</div>
+          <div class="at-step"><span style="background:#3b82f6;color:#fff;font-size:10px;font-weight:800;padding:1px 6px;border-radius:3px;margin-right:6px">2</span>In MT5, go to <code>File → Open Data Folder → MQL5 → Experts</code> and paste the .mq5 file there</div>
+          <div class="at-step"><span style="background:#3b82f6;color:#fff;font-size:10px;font-weight:800;padding:1px 6px;border-radius:3px;margin-right:6px">3</span>Open <strong>MetaEditor</strong> (press F4 in MT5), then open the file and press <strong>F7</strong> to compile — this creates the .ex5 program file</div>
+          <div class="at-step"><span style="background:#3b82f6;color:#fff;font-size:10px;font-weight:800;padding:1px 6px;border-radius:3px;margin-right:6px">4</span>Go to <code>Tools → Options → Expert Advisors</code> and check <strong>Allow WebRequest for listed URL</strong>, then add <code>https://nervafx.vercel.app</code></div>
+          <div class="at-step"><span style="background:#3b82f6;color:#fff;font-size:10px;font-weight:800;padding:1px 6px;border-radius:3px;margin-right:6px">5</span>Restart MT5, then drag <strong>NervaFX EA</strong> from the Navigator panel onto any chart</div>
+          <div class="at-step"><span style="background:#3b82f6;color:#fff;font-size:10px;font-weight:800;padding:1px 6px;border-radius:3px;margin-right:6px">6</span>In the EA settings dialog, paste your <strong>API Key</strong> (above) into the ApiKey field and click OK</div>
+          <div class="at-step"><span style="background:#3b82f6;color:#fff;font-size:10px;font-weight:800;padding:1px 6px;border-radius:3px;margin-right:6px">7</span>Click the <strong>AutoTrading</strong> button in the MT5 toolbar to enable live trading</div>
         </div>
       </div>`;
 
