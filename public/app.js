@@ -2958,7 +2958,7 @@ async function renderEnergySignals(data) {
 
   if (statusEl) {
     if (thresholdMet) {
-      statusEl.innerHTML = `<span style="color:#22c55e;font-weight:700">ACTIVE</span> — 6H strength sum ≥ 40p, directions confirmed.`;
+      statusEl.innerHTML = `<span style="color:#22c55e;font-weight:700">ACTIVE</span> — 6H strength sum ≥ 30p, directions confirmed.`;
     } else if (energy >= 25) {
       statusEl.innerHTML = `<span style="color:#f59e0b;font-weight:700">BUILDING</span> — 6H sum ${Math.round(energy)}p, approaching 40p.`;
     } else {
@@ -3576,7 +3576,7 @@ async function renderCompressionBreakout(data) {
       statusText = 'Approved — Waiting for Entry';
       statusColor = '#0ea5e9';
     } else if (summary?.validating > 0) {
-      statusText = 'Validating — 2h Persistence Check';
+      statusText = 'Validating — 1h Persistence Check';
       statusColor = '#f59e0b';
     } else {
       statusText = 'No Active Pairs';
