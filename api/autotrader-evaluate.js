@@ -22,10 +22,10 @@ async function evaluateAutoTrader(sb) {
     .eq('status', 'pending')
     .lt('created_at', new Date(now.getTime() - 5 * 60000).toISOString());
 
-  // Find users with auto trading enabled
+  // Find users with auto trading enabled (include trade counter)
   const { data: enabledUsers, error: settingsErr } = await sb
     .from('ea_settings')
-    .select('user_id')
+    .select('user_id, trades_since_reset')
     .eq('auto_trading_enabled', true);
   if (settingsErr) throw new Error(settingsErr.message);
   if (!enabledUsers?.length) return { evaluated: 0 };
@@ -37,6 +37,7 @@ async function evaluateAutoTrader(sb) {
     .eq('active', true);
   if (!signals?.length) return { evaluated: enabledUsers.length, commands: 0 };
 
+  const hasReversal = signals.some(s => s.energy_event_type === 'REVERSAL');
   let totalCommands = 0;
 
   for (const user of enabledUsers) {
@@ -63,6 +64,7 @@ async function evaluateAutoTrader(sb) {
     const riskPct   = profile?.max_daily_risk_pct || 2;
     const minRR     = profile?.min_rr || 2;
 
+    let tradeCount = user.trades_since_reset || 0;
     const openPositions = account.open_positions || [];
 
     // Get pending commands for this user
@@ -77,13 +79,13 @@ async function evaluateAutoTrader(sb) {
       openInstruments.set(p.instrument, p);
     }
 
-    // ── REVERSAL: close trades whose direction flipped ──
+    // ── REVERSAL: close wrong-way trades and reset trade counter ──
+    let didReset = false;
     for (const sig of signals) {
       if (sig.energy_event_type !== 'REVERSAL') continue;
       const mt5Symbol = oandaToMt5(sig.instrument);
       const pos = openInstruments.get(mt5Symbol);
       if (!pos) continue;
-      // Signal dir flipped — close if position is now wrong-way
       if (pos.dir !== sig.dir) {
         const { error: cmdErr } = await sb
           .from('ea_commands')
@@ -98,18 +100,29 @@ async function evaluateAutoTrader(sb) {
         if (!cmdErr) {
           totalCommands++;
           pendingInstruments.add(mt5Symbol);
+          didReset = true;
         }
       }
     }
 
-    // ── ENTRY/MOVING: open new trades on direction confirmation ──
+    // Reset trade counter on any reversal
+    if (didReset || hasReversal) {
+      tradeCount = 0;
+      await sb
+        .from('ea_settings')
+        .update({ trades_since_reset: 0, last_reset_at: now.toISOString() })
+        .eq('user_id', user.user_id);
+    }
+
+    // ── ENTRY/MOVING: open new trades within the direction cycle budget ──
     const entrySignals = signals.filter(s =>
       s.phase === 'ENTRY' || s.phase === 'MOVING'
     );
 
-    const slotsAvailable = maxTrades - openPositions.length - pendingInstruments.size;
+    const slotsAvailable = maxTrades - tradeCount;
     if (slotsAvailable <= 0) continue;
 
+    // Also skip if instrument already open or pending
     let filled = 0;
     for (const sig of entrySignals) {
       if (filled >= slotsAvailable) break;
@@ -118,7 +131,6 @@ async function evaluateAutoTrader(sb) {
       if (openInstruments.has(mt5Symbol)) continue;
       if (pendingInstruments.has(mt5Symbol)) continue;
 
-      // Calculate lot size: risk per trade = (risk% / max_trades) of balance
       const riskPerTrade = account.balance * (riskPct / 100) / maxTrades;
       const slPips = 30;
       const tpPips = slPips * minRR;
@@ -147,6 +159,14 @@ async function evaluateAutoTrader(sb) {
       filled++;
       totalCommands++;
       pendingInstruments.add(mt5Symbol);
+    }
+
+    // Update the trade counter
+    if (filled > 0) {
+      await sb
+        .from('ea_settings')
+        .update({ trades_since_reset: tradeCount + filled })
+        .eq('user_id', user.user_id);
     }
   }
 

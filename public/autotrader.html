@@ -264,11 +264,12 @@
         <div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.06)">
           <div style="font-size:10px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Risk Settings <span style="font-weight:400;text-transform:none">(from <a href="/profile" style="color:#3b82f6;text-decoration:none">Profile</a>)</span></div>
           <div class="at-metrics">
-            <div class="at-metric"><div class="at-metric-label">Max Trades</div><div class="at-metric-value" style="font-size:18px">${c.max_trades}</div></div>
+            <div class="at-metric"><div class="at-metric-label">Trades Used</div><div class="at-metric-value" style="font-size:18px">${c.trades_since_reset || 0} / ${c.max_trades}</div></div>
             <div class="at-metric"><div class="at-metric-label">Daily Risk</div><div class="at-metric-value" style="font-size:18px">${c.max_daily_risk_pct}%</div></div>
             <div class="at-metric"><div class="at-metric-label">Min R:R</div><div class="at-metric-value" style="font-size:18px">1:${c.min_rr}</div></div>
             <div class="at-metric"><div class="at-metric-label">Open Positions</div><div class="at-metric-value" style="font-size:18px">${positions.length}</div></div>
           </div>
+          ${c.last_reset_at ? `<div style="font-size:10px;color:var(--text-dim);margin-top:6px">Last reset: ${timeSince(c.last_reset_at)}</div>` : ''}
         </div>
 
         <div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.06)">

@@ -59,6 +59,8 @@ module.exports = async function handler(req, res) {
       return res.json({
         api_key:              settings.api_key,
         auto_trading_enabled: settings.auto_trading_enabled,
+        trades_since_reset:   settings.trades_since_reset || 0,
+        last_reset_at:        settings.last_reset_at || null,
         // From profile
         max_trades:           profile?.max_trades || 3,
         max_daily_risk_pct:   profile?.max_daily_risk_pct || 2,
