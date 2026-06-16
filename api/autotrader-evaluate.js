@@ -30,14 +30,23 @@ async function evaluateAutoTrader(sb) {
   if (settingsErr) throw new Error(settingsErr.message);
   if (!enabledUsers?.length) return { evaluated: 0 };
 
-  // Get active signal pairs
+  // Get active signal pairs (direction confirmation)
   const { data: signals } = await sb
     .from('energy_signal_pairs')
     .select('instrument, dir, phase, de_combined, spread_6h, energy_event_type, active')
     .eq('active', true);
-  if (!signals?.length) return { evaluated: enabledUsers.length, commands: 0 };
 
-  const hasReversal = signals.some(s => s.energy_event_type === 'REVERSAL');
+  // Get structure breakout entries (M15 structure watch)
+  const { data: structureEntries } = await sb
+    .from('m15_structure_watch')
+    .select('instrument, direction, state, entry_price, invalidation_price, impulse_high, impulse_low')
+    .eq('state', 'ENTRY');
+
+  if (!signals?.length && !structureEntries?.length) {
+    return { evaluated: enabledUsers.length, commands: 0 };
+  }
+
+  const hasReversal = (signals || []).some(s => s.energy_event_type === 'REVERSAL');
   let totalCommands = 0;
 
   for (const user of enabledUsers) {
@@ -81,7 +90,7 @@ async function evaluateAutoTrader(sb) {
 
     // ── REVERSAL: close wrong-way trades and reset trade counter ──
     let didReset = false;
-    for (const sig of signals) {
+    for (const sig of (signals || [])) {
       if (sig.energy_event_type !== 'REVERSAL') continue;
       const mt5Symbol = oandaToMt5(sig.instrument);
       const pos = openInstruments.get(mt5Symbol);
@@ -114,16 +123,62 @@ async function evaluateAutoTrader(sb) {
         .eq('user_id', user.user_id);
     }
 
-    // ── ENTRY/MOVING: open new trades within the direction cycle budget ──
-    const entrySignals = signals.filter(s =>
-      s.phase === 'ENTRY' || s.phase === 'MOVING'
-    );
-
     const slotsAvailable = maxTrades - tradeCount;
     if (slotsAvailable <= 0) continue;
 
-    // Also skip if instrument already open or pending
     let filled = 0;
+
+    // ── STRUCTURE BREAKOUT ENTRIES (priority — has precise SL/TP) ──
+    for (const sw of (structureEntries || [])) {
+      if (filled >= slotsAvailable) break;
+
+      const mt5Symbol = oandaToMt5(sw.instrument);
+      if (openInstruments.has(mt5Symbol)) continue;
+      if (pendingInstruments.has(mt5Symbol)) continue;
+
+      const dir = sw.direction;
+      const entry = parseFloat(sw.entry_price);
+      const sl = parseFloat(sw.invalidation_price);
+      if (!entry || !sl || entry === sl) continue;
+
+      const pip = pipValue(mt5Symbol);
+      const slPips = Math.abs(entry - sl) / pip;
+      if (slPips < 1) continue;
+
+      const tpPips = slPips * minRR;
+      const riskPerTrade = account.balance * (riskPct / 100) / maxTrades;
+      const pipValuePerLot = pip * 100000;
+      let lots = riskPerTrade / (slPips * pipValuePerLot);
+      lots = Math.max(0.01, Math.round(lots * 100) / 100);
+
+      const action = dir === 'BUY' ? 'OPEN_BUY' : 'OPEN_SELL';
+
+      const { error: cmdErr } = await sb
+        .from('ea_commands')
+        .insert({
+          user_id:        user.user_id,
+          instrument:     mt5Symbol,
+          action,
+          params:         { lots, sl_pips: Math.round(slPips * 10) / 10, tp_pips: Math.round(tpPips * 10) / 10 },
+          status:         'pending',
+          signal_pair_id: sw.instrument,
+        });
+      if (cmdErr) {
+        console.error(`[AUTOTRADER] Structure entry error for ${user.user_id}:`, cmdErr.message);
+        continue;
+      }
+
+      filled++;
+      totalCommands++;
+      pendingInstruments.add(mt5Symbol);
+      console.log(`[AUTOTRADER] Structure entry: ${mt5Symbol} ${action} ${lots} lots, SL ${slPips.toFixed(1)} pips, TP ${tpPips.toFixed(1)} pips`);
+    }
+
+    // ── DIRECTION CONFIRMATION ENTRIES (fallback — fixed 30-pip SL) ──
+    const entrySignals = (signals || []).filter(s =>
+      s.phase === 'ENTRY' || s.phase === 'MOVING'
+    );
+
     for (const sig of entrySignals) {
       if (filled >= slotsAvailable) break;
 
