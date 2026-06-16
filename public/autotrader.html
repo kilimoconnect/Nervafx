@@ -328,7 +328,7 @@
       html += `<div class="at-card">
         <div class="at-card-hd"><i data-lucide="book-open"></i> MT5 Setup Instructions</div>
         <div class="at-steps">
-          <div class="at-step">Download the <strong>NervaFX_EA.mq5</strong> file from your account</div>
+          <div class="at-step"><a href="/api/ea-download" style="color:#3b82f6;font-weight:700;text-decoration:none" onclick="event.preventDefault();downloadEA()">Download NervaFX_EA.mq5</a> — click to save the EA file</div>
           <div class="at-step">In MT5, go to <code>File → Open Data Folder → MQL5 → Experts</code> and paste the file</div>
           <div class="at-step">Go to <code>Tools → Options → Expert Advisors</code> and add <code>https://nervafx.vercel.app</code> to allowed URLs</div>
           <div class="at-step">Restart MT5, then drag <strong>NervaFX EA</strong> onto any chart</div>
@@ -358,6 +358,17 @@
         saved.style.display = 'block';
         setTimeout(() => saved.style.display = 'none', 2000);
       }
+    };
+
+    window.downloadEA = async function() {
+      const r = await fetch('/api/ea-download', { headers: { Authorization: `Bearer ${token}` } });
+      if (!r.ok) return alert('Download failed — Pro plan required');
+      const blob = await r.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'NervaFX_EA.mq5';
+      a.click();
+      URL.revokeObjectURL(a.href);
     };
 
     window.copyKey = function() {
