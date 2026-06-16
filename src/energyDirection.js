@@ -175,7 +175,7 @@ async function calculateEnergyDirection() {
     };
   }
 
-  // ── 2b. Direction trigger: 6H currency strength sum ≥ 40 pips ─────────────
+  // ── 2b. Direction trigger: 6H currency strength sum ≥ 30 pips ─────────────
   const h6Values = CURRENCIES
     .filter(ccy => ccyMap[ccy])
     .map(ccy => ccyMap[ccy].smooth_6h);
@@ -192,7 +192,7 @@ async function calculateEnergyDirection() {
       triggerBar = {
         energy: Math.round(csSum * 10000),
         time: roundedHour,
-        session: null,
+        session: getSession(new Date(roundedHour).getUTCHours()),
       };
     }
   }
