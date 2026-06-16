@@ -88,34 +88,8 @@ async function evaluateAutoTrader(sb) {
       openInstruments.set(p.instrument, p);
     }
 
-    // ── REVERSAL: close wrong-way trades and reset trade counter ──
-    let didReset = false;
-    for (const sig of (signals || [])) {
-      if (sig.energy_event_type !== 'REVERSAL') continue;
-      const mt5Symbol = oandaToMt5(sig.instrument);
-      const pos = openInstruments.get(mt5Symbol);
-      if (!pos) continue;
-      if (pos.dir !== sig.dir) {
-        const { error: cmdErr } = await sb
-          .from('ea_commands')
-          .insert({
-            user_id:        user.user_id,
-            instrument:     mt5Symbol,
-            action:         'CLOSE',
-            params:         { ticket: pos.ticket },
-            status:         'pending',
-            signal_pair_id: sig.instrument,
-          });
-        if (!cmdErr) {
-          totalCommands++;
-          pendingInstruments.add(mt5Symbol);
-          didReset = true;
-        }
-      }
-    }
-
-    // Reset trade counter on any reversal
-    if (didReset || hasReversal) {
+    // ── REVERSAL: reset trade counter (don't close existing positions) ──
+    if (hasReversal) {
       tradeCount = 0;
       await sb
         .from('ea_settings')
