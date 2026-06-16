@@ -6,14 +6,18 @@
 #property copyright "NervaFX"
 #property link      "https://nervafx.vercel.app"
 #property version   "1.00"
-#property strict
 
 //--- Input parameters
-input string InpApiKey         = "";                              // EA API Key (from AutoTrader dashboard)
+input group "NervaFX Connection"
+input string InpApiKey         = "PASTE_YOUR_API_KEY_HERE";       // API Key
 input string InpServerUrl      = "https://nervafx.vercel.app";    // Server URL
+
+input group "Timing"
 input int    InpHeartbeatSec   = 15;                              // Heartbeat interval (seconds)
 input int    InpPollSec        = 5;                               // Command poll interval (seconds)
 input int    InpRequestTimeout = 5000;                            // HTTP timeout (ms)
+
+input group "Trading"
 input int    InpSlippage       = 10;                              // Max slippage (points)
 
 //--- Global state
