@@ -318,13 +318,24 @@
     function countPrevCandles(pair, dir, hourKey, candleDirs) {
       const pairDirs = candleDirs[pair];
       if (!pairDirs) return null;
-      // Use the later of row time or current hour as reference
-      const rowDt = new Date(hourKey + ':00:00Z');
-      const nowDt = new Date();
-      const refDt = nowDt > rowDt ? nowDt : rowDt;
-      const refHour = refDt.toISOString().slice(0, 13);
-      // 5 completed candles before reference hour
-      const keys = Object.keys(pairDirs).sort().reverse().filter(k => k < refHour).slice(0, 5);
+      const dt = new Date(hourKey + ':00:00Z');
+      let matching = 0, checked = 0;
+      for (let i = 1; i <= 5; i++) {
+        const prev = new Date(dt.getTime() - i * 3600000);
+        const pk = prev.toISOString().slice(0, 13);
+        const d = pairDirs[pk];
+        if (d == null) continue;
+        checked++;
+        if ((dir === 'BUY' && d === 1) || (dir === 'SELL' && d === -1)) matching++;
+      }
+      return checked > 0 ? matching : null;
+    }
+
+    function countPrevCandlesNow(pair, dir, candleDirs) {
+      const pairDirs = candleDirs[pair];
+      if (!pairDirs) return null;
+      const nowHour = new Date().toISOString().slice(0, 13);
+      const keys = Object.keys(pairDirs).sort().reverse().filter(k => k < nowHour).slice(0, 5);
       if (!keys.length) return null;
       let matching = 0;
       for (const k of keys) {
@@ -359,6 +370,20 @@
       return checked > 0 ? matching : null;
     }
 
+    function countPrevM15CandlesNow(pair, dir, candleDirs) {
+      const pairDirs = candleDirs[pair];
+      if (!pairDirs) return null;
+      const now = new Date();
+      const nowKey = now.toISOString().slice(0, 16);
+      const keys = Object.keys(pairDirs).sort().reverse().filter(k => k < nowKey).slice(0, 5);
+      if (!keys.length) return null;
+      let matching = 0;
+      for (const k of keys) {
+        if ((dir === 'BUY' && pairDirs[k] === 1) || (dir === 'SELL' && pairDirs[k] === -1)) matching++;
+      }
+      return matching;
+    }
+
     function buildAllPairs(sorted) {
       const top3 = sorted.slice(0, 3).map(c => c.cur);
       const bot3 = sorted.slice(-3).map(c => c.cur);
@@ -390,8 +415,8 @@
 
       for (const p of allPairs) {
         p.prevCount = isM15
-          ? countPrevM15Candles(p.pair, p.dir, time, dirs)
-          : countPrevCandles(p.pair, p.dir, time.slice(0, 13), dirs);
+          ? countPrevM15CandlesNow(p.pair, p.dir, dirs)
+          : countPrevCandlesNow(p.pair, p.dir, dirs);
       }
       allPairs.sort((a, b) => (b.prevCount ?? -1) - (a.prevCount ?? -1) || b.spread - a.spread);
 
