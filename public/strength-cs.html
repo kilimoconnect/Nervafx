@@ -318,17 +318,14 @@
     function countPrevCandles(pair, dir, hourKey, candleDirs) {
       const pairDirs = candleDirs[pair];
       if (!pairDirs) return null;
-      const dt = new Date(hourKey + ':00:00Z');
-      let matching = 0, checked = 0;
-      for (let i = 1; i <= 5; i++) {
-        const prev = new Date(dt.getTime() - i * 3600000);
-        const pk = prev.toISOString().slice(0, 13);
-        const d = pairDirs[pk];
-        if (d == null) continue;
-        checked++;
-        if ((dir === 'BUY' && d === 1) || (dir === 'SELL' && d === -1)) matching++;
+      // 5 most recent completed candles up to and including this hour
+      const keys = Object.keys(pairDirs).sort().reverse().filter(k => k <= hourKey).slice(0, 5);
+      if (!keys.length) return null;
+      let matching = 0;
+      for (const k of keys) {
+        if ((dir === 'BUY' && pairDirs[k] === 1) || (dir === 'SELL' && pairDirs[k] === -1)) matching++;
       }
-      return checked > 0 ? matching : null;
+      return matching;
     }
 
     function countPrevCandlesNow(pair, dir, candleDirs) {
@@ -357,17 +354,14 @@
     function countPrevM15Candles(pair, dir, timeKey, candleDirs) {
       const pairDirs = candleDirs[pair];
       if (!pairDirs) return null;
-      const dt = new Date(timeKey);
-      let matching = 0, checked = 0;
-      for (let i = 1; i <= 5; i++) {
-        const prev = new Date(dt.getTime() - i * 15 * 60000);
-        const pk = prev.toISOString().slice(0, 16);
-        const d = pairDirs[pk];
-        if (d == null) continue;
-        checked++;
-        if ((dir === 'BUY' && d === 1) || (dir === 'SELL' && d === -1)) matching++;
+      const slotKey = new Date(timeKey).toISOString().slice(0, 16);
+      const keys = Object.keys(pairDirs).sort().reverse().filter(k => k <= slotKey).slice(0, 5);
+      if (!keys.length) return null;
+      let matching = 0;
+      for (const k of keys) {
+        if ((dir === 'BUY' && pairDirs[k] === 1) || (dir === 'SELL' && pairDirs[k] === -1)) matching++;
       }
-      return checked > 0 ? matching : null;
+      return matching;
     }
 
     function countPrevM15CandlesNow(pair, dir, candleDirs) {
