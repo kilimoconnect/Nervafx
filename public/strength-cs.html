@@ -477,7 +477,7 @@
         const sum = Math.abs(strongest.val) + Math.abs(weakest.val);
         const time = hk + ':00:00Z';
         let pairs = null;
-        if (sum >= 0.004) {
+        if (sum >= 0.003) {
           pairs = buildPairs(sorted.slice(0, 3), sorted.slice(-3).reverse());
         }
         hourResults.push({ time, strongest, weakest, sum, sorted, pairs });
@@ -502,7 +502,7 @@
           return ld === _6hDate;
         });
       }
-      const CS_THRESHOLD = 0.004;
+      const CS_THRESHOLD = 0.003;
 
       // Group by local date
       const byDate = {};
@@ -513,7 +513,7 @@
 
       let html = `<div style="font-size:11px;color:var(--text-dim);margin-bottom:14px">
         Strongest + Weakest currency by 6H strength each hour. Both values converted to positive and summed.
-        Rows at <span style="color:#22c55e;font-weight:700">≥40 pips</span> show the best 3 tradeable pairs.
+        Rows at <span style="color:#22c55e;font-weight:700">≥30 pips</span> show the best 3 tradeable pairs.
       </div>`;
 
       for (const [dateLabel, hours] of Object.entries(byDate)) {
@@ -521,7 +521,7 @@
         html += `<div style="margin-bottom:16px">`;
         html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
           <span style="font-size:12px;font-weight:700;color:#e2e8f0">${dateLabel}</span>
-          ${thresholdCount ? `<span style="font-size:10px;font-weight:600;color:#22c55e;background:rgba(34,197,94,0.1);padding:2px 8px;border-radius:4px">${thresholdCount} hour${thresholdCount>1?'s':''} ≥40</span>` : ''}
+          ${thresholdCount ? `<span style="font-size:10px;font-weight:600;color:#22c55e;background:rgba(34,197,94,0.1);padding:2px 8px;border-radius:4px">${thresholdCount} hour${thresholdCount>1?'s':''} ≥30</span>` : ''}
         </div>`;
         html += '<div class="cs-rows">';
 
@@ -540,7 +540,7 @@
             <div class="cs-row-bar-wrap">
               <div class="cs-row-bar" style="width:${barWidth}%;background:${sumColor}"></div>
             </div>
-            <div class="cs-row-sum" style="color:${sumColor}">${pips(h.sum)}${meetsThreshold ? '<span style="font-size:8px;display:block;color:#22c55e">≥40</span>' : ''}</div>`;
+            <div class="cs-row-sum" style="color:${sumColor}">${pips(h.sum)}${meetsThreshold ? '<span style="font-size:8px;display:block;color:#22c55e">≥30</span>' : ''}</div>`;
 
           if (meetsThreshold && h.pairs?.length) {
             html += `<div class="cs-pairs-row">${h.pairs.map(p => pairCardHTML(p, 'row')).join('')}</div>`;

@@ -911,7 +911,7 @@ function _setupAnalysis(s) {
   }
 
   // ── 3. Spread magnitude ──────────────────────────────────────────────
-  if (sp6h >= 0.004)       parts.push(`6H spread strong (${(sp6h * 10000).toFixed(0)} pips) — 54% WR at this level, best quality setups.`);
+  if (sp6h >= 0.003)       parts.push(`6H spread strong (${(sp6h * 10000).toFixed(0)} pips) — strong quality setup.`);
   else if (sp6h >= 0.002)  parts.push(`6H spread decent (${(sp6h * 10000).toFixed(0)} pips) — 53% WR range.`);
   else if (sp6h > 0)       parts.push(`6H spread weak (${(sp6h * 10000).toFixed(0)} pips) — below 20 pips drops to 36% WR. Low conviction.`);
 
@@ -928,7 +928,7 @@ function _setupAnalysis(s) {
   const isBase  = state === 'BASE_FORMING';
   const goodSess = sessEdge?.wr >= 55;
   const badSess  = sessEdge?.wr <= 45;
-  const strongSpread = sp6h >= 0.004;
+  const strongSpread = sp6h >= 0.003;
   const decentSpread = sp6h >= 0.002;
   const highConf = conf >= 80;
 
@@ -6565,7 +6565,7 @@ function _meMarketCycleBanner(cycle, latestHourly) {
       let csGreen = false;
       if (h6.length >= 2) {
         const sum = Math.abs(Math.max(...h6)) + Math.abs(Math.min(...h6));
-        csGreen = sum >= 0.004;
+        csGreen = sum >= 0.003;
       }
       const st = csGreen ? ' style="background:#22c55e;color:#fff;border-color:#22c55e"' : '';
       return `<button class="me-ai-toggle me-btn-cs premium-only"${st} onclick="location.href='/strength-cs.html'">CS</button>`;

@@ -42,8 +42,8 @@ module.exports = async function handler(req, res) {
       .order('trigger_energy', { ascending: false });
     if (pErr) throw pErr;
 
-    // Trigger: 6H currency strength sum ≥ 40 pips (mirrors src/energyDirection.js)
-    const CS_SUM_THRESHOLD = 0.004;
+    // Trigger: 6H currency strength sum ≥ 30 pips (mirrors src/energyDirection.js)
+    const CS_SUM_THRESHOLD = 0.003;
     const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
 
     const { data: csRows } = await sb

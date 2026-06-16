@@ -139,7 +139,7 @@ function confBreakdown(s3, s6, s12, bias, state) {
   const dir = bias === 'BUY' ? 1 : -1;
   const out = [];
   if (s12 * dir > 0 && s6 * dir > 0) out.push('12H & 6H aligned');
-  if (Math.abs(s6) >= 0.004) out.push('6H strong');
+  if (Math.abs(s6) >= 0.003) out.push('6H strong');
   else if (Math.abs(s6) >= 0.002) out.push('6H moderate');
   if (s3 * dir > 0 && (state === 'PULLBACK_STARTING' || state === 'PULLBACK_ACTIVE')) out.push('Light pullback (3H still in trend direction)');
   else if (s3 * dir > 0) out.push('3H aligned with trend');

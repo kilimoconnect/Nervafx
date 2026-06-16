@@ -118,7 +118,7 @@ function buildPrompt(sessions, ep, marketCycle, prevSessions, hourlyTrend, energ
     }).join('\n') +
     '\n  Strongest: ' + ccyStrength[0].currency + ' | Weakest: ' + ccyStrength[ccyStrength.length-1].currency +
     '\n  3H Dispersion: ' + (((parseFloat(ccyStrength[0].smooth_3h)||0) - (parseFloat(ccyStrength[ccyStrength.length-1].smooth_3h)||0))*10000).toFixed(1) + ' pips' +
-    '\n  6H CS Sum (|strongest| + |weakest|): ' + csSumPips + 'p → ' + (csSumMet ? 'DIRECTION TRIGGER MET (≥40p)' : 'below threshold (need ≥40p)');
+    '\n  6H CS Sum (|strongest| + |weakest|): ' + csSumPips + 'p → ' + (csSumMet ? 'DIRECTION TRIGGER MET (≥30p)' : 'below threshold (need ≥30p)');
   }
 
   return `You are a senior institutional forex trading intelligence engine. Your job is to produce ACTIONABLE intelligence, NOT metric commentary.
@@ -129,7 +129,7 @@ CRITICAL RULES:
 - ALWAYS compare to previous sessions when data is available.
 - ALWAYS give specific thresholds for what would change the bias.
 - Be direct. No filler phrases. Every sentence must add value.
-- Direction confirmation uses the 6H Currency Strength Sum (|strongest 6H| + |weakest 6H| in pips). ≥ 40 pips = direction trigger met.
+- Direction confirmation uses the 6H Currency Strength Sum (|strongest 6H| + |weakest 6H| in pips). ≥ 30 pips = direction trigger met.
 - Use all 5 currency strength timeframes (3H, 4H, 6H, 12H, Daily) to assess multi-timeframe alignment and divergences.
 
 ━━━ LIVE SESSION DATA ━━━
@@ -222,8 +222,8 @@ FIELD RULES:
 - expansion_probability.score: 0-100 based on dispersion trend + breadth + agreement + 6H CS sum momentum
 - cycle.confidence: 0-100 how clear the cycle classification is
 - engine_conflicts: detect when metrics CONTRADICT each other (high breadth + low agreement, high movement + low directional control, 6H trigger met but poor agreement, etc)
-- what_changes_bias: must cite SPECIFIC numbers and conditions, not vague statements. Reference 6H CS Sum threshold (40p) when relevant.
-- decision.action: TRADE only if tradability > 50 AND agreement > 45 AND 6H CS Sum ≥ 40p (direction trigger met)
+- what_changes_bias: must cite SPECIFIC numbers and conditions, not vague statements. Reference 6H CS Sum threshold (30p) when relevant.
+- decision.action: TRADE only if tradability > 50 AND agreement > 45 AND 6H CS Sum ≥ 30p (direction trigger met)
 - currencies: use ALL timeframes (3H, 4H, 6H, 12H, Daily) to assess multi-timeframe alignment. Divergences between short-term (3H/4H) and long-term (12H/Daily) are key signals.
 - direction_trigger: 6H CS Sum = |strongest 6H| + |weakest 6H| in pips. ≥ 40p = sufficient currency separation for directional trading. Below 40p = currencies too tightly clustered for confident direction.
 - All text: professional analyst tone. Every sentence must contain insight, not description.`;

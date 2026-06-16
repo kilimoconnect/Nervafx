@@ -2,7 +2,7 @@ const { config } = require('./config');
 const { supabase } = require('./supabase');
 
 const MIN_SPREAD   = 0.0020;
-const STRONG_SPREAD = 0.0040;
+const STRONG_SPREAD = 0.0030;
 
 // ─── States ───────────────────────────────────────────────────────────────────
 // TREND               — 12H + 6H aligned, 3H expanding with trend
