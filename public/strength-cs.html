@@ -151,6 +151,45 @@
     .cs-hero-pair-dir { font-size: 12px; font-weight: 700; margin-top: 3px; }
     .cs-hero-pair-ccys { font-size: 10px; color: var(--text-dim); margin-top: 3px; }
 
+    /* ── Clickable rows ── */
+    .cs-row { cursor: pointer; transition: background 0.15s; }
+    .cs-row:hover { background: rgba(255,255,255,0.04); }
+
+    /* ── Pair detail modal ── */
+    .cs-modal-overlay {
+      position: fixed; inset: 0; z-index: 9999;
+      background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+      display: flex; align-items: center; justify-content: center;
+      padding: 16px;
+    }
+    .cs-modal {
+      background: var(--card-bg, #1e293b); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px; width: 100%; max-width: 520px; max-height: 85vh;
+      overflow-y: auto; padding: 20px;
+    }
+    .cs-modal-hd {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .cs-modal-title { font-size: 14px; font-weight: 700; color: #e2e8f0; }
+    .cs-modal-close {
+      background: none; border: none; color: var(--text-dim); font-size: 20px;
+      cursor: pointer; padding: 4px 8px; border-radius: 4px;
+    }
+    .cs-modal-close:hover { background: rgba(255,255,255,0.08); color: #e2e8f0; }
+    .cs-modal-pair {
+      display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+      border-radius: 8px; margin-bottom: 6px; background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+    .cs-modal-pair-rank {
+      font-size: 11px; font-weight: 700; color: var(--text-dim);
+      min-width: 22px; text-align: center;
+    }
+    .cs-modal-pair-name { font-size: 14px; font-weight: 800; color: #e2e8f0; flex: 1; }
+    .cs-modal-pair-dir { font-size: 11px; font-weight: 700; }
+    .cs-modal-pair-spread { font-size: 11px; color: var(--text-dim); min-width: 45px; text-align: right; }
+
     /* ── Loading ── */
     .cs-loading {
       display: flex; align-items: center; justify-content: center;
@@ -236,6 +275,8 @@
     let _m15Days = 7;
     let _6hDate = '';
     let _m15Date = '';
+    let _6hRowCache = [];
+    let _m15RowCache = [];
     const _cache = {};
     const DATA_START = '2025-05-20';
     function allDays() { return Math.min(730, Math.ceil((Date.now() - new Date(DATA_START).getTime()) / 86400000) + 1); }
@@ -307,6 +348,73 @@
       return checked > 0 ? matching : null;
     }
 
+    function buildAllPairs(sorted) {
+      const top3 = sorted.slice(0, 3).map(c => c.cur);
+      const bot3 = sorted.slice(-3).map(c => c.cur);
+      const valMap = Object.fromEntries(sorted.map(c => [c.cur, c.val]));
+      const pairs = [];
+      for (const strong of top3) {
+        for (const weak of bot3) {
+          const pair = CS_PAIRS.find(p => {
+            const [b, q] = p.split('_');
+            return (b === strong && q === weak) || (b === weak && q === strong);
+          });
+          if (!pair) continue;
+          const [base] = pair.split('_');
+          const dir = base === strong ? 'BUY' : 'SELL';
+          const spread = Math.abs((valMap[strong] || 0) - (valMap[weak] || 0));
+          pairs.push({ pair, dir, strong, weak, spread });
+        }
+      }
+      return pairs;
+    }
+
+    // type: '6h' or 'm15'
+    async function showPairDetail(sorted, time, type) {
+      const allPairs = buildAllPairs(sorted);
+      const isM15 = type === 'm15';
+      const dirs = isM15
+        ? await fetchM15CandleDirs(_m15Days)
+        : await fetchCandleDirs(_6hDays);
+
+      for (const p of allPairs) {
+        p.prevCount = isM15
+          ? countPrevM15Candles(p.pair, p.dir, time, dirs)
+          : countPrevCandles(p.pair, p.dir, time.slice(0, 13), dirs);
+      }
+      allPairs.sort((a, b) => (b.prevCount ?? -1) - (a.prevCount ?? -1) || b.spread - a.spread);
+
+      const label = isM15 ? fmtTime(time) : fmtTime(time);
+      const dateLabel = fmtFull(time);
+      let html = `<div class="cs-modal-hd">
+        <div class="cs-modal-title">${dateLabel} · ${label} — All Pairs</div>
+        <button class="cs-modal-close" onclick="this.closest('.cs-modal-overlay').remove()">✕</button>
+      </div>`;
+
+      allPairs.forEach((p, i) => {
+        const dc = p.dir === 'BUY' ? '#22c55e' : '#ef4444';
+        const bc = p.prevCount >= 4 ? 'rgba(34,197,94,0.18);color:#22c55e;border:1px solid rgba(34,197,94,0.3)'
+                 : p.prevCount >= 3 ? 'rgba(245,158,11,0.18);color:#f59e0b;border:1px solid rgba(245,158,11,0.3)'
+                 : 'rgba(100,116,139,0.18);color:#94a3b8;border:1px solid rgba(100,116,139,0.2)';
+        const badge = p.prevCount != null
+          ? `<span class="cs-prev-badge" style="font-size:12px;font-weight:800;padding:2px 7px;border-radius:4px;line-height:1.2;white-space:nowrap;background:${bc}">${p.prevCount}/5</span>`
+          : '';
+        html += `<div class="cs-modal-pair">
+          <div class="cs-modal-pair-rank">${i + 1}</div>
+          <div class="cs-modal-pair-name">${p.pair.replace('_','/')}</div>
+          <div class="cs-modal-pair-dir" style="color:${dc}">${p.dir}</div>
+          <div class="cs-modal-pair-spread">${pips(p.spread)}p</div>
+          ${badge}
+        </div>`;
+      });
+
+      const overlay = document.createElement('div');
+      overlay.className = 'cs-modal-overlay';
+      overlay.innerHTML = `<div class="cs-modal">${html}</div>`;
+      overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+      document.body.appendChild(overlay);
+    }
+
     function pairCardHTML(p, size) {
       const dc = p.dir === 'BUY' ? '#22c55e' : '#ef4444';
       const cls = size === 'hero' ? 'cs-hero-pair' : 'cs-pair-card';
@@ -330,6 +438,7 @@
     // 6H TAB
     // ═══════════════════════════════════════════════════════════════════════════
     async function render6H() {
+      _6hRowCache = [];
       const el = document.getElementById('cs-content');
       el.innerHTML = `<div class="sx-card"><div class="sx-card-hd"><i data-lucide="bar-chart-3"></i> 6H Strength Sum
         <div class="sx-ctrls">
@@ -422,7 +531,7 @@
           const meetsThreshold = h.sum >= CS_THRESHOLD;
           const sumColor = meetsThreshold ? '#22c55e' : h.sum >= 0.0015 ? '#f59e0b' : '#64748b';
 
-          html += `<div class="cs-row${meetsThreshold ? ' highlight' : ''}">
+          html += `<div class="cs-row${meetsThreshold ? ' highlight' : ''}" data-6h-idx="${_6hRowCache.length}">
             <div class="cs-row-time">${t}</div>
             <div class="cs-row-ccys">
               <span class="cs-strong">${h.strongest.cur} <span class="cs-val">+${pips(Math.abs(h.strongest.val))}</span></span>
@@ -437,17 +546,25 @@
             html += `<div class="cs-pairs-row">${h.pairs.map(p => pairCardHTML(p, 'row')).join('')}</div>`;
           }
           html += `</div>`;
+          _6hRowCache.push(h);
         }
         html += '</div></div>';
       }
 
       body.innerHTML = html;
+      body.querySelectorAll('.cs-row[data-6h-idx]').forEach(el => {
+        el.addEventListener('click', () => {
+          const h = _6hRowCache[parseInt(el.dataset['6hIdx'])];
+          if (h) showPairDetail(h.sorted, h.time, '6h');
+        });
+      });
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
     // 15M TAB
     // ═══════════════════════════════════════════════════════════════════════════
     async function render15M() {
+      _m15RowCache = [];
       const el = document.getElementById('cs-content');
       el.innerHTML = `<div class="sx-card"><div class="sx-card-hd"><i data-lucide="timer"></i> 15M Persistence Streaks
         <div class="sx-ctrls">
@@ -553,7 +670,7 @@
           const barWidth = Math.min(100, (m.sum / 0.003) * 100);
           const sumColor = m.meetsThreshold ? '#22c55e' : m.sum >= 0.0008 ? '#f59e0b' : '#64748b';
 
-          html += `<div class="cs-row${m.meetsThreshold ? ' highlight' : ''}">
+          html += `<div class="cs-row${m.meetsThreshold ? ' highlight' : ''}" data-m15-idx="${_m15RowCache.length}">
             <div class="cs-row-time">${t}</div>
             <div class="cs-row-ccys">
               <span class="cs-strong">${m.strongCcy} <span class="cs-val">+${pips(Math.abs((m.vals.find(v=>v.cur===m.strongCcy)||{}).val||0))}</span></span>
@@ -568,6 +685,7 @@
             html += `<div class="cs-pairs-row">${m.pairs.map(p => pairCardHTML(p, 'row')).join('')}</div>`;
           }
           html += `</div>`;
+          _m15RowCache.push(m);
         }
         html += '</div></div>';
       }
@@ -577,6 +695,12 @@
       }
 
       body.innerHTML = html;
+      body.querySelectorAll('.cs-row[data-m15-idx]').forEach(el => {
+        el.addEventListener('click', () => {
+          const m = _m15RowCache[parseInt(el.dataset.m15Idx)];
+          if (m) showPairDetail(m.vals, m.time, 'm15');
+        });
+      });
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
