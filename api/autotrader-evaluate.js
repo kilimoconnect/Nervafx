@@ -174,48 +174,6 @@ async function evaluateAutoTrader(sb) {
       console.log(`[AUTOTRADER] Structure entry: ${mt5Symbol} ${action} ${lots} lots, SL ${slPips.toFixed(1)} pips, TP ${tpPips.toFixed(1)} pips`);
     }
 
-    // ── DIRECTION CONFIRMATION ENTRIES (fallback — fixed 30-pip SL) ──
-    const entrySignals = (signals || []).filter(s =>
-      s.phase === 'ENTRY' || s.phase === 'MOVING'
-    );
-
-    for (const sig of entrySignals) {
-      if (filled >= slotsAvailable) break;
-
-      const mt5Symbol = oandaToMt5(sig.instrument);
-      if (openInstruments.has(mt5Symbol)) continue;
-      if (pendingInstruments.has(mt5Symbol)) continue;
-
-      const riskPerTrade = account.balance * (riskPct / 100) / maxTrades;
-      const slPips = 30;
-      const tpPips = slPips * minRR;
-      const pip = pipValue(mt5Symbol);
-      const pipValuePerLot = pip * 100000;
-      let lots = riskPerTrade / (slPips * pipValuePerLot);
-      lots = Math.max(0.01, Math.round(lots * 100) / 100);
-
-      const action = sig.dir === 'BUY' ? 'OPEN_BUY' : 'OPEN_SELL';
-
-      const { error: cmdErr } = await sb
-        .from('ea_commands')
-        .insert({
-          user_id:        user.user_id,
-          instrument:     mt5Symbol,
-          action,
-          params:         { lots, sl_pips: slPips, tp_pips: tpPips },
-          status:         'pending',
-          signal_pair_id: sig.instrument,
-        });
-      if (cmdErr) {
-        console.error(`[AUTOTRADER] Command insert error for ${user.user_id}:`, cmdErr.message);
-        continue;
-      }
-
-      filled++;
-      totalCommands++;
-      pendingInstruments.add(mt5Symbol);
-    }
-
     // Update the trade counter
     if (filled > 0) {
       await sb
