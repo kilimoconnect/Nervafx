@@ -211,6 +211,15 @@
       .cs-prev-badge { font-size: 10.5px !important; padding: 2px 5px !important; position: absolute !important; top: 3px; right: 3px; }
       .cs-tabs { border-radius: 8px; }
       .cs-tab { padding: 10px 8px; font-size: 12px; }
+      .cs-modal { padding: 14px 12px; max-height: 90vh; }
+      .cs-modal-hd { margin-bottom: 10px; padding-bottom: 8px; }
+      .cs-modal-title { font-size: 12px; }
+      .cs-modal-pair { gap: 6px; padding: 8px 8px; margin-bottom: 4px; }
+      .cs-modal-pair-rank { font-size: 10px; min-width: 18px; }
+      .cs-modal-pair-name { font-size: 12px; }
+      .cs-modal-pair-dir { font-size: 10px; }
+      .cs-modal-pair-spread { font-size: 10px; min-width: 36px; }
+      .cs-modal-badge { font-size: 10px !important; padding: 2px 5px !important; }
     }
   </style>
 </head>
@@ -397,7 +406,7 @@
                  : p.prevCount >= 3 ? 'rgba(245,158,11,0.18);color:#f59e0b;border:1px solid rgba(245,158,11,0.3)'
                  : 'rgba(100,116,139,0.18);color:#94a3b8;border:1px solid rgba(100,116,139,0.2)';
         const badge = p.prevCount != null
-          ? `<span class="cs-prev-badge" style="font-size:12px;font-weight:800;padding:2px 7px;border-radius:4px;line-height:1.2;white-space:nowrap;background:${bc}">${p.prevCount}/5</span>`
+          ? `<span class="cs-modal-badge" style="font-size:12px;font-weight:800;padding:2px 7px;border-radius:4px;line-height:1.2;white-space:nowrap;background:${bc}">${p.prevCount}/5</span>`
           : '';
         html += `<div class="cs-modal-pair">
           <div class="cs-modal-pair-rank">${i + 1}</div>
