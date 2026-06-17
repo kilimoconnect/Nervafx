@@ -58,7 +58,7 @@ module.exports = async function handler(req, res) {
     while (true) {
       const { data, error } = await sb
         .from('currency_strength')
-        .select('time, currency, smooth_2h')
+        .select('time, currency, smooth_6h')
         .gte('time', since)
         .order('time', { ascending: true })
         .range(offset, offset + PAGE - 1);
@@ -92,7 +92,7 @@ module.exports = async function handler(req, res) {
         sessionBlocks[blockKey] = { date: dateKey, session: sess, hours: {} };
       }
       for (const r of rows) {
-        const val = parseFloat(r.smooth_2h) || 0;
+        const val = parseFloat(r.smooth_6h) || 0;
         if (!sessionBlocks[blockKey].hours[r.currency]) {
           sessionBlocks[blockKey].hours[r.currency] = [];
         }
@@ -100,7 +100,7 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // For each session block: compute smooth_2h per currency, assign direction to all 28 pairs
+    // For each session block: compute smooth_6h per currency, assign direction to all 28 pairs
     const sessionList = [];
     for (const [key, block] of Object.entries(sessionBlocks)) {
       const ccyVals = {};
@@ -191,7 +191,7 @@ module.exports = async function handler(req, res) {
         const latestRows = byHour[latestHk];
         const liveCcyMap = {};
         for (const r of latestRows) {
-          if (!liveCcyMap[r.currency]) liveCcyMap[r.currency] = parseFloat(r.smooth_2h) || 0;
+          if (!liveCcyMap[r.currency]) liveCcyMap[r.currency] = parseFloat(r.smooth_6h) || 0;
         }
         const liveDirs = {};
         for (const instrument of VALID_PAIRS) {
