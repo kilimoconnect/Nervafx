@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>NervaFX — Session Continuity</title>
+  <link rel="icon" type="image/png" href="/nervafx-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <link rel="stylesheet" href="style.css" />
+
+  <style>
+    .grid { display: block !important; }
+
+    .sx-topbar {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 28px; height: 56px;
+      background: rgba(8,11,18,0.92);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+    .sx-topbar-left { display: flex; align-items: center; gap: 12px; }
+    .sx-logo img { height: 24px; display: block; }
+    .sx-sep { color: rgba(255,255,255,0.1); font-size: 20px; font-weight: 200; }
+    .sx-title-text { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+    .sx-back-btn {
+      display: flex; align-items: center; gap: 5px;
+      padding: 6px 12px; border-radius: 8px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); font-size: 11px; font-weight: 600;
+      cursor: pointer; text-decoration: none; transition: all 0.15s;
+    }
+    .sx-back-btn:hover { background: rgba(255,255,255,0.09); color: var(--text); }
+
+    .sx-main { max-width: 900px; margin: 0 auto; padding: 20px 16px 80px; }
+
+    .sx-card {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px; margin-bottom: 18px; overflow: hidden;
+    }
+    .sx-card-hd {
+      padding: 12px 16px; font-size: 12px; font-weight: 700;
+      color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    }
+    .sx-card-hd i { width: 15px; height: 15px; }
+    .sx-card-bd { padding: 14px 16px; }
+
+    .sx-ctrls { display: flex; gap: 6px; margin-left: auto; align-items: center; flex-wrap: wrap; }
+    .sx-btn {
+      padding: 4px 12px; border-radius: 7px; font-size: 11px; font-weight: 700;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); cursor: pointer; transition: all 0.15s;
+    }
+    .sx-btn:hover { color: var(--text); background: rgba(255,255,255,0.08); }
+    .sx-btn.active { background: rgba(96,165,250,0.15); border-color: rgba(96,165,250,0.5); color: #60a5fa; }
+
+    /* Session filter buttons */
+    .sc-filters {
+      display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; align-items: center;
+    }
+    .sc-filter-label { font-size: 10px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: .05em; }
+
+    /* Continuity row */
+    .sc-rows { display: flex; flex-direction: column; gap: 8px; }
+    .sc-row {
+      padding: 12px 14px; border-radius: 10px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+    .sc-row-hdr {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap;
+    }
+    .sc-date { font-size: 12px; font-weight: 700; color: #e2e8f0; }
+    .sc-arrow { font-size: 12px; font-weight: 700; color: var(--text-dim); }
+    .sc-session {
+      font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 5px;
+      text-transform: uppercase; letter-spacing: .04em;
+    }
+    .sc-session.asia { background: rgba(251,191,36,0.12); color: #fbbf24; }
+    .sc-session.london { background: rgba(96,165,250,0.12); color: #60a5fa; }
+    .sc-session.new_york { background: rgba(167,139,250,0.12); color: #a78bfa; }
+
+    .sc-ccys {
+      font-size: 10px; color: var(--text-dim); margin-left: auto;
+    }
+    .sc-ccys .strong { color: #22c55e; font-weight: 700; }
+    .sc-ccys .weak { color: #ef4444; font-weight: 700; }
+
+    .sc-pairs { display: flex; gap: 8px; flex-wrap: wrap; }
+    .sc-pair {
+      flex: 0 0 auto; min-width: 130px; padding: 8px 12px; border-radius: 7px;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .sc-pair-name { font-size: 13px; font-weight: 800; color: #e2e8f0; }
+    .sc-pair-dir {
+      font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px;
+    }
+    .sc-pair-dir.buy { background: rgba(34,197,94,0.15); color: #22c55e; }
+    .sc-pair-dir.sell { background: rgba(239,68,68,0.15); color: #ef4444; }
+    .sc-pair-spread { font-size: 10px; color: var(--text-dim); }
+    .sc-pair-growing { font-size: 9px; font-weight: 700; color: #22c55e; }
+
+    .sc-sum { font-size: 12px; font-weight: 800; color: #64748b; margin-left: 6px; }
+
+    /* Date group header */
+    .sc-date-hdr {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 6px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .sc-date-label { font-size: 12px; font-weight: 700; color: #e2e8f0; }
+    .sc-date-count {
+      font-size: 10px; font-weight: 600; color: #a78bfa;
+      background: rgba(167,139,250,0.1); padding: 2px 8px; border-radius: 4px;
+    }
+
+    /* Stats bar */
+    .sc-stats {
+      display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap;
+    }
+    .sc-stat {
+      padding: 10px 16px; border-radius: 8px;
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+      text-align: center; flex: 1; min-width: 80px;
+    }
+    .sc-stat-val { font-size: 20px; font-weight: 800; color: #e2e8f0; }
+    .sc-stat-label { font-size: 9px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: .05em; margin-top: 2px; }
+
+    .sc-loading {
+      text-align: center; padding: 60px 20px; color: var(--text-dim); font-size: 12px;
+    }
+    .spinner {
+      display: inline-block; width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.08);
+      border-top-color: #60a5fa; border-radius: 50%; animation: spin .6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <!-- ── Top bar ── -->
+  <div class="sx-topbar">
+    <div class="sx-topbar-left">
+      <a href="/app" class="sx-logo"><img src="/nervafx-logo.svg" alt="NervaFX" onerror="this.style.display='none'"></a>
+      <span class="sx-sep">|</span>
+      <span class="sx-title-text">Session Continuity</span>
+    </div>
+    <a href="/app" class="sx-back-btn"><i data-lucide="arrow-left" style="width:12px;height:12px"></i> Dashboard</a>
+  </div>
+
+  <div class="sx-main">
+    <div class="sx-card">
+      <div class="sx-card-hd">
+        <i data-lucide="repeat"></i> Session Continuity — Pairs Holding Direction Across Sessions
+        <div class="sx-ctrls">
+          <button class="sx-btn active" data-days="7" onclick="loadDays(7)">7D</button>
+          <button class="sx-btn" data-days="30" onclick="loadDays(30)">30D</button>
+          <button class="sx-btn" data-days="90" onclick="loadDays(90)">90D</button>
+          <button class="sx-btn" data-days="420" onclick="loadDays(420)">All</button>
+        </div>
+      </div>
+      <div class="sx-card-bd">
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:14px">
+          Pairs where the direction (BUY/SELL) continued from one session to the next.
+          For example, SELL in New York → SELL in Asia means that session's strongest/weakest currencies still align.
+          <span style="color:#22c55e;font-weight:700">▲ Growing</span> = spread is widening (stronger continuation).
+        </div>
+
+        <div class="sc-filters">
+          <span class="sc-filter-label">Filter:</span>
+          <button class="sx-btn active" data-filter="all" onclick="filterSess('all')">All</button>
+          <button class="sx-btn" data-filter="asia" onclick="filterSess('asia')">Asia</button>
+          <button class="sx-btn" data-filter="london" onclick="filterSess('london')">London</button>
+          <button class="sx-btn" data-filter="new_york" onclick="filterSess('new_york')">New York</button>
+        </div>
+
+        <div id="sc-stats" class="sc-stats"></div>
+        <div id="sc-body"><div class="sc-loading"><span class="spinner"></span> Loading 2H session data…</div></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const _tz = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
+    let _data = [];
+    let _sessFilter = 'all';
+    let _currentDays = 7;
+
+    function fmtDate(iso) {
+      const d = new Date(iso + 'T12:00:00Z');
+      return d.toLocaleDateString('en-US', { timeZone: _tz(), weekday: 'short', month: 'short', day: 'numeric' });
+    }
+
+    function pips(v) { return (v * 10000).toFixed(1); }
+
+    async function load(days) {
+      _currentDays = days;
+      // Update button state
+      document.querySelectorAll('[data-days]').forEach(b => {
+        b.classList.toggle('active', parseInt(b.dataset.days) === days);
+      });
+
+      const body = document.getElementById('sc-body');
+      body.innerHTML = '<div class="sc-loading"><span class="spinner"></span> Loading 2H session data…</div>';
+
+      const token = localStorage.getItem('nfx_token');
+      try {
+        const r = await fetch(`/api/session-continuity?days=${days}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!r.ok) {
+          const e = await r.json().catch(() => ({}));
+          body.innerHTML = `<div class="sc-loading" style="color:#ef4444">${e.error || 'Failed to load'}</div>`;
+          return;
+        }
+        const json = await r.json();
+        _data = json.continuations || [];
+        render();
+      } catch (e) {
+        body.innerHTML = `<div class="sc-loading" style="color:#ef4444">${e.message}</div>`;
+      }
+    }
+
+    function loadDays(d) { load(d); }
+
+    function filterSess(f) {
+      _sessFilter = f;
+      document.querySelectorAll('[data-filter]').forEach(b => {
+        b.classList.toggle('active', b.dataset.filter === f);
+      });
+      render();
+    }
+
+    function render() {
+      const body = document.getElementById('sc-body');
+      const statsEl = document.getElementById('sc-stats');
+
+      let filtered = _data;
+      if (_sessFilter !== 'all') {
+        filtered = _data.filter(c => c.toSession.toLowerCase() === _sessFilter);
+      }
+
+      if (!filtered.length) {
+        statsEl.innerHTML = '';
+        body.innerHTML = '<div class="sc-loading" style="color:var(--text-dim)">No continuations found for this period</div>';
+        return;
+      }
+
+      // Stats
+      const totalPairs = filtered.reduce((s, c) => s + c.pairs.length, 0);
+      const growingCount = filtered.reduce((s, c) => s + c.pairs.filter(p => p.growing).length, 0);
+
+      // Most continued pair
+      const pairCount = {};
+      for (const c of filtered) {
+        for (const p of c.pairs) {
+          const k = `${p.instrument}_${p.dir}`;
+          pairCount[k] = (pairCount[k] || 0) + 1;
+        }
+      }
+      const topPair = Object.entries(pairCount).sort((a, b) => b[1] - a[1])[0];
+      const topLabel = topPair ? `${topPair[0].replace('_', '/').replace('_BUY', ' BUY').replace('_SELL', ' SELL')} (${topPair[1]}×)` : '—';
+
+      statsEl.innerHTML = `
+        <div class="sc-stat"><div class="sc-stat-val">${filtered.length}</div><div class="sc-stat-label">Continuations</div></div>
+        <div class="sc-stat"><div class="sc-stat-val">${totalPairs}</div><div class="sc-stat-label">Total Pairs</div></div>
+        <div class="sc-stat"><div class="sc-stat-val" style="color:#22c55e">${growingCount}</div><div class="sc-stat-label">Growing Spread</div></div>
+        <div class="sc-stat"><div class="sc-stat-val" style="font-size:13px">${topLabel}</div><div class="sc-stat-label">Most Continued</div></div>
+      `;
+
+      // Group by date
+      const byDate = {};
+      for (const c of filtered) {
+        (byDate[c.date] = byDate[c.date] || []).push(c);
+      }
+
+      let html = '<div class="sc-rows">';
+      for (const [date, items] of Object.entries(byDate).sort((a, b) => b[0].localeCompare(a[0]))) {
+        const totalP = items.reduce((s, c) => s + c.pairs.length, 0);
+        html += `<div class="sc-date-hdr">
+          <span class="sc-date-label">${fmtDate(date)}</span>
+          <span class="sc-date-count">${items.length} continuation${items.length > 1 ? 's' : ''}, ${totalP} pair${totalP > 1 ? 's' : ''}</span>
+        </div>`;
+
+        for (const c of items) {
+          const fromCls = c.fromSession.toLowerCase();
+          const toCls = c.toSession.toLowerCase();
+          const sumPips = pips(c.sum);
+
+          html += `<div class="sc-row">
+            <div class="sc-row-hdr">
+              <span class="sc-session ${fromCls}">${c.fromSession.replace('_', ' ')}</span>
+              <span class="sc-arrow">→</span>
+              <span class="sc-session ${toCls}">${c.toSession.replace('_', ' ')}</span>
+              <span class="sc-sum">${sumPips}p</span>
+              <span class="sc-ccys">
+                <span class="strong">${c.strongest?.currency || ''} +${pips(Math.abs(c.strongest?.val || 0))}</span>
+                &nbsp;
+                <span class="weak">${c.weakest?.currency || ''} ${pips(c.weakest?.val || 0)}</span>
+              </span>
+            </div>
+            <div class="sc-pairs">`;
+
+          for (const p of c.pairs) {
+            const dirCls = p.dir.toLowerCase();
+            html += `<div class="sc-pair">
+              <div>
+                <span class="sc-pair-name">${p.instrument.replace('_', '/')}</span>
+                <span class="sc-pair-dir ${dirCls}">${p.dir}</span>
+              </div>
+              <div>
+                <span class="sc-pair-spread">${pips(p.currSpread)}p</span>
+                ${p.growing ? '<span class="sc-pair-growing">▲ Growing</span>' : ''}
+              </div>
+            </div>`;
+          }
+
+          html += '</div></div>';
+        }
+      }
+      html += '</div>';
+      body.innerHTML = html;
+    }
+
+    // Init
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    load(7);
+  </script>
+</body>
+</html>
