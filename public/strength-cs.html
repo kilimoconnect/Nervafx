@@ -236,7 +236,7 @@
   <div class="sx-main">
     <!-- Tab switcher -->
     <div class="cs-tabs">
-      <button class="cs-tab active" data-tab="6h" onclick="switchTab('6h')">3H Strength Sum</button>
+      <button class="cs-tab active" data-tab="6h" onclick="switchTab('6h')">2H Strength Sum</button>
       <button class="cs-tab" data-tab="m15" onclick="switchTab('m15')">15M Persistence</button>
     </div>
 
@@ -335,7 +335,7 @@
 
       const label = fmtTime(time);
       const dateLabel = fmtFull(time);
-      const tfBadge = isM15 ? '15M' : '3H';
+      const tfBadge = isM15 ? '15M' : '2H';
       let html = `<div class="cs-modal-hd">
         <div class="cs-modal-title">${dateLabel} · ${label} <span style="font-size:10px;font-weight:700;background:${isM15 ? 'rgba(59,130,246,0.2);color:#3b82f6' : 'rgba(34,197,94,0.2);color:#22c55e'};padding:2px 6px;border-radius:4px;margin-left:4px">${tfBadge}</span> — All Pairs</div>
         <button class="cs-modal-close" onclick="this.closest('.cs-modal-overlay').remove()">✕</button>
@@ -379,13 +379,13 @@
     async function render6H() {
       _6hRowCache = [];
       const el = document.getElementById('cs-content');
-      el.innerHTML = `<div class="sx-card"><div class="sx-card-hd"><i data-lucide="bar-chart-3"></i> 3H Strength Sum
+      el.innerHTML = `<div class="sx-card"><div class="sx-card-hd"><i data-lucide="bar-chart-3"></i> 2H Strength Sum
         <div class="sx-ctrls">
           ${RANGE_OPTS.map(d => { const v = d === 'all' ? allDays() : d; const lbl = d === 'all' ? 'All' : d === 365 ? '1Y' : d+'D'; return `<button class="sx-btn ${_6hDays===v&&!_6hDate?'active':''}" onclick="set6HDays(${v})">${lbl}</button>`; }).join('')}
           <span class="sx-ctrl-sep"></span>
           <input type="date" class="sx-date${_6hDate?' active':''}" value="${_6hDate}" min="${DATA_START}" max="${new Date().toISOString().slice(0,10)}" onchange="set6HDate(this.value)">
         </div>
-      </div><div class="sx-card-bd" id="cs-6h-body"><div class="cs-loading"><span class="spinner"></span> Loading 3H data...</div></div></div>`;
+      </div><div class="sx-card-bd" id="cs-6h-body"><div class="cs-loading"><span class="spinner"></span> Loading 2H data...</div></div></div>`;
       lucide.createIcons();
 
       const key = `6h:${_6hDays}`;
@@ -408,7 +408,7 @@
       for (const hk of hourKeys) {
         const currencies = byHour[hk];
         const sorted = currencies
-          .map(c => ({ cur: c.currency, val: parseFloat(c.smooth_3h) || 0 }))
+          .map(c => ({ cur: c.currency, val: parseFloat(c.smooth_2h) || 0 }))
           .sort((a, b) => b.val - a.val);
         if (sorted.length < 2) continue;
         const strongest = sorted[0];
@@ -446,7 +446,7 @@
       }
 
       let html = `<div style="font-size:11px;color:var(--text-dim);margin-bottom:14px">
-        Strongest + Weakest currency by 3H strength each hour. Both values converted to positive and summed.
+        Strongest + Weakest currency by 2H strength each hour. Both values converted to positive and summed.
         Rows at <span style="color:#22c55e;font-weight:700">≥30 pips</span> show the best 3 tradeable pairs.
       </div>`;
 

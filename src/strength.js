@@ -3,7 +3,7 @@ const { supabase } = require('./supabase');
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
 const PAIRS_PER_CURRENCY = 7;
-const LOOKBACKS = [3, 4, 6, 12, 24];
+const LOOKBACKS = [2, 3, 4, 6, 12, 24];
 
 function offsetISO(isoTime, hoursBack) {
   const t = new Date(isoTime);
@@ -129,11 +129,13 @@ function calculateAtTime(lookup, time) {
   return CURRENCIES.map(currency => ({
     time,
     currency,
+    raw_2h: raw[2][currency],
     raw_3h: raw[3][currency],
     raw_4h: raw[4][currency],
     raw_6h: raw[6][currency],
     raw_12h: raw[12][currency],
     raw_1d: raw[24][currency],
+    normalized_2h: raw[2][currency] / PAIRS_PER_CURRENCY,
     normalized_3h: raw[3][currency] / PAIRS_PER_CURRENCY,
     normalized_4h: raw[4][currency] / PAIRS_PER_CURRENCY,
     normalized_6h: raw[6][currency] / PAIRS_PER_CURRENCY,
@@ -253,9 +255,11 @@ async function calculateLatestStrength() {
 
     const rows = CURRENCIES.map(currency => ({
       time: refTime, currency,
-      raw_3h:  raw[3][currency],  raw_4h:  raw[4][currency],
+      raw_2h:  raw[2][currency],  raw_3h:  raw[3][currency],
+      raw_4h:  raw[4][currency],
       raw_6h:  raw[6][currency],  raw_12h: raw[12][currency],
       raw_1d:  raw[24][currency],
+      normalized_2h:  raw[2][currency]  / PAIRS_PER_CURRENCY,
       normalized_3h:  raw[3][currency]  / PAIRS_PER_CURRENCY,
       normalized_4h:  raw[4][currency]  / PAIRS_PER_CURRENCY,
       normalized_6h:  raw[6][currency]  / PAIRS_PER_CURRENCY,

@@ -6,10 +6,10 @@
  * Runs each pipeline cycle (after session_activity + m15_spreads + flow_performance).
  *
  * System flow:
- *   1. Trigger: 6H currency strength sum (|strongest| + |weakest|) ≥ 40 pips
- *   2. Currencies with aligned 3H + 6H → confirmed STRONG or WEAK
+ *   1. Trigger: 2H currency strength sum (|strongest| + |weakest|) ≥ 30 pips
+ *   2. Currencies with aligned 2H + 6H → confirmed STRONG or WEAK
  *   3. Pairs formed: one STRONG currency + one WEAK currency
- *   4. Direction PERSISTS even if 3H/6H temporarily diverges
+ *   4. Direction PERSISTS even if 2H/6H temporarily diverges
  *   5. Direction only changes when NEW trigger event fires
  *   6. M15 monitors for: PULLBACK → COMPRESSION → READY → ENTRY
  *   7. New events flagged as CONTINUATION or REVERSAL per currency
@@ -22,10 +22,10 @@
 const { supabase } = require('./supabase');
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
-// Direction confirmation trigger: 3H smoothed currency strength sum ≥ 30 pips (0.003).
-// Sum = |strongest smooth_3h| + |weakest smooth_3h|
+// Direction confirmation trigger: 2H smoothed currency strength sum ≥ 30 pips (0.003).
+// Sum = |strongest smooth_2h| + |weakest smooth_2h|
 const CS_SUM_THRESHOLD = 0.003;
-const FLOW_SPREAD_THRESHOLD = 30;  // 3H pair spread ≥ 30 pips
+const FLOW_SPREAD_THRESHOLD = 30;  // 2H pair spread ≥ 30 pips
 const FLOW_SPREAD_MIN_PAIRS = 1;   // At least 1 pair must qualify
 
 const VALID_PAIRS = new Set([
@@ -51,7 +51,7 @@ function getSession(utcHour) {
  *   PULLBACK   → M15 retraces against flow direction
  *   COMPRESSION → after pullback, M15 range tightens (low |v45|)
  *   ENTRY       → after compression/pullback, momentum returns in flow direction (trade now)
- *   MOVING      → strong confirmation: M15 + 3H aligned + impulse (already moving, late entry)
+ *   MOVING      → strong confirmation: M15 + 2H aligned + impulse (already moving, late entry)
  */
 function detectPhase(prevPhase, dir, v45, v90, spread3h, impulseScore, impulseAligned, deCombo) {
   const flowSign = dir === 'BUY' ? 1 : -1;
@@ -150,10 +150,10 @@ async function calculateEnergyDirection() {
     }
   }
 
-  // ── 2. Fetch latest currency strength (3H + 6H + 12H) ──────────────────────
+  // ── 2. Fetch latest currency strength (2H + 6H + 12H) ──────────────────────
   const { data: csRows, error: csErr } = await supabase
     .from('currency_strength')
-    .select('currency, smooth_3h, smooth_6h, smooth_12h, raw_6h, time')
+    .select('currency, smooth_2h, smooth_3h, smooth_6h, smooth_12h, raw_6h, time')
     .order('time', { ascending: false })
     .limit(8);
 
@@ -169,6 +169,7 @@ async function calculateEnergyDirection() {
     if (seen.has(r.currency)) continue;
     seen.add(r.currency);
     ccyMap[r.currency] = {
+      smooth_2h: parseFloat(r.smooth_2h) || 0,
       smooth_3h: parseFloat(r.smooth_3h) || 0,
       smooth_6h: parseFloat(r.smooth_6h) || 0,
       smooth_12h: parseFloat(r.smooth_12h) || 0,
@@ -176,10 +177,10 @@ async function calculateEnergyDirection() {
     };
   }
 
-  // ── 2b. Direction trigger: 3H smoothed currency strength sum ≥ 30 pips ────
+  // ── 2b. Direction trigger: 2H smoothed currency strength sum ≥ 30 pips ────
   const h6Values = CURRENCIES
     .filter(ccy => ccyMap[ccy])
-    .map(ccy => ccyMap[ccy].smooth_3h);
+    .map(ccy => ccyMap[ccy].smooth_2h);
 
   let triggerBar = null;
   if (h6Values.length >= 2) {
@@ -202,14 +203,14 @@ async function calculateEnergyDirection() {
   const triggerSession = triggerBar ? triggerBar.session : null;
   const triggerHour = triggerBar ? triggerBar.time : null;
 
-  console.log(`[ENERGY_DIR] Current energy: ${currentEnergy} | 6H CS sum: ${triggerEnergy}p (threshold ${Math.round(CS_SUM_THRESHOLD * 10000)}p) ${triggerBar ? '→ TRIGGER' : '→ no trigger'}`);
+  console.log(`[ENERGY_DIR] Current energy: ${currentEnergy} | 2H CS sum: ${triggerEnergy}p (threshold ${Math.round(CS_SUM_THRESHOLD * 10000)}p) ${triggerBar ? '→ TRIGGER' : '→ no trigger'}`);
 
-  // ── 2b. Count flow spread pairs (3H spread ≥ 30 pips) ───────────────────────
+  // ── 2b. Count flow spread pairs (2H spread ≥ 30 pips) ───────────────────────
   let flowSpreadCount = 0;
   for (const inst of VALID_PAIRS) {
     const [base, quote] = inst.split('_');
-    const bVal = ccyMap[base]?.smooth_3h || 0;
-    const qVal = ccyMap[quote]?.smooth_3h || 0;
+    const bVal = ccyMap[base]?.smooth_2h || 0;
+    const qVal = ccyMap[quote]?.smooth_2h || 0;
     const spreadPips = Math.abs(bVal - qVal) * 10000;
     if (spreadPips >= FLOW_SPREAD_THRESHOLD) flowSpreadCount++;
   }
@@ -262,13 +263,13 @@ async function calculateEnergyDirection() {
     // ── 6. NEW energy event — snapshot currencies from CURRENT strength ────
     // This is the ONLY time directions are evaluated. Strength values are
     // locked in and persist until the next bar crosses ≥ threshold.
-    // Rank currencies by combined 3H+6H strength — top 3 positive = strong,
+    // Rank currencies by combined 2H+6H strength — top 3 positive = strong,
     // bottom 3 negative = weak (same approach as hour analysis page).
     const ranked = CURRENCIES
       .filter(ccy => ccyMap[ccy])
       .map(ccy => {
         const d = ccyMap[ccy];
-        const h3 = d.smooth_3h;
+        const h3 = d.smooth_2h;
         const h6 = d.smooth_6h;
         const combined = (h3 + h6) / 2;
         return { currency: ccy, h3, h6, combined };
@@ -283,7 +284,7 @@ async function calculateEnergyDirection() {
     strong.sort((a, b) => b.score - a.score);
     weak.sort((a, b) => b.score - a.score);
 
-    console.log(`[ENERGY_DIR] ═══ NEW ENERGY EVENT — 6H CS sum ${triggerEnergy}p @ ${triggerHour} ═══`);
+    console.log(`[ENERGY_DIR] ═══ NEW ENERGY EVENT — 2H CS sum ${triggerEnergy}p @ ${triggerHour} ═══`);
 
     // ── 7. Snapshot currency directions with trigger-time strength ─────────
     const newDirections = new Map();
@@ -301,7 +302,7 @@ async function calculateEnergyDirection() {
       const newDir = newDirections.get(ccy) || 'NEUTRAL';
       const prev = stateMap[ccy];
       const prevDir = prev?.direction || 'NEUTRAL';
-      const snap = strengthSnapshot.get(ccy) || { h3: ccyMap[ccy]?.smooth_3h || 0, h6: ccyMap[ccy]?.smooth_6h || 0 };
+      const snap = strengthSnapshot.get(ccy) || { h3: ccyMap[ccy]?.smooth_2h || 0, h6: ccyMap[ccy]?.smooth_6h || 0 };
 
       let energyEventType = null;
       if (prev?.active && newDir !== 'NEUTRAL') {
@@ -422,15 +423,15 @@ async function calculateEnergyDirection() {
     }
   }
 
-  // Also get 3H/6H/12H spreads for pairs — use LIVE strength for monitoring
+  // Also get 2H/6H/12H spreads for pairs — use LIVE strength for monitoring
   // (phase detection and signal entry gates need current market conditions)
   // but fall back to snapshotted values if live data is missing
   let spreadMap = {};
   if (pairInstruments.length) {
     for (const inst of pairInstruments) {
       const [base, quote] = inst.split('_');
-      const h3base = ccyMap[base]?.smooth_3h || 0;
-      const h3quote = ccyMap[quote]?.smooth_3h || 0;
+      const h3base = ccyMap[base]?.smooth_2h || 0;
+      const h3quote = ccyMap[quote]?.smooth_2h || 0;
       const h6base = ccyMap[base]?.smooth_6h || 0;
       const h6quote = ccyMap[quote]?.smooth_6h || 0;
       const h12base = ccyMap[base]?.smooth_12h || 0;

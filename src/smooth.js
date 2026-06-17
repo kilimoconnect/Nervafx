@@ -15,7 +15,7 @@ async function getRowsForCurrency(currency) {
   while (true) {
     const { data, error } = await supabase
       .from('currency_strength')
-      .select('id, time, normalized_3h, normalized_4h, normalized_6h, normalized_12h, normalized_1d, smooth_3h, smooth_4h, smooth_6h, smooth_12h, smooth_1d')
+      .select('id, time, normalized_2h, normalized_3h, normalized_4h, normalized_6h, normalized_12h, normalized_1d, smooth_2h, smooth_3h, smooth_4h, smooth_6h, smooth_12h, smooth_1d')
       .eq('currency', currency)
       .order('time', { ascending: true })
       .range(offset, offset + PAGE - 1);
@@ -37,6 +37,7 @@ async function batchUpdateSmooth(rows) {
       id: r.id,
       time: r.time,
       currency: r.currency,
+      smooth_2h: r.smooth_2h,
       smooth_3h: r.smooth_3h,
       smooth_4h: r.smooth_4h,
       smooth_6h: r.smooth_6h,
@@ -55,20 +56,21 @@ async function smoothCurrency(currency) {
   const rows = await getRowsForCurrency(currency);
   if (rows.length === 0) return 0;
 
-  let prev3h = null, prev4h = null, prev6h = null, prev12h = null, prev1d = null;
+  let prev2h = null, prev3h = null, prev4h = null, prev6h = null, prev12h = null, prev1d = null;
 
   const toUpdate = [];
 
   for (const row of rows) {
+    const s2h  = ema(prev2h,  parseFloat(row.normalized_2h) || 0);
     const s3h  = ema(prev3h,  row.normalized_3h);
     const s4h  = ema(prev4h,  parseFloat(row.normalized_4h) || 0);
     const s6h  = ema(prev6h,  row.normalized_6h);
     const s12h = ema(prev12h, row.normalized_12h);
     const s1d  = ema(prev1d,  parseFloat(row.normalized_1d) || 0);
 
-    toUpdate.push({ ...row, currency, smooth_3h: s3h, smooth_4h: s4h, smooth_6h: s6h, smooth_12h: s12h, smooth_1d: s1d });
+    toUpdate.push({ ...row, currency, smooth_2h: s2h, smooth_3h: s3h, smooth_4h: s4h, smooth_6h: s6h, smooth_12h: s12h, smooth_1d: s1d });
 
-    prev3h = s3h; prev4h = s4h; prev6h = s6h; prev12h = s12h; prev1d = s1d;
+    prev2h = s2h; prev3h = s3h; prev4h = s4h; prev6h = s6h; prev12h = s12h; prev1d = s1d;
   }
 
   await batchUpdateSmooth(toUpdate);
@@ -98,9 +100,9 @@ async function smoothLatest() {
   for (const currency of CURRENCIES) {
     const { data: unsmoothed, error } = await supabase
       .from('currency_strength')
-      .select('id, time, normalized_3h, normalized_4h, normalized_6h, normalized_12h, normalized_1d')
+      .select('id, time, normalized_2h, normalized_3h, normalized_4h, normalized_6h, normalized_12h, normalized_1d')
       .eq('currency', currency)
-      .is('smooth_3h', null)
+      .is('smooth_2h', null)
       .order('time', { ascending: true })
       .limit(50);
 
@@ -109,13 +111,14 @@ async function smoothLatest() {
 
     const { data: prev } = await supabase
       .from('currency_strength')
-      .select('smooth_3h, smooth_4h, smooth_6h, smooth_12h, smooth_1d')
+      .select('smooth_2h, smooth_3h, smooth_4h, smooth_6h, smooth_12h, smooth_1d')
       .eq('currency', currency)
       .lt('time', unsmoothed[0].time)
       .not('smooth_3h', 'is', null)
       .order('time', { ascending: false })
       .limit(1);
 
+    let p2 = prev?.[0]?.smooth_2h ?? null;
     let p3 = prev?.[0]?.smooth_3h ?? null;
     let p4 = prev?.[0]?.smooth_4h ?? null;
     let p6 = prev?.[0]?.smooth_6h ?? null;
@@ -123,6 +126,7 @@ async function smoothLatest() {
     let p1d = prev?.[0]?.smooth_1d ?? null;
 
     for (const row of unsmoothed) {
+      p2  = ema(p2,  parseFloat(row.normalized_2h) || 0);
       p3  = ema(p3,  row.normalized_3h);
       p4  = ema(p4,  parseFloat(row.normalized_4h) || 0);
       p6  = ema(p6,  row.normalized_6h);
@@ -130,7 +134,7 @@ async function smoothLatest() {
       p1d = ema(p1d, parseFloat(row.normalized_1d) || 0);
       allUpdates.push({
         id: row.id, time: row.time, currency,
-        smooth_3h: p3, smooth_4h: p4, smooth_6h: p6,
+        smooth_2h: p2, smooth_3h: p3, smooth_4h: p4, smooth_6h: p6,
         smooth_12h: p12, smooth_1d: p1d,
       });
     }
