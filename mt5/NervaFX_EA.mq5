@@ -193,7 +193,7 @@ string BuildHistoryJson()
 void SendHeartbeat()
 {
    string url = InpServerUrl + "/api/ea-heartbeat";
-   string headers = "Content-Type: application/json\r\nX-EA-Key: " + InpApiKey + "\r\n";
+   string headers = "Content-Type: application/json\r\nX-EA-Key: " + InpApiKey + "\r\nUser-Agent: NervaFX-EA/1.0\r\n";
 
    string body = "{";
    body += "\"account_number\":\"" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) + "\",";
@@ -247,7 +247,7 @@ void SendHeartbeat()
 void PollCommands()
 {
    string url = InpServerUrl + "/api/ea-commands";
-   string headers = "X-EA-Key: " + InpApiKey + "\r\n";
+   string headers = "X-EA-Key: " + InpApiKey + "\r\nUser-Agent: NervaFX-EA/1.0\r\n";
 
    uchar postData[];
    uchar result[];
@@ -590,7 +590,7 @@ bool PartialClose(long ticket, double closePct, string &outError)
 void AckCommand(const string cmdId, const string status, const string ticket, const string error)
 {
    string url = InpServerUrl + "/api/ea-commands";
-   string headers = "Content-Type: application/json\r\nX-EA-Key: " + InpApiKey + "\r\n";
+   string headers = "Content-Type: application/json\r\nX-EA-Key: " + InpApiKey + "\r\nUser-Agent: NervaFX-EA/1.0\r\n";
 
    string body = "{";
    body += "\"command_id\":\"" + cmdId + "\",";
