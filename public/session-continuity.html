@@ -244,7 +244,10 @@
 
       let filtered = _data;
       if (_sessFilter !== 'all') {
-        filtered = _data.filter(c => c.toSession.toLowerCase() === _sessFilter);
+        filtered = _data.filter(c =>
+          c.toSession.toLowerCase() === _sessFilter ||
+          c.fromSession.toLowerCase() === _sessFilter
+        );
       }
 
       if (!filtered.length) {
