@@ -109,7 +109,7 @@ function _updateAlertBadge() {
   const panel = document.getElementById('hdr-panel-alerts');
   if (!panel) return;
   let count = 0;
-  const bars = ['news-alert-bar', 'm15-impulse-bar'];
+  const bars = ['news-alert-bar', 'm15-impulse-bar', 'sc-continuity-bar'];
   for (const id of bars) {
     const el = document.getElementById(id);
     if (el && el.style.display !== 'none') count++;
@@ -6742,42 +6742,66 @@ async function fetchSessionContinuity() {
 }
 
 function renderSessionContinuityNotif() {
-  const el = document.getElementById('sc-notif');
-  if (!el) return;
-  const items = _sessionContinuityCache || [];
-  if (!items.length) { el.innerHTML = ''; return; }
+  const bar = document.getElementById('sc-continuity-bar');
+  const chipsEl = document.getElementById('sc-bar-chips');
+  const inlineEl = document.getElementById('sc-notif');
 
+  const items = _sessionContinuityCache || [];
   const today = new Date().toISOString().slice(0, 10);
   const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
   const recent = items.filter(c => c.date === today || c.date === yesterday);
-  if (!recent.length) { el.innerHTML = ''; return; }
 
-  const pips = v => (v * 10000).toFixed(1);
-  const sessColor = s => s === 'ASIA' ? '#fbbf24' : s === 'LONDON' ? '#60a5fa' : '#a78bfa';
-
-  let html = `<div style="margin-top:12px;padding:12px 14px;border-radius:10px;background:rgba(167,139,250,0.06);border:1px solid rgba(167,139,250,0.15)">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-      <span style="font-size:11px;font-weight:700;color:#a78bfa;text-transform:uppercase;letter-spacing:.05em">Session Continuity</span>
-      <a href="/session-continuity" style="font-size:10px;color:var(--text-dim);margin-left:auto;text-decoration:none">View All →</a>
-    </div>`;
-
-  for (const c of recent.slice(0, 3)) {
-    const fromCol = sessColor(c.fromSession);
-    const toCol = sessColor(c.toSession);
-    html += `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
-      <span style="font-size:10px;font-weight:700;color:${fromCol}">${c.fromSession.replace('_', ' ')}</span>
-      <span style="font-size:10px;color:var(--text-dim)">→</span>
-      <span style="font-size:10px;font-weight:700;color:${toCol}">${c.toSession.replace('_', ' ')}</span>
-      <span style="font-size:10px;color:var(--text-dim);margin-left:4px">`;
-    html += c.pairs.slice(0, 4).map(p => {
-      const col = p.dir === 'BUY' ? '#22c55e' : '#ef4444';
-      return `<span style="font-weight:700;color:#e2e8f0">${p.instrument.replace('_', '/')}</span> <span style="color:${col};font-weight:600">${p.dir}</span>`;
-    }).join(' · ');
-    if (c.pairs.length > 4) html += ` +${c.pairs.length - 4}`;
-    html += `</span></div>`;
+  // ── Header notification bar ──
+  if (bar && chipsEl) {
+    if (!recent.length) {
+      bar.style.display = 'none';
+    } else {
+      const SESS_SHORT = { ASIA: 'Asia', LONDON: 'Ldn', NEW_YORK: 'NY' };
+      let chips = '';
+      for (const c of recent.slice(0, 3)) {
+        const flow = `${SESS_SHORT[c.fromSession] || c.fromSession}→${SESS_SHORT[c.toSession] || c.toSession}`;
+        for (const p of c.pairs.slice(0, 3)) {
+          const dirCls = p.dir === 'BUY' ? 'chip-buy' : 'chip-sell';
+          chips += `<span class="sc-bar-chip">
+            <span class="chip-pair">${p.instrument.replace('_', '/')}</span>
+            <span class="${dirCls}">${p.dir}</span>
+            <span class="chip-flow">${flow}</span>
+          </span>`;
+        }
+      }
+      chipsEl.innerHTML = chips;
+      bar.style.display = '';
+    }
+    _updateAlertBadge();
   }
-  html += '</div>';
-  el.innerHTML = html;
+
+  // ── Inline panel in Market Energy ──
+  if (inlineEl) {
+    if (!recent.length) { inlineEl.innerHTML = ''; return; }
+    const sessColor = s => s === 'ASIA' ? '#fbbf24' : s === 'LONDON' ? '#60a5fa' : '#a78bfa';
+    let html = `<div style="margin-top:12px;padding:12px 14px;border-radius:10px;background:rgba(167,139,250,0.06);border:1px solid rgba(167,139,250,0.15)">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span style="font-size:11px;font-weight:700;color:#a78bfa;text-transform:uppercase;letter-spacing:.05em">Session Continuity</span>
+        <a href="/session-continuity" style="font-size:10px;color:var(--text-dim);margin-left:auto;text-decoration:none">View All →</a>
+      </div>`;
+    for (const c of recent.slice(0, 3)) {
+      const fromCol = sessColor(c.fromSession);
+      const toCol = sessColor(c.toSession);
+      html += `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
+        <span style="font-size:10px;font-weight:700;color:${fromCol}">${c.fromSession.replace('_', ' ')}</span>
+        <span style="font-size:10px;color:var(--text-dim)">→</span>
+        <span style="font-size:10px;font-weight:700;color:${toCol}">${c.toSession.replace('_', ' ')}</span>
+        <span style="font-size:10px;color:var(--text-dim);margin-left:4px">`;
+      html += c.pairs.slice(0, 4).map(p => {
+        const col = p.dir === 'BUY' ? '#22c55e' : '#ef4444';
+        return `<span style="font-weight:700;color:#e2e8f0">${p.instrument.replace('_', '/')}</span> <span style="color:${col};font-weight:600">${p.dir}</span>`;
+      }).join(' · ');
+      if (c.pairs.length > 4) html += ` +${c.pairs.length - 4}`;
+      html += `</span></div>`;
+    }
+    html += '</div>';
+    inlineEl.innerHTML = html;
+  }
 }
 
 // ─── Momentum Continuation Signal ────────────────────────────────────────────
