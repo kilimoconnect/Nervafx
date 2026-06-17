@@ -344,28 +344,22 @@
       const totalPairs = filtered.reduce((s, c) => s + c.pairs.length, 0);
       const growingCount = filtered.reduce((s, c) => s + c.pairs.filter(p => p.growing).length, 0);
 
-      // Top 3 most continued pairs
+      // Most continued pair
       const pairCount = {};
       for (const c of filtered) {
         for (const p of c.pairs) {
-          const k = `${p.instrument}|${p.dir}`;
+          const k = `${p.instrument}_${p.dir}`;
           pairCount[k] = (pairCount[k] || 0) + 1;
         }
       }
-      const top3 = Object.entries(pairCount).sort((a, b) => b[1] - a[1]).slice(0, 3);
-      const top3Html = top3.length
-        ? top3.map(([k, count]) => {
-            const [inst, dir] = k.split('|');
-            const col = dir === 'BUY' ? '#22c55e' : '#ef4444';
-            return `<span style="font-size:12px;font-weight:700;color:#e2e8f0">${inst.replace('_','/')}</span> <span style="font-size:10px;font-weight:700;color:${col}">${dir}</span> <span style="font-size:10px;color:var(--text-dim)">${count}×</span>`;
-          }).join('<br>')
-        : '—';
+      const topPair = Object.entries(pairCount).sort((a, b) => b[1] - a[1])[0];
+      const topLabel = topPair ? `${topPair[0].replace('_', '/').replace('_BUY', ' BUY').replace('_SELL', ' SELL')} (${topPair[1]}×)` : '—';
 
       statsEl.innerHTML = `
         <div class="sc-stat"><div class="sc-stat-val">${filtered.length}</div><div class="sc-stat-label">Continuations</div></div>
         <div class="sc-stat"><div class="sc-stat-val">${totalPairs}</div><div class="sc-stat-label">Total Pairs</div></div>
         <div class="sc-stat"><div class="sc-stat-val" style="color:#22c55e">${growingCount}</div><div class="sc-stat-label">Growing Spread</div></div>
-        <div class="sc-stat" style="text-align:left"><div class="sc-stat-val" style="font-size:12px;line-height:1.6">${top3Html}</div><div class="sc-stat-label">Top 3 Most Continued</div></div>
+        <div class="sc-stat"><div class="sc-stat-val" style="font-size:13px">${topLabel}</div><div class="sc-stat-label">Most Continued</div></div>
       `;
 
       // Group by date
@@ -401,7 +395,8 @@
             </div>
             <div class="sc-pairs">`;
 
-          for (const p of c.pairs) {
+          const topPairs = c.pairs.slice(0, 3);
+          for (const p of topPairs) {
             const dirCls = p.dir.toLowerCase();
             html += `<div class="sc-pair">
               <div>
