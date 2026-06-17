@@ -284,10 +284,11 @@ async function updateM15StructureWatch() {
     results.push(entry);
   }
 
-  // Deactivate pairs no longer in signal set
+  // Deactivate pairs no longer in signal set (preserve ENTRY/APPROVED — valid trade setups persist)
   const activeInstruments = new Set(signalPairs.map(p => p.instrument));
+  const preserveStates = new Set(['ENTRY', 'APPROVED']);
   for (const w of (existingWatch || [])) {
-    if (!activeInstruments.has(w.instrument) && w.state !== 'INACTIVE') {
+    if (!activeInstruments.has(w.instrument) && w.state !== 'INACTIVE' && !preserveStates.has(w.state)) {
       console.log(`[STRUCT] ${w.instrument} removed from signal pairs — INACTIVE`);
       results.push({ ...w, state: 'INACTIVE', updated_at: new Date().toISOString() });
     }
