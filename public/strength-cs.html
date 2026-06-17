@@ -236,7 +236,7 @@
   <div class="sx-main">
     <!-- Tab switcher -->
     <div class="cs-tabs">
-      <button class="cs-tab active" data-tab="6h" onclick="switchTab('6h')">6H Strength Sum</button>
+      <button class="cs-tab active" data-tab="6h" onclick="switchTab('6h')">3H Strength Sum</button>
       <button class="cs-tab" data-tab="m15" onclick="switchTab('m15')">15M Persistence</button>
     </div>
 
@@ -472,7 +472,7 @@
     async function render6H() {
       _6hRowCache = [];
       const el = document.getElementById('cs-content');
-      el.innerHTML = `<div class="sx-card"><div class="sx-card-hd"><i data-lucide="bar-chart-3"></i> 6H Strength Sum
+      el.innerHTML = `<div class="sx-card"><div class="sx-card-hd"><i data-lucide="bar-chart-3"></i> 3H Strength Sum
         <div class="sx-ctrls">
           ${RANGE_OPTS.map(d => { const v = d === 'all' ? allDays() : d; const lbl = d === 'all' ? 'All' : d === 365 ? '1Y' : d+'D'; return `<button class="sx-btn ${_6hDays===v&&!_6hDate?'active':''}" onclick="set6HDays(${v})">${lbl}</button>`; }).join('')}
           <span class="sx-ctrl-sep"></span>
@@ -501,7 +501,7 @@
       for (const hk of hourKeys) {
         const currencies = byHour[hk];
         const sorted = currencies
-          .map(c => ({ cur: c.currency, val: parseFloat(c.raw_6h) || 0 }))
+          .map(c => ({ cur: c.currency, val: parseFloat(c.raw_3h) || 0 }))
           .sort((a, b) => b.val - a.val);
         if (sorted.length < 2) continue;
         const strongest = sorted[0];
@@ -544,7 +544,7 @@
       }
 
       let html = `<div style="font-size:11px;color:var(--text-dim);margin-bottom:14px">
-        Strongest + Weakest currency by 6H strength each hour. Both values converted to positive and summed.
+        Strongest + Weakest currency by 3H strength each hour. Both values converted to positive and summed.
         Rows at <span style="color:#22c55e;font-weight:700">≥200 pips</span> show the best 3 tradeable pairs.
       </div>`;
 
