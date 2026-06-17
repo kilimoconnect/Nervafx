@@ -4984,7 +4984,7 @@ async function _renderCs6H(modal, tz) {
     for (const hk of hourKeys) {
       const currencies = byHour[hk];
       const sorted = currencies
-        .map(c => ({ cur: c.currency, val: parseFloat(c.smooth_6h) || 0 }))
+        .map(c => ({ cur: c.currency, val: parseFloat(c.raw_6h) || 0 }))
         .sort((a, b) => b.val - a.val);
       if (sorted.length < 2) continue;
       const strongest = sorted[0];
@@ -6563,7 +6563,7 @@ function _meMarketCycleBanner(cycle, latestHourly) {
     ${engineBtn('agreement', 'Agreement')}
     ${(function() {
       const ccys = strengthData?.currencies || [];
-      const h6 = ccys.map(c => parseFloat(c.smooth_6h) || 0);
+      const h6 = ccys.map(c => parseFloat(c.raw_6h) || 0);
       let csGreen = false;
       if (h6.length >= 2) {
         const sum = Math.abs(Math.max(...h6)) + Math.abs(Math.min(...h6));

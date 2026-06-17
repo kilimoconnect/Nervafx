@@ -21,7 +21,7 @@ module.exports = async function handler(req, res) {
     const tfMap = { '12h': 'smooth_12h', '6h': 'smooth_6h', '4h': 'smooth_4h', '1d': 'smooth_1d' };
     const field = tfMap[tf] || 'smooth_3h';
     const selectFields = multi
-      ? 'time, currency, smooth_3h, smooth_4h, smooth_6h, smooth_12h, smooth_1d'
+      ? 'time, currency, smooth_3h, smooth_4h, smooth_6h, smooth_12h, smooth_1d, raw_3h, raw_6h, raw_12h'
       : `time, currency, ${field}`;
     const sb    = getClient();
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();

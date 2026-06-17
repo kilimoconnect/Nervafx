@@ -513,7 +513,7 @@
       for (const hk of hourKeys) {
         const currencies = byHour[hk];
         const sorted = currencies
-          .map(c => ({ cur: c.currency, val: parseFloat(c.smooth_6h) || 0 }))
+          .map(c => ({ cur: c.currency, val: parseFloat(c.raw_6h) || 0 }))
           .sort((a, b) => b.val - a.val);
         if (sorted.length < 2) continue;
         const strongest = sorted[0];

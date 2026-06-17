@@ -153,7 +153,7 @@ async function calculateEnergyDirection() {
   // ── 2. Fetch latest currency strength (3H + 6H + 12H) ──────────────────────
   const { data: csRows, error: csErr } = await supabase
     .from('currency_strength')
-    .select('currency, smooth_3h, smooth_6h, smooth_12h, time')
+    .select('currency, smooth_3h, smooth_6h, smooth_12h, raw_6h, time')
     .order('time', { ascending: false })
     .limit(8);
 
@@ -172,13 +172,14 @@ async function calculateEnergyDirection() {
       smooth_3h: parseFloat(r.smooth_3h) || 0,
       smooth_6h: parseFloat(r.smooth_6h) || 0,
       smooth_12h: parseFloat(r.smooth_12h) || 0,
+      raw_6h: parseFloat(r.raw_6h) || 0,
     };
   }
 
-  // ── 2b. Direction trigger: 6H currency strength sum ≥ 30 pips ─────────────
+  // ── 2b. Direction trigger: 6H currency strength sum ≥ 40 pips ─────────────
   const h6Values = CURRENCIES
     .filter(ccy => ccyMap[ccy])
-    .map(ccy => ccyMap[ccy].smooth_6h);
+    .map(ccy => ccyMap[ccy].raw_6h);
 
   let triggerBar = null;
   if (h6Values.length >= 2) {

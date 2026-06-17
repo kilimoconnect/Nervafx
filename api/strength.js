@@ -34,7 +34,7 @@ module.exports = async function handler(req, res) {
     if (!t) return res.json({ currencies: [] });
     const { data, error } = await getClient()
       .from('currency_strength')
-      .select('currency, normalized_3h, normalized_4h, normalized_6h, normalized_12h, normalized_1d, smooth_3h, smooth_4h, smooth_6h, smooth_12h, smooth_1d')
+      .select('currency, normalized_3h, normalized_4h, normalized_6h, normalized_12h, normalized_1d, smooth_3h, smooth_4h, smooth_6h, smooth_12h, smooth_1d, raw_3h, raw_6h, raw_12h')
       .eq('time', t);
     if (error) throw error;
 
