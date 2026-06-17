@@ -180,23 +180,23 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // Live-check: for the current session, verify directions against the latest hour.
+    // Live-check: for the current session, verify directions against the latest M15 close.
     // If a pair's direction flipped mid-session, drop the stale continuation.
     const nowH = new Date().getUTCHours();
     const currSess = getSession(nowH);
     if (currSess && continuations.length) {
-      const hourKeys = Object.keys(byHour).sort();
-      const latestHk = hourKeys[hourKeys.length - 1];
-      if (latestHk && byHour[latestHk]) {
-        const latestRows = byHour[latestHk];
-        const liveCcyMap = {};
-        for (const r of latestRows) {
-          if (!liveCcyMap[r.currency]) liveCcyMap[r.currency] = parseFloat(r.smooth_6h) || 0;
-        }
+      const { data: m15Rows } = await sb
+        .from('m15_currency_strength')
+        .select('time, values')
+        .order('time', { ascending: false })
+        .limit(1);
+
+      const m15Latest = m15Rows?.[0]?.values;
+      if (m15Latest) {
         const liveDirs = {};
         for (const instrument of VALID_PAIRS) {
           const [base, quote] = instrument.split('_');
-          liveDirs[instrument] = (liveCcyMap[base] || 0) >= (liveCcyMap[quote] || 0) ? 'BUY' : 'SELL';
+          liveDirs[instrument] = (m15Latest[base] || 0) >= (m15Latest[quote] || 0) ? 'BUY' : 'SELL';
         }
 
         for (const c of continuations) {
