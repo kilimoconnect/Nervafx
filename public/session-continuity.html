@@ -288,6 +288,17 @@
 
     function filterDate(d) {
       _dateFilter = d;
+      if (d) {
+        _sessFilter = 'all';
+        _flowFilter = 'all';
+        _dirFilter = 'all';
+        _pairFilter = 'all';
+        document.querySelectorAll('[data-filter]').forEach(b => b.classList.toggle('active', b.dataset.filter === 'all'));
+        document.querySelectorAll('[data-flow]').forEach(b => b.classList.toggle('active', b.dataset.flow === 'all'));
+        document.querySelectorAll('[data-dir]').forEach(b => b.classList.toggle('active', b.dataset.dir === 'all'));
+        const sel = document.getElementById('sc-pair-filter');
+        if (sel) sel.value = 'all';
+      }
       render();
     }
 
