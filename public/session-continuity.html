@@ -226,15 +226,14 @@
 
     function pips(v) { return (v * 10000).toFixed(1); }
 
-    async function load(days) {
+    async function load(days, silent) {
       _currentDays = days;
-      // Update button state
       document.querySelectorAll('[data-days]').forEach(b => {
         b.classList.toggle('active', parseInt(b.dataset.days) === days);
       });
 
       const body = document.getElementById('sc-body');
-      body.innerHTML = '<div class="sc-loading"><span class="spinner"></span> Loading 6H session data…</div>';
+      if (!silent) body.innerHTML = '<div class="sc-loading"><span class="spinner"></span> Loading 6H session data…</div>';
 
       const token = localStorage.getItem('nfx_token');
       try {
@@ -243,7 +242,7 @@
         });
         if (!r.ok) {
           const e = await r.json().catch(() => ({}));
-          body.innerHTML = `<div class="sc-loading" style="color:#ef4444">${e.error || 'Failed to load'}</div>`;
+          if (!silent) body.innerHTML = `<div class="sc-loading" style="color:#ef4444">${e.error || 'Failed to load'}</div>`;
           return;
         }
         const json = await r.json();
@@ -251,7 +250,7 @@
         buildPairDropdown(_data);
         render();
       } catch (e) {
-        body.innerHTML = `<div class="sc-loading" style="color:#ef4444">${e.message}</div>`;
+        if (!silent) body.innerHTML = `<div class="sc-loading" style="color:#ef4444">${e.message}</div>`;
       }
     }
 
@@ -453,6 +452,7 @@
     // Init
     if (typeof lucide !== 'undefined') lucide.createIcons();
     load(7);
+    setInterval(() => load(_currentDays, true), 60000);
   </script>
 </body>
 </html>
