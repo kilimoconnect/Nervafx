@@ -285,8 +285,6 @@
     let _6hDate = '';
     let _m15Date = '';
     let _6hRowCache = [];
-    let _6hPairIndex = {};
-    let _6hSortedKeys = [];
     let _m15RowCache = [];
     const _cache = {};
     const DATA_START = '2025-05-20';
@@ -406,24 +404,14 @@
       const allPairs = buildAllPairs(sorted);
       const isM15 = type === 'm15';
 
-      if (isM15) {
-        const dirs = await fetchM15CandleDirs(_m15Days);
-        for (const p of allPairs) {
-          p.prevCount = countPrevM15CandlesNow(p.pair, p.dir, dirs);
-        }
-      } else {
-        // Count how many of the previous 5 hours this pair also qualified
-        const hk = time.slice(0, 13);
-        const idx = _6hSortedKeys.indexOf(hk);
-        const prevKeys = _6hSortedKeys.slice(Math.max(0, idx - 5), idx);
-        for (const p of allPairs) {
-          const key = p.pair + ':' + p.dir;
-          let count = 0;
-          for (const pk of prevKeys) {
-            if (_6hPairIndex[pk]?.has(key)) count++;
-          }
-          p.prevCount = count;
-        }
+      const dirs = isM15
+        ? await fetchM15CandleDirs(_m15Days)
+        : await fetchCandleDirs(_6hDays);
+
+      for (const p of allPairs) {
+        p.prevCount = isM15
+          ? countPrevM15CandlesNow(p.pair, p.dir, dirs)
+          : countPrevCandlesNow(p.pair, p.dir, dirs);
       }
       allPairs.sort((a, b) => (b.prevCount ?? -1) - (a.prevCount ?? -1) || b.spread - a.spread);
 
@@ -527,36 +515,16 @@
         hourResults.push({ time, strongest, weakest, sum, sorted, pairs });
       }
 
-      // Build index: for each hour, the full set of qualifying pair+dir combos
-      const hourPairIndex = {};
+      const candleDirs = await fetchCandleDirs(_6hDays);
       for (const h of hourResults) {
         const hk = h.time.slice(0, 13);
-        const pairSet = new Set();
         if (h.pairs) {
-          for (const p of h.pairs) pairSet.add(p.pair + ':' + p.dir);
-        }
-        hourPairIndex[hk] = pairSet;
-      }
-      const sortedHourKeys = Object.keys(hourPairIndex).sort();
-      _6hPairIndex = hourPairIndex;
-      _6hSortedKeys = sortedHourKeys;
-
-      for (let i = 0; i < hourResults.length; i++) {
-        const h = hourResults[i];
-        if (!h.pairs) continue;
-        const hk = h.time.slice(0, 13);
-        const idx = sortedHourKeys.indexOf(hk);
-        const prevKeys = sortedHourKeys.slice(Math.max(0, idx - 5), idx);
-        for (const p of h.pairs) {
-          const key = p.pair + ':' + p.dir;
-          let count = 0;
-          for (const pk of prevKeys) {
-            if (hourPairIndex[pk].has(key)) count++;
+          for (const p of h.pairs) {
+            p.prevCount = countPrevCandles(p.pair, p.dir, hk, candleDirs);
           }
-          p.prevCount = count;
+          h.pairs.sort((a, b) => (b.prevCount ?? -1) - (a.prevCount ?? -1) || b.spread - a.spread);
+          h.pairs = h.pairs.slice(0, 3);
         }
-        h.pairs.sort((a, b) => (b.prevCount ?? -1) - (a.prevCount ?? -1) || b.spread - a.spread);
-        h.pairs = h.pairs.slice(0, 3);
       }
 
       let all = hourResults.reverse();
