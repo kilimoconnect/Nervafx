@@ -2926,7 +2926,7 @@ async function renderEnergySignals(data) {
 
   if (statusEl) {
     if (thresholdMet) {
-      statusEl.innerHTML = `<span style="color:#22c55e;font-weight:700">ACTIVE</span> — 2H strength sum ≥ 30p, directions confirmed.`;
+      statusEl.innerHTML = `<span style="color:#22c55e;font-weight:700">ACTIVE</span> — 2H strength momentum rising, directions confirmed.`;
     } else if (energy >= 25) {
       statusEl.innerHTML = `<span style="color:#f59e0b;font-weight:700">BUILDING</span> — 6H sum ${Math.round(energy)}p, approaching 40p.`;
     } else {
@@ -4944,40 +4944,42 @@ async function _renderCs6H(modal, tz) {
       const weakest = sorted[sorted.length - 1];
       const sum = Math.abs(strongest.val) + Math.abs(weakest.val);
       const time = hk + ':00:00Z';
-      // Top 3 pairs when sum ≥ 40 pips
-      let pairs = null;
-      if (sum >= 0.003) {
-        const top3 = sorted.slice(0, 3);
-        const bot3 = sorted.slice(-3).reverse();
-        const candidates = [];
-        for (const s of top3) {
-          for (const w of bot3) {
-            if (s.cur === w.cur) continue;
-            const pn = `${s.cur}_${w.cur}`, rn = `${w.cur}_${s.cur}`;
-            if (CS_PAIRS.includes(pn)) candidates.push({ pair: pn, dir: 'BUY', strong: s.cur, weak: w.cur, spread: Math.abs(s.val) + Math.abs(w.val) });
-            else if (CS_PAIRS.includes(rn)) candidates.push({ pair: rn, dir: 'SELL', strong: s.cur, weak: w.cur, spread: Math.abs(s.val) + Math.abs(w.val) });
-          }
+      const top3 = sorted.slice(0, 3);
+      const bot3 = sorted.slice(-3).reverse();
+      const candidates = [];
+      for (const s of top3) {
+        for (const w of bot3) {
+          if (s.cur === w.cur) continue;
+          const pn = `${s.cur}_${w.cur}`, rn = `${w.cur}_${s.cur}`;
+          if (CS_PAIRS.includes(pn)) candidates.push({ pair: pn, dir: 'BUY', strong: s.cur, weak: w.cur, spread: Math.abs(s.val) + Math.abs(w.val) });
+          else if (CS_PAIRS.includes(rn)) candidates.push({ pair: rn, dir: 'SELL', strong: s.cur, weak: w.cur, spread: Math.abs(s.val) + Math.abs(w.val) });
         }
-        candidates.sort((a, b) => b.spread - a.spread);
-        pairs = candidates.slice(0, 3);
       }
+      candidates.sort((a, b) => b.spread - a.spread);
+      const pairs = candidates.slice(0, 3);
       hourResults.push({ time, strongest, weakest, sum, sorted, pairs });
+    }
+
+    // Mark momentum: 3 consecutive hours of increasing sum, last candle >= 15 pips
+    for (let i = 2; i < hourResults.length; i++) {
+      if (hourResults[i].sum > hourResults[i - 1].sum && hourResults[i - 1].sum > hourResults[i - 2].sum && hourResults[i].sum >= 15) {
+        hourResults[i].momentum = true;
+      }
     }
 
     const recent = hourResults.reverse();
     const pips = v => (v * 10000).toFixed(1);
-    const CS_THRESHOLD = 0.003; // 30 pips
 
-    let html = `<div style="font-size:10px;color:var(--text-dim);margin-bottom:10px">Strongest + Weakest by 2H strength (absolute values summed). Rows highlighted at ≥30 pips with top 3 pairs.</div>`;
+    let html = `<div style="font-size:10px;color:var(--text-dim);margin-bottom:10px">Strongest + Weakest by 2H strength (absolute values summed). Rows with <span style="color:#22c55e;font-weight:700">↑3</span> = 3 consecutive hours of increasing pips.</div>`;
     html += '<div class="cs-rows" style="max-height:60vh;overflow-y:auto">';
     for (const h of recent) {
       const t = new Date(h.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: tz });
       const d = new Date(h.time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', timeZone: tz });
       const barWidth = Math.min(100, (h.sum / 0.005) * 100);
-      const meetsThreshold = h.sum >= CS_THRESHOLD;
-      const sumColor = meetsThreshold ? '#22c55e' : h.sum >= 0.0015 ? '#f59e0b' : '#64748b';
-      const rowBg = meetsThreshold ? 'rgba(34,197,94,0.08)' : 'rgba(255,255,255,0.03)';
-      const rowBorder = meetsThreshold ? 'rgba(34,197,94,0.2)' : 'rgba(255,255,255,0.05)';
+      const hasMomentum = !!h.momentum;
+      const sumColor = hasMomentum ? '#22c55e' : '#64748b';
+      const rowBg = hasMomentum ? 'rgba(34,197,94,0.08)' : 'rgba(255,255,255,0.03)';
+      const rowBorder = hasMomentum ? 'rgba(34,197,94,0.2)' : 'rgba(255,255,255,0.05)';
 
       html += `<div class="cs-row" style="background:${rowBg};border-color:${rowBorder};flex-wrap:wrap">
         <div class="cs-row-time">${t}<span class="cs-row-date">${d}</span></div>
@@ -4988,10 +4990,10 @@ async function _renderCs6H(modal, tz) {
         <div class="cs-row-bar-wrap">
           <div class="cs-row-bar" style="width:${barWidth}%;background:${sumColor}"></div>
         </div>
-        <div class="cs-row-sum" style="color:${sumColor}">${pips(h.sum)}${meetsThreshold ? '<span style="font-size:8px;display:block;color:#22c55e">≥30</span>' : ''}</div>`;
+        <div class="cs-row-sum" style="color:${sumColor}">${pips(h.sum)}${hasMomentum ? '<span style="font-size:8px;display:block;color:#22c55e">↑3</span>' : ''}</div>`;
 
-      // Show top 3 pairs when threshold met
-      if (meetsThreshold && h.pairs?.length) {
+      // Show top 3 pairs when momentum detected
+      if (hasMomentum && h.pairs?.length) {
         html += `<div style="width:100%;display:flex;gap:6px;margin-top:6px;padding-top:6px;border-top:1px solid rgba(34,197,94,0.12)">`;
         for (const p of h.pairs) {
           const dc = p.dir === 'BUY' ? '#22c55e' : '#ef4444';
@@ -6515,14 +6517,7 @@ function _meMarketCycleBanner(cycle, latestHourly) {
     ${engineBtn('breadth', 'Breadth')}
     ${engineBtn('agreement', 'Agreement')}
     ${(function() {
-      const ccys = strengthData?.currencies || [];
-      const h6 = ccys.map(c => parseFloat(c.smooth_2h) || 0);
-      let csGreen = false;
-      if (h6.length >= 2) {
-        const sum = Math.abs(Math.max(...h6)) + Math.abs(Math.min(...h6));
-        csGreen = sum >= 0.003;
-      }
-      const st = csGreen ? ' style="background:#22c55e;color:#fff;border-color:#22c55e"' : '';
+      const st = _energySignalsCache?.threshold_met ? ' style="background:#22c55e;color:#fff;border-color:#22c55e"' : '';
       return `<button class="me-ai-toggle me-btn-cs premium-only"${st} onclick="location.href='/strength-cs.html'">CS</button>`;
     })()}
     <button class="me-ai-toggle me-btn-ai premium-only" onclick="openMeAiAnalysis()">AI Analysis</button>

@@ -42,39 +42,41 @@ module.exports = async function handler(req, res) {
       .order('trigger_energy', { ascending: false });
     if (pErr) throw pErr;
 
-    // Trigger: 6H currency strength sum ≥ 30 pips (mirrors src/energyDirection.js)
-    const CS_SUM_THRESHOLD = 0.003;
+    // Momentum trigger: 2H CS sum increasing for 3 consecutive hours (mirrors src/energyDirection.js)
     const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
 
     const { data: csRows } = await sb
       .from('currency_strength')
-      .select('currency, smooth_6h')
+      .select('currency, smooth_2h, time')
       .order('time', { ascending: false })
-      .limit(8);
+      .limit(24); // 8 currencies × 3 hours
 
-    const ccyMap = {};
-    const seen = new Set();
+    const byTime = {};
     for (const r of (csRows || [])) {
-      if (seen.has(r.currency)) continue;
-      seen.add(r.currency);
-      ccyMap[r.currency] = parseFloat(r.smooth_6h) || 0;
+      const tk = r.time;
+      if (!byTime[tk]) byTime[tk] = {};
+      if (!byTime[tk][r.currency]) {
+        byTime[tk][r.currency] = parseFloat(r.smooth_2h) || 0;
+      }
     }
+    const timeKeys = Object.keys(byTime).sort();
+    const last3 = timeKeys.slice(-3);
 
-    const h6Values = CURRENCIES.filter(c => ccyMap[c] !== undefined).map(c => ccyMap[c]);
-    let csSumPips = 0;
-    if (h6Values.length >= 2) {
-      const strongest = Math.max(...h6Values);
-      const weakest = Math.min(...h6Values);
-      csSumPips = Math.round((Math.abs(strongest) + Math.abs(weakest)) * 10000);
-    }
-    const csTrigger = csSumPips >= Math.round(CS_SUM_THRESHOLD * 10000);
+    const sums = last3.map(tk => {
+      const vals = CURRENCIES.filter(c => byTime[tk]?.[c] !== undefined).map(c => byTime[tk][c]);
+      if (vals.length < 2) return 0;
+      return Math.abs(Math.max(...vals)) + Math.abs(Math.min(...vals));
+    });
+
+    const hasMomentum = sums.length === 3 && sums[2] > sums[1] && sums[1] > sums[0] && sums[2] >= 0.0015;
+    const csSumPips = Math.round((sums[sums.length - 1] || 0) * 10000);
 
     const hasActiveDirections = (currencies || []).some(c => c.active && c.direction !== 'NEUTRAL');
     const hasActivePairs = (pairs || []).some(p => p.active);
-    const thresholdMet = csTrigger || hasActiveDirections || hasActivePairs;
+    const thresholdMet = hasMomentum || hasActiveDirections || hasActivePairs;
 
     let displayEnergy;
-    if (csTrigger) {
+    if (hasMomentum) {
       displayEnergy = csSumPips;
     } else if (hasActiveDirections) {
       const storedTrigger = (currencies || []).find(c => c.energy_at_trigger);
@@ -90,7 +92,7 @@ module.exports = async function handler(req, res) {
       triggerEnergy: csSumPips,
       peakBarTime: null,
       peakBarSession: null,
-      thresholdMet,
+      threshold_met: thresholdMet,
     });
   } catch (e) {
     console.error('[ENERGY-SIGNALS-API]', e.message);

@@ -415,11 +415,15 @@
         const weakest = sorted[sorted.length - 1];
         const sum = Math.abs(strongest.val) + Math.abs(weakest.val);
         const time = hk + ':00:00Z';
-        let pairs = null;
-        if (sum >= 0.003) {
-          pairs = buildPairs(sorted.slice(0, 3), sorted.slice(-3).reverse());
-        }
+        const pairs = buildPairs(sorted.slice(0, 3), sorted.slice(-3).reverse());
         hourResults.push({ time, strongest, weakest, sum, sorted, pairs });
+      }
+
+      // Mark momentum: 3 consecutive hours of increasing sum, last candle >= 15 pips
+      for (let i = 2; i < hourResults.length; i++) {
+        if (hourResults[i].sum > hourResults[i - 1].sum && hourResults[i - 1].sum > hourResults[i - 2].sum && hourResults[i].sum >= 15) {
+          hourResults[i].momentum = true;
+        }
       }
 
       for (const h of hourResults) {
@@ -436,7 +440,6 @@
           return ld === _6hDate;
         });
       }
-      const CS_THRESHOLD = 0.003;
 
       // Group by local date
       const byDate = {};
@@ -447,25 +450,25 @@
 
       let html = `<div style="font-size:11px;color:var(--text-dim);margin-bottom:14px">
         Strongest + Weakest currency by 2H strength each hour. Both values converted to positive and summed.
-        Rows at <span style="color:#22c55e;font-weight:700">≥30 pips</span> show the best 3 tradeable pairs.
+        Rows with <span style="color:#22c55e;font-weight:700">↑3</span> = pips increasing for 3 consecutive hours (momentum).
       </div>`;
 
       for (const [dateLabel, hours] of Object.entries(byDate)) {
-        const thresholdCount = hours.filter(h => h.sum >= CS_THRESHOLD).length;
+        const momCount = hours.filter(h => h.momentum).length;
         html += `<div style="margin-bottom:16px">`;
         html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
           <span style="font-size:12px;font-weight:700;color:#e2e8f0">${dateLabel}</span>
-          ${thresholdCount ? `<span style="font-size:10px;font-weight:600;color:#22c55e;background:rgba(34,197,94,0.1);padding:2px 8px;border-radius:4px">${thresholdCount} hour${thresholdCount>1?'s':''} ≥30</span>` : ''}
+          ${momCount ? `<span style="font-size:10px;font-weight:600;color:#22c55e;background:rgba(34,197,94,0.1);padding:2px 8px;border-radius:4px">${momCount} momentum</span>` : ''}
         </div>`;
         html += '<div class="cs-rows">';
 
         for (const h of hours) {
           const t = fmtTime(h.time);
           const barWidth = Math.min(100, (h.sum / 0.006) * 100);
-          const meetsThreshold = h.sum >= CS_THRESHOLD;
-          const sumColor = meetsThreshold ? '#22c55e' : h.sum >= 0.0015 ? '#f59e0b' : '#64748b';
+          const hasMomentum = !!h.momentum;
+          const sumColor = hasMomentum ? '#22c55e' : '#64748b';
 
-          html += `<div class="cs-row${meetsThreshold ? ' highlight' : ''}" data-6h-idx="${_6hRowCache.length}">
+          html += `<div class="cs-row${hasMomentum ? ' highlight' : ''}" data-6h-idx="${_6hRowCache.length}">
             <div class="cs-row-time">${t}</div>
             <div class="cs-row-ccys">
               <span class="cs-strong">${h.strongest.cur} <span class="cs-val">+${pips(Math.abs(h.strongest.val))}</span></span>
@@ -474,9 +477,9 @@
             <div class="cs-row-bar-wrap">
               <div class="cs-row-bar" style="width:${barWidth}%;background:${sumColor}"></div>
             </div>
-            <div class="cs-row-sum" style="color:${sumColor}">${pips(h.sum)}${meetsThreshold ? '<span style="font-size:8px;display:block;color:#22c55e">≥30</span>' : ''}</div>`;
+            <div class="cs-row-sum" style="color:${sumColor}">${pips(h.sum)}${hasMomentum ? '<span style="font-size:8px;display:block;color:#22c55e">↑3</span>' : ''}</div>`;
 
-          if (meetsThreshold && h.pairs?.length) {
+          if (hasMomentum && h.pairs?.length) {
             html += `<div class="cs-pairs-row">${h.pairs.map(p => pairCardHTML(p, 'row')).join('')}</div>`;
           }
           html += `</div>`;
@@ -536,25 +539,28 @@
       }
 
       // Build pairs + compute sum per merged row
-      const M15_THRESHOLD = 0.003;
       const merged = Object.values(mergedMap);
       for (const m of merged) {
         const sVal = Math.abs((m.vals.find(v => v.cur === (m.strongCcy || m.vals[0]?.cur)) || {}).val || 0);
         const wVal = Math.abs((m.vals.find(v => v.cur === (m.weakCcy || m.vals[m.vals.length - 1]?.cur)) || {}).val || 0);
         m.sum = sVal + wVal;
-        m.meetsThreshold = m.sum >= M15_THRESHOLD;
-
-        if (m.meetsThreshold) {
-          const top3 = m.vals.slice(0, 3);
-          const bot3 = m.vals.slice(-3).reverse();
-          m.pairs = buildPairs(top3, bot3);
-        }
+        const top3 = m.vals.slice(0, 3);
+        const bot3 = m.vals.slice(-3).reverse();
+        m.pairs = buildPairs(top3, bot3);
       }
 
       for (const m of merged) {
         if (m.pairs) {
           m.pairs.sort((a, b) => b.spread - a.spread);
           m.pairs = m.pairs.slice(0, 3);
+        }
+      }
+
+      // Mark momentum: 3 consecutive intervals of increasing sum, last candle >= 15 pips
+      merged.sort((a, b) => a.time.localeCompare(b.time));
+      for (let i = 2; i < merged.length; i++) {
+        if (merged[i].sum > merged[i - 1].sum && merged[i - 1].sum > merged[i - 2].sum && merged[i].sum >= 15) {
+          merged[i].momentum = true;
         }
       }
 
@@ -573,7 +579,7 @@
 
       html += `<div style="font-size:11px;color:var(--text-dim);margin-bottom:14px">
         Strongest + Weakest currency by M15 strength each interval. Both values converted to positive and summed.
-        Rows at <span style="color:#22c55e;font-weight:700">≥30 pips</span> show the best 3 tradeable pairs.
+        Rows with <span style="color:#22c55e;font-weight:700">↑3</span> = pips increasing for 3 consecutive intervals (momentum).
       </div>`;
 
       // Group by local date
@@ -584,22 +590,22 @@
       }
 
       for (const [dateLabel, items] of Object.entries(byDate)) {
-        const thresholdCount = items.filter(m => m.meetsThreshold).length;
-        const maxCount = Math.max(...items.map(m => Math.max(m.strongCount || 0, m.weakCount || 0)));
+        const momCount = items.filter(m => m.momentum).length;
         html += `<div style="margin-bottom:16px">`;
         html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
           <span style="font-size:12px;font-weight:700;color:#e2e8f0">${dateLabel}</span>
           <span style="font-size:10px;font-weight:600;color:var(--text-dim)">${items.length} intervals</span>
-          ${thresholdCount ? `<span style="font-size:10px;font-weight:600;color:#22c55e;background:rgba(34,197,94,0.1);padding:2px 8px;border-radius:4px">${thresholdCount} interval${thresholdCount>1?'s':''} ≥30</span>` : ''}
+          ${momCount ? `<span style="font-size:10px;font-weight:600;color:#22c55e;background:rgba(34,197,94,0.1);padding:2px 8px;border-radius:4px">${momCount} momentum</span>` : ''}
         </div>`;
         html += '<div class="cs-rows">';
 
         for (const m of items) {
           const t = fmtTime(m.time);
-          const barWidth = Math.min(100, (m.sum / 0.003) * 100);
-          const sumColor = m.meetsThreshold ? '#22c55e' : m.sum >= 0.0008 ? '#f59e0b' : '#64748b';
+          const barWidth = Math.min(100, (m.sum / 0.006) * 100);
+          const hasMomentum = !!m.momentum;
+          const sumColor = hasMomentum ? '#22c55e' : '#64748b';
 
-          html += `<div class="cs-row${m.meetsThreshold ? ' highlight' : ''}" data-m15-idx="${_m15RowCache.length}">
+          html += `<div class="cs-row${hasMomentum ? ' highlight' : ''}" data-m15-idx="${_m15RowCache.length}">
             <div class="cs-row-time">${t}</div>
             <div class="cs-row-ccys">
               <span class="cs-strong">${m.strongCcy} <span class="cs-val">+${pips(Math.abs((m.vals.find(v=>v.cur===m.strongCcy)||{}).val||0))}</span></span>
@@ -608,9 +614,9 @@
             <div class="cs-row-bar-wrap">
               <div class="cs-row-bar" style="width:${barWidth}%;background:${sumColor}"></div>
             </div>
-            <div class="cs-row-sum" style="color:${sumColor}">${pips(m.sum)}${m.meetsThreshold ? '<span style="font-size:8px;display:block;color:#22c55e">≥30</span>' : ''}</div>`;
+            <div class="cs-row-sum" style="color:${sumColor}">${pips(m.sum)}${hasMomentum ? '<span style="font-size:8px;display:block;color:#22c55e">↑3</span>' : ''}</div>`;
 
-          if (m.meetsThreshold && m.pairs?.length) {
+          if (hasMomentum && m.pairs?.length) {
             html += `<div class="cs-pairs-row">${m.pairs.map(p => pairCardHTML(p, 'row')).join('')}</div>`;
           }
           html += `</div>`;

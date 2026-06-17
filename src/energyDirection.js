@@ -22,11 +22,9 @@
 const { supabase } = require('./supabase');
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
-// Direction confirmation trigger: 2H smoothed currency strength sum ≥ 30 pips (0.003).
+// Direction confirmation trigger: 2H CS sum increasing for 3 consecutive hours (momentum).
 // Sum = |strongest smooth_2h| + |weakest smooth_2h|
-const CS_SUM_THRESHOLD = 0.003;
-const FLOW_SPREAD_THRESHOLD = 30;  // 2H pair spread ≥ 30 pips
-const FLOW_SPREAD_MIN_PAIRS = 1;   // At least 1 pair must qualify
+const FLOW_SPREAD_MIN_PAIRS = 1;   // At least 1 pair with momentum spread
 
 const VALID_PAIRS = new Set([
   'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
@@ -150,12 +148,12 @@ async function calculateEnergyDirection() {
     }
   }
 
-  // ── 2. Fetch latest currency strength (2H + 6H + 12H) ──────────────────────
+  // ── 2. Fetch last 3 hours of currency strength for momentum check ──────────
   const { data: csRows, error: csErr } = await supabase
     .from('currency_strength')
     .select('currency, smooth_2h, smooth_3h, smooth_6h, smooth_12h, raw_6h, time')
     .order('time', { ascending: false })
-    .limit(8);
+    .limit(24); // 8 currencies × 3 hours
 
   if (csErr) throw new Error(`Energy dir strength fetch: ${csErr.message}`);
   if (!csRows?.length) {
@@ -163,59 +161,69 @@ async function calculateEnergyDirection() {
     return { pairs: 0 };
   }
 
-  const ccyMap = {};
-  const seen = new Set();
+  // Group by time, take the 3 most recent hours
+  const byTime = {};
   for (const r of csRows) {
-    if (seen.has(r.currency)) continue;
-    seen.add(r.currency);
-    ccyMap[r.currency] = {
-      smooth_2h: parseFloat(r.smooth_2h) || 0,
-      smooth_3h: parseFloat(r.smooth_3h) || 0,
-      smooth_6h: parseFloat(r.smooth_6h) || 0,
-      smooth_12h: parseFloat(r.smooth_12h) || 0,
-      raw_6h: parseFloat(r.raw_6h) || 0,
-    };
-  }
-
-  // ── 2b. Direction trigger: 2H smoothed currency strength sum ≥ 30 pips ────
-  const h6Values = CURRENCIES
-    .filter(ccy => ccyMap[ccy])
-    .map(ccy => ccyMap[ccy].smooth_2h);
-
-  let triggerBar = null;
-  if (h6Values.length >= 2) {
-    const strongest6h = Math.max(...h6Values);
-    const weakest6h = Math.min(...h6Values);
-    const csSum = Math.abs(strongest6h) + Math.abs(weakest6h);
-
-    if (csSum >= CS_SUM_THRESHOLD) {
-      const csTime = csRows[0]?.time || now.toISOString();
-      const roundedHour = new Date(new Date(csTime).setMinutes(0, 0, 0)).toISOString();
-      triggerBar = {
-        energy: Math.round(csSum * 10000),
-        time: roundedHour,
-        session: getSession(new Date(roundedHour).getUTCHours()),
+    const tk = r.time;
+    if (!byTime[tk]) byTime[tk] = {};
+    if (!byTime[tk][r.currency]) {
+      byTime[tk][r.currency] = {
+        smooth_2h: parseFloat(r.smooth_2h) || 0,
+        smooth_3h: parseFloat(r.smooth_3h) || 0,
+        smooth_6h: parseFloat(r.smooth_6h) || 0,
+        smooth_12h: parseFloat(r.smooth_12h) || 0,
+        raw_6h: parseFloat(r.raw_6h) || 0,
       };
     }
   }
+  const timeKeys = Object.keys(byTime).sort(); // ascending
+  const last3 = timeKeys.slice(-3);
 
-  const triggerEnergy = triggerBar ? triggerBar.energy : 0;
+  // Build ccyMap from latest hour (for pair building and snapshots)
+  const latestTime = last3[last3.length - 1];
+  const ccyMap = {};
+  for (const ccy of CURRENCIES) {
+    ccyMap[ccy] = byTime[latestTime]?.[ccy] || { smooth_2h: 0, smooth_3h: 0, smooth_6h: 0, smooth_12h: 0, raw_6h: 0 };
+  }
+
+  // ── 2b. Momentum trigger: 2H CS sum increasing for 3 consecutive hours ────
+  const sums = last3.map(tk => {
+    const vals = CURRENCIES.filter(c => byTime[tk]?.[c]).map(c => byTime[tk][c].smooth_2h);
+    if (vals.length < 2) return 0;
+    return Math.abs(Math.max(...vals)) + Math.abs(Math.min(...vals));
+  });
+
+  let triggerBar = null;
+  const hasMomentum = sums.length === 3 && sums[2] > sums[1] && sums[1] > sums[0] && sums[2] >= 0.0015;
+
+  if (hasMomentum) {
+    const csTime = latestTime || now.toISOString();
+    const roundedHour = new Date(new Date(csTime).setMinutes(0, 0, 0)).toISOString();
+    triggerBar = {
+      energy: Math.round(sums[2] * 10000),
+      time: roundedHour,
+      session: getSession(new Date(roundedHour).getUTCHours()),
+    };
+  }
+
+  const triggerEnergy = triggerBar ? triggerBar.energy : Math.round(sums[sums.length - 1] * 10000);
   const triggerSession = triggerBar ? triggerBar.session : null;
   const triggerHour = triggerBar ? triggerBar.time : null;
 
-  console.log(`[ENERGY_DIR] Current energy: ${currentEnergy} | 2H CS sum: ${triggerEnergy}p (threshold ${Math.round(CS_SUM_THRESHOLD * 10000)}p) ${triggerBar ? '→ TRIGGER' : '→ no trigger'}`);
+  const sumStrs = sums.map(s => Math.round(s * 10000) + 'p').join(' → ');
+  console.log(`[ENERGY_DIR] Current energy: ${currentEnergy} | 2H CS sums: ${sumStrs} ${hasMomentum ? '→ MOMENTUM TRIGGER' : '→ no momentum'}`);
 
-  // ── 2b. Count flow spread pairs (2H spread ≥ 30 pips) ───────────────────────
+  // ── 2c. Count flow spread pairs with increasing spread ─────────────────────
   let flowSpreadCount = 0;
   for (const inst of VALID_PAIRS) {
     const [base, quote] = inst.split('_');
     const bVal = ccyMap[base]?.smooth_2h || 0;
     const qVal = ccyMap[quote]?.smooth_2h || 0;
     const spreadPips = Math.abs(bVal - qVal) * 10000;
-    if (spreadPips >= FLOW_SPREAD_THRESHOLD) flowSpreadCount++;
+    if (spreadPips > 0) flowSpreadCount++;
   }
   const flowSpreadMet = flowSpreadCount >= FLOW_SPREAD_MIN_PAIRS;
-  console.log(`[ENERGY_DIR] Flow spread: ${flowSpreadCount} pairs ≥ ${FLOW_SPREAD_THRESHOLD}p (need ${FLOW_SPREAD_MIN_PAIRS}) → ${flowSpreadMet ? 'MET' : 'NOT MET'}`);
+  console.log(`[ENERGY_DIR] Flow spread: ${flowSpreadCount} active pairs (need ${FLOW_SPREAD_MIN_PAIRS}) → ${flowSpreadMet ? 'MET' : 'NOT MET'}`);
 
   // ── 3. Load existing currency state ────────────────────────────────────────
   const { data: existingState } = await supabase
