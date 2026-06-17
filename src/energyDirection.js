@@ -22,9 +22,9 @@
 const { supabase } = require('./supabase');
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
-// Direction confirmation trigger: 6H currency strength sum ≥ 30 pips (0.003 raw).
+// Direction confirmation trigger: 6H currency strength sum ≥ 40 pips (0.004 raw).
 // Sum = |strongest smooth_6h| + |weakest smooth_6h|
-const CS_SUM_THRESHOLD = 0.003;
+const CS_SUM_THRESHOLD = 0.004;
 const FLOW_SPREAD_THRESHOLD = 20;  // 3H pair spread ≥ 20 pips
 const FLOW_SPREAD_MIN_PAIRS = 1;   // At least 1 pair must qualify
 
