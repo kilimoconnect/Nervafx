@@ -6747,9 +6747,10 @@ function renderSessionContinuityNotif() {
   const inlineEl = document.getElementById('sc-notif');
 
   const items = _sessionContinuityCache || [];
-  const today = new Date().toISOString().slice(0, 10);
-  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-  const recent = items.filter(c => c.date === today || c.date === yesterday);
+  const h = new Date().getUTCHours();
+  const currSess = (h >= 23 || h < 7) ? 'ASIA' : (h >= 7 && h < 13) ? 'LONDON' : (h >= 13 && h < 21) ? 'NEW_YORK' : null;
+  if (!currSess) { if (bar) { bar.style.display = 'none'; _updateAlertBadge(); } if (inlineEl) inlineEl.innerHTML = ''; return; }
+  const recent = items.filter(c => c.toSession === currSess);
 
   // ── Header notification bar ──
   if (bar && chipsEl) {
