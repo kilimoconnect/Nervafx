@@ -6758,17 +6758,19 @@ function renderSessionContinuityNotif() {
       bar.style.display = 'none';
     } else {
       const SESS_SHORT = { ASIA: 'Asia', LONDON: 'Ldn', NEW_YORK: 'NY' };
-      let chips = '';
-      for (const c of recent.slice(0, 3)) {
+      const allChips = [];
+      for (const c of recent) {
         const flow = `${SESS_SHORT[c.fromSession] || c.fromSession}→${SESS_SHORT[c.toSession] || c.toSession}`;
-        for (const p of c.pairs.slice(0, 3)) {
-          const dirCls = p.dir === 'BUY' ? 'chip-buy' : 'chip-sell';
-          chips += `<span class="sc-bar-chip">
-            <span class="chip-pair">${p.instrument.replace('_', '/')}</span>
-            <span class="${dirCls}">${p.dir}</span>
-            <span class="chip-flow">${flow}</span>
-          </span>`;
-        }
+        for (const p of c.pairs) allChips.push({ ...p, flow });
+      }
+      let chips = '';
+      for (const p of allChips.slice(0, 3)) {
+        const dirCls = p.dir === 'BUY' ? 'chip-buy' : 'chip-sell';
+        chips += `<span class="sc-bar-chip">
+          <span class="chip-pair">${p.instrument.replace('_', '/')}</span>
+          <span class="${dirCls}">${p.dir}</span>
+          <span class="chip-flow">${p.flow}</span>
+        </span>`;
       }
       chipsEl.innerHTML = chips;
       bar.style.display = '';
