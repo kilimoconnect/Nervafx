@@ -911,7 +911,7 @@ function _setupAnalysis(s) {
   }
 
   // ── 3. Spread magnitude ──────────────────────────────────────────────
-  if (sp6h >= 0.020)       parts.push(`6H spread strong (${(sp6h * 10000).toFixed(0)} pips) — strong quality setup.`);
+  if (sp6h >= 0.002)       parts.push(`6H spread strong (${(sp6h * 10000).toFixed(0)} pips) — strong quality setup.`);
   else if (sp6h >= 0.002)  parts.push(`6H spread decent (${(sp6h * 10000).toFixed(0)} pips) — 53% WR range.`);
   else if (sp6h > 0)       parts.push(`6H spread weak (${(sp6h * 10000).toFixed(0)} pips) — below 20 pips drops to 36% WR. Low conviction.`);
 
@@ -928,7 +928,7 @@ function _setupAnalysis(s) {
   const isBase  = state === 'BASE_FORMING';
   const goodSess = sessEdge?.wr >= 55;
   const badSess  = sessEdge?.wr <= 45;
-  const strongSpread = sp6h >= 0.020;
+  const strongSpread = sp6h >= 0.002;
   const decentSpread = sp6h >= 0.002;
   const highConf = conf >= 80;
 
@@ -2960,7 +2960,7 @@ async function renderEnergySignals(data) {
 
   if (statusEl) {
     if (thresholdMet) {
-      statusEl.innerHTML = `<span style="color:#22c55e;font-weight:700">ACTIVE</span> — 6H strength sum ≥ 200p, directions confirmed.`;
+      statusEl.innerHTML = `<span style="color:#22c55e;font-weight:700">ACTIVE</span> — 3H strength sum ≥ 20p, directions confirmed.`;
     } else if (energy >= 25) {
       statusEl.innerHTML = `<span style="color:#f59e0b;font-weight:700">BUILDING</span> — 6H sum ${Math.round(energy)}p, approaching 40p.`;
     } else {
@@ -4984,7 +4984,7 @@ async function _renderCs6H(modal, tz) {
     for (const hk of hourKeys) {
       const currencies = byHour[hk];
       const sorted = currencies
-        .map(c => ({ cur: c.currency, val: parseFloat(c.raw_6h) || 0 }))
+        .map(c => ({ cur: c.currency, val: parseFloat(c.smooth_3h) || 0 }))
         .sort((a, b) => b.val - a.val);
       if (sorted.length < 2) continue;
       const strongest = sorted[0];
@@ -4993,7 +4993,7 @@ async function _renderCs6H(modal, tz) {
       const time = hk + ':00:00Z';
       // Top 3 pairs when sum ≥ 40 pips
       let pairs = null;
-      if (sum >= 0.020) {
+      if (sum >= 0.002) {
         const top3 = sorted.slice(0, 3);
         const bot3 = sorted.slice(-3).reverse();
         const candidates = [];
@@ -5013,9 +5013,9 @@ async function _renderCs6H(modal, tz) {
 
     const recent = hourResults.reverse();
     const pips = v => (v * 10000).toFixed(1);
-    const CS_THRESHOLD = 0.020; // 200 pips
+    const CS_THRESHOLD = 0.002; // 20 pips
 
-    let html = `<div style="font-size:10px;color:var(--text-dim);margin-bottom:10px">Strongest + Weakest by 6H strength (absolute values summed). Rows highlighted at ≥200 pips with top 3 pairs.</div>`;
+    let html = `<div style="font-size:10px;color:var(--text-dim);margin-bottom:10px">Strongest + Weakest by 6H strength (absolute values summed). Rows highlighted at ≥20 pips with top 3 pairs.</div>`;
     html += '<div class="cs-rows" style="max-height:60vh;overflow-y:auto">';
     for (const h of recent) {
       const t = new Date(h.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: tz });
@@ -5035,7 +5035,7 @@ async function _renderCs6H(modal, tz) {
         <div class="cs-row-bar-wrap">
           <div class="cs-row-bar" style="width:${barWidth}%;background:${sumColor}"></div>
         </div>
-        <div class="cs-row-sum" style="color:${sumColor}">${pips(h.sum)}${meetsThreshold ? '<span style="font-size:8px;display:block;color:#22c55e">≥200</span>' : ''}</div>`;
+        <div class="cs-row-sum" style="color:${sumColor}">${pips(h.sum)}${meetsThreshold ? '<span style="font-size:8px;display:block;color:#22c55e">≥20</span>' : ''}</div>`;
 
       // Show top 3 pairs when threshold met
       if (meetsThreshold && h.pairs?.length) {
@@ -6563,11 +6563,11 @@ function _meMarketCycleBanner(cycle, latestHourly) {
     ${engineBtn('agreement', 'Agreement')}
     ${(function() {
       const ccys = strengthData?.currencies || [];
-      const h6 = ccys.map(c => parseFloat(c.raw_6h) || 0);
+      const h6 = ccys.map(c => parseFloat(c.smooth_3h) || 0);
       let csGreen = false;
       if (h6.length >= 2) {
         const sum = Math.abs(Math.max(...h6)) + Math.abs(Math.min(...h6));
-        csGreen = sum >= 0.020;
+        csGreen = sum >= 0.002;
       }
       const st = csGreen ? ' style="background:#22c55e;color:#fff;border-color:#22c55e"' : '';
       return `<button class="me-ai-toggle me-btn-cs premium-only"${st} onclick="location.href='/strength-cs.html'">CS</button>`;

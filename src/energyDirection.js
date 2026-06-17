@@ -22,9 +22,9 @@
 const { supabase } = require('./supabase');
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
-// Direction confirmation trigger: 6H currency strength sum ≥ 200 pips (0.020 raw).
-// Sum = |strongest raw_6h| + |weakest raw_6h|
-const CS_SUM_THRESHOLD = 0.020;
+// Direction confirmation trigger: 3H smoothed currency strength sum ≥ 20 pips (0.002).
+// Sum = |strongest smooth_3h| + |weakest smooth_3h|
+const CS_SUM_THRESHOLD = 0.002;
 const FLOW_SPREAD_THRESHOLD = 20;  // 3H pair spread ≥ 20 pips
 const FLOW_SPREAD_MIN_PAIRS = 1;   // At least 1 pair must qualify
 
@@ -176,10 +176,10 @@ async function calculateEnergyDirection() {
     };
   }
 
-  // ── 2b. Direction trigger: 6H currency strength sum ≥ 40 pips ─────────────
+  // ── 2b. Direction trigger: 3H smoothed currency strength sum ≥ 20 pips ────
   const h6Values = CURRENCIES
     .filter(ccy => ccyMap[ccy])
-    .map(ccy => ccyMap[ccy].raw_6h);
+    .map(ccy => ccyMap[ccy].smooth_3h);
 
   let triggerBar = null;
   if (h6Values.length >= 2) {
