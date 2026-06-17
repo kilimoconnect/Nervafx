@@ -26,6 +26,8 @@ datetime g_lastPoll      = 0;
 int      g_pendingCount  = 0;
 int      g_heartbeatOk   = 0;
 int      g_heartbeatFail = 0;
+string   g_lastError     = "";
+int      g_lastHttpCode  = 0;
 
 //+------------------------------------------------------------------+
 //| Expert initialization                                             |
@@ -90,6 +92,8 @@ void UpdateChart(string extra)
    status += "Pending commands: " + IntegerToString(g_pendingCount) + "\n";
    status += "Last heartbeat: " + TimeToString(g_lastHeartbeat, TIME_DATE | TIME_SECONDS) + "\n";
    status += "Last poll: " + TimeToString(g_lastPoll, TIME_DATE | TIME_SECONDS) + "\n";
+   if(StringLen(g_lastError) > 0)
+      status += "Last error: " + g_lastError + "\n";
    if(StringLen(extra) > 0)
       status += "\n" + extra;
    Comment(status);
@@ -203,23 +207,37 @@ void SendHeartbeat()
    body += "\"trade_history\":" + BuildHistoryJson();
    body += "}";
 
-   char postData[];
-   char result[];
+   uchar postData[];
+   uchar result[];
    string resultHeaders;
 
-   StringToCharArray(body, postData, 0, StringLen(body), CP_UTF8);
+   int bytes = StringToCharArray(body, postData, 0, -1, CP_UTF8);
+   if(bytes > 0) ArrayResize(postData, bytes - 1);
 
    int res = WebRequest("POST", url, headers, InpRequestTimeout, postData, result, resultHeaders);
 
    if(res == 200)
+   {
       g_heartbeatOk++;
+      g_lastError = "";
+      g_lastHttpCode = 200;
+   }
    else
    {
       g_heartbeatFail++;
+      g_lastHttpCode = res;
       if(res == -1)
-         Print("NervaFX: Heartbeat failed — check URL is whitelisted in MT5 Options > Expert Advisors");
+      {
+         int sysErr = GetLastError();
+         g_lastError = "WebRequest failed (err " + IntegerToString(sysErr) + ") — add " + InpServerUrl + " to Tools>Options>Expert Advisors URL list";
+         Print("NervaFX: ", g_lastError);
+      }
       else
-         Print("NervaFX: Heartbeat HTTP ", res);
+      {
+         string respBody = CharArrayToString(result, 0, WHOLE_ARRAY, CP_UTF8);
+         g_lastError = "HTTP " + IntegerToString(res) + ": " + StringSubstr(respBody, 0, 120);
+         Print("NervaFX: Heartbeat ", g_lastError);
+      }
    }
 }
 
@@ -231,8 +249,8 @@ void PollCommands()
    string url = InpServerUrl + "/api/ea-commands";
    string headers = "X-EA-Key: " + InpApiKey + "\r\n";
 
-   char postData[];
-   char result[];
+   uchar postData[];
+   uchar result[];
    string resultHeaders;
 
    int res = WebRequest("GET", url, headers, InpRequestTimeout, postData, result, resultHeaders);
@@ -583,11 +601,13 @@ void AckCommand(const string cmdId, const string status, const string ticket, co
       body += ",\"error\":\"" + error + "\"";
    body += "}";
 
-   char postData[];
-   char result[];
+   uchar postData[];
+   uchar result[];
    string resultHeaders;
 
-   StringToCharArray(body, postData, 0, StringLen(body), CP_UTF8);
+   int bytes = StringToCharArray(body, postData, 0, -1, CP_UTF8);
+   if(bytes > 0) ArrayResize(postData, bytes - 1);
+
    int res = WebRequest("POST", url, headers, InpRequestTimeout, postData, result, resultHeaders);
 
    if(res != 200)
