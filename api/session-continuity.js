@@ -135,6 +135,49 @@ module.exports = async function handler(req, res) {
       });
     }
 
+    // If the current session has no hourly data yet, inject it from the latest M15 close
+    const nowH2 = new Date().getUTCHours();
+    const currSess2 = getSession(nowH2);
+    if (currSess2) {
+      const todayDate = sessionDate(new Date().toISOString(), currSess2);
+      const currBlockKey = `${todayDate}|${currSess2}`;
+      if (!sessionBlocks[currBlockKey]) {
+        const { data: m15Row } = await sb
+          .from('m15_currency_strength')
+          .select('time, values')
+          .order('time', { ascending: false })
+          .limit(1);
+        const m15Vals = m15Row?.[0]?.values;
+        if (m15Vals) {
+          const ccyVals = {};
+          for (const ccy of CURRENCIES) ccyVals[ccy] = m15Vals[ccy] || 0;
+          const ranked = CURRENCIES.map(ccy => ({ currency: ccy, val: ccyVals[ccy] }))
+            .sort((a, b) => b.val - a.val);
+          const sum = (ranked[0]?.val ? Math.abs(ranked[0].val) : 0) +
+                      (ranked[7]?.val ? Math.abs(ranked[7].val) : 0);
+          const pairs = [];
+          for (const instrument of VALID_PAIRS) {
+            const [base, quote] = instrument.split('_');
+            const bVal = ccyVals[base] || 0;
+            const qVal = ccyVals[quote] || 0;
+            const dir = bVal >= qVal ? 'BUY' : 'SELL';
+            const strong = dir === 'BUY' ? base : quote;
+            const weak = dir === 'BUY' ? quote : base;
+            const spread = Math.abs(bVal - qVal);
+            pairs.push({ instrument, dir, strong, weak, spread });
+          }
+          sessionList.push({
+            date: todayDate,
+            session: currSess2,
+            strongest: ranked[0],
+            weakest: ranked[ranked.length - 1],
+            sum,
+            pairs,
+          });
+        }
+      }
+    }
+
     // Sort by date + session order
     sessionList.sort((a, b) => {
       const dc = a.date.localeCompare(b.date);
