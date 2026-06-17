@@ -10,7 +10,7 @@
 //--- Input parameters
 input group "NervaFX Connection"
 input string InpApiKey         = "PASTE_YOUR_API_KEY_HERE";       // API Key
-input string InpServerUrl      = "https://nervafx.vercel.app";    // Server URL
+input string InpServerUrl      = "https://www.nervafx.com";       // Server URL
 
 input group "Timing"
 input int    InpHeartbeatSec   = 15;                              // Heartbeat interval (seconds)
