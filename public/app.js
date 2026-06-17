@@ -4960,9 +4960,9 @@ async function _renderCs6H(modal, tz) {
       hourResults.push({ time, strongest, weakest, sum, sorted, pairs });
     }
 
-    // Mark momentum: 3 consecutive hours of increasing sum, last candle >= 15 pips
+    // Mark momentum: 3 consecutive hours of increasing sum, last candle >= 15 pips (0.0015 raw)
     for (let i = 2; i < hourResults.length; i++) {
-      if (hourResults[i].sum > hourResults[i - 1].sum && hourResults[i - 1].sum > hourResults[i - 2].sum && hourResults[i].sum >= 15) {
+      if (hourResults[i].sum > hourResults[i - 1].sum && hourResults[i - 1].sum > hourResults[i - 2].sum && hourResults[i].sum >= 0.0015) {
         hourResults[i].momentum = true;
       }
     }
