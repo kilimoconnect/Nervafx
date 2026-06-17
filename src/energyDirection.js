@@ -22,10 +22,10 @@
 const { supabase } = require('./supabase');
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
-// Direction confirmation trigger: 3H smoothed currency strength sum ≥ 20 pips (0.002).
+// Direction confirmation trigger: 3H smoothed currency strength sum ≥ 30 pips (0.003).
 // Sum = |strongest smooth_3h| + |weakest smooth_3h|
-const CS_SUM_THRESHOLD = 0.002;
-const FLOW_SPREAD_THRESHOLD = 20;  // 3H pair spread ≥ 20 pips
+const CS_SUM_THRESHOLD = 0.003;
+const FLOW_SPREAD_THRESHOLD = 30;  // 3H pair spread ≥ 30 pips
 const FLOW_SPREAD_MIN_PAIRS = 1;   // At least 1 pair must qualify
 
 const VALID_PAIRS = new Set([
@@ -176,7 +176,7 @@ async function calculateEnergyDirection() {
     };
   }
 
-  // ── 2b. Direction trigger: 3H smoothed currency strength sum ≥ 20 pips ────
+  // ── 2b. Direction trigger: 3H smoothed currency strength sum ≥ 30 pips ────
   const h6Values = CURRENCIES
     .filter(ccy => ccyMap[ccy])
     .map(ccy => ccyMap[ccy].smooth_3h);
@@ -204,7 +204,7 @@ async function calculateEnergyDirection() {
 
   console.log(`[ENERGY_DIR] Current energy: ${currentEnergy} | 6H CS sum: ${triggerEnergy}p (threshold ${Math.round(CS_SUM_THRESHOLD * 10000)}p) ${triggerBar ? '→ TRIGGER' : '→ no trigger'}`);
 
-  // ── 2b. Count flow spread pairs (3H spread ≥ 20 pips) ───────────────────────
+  // ── 2b. Count flow spread pairs (3H spread ≥ 30 pips) ───────────────────────
   let flowSpreadCount = 0;
   for (const inst of VALID_PAIRS) {
     const [base, quote] = inst.split('_');

@@ -291,16 +291,6 @@
     function allDays() { return Math.min(730, Math.ceil((Date.now() - new Date(DATA_START).getTime()) / 86400000) + 1); }
     const RANGE_OPTS = [7,14,30,90,365,'all'];
 
-    async function fetchCandleDirs(days) {
-      const key = `cdirs:${days}`;
-      if (_cache[key]) return _cache[key];
-      try {
-        const data = await api(`/api/candle-dirs?days=${days}`);
-        _cache[key] = data.dirs || {};
-      } catch (_) { _cache[key] = {}; }
-      return _cache[key];
-    }
-
     function buildPairs(top3, bot3) {
       const candidates = [];
       for (const s of top3) {
@@ -313,69 +303,6 @@
       }
       candidates.sort((a, b) => b.spread - a.spread);
       return candidates.slice(0, 6);
-    }
-
-    function countPrevCandles(pair, dir, hourKey, candleDirs) {
-      const pairDirs = candleDirs[pair];
-      if (!pairDirs) return null;
-      // 5 most recent completed candles up to and including this hour
-      const keys = Object.keys(pairDirs).sort().reverse().filter(k => k <= hourKey).slice(0, 5);
-      if (!keys.length) return null;
-      let matching = 0;
-      for (const k of keys) {
-        if ((dir === 'BUY' && pairDirs[k] === 1) || (dir === 'SELL' && pairDirs[k] === -1)) matching++;
-      }
-      return matching;
-    }
-
-    function countPrevCandlesNow(pair, dir, candleDirs) {
-      const pairDirs = candleDirs[pair];
-      if (!pairDirs) return null;
-      const nowHour = new Date().toISOString().slice(0, 13);
-      const keys = Object.keys(pairDirs).sort().reverse().filter(k => k < nowHour).slice(0, 5);
-      if (!keys.length) return null;
-      let matching = 0;
-      for (const k of keys) {
-        if ((dir === 'BUY' && pairDirs[k] === 1) || (dir === 'SELL' && pairDirs[k] === -1)) matching++;
-      }
-      return matching;
-    }
-
-    async function fetchM15CandleDirs(days) {
-      const key = `cdirs_m15:${days}`;
-      if (_cache[key]) return _cache[key];
-      try {
-        const data = await api(`/api/candle-dirs?days=${days}&tf=M15`);
-        _cache[key] = data.dirs || {};
-      } catch (_) { _cache[key] = {}; }
-      return _cache[key];
-    }
-
-    function countPrevM15Candles(pair, dir, timeKey, candleDirs) {
-      const pairDirs = candleDirs[pair];
-      if (!pairDirs) return null;
-      const slotKey = new Date(timeKey).toISOString().slice(0, 16);
-      const keys = Object.keys(pairDirs).sort().reverse().filter(k => k <= slotKey).slice(0, 5);
-      if (!keys.length) return null;
-      let matching = 0;
-      for (const k of keys) {
-        if ((dir === 'BUY' && pairDirs[k] === 1) || (dir === 'SELL' && pairDirs[k] === -1)) matching++;
-      }
-      return matching;
-    }
-
-    function countPrevM15CandlesNow(pair, dir, candleDirs) {
-      const pairDirs = candleDirs[pair];
-      if (!pairDirs) return null;
-      const now = new Date();
-      const nowKey = now.toISOString().slice(0, 16);
-      const keys = Object.keys(pairDirs).sort().reverse().filter(k => k < nowKey).slice(0, 5);
-      if (!keys.length) return null;
-      let matching = 0;
-      for (const k of keys) {
-        if ((dir === 'BUY' && pairDirs[k] === 1) || (dir === 'SELL' && pairDirs[k] === -1)) matching++;
-      }
-      return matching;
     }
 
     function buildAllPairs(sorted) {
@@ -404,16 +331,7 @@
       const allPairs = buildAllPairs(sorted);
       const isM15 = type === 'm15';
 
-      const dirs = isM15
-        ? await fetchM15CandleDirs(_m15Days)
-        : await fetchCandleDirs(_6hDays);
-
-      for (const p of allPairs) {
-        p.prevCount = isM15
-          ? countPrevM15CandlesNow(p.pair, p.dir, dirs)
-          : countPrevCandlesNow(p.pair, p.dir, dirs);
-      }
-      allPairs.sort((a, b) => (b.prevCount ?? -1) - (a.prevCount ?? -1) || b.spread - a.spread);
+      allPairs.sort((a, b) => b.spread - a.spread);
 
       const label = fmtTime(time);
       const dateLabel = fmtFull(time);
@@ -425,18 +343,11 @@
 
       allPairs.forEach((p, i) => {
         const dc = p.dir === 'BUY' ? '#22c55e' : '#ef4444';
-        const bc = p.prevCount >= 4 ? 'rgba(34,197,94,0.18);color:#22c55e;border:1px solid rgba(34,197,94,0.3)'
-                 : p.prevCount >= 3 ? 'rgba(245,158,11,0.18);color:#f59e0b;border:1px solid rgba(245,158,11,0.3)'
-                 : 'rgba(100,116,139,0.18);color:#94a3b8;border:1px solid rgba(100,116,139,0.2)';
-        const badge = p.prevCount != null
-          ? `<span class="cs-modal-badge" style="font-size:12px;font-weight:800;padding:2px 7px;border-radius:4px;line-height:1.2;white-space:nowrap;background:${bc}">${p.prevCount}/5</span>`
-          : '';
         html += `<div class="cs-modal-pair">
           <div class="cs-modal-pair-rank">${i + 1}</div>
           <div class="cs-modal-pair-name">${p.pair.replace('_','/')}</div>
           <div class="cs-modal-pair-dir" style="color:${dc}">${p.dir}</div>
           <div class="cs-modal-pair-spread">${pips(p.spread)}p</div>
-          ${badge}
         </div>`;
       });
 
@@ -453,16 +364,12 @@
       const nCls = size === 'hero' ? 'cs-hero-pair-name' : 'cs-pair-name';
       const dCls = size === 'hero' ? 'cs-hero-pair-dir' : 'cs-pair-dir';
       const cCls = size === 'hero' ? 'cs-hero-pair-ccys' : 'cs-pair-ccys';
-      const prevBadge = p.prevCount != null
-        ? `<span class="cs-prev-badge" style="font-size:12px;font-weight:800;padding:2px 7px;border-radius:4px;line-height:1.2;white-space:nowrap;background:${p.prevCount >= 4 ? 'rgba(34,197,94,0.18);color:#22c55e;border:1px solid rgba(34,197,94,0.3)' : p.prevCount >= 3 ? 'rgba(245,158,11,0.18);color:#f59e0b;border:1px solid rgba(245,158,11,0.3)' : 'rgba(100,116,139,0.18);color:#94a3b8;border:1px solid rgba(100,116,139,0.2)'}">${p.prevCount}/5</span>`
-        : '';
       return `<div class="${cls}">
         <div class="cs-pair-info">
           <div class="${nCls}">${p.pair.replace('_','/')}</div>
           <div class="${dCls}" style="color:${dc}">${p.dir}</div>
           <div class="${cCls}"><span style="color:#22c55e">${p.strong}↑</span> vs <span style="color:#ef4444">${p.weak}↓</span>${p.spread ? `<span style="margin-left:4px;color:var(--text-dim)">${pips(p.spread)}p</span>` : ''}</div>
         </div>
-        ${prevBadge}
       </div>`;
     }
 
@@ -478,7 +385,7 @@
           <span class="sx-ctrl-sep"></span>
           <input type="date" class="sx-date${_6hDate?' active':''}" value="${_6hDate}" min="${DATA_START}" max="${new Date().toISOString().slice(0,10)}" onchange="set6HDate(this.value)">
         </div>
-      </div><div class="sx-card-bd" id="cs-6h-body"><div class="cs-loading"><span class="spinner"></span> Loading 6H data...</div></div></div>`;
+      </div><div class="sx-card-bd" id="cs-6h-body"><div class="cs-loading"><span class="spinner"></span> Loading 3H data...</div></div></div>`;
       lucide.createIcons();
 
       const key = `6h:${_6hDays}`;
@@ -509,20 +416,15 @@
         const sum = Math.abs(strongest.val) + Math.abs(weakest.val);
         const time = hk + ':00:00Z';
         let pairs = null;
-        if (sum >= 0.002) {
+        if (sum >= 0.003) {
           pairs = buildPairs(sorted.slice(0, 3), sorted.slice(-3).reverse());
         }
         hourResults.push({ time, strongest, weakest, sum, sorted, pairs });
       }
 
-      const candleDirs = await fetchCandleDirs(_6hDays);
       for (const h of hourResults) {
-        const hk = h.time.slice(0, 13);
         if (h.pairs) {
-          for (const p of h.pairs) {
-            p.prevCount = countPrevCandles(p.pair, p.dir, hk, candleDirs);
-          }
-          h.pairs.sort((a, b) => (b.prevCount ?? -1) - (a.prevCount ?? -1) || b.spread - a.spread);
+          h.pairs.sort((a, b) => b.spread - a.spread);
           h.pairs = h.pairs.slice(0, 3);
         }
       }
@@ -534,7 +436,7 @@
           return ld === _6hDate;
         });
       }
-      const CS_THRESHOLD = 0.002;
+      const CS_THRESHOLD = 0.003;
 
       // Group by local date
       const byDate = {};
@@ -545,7 +447,7 @@
 
       let html = `<div style="font-size:11px;color:var(--text-dim);margin-bottom:14px">
         Strongest + Weakest currency by 3H strength each hour. Both values converted to positive and summed.
-        Rows at <span style="color:#22c55e;font-weight:700">≥20 pips</span> show the best 3 tradeable pairs.
+        Rows at <span style="color:#22c55e;font-weight:700">≥30 pips</span> show the best 3 tradeable pairs.
       </div>`;
 
       for (const [dateLabel, hours] of Object.entries(byDate)) {
@@ -553,7 +455,7 @@
         html += `<div style="margin-bottom:16px">`;
         html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
           <span style="font-size:12px;font-weight:700;color:#e2e8f0">${dateLabel}</span>
-          ${thresholdCount ? `<span style="font-size:10px;font-weight:600;color:#22c55e;background:rgba(34,197,94,0.1);padding:2px 8px;border-radius:4px">${thresholdCount} hour${thresholdCount>1?'s':''} ≥20</span>` : ''}
+          ${thresholdCount ? `<span style="font-size:10px;font-weight:600;color:#22c55e;background:rgba(34,197,94,0.1);padding:2px 8px;border-radius:4px">${thresholdCount} hour${thresholdCount>1?'s':''} ≥30</span>` : ''}
         </div>`;
         html += '<div class="cs-rows">';
 
@@ -572,7 +474,7 @@
             <div class="cs-row-bar-wrap">
               <div class="cs-row-bar" style="width:${barWidth}%;background:${sumColor}"></div>
             </div>
-            <div class="cs-row-sum" style="color:${sumColor}">${pips(h.sum)}${meetsThreshold ? '<span style="font-size:8px;display:block;color:#22c55e">≥20</span>' : ''}</div>`;
+            <div class="cs-row-sum" style="color:${sumColor}">${pips(h.sum)}${meetsThreshold ? '<span style="font-size:8px;display:block;color:#22c55e">≥30</span>' : ''}</div>`;
 
           if (meetsThreshold && h.pairs?.length) {
             html += `<div class="cs-pairs-row">${h.pairs.map(p => pairCardHTML(p, 'row')).join('')}</div>`;
@@ -634,7 +536,7 @@
       }
 
       // Build pairs + compute sum per merged row
-      const M15_THRESHOLD = 0.002;
+      const M15_THRESHOLD = 0.003;
       const merged = Object.values(mergedMap);
       for (const m of merged) {
         const sVal = Math.abs((m.vals.find(v => v.cur === (m.strongCcy || m.vals[0]?.cur)) || {}).val || 0);
@@ -649,14 +551,9 @@
         }
       }
 
-      // Fetch M15 candle dirs and compute prev candle counts
-      const m15CandleDirs = await fetchM15CandleDirs(_m15Days);
       for (const m of merged) {
         if (m.pairs) {
-          for (const p of m.pairs) {
-            p.prevCount = countPrevM15Candles(p.pair, p.dir, m.time, m15CandleDirs);
-          }
-          m.pairs.sort((a, b) => (b.prevCount ?? -1) - (a.prevCount ?? -1) || b.spread - a.spread);
+          m.pairs.sort((a, b) => b.spread - a.spread);
           m.pairs = m.pairs.slice(0, 3);
         }
       }
@@ -676,7 +573,7 @@
 
       html += `<div style="font-size:11px;color:var(--text-dim);margin-bottom:14px">
         Strongest + Weakest currency by M15 strength each interval. Both values converted to positive and summed.
-        Rows at <span style="color:#22c55e;font-weight:700">≥20 pips</span> show the best 3 tradeable pairs.
+        Rows at <span style="color:#22c55e;font-weight:700">≥30 pips</span> show the best 3 tradeable pairs.
       </div>`;
 
       // Group by local date
@@ -693,13 +590,13 @@
         html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
           <span style="font-size:12px;font-weight:700;color:#e2e8f0">${dateLabel}</span>
           <span style="font-size:10px;font-weight:600;color:var(--text-dim)">${items.length} intervals</span>
-          ${thresholdCount ? `<span style="font-size:10px;font-weight:600;color:#22c55e;background:rgba(34,197,94,0.1);padding:2px 8px;border-radius:4px">${thresholdCount} interval${thresholdCount>1?'s':''} ≥20</span>` : ''}
+          ${thresholdCount ? `<span style="font-size:10px;font-weight:600;color:#22c55e;background:rgba(34,197,94,0.1);padding:2px 8px;border-radius:4px">${thresholdCount} interval${thresholdCount>1?'s':''} ≥30</span>` : ''}
         </div>`;
         html += '<div class="cs-rows">';
 
         for (const m of items) {
           const t = fmtTime(m.time);
-          const barWidth = Math.min(100, (m.sum / 0.002) * 100);
+          const barWidth = Math.min(100, (m.sum / 0.003) * 100);
           const sumColor = m.meetsThreshold ? '#22c55e' : m.sum >= 0.0008 ? '#f59e0b' : '#64748b';
 
           html += `<div class="cs-row${m.meetsThreshold ? ' highlight' : ''}" data-m15-idx="${_m15RowCache.length}">
@@ -711,7 +608,7 @@
             <div class="cs-row-bar-wrap">
               <div class="cs-row-bar" style="width:${barWidth}%;background:${sumColor}"></div>
             </div>
-            <div class="cs-row-sum" style="color:${sumColor}">${pips(m.sum)}${m.meetsThreshold ? '<span style="font-size:8px;display:block;color:#22c55e">≥20</span>' : ''}</div>`;
+            <div class="cs-row-sum" style="color:${sumColor}">${pips(m.sum)}${m.meetsThreshold ? '<span style="font-size:8px;display:block;color:#22c55e">≥30</span>' : ''}</div>`;
 
           if (m.meetsThreshold && m.pairs?.length) {
             html += `<div class="cs-pairs-row">${m.pairs.map(p => pairCardHTML(p, 'row')).join('')}</div>`;

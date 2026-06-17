@@ -1884,39 +1884,6 @@ function _flowPairAnalysis(p) {
 
 let _fpPrecomputed = null; // Pre-computed flow performance rows from API
 let _energySignalsCache = null; // Cached energy signal pairs from API
-let _candleDirsCache = null;
-
-async function _fetchCandleDirs() {
-  if (_candleDirsCache) return _candleDirsCache;
-  try {
-    const d = await api('/api/candle-dirs?days=1');
-    _candleDirsCache = d.dirs || {};
-  } catch (_) { _candleDirsCache = {}; }
-  return _candleDirsCache;
-}
-
-function _countPrevCandles(pair, dir, candleDirs) {
-  const pd = candleDirs[pair];
-  if (!pd) return null;
-  // Use the 5 candles before the current hour (exclude incomplete current candle)
-  const nowHour = new Date().toISOString().slice(0, 13);
-  const keys = Object.keys(pd).sort().reverse().filter(k => k < nowHour).slice(0, 5);
-  if (!keys.length) return null;
-  let matching = 0;
-  for (const k of keys) {
-    if ((dir === 'BUY' && pd[k] === 1) || (dir === 'SELL' && pd[k] === -1)) matching++;
-  }
-  return { count: matching, total: keys.length };
-}
-
-function _prevBadgeHtml(pc) {
-  if (!pc) return '';
-  const t = Math.min(pc.total, 5);
-  const bg = pc.count >= 4 ? 'rgba(34,197,94,0.15)' : pc.count >= 3 ? 'rgba(245,158,11,0.15)' : 'rgba(100,116,139,0.15)';
-  const border = pc.count >= 4 ? 'rgba(34,197,94,0.3)' : pc.count >= 3 ? 'rgba(245,158,11,0.3)' : 'rgba(100,116,139,0.2)';
-  const color = pc.count >= 4 ? '#22c55e' : pc.count >= 3 ? '#f59e0b' : '#94a3b8';
-  return `<span style="font-size:10px;font-weight:800;padding:1px 6px;border-radius:4px;background:${bg};color:${color};border:1px solid ${border}">${pc.count}/${t}</span>`;
-}
 
 function _buildFpScored(strengthArg, m15Data) {
   // Use passed strength data or fall back to global cache
@@ -2900,7 +2867,6 @@ async function _energyRefreshTick() {
     const fresh = await api('/api/energy-signals').catch(() => null);
     if (!fresh) return;
     _energySignalsCache = fresh;
-    _candleDirsCache = null;
     await renderEnergySignals(fresh);
     // Also re-render flow performance since it depends on energy pairs
     renderFlowPerformance(null, _m15DataCache);
@@ -2960,7 +2926,7 @@ async function renderEnergySignals(data) {
 
   if (statusEl) {
     if (thresholdMet) {
-      statusEl.innerHTML = `<span style="color:#22c55e;font-weight:700">ACTIVE</span> — 3H strength sum ≥ 20p, directions confirmed.`;
+      statusEl.innerHTML = `<span style="color:#22c55e;font-weight:700">ACTIVE</span> — 3H strength sum ≥ 30p, directions confirmed.`;
     } else if (energy >= 25) {
       statusEl.innerHTML = `<span style="color:#f59e0b;font-weight:700">BUILDING</span> — 6H sum ${Math.round(energy)}p, approaching 40p.`;
     } else {
@@ -3065,13 +3031,7 @@ async function renderEnergySignals(data) {
       });
       activePairs.sort((a, b) => b._finalScore - a._finalScore);
 
-      const candleDirs = await _fetchCandleDirs();
-      for (const p of activePairs) {
-        const pc = _countPrevCandles(p.instrument, p.dir, candleDirs);
-        p._prevCount = pc ? pc.count : -1;
-        p._prevTotal = pc ? pc.total : 0;
-      }
-      activePairs.sort((a, b) => b._prevCount - a._prevCount || b._finalScore - a._finalScore);
+      activePairs.sort((a, b) => b._finalScore - a._finalScore);
 
       pairsEl.innerHTML = activePairs.map(p => {
         const pairLabel = p.instrument.replace('_', '/');
@@ -3085,8 +3045,6 @@ async function renderEnergySignals(data) {
         const sp3 = parseFloat(p.spread_3h) || 0;
         const sp6 = parseFloat(p.spread_6h) || 0;
         const m15State = (p.m15_state || 'FLAT').toLowerCase();
-        const pcBadge = p._prevTotal > 0 ? _prevBadgeHtml({ count: p._prevCount, total: p._prevTotal }) : '';
-
         // Energy event badge
         let eventHtml = '';
         if (p.new_energy_event && p.energy_event_type) {
@@ -3101,7 +3059,6 @@ async function renderEnergySignals(data) {
               <span class="es-pair-name">${pairLabel}</span>
               <span class="es-pair-dir ${dirCls}">${p.dir}</span>
               <span style="font-size:10px;font-weight:800;color:${p._finalScore >= 70 ? '#4ade80' : p._finalScore >= 45 ? '#f59e0b' : '#94a3b8'};background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:5px;padding:1px 7px">${p._finalScore}</span>
-              ${pcBadge}
             </div>
             <span class="es-pair-phase ${phaseCls}">${rawPhase}</span>
           </div>
@@ -3595,7 +3552,7 @@ async function renderCompressionBreakout(data) {
   const el = document.getElementById('cb-structures');
   if (!el) return;
 
-  // Filter structures to only pairs still in active signal pairs (3H spread ≥ 20p)
+  // Filter structures to only pairs still in active signal pairs (3H spread ≥ 30p)
   const _spreadPairsSet = new Set();
   if (_energySignalsCache?.pairs) {
     for (const p of _energySignalsCache.pairs) {
@@ -3620,15 +3577,12 @@ async function renderCompressionBreakout(data) {
   const isJPY = inst => inst.includes('JPY');
   const dec = inst => isJPY(inst) ? 3 : 5;
 
-  const candleDirs = await _fetchCandleDirs();
   el.innerHTML = structures.map(s => {
     const col = STATE_COLOR[s.state] || '#475569';
     const label = STATE_LABEL[s.state] || s.state;
     const dirCls = s.direction === 'BUY' ? 'buy' : 'sell';
     const d = dec(s.instrument);
     const pairLabel = s.instrument.replace('_', '/');
-    const pc = _countPrevCandles(s.instrument, s.direction, candleDirs);
-    const pcBadge = _prevBadgeHtml(pc);
 
     let detailHtml = '';
     {
@@ -3646,7 +3600,6 @@ async function renderCompressionBreakout(data) {
         <div style="display:flex;align-items:center;gap:8px">
           <span style="font-size:13px;font-weight:700;color:#e2e8f0">${pairLabel}</span>
           <span class="es-pair-dir ${dirCls}" style="font-size:10px">${s.direction}</span>
-          ${pcBadge}
         </div>
         <span style="font-size:10px;font-weight:700;color:${col};letter-spacing:0.5px">${label}</span>
       </div>
@@ -4993,7 +4946,7 @@ async function _renderCs6H(modal, tz) {
       const time = hk + ':00:00Z';
       // Top 3 pairs when sum ≥ 40 pips
       let pairs = null;
-      if (sum >= 0.002) {
+      if (sum >= 0.003) {
         const top3 = sorted.slice(0, 3);
         const bot3 = sorted.slice(-3).reverse();
         const candidates = [];
@@ -5013,9 +4966,9 @@ async function _renderCs6H(modal, tz) {
 
     const recent = hourResults.reverse();
     const pips = v => (v * 10000).toFixed(1);
-    const CS_THRESHOLD = 0.002; // 20 pips
+    const CS_THRESHOLD = 0.003; // 30 pips
 
-    let html = `<div style="font-size:10px;color:var(--text-dim);margin-bottom:10px">Strongest + Weakest by 6H strength (absolute values summed). Rows highlighted at ≥20 pips with top 3 pairs.</div>`;
+    let html = `<div style="font-size:10px;color:var(--text-dim);margin-bottom:10px">Strongest + Weakest by 3H strength (absolute values summed). Rows highlighted at ≥30 pips with top 3 pairs.</div>`;
     html += '<div class="cs-rows" style="max-height:60vh;overflow-y:auto">';
     for (const h of recent) {
       const t = new Date(h.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: tz });
@@ -5035,7 +4988,7 @@ async function _renderCs6H(modal, tz) {
         <div class="cs-row-bar-wrap">
           <div class="cs-row-bar" style="width:${barWidth}%;background:${sumColor}"></div>
         </div>
-        <div class="cs-row-sum" style="color:${sumColor}">${pips(h.sum)}${meetsThreshold ? '<span style="font-size:8px;display:block;color:#22c55e">≥20</span>' : ''}</div>`;
+        <div class="cs-row-sum" style="color:${sumColor}">${pips(h.sum)}${meetsThreshold ? '<span style="font-size:8px;display:block;color:#22c55e">≥30</span>' : ''}</div>`;
 
       // Show top 3 pairs when threshold met
       if (meetsThreshold && h.pairs?.length) {
@@ -6567,7 +6520,7 @@ function _meMarketCycleBanner(cycle, latestHourly) {
       let csGreen = false;
       if (h6.length >= 2) {
         const sum = Math.abs(Math.max(...h6)) + Math.abs(Math.min(...h6));
-        csGreen = sum >= 0.002;
+        csGreen = sum >= 0.003;
       }
       const st = csGreen ? ' style="background:#22c55e;color:#fff;border-color:#22c55e"' : '';
       return `<button class="me-ai-toggle me-btn-cs premium-only"${st} onclick="location.href='/strength-cs.html'">CS</button>`;
