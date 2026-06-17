@@ -6,10 +6,10 @@
  * Runs each pipeline cycle (after session_activity + m15_spreads + flow_performance).
  *
  * System flow:
- *   1. Trigger: 2H currency strength sum (|strongest| + |weakest|) ≥ 30 pips
- *   2. Currencies with aligned 2H + 6H → confirmed STRONG or WEAK
+ *   1. Trigger: 6H currency strength sum (|strongest| + |weakest|) ≥ 30 pips
+ *   2. Currencies with aligned 6H + 6H → confirmed STRONG or WEAK
  *   3. Pairs formed: one STRONG currency + one WEAK currency
- *   4. Direction PERSISTS even if 2H/6H temporarily diverges
+ *   4. Direction PERSISTS even if 6H temporarily diverges
  *   5. Direction only changes when NEW trigger event fires
  *   6. M15 monitors for: PULLBACK → COMPRESSION → READY → ENTRY
  *   7. New events flagged as CONTINUATION or REVERSAL per currency
@@ -22,8 +22,8 @@
 const { supabase } = require('./supabase');
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
-// Direction confirmation trigger: 2H CS sum increasing for 3 consecutive hours (momentum).
-// Sum = |strongest smooth_2h| + |weakest smooth_2h|
+// Direction confirmation trigger: 6H CS sum increasing for 3 consecutive hours (momentum).
+// Sum = |strongest smooth_6h| + |weakest smooth_6h|
 const FLOW_SPREAD_MIN_PAIRS = 1;   // At least 1 pair with momentum spread
 
 const VALID_PAIRS = new Set([
@@ -49,7 +49,7 @@ function getSession(utcHour) {
  *   PULLBACK   → M15 retraces against flow direction
  *   COMPRESSION → after pullback, M15 range tightens (low |v45|)
  *   ENTRY       → after compression/pullback, momentum returns in flow direction (trade now)
- *   MOVING      → strong confirmation: M15 + 2H aligned + impulse (already moving, late entry)
+ *   MOVING      → strong confirmation: M15 + 6H aligned + impulse (already moving, late entry)
  */
 function detectPhase(prevPhase, dir, v45, v90, spread3h, impulseScore, impulseAligned, deCombo) {
   const flowSign = dir === 'BUY' ? 1 : -1;
@@ -188,13 +188,13 @@ async function calculateEnergyDirection() {
 
   // ── 2b. Momentum trigger: 2H CS sum increasing for 3 consecutive hours ────
   const sums = last3.map(tk => {
-    const vals = CURRENCIES.filter(c => byTime[tk]?.[c]).map(c => byTime[tk][c].smooth_2h);
+    const vals = CURRENCIES.filter(c => byTime[tk]?.[c]).map(c => byTime[tk][c].smooth_6h);
     if (vals.length < 2) return 0;
     return Math.abs(Math.max(...vals)) + Math.abs(Math.min(...vals));
   });
 
   let triggerBar = null;
-  const hasMomentum = sums.length === 3 && sums[2] > sums[1] && sums[1] > sums[0] && sums[2] >= 0.0015;
+  const hasMomentum = sums.length === 3 && sums[2] > sums[1] && sums[1] > sums[0] && sums[2] >= 0.003;
 
   if (hasMomentum) {
     const csTime = latestTime || now.toISOString();
@@ -211,14 +211,14 @@ async function calculateEnergyDirection() {
   const triggerHour = triggerBar ? triggerBar.time : null;
 
   const sumStrs = sums.map(s => Math.round(s * 10000) + 'p').join(' → ');
-  console.log(`[ENERGY_DIR] Current energy: ${currentEnergy} | 2H CS sums: ${sumStrs} ${hasMomentum ? '→ MOMENTUM TRIGGER' : '→ no momentum'}`);
+  console.log(`[ENERGY_DIR] Current energy: ${currentEnergy} | 6H CS sums: ${sumStrs} ${hasMomentum ? '→ MOMENTUM TRIGGER' : '→ no momentum'}`);
 
   // ── 2c. Count flow spread pairs with increasing spread ─────────────────────
   let flowSpreadCount = 0;
   for (const inst of VALID_PAIRS) {
     const [base, quote] = inst.split('_');
-    const bVal = ccyMap[base]?.smooth_2h || 0;
-    const qVal = ccyMap[quote]?.smooth_2h || 0;
+    const bVal = ccyMap[base]?.smooth_6h || 0;
+    const qVal = ccyMap[quote]?.smooth_6h || 0;
     const spreadPips = Math.abs(bVal - qVal) * 10000;
     if (spreadPips > 0) flowSpreadCount++;
   }
@@ -271,13 +271,13 @@ async function calculateEnergyDirection() {
     // ── 6. NEW energy event — snapshot currencies from CURRENT strength ────
     // This is the ONLY time directions are evaluated. Strength values are
     // locked in and persist until the next bar crosses ≥ threshold.
-    // Rank currencies by combined 2H+6H strength — top 3 positive = strong,
+    // Rank currencies by combined 6H+6H strength — top 3 positive = strong,
     // bottom 3 negative = weak (same approach as hour analysis page).
     const ranked = CURRENCIES
       .filter(ccy => ccyMap[ccy])
       .map(ccy => {
         const d = ccyMap[ccy];
-        const h3 = d.smooth_2h;
+        const h3 = d.smooth_6h;
         const h6 = d.smooth_6h;
         const combined = (h3 + h6) / 2;
         return { currency: ccy, h3, h6, combined };
@@ -292,7 +292,7 @@ async function calculateEnergyDirection() {
     strong.sort((a, b) => b.score - a.score);
     weak.sort((a, b) => b.score - a.score);
 
-    console.log(`[ENERGY_DIR] ═══ NEW ENERGY EVENT — 2H CS sum ${triggerEnergy}p @ ${triggerHour} ═══`);
+    console.log(`[ENERGY_DIR] ═══ NEW ENERGY EVENT — 6H CS sum ${triggerEnergy}p @ ${triggerHour} ═══`);
 
     // ── 7. Snapshot currency directions with trigger-time strength ─────────
     const newDirections = new Map();
@@ -310,7 +310,7 @@ async function calculateEnergyDirection() {
       const newDir = newDirections.get(ccy) || 'NEUTRAL';
       const prev = stateMap[ccy];
       const prevDir = prev?.direction || 'NEUTRAL';
-      const snap = strengthSnapshot.get(ccy) || { h3: ccyMap[ccy]?.smooth_2h || 0, h6: ccyMap[ccy]?.smooth_6h || 0 };
+      const snap = strengthSnapshot.get(ccy) || { h3: ccyMap[ccy]?.smooth_6h || 0, h6: ccyMap[ccy]?.smooth_6h || 0 };
 
       let energyEventType = null;
       if (prev?.active && newDir !== 'NEUTRAL') {
@@ -431,15 +431,15 @@ async function calculateEnergyDirection() {
     }
   }
 
-  // Also get 2H/6H/12H spreads for pairs — use LIVE strength for monitoring
+  // Also get 6H/12H spreads for pairs — use LIVE strength for monitoring
   // (phase detection and signal entry gates need current market conditions)
   // but fall back to snapshotted values if live data is missing
   let spreadMap = {};
   if (pairInstruments.length) {
     for (const inst of pairInstruments) {
       const [base, quote] = inst.split('_');
-      const h3base = ccyMap[base]?.smooth_2h || 0;
-      const h3quote = ccyMap[quote]?.smooth_2h || 0;
+      const h3base = ccyMap[base]?.smooth_6h || 0;
+      const h3quote = ccyMap[quote]?.smooth_6h || 0;
       const h6base = ccyMap[base]?.smooth_6h || 0;
       const h6quote = ccyMap[quote]?.smooth_6h || 0;
       const h12base = ccyMap[base]?.smooth_12h || 0;

@@ -42,12 +42,12 @@ module.exports = async function handler(req, res) {
       .order('trigger_energy', { ascending: false });
     if (pErr) throw pErr;
 
-    // Momentum trigger: 2H CS sum increasing for 3 consecutive hours (mirrors src/energyDirection.js)
+    // Momentum trigger: 6H CS sum increasing for 3 consecutive hours (mirrors src/energyDirection.js)
     const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
 
     const { data: csRows } = await sb
       .from('currency_strength')
-      .select('currency, smooth_2h, time')
+      .select('currency, smooth_6h, time')
       .order('time', { ascending: false })
       .limit(24); // 8 currencies × 3 hours
 
@@ -56,7 +56,7 @@ module.exports = async function handler(req, res) {
       const tk = r.time;
       if (!byTime[tk]) byTime[tk] = {};
       if (!byTime[tk][r.currency]) {
-        byTime[tk][r.currency] = parseFloat(r.smooth_2h) || 0;
+        byTime[tk][r.currency] = parseFloat(r.smooth_6h) || 0;
       }
     }
     const timeKeys = Object.keys(byTime).sort();
@@ -68,7 +68,7 @@ module.exports = async function handler(req, res) {
       return Math.abs(Math.max(...vals)) + Math.abs(Math.min(...vals));
     });
 
-    const hasMomentum = sums.length === 3 && sums[2] > sums[1] && sums[1] > sums[0] && sums[2] >= 0.0015;
+    const hasMomentum = sums.length === 3 && sums[2] > sums[1] && sums[1] > sums[0] && sums[2] >= 0.003;
     const csSumPips = Math.round((sums[sums.length - 1] || 0) * 10000);
 
     const hasActiveDirections = (currencies || []).some(c => c.active && c.direction !== 'NEUTRAL');

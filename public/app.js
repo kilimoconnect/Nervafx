@@ -179,14 +179,14 @@ function entryHasCsigPair(e) {
   return instruments.some(i => hasCsigCurrency(i));
 }
 
-// Derive strongest/weakest currencies from smoothed 2H strength data.
+// Derive strongest/weakest currencies from smoothed 6H strength data.
 // Uses the global `strengthData` (from /api/strength) when available.
-// Always returns top 2 strongest and top 2 weakest by smooth_2h value.
-function getSmoothed2HFlow(currencies) {
+// Always returns top 2 strongest and top 2 weakest by smooth_6h value.
+function getSmoothed6HFlow(currencies) {
   const list = currencies || strengthData?.currencies || [];
   if (!list.length) return { strong: [], weak: [] };
   const scored = list.map(c => {
-    const v3 = parseFloat(c.smooth_2h ?? c.normalized_2h) || 0;
+    const v3 = parseFloat(c.smooth_6h ?? c.normalized_6h) || 0;
     return { cur: c.currency, v3 };
   }).sort((a, b) => b.v3 - a.v3);
   const strong = scored.slice(0, 2).map(c => c.cur);
@@ -205,8 +205,8 @@ function computeEntryCsig(e) {
     const v6  = parseFloat(c.smooth_6h  ?? c.normalized_6h)  || 0;
     const v12 = parseFloat(c.smooth_12h ?? c.normalized_12h) || 0;
     const combined = (v3 + v6 + v12) / 3;
-    if (combined >  CS_THRESHOLD && v3 >  CS_THRESHOLD) strong.push(c.currency);
-    else if (combined < -CS_THRESHOLD && v3 < -CS_THRESHOLD) weak.push(c.currency);
+    if (combined >  CS_THRESHOLD && v6 >  CS_THRESHOLD) strong.push(c.currency);
+    else if (combined < -CS_THRESHOLD && v6 < -CS_THRESHOLD) weak.push(c.currency);
   });
   return { strong, weak };
 }
@@ -254,8 +254,8 @@ function renderJrnCsigSection(e) {
     return { cur: c.currency, combined: (v3 + v6 + v12) / 3, h3: v3, h4: v4, h6: v6, h12: v12, d1: v1d };
   });
 
-  const strong = scored.filter(c => c.combined >  CS_THRESHOLD && c.h3 >  CS_THRESHOLD).sort((a, b) => b.combined - a.combined);
-  const weak   = scored.filter(c => c.combined < -CS_THRESHOLD && c.h3 < -CS_THRESHOLD).sort((a, b) => a.combined - b.combined);
+  const strong = scored.filter(c => c.combined >  CS_THRESHOLD && c.h6 >  CS_THRESHOLD).sort((a, b) => b.combined - a.combined);
+  const weak   = scored.filter(c => c.combined < -CS_THRESHOLD && c.h6 < -CS_THRESHOLD).sort((a, b) => a.combined - b.combined);
   const score  = _csigScore(strong.length, weak.length);
 
   const expansionNote = score >= 2
@@ -1900,7 +1900,7 @@ function _buildFpScored(strengthArg, m15Data) {
       const ccyMap3H = {}, ccyMap12H = {};
       if (sData?.currencies?.length) {
         for (const c of sData.currencies) {
-          ccyMap3H[c.currency] = parseFloat(c.smooth_2h ?? c.normalized_2h) || 0;
+          ccyMap3H[c.currency] = parseFloat(c.smooth_6h ?? c.normalized_6h) || 0;
           ccyMap12H[c.currency] = parseFloat(c.smooth_12h ?? c.normalized_12h) || 0;
         }
       }
@@ -1978,7 +1978,7 @@ function _buildFpScored(strengthArg, m15Data) {
   }
 
   // ── Fallback: client-side computation (same as before for premium with live m15 data) ──
-  const { strong, weak } = getSmoothed2HFlow(sData?.currencies);
+  const { strong, weak } = getSmoothed6HFlow(sData?.currencies);
   if (!strong.length || !weak.length) return null;
 
   const PAIRS = new Set([
@@ -2005,7 +2005,7 @@ function _buildFpScored(strengthArg, m15Data) {
   const ccyMap3H = {}, ccyMap6H = {};
   if (sData?.currencies?.length) {
     for (const c of sData.currencies) {
-      ccyMap3H[c.currency] = parseFloat(c.smooth_2h ?? c.normalized_2h) || 0;
+      ccyMap3H[c.currency] = parseFloat(c.smooth_6h ?? c.normalized_6h) || 0;
       ccyMap6H[c.currency] = parseFloat(c.smooth_6h ?? c.normalized_6h) || 0;
     }
   }
@@ -2534,13 +2534,13 @@ function _getFlowSpreadPairs() {
   const ccys = strengthData?.currencies;
   if (!ccys?.length) return [];
 
-  // Build 2H strength map
+  // Build 6H strength map
   const valMap = {};
   for (const c of ccys) {
-    valMap[c.currency] = parseFloat(c.smooth_2h ?? c.normalized_2h) || 0;
+    valMap[c.currency] = parseFloat(c.smooth_6h ?? c.normalized_6h) || 0;
   }
 
-  // Form pairs from all 28 — direction from 2H spread sign
+  // Form pairs from all 28 — direction from 6H spread sign
   const pairs = [];
   for (const inst of FP_BAR_VALID_PAIRS) {
     const [base, quote] = inst.split('_');
@@ -2926,7 +2926,7 @@ async function renderEnergySignals(data) {
 
   if (statusEl) {
     if (thresholdMet) {
-      statusEl.innerHTML = `<span style="color:#22c55e;font-weight:700">ACTIVE</span> — 2H strength momentum rising, directions confirmed.`;
+      statusEl.innerHTML = `<span style="color:#22c55e;font-weight:700">ACTIVE</span> — 6H strength momentum rising, directions confirmed.`;
     } else if (energy >= 25) {
       statusEl.innerHTML = `<span style="color:#f59e0b;font-weight:700">BUILDING</span> — 6H sum ${Math.round(energy)}p, approaching 40p.`;
     } else {
@@ -2954,7 +2954,7 @@ async function renderEnergySignals(data) {
     const active = (currencies || []).filter(c => c.active && c.direction !== 'NEUTRAL');
     const m15Str = _m15CurrencyStrength();
     // Rank by |M15| + |2H| + |6H| combined performance
-    const perfScore = c => Math.abs(m15Str[c.currency] || 0) + Math.abs(parseFloat(c.smooth_2h) || 0) + Math.abs(parseFloat(c.smooth_6h) || 0);
+    const perfScore = c => Math.abs(m15Str[c.currency] || 0) + Math.abs(parseFloat(c.smooth_6h) || 0) + Math.abs(parseFloat(c.smooth_12h) || 0);
     const strong = active.filter(c => c.direction === 'STRONG').sort((a,b) => perfScore(b) - perfScore(a));
     const weak   = active.filter(c => c.direction === 'WEAK').sort((a,b) => perfScore(b) - perfScore(a));
 
@@ -2965,11 +2965,11 @@ async function renderEnergySignals(data) {
         if (!items.length) return '';
         const rows = items.map(c => {
           const m15 = m15Str[c.currency] || 0;
-          const h3 = parseFloat(c.smooth_2h) || 0;
           const h6 = parseFloat(c.smooth_6h) || 0;
+          const h12 = parseFloat(c.smooth_12h) || 0;
           const m15Cls = m15 > 0 ? 'pos' : m15 < 0 ? 'neg' : '';
-          const h3Cls = h3 > 0 ? 'pos' : h3 < 0 ? 'neg' : '';
           const h6Cls = h6 > 0 ? 'pos' : h6 < 0 ? 'neg' : '';
+          const h12Cls = h12 > 0 ? 'pos' : h12 < 0 ? 'neg' : '';
           let eventHtml = '';
           if (c.energy_event_type) {
             const evCls = c.energy_event_type === 'CONTINUATION' ? 'continuation' : c.energy_event_type === 'REVERSAL' ? 'reversal' : c.energy_event_type === 'DROPPED' ? 'reversal' : 'new-event';
@@ -2979,15 +2979,15 @@ async function renderEnergySignals(data) {
             <span class="es-ccy-name">${c.currency}</span>
             <div class="es-ccy-vals">
               <span class="es-ccy-val ${m15Cls}" title="M15">${(m15*10000).toFixed(1)}</span>
-              <span class="es-ccy-val ${h3Cls}" title="2H">${(h3*10000).toFixed(1)}</span>
               <span class="es-ccy-val ${h6Cls}" title="6H">${(h6*10000).toFixed(1)}</span>
+              <span class="es-ccy-val ${h12Cls}" title="12H">${(h12*10000).toFixed(1)}</span>
               ${eventHtml}
             </div>
           </div>`;
         }).join('');
         return `<div class="es-ccy-col ${cls}">
           <div class="es-ccy-col-title">${title}</div>
-          <div class="es-ccy-hdr"><span></span><span class="es-ccy-hdr-lbl">M15</span><span class="es-ccy-hdr-lbl">2H</span><span class="es-ccy-hdr-lbl">6H</span><span></span></div>
+          <div class="es-ccy-hdr"><span></span><span class="es-ccy-hdr-lbl">M15</span><span class="es-ccy-hdr-lbl">6H</span><span class="es-ccy-hdr-lbl">12H</span><span></span></div>
           ${rows}
         </div>`;
       };
@@ -4072,7 +4072,7 @@ function _meSessionExplain(s, label, status) {
   // Completed sessions use their own stored snapshot from that session's time
   let strong, weak;
   if (status === 'ACTIVE' && strengthData?.currencies?.length) {
-    const flow = getSmoothed2HFlow(strengthData.currencies);
+    const flow = getSmoothed6HFlow(strengthData.currencies);
     strong = flow.strong[0] || null;
     weak   = flow.weak[0]   || null;
   } else {
@@ -4618,11 +4618,11 @@ function _meSessionCard(name, s, status, hourlyRows) {
   const neutral    = Math.max(0, 100 - activePct);
 
   const domScore  = Math.round(parseFloat(s.dominance_score) || 0);
-  // Use Flow Performance calculation (smooth_2h) for active session
+  // Use Flow Performance calculation (smooth_6h) for active session
   // Completed/upcoming sessions use their own stored snapshot from that session's time
   let strongCcys, weakCcys;
   if (status === 'ACTIVE' && strengthData?.currencies?.length) {
-    const flow = getSmoothed2HFlow(strengthData.currencies);
+    const flow = getSmoothed6HFlow(strengthData.currencies);
     strongCcys = flow.strong;
     weakCcys   = flow.weak;
   } else {
@@ -4937,7 +4937,7 @@ async function _renderCs6H(modal, tz) {
     for (const hk of hourKeys) {
       const currencies = byHour[hk];
       const sorted = currencies
-        .map(c => ({ cur: c.currency, val: parseFloat(c.smooth_2h) || 0 }))
+        .map(c => ({ cur: c.currency, val: parseFloat(c.smooth_6h) || 0 }))
         .sort((a, b) => b.val - a.val);
       if (sorted.length < 2) continue;
       const strongest = sorted[0];
@@ -4960,9 +4960,9 @@ async function _renderCs6H(modal, tz) {
       hourResults.push({ time, strongest, weakest, sum, sorted, pairs });
     }
 
-    // Mark momentum: 3 consecutive hours of increasing sum, last candle >= 15 pips (0.0015 raw)
+    // Mark momentum: 3 consecutive hours of increasing sum, last candle >= 30 pips (0.003 raw)
     for (let i = 2; i < hourResults.length; i++) {
-      if (hourResults[i].sum > hourResults[i - 1].sum && hourResults[i - 1].sum > hourResults[i - 2].sum && hourResults[i].sum >= 0.0015) {
+      if (hourResults[i].sum > hourResults[i - 1].sum && hourResults[i - 1].sum > hourResults[i - 2].sum && hourResults[i].sum >= 0.003) {
         hourResults[i].momentum = true;
       }
     }
@@ -4970,7 +4970,7 @@ async function _renderCs6H(modal, tz) {
     const recent = hourResults.reverse();
     const pips = v => (v * 10000).toFixed(1);
 
-    let html = `<div style="font-size:10px;color:var(--text-dim);margin-bottom:10px">Strongest + Weakest by 2H strength (absolute values summed). Rows with <span style="color:#22c55e;font-weight:700">↑3</span> = 3 consecutive hours of increasing pips.</div>`;
+    let html = `<div style="font-size:10px;color:var(--text-dim);margin-bottom:10px">Strongest + Weakest by 6H strength (absolute values summed). Rows with <span style="color:#22c55e;font-weight:700">↑3</span> = 3 consecutive hours of increasing pips.</div>`;
     html += '<div class="cs-rows" style="max-height:60vh;overflow-y:auto">';
     for (const h of recent) {
       const t = new Date(h.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: tz });
@@ -6377,14 +6377,14 @@ function _renderMeAnalysisModal() {
   try {
     const strengthEl = strengthData?.currencies || [];
     for (const c of strengthEl) {
-      csData.push({ ccy: c.currency, val: parseFloat(c.smooth_2h ?? c.normalized_2h) || 0 });
+      csData.push({ ccy: c.currency, val: parseFloat(c.smooth_6h ?? c.normalized_6h) || 0 });
     }
   } catch (_) {}
   csData.sort((a, b) => b.val - a.val);
   const maxCsAbs = Math.max(0.0001, ...csData.map(c => Math.abs(c.val)));
   const csBarHtml = csData.length ? `
     <div style="margin-bottom:16px;padding:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:8px">
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b;margin-bottom:8px">Currency Strength (2H)</div>
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b;margin-bottom:8px">Currency Strength (6H)</div>
       ${csData.map(c => {
         const pct = Math.round(Math.abs(c.val) / maxCsAbs * 100);
         const col = c.val > 0 ? '#22c55e' : '#ef4444';
@@ -7035,7 +7035,7 @@ function renderJrnSessionPerfSection(e, sessionEntries) {
         <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Momentum</span><span class="jrn-sess-val">${brd}</span></div>
         <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Liquidity</span><span class="jrn-sess-val" style="color:${liqColor}">${liq}</span></div>
         <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Pressure</span><span class="jrn-sess-val">▲${bull}% ▼${bear}%</span></div>
-        <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Flow</span><span class="jrn-sess-val">${(() => { const cs = e.currency_strength; const ccys = Array.isArray(cs) ? cs : (cs?.currencies || []); const fl = getSmoothed2HFlow(ccys.length ? ccys : null); return fl.strong.map(c => `<span style="color:#22c55e">${c}↑</span>`).join(' ') + ' ' + fl.weak.map(c => `<span style="color:#ef4444">${c}↓</span>`).join(' ') || '—'; })()}</span></div>
+        <div class="jrn-sess-stat"><span class="jrn-sess-lbl">Flow</span><span class="jrn-sess-val">${(() => { const cs = e.currency_strength; const ccys = Array.isArray(cs) ? cs : (cs?.currencies || []); const fl = getSmoothed6HFlow(ccys.length ? ccys : null); return fl.strong.map(c => `<span style="color:#22c55e">${c}↑</span>`).join(' ') + ' ' + fl.weak.map(c => `<span style="color:#ef4444">${c}↓</span>`).join(' ') || '—'; })()}</span></div>
         ${allSignals.length ? `<div class="jrn-sess-stat jrn-sess-full"><span class="jrn-sess-lbl">Signals</span><span class="jrn-sess-val">${allSignals.map(s => `${pair(s.instrument)} ${s.signal}`).join(', ')}</span></div>` : ''}
       </div>`);
   }
