@@ -174,11 +174,30 @@
         </div>
 
         <div class="sc-filters">
-          <span class="sc-filter-label">Filter:</span>
+          <span class="sc-filter-label">Session:</span>
           <button class="sx-btn active" data-filter="all" onclick="filterSess('all')">All</button>
           <button class="sx-btn" data-filter="asia" onclick="filterSess('asia')">Asia</button>
           <button class="sx-btn" data-filter="london" onclick="filterSess('london')">London</button>
           <button class="sx-btn" data-filter="new_york" onclick="filterSess('new_york')">New York</button>
+        </div>
+        <div class="sc-filters">
+          <span class="sc-filter-label">Flow:</span>
+          <button class="sx-btn active" data-flow="all" onclick="filterFlow('all')">All Flows</button>
+          <button class="sx-btn" data-flow="ny_asia" onclick="filterFlow('ny_asia')">NY → Asia</button>
+          <button class="sx-btn" data-flow="asia_london" onclick="filterFlow('asia_london')">Asia → London</button>
+          <button class="sx-btn" data-flow="london_ny" onclick="filterFlow('london_ny')">London → NY</button>
+        </div>
+        <div class="sc-filters">
+          <span class="sc-filter-label">Direction:</span>
+          <button class="sx-btn active" data-dir="all" onclick="filterDir('all')">All</button>
+          <button class="sx-btn" data-dir="BUY" onclick="filterDir('BUY')">BUY Only</button>
+          <button class="sx-btn" data-dir="SELL" onclick="filterDir('SELL')">SELL Only</button>
+        </div>
+        <div class="sc-filters">
+          <span class="sc-filter-label">Pair:</span>
+          <select id="sc-pair-filter" onchange="filterPair(this.value)" style="padding:4px 8px;border-radius:7px;font-size:11px;font-weight:600;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:var(--text-muted);font-family:inherit;color-scheme:dark">
+            <option value="all">All Pairs</option>
+          </select>
         </div>
 
         <div id="sc-stats" class="sc-stats"></div>
@@ -191,6 +210,9 @@
     const _tz = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
     let _data = [];
     let _sessFilter = 'all';
+    let _flowFilter = 'all';
+    let _dirFilter = 'all';
+    let _pairFilter = 'all';
     let _currentDays = 7;
 
     function fmtDate(iso) {
@@ -222,6 +244,7 @@
         }
         const json = await r.json();
         _data = json.continuations || [];
+        buildPairDropdown(_data);
         render();
       } catch (e) {
         body.innerHTML = `<div class="sc-loading" style="color:#ef4444">${e.message}</div>`;
@@ -238,16 +261,77 @@
       render();
     }
 
+    function filterFlow(f) {
+      _flowFilter = f;
+      document.querySelectorAll('[data-flow]').forEach(b => {
+        b.classList.toggle('active', b.dataset.flow === f);
+      });
+      render();
+    }
+
+    function filterDir(d) {
+      _dirFilter = d;
+      document.querySelectorAll('[data-dir]').forEach(b => {
+        b.classList.toggle('active', b.dataset.dir === d);
+      });
+      render();
+    }
+
+    function filterPair(p) {
+      _pairFilter = p;
+      render();
+    }
+
+    const FLOW_MAP = {
+      ny_asia: { from: 'NEW_YORK', to: 'ASIA' },
+      asia_london: { from: 'ASIA', to: 'LONDON' },
+      london_ny: { from: 'LONDON', to: 'NEW_YORK' },
+    };
+
+    function buildPairDropdown(data) {
+      const pairs = new Set();
+      for (const c of data) for (const p of c.pairs) pairs.add(p.instrument);
+      const sel = document.getElementById('sc-pair-filter');
+      const sorted = [...pairs].sort();
+      sel.innerHTML = '<option value="all">All Pairs</option>' +
+        sorted.map(p => `<option value="${p}">${p.replace('_', '/')}</option>`).join('');
+      sel.value = _pairFilter;
+    }
+
     function render() {
       const body = document.getElementById('sc-body');
       const statsEl = document.getElementById('sc-stats');
 
       let filtered = _data;
+
+      // Session filter
       if (_sessFilter !== 'all') {
-        filtered = _data.filter(c =>
+        filtered = filtered.filter(c =>
           c.toSession.toLowerCase() === _sessFilter ||
           c.fromSession.toLowerCase() === _sessFilter
         );
+      }
+
+      // Flow filter (specific from → to)
+      if (_flowFilter !== 'all' && FLOW_MAP[_flowFilter]) {
+        const { from, to } = FLOW_MAP[_flowFilter];
+        filtered = filtered.filter(c => c.fromSession === from && c.toSession === to);
+      }
+
+      // Direction filter — filter at pair level
+      if (_dirFilter !== 'all') {
+        filtered = filtered.map(c => ({
+          ...c,
+          pairs: c.pairs.filter(p => p.dir === _dirFilter),
+        })).filter(c => c.pairs.length > 0);
+      }
+
+      // Pair filter — filter at pair level
+      if (_pairFilter !== 'all') {
+        filtered = filtered.map(c => ({
+          ...c,
+          pairs: c.pairs.filter(p => p.instrument === _pairFilter),
+        })).filter(c => c.pairs.length > 0);
       }
 
       if (!filtered.length) {

@@ -6520,6 +6520,7 @@ function _meMarketCycleBanner(cycle, latestHourly) {
       const st = _energySignalsCache?.threshold_met ? ' style="background:#22c55e;color:#fff;border-color:#22c55e"' : '';
       return `<button class="me-ai-toggle me-btn-cs premium-only"${st} onclick="location.href='/strength-cs.html'">CS</button>`;
     })()}
+    <button class="me-ai-toggle me-btn-metric premium-only" onclick="location.href='/session-continuity'">SC</button>
     <button class="me-ai-toggle me-btn-ai premium-only" onclick="openMeAiAnalysis()">AI Analysis</button>
   </div>`;
 }
@@ -6688,9 +6689,11 @@ function renderMarketEnergy(sessions, expansionPressure, marketCycle, currentSes
     <div class="me-card-grid">
       ${sorted.map(({ name }) => _meSessionCard(name, byName[name] || null, _meSessionStatus(name, currentSession), allHourly)).join('')}
     </div>
+    <div id="sc-notif"></div>
     ${_meExpansionPressurePanel(expansionPressure)}
     ${_meHistoryPanel(historyRows, sessions)}`;
 
+  fetchSessionContinuity();
   fetchMarketEnergyNarrative(sessions, expansionPressure, marketCycle);
 }
 
@@ -6723,6 +6726,59 @@ async function fetchMarketActivity() {
 }
 
 
+
+// ─── Session Continuity Notification ─────────────────────────────────────────
+
+let _sessionContinuityCache = null;
+
+async function fetchSessionContinuity() {
+  try {
+    const data = await api('/api/session-continuity?days=2');
+    _sessionContinuityCache = data?.continuations || [];
+    renderSessionContinuityNotif();
+  } catch (_) {
+    _sessionContinuityCache = [];
+  }
+}
+
+function renderSessionContinuityNotif() {
+  const el = document.getElementById('sc-notif');
+  if (!el) return;
+  const items = _sessionContinuityCache || [];
+  if (!items.length) { el.innerHTML = ''; return; }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  const recent = items.filter(c => c.date === today || c.date === yesterday);
+  if (!recent.length) { el.innerHTML = ''; return; }
+
+  const pips = v => (v * 10000).toFixed(1);
+  const sessColor = s => s === 'ASIA' ? '#fbbf24' : s === 'LONDON' ? '#60a5fa' : '#a78bfa';
+
+  let html = `<div style="margin-top:12px;padding:12px 14px;border-radius:10px;background:rgba(167,139,250,0.06);border:1px solid rgba(167,139,250,0.15)">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <span style="font-size:11px;font-weight:700;color:#a78bfa;text-transform:uppercase;letter-spacing:.05em">Session Continuity</span>
+      <a href="/session-continuity" style="font-size:10px;color:var(--text-dim);margin-left:auto;text-decoration:none">View All →</a>
+    </div>`;
+
+  for (const c of recent.slice(0, 3)) {
+    const fromCol = sessColor(c.fromSession);
+    const toCol = sessColor(c.toSession);
+    html += `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
+      <span style="font-size:10px;font-weight:700;color:${fromCol}">${c.fromSession.replace('_', ' ')}</span>
+      <span style="font-size:10px;color:var(--text-dim)">→</span>
+      <span style="font-size:10px;font-weight:700;color:${toCol}">${c.toSession.replace('_', ' ')}</span>
+      <span style="font-size:10px;color:var(--text-dim);margin-left:4px">`;
+    html += c.pairs.slice(0, 4).map(p => {
+      const col = p.dir === 'BUY' ? '#22c55e' : '#ef4444';
+      return `<span style="font-weight:700;color:#e2e8f0">${p.instrument.replace('_', '/')}</span> <span style="color:${col};font-weight:600">${p.dir}</span>`;
+    }).join(' · ');
+    if (c.pairs.length > 4) html += ` +${c.pairs.length - 4}`;
+    html += `</span></div>`;
+  }
+  html += '</div>';
+  el.innerHTML = html;
+}
 
 // ─── Momentum Continuation Signal ────────────────────────────────────────────
 // Detects 3+ consecutive hourly increases (both ≥10) in today's session data.
