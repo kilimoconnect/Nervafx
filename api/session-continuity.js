@@ -100,32 +100,29 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // For each session block: average smooth_2h per currency, rank, form pairs
+    // For each session block: compute smooth_2h per currency, assign direction to all 28 pairs
     const sessionList = [];
     for (const [key, block] of Object.entries(sessionBlocks)) {
-      const ranked = CURRENCIES.map(ccy => {
+      const ccyVals = {};
+      for (const ccy of CURRENCIES) {
         const vals = block.hours[ccy] || [];
-        const avg = vals.length ? vals[vals.length - 1] : 0; // use last hour of session
-        return { currency: ccy, val: avg };
-      }).sort((a, b) => b.val - a.val);
-
-      const strong = ranked.slice(0, 3).filter(c => c.val > 0);
-      const weak = ranked.slice(-3).filter(c => c.val < 0).reverse();
+        ccyVals[ccy] = vals.length ? vals[vals.length - 1] : 0;
+      }
+      const ranked = CURRENCIES.map(ccy => ({ currency: ccy, val: ccyVals[ccy] }))
+        .sort((a, b) => b.val - a.val);
       const sum = (ranked[0]?.val ? Math.abs(ranked[0].val) : 0) +
                   (ranked[7]?.val ? Math.abs(ranked[7].val) : 0);
 
       const pairs = [];
-      for (const s of strong) {
-        for (const w of weak) {
-          const fwd = `${s.currency}_${w.currency}`;
-          const rev = `${w.currency}_${s.currency}`;
-          let instrument, dir;
-          if (VALID_PAIRS.has(fwd)) { instrument = fwd; dir = 'BUY'; }
-          else if (VALID_PAIRS.has(rev)) { instrument = rev; dir = 'SELL'; }
-          else continue;
-          const spread = Math.abs(s.val - w.val);
-          pairs.push({ instrument, dir, strong: s.currency, weak: w.currency, spread });
-        }
+      for (const instrument of VALID_PAIRS) {
+        const [base, quote] = instrument.split('_');
+        const bVal = ccyVals[base] || 0;
+        const qVal = ccyVals[quote] || 0;
+        const dir = bVal >= qVal ? 'BUY' : 'SELL';
+        const strong = dir === 'BUY' ? base : quote;
+        const weak = dir === 'BUY' ? quote : base;
+        const spread = Math.abs(bVal - qVal);
+        pairs.push({ instrument, dir, strong, weak, spread });
       }
 
       sessionList.push({
@@ -196,19 +193,10 @@ module.exports = async function handler(req, res) {
         for (const r of latestRows) {
           if (!liveCcyMap[r.currency]) liveCcyMap[r.currency] = parseFloat(r.smooth_2h) || 0;
         }
-        const liveRanked = CURRENCIES
-          .map(ccy => ({ currency: ccy, val: liveCcyMap[ccy] || 0 }))
-          .sort((a, b) => b.val - a.val);
-        const liveStrong = new Set(liveRanked.slice(0, 3).filter(c => c.val > 0).map(c => c.currency));
-        const liveWeak = new Set(liveRanked.slice(-3).filter(c => c.val < 0).map(c => c.currency));
-
         const liveDirs = {};
-        for (const s of liveStrong) {
-          for (const w of liveWeak) {
-            const fwd = `${s}_${w}`, rev = `${w}_${s}`;
-            if (VALID_PAIRS.has(fwd)) liveDirs[fwd] = 'BUY';
-            else if (VALID_PAIRS.has(rev)) liveDirs[rev] = 'SELL';
-          }
+        for (const instrument of VALID_PAIRS) {
+          const [base, quote] = instrument.split('_');
+          liveDirs[instrument] = (liveCcyMap[base] || 0) >= (liveCcyMap[quote] || 0) ? 'BUY' : 'SELL';
         }
 
         for (const c of continuations) {
