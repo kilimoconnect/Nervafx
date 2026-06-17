@@ -183,7 +183,44 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    res.json({ continuations: continuations.reverse(), total: continuations.length });
+    // Live-check: for the current session, verify directions against the latest hour.
+    // If a pair's direction flipped mid-session, drop the stale continuation.
+    const nowH = new Date().getUTCHours();
+    const currSess = getSession(nowH);
+    if (currSess && continuations.length) {
+      const hourKeys = Object.keys(byHour).sort();
+      const latestHk = hourKeys[hourKeys.length - 1];
+      if (latestHk && byHour[latestHk]) {
+        const latestRows = byHour[latestHk];
+        const liveCcyMap = {};
+        for (const r of latestRows) {
+          if (!liveCcyMap[r.currency]) liveCcyMap[r.currency] = parseFloat(r.smooth_2h) || 0;
+        }
+        const liveRanked = CURRENCIES
+          .map(ccy => ({ currency: ccy, val: liveCcyMap[ccy] || 0 }))
+          .sort((a, b) => b.val - a.val);
+        const liveStrong = new Set(liveRanked.slice(0, 3).filter(c => c.val > 0).map(c => c.currency));
+        const liveWeak = new Set(liveRanked.slice(-3).filter(c => c.val < 0).map(c => c.currency));
+
+        const liveDirs = {};
+        for (const s of liveStrong) {
+          for (const w of liveWeak) {
+            const fwd = `${s}_${w}`, rev = `${w}_${s}`;
+            if (VALID_PAIRS.has(fwd)) liveDirs[fwd] = 'BUY';
+            else if (VALID_PAIRS.has(rev)) liveDirs[rev] = 'SELL';
+          }
+        }
+
+        for (const c of continuations) {
+          if (c.toSession === currSess) {
+            c.pairs = c.pairs.filter(p => liveDirs[p.instrument] === p.dir);
+          }
+        }
+      }
+    }
+
+    const filtered = continuations.filter(c => c.pairs.length > 0);
+    res.json({ continuations: filtered.reverse(), total: filtered.length });
   } catch (e) {
     console.error('[SESSION-CONTINUITY]', e.message);
     res.status(500).json({ error: e.message });
