@@ -434,7 +434,7 @@
             <div class="sc-pairs">`;
 
           const growingPairs = c.pairs.filter(p => p.growing).sort((a, b) => b.currSpread - a.currSpread);
-          const topPairs = growingPairs.slice(0, 3);
+          const topPairs = growingPairs.slice(0, 4);
           for (const p of topPairs) {
             const dirCls = p.dir.toLowerCase();
             html += `<div class="sc-pair">
