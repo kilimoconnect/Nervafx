@@ -443,8 +443,10 @@
                 <span class="sc-pair-dir ${dirCls}">${p.dir}</span>
               </div>
               <div>
-                <span class="sc-pair-spread">${pips(p.currSpread)}p</span>
-                ${p.growing ? '<span class="sc-pair-growing">▲ Growing</span>' : ''}
+                <span class="sc-pair-spread" style="color:#64748b">${pips(p.prevSpread)}p</span>
+                <span style="color:#475569;font-size:10px;margin:0 2px">→</span>
+                <span class="sc-pair-spread" style="color:#e2e8f0;font-weight:700">${pips(p.currSpread)}p</span>
+                ${p.growing ? '<span class="sc-pair-growing">▲</span>' : ''}
               </div>
             </div>`;
           }
