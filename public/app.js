@@ -6727,39 +6727,34 @@ async function fetchMarketActivity() {
 
 
 // ─── Session Continuity Notification ─────────────────────────────────────────
-// Fetches the same API as /session-continuity page. API returns growing pairs only.
+// Fetches the same API as /session-continuity page. API returns growing+M15-confirmed pairs only.
 
 async function fetchSessionContinuity() {
   const bar = document.getElementById('sc-continuity-bar');
   const chipsEl = document.getElementById('sc-bar-chips');
-  const inlineEl = document.getElementById('sc-notif');
   const h = new Date().getUTCHours();
   const currSess = (h >= 23 || h < 7) ? 'ASIA' : (h >= 7 && h < 13) ? 'LONDON' : (h >= 13 && h < 21) ? 'NEW_YORK' : null;
 
   if (!currSess) {
     if (bar) { bar.style.display = 'none'; _updateAlertBadge(); }
-    if (inlineEl) inlineEl.innerHTML = '';
     return;
   }
 
-  let recent = [];
+  let allChips = [];
   try {
     const data = await api('/api/session-continuity?days=7');
-    const items = data?.continuations || [];
-    recent = items.filter(c => c.toSession === currSess);
+    const items = (data?.continuations || []).filter(c => c.toSession === currSess);
+    const SESS_SHORT = { ASIA: 'Asia', LONDON: 'Ldn', NEW_YORK: 'NY' };
+    for (const c of items) {
+      const flow = `${SESS_SHORT[c.fromSession] || c.fromSession}→${SESS_SHORT[c.toSession] || c.toSession}`;
+      for (const p of c.pairs) allChips.push({ ...p, flow });
+    }
   } catch (_) {}
 
-  // ── Header notification bar ──
   if (bar && chipsEl) {
-    if (!recent.length) {
+    if (!allChips.length) {
       bar.style.display = 'none';
     } else {
-      const SESS_SHORT = { ASIA: 'Asia', LONDON: 'Ldn', NEW_YORK: 'NY' };
-      const allChips = [];
-      for (const c of recent) {
-        const flow = `${SESS_SHORT[c.fromSession] || c.fromSession}→${SESS_SHORT[c.toSession] || c.toSession}`;
-        for (const p of c.pairs) allChips.push({ ...p, flow });
-      }
       let chips = '';
       for (const p of allChips.slice(0, 3)) {
         const dirCls = p.dir === 'BUY' ? 'chip-buy' : 'chip-sell';
@@ -6773,34 +6768,6 @@ async function fetchSessionContinuity() {
       bar.style.display = '';
     }
     _updateAlertBadge();
-  }
-
-  // ── Inline panel in Market Energy ──
-  if (inlineEl) {
-    if (!recent.length) { inlineEl.innerHTML = ''; return; }
-    const sessColor = s => s === 'ASIA' ? '#fbbf24' : s === 'LONDON' ? '#60a5fa' : '#a78bfa';
-    let html = `<div style="margin-top:12px;padding:12px 14px;border-radius:10px;background:rgba(167,139,250,0.06);border:1px solid rgba(167,139,250,0.15)">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-        <span style="font-size:11px;font-weight:700;color:#a78bfa;text-transform:uppercase;letter-spacing:.05em">Session Continuity</span>
-        <a href="/session-continuity" style="font-size:10px;color:var(--text-dim);margin-left:auto;text-decoration:none">View All →</a>
-      </div>`;
-    for (const c of recent.slice(0, 3)) {
-      const fromCol = sessColor(c.fromSession);
-      const toCol = sessColor(c.toSession);
-      html += `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
-        <span style="font-size:10px;font-weight:700;color:${fromCol}">${c.fromSession.replace('_', ' ')}</span>
-        <span style="font-size:10px;color:var(--text-dim)">→</span>
-        <span style="font-size:10px;font-weight:700;color:${toCol}">${c.toSession.replace('_', ' ')}</span>
-        <span style="font-size:10px;color:var(--text-dim);margin-left:4px">`;
-      html += c.pairs.slice(0, 4).map(p => {
-        const col = p.dir === 'BUY' ? '#22c55e' : '#ef4444';
-        return `<span style="font-weight:700;color:#e2e8f0">${p.instrument.replace('_', '/')}</span> <span style="color:${col};font-weight:600">${p.dir}</span>`;
-      }).join(' · ');
-      if (c.pairs.length > 4) html += ` +${c.pairs.length - 4}`;
-      html += `</span></div>`;
-    }
-    html += '</div>';
-    inlineEl.innerHTML = html;
   }
 }
 
