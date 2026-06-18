@@ -6689,7 +6689,6 @@ function renderMarketEnergy(sessions, expansionPressure, marketCycle, currentSes
     <div class="me-card-grid">
       ${sorted.map(({ name }) => _meSessionCard(name, byName[name] || null, _meSessionStatus(name, currentSession), allHourly)).join('')}
     </div>
-    <div id="sc-notif"></div>
     ${_meExpansionPressurePanel(expansionPressure)}
     ${_meHistoryPanel(historyRows, sessions)}`;
 
