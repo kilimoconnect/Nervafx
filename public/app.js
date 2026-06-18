@@ -6750,7 +6750,11 @@ function renderSessionContinuityNotif() {
   const h = new Date().getUTCHours();
   const currSess = (h >= 23 || h < 7) ? 'ASIA' : (h >= 7 && h < 13) ? 'LONDON' : (h >= 13 && h < 21) ? 'NEW_YORK' : null;
   if (!currSess) { if (bar) { bar.style.display = 'none'; _updateAlertBadge(); } if (inlineEl) inlineEl.innerHTML = ''; return; }
-  const recent = items.filter(c => c.toSession === currSess);
+  // Only show growing pairs
+  const recent = items.filter(c => c.toSession === currSess)
+    .map(c => ({ ...c, pairs: c.pairs.filter(p => p.growing).sort((a, b) => b.currSpread - a.currSpread) }))
+    .filter(c => c.pairs.length > 0)
+    .sort((a, b) => b.pairs.length - a.pairs.length || b.sum - a.sum);
 
   // ── Header notification bar ──
   if (bar && chipsEl) {
