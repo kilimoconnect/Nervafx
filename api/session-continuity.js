@@ -250,6 +250,10 @@ module.exports = async function handler(req, res) {
       }
     }
 
+    // Only return growing pairs
+    for (const c of continuations) {
+      c.pairs = c.pairs.filter(p => p.growing).sort((a, b) => b.currSpread - a.currSpread);
+    }
     const filtered = continuations.filter(c => c.pairs.length > 0);
     res.json({ continuations: filtered.reverse(), total: filtered.length });
   } catch (e) {
