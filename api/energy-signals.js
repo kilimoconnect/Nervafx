@@ -4,18 +4,35 @@
  * GET /api/energy-signals
  *
  * Returns current energy-driven currency directions and active signal pairs.
- * No plan gate — available to all users.
- *
- * Response: {
- *   currencies: [...],   // energy_currency_state rows
- *   pairs: [...],        // energy_signal_pairs rows (active only)
- *   energy: number,      // current market energy level
- *   thresholdMet: bool
- * }
+ * Supports 2-slot direction confirmation system with session expiry.
  */
 
 const { cors, getClient } = require('./_db');
 const { requirePlan }     = require('./_plan');
+
+const SESSION_ORDER = { ASIA: 0, LONDON: 1, NEW_YORK: 2 };
+
+function getSession(utcHour) {
+  if (utcHour >= 23 || utcHour < 7)  return 'ASIA';
+  if (utcHour >= 7  && utcHour < 13) return 'LONDON';
+  if (utcHour >= 13 && utcHour < 21) return 'NEW_YORK';
+  return 'LOW_LIQUIDITY';
+}
+
+function getSessionDate(now, session) {
+  const d = new Date(now);
+  if (session === 'ASIA' && d.getUTCHours() === 23) {
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+  return d.toISOString().slice(0, 10);
+}
+
+function sessionNum(dateStr, session) {
+  if (!dateStr || !session) return 0;
+  const d = new Date(dateStr + 'T12:00:00Z');
+  const days = Math.floor(d.getTime() / 86400000);
+  return days * 3 + (SESSION_ORDER[session] || 0);
+}
 
 module.exports = async function handler(req, res) {
   cors(res);
@@ -27,14 +44,12 @@ module.exports = async function handler(req, res) {
     const gate = await requirePlan(sb, req, 'free');
     if (gate.error) return res.status(gate.status).json({ error: gate.error, upgrade: gate.upgrade });
 
-    // Fetch currency state
     const { data: currencies, error: cErr } = await sb
       .from('energy_currency_state')
       .select('*')
-      .order('currency', { ascending: true });
+      .order('slot', { ascending: true });
     if (cErr) throw cErr;
 
-    // Fetch active signal pairs
     const { data: pairs, error: pErr } = await sb
       .from('energy_signal_pairs')
       .select('*')
@@ -42,14 +57,14 @@ module.exports = async function handler(req, res) {
       .order('trigger_energy', { ascending: false });
     if (pErr) throw pErr;
 
-    // Momentum trigger: 6H CS sum increasing for 3 consecutive hours (mirrors src/energyDirection.js)
+    // Momentum check (mirrors energyDirection.js)
     const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
 
     const { data: csRows } = await sb
       .from('currency_strength')
       .select('currency, smooth_6h, time')
       .order('time', { ascending: false })
-      .limit(24); // 8 currencies × 3 hours
+      .limit(24);
 
     const byTime = {};
     for (const r of (csRows || [])) {
@@ -71,15 +86,41 @@ module.exports = async function handler(req, res) {
     const hasMomentum = sums.length === 3 && sums[2] > sums[1] && sums[1] > sums[0] && sums[2] >= 0.003;
     const csSumPips = Math.round((sums[sums.length - 1] || 0) * 10000);
 
-    const hasActiveDirections = (currencies || []).some(c => c.active && c.direction !== 'NEUTRAL');
+    const activeCurrencies = (currencies || []).filter(c => c.active);
+    const hasActiveDirections = activeCurrencies.length > 0;
     const hasActivePairs = (pairs || []).some(p => p.active);
     const thresholdMet = hasMomentum || hasActiveDirections || hasActivePairs;
+
+    // Compute session info for expiry display
+    const now = new Date();
+    const currSession = getSession(now.getUTCHours());
+    const currDate = getSessionDate(now, currSession);
+    const currSessNum = sessionNum(currDate, currSession);
+
+    // Build slot summaries
+    const slots = {};
+    for (const c of activeCurrencies) {
+      const sn = c.slot || 1;
+      if (!slots[sn]) {
+        const confNum = sessionNum(c.confirmed_date, c.confirmed_session);
+        const elapsed = currSessNum - confNum;
+        slots[sn] = {
+          slot: sn,
+          confirmed_session: c.confirmed_session,
+          confirmed_date: c.confirmed_date,
+          sessions_remaining: Math.max(0, 2 - elapsed),
+          trigger_energy: c.energy_at_trigger,
+          currencies: [],
+        };
+      }
+      slots[sn].currencies.push(c);
+    }
 
     let displayEnergy;
     if (hasMomentum) {
       displayEnergy = csSumPips;
     } else if (hasActiveDirections) {
-      const storedTrigger = (currencies || []).find(c => c.energy_at_trigger);
+      const storedTrigger = activeCurrencies.find(c => c.energy_at_trigger);
       displayEnergy = storedTrigger?.energy_at_trigger || 0;
     } else {
       displayEnergy = csSumPips;
@@ -88,10 +129,10 @@ module.exports = async function handler(req, res) {
     res.json({
       currencies: currencies || [],
       pairs: pairs || [],
+      slots: Object.values(slots),
       energy: displayEnergy,
       triggerEnergy: csSumPips,
-      peakBarTime: null,
-      peakBarSession: null,
+      currentSession: currSession,
       threshold_met: thresholdMet,
     });
   } catch (e) {

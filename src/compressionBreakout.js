@@ -1,32 +1,47 @@
 'use strict';
 
 /**
- * Expansion → Persistence Validation → Trade Approval
+ * Trade Approval — M15 Strength Alignment Entry
  *
- * New pair lifecycle (replaces old compression breakout):
+ * Lifecycle (per signal pair):
+ *   1. WAITING:   Pair confirmed but not yet in eligible session (entry starts next session)
+ *   2. APPROVED:  In eligible session, waiting for M15 strength alignment
+ *   3. ENTRY:     M15 strong ccy > 0 AND weak ccy < 0 — trade entry signal
+ *   4. REMOVED:   Slot expired or direction no longer holds
  *
- *   1. VALIDATING:  Pair formed after confluence bar. Monitored for 1 hour.
- *                   During this window, M15 high/low are tracked as reference levels.
- *
- *   2. APPROVED:    After 1h, 3H currency strength still supports the pair
- *                   (strong ccy 3H > 0, weak ccy 3H < 0). Trade approved.
- *                   Waiting for M15 pullback entry:
- *                     BUY  → M15 close below the 2h-window high
- *                     SELL → M15 close above the 2h-window low
- *
- *   3. ENTRY:       Pullback condition met — trade entry signal.
- *
- *   4. REMOVED:     3H currency strength reversed (strong flipped negative
- *                   or weak flipped positive). Pair removed at any stage.
+ * Entry gate: M15 currency strength must align — strong currency positive, weak currency negative.
+ * This replaces the old H1 structure breakout system.
  *
  * DB tables:
- *   m15_structure_watch  — per-pair state tracking (reuses existing table)
- *   compression_baseline — kept for backward compat (updated but not critical)
+ *   m15_structure_watch  — per-pair trade state tracking
+ *   compression_baseline — kept for backward compat
  */
 
 const { supabase } = require('./supabase');
 
-const VALIDATION_HOURS = 1;
+const SESSION_ORDER = { ASIA: 0, LONDON: 1, NEW_YORK: 2 };
+
+function getSession(utcHour) {
+  if (utcHour >= 23 || utcHour < 7)  return 'ASIA';
+  if (utcHour >= 7  && utcHour < 13) return 'LONDON';
+  if (utcHour >= 13 && utcHour < 21) return 'NEW_YORK';
+  return 'LOW_LIQUIDITY';
+}
+
+function getSessionDate(now, session) {
+  const d = new Date(now);
+  if (session === 'ASIA' && d.getUTCHours() === 23) {
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+  return d.toISOString().slice(0, 10);
+}
+
+function sessionNum(dateStr, session) {
+  if (!dateStr || !session) return 0;
+  const d = new Date(dateStr + 'T12:00:00Z');
+  const days = Math.floor(d.getTime() / 86400000);
+  return days * 3 + (SESSION_ORDER[session] || 0);
+}
 
 // ─── Compression Baseline (kept for backward compat) ────────────────────────
 
@@ -90,12 +105,23 @@ async function updateCompressionBaseline() {
   return baseline;
 }
 
-// ─── Expansion → Persistence → Trade Approval ──────────────────────────────
+// ─── M15 Strength Alignment Entry ──────────────────────────────────────────
 
 async function updateM15StructureWatch() {
+  const now = new Date();
+  const currSession = getSession(now.getUTCHours());
+
+  if (currSession === 'LOW_LIQUIDITY') {
+    console.log('[STRUCT] Low liquidity — skipping');
+    return [];
+  }
+
+  const currDate = getSessionDate(now, currSession);
+  const currSessNum = sessionNum(currDate, currSession);
+
   const { data: signalPairs } = await supabase
     .from('energy_signal_pairs')
-    .select('instrument, dir, strong_ccy, weak_ccy, triggered_at')
+    .select('instrument, dir, strong_ccy, weak_ccy, triggered_at, slot, entry_eligible_session, entry_eligible_date')
     .eq('active', true);
 
   if (!signalPairs?.length) {
@@ -105,7 +131,7 @@ async function updateM15StructureWatch() {
       .select('*');
     const toDeactivate = (existingWatch || []).filter(w => w.state !== 'INACTIVE');
     if (toDeactivate.length) {
-      const rows = toDeactivate.map(w => ({ ...w, state: 'INACTIVE', updated_at: new Date().toISOString() }));
+      const rows = toDeactivate.map(w => ({ ...w, state: 'INACTIVE', updated_at: now.toISOString() }));
       await supabase.from('m15_structure_watch').upsert(rows, { onConflict: 'instrument' });
       console.log(`[STRUCT] Deactivated ${rows.length} entries`);
     }
@@ -119,129 +145,100 @@ async function updateM15StructureWatch() {
   const watchMap = {};
   for (const w of (existingWatch || [])) watchMap[w.instrument] = w;
 
-  // Fetch current 3H currency strength for persistence checks
-  const { data: csRows } = await supabase
-    .from('currency_strength')
-    .select('currency, smooth_3h')
+  // Fetch latest M15 currency strength for alignment check
+  const { data: m15CsRows } = await supabase
+    .from('m15_currency_strength')
+    .select('time, values')
     .order('time', { ascending: false })
-    .limit(8);
-  const strengthMap = {};
-  const seen3h = new Set();
-  for (const r of (csRows || [])) {
-    if (seen3h.has(r.currency)) continue;
-    seen3h.add(r.currency);
-    strengthMap[r.currency] = parseFloat(r.smooth_3h) || 0;
+    .limit(1);
+
+  const m15Vals = m15CsRows?.[0]?.values || {};
+
+  // Fetch latest M15 candle per instrument for entry price + SL
+  const instruments = signalPairs.map(p => p.instrument);
+  const m15Map = {};
+  if (instruments.length) {
+    const { data: m15Candles } = await supabase
+      .from('backtest_candles')
+      .select('instrument, time, open, high, low, close')
+      .in('instrument', instruments)
+      .eq('timeframe', 'M15')
+      .eq('complete', true)
+      .order('time', { ascending: false })
+      .limit(instruments.length * 2);
+    for (const c of (m15Candles || [])) {
+      if (!m15Map[c.instrument]) {
+        m15Map[c.instrument] = {
+          time: c.time,
+          open: parseFloat(c.open),
+          high: parseFloat(c.high),
+          low: parseFloat(c.low),
+          close: parseFloat(c.close),
+        };
+      }
+    }
   }
 
-  const now = new Date();
   const results = [];
 
   for (const sp of signalPairs) {
     const existing = watchMap[sp.instrument] || null;
     const trigRef = sp.triggered_at || null;
+    const latest = m15Map[sp.instrument];
+    if (!latest) continue;
 
-    // Check 3H persistence: strong ccy still positive, weak ccy still negative
-    const strong3h = strengthMap[sp.strong_ccy] ?? 0;
-    const weak3h = strengthMap[sp.weak_ccy] ?? 0;
-    const directionHolds = strong3h > 0 && weak3h < 0;
+    // Check session eligibility: entry starts NEXT session after confirmation
+    const eligibleSession = sp.entry_eligible_session;
+    const eligibleDate = sp.entry_eligible_date;
+    const eligibleNum = sessionNum(eligibleDate, eligibleSession);
+    const isEligible = currSessNum >= eligibleNum;
 
-    // Fetch latest M15 candle for current price
-    const { data: m15Candles } = await supabase
-      .from('backtest_candles')
-      .select('time, open, high, low, close')
-      .eq('instrument', sp.instrument)
-      .eq('timeframe', 'M15')
-      .eq('complete', true)
-      .order('time', { ascending: false })
-      .limit(1);
+    // Check M15 strength alignment
+    const m15Strong = m15Vals[sp.strong_ccy] || 0;
+    const m15Weak = m15Vals[sp.weak_ccy] || 0;
+    const m15Aligned = m15Strong > 0 && m15Weak < 0;
 
-    if (!m15Candles?.length) continue;
-    const latest = {
-      time: m15Candles[0].time,
-      open: parseFloat(m15Candles[0].open),
-      high: parseFloat(m15Candles[0].high),
-      low: parseFloat(m15Candles[0].low),
-      close: parseFloat(m15Candles[0].close),
-    };
-
-    // Per-pair lifecycle:
-    //   NEW pair (or re-activated)            → fresh validation
-    //   REVERSAL (direction flipped)          → fresh validation
-    //   New energy event on a REMOVED pair    → fresh validation
-    //   CONTINUATION (same dir, any state)    → keep state and clock
+    // Determine pair state
     const isNew = !existing || existing.state === 'INACTIVE';
     const isReversal = !isNew && existing.direction !== sp.dir;
     const isNewEvent = !isNew && trigRef && existing.trigger_ref !== trigRef;
 
     let entry;
     if (isNew || isReversal || (isNewEvent && existing.state === 'REMOVED')) {
-      // (Re)start validation — H1 candle at direction confirmation = reference level
-      const { data: h1Candles } = await supabase
-        .from('backtest_candles')
-        .select('time, high, low')
-        .eq('instrument', sp.instrument)
-        .eq('timeframe', 'H1')
-        .lte('time', sp.triggered_at || now.toISOString())
-        .order('time', { ascending: false })
-        .limit(1);
-
-      const h1 = h1Candles?.[0];
-      const refHigh = h1 ? parseFloat(h1.high) : latest.high;
-      const refLow = h1 ? parseFloat(h1.low) : latest.low;
       const reason = isNew ? 'NEW' : isReversal ? 'REVERSAL' : 'NEW EVENT';
-
       entry = {
         instrument: sp.instrument,
         direction: sp.dir,
-        state: 'VALIDATING',
-        impulse_high: refHigh,   // H1 high at direction confirmation
-        impulse_low: refLow,     // H1 low at direction confirmation
+        state: isEligible ? 'APPROVED' : 'WAITING',
+        impulse_high: latest.high,
+        impulse_low: latest.low,
         pullback_high: null,
         pullback_low: null,
         entry_price: null,
         invalidation_price: null,
-        validation_started_at: now.toISOString(),  // per-pair 1h clock starts NOW
+        validation_started_at: now.toISOString(),
         trigger_ref: trigRef,
       };
-      console.log(`[STRUCT] ${sp.instrument} ${sp.dir} → VALIDATING (${reason}, 1h clock started, H1 ref H:${refHigh.toFixed(5)} L:${refLow.toFixed(5)})`);
-
+      console.log(`[STRUCT] ${sp.instrument} ${sp.dir} → ${entry.state} (${reason}, eligible: ${eligibleSession} ${eligibleDate})`);
     } else {
       entry = { ...existing };
-      if (isNewEvent) entry.trigger_ref = trigRef;  // continuation event — keep state & clock
+      if (isNewEvent) entry.trigger_ref = trigRef;
     }
-
-    // Per-pair validation clock — anchored to when THIS pair entered validation,
-    // never to the (possibly hours-old) confluence bar time.
-    const validationStart = entry.validation_started_at
-      ? new Date(entry.validation_started_at)
-      : (sp.triggered_at ? new Date(sp.triggered_at) : now);
-    const hoursValidating = (now - validationStart) / 3600000;
 
     // ── State machine ───────────────────────────────────────────────────────
 
-    if (entry.state === 'VALIDATING') {
-      // Wait the full per-pair 2h persistence window
-      if (hoursValidating >= VALIDATION_HOURS) {
-        if (!directionHolds) {
-          entry.state = 'REMOVED';
-          console.log(`[STRUCT] ${sp.instrument} REMOVED — 3H reversed (${sp.strong_ccy}: ${strong3h.toFixed(5)}, ${sp.weak_ccy}: ${weak3h.toFixed(5)})`);
-        } else {
-          entry.state = 'APPROVED';
-          console.log(`[STRUCT] ${sp.instrument} APPROVED — 3H holds after ${hoursValidating.toFixed(1)}h (${sp.strong_ccy}: +${strong3h.toFixed(5)}, ${sp.weak_ccy}: ${weak3h.toFixed(5)})`);
-        }
-      }
+    // WAITING → APPROVED when session becomes eligible
+    if (entry.state === 'WAITING' && isEligible) {
+      entry.state = 'APPROVED';
+      console.log(`[STRUCT] ${sp.instrument} WAITING → APPROVED (session ${currSession} is eligible)`);
     }
 
+    // APPROVED → ENTRY when M15 strength aligns
     if (entry.state === 'APPROVED') {
-      if (!directionHolds) {
-        entry.state = 'REMOVED';
-        console.log(`[STRUCT] ${sp.instrument} REMOVED — 3H reversed after approval`);
-      } else {
-        // Trade entry: price confirms direction by closing past the H1 reference level
-        // BUY:  M15 close ABOVE the H1 high at direction confirmation
-        // SELL: M15 close BELOW the H1 low at direction confirmation
-        if (sp.dir === 'BUY' && latest.close > entry.impulse_high) {
-          // SL = lowest low of last 2 H1 candles
+      if (m15Aligned) {
+        // SL from last 2 H1 candles
+        let sl;
+        if (sp.dir === 'BUY') {
           const { data: slCandles } = await supabase
             .from('backtest_candles')
             .select('low')
@@ -250,13 +247,8 @@ async function updateM15StructureWatch() {
             .eq('complete', true)
             .order('time', { ascending: false })
             .limit(2);
-          const sl = slCandles?.length ? Math.min(...slCandles.map(c => parseFloat(c.low))) : entry.impulse_low;
-          entry.state = 'ENTRY';
-          entry.entry_price = latest.close;
-          entry.invalidation_price = sl;
-          console.log(`[STRUCT] ${sp.instrument} BUY ENTRY — M15 close ${latest.close.toFixed(5)} > H1 high ${entry.impulse_high.toFixed(5)} | SL ${sl.toFixed(5)}`);
-        } else if (sp.dir === 'SELL' && latest.close < entry.impulse_low) {
-          // SL = highest high of last 2 H1 candles
+          sl = slCandles?.length ? Math.min(...slCandles.map(c => parseFloat(c.low))) : latest.low;
+        } else {
           const { data: slCandles } = await supabase
             .from('backtest_candles')
             .select('high')
@@ -265,60 +257,54 @@ async function updateM15StructureWatch() {
             .eq('complete', true)
             .order('time', { ascending: false })
             .limit(2);
-          const sl = slCandles?.length ? Math.max(...slCandles.map(c => parseFloat(c.high))) : entry.impulse_high;
-          entry.state = 'ENTRY';
-          entry.entry_price = latest.close;
-          entry.invalidation_price = sl;
-          console.log(`[STRUCT] ${sp.instrument} SELL ENTRY — M15 close ${latest.close.toFixed(5)} < H1 low ${entry.impulse_low.toFixed(5)} | SL ${sl.toFixed(5)}`);
+          sl = slCandles?.length ? Math.max(...slCandles.map(c => parseFloat(c.high))) : latest.high;
         }
+
+        entry.state = 'ENTRY';
+        entry.entry_price = latest.close;
+        entry.invalidation_price = sl;
+        console.log(`[STRUCT] ${sp.instrument} ${sp.dir} ENTRY — M15 aligned (${sp.strong_ccy}: ${m15Strong.toFixed(4)}, ${sp.weak_ccy}: ${m15Weak.toFixed(4)}) | Price: ${latest.close.toFixed(5)} | SL: ${sl.toFixed(5)}`);
       }
     }
 
-    if (entry.state === 'ENTRY') {
-      if (!directionHolds) {
-        entry.state = 'REMOVED';
-        console.log(`[STRUCT] ${sp.instrument} REMOVED — 3H reversed after entry`);
-      }
-    }
+    // ENTRY stays until direction expires (handled by slot expiry in energyDirection)
+    // No need to revert ENTRY — the slot expiry system handles cleanup
 
     results.push(entry);
   }
 
-  // Deactivate pairs no longer in signal set (preserve ENTRY/APPROVED — valid trade setups persist)
+  // Deactivate pairs no longer in signal set (preserve ENTRY/APPROVED)
   const activeInstruments = new Set(signalPairs.map(p => p.instrument));
   const preserveStates = new Set(['ENTRY', 'APPROVED']);
   for (const w of (existingWatch || [])) {
     if (!activeInstruments.has(w.instrument) && w.state !== 'INACTIVE' && !preserveStates.has(w.state)) {
-      console.log(`[STRUCT] ${w.instrument} removed from signal pairs — INACTIVE`);
-      results.push({ ...w, state: 'INACTIVE', updated_at: new Date().toISOString() });
+      console.log(`[STRUCT] ${w.instrument} removed from signal set — INACTIVE`);
+      results.push({ ...w, state: 'INACTIVE', updated_at: now.toISOString() });
     }
   }
 
   // Upsert all
   if (results.length) {
-    const rows = results.map(r => ({ ...r, updated_at: new Date().toISOString() }));
+    const rows = results.map(r => ({ ...r, updated_at: now.toISOString() }));
     let { error } = await supabase
       .from('m15_structure_watch')
       .upsert(rows, { onConflict: 'instrument' });
     if (error && /validation_started_at|trigger_ref/.test(error.message)) {
-      // Columns not migrated yet — run supabase/migration_structure_validation.sql
-      console.warn('[STRUCT] validation_started_at/trigger_ref columns missing — apply migration_structure_validation.sql. Saving without per-pair clock.');
+      console.warn('[STRUCT] Missing columns — apply migration. Saving without per-pair fields.');
       const stripped = rows.map(({ validation_started_at, trigger_ref, ...rest }) => rest);
       ({ error } = await supabase.from('m15_structure_watch').upsert(stripped, { onConflict: 'instrument' }));
     }
     if (error) console.error('[STRUCT] Upsert error:', error.message);
   }
 
-  const validating = results.filter(r => r.state === 'VALIDATING');
+  const waiting = results.filter(r => r.state === 'WAITING');
   const approved = results.filter(r => r.state === 'APPROVED');
-  const entry = results.filter(r => r.state === 'ENTRY');
+  const entries = results.filter(r => r.state === 'ENTRY');
   const removed = results.filter(r => r.state === 'REMOVED');
-  console.log(`[STRUCT] ${validating.length} VALIDATING, ${approved.length} APPROVED, ${entry.length} ENTRY, ${removed.length} REMOVED, ${results.length} total`);
+  console.log(`[STRUCT] ${waiting.length} WAITING, ${approved.length} APPROVED, ${entries.length} ENTRY, ${removed.length} REMOVED, ${results.length} total`);
 
   return results;
 }
-
-// ─── Main entry point ────────────────────────────────────────────────────────
 
 async function runCompressionBreakout() {
   const baseline = await updateCompressionBaseline();

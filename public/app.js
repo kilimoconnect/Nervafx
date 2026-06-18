@@ -2907,7 +2907,7 @@ function _scheduleEnergyRefresh(initialData) {
 
 async function renderEnergySignals(data) {
   if (!data) return;
-  const { currencies, pairs, energy, thresholdMet } = data;
+  const { currencies, pairs, energy, thresholdMet, slots, currentSession } = data;
 
   // ── Banner ──
   const ringEl = document.getElementById('es-energy-ring');
@@ -2924,74 +2924,103 @@ async function renderEnergySignals(data) {
     numEl.style.color = col;
   }
 
+  const activeSlots = (slots || []).filter(s => s.sessions_remaining > 0);
+
   if (statusEl) {
-    if (thresholdMet) {
-      statusEl.innerHTML = `<span style="color:#22c55e;font-weight:700">ACTIVE</span> — 6H strength momentum rising, directions confirmed.`;
+    if (activeSlots.length) {
+      const slotInfo = activeSlots.map(s => {
+        const sessShort = { ASIA: 'Asia', LONDON: 'Ldn', NEW_YORK: 'NY' };
+        return `Slot ${s.slot}: ${sessShort[s.confirmed_session] || s.confirmed_session} (${s.sessions_remaining} sess left)`;
+      }).join(' · ');
+      statusEl.innerHTML = `<span style="color:#22c55e;font-weight:700">ACTIVE</span> — ${activeSlots.length} confirmation${activeSlots.length > 1 ? 's' : ''} · ${slotInfo}`;
     } else if (energy >= 25) {
-      statusEl.innerHTML = `<span style="color:#f59e0b;font-weight:700">BUILDING</span> — 6H sum ${Math.round(energy)}p, approaching 40p.`;
+      statusEl.innerHTML = `<span style="color:#f59e0b;font-weight:700">BUILDING</span> — 6H sum ${Math.round(energy)}p, approaching 30p threshold.`;
     } else {
-      statusEl.innerHTML = `<span style="color:#94a3b8;font-weight:700">LOW</span> — 6H sum ${Math.round(energy)}p. Existing directions persist.`;
+      statusEl.innerHTML = `<span style="color:#94a3b8;font-weight:700">LOW</span> — 6H sum ${Math.round(energy)}p. Waiting for 5/8 currency shift.`;
     }
   }
 
-  // Event chips in banner
+  // Slot chips in banner
   if (rightEl) {
-    const events = new Set();
-    for (const p of (pairs || [])) {
-      if (p.new_energy_event && p.energy_event_type) events.add(p.energy_event_type);
-    }
     let chips = '';
-    if (events.has('CONTINUATION')) chips += '<span class="es-event-chip continuation">Continuation</span>';
-    if (events.has('REVERSAL'))     chips += '<span class="es-event-chip reversal">Reversal</span>';
-    if (events.has('NEW'))          chips += '<span class="es-event-chip new-event">New Signal</span>';
-    if (!thresholdMet && !pairs?.length) chips += '<span class="es-event-chip below">Below Threshold</span>';
+    for (const s of activeSlots) {
+      const col = s.sessions_remaining === 2 ? '#4ade80' : '#f59e0b';
+      chips += `<span class="es-event-chip" style="background:${col}20;color:${col};border-color:${col}40">Slot ${s.slot} · ${s.sessions_remaining}s</span>`;
+    }
+    if (!activeSlots.length && !pairs?.length) chips += '<span class="es-event-chip below">No Active Directions</span>';
     rightEl.innerHTML = chips;
   }
 
-  // ── Currencies ──
+  // ── Currencies (grouped by slot) ──
   const ccyEl = document.getElementById('es-currencies');
   if (ccyEl) {
     const active = (currencies || []).filter(c => c.active && c.direction !== 'NEUTRAL');
     const m15Str = _m15CurrencyStrength();
-    // Rank by |M15| + |2H| + |6H| combined performance
     const perfScore = c => Math.abs(m15Str[c.currency] || 0) + Math.abs(parseFloat(c.smooth_6h) || 0) + Math.abs(parseFloat(c.smooth_12h) || 0);
-    const strong = active.filter(c => c.direction === 'STRONG').sort((a,b) => perfScore(b) - perfScore(a));
-    const weak   = active.filter(c => c.direction === 'WEAK').sort((a,b) => perfScore(b) - perfScore(a));
 
-    if (!strong.length && !weak.length) {
-      ccyEl.innerHTML = '<div class="es-no-data">No confirmed currency directions. Energy threshold not yet met or no aligned currencies.</div>';
+    if (!active.length) {
+      ccyEl.innerHTML = '<div class="es-no-data">No confirmed currency directions. Waiting for momentum (≥30p) + 5/8 currency shift.</div>';
     } else {
-      const renderCol = (items, cls, title) => {
-        if (!items.length) return '';
-        const rows = items.map(c => {
-          const m15 = m15Str[c.currency] || 0;
-          const h6 = parseFloat(c.smooth_6h) || 0;
-          const h12 = parseFloat(c.smooth_12h) || 0;
-          const m15Cls = m15 > 0 ? 'pos' : m15 < 0 ? 'neg' : '';
-          const h6Cls = h6 > 0 ? 'pos' : h6 < 0 ? 'neg' : '';
-          const h12Cls = h12 > 0 ? 'pos' : h12 < 0 ? 'neg' : '';
-          let eventHtml = '';
-          if (c.energy_event_type) {
-            const evCls = c.energy_event_type === 'CONTINUATION' ? 'continuation' : c.energy_event_type === 'REVERSAL' ? 'reversal' : c.energy_event_type === 'DROPPED' ? 'reversal' : 'new-event';
-            eventHtml = `<span class="es-ccy-event ${evCls}">${c.energy_event_type}</span>`;
-          }
-          return `<div class="es-ccy-row">
-            <span class="es-ccy-name">${c.currency}</span>
-            <div class="es-ccy-vals">
-              <span class="es-ccy-val ${m15Cls}" title="M15">${(m15*10000).toFixed(1)}</span>
-              <span class="es-ccy-val ${h6Cls}" title="6H">${(h6*10000).toFixed(1)}</span>
-              <span class="es-ccy-val ${h12Cls}" title="12H">${(h12*10000).toFixed(1)}</span>
-              ${eventHtml}
-            </div>
+      // Group by slot
+      const bySlot = {};
+      for (const c of active) {
+        const sn = c.slot || 1;
+        if (!bySlot[sn]) bySlot[sn] = [];
+        bySlot[sn].push(c);
+      }
+
+      let html = '';
+      for (const [sn, ccys] of Object.entries(bySlot)) {
+        const slotMeta = activeSlots.find(s => s.slot === parseInt(sn));
+        const sessLeft = slotMeta?.sessions_remaining || 0;
+        const sessShort = { ASIA: 'Asia', LONDON: 'Ldn', NEW_YORK: 'NY' };
+        const confLabel = slotMeta ? `${sessShort[slotMeta.confirmed_session] || slotMeta.confirmed_session} ${slotMeta.confirmed_date?.slice(5) || ''}` : '';
+
+        const strong = ccys.filter(c => c.direction === 'STRONG').sort((a,b) => perfScore(b) - perfScore(a));
+        const weak   = ccys.filter(c => c.direction === 'WEAK').sort((a,b) => perfScore(b) - perfScore(a));
+
+        if (Object.keys(bySlot).length > 1) {
+          const dotCol = sessLeft === 2 ? '#4ade80' : sessLeft === 1 ? '#f59e0b' : '#ef4444';
+          html += `<div style="grid-column:1/-1;display:flex;align-items:center;gap:6px;margin:4px 0 2px;padding:3px 8px;background:rgba(255,255,255,0.03);border-radius:6px">
+            <span style="width:6px;height:6px;border-radius:50%;background:${dotCol}"></span>
+            <span style="font-size:10px;font-weight:700;color:${dotCol}">SLOT ${sn}</span>
+            <span style="font-size:9px;color:#64748b">${confLabel} · ${sessLeft} session${sessLeft !== 1 ? 's' : ''} remaining</span>
           </div>`;
-        }).join('');
-        return `<div class="es-ccy-col ${cls}">
-          <div class="es-ccy-col-title">${title}</div>
-          <div class="es-ccy-hdr"><span></span><span class="es-ccy-hdr-lbl">M15</span><span class="es-ccy-hdr-lbl">6H</span><span class="es-ccy-hdr-lbl">12H</span><span></span></div>
-          ${rows}
-        </div>`;
-      };
-      ccyEl.innerHTML = renderCol(strong, 'strong', 'Strong') + renderCol(weak, 'weak', 'Weak');
+        }
+
+        const renderCol = (items, cls, title) => {
+          if (!items.length) return '';
+          const rows = items.map(c => {
+            const m15 = m15Str[c.currency] || 0;
+            const h6 = parseFloat(c.smooth_6h) || 0;
+            const h12 = parseFloat(c.smooth_12h) || 0;
+            const m15Cls = m15 > 0 ? 'pos' : m15 < 0 ? 'neg' : '';
+            const h6Cls = h6 > 0 ? 'pos' : h6 < 0 ? 'neg' : '';
+            const h12Cls = h12 > 0 ? 'pos' : h12 < 0 ? 'neg' : '';
+            let eventHtml = '';
+            if (c.energy_event_type) {
+              const evCls = c.energy_event_type === 'CONTINUATION' ? 'continuation' : c.energy_event_type === 'REVERSAL' ? 'reversal' : c.energy_event_type === 'DROPPED' ? 'reversal' : 'new-event';
+              eventHtml = `<span class="es-ccy-event ${evCls}">${c.energy_event_type}</span>`;
+            }
+            return `<div class="es-ccy-row">
+              <span class="es-ccy-name">${c.currency}</span>
+              <div class="es-ccy-vals">
+                <span class="es-ccy-val ${m15Cls}" title="M15">${(m15*10000).toFixed(1)}</span>
+                <span class="es-ccy-val ${h6Cls}" title="6H">${(h6*10000).toFixed(1)}</span>
+                <span class="es-ccy-val ${h12Cls}" title="12H">${(h12*10000).toFixed(1)}</span>
+                ${eventHtml}
+              </div>
+            </div>`;
+          }).join('');
+          return `<div class="es-ccy-col ${cls}">
+            <div class="es-ccy-col-title">${title}</div>
+            <div class="es-ccy-hdr"><span></span><span class="es-ccy-hdr-lbl">M15</span><span class="es-ccy-hdr-lbl">6H</span><span class="es-ccy-hdr-lbl">12H</span><span></span></div>
+            ${rows}
+          </div>`;
+        };
+        html += renderCol(strong, 'strong', 'Strong') + renderCol(weak, 'weak', 'Weak');
+      }
+      ccyEl.innerHTML = html;
     }
   }
 
@@ -3072,7 +3101,7 @@ async function renderEnergySignals(data) {
               <div class="es-metric-val" style="color:${v45 > 0 ? '#4ade80' : v45 < 0 ? '#f87171' : '#94a3b8'}">${(v45*10000).toFixed(1)}</div>
             </div>
             <div class="es-metric">
-              <div class="es-metric-label">2H</div>
+              <div class="es-metric-label">6H</div>
               <div class="es-metric-val" style="color:${sp3 > 0 ? '#4ade80' : sp3 < 0 ? '#f87171' : '#94a3b8'}">${(sp3*10000).toFixed(1)}</div>
             </div>
             <div class="es-metric">
@@ -3534,8 +3563,8 @@ async function renderCompressionBreakout(data) {
     } else if (summary?.approved > 0) {
       statusText = 'Approved — Waiting for Entry';
       statusColor = '#0ea5e9';
-    } else if (summary?.validating > 0) {
-      statusText = 'Validating — 1h Persistence Check';
+    } else if (summary?.waiting > 0) {
+      statusText = 'Waiting — Entry Next Session';
       statusColor = '#f59e0b';
     } else {
       statusText = 'No Active Pairs';
@@ -3544,7 +3573,7 @@ async function renderCompressionBreakout(data) {
     baseEl.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:8px">
       <span style="width:8px;height:8px;border-radius:50%;background:${statusColor}"></span>
       <span style="font-size:11px;font-weight:600;color:${statusColor}">${statusText}</span>
-      ${summary ? `<span style="margin-left:auto;font-size:10px;color:#64748b">${summary.entry} entry · ${summary.approved} approved · ${summary.validating} validating</span>` : ''}
+      ${summary ? `<span style="margin-left:auto;font-size:10px;color:#64748b">${summary.entry} entry · ${summary.approved} approved · ${summary.waiting || 0} waiting</span>` : ''}
     </div>`;
   }
 
@@ -3568,11 +3597,11 @@ async function renderCompressionBreakout(data) {
 
   const STATE_COLOR = {
     ENTRY: '#22c55e', APPROVED: '#0ea5e9',
-    VALIDATING: '#f59e0b',
+    WAITING: '#f59e0b',
   };
   const STATE_LABEL = {
     ENTRY: 'ENTRY', APPROVED: 'APPROVED',
-    VALIDATING: 'VALIDATING',
+    WAITING: 'WAITING',
   };
   const isJPY = inst => inst.includes('JPY');
   const dec = inst => isJPY(inst) ? 3 : 5;
@@ -3584,12 +3613,19 @@ async function renderCompressionBreakout(data) {
     const d = dec(s.instrument);
     const pairLabel = s.instrument.replace('_', '/');
 
+    // Find matching signal pair for strong/weak ccy info
+    const sigPair = (_energySignalsCache?.pairs || []).find(p => p.instrument === s.instrument && p.active);
+    const strongCcy = sigPair?.strong_ccy || '';
+    const weakCcy = sigPair?.weak_ccy || '';
+
     let detailHtml = '';
     {
       const rows = [];
-      const refLabel = s.direction === 'BUY' ? 'H1 High' : 'H1 Low';
-      const refVal = s.direction === 'BUY' ? s.impulse_high : s.impulse_low;
-      if (refVal) rows.push(`<span class="cb-lbl">${refLabel}</span><span class="cb-val" style="color:#60a5fa">${refVal.toFixed(d)}</span>`);
+      if (s.state === 'WAITING') {
+        rows.push(`<span class="cb-lbl">Status</span><span class="cb-val" style="color:#f59e0b">Waiting for next session</span>`);
+      } else if (s.state === 'APPROVED') {
+        rows.push(`<span class="cb-lbl">Gate</span><span class="cb-val" style="color:#60a5fa">M15: ${strongCcy}↑ ${weakCcy}↓</span>`);
+      }
       if (s.entry_price) rows.push(`<span class="cb-lbl">Entry</span><span class="cb-val" style="color:#22c55e;font-weight:700">${s.entry_price.toFixed(d)}</span>`);
       if (s.invalidation_price) rows.push(`<span class="cb-lbl">Invalid</span><span class="cb-val" style="color:#f87171">${s.invalidation_price.toFixed(d)}</span>`);
       detailHtml = `<div style="display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin-top:6px;font-size:10px">${rows.join('')}</div>`;
