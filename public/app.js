@@ -6728,33 +6728,27 @@ async function fetchMarketActivity() {
 
 
 // ─── Session Continuity Notification ─────────────────────────────────────────
-
-let _sessionContinuityCache = null;
+// Fetches the same API as /session-continuity page. API returns growing pairs only.
 
 async function fetchSessionContinuity() {
-  try {
-    const data = await api('/api/session-continuity?days=2');
-    _sessionContinuityCache = data?.continuations || [];
-    renderSessionContinuityNotif();
-  } catch (_) {
-    _sessionContinuityCache = [];
-  }
-}
-
-function renderSessionContinuityNotif() {
   const bar = document.getElementById('sc-continuity-bar');
   const chipsEl = document.getElementById('sc-bar-chips');
   const inlineEl = document.getElementById('sc-notif');
-
-  const items = _sessionContinuityCache || [];
   const h = new Date().getUTCHours();
   const currSess = (h >= 23 || h < 7) ? 'ASIA' : (h >= 7 && h < 13) ? 'LONDON' : (h >= 13 && h < 21) ? 'NEW_YORK' : null;
-  if (!currSess) { if (bar) { bar.style.display = 'none'; _updateAlertBadge(); } if (inlineEl) inlineEl.innerHTML = ''; return; }
-  // Only show growing pairs
-  const recent = items.filter(c => c.toSession === currSess)
-    .map(c => ({ ...c, pairs: c.pairs.filter(p => p.growing).sort((a, b) => b.currSpread - a.currSpread) }))
-    .filter(c => c.pairs.length > 0)
-    .sort((a, b) => b.pairs.length - a.pairs.length || b.sum - a.sum);
+
+  if (!currSess) {
+    if (bar) { bar.style.display = 'none'; _updateAlertBadge(); }
+    if (inlineEl) inlineEl.innerHTML = '';
+    return;
+  }
+
+  let recent = [];
+  try {
+    const data = await api('/api/session-continuity?days=7');
+    const items = data?.continuations || [];
+    recent = items.filter(c => c.toSession === currSess);
+  } catch (_) {}
 
   // ── Header notification bar ──
   if (bar && chipsEl) {
