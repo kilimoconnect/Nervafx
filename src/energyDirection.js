@@ -3,8 +3,8 @@
 /**
  * Energy Direction Engine — 2-slot direction confirmation with session expiry
  *
- * Trigger: 6H CS momentum (3h increasing, ≥30 pips) AND 5+ of 8 currencies changed direction
- * Slots:   Up to 2 active confirmations if they represent different currency configurations
+ * Trigger: 6H CS sum ≥30 pips AND higher spread than previous confirmation
+ * Slots:   Up to 2 active confirmations from different sessions
  * Expiry:  Each confirmation lasts 2 sessions after the one it was confirmed in
  * Entry:   Starts next session after confirmation, based on M15 strength alignment
  *

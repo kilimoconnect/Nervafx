@@ -168,8 +168,7 @@
       </div>
       <div class="sx-card-bd">
         <div style="font-size:11px;color:var(--text-dim);margin-bottom:14px">
-          Pairs where the direction (BUY/SELL) continued from one session to the next.
-          For example, SELL in New York → SELL in Asia means that session's strongest/weakest currencies still align.
+          Pairs where the 6H direction (BUY/SELL) continued across sessions (up to 2 sessions back), confirmed by current 2H strength.
           <span style="color:#22c55e;font-weight:700">▲ Growing</span> = spread is widening (stronger continuation).
         </div>
 
@@ -186,6 +185,9 @@
           <button class="sx-btn" data-flow="ny_asia" onclick="filterFlow('ny_asia')">NY → Asia</button>
           <button class="sx-btn" data-flow="asia_london" onclick="filterFlow('asia_london')">Asia → London</button>
           <button class="sx-btn" data-flow="london_ny" onclick="filterFlow('london_ny')">London → NY</button>
+          <button class="sx-btn" data-flow="london_asia" onclick="filterFlow('london_asia')">London → Asia</button>
+          <button class="sx-btn" data-flow="ny_london" onclick="filterFlow('ny_london')">NY → London</button>
+          <button class="sx-btn" data-flow="asia_ny" onclick="filterFlow('asia_ny')">Asia → NY</button>
         </div>
         <div class="sc-filters">
           <span class="sc-filter-label">Direction:</span>
@@ -204,7 +206,7 @@
         </div>
 
         <div id="sc-stats" class="sc-stats"></div>
-        <div id="sc-body"><div class="sc-loading"><span class="spinner"></span> Loading 6H session data…</div></div>
+        <div id="sc-body"><div class="sc-loading"><span class="spinner"></span> Loading session continuity data…</div></div>
       </div>
     </div>
   </div>
@@ -233,7 +235,7 @@
       });
 
       const body = document.getElementById('sc-body');
-      if (!silent) body.innerHTML = '<div class="sc-loading"><span class="spinner"></span> Loading 6H session data…</div>';
+      if (!silent) body.innerHTML = '<div class="sc-loading"><span class="spinner"></span> Loading session continuity data…</div>';
 
       const token = localStorage.getItem('nfx_token');
       try {
@@ -313,6 +315,9 @@
       ny_asia: { from: 'NEW_YORK', to: 'ASIA' },
       asia_london: { from: 'ASIA', to: 'LONDON' },
       london_ny: { from: 'LONDON', to: 'NEW_YORK' },
+      london_asia: { from: 'LONDON', to: 'ASIA' },
+      ny_london: { from: 'NEW_YORK', to: 'LONDON' },
+      asia_ny: { from: 'ASIA', to: 'NEW_YORK' },
     };
 
     function buildPairDropdown(data) {
