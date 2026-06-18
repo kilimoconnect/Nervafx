@@ -4,10 +4,9 @@
  * Trade Approval — M15 Strength Alignment Entry
  *
  * Lifecycle (per signal pair):
- *   1. WAITING:   Pair confirmed but not yet in eligible session (entry starts next session)
- *   2. APPROVED:  In eligible session, waiting for M15 strength alignment
- *   3. ENTRY:     M15 strong ccy > 0 AND weak ccy < 0 — trade entry signal
- *   4. REMOVED:   Slot expired or direction no longer holds
+ *   1. WAITING:   Pair confirmed, waiting for eligible session + M15 alignment
+ *   2. ENTRY:     Eligible session reached AND M15 strong ccy > 0 AND weak ccy < 0
+ *   3. REMOVED:   Slot expired or direction no longer holds
  *
  * Entry gate: M15 currency strength must align — strong currency positive, weak currency negative.
  * This replaces the old H1 structure breakout system.
@@ -209,7 +208,7 @@ async function updateM15StructureWatch() {
       entry = {
         instrument: sp.instrument,
         direction: sp.dir,
-        state: isEligible ? 'APPROVED' : 'WAITING',
+        state: 'WAITING',
         impulse_high: latest.high,
         impulse_low: latest.low,
         pullback_high: null,
@@ -219,23 +218,15 @@ async function updateM15StructureWatch() {
         validation_started_at: now.toISOString(),
         trigger_ref: trigRef,
       };
-      console.log(`[STRUCT] ${sp.instrument} ${sp.dir} → ${entry.state} (${reason}, eligible: ${eligibleSession} ${eligibleDate})`);
+      console.log(`[STRUCT] ${sp.instrument} ${sp.dir} → WAITING (${reason}, eligible: ${eligibleSession} ${eligibleDate})`);
     } else {
       entry = { ...existing };
       if (isNewEvent) entry.trigger_ref = trigRef;
     }
 
-    // ── State machine ───────────────────────────────────────────────────────
+    // ── State machine: WAITING → ENTRY when eligible session + M15 aligned ──
 
-    // WAITING → APPROVED when session becomes eligible
-    if (entry.state === 'WAITING' && isEligible) {
-      entry.state = 'APPROVED';
-      console.log(`[STRUCT] ${sp.instrument} WAITING → APPROVED (session ${currSession} is eligible)`);
-    }
-
-    // APPROVED → ENTRY when M15 strength aligns
-    if (entry.state === 'APPROVED') {
-      if (m15Aligned) {
+    if (entry.state === 'WAITING' && isEligible && m15Aligned) {
         // SL from last 2 H1 candles
         let sl;
         if (sp.dir === 'BUY') {
@@ -264,18 +255,14 @@ async function updateM15StructureWatch() {
         entry.entry_price = latest.close;
         entry.invalidation_price = sl;
         console.log(`[STRUCT] ${sp.instrument} ${sp.dir} ENTRY — M15 aligned (${sp.strong_ccy}: ${m15Strong.toFixed(4)}, ${sp.weak_ccy}: ${m15Weak.toFixed(4)}) | Price: ${latest.close.toFixed(5)} | SL: ${sl.toFixed(5)}`);
-      }
     }
-
-    // ENTRY stays until direction expires (handled by slot expiry in energyDirection)
-    // No need to revert ENTRY — the slot expiry system handles cleanup
 
     results.push(entry);
   }
 
-  // Deactivate pairs no longer in signal set (preserve ENTRY/APPROVED)
+  // Deactivate pairs no longer in signal set (preserve ENTRY)
   const activeInstruments = new Set(signalPairs.map(p => p.instrument));
-  const preserveStates = new Set(['ENTRY', 'APPROVED']);
+  const preserveStates = new Set(['ENTRY']);
   for (const w of (existingWatch || [])) {
     if (!activeInstruments.has(w.instrument) && w.state !== 'INACTIVE' && !preserveStates.has(w.state)) {
       console.log(`[STRUCT] ${w.instrument} removed from signal set — INACTIVE`);
@@ -298,10 +285,9 @@ async function updateM15StructureWatch() {
   }
 
   const waiting = results.filter(r => r.state === 'WAITING');
-  const approved = results.filter(r => r.state === 'APPROVED');
   const entries = results.filter(r => r.state === 'ENTRY');
   const removed = results.filter(r => r.state === 'REMOVED');
-  console.log(`[STRUCT] ${waiting.length} WAITING, ${approved.length} APPROVED, ${entries.length} ENTRY, ${removed.length} REMOVED, ${results.length} total`);
+  console.log(`[STRUCT] ${waiting.length} WAITING, ${entries.length} ENTRY, ${removed.length} REMOVED, ${results.length} total`);
 
   return results;
 }

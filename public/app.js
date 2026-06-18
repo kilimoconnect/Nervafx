@@ -3560,9 +3560,6 @@ async function renderCompressionBreakout(data) {
     if (summary?.entry > 0) {
       statusText = 'Trade Entry Available';
       statusColor = '#22c55e';
-    } else if (summary?.approved > 0) {
-      statusText = 'Approved — Waiting for Entry';
-      statusColor = '#0ea5e9';
     } else if (summary?.waiting > 0) {
       statusText = 'Waiting — Entry Next Session';
       statusColor = '#f59e0b';
@@ -3573,7 +3570,7 @@ async function renderCompressionBreakout(data) {
     baseEl.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:8px">
       <span style="width:8px;height:8px;border-radius:50%;background:${statusColor}"></span>
       <span style="font-size:11px;font-weight:600;color:${statusColor}">${statusText}</span>
-      ${summary ? `<span style="margin-left:auto;font-size:10px;color:#64748b">${summary.entry} entry · ${summary.approved} approved · ${summary.waiting || 0} waiting</span>` : ''}
+      ${summary ? `<span style="margin-left:auto;font-size:10px;color:#64748b">${summary.entry} entry · ${summary.waiting || 0} waiting</span>` : ''}
     </div>`;
   }
 
@@ -3596,11 +3593,11 @@ async function renderCompressionBreakout(data) {
   }
 
   const STATE_COLOR = {
-    ENTRY: '#22c55e', APPROVED: '#0ea5e9',
+    ENTRY: '#22c55e',
     WAITING: '#f59e0b',
   };
   const STATE_LABEL = {
-    ENTRY: 'ENTRY', APPROVED: 'APPROVED',
+    ENTRY: 'ENTRY',
     WAITING: 'WAITING',
   };
   const isJPY = inst => inst.includes('JPY');
@@ -3622,9 +3619,7 @@ async function renderCompressionBreakout(data) {
     {
       const rows = [];
       if (s.state === 'WAITING') {
-        rows.push(`<span class="cb-lbl">Status</span><span class="cb-val" style="color:#f59e0b">Waiting for next session</span>`);
-      } else if (s.state === 'APPROVED') {
-        rows.push(`<span class="cb-lbl">Gate</span><span class="cb-val" style="color:#60a5fa">M15: ${strongCcy}↑ ${weakCcy}↓</span>`);
+        rows.push(`<span class="cb-lbl">Gate</span><span class="cb-val" style="color:#f59e0b">M15: ${strongCcy}↑ ${weakCcy}↓ (next session)</span>`);
       }
       if (s.entry_price) rows.push(`<span class="cb-lbl">Entry</span><span class="cb-val" style="color:#22c55e;font-weight:700">${s.entry_price.toFixed(d)}</span>`);
       if (s.invalidation_price) rows.push(`<span class="cb-lbl">Invalid</span><span class="cb-val" style="color:#f87171">${s.invalidation_price.toFixed(d)}</span>`);

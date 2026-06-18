@@ -27,7 +27,7 @@ module.exports = async function handler(req, res) {
 
     const baseline   = baselineRes.data || null;
     const structures = (watchRes.data || []).sort((a, b) => {
-      const order = { ENTRY: 0, APPROVED: 1, WAITING: 2 };
+      const order = { ENTRY: 0, WAITING: 1 };
       return (order[a.state] ?? 9) - (order[b.state] ?? 9);
     });
 
@@ -35,9 +35,8 @@ module.exports = async function handler(req, res) {
       baseline,
       structures,
       summary: {
-        entry:    structures.filter(s => s.state === 'ENTRY').length,
-        approved: structures.filter(s => s.state === 'APPROVED').length,
-        waiting:  structures.filter(s => s.state === 'WAITING').length,
+        entry:   structures.filter(s => s.state === 'ENTRY').length,
+        waiting: structures.filter(s => s.state === 'WAITING').length,
       },
     });
   } catch (e) {
