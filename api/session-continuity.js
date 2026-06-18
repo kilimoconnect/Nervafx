@@ -223,36 +223,26 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // Live-check: for the current session, verify directions against the latest M15 close.
-    // If a pair's direction flipped mid-session, drop the stale continuation.
-    const nowH = new Date().getUTCHours();
-    const currSess = getSession(nowH);
-    if (currSess && continuations.length) {
-      const { data: m15Rows } = await sb
-        .from('m15_currency_strength')
-        .select('time, values')
-        .order('time', { ascending: false })
-        .limit(1);
+    // Only return growing pairs confirmed by latest M15 strength direction
+    const { data: m15Rows } = await sb
+      .from('m15_currency_strength')
+      .select('time, values')
+      .order('time', { ascending: false })
+      .limit(1);
 
-      const m15Latest = m15Rows?.[0]?.values;
-      if (m15Latest) {
-        const liveDirs = {};
-        for (const instrument of VALID_PAIRS) {
-          const [base, quote] = instrument.split('_');
-          liveDirs[instrument] = (m15Latest[base] || 0) >= (m15Latest[quote] || 0) ? 'BUY' : 'SELL';
-        }
-
-        for (const c of continuations) {
-          if (c.toSession === currSess) {
-            c.pairs = c.pairs.filter(p => liveDirs[p.instrument] === p.dir && p.growing);
-          }
-        }
+    const m15Vals = m15Rows?.[0]?.values;
+    const m15Dirs = {};
+    if (m15Vals) {
+      for (const instrument of VALID_PAIRS) {
+        const [base, quote] = instrument.split('_');
+        m15Dirs[instrument] = (m15Vals[base] || 0) >= (m15Vals[quote] || 0) ? 'BUY' : 'SELL';
       }
     }
 
-    // Only return growing pairs
     for (const c of continuations) {
-      c.pairs = c.pairs.filter(p => p.growing).sort((a, b) => b.currSpread - a.currSpread);
+      c.pairs = c.pairs
+        .filter(p => p.growing && (!m15Vals || m15Dirs[p.instrument] === p.dir))
+        .sort((a, b) => b.currSpread - a.currSpread);
     }
     const filtered = continuations.filter(c => c.pairs.length > 0);
     res.json({ continuations: filtered.reverse(), total: filtered.length });
