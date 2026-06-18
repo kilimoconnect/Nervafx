@@ -244,7 +244,7 @@ module.exports = async function handler(req, res) {
 
         for (const c of continuations) {
           if (c.toSession === currSess) {
-            c.pairs = c.pairs.filter(p => liveDirs[p.instrument] === p.dir);
+            c.pairs = c.pairs.filter(p => liveDirs[p.instrument] === p.dir && p.growing);
           }
         }
       }
