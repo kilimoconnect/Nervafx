@@ -109,7 +109,7 @@ function _updateAlertBadge() {
   const panel = document.getElementById('hdr-panel-alerts');
   if (!panel) return;
   let count = 0;
-  const bars = ['news-alert-bar', 'sc-continuity-bar'];
+  const bars = ['news-alert-bar'];
   for (const id of bars) {
     const el = document.getElementById(id);
     if (el && el.style.display !== 'none') count++;
@@ -6692,7 +6692,6 @@ function renderMarketEnergy(sessions, expansionPressure, marketCycle, currentSes
     ${_meExpansionPressurePanel(expansionPressure)}
     ${_meHistoryPanel(historyRows, sessions)}`;
 
-  fetchSessionContinuity();
   fetchMarketEnergyNarrative(sessions, expansionPressure, marketCycle);
 }
 
@@ -6726,50 +6725,6 @@ async function fetchMarketActivity() {
 
 
 
-// ─── Session Continuity Notification ─────────────────────────────────────────
-// Fetches the same API as /session-continuity page. API returns growing+M15-confirmed pairs only.
-
-async function fetchSessionContinuity() {
-  const bar = document.getElementById('sc-continuity-bar');
-  const chipsEl = document.getElementById('sc-bar-chips');
-  const h = new Date().getUTCHours();
-  const currSess = (h >= 23 || h < 7) ? 'ASIA' : (h >= 7 && h < 13) ? 'LONDON' : (h >= 13 && h < 21) ? 'NEW_YORK' : null;
-
-  if (!currSess) {
-    if (bar) { bar.style.display = 'none'; _updateAlertBadge(); }
-    return;
-  }
-
-  let allChips = [];
-  try {
-    const data = await api('/api/session-continuity?days=7');
-    const items = (data?.continuations || []).filter(c => c.toSession === currSess);
-    const SESS_SHORT = { ASIA: 'Asia', LONDON: 'Ldn', NEW_YORK: 'NY' };
-    for (const c of items) {
-      const flow = `${SESS_SHORT[c.fromSession] || c.fromSession}→${SESS_SHORT[c.toSession] || c.toSession}`;
-      for (const p of c.pairs) allChips.push({ ...p, flow });
-    }
-  } catch (_) {}
-
-  if (bar && chipsEl) {
-    if (!allChips.length) {
-      bar.style.display = 'none';
-    } else {
-      let chips = '';
-      for (const p of allChips.slice(0, 3)) {
-        const dirCls = p.dir === 'BUY' ? 'chip-buy' : 'chip-sell';
-        chips += `<span class="sc-bar-chip">
-          <span class="chip-pair">${p.instrument.replace('_', '/')}</span>
-          <span class="${dirCls}">${p.dir}</span>
-          <span class="chip-flow">${p.flow}</span>
-        </span>`;
-      }
-      chipsEl.innerHTML = chips;
-      bar.style.display = '';
-    }
-    _updateAlertBadge();
-  }
-}
 
 // ─── Momentum Continuation Signal ────────────────────────────────────────────
 // Detects 3+ consecutive hourly increases (both ≥10) in today's session data.
