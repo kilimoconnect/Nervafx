@@ -307,35 +307,50 @@ async function calculateEnergyDirection() {
       targetSlot = 1;
       console.log(`[ENERGY_DIR] No active slots — new confirmation → slot 1`);
     } else {
-      // Compare against most recent active slot
-      const latestSlot = activeSlots.reduce((best, s) => {
-        const bMeta = slotMeta[best];
-        const sMeta = slotMeta[s];
-        if (!bMeta) return s;
-        if (!sMeta) return best;
-        return sessionNum(sMeta.confirmed_date, sMeta.confirmed_session) >
-               sessionNum(bMeta.confirmed_date, bMeta.confirmed_session) ? s : best;
+      // Check if any active slot is from the SAME session (same date + session name)
+      // Rule: only 1 confirmation per session — latest one in that session wins
+      const sameSessionSlot = activeSlots.find(s => {
+        const m = slotMeta[s];
+        return m && m.confirmed_session === session && m.confirmed_date === currDate;
       });
 
-      const prevDirMap = slotDirMaps[latestSlot];
-      let changes = 0;
-      for (const ccy of CURRENCIES) {
-        if ((newDirMap[ccy] || 'NEUTRAL') !== (prevDirMap[ccy] || 'NEUTRAL')) changes++;
-      }
-
-      console.log(`[ENERGY_DIR] Direction changes vs slot ${latestSlot}: ${changes}/8 (need ${MIN_CURRENCY_CHANGES})`);
-
-      if (changes >= MIN_CURRENCY_CHANGES) {
+      if (sameSessionSlot) {
+        // Same session — always replace (latest in this session wins)
         newConfirmation = true;
-        if (!activeSlots.includes(1)) {
-          targetSlot = 1;
-        } else if (!activeSlots.includes(2)) {
-          targetSlot = 2;
-        } else {
-          const s1Num = sessionNum(slotMeta[1]?.confirmed_date, slotMeta[1]?.confirmed_session);
-          const s2Num = sessionNum(slotMeta[2]?.confirmed_date, slotMeta[2]?.confirmed_session);
-          targetSlot = s1Num <= s2Num ? 1 : 2;
-          console.log(`[ENERGY_DIR] Both slots active — replacing oldest (slot ${targetSlot})`);
+        targetSlot = sameSessionSlot;
+        console.log(`[ENERGY_DIR] Same session (${session} ${currDate}) — replacing slot ${targetSlot} with latest`);
+      } else {
+        // Different session — check 5/8 currency change requirement
+        const latestSlot = activeSlots.reduce((best, s) => {
+          const bMeta = slotMeta[best];
+          const sMeta = slotMeta[s];
+          if (!bMeta) return s;
+          if (!sMeta) return best;
+          return sessionNum(sMeta.confirmed_date, sMeta.confirmed_session) >
+                 sessionNum(bMeta.confirmed_date, bMeta.confirmed_session) ? s : best;
+        });
+
+        const prevDirMap = slotDirMaps[latestSlot];
+        let changes = 0;
+        for (const ccy of CURRENCIES) {
+          if ((newDirMap[ccy] || 'NEUTRAL') !== (prevDirMap[ccy] || 'NEUTRAL')) changes++;
+        }
+
+        console.log(`[ENERGY_DIR] Direction changes vs slot ${latestSlot}: ${changes}/8 (need ${MIN_CURRENCY_CHANGES})`);
+
+        if (changes >= MIN_CURRENCY_CHANGES) {
+          newConfirmation = true;
+          // Use empty slot, or replace oldest
+          if (!activeSlots.includes(1)) {
+            targetSlot = 1;
+          } else if (!activeSlots.includes(2)) {
+            targetSlot = 2;
+          } else {
+            const s1Num = sessionNum(slotMeta[1]?.confirmed_date, slotMeta[1]?.confirmed_session);
+            const s2Num = sessionNum(slotMeta[2]?.confirmed_date, slotMeta[2]?.confirmed_session);
+            targetSlot = s1Num <= s2Num ? 1 : 2;
+            console.log(`[ENERGY_DIR] Both slots active — replacing oldest (slot ${targetSlot})`);
+          }
         }
       }
     }
