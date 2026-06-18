@@ -408,6 +408,7 @@
           <span class="sc-date-count">${items.length} continuation${items.length > 1 ? 's' : ''}, ${totalP} pair${totalP > 1 ? 's' : ''}</span>
         </div>`;
 
+        items.sort((a, b) => b.pairs.filter(p => p.growing).length - a.pairs.filter(p => p.growing).length || b.sum - a.sum);
         for (const c of items) {
           const fromCls = c.fromSession.toLowerCase();
           const toCls = c.toSession.toLowerCase();
@@ -427,6 +428,7 @@
             </div>
             <div class="sc-pairs">`;
 
+          c.pairs.sort((a, b) => (b.growing ? 1 : 0) - (a.growing ? 1 : 0) || b.currSpread - a.currSpread);
           const topPairs = c.pairs.slice(0, 3);
           for (const p of topPairs) {
             const dirCls = p.dir.toLowerCase();
