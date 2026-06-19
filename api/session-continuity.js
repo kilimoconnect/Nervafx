@@ -201,11 +201,63 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // Filter: growing spread + confirmed by current 2H strength direction
+    // Determine current session for H1 breakout filter
+    const nowH = new Date().getUTCHours();
+    const currSess = getSession(nowH);
+    const currDate = currSess ? sessionDate(new Date().toISOString(), currSess) : null;
+
+    // Fetch last 2 complete H1 candles per pair for H1 breakout check (current session only)
+    const allInstruments = [...VALID_PAIRS];
+    const h1Breakouts = {};
+    if (currSess) {
+      const { data: h1Candles } = await sb
+        .from('backtest_candles')
+        .select('instrument, time, high, low, close')
+        .in('instrument', allInstruments)
+        .eq('timeframe', 'H1')
+        .eq('complete', true)
+        .order('time', { ascending: false })
+        .limit(allInstruments.length * 2);
+
+      const h1Map = {};
+      for (const c of (h1Candles || [])) {
+        if (!h1Map[c.instrument]) h1Map[c.instrument] = [];
+        if (h1Map[c.instrument].length < 2) {
+          h1Map[c.instrument].push({
+            high: parseFloat(c.high),
+            low: parseFloat(c.low),
+            close: parseFloat(c.close),
+          });
+        }
+      }
+      for (const [inst, candles] of Object.entries(h1Map)) {
+        if (candles.length >= 2) {
+          const latest = candles[0];
+          const prev = candles[1];
+          h1Breakouts[inst] = {
+            buy: latest.close > prev.high,
+            sell: latest.close < prev.low,
+          };
+        }
+      }
+    }
+
+    // Filter: growing spread + 2H direction + H1 breakout (current session only)
     const has2h = Object.values(latest2h).some(v => v !== 0);
     for (const c of continuations) {
+      const isCurrentSession = currSess && c.toSession === currSess && c.date === currDate;
       c.pairs = c.pairs
-        .filter(p => p.growing && (!has2h || h2Dirs[p.instrument] === p.dir))
+        .filter(p => {
+          if (!p.growing) return false;
+          if (has2h && h2Dirs[p.instrument] !== p.dir) return false;
+          if (isCurrentSession) {
+            const bo = h1Breakouts[p.instrument];
+            if (!bo) return false;
+            if (p.dir === 'BUY' && !bo.buy) return false;
+            if (p.dir === 'SELL' && !bo.sell) return false;
+          }
+          return true;
+        })
         .sort((a, b) => b.currSpread - a.currSpread);
     }
     const filtered = continuations.filter(c => c.pairs.length > 0);
