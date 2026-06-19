@@ -242,15 +242,15 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // Filter: growing spread + 2H direction + H1 breakout (current session only)
+    // Filter: growing spread for all; 2H direction + H1 breakout for current session only
     const has2h = Object.values(latest2h).some(v => v !== 0);
     for (const c of continuations) {
       const isCurrentSession = currSess && c.toSession === currSess && c.date === currDate;
       c.pairs = c.pairs
         .filter(p => {
           if (!p.growing) return false;
-          if (has2h && h2Dirs[p.instrument] !== p.dir) return false;
           if (isCurrentSession) {
+            if (has2h && h2Dirs[p.instrument] !== p.dir) return false;
             const bo = h1Breakouts[p.instrument];
             if (!bo) return false;
             if (p.dir === 'BUY' && !bo.buy) return false;
