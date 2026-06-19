@@ -22,7 +22,7 @@ module.exports = async function handler(req, res) {
 
     const [baselineRes, watchRes] = await Promise.all([
       sb.from('compression_baseline').select('*').eq('id', 1).single(),
-      sb.from('m15_structure_watch').select('*').not('state', 'in', '("INACTIVE","REMOVED")').order('state'),
+      sb.from('m15_structure_watch').select('*').not('state', 'in', '("INACTIVE","REMOVED","APPROVED","VALIDATING")').order('state'),
     ]);
 
     const baseline   = baselineRes.data || null;

@@ -4,12 +4,14 @@
  * Trade Approval — M15 Strength Alignment Entry
  *
  * Lifecycle (per signal pair):
- *   1. WAITING:   Pair confirmed, waiting for eligible session + M15 alignment
- *   2. ENTRY:     Eligible session reached AND M15 strong ccy > 0 AND weak ccy < 0
+ *   1. WAITING:   Pair confirmed, waiting for eligible session + M15 alignment + H1 breakout
+ *   2. ENTRY:     All three conditions met
  *   3. REMOVED:   Slot expired or direction no longer holds
  *
- * Entry gate: M15 currency strength must align — strong currency positive, weak currency negative.
- * This replaces the old H1 structure breakout system.
+ * Entry gate (all required):
+ *   - Session eligible (next session after direction confirmation)
+ *   - M15 currency strength aligned (strong ccy > 0, weak ccy < 0)
+ *   - H1 breakout: BUY = H1 close > previous H1 high, SELL = H1 close < previous H1 low
  *
  * DB tables:
  *   m15_structure_watch  — per-pair trade state tracking
@@ -153,7 +155,7 @@ async function updateM15StructureWatch() {
 
   const m15Vals = m15CsRows?.[0]?.values || {};
 
-  // Fetch latest M15 candle per instrument for entry price + SL
+  // Fetch latest M15 candle per instrument for entry price
   const instruments = signalPairs.map(p => p.instrument);
   const m15Map = {};
   if (instruments.length) {
@@ -174,6 +176,31 @@ async function updateM15StructureWatch() {
           low: parseFloat(c.low),
           close: parseFloat(c.close),
         };
+      }
+    }
+  }
+
+  // Fetch last 2 complete H1 candles per instrument for breakout check + SL
+  const h1Map = {};
+  if (instruments.length) {
+    const { data: h1Candles } = await supabase
+      .from('backtest_candles')
+      .select('instrument, time, open, high, low, close')
+      .in('instrument', instruments)
+      .eq('timeframe', 'H1')
+      .eq('complete', true)
+      .order('time', { ascending: false })
+      .limit(instruments.length * 2);
+    for (const c of (h1Candles || [])) {
+      if (!h1Map[c.instrument]) h1Map[c.instrument] = [];
+      if (h1Map[c.instrument].length < 2) {
+        h1Map[c.instrument].push({
+          time: c.time,
+          open: parseFloat(c.open),
+          high: parseFloat(c.high),
+          low: parseFloat(c.low),
+          close: parseFloat(c.close),
+        });
       }
     }
   }
@@ -224,37 +251,35 @@ async function updateM15StructureWatch() {
       if (isNewEvent) entry.trigger_ref = trigRef;
     }
 
-    // ── State machine: WAITING → ENTRY when eligible session + M15 aligned ──
+    // ── State machine: WAITING → ENTRY ──
+    // Requires: eligible session + M15 aligned + H1 breakout
+    // H1 breakout: BUY = latest H1 close > previous H1 high
+    //              SELL = latest H1 close < previous H1 low
 
-    if (entry.state === 'WAITING' && isEligible && m15Aligned) {
+    const h1Candles = h1Map[sp.instrument] || [];
+    const h1Latest = h1Candles[0];
+    const h1Prev = h1Candles[1];
+    let h1Breakout = false;
+    if (h1Latest && h1Prev) {
+      if (sp.dir === 'BUY') {
+        h1Breakout = h1Latest.close > h1Prev.high;
+      } else {
+        h1Breakout = h1Latest.close < h1Prev.low;
+      }
+    }
+
+    if (entry.state === 'WAITING' && isEligible && m15Aligned && h1Breakout) {
         // SL from last 2 H1 candles
-        let sl;
-        if (sp.dir === 'BUY') {
-          const { data: slCandles } = await supabase
-            .from('backtest_candles')
-            .select('low')
-            .eq('instrument', sp.instrument)
-            .eq('timeframe', 'H1')
-            .eq('complete', true)
-            .order('time', { ascending: false })
-            .limit(2);
-          sl = slCandles?.length ? Math.min(...slCandles.map(c => parseFloat(c.low))) : latest.low;
-        } else {
-          const { data: slCandles } = await supabase
-            .from('backtest_candles')
-            .select('high')
-            .eq('instrument', sp.instrument)
-            .eq('timeframe', 'H1')
-            .eq('complete', true)
-            .order('time', { ascending: false })
-            .limit(2);
-          sl = slCandles?.length ? Math.max(...slCandles.map(c => parseFloat(c.high))) : latest.high;
-        }
+        const sl = sp.dir === 'BUY'
+          ? Math.min(...h1Candles.map(c => c.low))
+          : Math.max(...h1Candles.map(c => c.high));
 
         entry.state = 'ENTRY';
         entry.entry_price = latest.close;
         entry.invalidation_price = sl;
-        console.log(`[STRUCT] ${sp.instrument} ${sp.dir} ENTRY — M15 aligned (${sp.strong_ccy}: ${m15Strong.toFixed(4)}, ${sp.weak_ccy}: ${m15Weak.toFixed(4)}) | Price: ${latest.close.toFixed(5)} | SL: ${sl.toFixed(5)}`);
+        console.log(`[STRUCT] ${sp.instrument} ${sp.dir} ENTRY — M15 aligned (${sp.strong_ccy}: ${m15Strong.toFixed(4)}, ${sp.weak_ccy}: ${m15Weak.toFixed(4)}) + H1 breakout (close ${h1Latest.close.toFixed(5)} ${sp.dir === 'BUY' ? '>' : '<'} prev ${sp.dir === 'BUY' ? h1Prev.high.toFixed(5) : h1Prev.low.toFixed(5)}) | Price: ${latest.close.toFixed(5)} | SL: ${sl.toFixed(5)}`);
+    } else if (entry.state === 'WAITING' && isEligible && m15Aligned && !h1Breakout && h1Latest && h1Prev) {
+        console.log(`[STRUCT] ${sp.instrument} ${sp.dir} WAITING — M15 aligned but no H1 breakout (close ${h1Latest.close.toFixed(5)} ${sp.dir === 'BUY' ? '<=' : '>='} prev ${sp.dir === 'BUY' ? h1Prev.high.toFixed(5) : h1Prev.low.toFixed(5)})`);
     }
 
     results.push(entry);
