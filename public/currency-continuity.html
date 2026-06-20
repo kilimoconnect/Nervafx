@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>NervaFX — Currency Continuity</title>
+  <link rel="icon" type="image/png" href="/nervafx-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <link rel="stylesheet" href="style.css" />
+
+  <style>
+    .grid { display: block !important; }
+
+    .sx-topbar {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 28px; height: 56px;
+      background: rgba(8,11,18,0.92);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+    .sx-topbar-left { display: flex; align-items: center; gap: 12px; }
+    .sx-logo img { height: 24px; display: block; }
+    .sx-sep { color: rgba(255,255,255,0.1); font-size: 20px; font-weight: 200; }
+    .sx-title-text { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+    .sx-back-btn {
+      display: flex; align-items: center; gap: 5px;
+      padding: 6px 12px; border-radius: 8px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); font-size: 11px; font-weight: 600;
+      cursor: pointer; text-decoration: none; transition: all 0.15s;
+    }
+    .sx-back-btn:hover { background: rgba(255,255,255,0.09); color: var(--text); }
+
+    .sx-main { max-width: 900px; margin: 0 auto; padding: 20px 16px 80px; }
+
+    .sx-card {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px; margin-bottom: 18px; overflow: hidden;
+    }
+    .sx-card-hd {
+      padding: 12px 16px; font-size: 12px; font-weight: 700;
+      color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    }
+    .sx-card-hd i { width: 15px; height: 15px; }
+    .sx-card-bd { padding: 14px 16px; }
+
+    .sx-ctrls { display: flex; gap: 6px; margin-left: auto; align-items: center; flex-wrap: wrap; }
+    .sx-btn {
+      padding: 4px 12px; border-radius: 7px; font-size: 11px; font-weight: 700;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); cursor: pointer; transition: all 0.15s;
+    }
+    .sx-btn:hover { color: var(--text); background: rgba(255,255,255,0.08); }
+    .sx-btn.active { background: rgba(96,165,250,0.15); border-color: rgba(96,165,250,0.5); color: #60a5fa; }
+
+    .sc-filters {
+      display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; align-items: center;
+    }
+    .sc-filter-label { font-size: 10px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: .05em; }
+
+    .sc-rows { display: flex; flex-direction: column; gap: 8px; }
+    .sc-row {
+      padding: 12px 14px; border-radius: 10px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+    .sc-row-hdr {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap;
+    }
+    .sc-date { font-size: 12px; font-weight: 700; color: #e2e8f0; }
+    .sc-arrow { font-size: 12px; font-weight: 700; color: var(--text-dim); }
+    .sc-session {
+      font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 5px;
+      text-transform: uppercase; letter-spacing: .04em;
+    }
+    .sc-session.asia { background: rgba(251,191,36,0.12); color: #fbbf24; }
+    .sc-session.london { background: rgba(96,165,250,0.12); color: #60a5fa; }
+    .sc-session.new_york { background: rgba(167,139,250,0.12); color: #a78bfa; }
+
+    .cc-currencies { display: flex; gap: 8px; flex-wrap: wrap; }
+    .cc-ccy {
+      flex: 0 0 auto; min-width: 110px; padding: 8px 12px; border-radius: 7px;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06);
+    }
+    .cc-ccy.strong { border-color: rgba(34,197,94,0.25); }
+    .cc-ccy-name { font-size: 14px; font-weight: 800; color: #e2e8f0; }
+    .cc-ccy-dir {
+      font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 3px;
+      margin-left: 4px;
+    }
+    .cc-ccy-dir.bullish { background: rgba(34,197,94,0.15); color: #22c55e; }
+    .cc-ccy-dir.bearish { background: rgba(239,68,68,0.15); color: #ef4444; }
+    .cc-ccy-pips {
+      display: flex; align-items: center; gap: 4px; margin-top: 4px; font-size: 10px;
+    }
+    .cc-ccy-ratio {
+      font-size: 10px; font-weight: 700; margin-top: 2px;
+    }
+    .cc-ccy-ratio.strong-ratio { color: #22c55e; }
+    .cc-ccy-ratio.weak-ratio { color: #fbbf24; }
+
+    .cc-count {
+      font-size: 10px; font-weight: 600; color: #a78bfa;
+      background: rgba(167,139,250,0.1); padding: 2px 8px; border-radius: 4px;
+      margin-left: auto;
+    }
+
+    .sc-date-hdr {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 6px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .sc-date-label { font-size: 12px; font-weight: 700; color: #e2e8f0; }
+    .sc-date-count {
+      font-size: 10px; font-weight: 600; color: #a78bfa;
+      background: rgba(167,139,250,0.1); padding: 2px 8px; border-radius: 4px;
+    }
+
+    .sc-stats {
+      display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap;
+    }
+    .sc-stat {
+      padding: 10px 16px; border-radius: 8px;
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+      text-align: center; flex: 1; min-width: 80px;
+    }
+    .sc-stat-val { font-size: 20px; font-weight: 800; color: #e2e8f0; }
+    .sc-stat-label { font-size: 9px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: .05em; margin-top: 2px; }
+
+    .sc-loading {
+      text-align: center; padding: 60px 20px; color: var(--text-dim); font-size: 12px;
+    }
+    .spinner {
+      display: inline-block; width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.08);
+      border-top-color: #60a5fa; border-radius: 50%; animation: spin .6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="sx-topbar">
+    <div class="sx-topbar-left">
+      <a href="/app" class="sx-logo"><img src="/nervafx-logo.svg" alt="NervaFX" onerror="this.style.display='none'"></a>
+      <span class="sx-sep">|</span>
+      <span class="sx-title-text">Currency Continuity</span>
+    </div>
+    <a href="/app" class="sx-back-btn"><i data-lucide="arrow-left" style="width:12px;height:12px"></i> Dashboard</a>
+  </div>
+
+  <div class="sx-main">
+    <div class="sx-card">
+      <div class="sx-card-hd">
+        <i data-lucide="trending-up"></i> Currency Continuity — Does a Currency Continue Across Sessions?
+        <div class="sx-ctrls">
+          <button class="sx-btn active" data-days="7" onclick="loadDays(7)">7D</button>
+          <button class="sx-btn" data-days="30" onclick="loadDays(30)">30D</button>
+          <button class="sx-btn" data-days="90" onclick="loadDays(90)">90D</button>
+          <button class="sx-btn" data-days="420" onclick="loadDays(420)">All</button>
+        </div>
+      </div>
+      <div class="sx-card-bd">
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:14px">
+          Per-currency continuation: same direction AND current movement &ge; 30% of previous session.
+          <span style="color:#22c55e;font-weight:700">Strong</span> = &ge; 50%.
+          <span style="color:#fbbf24;font-weight:700">Moderate</span> = 30-49%.
+        </div>
+
+        <div class="sc-filters">
+          <span class="sc-filter-label">Flow:</span>
+          <button class="sx-btn active" data-flow="all" onclick="filterFlow('all')">All Flows</button>
+          <button class="sx-btn" data-flow="ny_asia" onclick="filterFlow('ny_asia')">NY &rarr; Asia</button>
+          <button class="sx-btn" data-flow="asia_london" onclick="filterFlow('asia_london')">Asia &rarr; London</button>
+          <button class="sx-btn" data-flow="london_ny" onclick="filterFlow('london_ny')">London &rarr; NY</button>
+          <button class="sx-btn" data-flow="london_asia" onclick="filterFlow('london_asia')">London &rarr; Asia</button>
+          <button class="sx-btn" data-flow="ny_london" onclick="filterFlow('ny_london')">NY &rarr; London</button>
+          <button class="sx-btn" data-flow="asia_ny" onclick="filterFlow('asia_ny')">Asia &rarr; NY</button>
+        </div>
+        <div class="sc-filters">
+          <span class="sc-filter-label">Currency:</span>
+          <button class="sx-btn active" data-ccy="all" onclick="filterCcy('all')">All</button>
+          <button class="sx-btn" data-ccy="USD" onclick="filterCcy('USD')">USD</button>
+          <button class="sx-btn" data-ccy="EUR" onclick="filterCcy('EUR')">EUR</button>
+          <button class="sx-btn" data-ccy="GBP" onclick="filterCcy('GBP')">GBP</button>
+          <button class="sx-btn" data-ccy="JPY" onclick="filterCcy('JPY')">JPY</button>
+        </div>
+        <div class="sc-filters">
+          <button class="sx-btn" data-ccy="CHF" onclick="filterCcy('CHF')">CHF</button>
+          <button class="sx-btn" data-ccy="CAD" onclick="filterCcy('CAD')">CAD</button>
+          <button class="sx-btn" data-ccy="AUD" onclick="filterCcy('AUD')">AUD</button>
+          <button class="sx-btn" data-ccy="NZD" onclick="filterCcy('NZD')">NZD</button>
+          <span class="sc-filter-label" style="margin-left:12px">Strength:</span>
+          <button class="sx-btn active" data-str="all" onclick="filterStr('all')">All</button>
+          <button class="sx-btn" data-str="strong" onclick="filterStr('strong')">Strong Only</button>
+        </div>
+
+        <div id="sc-stats" class="sc-stats"></div>
+        <div id="sc-body"><div class="sc-loading"><span class="spinner"></span> Loading currency continuity data&hellip;</div></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function _clearAuth() {
+      Object.keys(localStorage).filter(k => k.startsWith('nfx_')).forEach(k => localStorage.removeItem(k));
+    }
+    async function _refreshToken() {
+      const rt = localStorage.getItem('nfx_refresh_token');
+      if (!rt) return false;
+      try {
+        const r = await fetch('/api/refresh', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: rt }),
+        });
+        if (!r.ok) return false;
+        const d = await r.json();
+        if (!d.token) return false;
+        localStorage.setItem('nfx_token', d.token);
+        localStorage.setItem('nfx_refresh_token', d.refresh_token || rt);
+        return true;
+      } catch (_) { return false; }
+    }
+    (function guardAuth() {
+      const token = localStorage.getItem('nfx_token');
+      if (!token) return location.replace('/login.html');
+      try {
+        const pay = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+        if (pay.exp * 1000 < Date.now()) {
+          _refreshToken().then(ok => { if (!ok) { _clearAuth(); location.replace('/login.html'); } });
+        }
+      } catch (_) { _clearAuth(); location.replace('/login.html'); }
+    })();
+
+    const _tz = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
+    let _data = [];
+    let _flowFilter = 'all';
+    let _ccyFilter = 'all';
+    let _strFilter = 'all';
+    let _currentDays = 7;
+
+    const FLOW_MAP = {
+      ny_asia: { from: 'NEW_YORK', to: 'ASIA' },
+      asia_london: { from: 'ASIA', to: 'LONDON' },
+      london_ny: { from: 'LONDON', to: 'NEW_YORK' },
+      london_asia: { from: 'LONDON', to: 'ASIA' },
+      ny_london: { from: 'NEW_YORK', to: 'LONDON' },
+      asia_ny: { from: 'ASIA', to: 'NEW_YORK' },
+    };
+
+    function fmtDate(iso) {
+      const d = new Date(iso + 'T12:00:00Z');
+      return d.toLocaleDateString('en-US', { timeZone: _tz(), weekday: 'short', month: 'short', day: 'numeric' });
+    }
+
+    async function load(days, silent) {
+      _currentDays = days;
+      document.querySelectorAll('[data-days]').forEach(b => {
+        b.classList.toggle('active', parseInt(b.dataset.days) === days);
+      });
+
+      const body = document.getElementById('sc-body');
+      if (!silent) body.innerHTML = '<div class="sc-loading"><span class="spinner"></span> Loading currency continuity data&hellip;</div>';
+
+      let token = localStorage.getItem('nfx_token');
+      try {
+        let r = await fetch(`/api/currency-continuity?days=${days}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (r.status === 401 || r.status === 403) {
+          const ok = await _refreshToken();
+          if (!ok) { _clearAuth(); return location.replace('/login.html'); }
+          token = localStorage.getItem('nfx_token');
+          r = await fetch(`/api/currency-continuity?days=${days}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+        }
+        if (!r.ok) {
+          const e = await r.json().catch(() => ({}));
+          if (!silent) body.innerHTML = `<div class="sc-loading" style="color:#ef4444">${e.error || 'Failed to load'}</div>`;
+          return;
+        }
+        const json = await r.json();
+        _data = json.continuations || [];
+        render();
+      } catch (e) {
+        if (!silent) body.innerHTML = `<div class="sc-loading" style="color:#ef4444">${e.message}</div>`;
+      }
+    }
+
+    function loadDays(d) { load(d); }
+
+    function filterFlow(f) {
+      _flowFilter = f;
+      document.querySelectorAll('[data-flow]').forEach(b => b.classList.toggle('active', b.dataset.flow === f));
+      render();
+    }
+
+    function filterCcy(c) {
+      _ccyFilter = c;
+      document.querySelectorAll('[data-ccy]').forEach(b => b.classList.toggle('active', b.dataset.ccy === c));
+      render();
+    }
+
+    function filterStr(s) {
+      _strFilter = s;
+      document.querySelectorAll('[data-str]').forEach(b => b.classList.toggle('active', b.dataset.str === s));
+      render();
+    }
+
+    function render() {
+      const body = document.getElementById('sc-body');
+      const statsEl = document.getElementById('sc-stats');
+
+      let filtered = _data;
+
+      if (_flowFilter !== 'all' && FLOW_MAP[_flowFilter]) {
+        const { from, to } = FLOW_MAP[_flowFilter];
+        filtered = filtered.filter(c => c.fromSession === from && c.toSession === to);
+      }
+
+      if (_ccyFilter !== 'all') {
+        filtered = filtered.map(c => ({
+          ...c,
+          currencies: c.currencies.filter(cc => cc.currency === _ccyFilter),
+          continuedCount: c.currencies.filter(cc => cc.currency === _ccyFilter).length,
+          strongCount: c.currencies.filter(cc => cc.currency === _ccyFilter && cc.strong).length,
+        })).filter(c => c.currencies.length > 0);
+      }
+
+      if (_strFilter === 'strong') {
+        filtered = filtered.map(c => ({
+          ...c,
+          currencies: c.currencies.filter(cc => cc.strong),
+          continuedCount: c.currencies.filter(cc => cc.strong).length,
+          strongCount: c.currencies.filter(cc => cc.strong).length,
+        })).filter(c => c.currencies.length > 0);
+      }
+
+      if (!filtered.length) {
+        statsEl.innerHTML = '';
+        body.innerHTML = '<div class="sc-loading" style="color:var(--text-dim)">No currency continuations found for this period</div>';
+        return;
+      }
+
+      const totalCcys = filtered.reduce((s, c) => s + c.currencies.length, 0);
+      const strongCount = filtered.reduce((s, c) => s + c.currencies.filter(cc => cc.strong).length, 0);
+
+      const ccyCount = {};
+      for (const c of filtered) {
+        for (const cc of c.currencies) {
+          ccyCount[cc.currency] = (ccyCount[cc.currency] || 0) + 1;
+        }
+      }
+      const topCcy = Object.entries(ccyCount).sort((a, b) => b[1] - a[1])[0];
+      const topLabel = topCcy ? `${topCcy[0]} (${topCcy[1]}x)` : '—';
+
+      statsEl.innerHTML = `
+        <div class="sc-stat"><div class="sc-stat-val">${filtered.length}</div><div class="sc-stat-label">Sessions</div></div>
+        <div class="sc-stat"><div class="sc-stat-val">${totalCcys}</div><div class="sc-stat-label">Continuations</div></div>
+        <div class="sc-stat"><div class="sc-stat-val" style="color:#22c55e">${strongCount}</div><div class="sc-stat-label">Strong (&ge;50%)</div></div>
+        <div class="sc-stat"><div class="sc-stat-val" style="font-size:15px">${topLabel}</div><div class="sc-stat-label">Most Continued</div></div>
+      `;
+
+      const byDate = {};
+      for (const c of filtered) {
+        (byDate[c.date] = byDate[c.date] || []).push(c);
+      }
+
+      let html = '<div class="sc-rows">';
+      for (const [date, items] of Object.entries(byDate).sort((a, b) => b[0].localeCompare(a[0]))) {
+        const totalC = items.reduce((s, c) => s + c.currencies.length, 0);
+        html += `<div class="sc-date-hdr">
+          <span class="sc-date-label">${fmtDate(date)}</span>
+          <span class="sc-date-count">${items.length} flow${items.length > 1 ? 's' : ''}, ${totalC} currenc${totalC > 1 ? 'ies' : 'y'}</span>
+        </div>`;
+
+        for (const c of items) {
+          const fromCls = c.fromSession.toLowerCase();
+          const toCls = c.toSession.toLowerCase();
+
+          html += `<div class="sc-row">
+            <div class="sc-row-hdr">
+              <span class="sc-session ${fromCls}">${c.fromSession.replace('_', ' ')}</span>
+              <span class="sc-arrow">&rarr;</span>
+              <span class="sc-session ${toCls}">${c.toSession.replace('_', ' ')}</span>
+              <span class="cc-count">${c.currencies.length} continued${c.strongCount ? ', ' + c.strongCount + ' strong' : ''}</span>
+            </div>
+            <div class="cc-currencies">`;
+
+          for (const cc of c.currencies) {
+            const dir = cc.currPips > 0 ? 'bullish' : 'bearish';
+            const ratCls = cc.strong ? 'strong-ratio' : 'weak-ratio';
+            html += `<div class="cc-ccy${cc.strong ? ' strong' : ''}">
+              <div>
+                <span class="cc-ccy-name">${cc.currency}</span>
+                <span class="cc-ccy-dir ${dir}">${dir === 'bullish' ? '▲' : '▼'}</span>
+              </div>
+              <div class="cc-ccy-pips">
+                <span style="color:#64748b">${cc.prevPips > 0 ? '+' : ''}${cc.prevPips}p</span>
+                <span style="color:#475569">&rarr;</span>
+                <span style="color:#e2e8f0;font-weight:700">${cc.currPips > 0 ? '+' : ''}${cc.currPips}p</span>
+              </div>
+              <div class="cc-ccy-ratio ${ratCls}">${cc.ratio}% ${cc.strong ? 'Strong' : 'Moderate'}</div>
+            </div>`;
+          }
+
+          html += '</div></div>';
+        }
+      }
+      html += '</div>';
+      body.innerHTML = html;
+    }
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    load(7);
+    setInterval(() => load(_currentDays, true), 60000);
+  </script>
+</body>
+</html>

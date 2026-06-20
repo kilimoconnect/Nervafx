@@ -10,7 +10,8 @@
     "api/run-pipeline.js":        { "maxDuration": 120 },
     "api/cron-backtest-sync.js":  { "maxDuration": 300 },
     "api/de-history.js":          { "maxDuration": 60 },
-    "api/session-continuity.js":  { "maxDuration": 60 }
+    "api/session-continuity.js":  { "maxDuration": 60 },
+    "api/currency-continuity.js": { "maxDuration": 60 }
   },
   "rewrites": [
     { "source": "/",       "destination": "/login.html" },
@@ -24,7 +25,8 @@
     { "source": "/payment-callback", "destination": "/payment-callback.html" },
     { "source": "/archive",          "destination": "/archive.html" },
     { "source": "/autotrader",       "destination": "/autotrader.html" },
-    { "source": "/session-continuity", "destination": "/session-continuity.html" }
+    { "source": "/session-continuity", "destination": "/session-continuity.html" },
+    { "source": "/currency-continuity", "destination": "/currency-continuity.html" }
   ],
   "headers": [
     {
