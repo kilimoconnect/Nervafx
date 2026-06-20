@@ -268,6 +268,9 @@
             <button class="sx-btn" data-spccy="AUD" onclick="filterSpCcy('AUD')">AUD</button>
             <button class="sx-btn" data-spccy="NZD" onclick="filterSpCcy('NZD')">NZD</button>
           </div>
+          <div id="sp-chart" style="margin-bottom:16px;overflow-x:auto">
+            <canvas id="sp-canvas" height="180" style="width:100%;border-radius:8px;background:rgba(255,255,255,0.02)"></canvas>
+          </div>
           <div id="sp-body"><div class="sc-loading"><span class="spinner"></span> Loading&hellip;</div></div>
         </div>
       </div>
@@ -551,6 +554,85 @@
       }
 
       body.innerHTML = html;
+      renderChart();
+    }
+
+    function renderChart() {
+      const canvas = document.getElementById('sp-canvas');
+      if (!canvas || !_sessions.length) return;
+      const ctx = canvas.getContext('2d');
+
+      const items = [..._sessions].reverse();
+      const totals = items.map(s =>
+        Math.round(CURRENCIES.reduce((sum, ccy) => sum + Math.abs(s.movements[ccy] || 0), 0) * 10) / 10
+      );
+      const labels = items.map(s => {
+        const d = s.date.slice(5);
+        const sn = s.session === 'ASIA' ? 'A' : s.session === 'LONDON' ? 'L' : 'NY';
+        return `${d} ${sn}`;
+      });
+
+      const maxVal = Math.max(...totals, 1);
+      const dpr = window.devicePixelRatio || 1;
+      const barW = Math.max(6, Math.min(20, Math.floor(800 / items.length) - 2));
+      const chartW = Math.max(canvas.parentElement.clientWidth, items.length * (barW + 2) + 60);
+      const chartH = 180;
+
+      canvas.width = chartW * dpr;
+      canvas.height = chartH * dpr;
+      canvas.style.width = chartW + 'px';
+      canvas.style.height = chartH + 'px';
+      ctx.scale(dpr, dpr);
+
+      ctx.clearRect(0, 0, chartW, chartH);
+
+      const padL = 40, padR = 10, padT = 16, padB = 32;
+      const plotW = chartW - padL - padR;
+      const plotH = chartH - padT - padB;
+
+      // Y axis gridlines
+      ctx.font = '9px Inter, sans-serif';
+      ctx.textAlign = 'right';
+      const steps = 4;
+      for (let i = 0; i <= steps; i++) {
+        const v = Math.round(maxVal * i / steps);
+        const y = padT + plotH - (plotH * i / steps);
+        ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+        ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(chartW - padR, y); ctx.stroke();
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.fillText(v, padL - 4, y + 3);
+      }
+
+      // Bars
+      const gap = Math.max(1, Math.floor((plotW - items.length * barW) / Math.max(items.length, 1)));
+      const totalBarSpace = barW + gap;
+
+      const sesColors = { ASIA: '#fbbf24', LONDON: '#60a5fa', NEW_YORK: '#a78bfa' };
+
+      for (let i = 0; i < items.length; i++) {
+        const x = padL + i * totalBarSpace;
+        const h = (totals[i] / maxVal) * plotH;
+        const y = padT + plotH - h;
+        ctx.fillStyle = sesColors[items[i].session] || '#60a5fa';
+        ctx.globalAlpha = 0.7;
+        ctx.beginPath();
+        ctx.roundRect(x, y, barW, h, [2, 2, 0, 0]);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        // X labels (show every nth to avoid overlap)
+        const labelEvery = Math.max(1, Math.floor(items.length / 30));
+        if (i % labelEvery === 0) {
+          ctx.save();
+          ctx.font = '8px Inter, sans-serif';
+          ctx.fillStyle = 'rgba(255,255,255,0.3)';
+          ctx.textAlign = 'center';
+          ctx.translate(x + barW / 2, chartH - 4);
+          ctx.rotate(-0.5);
+          ctx.fillText(labels[i], 0, 0);
+          ctx.restore();
+        }
+      }
     }
 
     if (typeof lucide !== 'undefined') lucide.createIcons();
