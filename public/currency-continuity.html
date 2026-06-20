@@ -269,7 +269,7 @@
             <button class="sx-btn" data-spccy="NZD" onclick="filterSpCcy('NZD')">NZD</button>
           </div>
           <div id="sp-chart" style="margin-bottom:16px;overflow-x:auto">
-            <canvas id="sp-canvas" height="180" style="width:100%;border-radius:8px;background:rgba(255,255,255,0.02)"></canvas>
+            <canvas id="sp-canvas" height="220" style="width:100%;border-radius:8px;background:rgba(255,255,255,0.02)"></canvas>
           </div>
           <div id="sp-body"><div class="sc-loading"><span class="spinner"></span> Loading&hellip;</div></div>
         </div>
@@ -576,7 +576,7 @@
       const dpr = window.devicePixelRatio || 1;
       const barW = Math.max(6, Math.min(20, Math.floor(800 / items.length) - 2));
       const chartW = Math.max(canvas.parentElement.clientWidth, items.length * (barW + 2) + 60);
-      const chartH = 180;
+      const chartH = 220;
 
       canvas.width = chartW * dpr;
       canvas.height = chartH * dpr;
@@ -586,7 +586,7 @@
 
       ctx.clearRect(0, 0, chartW, chartH);
 
-      const padL = 40, padR = 10, padT = 16, padB = 32;
+      const padL = 40, padR = 10, padT = 16, padB = 60;
       const plotW = chartW - padL - padR;
       const plotH = chartH - padT - padB;
 
@@ -620,15 +620,15 @@
         ctx.fill();
         ctx.globalAlpha = 1;
 
-        // X labels (show every nth to avoid overlap)
         const labelEvery = Math.max(1, Math.floor(items.length / 30));
         if (i % labelEvery === 0) {
           ctx.save();
-          ctx.font = '8px Inter, sans-serif';
-          ctx.fillStyle = 'rgba(255,255,255,0.3)';
-          ctx.textAlign = 'center';
-          ctx.translate(x + barW / 2, chartH - 4);
-          ctx.rotate(-0.5);
+          ctx.font = '10px Inter, sans-serif';
+          ctx.fillStyle = 'rgba(255,255,255,0.5)';
+          ctx.textAlign = 'right';
+          ctx.textBaseline = 'middle';
+          ctx.translate(x + barW / 2, padT + plotH + 8);
+          ctx.rotate(-Math.PI / 3);
           ctx.fillText(labels[i], 0, 0);
           ctx.restore();
         }
