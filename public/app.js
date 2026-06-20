@@ -6552,6 +6552,7 @@ function _meMarketCycleBanner(cycle, latestHourly) {
       return `<button class="me-ai-toggle me-btn-cs premium-only"${st} onclick="location.href='/strength-cs.html'">CS</button>`;
     })()}
     <button class="me-ai-toggle me-btn-metric premium-only" onclick="location.href='/session-continuity'">SC</button>
+    <button class="me-ai-toggle me-btn-metric premium-only" onclick="location.href='/currency-continuity'">CC</button>
     <button class="me-ai-toggle me-btn-ai premium-only" onclick="openMeAiAnalysis()">AI Analysis</button>
   </div>`;
 }
