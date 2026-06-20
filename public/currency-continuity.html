@@ -528,7 +528,7 @@
         html += '<div style="overflow-x:auto;margin-bottom:12px"><table class="sp-table"><thead><tr>';
         html += '<th>Session</th>';
         for (const ccy of cols) html += `<th>${ccy}</th>`;
-        html += '<th>Strongest</th><th>Weakest</th>';
+        html += '<th>Strongest</th><th>Weakest</th><th>Total</th>';
         html += '</tr></thead><tbody>';
 
         for (const s of sessions) {
@@ -539,8 +539,12 @@
             const cls = v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero';
             html += `<td><span class="sp-val ${cls}">${v > 0 ? '+' : ''}${v}</span></td>`;
           }
-          html += `<td><span class="sp-strongest">${s.strongest.currency} +${s.strongest.val}</span></td>`;
-          html += `<td><span class="sp-weakest">${s.weakest.currency} ${s.weakest.val}</span></td>`;
+          const strongVal = s.strongest.val;
+          const weakVal = Math.abs(s.weakest.val);
+          const total = Math.round((strongVal + weakVal) * 10) / 10;
+          html += `<td><span class="sp-strongest">${s.strongest.currency} +${strongVal}</span></td>`;
+          html += `<td><span class="sp-weakest">${s.weakest.currency} +${weakVal}</span></td>`;
+          html += `<td><span class="sp-val" style="color:#60a5fa;font-weight:800">${total}</span></td>`;
           html += '</tr>';
         }
         html += '</tbody></table></div>';
