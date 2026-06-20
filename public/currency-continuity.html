@@ -114,6 +114,24 @@
       margin-left: auto;
     }
 
+    /* Session performance table */
+    .sp-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    .sp-table th {
+      text-align: center; padding: 6px 4px; font-size: 9px; font-weight: 700;
+      color: var(--text-dim); text-transform: uppercase; letter-spacing: .04em;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .sp-table th:first-child { text-align: left; }
+    .sp-table td { text-align: center; padding: 6px 4px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    .sp-table td:first-child { text-align: left; }
+    .sp-table tr:hover td { background: rgba(255,255,255,0.02); }
+    .sp-val { font-weight: 700; font-size: 11px; }
+    .sp-val.pos { color: #22c55e; }
+    .sp-val.neg { color: #ef4444; }
+    .sp-val.zero { color: #475569; }
+    .sp-strongest { font-size: 9px; font-weight: 700; color: #22c55e; }
+    .sp-weakest { font-size: 9px; font-weight: 700; color: #ef4444; }
+
     .sc-date-hdr {
       display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 6px 0;
       border-bottom: 1px solid rgba(255,255,255,0.06);
@@ -205,6 +223,20 @@
         <div id="sc-body"><div class="sc-loading"><span class="spinner"></span> Loading currency continuity data&hellip;</div></div>
       </div>
     </div>
+
+    <div class="sx-card">
+      <div class="sx-card-hd">
+        <i data-lucide="bar-chart-3"></i> Session Performance — Currency Pip Movement Per Session
+      </div>
+      <div class="sx-card-bd">
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:14px">
+          Net pip movement (smooth_6h) for each currency at the end of every session.
+          <span style="color:#22c55e;font-weight:700">Green</span> = bullish,
+          <span style="color:#ef4444;font-weight:700">Red</span> = bearish.
+        </div>
+        <div id="sp-body"><div class="sc-loading"><span class="spinner"></span> Loading&hellip;</div></div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -241,10 +273,12 @@
 
     const _tz = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
     let _data = [];
+    let _sessions = [];
     let _flowFilter = 'all';
     let _ccyFilter = 'all';
     let _strFilter = 'all';
     let _currentDays = 7;
+    const CURRENCIES = ['USD','EUR','GBP','JPY','CHF','CAD','AUD','NZD'];
 
     const FLOW_MAP = {
       ny_asia: { from: 'NEW_YORK', to: 'ASIA' },
@@ -289,7 +323,9 @@
         }
         const json = await r.json();
         _data = json.continuations || [];
+        _sessions = json.sessions || [];
         render();
+        renderSessions();
       } catch (e) {
         if (!silent) body.innerHTML = `<div class="sc-loading" style="color:#ef4444">${e.message}</div>`;
       }
@@ -307,6 +343,7 @@
       _ccyFilter = c;
       document.querySelectorAll('[data-ccy]').forEach(b => b.classList.toggle('active', b.dataset.ccy === c));
       render();
+      renderSessions();
     }
 
     function filterStr(s) {
@@ -416,6 +453,56 @@
         }
       }
       html += '</div>';
+      body.innerHTML = html;
+    }
+
+    function renderSessions() {
+      const body = document.getElementById('sp-body');
+      let list = _sessions;
+
+      if (_ccyFilter !== 'all') {
+        // still show all sessions but we'll highlight the filtered currency
+      }
+
+      if (!list.length) {
+        body.innerHTML = '<div class="sc-loading" style="color:var(--text-dim)">No session data</div>';
+        return;
+      }
+
+      const byDate = {};
+      for (const s of list) {
+        (byDate[s.date] = byDate[s.date] || []).push(s);
+      }
+
+      let html = '';
+      for (const [date, sessions] of Object.entries(byDate).sort((a, b) => b[0].localeCompare(a[0]))) {
+        html += `<div class="sc-date-hdr">
+          <span class="sc-date-label">${fmtDate(date)}</span>
+          <span class="sc-date-count">${sessions.length} session${sessions.length > 1 ? 's' : ''}</span>
+        </div>`;
+
+        html += '<div style="overflow-x:auto;margin-bottom:12px"><table class="sp-table"><thead><tr>';
+        html += '<th>Session</th>';
+        const cols = _ccyFilter !== 'all' ? [_ccyFilter] : CURRENCIES;
+        for (const ccy of cols) html += `<th>${ccy}</th>`;
+        html += '<th>Strongest</th><th>Weakest</th>';
+        html += '</tr></thead><tbody>';
+
+        for (const s of sessions) {
+          const sessCls = s.session.toLowerCase();
+          html += `<tr><td><span class="sc-session ${sessCls}">${s.session.replace('_', ' ')}</span></td>`;
+          for (const ccy of cols) {
+            const v = s.movements[ccy] || 0;
+            const cls = v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero';
+            html += `<td><span class="sp-val ${cls}">${v > 0 ? '+' : ''}${v}</span></td>`;
+          }
+          html += `<td><span class="sp-strongest">${s.strongest.currency} +${s.strongest.val}</span></td>`;
+          html += `<td><span class="sp-weakest">${s.weakest.currency} ${s.weakest.val}</span></td>`;
+          html += '</tr>';
+        }
+        html += '</tbody></table></div>';
+      }
+
       body.innerHTML = html;
     }
 

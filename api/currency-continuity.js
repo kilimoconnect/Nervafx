@@ -148,7 +148,21 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    res.json({ continuations: continuations.reverse(), total: continuations.length });
+    // Session performance: per-session currency movements
+    const sessions = sessionList.map(s => ({
+      date: s.date,
+      session: s.session,
+      movements: s.movements,
+      strongest: Object.entries(s.movements).reduce((best, [ccy, val]) => val > best.val ? { currency: ccy, val } : best, { currency: '', val: -Infinity }),
+      weakest: Object.entries(s.movements).reduce((best, [ccy, val]) => val < best.val ? { currency: ccy, val } : best, { currency: '', val: Infinity }),
+    }));
+
+    res.json({
+      continuations: continuations.reverse(),
+      total: continuations.length,
+      sessions: sessions.reverse(),
+      sessionCount: sessions.length,
+    });
   } catch (e) {
     console.error('[CURRENCY-CONTINUITY]', e.message);
     res.status(500).json({ error: e.message });
