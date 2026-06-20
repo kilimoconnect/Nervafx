@@ -557,10 +557,13 @@
       renderChart();
     }
 
+    let _chartBars = [];
+
     function renderChart() {
       const canvas = document.getElementById('sp-canvas');
       if (!canvas || !_sessions.length) return;
       const ctx = canvas.getContext('2d');
+      _chartBars = [];
 
       const items = [..._sessions].reverse();
       const totals = items.map(s =>
@@ -570,6 +573,10 @@
         const d = s.date.slice(5);
         const sn = s.session === 'ASIA' ? 'A' : s.session === 'LONDON' ? 'L' : 'NY';
         return `${d} ${sn}`;
+      });
+      const fullLabels = items.map(s => {
+        const sn = s.session.replace('_', ' ');
+        return `${s.date}  ${sn}  —  Total: ${totals[items.indexOf(s)]}p`;
       });
 
       const maxVal = Math.max(...totals, 1);
@@ -590,7 +597,6 @@
       const plotW = chartW - padL - padR;
       const plotH = chartH - padT - padB;
 
-      // Y axis gridlines
       ctx.font = '9px Inter, sans-serif';
       ctx.textAlign = 'right';
       const steps = 4;
@@ -603,16 +609,17 @@
         ctx.fillText(v, padL - 4, y + 3);
       }
 
-      // Bars
       const gap = Math.max(1, Math.floor((plotW - items.length * barW) / Math.max(items.length, 1)));
       const totalBarSpace = barW + gap;
-
       const sesColors = { ASIA: '#fbbf24', LONDON: '#60a5fa', NEW_YORK: '#a78bfa' };
 
       for (let i = 0; i < items.length; i++) {
         const x = padL + i * totalBarSpace;
         const h = (totals[i] / maxVal) * plotH;
         const y = padT + plotH - h;
+
+        _chartBars.push({ x, y, w: barW, h, label: fullLabels[i], total: totals[i], session: items[i].session });
+
         ctx.fillStyle = sesColors[items[i].session] || '#60a5fa';
         ctx.globalAlpha = 0.7;
         ctx.beginPath();
@@ -633,6 +640,51 @@
           ctx.restore();
         }
       }
+
+      // Tooltip setup
+      let tooltip = document.getElementById('sp-tooltip');
+      if (!tooltip) {
+        tooltip = document.createElement('div');
+        tooltip.id = 'sp-tooltip';
+        tooltip.style.cssText = 'position:absolute;display:none;padding:6px 10px;border-radius:6px;background:rgba(15,18,25,0.95);border:1px solid rgba(255,255,255,0.15);color:#e2e8f0;font-size:11px;font-weight:600;pointer-events:none;white-space:nowrap;z-index:50;font-family:Inter,sans-serif';
+        canvas.parentElement.style.position = 'relative';
+        canvas.parentElement.appendChild(tooltip);
+      }
+
+      canvas.onmousemove = function(e) {
+        const rect = canvas.getBoundingClientRect();
+        const mx = (e.clientX - rect.left) * (chartW / rect.width);
+        const my = (e.clientY - rect.top) * (chartH / rect.height);
+        let hit = null;
+        for (const bar of _chartBars) {
+          if (mx >= bar.x && mx <= bar.x + bar.w && my >= bar.y && my <= bar.y + bar.h) {
+            hit = bar; break;
+          }
+        }
+        if (!hit) {
+          for (const bar of _chartBars) {
+            if (mx >= bar.x && mx <= bar.x + bar.w && my >= padT && my <= padT + plotH) {
+              hit = bar; break;
+            }
+          }
+        }
+        if (hit) {
+          tooltip.style.display = 'block';
+          tooltip.textContent = hit.label;
+          const tx = Math.min(e.clientX - rect.left + 12, rect.width - tooltip.offsetWidth - 8);
+          tooltip.style.left = tx + 'px';
+          tooltip.style.top = (e.clientY - rect.top - 30) + 'px';
+          canvas.style.cursor = 'crosshair';
+        } else {
+          tooltip.style.display = 'none';
+          canvas.style.cursor = 'default';
+        }
+      };
+
+      canvas.onmouseleave = function() {
+        tooltip.style.display = 'none';
+        canvas.style.cursor = 'default';
+      };
     }
 
     if (typeof lucide !== 'undefined') lucide.createIcons();
