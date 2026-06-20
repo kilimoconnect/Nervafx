@@ -62,6 +62,22 @@
     .sx-btn:hover { color: var(--text); background: rgba(255,255,255,0.08); }
     .sx-btn.active { background: rgba(96,165,250,0.15); border-color: rgba(96,165,250,0.5); color: #60a5fa; }
 
+    /* Tabs */
+    .sx-tabs {
+      display: flex; gap: 0; border-bottom: 1px solid rgba(255,255,255,0.08);
+      margin-bottom: 0;
+    }
+    .sx-tab {
+      padding: 10px 20px; font-size: 12px; font-weight: 700;
+      color: var(--text-dim); cursor: pointer; transition: all 0.15s;
+      border-bottom: 2px solid transparent; background: none; border-top: none;
+      border-left: none; border-right: none; letter-spacing: 0.02em;
+    }
+    .sx-tab:hover { color: var(--text-muted); }
+    .sx-tab.active { color: #60a5fa; border-bottom-color: #60a5fa; }
+    .sx-tab-panel { display: none; }
+    .sx-tab-panel.active { display: block; }
+
     .sc-filters {
       display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; align-items: center;
     }
@@ -176,7 +192,7 @@
   <div class="sx-main">
     <div class="sx-card">
       <div class="sx-card-hd">
-        <i data-lucide="trending-up"></i> Currency Continuity — Does a Currency Continue Across Sessions?
+        <i data-lucide="coins"></i> Currency Analysis
         <div class="sx-ctrls">
           <button class="sx-btn active" data-days="7" onclick="loadDays(7)">7D</button>
           <button class="sx-btn" data-days="30" onclick="loadDays(30)">30D</button>
@@ -184,57 +200,76 @@
           <button class="sx-btn" data-days="420" onclick="loadDays(420)">All</button>
         </div>
       </div>
-      <div class="sx-card-bd">
-        <div style="font-size:11px;color:var(--text-dim);margin-bottom:14px">
-          Per-currency continuation: same direction AND current movement &ge; 30% of previous session.
-          <span style="color:#22c55e;font-weight:700">Strong</span> = &ge; 50%.
-          <span style="color:#fbbf24;font-weight:700">Moderate</span> = 30-49%.
-        </div>
 
-        <div class="sc-filters">
-          <span class="sc-filter-label">Flow:</span>
-          <button class="sx-btn active" data-flow="all" onclick="filterFlow('all')">All Flows</button>
-          <button class="sx-btn" data-flow="ny_asia" onclick="filterFlow('ny_asia')">NY &rarr; Asia</button>
-          <button class="sx-btn" data-flow="asia_london" onclick="filterFlow('asia_london')">Asia &rarr; London</button>
-          <button class="sx-btn" data-flow="london_ny" onclick="filterFlow('london_ny')">London &rarr; NY</button>
-          <button class="sx-btn" data-flow="london_asia" onclick="filterFlow('london_asia')">London &rarr; Asia</button>
-          <button class="sx-btn" data-flow="ny_london" onclick="filterFlow('ny_london')">NY &rarr; London</button>
-          <button class="sx-btn" data-flow="asia_ny" onclick="filterFlow('asia_ny')">Asia &rarr; NY</button>
-        </div>
-        <div class="sc-filters">
-          <span class="sc-filter-label">Currency:</span>
-          <button class="sx-btn active" data-ccy="all" onclick="filterCcy('all')">All</button>
-          <button class="sx-btn" data-ccy="USD" onclick="filterCcy('USD')">USD</button>
-          <button class="sx-btn" data-ccy="EUR" onclick="filterCcy('EUR')">EUR</button>
-          <button class="sx-btn" data-ccy="GBP" onclick="filterCcy('GBP')">GBP</button>
-          <button class="sx-btn" data-ccy="JPY" onclick="filterCcy('JPY')">JPY</button>
-        </div>
-        <div class="sc-filters">
-          <button class="sx-btn" data-ccy="CHF" onclick="filterCcy('CHF')">CHF</button>
-          <button class="sx-btn" data-ccy="CAD" onclick="filterCcy('CAD')">CAD</button>
-          <button class="sx-btn" data-ccy="AUD" onclick="filterCcy('AUD')">AUD</button>
-          <button class="sx-btn" data-ccy="NZD" onclick="filterCcy('NZD')">NZD</button>
-          <span class="sc-filter-label" style="margin-left:12px">Strength:</span>
-          <button class="sx-btn active" data-str="all" onclick="filterStr('all')">All</button>
-          <button class="sx-btn" data-str="strong" onclick="filterStr('strong')">Strong Only</button>
-        </div>
-
-        <div id="sc-stats" class="sc-stats"></div>
-        <div id="sc-body"><div class="sc-loading"><span class="spinner"></span> Loading currency continuity data&hellip;</div></div>
+      <div class="sx-tabs">
+        <button class="sx-tab active" data-tab="continuity" onclick="switchTab('continuity')">Currency Continuity</button>
+        <button class="sx-tab" data-tab="performance" onclick="switchTab('performance')">Session Performance</button>
       </div>
-    </div>
 
-    <div class="sx-card">
-      <div class="sx-card-hd">
-        <i data-lucide="bar-chart-3"></i> Session Performance — Currency Pip Movement Per Session
-      </div>
-      <div class="sx-card-bd">
-        <div style="font-size:11px;color:var(--text-dim);margin-bottom:14px">
-          Net pip movement (smooth_6h) for each currency at the end of every session.
-          <span style="color:#22c55e;font-weight:700">Green</span> = bullish,
-          <span style="color:#ef4444;font-weight:700">Red</span> = bearish.
+      <!-- Tab 1: Currency Continuity -->
+      <div class="sx-tab-panel active" id="tab-continuity">
+        <div class="sx-card-bd">
+          <div style="font-size:11px;color:var(--text-dim);margin-bottom:14px">
+            Per-currency continuation: same direction AND current movement &ge; 30% of previous session.
+            <span style="color:#22c55e;font-weight:700">Strong</span> = &ge; 50%.
+            <span style="color:#fbbf24;font-weight:700">Moderate</span> = 30-49%.
+          </div>
+
+          <div class="sc-filters">
+            <span class="sc-filter-label">Flow:</span>
+            <button class="sx-btn active" data-flow="all" onclick="filterFlow('all')">All Flows</button>
+            <button class="sx-btn" data-flow="ny_asia" onclick="filterFlow('ny_asia')">NY &rarr; Asia</button>
+            <button class="sx-btn" data-flow="asia_london" onclick="filterFlow('asia_london')">Asia &rarr; London</button>
+            <button class="sx-btn" data-flow="london_ny" onclick="filterFlow('london_ny')">London &rarr; NY</button>
+            <button class="sx-btn" data-flow="london_asia" onclick="filterFlow('london_asia')">London &rarr; Asia</button>
+            <button class="sx-btn" data-flow="ny_london" onclick="filterFlow('ny_london')">NY &rarr; London</button>
+            <button class="sx-btn" data-flow="asia_ny" onclick="filterFlow('asia_ny')">Asia &rarr; NY</button>
+          </div>
+          <div class="sc-filters">
+            <span class="sc-filter-label">Currency:</span>
+            <button class="sx-btn active" data-ccy="all" onclick="filterCcy('all')">All</button>
+            <button class="sx-btn" data-ccy="USD" onclick="filterCcy('USD')">USD</button>
+            <button class="sx-btn" data-ccy="EUR" onclick="filterCcy('EUR')">EUR</button>
+            <button class="sx-btn" data-ccy="GBP" onclick="filterCcy('GBP')">GBP</button>
+            <button class="sx-btn" data-ccy="JPY" onclick="filterCcy('JPY')">JPY</button>
+          </div>
+          <div class="sc-filters">
+            <button class="sx-btn" data-ccy="CHF" onclick="filterCcy('CHF')">CHF</button>
+            <button class="sx-btn" data-ccy="CAD" onclick="filterCcy('CAD')">CAD</button>
+            <button class="sx-btn" data-ccy="AUD" onclick="filterCcy('AUD')">AUD</button>
+            <button class="sx-btn" data-ccy="NZD" onclick="filterCcy('NZD')">NZD</button>
+            <span class="sc-filter-label" style="margin-left:12px">Strength:</span>
+            <button class="sx-btn active" data-str="all" onclick="filterStr('all')">All</button>
+            <button class="sx-btn" data-str="strong" onclick="filterStr('strong')">Strong Only</button>
+          </div>
+
+          <div id="sc-stats" class="sc-stats"></div>
+          <div id="sc-body"><div class="sc-loading"><span class="spinner"></span> Loading currency continuity data&hellip;</div></div>
         </div>
-        <div id="sp-body"><div class="sc-loading"><span class="spinner"></span> Loading&hellip;</div></div>
+      </div>
+
+      <!-- Tab 2: Session Performance -->
+      <div class="sx-tab-panel" id="tab-performance">
+        <div class="sx-card-bd">
+          <div style="font-size:11px;color:var(--text-dim);margin-bottom:14px">
+            Net pip movement (smooth_6h) for each currency at the end of every session.
+            <span style="color:#22c55e;font-weight:700">Green</span> = bullish,
+            <span style="color:#ef4444;font-weight:700">Red</span> = bearish.
+          </div>
+          <div class="sc-filters">
+            <span class="sc-filter-label">Currency:</span>
+            <button class="sx-btn active" data-spccy="all" onclick="filterSpCcy('all')">All</button>
+            <button class="sx-btn" data-spccy="USD" onclick="filterSpCcy('USD')">USD</button>
+            <button class="sx-btn" data-spccy="EUR" onclick="filterSpCcy('EUR')">EUR</button>
+            <button class="sx-btn" data-spccy="GBP" onclick="filterSpCcy('GBP')">GBP</button>
+            <button class="sx-btn" data-spccy="JPY" onclick="filterSpCcy('JPY')">JPY</button>
+            <button class="sx-btn" data-spccy="CHF" onclick="filterSpCcy('CHF')">CHF</button>
+            <button class="sx-btn" data-spccy="CAD" onclick="filterSpCcy('CAD')">CAD</button>
+            <button class="sx-btn" data-spccy="AUD" onclick="filterSpCcy('AUD')">AUD</button>
+            <button class="sx-btn" data-spccy="NZD" onclick="filterSpCcy('NZD')">NZD</button>
+          </div>
+          <div id="sp-body"><div class="sc-loading"><span class="spinner"></span> Loading&hellip;</div></div>
+        </div>
       </div>
     </div>
   </div>
@@ -277,8 +312,22 @@
     let _flowFilter = 'all';
     let _ccyFilter = 'all';
     let _strFilter = 'all';
+    let _spCcyFilter = 'all';
     let _currentDays = 7;
+    let _activeTab = 'continuity';
     const CURRENCIES = ['USD','EUR','GBP','JPY','CHF','CAD','AUD','NZD'];
+
+    function switchTab(tab) {
+      _activeTab = tab;
+      document.querySelectorAll('.sx-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+      document.querySelectorAll('.sx-tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + tab));
+    }
+
+    function filterSpCcy(c) {
+      _spCcyFilter = c;
+      document.querySelectorAll('[data-spccy]').forEach(b => b.classList.toggle('active', b.dataset.spccy === c));
+      renderSessions();
+    }
 
     const FLOW_MAP = {
       ny_asia: { from: 'NEW_YORK', to: 'ASIA' },
@@ -343,7 +392,6 @@
       _ccyFilter = c;
       document.querySelectorAll('[data-ccy]').forEach(b => b.classList.toggle('active', b.dataset.ccy === c));
       render();
-      renderSessions();
     }
 
     function filterStr(s) {
@@ -458,21 +506,17 @@
 
     function renderSessions() {
       const body = document.getElementById('sp-body');
-      let list = _sessions;
-
-      if (_ccyFilter !== 'all') {
-        // still show all sessions but we'll highlight the filtered currency
-      }
-
-      if (!list.length) {
+      if (!_sessions.length) {
         body.innerHTML = '<div class="sc-loading" style="color:var(--text-dim)">No session data</div>';
         return;
       }
 
       const byDate = {};
-      for (const s of list) {
+      for (const s of _sessions) {
         (byDate[s.date] = byDate[s.date] || []).push(s);
       }
+
+      const cols = _spCcyFilter !== 'all' ? [_spCcyFilter] : CURRENCIES;
 
       let html = '';
       for (const [date, sessions] of Object.entries(byDate).sort((a, b) => b[0].localeCompare(a[0]))) {
@@ -483,7 +527,6 @@
 
         html += '<div style="overflow-x:auto;margin-bottom:12px"><table class="sp-table"><thead><tr>';
         html += '<th>Session</th>';
-        const cols = _ccyFilter !== 'all' ? [_ccyFilter] : CURRENCIES;
         for (const ccy of cols) html += `<th>${ccy}</th>`;
         html += '<th>Strongest</th><th>Weakest</th>';
         html += '</tr></thead><tbody>';
