@@ -541,7 +541,7 @@
           }
           const strongVal = s.strongest.val;
           const weakVal = Math.abs(s.weakest.val);
-          const total = Math.round((strongVal + weakVal) * 10) / 10;
+          const total = Math.round(CURRENCIES.reduce((sum, ccy) => sum + Math.abs(s.movements[ccy] || 0), 0) * 10) / 10;
           html += `<td><span class="sp-strongest">${s.strongest.currency} +${strongVal}</span></td>`;
           html += `<td><span class="sp-weakest">${s.weakest.currency} +${weakVal}</span></td>`;
           html += `<td><span class="sp-val" style="color:#60a5fa;font-weight:800">${total}</span></td>`;
