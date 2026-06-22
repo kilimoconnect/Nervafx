@@ -171,10 +171,7 @@ module.exports = async function handler(req, res) {
       const trending = new Set(trendingSets[snap.time] || []);
       const pairArr = Object.entries(snap.pairs)
         .map(([pair, q]) => ({ pair, ...q, trending: trending.has(pair) }))
-        .sort((a, b) => {
-          if (a.trending !== b.trending) return a.trending ? -1 : 1;
-          return b.quality - a.quality;
-        });
+        .sort((a, b) => b.quality - a.quality);
 
       return {
         time: snap.time,
