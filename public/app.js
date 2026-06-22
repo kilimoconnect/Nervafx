@@ -6553,6 +6553,7 @@ function _meMarketCycleBanner(cycle, latestHourly) {
     })()}
     <button class="me-ai-toggle me-btn-metric premium-only" onclick="location.href='/session-continuity'">SC</button>
     <button class="me-ai-toggle me-btn-metric premium-only" onclick="location.href='/currency-continuity'">CC</button>
+    <button class="me-ai-toggle me-btn-metric premium-only" onclick="location.href='/structure-break'">SB</button>
     <button class="me-ai-toggle me-btn-ai premium-only" onclick="openMeAiAnalysis()">AI Analysis</button>
   </div>`;
 }
@@ -7488,6 +7489,8 @@ const BT_ENGINES = [
     desc: 'Expected pip distance at 1H, 4H, 8H, 12H, 24H horizons — broken by energy level. Calibrate TP targets and stop losses to actual market data.' },
   { id: 'session_performance', name: 'Session Performance', icon: 'bar-chart-3',
     desc: 'Which trading session produces the biggest and most reliable moves. Average energy, 4H and 8H pip ranges per session window.' },
+  { id: 'structure_break', name: 'Structure Break', icon: 'split',
+    desc: 'H1 candle close above previous high (bullish break) or below previous low (bearish break). Currency and pair-level aggregation reveals who is driving and who is being driven.' },
 ];
 
 let _btSelectedEngine = null;
@@ -7619,6 +7622,7 @@ function _btRenderEngine(key, data, insight, container) {
     condition_combos:     () => { _btRenderConditionCombosInto(data, insight, wrap); },
     move_distance:        () => { _btRenderMoveDistanceInto(data, insight, wrap); },
     session_performance:  () => { _btRenderSessionPerfInto(data, insight, wrap); },
+    structure_break:      () => { _btRenderStructureBreakInto(data, insight, wrap); },
   };
 
   if (renderers[key]) renderers[key]();
@@ -8645,6 +8649,134 @@ function _btRenderSessionPerfInto(data, insight, wrap) {
     '<strong>Plan your day around sessions.</strong> Set alarms for session opens. Be at your screen during the best sessions, away during the worst.',
     '<strong>Combine with Session Thresholds.</strong> This engine tells you WHEN to trade, Session Thresholds tells you WHAT thresholds to use during each window.',
     '<strong>London-NY overlap is typically the highest-volume period.</strong> If it does not show up as the best here, market conditions in your test period were unusual.',
+  ]);
+
+  wrap.innerHTML = html;
+}
+
+function _btRenderStructureBreakInto(data, insight, wrap) {
+  if (!data) { wrap.innerHTML = '<div style="color:var(--text-muted)">No structure break data</div>'; return; }
+
+  const o = data.overview;
+  let html = _btWhatIs('split', 'What This Analysis Shows',
+    'Every H1 candle is checked: did it <strong>close above the previous candle\'s high</strong> (bullish structure break) or <strong>close below the previous candle\'s low</strong> (bearish structure break)? A <strong>strong break</strong> requires ≥ 3 pips of penetration AND ≥ 50% body-to-range ratio (conviction candle). Breaks are aggregated per currency across all 7 of its pairs to reveal <strong>who is driving the market</strong>. The 4-hour continuation rate shows <strong>which breaks actually follow through</strong>.');
+
+  html += _btFindings([
+    { type: 'info', label: 'Total breaks', value: `${o.total_breaks}`, desc: `${o.bullish_breaks} bullish / ${o.bearish_breaks} bearish. ${o.strong_breaks} classified as strong.` },
+    { type: 'good', label: 'Strong break cont. rate', value: `${o.strong_cont_rate}%`, desc: `Strong breaks continued in their direction ${o.strong_cont_rate}% of the time at 4H horizon. Avg ${o.avg_pips_strong}p net, ${o.avg_favorable_strong}p max favorable.` },
+    { type: o.weak_cont_rate < 50 ? 'bad' : 'info', label: 'Weak break cont. rate', value: `${o.weak_cont_rate}%`, desc: `Non-strong breaks continued only ${o.weak_cont_rate}% of the time. Filter for strong breaks.` },
+    { type: 'info', label: 'Avg adverse (strong)', value: `${o.avg_adverse_strong}p`, desc: `Strong breaks pulled back an average of ${o.avg_adverse_strong} pips against the break direction before continuing.` },
+  ]);
+
+  html += _btInsightBox(insight);
+
+  // Magnitude analysis
+  html += '<h3 class="bt-section-title">Break Magnitude vs Continuation</h3>';
+  html += _btGuide([
+    '<strong>Magnitude</strong> = how many pips the close exceeded the previous high/low.',
+    '<strong>Continuation rate</strong> = % of breaks where price kept moving in the break direction 4 hours later.',
+    'Higher magnitude breaks should have higher continuation — if not, the market is choppy.',
+  ]);
+
+  html += _btTable(
+    ['Magnitude', 'Count', 'Cont. Rate', 'Avg Net Pips', 'Avg Favorable', 'Avg Adverse'],
+    (data.magnitude_analysis || []).map(m => {
+      const cls = m.cont_rate >= 55 ? 'bt-win' : m.cont_rate < 45 ? 'bt-lose' : '';
+      return `<tr><td><strong>${m.label}</strong></td><td>${m.count}</td>
+        <td class="${cls}"><strong>${m.cont_rate}%</strong></td>
+        <td>${m.avg_pips}p</td><td>${m.avg_favorable}p</td><td>${m.avg_adverse}p</td></tr>`;
+    })
+  );
+
+  // Body ratio analysis
+  html += '<h3 class="bt-section-title">Candle Body Ratio vs Continuation</h3>';
+  html += _btGuide([
+    '<strong>Body ratio</strong> = candle body ÷ total range. A 70%+ body = strong conviction candle.',
+    'Higher body ratio should mean higher continuation — the candle closed near its extreme.',
+  ]);
+
+  html += _btTable(
+    ['Body Ratio', 'Count', 'Cont. Rate', 'Avg Net Pips'],
+    (data.body_analysis || []).map(b => {
+      const cls = b.cont_rate >= 55 ? 'bt-win' : b.cont_rate < 45 ? 'bt-lose' : '';
+      return `<tr><td><strong>${b.label}</strong></td><td>${b.count}</td>
+        <td class="${cls}"><strong>${b.cont_rate}%</strong></td><td>${b.avg_pips}p</td></tr>`;
+    })
+  );
+
+  // Session analysis
+  html += '<h3 class="bt-section-title">Structure Breaks by Session</h3>';
+  const sessOrder = ['ASIA', 'LONDON', 'NEW_YORK'];
+  html += _btTable(
+    ['Session', 'Total Breaks', 'Cont. Rate', 'Avg Pips', 'Strong Breaks', 'Strong Cont. Rate'],
+    sessOrder.map(sess => {
+      const s = data.session_analysis?.[sess] || {};
+      const cls = s.cont_rate >= 55 ? 'bt-win' : '';
+      return `<tr><td><strong>${sess}</strong></td><td>${s.count || 0}</td>
+        <td class="${cls}"><strong>${s.cont_rate || 0}%</strong></td><td>${s.avg_pips || 0}p</td>
+        <td>${s.strong_count || 0}</td><td><strong>${s.strong_cont_rate || 0}%</strong></td></tr>`;
+    })
+  );
+
+  // Currency rankings
+  html += '<h3 class="bt-section-title">Currency Structure Break Rankings</h3>';
+  html += _btGuide([
+    '<strong>Net</strong> = bullish breaks − bearish breaks. Positive = currency is breaking higher across its pairs.',
+    '<strong>Consistency</strong> = what % of hours the currency maintained its dominant direction.',
+    'A currency with high net + high consistency is in a <strong>structural trend</strong>.',
+  ]);
+
+  html += _btTable(
+    ['Currency', 'Bullish', 'Bearish', 'Strong', 'Net', 'Direction', 'Consistency', 'Avg Net/Hour'],
+    (data.currency_rankings || []).map((c, i) => {
+      const netColor = c.net > 0 ? 'bt-win' : c.net < 0 ? 'bt-lose' : '';
+      const rowCls = i === 0 ? 'bt-comp-row-best' : i === data.currency_rankings.length - 1 ? 'bt-comp-row-worst' : '';
+      return `<tr class="${rowCls}"><td><strong>${c.currency}</strong>${i === 0 ? ' ★' : ''}</td>
+        <td>${c.bullish}</td><td>${c.bearish}</td><td>${c.strong}</td>
+        <td class="${netColor}"><strong>${c.net > 0 ? '+' : ''}${c.net}</strong></td>
+        <td>${c.direction}</td><td>${c.consistency}%</td>
+        <td>${c.avg_net_per_hour > 0 ? '+' : ''}${c.avg_net_per_hour}</td></tr>`;
+    })
+  );
+
+  // Top pair rankings
+  html += '<h3 class="bt-section-title">Top Pair Structure Breaks</h3>';
+  html += _btTable(
+    ['Pair', 'Bullish', 'Bearish', 'Strong', 'Net', 'Avg Mag', 'Max Mag', 'Direction'],
+    (data.pair_rankings || []).slice(0, 15).map(p => {
+      const netColor = p.net > 0 ? 'bt-win' : p.net < 0 ? 'bt-lose' : '';
+      return `<tr><td><strong>${p.pair.replace('_','/')}</strong></td>
+        <td>${p.bullish}</td><td>${p.bearish}</td><td>${p.strong}</td>
+        <td class="${netColor}"><strong>${p.net > 0 ? '+' : ''}${p.net}</strong></td>
+        <td>${p.avg_magnitude}p</td><td>${p.max_magnitude}p</td>
+        <td>${p.direction}</td></tr>`;
+    })
+  );
+
+  // Session × Currency heatmap
+  html += '<h3 class="bt-section-title">Session × Currency Heatmap</h3>';
+  const ccys = ['USD','EUR','GBP','JPY','CHF','CAD','AUD','NZD'];
+  let hmHtml = '<table class="bt-inst-table"><thead><tr><th>Session</th>';
+  for (const ccy of ccys) hmHtml += `<th>${ccy}</th>`;
+  hmHtml += '</tr></thead><tbody>';
+  for (const sess of sessOrder) {
+    hmHtml += `<tr><td><strong>${sess}</strong></td>`;
+    for (const ccy of ccys) {
+      const cell = data.session_matrix?.[sess]?.[ccy] || { net: 0 };
+      const color = cell.net > 0 ? '#22c55e' : cell.net < 0 ? '#ef4444' : 'var(--text-muted)';
+      hmHtml += `<td style="color:${color};font-weight:700">${cell.net > 0 ? '+' : ''}${cell.net}</td>`;
+    }
+    hmHtml += '</tr>';
+  }
+  hmHtml += '</tbody></table>';
+  html += hmHtml;
+
+  html += _btActionBox([
+    '<strong>Trade strong breaks only.</strong> They have significantly higher continuation rates than weak breaks.',
+    '<strong>Use magnitude as a filter.</strong> Larger break magnitude correlates with stronger follow-through.',
+    '<strong>Check currency alignment.</strong> When a currency shows net +3 or higher, it is structurally breaking out across multiple pairs — these are the highest-conviction flows.',
+    '<strong>Combine with energy.</strong> Structure breaks during high-energy sessions (London, NY overlap) continue more reliably than during low-energy (Asia).',
+    '<strong>Use the session × currency heatmap</strong> to identify which currencies dominate which sessions. Trade with the structural flow, not against it.',
   ]);
 
   wrap.innerHTML = html;

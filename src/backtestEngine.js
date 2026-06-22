@@ -632,6 +632,52 @@ async function runBacktest({ from, to }) {
       }
     }
 
+    // Structure break detection: H1 close vs previous candle's high/low
+    const structureBreaks = [];
+    const ccyBreaks = {};
+    for (const ccy of CURRENCIES) ccyBreaks[ccy] = { bullish: 0, bearish: 0, strong: 0 };
+
+    for (const inst of config.instruments) {
+      const idx = timeIndex[inst]?.[time];
+      if (idx == null || idx < 1) continue;
+      const curr = candleArrays[inst][idx];
+      const prev = candleArrays[inst][idx - 1];
+      if (!curr || !prev) continue;
+
+      let breakType = null, magnitude = 0;
+      if (curr.close > prev.high) {
+        breakType = 'BULLISH';
+        magnitude = Math.round((curr.close - prev.high) * 100000) / 10;
+      } else if (curr.close < prev.low) {
+        breakType = 'BEARISH';
+        magnitude = Math.round((prev.low - curr.close) * 100000) / 10;
+      }
+      if (!breakType) continue;
+
+      const body = Math.abs(curr.close - curr.open);
+      const range = curr.high - curr.low;
+      const bodyRatio = range > 0 ? body / range : 0;
+      const isStrong = magnitude >= 3.0 && bodyRatio >= 0.5;
+
+      const [base, quote] = inst.split('_');
+      if (breakType === 'BULLISH') {
+        ccyBreaks[base].bullish++;
+        ccyBreaks[quote].bearish++;
+      } else {
+        ccyBreaks[base].bearish++;
+        ccyBreaks[quote].bullish++;
+      }
+      if (isStrong) { ccyBreaks[base].strong++; ccyBreaks[quote].strong++; }
+
+      structureBreaks.push({ instrument: inst, type: breakType, magnitude, bodyRatio: Math.round(bodyRatio * 100), strong: isStrong });
+    }
+
+    const ccyBreakScores = {};
+    for (const ccy of CURRENCIES) {
+      const b = ccyBreaks[ccy];
+      ccyBreakScores[ccy] = { ...b, net: b.bullish - b.bearish, score: Math.round(((b.bullish - b.bearish) / 7) * 100) };
+    }
+
     snapshots.push({
       time,
       session,
@@ -641,6 +687,8 @@ async function runBacktest({ from, to }) {
       max_spread: Math.round(maxSpread * 100000) / 100000,
       pair_outcomes: pairOutcomes,
       flow_performance: flowPerf,
+      structure_breaks: structureBreaks,
+      ccy_break_scores: ccyBreakScores,
     });
   }
 
@@ -670,6 +718,7 @@ async function runBacktest({ from, to }) {
     flow_performance:     () => analyzeFlowPerformance(snapshots),
     tradability:          () => analyzeTradability(snapshots),
     energy_cycle:         () => analyzeEnergyCycleOutcomes(snapshots),
+    structure_break:      () => analyzeStructureBreaks(snapshots),
   };
 
   let analysis;
@@ -2055,6 +2104,7 @@ function interpretAnalysis(analysis) {
     flow_performance:     interpretFlowPerformance,
     tradability:          interpretTradability,
     energy_cycle:         interpretEnergyCycle,
+    structure_break:      interpretStructureBreak,
   };
 
   // Only interpret keys that exist in analysis (supports single-engine runs)
@@ -2860,6 +2910,241 @@ function interpretEnergyCycle(data) {
     : 'Energy cycle analysis shows how market regime affects trade outcomes.';
 
   return { summary, bullets };
+}
+
+// ── Structure Break Analysis ───────────────────────────────────────────────
+
+function interpretStructureBreak(data) {
+  if (!data?.overview) return { summary: 'No structure break data.', bullets: [] };
+  const o = data.overview;
+  const bullets = [];
+
+  bullets.push(`${o.total_breaks} structure breaks detected: ${o.bullish_breaks} bullish, ${o.bearish_breaks} bearish. ${o.strong_breaks} were strong (≥3 pip penetration + ≥50% body ratio).`);
+  bullets.push(`Strong breaks continued ${o.strong_cont_rate}% of the time at the 4-hour horizon, averaging ${o.avg_pips_strong} pips net with ${o.avg_favorable_strong} pips max favorable excursion.`);
+
+  if (o.strong_cont_rate > o.weak_cont_rate + 10) {
+    bullets.push(`Strong breaks outperform weak breaks by ${o.strong_cont_rate - o.weak_cont_rate} percentage points in continuation rate — use the strong filter.`);
+  }
+
+  const mag = data.magnitude_analysis || [];
+  const bestMag = mag.reduce((best, m) => m.cont_rate > (best?.cont_rate || 0) && m.count >= 20 ? m : best, null);
+  if (bestMag) {
+    bullets.push(`Best continuation at ${bestMag.label} magnitude: ${bestMag.cont_rate}% continuation rate over ${bestMag.count} samples.`);
+  }
+
+  const ccyRank = data.currency_rankings || [];
+  if (ccyRank.length >= 2) {
+    const top = ccyRank[0], bot = ccyRank[ccyRank.length - 1];
+    bullets.push(`Strongest structural currency: ${top.currency} (net +${top.net}, ${top.consistency}% consistent). Weakest: ${bot.currency} (net ${bot.net}, ${bot.consistency}% consistent).`);
+  }
+
+  const sessAn = data.session_analysis || {};
+  const bestSess = Object.entries(sessAn).sort((a, b) => b[1].cont_rate - a[1].cont_rate)[0];
+  if (bestSess) {
+    bullets.push(`${bestSess[0]} session has the highest break continuation rate at ${bestSess[1].cont_rate}% with ${bestSess[1].count} breaks.`);
+  }
+
+  return {
+    summary: `Structure break analysis reveals a ${o.strong_cont_rate}% continuation rate for strong H1 breaks (vs ${o.weak_cont_rate}% for weak). ${ccyRank[0]?.currency || '?'} is the structurally strongest currency, ${ccyRank[ccyRank.length - 1]?.currency || '?'} the weakest.`,
+    bullets,
+  };
+}
+
+function analyzeStructureBreaks(snapshots) {
+  const ccyStats = {};
+  const pairStats = {};
+  const sessionCcyStats = {};
+  const breakVsOutcome = { bullish: [], bearish: [] };
+
+  for (const ccy of CURRENCIES) {
+    ccyStats[ccy] = { bullish: 0, bearish: 0, strong: 0, hours: 0, netHistory: [] };
+    for (const sess of ['ASIA', 'LONDON', 'NEW_YORK']) {
+      sessionCcyStats[`${sess}|${ccy}`] = { bullish: 0, bearish: 0, strong: 0, hours: 0 };
+    }
+  }
+
+  for (const snap of snapshots) {
+    const breaks = snap.structure_breaks || [];
+    const ccyScores = snap.ccy_break_scores || {};
+
+    // Per-pair stats
+    for (const b of breaks) {
+      if (!pairStats[b.instrument]) {
+        pairStats[b.instrument] = { bullish: 0, bearish: 0, strong: 0, totalMag: 0, maxMag: 0, maxStreak: 0 };
+      }
+      const ps = pairStats[b.instrument];
+      if (b.type === 'BULLISH') ps.bullish++;
+      else ps.bearish++;
+      if (b.strong) ps.strong++;
+      ps.totalMag += b.magnitude;
+      ps.maxMag = Math.max(ps.maxMag, b.magnitude);
+
+      // Correlate with 4H outcome
+      const pairOutcome = snap.pair_outcomes?.find(p => p.instrument === b.instrument);
+      if (pairOutcome?.h4) {
+        const entry = { magnitude: b.magnitude, strong: b.strong, bodyRatio: b.bodyRatio, session: snap.session };
+        if (b.type === 'BULLISH') {
+          entry.continued = pairOutcome.h4.direction === 'UP';
+          entry.pips = pairOutcome.h4.net_pips;
+          entry.maxFavorable = pairOutcome.h4.max_up_pips;
+          entry.maxAdverse = pairOutcome.h4.max_down_pips;
+          breakVsOutcome.bullish.push(entry);
+        } else {
+          entry.continued = pairOutcome.h4.direction === 'DOWN';
+          entry.pips = -pairOutcome.h4.net_pips;
+          entry.maxFavorable = pairOutcome.h4.max_down_pips;
+          entry.maxAdverse = pairOutcome.h4.max_up_pips;
+          breakVsOutcome.bearish.push(entry);
+        }
+      }
+    }
+
+    // Per-currency stats
+    for (const ccy of CURRENCIES) {
+      const cs = ccyScores[ccy];
+      if (!cs) continue;
+      ccyStats[ccy].bullish += cs.bullish;
+      ccyStats[ccy].bearish += cs.bearish;
+      ccyStats[ccy].strong += cs.strong;
+      ccyStats[ccy].hours++;
+      ccyStats[ccy].netHistory.push(cs.net);
+
+      const key = `${snap.session}|${ccy}`;
+      if (sessionCcyStats[key]) {
+        sessionCcyStats[key].bullish += cs.bullish;
+        sessionCcyStats[key].bearish += cs.bearish;
+        sessionCcyStats[key].strong += cs.strong;
+        sessionCcyStats[key].hours++;
+      }
+    }
+  }
+
+  // Continuation rates by break strength
+  const allBreaks = [...breakVsOutcome.bullish, ...breakVsOutcome.bearish];
+  const strongBreaks = allBreaks.filter(b => b.strong);
+  const weakBreaks = allBreaks.filter(b => !b.strong);
+
+  const contRate = arr => arr.length ? Math.round((arr.filter(b => b.continued).length / arr.length) * 100) : 0;
+  const avgPips = arr => arr.length ? Math.round(arr.reduce((s, b) => s + b.pips, 0) / arr.length) : 0;
+  const avgFav = arr => arr.length ? Math.round(arr.reduce((s, b) => s + b.maxFavorable, 0) / arr.length) : 0;
+  const avgAdv = arr => arr.length ? Math.round(arr.reduce((s, b) => s + b.maxAdverse, 0) / arr.length) : 0;
+
+  // Continuation by magnitude bucket
+  const magBuckets = [
+    { label: '< 3 pips', min: 0, max: 3 },
+    { label: '3-6 pips', min: 3, max: 6 },
+    { label: '6-10 pips', min: 6, max: 10 },
+    { label: '10-20 pips', min: 10, max: 20 },
+    { label: '20+ pips', min: 20, max: 9999 },
+  ];
+
+  const magAnalysis = magBuckets.map(bucket => {
+    const inBucket = allBreaks.filter(b => b.magnitude >= bucket.min && b.magnitude < bucket.max);
+    return {
+      label: bucket.label,
+      count: inBucket.length,
+      cont_rate: contRate(inBucket),
+      avg_pips: avgPips(inBucket),
+      avg_favorable: avgFav(inBucket),
+      avg_adverse: avgAdv(inBucket),
+    };
+  });
+
+  // Body ratio analysis
+  const bodyBuckets = [
+    { label: '< 30%', min: 0, max: 30 },
+    { label: '30-50%', min: 30, max: 50 },
+    { label: '50-70%', min: 50, max: 70 },
+    { label: '70%+', min: 70, max: 101 },
+  ];
+
+  const bodyAnalysis = bodyBuckets.map(bucket => {
+    const inBucket = allBreaks.filter(b => b.bodyRatio >= bucket.min && b.bodyRatio < bucket.max);
+    return {
+      label: bucket.label,
+      count: inBucket.length,
+      cont_rate: contRate(inBucket),
+      avg_pips: avgPips(inBucket),
+    };
+  });
+
+  // Session analysis
+  const sessionAnalysis = {};
+  for (const sess of ['ASIA', 'LONDON', 'NEW_YORK']) {
+    const sessBreaks = allBreaks.filter(b => b.session === sess);
+    sessionAnalysis[sess] = {
+      count: sessBreaks.length,
+      cont_rate: contRate(sessBreaks),
+      avg_pips: avgPips(sessBreaks),
+      strong_count: sessBreaks.filter(b => b.strong).length,
+      strong_cont_rate: contRate(sessBreaks.filter(b => b.strong)),
+    };
+  }
+
+  // Currency rankings
+  const ccyRankings = CURRENCIES.map(ccy => {
+    const s = ccyStats[ccy];
+    const net = s.bullish - s.bearish;
+    const total = s.bullish + s.bearish;
+    const avgNetPerHour = s.hours ? (net / s.hours) : 0;
+
+    // Consistency: what % of hours had net > 0 vs net < 0
+    const bullHours = s.netHistory.filter(n => n > 0).length;
+    const bearHours = s.netHistory.filter(n => n < 0).length;
+    const consistency = s.hours ? Math.round((Math.max(bullHours, bearHours) / s.hours) * 100) : 0;
+    const direction = net > 0 ? 'BULLISH' : net < 0 ? 'BEARISH' : 'NEUTRAL';
+
+    return {
+      currency: ccy, bullish: s.bullish, bearish: s.bearish, strong: s.strong,
+      net, total, direction, consistency,
+      avg_net_per_hour: Math.round(avgNetPerHour * 100) / 100,
+      bull_hours: bullHours, bear_hours: bearHours, total_hours: s.hours,
+    };
+  }).sort((a, b) => b.net - a.net);
+
+  // Pair rankings
+  const pairRankings = Object.entries(pairStats).map(([inst, s]) => {
+    const net = s.bullish - s.bearish;
+    const total = s.bullish + s.bearish;
+    const avgMag = total ? Math.round((s.totalMag / total) * 10) / 10 : 0;
+    return {
+      pair: inst, bullish: s.bullish, bearish: s.bearish, strong: s.strong,
+      net, total, avg_magnitude: avgMag, max_magnitude: s.maxMag,
+      direction: net > 3 ? 'STRONG_BULL' : net > 0 ? 'BULLISH' : net < -3 ? 'STRONG_BEAR' : net < 0 ? 'BEARISH' : 'NEUTRAL',
+    };
+  }).sort((a, b) => Math.abs(b.net) - Math.abs(a.net));
+
+  // Session × currency matrix
+  const sessionMatrix = {};
+  for (const sess of ['ASIA', 'LONDON', 'NEW_YORK']) {
+    sessionMatrix[sess] = {};
+    for (const ccy of CURRENCIES) {
+      const s = sessionCcyStats[`${sess}|${ccy}`];
+      sessionMatrix[sess][ccy] = { bullish: s.bullish, bearish: s.bearish, net: s.bullish - s.bearish, strong: s.strong };
+    }
+  }
+
+  return {
+    overview: {
+      total_breaks: allBreaks.length,
+      bullish_breaks: breakVsOutcome.bullish.length,
+      bearish_breaks: breakVsOutcome.bearish.length,
+      strong_breaks: strongBreaks.length,
+      overall_cont_rate: contRate(allBreaks),
+      strong_cont_rate: contRate(strongBreaks),
+      weak_cont_rate: contRate(weakBreaks),
+      avg_pips_all: avgPips(allBreaks),
+      avg_pips_strong: avgPips(strongBreaks),
+      avg_favorable_strong: avgFav(strongBreaks),
+      avg_adverse_strong: avgAdv(strongBreaks),
+    },
+    magnitude_analysis: magAnalysis,
+    body_analysis: bodyAnalysis,
+    session_analysis: sessionAnalysis,
+    currency_rankings: ccyRankings,
+    pair_rankings: pairRankings,
+    session_matrix: sessionMatrix,
+  };
 }
 
 module.exports = { runBacktest, saveBacktestResult, loadCandles, interpretAnalysis };

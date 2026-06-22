@@ -342,6 +342,7 @@
       <button class="arc-tab" data-section="breakdown" onclick="switchArchiveTab(this)">Hourly Breakdown</button>
       <button class="arc-tab" data-section="flowperf" onclick="switchArchiveTab(this)">Flow Performance</button>
       <button class="arc-tab" data-section="history" onclick="switchArchiveTab(this)">Session History</button>
+      <button class="arc-tab" data-section="structbreak" onclick="switchArchiveTab(this)">Structure Break</button>
       <span class="arc-tab-sep"></span>
       <a href="/session-continuity" class="arc-tab" style="text-decoration:none">Session Continuity →</a>
     </div>
@@ -488,6 +489,12 @@
       <div class="arc-section-header"><i data-lucide="clock"></i> Session Energy History</div>
       <div id="arc-history-body"><div class="arc-loading"><span class="spinner"></span> Loading history…</div></div>
     </section>
+
+    <section class="arc-section" id="arc-structbreak" style="display:none">
+      <div class="arc-section-header"><i data-lucide="split"></i> H1 Structure Break Archive</div>
+      <div class="arc-section-desc">H1 candle close above previous high = bullish break, close below previous low = bearish break. Aggregated per currency across all 7 pairs. Strong = ≥3 pip penetration + ≥50% body ratio.</div>
+      <div id="arc-structbreak-body"><div class="arc-loading"><span class="spinner"></span> Loading structure break data…</div></div>
+    </section>
   </main>
 
   <script>
@@ -551,7 +558,7 @@
   let _arcCustomFrom = null;  // ISO string or null
   let _arcCustomTo = null;
 
-  const ARC_SECTIONS = ['energy', 'de', 'dispersion', 'tradability', 'movement', 'breadth', 'agreement', 'dircontrol', 'volquality', 'volatility', 'momentum', 'chaos', 'fbr', 'liquidity', 'breakdown', 'ccystrength', 'flowperf', 'history'];
+  const ARC_SECTIONS = ['energy', 'de', 'dispersion', 'tradability', 'movement', 'breadth', 'agreement', 'dircontrol', 'volquality', 'volatility', 'momentum', 'chaos', 'fbr', 'liquidity', 'breakdown', 'ccystrength', 'flowperf', 'history', 'structbreak'];
 
   function setArcPeriod(btn) {
     document.querySelectorAll('#arc-period-pills .arc-fpill').forEach(b => b.classList.remove('active'));
@@ -615,7 +622,7 @@
       const target = bodyEl.querySelector('.bc-tf-content') || bodyEl;
       target.innerHTML = _loadingHtml;
     }
-    for (const id of ['arc-breakdown-body', 'arc-ccystrength-body', 'arc-flowperf-body', 'arc-liquidity-body', 'arc-history-body']) {
+    for (const id of ['arc-breakdown-body', 'arc-ccystrength-body', 'arc-flowperf-body', 'arc-liquidity-body', 'arc-history-body', 'arc-structbreak-body']) {
       const el = document.getElementById(id);
       if (el) el.innerHTML = _loadingHtml;
     }
@@ -661,6 +668,8 @@
         _renderFilteredHistory();
       }
     } catch (_) {}
+
+    _renderFilteredStructBreak();
   }
 
   function switchArchiveTab(btn) {
@@ -684,6 +693,8 @@
       loadFlowPerfArchive();
     } else if (section === 'history') {
       loadHistoryArchive();
+    } else if (section === 'structbreak') {
+      loadStructBreakArchive();
     }
   }
 
@@ -2139,6 +2150,261 @@
     for (const ep of endpoints) {
       ctx.fillStyle = ep.color;
       ctx.fillText(ep.ccy, ep.x + 6, ep.y + 3);
+    }
+  }
+
+  // ─── Structure Break Archive ──────────────────────────────────────────────────
+
+  let _sbCache = null;
+  let _sbCacheDays = 0;
+
+  async function loadStructBreakArchive() {
+    const bodyEl = document.getElementById('arc-structbreak-body');
+    if (!bodyEl) return;
+    bodyEl.innerHTML = '<div class="arc-loading"><span class="spinner"></span> Loading structure break data…</div>';
+
+    try {
+      const need = _arcFilterDays || 30;
+      let url;
+      if (_arcCustomFrom || _arcCustomTo) {
+        const from = _arcCustomFrom ? _arcCustomFrom.slice(0, 10) : '2025-05-01';
+        const to = _arcCustomTo ? _arcCustomTo.slice(0, 10) : new Date().toISOString().slice(0, 10);
+        url = `/api/structure-break?from=${from}&to=${to}`;
+        _sbCache = null;
+      } else if (!_sbCache || _sbCacheDays < need) {
+        url = `/api/structure-break?hours=${need * 24}`;
+      }
+
+      if (url) {
+        _sbCache = await api(url);
+        _sbCacheDays = need;
+      }
+
+      if (!_sbCache?.sessions?.length) {
+        bodyEl.innerHTML = '<p class="me-empty">No structure break data available for this period.</p>';
+        return;
+      }
+
+      renderStructBreakArchive(bodyEl, _sbCache);
+    } catch (e) {
+      bodyEl.innerHTML = `<p class="me-empty">Failed to load: ${e.message}</p>`;
+    }
+  }
+
+  function _renderFilteredStructBreak() {
+    if (!_sbCache) return;
+    _sbCache = null;
+    _sbCacheDays = 0;
+    loadStructBreakArchive();
+  }
+
+  function renderStructBreakArchive(container, data) {
+    const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
+    const SESS_CLR = { ASIA: '#f59e0b', LONDON: '#3b82f6', NEW_YORK: '#a855f7' };
+
+    let sessions = data.sessions || [];
+
+    // Apply session filter
+    if (_arcFilterSession !== 'ALL') {
+      sessions = sessions.filter(s => s.session === _arcFilterSession);
+    }
+
+    if (!sessions.length) {
+      container.innerHTML = '<p class="me-empty">No sessions for this filter.</p>';
+      return;
+    }
+
+    let html = '';
+
+    // ── Currency summary cards ──
+    const ccyTotals = {};
+    for (const ccy of CURRENCIES) ccyTotals[ccy] = { bullish: 0, bearish: 0, strong: 0, sessions: 0 };
+    for (const s of sessions) {
+      for (const ccy of CURRENCIES) {
+        const c = s.currencies?.[ccy];
+        if (!c) continue;
+        ccyTotals[ccy].bullish += c.bullish;
+        ccyTotals[ccy].bearish += c.bearish;
+        ccyTotals[ccy].strong += c.strong;
+        ccyTotals[ccy].sessions++;
+      }
+    }
+
+    const ccyRanked = CURRENCIES.map(ccy => {
+      const t = ccyTotals[ccy];
+      const net = t.bullish - t.bearish;
+      return { ccy, ...t, net };
+    }).sort((a, b) => b.net - a.net);
+
+    html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:20px;">';
+    for (const c of ccyRanked) {
+      const netColor = c.net > 0 ? '#22c55e' : c.net < 0 ? '#ef4444' : 'var(--text-muted)';
+      const border = c.net > 10 ? 'rgba(34,197,94,0.3)' : c.net < -10 ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.06)';
+      html += `<div style="background:rgba(255,255,255,0.02);border:1px solid ${border};border-radius:8px;padding:12px;text-align:center;">
+        <div style="font-size:14px;font-weight:800;">${c.ccy}</div>
+        <div style="font-size:20px;font-weight:800;color:${netColor};margin:4px 0;">${c.net > 0 ? '+' : ''}${c.net}</div>
+        <div style="font-size:10px;color:var(--text-muted);">${c.bullish} bull / ${c.bearish} bear / ${c.strong} strong</div>
+      </div>`;
+    }
+    html += '</div>';
+
+    // ── Session heatmap ──
+    html += '<div style="margin-bottom:20px;">';
+    html += '<div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">Session × Currency Heatmap</div>';
+    html += '<div style="overflow-x:auto;"><table class="arc-table" style="font-size:11px;"><thead><tr><th>Date</th><th>Session</th>';
+    for (const ccy of CURRENCIES) html += `<th>${ccy}</th>`;
+    html += '<th>Strongest</th><th>Weakest</th><th>Breaks</th></tr></thead><tbody>';
+
+    for (const s of sessions.slice(0, 90)) {
+      html += '<tr>';
+      html += `<td style="font-weight:600;white-space:nowrap;">${s.date}</td>`;
+      html += `<td><span style="display:inline-block;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700;background:${SESS_CLR[s.session] || '#666'}22;color:${SESS_CLR[s.session] || '#999'}">${s.session}</span></td>`;
+
+      for (const ccy of CURRENCIES) {
+        const c = s.currencies?.[ccy];
+        if (!c) { html += '<td>—</td>'; continue; }
+        const net = c.net;
+        const color = net >= 3 ? '#22c55e' : net >= 1 ? '#4ade80' : net <= -3 ? '#ef4444' : net <= -1 ? '#f87171' : 'var(--text-muted)';
+        const bg = Math.abs(net) >= 3 ? (net > 0 ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)') : 'transparent';
+        html += `<td style="color:${color};font-weight:700;background:${bg};">${net > 0 ? '+' : ''}${net}</td>`;
+      }
+
+      html += `<td style="color:#22c55e;font-weight:700;white-space:nowrap;">${s.strongest?.currency || '—'} +${s.strongest?.net || 0}</td>`;
+      html += `<td style="color:#ef4444;font-weight:700;white-space:nowrap;">${s.weakest?.currency || '—'} ${s.weakest?.net || 0}</td>`;
+      html += `<td style="font-weight:600;">${s.totalBreaks}</td>`;
+      html += '</tr>';
+    }
+    html += '</tbody></table></div></div>';
+
+    // ── Top pairs breakdown ──
+    html += '<div style="margin-bottom:20px;">';
+    html += '<div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">Top Pair Breaks (All Sessions)</div>';
+
+    const pairAgg = {};
+    for (const s of sessions) {
+      for (const p of (s.topPairs || [])) {
+        if (!pairAgg[p.pair]) pairAgg[p.pair] = { bullish: 0, bearish: 0, strong: 0, maxMag: 0 };
+        pairAgg[p.pair].bullish += p.bullish;
+        pairAgg[p.pair].bearish += p.bearish;
+        pairAgg[p.pair].strong += p.strong;
+        pairAgg[p.pair].maxMag = Math.max(pairAgg[p.pair].maxMag, p.maxMag);
+      }
+    }
+
+    const pairRanked = Object.entries(pairAgg)
+      .map(([pair, d]) => ({ pair, ...d, net: d.bullish - d.bearish }))
+      .sort((a, b) => Math.abs(b.net) - Math.abs(a.net))
+      .slice(0, 20);
+
+    html += '<div style="overflow-x:auto;"><table class="arc-table" style="font-size:11px;"><thead><tr>';
+    html += '<th>Pair</th><th>Bullish</th><th>Bearish</th><th>Net</th><th>Strong</th><th>Max Mag</th><th>Direction</th>';
+    html += '</tr></thead><tbody>';
+    for (const p of pairRanked) {
+      const netColor = p.net > 0 ? '#22c55e' : p.net < 0 ? '#ef4444' : 'var(--text-muted)';
+      const dir = p.net > 5 ? 'STRONG BULL' : p.net > 0 ? 'BULLISH' : p.net < -5 ? 'STRONG BEAR' : p.net < 0 ? 'BEARISH' : 'NEUTRAL';
+      html += `<tr><td style="font-weight:700;">${p.pair.replace('_','/')}</td>`;
+      html += `<td>${p.bullish}</td><td>${p.bearish}</td>`;
+      html += `<td style="color:${netColor};font-weight:700;">${p.net > 0 ? '+' : ''}${p.net}</td>`;
+      html += `<td>${p.strong}</td><td>${p.maxMag}p</td>`;
+      html += `<td style="color:${netColor};font-weight:600;">${dir}</td></tr>`;
+    }
+    html += '</tbody></table></div></div>';
+
+    // ── Break activity chart ──
+    html += '<div style="margin-bottom:20px;">';
+    html += '<div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">Break Activity Per Session</div>';
+    html += '<div style="position:relative;"><canvas id="arc-sb-chart" height="180" style="width:100%;"></canvas>';
+    html += '<div id="arc-sb-tooltip" style="position:absolute;display:none;padding:8px 12px;border-radius:8px;background:rgba(0,0,0,0.9);border:1px solid rgba(255,255,255,0.15);font-size:11px;color:#fff;pointer-events:none;z-index:10;white-space:nowrap;"></div>';
+    html += '</div></div>';
+
+    container.innerHTML = html;
+
+    // Draw chart
+    requestAnimationFrame(() => drawSbChart(sessions));
+  }
+
+  function drawSbChart(sessions) {
+    const canvas = document.getElementById('arc-sb-chart');
+    if (!canvas) return;
+    const reversed = [...sessions].reverse().slice(-60);
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = 180 * dpr;
+    ctx.scale(dpr, dpr);
+
+    const W = rect.width, H = 180;
+    const padL = 36, padR = 10, padT = 10, padB = 50;
+    const chartW = W - padL - padR, chartH = H - padT - padB;
+    const maxB = Math.max(1, ...reversed.map(s => s.totalBreaks));
+    const gap = chartW / reversed.length;
+    const barW = Math.min(16, gap * 0.7);
+
+    const SESS_CLR = { ASIA: '#f59e0b', LONDON: '#3b82f6', NEW_YORK: '#a855f7' };
+    const barPositions = [];
+
+    ctx.clearRect(0, 0, W, H);
+
+    // Y gridlines
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = '10px Inter';
+    ctx.textAlign = 'right';
+    for (let i = 0; i <= 4; i++) {
+      const y = padT + chartH - (i / 4) * chartH;
+      ctx.fillText(Math.round((i / 4) * maxB), padL - 6, y + 3);
+      ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+    }
+
+    for (let i = 0; i < reversed.length; i++) {
+      const s = reversed[i];
+      const x = padL + i * gap + gap / 2;
+      const h = (s.totalBreaks / maxB) * chartH;
+      const y = padT + chartH - h;
+      ctx.fillStyle = SESS_CLR[s.session] || '#666';
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(x - barW / 2, y, barW, h, 2);
+      else { ctx.rect(x - barW / 2, y, barW, h); }
+      ctx.fill();
+      barPositions.push({ x: x - barW / 2, y, w: barW, h, session: s });
+
+      // Date labels every 3rd bar
+      if (i % 3 === 0) {
+        ctx.save();
+        ctx.translate(x, padT + chartH + 6);
+        ctx.rotate(-Math.PI / 3.5);
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.font = '9px Inter';
+        ctx.textAlign = 'right';
+        ctx.fillText(s.date.slice(5) + ' ' + s.session.slice(0, 3), 0, 0);
+        ctx.restore();
+      }
+    }
+
+    const tooltip = document.getElementById('arc-sb-tooltip');
+    if (tooltip) {
+      canvas.onmousemove = (e) => {
+        const r = canvas.getBoundingClientRect();
+        const mx = e.clientX - r.left, my = e.clientY - r.top;
+        let found = null;
+        for (const bp of barPositions) {
+          if (mx >= bp.x && mx <= bp.x + bp.w && my >= bp.y && my <= bp.y + bp.h) { found = bp; break; }
+        }
+        if (found) {
+          const s = found.session;
+          tooltip.style.display = 'block';
+          tooltip.style.left = Math.min(found.x + found.w + 8, rect.width - 200) + 'px';
+          tooltip.style.top = found.y + 'px';
+          tooltip.innerHTML = `<div style="font-weight:700;">${s.date} — ${s.session}</div>
+            <div>${s.totalBreaks} total breaks</div>
+            <div style="color:#22c55e">Strongest: ${s.strongest?.currency} +${s.strongest?.net}</div>
+            <div style="color:#ef4444">Weakest: ${s.weakest?.currency} ${s.weakest?.net}</div>`;
+        } else {
+          tooltip.style.display = 'none';
+        }
+      };
+      canvas.onmouseleave = () => { tooltip.style.display = 'none'; };
     }
   }
 
