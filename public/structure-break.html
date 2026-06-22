@@ -369,7 +369,6 @@ function renderDashboard(d) {
   ];
   const ccyMap = Object.fromEntries(sorted.map(c => [c.ccy, c.net]));
   const r3h = (d.recent3h && d.recent3h[_sbLookback]) || {};
-  const m15 = (d.recent3h && d.recent3h.m15) || {};
   const q15 = d.m15Quality || {};
 
   // Find max spread to normalize to 0-100 scale
@@ -397,15 +396,11 @@ function renderDashboard(d) {
     // Normalize spread to 0-100 (50% weight)
     const spreadNorm = (ccySpread / maxSpread) * 100;
 
-    // H-timeframe break activity (20% weight) — cap at 100
+    // H-timeframe break activity (25% weight) — cap at 100
     const pairR3h = r3h[pair] || { total: 0, strong: 0 };
     const breakRaw = Math.min(100, (pairR3h.total * 15) + (pairR3h.strong * 20));
 
-    // M15 break activity (10% weight) — cap at 100
-    const pairM15 = m15[pair] || { total: 0, strong: 0 };
-    const m15Raw = Math.min(100, (pairM15.total * 5) + (pairM15.strong * 10));
-
-    // M15 quality alignment (20% weight) — only if direction matches
+    // M15 quality alignment (25% weight) — only if direction matches
     const pairQ = q15[pair] || null;
     let qualityRaw = 0;
     if (pairQ) {
@@ -415,16 +410,14 @@ function renderDashboard(d) {
 
     const score = Math.round(
       0.50 * spreadNorm +
-      0.20 * breakRaw +
-      0.10 * m15Raw +
-      0.20 * qualityRaw
+      0.25 * breakRaw +
+      0.25 * qualityRaw
     );
 
     flowPairs.push({
       pair, dir, strong, weak, sNet, wNet,
       ccySpread, score,
       breaks3h: pairR3h.total, strong3h: pairR3h.strong,
-      m15Total: pairM15.total, m15Strong: pairM15.strong,
       q: pairQ,
     });
   }
@@ -432,17 +425,13 @@ function renderDashboard(d) {
 
   if (flowPairs.length) {
     html += `<div style="margin-top:14px;padding:14px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);border-radius:8px;">
-      <div style="font-size:10px;color:#f59e0b;font-weight:700;margin-bottom:10px;">STRUCTURE FLOW PAIRS (${lbLabel()}) — ranked by spread + breaks + M15 quality</div>`;
+      <div style="font-size:10px;color:#f59e0b;font-weight:700;margin-bottom:10px;">STRUCTURE FLOW PAIRS (${lbLabel()}) — 50% spread + 25% H-breaks + 25% M15 quality</div>`;
     for (const fp of flowPairs.slice(0, 9)) {
       const dirColor = fp.dir === 'BUY' ? '#22c55e' : '#ef4444';
       const dirBg = fp.dir === 'BUY' ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)';
       const breakTag = fp.breaks3h > 0
         ? `<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(245,158,11,0.2);color:#f59e0b;margin-left:4px;">${fp.breaks3h} brk${fp.strong3h ? ' / '+fp.strong3h+' str' : ''}</span>`
         : '';
-      const m15Tag = fp.m15Total > 0
-        ? `<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(59,130,246,0.2);color:#3b82f6;margin-left:3px;">M15: ${fp.m15Total}${fp.m15Strong ? ' / '+fp.m15Strong+' str' : ''}</span>`
-        : '';
-      // M15 quality badge
       let qTag = '';
       if (fp.q) {
         const qc = fp.q.classification;
@@ -457,7 +446,7 @@ function renderDashboard(d) {
         <span style="font-size:13px;font-weight:800;color:#fff;min-width:72px;">${fp.pair.replace('_','/')}</span>
         <span style="font-size:11px;font-weight:800;color:${dirColor};min-width:36px;">${fp.dir}</span>
         <span style="font-size:11px;font-weight:700;color:var(--text-muted);min-width:28px;">${spreadLabel}</span>
-        <span style="font-size:10px;color:var(--text-muted);flex:1;">${fp.strong} <span style="color:#22c55e">${fp.sNet>0?'+':''}${fp.sNet}</span> vs ${fp.weak} <span style="color:#ef4444">${fp.wNet}</span>${breakTag}${m15Tag}${qTag}</span>
+        <span style="font-size:10px;color:var(--text-muted);flex:1;">${fp.strong} <span style="color:#22c55e">${fp.sNet>0?'+':''}${fp.sNet}</span> vs ${fp.weak} <span style="color:#ef4444">${fp.wNet}</span>${breakTag}${qTag}</span>
         <span style="font-size:11px;font-weight:700;color:#f59e0b;">score ${fp.score}</span>
       </div>`;
     }
