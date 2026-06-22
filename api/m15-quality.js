@@ -164,7 +164,7 @@ module.exports = async function handler(req, res) {
       const trending = [];
       for (const pair of sets[0]) {
         if (sets[1].has(pair) && sets[2].has(pair) && sets[3].has(pair) &&
-            qs[0][pair] > 40 &&
+            qs[0][pair] > 30 &&
             qs[0][pair] > qs[1][pair] && qs[1][pair] > qs[2][pair] && qs[2][pair] > qs[3][pair]) {
           trending.push(pair);
         }
