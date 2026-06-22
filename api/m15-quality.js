@@ -105,34 +105,38 @@ module.exports = async function handler(req, res) {
     const candlesByInst = {};
     const PAGE = 1000;
 
-    for (const inst of INSTRUMENTS) {
-      const allCandles = [];
-      let offset = 0;
-      while (true) {
-        let q = sb
-          .from('backtest_candles')
-          .select('time, open, high, low, close')
-          .eq('instrument', inst)
-          .eq('timeframe', 'M15')
-          .eq('complete', true)
-          .gte('time', since);
-        if (until) q = q.lte('time', until);
-        const { data, error } = await q
-          .order('time', { ascending: true })
-          .range(offset, offset + PAGE - 1);
-        if (error) throw error;
-        if (!data?.length) break;
-        allCandles.push(...data);
-        if (data.length < PAGE) break;
-        offset += PAGE;
-      }
-      candlesByInst[inst] = allCandles.map(c => ({
-        time: c.time,
-        open: parseFloat(c.open),
-        high: parseFloat(c.high),
-        low: parseFloat(c.low),
-        close: parseFloat(c.close),
-      }));
+    // Fetch all instruments in one paginated query
+    let allRows = [];
+    let offset = 0;
+    while (true) {
+      let q = sb
+        .from('backtest_candles')
+        .select('instrument, time, open, high, low, close')
+        .in('instrument', INSTRUMENTS)
+        .eq('timeframe', 'M15')
+        .eq('complete', true)
+        .gte('time', since);
+      if (until) q = q.lte('time', until);
+      const { data, error } = await q
+        .order('instrument', { ascending: true })
+        .order('time', { ascending: true })
+        .range(offset, offset + PAGE - 1);
+      if (error) throw error;
+      if (!data?.length) break;
+      allRows.push(...data);
+      if (data.length < PAGE) break;
+      offset += PAGE;
+    }
+
+    for (const row of allRows) {
+      if (!candlesByInst[row.instrument]) candlesByInst[row.instrument] = [];
+      candlesByInst[row.instrument].push({
+        time: row.time,
+        open: parseFloat(row.open),
+        high: parseFloat(row.high),
+        low: parseFloat(row.low),
+        close: parseFloat(row.close),
+      });
     }
 
     // Compute quality at each M15 timestamp per pair
