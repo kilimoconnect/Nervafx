@@ -158,7 +158,7 @@ module.exports = async function handler(req, res) {
       const qs0 = qualityMap[t0] || {};
       const trending = [];
       for (const pair of set0) {
-        if (set1.has(pair) && qs0[pair] >= 20) {
+        if (set1.has(pair) && qs0[pair] > 30) {
           trending.push(pair);
         }
       }
