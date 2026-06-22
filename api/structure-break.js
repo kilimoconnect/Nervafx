@@ -118,6 +118,7 @@ module.exports = async function handler(req, res) {
 
     const h1Snapshots = {};
     const qualityMap = {};
+    const breakMap = {}; // breakMap[time][inst] = true if candle confirms structure break
 
     for (const inst of INSTRUMENTS) {
       const candles = candlesByInst[inst];
@@ -130,9 +131,19 @@ module.exports = async function handler(req, res) {
           const d = new Date(time);
           h1Snapshots[time] = { time, session: getSession(d.getUTCHours()), pairs: {} };
           qualityMap[time] = {};
+          breakMap[time] = {};
         }
         h1Snapshots[time].pairs[inst] = q;
         qualityMap[time][inst] = q.quality;
+
+        // Structure break: close above previous high (bullish) or below previous low (bearish)
+        const curr = candles[i];
+        const prev = candles[i - 1];
+        if (q.direction === 'BULLISH' && curr.close > prev.high) {
+          breakMap[time][inst] = true;
+        } else if (q.direction === 'BEARISH' && curr.close < prev.low) {
+          breakMap[time][inst] = true;
+        }
       }
     }
 
@@ -142,9 +153,13 @@ module.exports = async function handler(req, res) {
 
     const top5ByTime = {};
     for (const snap of sortedSnaps) {
+      const breaks = breakMap[snap.time] || {};
       const sorted = Object.entries(snap.pairs)
-        .map(([pair, q]) => ({ pair, quality: q.quality }))
-        .sort((a, b) => b.quality - a.quality)
+        .map(([pair, q]) => ({ pair, quality: q.quality, brk: !!breaks[pair] }))
+        .sort((a, b) => {
+          if (a.brk !== b.brk) return a.brk ? -1 : 1;
+          return b.quality - a.quality;
+        })
         .slice(0, 5);
       top5ByTime[snap.time] = new Set(sorted.map(p => p.pair));
     }
@@ -167,9 +182,13 @@ module.exports = async function handler(req, res) {
 
     const timeline = sortedSnaps.map(snap => {
       const trending = new Set(trendingSets[snap.time] || []);
+      const breaks = breakMap[snap.time] || {};
       const pairArr = Object.entries(snap.pairs)
-        .map(([pair, q]) => ({ pair, ...q, trending: trending.has(pair) }))
-        .sort((a, b) => b.quality - a.quality);
+        .map(([pair, q]) => ({ pair, ...q, trending: trending.has(pair), structureBreak: !!breaks[pair] }))
+        .sort((a, b) => {
+          if (a.structureBreak !== b.structureBreak) return a.structureBreak ? -1 : 1;
+          return b.quality - a.quality;
+        });
 
       return {
         time: snap.time,
