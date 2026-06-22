@@ -77,217 +77,200 @@ module.exports = async function handler(req, res) {
       }));
     }
 
-    // Detect structure breaks per pair per hour
-    const pairBreaks = {};  // { inst: [{ time, type, close, prevHigh, prevLow, magnitude }] }
+    // Detect structure breaks per pair per hour at 3 lookback depths
+    const LOOKBACKS = [1, 3, 6]; // H1, H3, H6
+    const pairBreaksByLB = {}; // { lb: { inst: [breaks] } }
 
-    for (const inst of INSTRUMENTS) {
-      const candles = candlesByInst[inst];
-      pairBreaks[inst] = [];
+    for (const lb of LOOKBACKS) {
+      pairBreaksByLB[lb] = {};
+      for (const inst of INSTRUMENTS) {
+        const candles = candlesByInst[inst];
+        const breaks = [];
 
-      for (let i = 1; i < candles.length; i++) {
-        const prev = candles[i - 1];
-        const curr = candles[i];
-        const session = getSession(new Date(curr.time).getUTCHours());
-        if (!session) continue;
+        for (let i = lb; i < candles.length; i++) {
+          const curr = candles[i];
+          const session = getSession(new Date(curr.time).getUTCHours());
+          if (!session) continue;
 
-        let breakType = null;
-        let magnitude = 0;
-
-        if (curr.close > prev.high) {
-          breakType = 'BULLISH';
-          magnitude = Math.round((curr.close - prev.high) * 100000) / 10;
-        } else if (curr.close < prev.low) {
-          breakType = 'BEARISH';
-          magnitude = Math.round((prev.low - curr.close) * 100000) / 10;
-        }
-
-        if (breakType) {
-          // Check for strong break: close beyond prev high/low by significant margin
-          // AND body > 50% of candle range (conviction)
-          const body = Math.abs(curr.close - curr.open);
-          const range = curr.high - curr.low;
-          const bodyRatio = range > 0 ? body / range : 0;
-          const isStrong = magnitude >= 3.0 && bodyRatio >= 0.5;
-
-          // Multi-candle context: count consecutive breaks in same direction
-          let streak = 1;
-          for (let j = pairBreaks[inst].length - 1; j >= 0; j--) {
-            if (pairBreaks[inst][j].type === breakType) streak++;
-            else break;
+          // Find highest high and lowest low of previous `lb` candles
+          let prevHigh = -Infinity, prevLow = Infinity;
+          for (let j = i - lb; j < i; j++) {
+            prevHigh = Math.max(prevHigh, candles[j].high);
+            prevLow = Math.min(prevLow, candles[j].low);
           }
 
-          pairBreaks[inst].push({
-            time: curr.time,
-            session,
-            type: breakType,
-            close: curr.close,
-            prevHigh: prev.high,
-            prevLow: prev.low,
-            magnitude,
-            bodyRatio: Math.round(bodyRatio * 100),
-            strong: isStrong,
-            streak,
-          });
+          let breakType = null, magnitude = 0;
+          if (curr.close > prevHigh) {
+            breakType = 'BULLISH';
+            magnitude = Math.round((curr.close - prevHigh) * 100000) / 10;
+          } else if (curr.close < prevLow) {
+            breakType = 'BEARISH';
+            magnitude = Math.round((prevLow - curr.close) * 100000) / 10;
+          }
+
+          if (breakType) {
+            const body = Math.abs(curr.close - curr.open);
+            const range = curr.high - curr.low;
+            const bodyRatio = range > 0 ? body / range : 0;
+            const isStrong = magnitude >= 3.0 && bodyRatio >= 0.5;
+
+            breaks.push({
+              time: curr.time, session, type: breakType,
+              magnitude, bodyRatio: Math.round(bodyRatio * 100), strong: isStrong,
+            });
+          }
         }
+        pairBreaksByLB[lb][inst] = breaks;
       }
     }
 
-    // Aggregate to currency level per hour
+    // Collect all timestamps where any break occurred at any lookback
     const allBreakTimes = new Set();
-    for (const inst of INSTRUMENTS) {
-      for (const b of pairBreaks[inst]) allBreakTimes.add(b.time);
+    for (const lb of LOOKBACKS) {
+      for (const inst of INSTRUMENTS) {
+        for (const b of pairBreaksByLB[lb][inst]) allBreakTimes.add(b.time);
+      }
     }
     const sortedTimes = [...allBreakTimes].sort();
 
-    // Per-hour currency break scores
+    // Per-hour currency break scores — with H1/H3/H6 layers
     const hourlyScores = [];
     for (const time of sortedTimes) {
       const session = getSession(new Date(time).getUTCHours());
-      const ccyBullish = {};
-      const ccyBearish = {};
-      const ccyStrong = {};
-      const breakDetails = [];
 
-      for (const ccy of CURRENCIES) {
-        ccyBullish[ccy] = 0;
-        ccyBearish[ccy] = 0;
-        ccyStrong[ccy] = 0;
-      }
+      const byLB = {};
+      for (const lb of LOOKBACKS) {
+        const ccyBull = {}, ccyBear = {}, ccyStr = {};
+        for (const ccy of CURRENCIES) { ccyBull[ccy] = 0; ccyBear[ccy] = 0; ccyStr[ccy] = 0; }
+        const details = [];
 
-      for (const inst of INSTRUMENTS) {
-        const brk = pairBreaks[inst].find(b => b.time === time);
-        if (!brk) continue;
-
-        const [base, quote] = inst.split('_');
-
-        if (brk.type === 'BULLISH') {
-          ccyBullish[base]++;
-          ccyBearish[quote]++;
-          if (brk.strong) { ccyStrong[base]++; ccyStrong[quote]++; }
-        } else {
-          ccyBearish[base]++;
-          ccyBullish[quote]++;
-          if (brk.strong) { ccyStrong[base]++; ccyStrong[quote]++; }
+        for (const inst of INSTRUMENTS) {
+          const brk = pairBreaksByLB[lb][inst].find(b => b.time === time);
+          if (!brk) continue;
+          const [base, quote] = inst.split('_');
+          if (brk.type === 'BULLISH') { ccyBull[base]++; ccyBear[quote]++; }
+          else { ccyBear[base]++; ccyBull[quote]++; }
+          if (brk.strong) { ccyStr[base]++; ccyStr[quote]++; }
+          details.push({ pair: inst, type: brk.type, magnitude: brk.magnitude, bodyRatio: brk.bodyRatio, strong: brk.strong });
         }
 
-        breakDetails.push({
-          pair: inst,
-          type: brk.type,
-          magnitude: brk.magnitude,
-          bodyRatio: brk.bodyRatio,
-          strong: brk.strong,
-          streak: brk.streak,
-        });
+        const ccyScores = {};
+        for (const ccy of CURRENCIES) {
+          const net = ccyBull[ccy] - ccyBear[ccy];
+          ccyScores[ccy] = {
+            bullish: ccyBull[ccy], bearish: ccyBear[ccy], net,
+            total: ccyBull[ccy] + ccyBear[ccy], strong: ccyStr[ccy],
+            direction: net > 0 ? 'STRONG' : net < 0 ? 'WEAK' : 'NEUTRAL',
+          };
+        }
+        byLB[lb] = { currencies: ccyScores, pairs: details, totalBreaks: details.length };
       }
 
-      // Currency scores: net breaks (bullish - bearish) out of 7 pairs
-      const ccyScores = {};
-      for (const ccy of CURRENCIES) {
-        const net = ccyBullish[ccy] - ccyBearish[ccy];
-        const total = ccyBullish[ccy] + ccyBearish[ccy];
-        const strongCount = ccyStrong[ccy];
-        ccyScores[ccy] = {
-          bullish: ccyBullish[ccy],
-          bearish: ccyBearish[ccy],
-          net,
-          total,
-          strong: strongCount,
-          direction: net > 0 ? 'STRONG' : net < 0 ? 'WEAK' : 'NEUTRAL',
-          score: Math.round((net / 7) * 100),
-        };
-      }
-
+      // Primary view uses H1 for backward compat, but includes all layers
       hourlyScores.push({
-        time,
-        session,
-        currencies: ccyScores,
-        pairs: breakDetails,
-        totalBreaks: breakDetails.length,
+        time, session,
+        currencies: byLB[1].currencies,
+        pairs: byLB[1].pairs,
+        totalBreaks: byLB[1].totalBreaks,
+        h3: byLB[3],
+        h6: byLB[6],
       });
     }
 
     // Build session summaries: aggregate breaks within each session block
+    // Tracks H1, H3, H6 layers per session block
     const sessionBlocks = {};
+    const LB_KEYS = { 1: 'h1', 3: 'h3', 6: 'h6' };
+
     for (const hs of hourlyScores) {
       const d = new Date(hs.time);
       const dateStr = d.toISOString().slice(0, 10);
       const blockKey = `${dateStr}|${hs.session}`;
 
       if (!sessionBlocks[blockKey]) {
-        sessionBlocks[blockKey] = {
-          date: dateStr, session: hs.session,
-          currencies: {},
-          pairBreaks: {},
-          hours: 0,
+        const initLB = () => {
+          const o = { currencies: {}, pairBreaks: {} };
+          for (const ccy of CURRENCIES) o.currencies[ccy] = { bullish: 0, bearish: 0, strong: 0 };
+          return o;
         };
-        for (const ccy of CURRENCIES) {
-          sessionBlocks[blockKey].currencies[ccy] = { bullish: 0, bearish: 0, strong: 0 };
-        }
+        sessionBlocks[blockKey] = {
+          date: dateStr, session: hs.session, hours: 0,
+          h1: initLB(), h3: initLB(), h6: initLB(),
+        };
       }
 
       const block = sessionBlocks[blockKey];
       block.hours++;
 
-      for (const ccy of CURRENCIES) {
-        block.currencies[ccy].bullish += hs.currencies[ccy].bullish;
-        block.currencies[ccy].bearish += hs.currencies[ccy].bearish;
-        block.currencies[ccy].strong += hs.currencies[ccy].strong;
-      }
+      // Aggregate each lookback layer
+      for (const [lbStr, lbKey] of Object.entries(LB_KEYS)) {
+        const src = lbKey === 'h1' ? hs : hs[lbKey];
+        if (!src) continue;
+        const layer = block[lbKey];
 
-      for (const pb of hs.pairs) {
-        if (!block.pairBreaks[pb.pair]) {
-          block.pairBreaks[pb.pair] = { bullish: 0, bearish: 0, strong: 0, maxMag: 0, maxStreak: 0 };
+        for (const ccy of CURRENCIES) {
+          if (src.currencies[ccy]) {
+            layer.currencies[ccy].bullish += src.currencies[ccy].bullish;
+            layer.currencies[ccy].bearish += src.currencies[ccy].bearish;
+            layer.currencies[ccy].strong += src.currencies[ccy].strong;
+          }
         }
-        const p = block.pairBreaks[pb.pair];
-        if (pb.type === 'BULLISH') p.bullish++;
-        else p.bearish++;
-        if (pb.strong) p.strong++;
-        p.maxMag = Math.max(p.maxMag, pb.magnitude);
-        p.maxStreak = Math.max(p.maxStreak, pb.streak);
+
+        for (const pb of (src.pairs || [])) {
+          if (!layer.pairBreaks[pb.pair]) {
+            layer.pairBreaks[pb.pair] = { bullish: 0, bearish: 0, strong: 0, maxMag: 0 };
+          }
+          const p = layer.pairBreaks[pb.pair];
+          if (pb.type === 'BULLISH') p.bullish++;
+          else p.bearish++;
+          if (pb.strong) p.strong++;
+          p.maxMag = Math.max(p.maxMag, pb.magnitude);
+        }
       }
     }
 
-    // Build final session summaries
-    const sessions = Object.values(sessionBlocks).map(block => {
+    function buildSessionSummary(layerData) {
       const ccySummary = {};
       for (const ccy of CURRENCIES) {
-        const c = block.currencies[ccy];
+        const c = layerData.currencies[ccy];
         const net = c.bullish - c.bearish;
         ccySummary[ccy] = {
-          ...c,
-          net,
+          ...c, net,
           direction: net >= 3 ? 'STRONG' : net >= 1 ? 'BULLISH' : net <= -3 ? 'WEAK' : net <= -1 ? 'BEARISH' : 'NEUTRAL',
           score: Math.round((net / (c.bullish + c.bearish || 1)) * 100),
         };
       }
-
-      // Top movers
       const sorted = Object.entries(ccySummary).sort((a, b) => b[1].net - a[1].net);
       const strongest = sorted[0];
       const weakest = sorted[sorted.length - 1];
-
-      // Top pair breaks
-      const topPairs = Object.entries(block.pairBreaks)
+      const topPairs = Object.entries(layerData.pairBreaks)
         .map(([pair, d]) => ({
-          pair,
-          net: d.bullish - d.bearish,
-          bullish: d.bullish,
-          bearish: d.bearish,
-          strong: d.strong,
-          maxMag: d.maxMag,
-          maxStreak: d.maxStreak,
+          pair, net: d.bullish - d.bearish,
+          bullish: d.bullish, bearish: d.bearish,
+          strong: d.strong, maxMag: d.maxMag,
         }))
         .sort((a, b) => Math.abs(b.net) - Math.abs(a.net));
-
       return {
-        date: block.date,
-        session: block.session,
-        hours: block.hours,
         currencies: ccySummary,
         strongest: { currency: strongest[0], ...strongest[1] },
         weakest: { currency: weakest[0], ...weakest[1] },
         topPairs: topPairs.slice(0, 10),
         totalBreaks: topPairs.reduce((s, p) => s + p.bullish + p.bearish, 0),
+      };
+    }
+
+    // Build final session summaries with H1/H3/H6 layers
+    const sessions = Object.values(sessionBlocks).map(block => {
+      const h1 = buildSessionSummary(block.h1);
+      const h3 = buildSessionSummary(block.h3);
+      const h6 = buildSessionSummary(block.h6);
+      return {
+        date: block.date, session: block.session, hours: block.hours,
+        currencies: h1.currencies,
+        strongest: h1.strongest, weakest: h1.weakest,
+        topPairs: h1.topPairs, totalBreaks: h1.totalBreaks,
+        h3: { currencies: h3.currencies, strongest: h3.strongest, weakest: h3.weakest, topPairs: h3.topPairs, totalBreaks: h3.totalBreaks },
+        h6: { currencies: h6.currencies, strongest: h6.strongest, weakest: h6.weakest, topPairs: h6.topPairs, totalBreaks: h6.totalBreaks },
       };
     });
 
@@ -298,10 +281,10 @@ module.exports = async function handler(req, res) {
       return (so[b.session] || 0) - (so[a.session] || 0);
     });
 
-    // Latest snapshot: most recent hour's currency state
+    // Latest snapshot: most recent hour's currency state with H1/H3/H6
     const latest = hourlyScores.length ? hourlyScores[hourlyScores.length - 1] : null;
 
-    // Currency momentum: trend of last N hours per currency
+    // Currency momentum: trend of last N hours per currency (H1 based)
     const momentum = {};
     const recentHours = hourlyScores.slice(-6);
     for (const ccy of CURRENCIES) {

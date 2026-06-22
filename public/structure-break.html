@@ -167,6 +167,16 @@
     .sb-loading { text-align: center; padding: 60px; color: var(--text-muted); font-size: 13px; }
     .sb-loading .spin { display: inline-block; width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.1); border-top-color: #f59e0b; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: middle; }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Lookback toggle */
+    .sb-lb-toggle { display: flex; gap: 0; background: rgba(255,255,255,0.04); border-radius: 8px; overflow: hidden; border: 1px solid rgba(255,255,255,0.08); margin-bottom: 16px; width: fit-content; }
+    .sb-lb-btn {
+      padding: 7px 16px; font-size: 11px; font-weight: 700; color: var(--text-muted);
+      cursor: pointer; transition: all 0.15s; border: none; background: transparent;
+      letter-spacing: 0.3px;
+    }
+    .sb-lb-btn:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+    .sb-lb-btn.active { background: rgba(245,158,11,0.2); color: #f59e0b; }
   </style>
 </head>
 <body>
@@ -181,7 +191,7 @@
 </div>
 
 <div class="sx-main" id="sb-root">
-  <div class="sb-loading" id="sb-loading"><span class="spin"></span> Analyzing H1 structure breaks…</div>
+  <div class="sb-loading" id="sb-loading"><span class="spin"></span> Analyzing H1/H3/H6 structure breaks…</div>
 </div>
 
 <script>
@@ -192,6 +202,7 @@ let _sbData = null;
 let _sbSessionFilter = 'ALL';
 let _sbCcyFilter = 'ALL';
 let _sbHours = 168;
+let _sbLookback = 'h1'; // 'h1', 'h3', 'h6'
 
 async function api(path) {
   let token = localStorage.getItem('nfx_token');
@@ -257,17 +268,44 @@ function switchTab(tab) {
   if (tab === 'heatmap') initCharts();
 }
 
+function switchLookback(lb) {
+  _sbLookback = lb;
+  render();
+}
+
+function lbLabel() { return _sbLookback === 'h1' ? 'H1 (1 Candle)' : _sbLookback === 'h3' ? 'H3 (3 Candles)' : 'H6 (6 Candles)'; }
+
+function renderLbToggle() {
+  return `<div class="sb-lb-toggle">
+    <button class="sb-lb-btn ${_sbLookback==='h1'?'active':''}" onclick="switchLookback('h1')">H1</button>
+    <button class="sb-lb-btn ${_sbLookback==='h3'?'active':''}" onclick="switchLookback('h3')">H3</button>
+    <button class="sb-lb-btn ${_sbLookback==='h6'?'active':''}" onclick="switchLookback('h6')">H6</button>
+  </div>`;
+}
+
+function getLatestLB(d) {
+  if (!d.latest) return null;
+  if (_sbLookback === 'h1') return { currencies: d.latest.currencies, pairs: d.latest.pairs, totalBreaks: d.latest.totalBreaks };
+  return d.latest[_sbLookback] || { currencies: d.latest.currencies, pairs: d.latest.pairs, totalBreaks: d.latest.totalBreaks };
+}
+
+function getSessionLB(s) {
+  if (_sbLookback === 'h1') return { currencies: s.currencies, strongest: s.strongest, weakest: s.weakest, topPairs: s.topPairs, totalBreaks: s.totalBreaks };
+  return s[_sbLookback] || { currencies: s.currencies, strongest: s.strongest, weakest: s.weakest, topPairs: s.topPairs, totalBreaks: s.totalBreaks };
+}
+
 function renderDashboard(d) {
   if (!d.latest) return '<div class="sb-loading">No structure break data available</div>';
 
   const m = d.momentum;
-  let html = '';
+  const lb = getLatestLB(d);
+  let html = renderLbToggle();
 
   // Currency cards
-  html += '<div class="sx-card"><div class="sx-card-hd">Currency Structure — Last Hour</div><div class="sx-card-body">';
+  html += `<div class="sx-card"><div class="sx-card-hd">Currency Structure — Last Hour (${lbLabel()})</div><div class="sx-card-body">`;
   html += '<div class="sb-ccy-grid">';
   for (const ccy of CURRENCIES) {
-    const c = d.latest.currencies[ccy];
+    const c = lb.currencies[ccy];
     const mom = m[ccy];
     const scoreClass = c.net > 0 ? 'pos' : c.net < 0 ? 'neg' : 'zero';
     const cardClass = c.net >= 2 ? 'strong' : c.net <= -2 ? 'weak' : '';
@@ -294,9 +332,9 @@ function renderDashboard(d) {
   html += '</div></div></div>';
 
   // Summary card
-  html += '<div class="sx-card"><div class="sx-card-hd">Structure Break Summary</div><div class="sx-card-body">';
+  html += `<div class="sx-card"><div class="sx-card-hd">Structure Break Summary (${lbLabel()})</div><div class="sx-card-body">`;
 
-  const sorted = CURRENCIES.map(c => ({ ccy: c, net: d.latest.currencies[c].net, strong: d.latest.currencies[c].strong }))
+  const sorted = CURRENCIES.map(c => ({ ccy: c, net: lb.currencies[c].net, strong: lb.currencies[c].strong }))
     .sort((a, b) => b.net - a.net);
 
   const strongest = sorted[0];
@@ -313,7 +351,7 @@ function renderDashboard(d) {
   </div>`;
   html += `<div style="padding:12px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);border-radius:8px;">
     <div style="font-size:10px;color:#f59e0b;font-weight:700;margin-bottom:4px;">TOTAL BREAKS THIS HOUR</div>
-    <div style="font-size:20px;font-weight:800;color:#f59e0b;">${d.latest.totalBreaks} <span style="font-size:14px;">pairs</span></div>
+    <div style="font-size:20px;font-weight:800;color:#f59e0b;">${lb.totalBreaks} <span style="font-size:14px;">pairs</span></div>
   </div>`;
   html += `<div style="padding:12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:8px;">
     <div style="font-size:10px;color:var(--text-muted);font-weight:700;margin-bottom:4px;">SESSION</div>
@@ -330,7 +368,7 @@ function renderDashboard(d) {
     'NZD_JPY','NZD_CHF','NZD_CAD','CAD_JPY','CAD_CHF','CHF_JPY',
   ];
   const strongCcys = sorted.filter(c => c.net > 0).slice(0, 3);
-  const weakCcys = sorted.filter(c => c.net < 0).slice(-3).reverse();
+  const weakCcys = sorted.filter(c => c.net < 0).reverse().slice(0, 3);
 
   if (strongCcys.length && weakCcys.length) {
     const flowPairs = [];
@@ -349,7 +387,7 @@ function renderDashboard(d) {
 
     if (flowPairs.length) {
       html += `<div style="margin-top:14px;padding:14px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);border-radius:8px;">
-        <div style="font-size:10px;color:#f59e0b;font-weight:700;margin-bottom:10px;">STRUCTURE FLOW PAIRS</div>`;
+        <div style="font-size:10px;color:#f59e0b;font-weight:700;margin-bottom:10px;">STRUCTURE FLOW PAIRS (${lbLabel()})</div>`;
       for (const fp of flowPairs.slice(0, 7)) {
         const dirColor = fp.dir === 'BUY' ? '#22c55e' : '#ef4444';
         const dirBg = fp.dir === 'BUY' ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)';
@@ -375,7 +413,7 @@ function renderDashboard(d) {
 }
 
 function renderSessions(d) {
-  let html = '';
+  let html = renderLbToggle();
 
   // Session filter
   html += '<div class="sb-filters">';
@@ -387,7 +425,7 @@ function renderSessions(d) {
 
   const sessions = d.sessions.filter(s => _sbSessionFilter === 'ALL' || s.session === _sbSessionFilter);
 
-  html += '<div class="sx-card"><div class="sx-card-hd">Session Structure Breaks</div><div class="sx-card-body" style="overflow-x:auto;">';
+  html += `<div class="sx-card"><div class="sx-card-hd">Session Structure Breaks (${lbLabel()})</div><div class="sx-card-body" style="overflow-x:auto;">`;
   html += '<table class="sb-tbl"><thead><tr>';
   html += '<th>Date</th><th>Session</th>';
   for (const ccy of CURRENCIES) html += `<th>${ccy}</th>`;
@@ -395,21 +433,21 @@ function renderSessions(d) {
   html += '</tr></thead><tbody>';
 
   for (const s of sessions.slice(0, 60)) {
-    const sessClass = s.session.toLowerCase().replace('_', '-');
+    const lb = getSessionLB(s);
     html += `<tr>`;
     html += `<td style="font-weight:600;white-space:nowrap;">${s.date}</td>`;
     html += `<td><span class="sb-session-tag ${s.session.toLowerCase()}">${s.session.replace('_',' ')}</span></td>`;
 
     for (const ccy of CURRENCIES) {
-      const c = s.currencies[ccy];
+      const c = lb.currencies[ccy];
       const badgeClass = c.direction.toLowerCase();
       const sign = c.net > 0 ? '+' : '';
       html += `<td><span class="sb-badge ${badgeClass}">${sign}${c.net}</span></td>`;
     }
 
-    html += `<td><span style="color:#22c55e;font-weight:700;">${s.strongest.currency} +${s.strongest.net}</span></td>`;
-    html += `<td><span style="color:#ef4444;font-weight:700;">${s.weakest.currency} ${s.weakest.net}</span></td>`;
-    html += `<td style="font-weight:700;">${s.totalBreaks}</td>`;
+    html += `<td><span style="color:#22c55e;font-weight:700;">${lb.strongest.currency} +${lb.strongest.net}</span></td>`;
+    html += `<td><span style="color:#ef4444;font-weight:700;">${lb.weakest.currency} ${lb.weakest.net}</span></td>`;
+    html += `<td style="font-weight:700;">${lb.totalBreaks}</td>`;
     html += '</tr>';
   }
 
@@ -418,7 +456,7 @@ function renderSessions(d) {
 }
 
 function renderPairs(d) {
-  let html = '';
+  let html = renderLbToggle();
 
   // Currency filter
   html += '<div class="sb-filters">';
@@ -428,14 +466,14 @@ function renderPairs(d) {
   }
   html += '</div>';
 
-  // Show latest session's pair breaks
   if (!d.sessions.length) return html + '<div class="sb-loading">No session data</div>';
 
   const latestSession = d.sessions[0];
-  html += `<div class="sx-card"><div class="sx-card-hd">Pair Breaks — ${latestSession.date} ${latestSession.session.replace('_',' ')}</div><div class="sx-card-body">`;
+  const lb = getSessionLB(latestSession);
+  html += `<div class="sx-card"><div class="sx-card-hd">Pair Breaks — ${latestSession.date} ${latestSession.session.replace('_',' ')} (${lbLabel()})</div><div class="sx-card-body">`;
   html += '<div class="sb-pair-grid">';
 
-  let pairs = latestSession.topPairs;
+  let pairs = lb.topPairs;
   if (_sbCcyFilter !== 'ALL') {
     pairs = pairs.filter(p => p.pair.includes(_sbCcyFilter));
   }
@@ -450,14 +488,14 @@ function renderPairs(d) {
       <div class="pair-name">${p.pair.replace('_', '/')}</div>
       <div class="pair-dir" style="color:${dirColor}">${dir}</div>
       <div class="pair-stat">${p.bullish} bullish / ${p.bearish} bearish breaks</div>
-      <div class="pair-stat">${p.strong} strong • max ${p.maxMag} pips • streak ${p.maxStreak}</div>
+      <div class="pair-stat">${p.strong} strong • max ${p.maxMag} pips</div>
     </div>`;
   }
 
   html += '</div></div></div>';
 
   // Multi-session pair history
-  html += '<div class="sx-card"><div class="sx-card-hd">Pair Break History (Last 10 Sessions)</div><div class="sx-card-body" style="overflow-x:auto;">';
+  html += `<div class="sx-card"><div class="sx-card-hd">Pair Break History — Last 10 Sessions (${lbLabel()})</div><div class="sx-card-body" style="overflow-x:auto;">`;
   html += '<table class="sb-tbl"><thead><tr><th>Pair</th>';
 
   const recentSessions = d.sessions.slice(0, 10);
@@ -466,10 +504,10 @@ function renderPairs(d) {
   }
   html += '</tr></thead><tbody>';
 
-  // Collect all pairs
   const allPairsSet = new Set();
   for (const s of recentSessions) {
-    for (const p of s.topPairs) allPairsSet.add(p.pair);
+    const slb = getSessionLB(s);
+    for (const p of slb.topPairs) allPairsSet.add(p.pair);
   }
   let allPairs = [...allPairsSet].sort();
   if (_sbCcyFilter !== 'ALL') {
@@ -479,7 +517,8 @@ function renderPairs(d) {
   for (const pair of allPairs) {
     html += `<tr><td style="font-weight:700;white-space:nowrap;">${pair.replace('_','/')}</td>`;
     for (const s of recentSessions) {
-      const p = s.topPairs.find(t => t.pair === pair);
+      const slb = getSessionLB(s);
+      const p = slb.topPairs.find(t => t.pair === pair);
       if (!p) { html += '<td>—</td>'; continue; }
       const net = p.bullish - p.bearish;
       const color = net > 0 ? '#22c55e' : net < 0 ? '#ef4444' : 'var(--text-muted)';
@@ -493,12 +532,11 @@ function renderPairs(d) {
 }
 
 function renderHeatmap(d) {
-  let html = '';
+  let html = renderLbToggle();
 
-  html += '<div class="sx-card"><div class="sx-card-hd">Currency Structure Heatmap — Last 10 Sessions</div><div class="sx-card-body">';
+  html += `<div class="sx-card"><div class="sx-card-hd">Currency Structure Heatmap — Last 10 Sessions (${lbLabel()})</div><div class="sx-card-body">`;
   html += '<div class="sb-heatmap">';
 
-  // Header row
   html += '<div class="sb-hm-cell"></div>';
   for (const ccy of CURRENCIES) {
     html += `<div class="sb-hm-cell sb-hm-header">${ccy}</div>`;
@@ -506,9 +544,10 @@ function renderHeatmap(d) {
 
   const recentSessions = d.sessions.slice(0, 10);
   for (const s of recentSessions) {
+    const lb = getSessionLB(s);
     html += `<div class="sb-hm-cell sb-hm-row-label">${s.date.slice(5)} ${s.session.slice(0,3)}</div>`;
     for (const ccy of CURRENCIES) {
-      const c = s.currencies[ccy];
+      const c = lb.currencies[ccy];
       const net = c.net;
       const intensity = Math.min(1, Math.abs(net) / 6);
       let bg, color;
@@ -529,11 +568,11 @@ function renderHeatmap(d) {
   html += '</div></div></div>';
 
   // Currency consistency analysis
-  html += '<div class="sx-card"><div class="sx-card-hd">Currency Consistency Score</div><div class="sx-card-body">';
+  html += `<div class="sx-card"><div class="sx-card-hd">Currency Consistency Score (${lbLabel()})</div><div class="sx-card-body">`;
   html += '<div class="sb-ccy-grid">';
 
   for (const ccy of CURRENCIES) {
-    const nets = recentSessions.map(s => s.currencies[ccy].net);
+    const nets = recentSessions.map(s => getSessionLB(s).currencies[ccy].net);
     const bullCount = nets.filter(n => n > 0).length;
     const bearCount = nets.filter(n => n < 0).length;
     const avgNet = nets.length ? nets.reduce((a, b) => a + b, 0) / nets.length : 0;
