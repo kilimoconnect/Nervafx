@@ -150,19 +150,19 @@ module.exports = async function handler(req, res) {
     }
 
     const trendingSets = {};
-    for (let si = 0; si < sortedSnaps.length - 2; si++) {
-      const times = [0, 1, 2].map(j => sortedSnaps[si + j].time);
-      const qs = times.map(t => qualityMap[t] || {});
-      const sets = times.map(t => top5ByTime[t] || new Set());
+    for (let si = 0; si < sortedSnaps.length - 1; si++) {
+      const t0 = sortedSnaps[si].time;
+      const t1 = sortedSnaps[si + 1].time;
+      const set0 = top5ByTime[t0] || new Set();
+      const set1 = top5ByTime[t1] || new Set();
+      const qs0 = qualityMap[t0] || {};
       const trending = [];
-      for (const pair of sets[0]) {
-        if (sets[1].has(pair) && sets[2].has(pair) &&
-            qs[0][pair] >= 20 &&
-            qs[0][pair] > qs[1][pair] && qs[1][pair] > qs[2][pair]) {
+      for (const pair of set0) {
+        if (set1.has(pair) && qs0[pair] >= 20) {
           trending.push(pair);
         }
       }
-      if (trending.length) trendingSets[times[0]] = trending;
+      if (trending.length) trendingSets[t0] = trending;
     }
 
     const timeline = sortedSnaps.map(snap => {
