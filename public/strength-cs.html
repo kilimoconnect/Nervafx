@@ -419,9 +419,9 @@
         hourResults.push({ time, strongest, weakest, sum, sorted, pairs });
       }
 
-      // Mark momentum: 3 consecutive hours of increasing sum, last candle >= 30 pips (0.003 raw)
+      // Mark momentum: 3 consecutive hours of increasing sum, last candle >= 50 pips (0.005 raw)
       for (let i = 2; i < hourResults.length; i++) {
-        if (hourResults[i].sum > hourResults[i - 1].sum && hourResults[i - 1].sum > hourResults[i - 2].sum && hourResults[i].sum >= 0.003) {
+        if (hourResults[i].sum > hourResults[i - 1].sum && hourResults[i - 1].sum > hourResults[i - 2].sum && hourResults[i].sum >= 0.005) {
           hourResults[i].momentum = true;
         }
       }
