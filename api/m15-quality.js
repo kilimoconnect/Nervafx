@@ -50,7 +50,7 @@ function computeQuality(candles) {
   let classification;
   if (quality >= 80) classification = 'VERY_CLEAN';
   else if (quality >= 65) classification = 'TRADEABLE';
-  else if (quality >= 50) classification = 'WEAK';
+  else if (quality >= 40) classification = 'WEAK';
   else classification = 'CHOPPY';
 
   const entryValid = Math.abs(directionScore) > 50 && impulseStrength > 50 && wickCleanliness > 55;
