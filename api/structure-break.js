@@ -300,10 +300,29 @@ module.exports = async function handler(req, res) {
       };
     }
 
+    // Per-pair break counts in last 3 hours — for flow pair ranking
+    const last3h = hourlyScores.slice(-3);
+    const recent3h = {};
+    for (const lbKey of ['h1', 'h3', 'h6']) {
+      recent3h[lbKey] = {};
+      for (const hs of last3h) {
+        const src = lbKey === 'h1' ? hs : hs[lbKey];
+        if (!src) continue;
+        for (const pb of (src.pairs || [])) {
+          if (!recent3h[lbKey][pb.pair]) recent3h[lbKey][pb.pair] = { total: 0, strong: 0, bullish: 0, bearish: 0 };
+          const r = recent3h[lbKey][pb.pair];
+          r.total++;
+          if (pb.strong) r.strong++;
+          if (pb.type === 'BULLISH') r.bullish++; else r.bearish++;
+        }
+      }
+    }
+
     res.json({
       latest,
       momentum,
       sessions,
+      recent3h,
       sessionCount: sessions.length,
       totalHours: hourlyScores.length,
     });
