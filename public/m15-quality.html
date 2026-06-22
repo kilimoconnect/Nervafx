@@ -211,23 +211,6 @@ function render() {
   let timeline = d.timeline;
   if (_mqSessionFilter !== 'ALL') timeline = timeline.filter(s => s.session === _mqSessionFilter);
 
-  // Build trending-up map: pair quality increasing for 3 consecutive snapshots
-  // Uses allQ (all 28 pairs) so trends aren't missed when a pair exits/enters top 5
-  const trendingUp = {};
-  for (let si = 0; si < timeline.length - 2; si++) {
-    const q0 = timeline[si].allQ || {};
-    const q1 = timeline[si + 1].allQ || {};
-    const q2 = timeline[si + 2].allQ || {};
-    const key = timeline[si].time;
-    trendingUp[key] = {};
-    for (const pair of Object.keys(q0)) {
-      if (q1[pair] != null && q2[pair] != null &&
-          q0[pair] > q1[pair] && q1[pair] > q2[pair]) {
-        trendingUp[key][pair] = true;
-      }
-    }
-  }
-
   for (const snap of timeline) {
     const sessClass = snap.session.toLowerCase();
     const avgColor = qColor(snap.avgQuality >= 65 ? 'TRADEABLE' : snap.avgQuality >= 50 ? 'WEAK' : 'CHOPPY');
@@ -251,7 +234,7 @@ function render() {
       const dc = p.direction === 'BULLISH' ? 'buy' : p.direction === 'BEARISH' ? 'sell' : 'neutral';
       const barColor = qColor(p.classification);
       const entryBadge = p.entryValid ? ' <span class="mq-entry-badge">ENTRY</span>' : '';
-      const isTrending = trendingUp[snap.time] && trendingUp[snap.time][p.pair];
+      const isTrending = p.trending;
       const trendBadge = isTrending ? ' <span class="mq-trend-badge">▲ 3x</span>' : '';
 
       html += `<div class="mq-pair-row${isTrending ? ' mq-trending' : ''}">`

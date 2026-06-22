@@ -134,51 +134,68 @@ module.exports = async function handler(req, res) {
     }
 
     // Compute quality at each M15 timestamp per pair
+    // qualityMap[time][instrument] = quality score (number)
     const m15Snapshots = {};
+    const qualityMap = {};
 
     for (const inst of INSTRUMENTS) {
       const candles = candlesByInst[inst];
       for (let i = 9; i < candles.length; i++) {
-        const window = candles.slice(i - 9, i + 1);
-        const q = computeQuality(window);
+        const q = computeQuality(candles.slice(i - 9, i + 1));
         if (!q) continue;
 
         const time = candles[i].time;
         if (!m15Snapshots[time]) {
           const d = new Date(time);
-          m15Snapshots[time] = {
-            time,
-            session: getSession(d.getUTCHours()),
-            pairs: {},
-          };
+          m15Snapshots[time] = { time, session: getSession(d.getUTCHours()), pairs: {} };
+          qualityMap[time] = {};
         }
         m15Snapshots[time].pairs[inst] = q;
+        qualityMap[time][inst] = q.quality;
       }
     }
 
-    // Build timeline: each M15 snapshot with top 5 pairs
-    const timeline = Object.values(m15Snapshots)
+    // Build sorted timeline (newest first)
+    const sortedSnaps = Object.values(m15Snapshots)
       .filter(s => s.session)
-      .sort((a, b) => b.time.localeCompare(a.time))
-      .map(snap => {
-        const pairArr = Object.entries(snap.pairs)
-          .map(([pair, q]) => ({ pair, ...q }))
-          .sort((a, b) => b.quality - a.quality);
+      .sort((a, b) => b.time.localeCompare(a.time));
 
-        const allQ = {};
-        pairArr.forEach(p => { allQ[p.pair] = p.quality; });
+    // Pre-compute trending: quality increasing for 3 consecutive snapshots
+    const trendingSets = {};
+    for (let si = 0; si < sortedSnaps.length - 2; si++) {
+      const t0 = sortedSnaps[si].time;
+      const t1 = sortedSnaps[si + 1].time;
+      const t2 = sortedSnaps[si + 2].time;
+      const q0 = qualityMap[t0] || {};
+      const q1 = qualityMap[t1] || {};
+      const q2 = qualityMap[t2] || {};
+      const trending = [];
+      for (const pair of Object.keys(q0)) {
+        if (q1[pair] != null && q2[pair] != null && q0[pair] > q1[pair] && q1[pair] > q2[pair]) {
+          trending.push(pair);
+        }
+      }
+      if (trending.length) trendingSets[t0] = trending;
+    }
 
-        return {
-          time: snap.time,
-          session: snap.session,
-          top5: pairArr.slice(0, 5),
-          allQ,
-          totalPairs: pairArr.length,
-          avgQuality: pairArr.length ? Math.round(pairArr.reduce((s, p) => s + p.quality, 0) / pairArr.length) : 0,
-          entryCount: pairArr.filter(p => p.entryValid).length,
-          veryClean: pairArr.filter(p => p.classification === 'VERY_CLEAN').length,
-        };
-      });
+    const timeline = sortedSnaps.map(snap => {
+      const pairArr = Object.entries(snap.pairs)
+        .map(([pair, q]) => ({ pair, ...q }))
+        .sort((a, b) => b.quality - a.quality);
+
+      const trending = trendingSets[snap.time] || [];
+
+      return {
+        time: snap.time,
+        session: snap.session,
+        top5: pairArr.slice(0, 5).map(p => ({ ...p, trending: trending.includes(p.pair) })),
+        trending,
+        totalPairs: pairArr.length,
+        avgQuality: pairArr.length ? Math.round(pairArr.reduce((s, p) => s + p.quality, 0) / pairArr.length) : 0,
+        entryCount: pairArr.filter(p => p.entryValid).length,
+        veryClean: pairArr.filter(p => p.classification === 'VERY_CLEAN').length,
+      };
+    });
 
     res.json({
       timeline,
