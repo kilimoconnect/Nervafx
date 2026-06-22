@@ -35,19 +35,6 @@ function computeQuality(candles) {
   const totalRange = c.reduce((s, x) => s + (x.high - x.low), 0);
   const impulseStrength = totalRange > 0 ? (netMove / totalRange) * 100 : 0;
 
-  const directionalCandles = mainDir === 'BULLISH' ? bullCandles : bearCandles;
-  const smoothnessBase = (directionalCandles / 10) * 100;
-  let mainBodySum = 0, oppositeBodySum = 0;
-  for (const x of c) {
-    const body = Math.abs(x.close - x.open);
-    const isBull = x.close > x.open;
-    if ((mainDir === 'BULLISH' && isBull) || (mainDir === 'BEARISH' && !isBull)) mainBodySum += body;
-    else oppositeBodySum += body;
-  }
-  const totalBody = mainBodySum + oppositeBodySum;
-  const oppositeRatio = totalBody > 0 ? (oppositeBodySum / totalBody) * 100 : 0;
-  const smoothness = Math.max(0, smoothnessBase - oppositeRatio);
-
   const totalWick = c.reduce((s, x) => {
     const body = Math.abs(x.close - x.open);
     return s + (x.high - x.low - body);
@@ -56,8 +43,7 @@ function computeQuality(candles) {
 
   const quality = Math.round(
     0.15 * Math.abs(directionScore) +
-    0.40 * impulseStrength +
-    0.40 * smoothness +
+    0.80 * impulseStrength +
     0.05 * wickCleanliness
   );
 
@@ -67,13 +53,12 @@ function computeQuality(candles) {
   else if (quality >= 50) classification = 'WEAK';
   else classification = 'CHOPPY';
 
-  const entryValid = Math.abs(directionScore) > 50 && impulseStrength > 50 && smoothness > 65 && wickCleanliness > 55;
+  const entryValid = Math.abs(directionScore) > 50 && impulseStrength > 50 && wickCleanliness > 55;
 
   return {
     direction: mainDir,
     directionScore: Math.round(directionScore),
     impulseStrength: Math.round(impulseStrength),
-    smoothness: Math.round(smoothness),
     wickCleanliness: Math.round(wickCleanliness),
     quality, classification, entryValid,
     bullCandles, bearCandles,
