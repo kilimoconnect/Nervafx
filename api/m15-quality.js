@@ -103,40 +103,34 @@ module.exports = async function handler(req, res) {
     const until = toDate ? new Date(toDate + 'T23:59:59Z').toISOString() : null;
 
     const candlesByInst = {};
-    const PAGE = 1000;
 
-    // Fetch all instruments in one paginated query
-    let allRows = [];
-    let offset = 0;
-    while (true) {
-      let q = sb
-        .from('backtest_candles')
-        .select('instrument, time, open, high, low, close')
-        .in('instrument', INSTRUMENTS)
-        .eq('timeframe', 'M15')
-        .eq('complete', true)
-        .gte('time', since);
-      if (until) q = q.lte('time', until);
-      const { data, error } = await q
-        .order('instrument', { ascending: true })
-        .order('time', { ascending: true })
-        .range(offset, offset + PAGE - 1);
-      if (error) throw error;
-      if (!data?.length) break;
-      allRows.push(...data);
-      if (data.length < PAGE) break;
-      offset += PAGE;
-    }
-
-    for (const row of allRows) {
-      if (!candlesByInst[row.instrument]) candlesByInst[row.instrument] = [];
-      candlesByInst[row.instrument].push({
-        time: row.time,
-        open: parseFloat(row.open),
-        high: parseFloat(row.high),
-        low: parseFloat(row.low),
-        close: parseFloat(row.close),
-      });
+    // Fetch all instruments in parallel (batches of 7 to avoid connection limits)
+    for (let b = 0; b < INSTRUMENTS.length; b += 7) {
+      const batch = INSTRUMENTS.slice(b, b + 7);
+      const results = await Promise.all(batch.map(async (inst) => {
+        let q = sb
+          .from('backtest_candles')
+          .select('time, open, high, low, close')
+          .eq('instrument', inst)
+          .eq('timeframe', 'M15')
+          .eq('complete', true)
+          .gte('time', since);
+        if (until) q = q.lte('time', until);
+        const { data, error } = await q
+          .order('time', { ascending: true })
+          .limit(1000);
+        if (error) throw error;
+        return { inst, data: data || [] };
+      }));
+      for (const { inst, data } of results) {
+        candlesByInst[inst] = data.map(c => ({
+          time: c.time,
+          open: parseFloat(c.open),
+          high: parseFloat(c.high),
+          low: parseFloat(c.low),
+          close: parseFloat(c.close),
+        }));
+      }
     }
 
     // Compute quality at each M15 timestamp per pair
