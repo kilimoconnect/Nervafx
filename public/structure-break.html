@@ -370,8 +370,9 @@ function renderDashboard(d) {
   const strongCcys = sorted.filter(c => c.net > 0).slice(0, 3);
   const weakCcys = sorted.filter(c => c.net < 0).reverse().slice(0, 3);
 
-  // recent3h break counts for the selected lookback
+  // recent3h break counts for the selected lookback + M15
   const r3h = (d.recent3h && d.recent3h[_sbLookback]) || {};
+  const m15 = (d.recent3h && d.recent3h.m15) || {};
 
   if (strongCcys.length && weakCcys.length) {
     const flowPairs = [];
@@ -383,12 +384,16 @@ function renderDashboard(d) {
         if (!matchedPair) continue;
         const dir = VALID_PAIRS.includes(pair) ? 'BUY' : 'SELL';
         const pairR3h = r3h[matchedPair] || { total: 0, strong: 0, bullish: 0, bearish: 0 };
+        const pairM15 = m15[matchedPair] || { total: 0, strong: 0, bullish: 0, bearish: 0 };
         const ccyScore = s.net + Math.abs(w.net);
         const breakBoost = pairR3h.total * 2 + pairR3h.strong * 3;
+        const m15Boost = pairM15.total * 1 + pairM15.strong * 2;
         flowPairs.push({
           pair: matchedPair, dir, strong: s.ccy, weak: w.ccy,
-          ccyScore, breakBoost, score: ccyScore + breakBoost,
-          sNet: s.net, wNet: w.net, breaks3h: pairR3h.total, strong3h: pairR3h.strong,
+          ccyScore, breakBoost, m15Boost, score: ccyScore + breakBoost + m15Boost,
+          sNet: s.net, wNet: w.net,
+          breaks3h: pairR3h.total, strong3h: pairR3h.strong,
+          m15Total: pairM15.total, m15Strong: pairM15.strong,
         });
       }
     }
@@ -396,17 +401,20 @@ function renderDashboard(d) {
 
     if (flowPairs.length) {
       html += `<div style="margin-top:14px;padding:14px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);border-radius:8px;">
-        <div style="font-size:10px;color:#f59e0b;font-weight:700;margin-bottom:10px;">STRUCTURE FLOW PAIRS (${lbLabel()}) — ranked by currency + 3H break activity</div>`;
+        <div style="font-size:10px;color:#f59e0b;font-weight:700;margin-bottom:10px;">STRUCTURE FLOW PAIRS (${lbLabel()}) — ranked by currency + ${lbLabel()} breaks + M15 activity</div>`;
       for (const fp of flowPairs.slice(0, 7)) {
         const dirColor = fp.dir === 'BUY' ? '#22c55e' : '#ef4444';
         const dirBg = fp.dir === 'BUY' ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)';
         const breakTag = fp.breaks3h > 0
           ? `<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(245,158,11,0.2);color:#f59e0b;margin-left:4px;">${fp.breaks3h} brk${fp.strong3h ? ' / '+fp.strong3h+' str' : ''}</span>`
           : '';
+        const m15Tag = fp.m15Total > 0
+          ? `<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(59,130,246,0.2);color:#3b82f6;margin-left:3px;">M15: ${fp.m15Total}${fp.m15Strong ? ' / '+fp.m15Strong+' str' : ''}</span>`
+          : '';
         html += `<div style="display:flex;align-items:center;gap:10px;padding:6px 10px;margin-bottom:4px;background:${dirBg};border-radius:6px;">
           <span style="font-size:11px;font-weight:800;color:${dirColor};min-width:36px;">${fp.dir}</span>
           <span style="font-size:13px;font-weight:800;color:#fff;min-width:80px;">${fp.pair.replace('_','/')}</span>
-          <span style="font-size:10px;color:var(--text-muted);flex:1;">${fp.strong} <span style="color:#22c55e">+${fp.sNet}</span> vs ${fp.weak} <span style="color:#ef4444">${fp.wNet}</span>${breakTag}</span>
+          <span style="font-size:10px;color:var(--text-muted);flex:1;">${fp.strong} <span style="color:#22c55e">+${fp.sNet}</span> vs ${fp.weak} <span style="color:#ef4444">${fp.wNet}</span>${breakTag}${m15Tag}</span>
           <span style="font-size:11px;font-weight:700;color:#f59e0b;">score ${fp.score}</span>
         </div>`;
       }

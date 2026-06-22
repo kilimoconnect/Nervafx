@@ -318,6 +318,53 @@ module.exports = async function handler(req, res) {
       }
     }
 
+    // M15 structure breaks — last 3h of M15 candles for ranking boost
+    const m15Since = new Date(Date.now() - 3 * 3600000).toISOString();
+    const m15Breaks = {}; // { pair: { total, strong, bullish, bearish } }
+
+    for (const inst of INSTRUMENTS) {
+      const { data: m15Raw, error: m15Err } = await sb
+        .from('backtest_candles')
+        .select('time, open, high, low, close')
+        .eq('instrument', inst)
+        .eq('timeframe', 'M15')
+        .eq('complete', true)
+        .gte('time', m15Since)
+        .order('time', { ascending: true })
+        .limit(50);
+      if (m15Err || !m15Raw?.length) continue;
+
+      const candles = m15Raw.map(c => ({
+        open: parseFloat(c.open), high: parseFloat(c.high),
+        low: parseFloat(c.low), close: parseFloat(c.close),
+      }));
+
+      if (!m15Breaks[inst]) m15Breaks[inst] = { total: 0, strong: 0, bullish: 0, bearish: 0 };
+      for (let i = 1; i < candles.length; i++) {
+        const curr = candles[i], prev = candles[i - 1];
+        let breakType = null, mag = 0;
+        if (curr.close > prev.high) {
+          breakType = 'BULLISH';
+          mag = Math.round((curr.close - prev.high) * 100000) / 10;
+        } else if (curr.close < prev.low) {
+          breakType = 'BEARISH';
+          mag = Math.round((prev.low - curr.close) * 100000) / 10;
+        }
+        if (breakType) {
+          const body = Math.abs(curr.close - curr.open);
+          const range = curr.high - curr.low;
+          const bodyRatio = range > 0 ? body / range : 0;
+          const isStrong = mag >= 1.5 && bodyRatio >= 0.5;
+          m15Breaks[inst].total++;
+          if (isStrong) m15Breaks[inst].strong++;
+          if (breakType === 'BULLISH') m15Breaks[inst].bullish++;
+          else m15Breaks[inst].bearish++;
+        }
+      }
+    }
+
+    recent3h.m15 = m15Breaks;
+
     res.json({
       latest,
       momentum,
