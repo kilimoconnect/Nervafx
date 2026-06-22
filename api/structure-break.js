@@ -140,24 +140,29 @@ module.exports = async function handler(req, res) {
       .filter(s => s.session)
       .sort((a, b) => b.time.localeCompare(a.time));
 
-    const top1ByTime = {};
+    const top5ByTime = {};
     for (const snap of sortedSnaps) {
       const sorted = Object.entries(snap.pairs)
         .map(([pair, q]) => ({ pair, quality: q.quality }))
-        .sort((a, b) => b.quality - a.quality);
-      if (sorted.length) top1ByTime[snap.time] = sorted[0].pair;
+        .sort((a, b) => b.quality - a.quality)
+        .slice(0, 5);
+      top5ByTime[snap.time] = new Set(sorted.map(p => p.pair));
     }
 
     const trendingSets = {};
-    for (let si = 0; si < sortedSnaps.length - 1; si++) {
+    for (let si = 0; si < sortedSnaps.length - 2; si++) {
       const t0 = sortedSnaps[si].time;
       const t1 = sortedSnaps[si + 1].time;
-      const pair0 = top1ByTime[t0];
-      const pair1 = top1ByTime[t1];
+      const t2 = sortedSnaps[si + 2].time;
+      const set0 = top5ByTime[t0] || new Set();
+      const set1 = top5ByTime[t1] || new Set();
+      const set2 = top5ByTime[t2] || new Set();
       const qs0 = qualityMap[t0] || {};
       const trending = [];
-      if (pair0 && pair0 === pair1 && qs0[pair0] > 30) {
-        trending.push(pair0);
+      for (const pair of set0) {
+        if (set1.has(pair) && set2.has(pair) && qs0[pair] > 30) {
+          trending.push(pair);
+        }
       }
       if (trending.length) trendingSets[t0] = trending;
     }
