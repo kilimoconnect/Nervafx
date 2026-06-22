@@ -160,7 +160,17 @@ module.exports = async function handler(req, res) {
       .filter(s => s.session)
       .sort((a, b) => b.time.localeCompare(a.time));
 
-    // Pre-compute trending: quality increasing for 3 consecutive snapshots
+    // First pass: compute top 5 by quality for each snapshot
+    const top5ByTime = {};
+    for (const snap of sortedSnaps) {
+      const sorted = Object.entries(snap.pairs)
+        .map(([pair, q]) => ({ pair, quality: q.quality }))
+        .sort((a, b) => b.quality - a.quality)
+        .slice(0, 5);
+      top5ByTime[snap.time] = new Set(sorted.map(p => p.pair));
+    }
+
+    // Trending: pair must be in top 5 for all 3 consecutive snapshots AND quality increasing
     const trendingSets = {};
     for (let si = 0; si < sortedSnaps.length - 2; si++) {
       const t0 = sortedSnaps[si].time;
@@ -169,9 +179,13 @@ module.exports = async function handler(req, res) {
       const q0 = qualityMap[t0] || {};
       const q1 = qualityMap[t1] || {};
       const q2 = qualityMap[t2] || {};
+      const set0 = top5ByTime[t0] || new Set();
+      const set1 = top5ByTime[t1] || new Set();
+      const set2 = top5ByTime[t2] || new Set();
       const trending = [];
-      for (const pair of Object.keys(q0)) {
-        if (q1[pair] != null && q2[pair] != null && q0[pair] > q1[pair] && q1[pair] > q2[pair]) {
+      for (const pair of set0) {
+        if (set1.has(pair) && set2.has(pair) &&
+            q0[pair] > q1[pair] && q1[pair] > q2[pair]) {
           trending.push(pair);
         }
       }
