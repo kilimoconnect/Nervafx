@@ -318,9 +318,10 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // M15 structure breaks — last 3h of M15 candles for ranking boost
+    // M15 engine — structure breaks + 10-candle direction/quality engine
     const m15Since = new Date(Date.now() - 3 * 3600000).toISOString();
-    const m15Breaks = {}; // { pair: { total, strong, bullish, bearish } }
+    const m15Breaks = {};
+    const m15Quality = {};
 
     for (const inst of INSTRUMENTS) {
       const { data: m15Raw, error: m15Err } = await sb
@@ -339,6 +340,7 @@ module.exports = async function handler(req, res) {
         low: parseFloat(c.low), close: parseFloat(c.close),
       }));
 
+      // Structure breaks
       if (!m15Breaks[inst]) m15Breaks[inst] = { total: 0, strong: 0, bullish: 0, bearish: 0 };
       for (let i = 1; i < candles.length; i++) {
         const curr = candles[i], prev = candles[i - 1];
@@ -361,6 +363,67 @@ module.exports = async function handler(req, res) {
           else m15Breaks[inst].bearish++;
         }
       }
+
+      // 10-candle quality engine on last 10 M15 candles
+      const last10 = candles.slice(-10);
+      if (last10.length < 10) continue;
+
+      const bullCandles = last10.filter(c => c.close > c.open).length;
+      const bearCandles = last10.filter(c => c.close < c.open).length;
+      const directionScore = ((bullCandles - bearCandles) / 10) * 100;
+      const mainDir = directionScore > 0 ? 'BULLISH' : directionScore < 0 ? 'BEARISH' : 'NEUTRAL';
+
+      const netMove = Math.abs(last10[9].close - last10[0].open);
+      const totalRange = last10.reduce((s, c) => s + (c.high - c.low), 0);
+      const impulseStrength = totalRange > 0 ? (netMove / totalRange) * 100 : 0;
+
+      const directionalCandles = mainDir === 'BULLISH' ? bullCandles : bearCandles;
+      const smoothnessBase = (directionalCandles / 10) * 100;
+      let mainBodySum = 0, oppositeBodySum = 0;
+      for (const c of last10) {
+        const body = Math.abs(c.close - c.open);
+        const isBull = c.close > c.open;
+        if ((mainDir === 'BULLISH' && isBull) || (mainDir === 'BEARISH' && !isBull)) mainBodySum += body;
+        else oppositeBodySum += body;
+      }
+      const totalBody = mainBodySum + oppositeBodySum;
+      const oppositeRatio = totalBody > 0 ? (oppositeBodySum / totalBody) * 100 : 0;
+      const smoothness = Math.max(0, smoothnessBase - oppositeRatio);
+
+      const totalWick = last10.reduce((s, c) => {
+        const body = Math.abs(c.close - c.open);
+        const range = c.high - c.low;
+        return s + (range - body);
+      }, 0);
+      const wickCleanliness = totalRange > 0 ? 100 - (totalWick / totalRange) * 100 : 0;
+
+      const quality = Math.round(
+        0.35 * Math.abs(directionScore)
+        + 0.30 * impulseStrength
+        + 0.25 * smoothness
+        + 0.10 * wickCleanliness
+      );
+
+      let classification;
+      if (quality >= 80) classification = 'VERY_CLEAN';
+      else if (quality >= 65) classification = 'TRADEABLE';
+      else if (quality >= 50) classification = 'WEAK';
+      else classification = 'CHOPPY';
+
+      const entryValid = Math.abs(directionScore) > 50 && impulseStrength > 50 && smoothness > 65 && wickCleanliness > 55;
+
+      m15Quality[inst] = {
+        direction: mainDir,
+        directionScore: Math.round(directionScore),
+        impulseStrength: Math.round(impulseStrength),
+        smoothness: Math.round(smoothness),
+        wickCleanliness: Math.round(wickCleanliness),
+        quality,
+        classification,
+        entryValid,
+        bullCandles,
+        bearCandles,
+      };
     }
 
     recent3h.m15 = m15Breaks;
@@ -370,6 +433,7 @@ module.exports = async function handler(req, res) {
       momentum,
       sessions,
       recent3h,
+      m15Quality,
       sessionCount: sessions.length,
       totalHours: hourlyScores.length,
     });

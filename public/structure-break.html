@@ -370,6 +370,7 @@ function renderDashboard(d) {
   const ccyMap = Object.fromEntries(sorted.map(c => [c.ccy, c.net]));
   const r3h = (d.recent3h && d.recent3h[_sbLookback]) || {};
   const m15 = (d.recent3h && d.recent3h.m15) || {};
+  const q15 = d.m15Quality || {};
 
   const flowPairs = [];
   for (const pair of VALID_PAIRS) {
@@ -388,22 +389,31 @@ function renderDashboard(d) {
 
     const pairR3h = r3h[pair] || { total: 0, strong: 0 };
     const pairM15 = m15[pair] || { total: 0, strong: 0 };
+    const pairQ = q15[pair] || null;
     const breakBoost = pairR3h.total * 2 + pairR3h.strong * 3;
     const m15Boost = pairM15.total * 1 + pairM15.strong * 2;
 
+    // M15 quality boost: only if direction aligns with flow direction
+    let qualityBoost = 0;
+    if (pairQ) {
+      const aligned = (dir === 'BUY' && pairQ.direction === 'BULLISH') || (dir === 'SELL' && pairQ.direction === 'BEARISH');
+      if (aligned) qualityBoost = Math.round(pairQ.quality * 0.3);
+    }
+
     flowPairs.push({
       pair, dir, strong, weak, sNet, wNet,
-      ccySpread, breakBoost, m15Boost,
-      score: ccySpread + breakBoost + m15Boost,
+      ccySpread, breakBoost, m15Boost, qualityBoost,
+      score: ccySpread + breakBoost + m15Boost + qualityBoost,
       breaks3h: pairR3h.total, strong3h: pairR3h.strong,
       m15Total: pairM15.total, m15Strong: pairM15.strong,
+      q: pairQ,
     });
   }
   flowPairs.sort((a, b) => b.score - a.score);
 
   if (flowPairs.length) {
     html += `<div style="margin-top:14px;padding:14px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);border-radius:8px;">
-      <div style="font-size:10px;color:#f59e0b;font-weight:700;margin-bottom:10px;">STRUCTURE FLOW PAIRS (${lbLabel()}) — All 28 pairs ranked by spread + breaks + M15</div>`;
+      <div style="font-size:10px;color:#f59e0b;font-weight:700;margin-bottom:10px;">STRUCTURE FLOW PAIRS (${lbLabel()}) — ranked by spread + breaks + M15 quality</div>`;
     for (const fp of flowPairs.slice(0, 9)) {
       const dirColor = fp.dir === 'BUY' ? '#22c55e' : '#ef4444';
       const dirBg = fp.dir === 'BUY' ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)';
@@ -413,13 +423,22 @@ function renderDashboard(d) {
       const m15Tag = fp.m15Total > 0
         ? `<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(59,130,246,0.2);color:#3b82f6;margin-left:3px;">M15: ${fp.m15Total}${fp.m15Strong ? ' / '+fp.m15Strong+' str' : ''}</span>`
         : '';
+      // M15 quality badge
+      let qTag = '';
+      if (fp.q) {
+        const qc = fp.q.classification;
+        const qColor = qc === 'VERY_CLEAN' ? '#22c55e' : qc === 'TRADEABLE' ? '#3b82f6' : qc === 'WEAK' ? '#eab308' : '#ef4444';
+        const qBg = qc === 'VERY_CLEAN' ? 'rgba(34,197,94,0.2)' : qc === 'TRADEABLE' ? 'rgba(59,130,246,0.2)' : qc === 'WEAK' ? 'rgba(234,179,8,0.2)' : 'rgba(239,68,68,0.2)';
+        const entryIcon = fp.q.entryValid ? ' ✓' : '';
+        qTag = `<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:${qBg};color:${qColor};margin-left:3px;">${fp.q.quality}% ${qc.replace('_',' ')}${entryIcon}</span>`;
+      }
       const spreadLabel = `${fp.ccySpread}p`;
-      html += `<div style="display:flex;align-items:center;gap:10px;padding:6px 10px;margin-bottom:4px;background:${dirBg};border-radius:6px;">
+      html += `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;margin-bottom:4px;background:${dirBg};border-radius:6px;flex-wrap:wrap;">
         <span style="font-size:10px;font-weight:800;color:var(--text-muted);min-width:16px;">${flowPairs.indexOf(fp)+1}</span>
         <span style="font-size:13px;font-weight:800;color:#fff;min-width:72px;">${fp.pair.replace('_','/')}</span>
         <span style="font-size:11px;font-weight:800;color:${dirColor};min-width:36px;">${fp.dir}</span>
-        <span style="font-size:11px;font-weight:700;color:var(--text-muted);min-width:32px;">${spreadLabel}</span>
-        <span style="font-size:10px;color:var(--text-muted);flex:1;">${fp.strong} <span style="color:#22c55e">${fp.sNet>0?'+':''}${fp.sNet}</span> vs ${fp.weak} <span style="color:#ef4444">${fp.wNet}</span>${breakTag}${m15Tag}</span>
+        <span style="font-size:11px;font-weight:700;color:var(--text-muted);min-width:28px;">${spreadLabel}</span>
+        <span style="font-size:10px;color:var(--text-muted);flex:1;">${fp.strong} <span style="color:#22c55e">${fp.sNet>0?'+':''}${fp.sNet}</span> vs ${fp.weak} <span style="color:#ef4444">${fp.wNet}</span>${breakTag}${m15Tag}${qTag}</span>
         <span style="font-size:11px;font-weight:700;color:#f59e0b;">score ${fp.score}</span>
       </div>`;
     }
@@ -427,6 +446,37 @@ function renderDashboard(d) {
   }
 
   html += '</div></div>';
+
+  // M15 Candle Quality card
+  const qEntries = Object.entries(q15).filter(([,v]) => v).sort((a, b) => b[1].quality - a[1].quality);
+  if (qEntries.length) {
+    html += '<div class="sx-card"><div class="sx-card-hd">M15 Candle Quality — 10-Candle Direction Engine</div><div class="sx-card-body">';
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px;">';
+    for (const [pair, q] of qEntries) {
+      const qc = q.classification;
+      const borderColor = qc === 'VERY_CLEAN' ? 'rgba(34,197,94,0.4)' : qc === 'TRADEABLE' ? 'rgba(59,130,246,0.3)' : qc === 'WEAK' ? 'rgba(234,179,8,0.2)' : 'rgba(239,68,68,0.15)';
+      const dirColor = q.direction === 'BULLISH' ? '#22c55e' : q.direction === 'BEARISH' ? '#ef4444' : 'var(--text-muted)';
+      const qColor = qc === 'VERY_CLEAN' ? '#22c55e' : qc === 'TRADEABLE' ? '#3b82f6' : qc === 'WEAK' ? '#eab308' : '#ef4444';
+      const entryBadge = q.entryValid ? '<span style="font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;background:rgba(34,197,94,0.2);color:#22c55e;margin-left:4px;">ENTRY ✓</span>' : '';
+      html += `<div style="background:rgba(255,255,255,0.02);border:1px solid ${borderColor};border-radius:8px;padding:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <span style="font-size:12px;font-weight:800;">${pair.replace('_','/')}</span>
+          <span style="font-size:11px;font-weight:800;color:${dirColor}">${q.direction}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+          <span style="font-size:18px;font-weight:800;color:${qColor}">${q.quality}%</span>
+          <span style="font-size:9px;font-weight:700;color:${qColor}">${qc.replace('_',' ')}</span>${entryBadge}
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px;font-size:9px;color:var(--text-muted);">
+          <span>Dir: <b style="color:#fff">${q.directionScore > 0 ? '+' : ''}${q.directionScore}</b></span>
+          <span>Impulse: <b style="color:#fff">${q.impulseStrength}</b></span>
+          <span>Smooth: <b style="color:#fff">${q.smoothness}</b></span>
+          <span>Wicks: <b style="color:#fff">${q.wickCleanliness}</b></span>
+        </div>
+      </div>`;
+    }
+    html += '</div></div></div>';
+  }
 
   // Break chart
   html += '<div class="sx-card"><div class="sx-card-hd">Session Break Activity</div><div class="sx-card-body">';
