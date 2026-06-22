@@ -55,10 +55,10 @@ function computeQuality(candles) {
   const wickCleanliness = totalRange > 0 ? 100 - (totalWick / totalRange) * 100 : 0;
 
   const quality = Math.round(
-    0.20 * Math.abs(directionScore) +
-    0.35 * impulseStrength +
-    0.35 * smoothness +
-    0.10 * wickCleanliness
+    0.15 * Math.abs(directionScore) +
+    0.40 * impulseStrength +
+    0.40 * smoothness +
+    0.05 * wickCleanliness
   );
 
   let classification;
