@@ -4,17 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <title>NervaFX — Structure Break</title>
+  <title>NervaFX — H1 Quality</title>
   <link rel="icon" type="image/png" href="/nervafx-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <link rel="stylesheet" href="style.css" />
-
   <style>
     .grid { display: block !important; }
-
     .sx-topbar {
       position: sticky; top: 0; z-index: 100;
       display: flex; align-items: center; justify-content: space-between;
@@ -36,147 +33,96 @@
       cursor: pointer; text-decoration: none; transition: all 0.15s;
     }
     .sx-back-btn:hover { background: rgba(255,255,255,0.09); color: var(--text); }
+    .sx-main { max-width: 800px; margin: 0 auto; padding: 20px 16px 80px; }
 
-    .sx-main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 80px; }
-
-    .sx-card {
-      background: rgba(255,255,255,0.02);
-      border: 1px solid rgba(255,255,255,0.06);
-      border-radius: 12px; margin-bottom: 18px; overflow: hidden;
-    }
-    .sx-card-hd {
-      padding: 12px 16px; font-size: 12px; font-weight: 700;
-      color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
-    }
-    .sx-card-body { padding: 16px; }
-
-    /* Tabs */
-    .sb-tabs { display: flex; gap: 0; margin-bottom: 18px; border-bottom: 1px solid rgba(255,255,255,0.08); }
-    .sb-tab {
-      padding: 10px 20px; font-size: 12px; font-weight: 700; color: var(--text-muted);
-      cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s;
-      text-transform: uppercase; letter-spacing: 0.5px;
-    }
-    .sb-tab:hover { color: var(--text); }
-    .sb-tab.active { color: #f59e0b; border-bottom-color: #f59e0b; }
-    .sb-panel { display: none; }
-    .sb-panel.active { display: block; }
-
-    /* Currency dashboard grid */
-    .sb-ccy-grid {
-      display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
-    }
-    @media (max-width: 700px) { .sb-ccy-grid { grid-template-columns: repeat(2, 1fr); } }
-
-    .sb-ccy-card {
-      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
-      border-radius: 10px; padding: 14px; text-align: center; transition: all 0.2s;
-    }
-    .sb-ccy-card:hover { border-color: rgba(255,255,255,0.15); }
-    .sb-ccy-card.strong { border-color: rgba(34,197,94,0.4); background: rgba(34,197,94,0.05); }
-    .sb-ccy-card.weak { border-color: rgba(239,68,68,0.4); background: rgba(239,68,68,0.05); }
-
-    .sb-ccy-name { font-size: 16px; font-weight: 800; margin-bottom: 4px; }
-    .sb-ccy-dir { font-size: 11px; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 8px; }
-    .sb-ccy-dir.bull { color: #22c55e; }
-    .sb-ccy-dir.bear { color: #ef4444; }
-    .sb-ccy-dir.neut { color: var(--text-muted); }
-
-    .sb-ccy-bars { display: flex; justify-content: center; gap: 2px; margin-bottom: 6px; height: 18px; align-items: flex-end; }
-    .sb-ccy-bar { width: 8px; border-radius: 2px; min-height: 2px; transition: height 0.3s; }
-    .sb-ccy-bar.up { background: #22c55e; }
-    .sb-ccy-bar.down { background: #ef4444; }
-    .sb-ccy-bar.flat { background: rgba(255,255,255,0.1); }
-
-    .sb-ccy-stat { font-size: 10px; color: var(--text-muted); }
-    .sb-ccy-stat span { font-weight: 700; }
-
-    .sb-ccy-score { font-size: 22px; font-weight: 800; margin: 4px 0; }
-    .sb-ccy-score.pos { color: #22c55e; }
-    .sb-ccy-score.neg { color: #ef4444; }
-    .sb-ccy-score.zero { color: var(--text-muted); }
-
-    .sb-ccy-trend { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 4px; display: inline-block; margin-top: 4px; }
-    .sb-ccy-trend.rising { background: rgba(34,197,94,0.15); color: #22c55e; }
-    .sb-ccy-trend.falling { background: rgba(239,68,68,0.15); color: #ef4444; }
-    .sb-ccy-trend.flat { background: rgba(255,255,255,0.05); color: var(--text-muted); }
-
-    /* Session table */
-    .sb-tbl { width: 100%; border-collapse: collapse; font-size: 11px; }
-    .sb-tbl th {
-      padding: 8px 6px; text-align: center; font-weight: 700; color: var(--text-muted);
-      border-bottom: 1px solid rgba(255,255,255,0.08); font-size: 10px;
-      text-transform: uppercase; letter-spacing: 0.4px;
-    }
-    .sb-tbl td { padding: 6px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.03); }
-    .sb-tbl tr:hover { background: rgba(255,255,255,0.02); }
-
-    .sb-badge {
-      display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700;
-    }
-    .sb-badge.strong { background: rgba(34,197,94,0.15); color: #22c55e; }
-    .sb-badge.bullish { background: rgba(34,197,94,0.10); color: #4ade80; }
-    .sb-badge.bearish { background: rgba(239,68,68,0.10); color: #f87171; }
-    .sb-badge.weak { background: rgba(239,68,68,0.15); color: #ef4444; }
-    .sb-badge.neutral { background: rgba(255,255,255,0.05); color: var(--text-muted); }
-
-    .sb-session-tag {
-      display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;
-    }
-    .sb-session-tag.asia { background: rgba(234,179,8,0.15); color: #eab308; }
-    .sb-session-tag.london { background: rgba(59,130,246,0.15); color: #3b82f6; }
-    .sb-session-tag.new_york { background: rgba(168,85,247,0.15); color: #a855f7; }
-
-    /* Pair detail cards */
-    .sb-pair-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
-    .sb-pair-card {
-      background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
-      border-radius: 8px; padding: 12px;
-    }
-    .sb-pair-card .pair-name { font-size: 13px; font-weight: 800; margin-bottom: 6px; }
-    .sb-pair-card .pair-dir { font-size: 11px; font-weight: 700; }
-    .sb-pair-card .pair-stat { font-size: 10px; color: var(--text-muted); margin-top: 4px; }
-
-    /* Heatmap */
-    .sb-heatmap { display: grid; grid-template-columns: auto repeat(8, 1fr); gap: 2px; font-size: 10px; }
-    .sb-hm-cell {
-      padding: 6px 4px; text-align: center; border-radius: 4px; font-weight: 700;
-    }
-    .sb-hm-header { color: var(--text-muted); font-weight: 800; font-size: 10px; }
-    .sb-hm-row-label { color: var(--text-muted); font-weight: 600; text-align: right; padding-right: 8px; }
-
-    /* Filters */
-    .sb-filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
-    .sb-filter-btn {
+    .mq-filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+    .mq-filter-btn {
       padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 600;
       background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
       color: var(--text-muted); cursor: pointer; transition: all 0.15s;
     }
-    .sb-filter-btn:hover { background: rgba(255,255,255,0.08); }
-    .sb-filter-btn.active { background: rgba(245,158,11,0.15); border-color: rgba(245,158,11,0.4); color: #f59e0b; }
+    .mq-filter-btn:hover { background: rgba(255,255,255,0.08); }
+    .mq-filter-btn.active { background: rgba(245,158,11,0.15); border-color: rgba(245,158,11,0.4); color: #f59e0b; }
 
-    .sb-chart-wrap { position: relative; margin-top: 12px; }
-    .sb-chart-wrap canvas { width: 100%; height: 200px; }
-    .sb-tooltip {
-      position: absolute; display: none; padding: 8px 12px; border-radius: 8px;
-      background: rgba(0,0,0,0.9); border: 1px solid rgba(255,255,255,0.15);
-      font-size: 11px; color: #fff; pointer-events: none; z-index: 10; white-space: nowrap;
+    .mq-snap {
+      margin-bottom: 14px; border-radius: 10px; overflow: hidden;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.06);
     }
+    .mq-snap-hd {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .mq-snap-time { font-size: 13px; font-weight: 800; }
+    .mq-snap-meta { display: flex; gap: 10px; align-items: center; font-size: 10px; color: var(--text-muted); }
+    .mq-snap-meta b { font-weight: 700; }
 
-    .sb-loading { text-align: center; padding: 60px; color: var(--text-muted); font-size: 13px; }
-    .sb-loading .spin { display: inline-block; width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.1); border-top-color: #f59e0b; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: middle; }
+    .mq-session-tag {
+      display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;
+    }
+    .mq-session-tag.asia { background: rgba(234,179,8,0.15); color: #eab308; }
+    .mq-session-tag.london { background: rgba(59,130,246,0.15); color: #3b82f6; }
+    .mq-session-tag.new_york { background: rgba(168,85,247,0.15); color: #a855f7; }
+
+    .mq-pair-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 7px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+    .mq-pair-row:last-child { border-bottom: none; }
+    .mq-rank { font-size: 11px; font-weight: 800; color: var(--text-muted); min-width: 18px; }
+    .mq-pair-name { font-size: 13px; font-weight: 800; min-width: 76px; }
+    .mq-dir-tag {
+      font-size: 10px; font-weight: 800; min-width: 40px;
+      padding: 2px 6px; border-radius: 4px; text-align: center;
+    }
+    .mq-dir-tag.buy { background: rgba(34,197,94,0.12); color: #22c55e; }
+    .mq-dir-tag.sell { background: rgba(239,68,68,0.12); color: #ef4444; }
+    .mq-dir-tag.neutral { background: rgba(255,255,255,0.05); color: var(--text-muted); }
+
+    .mq-q-score { font-size: 14px; font-weight: 800; min-width: 40px; text-align: right; }
+    .mq-badge {
+      display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 700;
+    }
+    .mq-badge.very_clean { background: rgba(34,197,94,0.15); color: #22c55e; }
+    .mq-badge.tradeable { background: rgba(59,130,246,0.15); color: #3b82f6; }
+    .mq-badge.weak { background: rgba(234,179,8,0.15); color: #eab308; }
+    .mq-badge.choppy { background: rgba(239,68,68,0.15); color: #ef4444; }
+
+    .mq-entry-badge {
+      font-size: 8px; font-weight: 700; padding: 1px 5px; border-radius: 3px;
+      background: rgba(34,197,94,0.2); color: #22c55e;
+    }
+    .mq-trend-badge {
+      font-size: 9px; font-weight: 800; padding: 2px 8px; border-radius: 4px;
+      background: rgba(251,191,36,0.25); color: #fbbf24;
+      text-transform: uppercase; letter-spacing: 0.5px;
+      animation: trendPulse 2s ease-in-out infinite;
+    }
+    @keyframes trendPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(251,191,36,0.3); }
+      50% { box-shadow: 0 0 8px 2px rgba(251,191,36,0.4); }
+    }
+    .mq-pair-row.mq-trending {
+      background: linear-gradient(90deg, rgba(251,191,36,0.12) 0%, rgba(251,191,36,0.04) 100%);
+      border-left: 3px solid #fbbf24;
+      box-shadow: inset 0 0 20px rgba(251,191,36,0.06);
+    }
+    .mq-pair-row.mq-trending .mq-pair-name { color: #fbbf24; }
+    .mq-pair-row.mq-trending .mq-q-score { text-shadow: 0 0 6px currentColor; }
+
+    .mq-metrics {
+      display: flex; gap: 8px; flex: 1; font-size: 9px; color: var(--text-muted);
+    }
+    .mq-metrics b { color: rgba(255,255,255,0.7); font-weight: 700; }
+
+    .mq-bar-bg { width: 60px; height: 5px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; }
+    .mq-bar-fill { height: 100%; border-radius: 3px; }
+
+    .mq-loading { text-align: center; padding: 60px; color: var(--text-muted); font-size: 13px; }
+    .mq-loading .spin { display: inline-block; width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.1); border-top-color: #f59e0b; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: middle; }
     @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* Lookback toggle */
-    .sb-lb-toggle { display: flex; gap: 0; background: rgba(255,255,255,0.04); border-radius: 8px; overflow: hidden; border: 1px solid rgba(255,255,255,0.08); margin-bottom: 16px; width: fit-content; }
-    .sb-lb-btn {
-      padding: 7px 16px; font-size: 11px; font-weight: 700; color: var(--text-muted);
-      cursor: pointer; transition: all 0.15s; border: none; background: transparent;
-      letter-spacing: 0.3px;
-    }
-    .sb-lb-btn:hover { color: var(--text); background: rgba(255,255,255,0.04); }
-    .sb-lb-btn.active { background: rgba(245,158,11,0.2); color: #f59e0b; }
   </style>
 </head>
 <body>
@@ -185,24 +131,20 @@
   <div class="sx-topbar-left">
     <a href="/app" class="sx-logo"><img src="/nervafx-logo.png" alt="NervaFX" /></a>
     <span class="sx-sep">/</span>
-    <span class="sx-title-text">Structure Break</span>
+    <span class="sx-title-text">H1 Quality</span>
   </div>
-  <a href="/app" class="sx-back-btn"><i data-lucide="arrow-left" style="width:12px;height:12px"></i> Dashboard</a>
+  <a href="/app" class="sx-back-btn">Dashboard</a>
 </div>
 
-<div class="sx-main" id="sb-root">
-  <div class="sb-loading" id="sb-loading"><span class="spin"></span> Analyzing H1/H3/H6 structure breaks…</div>
+<div class="sx-main" id="mq-root">
+  <div class="mq-loading" id="mq-loading"><span class="spin"></span> Analyzing H1 candle quality…</div>
 </div>
 
 <script>
 const SUPABASE_URL = 'https://lfmhnelejjrpqfbvosmt.supabase.co';
-const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
-
-let _sbData = null;
-let _sbSessionFilter = 'ALL';
-let _sbCcyFilter = 'ALL';
-let _sbHours = 168;
-let _sbLookback = 'h1'; // 'h1', 'h3', 'h6'
+let _mqData = null;
+let _mqHours = 168;
+let _mqSessionFilter = 'ALL';
 
 async function api(path) {
   let token = localStorage.getItem('nfx_token');
@@ -231,552 +173,104 @@ async function api(path) {
 
 async function loadData() {
   try {
-    _sbData = await api(`/api/structure-break?hours=${_sbHours}`);
-    if (!_sbData) return;
+    document.getElementById('mq-root').innerHTML = '<div class="mq-loading"><span class="spin"></span> Analyzing H1 candle quality…</div>';
+    _mqData = await api(`/api/structure-break?hours=${_mqHours}`);
+    if (!_mqData) return;
     render();
   } catch (e) {
-    document.getElementById('sb-loading').innerHTML = `<span style="color:#ef4444">Error: ${e.message}</span>`;
+    document.getElementById('mq-root').innerHTML = `<div class="mq-loading"><span style="color:#ef4444">Error: ${e.message}</span></div>`;
   }
+}
+
+function qColor(cls) {
+  return cls === 'VERY_CLEAN' ? '#22c55e' : cls === 'TRADEABLE' ? '#3b82f6' : cls === 'WEAK' ? '#eab308' : '#ef4444';
+}
+
+function fmtTime(iso) {
+  const d = new Date(iso);
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const day = days[d.getDay()];
+  const dd = d.getDate();
+  const mon = months[d.getMonth()];
+  const hh = String(d.getHours()).padStart(2,'0');
+  const mm = String(d.getMinutes()).padStart(2,'0');
+  return `${day} ${dd} ${mon} · ${hh}:${mm}`;
 }
 
 function render() {
-  const root = document.getElementById('sb-root');
-  const d = _sbData;
-  if (!d) return;
+  const root = document.getElementById('mq-root');
+  const d = _mqData;
+  if (!d || !d.timeline.length) { root.innerHTML = '<div class="mq-loading">No H1 data available</div>'; return; }
 
-  root.innerHTML = `
-    <div class="sb-tabs">
-      <div class="sb-tab active" data-tab="dashboard" onclick="switchTab('dashboard')">Live Dashboard</div>
-      <div class="sb-tab" data-tab="sessions" onclick="switchTab('sessions')">Session History</div>
-      <div class="sb-tab" data-tab="pairs" onclick="switchTab('pairs')">Pair Breaks</div>
-      <div class="sb-tab" data-tab="heatmap" onclick="switchTab('heatmap')">Currency Heatmap</div>
-    </div>
+  let html = '';
 
-    <div class="sb-panel active" id="panel-dashboard">${renderDashboard(d)}</div>
-    <div class="sb-panel" id="panel-sessions">${renderSessions(d)}</div>
-    <div class="sb-panel" id="panel-pairs">${renderPairs(d)}</div>
-    <div class="sb-panel" id="panel-heatmap">${renderHeatmap(d)}</div>
-  `;
-
-  if (window.lucide) lucide.createIcons();
-  initCharts();
-}
-
-function switchTab(tab) {
-  document.querySelectorAll('.sb-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
-  document.querySelectorAll('.sb-panel').forEach(p => p.classList.toggle('active', p.id === `panel-${tab}`));
-  if (tab === 'heatmap') initCharts();
-}
-
-function switchLookback(lb) {
-  _sbLookback = lb;
-  render();
-}
-
-function lbLabel() { return _sbLookback === 'h1' ? 'H1 (1 Candle)' : _sbLookback === 'h3' ? 'H3 (3 Candles)' : 'H6 (6 Candles)'; }
-
-function renderLbToggle() {
-  return `<div class="sb-lb-toggle">
-    <button class="sb-lb-btn ${_sbLookback==='h1'?'active':''}" onclick="switchLookback('h1')">H1</button>
-    <button class="sb-lb-btn ${_sbLookback==='h3'?'active':''}" onclick="switchLookback('h3')">H3</button>
-    <button class="sb-lb-btn ${_sbLookback==='h6'?'active':''}" onclick="switchLookback('h6')">H6</button>
-  </div>`;
-}
-
-function getLatestLB(d) {
-  if (!d.latest) return null;
-  if (_sbLookback === 'h1') return { currencies: d.latest.currencies, pairs: d.latest.pairs, totalBreaks: d.latest.totalBreaks };
-  return d.latest[_sbLookback] || { currencies: d.latest.currencies, pairs: d.latest.pairs, totalBreaks: d.latest.totalBreaks };
-}
-
-function getSessionLB(s) {
-  if (_sbLookback === 'h1') return { currencies: s.currencies, strongest: s.strongest, weakest: s.weakest, topPairs: s.topPairs, totalBreaks: s.totalBreaks };
-  return s[_sbLookback] || { currencies: s.currencies, strongest: s.strongest, weakest: s.weakest, topPairs: s.topPairs, totalBreaks: s.totalBreaks };
-}
-
-function renderDashboard(d) {
-  if (!d.latest) return '<div class="sb-loading">No structure break data available</div>';
-
-  const m = d.momentum;
-  const lb = getLatestLB(d);
-  let html = renderLbToggle();
-
-  // Currency cards
-  html += `<div class="sx-card"><div class="sx-card-hd">Currency Structure — Last Hour (${lbLabel()})</div><div class="sx-card-body">`;
-  html += '<div class="sb-ccy-grid">';
-  for (const ccy of CURRENCIES) {
-    const c = lb.currencies[ccy];
-    const mom = m[ccy];
-    const scoreClass = c.net > 0 ? 'pos' : c.net < 0 ? 'neg' : 'zero';
-    const cardClass = c.net >= 2 ? 'strong' : c.net <= -2 ? 'weak' : '';
-    const dirClass = c.direction === 'STRONG' ? 'bull' : c.direction === 'WEAK' ? 'bear' : 'neut';
-    const trendClass = mom.trend.toLowerCase();
-
-    // Mini bars for last 6h momentum
-    let bars = '';
-    for (const n of mom.last6h) {
-      const h = Math.min(18, Math.max(2, Math.abs(n) * 4));
-      const cls = n > 0 ? 'up' : n < 0 ? 'down' : 'flat';
-      bars += `<div class="sb-ccy-bar ${cls}" style="height:${h}px"></div>`;
-    }
-
-    html += `<div class="sb-ccy-card ${cardClass}">
-      <div class="sb-ccy-name">${ccy}</div>
-      <div class="sb-ccy-dir ${dirClass}">${c.direction}</div>
-      <div class="sb-ccy-score ${scoreClass}">${c.net > 0 ? '+' : ''}${c.net}</div>
-      <div class="sb-ccy-stat"><span>${c.bullish}</span> bull / <span>${c.bearish}</span> bear / <span>${c.strong}</span> strong</div>
-      <div class="sb-ccy-bars">${bars}</div>
-      <div class="sb-ccy-trend ${trendClass}">${mom.trend} ${mom.direction}</div>
-    </div>`;
+  // Filters
+  html += '<div class="mq-filters">';
+  for (const [label, hrs] of [['24H',24],['3D',72],['7D',168],['14D',336],['30D',720]]) {
+    html += `<button class="mq-filter-btn ${_mqHours===hrs?'active':''}" onclick="_mqHours=${hrs};loadData()">${label}</button>`;
   }
-  html += '</div></div></div>';
-
-  // Summary card
-  html += `<div class="sx-card"><div class="sx-card-hd">Structure Break Summary (${lbLabel()})</div><div class="sx-card-body">`;
-
-  const sorted = CURRENCIES.map(c => ({ ccy: c, net: lb.currencies[c].net, strong: lb.currencies[c].strong }))
-    .sort((a, b) => b.net - a.net);
-
-  const strongest = sorted[0];
-  const weakest = sorted[sorted.length - 1];
-
-  html += `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;">`;
-  html += `<div style="padding:12px;background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.2);border-radius:8px;">
-    <div style="font-size:10px;color:#22c55e;font-weight:700;margin-bottom:4px;">STRONGEST CURRENCY</div>
-    <div style="font-size:20px;font-weight:800;color:#22c55e;">${strongest.ccy} <span style="font-size:14px;">+${strongest.net}</span></div>
-  </div>`;
-  html += `<div style="padding:12px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);border-radius:8px;">
-    <div style="font-size:10px;color:#ef4444;font-weight:700;margin-bottom:4px;">WEAKEST CURRENCY</div>
-    <div style="font-size:20px;font-weight:800;color:#ef4444;">${weakest.ccy} <span style="font-size:14px;">${weakest.net}</span></div>
-  </div>`;
-  html += `<div style="padding:12px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);border-radius:8px;">
-    <div style="font-size:10px;color:#f59e0b;font-weight:700;margin-bottom:4px;">TOTAL BREAKS THIS HOUR</div>
-    <div style="font-size:20px;font-weight:800;color:#f59e0b;">${lb.totalBreaks} <span style="font-size:14px;">pairs</span></div>
-  </div>`;
-  html += `<div style="padding:12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:8px;">
-    <div style="font-size:10px;color:var(--text-muted);font-weight:700;margin-bottom:4px;">SESSION</div>
-    <div style="font-size:20px;font-weight:800;">${d.latest.session.replace('_',' ')}</div>
-  </div>`;
+  html += '<span style="width:12px"></span>';
+  for (const s of ['ALL','ASIA','LONDON','NEW_YORK']) {
+    html += `<button class="mq-filter-btn ${_mqSessionFilter===s?'active':''}" onclick="_mqSessionFilter='${s}';render()">${s === 'ALL' ? 'All' : s.replace('_',' ')}</button>`;
+  }
   html += '</div>';
 
-  // Structure flow pairs: rank ALL 28 pairs by currency net spread + break activity
-  const VALID_PAIRS = [
-    'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
-    'EUR_GBP','EUR_JPY','EUR_CHF','EUR_CAD','EUR_AUD','EUR_NZD',
-    'GBP_JPY','GBP_CHF','GBP_CAD','GBP_AUD','GBP_NZD',
-    'AUD_JPY','AUD_CHF','AUD_CAD','AUD_NZD',
-    'NZD_JPY','NZD_CHF','NZD_CAD','CAD_JPY','CAD_CHF','CHF_JPY',
-  ];
-  const ccyMap = Object.fromEntries(sorted.map(c => [c.ccy, c.net]));
-  const r3h = (d.recent3h && d.recent3h[_sbLookback]) || {};
-  const q15 = d.m15Quality || {};
+  // Timeline
+  let timeline = d.timeline;
+  if (_mqSessionFilter !== 'ALL') timeline = timeline.filter(s => s.session === _mqSessionFilter);
 
-  // Find max spread to normalize to 0-100 scale
-  const allSpreads = VALID_PAIRS.map(p => {
-    const [b,q] = p.split('_');
-    return Math.abs((ccyMap[b]||0) - (ccyMap[q]||0));
-  }).filter(s => s > 0);
-  const maxSpread = Math.max(1, ...allSpreads);
+  for (const snap of timeline) {
+    const sessClass = snap.session.toLowerCase();
+    const avgColor = qColor(snap.avgQuality >= 65 ? 'TRADEABLE' : snap.avgQuality >= 40 ? 'WEAK' : 'CHOPPY');
 
-  const flowPairs = [];
-  for (const pair of VALID_PAIRS) {
-    const [base, quote] = pair.split('_');
-    const baseNet = ccyMap[base] || 0;
-    const quoteNet = ccyMap[quote] || 0;
-    const spread = baseNet - quoteNet;
-    if (spread === 0) continue;
+    html += `<div class="mq-snap">`;
+    html += `<div class="mq-snap-hd">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span class="mq-snap-time">${fmtTime(snap.time)}</span>
+        <span class="mq-session-tag ${sessClass}">${snap.session.replace('_',' ')}</span>
+      </div>
+      <div class="mq-snap-meta">
+        <span>avg <b style="color:${avgColor}">${snap.avgQuality}%</b></span>
+        <span>clean <b style="color:#22c55e">${snap.veryClean}</b></span>
+        <span>entry <b style="color:#22c55e">${snap.entryCount}</b></span>
+      </div>
+    </div>`;
 
-    const dir = spread > 0 ? 'BUY' : 'SELL';
-    const strong = spread > 0 ? base : quote;
-    const weak = spread > 0 ? quote : base;
-    const sNet = ccyMap[strong] || 0;
-    const wNet = ccyMap[weak] || 0;
-    const ccySpread = Math.abs(spread);
+    for (let i = 0; i < snap.top5.length; i++) {
+      const p = snap.top5[i];
+      const cls = p.classification.toLowerCase();
+      const dc = p.direction === 'BULLISH' ? 'buy' : p.direction === 'BEARISH' ? 'sell' : 'neutral';
+      const barColor = qColor(p.classification);
+      const entryBadge = p.entryValid ? ' <span class="mq-entry-badge">ENTRY</span>' : '';
+      const isTrending = p.trending;
+      const trendBadge = isTrending ? ' <span class="mq-trend-badge">▲ 4x</span>' : '';
 
-    // Normalize spread to 0-100 (50% weight)
-    const spreadNorm = (ccySpread / maxSpread) * 100;
-
-    // H-timeframe break activity (25% weight) — cap at 100
-    const pairR3h = r3h[pair] || { total: 0, strong: 0 };
-    const breakRaw = Math.min(100, (pairR3h.total * 15) + (pairR3h.strong * 20));
-
-    // M15 quality alignment (25% weight) — only if direction matches
-    const pairQ = q15[pair] || null;
-    let qualityRaw = 0;
-    if (pairQ) {
-      const aligned = (dir === 'BUY' && pairQ.direction === 'BULLISH') || (dir === 'SELL' && pairQ.direction === 'BEARISH');
-      if (aligned) qualityRaw = pairQ.quality;
-    }
-
-    const score = Math.round(
-      0.50 * spreadNorm +
-      0.25 * breakRaw +
-      0.25 * qualityRaw
-    );
-
-    flowPairs.push({
-      pair, dir, strong, weak, sNet, wNet,
-      ccySpread, score,
-      breaks3h: pairR3h.total, strong3h: pairR3h.strong,
-      q: pairQ,
-    });
-  }
-  flowPairs.sort((a, b) => b.score - a.score);
-
-  if (flowPairs.length) {
-    html += `<div style="margin-top:14px;padding:14px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);border-radius:8px;">
-      <div style="font-size:10px;color:#f59e0b;font-weight:700;margin-bottom:10px;">STRUCTURE FLOW PAIRS (${lbLabel()}) — 50% spread + 25% H-breaks + 25% M15 quality</div>`;
-    for (const fp of flowPairs.slice(0, 9)) {
-      const dirColor = fp.dir === 'BUY' ? '#22c55e' : '#ef4444';
-      const dirBg = fp.dir === 'BUY' ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)';
-      const breakTag = fp.breaks3h > 0
-        ? `<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(245,158,11,0.2);color:#f59e0b;margin-left:4px;">${fp.breaks3h} brk${fp.strong3h ? ' / '+fp.strong3h+' str' : ''}</span>`
-        : '';
-      let qTag = '';
-      if (fp.q) {
-        const qc = fp.q.classification;
-        const qColor = qc === 'VERY_CLEAN' ? '#22c55e' : qc === 'TRADEABLE' ? '#3b82f6' : qc === 'WEAK' ? '#eab308' : '#ef4444';
-        const qBg = qc === 'VERY_CLEAN' ? 'rgba(34,197,94,0.2)' : qc === 'TRADEABLE' ? 'rgba(59,130,246,0.2)' : qc === 'WEAK' ? 'rgba(234,179,8,0.2)' : 'rgba(239,68,68,0.2)';
-        const entryIcon = fp.q.entryValid ? ' ✓' : '';
-        qTag = `<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:${qBg};color:${qColor};margin-left:3px;">${fp.q.quality}% ${qc.replace('_',' ')}${entryIcon}</span>`;
-      }
-      const spreadLabel = `${fp.ccySpread}p`;
-      html += `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;margin-bottom:4px;background:${dirBg};border-radius:6px;flex-wrap:wrap;">
-        <span style="font-size:10px;font-weight:800;color:var(--text-muted);min-width:16px;">${flowPairs.indexOf(fp)+1}</span>
-        <span style="font-size:13px;font-weight:800;color:#fff;min-width:72px;">${fp.pair.replace('_','/')}</span>
-        <span style="font-size:11px;font-weight:800;color:${dirColor};min-width:36px;">${fp.dir}</span>
-        <span style="font-size:11px;font-weight:700;color:var(--text-muted);min-width:28px;">${spreadLabel}</span>
-        <span style="font-size:10px;color:var(--text-muted);flex:1;">${fp.strong} <span style="color:#22c55e">${fp.sNet>0?'+':''}${fp.sNet}</span> vs ${fp.weak} <span style="color:#ef4444">${fp.wNet}</span>${breakTag}${qTag}</span>
-        <span style="font-size:11px;font-weight:700;color:#f59e0b;">score ${fp.score}</span>
+      html += `<div class="mq-pair-row${isTrending ? ' mq-trending' : ''}">
+        <span class="mq-rank">${i + 1}</span>
+        <span class="mq-pair-name">${p.pair.replace('_','/')}</span>
+        <span class="mq-dir-tag ${dc}">${p.direction === 'BULLISH' ? 'BUY' : p.direction === 'BEARISH' ? 'SELL' : '—'}</span>
+        <span class="mq-q-score" style="color:${barColor}">${p.quality}%</span>
+        <span class="mq-badge ${cls}">${p.classification.replace('_',' ')}</span>${entryBadge}${trendBadge}
+        <span class="mq-metrics">
+          <span>D:<b>${p.directionScore > 0 ? '+' : ''}${p.directionScore}</b></span>
+          <span>I:<b>${p.impulseStrength}</b></span>
+          <span>W:<b>${p.wickCleanliness}</b></span>
+        </span>
+        <div class="mq-bar-bg"><div class="mq-bar-fill" style="width:${p.quality}%;background:${barColor}"></div></div>
       </div>`;
     }
+
     html += '</div>';
   }
 
-  html += '</div></div>';
-
-  // M15 Candle Quality card
-  const qEntries = Object.entries(q15).filter(([,v]) => v).sort((a, b) => b[1].quality - a[1].quality);
-  if (qEntries.length) {
-    html += '<div class="sx-card"><div class="sx-card-hd">M15 Candle Quality — 10-Candle Direction Engine</div><div class="sx-card-body">';
-    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px;">';
-    for (const [pair, q] of qEntries) {
-      const qc = q.classification;
-      const borderColor = qc === 'VERY_CLEAN' ? 'rgba(34,197,94,0.4)' : qc === 'TRADEABLE' ? 'rgba(59,130,246,0.3)' : qc === 'WEAK' ? 'rgba(234,179,8,0.2)' : 'rgba(239,68,68,0.15)';
-      const dirColor = q.direction === 'BULLISH' ? '#22c55e' : q.direction === 'BEARISH' ? '#ef4444' : 'var(--text-muted)';
-      const qColor = qc === 'VERY_CLEAN' ? '#22c55e' : qc === 'TRADEABLE' ? '#3b82f6' : qc === 'WEAK' ? '#eab308' : '#ef4444';
-      const entryBadge = q.entryValid ? '<span style="font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;background:rgba(34,197,94,0.2);color:#22c55e;margin-left:4px;">ENTRY ✓</span>' : '';
-      html += `<div style="background:rgba(255,255,255,0.02);border:1px solid ${borderColor};border-radius:8px;padding:10px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-          <span style="font-size:12px;font-weight:800;">${pair.replace('_','/')}</span>
-          <span style="font-size:11px;font-weight:800;color:${dirColor}">${q.direction}</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
-          <span style="font-size:18px;font-weight:800;color:${qColor}">${q.quality}%</span>
-          <span style="font-size:9px;font-weight:700;color:${qColor}">${qc.replace('_',' ')}</span>${entryBadge}
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px;font-size:9px;color:var(--text-muted);">
-          <span>Dir: <b style="color:#fff">${q.directionScore > 0 ? '+' : ''}${q.directionScore}</b></span>
-          <span>Impulse: <b style="color:#fff">${q.impulseStrength}</b></span>
-          <span>Smooth: <b style="color:#fff">${q.smoothness}</b></span>
-          <span>Wicks: <b style="color:#fff">${q.wickCleanliness}</b></span>
-        </div>
-      </div>`;
-    }
-    html += '</div></div></div>';
-  }
-
-  // Break chart
-  html += '<div class="sx-card"><div class="sx-card-hd">Session Break Activity</div><div class="sx-card-body">';
-  html += '<div class="sb-chart-wrap"><canvas id="sb-break-chart" height="200"></canvas><div class="sb-tooltip" id="sb-break-tooltip"></div></div>';
-  html += '</div></div>';
-
-  return html;
+  root.innerHTML = html;
 }
 
-function renderSessions(d) {
-  let html = renderLbToggle();
-
-  // Session filter
-  html += '<div class="sb-filters">';
-  for (const s of ['ALL', 'ASIA', 'LONDON', 'NEW_YORK']) {
-    const cls = _sbSessionFilter === s ? 'active' : '';
-    html += `<button class="sb-filter-btn ${cls}" onclick="_sbSessionFilter='${s}';render()">${s === 'ALL' ? 'All Sessions' : s}</button>`;
-  }
-  html += '</div>';
-
-  const sessions = d.sessions.filter(s => _sbSessionFilter === 'ALL' || s.session === _sbSessionFilter);
-
-  html += `<div class="sx-card"><div class="sx-card-hd">Session Structure Breaks (${lbLabel()})</div><div class="sx-card-body" style="overflow-x:auto;">`;
-  html += '<table class="sb-tbl"><thead><tr>';
-  html += '<th>Date</th><th>Session</th>';
-  for (const ccy of CURRENCIES) html += `<th>${ccy}</th>`;
-  html += '<th>Strongest</th><th>Weakest</th><th>Breaks</th>';
-  html += '</tr></thead><tbody>';
-
-  for (const s of sessions.slice(0, 60)) {
-    const lb = getSessionLB(s);
-    html += `<tr>`;
-    html += `<td style="font-weight:600;white-space:nowrap;">${s.date}</td>`;
-    html += `<td><span class="sb-session-tag ${s.session.toLowerCase()}">${s.session.replace('_',' ')}</span></td>`;
-
-    for (const ccy of CURRENCIES) {
-      const c = lb.currencies[ccy];
-      const badgeClass = c.direction.toLowerCase();
-      const sign = c.net > 0 ? '+' : '';
-      html += `<td><span class="sb-badge ${badgeClass}">${sign}${c.net}</span></td>`;
-    }
-
-    html += `<td><span style="color:#22c55e;font-weight:700;">${lb.strongest.currency} +${lb.strongest.net}</span></td>`;
-    html += `<td><span style="color:#ef4444;font-weight:700;">${lb.weakest.currency} ${lb.weakest.net}</span></td>`;
-    html += `<td style="font-weight:700;">${lb.totalBreaks}</td>`;
-    html += '</tr>';
-  }
-
-  html += '</tbody></table></div></div>';
-  return html;
-}
-
-function renderPairs(d) {
-  let html = renderLbToggle();
-
-  // Currency filter
-  html += '<div class="sb-filters">';
-  html += `<button class="sb-filter-btn ${_sbCcyFilter === 'ALL' ? 'active' : ''}" onclick="_sbCcyFilter='ALL';render()">All</button>`;
-  for (const ccy of CURRENCIES) {
-    html += `<button class="sb-filter-btn ${_sbCcyFilter === ccy ? 'active' : ''}" onclick="_sbCcyFilter='${ccy}';render()">${ccy}</button>`;
-  }
-  html += '</div>';
-
-  if (!d.sessions.length) return html + '<div class="sb-loading">No session data</div>';
-
-  const latestSession = d.sessions[0];
-  const lb = getSessionLB(latestSession);
-  html += `<div class="sx-card"><div class="sx-card-hd">Pair Breaks — ${latestSession.date} ${latestSession.session.replace('_',' ')} (${lbLabel()})</div><div class="sx-card-body">`;
-  html += '<div class="sb-pair-grid">';
-
-  let pairs = lb.topPairs;
-  if (_sbCcyFilter !== 'ALL') {
-    pairs = pairs.filter(p => p.pair.includes(_sbCcyFilter));
-  }
-
-  for (const p of pairs) {
-    const net = p.bullish - p.bearish;
-    const dir = net > 0 ? 'BULLISH' : net < 0 ? 'BEARISH' : 'MIXED';
-    const dirColor = dir === 'BULLISH' ? '#22c55e' : dir === 'BEARISH' ? '#ef4444' : 'var(--text-muted)';
-    const borderColor = dir === 'BULLISH' ? 'rgba(34,197,94,0.3)' : dir === 'BEARISH' ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.06)';
-
-    html += `<div class="sb-pair-card" style="border-color:${borderColor}">
-      <div class="pair-name">${p.pair.replace('_', '/')}</div>
-      <div class="pair-dir" style="color:${dirColor}">${dir}</div>
-      <div class="pair-stat">${p.bullish} bullish / ${p.bearish} bearish breaks</div>
-      <div class="pair-stat">${p.strong} strong • max ${p.maxMag} pips</div>
-    </div>`;
-  }
-
-  html += '</div></div></div>';
-
-  // Multi-session pair history
-  html += `<div class="sx-card"><div class="sx-card-hd">Pair Break History — Last 10 Sessions (${lbLabel()})</div><div class="sx-card-body" style="overflow-x:auto;">`;
-  html += '<table class="sb-tbl"><thead><tr><th>Pair</th>';
-
-  const recentSessions = d.sessions.slice(0, 10);
-  for (const s of recentSessions) {
-    html += `<th style="font-size:9px;">${s.date.slice(5)}<br>${s.session.slice(0,3)}</th>`;
-  }
-  html += '</tr></thead><tbody>';
-
-  const allPairsSet = new Set();
-  for (const s of recentSessions) {
-    const slb = getSessionLB(s);
-    for (const p of slb.topPairs) allPairsSet.add(p.pair);
-  }
-  let allPairs = [...allPairsSet].sort();
-  if (_sbCcyFilter !== 'ALL') {
-    allPairs = allPairs.filter(p => p.includes(_sbCcyFilter));
-  }
-
-  for (const pair of allPairs) {
-    html += `<tr><td style="font-weight:700;white-space:nowrap;">${pair.replace('_','/')}</td>`;
-    for (const s of recentSessions) {
-      const slb = getSessionLB(s);
-      const p = slb.topPairs.find(t => t.pair === pair);
-      if (!p) { html += '<td>—</td>'; continue; }
-      const net = p.bullish - p.bearish;
-      const color = net > 0 ? '#22c55e' : net < 0 ? '#ef4444' : 'var(--text-muted)';
-      html += `<td style="color:${color};font-weight:700;">${net > 0 ? '+' : ''}${net}</td>`;
-    }
-    html += '</tr>';
-  }
-
-  html += '</tbody></table></div></div>';
-  return html;
-}
-
-function renderHeatmap(d) {
-  let html = renderLbToggle();
-
-  html += `<div class="sx-card"><div class="sx-card-hd">Currency Structure Heatmap — Last 10 Sessions (${lbLabel()})</div><div class="sx-card-body">`;
-  html += '<div class="sb-heatmap">';
-
-  html += '<div class="sb-hm-cell"></div>';
-  for (const ccy of CURRENCIES) {
-    html += `<div class="sb-hm-cell sb-hm-header">${ccy}</div>`;
-  }
-
-  const recentSessions = d.sessions.slice(0, 10);
-  for (const s of recentSessions) {
-    const lb = getSessionLB(s);
-    html += `<div class="sb-hm-cell sb-hm-row-label">${s.date.slice(5)} ${s.session.slice(0,3)}</div>`;
-    for (const ccy of CURRENCIES) {
-      const c = lb.currencies[ccy];
-      const net = c.net;
-      const intensity = Math.min(1, Math.abs(net) / 6);
-      let bg, color;
-      if (net > 0) {
-        bg = `rgba(34,197,94,${0.1 + intensity * 0.4})`;
-        color = '#22c55e';
-      } else if (net < 0) {
-        bg = `rgba(239,68,68,${0.1 + intensity * 0.4})`;
-        color = '#ef4444';
-      } else {
-        bg = 'rgba(255,255,255,0.03)';
-        color = 'var(--text-muted)';
-      }
-      html += `<div class="sb-hm-cell" style="background:${bg};color:${color}">${net > 0 ? '+' : ''}${net}</div>`;
-    }
-  }
-
-  html += '</div></div></div>';
-
-  // Currency consistency analysis
-  html += `<div class="sx-card"><div class="sx-card-hd">Currency Consistency Score (${lbLabel()})</div><div class="sx-card-body">`;
-  html += '<div class="sb-ccy-grid">';
-
-  for (const ccy of CURRENCIES) {
-    const nets = recentSessions.map(s => getSessionLB(s).currencies[ccy].net);
-    const bullCount = nets.filter(n => n > 0).length;
-    const bearCount = nets.filter(n => n < 0).length;
-    const avgNet = nets.length ? nets.reduce((a, b) => a + b, 0) / nets.length : 0;
-    const consistency = Math.max(bullCount, bearCount) / (nets.length || 1);
-    const consPercent = Math.round(consistency * 100);
-    const direction = avgNet > 0.5 ? 'BULLISH' : avgNet < -0.5 ? 'BEARISH' : 'MIXED';
-    const dirColor = direction === 'BULLISH' ? '#22c55e' : direction === 'BEARISH' ? '#ef4444' : 'var(--text-muted)';
-
-    html += `<div class="sb-ccy-card">
-      <div class="sb-ccy-name">${ccy}</div>
-      <div style="font-size:24px;font-weight:800;color:${dirColor}">${consPercent}%</div>
-      <div style="font-size:10px;color:${dirColor};font-weight:700;margin:4px 0;">${direction}</div>
-      <div class="sb-ccy-stat">${bullCount} bull / ${bearCount} bear sessions</div>
-      <div class="sb-ccy-stat">Avg net: <span>${avgNet > 0 ? '+' : ''}${avgNet.toFixed(1)}</span></div>
-    </div>`;
-  }
-
-  html += '</div></div></div>';
-  return html;
-}
-
-function initCharts() {
-  const canvas = document.getElementById('sb-break-chart');
-  if (!canvas || !_sbData) return;
-
-  const sessions = [..._sbData.sessions].reverse().slice(-30);
-  const ctx = canvas.getContext('2d');
-  const dpr = window.devicePixelRatio || 1;
-  const rect = canvas.getBoundingClientRect();
-  canvas.width = rect.width * dpr;
-  canvas.height = 200 * dpr;
-  ctx.scale(dpr, dpr);
-
-  const W = rect.width;
-  const H = 200;
-  const padL = 40, padR = 10, padT = 10, padB = 60;
-  const chartW = W - padL - padR;
-  const chartH = H - padT - padB;
-
-  const maxBreaks = Math.max(1, ...sessions.map(s => s.totalBreaks));
-  const barW = Math.min(20, (chartW / sessions.length) * 0.7);
-  const gap = chartW / sessions.length;
-
-  ctx.clearRect(0, 0, W, H);
-
-  // Y axis
-  ctx.fillStyle = 'rgba(255,255,255,0.3)';
-  ctx.font = '10px Inter';
-  ctx.textAlign = 'right';
-  for (let i = 0; i <= 4; i++) {
-    const y = padT + chartH - (i / 4) * chartH;
-    const val = Math.round((i / 4) * maxBreaks);
-    ctx.fillText(val, padL - 6, y + 3);
-    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
-  }
-
-  // Bars
-  const sessionColors = { ASIA: '#eab308', LONDON: '#3b82f6', NEW_YORK: '#a855f7' };
-  const barPositions = [];
-
-  for (let i = 0; i < sessions.length; i++) {
-    const s = sessions[i];
-    const x = padL + i * gap + gap / 2;
-    const h = (s.totalBreaks / maxBreaks) * chartH;
-    const y = padT + chartH - h;
-    const color = sessionColors[s.session] || '#666';
-
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.roundRect(x - barW / 2, y, barW, h, 2);
-    ctx.fill();
-
-    barPositions.push({ x: x - barW / 2, y, w: barW, h, session: s });
-
-    // Date labels
-    ctx.save();
-    ctx.translate(x, padT + chartH + 8);
-    ctx.rotate(-Math.PI / 3);
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.font = '9px Inter';
-    ctx.textAlign = 'right';
-    ctx.fillText(`${s.date.slice(5)} ${s.session.slice(0,3)}`, 0, 0);
-    ctx.restore();
-  }
-
-  // Tooltip
-  const tooltip = document.getElementById('sb-break-tooltip');
-  if (tooltip) {
-    canvas.onmousemove = (e) => {
-      const r = canvas.getBoundingClientRect();
-      const mx = e.clientX - r.left;
-      const my = e.clientY - r.top;
-      let found = null;
-      for (const bp of barPositions) {
-        if (mx >= bp.x && mx <= bp.x + bp.w && my >= bp.y && my <= bp.y + bp.h) {
-          found = bp; break;
-        }
-      }
-      if (found) {
-        const s = found.session;
-        tooltip.style.display = 'block';
-        tooltip.style.left = (found.x + found.w + 8) + 'px';
-        tooltip.style.top = (found.y) + 'px';
-        tooltip.innerHTML = `<div style="font-weight:700;">${s.date} — ${s.session.replace('_',' ')}</div>
-          <div>${s.totalBreaks} total breaks</div>
-          <div style="color:#22c55e">Strongest: ${s.strongest.currency} +${s.strongest.net}</div>
-          <div style="color:#ef4444">Weakest: ${s.weakest.currency} ${s.weakest.net}</div>`;
-      } else {
-        tooltip.style.display = 'none';
-      }
-    };
-    canvas.onmouseleave = () => { tooltip.style.display = 'none'; };
-  }
-}
-
-// Auth check
 (async () => {
   const token = localStorage.getItem('nfx_token');
   if (!token) { location.href = '/login'; return; }
   await loadData();
-  if (window.lucide) lucide.createIcons();
 })();
 </script>
 </body>

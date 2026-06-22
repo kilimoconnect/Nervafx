@@ -3,7 +3,6 @@
 const { getClient, cors } = require('./_db');
 const { requirePlan } = require('./_plan');
 
-const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
 const INSTRUMENTS = [
   'EUR_USD', 'GBP_USD', 'AUD_USD', 'NZD_USD',
   'USD_JPY', 'USD_CHF', 'USD_CAD',
@@ -22,6 +21,49 @@ function getSession(h) {
   return null;
 }
 
+function computeQuality(candles) {
+  if (candles.length < 10) return null;
+  const c = candles.slice(-10);
+
+  const bullCandles = c.filter(x => x.close > x.open).length;
+  const bearCandles = c.filter(x => x.close < x.open).length;
+  const directionScore = ((bullCandles - bearCandles) / 10) * 100;
+  const mainDir = directionScore > 0 ? 'BULLISH' : directionScore < 0 ? 'BEARISH' : 'NEUTRAL';
+
+  const netMove = Math.abs(c[9].close - c[0].open);
+  const totalRange = c.reduce((s, x) => s + (x.high - x.low), 0);
+  const impulseStrength = totalRange > 0 ? (netMove / totalRange) * 100 : 0;
+
+  const totalWick = c.reduce((s, x) => {
+    const body = Math.abs(x.close - x.open);
+    return s + (x.high - x.low - body);
+  }, 0);
+  const wickCleanliness = totalRange > 0 ? 100 - (totalWick / totalRange) * 100 : 0;
+
+  const quality = Math.round(
+    0.15 * Math.abs(directionScore) +
+    0.80 * impulseStrength +
+    0.05 * wickCleanliness
+  );
+
+  let classification;
+  if (quality >= 80) classification = 'VERY_CLEAN';
+  else if (quality >= 65) classification = 'TRADEABLE';
+  else if (quality >= 40) classification = 'WEAK';
+  else classification = 'CHOPPY';
+
+  const entryValid = Math.abs(directionScore) > 50 && impulseStrength > 50 && wickCleanliness > 55;
+
+  return {
+    direction: mainDir,
+    directionScore: Math.round(directionScore),
+    impulseStrength: Math.round(impulseStrength),
+    wickCleanliness: Math.round(wickCleanliness),
+    quality, classification, entryValid,
+    bullCandles, bearCandles,
+  };
+}
+
 module.exports = async function handler(req, res) {
   cors(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -34,23 +76,21 @@ module.exports = async function handler(req, res) {
 
     const fromDate = req.query?.from || null;
     const toDate = req.query?.to || null;
+    const hoursParam = Math.min(2000, parseInt(req.query?.hours || '168', 10) || 168);
+
     let since;
     if (fromDate) {
-      since = new Date(fromDate).toISOString();
+      since = new Date(new Date(fromDate).getTime() - 10 * 3600000).toISOString();
     } else {
-      const hours = Math.min(10000, parseInt(req.query?.hours || '168', 10) || 168);
-      since = new Date(Date.now() - hours * 3600000).toISOString();
+      since = new Date(Date.now() - hoursParam * 3600000 - 10 * 3600000).toISOString();
     }
     const until = toDate ? new Date(toDate + 'T23:59:59Z').toISOString() : null;
 
-    // Fetch H1 candles for all instruments
     const candlesByInst = {};
-    const PAGE = 1000;
 
-    for (const inst of INSTRUMENTS) {
-      const allCandles = [];
-      let offset = 0;
-      while (true) {
+    for (let b = 0; b < INSTRUMENTS.length; b += 7) {
+      const batch = INSTRUMENTS.slice(b, b + 7);
+      const results = await Promise.all(batch.map(async (inst) => {
         let q = sb
           .from('backtest_candles')
           .select('time, open, high, low, close')
@@ -61,381 +101,94 @@ module.exports = async function handler(req, res) {
         if (until) q = q.lte('time', until);
         const { data, error } = await q
           .order('time', { ascending: true })
-          .range(offset, offset + PAGE - 1);
+          .limit(2000);
         if (error) throw error;
-        if (!data?.length) break;
-        allCandles.push(...data);
-        if (data.length < PAGE) break;
-        offset += PAGE;
-      }
-      candlesByInst[inst] = allCandles.map(c => ({
-        time: c.time,
-        open: parseFloat(c.open),
-        high: parseFloat(c.high),
-        low: parseFloat(c.low),
-        close: parseFloat(c.close),
+        return { inst, data: data || [] };
       }));
-    }
-
-    // Detect structure breaks per pair per hour at 3 lookback depths
-    const LOOKBACKS = [1, 3, 6]; // H1, H3, H6
-    const pairBreaksByLB = {}; // { lb: { inst: [breaks] } }
-
-    for (const lb of LOOKBACKS) {
-      pairBreaksByLB[lb] = {};
-      for (const inst of INSTRUMENTS) {
-        const candles = candlesByInst[inst];
-        const breaks = [];
-
-        for (let i = lb; i < candles.length; i++) {
-          const curr = candles[i];
-          const session = getSession(new Date(curr.time).getUTCHours());
-          if (!session) continue;
-
-          // Find highest high and lowest low of previous `lb` candles
-          let prevHigh = -Infinity, prevLow = Infinity;
-          for (let j = i - lb; j < i; j++) {
-            prevHigh = Math.max(prevHigh, candles[j].high);
-            prevLow = Math.min(prevLow, candles[j].low);
-          }
-
-          let breakType = null, magnitude = 0;
-          if (curr.close > prevHigh) {
-            breakType = 'BULLISH';
-            magnitude = Math.round((curr.close - prevHigh) * 100000) / 10;
-          } else if (curr.close < prevLow) {
-            breakType = 'BEARISH';
-            magnitude = Math.round((prevLow - curr.close) * 100000) / 10;
-          }
-
-          if (breakType) {
-            const body = Math.abs(curr.close - curr.open);
-            const range = curr.high - curr.low;
-            const bodyRatio = range > 0 ? body / range : 0;
-            const isStrong = magnitude >= 3.0 && bodyRatio >= 0.5;
-
-            breaks.push({
-              time: curr.time, session, type: breakType,
-              magnitude, bodyRatio: Math.round(bodyRatio * 100), strong: isStrong,
-            });
-          }
-        }
-        pairBreaksByLB[lb][inst] = breaks;
+      for (const { inst, data } of results) {
+        candlesByInst[inst] = data.map(c => ({
+          time: c.time,
+          open: parseFloat(c.open),
+          high: parseFloat(c.high),
+          low: parseFloat(c.low),
+          close: parseFloat(c.close),
+        }));
       }
     }
 
-    // Collect all timestamps where any break occurred at any lookback
-    const allBreakTimes = new Set();
-    for (const lb of LOOKBACKS) {
-      for (const inst of INSTRUMENTS) {
-        for (const b of pairBreaksByLB[lb][inst]) allBreakTimes.add(b.time);
-      }
-    }
-    const sortedTimes = [...allBreakTimes].sort();
-
-    // Per-hour currency break scores — with H1/H3/H6 layers
-    const hourlyScores = [];
-    for (const time of sortedTimes) {
-      const session = getSession(new Date(time).getUTCHours());
-
-      const byLB = {};
-      for (const lb of LOOKBACKS) {
-        const ccyBull = {}, ccyBear = {}, ccyStr = {};
-        for (const ccy of CURRENCIES) { ccyBull[ccy] = 0; ccyBear[ccy] = 0; ccyStr[ccy] = 0; }
-        const details = [];
-
-        for (const inst of INSTRUMENTS) {
-          const brk = pairBreaksByLB[lb][inst].find(b => b.time === time);
-          if (!brk) continue;
-          const [base, quote] = inst.split('_');
-          if (brk.type === 'BULLISH') { ccyBull[base]++; ccyBear[quote]++; }
-          else { ccyBear[base]++; ccyBull[quote]++; }
-          if (brk.strong) { ccyStr[base]++; ccyStr[quote]++; }
-          details.push({ pair: inst, type: brk.type, magnitude: brk.magnitude, bodyRatio: brk.bodyRatio, strong: brk.strong });
-        }
-
-        const ccyScores = {};
-        for (const ccy of CURRENCIES) {
-          const net = ccyBull[ccy] - ccyBear[ccy];
-          ccyScores[ccy] = {
-            bullish: ccyBull[ccy], bearish: ccyBear[ccy], net,
-            total: ccyBull[ccy] + ccyBear[ccy], strong: ccyStr[ccy],
-            direction: net > 0 ? 'STRONG' : net < 0 ? 'WEAK' : 'NEUTRAL',
-          };
-        }
-        byLB[lb] = { currencies: ccyScores, pairs: details, totalBreaks: details.length };
-      }
-
-      // Primary view uses H1 for backward compat, but includes all layers
-      hourlyScores.push({
-        time, session,
-        currencies: byLB[1].currencies,
-        pairs: byLB[1].pairs,
-        totalBreaks: byLB[1].totalBreaks,
-        h3: byLB[3],
-        h6: byLB[6],
-      });
-    }
-
-    // Build session summaries: aggregate breaks within each session block
-    // Tracks H1, H3, H6 layers per session block
-    const sessionBlocks = {};
-    const LB_KEYS = { 1: 'h1', 3: 'h3', 6: 'h6' };
-
-    for (const hs of hourlyScores) {
-      const d = new Date(hs.time);
-      const dateStr = d.toISOString().slice(0, 10);
-      const blockKey = `${dateStr}|${hs.session}`;
-
-      if (!sessionBlocks[blockKey]) {
-        const initLB = () => {
-          const o = { currencies: {}, pairBreaks: {} };
-          for (const ccy of CURRENCIES) o.currencies[ccy] = { bullish: 0, bearish: 0, strong: 0 };
-          return o;
-        };
-        sessionBlocks[blockKey] = {
-          date: dateStr, session: hs.session, hours: 0,
-          h1: initLB(), h3: initLB(), h6: initLB(),
-        };
-      }
-
-      const block = sessionBlocks[blockKey];
-      block.hours++;
-
-      // Aggregate each lookback layer
-      for (const [lbStr, lbKey] of Object.entries(LB_KEYS)) {
-        const src = lbKey === 'h1' ? hs : hs[lbKey];
-        if (!src) continue;
-        const layer = block[lbKey];
-
-        for (const ccy of CURRENCIES) {
-          if (src.currencies[ccy]) {
-            layer.currencies[ccy].bullish += src.currencies[ccy].bullish;
-            layer.currencies[ccy].bearish += src.currencies[ccy].bearish;
-            layer.currencies[ccy].strong += src.currencies[ccy].strong;
-          }
-        }
-
-        for (const pb of (src.pairs || [])) {
-          if (!layer.pairBreaks[pb.pair]) {
-            layer.pairBreaks[pb.pair] = { bullish: 0, bearish: 0, strong: 0, maxMag: 0 };
-          }
-          const p = layer.pairBreaks[pb.pair];
-          if (pb.type === 'BULLISH') p.bullish++;
-          else p.bearish++;
-          if (pb.strong) p.strong++;
-          p.maxMag = Math.max(p.maxMag, pb.magnitude);
-        }
-      }
-    }
-
-    function buildSessionSummary(layerData) {
-      const ccySummary = {};
-      for (const ccy of CURRENCIES) {
-        const c = layerData.currencies[ccy];
-        const net = c.bullish - c.bearish;
-        ccySummary[ccy] = {
-          ...c, net,
-          direction: net >= 3 ? 'STRONG' : net >= 1 ? 'BULLISH' : net <= -3 ? 'WEAK' : net <= -1 ? 'BEARISH' : 'NEUTRAL',
-          score: Math.round((net / (c.bullish + c.bearish || 1)) * 100),
-        };
-      }
-      const sorted = Object.entries(ccySummary).sort((a, b) => b[1].net - a[1].net);
-      const strongest = sorted[0];
-      const weakest = sorted[sorted.length - 1];
-      const topPairs = Object.entries(layerData.pairBreaks)
-        .map(([pair, d]) => ({
-          pair, net: d.bullish - d.bearish,
-          bullish: d.bullish, bearish: d.bearish,
-          strong: d.strong, maxMag: d.maxMag,
-        }))
-        .sort((a, b) => Math.abs(b.net) - Math.abs(a.net));
-      return {
-        currencies: ccySummary,
-        strongest: { currency: strongest[0], ...strongest[1] },
-        weakest: { currency: weakest[0], ...weakest[1] },
-        topPairs: topPairs.slice(0, 10),
-        totalBreaks: topPairs.reduce((s, p) => s + p.bullish + p.bearish, 0),
-      };
-    }
-
-    // Build final session summaries with H1/H3/H6 layers
-    const sessions = Object.values(sessionBlocks).map(block => {
-      const h1 = buildSessionSummary(block.h1);
-      const h3 = buildSessionSummary(block.h3);
-      const h6 = buildSessionSummary(block.h6);
-      return {
-        date: block.date, session: block.session, hours: block.hours,
-        currencies: h1.currencies,
-        strongest: h1.strongest, weakest: h1.weakest,
-        topPairs: h1.topPairs, totalBreaks: h1.totalBreaks,
-        h3: { currencies: h3.currencies, strongest: h3.strongest, weakest: h3.weakest, topPairs: h3.topPairs, totalBreaks: h3.totalBreaks },
-        h6: { currencies: h6.currencies, strongest: h6.strongest, weakest: h6.weakest, topPairs: h6.topPairs, totalBreaks: h6.totalBreaks },
-      };
-    });
-
-    sessions.sort((a, b) => {
-      const dc = b.date.localeCompare(a.date);
-      if (dc !== 0) return dc;
-      const so = { NEW_YORK: 2, LONDON: 1, ASIA: 0 };
-      return (so[b.session] || 0) - (so[a.session] || 0);
-    });
-
-    // Latest snapshot: most recent hour's currency state with H1/H3/H6
-    const latest = hourlyScores.length ? hourlyScores[hourlyScores.length - 1] : null;
-
-    // Currency momentum: trend of last N hours per currency (H1 based)
-    const momentum = {};
-    const recentHours = hourlyScores.slice(-6);
-    for (const ccy of CURRENCIES) {
-      const nets = recentHours.map(h => h.currencies[ccy].net);
-      const avg = nets.length ? nets.reduce((a, b) => a + b, 0) / nets.length : 0;
-      const trend = nets.length >= 3 ?
-        (nets[nets.length - 1] > nets[0] ? 'RISING' : nets[nets.length - 1] < nets[0] ? 'FALLING' : 'FLAT') : 'FLAT';
-      momentum[ccy] = {
-        avg: Math.round(avg * 10) / 10,
-        trend,
-        last6h: nets,
-        direction: avg > 0.5 ? 'BULLISH' : avg < -0.5 ? 'BEARISH' : 'NEUTRAL',
-      };
-    }
-
-    // Per-pair break counts in last 3 hours — for flow pair ranking
-    const last3h = hourlyScores.slice(-3);
-    const recent3h = {};
-    for (const lbKey of ['h1', 'h3', 'h6']) {
-      recent3h[lbKey] = {};
-      for (const hs of last3h) {
-        const src = lbKey === 'h1' ? hs : hs[lbKey];
-        if (!src) continue;
-        for (const pb of (src.pairs || [])) {
-          if (!recent3h[lbKey][pb.pair]) recent3h[lbKey][pb.pair] = { total: 0, strong: 0, bullish: 0, bearish: 0 };
-          const r = recent3h[lbKey][pb.pair];
-          r.total++;
-          if (pb.strong) r.strong++;
-          if (pb.type === 'BULLISH') r.bullish++; else r.bearish++;
-        }
-      }
-    }
-
-    // M15 engine — structure breaks + 10-candle direction/quality engine
-    const m15Since = new Date(Date.now() - 3 * 3600000).toISOString();
-    const m15Breaks = {};
-    const m15Quality = {};
+    const h1Snapshots = {};
+    const qualityMap = {};
 
     for (const inst of INSTRUMENTS) {
-      const { data: m15Raw, error: m15Err } = await sb
-        .from('backtest_candles')
-        .select('time, open, high, low, close')
-        .eq('instrument', inst)
-        .eq('timeframe', 'M15')
-        .eq('complete', true)
-        .gte('time', m15Since)
-        .order('time', { ascending: true })
-        .limit(50);
-      if (m15Err || !m15Raw?.length) continue;
+      const candles = candlesByInst[inst];
+      for (let i = 9; i < candles.length; i++) {
+        const q = computeQuality(candles.slice(i - 9, i + 1));
+        if (!q) continue;
 
-      const candles = m15Raw.map(c => ({
-        open: parseFloat(c.open), high: parseFloat(c.high),
-        low: parseFloat(c.low), close: parseFloat(c.close),
-      }));
-
-      // Structure breaks
-      if (!m15Breaks[inst]) m15Breaks[inst] = { total: 0, strong: 0, bullish: 0, bearish: 0 };
-      for (let i = 1; i < candles.length; i++) {
-        const curr = candles[i], prev = candles[i - 1];
-        let breakType = null, mag = 0;
-        if (curr.close > prev.high) {
-          breakType = 'BULLISH';
-          mag = Math.round((curr.close - prev.high) * 100000) / 10;
-        } else if (curr.close < prev.low) {
-          breakType = 'BEARISH';
-          mag = Math.round((prev.low - curr.close) * 100000) / 10;
+        const time = candles[i].time;
+        if (!h1Snapshots[time]) {
+          const d = new Date(time);
+          h1Snapshots[time] = { time, session: getSession(d.getUTCHours()), pairs: {} };
+          qualityMap[time] = {};
         }
-        if (breakType) {
-          const body = Math.abs(curr.close - curr.open);
-          const range = curr.high - curr.low;
-          const bodyRatio = range > 0 ? body / range : 0;
-          const isStrong = mag >= 1.5 && bodyRatio >= 0.5;
-          m15Breaks[inst].total++;
-          if (isStrong) m15Breaks[inst].strong++;
-          if (breakType === 'BULLISH') m15Breaks[inst].bullish++;
-          else m15Breaks[inst].bearish++;
-        }
+        h1Snapshots[time].pairs[inst] = q;
+        qualityMap[time][inst] = q.quality;
       }
-
-      // 10-candle quality engine on last 10 M15 candles
-      const last10 = candles.slice(-10);
-      if (last10.length < 10) continue;
-
-      const bullCandles = last10.filter(c => c.close > c.open).length;
-      const bearCandles = last10.filter(c => c.close < c.open).length;
-      const directionScore = ((bullCandles - bearCandles) / 10) * 100;
-      const mainDir = directionScore > 0 ? 'BULLISH' : directionScore < 0 ? 'BEARISH' : 'NEUTRAL';
-
-      const netMove = Math.abs(last10[9].close - last10[0].open);
-      const totalRange = last10.reduce((s, c) => s + (c.high - c.low), 0);
-      const impulseStrength = totalRange > 0 ? (netMove / totalRange) * 100 : 0;
-
-      const directionalCandles = mainDir === 'BULLISH' ? bullCandles : bearCandles;
-      const smoothnessBase = (directionalCandles / 10) * 100;
-      let mainBodySum = 0, oppositeBodySum = 0;
-      for (const c of last10) {
-        const body = Math.abs(c.close - c.open);
-        const isBull = c.close > c.open;
-        if ((mainDir === 'BULLISH' && isBull) || (mainDir === 'BEARISH' && !isBull)) mainBodySum += body;
-        else oppositeBodySum += body;
-      }
-      const totalBody = mainBodySum + oppositeBodySum;
-      const oppositeRatio = totalBody > 0 ? (oppositeBodySum / totalBody) * 100 : 0;
-      const smoothness = Math.max(0, smoothnessBase - oppositeRatio);
-
-      const totalWick = last10.reduce((s, c) => {
-        const body = Math.abs(c.close - c.open);
-        const range = c.high - c.low;
-        return s + (range - body);
-      }, 0);
-      const wickCleanliness = totalRange > 0 ? 100 - (totalWick / totalRange) * 100 : 0;
-
-      const quality = Math.round(
-        0.35 * Math.abs(directionScore)
-        + 0.30 * impulseStrength
-        + 0.25 * smoothness
-        + 0.10 * wickCleanliness
-      );
-
-      let classification;
-      if (quality >= 80) classification = 'VERY_CLEAN';
-      else if (quality >= 65) classification = 'TRADEABLE';
-      else if (quality >= 50) classification = 'WEAK';
-      else classification = 'CHOPPY';
-
-      const entryValid = Math.abs(directionScore) > 50 && impulseStrength > 50 && smoothness > 65 && wickCleanliness > 55;
-
-      m15Quality[inst] = {
-        direction: mainDir,
-        directionScore: Math.round(directionScore),
-        impulseStrength: Math.round(impulseStrength),
-        smoothness: Math.round(smoothness),
-        wickCleanliness: Math.round(wickCleanliness),
-        quality,
-        classification,
-        entryValid,
-        bullCandles,
-        bearCandles,
-      };
     }
 
-    recent3h.m15 = m15Breaks;
+    const sortedSnaps = Object.values(h1Snapshots)
+      .filter(s => s.session)
+      .sort((a, b) => b.time.localeCompare(a.time));
+
+    const top5ByTime = {};
+    for (const snap of sortedSnaps) {
+      const sorted = Object.entries(snap.pairs)
+        .map(([pair, q]) => ({ pair, quality: q.quality }))
+        .sort((a, b) => b.quality - a.quality)
+        .slice(0, 5);
+      top5ByTime[snap.time] = new Set(sorted.map(p => p.pair));
+    }
+
+    const trendingSets = {};
+    for (let si = 0; si < sortedSnaps.length - 3; si++) {
+      const times = [0, 1, 2, 3].map(j => sortedSnaps[si + j].time);
+      const qs = times.map(t => qualityMap[t] || {});
+      const sets = times.map(t => top5ByTime[t] || new Set());
+      const trending = [];
+      for (const pair of sets[0]) {
+        if (sets[1].has(pair) && sets[2].has(pair) && sets[3].has(pair) &&
+            qs[0][pair] >= 40 &&
+            qs[0][pair] > qs[1][pair] && qs[1][pair] > qs[2][pair] && qs[2][pair] > qs[3][pair]) {
+          trending.push(pair);
+        }
+      }
+      if (trending.length) trendingSets[times[0]] = trending;
+    }
+
+    const timeline = sortedSnaps.map(snap => {
+      const trending = new Set(trendingSets[snap.time] || []);
+      const pairArr = Object.entries(snap.pairs)
+        .map(([pair, q]) => ({ pair, ...q, trending: trending.has(pair) }))
+        .sort((a, b) => {
+          if (a.trending !== b.trending) return a.trending ? -1 : 1;
+          return b.quality - a.quality;
+        });
+
+      return {
+        time: snap.time,
+        session: snap.session,
+        top5: pairArr.slice(0, 5),
+        trendingCount: trending.size,
+        totalPairs: pairArr.length,
+        avgQuality: pairArr.length ? Math.round(pairArr.reduce((s, p) => s + p.quality, 0) / pairArr.length) : 0,
+        entryCount: pairArr.filter(p => p.entryValid).length,
+        veryClean: pairArr.filter(p => p.classification === 'VERY_CLEAN').length,
+      };
+    });
 
     res.json({
-      latest,
-      momentum,
-      sessions,
-      recent3h,
-      m15Quality,
-      sessionCount: sessions.length,
-      totalHours: hourlyScores.length,
+      timeline,
+      snapshotCount: timeline.length,
     });
   } catch (e) {
     console.error('[STRUCTURE-BREAK]', e.message);
