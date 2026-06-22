@@ -170,26 +170,21 @@ module.exports = async function handler(req, res) {
       top5ByTime[snap.time] = new Set(sorted.map(p => p.pair));
     }
 
-    // Trending: pair must be in top 5 for all 3 consecutive snapshots AND quality increasing
+    // Trending: pair must be in top 5 for all 4 consecutive snapshots AND quality increasing
     const trendingSets = {};
-    for (let si = 0; si < sortedSnaps.length - 2; si++) {
-      const t0 = sortedSnaps[si].time;
-      const t1 = sortedSnaps[si + 1].time;
-      const t2 = sortedSnaps[si + 2].time;
-      const q0 = qualityMap[t0] || {};
-      const q1 = qualityMap[t1] || {};
-      const q2 = qualityMap[t2] || {};
-      const set0 = top5ByTime[t0] || new Set();
-      const set1 = top5ByTime[t1] || new Set();
-      const set2 = top5ByTime[t2] || new Set();
+    for (let si = 0; si < sortedSnaps.length - 3; si++) {
+      const times = [0, 1, 2, 3].map(j => sortedSnaps[si + j].time);
+      const qs = times.map(t => qualityMap[t] || {});
+      const sets = times.map(t => top5ByTime[t] || new Set());
       const trending = [];
-      for (const pair of set0) {
-        if (set1.has(pair) && set2.has(pair) &&
-            q0[pair] > 50 && q0[pair] > q1[pair] && q1[pair] > q2[pair]) {
+      for (const pair of sets[0]) {
+        if (sets[1].has(pair) && sets[2].has(pair) && sets[3].has(pair) &&
+            qs[0][pair] > 50 &&
+            qs[0][pair] > qs[1][pair] && qs[1][pair] > qs[2][pair] && qs[2][pair] > qs[3][pair]) {
           trending.push(pair);
         }
       }
-      if (trending.length) trendingSets[t0] = trending;
+      if (trending.length) trendingSets[times[0]] = trending;
     }
 
     const timeline = sortedSnaps.map(snap => {
