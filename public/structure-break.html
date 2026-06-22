@@ -317,7 +317,7 @@ function renderDashboard(d) {
   </div>`;
   html += `<div style="padding:12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:8px;">
     <div style="font-size:10px;color:var(--text-muted);font-weight:700;margin-bottom:4px;">SESSION</div>
-    <div style="font-size:20px;font-weight:800;">${d.latest.session}</div>
+    <div style="font-size:20px;font-weight:800;">${d.latest.session.replace('_',' ')}</div>
   </div>`;
   html += '</div>';
 
@@ -398,7 +398,7 @@ function renderSessions(d) {
     const sessClass = s.session.toLowerCase().replace('_', '-');
     html += `<tr>`;
     html += `<td style="font-weight:600;white-space:nowrap;">${s.date}</td>`;
-    html += `<td><span class="sb-session-tag ${s.session.toLowerCase()}">${s.session}</span></td>`;
+    html += `<td><span class="sb-session-tag ${s.session.toLowerCase()}">${s.session.replace('_',' ')}</span></td>`;
 
     for (const ccy of CURRENCIES) {
       const c = s.currencies[ccy];
@@ -432,7 +432,7 @@ function renderPairs(d) {
   if (!d.sessions.length) return html + '<div class="sb-loading">No session data</div>';
 
   const latestSession = d.sessions[0];
-  html += `<div class="sx-card"><div class="sx-card-hd">Pair Breaks — ${latestSession.date} ${latestSession.session}</div><div class="sx-card-body">`;
+  html += `<div class="sx-card"><div class="sx-card-hd">Pair Breaks — ${latestSession.date} ${latestSession.session.replace('_',' ')}</div><div class="sx-card-body">`;
   html += '<div class="sb-pair-grid">';
 
   let pairs = latestSession.topPairs;
@@ -638,7 +638,7 @@ function initCharts() {
         tooltip.style.display = 'block';
         tooltip.style.left = (found.x + found.w + 8) + 'px';
         tooltip.style.top = (found.y) + 'px';
-        tooltip.innerHTML = `<div style="font-weight:700;">${s.date} — ${s.session}</div>
+        tooltip.innerHTML = `<div style="font-weight:700;">${s.date} — ${s.session.replace('_',' ')}</div>
           <div>${s.totalBreaks} total breaks</div>
           <div style="color:#22c55e">Strongest: ${s.strongest.currency} +${s.strongest.net}</div>
           <div style="color:#ef4444">Weakest: ${s.weakest.currency} ${s.weakest.net}</div>`;
