@@ -47,12 +47,12 @@ function computeQuality(candles) {
   );
 
   let classification;
-  if (quality >= 80) classification = 'VERY_CLEAN';
-  else if (quality >= 65) classification = 'TRADEABLE';
-  else if (quality >= 40) classification = 'WEAK';
+  if (quality >= 60) classification = 'VERY_CLEAN';
+  else if (quality >= 45) classification = 'TRADEABLE';
+  else if (quality >= 30) classification = 'WEAK';
   else classification = 'CHOPPY';
 
-  const entryValid = Math.abs(directionScore) > 50 && impulseStrength > 50 && wickCleanliness > 55;
+  const entryValid = Math.abs(directionScore) > 40 && impulseStrength > 40 && wickCleanliness > 45;
 
   return {
     direction: mainDir,
@@ -157,7 +157,7 @@ module.exports = async function handler(req, res) {
       const trending = [];
       for (const pair of sets[0]) {
         if (sets[1].has(pair) && sets[2].has(pair) &&
-            qs[0][pair] >= 40 &&
+            qs[0][pair] >= 20 &&
             qs[0][pair] > qs[1][pair] && qs[1][pair] > qs[2][pair]) {
           trending.push(pair);
         }

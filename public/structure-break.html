@@ -222,7 +222,7 @@ function render() {
 
   for (const snap of timeline) {
     const sessClass = snap.session.toLowerCase();
-    const avgColor = qColor(snap.avgQuality >= 65 ? 'TRADEABLE' : snap.avgQuality >= 40 ? 'WEAK' : 'CHOPPY');
+    const avgColor = qColor(snap.avgQuality >= 45 ? 'TRADEABLE' : snap.avgQuality >= 30 ? 'WEAK' : 'CHOPPY');
 
     html += `<div class="mq-snap">`;
     html += `<div class="mq-snap-hd">
