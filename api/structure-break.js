@@ -150,17 +150,15 @@ module.exports = async function handler(req, res) {
     }
 
     const trendingSets = {};
-    for (let si = 0; si < sortedSnaps.length - 2; si++) {
+    for (let si = 0; si < sortedSnaps.length - 1; si++) {
       const t0 = sortedSnaps[si].time;
       const t1 = sortedSnaps[si + 1].time;
-      const t2 = sortedSnaps[si + 2].time;
       const set0 = top5ByTime[t0] || new Set();
       const set1 = top5ByTime[t1] || new Set();
-      const set2 = top5ByTime[t2] || new Set();
       const qs0 = qualityMap[t0] || {};
       const trending = [];
       for (const pair of set0) {
-        if (set1.has(pair) && set2.has(pair) && qs0[pair] > 30) {
+        if (set1.has(pair) && qs0[pair] > 30) {
           trending.push(pair);
         }
       }
