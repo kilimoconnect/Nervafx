@@ -22,15 +22,15 @@ function getSession(h) {
 }
 
 function computeQuality(candles) {
-  if (candles.length < 10) return null;
-  const c = candles.slice(-10);
+  if (candles.length < 6) return null;
+  const c = candles.slice(-6);
 
   const bullCandles = c.filter(x => x.close > x.open).length;
   const bearCandles = c.filter(x => x.close < x.open).length;
-  const directionScore = ((bullCandles - bearCandles) / 10) * 100;
+  const directionScore = ((bullCandles - bearCandles) / 6) * 100;
   const mainDir = directionScore > 0 ? 'BULLISH' : directionScore < 0 ? 'BEARISH' : 'NEUTRAL';
 
-  const netMove = Math.abs(c[9].close - c[0].open);
+  const netMove = Math.abs(c[5].close - c[0].open);
   const totalRange = c.reduce((s, x) => s + (x.high - x.low), 0);
   const impulseStrength = totalRange > 0 ? (netMove / totalRange) * 100 : 0;
 
@@ -80,9 +80,9 @@ module.exports = async function handler(req, res) {
 
     let since;
     if (fromDate) {
-      since = new Date(new Date(fromDate).getTime() - 10 * 3600000).toISOString();
+      since = new Date(new Date(fromDate).getTime() - 6 * 3600000).toISOString();
     } else {
-      since = new Date(Date.now() - hoursParam * 3600000 - 10 * 3600000).toISOString();
+      since = new Date(Date.now() - hoursParam * 3600000 - 6 * 3600000).toISOString();
     }
     const until = toDate ? new Date(toDate + 'T23:59:59Z').toISOString() : null;
 
@@ -121,8 +121,8 @@ module.exports = async function handler(req, res) {
 
     for (const inst of INSTRUMENTS) {
       const candles = candlesByInst[inst];
-      for (let i = 9; i < candles.length; i++) {
-        const q = computeQuality(candles.slice(i - 9, i + 1));
+      for (let i = 5; i < candles.length; i++) {
+        const q = computeQuality(candles.slice(i - 5, i + 1));
         if (!q) continue;
 
         const time = candles[i].time;
@@ -150,15 +150,15 @@ module.exports = async function handler(req, res) {
     }
 
     const trendingSets = {};
-    for (let si = 0; si < sortedSnaps.length - 3; si++) {
-      const times = [0, 1, 2, 3].map(j => sortedSnaps[si + j].time);
+    for (let si = 0; si < sortedSnaps.length - 2; si++) {
+      const times = [0, 1, 2].map(j => sortedSnaps[si + j].time);
       const qs = times.map(t => qualityMap[t] || {});
       const sets = times.map(t => top5ByTime[t] || new Set());
       const trending = [];
       for (const pair of sets[0]) {
-        if (sets[1].has(pair) && sets[2].has(pair) && sets[3].has(pair) &&
+        if (sets[1].has(pair) && sets[2].has(pair) &&
             qs[0][pair] >= 40 &&
-            qs[0][pair] > qs[1][pair] && qs[1][pair] > qs[2][pair] && qs[2][pair] > qs[3][pair]) {
+            qs[0][pair] > qs[1][pair] && qs[1][pair] > qs[2][pair]) {
           trending.push(pair);
         }
       }
