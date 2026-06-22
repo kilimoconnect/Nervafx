@@ -22,15 +22,15 @@ function getSession(h) {
 }
 
 function computeQuality(candles) {
-  if (candles.length < 3) return null;
-  const c = candles.slice(-3);
+  if (candles.length < 6) return null;
+  const c = candles.slice(-6);
 
   const bullCandles = c.filter(x => x.close > x.open).length;
   const bearCandles = c.filter(x => x.close < x.open).length;
-  const directionScore = ((bullCandles - bearCandles) / 3) * 100;
+  const directionScore = ((bullCandles - bearCandles) / 6) * 100;
   const mainDir = directionScore > 0 ? 'BULLISH' : directionScore < 0 ? 'BEARISH' : 'NEUTRAL';
 
-  const netMove = Math.abs(c[2].close - c[0].open);
+  const netMove = Math.abs(c[5].close - c[0].open);
   const totalRange = c.reduce((s, x) => s + (x.high - x.low), 0);
   const impulseStrength = totalRange > 0 ? (netMove / totalRange) * 100 : 0;
 
@@ -80,9 +80,9 @@ module.exports = async function handler(req, res) {
 
     let since;
     if (fromDate) {
-      since = new Date(new Date(fromDate).getTime() - 3 * 3600000).toISOString();
+      since = new Date(new Date(fromDate).getTime() - 6 * 3600000).toISOString();
     } else {
-      since = new Date(Date.now() - hoursParam * 3600000 - 3 * 3600000).toISOString();
+      since = new Date(Date.now() - hoursParam * 3600000 - 6 * 3600000).toISOString();
     }
     const until = toDate ? new Date(toDate + 'T23:59:59Z').toISOString() : null;
 
@@ -121,8 +121,8 @@ module.exports = async function handler(req, res) {
 
     for (const inst of INSTRUMENTS) {
       const candles = candlesByInst[inst];
-      for (let i = 2; i < candles.length; i++) {
-        const q = computeQuality(candles.slice(i - 2, i + 1));
+      for (let i = 5; i < candles.length; i++) {
+        const q = computeQuality(candles.slice(i - 5, i + 1));
         if (!q) continue;
 
         const time = candles[i].time;
