@@ -237,7 +237,7 @@ function render() {
       const isTrending = p.trending;
       const trendBadge = isTrending ? ' <span class="mq-trend-badge">▲ 3x</span>' : '';
 
-      html += `<div class="mq-pair-row${isTrending ? ' mq-trending' : ''}">`
+      html += `<div class="mq-pair-row${isTrending ? ' mq-trending' : ''}">
         <span class="mq-rank">${i + 1}</span>
         <span class="mq-pair-name">${p.pair.replace('_','/')}</span>
         <span class="mq-dir-tag ${dc}">${p.direction === 'BULLISH' ? 'BUY' : p.direction === 'BEARISH' ? 'SELL' : '—'}</span>
