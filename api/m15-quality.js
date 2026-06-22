@@ -185,7 +185,7 @@ module.exports = async function handler(req, res) {
       const trending = [];
       for (const pair of set0) {
         if (set1.has(pair) && set2.has(pair) &&
-            q0[pair] > q1[pair] && q1[pair] > q2[pair]) {
+            q0[pair] > 50 && q0[pair] > q1[pair] && q1[pair] > q2[pair]) {
           trending.push(pair);
         }
       }
