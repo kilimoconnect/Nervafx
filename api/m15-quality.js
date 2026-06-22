@@ -167,10 +167,14 @@ module.exports = async function handler(req, res) {
           .map(([pair, q]) => ({ pair, ...q }))
           .sort((a, b) => b.quality - a.quality);
 
+        const allQ = {};
+        pairArr.forEach(p => { allQ[p.pair] = p.quality; });
+
         return {
           time: snap.time,
           session: snap.session,
           top5: pairArr.slice(0, 5),
+          allQ,
           totalPairs: pairArr.length,
           avgQuality: pairArr.length ? Math.round(pairArr.reduce((s, p) => s + p.quality, 0) / pairArr.length) : 0,
           entryCount: pairArr.filter(p => p.entryValid).length,

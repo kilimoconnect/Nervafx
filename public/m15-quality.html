@@ -94,6 +94,14 @@
       font-size: 8px; font-weight: 700; padding: 1px 5px; border-radius: 3px;
       background: rgba(34,197,94,0.2); color: #22c55e;
     }
+    .mq-trend-badge {
+      font-size: 8px; font-weight: 700; padding: 1px 5px; border-radius: 3px;
+      background: rgba(251,191,36,0.2); color: #fbbf24;
+    }
+    .mq-pair-row.mq-trending {
+      background: rgba(251,191,36,0.04);
+      border-left: 2px solid rgba(251,191,36,0.4);
+    }
 
     .mq-metrics {
       display: flex; gap: 8px; flex: 1; font-size: 9px; color: var(--text-muted);
@@ -203,6 +211,23 @@ function render() {
   let timeline = d.timeline;
   if (_mqSessionFilter !== 'ALL') timeline = timeline.filter(s => s.session === _mqSessionFilter);
 
+  // Build trending-up map: pair quality increasing for 3 consecutive snapshots
+  // Uses allQ (all 28 pairs) so trends aren't missed when a pair exits/enters top 5
+  const trendingUp = {};
+  for (let si = 0; si < timeline.length - 2; si++) {
+    const q0 = timeline[si].allQ || {};
+    const q1 = timeline[si + 1].allQ || {};
+    const q2 = timeline[si + 2].allQ || {};
+    const key = timeline[si].time;
+    trendingUp[key] = {};
+    for (const pair of Object.keys(q0)) {
+      if (q1[pair] != null && q2[pair] != null &&
+          q0[pair] > q1[pair] && q1[pair] > q2[pair]) {
+        trendingUp[key][pair] = true;
+      }
+    }
+  }
+
   for (const snap of timeline) {
     const sessClass = snap.session.toLowerCase();
     const avgColor = qColor(snap.avgQuality >= 65 ? 'TRADEABLE' : snap.avgQuality >= 50 ? 'WEAK' : 'CHOPPY');
@@ -226,13 +251,15 @@ function render() {
       const dc = p.direction === 'BULLISH' ? 'buy' : p.direction === 'BEARISH' ? 'sell' : 'neutral';
       const barColor = qColor(p.classification);
       const entryBadge = p.entryValid ? ' <span class="mq-entry-badge">ENTRY</span>' : '';
+      const isTrending = trendingUp[snap.time] && trendingUp[snap.time][p.pair];
+      const trendBadge = isTrending ? ' <span class="mq-trend-badge">▲ 3x</span>' : '';
 
-      html += `<div class="mq-pair-row">
+      html += `<div class="mq-pair-row${isTrending ? ' mq-trending' : ''}">`
         <span class="mq-rank">${i + 1}</span>
         <span class="mq-pair-name">${p.pair.replace('_','/')}</span>
         <span class="mq-dir-tag ${dc}">${p.direction === 'BULLISH' ? 'BUY' : p.direction === 'BEARISH' ? 'SELL' : '—'}</span>
         <span class="mq-q-score" style="color:${barColor}">${p.quality}%</span>
-        <span class="mq-badge ${cls}">${p.classification.replace('_',' ')}</span>${entryBadge}
+        <span class="mq-badge ${cls}">${p.classification.replace('_',' ')}</span>${entryBadge}${trendBadge}
         <span class="mq-metrics">
           <span>D:<b>${p.directionScore > 0 ? '+' : ''}${p.directionScore}</b></span>
           <span>I:<b>${p.impulseStrength}</b></span>
