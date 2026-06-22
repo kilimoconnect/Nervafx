@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>NervaFX — M15 Quality Engine</title>
+  <link rel="icon" type="image/png" href="/nervafx-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+
+  <style>
+    .grid { display: block !important; }
+
+    .sx-topbar {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 28px; height: 56px;
+      background: rgba(8,11,18,0.92);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+    .sx-topbar-left { display: flex; align-items: center; gap: 12px; }
+    .sx-logo img { height: 24px; display: block; }
+    .sx-sep { color: rgba(255,255,255,0.1); font-size: 20px; font-weight: 200; }
+    .sx-title-text { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+    .sx-back-btn {
+      display: flex; align-items: center; gap: 5px;
+      padding: 6px 12px; border-radius: 8px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); font-size: 11px; font-weight: 600;
+      cursor: pointer; text-decoration: none; transition: all 0.15s;
+    }
+    .sx-back-btn:hover { background: rgba(255,255,255,0.09); color: var(--text); }
+
+    .sx-main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 80px; }
+
+    .sx-card {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px; margin-bottom: 18px; overflow: hidden;
+    }
+    .sx-card-hd {
+      padding: 12px 16px; font-size: 12px; font-weight: 700;
+      color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .sx-card-body { padding: 16px; }
+
+    /* Tabs */
+    .mq-tabs { display: flex; gap: 0; margin-bottom: 18px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .mq-tab {
+      padding: 10px 20px; font-size: 12px; font-weight: 700; color: var(--text-muted);
+      cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .mq-tab:hover { color: var(--text); }
+    .mq-tab.active { color: #3b82f6; border-bottom-color: #3b82f6; }
+    .mq-panel { display: none; }
+    .mq-panel.active { display: block; }
+
+    /* Pair quality grid */
+    .mq-pair-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+
+    .mq-pair-card {
+      background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 10px; padding: 12px; transition: all 0.2s;
+    }
+    .mq-pair-card:hover { border-color: rgba(255,255,255,0.15); }
+    .mq-pair-card.very_clean { border-color: rgba(34,197,94,0.4); background: rgba(34,197,94,0.04); }
+    .mq-pair-card.tradeable { border-color: rgba(59,130,246,0.3); background: rgba(59,130,246,0.03); }
+    .mq-pair-card.weak { border-color: rgba(234,179,8,0.2); }
+    .mq-pair-card.choppy { border-color: rgba(239,68,68,0.15); }
+
+    .mq-bar-bg { width: 100%; height: 6px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; margin-top: 4px; }
+    .mq-bar-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+
+    /* Filters */
+    .mq-filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+    .mq-filter-btn {
+      padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 600;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); cursor: pointer; transition: all 0.15s;
+    }
+    .mq-filter-btn:hover { background: rgba(255,255,255,0.08); }
+    .mq-filter-btn.active { background: rgba(59,130,246,0.15); border-color: rgba(59,130,246,0.4); color: #3b82f6; }
+
+    /* Table */
+    .mq-tbl { width: 100%; border-collapse: collapse; font-size: 11px; }
+    .mq-tbl th {
+      padding: 8px 6px; text-align: center; font-weight: 700; color: var(--text-muted);
+      border-bottom: 1px solid rgba(255,255,255,0.08); font-size: 10px;
+      text-transform: uppercase; letter-spacing: 0.4px;
+    }
+    .mq-tbl td { padding: 6px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.03); }
+    .mq-tbl tr:hover { background: rgba(255,255,255,0.02); }
+
+    .mq-badge {
+      display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700;
+    }
+    .mq-badge.very_clean { background: rgba(34,197,94,0.15); color: #22c55e; }
+    .mq-badge.tradeable { background: rgba(59,130,246,0.15); color: #3b82f6; }
+    .mq-badge.weak { background: rgba(234,179,8,0.15); color: #eab308; }
+    .mq-badge.choppy { background: rgba(239,68,68,0.15); color: #ef4444; }
+
+    .mq-entry-badge {
+      font-size: 8px; font-weight: 700; padding: 1px 5px; border-radius: 3px;
+      background: rgba(34,197,94,0.2); color: #22c55e;
+    }
+
+    .mq-session-tag {
+      display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;
+    }
+    .mq-session-tag.asia { background: rgba(234,179,8,0.15); color: #eab308; }
+    .mq-session-tag.london { background: rgba(59,130,246,0.15); color: #3b82f6; }
+    .mq-session-tag.new_york { background: rgba(168,85,247,0.15); color: #a855f7; }
+
+    /* Summary stat cards */
+    .mq-stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 16px; }
+    .mq-stat-card {
+      padding: 12px; border-radius: 8px;
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+    }
+    .mq-stat-label { font-size: 10px; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; }
+    .mq-stat-val { font-size: 20px; font-weight: 800; }
+
+    /* Currency cards */
+    .mq-ccy-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    @media (max-width: 700px) { .mq-ccy-grid { grid-template-columns: repeat(2, 1fr); } }
+
+    .mq-loading { text-align: center; padding: 60px; color: var(--text-muted); font-size: 13px; }
+    .mq-loading .spin { display: inline-block; width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.1); border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: middle; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Heatmap */
+    .mq-heatmap { display: grid; grid-template-columns: auto repeat(8, 1fr); gap: 2px; font-size: 10px; }
+    .mq-hm-cell { padding: 6px 4px; text-align: center; border-radius: 4px; font-weight: 700; }
+    .mq-hm-header { color: var(--text-muted); font-weight: 800; font-size: 10px; }
+    .mq-hm-row-label { color: var(--text-muted); font-weight: 600; text-align: right; padding-right: 8px; white-space: nowrap; }
+  </style>
+</head>
+<body>
+
+<div class="sx-topbar">
+  <div class="sx-topbar-left">
+    <a href="/app" class="sx-logo"><img src="/nervafx-logo.png" alt="NervaFX" /></a>
+    <span class="sx-sep">/</span>
+    <span class="sx-title-text">M15 Quality Engine</span>
+  </div>
+  <a href="/app" class="sx-back-btn">Dashboard</a>
+</div>
+
+<div class="sx-main" id="mq-root">
+  <div class="mq-loading" id="mq-loading"><span class="spin"></span> Analyzing M15 candle quality…</div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://lfmhnelejjrpqfbvosmt.supabase.co';
+const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
+
+let _mqData = null;
+let _mqSessionFilter = 'ALL';
+let _mqCcyFilter = 'ALL';
+let _mqClassFilter = 'ALL';
+let _mqHours = 168;
+
+async function api(path) {
+  let token = localStorage.getItem('nfx_token');
+  let res = await fetch(path, { headers: { Authorization: `Bearer ${token}` } });
+  if (res.status === 401) {
+    const refresh = localStorage.getItem('nfx_refresh');
+    if (refresh) {
+      const r2 = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxmbWhuZWxlanpycHFmYnZvc210Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM2MTcxMTYsImV4cCI6MjA1OTE5MzExNn0.5T424U9jEgMLVreKMFCJ_7oVBGhFB96MvOi0k38_BPc' },
+        body: JSON.stringify({ refresh_token: refresh }),
+      });
+      if (r2.ok) {
+        const t = await r2.json();
+        localStorage.setItem('nfx_token', t.access_token);
+        localStorage.setItem('nfx_refresh', t.refresh_token);
+        token = t.access_token;
+        res = await fetch(path, { headers: { Authorization: `Bearer ${token}` } });
+      }
+    }
+  }
+  if (res.status === 401) { location.href = '/login'; return null; }
+  if (!res.ok) throw new Error(`API ${res.status}`);
+  return res.json();
+}
+
+async function loadData() {
+  try {
+    _mqData = await api(`/api/m15-quality?hours=${_mqHours}`);
+    if (!_mqData) return;
+    render();
+  } catch (e) {
+    document.getElementById('mq-loading').innerHTML = `<span style="color:#ef4444">Error: ${e.message}</span>`;
+  }
+}
+
+function render() {
+  const root = document.getElementById('mq-root');
+  const d = _mqData;
+  if (!d) return;
+
+  root.innerHTML = `
+    <div class="mq-tabs">
+      <div class="mq-tab active" data-tab="dashboard" onclick="switchTab('dashboard')">Live Dashboard</div>
+      <div class="mq-tab" data-tab="history" onclick="switchTab('history')">Session History</div>
+      <div class="mq-tab" data-tab="pairs" onclick="switchTab('pairs')">Pair Analysis</div>
+      <div class="mq-tab" data-tab="heatmap" onclick="switchTab('heatmap')">Quality Heatmap</div>
+    </div>
+
+    <div class="mq-panel active" id="panel-dashboard">${renderDashboard(d)}</div>
+    <div class="mq-panel" id="panel-history">${renderHistory(d)}</div>
+    <div class="mq-panel" id="panel-pairs">${renderPairs(d)}</div>
+    <div class="mq-panel" id="panel-heatmap">${renderHeatmap(d)}</div>
+  `;
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.mq-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  document.querySelectorAll('.mq-panel').forEach(p => p.classList.toggle('active', p.id === `panel-${tab}`));
+}
+
+function qColor(cls) {
+  return cls === 'VERY_CLEAN' ? '#22c55e' : cls === 'TRADEABLE' ? '#3b82f6' : cls === 'WEAK' ? '#eab308' : '#ef4444';
+}
+function qBg(cls) {
+  return cls === 'VERY_CLEAN' ? 'rgba(34,197,94,0.15)' : cls === 'TRADEABLE' ? 'rgba(59,130,246,0.15)' : cls === 'WEAK' ? 'rgba(234,179,8,0.15)' : 'rgba(239,68,68,0.15)';
+}
+function dirColor(d) { return d === 'BULLISH' ? '#22c55e' : d === 'BEARISH' ? '#ef4444' : 'var(--text-muted)'; }
+
+function renderDashboard(d) {
+  if (!d.latest) return '<div class="mq-loading">No M15 quality data available</div>';
+  const L = d.latest;
+  let html = '';
+
+  // Time range filter
+  html += '<div class="mq-filters">';
+  for (const [label, hrs] of [['7D',168],['14D',336],['30D',720],['90D',2160]]) {
+    html += `<button class="mq-filter-btn ${_mqHours===hrs?'active':''}" onclick="_mqHours=${hrs};loadData()">${label}</button>`;
+  }
+  html += '</div>';
+
+  // Summary stats
+  html += '<div class="mq-stat-grid">';
+  html += `<div class="mq-stat-card"><div class="mq-stat-label">AVG QUALITY</div><div class="mq-stat-val" style="color:${qColor(L.avgQuality>=65?'TRADEABLE':L.avgQuality>=50?'WEAK':'CHOPPY')}">${L.avgQuality}%</div></div>`;
+  html += `<div class="mq-stat-card"><div class="mq-stat-label">VERY CLEAN</div><div class="mq-stat-val" style="color:#22c55e">${L.veryClean}</div></div>`;
+  html += `<div class="mq-stat-card"><div class="mq-stat-label">TRADEABLE</div><div class="mq-stat-val" style="color:#3b82f6">${L.tradeable}</div></div>`;
+  html += `<div class="mq-stat-card"><div class="mq-stat-label">ENTRY VALID</div><div class="mq-stat-val" style="color:#22c55e">${L.entryCount}</div></div>`;
+  html += `<div class="mq-stat-card"><div class="mq-stat-label">SESSION</div><div class="mq-stat-val">${L.session.replace('_',' ')}</div></div>`;
+  html += '</div>';
+
+  // Classification filter
+  html += '<div class="mq-filters">';
+  for (const cls of ['ALL','VERY_CLEAN','TRADEABLE','WEAK','CHOPPY']) {
+    html += `<button class="mq-filter-btn ${_mqClassFilter===cls?'active':''}" onclick="_mqClassFilter='${cls}';render()">${cls === 'ALL' ? 'All' : cls.replace('_',' ')}</button>`;
+  }
+  html += '</div>';
+
+  // Pair quality cards
+  html += '<div class="sx-card"><div class="sx-card-hd">Pair Quality — Latest M15 Window</div><div class="sx-card-body">';
+  html += '<div class="mq-pair-grid">';
+
+  let pairs = L.pairs;
+  if (_mqClassFilter !== 'ALL') pairs = pairs.filter(p => p.classification === _mqClassFilter);
+  if (_mqCcyFilter !== 'ALL') pairs = pairs.filter(p => p.pair.includes(_mqCcyFilter));
+
+  for (const p of pairs) {
+    const cls = p.classification.toLowerCase();
+    const dc = dirColor(p.direction);
+    const barColor = qColor(p.classification);
+    const entryBadge = p.entryValid ? ' <span class="mq-entry-badge">ENTRY</span>' : '';
+
+    html += `<div class="mq-pair-card ${cls}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <span style="font-size:13px;font-weight:800;">${p.pair.replace('_','/')}</span>
+        <span style="font-size:11px;font-weight:800;color:${dc}">${p.direction}${entryBadge}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <span style="font-size:22px;font-weight:800;color:${barColor}">${p.quality}%</span>
+        <span class="mq-badge ${cls}">${p.classification.replace('_',' ')}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px;font-size:9px;color:var(--text-muted);">
+        <span>Direction: <b style="color:#fff">${p.directionScore > 0 ? '+' : ''}${p.directionScore}</b></span>
+        <span>Impulse: <b style="color:#fff">${p.impulseStrength}</b></span>
+        <span>Smooth: <b style="color:#fff">${p.smoothness}</b></span>
+        <span>Wicks: <b style="color:#fff">${p.wickCleanliness}</b></span>
+      </div>
+      <div class="mq-bar-bg"><div class="mq-bar-fill" style="width:${p.quality}%;background:${barColor}"></div></div>
+    </div>`;
+  }
+  html += '</div></div></div>';
+
+  // Currency summary
+  html += '<div class="sx-card"><div class="sx-card-hd">Currency M15 Direction</div><div class="sx-card-body">';
+  html += '<div class="mq-ccy-grid">';
+  const ccySorted = CURRENCIES.map(c => ({ ccy: c, ...L.currencies[c] })).sort((a, b) => b.net - a.net);
+  for (const c of ccySorted) {
+    const dc = dirColor(c.direction === 'STRONG' ? 'BULLISH' : c.direction === 'WEAK' ? 'BEARISH' : c.direction);
+    const cardBorder = c.net >= 2 ? 'rgba(34,197,94,0.3)' : c.net <= -2 ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.06)';
+    html += `<div style="background:rgba(255,255,255,0.02);border:1px solid ${cardBorder};border-radius:10px;padding:12px;text-align:center;">
+      <div style="font-size:16px;font-weight:800;">${c.ccy}</div>
+      <div style="font-size:11px;font-weight:700;color:${dc};margin:2px 0;">${c.direction}</div>
+      <div style="font-size:20px;font-weight:800;color:${dc}">${c.net > 0 ? '+' : ''}${c.net}</div>
+      <div style="font-size:9px;color:var(--text-muted);">${c.bullish} bull / ${c.bearish} bear</div>
+      <div style="font-size:9px;color:var(--text-muted);">avg quality: <b>${c.avgQuality}%</b></div>
+    </div>`;
+  }
+  html += '</div></div></div>';
+
+  return html;
+}
+
+function renderHistory(d) {
+  let html = '';
+
+  // Time range + session filter
+  html += '<div class="mq-filters">';
+  for (const [label, hrs] of [['7D',168],['14D',336],['30D',720],['90D',2160]]) {
+    html += `<button class="mq-filter-btn ${_mqHours===hrs?'active':''}" onclick="_mqHours=${hrs};loadData()">${label}</button>`;
+  }
+  html += '<span style="width:16px"></span>';
+  for (const s of ['ALL', 'ASIA', 'LONDON', 'NEW_YORK']) {
+    html += `<button class="mq-filter-btn ${_mqSessionFilter===s?'active':''}" onclick="_mqSessionFilter='${s}';render()">${s === 'ALL' ? 'All Sessions' : s.replace('_',' ')}</button>`;
+  }
+  html += '</div>';
+
+  const sessions = d.sessions.filter(s => _mqSessionFilter === 'ALL' || s.session === _mqSessionFilter);
+
+  html += '<div class="sx-card"><div class="sx-card-hd">Session M15 Quality Summary</div><div class="sx-card-body" style="overflow-x:auto;">';
+  html += '<table class="mq-tbl"><thead><tr>';
+  html += '<th>Date</th><th>Session</th><th>Avg Q</th><th>Clean</th><th>Trade</th><th>Entry</th>';
+  for (const ccy of CURRENCIES) html += `<th>${ccy}</th>`;
+  html += '</tr></thead><tbody>';
+
+  for (const s of sessions.slice(0, 60)) {
+    const avgQ = s.summary.avgQuality;
+    const avgColor = qColor(avgQ >= 65 ? 'TRADEABLE' : avgQ >= 50 ? 'WEAK' : 'CHOPPY');
+    html += '<tr>';
+    html += `<td style="font-weight:600;white-space:nowrap;">${s.date}</td>`;
+    html += `<td><span class="mq-session-tag ${s.session.toLowerCase()}">${s.session.replace('_',' ')}</span></td>`;
+    html += `<td style="color:${avgColor};font-weight:700;">${avgQ}%</td>`;
+    html += `<td style="color:#22c55e;font-weight:700;">${s.summary.veryClean}</td>`;
+    html += `<td style="color:#3b82f6;font-weight:700;">${s.summary.tradeable}</td>`;
+    html += `<td style="color:#22c55e;font-weight:700;">${s.summary.entryCount}</td>`;
+    for (const ccy of CURRENCIES) {
+      const c = s.currencies[ccy];
+      const nc = dirColor(c.direction === 'STRONG' ? 'BULLISH' : c.direction === 'WEAK' ? 'BEARISH' : c.direction);
+      html += `<td style="color:${nc};font-weight:700;">${c.net > 0 ? '+' : ''}${c.net}</td>`;
+    }
+    html += '</tr>';
+  }
+
+  html += '</tbody></table></div></div>';
+  return html;
+}
+
+function renderPairs(d) {
+  let html = '';
+
+  // Currency filter
+  html += '<div class="mq-filters">';
+  html += `<button class="mq-filter-btn ${_mqCcyFilter==='ALL'?'active':''}" onclick="_mqCcyFilter='ALL';render()">All</button>`;
+  for (const ccy of CURRENCIES) {
+    html += `<button class="mq-filter-btn ${_mqCcyFilter===ccy?'active':''}" onclick="_mqCcyFilter='${ccy}';render()">${ccy}</button>`;
+  }
+  html += '</div>';
+
+  if (!d.sessions.length) return html + '<div class="mq-loading">No session data</div>';
+
+  const latestSess = d.sessions[0];
+  let pairs = latestSess.topPairs;
+  if (_mqCcyFilter !== 'ALL') pairs = pairs.filter(p => p.pair.includes(_mqCcyFilter));
+
+  html += `<div class="sx-card"><div class="sx-card-hd">Pair Quality — ${latestSess.date} ${latestSess.session.replace('_',' ')}</div><div class="sx-card-body">`;
+  html += '<div class="mq-pair-grid">';
+
+  for (const p of pairs) {
+    const cls = p.classification.toLowerCase();
+    const dc = dirColor(p.direction);
+    const barColor = qColor(p.classification);
+    const entryBadge = p.entryValid ? ' <span class="mq-entry-badge">ENTRY</span>' : '';
+
+    html += `<div class="mq-pair-card ${cls}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <span style="font-size:13px;font-weight:800;">${p.pair.replace('_','/')}</span>
+        <span style="font-size:11px;font-weight:800;color:${dc}">${p.direction}${entryBadge}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <span style="font-size:22px;font-weight:800;color:${barColor}">${p.quality}%</span>
+        <span class="mq-badge ${cls}">${p.classification.replace('_',' ')}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px;font-size:9px;color:var(--text-muted);">
+        <span>Direction: <b style="color:#fff">${p.directionScore > 0 ? '+' : ''}${p.directionScore}</b></span>
+        <span>Impulse: <b style="color:#fff">${p.impulseStrength}</b></span>
+        <span>Smooth: <b style="color:#fff">${p.smoothness}</b></span>
+        <span>Wicks: <b style="color:#fff">${p.wickCleanliness}</b></span>
+      </div>
+      <div class="mq-bar-bg"><div class="mq-bar-fill" style="width:${p.quality}%;background:${barColor}"></div></div>
+    </div>`;
+  }
+
+  html += '</div></div></div>';
+
+  // Multi-session pair history table
+  html += '<div class="sx-card"><div class="sx-card-hd">Pair Quality History — Last 10 Sessions</div><div class="sx-card-body" style="overflow-x:auto;">';
+  html += '<table class="mq-tbl"><thead><tr><th>Pair</th>';
+  const recentSessions = d.sessions.slice(0, 10);
+  for (const s of recentSessions) {
+    html += `<th style="font-size:9px;">${s.date.slice(5)}<br>${s.session.slice(0,3)}</th>`;
+  }
+  html += '</tr></thead><tbody>';
+
+  const allPairsSet = new Set();
+  for (const s of recentSessions) for (const p of s.topPairs) allPairsSet.add(p.pair);
+  let allPairs = [...allPairsSet].sort();
+  if (_mqCcyFilter !== 'ALL') allPairs = allPairs.filter(p => p.includes(_mqCcyFilter));
+
+  for (const pair of allPairs) {
+    html += `<tr><td style="font-weight:700;white-space:nowrap;">${pair.replace('_','/')}</td>`;
+    for (const s of recentSessions) {
+      const p = s.topPairs.find(t => t.pair === pair);
+      if (!p) { html += '<td>—</td>'; continue; }
+      const color = qColor(p.classification);
+      html += `<td style="color:${color};font-weight:700;">${p.quality}%</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table></div></div>';
+  return html;
+}
+
+function renderHeatmap(d) {
+  let html = '';
+
+  // Currency quality heatmap
+  html += '<div class="sx-card"><div class="sx-card-hd">Currency M15 Quality Heatmap — Last 10 Sessions</div><div class="sx-card-body">';
+  html += '<div class="mq-heatmap">';
+  html += '<div class="mq-hm-cell"></div>';
+  for (const ccy of CURRENCIES) html += `<div class="mq-hm-cell mq-hm-header">${ccy}</div>`;
+
+  const recentSessions = d.sessions.slice(0, 10);
+  for (const s of recentSessions) {
+    html += `<div class="mq-hm-cell mq-hm-row-label">${s.date.slice(5)} ${s.session.slice(0,3)}</div>`;
+    for (const ccy of CURRENCIES) {
+      const c = s.currencies[ccy];
+      const q = c.avgQuality;
+      const intensity = Math.min(1, q / 100);
+      let bg, color;
+      if (q >= 65) {
+        bg = `rgba(34,197,94,${0.1 + intensity * 0.3})`;
+        color = '#22c55e';
+      } else if (q >= 50) {
+        bg = `rgba(59,130,246,${0.1 + intensity * 0.2})`;
+        color = '#3b82f6';
+      } else {
+        bg = `rgba(239,68,68,${0.05 + (1 - intensity) * 0.2})`;
+        color = '#ef4444';
+      }
+      html += `<div class="mq-hm-cell" style="background:${bg};color:${color}">${q}%</div>`;
+    }
+  }
+  html += '</div></div></div>';
+
+  // Direction heatmap
+  html += '<div class="sx-card"><div class="sx-card-hd">Currency M15 Direction Heatmap — Last 10 Sessions</div><div class="sx-card-body">';
+  html += '<div class="mq-heatmap">';
+  html += '<div class="mq-hm-cell"></div>';
+  for (const ccy of CURRENCIES) html += `<div class="mq-hm-cell mq-hm-header">${ccy}</div>`;
+
+  for (const s of recentSessions) {
+    html += `<div class="mq-hm-cell mq-hm-row-label">${s.date.slice(5)} ${s.session.slice(0,3)}</div>`;
+    for (const ccy of CURRENCIES) {
+      const c = s.currencies[ccy];
+      const net = c.net;
+      const intensity = Math.min(1, Math.abs(net) / 6);
+      let bg, color;
+      if (net > 0) {
+        bg = `rgba(34,197,94,${0.1 + intensity * 0.4})`;
+        color = '#22c55e';
+      } else if (net < 0) {
+        bg = `rgba(239,68,68,${0.1 + intensity * 0.4})`;
+        color = '#ef4444';
+      } else {
+        bg = 'rgba(255,255,255,0.03)';
+        color = 'var(--text-muted)';
+      }
+      html += `<div class="mq-hm-cell" style="background:${bg};color:${color}">${net > 0 ? '+' : ''}${net}</div>`;
+    }
+  }
+  html += '</div></div></div>';
+
+  return html;
+}
+
+// Auth check + load
+(async () => {
+  const token = localStorage.getItem('nfx_token');
+  if (!token) { location.href = '/login'; return; }
+  await loadData();
+})();
+</script>
+</body>
+</html>
