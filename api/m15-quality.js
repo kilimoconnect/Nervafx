@@ -179,17 +179,19 @@ module.exports = async function handler(req, res) {
     }
 
     const timeline = sortedSnaps.map(snap => {
+      const trending = new Set(trendingSets[snap.time] || []);
       const pairArr = Object.entries(snap.pairs)
-        .map(([pair, q]) => ({ pair, ...q }))
-        .sort((a, b) => b.quality - a.quality);
-
-      const trending = trendingSets[snap.time] || [];
+        .map(([pair, q]) => ({ pair, ...q, trending: trending.has(pair) }))
+        .sort((a, b) => {
+          if (a.trending !== b.trending) return a.trending ? -1 : 1;
+          return b.quality - a.quality;
+        });
 
       return {
         time: snap.time,
         session: snap.session,
-        top5: pairArr.slice(0, 5).map(p => ({ ...p, trending: trending.includes(p.pair) })),
-        trending,
+        top5: pairArr.slice(0, 5),
+        trendingCount: trending.size,
         totalPairs: pairArr.length,
         avgQuality: pairArr.length ? Math.round(pairArr.reduce((s, p) => s + p.quality, 0) / pairArr.length) : 0,
         entryCount: pairArr.filter(p => p.entryValid).length,
