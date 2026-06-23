@@ -18,6 +18,7 @@ const { calculateFlowPerformance }       = require('./flowPerformance');
 const { calculateLatestVolumeAnalysis }  = require('./volumeAnalysis');
 const { calculateM15Energy }           = require('./m15Energy');
 const { evaluateAutoTrader }           = require('../api/autotrader-evaluate');
+const { sendQualityAlerts }            = require('./qualityAlerts');
 
 const PARALLEL = 7; // instruments fetched in parallel (OANDA rate-limit safe)
 
@@ -155,6 +156,7 @@ async function hourlyUpdate() {
   await step('market_narrative',    () => generateMarketNarrative());
   await step('journal',             () => writeJournalEntry());
   await step('outcomes',         () => runOutcomeReviews());
+  await step('quality_alerts',   () => sendQualityAlerts());
 
   console.log('[UPDATE] Complete.');
   return { status: 'CLEAN', check };

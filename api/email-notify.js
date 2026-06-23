@@ -13,6 +13,7 @@ const {
   sendEmail, sendBulk,
   signalAlertEmail, dailyDigestEmail, upgradePromptEmail,
 } = require('../src/emailService');
+const { sendQualityAlerts } = require('../src/qualityAlerts');
 
 const ADMIN_ID = '140f3854-2c85-488c-8e0a-0f965d562654';
 
@@ -164,7 +165,13 @@ module.exports = async function handler(req, res) {
       return res.json({ ok: true, sent: sent.length });
     }
 
-    return res.status(400).json({ error: 'type must be "signals", "digest", or "upgrade"' });
+    // ── Quality alerts ──────────────────────────────────────────────────
+    if (type === 'quality') {
+      const result = await sendQualityAlerts(sb);
+      return res.json({ ok: true, ...result });
+    }
+
+    return res.status(400).json({ error: 'type must be "signals", "digest", "upgrade", or "quality"' });
 
   } catch (e) {
     console.error('[email-notify]', e);
