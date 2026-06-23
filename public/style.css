@@ -8024,9 +8024,49 @@ body::after {
   font-size: 9px; font-weight: 800; color: #fbbf24;
 }
 .qp-metric { font-size: 10px; font-weight: 600; color: var(--text-muted); }
+
+/* ── Candle Quality card (replaces Flow Performance) ── */
+.cq-section { margin-bottom: 16px; }
+.cq-section-hd { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.cq-section-label { font-size: 12px; font-weight: 800; color: var(--text); text-transform: uppercase; letter-spacing: 0.5px; }
+.cq-section-link { font-size: 11px; font-weight: 700; color: var(--text-muted); text-decoration: none; }
+.cq-section-link:hover { color: var(--text); }
+.cq-card {
+  background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 8px; padding: 8px 10px; margin-bottom: 8px;
+}
+.cq-card.cq-high-energy {
+  background: linear-gradient(135deg, rgba(34,197,94,0.10) 0%, rgba(34,197,94,0.03) 100%);
+  border-color: rgba(34,197,94,0.3);
+}
+.cq-card-hd {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+  padding-bottom: 5px; border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.cq-time { font-size: 11px; font-weight: 800; color: var(--text); }
+.cq-avg { font-size: 10px; font-weight: 700; margin-left: auto; }
+.cq-energy { font-size: 10px; font-weight: 700; }
+.cq-pair {
+  display: flex; align-items: center; gap: 6px;
+  padding: 3px 0; font-size: 11px; flex-wrap: wrap;
+}
+.cq-pair.cq-trending {
+  background: linear-gradient(90deg, rgba(251,191,36,0.10) 0%, transparent 100%);
+  border-radius: 4px; padding: 3px 4px;
+}
+.cq-rank { font-size: 10px; font-weight: 800; color: var(--text-muted); min-width: 14px; text-align: center; }
+.cq-pair-name { font-weight: 800; min-width: 58px; font-size: 11px; }
+.cq-score { font-weight: 800; font-size: 11px; }
+.cq-cls { font-size: 9px; font-weight: 700; }
+.cq-m15 { font-size: 9px; font-weight: 700; }
+.cq-trend { font-size: 9px; font-weight: 800; color: #fbbf24; }
+.cq-metric { font-size: 10px; font-weight: 600; color: var(--text-muted); }
+.cq-empty { font-size: 11px; color: var(--text-muted); padding: 4px 0; }
 @media (max-width: 600px) {
   .qp-grid { grid-template-columns: 1fr; }
   .qp-pair-name { min-width: 50px; font-size: 10px; }
   .qp-pair { flex-wrap: wrap; }
   .qp-metric { font-size: 9px; }
+  .cq-pair-name { min-width: 50px; font-size: 10px; }
+  .cq-metric { font-size: 9px; }
 }

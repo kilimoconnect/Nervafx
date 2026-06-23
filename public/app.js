@@ -2079,194 +2079,105 @@ function _buildFpScored(strengthArg, m15Data) {
   return scored;
 }
 
-function renderFlowPerformance(strengthData, m15Data) {
+async function renderFlowPerformance() {
   const el = document.getElementById('flow-perf-list');
   if (!el) return;
 
-  // Use pre-computed flow performance data (includes DE, volume, impulse — no plan gate)
-  let scored = _buildFpScored(strengthData, m15Data);
+  try {
+    const [h1Data, m15Data] = await Promise.all([
+      api('/api/structure-break?hours=4'),
+      api('/api/m15-quality?hours=2'),
+    ]);
 
-  // Fallback: if no FP data (e.g. low liquidity / off-hours), build from signal pairs
-  if ((!scored || !scored.length) && _energySignalsCache?.pairs?.length) {
-    const activePairs = _energySignalsCache.pairs.filter(p => p.active);
-    scored = activePairs.map(p => {
-      const [base, quote] = p.instrument.split('_');
-      const v45 = parseFloat(p.v45) || 0;
-      const v90 = parseFloat(p.v90) || 0;
-      const sp3 = parseFloat(p.spread_3h) || 0;
-      const sp6 = parseFloat(p.spread_6h) || 0;
-      const de  = parseFloat(p.de_combined) || 0;
-      const imp = p.impulse_score || 0;
-      const flowSign = p.dir === 'BUY' ? 1 : -1;
-      const impulseAligned = !!p.impulse_aligned;
-      const m15Confirms = Math.sign(v45) === flowSign && Math.abs(v45) >= 0.00008;
-      const h3Confirms  = Math.sign(sp3) === flowSign;
-      const h6Confirms  = Math.sign(sp6) === flowSign;
-      const accel = v45 - v90;
-      const accelSign = Math.sign(accel) === flowSign;
-      const m15State = (p.m15_state || 'FLAT').toUpperCase();
-      let perfScore = (v45 * flowSign) * 10000 * 3 + (sp3 * flowSign) * 10000 * 2 + (sp6 * flowSign) * 10000;
-      if (impulseAligned && imp >= 40) perfScore += imp * 0.5;
-      if (m15Confirms) perfScore += 10;
-      if (h3Confirms) perfScore += 10;
-      if (h6Confirms) perfScore += 5;
-      if (accelSign) perfScore += 10;
-      const finalScore = (0.75 * perfScore) + (0.25 * de);
-      const htfCount = [h3Confirms, h6Confirms].filter(Boolean).length;
-      let status, statusCls;
-      if (m15Confirms && htfCount === 2)      { status = 'STRONG';   statusCls = 'fp-strong'; }
-      else if (m15Confirms && htfCount === 1) { status = 'ALIGNED';  statusCls = 'fp-aligned'; }
-      else if (m15Confirms)                   { status = 'PARTIAL';  statusCls = 'fp-partial'; }
-      else if (htfCount >= 1)                 { status = 'BUILDING'; statusCls = 'fp-building'; }
-      else                                    { status = 'WAIT';     statusCls = 'fp-wait'; }
-      let momentum = imp >= 50 && impulseAligned ? 'Impulsive' : accelSign ? 'Accelerating' : 'Steady';
-      return {
-        instrument: p.instrument, dir: p.dir, base, quote,
-        v45, v90, v180: null, spread3H: sp3, spread6H: sp6,
-        spread12H: parseFloat(p.spread_12h) || 0,
-        state: p.m15_state || 'FLAT', status, statusCls, momentum,
-        m15Confirms, h3Confirms, h6Confirms, accel, accelSign,
-        perfScore, finalScore, deCombined: de,
-        deLabel: de >= 30 ? 'Institutional' : de >= 20 ? 'Clean' : de >= 8 ? 'Mixed' : 'Noisy',
-        impulseScore: imp, impulseAligned,
-        volRV: 0, volEff: 0, volGrade: '', volPers: 0, volAcc: 0, volScore: 0,
-        h3Base: null, h3Quote: null,
-      };
-    });
-    scored.sort((a, b) => b.finalScore - a.finalScore);
-  }
+    const h1Snaps = (h1Data?.timeline || []).slice(0, 3);
+    const m15Snaps = (m15Data?.timeline || []).slice(0, 3);
 
-  if (!scored || !scored.length) {
-    el.innerHTML = '<p class="empty-state">No active flow pairs.</p>';
-    return;
-  }
-
-  // Use Signal Pairs ranking order — same pairs, same sort, FP details
-  if (_energySignalsCache?.pairs?.length) {
-    const activePairs = _energySignalsCache.pairs.filter(p => p.active);
-    if (!activePairs.length) {
-      el.innerHTML = '<p class="empty-state">No active flow pairs.</p>';
+    if (!h1Snaps.length && !m15Snaps.length) {
+      el.innerHTML = '<p class="empty-state">No quality data available.</p>';
       return;
     }
-    // Compute _finalScore on signal pairs (same formula as renderEnergySignals)
-    activePairs.forEach(p => {
-      const v45 = parseFloat(p.v45) || 0;
-      const v90 = parseFloat(p.v90) || 0;
-      const sp3 = parseFloat(p.spread_3h) || 0;
-      const sp6 = parseFloat(p.spread_6h) || 0;
-      const de  = parseFloat(p.de_combined) || 0;
-      const imp = p.impulse_score || 0;
-      const flowSign = p.dir === 'BUY' ? 1 : -1;
-      const impulseAligned = !!p.impulse_aligned;
-      const m15Confirms = Math.sign(v45) === flowSign && Math.abs(v45) >= 0.00008;
-      const h3Confirms  = Math.sign(sp3) === flowSign;
-      const h6Confirms  = Math.sign(sp6) === flowSign;
-      const accelSign = Math.sign(v45 - v90) === flowSign;
-      const m15State = (p.m15_state || 'FLAT').toUpperCase();
-      let perfScore = 0;
-      perfScore += (v45 * flowSign) * 10000 * 3;
-      perfScore += (sp3 * flowSign) * 10000 * 2;
-      perfScore += (sp6 * flowSign) * 10000 * 1;
-      if (impulseAligned && imp >= 40) perfScore += imp * 0.5;
-      else if (impulseAligned)         perfScore += imp * 0.25;
-      else if (imp >= 40)              perfScore -= imp * 0.3;
-      if (m15Confirms && imp >= 40)    perfScore += 20;
-      else if (m15Confirms)            perfScore += 10;
-      if (h3Confirms)  perfScore += 10;
-      if (h6Confirms)  perfScore += 5;
-      if (accelSign)   perfScore += 10;
-      if (m15State === 'EXPANDING' && m15Confirms)                    perfScore += 15;
-      if (m15State === 'EXPANDING' && impulseAligned && imp >= 50)    perfScore += 10;
-      if (m15State === 'REVERSING')                                   perfScore -= 10;
-      if (m15State === 'COMPRESSING' && !m15Confirms)                 perfScore -= 15;
-      p._finalScore = (0.75 * perfScore) + (0.25 * de);
-    });
-    activePairs.sort((a, b) => b._finalScore - a._finalScore);
 
-    // Reorder FP scored to match signal pairs order, keep FP details
-    const fpMap = {};
-    for (const fp of scored) fpMap[fp.instrument] = fp;
-    scored = activePairs.map(p => fpMap[p.instrument]).filter(Boolean);
-    if (!scored.length) {
-      el.innerHTML = '<p class="empty-state">No energy signal pairs matched</p>';
-      return;
+    let html = '';
+
+    // H1 section
+    if (h1Snaps.length) {
+      html += '<div class="cq-section"><div class="cq-section-hd"><span class="cq-section-label">H1 Quality</span><a href="/structure-break" class="cq-section-link">View All →</a></div>';
+      for (const snap of h1Snaps) {
+        html += _renderCqSnap(snap, 'h1');
+      }
+      html += '</div>';
     }
+
+    // M15 section
+    if (m15Snaps.length) {
+      html += '<div class="cq-section"><div class="cq-section-hd"><span class="cq-section-label">M15 Quality</span><a href="/m15-quality" class="cq-section-link">View All →</a></div>';
+      for (const snap of m15Snaps) {
+        html += _renderCqSnap(snap, 'm15');
+      }
+      html += '</div>';
+    }
+
+    el.innerHTML = html;
+  } catch (e) {
+    el.innerHTML = `<p class="empty-state">Failed to load quality: ${e.message}</p>`;
+  }
+}
+
+function _renderCqSnap(snap, type) {
+  const sessCls = _qpSessionCls(snap.session);
+  const avgColor = _qpColor(snap.avgQuality);
+  const isHighEnergy = type === 'h1' && snap.energy != null && snap.energy >= 70;
+
+  let html = `<div class="cq-card${isHighEnergy ? ' cq-high-energy' : ''}">`;
+  html += `<div class="cq-card-hd">
+    <span class="cq-time">${_qpTime(snap.time)}</span>
+    <span class="qp-sess ${sessCls}">${snap.session.replace('_',' ')}</span>
+    <span class="cq-avg" style="color:${avgColor}">avg ${snap.avgQuality}%</span>`;
+  if (type === 'h1' && snap.energy != null) {
+    const eColor = snap.energy >= 60 ? '#22c55e' : snap.energy >= 40 ? '#eab308' : '#64748b';
+    html += `<span class="cq-energy" style="color:${eColor}">E:${Math.round(snap.energy)}</span>`;
+  }
+  html += '</div>';
+
+  const pairs = (snap.top5 || []).filter(p => {
+    if (type === 'h1') return p.quality >= 30 && (p.m15Quality == null || p.m15Quality >= 40);
+    return true;
+  });
+
+  for (let i = 0; i < pairs.length; i++) {
+    const p = pairs[i];
+    const color = _qpColor(p.quality);
+    const dc = p.direction === 'BULLISH' ? 'BUY' : p.direction === 'BEARISH' ? 'SELL' : '—';
+    const dcCls = p.direction === 'BULLISH' ? 'qp-buy' : p.direction === 'BEARISH' ? 'qp-sell' : 'qp-neut';
+    const cls = p.classification || (type === 'h1'
+      ? (p.quality >= 60 ? 'VERY_CLEAN' : p.quality >= 45 ? 'TRADEABLE' : p.quality >= 30 ? 'WEAK' : 'CHOPPY')
+      : (p.quality >= 80 ? 'VERY_CLEAN' : p.quality >= 65 ? 'TRADEABLE' : p.quality >= 40 ? 'WEAK' : 'CHOPPY'));
+    const clsLabel = cls.replace('_', ' ');
+    const clsColor = cls === 'VERY_CLEAN' ? '#22c55e' : cls === 'TRADEABLE' ? '#3b82f6' : cls === 'WEAK' ? '#eab308' : '#ef4444';
+    const trendLabel = type === 'h1' ? '2x' : '3x';
+    const dSign = (p.directionScore || 0) > 0 ? '+' : '';
+
+    html += `<div class="cq-pair${p.trending ? ' cq-trending' : ''}">
+      <span class="cq-rank">${i + 1}</span>
+      <span class="cq-pair-name">${p.pair.replace('_','/')}</span>
+      <span class="qp-dir ${dcCls}">${dc}</span>
+      <span class="cq-score" style="color:${color}">${p.quality}%</span>
+      <span class="cq-cls" style="color:${clsColor}">${clsLabel}</span>
+      ${p.trending ? `<span class="cq-trend">▲ ${trendLabel}</span>` : ''}
+      ${p.m15Quality != null ? `<span class="cq-m15" style="color:${_qpColor(p.m15Quality)}">M15:${p.m15Quality}%</span>` : ''}
+      ${p.structureBreak ? '<span class="qp-brk">BRK</span>' : ''}
+      <span class="cq-metric">D:${dSign}${p.directionScore || 0}</span>
+      <span class="cq-metric">I:${p.impulseStrength || 0}</span>
+      <span class="cq-metric">W:${p.wickCleanliness || 0}</span>
+    </div>`;
   }
 
-  // Render ranked cards with detail rows
-  const maxPerf = scored[0]?.finalScore || 1;
+  if (!pairs.length) {
+    html += '<div class="cq-empty">No qualifying pairs</div>';
+  }
 
-  const rows = scored.map((fp, idx) => {
-    const cls = fp.dir === 'BUY' ? 'buy' : 'sell';
-    const perfPct = Math.min(100, Math.max(0, Math.round((fp.finalScore / maxPerf) * 100)));
-
-    // M15 state badge
-    const stateLabel = fp.state ? fp.state.charAt(0) + fp.state.slice(1).toLowerCase() : '—';
-    const STATE_CLS = { EXPANDING: 'fp-st-exp', COMPRESSING: 'fp-st-comp', REVERSING: 'fp-st-rev', STEADY: 'fp-st-stdy', FLAT: 'fp-st-flat' };
-    const stateCls = STATE_CLS[fp.state] || 'fp-st-flat';
-
-    // Timeframe alignment dots
-    const dot = (confirms) => confirms === true ? '<span class="fp-dot green"></span>'
-      : confirms === false ? '<span class="fp-dot red"></span>'
-      : '<span class="fp-dot grey"></span>';
-
-    // Build simple explanation for the user
-    const explain = _fpExplain(fp);
-
-    return `
-      <div class="fp-card">
-        <div class="fp-header">
-          <span class="fp-rank">#${idx + 1}</span>
-          <span class="spread-accent ${cls}"></span>
-          <span class="spread-pair">${pair(fp.instrument)}</span>
-          <span class="spread-bias ${cls}">${fp.dir}</span>
-          <span class="fp-status ${fp.statusCls}">${fp.status}</span>
-        </div>
-        <div class="fp-bar-wrap"><div class="fp-bar-fill ${cls}" style="width:${perfPct}%"></div></div>
-        <div class="fp-explain">${explain}</div>
-        <div class="fp-details">
-          <div class="fp-detail-row">
-            <span class="fp-lbl">M15</span>
-            <span class="fp-val ${fp.m15Confirms ? 'green' : fp.m15Confirms === false ? 'red' : ''}">${fp.v45 != null ? fmt(fp.v45, 5) : '—'}</span>
-            <span class="fp-lbl">2H</span>
-            <span class="fp-val ${fp.h3Confirms ? 'green' : fp.h3Confirms === false ? 'red' : ''}">${fp.spread3H != null ? fmt(fp.spread3H, 5) : '—'}</span>
-            <span class="fp-lbl">6H</span>
-            <span class="fp-val ${fp.h6Confirms ? 'green' : fp.h6Confirms === false ? 'red' : ''}">${fp.spread6H != null ? fmt(fp.spread6H, 5) : '—'}</span>
-          </div>
-          <div class="fp-detail-row">
-            <span class="fp-lbl">State</span>
-            <span class="fp-state-badge ${stateCls}">${stateLabel}</span>
-            <span class="fp-lbl">Mom</span>
-            <span class="fp-val ${fp.momentum === 'Impulsive' ? 'green' : ''}">${fp.momentum}</span>
-            <span class="fp-lbl">Align</span>
-            <span class="fp-dots">${dot(fp.m15Confirms)}${dot(fp.h3Confirms)}${dot(fp.h6Confirms)}</span>
-            ${fp.deCombined > 0 ? `<span class="fp-lbl">Eff</span><span class="fp-val fp-de-${fp.deLabel.toLowerCase()}">${Math.round(fp.deCombined)}</span>` : ''}
-          </div>
-          ${fp.impulseScore > 0 ? `<div class="fp-detail-row fp-impulse-row">
-            <span class="fp-lbl">Impulse</span>
-            <span class="fp-imp-badge ${fp.impulseScore >= 60 ? 'imp-strong' : fp.impulseScore >= 40 ? 'imp-trend' : fp.impulseScore >= 20 ? 'imp-weak' : 'imp-flat'}">${fp.impulseScore >= 60 ? 'Strong' : fp.impulseScore >= 40 ? 'Trending' : fp.impulseScore >= 20 ? 'Weak' : 'Flat'} ${fp.impulseScore}</span>
-            <span class="fp-imp-dir ${fp.impulseAligned ? 'green' : 'red'}">${fp.impulseAligned ? '▲ Aligned' : '▼ Counter'}</span>
-          </div>` : ''}
-          ${fp.volGrade ? `<div class="fp-detail-row fp-vol-row">
-            <span class="fp-lbl">Vol</span>
-            ${_volGradeBadge(fp.volGrade)}
-            <span class="fp-lbl">RV</span>
-            <span class="fp-val ${fp.volRV >= 1.5 ? 'vol-institutional' : fp.volRV >= 1.0 ? 'vol-strong' : 'vol-weak'}">${fp.volRV.toFixed(1)}x</span>
-            <span class="fp-lbl">Pers</span>
-            <span class="fp-val">${fp.volPers}/4</span>
-            <span class="fp-lbl">Eff</span>
-            <span class="fp-val ${fp.volEff >= 0.01 ? 'vol-strong' : fp.volEff >= 0.001 ? 'vol-normal' : 'vol-weak'}">${(fp.volEff * 10000).toFixed(1)} bps</span>
-          </div>` : ''}
-          <div class="fp-detail-row fp-ccy-row">
-            <span class="fp-ccy-chip ${(fp.h3Base ?? 0) >= 0 ? 'strong' : 'weak'}">${fp.base} ${fmt(fp.h3Base ?? 0, 5)}</span>
-            <span class="fp-ccy-vs">vs</span>
-            <span class="fp-ccy-chip ${(fp.h3Quote ?? 0) <= 0 ? 'weak' : 'strong'}">${fp.quote} ${fmt(fp.h3Quote ?? 0, 5)}</span>
-          </div>
-        </div>
-      </div>`;
-  }).join('');
-
-  el.innerHTML = rows;
+  html += '</div>';
+  return html;
 }
 
 // ─── M15 Pair Ranking ─────────────────────────────────────────────────────────
@@ -2869,7 +2780,7 @@ async function _energyRefreshTick() {
     _energySignalsCache = fresh;
     await renderEnergySignals(fresh);
     // Also re-render flow performance since it depends on energy pairs
-    renderFlowPerformance(null, _m15DataCache);
+    renderFlowPerformance();
     // Refresh structure watch alongside signals
     fetchCompressionBreakout();
     hydrateIcons();
@@ -7417,7 +7328,7 @@ async function refresh() {
     // Wait for plan to load first (prevents 403 cascade on cold start)
     if (_userPlanReady) await _userPlanReady;
 
-    const [strength, states, risk, actions, quality, spreads, m15Data, sessionData, journalData, profileData, volData, fpData] = await Promise.all([
+    const [strength, states, risk, actions, quality, spreads, m15Data, sessionData, journalData, profileData, volData] = await Promise.all([
       api('/api/strength').catch(() => ({ currencies: [] })),
       api('/api/states').catch(() => ({ states: [] })),
       api('/api/risk').catch(() => ({})),
@@ -7429,7 +7340,6 @@ async function refresh() {
       api('/api/journal?limit=5').catch(() => ({ entries: [] })),
       api('/api/profile').catch(() => ({})),
       api('/api/volume-analysis?days=2').catch(() => ({ rows: [] })),
-      api('/api/flow-performance?days=1').catch(() => ({ rows: [] })),
     ]);
 
     // Fetch news calendar (non-blocking) — must run AFTER _userTz is set
@@ -7458,7 +7368,7 @@ async function refresh() {
     // Set caches BEFORE fetchMarketActivity so ME cards can read energy signal pairs
     _m15DataCache = m15Data;   // Cache for ME card flow ranking + scanner
     _volDataCache = _buildVolMap(volData);  // Cache volume analysis: instrument → latest row
-    _fpPrecomputed = fpData?.rows || [];    // Pre-computed flow performance (free plan — all metrics baked in)
+    _fpPrecomputed = [];    // Flow performance replaced by Candle Quality
     applyV2Gate(); // Gate sections before render — will update once fetchMarketActivity resolves
     fetchMarketActivity(); // non-blocking — separate fetch, renders independently + updates V2 gate
     buildChart(strength, activeTF);
@@ -7467,7 +7377,7 @@ async function refresh() {
     renderStates(states, m15Data);
     renderSpreads(spreads);
     renderRanking12H(spreads, strength);
-    renderFlowPerformance(strength, m15Data);
+    renderFlowPerformance();
     renderM15Spreads(m15Data);
     updateM15Bar();
     renderRisk(risk);
