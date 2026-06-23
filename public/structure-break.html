@@ -49,6 +49,11 @@
       background: rgba(255,255,255,0.02);
       border: 1px solid rgba(255,255,255,0.06);
     }
+    .mq-snap.mq-high-energy {
+      background: linear-gradient(135deg, rgba(34,197,94,0.10) 0%, rgba(34,197,94,0.03) 100%);
+      border-color: rgba(34,197,94,0.3);
+      box-shadow: 0 0 15px rgba(34,197,94,0.08);
+    }
     .mq-snap-hd {
       display: flex; align-items: center; justify-content: space-between;
       padding: 10px 14px;
@@ -245,7 +250,8 @@ function render() {
     const sessClass = snap.session.toLowerCase();
     const avgColor = qColor(snap.avgQuality >= 45 ? 'TRADEABLE' : snap.avgQuality >= 30 ? 'WEAK' : 'CHOPPY');
 
-    html += `<div class="mq-snap">`;
+    const highEnergy = snap.energy != null && snap.energy >= 70;
+    html += `<div class="mq-snap${highEnergy ? ' mq-high-energy' : ''}">`;
     html += `<div class="mq-snap-hd">
       <div style="display:flex;align-items:center;gap:10px;">
         <span class="mq-snap-time">${fmtTime(snap.time)}</span>
