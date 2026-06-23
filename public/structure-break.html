@@ -310,8 +310,8 @@ function render() {
       const barColor = qColor(p.classification);
       const entryBadge = p.entryValid ? ' <span class="mq-entry-badge">ENTRY</span>' : '';
       const breakBadge = p.structureBreak ? ' <span class="mq-break-badge">BRK</span>' : '';
-      const dayHighBadge = p.dayHigh ? ' <span class="mq-dayhl-badge"><b>⬆ DAY HIGH</b></span>' : '';
-      const dayLowBadge = p.dayLow ? ' <span class="mq-dayhl-badge"><b>⬇ DAY LOW</b></span>' : '';
+      const dayHighBadge = p.dayHigh && p.direction === 'BULLISH' ? ' <span class="mq-dayhl-badge"><b>⬆ DAY HIGH</b></span>' : '';
+      const dayLowBadge = p.dayLow && p.direction === 'BEARISH' ? ' <span class="mq-dayhl-badge"><b>⬇ DAY LOW</b></span>' : '';
       const isTrending = p.trending;
       const trendBadge = isTrending ? ' <span class="mq-trend-badge">▲ 2x</span>' : '';
 

@@ -210,10 +210,10 @@ function qualityAlertEmail(h1Pairs, m15Pairs, h1Time, m15Time, timezone) {
     const entryHtml = p.entryValid
       ? `<td style="padding:0 0 0 6px"><span style="display:inline-block;background:rgba(34,197,94,0.15);color:#22c55e;font-size:10px;font-weight:700;padding:2px 6px;border-radius:3px">ENTRY</span></td>`
       : '';
-    const dayHighHtml = p.dayHigh
+    const dayHighHtml = p.dayHigh && p.direction === 'BULLISH'
       ? `<td style="padding:0 0 0 6px"><span style="display:inline-block;background:rgba(59,130,246,0.25);color:#3b82f6;font-size:10px;font-weight:900;padding:2px 6px;border-radius:3px;border:1px solid rgba(59,130,246,0.5)"><b>⬆ DAY HIGH</b></span></td>`
       : '';
-    const dayLowHtml = p.dayLow
+    const dayLowHtml = p.dayLow && p.direction === 'BEARISH'
       ? `<td style="padding:0 0 0 6px"><span style="display:inline-block;background:rgba(59,130,246,0.25);color:#3b82f6;font-size:10px;font-weight:900;padding:2px 6px;border-radius:3px;border:1px solid rgba(59,130,246,0.5)"><b>⬇ DAY LOW</b></span></td>`
       : '';
     const trendHtml = p.trending
