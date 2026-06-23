@@ -116,8 +116,14 @@
       background: rgba(168,85,247,0.2); color: #a855f7;
     }
     .mq-dayhl-badge {
-      font-size: 8px; font-weight: 700; padding: 1px 5px; border-radius: 3px;
-      background: rgba(59,130,246,0.2); color: #3b82f6;
+      font-size: 9px; font-weight: 900; padding: 2px 8px; border-radius: 4px;
+      background: rgba(59,130,246,0.35); color: #3b82f6; letter-spacing: 0.3px;
+      border: 1px solid rgba(59,130,246,0.6);
+      animation: dayHLPulse 1.5s ease-in-out infinite;
+    }
+    @keyframes dayHLPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0.5); }
+      50% { box-shadow: 0 0 8px 2px rgba(59,130,246,0.3); }
     }
     .mq-trend-badge {
       font-size: 9px; font-weight: 800; padding: 2px 8px; border-radius: 4px;
@@ -304,8 +310,8 @@ function render() {
       const barColor = qColor(p.classification);
       const entryBadge = p.entryValid ? ' <span class="mq-entry-badge">ENTRY</span>' : '';
       const breakBadge = p.structureBreak ? ' <span class="mq-break-badge">BRK</span>' : '';
-      const dayHighBadge = p.dayHigh ? ' <span class="mq-dayhl-badge">⬆ HIGH</span>' : '';
-      const dayLowBadge = p.dayLow ? ' <span class="mq-dayhl-badge">⬇ LOW</span>' : '';
+      const dayHighBadge = p.dayHigh ? ' <span class="mq-dayhl-badge"><b>⬆ DAY HIGH</b></span>' : '';
+      const dayLowBadge = p.dayLow ? ' <span class="mq-dayhl-badge"><b>⬇ DAY LOW</b></span>' : '';
       const isTrending = p.trending;
       const trendBadge = isTrending ? ' <span class="mq-trend-badge">▲ 2x</span>' : '';
 
