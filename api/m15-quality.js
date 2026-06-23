@@ -182,9 +182,16 @@ module.exports = async function handler(req, res) {
     }
 
     const timeline = sortedSnaps.map(snap => {
-      const trending = new Set(trendingSets[snap.time] || []);
+      const trendingCandidates = new Set(trendingSets[snap.time] || []);
       const pairArr = Object.entries(snap.pairs)
-        .map(([pair, q]) => ({ pair, ...q, trending: trending.has(pair) }))
+        .map(([pair, q]) => ({ pair, ...q }))
+        .sort((a, b) => b.quality - a.quality);
+
+      // Mark trending only if in top 3 AND was #1 for 3 consecutive periods
+      const top3 = new Set(pairArr.slice(0, 3).map(p => p.pair));
+      const trending = new Set([...trendingCandidates].filter(p => top3.has(p)));
+
+      const result = pairArr.map(p => ({ ...p, trending: trending.has(p.pair) }))
         .sort((a, b) => {
           if (a.trending !== b.trending) return a.trending ? -1 : 1;
           return b.quality - a.quality;
@@ -193,7 +200,7 @@ module.exports = async function handler(req, res) {
       return {
         time: snap.time,
         session: snap.session,
-        top5: pairArr.slice(0, 5),
+        top5: result.slice(0, 5),
         trendingCount: trending.size,
         totalPairs: pairArr.length,
         avgQuality: pairArr.length ? Math.round(pairArr.reduce((s, p) => s + p.quality, 0) / pairArr.length) : 0,
