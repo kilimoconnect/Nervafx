@@ -211,11 +211,13 @@ module.exports = async function handler(req, res) {
       const dayStr = getDayInTimezone(snap.time, tz);
       const pairArr = Object.entries(snap.pairs)
         .map(([pair, q]) => {
+          // Only check the LATEST candle (at snap.time) for day high/low
           const candle = candlesByInst[pair]?.find(c => c.time === snap.time);
+          const isLatestCandle = candle && candle.time === snap.time;
           const tzDayTracking = dayHighLow[pair] || {};
           const dayData = tzDayTracking[tz]?.[dayStr] || { high: -Infinity, low: Infinity };
-          const isDayHigh = candle && candle.high === dayData.high;
-          const isDayLow = candle && candle.low === dayData.low;
+          const isDayHigh = isLatestCandle && candle.high === dayData.high;
+          const isDayLow = isLatestCandle && candle.low === dayData.low;
           return { pair, ...q, trending: trending.has(pair), dayHigh: isDayHigh, dayLow: isDayLow };
         })
         .sort((a, b) => {
