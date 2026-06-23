@@ -245,6 +245,7 @@ function render() {
   // Timeline
   let timeline = d.timeline;
   if (_mqSessionFilter !== 'ALL') timeline = timeline.filter(s => s.session === _mqSessionFilter);
+  timeline = timeline.filter(s => s.avgQuality >= 30);
 
   for (const snap of timeline) {
     const sessClass = snap.session.toLowerCase();
