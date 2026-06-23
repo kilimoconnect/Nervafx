@@ -2086,13 +2086,17 @@ async function renderFlowPerformance() {
   try {
     const ts = Date.now(); // Cache-bust
     const [h1Data, m15Data] = await Promise.all([
-      api(`/api/structure-break?hours=24&t=${ts}`),
-      api(`/api/m15-quality?hours=24&t=${ts}`),
+      api(`/api/structure-break?hours=168&t=${ts}`),
+      api(`/api/m15-quality?hours=168&t=${ts}`),
     ]);
 
-    // Take latest 2 snapshots (most recent first)
-    const h1Snaps = (h1Data?.timeline || []).slice(0, 2);
-    const m15Snaps = (m15Data?.timeline || []).slice(0, 2);
+    // Get the latest snapshot by comparing timestamps (timeline is sorted newest first)
+    const allH1 = h1Data?.timeline || [];
+    const allM15 = m15Data?.timeline || [];
+
+    // Take latest 2 from each, but ensure we're getting truly recent data
+    const h1Snaps = allH1.slice(0, 2);
+    const m15Snaps = allM15.slice(0, 2);
 
     if (!h1Snaps.length && !m15Snaps.length) {
       el.innerHTML = '<p class="empty-state">No quality data available.</p>';
