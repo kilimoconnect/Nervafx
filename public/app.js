@@ -2085,12 +2085,13 @@ async function renderFlowPerformance() {
 
   try {
     const [h1Data, m15Data] = await Promise.all([
-      api('/api/structure-break?hours=4'),
-      api('/api/m15-quality?hours=2'),
+      api('/api/structure-break?hours=24'),
+      api('/api/m15-quality?hours=24'),
     ]);
 
-    const h1Snaps = (h1Data?.timeline || []).slice(0, 3);
-    const m15Snaps = (m15Data?.timeline || []).slice(0, 3);
+    // Take latest 2 snapshots (most recent first)
+    const h1Snaps = (h1Data?.timeline || []).slice(0, 2);
+    const m15Snaps = (m15Data?.timeline || []).slice(0, 2);
 
     if (!h1Snaps.length && !m15Snaps.length) {
       el.innerHTML = '<p class="empty-state">No quality data available.</p>';
