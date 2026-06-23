@@ -258,6 +258,7 @@ function render() {
         <span class="mq-q-score" style="color:${barColor}">${p.quality}%</span>
         <span class="mq-badge ${cls}">${p.classification.replace('_',' ')}</span>${entryBadge}${breakBadge}${trendBadge}
         <span class="mq-metrics">
+          <span>M15:<b style="color:${p.m15Quality >= 65 ? '#22c55e' : p.m15Quality >= 40 ? '#3b82f6' : '#ef4444'}">${p.m15Quality}%</b></span>
           <span>D:<b>${p.directionScore > 0 ? '+' : ''}${p.directionScore}</b></span>
           <span>I:<b>${p.impulseStrength}</b></span>
           <span>W:<b>${p.wickCleanliness}</b></span>

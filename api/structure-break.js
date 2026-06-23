@@ -21,7 +21,7 @@ function getSession(h) {
   return null;
 }
 
-function computeQuality(candles) {
+function computeH1Quality(candles) {
   if (candles.length < 6) return null;
   const c = candles.slice(-6);
 
@@ -62,6 +62,31 @@ function computeQuality(candles) {
     quality, classification, entryValid,
     bullCandles, bearCandles,
   };
+}
+
+function computeM15Quality(candles) {
+  if (candles.length < 10) return null;
+  const c = candles.slice(-10);
+
+  const bullCandles = c.filter(x => x.close > x.open).length;
+  const bearCandles = c.filter(x => x.close < x.open).length;
+  const directionScore = ((bullCandles - bearCandles) / 10) * 100;
+
+  const netMove = Math.abs(c[9].close - c[0].open);
+  const totalRange = c.reduce((s, x) => s + (x.high - x.low), 0);
+  const impulseStrength = totalRange > 0 ? (netMove / totalRange) * 100 : 0;
+
+  const totalWick = c.reduce((s, x) => {
+    const body = Math.abs(x.close - x.open);
+    return s + (x.high - x.low - body);
+  }, 0);
+  const wickCleanliness = totalRange > 0 ? 100 - (totalWick / totalRange) * 100 : 0;
+
+  return Math.round(
+    0.15 * Math.abs(directionScore) +
+    0.80 * impulseStrength +
+    0.05 * wickCleanliness
+  );
 }
 
 module.exports = async function handler(req, res) {
@@ -116,14 +141,47 @@ module.exports = async function handler(req, res) {
       }
     }
 
+    // Fetch M15 candles in parallel
+    const m15ByInst = {};
+    const m15Since = new Date(new Date(since).getTime() - 10 * 15 * 60000).toISOString();
+    for (let b = 0; b < INSTRUMENTS.length; b += 7) {
+      const batch = INSTRUMENTS.slice(b, b + 7);
+      const results = await Promise.all(batch.map(async (inst) => {
+        let q = sb
+          .from('backtest_candles')
+          .select('time, open, high, low, close')
+          .eq('instrument', inst)
+          .eq('timeframe', 'M15')
+          .eq('complete', true)
+          .gte('time', m15Since);
+        if (until) q = q.lte('time', until);
+        const { data, error } = await q
+          .order('time', { ascending: true })
+          .limit(5000);
+        if (error) throw error;
+        return { inst, data: data || [] };
+      }));
+      for (const { inst, data } of results) {
+        m15ByInst[inst] = data.map(c => ({
+          time: c.time,
+          open: parseFloat(c.open),
+          high: parseFloat(c.high),
+          low: parseFloat(c.low),
+          close: parseFloat(c.close),
+        }));
+      }
+    }
+
     const h1Snapshots = {};
     const qualityMap = {};
-    const breakMap = {}; // breakMap[time][inst] = true if candle confirms structure break
+    const breakMap = {};
+    const m15QualityMap = {};
 
     for (const inst of INSTRUMENTS) {
       const candles = candlesByInst[inst];
+      const m15Candles = m15ByInst[inst] || [];
       for (let i = 5; i < candles.length; i++) {
-        const q = computeQuality(candles.slice(i - 5, i + 1));
+        const q = computeH1Quality(candles.slice(i - 5, i + 1));
         if (!q) continue;
 
         const time = candles[i].time;
@@ -132,6 +190,7 @@ module.exports = async function handler(req, res) {
           h1Snapshots[time] = { time, session: getSession(d.getUTCHours()), pairs: {} };
           qualityMap[time] = {};
           breakMap[time] = {};
+          m15QualityMap[time] = {};
         }
         h1Snapshots[time].pairs[inst] = q;
         qualityMap[time][inst] = q.quality;
@@ -144,6 +203,17 @@ module.exports = async function handler(req, res) {
         } else if (q.direction === 'BEARISH' && curr.close < prev.low) {
           breakMap[time][inst] = true;
         }
+
+        // M15 quality: find latest 10 M15 candles at or before this H1 time
+        const cutoff = new Date(time).getTime();
+        let endIdx = -1;
+        for (let j = m15Candles.length - 1; j >= 0; j--) {
+          if (new Date(m15Candles[j].time).getTime() <= cutoff) { endIdx = j; break; }
+        }
+        if (endIdx >= 9) {
+          const m15q = computeM15Quality(m15Candles.slice(endIdx - 9, endIdx + 1));
+          if (m15q !== null) m15QualityMap[time][inst] = m15q;
+        }
       }
     }
 
@@ -154,10 +224,12 @@ module.exports = async function handler(req, res) {
     const top5ByTime = {};
     for (const snap of sortedSnaps) {
       const breaks = breakMap[snap.time] || {};
+      const m15q = m15QualityMap[snap.time] || {};
       const sorted = Object.entries(snap.pairs)
-        .map(([pair, q]) => ({ pair, quality: q.quality, brk: !!breaks[pair] }))
+        .map(([pair, q]) => ({ pair, quality: q.quality, brk: !!breaks[pair], m15: m15q[pair] || 0 }))
         .sort((a, b) => {
           if (a.brk !== b.brk) return a.brk ? -1 : 1;
+          if (a.m15 !== b.m15) return b.m15 - a.m15;
           return b.quality - a.quality;
         })
         .slice(0, 5);
@@ -183,10 +255,12 @@ module.exports = async function handler(req, res) {
     const timeline = sortedSnaps.map(snap => {
       const trending = new Set(trendingSets[snap.time] || []);
       const breaks = breakMap[snap.time] || {};
+      const m15q = m15QualityMap[snap.time] || {};
       const pairArr = Object.entries(snap.pairs)
-        .map(([pair, q]) => ({ pair, ...q, trending: trending.has(pair), structureBreak: !!breaks[pair] }))
+        .map(([pair, q]) => ({ pair, ...q, trending: trending.has(pair), structureBreak: !!breaks[pair], m15Quality: m15q[pair] || 0 }))
         .sort((a, b) => {
           if (a.structureBreak !== b.structureBreak) return a.structureBreak ? -1 : 1;
+          if (a.m15Quality !== b.m15Quality) return b.m15Quality - a.m15Quality;
           return b.quality - a.quality;
         });
 
