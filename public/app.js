@@ -2084,9 +2084,10 @@ async function renderFlowPerformance() {
   if (!el) return;
 
   try {
+    const ts = Date.now(); // Cache-bust
     const [h1Data, m15Data] = await Promise.all([
-      api('/api/structure-break?hours=24'),
-      api('/api/m15-quality?hours=24'),
+      api(`/api/structure-break?hours=24&t=${ts}`),
+      api(`/api/m15-quality?hours=24&t=${ts}`),
     ]);
 
     // Take latest 2 snapshots (most recent first)
