@@ -403,6 +403,7 @@ module.exports = async function handler(req, res) {
   await step('volume_analysis',  () => calculateLatestVolumeAnalysis());
   await step('sentiment',        () => calculateLatestSentiment());
   await step('session_backfill', () => backfillSessionActivity());
+  await step('quality_alerts',  () => sendQualityAlerts(sb));
   await step('risk',             () => checkLatestSignals());
   await step('actions',          () => processLatestActions());
   await step('flow_performance', () => calculateFlowPerformance());
@@ -410,7 +411,6 @@ module.exports = async function handler(req, res) {
   await step('journal',          () => writeJournalEntry());
   await step('outcomes',         () => runOutcomeReviews());
   await step('autotrader',      () => evaluateAutoTrader(sb));
-  await step('quality_alerts',  () => sendQualityAlerts(sb));
 
   return res.json({
     ok:           true,
