@@ -41,7 +41,7 @@ async function getSubscribedUsers(sb, type) {
 
   const { data: prefs } = await sb
     .from('email_preferences')
-    .select('user_id, signal_alerts, daily_digest, upgrade_prompts, unsubscribed');
+    .select('user_id, signal_alerts, daily_digest, upgrade_prompts, unsubscribed, notification_email');
 
   const prefMap = {};
   for (const p of prefs || []) prefMap[p.user_id] = p;
@@ -54,7 +54,7 @@ async function getSubscribedUsers(sb, type) {
     if (type === 'upgrade' && p?.upgrade_prompts === false) return false;
     return true;
   }).map(u => ({
-    email: u.email,
+    email: prefMap[u.id]?.notification_email || u.email,
     firstName: u.user_metadata?.first_name || '',
     id: u.id,
   }));

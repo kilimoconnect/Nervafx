@@ -260,7 +260,7 @@ async function sendQualityAlerts(sb) {
 
   const { data: prefs } = await sb
     .from('email_preferences')
-    .select('user_id, signal_alerts, unsubscribed');
+    .select('user_id, signal_alerts, unsubscribed, notification_email');
   const prefMap = {};
   for (const p of prefs || []) prefMap[p.user_id] = p;
 
@@ -269,7 +269,7 @@ async function sendQualityAlerts(sb) {
     if (p?.unsubscribed) return false;
     if (p?.signal_alerts === false) return false;
     return true;
-  }).map(u => ({ email: u.email }));
+  }).map(u => ({ email: prefMap[u.id]?.notification_email || u.email }));
 
   if (!recipients.length) return { sent: 0 };
 
