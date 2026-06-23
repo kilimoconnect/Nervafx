@@ -245,7 +245,6 @@ function render() {
   // Timeline
   let timeline = d.timeline;
   if (_mqSessionFilter !== 'ALL') timeline = timeline.filter(s => s.session === _mqSessionFilter);
-  timeline = timeline.filter(s => s.avgQuality >= 30);
 
   for (const snap of timeline) {
     const sessClass = snap.session.toLowerCase();
@@ -273,6 +272,7 @@ function render() {
 
     for (let i = 0; i < snap.top5.length; i++) {
       const p = snap.top5[i];
+      if (p.quality < 30) continue;
       const cls = p.classification.toLowerCase();
       const dc = p.direction === 'BULLISH' ? 'buy' : p.direction === 'BEARISH' ? 'sell' : 'neutral';
       const barColor = qColor(p.classification);
