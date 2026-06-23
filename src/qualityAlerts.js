@@ -185,53 +185,78 @@ function qualityAlertEmail(h1Pairs, m15Pairs, h1Time, m15Time) {
     return `${days[d.getUTCDay()]} ${hh}:${mm} UTC`;
   };
 
-  const dirTag = (dir) => dir === 'BULLISH'
-    ? '<span class="tag tag-green">BUY</span>'
-    : dir === 'BEARISH' ? '<span class="tag tag-red">SELL</span>' : '<span class="tag tag-gray">—</span>';
-
   const clsColor = (cls) => cls === 'VERY_CLEAN' ? '#4ade80' : cls === 'TRADEABLE' ? '#60a5fa' : cls === 'WEAK' ? '#fbbf24' : '#f87171';
+  const dirColor = (dir) => dir === 'BULLISH' ? '#4ade80' : '#f87171';
+  const dirLabel = (dir) => dir === 'BULLISH' ? 'BUY' : 'SELL';
 
-  const pairRow = (p, type) => {
-    const trending = p.trending ? '<span class="tag tag-amber" style="margin-left:4px">▲ ' + (type === 'h1' ? '2x' : '3x') + '</span>' : '';
-    return `<div class="row row-bordered" style="border-left-color:${clsColor(p.classification)}">
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <span style="color:#f1f5f9;font-weight:800;font-size:14px">${p.pair.replace('_', '/')}</span>
-        ${dirTag(p.direction)}
-        <span style="color:${clsColor(p.classification)};font-weight:800;font-size:15px">${p.quality}%</span>
-        <span class="tag" style="background:rgba(255,255,255,0.05);color:${clsColor(p.classification)}">${p.classification.replace('_', ' ')}</span>
-        ${trending}
+  const pairRow = (p, idx, type) => {
+    const trendHtml = p.trending
+      ? `<td style="padding:0 0 0 6px"><span style="display:inline-block;background:rgba(251,191,36,0.15);color:#fbbf24;font-size:10px;font-weight:700;padding:2px 6px;border-radius:3px">▲ ${type === 'h1' ? '2x' : '3x'}</span></td>`
+      : '';
+    const dSign = p.directionScore > 0 ? '+' : '';
+    return `<tr>
+      <td style="padding:10px 14px;border-bottom:1px solid #1e293b">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+          <td style="width:24px;vertical-align:top;padding-top:2px">
+            <span style="display:inline-block;width:20px;height:20px;line-height:20px;text-align:center;border-radius:50%;background:#1e293b;color:#94a3b8;font-size:10px;font-weight:700">${idx + 1}</span>
+          </td>
+          <td style="padding:0 0 0 8px">
+            <table cellpadding="0" cellspacing="0" border="0"><tr>
+              <td style="padding:0"><span style="color:#f1f5f9;font-weight:800;font-size:15px;letter-spacing:-0.2px">${p.pair.replace('_', '/')}</span></td>
+              <td style="padding:0 0 0 8px"><span style="display:inline-block;background:${dirColor(p.direction)}20;color:${dirColor(p.direction)};font-size:10px;font-weight:700;padding:2px 7px;border-radius:3px">${dirLabel(p.direction)}</span></td>
+              <td style="padding:0 0 0 8px"><span style="color:${clsColor(p.classification)};font-weight:800;font-size:15px">${p.quality}%</span></td>
+              <td style="padding:0 0 0 6px"><span style="display:inline-block;background:${clsColor(p.classification)}15;color:${clsColor(p.classification)};font-size:10px;font-weight:600;padding:2px 7px;border-radius:3px">${p.classification.replace('_', ' ')}</span></td>
+              ${trendHtml}
+            </tr></table>
+            <table cellpadding="0" cellspacing="0" border="0" style="margin-top:6px"><tr>
+              <td style="padding:0"><span style="display:inline-block;background:#0f172a;border:1px solid #1e293b;border-radius:4px;padding:3px 8px;font-size:11px;color:#94a3b8">D:<span style="color:#f1f5f9;font-weight:700">${dSign}${p.directionScore}</span></span></td>
+              <td style="padding:0 0 0 4px"><span style="display:inline-block;background:#0f172a;border:1px solid #1e293b;border-radius:4px;padding:3px 8px;font-size:11px;color:#94a3b8">I:<span style="color:#f1f5f9;font-weight:700">${p.impulseStrength}</span></span></td>
+              <td style="padding:0 0 0 4px"><span style="display:inline-block;background:#0f172a;border:1px solid #1e293b;border-radius:4px;padding:3px 8px;font-size:11px;color:#94a3b8">W:<span style="color:#f1f5f9;font-weight:700">${p.wickCleanliness}</span></span></td>
+            </tr></table>
+          </td>
+        </tr></table>
+      </td>
+    </tr>`;
+  };
+
+  const sectionHtml = (title, time, pairs, type, link) => {
+    if (!pairs.length) return '';
+    return `
+    <div class="card" style="margin:20px 0">
+      <div class="card-hd" style="display:flex;padding:12px 14px;border-bottom:1px solid #1e293b">
+        <span style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1.2px">${title}</span>
+        <span style="margin-left:auto;font-size:11px;color:#94a3b8">${fmtTime(time)}</span>
       </div>
-      <div style="margin-top:4px">
-        <span class="metric">D:<b>${p.directionScore > 0 ? '+' : ''}${p.directionScore}</b></span>
-        <span class="metric">I:<b>${p.impulseStrength}</b></span>
-        <span class="metric">W:<b>${p.wickCleanliness}</b></span>
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        ${pairs.map((p, i) => pairRow(p, i, type)).join('')}
+      </table>
+      <div style="padding:10px 14px;text-align:right;border-top:1px solid #1e293b">
+        <a href="${link}" style="font-size:11px;color:#f59e0b;text-decoration:none;font-weight:600">View All →</a>
       </div>
     </div>`;
   };
 
-  const h1Html = h1Pairs.length ? `
-    <div class="section">
-      <div class="section-label">H1 Quality · ${fmtTime(h1Time)}</div>
-      ${h1Pairs.map(p => pairRow(p, 'h1')).join('')}
-    </div>` : '';
-
-  const m15Html = m15Pairs.length ? `
-    <div class="section">
-      <div class="section-label">M15 Quality · ${fmtTime(m15Time)}</div>
-      ${m15Pairs.map(p => pairRow(p, 'm15')).join('')}
-    </div>` : '';
+  const h1Html = sectionHtml('H1 Quality', h1Time, h1Pairs, 'h1', 'https://nervafx.com/structure-break');
+  const m15Html = sectionHtml('M15 Quality', m15Time, m15Pairs, 'm15', 'https://nervafx.com/m15-quality');
 
   const count = h1Pairs.length + m15Pairs.length;
+  const trending = [...h1Pairs, ...m15Pairs].filter(p => p.trending);
+  const trendLine = trending.length
+    ? `<p style="color:#fbbf24;font-size:13px;text-align:center;margin:0 0 16px">▲ ${trending.map(p => p.pair.replace('_','/')).join(', ')} trending</p>`
+    : '';
 
   return {
-    subject: `${count} Quality Pair${count !== 1 ? 's' : ''} — NervaFX`,
+    subject: `${count} Quality Pair${count !== 1 ? 's' : ''}${trending.length ? ' — ' + trending.map(p => p.pair.replace('_','/')).join(', ') + ' trending' : ''} — NervaFX`,
     html: baseLayout(`
-      <h2>Candle Quality Alert</h2>
-      <p class="sub">Top pairs by candle quality — structure, impulse &amp; direction</p>
+      <h2 style="margin:0 0 4px">Candle Quality Alert</h2>
+      <p class="sub" style="margin:0 0 8px">Top pairs ranked by direction, impulse &amp; wick cleanliness</p>
+      ${trendLine}
       ${h1Html}
       ${m15Html}
-      <p style="text-align:center;margin:24px 0"><a class="cta" href="https://nervafx.com/structure-break">View H1 Quality →</a></p>
-      <p style="color:#94a3b8;font-size:12px;text-align:center">Quality scores are not trade signals. Always confirm with structure breakouts.</p>
+      <div style="text-align:center;margin:24px 0">
+        <a class="cta" href="https://nervafx.com/app" style="display:inline-block;padding:12px 32px;background:#f59e0b;color:#0f172a;font-weight:700;text-decoration:none;border-radius:6px;font-size:14px">Open Dashboard →</a>
+      </div>
+      <p style="color:#475569;font-size:11px;text-align:center;margin:16px 0 0">Quality scores measure candle structure, not trade signals. Always confirm with structure breakouts.</p>
     `),
   };
 }
