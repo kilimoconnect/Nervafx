@@ -3689,9 +3689,10 @@ async function fetchQualityPreview() {
   const el = document.getElementById('quality-preview-display');
   if (!el) return;
   try {
+    const ts = Date.now(); // cache-bust so the browser/CDN never serves a stale snapshot
     const [h1, m15] = await Promise.all([
-      api('/api/structure-break?hours=24'),
-      api('/api/m15-quality?hours=6'),
+      api(`/api/structure-break?hours=24&t=${ts}`),
+      api(`/api/m15-quality?hours=24&t=${ts}`),
     ]);
     renderQualityPreview(el, h1, m15);
   } catch (e) {
