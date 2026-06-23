@@ -21,6 +21,24 @@ function getSession(h) {
   return null;
 }
 
+function getSessionTimezone(session) {
+  // Map session to IANA timezone
+  if (session === 'ASIA') return 'Asia/Tokyo';
+  if (session === 'LONDON') return 'Europe/London';
+  if (session === 'NEW_YORK') return 'America/New_York';
+  return 'UTC';
+}
+
+function getDayInTimezone(isoTime, timezone) {
+  // Convert UTC ISO time to date in given timezone
+  const d = new Date(isoTime);
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    timeZone: timezone
+  });
+  return formatter.format(d);
+}
+
 function computeH1Quality(candles) {
   if (candles.length < 6) return null;
   const c = candles.slice(-6);
@@ -209,33 +227,31 @@ module.exports = async function handler(req, res) {
     const qualityMap = {};
     const breakMap = {};
     const m15QualityMap = {};
-    const dayHighLow = {}; // dayHighLow[inst] = { dayStr, high, low }
+    const dayHighLow = {}; // dayHighLow[inst][tz][dayStr] = { high, low }
 
     for (const inst of INSTRUMENTS) {
       const candles = candlesByInst[inst];
       const m15Candles = m15ByInst[inst] || [];
-      let currentDayStr = null;
-      let dayHigh = -Infinity;
-      let dayLow = Infinity;
+      const tzDayTracking = {}; // tzDayTracking[tz][dayStr] = { high, low }
 
       for (let i = 5; i < candles.length; i++) {
         const q = computeH1Quality(candles.slice(i - 5, i + 1));
         if (!q) continue;
 
         const time = candles[i].time;
-        const dayStr = time.split('T')[0]; // YYYY-MM-DD
 
-        // Reset day tracking on new day
-        if (dayStr !== currentDayStr) {
-          currentDayStr = dayStr;
-          dayHigh = -Infinity;
-          dayLow = Infinity;
+        // Track day high/low for each timezone
+        for (const session of ['ASIA', 'LONDON', 'NEW_YORK']) {
+          const tz = getSessionTimezone(session);
+          const dayStr = getDayInTimezone(time, tz);
+
+          if (!tzDayTracking[tz]) tzDayTracking[tz] = {};
+          if (!tzDayTracking[tz][dayStr]) tzDayTracking[tz][dayStr] = { high: -Infinity, low: Infinity };
+
+          tzDayTracking[tz][dayStr].high = Math.max(tzDayTracking[tz][dayStr].high, candles[i].high);
+          tzDayTracking[tz][dayStr].low = Math.min(tzDayTracking[tz][dayStr].low, candles[i].low);
         }
-
-        // Track day high/low
-        dayHigh = Math.max(dayHigh, candles[i].high);
-        dayLow = Math.min(dayLow, candles[i].low);
-        dayHighLow[inst] = { dayStr, high: dayHigh, low: dayLow };
+        dayHighLow[inst] = tzDayTracking;
 
         if (!h1Snapshots[time]) {
           const d = new Date(time);
@@ -308,13 +324,15 @@ module.exports = async function handler(req, res) {
       const trending = new Set(trendingSets[snap.time] || []);
       const breaks = breakMap[snap.time] || {};
       const m15q = m15QualityMap[snap.time] || {};
-      const dayStr = snap.time.split('T')[0];
+      const tz = getSessionTimezone(snap.session);
+      const dayStr = getDayInTimezone(snap.time, tz);
       const pairArr = Object.entries(snap.pairs)
         .map(([pair, q]) => {
-          const dayHL = dayHighLow[pair] || {};
           const candle = candlesByInst[pair]?.find(c => c.time === snap.time);
-          const isDayHigh = candle && dayHL.dayStr === dayStr && candle.high === dayHL.high;
-          const isDayLow = candle && dayHL.dayStr === dayStr && candle.low === dayHL.low;
+          const tzDayTracking = dayHighLow[pair] || {};
+          const dayData = tzDayTracking[tz]?.[dayStr] || { high: -Infinity, low: Infinity };
+          const isDayHigh = candle && candle.high === dayData.high;
+          const isDayLow = candle && candle.low === dayData.low;
           return {
             pair, ...q, trending: trending.has(pair), structureBreak: !!breaks[pair],
             m15Quality: m15q[pair] || 0, dayHigh: isDayHigh, dayLow: isDayLow
