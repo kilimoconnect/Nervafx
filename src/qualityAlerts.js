@@ -297,6 +297,14 @@ async function sendQualityAlerts(sb) {
     return { sent: 0 };
   }
 
+  // Check if there are trending pairs in either timeframe
+  const h1Trending = h1Pairs.filter(p => p.trending).length;
+  const m15Trending = m15Pairs.filter(p => p.trending).length;
+  if (!h1Trending && !m15Trending) {
+    console.log('[QUALITY-ALERTS] No trending pairs in H1 or M15');
+    return { sent: 0 };
+  }
+
   // Get subscribed users (reuse signal_alerts preference)
   const { data: users } = await sb.auth.admin.listUsers({ perPage: 1000 });
   if (!users?.users?.length) return { sent: 0 };
