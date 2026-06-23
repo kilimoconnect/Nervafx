@@ -256,6 +256,7 @@ function render() {
 
     for (let i = 0; i < snap.top5.length; i++) {
       const p = snap.top5[i];
+      if (p.direction === 'NEUTRAL') continue;
       const cls = p.classification.toLowerCase();
       const dc = p.direction === 'BULLISH' ? 'buy' : p.direction === 'BEARISH' ? 'sell' : 'neutral';
       const barColor = qColor(p.classification);

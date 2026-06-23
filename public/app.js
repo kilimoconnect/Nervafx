@@ -2140,6 +2140,7 @@ function _renderCqSnap(snap, type) {
   html += '</div>';
 
   const pairs = (snap.top5 || []).filter(p => {
+    if (p.direction === 'NEUTRAL') return false;
     if (type === 'h1') return p.quality >= 30 && (p.m15Quality == null || p.m15Quality >= 40);
     return true;
   });
@@ -2147,8 +2148,8 @@ function _renderCqSnap(snap, type) {
   for (let i = 0; i < pairs.length; i++) {
     const p = pairs[i];
     const color = _qpColor(p.quality);
-    const dc = p.direction === 'BULLISH' ? 'BUY' : p.direction === 'BEARISH' ? 'SELL' : '—';
-    const dcCls = p.direction === 'BULLISH' ? 'qp-buy' : p.direction === 'BEARISH' ? 'qp-sell' : 'qp-neut';
+    const dc = p.direction === 'BULLISH' ? 'BUY' : 'SELL';
+    const dcCls = p.direction === 'BULLISH' ? 'qp-buy' : 'qp-sell';
     const cls = p.classification || (type === 'h1'
       ? (p.quality >= 60 ? 'VERY_CLEAN' : p.quality >= 45 ? 'TRADEABLE' : p.quality >= 30 ? 'WEAK' : 'CHOPPY')
       : (p.quality >= 80 ? 'VERY_CLEAN' : p.quality >= 65 ? 'TRADEABLE' : p.quality >= 40 ? 'WEAK' : 'CHOPPY'));
@@ -3757,6 +3758,7 @@ function _renderQpCard(snap, type) {
   </div>`;
 
   const pairs = (snap.top5 || []).filter(p => {
+    if (p.direction === 'NEUTRAL') return false;
     if (type === 'h1') return p.quality >= 30 && (p.m15Quality == null || p.m15Quality >= 40);
     return true;
   });
@@ -3764,8 +3766,8 @@ function _renderQpCard(snap, type) {
   for (let i = 0; i < pairs.length; i++) {
     const p = pairs[i];
     const color = _qpColor(p.quality);
-    const dc = p.direction === 'BULLISH' ? 'BUY' : p.direction === 'BEARISH' ? 'SELL' : '—';
-    const dcCls = p.direction === 'BULLISH' ? 'qp-buy' : p.direction === 'BEARISH' ? 'qp-sell' : 'qp-neut';
+    const dc = p.direction === 'BULLISH' ? 'BUY' : 'SELL';
+    const dcCls = p.direction === 'BULLISH' ? 'qp-buy' : 'qp-sell';
     const cls = p.classification || (p.quality >= 60 ? 'VERY_CLEAN' : p.quality >= 45 ? 'TRADEABLE' : p.quality >= 30 ? 'WEAK' : 'CHOPPY');
     const clsLabel = cls.replace('_', ' ');
     const clsColor = cls === 'VERY_CLEAN' ? '#22c55e' : cls === 'TRADEABLE' ? '#3b82f6' : cls === 'WEAK' ? '#eab308' : '#ef4444';
