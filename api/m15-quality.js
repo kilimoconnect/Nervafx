@@ -176,7 +176,8 @@ module.exports = async function handler(req, res) {
       const times = [0, 1, 2].map(j => sortedSnaps[si + j].time);
       const rank1Latest = rank1ByTime[times[0]];
       const inTop3Prev = top3ByTime[times[1]] && top3ByTime[times[2]];
-      if (rank1Latest && inTop3Prev &&
+      const qualityLatest = qualityMap[times[0]] && qualityMap[times[0]][rank1Latest];
+      if (rank1Latest && inTop3Prev && qualityLatest >= 50 &&
           top3ByTime[times[1]].has(rank1Latest) &&
           top3ByTime[times[2]].has(rank1Latest)) {
         if (!trendingSets[times[0]]) trendingSets[times[0]] = [];
