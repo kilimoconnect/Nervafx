@@ -7967,3 +7967,58 @@ body::after {
   .es-banner { flex-direction: column; align-items: flex-start; }
   .es-pair-metrics { grid-template-columns: repeat(3, 1fr); }
 }
+
+/* ─── Quality Preview (H1 + M15 snapshot cards on dashboard) ──────────────── */
+.qp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.qp-col-hd { margin-bottom: 8px; }
+.qp-col-link {
+  font-size: 11px; font-weight: 700; color: var(--text-muted);
+  text-decoration: none; transition: color 0.15s;
+}
+.qp-col-link:hover { color: var(--text); }
+.qp-card {
+  background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 8px; padding: 8px 10px; margin-bottom: 8px;
+}
+.qp-card.qp-high-energy {
+  background: linear-gradient(135deg, rgba(34,197,94,0.10) 0%, rgba(34,197,94,0.03) 100%);
+  border-color: rgba(34,197,94,0.3);
+}
+.qp-card-hd {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+  padding-bottom: 5px; border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.qp-time { font-size: 11px; font-weight: 800; color: var(--text); }
+.qp-sess {
+  font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 3px;
+}
+.qp-asia { background: rgba(234,179,8,0.15); color: #eab308; }
+.qp-london { background: rgba(59,130,246,0.15); color: #3b82f6; }
+.qp-ny { background: rgba(168,85,247,0.15); color: #a855f7; }
+.qp-avg { font-size: 10px; font-weight: 700; margin-left: auto; }
+.qp-pair {
+  display: flex; align-items: center; gap: 6px;
+  padding: 3px 0; font-size: 11px;
+}
+.qp-pair.qp-trending {
+  background: linear-gradient(90deg, rgba(251,191,36,0.10) 0%, transparent 100%);
+  border-radius: 4px; padding: 3px 4px;
+}
+.qp-pair-name { font-weight: 800; min-width: 58px; font-size: 11px; }
+.qp-dir { font-size: 9px; font-weight: 800; padding: 1px 4px; border-radius: 3px; }
+.qp-buy { background: rgba(34,197,94,0.12); color: #22c55e; }
+.qp-sell { background: rgba(239,68,68,0.12); color: #ef4444; }
+.qp-neut { color: var(--text-muted); }
+.qp-score { font-weight: 800; font-size: 11px; }
+.qp-m15 { font-size: 9px; font-weight: 700; }
+.qp-brk {
+  font-size: 8px; font-weight: 700; padding: 1px 4px; border-radius: 3px;
+  background: rgba(168,85,247,0.2); color: #a855f7;
+}
+.qp-trend {
+  font-size: 9px; font-weight: 800; color: #fbbf24;
+}
+@media (max-width: 600px) {
+  .qp-grid { grid-template-columns: 1fr; }
+  .qp-pair-name { min-width: 50px; font-size: 10px; }
+}

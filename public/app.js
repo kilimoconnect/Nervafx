@@ -3772,6 +3772,106 @@ function renderSession(data) {
     <div class="session-timeline">${timelineHtml}</div>`;
 }
 
+// ─── Quality Snapshot Preview (H1 + M15) ─────────────────────────────────────
+
+async function fetchQualityPreview() {
+  const el = document.getElementById('quality-preview-display');
+  if (!el) return;
+  try {
+    const [h1, m15] = await Promise.all([
+      api('/api/structure-break?hours=24'),
+      api('/api/m15-quality?hours=6'),
+    ]);
+    renderQualityPreview(el, h1, m15);
+  } catch (e) {
+    el.innerHTML = `<p class="me-empty">Failed to load quality: ${e.message}</p>`;
+  }
+}
+
+function _qpColor(q) {
+  return q >= 60 ? '#22c55e' : q >= 45 ? '#3b82f6' : q >= 30 ? '#eab308' : '#ef4444';
+}
+
+function _qpTime(iso) {
+  const d = new Date(iso);
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const hh = String(d.getHours()).padStart(2,'0');
+  const mm = String(d.getMinutes()).padStart(2,'0');
+  return `${days[d.getDay()]} ${hh}:${mm}`;
+}
+
+function _qpSessionCls(s) {
+  return s === 'ASIA' ? 'qp-asia' : s === 'LONDON' ? 'qp-london' : 'qp-ny';
+}
+
+function renderQualityPreview(el, h1Data, m15Data) {
+  const h1Snaps = (h1Data?.timeline || []).slice(0, 2);
+  const m15Snaps = (m15Data?.timeline || []).slice(0, 2);
+
+  if (!h1Snaps.length && !m15Snaps.length) {
+    el.innerHTML = '<p class="me-empty">No quality data available</p>';
+    return;
+  }
+
+  let html = '<div class="qp-grid">';
+
+  // H1 column
+  html += '<div class="qp-col">';
+  html += '<div class="qp-col-hd"><a href="/structure-break" class="qp-col-link">H1 Quality →</a></div>';
+  for (const snap of h1Snaps) {
+    html += _renderQpCard(snap, 'h1');
+  }
+  if (!h1Snaps.length) html += '<p class="me-empty">No H1 data</p>';
+  html += '</div>';
+
+  // M15 column
+  html += '<div class="qp-col">';
+  html += '<div class="qp-col-hd"><a href="/m15-quality" class="qp-col-link">M15 Quality →</a></div>';
+  for (const snap of m15Snaps) {
+    html += _renderQpCard(snap, 'm15');
+  }
+  if (!m15Snaps.length) html += '<p class="me-empty">No M15 data</p>';
+  html += '</div>';
+
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function _renderQpCard(snap, type) {
+  const sessCls = _qpSessionCls(snap.session);
+  const avgColor = _qpColor(snap.avgQuality);
+  const isHighEnergy = type === 'h1' && snap.energy != null && snap.energy >= 70;
+
+  let html = `<div class="qp-card${isHighEnergy ? ' qp-high-energy' : ''}">`;
+  html += `<div class="qp-card-hd">
+    <span class="qp-time">${_qpTime(snap.time)}</span>
+    <span class="qp-sess ${sessCls}">${snap.session.replace('_',' ')}</span>
+    <span class="qp-avg" style="color:${avgColor}">avg ${snap.avgQuality}%</span>
+  </div>`;
+
+  const pairs = (snap.top5 || []).filter(p => {
+    if (type === 'h1') return p.quality >= 30 && (p.m15Quality == null || p.m15Quality >= 40);
+    return true;
+  });
+
+  for (const p of pairs) {
+    const color = _qpColor(p.quality);
+    const dc = p.direction === 'BULLISH' ? 'BUY' : p.direction === 'BEARISH' ? 'SELL' : '—';
+    const dcCls = p.direction === 'BULLISH' ? 'qp-buy' : p.direction === 'BEARISH' ? 'qp-sell' : 'qp-neut';
+    html += `<div class="qp-pair${p.trending ? ' qp-trending' : ''}">
+      <span class="qp-pair-name">${p.pair.replace('_','/')}</span>
+      <span class="qp-dir ${dcCls}">${dc}</span>
+      <span class="qp-score" style="color:${color}">${p.quality}%</span>
+      ${p.m15Quality != null ? `<span class="qp-m15" style="color:${_qpColor(p.m15Quality)}">M15:${p.m15Quality}%</span>` : ''}
+      ${p.structureBreak ? '<span class="qp-brk">BRK</span>' : ''}
+      ${p.trending ? '<span class="qp-trend">▲</span>' : ''}
+    </div>`;
+  }
+
+  html += '</div>';
+  return html;
+}
+
 // ─── Inline M15 Energy Bars (below Trading Session) ──────────────────────────
 
 async function fetchInlineM15EnergyBars() {
@@ -7349,6 +7449,7 @@ async function refresh() {
     updateHeader(risk);
     renderSession(sessionData);
     fetchInlineM15EnergyBars(); // non-blocking — M15 energy bars below session
+    fetchQualityPreview(); // non-blocking — H1 + M15 quality snapshot cards
     // Set caches BEFORE fetchMarketActivity so ME cards can read energy signal pairs
     _m15DataCache = m15Data;   // Cache for ME card flow ranking + scanner
     _volDataCache = _buildVolMap(volData);  // Cache volume analysis: instrument → latest row
