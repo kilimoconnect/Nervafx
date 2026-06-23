@@ -2084,19 +2084,25 @@ async function renderFlowPerformance() {
   if (!el) return;
 
   try {
-    const ts = Date.now(); // Cache-bust
-    const [h1Data, m15Data] = await Promise.all([
-      api(`/api/structure-break?hours=168&t=${ts}`),
-      api(`/api/m15-quality?hours=168&t=${ts}`),
+    // Fetch pages directly to get fresh data
+    const [h1Page, m15Page] = await Promise.all([
+      fetch('/structure-break').then(r => r.text()),
+      fetch('/m15-quality').then(r => r.text()),
     ]);
 
-    // Get the latest snapshot by comparing timestamps (timeline is sorted newest first)
-    const allH1 = h1Data?.timeline || [];
-    const allM15 = m15Data?.timeline || [];
+    // Extract JSON data from pages
+    const h1Match = h1Page.match(/_sbData = ({.*?"timeline".*?});/s);
+    const m15Match = m15Page.match(/_mqData = ({.*?"timeline".*?});/s);
 
-    // Take latest 2 from each, but ensure we're getting truly recent data
-    const h1Snaps = allH1.slice(0, 2);
-    const m15Snaps = allM15.slice(0, 2);
+    let h1Data = { timeline: [] };
+    let m15Data = { timeline: [] };
+
+    if (h1Match) try { h1Data = JSON.parse(h1Match[1]); } catch (e) {}
+    if (m15Match) try { m15Data = JSON.parse(m15Match[1]); } catch (e) {}
+
+    // Take latest 2 snapshots from each
+    const h1Snaps = (h1Data?.timeline || []).slice(0, 2);
+    const m15Snaps = (m15Data?.timeline || []).slice(0, 2);
 
     if (!h1Snaps.length && !m15Snaps.length) {
       el.innerHTML = '<p class="empty-state">No quality data available.</p>';
