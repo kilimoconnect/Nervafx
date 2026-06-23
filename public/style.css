@@ -8020,6 +8020,15 @@ body::after {
   font-size: 8px; font-weight: 700; padding: 1px 4px; border-radius: 3px;
   background: rgba(168,85,247,0.2); color: #a855f7;
 }
+.qp-dayhl {
+  font-size: 9px; font-weight: 900; padding: 2px 6px; border-radius: 3px;
+  background: rgba(59,130,246,0.35); color: #3b82f6; letter-spacing: 0.2px;
+  border: 1px solid rgba(59,130,246,0.5); animation: dayHLPulse 1.5s ease-in-out infinite;
+}
+@keyframes dayHLPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0.4); }
+  50% { box-shadow: 0 0 6px 1px rgba(59,130,246,0.3); }
+}
 .qp-trend {
   font-size: 9px; font-weight: 800; color: #fbbf24;
 }

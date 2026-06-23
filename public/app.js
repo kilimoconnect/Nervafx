@@ -3779,6 +3779,8 @@ function _renderQpCard(snap, type) {
       <span class="qp-dir ${dcCls}">${dc}</span>
       <span class="qp-score" style="color:${color}">${p.quality}%</span>
       <span class="qp-cls" style="color:${clsColor}">${clsLabel}</span>
+      ${p.dayHigh ? '<span class="qp-dayhl">⬆ DAY HIGH</span>' : ''}
+      ${p.dayLow ? '<span class="qp-dayhl">⬇ DAY LOW</span>' : ''}
       ${p.trending ? `<span class="qp-trend">▲ ${trendLabel}</span>` : ''}
       ${p.m15Quality != null ? `<span class="qp-m15" style="color:${_qpColor(p.m15Quality)}">M15:${p.m15Quality}%</span>` : ''}
       ${p.structureBreak ? '<span class="qp-brk">BRK</span>' : ''}

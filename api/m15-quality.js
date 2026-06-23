@@ -128,14 +128,33 @@ module.exports = async function handler(req, res) {
     // qualityMap[time][instrument] = quality score (number)
     const m15Snapshots = {};
     const qualityMap = {};
+    const dayHighLow = {}; // dayHighLow[inst] = { dayStr, high, low }
 
     for (const inst of INSTRUMENTS) {
       const candles = candlesByInst[inst];
+      let currentDayStr = null;
+      let dayHigh = -Infinity;
+      let dayLow = Infinity;
+
       for (let i = 9; i < candles.length; i++) {
         const q = computeQuality(candles.slice(i - 9, i + 1));
         if (!q) continue;
 
         const time = candles[i].time;
+        const dayStr = time.split('T')[0]; // YYYY-MM-DD
+
+        // Reset day tracking on new day
+        if (dayStr !== currentDayStr) {
+          currentDayStr = dayStr;
+          dayHigh = -Infinity;
+          dayLow = Infinity;
+        }
+
+        // Track day high/low
+        dayHigh = Math.max(dayHigh, candles[i].high);
+        dayLow = Math.min(dayLow, candles[i].low);
+        dayHighLow[inst] = { dayStr, high: dayHigh, low: dayLow };
+
         if (!m15Snapshots[time]) {
           const d = new Date(time);
           m15Snapshots[time] = { time, session: getSession(d.getUTCHours()), pairs: {} };
@@ -174,8 +193,15 @@ module.exports = async function handler(req, res) {
 
     const timeline = sortedSnaps.map(snap => {
       const trending = new Set(trendingSets[snap.time] || []);
+      const dayStr = snap.time.split('T')[0];
       const pairArr = Object.entries(snap.pairs)
-        .map(([pair, q]) => ({ pair, ...q, trending: trending.has(pair) }))
+        .map(([pair, q]) => {
+          const dayHL = dayHighLow[pair] || {};
+          const candle = candlesByInst[pair]?.find(c => c.time === snap.time);
+          const isDayHigh = candle && dayHL.dayStr === dayStr && candle.high === dayHL.high;
+          const isDayLow = candle && dayHL.dayStr === dayStr && candle.low === dayHL.low;
+          return { pair, ...q, trending: trending.has(pair), dayHigh: isDayHigh, dayLow: isDayLow };
+        })
         .sort((a, b) => {
           if (a.trending !== b.trending) return a.trending ? -1 : 1;
           return b.quality - a.quality;

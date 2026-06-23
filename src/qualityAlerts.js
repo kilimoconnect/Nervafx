@@ -210,6 +210,12 @@ function qualityAlertEmail(h1Pairs, m15Pairs, h1Time, m15Time, timezone) {
     const entryHtml = p.entryValid
       ? `<td style="padding:0 0 0 6px"><span style="display:inline-block;background:rgba(34,197,94,0.15);color:#22c55e;font-size:10px;font-weight:700;padding:2px 6px;border-radius:3px">ENTRY</span></td>`
       : '';
+    const dayHighHtml = p.dayHigh
+      ? `<td style="padding:0 0 0 6px"><span style="display:inline-block;background:rgba(59,130,246,0.25);color:#3b82f6;font-size:10px;font-weight:900;padding:2px 6px;border-radius:3px;border:1px solid rgba(59,130,246,0.5)"><b>⬆ DAY HIGH</b></span></td>`
+      : '';
+    const dayLowHtml = p.dayLow
+      ? `<td style="padding:0 0 0 6px"><span style="display:inline-block;background:rgba(59,130,246,0.25);color:#3b82f6;font-size:10px;font-weight:900;padding:2px 6px;border-radius:3px;border:1px solid rgba(59,130,246,0.5)"><b>⬇ DAY LOW</b></span></td>`
+      : '';
     const trendHtml = p.trending
       ? `<td style="padding:0 0 0 6px"><span style="display:inline-block;background:rgba(251,191,36,0.15);color:#fbbf24;font-size:10px;font-weight:700;padding:2px 6px;border-radius:3px">▲ ${type === 'h1' ? '2x' : '3x'}</span></td>`
       : '';
@@ -227,6 +233,7 @@ function qualityAlertEmail(h1Pairs, m15Pairs, h1Time, m15Time, timezone) {
               <td style="padding:0 0 0 8px"><span style="color:${clsColor(p.classification)};font-weight:800;font-size:15px">${p.quality}%</span></td>
               <td style="padding:0 0 0 6px"><span style="display:inline-block;background:${clsColor(p.classification)}15;color:${clsColor(p.classification)};font-size:10px;font-weight:600;padding:2px 7px;border-radius:3px">${p.classification.replace('_', ' ')}</span></td>
               ${entryHtml}
+              ${dayHighHtml}${dayLowHtml}
               ${trendHtml}
             </tr></table>
             <table cellpadding="0" cellspacing="0" border="0" style="margin-top:6px"><tr>
