@@ -209,15 +209,34 @@ module.exports = async function handler(req, res) {
     const qualityMap = {};
     const breakMap = {};
     const m15QualityMap = {};
+    const dayHighLow = {}; // dayHighLow[inst] = { dayStr, high, low }
 
     for (const inst of INSTRUMENTS) {
       const candles = candlesByInst[inst];
       const m15Candles = m15ByInst[inst] || [];
+      let currentDayStr = null;
+      let dayHigh = -Infinity;
+      let dayLow = Infinity;
+
       for (let i = 5; i < candles.length; i++) {
         const q = computeH1Quality(candles.slice(i - 5, i + 1));
         if (!q) continue;
 
         const time = candles[i].time;
+        const dayStr = time.split('T')[0]; // YYYY-MM-DD
+
+        // Reset day tracking on new day
+        if (dayStr !== currentDayStr) {
+          currentDayStr = dayStr;
+          dayHigh = -Infinity;
+          dayLow = Infinity;
+        }
+
+        // Track day high/low
+        dayHigh = Math.max(dayHigh, candles[i].high);
+        dayLow = Math.min(dayLow, candles[i].low);
+        dayHighLow[inst] = { dayStr, high: dayHigh, low: dayLow };
+
         if (!h1Snapshots[time]) {
           const d = new Date(time);
           h1Snapshots[time] = { time, session: getSession(d.getUTCHours()), pairs: {} };
@@ -289,8 +308,18 @@ module.exports = async function handler(req, res) {
       const trending = new Set(trendingSets[snap.time] || []);
       const breaks = breakMap[snap.time] || {};
       const m15q = m15QualityMap[snap.time] || {};
+      const dayStr = snap.time.split('T')[0];
       const pairArr = Object.entries(snap.pairs)
-        .map(([pair, q]) => ({ pair, ...q, trending: trending.has(pair), structureBreak: !!breaks[pair], m15Quality: m15q[pair] || 0 }))
+        .map(([pair, q]) => {
+          const dayHL = dayHighLow[pair] || {};
+          const candle = candlesByInst[pair]?.find(c => c.time === snap.time);
+          const isDayHigh = candle && dayHL.dayStr === dayStr && candle.high === dayHL.high;
+          const isDayLow = candle && dayHL.dayStr === dayStr && candle.low === dayHL.low;
+          return {
+            pair, ...q, trending: trending.has(pair), structureBreak: !!breaks[pair],
+            m15Quality: m15q[pair] || 0, dayHigh: isDayHigh, dayLow: isDayLow
+          };
+        })
         .sort((a, b) => {
           if (a.structureBreak !== b.structureBreak) return a.structureBreak ? -1 : 1;
           if (a.m15Quality !== b.m15Quality) return b.m15Quality - a.m15Quality;

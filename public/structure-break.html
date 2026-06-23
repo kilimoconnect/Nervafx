@@ -115,6 +115,10 @@
       font-size: 8px; font-weight: 700; padding: 1px 5px; border-radius: 3px;
       background: rgba(168,85,247,0.2); color: #a855f7;
     }
+    .mq-dayhl-badge {
+      font-size: 8px; font-weight: 700; padding: 1px 5px; border-radius: 3px;
+      background: rgba(59,130,246,0.2); color: #3b82f6;
+    }
     .mq-trend-badge {
       font-size: 9px; font-weight: 800; padding: 2px 8px; border-radius: 4px;
       background: rgba(251,191,36,0.25); color: #fbbf24;
@@ -300,6 +304,8 @@ function render() {
       const barColor = qColor(p.classification);
       const entryBadge = p.entryValid ? ' <span class="mq-entry-badge">ENTRY</span>' : '';
       const breakBadge = p.structureBreak ? ' <span class="mq-break-badge">BRK</span>' : '';
+      const dayHighBadge = p.dayHigh ? ' <span class="mq-dayhl-badge">⬆ HIGH</span>' : '';
+      const dayLowBadge = p.dayLow ? ' <span class="mq-dayhl-badge">⬇ LOW</span>' : '';
       const isTrending = p.trending;
       const trendBadge = isTrending ? ' <span class="mq-trend-badge">▲ 2x</span>' : '';
 
@@ -308,7 +314,7 @@ function render() {
         <span class="mq-pair-name">${p.pair.replace('_','/')}</span>
         <span class="mq-dir-tag ${dc}">${p.direction === 'BULLISH' ? 'BUY' : p.direction === 'BEARISH' ? 'SELL' : '—'}</span>
         <span class="mq-q-score" style="color:${barColor}">${p.quality}%</span>
-        <span class="mq-badge ${cls}">${p.classification.replace('_',' ')}</span>${entryBadge}${breakBadge}${trendBadge}
+        <span class="mq-badge ${cls}">${p.classification.replace('_',' ')}</span>${entryBadge}${breakBadge}${dayHighBadge}${dayLowBadge}${trendBadge}
         <span class="mq-metrics">
           <span>M15:<b style="color:${p.m15Quality >= 65 ? '#22c55e' : p.m15Quality >= 40 ? '#3b82f6' : '#ef4444'}">${p.m15Quality}%</b></span>
           <span>D:<b>${p.directionScore > 0 ? '+' : ''}${p.directionScore}</b></span>
