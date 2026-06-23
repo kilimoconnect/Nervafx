@@ -8023,13 +8023,10 @@ body::after {
 .qp-trend {
   font-size: 9px; font-weight: 800; color: #fbbf24;
 }
-.qp-metrics {
-  display: flex; gap: 8px; padding: 0 0 4px 20px;
-  font-size: 10px; color: var(--text-muted);
-}
-.qp-metric { font-weight: 600; }
+.qp-metric { font-size: 10px; font-weight: 600; color: var(--text-muted); }
 @media (max-width: 600px) {
   .qp-grid { grid-template-columns: 1fr; }
   .qp-pair-name { min-width: 50px; font-size: 10px; }
-  .qp-metrics { padding-left: 16px; font-size: 9px; }
+  .qp-pair { flex-wrap: wrap; }
+  .qp-metric { font-size: 9px; }
 }

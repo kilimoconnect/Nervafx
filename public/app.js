@@ -3869,8 +3869,6 @@ function _renderQpCard(snap, type) {
       ${p.trending ? `<span class="qp-trend">▲ ${trendLabel}</span>` : ''}
       ${p.m15Quality != null ? `<span class="qp-m15" style="color:${_qpColor(p.m15Quality)}">M15:${p.m15Quality}%</span>` : ''}
       ${p.structureBreak ? '<span class="qp-brk">BRK</span>' : ''}
-    </div>
-    <div class="qp-metrics">
       <span class="qp-metric">D:${dSign}${p.directionScore || 0}</span>
       <span class="qp-metric">I:${p.impulseStrength || 0}</span>
       <span class="qp-metric">W:${p.wickCleanliness || 0}</span>
