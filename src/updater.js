@@ -185,6 +185,7 @@ async function m15Update() {
   await step('autotrader',          () => evaluateAutoTrader(supabase));
   await step('m15_energy',        () => calculateM15Energy());
   await step('flow_perf',         () => calculateFlowPerformance());
+  await step('quality_alerts',    () => sendQualityAlerts());
 
   console.log('[M15-UPDATE] Complete.');
   return { status: 'OK' };
