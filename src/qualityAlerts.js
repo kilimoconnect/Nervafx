@@ -105,7 +105,7 @@ function getLatestH1Pairs(h1ByInst) {
   const prev = times[1] || null;
   const pairs = Object.entries(snapshots[latest])
     .map(([pair, q]) => ({ pair, ...q }))
-    .filter(p => p.quality >= 30)
+    .filter(p => p.quality >= 30 && p.direction !== 'NEUTRAL')
     .sort((a, b) => b.quality - a.quality)
     .slice(0, 5);
 
@@ -165,6 +165,7 @@ function getLatestM15Pairs(m15ByInst) {
 
   const pairs = Object.entries(snapshots[latest])
     .map(([pair, q]) => ({ pair, ...q, trending: trendingSet.has(pair) }))
+    .filter(p => p.direction !== 'NEUTRAL')
     .sort((a, b) => {
       if (a.trending !== b.trending) return a.trending ? -1 : 1;
       return b.quality - a.quality;
