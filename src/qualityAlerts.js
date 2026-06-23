@@ -86,7 +86,7 @@ async function fetchCandles(sb, timeframe, since) {
   return byInst;
 }
 
-function getLatestH1Pairs(h1ByInst) {
+function getLatestH1Pairs(h1ByInst, m15ByInst) {
   const snapshots = {};
   for (const inst of INSTRUMENTS) {
     const candles = h1ByInst[inst] || [];
@@ -98,14 +98,33 @@ function getLatestH1Pairs(h1ByInst) {
       snapshots[time][inst] = q;
     }
   }
+
+  // Compute M15 quality at each H1 timestamp for cross-filtering
+  const m15QualityAt = {};
+  for (const inst of INSTRUMENTS) {
+    const candles = m15ByInst[inst] || [];
+    if (candles.length < 10) continue;
+    for (const time of Object.keys(snapshots)) {
+      const t = new Date(time).getTime();
+      const before = candles.filter(c => new Date(c.time).getTime() <= t);
+      if (before.length < 10) continue;
+      const q = computeM15Quality(before.slice(-10));
+      if (q) {
+        if (!m15QualityAt[time]) m15QualityAt[time] = {};
+        m15QualityAt[time][inst] = q.quality;
+      }
+    }
+  }
+
   const times = Object.keys(snapshots).sort((a, b) => b.localeCompare(a));
   if (!times.length) return { pairs: [], time: null };
 
   const latest = times[0];
   const prev = times[1] || null;
+  const m15q = m15QualityAt[latest] || {};
   const pairs = Object.entries(snapshots[latest])
-    .map(([pair, q]) => ({ pair, ...q }))
-    .filter(p => p.quality >= 30 && p.direction !== 'NEUTRAL')
+    .map(([pair, q]) => ({ pair, ...q, m15Quality: m15q[pair] || 0 }))
+    .filter(p => p.quality >= 30 && p.direction !== 'NEUTRAL' && p.m15Quality >= 40)
     .sort((a, b) => b.quality - a.quality)
     .slice(0, 5);
 
@@ -175,14 +194,21 @@ function getLatestM15Pairs(m15ByInst) {
   return { pairs, time: latest };
 }
 
-function qualityAlertEmail(h1Pairs, m15Pairs, h1Time, m15Time) {
+function qualityAlertEmail(h1Pairs, m15Pairs, h1Time, m15Time, timezone) {
+  const tz = timezone || 'UTC';
   const fmtTime = (iso) => {
     if (!iso) return '';
-    const d = new Date(iso);
-    const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-    const hh = String(d.getUTCHours()).padStart(2, '0');
-    const mm = String(d.getUTCMinutes()).padStart(2, '0');
-    return `${days[d.getUTCDay()]} ${hh}:${mm} UTC`;
+    try {
+      const d = new Date(iso);
+      const opts = { weekday: 'short', hour: '2-digit', minute: '2-digit', timeZone: tz, hour12: false };
+      const formatted = d.toLocaleString('en-US', opts);
+      const tzShort = d.toLocaleString('en-US', { timeZone: tz, timeZoneName: 'short' }).split(' ').pop();
+      return `${formatted} ${tzShort}`;
+    } catch (_) {
+      const d = new Date(iso);
+      const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+      return `${days[d.getUTCDay()]} ${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')} UTC`;
+    }
   };
 
   const clsColor = (cls) => cls === 'VERY_CLEAN' ? '#4ade80' : cls === 'TRADEABLE' ? '#60a5fa' : cls === 'WEAK' ? '#fbbf24' : '#f87171';
@@ -272,7 +298,7 @@ async function sendQualityAlerts(sb) {
     fetchCandles(sb, 'M15', m15Since),
   ]);
 
-  const { pairs: h1Pairs, time: h1Time } = getLatestH1Pairs(h1ByInst);
+  const { pairs: h1Pairs, time: h1Time } = getLatestH1Pairs(h1ByInst, m15ByInst);
   const { pairs: m15Pairs, time: m15Time } = getLatestM15Pairs(m15ByInst);
 
   if (!h1Pairs.length && !m15Pairs.length) {
@@ -284,23 +310,38 @@ async function sendQualityAlerts(sb) {
   const { data: users } = await sb.auth.admin.listUsers({ perPage: 1000 });
   if (!users?.users?.length) return { sent: 0 };
 
-  const { data: prefs } = await sb
-    .from('email_preferences')
-    .select('user_id, signal_alerts, unsubscribed, notification_email');
+  const [{ data: prefs }, { data: profiles }] = await Promise.all([
+    sb.from('email_preferences').select('user_id, signal_alerts, unsubscribed, notification_email'),
+    sb.from('user_profiles').select('id, timezone'),
+  ]);
   const prefMap = {};
   for (const p of prefs || []) prefMap[p.user_id] = p;
+  const tzMap = {};
+  for (const p of profiles || []) tzMap[p.id] = p.timezone;
 
   const recipients = users.users.filter(u => {
     const p = prefMap[u.id];
     if (p?.unsubscribed) return false;
     if (p?.signal_alerts === false) return false;
     return true;
-  }).map(u => ({ email: prefMap[u.id]?.notification_email || u.email }));
+  }).map(u => ({
+    email: prefMap[u.id]?.notification_email || u.email,
+    timezone: tzMap[u.id] || 'UTC',
+  }));
 
   if (!recipients.length) return { sent: 0 };
 
-  const template = qualityAlertEmail(h1Pairs, m15Pairs, h1Time, m15Time);
-  await sendBulk(recipients, template);
+  // Group recipients by timezone to batch emails
+  const byTz = {};
+  for (const r of recipients) {
+    if (!byTz[r.timezone]) byTz[r.timezone] = [];
+    byTz[r.timezone].push(r);
+  }
+
+  for (const [tz, group] of Object.entries(byTz)) {
+    const template = qualityAlertEmail(h1Pairs, m15Pairs, h1Time, m15Time, tz);
+    await sendBulk(group, template);
+  }
   console.log(`[QUALITY-ALERTS] Sent to ${recipients.length} users — H1:${h1Pairs.length} M15:${m15Pairs.length}`);
   return { sent: recipients.length, h1: h1Pairs.length, m15: m15Pairs.length };
 }
