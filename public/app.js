@@ -144,11 +144,7 @@ let strengthData = null;
 let _m15DataCache = null;   // Cached M15 spreads for flow ranking across components
 let _volDataCache = {};     // Cached volume analysis: instrument → latest volume row
 let _firstLoad = true;
-// Currencies that currently meet the Currency Signals threshold (strong + weak combined).
-// Set<string> — populated by renderCurrencySignals() before the section renderers run.
 let _csigCurrencies = new Set();
-// True once renderCurrencySignals() has processed real strength data.
-// Distinguishes "still loading" (pass-through) from "loaded but nothing qualifies" (filter out).
 let _csigDataLoaded = false;
 
 // Helper: get user-local date for a hourly row
@@ -965,6 +961,7 @@ function _setupAnalysis(s) {
 // ─── Live Opportunities ───────────────────────────────────────────────────────
 
 function renderLiveOpportunities(states) {
+  return; // Signals tab removed
   const el = document.getElementById('live-opportunities');
   if (!el) return;
 
@@ -1046,6 +1043,7 @@ function computeTopSetups(states) {
 }
 
 function renderTopSetups(states) {
+  return; // Signals tab removed
   const el = document.getElementById('top-setups');
   if (!el) return;
   const noSignal = _csigDataLoaded && !_csigCurrencies.size;
@@ -1208,6 +1206,8 @@ function renderSignals(data, statesArr, journalEntries) {
 const CS_THRESHOLD = 0.00100; // 0.00100 combined AND 2H must both exceed this
 
 function renderCurrencySignals(data) {
+  _csigDataLoaded = true;
+  return; // Signals tab removed
   const el = document.getElementById('currency-signals-body');
   if (!el) return;
 
@@ -2890,7 +2890,8 @@ async function _energyRefreshTick() {
   }
 }
 
-function _scheduleEnergyRefresh(initialData) {
+function _scheduleEnergyRefresh(initialData) { return; // Signals tab removed
+
   // Clear any existing timer
   if (_energyRefreshTimer) { clearTimeout(_energyRefreshTimer); _energyRefreshTimer = null; }
   _energyRetryCount = 0;
@@ -2905,7 +2906,7 @@ function _scheduleEnergyRefresh(initialData) {
   }
 }
 
-async function renderEnergySignals(data) {
+async function renderEnergySignals(data) { return; // Signals tab removed
   if (!data) return;
   const { currencies, pairs, energy, thresholdMet, slots, currentSession } = data;
 
@@ -3542,12 +3543,7 @@ function _renderCandlestickChart(ctx, candles, levels, isJPY) {
 
 // ─── Compression Breakout Structure Watch ─────────────────────────────────────
 
-async function fetchCompressionBreakout() {
-  try {
-    const data = await api('/api/compression-breakout');
-    renderCompressionBreakout(data);
-  } catch (_) {}
-}
+async function fetchCompressionBreakout() { return; } // Signals tab removed
 
 async function renderCompressionBreakout(data) {
   if (!data) return;
@@ -7410,9 +7406,8 @@ async function refresh() {
     // Wait for plan to load first (prevents 403 cascade on cold start)
     if (_userPlanReady) await _userPlanReady;
 
-    const [strength, signals, states, risk, actions, quality, spreads, m15Data, sessionData, journalData, profileData, volData, fpData, energySignals] = await Promise.all([
+    const [strength, states, risk, actions, quality, spreads, m15Data, sessionData, journalData, profileData, volData, fpData] = await Promise.all([
       api('/api/strength').catch(() => ({ currencies: [] })),
-      api('/api/signals').catch(() => ({ signals: [] })),
       api('/api/states').catch(() => ({ states: [] })),
       api('/api/risk').catch(() => ({})),
       api('/api/actions').catch(() => ({ actions: [] })),
@@ -7424,7 +7419,6 @@ async function refresh() {
       api('/api/profile').catch(() => ({})),
       api('/api/volume-analysis?days=2').catch(() => ({ rows: [] })),
       api('/api/flow-performance?days=1').catch(() => ({ rows: [] })),
-      api('/api/energy-signals').catch(() => ({ currencies: [], pairs: [], energy: 0, thresholdMet: false })),
     ]);
 
     // Fetch news calendar (non-blocking) — must run AFTER _userTz is set
@@ -7454,16 +7448,11 @@ async function refresh() {
     _m15DataCache = m15Data;   // Cache for ME card flow ranking + scanner
     _volDataCache = _buildVolMap(volData);  // Cache volume analysis: instrument → latest row
     _fpPrecomputed = fpData?.rows || [];    // Pre-computed flow performance (free plan — all metrics baked in)
-    _energySignalsCache = energySignals;    // Energy signal pairs for Strength Flow + DE engine
-    _scheduleEnergyRefresh(energySignals);  // Auto-retry if empty, periodic background refresh
     applyV2Gate(); // Gate sections before render — will update once fetchMarketActivity resolves
     fetchMarketActivity(); // non-blocking — separate fetch, renders independently + updates V2 gate
-    // fetchMomentumSignal(); // disabled — momentum bar removed from header
     buildChart(strength, activeTF);
-    renderCurrencySignals(strength);          // must run first — populates _csigCurrencies
-    renderLiveOpportunities(states.states || []);
-    renderTopSetups(states.states || []);
-    renderSignals(signals, states.states || [], journalData?.entries || []);
+    renderCurrencySignals(strength);
+    renderSignals({ signals: [] }, states.states || [], journalData?.entries || []);
     renderStates(states, m15Data);
     renderSpreads(spreads);
     renderRanking12H(spreads, strength);
@@ -7474,8 +7463,6 @@ async function refresh() {
     renderActions(actions);
     renderQuality(quality);
     renderJournal(journalData);
-    renderEnergySignals(energySignals);
-    fetchCompressionBreakout(); // non-blocking
 
     document.getElementById('status-dot').className = 'status-dot online';
 

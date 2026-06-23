@@ -18,7 +18,7 @@ const { backfillStrength, calculateLatestStrength } = require('./strength');
 const { backfillSmooth } = require('./smooth');
 const { backfillSpreads, rankPairs } = require('./spread');
 const { backfillStates, printLatestStates } = require('./stateDetect');
-const { backfillSignals, printLatestSignals } = require('./signals');
+// signals.js removed
 const { backfillRiskChecks, printRiskReport } = require('./risk');
 const { analyzeActiveSetups } = require('./aiAnalysis');
 const { calculateLatestSentiment } = require('./riskSentiment');
@@ -82,9 +82,7 @@ async function phase1() {
   console.log('\n=== PHASE 5: BACKFILL STATES ===');
   await backfillStates();
 
-  // Step 9: Backfill signals
-  console.log('\n=== PHASE 6: BACKFILL SIGNALS ===');
-  await backfillSignals();
+  // Step 9: Signals removed
 
   // Step 10: Backfill risk checks
   console.log('\n=== PHASE 7: BACKFILL RISK CHECKS ===');
@@ -193,15 +191,6 @@ if (command === 'load') {
 } else if (command === 'market') {
   validate();
   printLatestStates().then(() => process.exit(0)).catch(err => { console.error(err); process.exit(1); });
-} else if (command === 'signal-backfill') {
-  validate();
-  backfillSignals().then(r => {
-    console.log(JSON.stringify(r, null, 2));
-    process.exit(0);
-  }).catch(err => { console.error(err); process.exit(1); });
-} else if (command === 'signals') {
-  validate();
-  printLatestSignals().then(() => process.exit(0)).catch(err => { console.error(err); process.exit(1); });
 } else if (command === 'risk-backfill') {
   validate();
   backfillRiskChecks().then(r => {

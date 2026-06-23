@@ -90,7 +90,6 @@
   <!-- TAB BAR -->
   <nav class="dash-tabs" id="dash-tabs">
     <button class="dash-tab active" data-tab="overview">Overview</button>
-    <button class="dash-tab" data-tab="signals">Signals</button>
     <button class="dash-tab" data-tab="intelligence">Intelligence</button>
     <button class="dash-tab" data-tab="backtest">Backtesting</button>
     <a href="/archive" class="dash-tab" style="text-decoration:none">Archive</a>
@@ -110,11 +109,6 @@
       <div id="quality-preview-display"><div class="me-loading"><span class="spinner"></span> Loading quality snapshots…</div></div>
     </section>
 
-    <section class="card span-3" id="section-market-activity">
-      <h2 class="card-title"><i data-lucide="zap"></i> Market Energy <span class="sub">energy cycle · expansion readiness · session intelligence</span></h2>
-      <div id="market-activity-display" class="ma-display"><div class="me-loading"><span class="spinner"></span> Loading market energy…</div></div>
-    </section>
-
     <section class="card span-3" id="section-news">
       <h2 class="card-title"><i data-lucide="newspaper"></i> Today's News <span class="sub" id="today-news-date"></span> <span id="today-news-next-badge" class="today-news-next-badge" style="display:none"></span></h2>
       <div class="today-news-header-row">
@@ -122,6 +116,11 @@
       </div>
       <div id="today-news-list"></div>
       <div id="news-more-row"></div>
+    </section>
+
+    <section class="card span-3" id="section-market-activity">
+      <h2 class="card-title"><i data-lucide="zap"></i> Market Energy <span class="sub">energy cycle · expansion readiness · session intelligence</span></h2>
+      <div id="market-activity-display" class="ma-display"><div class="me-loading"><span class="spinner"></span> Loading market energy…</div></div>
     </section>
 
     <section class="card" id="section-strength">
@@ -171,90 +170,7 @@
 
   </main>
 
-  <!-- ═══ TAB 2: SIGNALS ═══ -->
-  <main class="grid tab-panel" id="tab-signals" data-tab="signals">
-
-    <!-- ── Energy Status Banner ── -->
-    <section class="card span-full" id="section-energy-banner">
-      <div class="plan-lock-overlay" data-require="pro">
-        <span class="plan-lock-icon">⚡</span>
-        <span class="plan-lock-title">Direction Engine</span>
-        <span class="plan-lock-desc">6H currency strength direction analysis. See which currencies are strong vs weak and get phase-based entry signals on the best pairs.</span>
-        <ul class="plan-lock-features">
-          <li>6H strength sum threshold (≥30 pips triggers)</li>
-          <li>3H &amp; 6H currency direction alignment</li>
-          <li>M15 phase tracking: Pullback → Compression → Entry</li>
-        </ul>
-        <a href="/home.html#pricing" class="plan-lock-btn">Upgrade →</a>
-      </div>
-      <div class="es-banner" id="es-banner">
-        <div class="es-banner-left">
-          <div class="es-energy-ring" id="es-energy-ring">
-            <span class="es-energy-num" id="es-energy-num">--</span>
-          </div>
-          <div class="es-banner-info">
-            <h2 class="es-banner-title">Direction Engine</h2>
-            <span class="es-banner-status" id="es-banner-status">Waiting for data...</span>
-          </div>
-        </div>
-        <div class="es-banner-right" id="es-banner-right"></div>
-      </div>
-    </section>
-
-    <!-- ── Active Currencies: strong vs weak ── -->
-    <section class="card span-full" id="section-energy-currencies">
-      <div class="plan-lock-overlay" data-require="pro">
-        <span class="plan-lock-icon">💱</span>
-        <span class="plan-lock-title">Currency Direction</span>
-        <span class="plan-lock-desc">Energy-confirmed currency strength and weakness. See which currencies are driving the market and in which direction — updated every pipeline cycle.</span>
-        <ul class="plan-lock-features">
-          <li>Strong vs Weak currency grid</li>
-          <li>3H &amp; 6H smoothed strength values</li>
-          <li>Continuation &amp; reversal event detection</li>
-        </ul>
-        <a href="/home.html#pricing" class="plan-lock-btn">Upgrade →</a>
-      </div>
-      <h2 class="card-title"><i data-lucide="arrow-up-down"></i> Currency Direction</h2>
-      <div class="es-currencies" id="es-currencies">
-        <div class="es-no-data">Waiting for energy threshold...</div>
-      </div>
-    </section>
-
-    <!-- ── Active Signal Pairs ── -->
-    <section class="card span-full" id="section-energy-pairs">
-      <div class="plan-lock-overlay" data-require="pro">
-        <span class="plan-lock-icon">🎯</span>
-        <span class="plan-lock-title">Signal Pairs</span>
-        <span class="plan-lock-desc">Energy-driven pair monitoring with M15 phase detection. Track the best pairs from pullback through compression to entry — with volume, DE, and impulse analysis.</span>
-        <ul class="plan-lock-features">
-          <li>Phase-based monitoring: MONITORING → ENTRY</li>
-          <li>Volume participation &amp; efficiency analysis</li>
-          <li>Directional Efficiency (DE) quality scoring</li>
-        </ul>
-        <a href="/home.html#pricing" class="plan-lock-btn">Upgrade →</a>
-      </div>
-      <h2 class="card-title"><i data-lucide="crosshair"></i> Signal Pairs</h2>
-      <div class="es-pairs" id="es-pairs">
-        <div class="es-no-data">No active pairs</div>
-      </div>
-    </section>
-
-    <!-- ── Trade Approval ── -->
-    <section class="card span-full" id="section-compression-breakout">
-      <div class="plan-lock-overlay" data-require="pro">
-        <span class="plan-lock-icon">🎯</span>
-        <span class="plan-lock-title">Trade Approval</span>
-        <span class="plan-lock-desc">2-hour persistence validation on signal pairs — direction confirmed via 3H currency strength, entry triggered when M15 breaks past H1 reference level.</span>
-        <a href="/home.html#pricing" class="plan-lock-btn">Upgrade →</a>
-      </div>
-      <h2 class="card-title"><i data-lucide="target"></i> Trade Approval <span class="sub">Expansion → Validation → Entry</span></h2>
-      <div id="cb-baseline" style="margin-bottom:8px"></div>
-      <div id="cb-structures"></div>
-    </section>
-
-  </main>
-
-  <!-- ═══ TAB 4: INTELLIGENCE ═══ -->
+  <!-- ═══ TAB 3: INTELLIGENCE ═══ -->
   <main class="grid tab-panel" id="tab-intelligence" data-tab="intelligence">
 
     <section class="card span-3" id="section-journal">
@@ -530,7 +446,6 @@
                 <div class="upgrade-feat"><span class="uf-check">&#10003;</span> Full live dashboard</div>
                 <div class="upgrade-feat"><span class="uf-check">&#10003;</span> M15 + 3H + 6H + 12H currency strength</div>
                 <div class="upgrade-feat"><span class="uf-check">&#10003;</span> M15 impulse detection &amp; alert bar</div>
-                <div class="upgrade-feat"><span class="uf-check">&#10003;</span> Energy direction &amp; signal pairs</div>
                 <div class="upgrade-feat"><span class="uf-check">&#10003;</span> Flow performance ranking</div>
                 <div class="upgrade-feat"><span class="uf-check">&#10003;</span> 12-engine Market Energy system</div>
                 <div class="upgrade-feat"><span class="uf-check">&#10003;</span> Tradability score &amp; session grading</div>

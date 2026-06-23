@@ -15,7 +15,6 @@
 const { createClient } = require('@supabase/supabase-js');
 const { fetchCandles, sleep }            = require('../src/oanda');
 const { config }                         = require('../src/config');
-const { calculateLatestSignals }         = require('../src/signals');
 const { checkLatestSignals }             = require('../src/risk');
 const { calculateLatestM15Spreads }      = require('../src/m15');
 const { calculateLatestSentiment }       = require('../src/riskSentiment');
@@ -24,12 +23,9 @@ const { backfillSessionActivity }        = require('../src/sessionActivity');
 const { generateMarketNarrative }        = require('../src/narrativeEngine');
 const { writeJournalEntry }              = require('../src/journalEngine');
 const { runOutcomeReviews }              = require('../src/outcomeReview');
-const { sendSignalAlerts }              = require('../src/emailAlerts');
 const { calculateLatestVolumeAnalysis } = require('../src/volumeAnalysis');
 const { calculateFlowPerformance }     = require('../src/flowPerformance');
-const { calculateEnergyDirection }     = require('../src/energyDirection');
 const { evaluateAutoTrader }           = require('./autotrader-evaluate');
-const { runCompressionBreakout }       = require('../src/compressionBreakout');
 
 const ADMIN_ID = '140f3854-2c85-488c-8e0a-0f965d562654';
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
@@ -406,16 +402,12 @@ module.exports = async function handler(req, res) {
   await step('volume_analysis',  () => calculateLatestVolumeAnalysis());
   await step('sentiment',        () => calculateLatestSentiment());
   await step('session_backfill', () => backfillSessionActivity());
-  await step('energy_direction', () => calculateEnergyDirection());
-  await step('signals',          () => calculateLatestSignals());
   await step('risk',             () => checkLatestSignals());
   await step('actions',          () => processLatestActions());
   await step('flow_performance', () => calculateFlowPerformance());
   await step('market_narrative', () => generateMarketNarrative());
   await step('journal',          () => writeJournalEntry());
   await step('outcomes',         () => runOutcomeReviews());
-  await step('email_alerts',     () => sendSignalAlerts(sb));
-  await step('compression_breakout', () => runCompressionBreakout());
   await step('autotrader',      () => evaluateAutoTrader(sb));
 
   return res.json({

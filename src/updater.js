@@ -7,7 +7,6 @@ const { calculateLatestStrength } = require('./strength');
 const { smoothLatest } = require('./smooth');
 const { calculateLatestSpreads } = require('./spread');
 const { calculateLatestM15Spreads } = require('./m15');
-const { calculateLatestSignals } = require('./signals');
 const { checkLatestSignals } = require('./risk');
 const { processLatestActions } = require('./actions');
 const { calculateLatestSentiment } = require('./riskSentiment');
@@ -17,9 +16,6 @@ const { backfillSessionActivity } = require('./sessionActivity');
 const { generateMarketNarrative }        = require('./narrativeEngine');
 const { calculateFlowPerformance }       = require('./flowPerformance');
 const { calculateLatestVolumeAnalysis }  = require('./volumeAnalysis');
-const { calculateEnergyDirection }       = require('./energyDirection');
-const { sendSignalAlerts }              = require('./emailAlerts');
-const { runCompressionBreakout }       = require('./compressionBreakout');
 const { calculateM15Energy }           = require('./m15Energy');
 const { evaluateAutoTrader }           = require('../api/autotrader-evaluate');
 
@@ -150,19 +146,15 @@ async function hourlyUpdate() {
   await step('m15_spreads',   () => calculateLatestM15Spreads());
   await step('volume_analysis', () => calculateLatestVolumeAnalysis());
   await step('sentiment',     () => calculateLatestSentiment());
-  await step('signals',       () => calculateLatestSignals());
   await step('risk',          () => checkLatestSignals());
   await step('actions',       () => processLatestActions());
   await step('flow_perf',          () => calculateFlowPerformance());
   await step('session_activity',    () => backfillSessionActivity());
-  await step('energy_direction',   () => calculateEnergyDirection());
-  await step('compression_breakout', () => runCompressionBreakout());
   await step('autotrader',          () => evaluateAutoTrader(supabase));
   await step('m15_energy',          () => calculateM15Energy());
   await step('market_narrative',    () => generateMarketNarrative());
   await step('journal',             () => writeJournalEntry());
   await step('outcomes',         () => runOutcomeReviews());
-  await step('email_alerts',    () => sendSignalAlerts(supabase));
 
   console.log('[UPDATE] Complete.');
   return { status: 'CLEAN', check };
@@ -188,13 +180,9 @@ async function m15Update() {
   await step('strength',          () => calculateLatestStrength());
   await step('smooth',            () => smoothLatest());
   await step('spreads',           () => calculateLatestSpreads());
-  await step('energy_direction',  () => calculateEnergyDirection());
-  await step('compression_breakout', () => runCompressionBreakout());
   await step('autotrader',          () => evaluateAutoTrader(supabase));
   await step('m15_energy',        () => calculateM15Energy());
-  await step('signals',           () => calculateLatestSignals());
   await step('flow_perf',         () => calculateFlowPerformance());
-  await step('email_alerts',      () => sendSignalAlerts(supabase));
 
   console.log('[M15-UPDATE] Complete.');
   return { status: 'OK' };
@@ -206,8 +194,6 @@ async function runAnalysis() {
   await step('smooth',            () => smoothLatest());
   await step('spreads',           () => calculateLatestSpreads());
   await step('sentiment',         () => calculateLatestSentiment());
-  await step('energy_direction',  () => calculateEnergyDirection());
-  await step('signals',           () => calculateLatestSignals());
   await step('risk',              () => checkLatestSignals());
   await step('actions',           () => processLatestActions());
   console.log('[ANALYZE] Complete.');
