@@ -88,14 +88,24 @@ async function fetchCandles(sb, timeframe, since) {
 
 function getLatestH1Pairs(h1ByInst, m15ByInst) {
   const snapshots = {};
+  const breakMap = {};
   for (const inst of INSTRUMENTS) {
     const candles = h1ByInst[inst] || [];
     for (let i = 5; i < candles.length; i++) {
       const q = computeH1Quality(candles.slice(i - 5, i + 1));
       if (!q) continue;
       const time = candles[i].time;
-      if (!snapshots[time]) snapshots[time] = {};
+      if (!snapshots[time]) { snapshots[time] = {}; breakMap[time] = {}; }
       snapshots[time][inst] = q;
+
+      // Structure break: close above previous high (bullish) or below previous low (bearish)
+      const curr = candles[i];
+      const prev = candles[i - 1];
+      if (q.direction === 'BULLISH' && curr.close > prev.high) {
+        breakMap[time][inst] = true;
+      } else if (q.direction === 'BEARISH' && curr.close < prev.low) {
+        breakMap[time][inst] = true;
+      }
     }
   }
 
@@ -113,10 +123,14 @@ function getLatestH1Pairs(h1ByInst, m15ByInst) {
 
   const latest = times[0];
   const prev = times[1] || null;
+  const breaks = breakMap[latest] || {};
   const pairs = Object.entries(snapshots[latest])
-    .map(([pair, q]) => ({ pair, ...q, m15Quality: latestM15q[pair] || 0 }))
-    .filter(p => p.quality >= 30 && p.direction !== 'NEUTRAL' && p.m15Quality >= 40)
-    .sort((a, b) => b.quality - a.quality)
+    .map(([pair, q]) => ({ pair, ...q, m15Quality: latestM15q[pair] || 0, structureBreak: !!breaks[pair] }))
+    .filter(p => p.quality >= 40 && p.direction !== 'NEUTRAL' && p.m15Quality >= 40)
+    .sort((a, b) => {
+      if (a.structureBreak !== b.structureBreak) return a.structureBreak ? -1 : 1;
+      return b.quality - a.quality;
+    })
     .slice(0, 5);
 
   // Trending: check if pair was in top 5 previous hour too with quality > 40
@@ -287,11 +301,13 @@ async function sendQualityAlerts(sb) {
     return { sent: 0 };
   }
 
-  // Check if there are trending pairs in either timeframe
-  const h1Trending = h1Pairs.filter(p => p.trending).length;
-  const m15Trending = m15Pairs.filter(p => p.trending).length;
-  if (!h1Trending && !m15Trending) {
-    console.log('[QUALITY-ALERTS] No trending pairs in H1 or M15');
+  // Check if there are qualifying pairs:
+  // H1: pairs with structure break OR trending
+  // M15: pairs with ENTRY badge
+  const h1Qualified = h1Pairs.filter(p => p.structureBreak || p.trending).length;
+  const m15Qualified = m15Pairs.filter(p => p.trending).length; // trending = entryValid for M15
+  if (!h1Qualified && !m15Qualified) {
+    console.log('[QUALITY-ALERTS] No qualifying pairs in H1 or M15');
     return { sent: 0 };
   }
 
