@@ -142,29 +142,24 @@ function getLatestM15Pairs(m15ByInst) {
   if (!times.length) return { pairs: [], time: null };
 
   const latest = times[0];
-  // Trending: 4 consecutive in top 5 with quality >= 40 and increasing
-  const top5ByTime = {};
+  // Trending: #1 rank for 3 consecutive periods, quality >= 30 all 3, latest >= 50
   const qMap = {};
+  const rank1ByTime = {};
   for (const t of times) {
     qMap[t] = {};
     const sorted = Object.entries(snapshots[t])
       .map(([pair, q]) => { qMap[t][pair] = q.quality; return { pair, quality: q.quality }; })
-      .sort((a, b) => b.quality - a.quality)
-      .slice(0, 5);
-    top5ByTime[t] = new Set(sorted.map(p => p.pair));
+      .sort((a, b) => b.quality - a.quality);
+    if (sorted.length) rank1ByTime[t] = sorted[0].pair;
   }
 
   const trendingSet = new Set();
-  if (times.length >= 4) {
-    const t = times.slice(0, 4);
-    const sets = t.map(x => top5ByTime[x] || new Set());
-    const qs = t.map(x => qMap[x] || {});
-    for (const pair of sets[0]) {
-      if (sets[1].has(pair) && sets[2].has(pair) && sets[3].has(pair) &&
-          qs[0][pair] >= 40 &&
-          qs[0][pair] > qs[1][pair] && qs[1][pair] > qs[2][pair] && qs[2][pair] > qs[3][pair]) {
-        trendingSet.add(pair);
-      }
+  if (times.length >= 3) {
+    const t = times.slice(0, 3);
+    const r1 = t.map(x => rank1ByTime[x]);
+    if (r1[0] && r1[0] === r1[1] && r1[1] === r1[2] &&
+        qMap[t[0]][r1[0]] >= 50 && qMap[t[1]][r1[0]] >= 30 && qMap[t[2]][r1[0]] >= 30) {
+      trendingSet.add(r1[0]);
     }
   }
 
