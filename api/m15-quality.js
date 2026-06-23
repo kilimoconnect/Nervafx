@@ -103,6 +103,11 @@ module.exports = async function handler(req, res) {
     }
     const until = toDate ? new Date(toDate + 'T23:59:59Z').toISOString() : null;
 
+    // For day high/low calculation, also fetch from start of UTC day
+    const dayStartUTC = new Date(new Date().toISOString().split('T')[0] + 'T00:00:00Z');
+    const sinceForDayHL = dayStartUTC.toISOString();
+    const sinceToUse = new Date(Math.min(new Date(since).getTime(), new Date(sinceForDayHL).getTime())).toISOString();
+
     // Estimate span in hours for fetch limit calculation
     const spanHours = fromDate
       ? Math.ceil((new Date(until || Date.now()) - new Date(since)) / 3600000)
@@ -120,7 +125,7 @@ module.exports = async function handler(req, res) {
           .eq('instrument', inst)
           .eq('timeframe', 'M15')
           .eq('complete', true)
-          .gte('time', since);
+          .gte('time', sinceToUse);
         if (until) q = q.lte('time', until);
         const fetchLimit = Math.min(10000, spanHours * 4 + 20);
         const { data, error } = await q
