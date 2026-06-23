@@ -101,7 +101,7 @@ module.exports = async function handler(req, res) {
 
     const fromDate = req.query?.from || null;
     const toDate = req.query?.to || null;
-    const hoursParam = Math.min(2000, parseInt(req.query?.hours || '168', 10) || 168);
+    const hoursParam = Math.min(8760, parseInt(req.query?.hours || '168', 10) || 168);
 
     let since;
     if (fromDate) {

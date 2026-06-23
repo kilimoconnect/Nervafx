@@ -43,6 +43,18 @@
     }
     .mq-filter-btn:hover { background: rgba(255,255,255,0.08); }
     .mq-filter-btn.active { background: rgba(245,158,11,0.15); border-color: rgba(245,158,11,0.4); color: #f59e0b; }
+    .mq-date-input {
+      padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 600;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); font-family: inherit;
+    }
+    .mq-date-input::-webkit-calendar-picker-indicator { filter: invert(0.7); }
+    .mq-date-go {
+      padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700;
+      background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.4);
+      color: #f59e0b; cursor: pointer; font-family: inherit;
+    }
+    .mq-date-go:hover { background: rgba(245,158,11,0.25); }
 
     .mq-snap {
       margin-bottom: 14px; border-radius: 10px; overflow: hidden;
@@ -171,6 +183,8 @@ const SUPABASE_URL = 'https://lfmhnelejjrpqfbvosmt.supabase.co';
 let _mqData = null;
 let _mqHours = 168;
 let _mqSessionFilter = 'ALL';
+let _mqFromDate = '';
+let _mqToDate = '';
 
 async function api(path) {
   let token = localStorage.getItem('nfx_token');
@@ -200,7 +214,8 @@ async function api(path) {
 async function loadData() {
   try {
     document.getElementById('mq-root').innerHTML = '<div class="mq-loading"><span class="spin"></span> Analyzing H1 candle quality…</div>';
-    _mqData = await api(`/api/structure-break?hours=${_mqHours}`);
+    let url = _mqFromDate ? `/api/structure-break?from=${_mqFromDate}` + (_mqToDate ? `&to=${_mqToDate}` : '') : `/api/structure-break?hours=${_mqHours}`;
+    _mqData = await api(url);
     if (!_mqData) return;
     render();
   } catch (e) {
@@ -233,13 +248,20 @@ function render() {
 
   // Filters
   html += '<div class="mq-filters">';
-  for (const [label, hrs] of [['24H',24],['3D',72],['7D',168],['14D',336],['30D',720]]) {
-    html += `<button class="mq-filter-btn ${_mqHours===hrs?'active':''}" onclick="_mqHours=${hrs};loadData()">${label}</button>`;
+  for (const [label, hrs] of [['24H',24],['3D',72],['7D',168],['14D',336],['30D',720],['90D',2160],['1Y',8760]]) {
+    const isActive = !_mqFromDate && _mqHours === hrs;
+    html += `<button class="mq-filter-btn ${isActive?'active':''}" onclick="_mqHours=${hrs};_mqFromDate='';_mqToDate='';loadData()">${label}</button>`;
   }
   html += '<span style="width:12px"></span>';
   for (const s of ['ALL','ASIA','LONDON','NEW_YORK']) {
     html += `<button class="mq-filter-btn ${_mqSessionFilter===s?'active':''}" onclick="_mqSessionFilter='${s}';render()">${s === 'ALL' ? 'All' : s.replace('_',' ')}</button>`;
   }
+  html += '</div>';
+  html += '<div class="mq-filters">';
+  html += `<input type="date" class="mq-date-input" id="mq-from" value="${_mqFromDate}" />`;
+  html += `<span style="color:var(--text-muted);font-size:11px;">to</span>`;
+  html += `<input type="date" class="mq-date-input" id="mq-to" value="${_mqToDate}" />`;
+  html += `<button class="mq-date-go" onclick="const f=document.getElementById('mq-from').value;const t=document.getElementById('mq-to').value;if(f){_mqFromDate=f;_mqToDate=t;_mqHours=0;loadData();}">Go</button>`;
   html += '</div>';
 
   // Timeline
