@@ -161,27 +161,14 @@ module.exports = async function handler(req, res) {
       top5ByTime[snap.time] = new Set(sorted.map(p => p.pair));
     }
 
-    // Trending: pair must be #1 in latest, top 3 in previous 2 periods
-    const rank1ByTime = {};
-    const top3ByTime = {};
-    for (const snap of sortedSnaps) {
-      const sorted = Object.entries(snap.pairs)
-        .map(([pair, q]) => ({ pair, quality: q.quality }))
-        .sort((a, b) => b.quality - a.quality);
-      if (sorted.length) rank1ByTime[snap.time] = sorted[0].pair;
-      top3ByTime[snap.time] = new Set(sorted.slice(0, 3).map(p => p.pair));
-    }
+    // Trending: pairs with entryValid=true (D>50, I>50, W>55)
     const trendingSets = {};
-    for (let si = 0; si < sortedSnaps.length - 2; si++) {
-      const times = [0, 1, 2].map(j => sortedSnaps[si + j].time);
-      const rank1Latest = rank1ByTime[times[0]];
-      const inTop3Prev = top3ByTime[times[1]] && top3ByTime[times[2]];
-      const qualityLatest = qualityMap[times[0]] && qualityMap[times[0]][rank1Latest];
-      if (rank1Latest && inTop3Prev && qualityLatest >= 50 &&
-          top3ByTime[times[1]].has(rank1Latest) &&
-          top3ByTime[times[2]].has(rank1Latest)) {
-        if (!trendingSets[times[0]]) trendingSets[times[0]] = [];
-        trendingSets[times[0]].push(rank1Latest);
+    for (const snap of sortedSnaps) {
+      const trending = Object.entries(snap.pairs)
+        .filter(([pair, q]) => q.entryValid)
+        .map(([pair]) => pair);
+      if (trending.length) {
+        trendingSets[snap.time] = trending;
       }
     }
 

@@ -152,26 +152,12 @@ function getLatestM15Pairs(m15ByInst) {
   if (!times.length) return { pairs: [], time: null };
 
   const latest = times[0];
-  // Trending: #1 rank for 3 consecutive periods, quality >= 30 all 3, latest >= 50
-  const qMap = {};
-  const rank1ByTime = {};
-  for (const t of times) {
-    qMap[t] = {};
-    const sorted = Object.entries(snapshots[t])
-      .map(([pair, q]) => { qMap[t][pair] = q.quality; return { pair, quality: q.quality }; })
-      .sort((a, b) => b.quality - a.quality);
-    if (sorted.length) rank1ByTime[t] = sorted[0].pair;
-  }
-
-  const trendingSet = new Set();
-  if (times.length >= 3) {
-    const t = times.slice(0, 3);
-    const r1 = t.map(x => rank1ByTime[x]);
-    if (r1[0] && r1[0] === r1[1] && r1[1] === r1[2] &&
-        qMap[t[0]][r1[0]] >= 50 && qMap[t[1]][r1[0]] >= 30 && qMap[t[2]][r1[0]] >= 30) {
-      trendingSet.add(r1[0]);
-    }
-  }
+  // Trending: pairs with entryValid=true (D>50, I>50, W>55)
+  const trendingSet = new Set(
+    Object.entries(snapshots[latest])
+      .filter(([, q]) => q.entryValid)
+      .map(([pair]) => pair)
+  );
 
   const pairs = Object.entries(snapshots[latest])
     .map(([pair, q]) => ({ pair, ...q, trending: trendingSet.has(pair) }))
