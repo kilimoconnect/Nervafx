@@ -149,31 +149,38 @@ module.exports = async function handler(req, res) {
     // qualityMap[time][instrument] = quality score (number)
     const m15Snapshots = {};
     const qualityMap = {};
-    const dayHighLow = {}; // dayHighLow[inst][tz][dayStr] = { high, low }
+    // newExtreme[inst][time][tz] = { newHigh, newLow } — did this candle create a
+    // new running high/low of the day (in that timezone) at that moment?
+    const newExtreme = {};
+    const SESSIONS_TZ = ['ASIA', 'LONDON', 'NEW_YORK'].map(getSessionTimezone);
 
     for (const inst of INSTRUMENTS) {
       const candles = candlesByInst[inst];
-      const tzDayTracking = {}; // tzDayTracking[tz][dayStr] = { high, low }
+      newExtreme[inst] = {};
+      const running = {}; // running[tz] = { dayStr, high, low }
+
+      // Walk ALL candles chronologically to track running day extremes
+      for (let i = 0; i < candles.length; i++) {
+        const time = candles[i].time;
+        newExtreme[inst][time] = {};
+        for (const tz of SESSIONS_TZ) {
+          const dayStr = getDayInTimezone(time, tz);
+          if (!running[tz] || running[tz].dayStr !== dayStr) {
+            running[tz] = { dayStr, high: -Infinity, low: Infinity };
+          }
+          const isNewHigh = candles[i].high > running[tz].high;
+          const isNewLow = candles[i].low < running[tz].low;
+          running[tz].high = Math.max(running[tz].high, candles[i].high);
+          running[tz].low = Math.min(running[tz].low, candles[i].low);
+          newExtreme[inst][time][tz] = { newHigh: isNewHigh, newLow: isNewLow };
+        }
+      }
 
       for (let i = 9; i < candles.length; i++) {
         const q = computeQuality(candles.slice(i - 9, i + 1));
         if (!q) continue;
 
         const time = candles[i].time;
-
-        // Track day high/low for each timezone
-        for (const session of ['ASIA', 'LONDON', 'NEW_YORK']) {
-          const tz = getSessionTimezone(session);
-          const dayStr = getDayInTimezone(time, tz);
-
-          if (!tzDayTracking[tz]) tzDayTracking[tz] = {};
-          if (!tzDayTracking[tz][dayStr]) tzDayTracking[tz][dayStr] = { high: -Infinity, low: Infinity };
-
-          tzDayTracking[tz][dayStr].high = Math.max(tzDayTracking[tz][dayStr].high, candles[i].high);
-          tzDayTracking[tz][dayStr].low = Math.min(tzDayTracking[tz][dayStr].low, candles[i].low);
-        }
-        dayHighLow[inst] = tzDayTracking;
-
         if (!m15Snapshots[time]) {
           const d = new Date(time);
           m15Snapshots[time] = { time, session: getSession(d.getUTCHours()), pairs: {} };
@@ -213,17 +220,11 @@ module.exports = async function handler(req, res) {
     const timeline = sortedSnaps.map(snap => {
       const trending = new Set(trendingSets[snap.time] || []);
       const tz = getSessionTimezone(snap.session);
-      const dayStr = getDayInTimezone(snap.time, tz);
       const pairArr = Object.entries(snap.pairs)
         .map(([pair, q]) => {
-          // Only check the LATEST candle (at snap.time) for day high/low
-          const candle = candlesByInst[pair]?.find(c => c.time === snap.time);
-          const isLatestCandle = candle && candle.time === snap.time;
-          const tzDayTracking = dayHighLow[pair] || {};
-          const dayData = tzDayTracking[tz]?.[dayStr] || { high: -Infinity, low: Infinity };
-          const isDayHigh = isLatestCandle && candle.high === dayData.high;
-          const isDayLow = isLatestCandle && candle.low === dayData.low;
-          return { pair, ...q, trending: trending.has(pair), dayHigh: isDayHigh, dayLow: isDayLow };
+          // Did this candle create a new running high/low of the day at this moment?
+          const ext = newExtreme[pair]?.[snap.time]?.[tz] || {};
+          return { pair, ...q, trending: trending.has(pair), dayHigh: !!ext.newHigh, dayLow: !!ext.newLow };
         })
         .sort((a, b) => {
           if (a.trending !== b.trending) return a.trending ? -1 : 1;
