@@ -140,6 +140,21 @@
     .mq-loading { text-align: center; padding: 60px; color: var(--text-muted); font-size: 13px; }
     .mq-loading .spin { display: inline-block; width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.1); border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: middle; }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    .mq-date-row { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+    .mq-date-input {
+      padding: 5px 10px; border-radius: 6px; font-size: 11px; font-weight: 600;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text); font-family: inherit; outline: none; cursor: pointer;
+    }
+    .mq-date-input:focus { border-color: rgba(59,130,246,0.4); }
+    .mq-date-label { font-size: 10px; color: var(--text-muted); font-weight: 600; }
+    .mq-date-go {
+      padding: 5px 14px; border-radius: 6px; font-size: 11px; font-weight: 700;
+      background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.3);
+      color: #3b82f6; cursor: pointer; transition: all 0.15s;
+    }
+    .mq-date-go:hover { background: rgba(59,130,246,0.25); }
   </style>
 </head>
 <body>
@@ -162,6 +177,9 @@ const SUPABASE_URL = 'https://lfmhnelejjrpqfbvosmt.supabase.co';
 let _mqData = null;
 let _mqHours = 24;
 let _mqSessionFilter = 'ALL';
+let _mqFrom = null;
+let _mqTo = null;
+let _mqPreset = null;
 
 async function api(path) {
   let token = localStorage.getItem('nfx_token');
@@ -191,7 +209,13 @@ async function api(path) {
 async function loadData() {
   try {
     document.getElementById('mq-root').innerHTML = '<div class="mq-loading"><span class="spin"></span> Analyzing M15 candle quality…</div>';
-    _mqData = await api(`/api/m15-quality?hours=${_mqHours}`);
+    let url = `/api/m15-quality`;
+    if (_mqFrom && _mqTo) {
+      url += `?from=${_mqFrom}&to=${_mqTo}`;
+    } else {
+      url += `?hours=${_mqHours}`;
+    }
+    _mqData = await api(url);
     if (!_mqData) return;
     render();
   } catch (e) {
@@ -223,15 +247,32 @@ function render() {
   let html = '';
 
   // Filters
+  const isDateMode = _mqFrom && _mqTo;
   html += '<div class="mq-filters">';
   for (const [label, hrs] of [['6H',6],['12H',12],['24H',24],['3D',72],['7D',168]]) {
-    html += `<button class="mq-filter-btn ${_mqHours===hrs?'active':''}" onclick="_mqHours=${hrs};loadData()">${label}</button>`;
+    const active = !isDateMode && _mqHours === hrs;
+    html += `<button class="mq-filter-btn ${active?'active':''}" onclick="_mqFrom=null;_mqTo=null;_mqPreset=null;_mqHours=${hrs};loadData()">${label}</button>`;
+  }
+  for (const [label, days] of [['90D',90],['1Y',365]]) {
+    const active = !isDateMode && _mqHours === 0 && _mqPreset === label;
+    html += `<button class="mq-filter-btn ${active?'active':''}" onclick="setPreset('${label}',${days})">${label}</button>`;
   }
   html += '<span style="width:12px"></span>';
   for (const s of ['ALL','ASIA','LONDON','NEW_YORK']) {
     html += `<button class="mq-filter-btn ${_mqSessionFilter===s?'active':''}" onclick="_mqSessionFilter='${s}';render()">${s === 'ALL' ? 'All' : s.replace('_',' ')}</button>`;
   }
   html += '</div>';
+
+  // Date range selector
+  const today = new Date().toISOString().split('T')[0];
+  html += `<div class="mq-date-row">
+    <span class="mq-date-label">From</span>
+    <input type="date" class="mq-date-input" id="mq-from" value="${_mqFrom || ''}" max="${today}" />
+    <span class="mq-date-label">To</span>
+    <input type="date" class="mq-date-input" id="mq-to" value="${_mqTo || ''}" max="${today}" />
+    <button class="mq-date-go" onclick="applyDateRange()">Apply</button>
+    ${isDateMode ? '<button class="mq-filter-btn" onclick="_mqFrom=null;_mqTo=null;_mqPreset=null;_mqHours=24;loadData()">✕ Clear</button>' : ''}
+  </div>`;
 
   // Timeline
   let timeline = d.timeline;
@@ -283,6 +324,28 @@ function render() {
   }
 
   root.innerHTML = html;
+}
+
+function setPreset(label, days) {
+  const to = new Date().toISOString().split('T')[0];
+  const from = new Date(Date.now() - days * 86400000).toISOString().split('T')[0];
+  _mqFrom = from;
+  _mqTo = to;
+  _mqHours = 0;
+  _mqPreset = label;
+  loadData();
+}
+
+function applyDateRange() {
+  const from = document.getElementById('mq-from')?.value;
+  const to = document.getElementById('mq-to')?.value;
+  if (!from || !to) return;
+  if (from > to) { alert('From date must be before To date'); return; }
+  _mqFrom = from;
+  _mqTo = to;
+  _mqHours = 0;
+  _mqPreset = null;
+  loadData();
 }
 
 (async () => {

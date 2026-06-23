@@ -77,7 +77,7 @@ module.exports = async function handler(req, res) {
 
     const fromDate = req.query?.from || null;
     const toDate = req.query?.to || null;
-    const hoursParam = Math.min(720, parseInt(req.query?.hours || '24', 10) || 24);
+    const hoursParam = Math.min(8760, parseInt(req.query?.hours || '24', 10) || 24);
 
     let since;
     if (fromDate) {
@@ -86,6 +86,11 @@ module.exports = async function handler(req, res) {
       since = new Date(Date.now() - hoursParam * 3600000 - 10 * 15 * 60000).toISOString();
     }
     const until = toDate ? new Date(toDate + 'T23:59:59Z').toISOString() : null;
+
+    // Estimate span in hours for fetch limit calculation
+    const spanHours = fromDate
+      ? Math.ceil((new Date(until || Date.now()) - new Date(since)) / 3600000)
+      : hoursParam;
 
     const candlesByInst = {};
 
@@ -101,9 +106,10 @@ module.exports = async function handler(req, res) {
           .eq('complete', true)
           .gte('time', since);
         if (until) q = q.lte('time', until);
+        const fetchLimit = Math.min(10000, spanHours * 4 + 20);
         const { data, error } = await q
           .order('time', { ascending: true })
-          .limit(1000);
+          .limit(fetchLimit);
         if (error) throw error;
         return { inst, data: data || [] };
       }));
