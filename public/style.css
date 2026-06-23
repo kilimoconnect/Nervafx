@@ -8009,7 +8009,12 @@ body::after {
 .qp-buy { background: rgba(34,197,94,0.12); color: #22c55e; }
 .qp-sell { background: rgba(239,68,68,0.12); color: #ef4444; }
 .qp-neut { color: var(--text-muted); }
+.qp-rank {
+  font-size: 10px; font-weight: 800; color: var(--text-muted);
+  min-width: 14px; text-align: center;
+}
 .qp-score { font-weight: 800; font-size: 11px; }
+.qp-cls { font-size: 9px; font-weight: 700; }
 .qp-m15 { font-size: 9px; font-weight: 700; }
 .qp-brk {
   font-size: 8px; font-weight: 700; padding: 1px 4px; border-radius: 3px;
@@ -8018,7 +8023,13 @@ body::after {
 .qp-trend {
   font-size: 9px; font-weight: 800; color: #fbbf24;
 }
+.qp-metrics {
+  display: flex; gap: 8px; padding: 0 0 4px 20px;
+  font-size: 10px; color: var(--text-muted);
+}
+.qp-metric { font-weight: 600; }
 @media (max-width: 600px) {
   .qp-grid { grid-template-columns: 1fr; }
   .qp-pair-name { min-width: 50px; font-size: 10px; }
+  .qp-metrics { padding-left: 16px; font-size: 9px; }
 }

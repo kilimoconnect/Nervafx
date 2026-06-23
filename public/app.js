@@ -3850,17 +3850,30 @@ function _renderQpCard(snap, type) {
     return true;
   });
 
-  for (const p of pairs) {
+  for (let i = 0; i < pairs.length; i++) {
+    const p = pairs[i];
     const color = _qpColor(p.quality);
     const dc = p.direction === 'BULLISH' ? 'BUY' : p.direction === 'BEARISH' ? 'SELL' : '—';
     const dcCls = p.direction === 'BULLISH' ? 'qp-buy' : p.direction === 'BEARISH' ? 'qp-sell' : 'qp-neut';
+    const cls = p.classification || (p.quality >= 60 ? 'VERY_CLEAN' : p.quality >= 45 ? 'TRADEABLE' : p.quality >= 30 ? 'WEAK' : 'CHOPPY');
+    const clsLabel = cls.replace('_', ' ');
+    const clsColor = cls === 'VERY_CLEAN' ? '#22c55e' : cls === 'TRADEABLE' ? '#3b82f6' : cls === 'WEAK' ? '#eab308' : '#ef4444';
+    const trendLabel = type === 'h1' ? '2x' : '3x';
+    const dSign = (p.directionScore || 0) > 0 ? '+' : '';
     html += `<div class="qp-pair${p.trending ? ' qp-trending' : ''}">
+      <span class="qp-rank">${i + 1}</span>
       <span class="qp-pair-name">${p.pair.replace('_','/')}</span>
       <span class="qp-dir ${dcCls}">${dc}</span>
       <span class="qp-score" style="color:${color}">${p.quality}%</span>
+      <span class="qp-cls" style="color:${clsColor}">${clsLabel}</span>
+      ${p.trending ? `<span class="qp-trend">▲ ${trendLabel}</span>` : ''}
       ${p.m15Quality != null ? `<span class="qp-m15" style="color:${_qpColor(p.m15Quality)}">M15:${p.m15Quality}%</span>` : ''}
       ${p.structureBreak ? '<span class="qp-brk">BRK</span>' : ''}
-      ${p.trending ? '<span class="qp-trend">▲</span>' : ''}
+    </div>
+    <div class="qp-metrics">
+      <span class="qp-metric">D:${dSign}${p.directionScore || 0}</span>
+      <span class="qp-metric">I:${p.impulseStrength || 0}</span>
+      <span class="qp-metric">W:${p.wickCleanliness || 0}</span>
     </div>`;
   }
 
