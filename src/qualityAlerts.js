@@ -99,21 +99,13 @@ function getLatestH1Pairs(h1ByInst, m15ByInst) {
     }
   }
 
-  // Compute M15 quality at each H1 timestamp for cross-filtering
-  const m15QualityAt = {};
+  // Compute latest M15 quality per instrument for cross-filtering
+  const latestM15q = {};
   for (const inst of INSTRUMENTS) {
     const candles = m15ByInst[inst] || [];
     if (candles.length < 10) continue;
-    for (const time of Object.keys(snapshots)) {
-      const t = new Date(time).getTime();
-      const before = candles.filter(c => new Date(c.time).getTime() <= t);
-      if (before.length < 10) continue;
-      const q = computeM15Quality(before.slice(-10));
-      if (q) {
-        if (!m15QualityAt[time]) m15QualityAt[time] = {};
-        m15QualityAt[time][inst] = q.quality;
-      }
-    }
+    const q = computeM15Quality(candles.slice(-10));
+    if (q) latestM15q[inst] = q.quality;
   }
 
   const times = Object.keys(snapshots).sort((a, b) => b.localeCompare(a));
@@ -121,9 +113,8 @@ function getLatestH1Pairs(h1ByInst, m15ByInst) {
 
   const latest = times[0];
   const prev = times[1] || null;
-  const m15q = m15QualityAt[latest] || {};
   const pairs = Object.entries(snapshots[latest])
-    .map(([pair, q]) => ({ pair, ...q, m15Quality: m15q[pair] || 0 }))
+    .map(([pair, q]) => ({ pair, ...q, m15Quality: latestM15q[pair] || 0 }))
     .filter(p => p.quality >= 30 && p.direction !== 'NEUTRAL' && p.m15Quality >= 40)
     .sort((a, b) => b.quality - a.quality)
     .slice(0, 5);
