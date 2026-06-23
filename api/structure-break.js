@@ -129,6 +129,11 @@ module.exports = async function handler(req, res) {
     }
     const until = toDate ? new Date(toDate + 'T23:59:59Z').toISOString() : null;
 
+    // For day high/low calculation, also fetch from start of UTC day
+    const dayStartUTC = new Date(new Date().toISOString().split('T')[0] + 'T00:00:00Z');
+    const sinceForDayHL = dayStartUTC.toISOString();
+    const sinceToUse = new Date(Math.min(new Date(since).getTime(), new Date(sinceForDayHL).getTime())).toISOString();
+
     const candlesByInst = {};
 
     for (let b = 0; b < INSTRUMENTS.length; b += 7) {
@@ -140,7 +145,7 @@ module.exports = async function handler(req, res) {
           .eq('instrument', inst)
           .eq('timeframe', 'H1')
           .eq('complete', true)
-          .gte('time', since);
+          .gte('time', sinceToUse);
         if (until) q = q.lte('time', until);
         const { data, error } = await q
           .order('time', { ascending: true })
@@ -161,7 +166,7 @@ module.exports = async function handler(req, res) {
 
     // Fetch M15 candles in parallel
     const m15ByInst = {};
-    const m15Since = new Date(new Date(since).getTime() - 10 * 15 * 60000).toISOString();
+    const m15Since = new Date(new Date(sinceToUse).getTime() - 10 * 15 * 60000).toISOString();
     for (let b = 0; b < INSTRUMENTS.length; b += 7) {
       const batch = INSTRUMENTS.slice(b, b + 7);
       const results = await Promise.all(batch.map(async (inst) => {
