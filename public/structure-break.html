@@ -238,6 +238,12 @@ function render() {
         <span>avg <b style="color:${avgColor}">${snap.avgQuality}%</b></span>
         <span>clean <b style="color:#22c55e">${snap.veryClean}</b></span>
         <span>entry <b style="color:#22c55e">${snap.entryCount}</b></span>
+        ${snap.energy != null ? `<span>E:<b style="color:${snap.energy >= 60 ? '#22c55e' : snap.energy >= 40 ? '#eab308' : '#ef4444'}">${Math.round(snap.energy)}</b></span>` : ''}
+        ${snap.dispersion != null ? `<span>Dp:<b>${Math.round(snap.dispersion)}</b></span>` : ''}
+        ${snap.tradability != null ? `<span>T:<b style="color:${snap.tradability >= 60 ? '#22c55e' : snap.tradability >= 40 ? '#eab308' : '#ef4444'}">${Math.round(snap.tradability)}</b></span>` : ''}
+        ${snap.movement != null ? `<span>Mv:<b>${Math.round(snap.movement)}</b></span>` : ''}
+        ${snap.breadth != null ? `<span>Br:<b>${Math.round(snap.breadth)}</b></span>` : ''}
+        ${snap.agreement != null ? `<span>Ag:<b style="color:${snap.agreement >= 60 ? '#22c55e' : snap.agreement >= 40 ? '#eab308' : '#ef4444'}">${Math.round(snap.agreement)}</b></span>` : ''}
       </div>
     </div>`;
 

@@ -172,6 +172,39 @@ module.exports = async function handler(req, res) {
       }
     }
 
+    // Fetch energy data from hourly_session_activity
+    const energyMap = {};
+    {
+      const allRows = [];
+      const PAGE = 1000;
+      let pgOffset = 0;
+      while (true) {
+        let q = sb
+          .from('hourly_session_activity')
+          .select('time_utc, market_energy, dispersion_score, tradability_score, movement_score, breadth_score, agreement_score')
+          .gte('time_utc', since);
+        if (until) q = q.lte('time_utc', until);
+        const { data, error } = await q
+          .order('time_utc', { ascending: true })
+          .range(pgOffset, pgOffset + PAGE - 1);
+        if (error) throw error;
+        if (!data || !data.length) break;
+        allRows.push(...data);
+        if (data.length < PAGE) break;
+        pgOffset += PAGE;
+      }
+      for (const row of allRows) {
+        energyMap[row.time_utc] = {
+          energy: row.market_energy,
+          dispersion: row.dispersion_score,
+          tradability: row.tradability_score,
+          movement: row.movement_score,
+          breadth: row.breadth_score,
+          agreement: row.agreement_score,
+        };
+      }
+    }
+
     const h1Snapshots = {};
     const qualityMap = {};
     const breakMap = {};
@@ -264,6 +297,7 @@ module.exports = async function handler(req, res) {
           return b.quality - a.quality;
         });
 
+      const en = energyMap[snap.time] || {};
       return {
         time: snap.time,
         session: snap.session,
@@ -273,6 +307,12 @@ module.exports = async function handler(req, res) {
         avgQuality: pairArr.length ? Math.round(pairArr.reduce((s, p) => s + p.quality, 0) / pairArr.length) : 0,
         entryCount: pairArr.filter(p => p.entryValid).length,
         veryClean: pairArr.filter(p => p.classification === 'VERY_CLEAN').length,
+        energy: en.energy ?? null,
+        dispersion: en.dispersion ?? null,
+        tradability: en.tradability ?? null,
+        movement: en.movement ?? null,
+        breadth: en.breadth ?? null,
+        agreement: en.agreement ?? null,
       };
     });
 
