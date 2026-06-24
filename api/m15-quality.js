@@ -149,6 +149,7 @@ module.exports = async function handler(req, res) {
     // qualityMap[time][instrument] = quality score (number)
     const m15Snapshots = {};
     const qualityMap = {};
+    const breakMap = {}; // breakMap[time][inst] = true (structure break)
     // newExtreme[inst][time][tz] = { newHigh, newLow } — did this candle create a
     // new running high/low of the day (in that timezone) at that moment?
     const newExtreme = {};
@@ -185,9 +186,19 @@ module.exports = async function handler(req, res) {
           const d = new Date(time);
           m15Snapshots[time] = { time, session: getSession(d.getUTCHours()), pairs: {} };
           qualityMap[time] = {};
+          breakMap[time] = {};
         }
         m15Snapshots[time].pairs[inst] = q;
         qualityMap[time][inst] = q.quality;
+
+        // Structure break: close above previous candle high (bullish) or below previous candle low (bearish)
+        const curr = candles[i];
+        const prev = candles[i - 1];
+        if (q.direction === 'BULLISH' && curr.close > prev.high) {
+          breakMap[time][inst] = true;
+        } else if (q.direction === 'BEARISH' && curr.close < prev.low) {
+          breakMap[time][inst] = true;
+        }
       }
     }
 
@@ -219,14 +230,16 @@ module.exports = async function handler(req, res) {
 
     const timeline = sortedSnaps.map(snap => {
       const trending = new Set(trendingSets[snap.time] || []);
+      const breaks = breakMap[snap.time] || {};
       const tz = getSessionTimezone(snap.session);
       const pairArr = Object.entries(snap.pairs)
         .map(([pair, q]) => {
           // Did this candle create a new running high/low of the day at this moment?
           const ext = newExtreme[pair]?.[snap.time]?.[tz] || {};
-          return { pair, ...q, trending: trending.has(pair), dayHigh: !!ext.newHigh, dayLow: !!ext.newLow };
+          return { pair, ...q, trending: trending.has(pair), structureBreak: !!breaks[pair], dayHigh: !!ext.newHigh, dayLow: !!ext.newLow };
         })
         .sort((a, b) => {
+          if (a.structureBreak !== b.structureBreak) return a.structureBreak ? -1 : 1;
           if (a.trending !== b.trending) return a.trending ? -1 : 1;
           return b.quality - a.quality;
         });
@@ -236,6 +249,7 @@ module.exports = async function handler(req, res) {
         session: snap.session,
         top5: pairArr.slice(0, 5),
         trendingCount: trending.size,
+        breakCount: pairArr.filter(p => p.structureBreak).length,
         totalPairs: pairArr.length,
         avgQuality: pairArr.length ? Math.round(pairArr.reduce((s, p) => s + p.quality, 0) / pairArr.length) : 0,
         entryCount: pairArr.filter(p => p.entryValid).length,
