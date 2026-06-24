@@ -293,8 +293,8 @@ function render() {
   if (_mqSessionFilter !== 'ALL') timeline = timeline.filter(s => s.session === _mqSessionFilter);
 
   for (const snap of timeline) {
-    // Only show snapshots that have at least one structure break
-    const breakPairs = (snap.breaks || []).filter(p => p.direction !== 'NEUTRAL');
+    // Only show snapshots that have at least one structure break (max 5 pairs)
+    const breakPairs = (snap.breaks || []).filter(p => p.direction !== 'NEUTRAL').slice(0, 5);
     if (!breakPairs.length) continue;
 
     const sessClass = snap.session.toLowerCase();
