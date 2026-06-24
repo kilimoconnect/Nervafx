@@ -252,9 +252,10 @@ async function loadReviews() {
   const el = document.getElementById('se-reviews');
   if (!el) return;
   try {
+    const ts = Date.now();
     const [wk, sess] = await Promise.all([
-      api('/api/structure-history?view=7d'),
-      api('/api/structure-history?view=session'),
+      api(`/api/structure-history?view=7d&t=${ts}`),
+      api(`/api/structure-history?view=session&t=${ts}`),
     ]);
     let h = '';
     if (wk && wk.best) {
@@ -271,7 +272,9 @@ async function loadReviews() {
       h += '</div>';
     }
     el.innerHTML = h || '<div class="se-review-card" style="grid-column:1/-1"><div class="se-rev-row"><span>No historical snapshots yet — reviews populate after the hourly engine runs.</span></div></div>';
-  } catch (_) { el.innerHTML = ''; }
+  } catch (e) {
+    el.innerHTML = `<div class="se-review-card" style="grid-column:1/-1"><div class="se-rev-row"><span style="color:#ef4444">Reviews error: ${e.message}</span></div></div>`;
+  }
 }
 
 async function openForecast(pair) {
