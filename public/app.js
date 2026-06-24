@@ -3718,7 +3718,10 @@ function _qpSessionCls(s) {
 
 function renderQualityPreview(el, h1Data, m15Data) {
   const h1Snaps = (h1Data?.timeline || []).slice(0, 2);
-  const m15Snaps = (m15Data?.timeline || []).slice(0, 2);
+  // M15 card is break-only: keep snapshots that have at least one structure break
+  const m15Snaps = (m15Data?.timeline || [])
+    .filter(s => (s.breaks || []).some(p => p.direction !== 'NEUTRAL'))
+    .slice(0, 2);
 
   if (!h1Snaps.length && !m15Snaps.length) {
     el.innerHTML = '<p class="me-empty">No quality data available</p>';
@@ -3761,11 +3764,13 @@ function _renderQpCard(snap, type) {
     <span class="qp-avg" style="color:${avgColor}">avg ${snap.avgQuality}%</span>
   </div>`;
 
-  const pairs = (snap.top5 || []).filter(p => {
+  // M15 card shows only structure-break pairs; H1 keeps its quality ranking
+  const source = type === 'm15' ? (snap.breaks || snap.top5 || []) : (snap.top5 || []);
+  const pairs = source.filter(p => {
     if (p.direction === 'NEUTRAL') return false;
     if (type === 'h1') return p.quality >= 30 && (p.m15Quality == null || p.m15Quality >= 40);
-    return true;
-  });
+    return !!p.structureBreak;
+  }).slice(0, 5);
 
   for (let i = 0; i < pairs.length; i++) {
     const p = pairs[i];
