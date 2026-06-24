@@ -19,6 +19,7 @@
 
 const { getClient, cors } = require('./_db');
 const { requirePlan } = require('./_plan');
+const { computeQuality: m15PageQuality } = require('./m15-quality');
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
 const INSTRUMENTS = [
@@ -211,44 +212,36 @@ function marketState(metrics, trendInfo, bos) {
   return 'TREND';
 }
 
-// Layer 7 — M15 quality (6-component model, entry timing)
+// Layer 7 — M15 quality. Score + direction use the exact same model as the
+// /m15-quality page (via its computeQuality); state is derived for entry timing.
 function m15Quality(candles) {
   if (candles.length < 10) return null;
   const c = candles.slice(-10);
-  const bull = c.filter(x => x.close > x.open).length;
-  const bear = c.filter(x => x.close < x.open).length;
-  const dirScore = ((bull - bear) / 10) * 100;
-  const cDir = Math.abs(dirScore);
-  const net = Math.abs(c[9].close - c[0].open);
-  const range = c.reduce((s, x) => s + (x.high - x.low), 0);
-  const impulse = range > 0 ? Math.min(100, (net / range) * 100) : 0;
+  const pq = m15PageQuality(c);
+  if (!pq) return null;
 
+  // Persistence / efficiency / expansion for the Layer-7 state
   let switches = 0, lastSign = 0;
   for (const x of c) { const s = sign(x); if (s === 0) continue; if (lastSign !== 0 && s !== lastSign) switches++; lastSign = s; }
   const persistence = Math.max(0, (1 - switches / 9) * 100);
 
+  const net = Math.abs(c[9].close - c[0].open);
   const totalBody = c.reduce((s, x) => s + body(x), 0);
   const efficiency = totalBody > 0 ? Math.min(100, (net / totalBody) * 100) : 0;
-
-  const trendSign = c[9].close >= c[0].open ? 1 : -1;
-  let trendBodies = 0, counterBodies = 0;
-  for (const x of c) { const s = sign(x); if (s === trendSign) trendBodies += body(x); else if (s === -trendSign) counterBodies += body(x); }
-  const tot = trendBodies + counterBodies;
-  const pullback = tot > 0 ? (1 - counterBodies / tot) * 100 : 50;
 
   const recentR = avgRange(c.slice(5));
   const prevR = avgRange(c.slice(0, 5));
   const expansion = prevR > 0 ? Math.max(0, Math.min(100, 50 * (recentR / prevR))) : 50;
 
-  const score = Math.round(0.20 * cDir + 0.15 * impulse + 0.25 * persistence + 0.25 * efficiency + 0.10 * pullback + 0.05 * expansion);
+  const score = pq.quality;
   let state;
   if (score < 30) state = 'DEAD';
   else if (expansion < 40 && persistence < 50) state = 'COMPRESSION';
-  else if (efficiency >= 55 && persistence >= 55) state = 'TREND';
+  else if (pq.entryValid || (efficiency >= 55 && persistence >= 55)) state = 'TREND';
   else if (expansion >= 60) state = 'EXPANSION';
   else state = 'EXHAUSTION';
 
-  return { score, state, direction: dirScore > 0 ? 'BULLISH' : dirScore < 0 ? 'BEARISH' : 'NEUTRAL' };
+  return { score, state, direction: pq.direction };
 }
 
 // Layer 5 — H1 structure score
