@@ -355,14 +355,27 @@ module.exports = async function handler(req, res) {
     const hourKey = (t) => { const d = new Date(t); d.setUTCMinutes(0, 0, 0); return d.toISOString(); };
     const structMap = {};
     try {
-      const { data: structRows } = await sb
-        .from('structure_snapshots')
-        .select('time_utc, instrument, trend')
-        .gte('time_utc', hourKey(since))
-        .limit(20000);
-      for (const r of structRows || []) {
-        const k = hourKey(r.time_utc);
-        (structMap[k] ||= {})[r.instrument] = r.trend;
+      // Bound to the card window [since, until] and paginate so historical ranges
+      // load the correct hours (not an arbitrary 20k slice).
+      const structSince = hourKey(since);
+      const structUntil = until || new Date().toISOString();
+      const SPAGE = 1000;
+      let sfrom = 0;
+      while (true) {
+        const { data: structRows, error } = await sb
+          .from('structure_snapshots')
+          .select('time_utc, instrument, trend')
+          .gte('time_utc', structSince)
+          .lte('time_utc', structUntil)
+          .order('time_utc', { ascending: true })
+          .range(sfrom, sfrom + SPAGE - 1);
+        if (error || !structRows || !structRows.length) break;
+        for (const r of structRows) {
+          const k = hourKey(r.time_utc);
+          (structMap[k] ||= {})[r.instrument] = r.trend;
+        }
+        if (structRows.length < SPAGE) break;
+        sfrom += SPAGE;
       }
     } catch (_) { /* structure table optional */ }
 
