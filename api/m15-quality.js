@@ -16,10 +16,10 @@ const INSTRUMENTS = [
 ];
 
 function getSession(h) {
-  if (h >= 23 || h < 7) return 'ASIA';
+  // Cover all 24 hours so no snapshot is dropped (21:00-22:59 = Asia/Sydney open)
+  if (h >= 21 || h < 7) return 'ASIA';
   if (h >= 7 && h < 13) return 'LONDON';
-  if (h >= 13 && h < 21) return 'NEW_YORK';
-  return null;
+  return 'NEW_YORK'; // 13:00-20:59
 }
 
 function getSessionTimezone(session) {
