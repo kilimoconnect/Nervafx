@@ -228,15 +228,35 @@ module.exports = async function handler(req, res) {
       }
     }
 
+    // Accelerating breakout: 3 consecutive snapshots with rising quality AND a structure break in all 3
+    const accelSets = {};
+    for (let si = 0; si <= sortedSnaps.length - 3; si++) {
+      const [s0, s1, s2] = [sortedSnaps[si], sortedSnaps[si + 1], sortedSnaps[si + 2]];
+      const accel = [];
+      for (const pair of Object.keys(s0.pairs)) {
+        const q0 = s0.pairs[pair]?.quality;
+        const q1 = s1.pairs[pair]?.quality;
+        const q2 = s2.pairs[pair]?.quality;
+        const b0 = !!(breakMap[s0.time] || {})[pair];
+        const b1 = !!(breakMap[s1.time] || {})[pair];
+        const b2 = !!(breakMap[s2.time] || {})[pair];
+        if (q0 != null && q1 != null && q2 != null && b0 && b1 && b2 && q0 > q1 && q1 > q2) {
+          accel.push(pair);
+        }
+      }
+      if (accel.length) accelSets[s0.time] = accel;
+    }
+
     const timeline = sortedSnaps.map(snap => {
       const trending = new Set(trendingSets[snap.time] || []);
+      const accel = new Set(accelSets[snap.time] || []);
       const breaks = breakMap[snap.time] || {};
       const tz = getSessionTimezone(snap.session);
       const pairArr = Object.entries(snap.pairs)
         .map(([pair, q]) => {
           // Did this candle create a new running high/low of the day at this moment?
           const ext = newExtreme[pair]?.[snap.time]?.[tz] || {};
-          return { pair, ...q, trending: trending.has(pair), structureBreak: !!breaks[pair], dayHigh: !!ext.newHigh, dayLow: !!ext.newLow };
+          return { pair, ...q, trending: trending.has(pair), scoreRamp: accel.has(pair), structureBreak: !!breaks[pair], dayHigh: !!ext.newHigh, dayLow: !!ext.newLow };
         })
         .sort((a, b) => {
           if (a.structureBreak !== b.structureBreak) return a.structureBreak ? -1 : 1;

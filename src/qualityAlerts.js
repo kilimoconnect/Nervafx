@@ -107,6 +107,19 @@ function computeBreak(candles, latestTime, direction) {
   return false;
 }
 
+// Accelerating breakout: 3 consecutive snapshots with rising quality AND a structure break in all 3
+function computeScoreRamp(snapshots, byInst, threeTimes, pair) {
+  if (threeTimes.length < 3 || threeTimes.some(t => !t)) return false;
+  const [t0, t1, t2] = threeTimes;
+  const s0 = snapshots[t0]?.[pair], s1 = snapshots[t1]?.[pair], s2 = snapshots[t2]?.[pair];
+  if (!s0 || !s1 || !s2) return false;
+  if (!(s0.quality > s1.quality && s1.quality > s2.quality)) return false;
+  const candles = byInst[pair] || [];
+  return computeBreak(candles, t0, s0.direction) &&
+         computeBreak(candles, t1, s1.direction) &&
+         computeBreak(candles, t2, s2.direction);
+}
+
 async function fetchCandles(sb, timeframe, since) {
   const byInst = {};
   for (let b = 0; b < INSTRUMENTS.length; b += 7) {
@@ -172,7 +185,7 @@ function getLatestH1Pairs(h1ByInst, m15ByInst) {
   const prev = times[1] || null;
   const breaks = breakMap[latest] || {};
   const pairs = Object.entries(snapshots[latest])
-    .map(([pair, q]) => ({ pair, ...q, m15Quality: latestM15q[pair] || 0, structureBreak: !!breaks[pair] }))
+    .map(([pair, q]) => ({ pair, ...q, m15Quality: latestM15q[pair] || 0, structureBreak: !!breaks[pair], scoreRamp: computeScoreRamp(snapshots, h1ByInst, [latest, times[1], times[2]], pair) }))
     .filter(p => p.quality >= 40 && p.direction !== 'NEUTRAL' && p.m15Quality >= 40)
     .sort((a, b) => {
       if (a.structureBreak !== b.structureBreak) return a.structureBreak ? -1 : 1;
@@ -238,6 +251,7 @@ function getLatestM15Pairs(m15ByInst) {
         pair, ...q,
         trending: trendingSet.has(pair),
         structureBreak: computeBreak(candles, latest, q.direction),
+        scoreRamp: computeScoreRamp(snapshots, m15ByInst, [latest, times[1], times[2]], pair),
         dayHigh: ext.dayHigh,
         dayLow: ext.dayLow,
       };
@@ -281,6 +295,9 @@ function qualityAlertEmail(h1Pairs, m15Pairs, h1Time, m15Time, timezone) {
     const breakHtml = p.structureBreak
       ? `<td style="padding:0 0 0 6px"><span style="display:inline-block;background:rgba(168,85,247,0.18);color:#a855f7;font-size:10px;font-weight:800;padding:2px 6px;border-radius:3px">BRK</span></td>`
       : '';
+    const rampHtml = p.scoreRamp
+      ? `<td style="padding:0 0 0 6px"><span style="display:inline-block;background:rgba(244,63,94,0.18);color:#fb7185;font-size:10px;font-weight:900;padding:2px 6px;border-radius:3px;border:1px solid rgba(244,63,94,0.5)">RAMP ↑3</span></td>`
+      : '';
     const dayHighHtml = p.dayHigh && p.direction === 'BULLISH'
       ? `<td style="padding:0 0 0 6px"><span style="display:inline-block;background:rgba(59,130,246,0.25);color:#3b82f6;font-size:10px;font-weight:900;padding:2px 6px;border-radius:3px;border:1px solid rgba(59,130,246,0.5)"><b>⬆ DAY HIGH</b></span></td>`
       : '';
@@ -305,6 +322,7 @@ function qualityAlertEmail(h1Pairs, m15Pairs, h1Time, m15Time, timezone) {
               <td style="padding:0 0 0 6px"><span style="display:inline-block;background:${clsColor(p.classification)}15;color:${clsColor(p.classification)};font-size:10px;font-weight:600;padding:2px 7px;border-radius:3px">${p.classification.replace('_', ' ')}</span></td>
               ${entryHtml}
               ${breakHtml}
+              ${rampHtml}
               ${dayHighHtml}${dayLowHtml}
               ${trendHtml}
             </tr></table>
