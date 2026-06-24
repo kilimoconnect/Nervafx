@@ -208,6 +208,7 @@ function applyAt() {
 function goLive() { _seAt = null; load(); }
 
 const fmtPrice = p => p == null ? '—' : (p >= 50 ? p.toFixed(2) : p.toFixed(5));
+const lvlStr = l => l ? fmtPrice(l.price) + (l.strength ? ' · ' + l.strength + (l.touches ? ` · ${l.touches}t` : '') : (l.score != null ? ' · ' + l.score : '')) : '—';
 const scoreColor = s => s >= 85 ? '#22c55e' : s >= 70 ? '#3b82f6' : s >= 55 ? '#eab308' : s >= 40 ? '#f97316' : '#ef4444';
 const ccyCls = l => 'lbl-' + l.toLowerCase();
 
@@ -281,9 +282,9 @@ function render() {
         ${p.approval.approved ? '<span class="se-tag tag-approved">✓ APPROVED</span>' : ''}
       </div>
       <div class="se-rows">
-        <div class="se-row"><span>Resistance</span><b>${p.nearestResistance ? fmtPrice(p.nearestResistance.price) + ' · ' + p.nearestResistance.score : '—'}</b></div>
-        <div class="se-row"><span>Price</span><b>${fmtPrice(p.price)}</b></div>
-        <div class="se-row"><span>Support</span><b>${p.nearestSupport ? fmtPrice(p.nearestSupport.price) + ' · ' + p.nearestSupport.score : '—'}</b></div>
+        <div class="se-row"><span>Resistance</span><b>${lvlStr(p.nearestResistance)}</b></div>
+        ${p.price != null ? `<div class="se-row"><span>Price</span><b>${fmtPrice(p.price)}</b></div>` : ''}
+        <div class="se-row"><span>Support</span><b>${lvlStr(p.nearestSupport)}</b></div>
         <div class="se-row"><span>Invalidation</span><b>${fmtPrice(p.invalidation)}</b></div>
       </div>
       <div class="se-metrics">
