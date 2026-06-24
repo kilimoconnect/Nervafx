@@ -60,6 +60,52 @@ function computeM15Quality(candles) {
   return { direction: dir, directionScore: Math.round(dirScore), impulseStrength: Math.round(impulse), wickCleanliness: Math.round(wickCln), quality, classification: cls };
 }
 
+function getSession(h) {
+  if (h >= 21 || h < 7) return 'ASIA';
+  if (h >= 7 && h < 13) return 'LONDON';
+  return 'NEW_YORK';
+}
+
+function getSessionTimezone(session) {
+  if (session === 'ASIA') return 'Asia/Tokyo';
+  if (session === 'LONDON') return 'Europe/London';
+  if (session === 'NEW_YORK') return 'America/New_York';
+  return 'UTC';
+}
+
+function getDayInTimezone(isoTime, timezone) {
+  return new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric', month: '2-digit', day: '2-digit', timeZone: timezone,
+  }).format(new Date(isoTime));
+}
+
+// Did the latest candle create a new running high/low of the day (in tz)?
+function computeDayExtreme(candles, latestTime, tz) {
+  if (!candles || !candles.length) return { dayHigh: false, dayLow: false };
+  const dayStr = getDayInTimezone(latestTime, tz);
+  let runHigh = -Infinity, runLow = Infinity, isNewHigh = false, isNewLow = false;
+  for (const c of candles) {
+    if (c.time > latestTime) break;
+    if (getDayInTimezone(c.time, tz) !== dayStr) continue;
+    isNewHigh = c.high > runHigh;
+    isNewLow = c.low < runLow;
+    runHigh = Math.max(runHigh, c.high);
+    runLow = Math.min(runLow, c.low);
+  }
+  return { dayHigh: isNewHigh, dayLow: isNewLow };
+}
+
+// Structure break on the latest candle: close above prev high (buy) / below prev low (sell)
+function computeBreak(candles, latestTime, direction) {
+  if (!candles || !candles.length) return false;
+  const idx = candles.findIndex(c => c.time === latestTime);
+  if (idx < 1) return false;
+  const curr = candles[idx], prev = candles[idx - 1];
+  if (direction === 'BULLISH' && curr.close > prev.high) return true;
+  if (direction === 'BEARISH' && curr.close < prev.low) return true;
+  return false;
+}
+
 async function fetchCandles(sb, timeframe, since) {
   const byInst = {};
   for (let b = 0; b < INSTRUMENTS.length; b += 7) {
@@ -147,6 +193,14 @@ function getLatestH1Pairs(h1ByInst, m15ByInst) {
     }
   }
 
+  // Day high/low at the latest candle, in the session's timezone
+  const tz = getSessionTimezone(getSession(new Date(latest).getUTCHours()));
+  for (const p of pairs) {
+    const ext = computeDayExtreme(h1ByInst[p.pair], latest, tz);
+    p.dayHigh = ext.dayHigh;
+    p.dayLow = ext.dayLow;
+  }
+
   return { pairs, time: latest };
 }
 
@@ -173,10 +227,23 @@ function getLatestM15Pairs(m15ByInst) {
       .map(([pair]) => pair)
   );
 
+  const tz = getSessionTimezone(getSession(new Date(latest).getUTCHours()));
+
   const pairs = Object.entries(snapshots[latest])
-    .map(([pair, q]) => ({ pair, ...q, trending: trendingSet.has(pair) }))
+    .map(([pair, q]) => {
+      const candles = m15ByInst[pair] || [];
+      const ext = computeDayExtreme(candles, latest, tz);
+      return {
+        pair, ...q,
+        trending: trendingSet.has(pair),
+        structureBreak: computeBreak(candles, latest, q.direction),
+        dayHigh: ext.dayHigh,
+        dayLow: ext.dayLow,
+      };
+    })
     .filter(p => p.direction !== 'NEUTRAL')
     .sort((a, b) => {
+      if (a.structureBreak !== b.structureBreak) return a.structureBreak ? -1 : 1;
       if (a.trending !== b.trending) return a.trending ? -1 : 1;
       return b.quality - a.quality;
     })
@@ -210,6 +277,9 @@ function qualityAlertEmail(h1Pairs, m15Pairs, h1Time, m15Time, timezone) {
     const entryHtml = p.entryValid
       ? `<td style="padding:0 0 0 6px"><span style="display:inline-block;background:rgba(34,197,94,0.15);color:#22c55e;font-size:10px;font-weight:700;padding:2px 6px;border-radius:3px">ENTRY</span></td>`
       : '';
+    const breakHtml = p.structureBreak
+      ? `<td style="padding:0 0 0 6px"><span style="display:inline-block;background:rgba(168,85,247,0.18);color:#a855f7;font-size:10px;font-weight:800;padding:2px 6px;border-radius:3px">BRK</span></td>`
+      : '';
     const dayHighHtml = p.dayHigh && p.direction === 'BULLISH'
       ? `<td style="padding:0 0 0 6px"><span style="display:inline-block;background:rgba(59,130,246,0.25);color:#3b82f6;font-size:10px;font-weight:900;padding:2px 6px;border-radius:3px;border:1px solid rgba(59,130,246,0.5)"><b>⬆ DAY HIGH</b></span></td>`
       : '';
@@ -233,6 +303,7 @@ function qualityAlertEmail(h1Pairs, m15Pairs, h1Time, m15Time, timezone) {
               <td style="padding:0 0 0 8px"><span style="color:${clsColor(p.classification)};font-weight:800;font-size:15px">${p.quality}%</span></td>
               <td style="padding:0 0 0 6px"><span style="display:inline-block;background:${clsColor(p.classification)}15;color:${clsColor(p.classification)};font-size:10px;font-weight:600;padding:2px 7px;border-radius:3px">${p.classification.replace('_', ' ')}</span></td>
               ${entryHtml}
+              ${breakHtml}
               ${dayHighHtml}${dayLowHtml}
               ${trendHtml}
             </tr></table>
@@ -310,9 +381,9 @@ async function sendQualityAlerts(sb) {
 
   // Check if there are qualifying pairs:
   // H1: pairs with structure break OR trending
-  // M15: pairs with ENTRY badge
+  // M15: pairs with ENTRY (trending) OR structure break
   const h1Qualified = h1Pairs.filter(p => p.structureBreak || p.trending).length;
-  const m15Qualified = m15Pairs.filter(p => p.trending).length; // trending = entryValid for M15
+  const m15Qualified = m15Pairs.filter(p => p.trending || p.structureBreak).length;
   if (!h1Qualified && !m15Qualified) {
     console.log('[QUALITY-ALERTS] No qualifying pairs in H1 or M15');
     return { sent: 0 };
