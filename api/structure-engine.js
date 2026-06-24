@@ -378,7 +378,55 @@ function tradeApproval(r, ccy, inst) {
   return { approved: reasons.length === 0, reasons };
 }
 
-module.exports = async function handler(req, res) {
+// Layer 1 — data engine + full per-pair analysis. Reused by the API handler,
+// the hourly storage job, and the history endpoint.
+async function computeStructure(sb) {
+  const h1ByInst = {}, m15ByInst = {};
+  for (let b = 0; b < INSTRUMENTS.length; b += 7) {
+    const batch = INSTRUMENTS.slice(b, b + 7);
+    const results = await Promise.all(batch.map(async (inst) => {
+      const [h1, m15] = await Promise.all([
+        sb.from('backtest_candles').select('time, open, high, low, close')
+          .eq('instrument', inst).eq('timeframe', 'H1').eq('complete', true)
+          .order('time', { ascending: false }).limit(500),
+        sb.from('backtest_candles').select('time, open, high, low, close')
+          .eq('instrument', inst).eq('timeframe', 'M15').eq('complete', true)
+          .order('time', { ascending: false }).limit(40),
+      ]);
+      return { inst, h1: h1.data || [], m15: m15.data || [] };
+    }));
+    for (const { inst, h1, m15 } of results) {
+      const map = c => ({ time: c.time, open: +c.open, high: +c.high, low: +c.low, close: +c.close });
+      h1ByInst[inst] = h1.map(map).reverse();   // ascending
+      m15ByInst[inst] = m15.map(map).reverse();
+    }
+  }
+
+  const pairs = {};
+  for (const inst of INSTRUMENTS) {
+    pairs[inst] = analysePair(h1ByInst[inst] || [], m15ByInst[inst] || []);
+  }
+
+  const currencies = aggregateCurrencies(pairs);
+
+  const out = [];
+  for (const inst of INSTRUMENTS) {
+    const r = pairs[inst];
+    if (!r) continue;
+    const approval = tradeApproval(r, currencies, inst);
+    out.push({ instrument: inst, ...r, approval });
+  }
+  out.sort((a, b) => b.structureScore - a.structureScore);
+
+  return {
+    generatedAt: new Date().toISOString(),
+    pairs: out,
+    currencies,
+    approvedCount: out.filter(p => p.approval.approved).length,
+  };
+}
+
+async function handler(req, res) {
   cors(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'GET') return res.status(405).json({ error: 'GET only' });
@@ -388,54 +436,15 @@ module.exports = async function handler(req, res) {
     const gate = await requirePlan(sb, req, 'premium');
     if (gate.error) return res.status(gate.status).json({ error: gate.error, upgrade: gate.upgrade });
 
-    // Layer 1 — data engine: 500 H1 + 40 M15 per pair
-    const h1ByInst = {}, m15ByInst = {};
-    for (let b = 0; b < INSTRUMENTS.length; b += 7) {
-      const batch = INSTRUMENTS.slice(b, b + 7);
-      const results = await Promise.all(batch.map(async (inst) => {
-        const [h1, m15] = await Promise.all([
-          sb.from('backtest_candles').select('time, open, high, low, close')
-            .eq('instrument', inst).eq('timeframe', 'H1').eq('complete', true)
-            .order('time', { ascending: false }).limit(500),
-          sb.from('backtest_candles').select('time, open, high, low, close')
-            .eq('instrument', inst).eq('timeframe', 'M15').eq('complete', true)
-            .order('time', { ascending: false }).limit(40),
-        ]);
-        return { inst, h1: h1.data || [], m15: m15.data || [] };
-      }));
-      for (const { inst, h1, m15 } of results) {
-        const map = c => ({ time: c.time, open: +c.open, high: +c.high, low: +c.low, close: +c.close });
-        h1ByInst[inst] = h1.map(map).reverse();   // ascending
-        m15ByInst[inst] = m15.map(map).reverse();
-      }
-    }
-
-    const pairs = {};
-    for (const inst of INSTRUMENTS) {
-      pairs[inst] = analysePair(h1ByInst[inst] || [], m15ByInst[inst] || []);
-    }
-
-    const currencies = aggregateCurrencies(pairs);
-
-    const out = [];
-    for (const inst of INSTRUMENTS) {
-      const r = pairs[inst];
-      if (!r) continue;
-      const approval = tradeApproval(r, currencies, inst);
-      out.push({ instrument: inst, ...r, approval });
-    }
-    out.sort((a, b) => b.structureScore - a.structureScore);
-
-    res.json({
-      generatedAt: new Date().toISOString(),
-      pairs: out,
-      currencies,
-      approvedCount: out.filter(p => p.approval.approved).length,
-    });
+    const data = await computeStructure(sb);
+    res.json(data);
   } catch (e) {
     console.error('[STRUCTURE-ENGINE]', e.message);
     res.status(500).json({ error: e.message });
   }
-};
+}
 
-module.exports.maxDuration = 60;
+module.exports = handler;
+module.exports.computeStructure = computeStructure;
+module.exports.INSTRUMENTS = INSTRUMENTS;
+module.exports.maxDuration = 90;

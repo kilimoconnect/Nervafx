@@ -80,6 +80,28 @@
     .se-loading .spin { display: inline-block; width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.1); border-top-color: #22c55e; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: middle; }
     @keyframes spin { to { transform: rotate(360deg); } }
     .se-note { font-size: 10px; color: #475569; margin-top: 20px; text-align: center; }
+    .se-card { cursor: pointer; }
+    .se-card:hover { border-color: rgba(255,255,255,0.15); }
+
+    /* Forecast / history modal */
+    .se-modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 16px; }
+    .se-modal { background: #0b0f17; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; max-width: 520px; width: 100%; max-height: 86vh; overflow-y: auto; padding: 18px; }
+    .se-modal-hd { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+    .se-modal-hd .x { margin-left: auto; cursor: pointer; color: var(--text-muted); font-size: 18px; }
+    .se-fc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+    .se-fc { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 10px; text-align: center; }
+    .se-fc-val { font-size: 20px; font-weight: 800; }
+    .se-fc-lbl { font-size: 9px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; margin-top: 2px; }
+    .se-hist-row { display: flex; align-items: center; gap: 8px; font-size: 10px; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    .se-hist-row .t { color: var(--text-muted); min-width: 86px; }
+
+    /* Reviews */
+    .se-reviews { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+    .se-review-card { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 12px 14px; }
+    .se-review-hd { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 8px; }
+    .se-rev-row { display: flex; justify-content: space-between; font-size: 11px; padding: 2px 0; }
+    .se-rev-row b { font-weight: 700; }
+    @media (max-width: 600px) { .se-reviews { grid-template-columns: 1fr; } }
 
     @media (max-width: 600px) {
       .sx-topbar { padding: 0 12px; height: 48px; }
@@ -167,6 +189,9 @@ function render() {
   }
   html += '</div>';
 
+  // Reviews (7-day + session) — populated async
+  html += '<div class="se-reviews" id="se-reviews"></div>';
+
   // Filters
   html += '<div class="se-filters">';
   for (const [label, key] of [['All','ALL'],['Approved','APPROVED'],['Bullish','BULLISH'],['Bearish','BEARISH'],['BOS','BOS'],['CHoCH','CHOCH']]) {
@@ -185,7 +210,7 @@ function render() {
   for (const p of pairs) {
     const trendCls = p.trend === 'BULLISH' ? 'tag-bull' : p.trend === 'BEARISH' ? 'tag-bear' : 'tag-range';
     const tvCls = p.trendValid === 'VALID' ? 'tag-valid' : p.trendValid === 'WEAKENING' ? 'tag-weakening' : 'tag-broken';
-    html += `<div class="se-card${p.approval.approved ? ' approved' : ''}">
+    html += `<div class="se-card${p.approval.approved ? ' approved' : ''}" onclick="openForecast('${p.instrument}')">
       <div class="se-card-hd">
         <span class="se-pair">${p.instrument.replace('_','/')}</span>
         <span class="se-tag ${trendCls}">${p.trend}</span>
@@ -217,9 +242,72 @@ function render() {
   }
   html += '</div>';
 
-  html += '<p class="se-note">Structure scores measure market structure quality, not guaranteed outcomes. Historical review & forecast layers coming next.</p>';
+  html += '<p class="se-note">Structure scores measure market structure quality, not guaranteed outcomes. Click any pair for its 24h evolution & forecast.</p>';
 
   root.innerHTML = html;
+  loadReviews();
+}
+
+async function loadReviews() {
+  const el = document.getElementById('se-reviews');
+  if (!el) return;
+  try {
+    const [wk, sess] = await Promise.all([
+      api('/api/structure-history?view=7d'),
+      api('/api/structure-history?view=session'),
+    ]);
+    let h = '';
+    if (wk && wk.best) {
+      h += '<div class="se-review-card"><div class="se-review-hd">7-Day · Best Structure</div>';
+      for (const p of wk.best) h += `<div class="se-rev-row"><span>${p.instrument.replace('_','/')}</span><b style="color:${scoreColor(p.avgScore)}">${p.avgScore}</b></div>`;
+      h += '</div>';
+    }
+    if (sess && sess.sessions) {
+      h += '<div class="se-review-card"><div class="se-review-hd">Session Review (7d)</div>';
+      for (const s of ['ASIA','LONDON','NEW_YORK']) {
+        const v = sess.sessions[s] || {};
+        h += `<div class="se-rev-row"><span>${s.replace('_',' ')}</span><b>str ${v.avgStructure||0} · exp ${v.avgExpansion||0} · bos ${v.bosEvents||0}</b></div>`;
+      }
+      h += '</div>';
+    }
+    el.innerHTML = h || '<div class="se-review-card" style="grid-column:1/-1"><div class="se-rev-row"><span>No historical snapshots yet — reviews populate after the hourly engine runs.</span></div></div>';
+  } catch (_) { el.innerHTML = ''; }
+}
+
+async function openForecast(pair) {
+  const bg = document.createElement('div');
+  bg.className = 'se-modal-bg';
+  bg.onclick = (e) => { if (e.target === bg) bg.remove(); };
+  bg.innerHTML = `<div class="se-modal"><div class="se-modal-hd"><span class="se-pair">${pair.replace('_','/')}</span><span class="x" onclick="this.closest('.se-modal-bg').remove()">✕</span></div><div class="se-loading"><span class="spin"></span> Loading history…</div></div>`;
+  document.body.appendChild(bg);
+  try {
+    const d = await api(`/api/structure-history?pair=${pair}&t=${Date.now()}`);
+    const modal = bg.querySelector('.se-modal');
+    if (!d || (!d.history?.length && !d.forecast)) {
+      modal.innerHTML = `<div class="se-modal-hd"><span class="se-pair">${pair.replace('_','/')}</span><span class="x" onclick="this.closest('.se-modal-bg').remove()">✕</span></div><p class="se-intro">No history yet for this pair. Forecasts populate after a few hourly engine runs.</p>`;
+      return;
+    }
+    const f = d.forecast || {};
+    let h = `<div class="se-modal-hd"><span class="se-pair">${pair.replace('_','/')}</span><span class="x" onclick="this.closest('.se-modal-bg').remove()">✕</span></div>`;
+    h += '<div class="se-fc-grid">';
+    h += `<div class="se-fc"><div class="se-fc-val" style="color:#22c55e">${f.continuationProbability ?? '—'}${f.continuationProbability!=null?'%':''}</div><div class="se-fc-lbl">Continuation</div></div>`;
+    h += `<div class="se-fc"><div class="se-fc-val" style="color:#ef4444">${f.exhaustionProbability ?? '—'}${f.exhaustionProbability!=null?'%':''}</div><div class="se-fc-lbl">Exhaustion</div></div>`;
+    h += `<div class="se-fc"><div class="se-fc-val">${f.trendAgeHours ?? '—'}h</div><div class="se-fc-lbl">Trend Age (avg ${f.avgTrendAgeHours ?? '—'}h)</div></div>`;
+    h += `<div class="se-fc"><div class="se-fc-val" style="color:#3b82f6">${f.breakoutSuccessProbability ?? '—'}${f.breakoutSuccessProbability!=null?'%':''}</div><div class="se-fc-lbl">Breakout Success</div></div>`;
+    h += '</div>';
+    h += '<div class="se-review-hd">24-Hour Evolution</div>';
+    for (const r of (d.history || [])) {
+      const t = new Date(r.time).toLocaleString('en-US', { weekday:'short', hour:'2-digit', minute:'2-digit', hour12:false });
+      h += `<div class="se-hist-row"><span class="t">${t}</span>
+        <span class="se-tag ${r.trend==='BULLISH'?'tag-bull':r.trend==='BEARISH'?'tag-bear':'tag-range'}">${r.trend}</span>
+        <span style="color:${scoreColor(r.score)};font-weight:800">${r.score}</span>
+        <span class="se-tag tag-state">${(r.state||'').replace('_',' ')}</span>
+        ${r.bos?`<span class="se-tag tag-bos">BOS</span>`:''}${r.choch?`<span class="se-tag tag-choch">CHoCH</span>`:''}${r.approved?`<span class="se-tag tag-approved">✓</span>`:''}</div>`;
+    }
+    modal.innerHTML = h;
+  } catch (e) {
+    bg.querySelector('.se-modal').innerHTML = `<div class="se-modal-hd"><span class="x" onclick="this.closest('.se-modal-bg').remove()">✕</span></div><p style="color:#ef4444">Error: ${e.message}</p>`;
+  }
 }
 
 (async () => {
