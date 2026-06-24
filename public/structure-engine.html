@@ -316,7 +316,10 @@ async function openForecast(pair) {
     const modal = bg.querySelector('.se-modal');
     const close = `<span class="x" onclick="this.closest('.se-modal-bg').remove()">✕</span>`;
     if (!d || (!d.summary && !d.history?.length)) {
-      modal.innerHTML = `<div class="se-modal-hd"><span class="se-pair">${pair.replace('_','/')}</span>${close}</div><p class="se-intro">No history yet for this pair. Forecasts populate after a few hourly engine runs.</p>`;
+      const msg = _seAt
+        ? 'No structure history at this time — stored history starts June 2025. Try a later hour.'
+        : 'No history yet for this pair. Forecasts populate after a few hourly engine runs.';
+      modal.innerHTML = `<div class="se-modal-hd"><span class="se-pair">${pair.replace('_','/')}</span>${close}</div><p class="se-intro">${msg}</p>`;
       return;
     }
     const s = d.summary || {}, pa = d.priceAction || {}, lv = d.levels || {}, f = d.forecast || {};
