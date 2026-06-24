@@ -350,18 +350,40 @@ module.exports = async function handler(req, res) {
       if (accel.length) accelSets[t0] = accel;
     }
 
+    // H1 Structure Engine trend per pair per hour — to flag breaks that conflict
+    // with the higher-timeframe structure at that card's hour.
+    const hourKey = (t) => { const d = new Date(t); d.setUTCMinutes(0, 0, 0); return d.toISOString(); };
+    const structMap = {};
+    try {
+      const { data: structRows } = await sb
+        .from('structure_snapshots')
+        .select('time_utc, instrument, trend')
+        .gte('time_utc', hourKey(since))
+        .limit(20000);
+      for (const r of structRows || []) {
+        const k = hourKey(r.time_utc);
+        (structMap[k] ||= {})[r.instrument] = r.trend;
+      }
+    } catch (_) { /* structure table optional */ }
+
     const timeline = sortedSnaps.map(snap => {
       const trending = new Set(trendingSets[snap.time] || []);
       const accel = new Set(accelSets[snap.time] || []);
       const breaks = breakMap[snap.time] || {};
       const m15q = m15QualityMap[snap.time] || {};
       const tz = getSessionTimezone(snap.session);
+      const structHour = structMap[hourKey(snap.time)] || {};
       const pairArr = Object.entries(snap.pairs)
         .map(([pair, q]) => {
           // Did this candle create a new running high/low of the day at this moment?
           const ext = newExtreme[pair]?.[snap.time]?.[tz] || {};
+          const st = structHour[pair] || null;
+          const structureAligned = (st === 'BULLISH' || st === 'BEARISH')
+            ? ((st === 'BULLISH' && q.direction === 'BULLISH') || (st === 'BEARISH' && q.direction === 'BEARISH'))
+            : null;
           return {
             pair, ...q, trending: trending.has(pair), scoreRamp: accel.has(pair), structureBreak: !!breaks[pair],
+            structureTrend: st, structureAligned,
             m15Quality: m15q[pair] || 0, dayHigh: !!ext.newHigh, dayLow: !!ext.newLow
           };
         })

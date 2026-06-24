@@ -2144,6 +2144,7 @@ function _renderCqSnap(snap, type) {
 
   const pairs = (snap.top5 || []).filter(p => {
     if (p.direction === 'NEUTRAL') return false;
+    if (p.structureAligned === false) return false;
     if (type === 'h1') return p.quality >= 30 && (p.m15Quality == null || p.m15Quality >= 40);
     return true;
   });
@@ -3770,8 +3771,9 @@ function _renderQpCard(snap, type) {
   const source = type === 'm15' ? (snap.breaks || snap.top5 || []) : (snap.top5 || []);
   const pairs = source.filter(p => {
     if (p.direction === 'NEUTRAL') return false;
+    if (p.structureAligned === false) return false;
     if (type === 'h1') return p.quality >= 30 && (p.m15Quality == null || p.m15Quality >= 40);
-    return !!p.structureBreak && p.structureAligned !== false;
+    return !!p.structureBreak;
   }).slice(0, 5);
 
   for (let i = 0; i < pairs.length; i++) {
