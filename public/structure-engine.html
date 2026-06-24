@@ -218,7 +218,7 @@ function render() {
 
   let html = '';
   const when = _seAt
-    ? new Date(d.generatedAt || _seAt).toLocaleString('en-US', { weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit', hour12:false }) + ' UTC'
+    ? new Date(d.generatedAt || _seAt).toLocaleString('en-US', { weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit', hour12:false, timeZoneName:'short' })
     : 'Live';
   html += `<p class="se-intro">Hourly market-structure analysis across all 28 pairs — <b>${when}</b>${_seAt ? ' <span style="color:#f59e0b">(historical)</span>' : ''}. <b style="color:#22c55e">${d.approvedCount}</b> approved setups.</p>`;
 
