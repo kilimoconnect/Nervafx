@@ -57,7 +57,8 @@ function computeM15Quality(candles) {
   else if (quality >= 65) cls = 'TRADEABLE';
   else if (quality >= 40) cls = 'WEAK';
   else cls = 'CHOPPY';
-  return { direction: dir, directionScore: Math.round(dirScore), impulseStrength: Math.round(impulse), wickCleanliness: Math.round(wickCln), quality, classification: cls };
+  const entryValid = Math.abs(dirScore) > 50 && impulse > 50 && wickCln > 55;
+  return { direction: dir, directionScore: Math.round(dirScore), impulseStrength: Math.round(impulse), wickCleanliness: Math.round(wickCln), quality, classification: cls, entryValid };
 }
 
 function getSession(h) {
@@ -380,10 +381,10 @@ async function sendQualityAlerts(sb) {
   }
 
   // Check if there are qualifying pairs:
-  // H1: pairs with structure break OR trending
-  // M15: pairs with ENTRY (trending) OR structure break
+  // H1:  pairs with structure break OR trending
+  // M15: pairs with the ENTRY badge (entryValid)
   const h1Qualified = h1Pairs.filter(p => p.structureBreak || p.trending).length;
-  const m15Qualified = m15Pairs.filter(p => p.trending || p.structureBreak).length;
+  const m15Qualified = m15Pairs.filter(p => p.entryValid).length;
   if (!h1Qualified && !m15Qualified) {
     console.log('[QUALITY-ALERTS] No qualifying pairs in H1 or M15');
     return { sent: 0 };
