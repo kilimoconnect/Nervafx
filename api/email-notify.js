@@ -171,7 +171,14 @@ module.exports = async function handler(req, res) {
       return res.json({ ok: true, ...result });
     }
 
-    return res.status(400).json({ error: 'type must be "signals", "digest", "upgrade", or "quality"' });
+    // ── Approved-trade alerts (Structure Engine) ─────────────────────────
+    if (type === 'approved') {
+      const { sendApprovedTradeAlerts } = require('../src/structureAlerts');
+      const result = await sendApprovedTradeAlerts(sb);
+      return res.json({ ok: true, ...result });
+    }
+
+    return res.status(400).json({ error: 'type must be "signals", "digest", "upgrade", "quality", or "approved"' });
 
   } catch (e) {
     console.error('[email-notify]', e);

@@ -71,7 +71,17 @@ async function storeStructureSnapshots(sb) {
   }
 
   console.log(`[STRUCTURE-SNAPSHOT] Stored ${rows.length} pair snapshots @ ${bucket}`);
-  return { stored: rows.length, time: bucket };
+
+  // Email any newly-approved trades (reuses the data we just computed)
+  let alerts = { sent: 0 };
+  try {
+    const { sendApprovedTradeAlerts } = require('./structureAlerts');
+    alerts = await sendApprovedTradeAlerts(sb, data);
+  } catch (e) {
+    console.error('[STRUCTURE-SNAPSHOT] alert error:', e.message);
+  }
+
+  return { stored: rows.length, time: bucket, alerts };
 }
 
 // Reference SQL (run once in Supabase SQL editor):
