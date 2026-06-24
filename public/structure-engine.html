@@ -42,6 +42,21 @@
     .se-fbtn:hover { background: rgba(255,255,255,0.08); }
     .se-fbtn.active { background: rgba(34,197,94,0.15); border-color: rgba(34,197,94,0.4); color: #22c55e; }
 
+    /* Time controls */
+    .se-time { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+    .se-date-input {
+      padding: 5px 10px; border-radius: 6px; font-size: 11px; font-weight: 600;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text); font-family: inherit; outline: none;
+    }
+    .se-date-input::-webkit-calendar-picker-indicator { filter: invert(0.7); }
+    .se-date-go {
+      padding: 5px 14px; border-radius: 6px; font-size: 11px; font-weight: 700;
+      background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.4);
+      color: #3b82f6; cursor: pointer;
+    }
+    .se-date-go:hover { background: rgba(59,130,246,0.25); }
+
     /* Currency strength strip */
     .se-ccy-strip { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; margin-bottom: 20px; }
     .se-ccy { border-radius: 8px; padding: 8px 6px; text-align: center; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); }
@@ -130,6 +145,7 @@
 const SUPABASE_URL = 'https://lfmhnelejjrpqfbvosmt.supabase.co';
 let _seData = null;
 let _seFilter = 'ALL';
+let _seAt = null; // null = live; otherwise an ISO hour to view historically
 
 async function api(path) {
   let token = localStorage.getItem('nfx_token');
@@ -157,13 +173,39 @@ async function api(path) {
 
 async function load() {
   try {
-    document.getElementById('se-root').innerHTML = '<div class="se-loading"><span class="spin"></span> Running hourly structure engine across 28 pairs…</div>';
-    _seData = await api(`/api/structure-engine?t=${Date.now()}`);
+    document.getElementById('se-root').innerHTML = '<div class="se-loading"><span class="spin"></span> ' + (_seAt ? 'Loading historical structure…' : 'Running hourly structure engine across 28 pairs…') + '</div>';
+    const url = _seAt
+      ? `/api/structure-history?at=${encodeURIComponent(_seAt)}&t=${Date.now()}`
+      : `/api/structure-engine?t=${Date.now()}`;
+    _seData = await api(url);
     if (_seData) render();
   } catch (e) {
     document.getElementById('se-root').innerHTML = `<div class="se-loading"><span style="color:#ef4444">Error: ${e.message}</span></div>`;
   }
 }
+
+// Floor a Date to the top of the UTC hour and return ISO
+function floorHourISO(ms) { const d = new Date(ms); d.setUTCMinutes(0, 0, 0); return d.toISOString(); }
+// Value for <input type=datetime-local> from an ISO (local time)
+function toLocalInput(iso) {
+  const d = iso ? new Date(iso) : new Date();
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:00`;
+}
+function stepHours(h) {
+  const base = _seAt ? new Date(_seAt).getTime() : Date.now();
+  const next = base + h * 3600000;
+  if (next > Date.now()) { _seAt = null; } else { _seAt = floorHourISO(next); }
+  load();
+}
+function applyAt() {
+  const v = document.getElementById('se-at-input')?.value;
+  if (!v) return;
+  const ms = new Date(v).getTime();
+  _seAt = ms >= Date.now() - 3600000 ? null : floorHourISO(ms);
+  load();
+}
+function goLive() { _seAt = null; load(); }
 
 const fmtPrice = p => p == null ? '—' : (p >= 50 ? p.toFixed(2) : p.toFixed(5));
 const scoreColor = s => s >= 85 ? '#22c55e' : s >= 70 ? '#3b82f6' : s >= 55 ? '#eab308' : s >= 40 ? '#f97316' : '#ef4444';
@@ -175,7 +217,24 @@ function render() {
   if (!d || !d.pairs.length) { root.innerHTML = '<div class="se-loading">No structure data available</div>'; return; }
 
   let html = '';
-  html += `<p class="se-intro">Hourly market-structure analysis — swings, BOS/CHoCH, trend validation, key levels, market state and trade approval across all 28 pairs. <b style="color:#22c55e">${d.approvedCount}</b> approved setups.</p>`;
+  const when = _seAt
+    ? new Date(d.generatedAt || _seAt).toLocaleString('en-US', { weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit', hour12:false }) + ' UTC'
+    : 'Live';
+  html += `<p class="se-intro">Hourly market-structure analysis across all 28 pairs — <b>${when}</b>${_seAt ? ' <span style="color:#f59e0b">(historical)</span>' : ''}. <b style="color:#22c55e">${d.approvedCount}</b> approved setups.</p>`;
+
+  // Time controls — view the evolution over hours / days / weeks
+  html += '<div class="se-time">';
+  html += `<button class="se-fbtn ${!_seAt?'active':''}" onclick="goLive()">● Live</button>`;
+  html += `<button class="se-fbtn" onclick="stepHours(-1)">◀ 1h</button>`;
+  html += `<button class="se-fbtn" onclick="stepHours(-24)">◀ 1d</button>`;
+  html += `<button class="se-fbtn" onclick="stepHours(-168)">◀ 1w</button>`;
+  html += `<input type="datetime-local" id="se-at-input" class="se-date-input" value="${toLocalInput(_seAt)}" />`;
+  html += `<button class="se-date-go" onclick="applyAt()">Go</button>`;
+  if (_seAt) {
+    html += `<button class="se-fbtn" onclick="stepHours(24)">1d ▶</button>`;
+    html += `<button class="se-fbtn" onclick="stepHours(1)">1h ▶</button>`;
+  }
+  html += '</div>';
 
   // Currency strip
   html += '<div class="se-ccy-strip">';

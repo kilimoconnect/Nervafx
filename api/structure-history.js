@@ -81,6 +81,51 @@ module.exports = async function handler(req, res) {
 
     const pair = req.query?.pair || null;
     const view = req.query?.view || null;
+    const at = req.query?.at || null;
+
+    // ── Historical snapshot of all pairs at a chosen hour ────────────────────
+    if (at) {
+      const d = new Date(at);
+      d.setUTCMinutes(0, 0, 0);
+      const hourStart = d.toISOString();
+      const hourEnd = new Date(d.getTime() + 3600000).toISOString();
+      const { data, error } = await sb
+        .from('structure_snapshots')
+        .select('*')
+        .gte('time_utc', hourStart)
+        .lt('time_utc', hourEnd);
+      if (error) throw error;
+      const rows = data || [];
+      if (!rows.length) return res.json({ generatedAt: hourStart, historical: true, pairs: [], currencies: {}, approvedCount: 0, note: 'no snapshot at this hour' });
+
+      const pairResults = {};
+      for (const r of rows) pairResults[r.instrument] = { trend: r.trend, structureScore: r.structure_score };
+      const currencies = engine.aggregateCurrencies(pairResults);
+
+      const pairs = rows.map(r => ({
+        instrument: r.instrument,
+        trend: r.trend,
+        structureScore: r.structure_score,
+        structureLabel: r.structure_label,
+        state: r.market_state,
+        trendValid: r.trend_valid,
+        bos: r.bos_direction ? { direction: r.bos_direction, level: r.bos_level } : null,
+        choch: r.choch || null,
+        efficiency: r.efficiency, persistence: r.persistence, expansion: r.expansion, pullbackQuality: r.pullback_quality,
+        nearestSupport: r.nearest_support != null ? { price: r.nearest_support } : null,
+        nearestResistance: r.nearest_resistance != null ? { price: r.nearest_resistance } : null,
+        invalidation: r.invalidation,
+        price: null,
+        m15: r.m15_score != null ? { score: r.m15_score, state: r.m15_state } : null,
+        approval: { approved: !!r.trade_approved, reasons: [] },
+      })).sort((a, b) => b.structureScore - a.structureScore);
+
+      return res.json({
+        generatedAt: hourStart, historical: true,
+        pairs, currencies,
+        approvedCount: pairs.filter(p => p.approval.approved).length,
+      });
+    }
 
     // ── Per-pair 24h evolution + forecast ────────────────────────────────────
     if (pair) {
