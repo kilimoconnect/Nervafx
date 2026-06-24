@@ -189,9 +189,6 @@ function render() {
   }
   html += '</div>';
 
-  // Reviews (7-day + session) — populated async
-  html += '<div class="se-reviews" id="se-reviews"></div>';
-
   // Filters
   html += '<div class="se-filters">';
   for (const [label, key] of [['All','ALL'],['Approved','APPROVED'],['Bullish','BULLISH'],['Bearish','BEARISH'],['BOS','BOS'],['CHoCH','CHOCH']]) {
@@ -245,36 +242,6 @@ function render() {
   html += '<p class="se-note">Structure scores measure market structure quality, not guaranteed outcomes. Click any pair for its 24h evolution & forecast.</p>';
 
   root.innerHTML = html;
-  loadReviews();
-}
-
-async function loadReviews() {
-  const el = document.getElementById('se-reviews');
-  if (!el) return;
-  try {
-    const ts = Date.now();
-    const [wk, sess] = await Promise.all([
-      api(`/api/structure-history?view=7d&t=${ts}`),
-      api(`/api/structure-history?view=session&t=${ts}`),
-    ]);
-    let h = '';
-    if (wk && wk.best) {
-      h += '<div class="se-review-card"><div class="se-review-hd">7-Day · Best Structure</div>';
-      for (const p of wk.best) h += `<div class="se-rev-row"><span>${p.instrument.replace('_','/')}</span><b style="color:${scoreColor(p.avgScore)}">${p.avgScore}</b></div>`;
-      h += '</div>';
-    }
-    if (sess && sess.sessions) {
-      h += '<div class="se-review-card"><div class="se-review-hd">Session Review (7d)</div>';
-      for (const s of ['ASIA','LONDON','NEW_YORK']) {
-        const v = sess.sessions[s] || {};
-        h += `<div class="se-rev-row"><span>${s.replace('_',' ')}</span><b>str ${v.avgStructure||0} · exp ${v.avgExpansion||0} · bos ${v.bosEvents||0}</b></div>`;
-      }
-      h += '</div>';
-    }
-    el.innerHTML = h || '<div class="se-review-card" style="grid-column:1/-1"><div class="se-rev-row"><span>No historical snapshots yet — reviews populate after the hourly engine runs.</span></div></div>';
-  } catch (e) {
-    el.innerHTML = `<div class="se-review-card" style="grid-column:1/-1"><div class="se-rev-row"><span style="color:#ef4444">Reviews error: ${e.message}</span></div></div>`;
-  }
 }
 
 async function openForecast(pair) {
