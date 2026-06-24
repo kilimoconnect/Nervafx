@@ -378,9 +378,11 @@ module.exports = async function handler(req, res) {
           // Did this candle create a new running high/low of the day at this moment?
           const ext = newExtreme[pair]?.[snap.time]?.[tz] || {};
           const st = structHour[pair] || null;
-          const structureAligned = (st === 'BULLISH' || st === 'BEARISH')
-            ? ((st === 'BULLISH' && q.direction === 'BULLISH') || (st === 'BEARISH' && q.direction === 'BEARISH'))
-            : null;
+          // aligned: true if same direction; false if conflicting OR TRANSITION (hidden);
+          // null if RANGE / no structure data (kept)
+          let structureAligned = null;
+          if (st === 'BULLISH' || st === 'BEARISH') structureAligned = (st === q.direction);
+          else if (st === 'TRANSITION') structureAligned = false;
           return {
             pair, ...q, trending: trending.has(pair), scoreRamp: accel.has(pair), structureBreak: !!breaks[pair],
             structureTrend: st, structureAligned,
