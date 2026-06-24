@@ -8,8 +8,8 @@
  * Default SINCE = 2025-06-01. For each tradeable H1 hour from SINCE to now,
  * recomputes the per-pair structure (trend, BOS, levels, score, state…) using
  * the live engine's analysePair over the trailing 500 H1 candles, aggregates
- * currencies per hour, and upserts. M15 fields are left null (the alignment
- * filter only needs `trend`; M15 is computed live going forward).
+ * currencies per hour, and upserts. M15 score/state are computed from the M15
+ * candles available at each hour (so historical trade-approval works too).
  */
 
 require('dotenv').config();
@@ -42,6 +42,26 @@ async function fetchAllH1(inst) {
   return rows.map(c => ({ time: c.time, open: +c.open, high: +c.high, low: +c.low, close: +c.close }));
 }
 
+async function fetchAllCandles(inst, timeframe) {
+  const rows = [];
+  const PAGE = 1000;
+  let from = 0;
+  while (true) {
+    const { data, error } = await sb
+      .from('backtest_candles')
+      .select('time, open, high, low, close')
+      .eq('instrument', inst).eq('timeframe', timeframe).eq('complete', true)
+      .order('time', { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) throw error;
+    if (!data || !data.length) break;
+    rows.push(...data);
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
+  return rows.map(c => ({ time: c.time, open: +c.open, high: +c.high, low: +c.low, close: +c.close }));
+}
+
 async function main() {
   const sinceMs = new Date(SINCE).getTime();
   console.log(`[BACKFILL] structure_snapshots since ${SINCE}`);
@@ -52,12 +72,18 @@ async function main() {
 
   for (const inst of INSTRUMENTS) {
     const candles = await fetchAllH1(inst);
+    const m15 = await fetchAllCandles(inst, 'M15');
     const m = new Map();
+    let m15Ptr = 0; // count of M15 candles with time <= current hour
     for (let i = 59; i < candles.length; i++) {
       const t = candles[i].time;
-      if (new Date(t).getTime() < sinceMs) continue;
+      const tMs = new Date(t).getTime();
+      // advance M15 pointer to include all candles at or before this H1 hour
+      while (m15Ptr < m15.length && new Date(m15[m15Ptr].time).getTime() <= tMs) m15Ptr++;
+      if (tMs < sinceMs) continue;
       const window = candles.slice(Math.max(0, i - (LOOKBACK - 1)), i + 1);
-      const r = analysePair(window, []); // no M15 in backfill
+      const m15Window = m15.slice(Math.max(0, m15Ptr - 10), m15Ptr);
+      const r = analysePair(window, m15Window); // M15 quality computed at this hour
       if (!r) continue;
       m.set(t, r);
       allHours.add(t);
@@ -91,7 +117,7 @@ async function main() {
 
     for (const [inst, r] of Object.entries(pairResults)) {
       const [base, quote] = inst.split('_');
-      const approval = tradeApproval(r, currencies, inst); // M15 null -> not approved
+      const approval = tradeApproval(r, currencies, inst); // now uses computed M15
       rows.push({
         time_utc: hour,
         instrument: inst,
@@ -110,8 +136,8 @@ async function main() {
         persistence: r.persistence,
         expansion: r.expansion,
         pullback_quality: r.pullbackQuality,
-        m15_score: null,
-        m15_state: null,
+        m15_score: r.m15 ? r.m15.score : null,
+        m15_state: r.m15 ? r.m15.state : null,
         base_ccy_score: currencies[base]?.avgStructure ?? null,
         quote_ccy_score: currencies[quote]?.avgStructure ?? null,
         trade_approved: approval.approved,

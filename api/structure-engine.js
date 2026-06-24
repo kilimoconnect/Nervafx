@@ -475,6 +475,7 @@ async function handler(req, res) {
 module.exports = handler;
 module.exports.computeStructure = computeStructure;
 module.exports.analysePair = analysePair;
+module.exports.m15Quality = m15Quality;
 module.exports.aggregateCurrencies = aggregateCurrencies;
 module.exports.tradeApproval = tradeApproval;
 module.exports.INSTRUMENTS = INSTRUMENTS;
