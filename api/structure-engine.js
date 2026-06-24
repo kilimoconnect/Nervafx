@@ -384,13 +384,14 @@ function aggregateCurrencies(pairResults) {
 
 // Layer 8 — trade approval
 function tradeApproval(r, ccy, inst) {
-  if (!r || !r.m15) return { approved: false, reasons: ['no data'] };
+  if (!r) return { approved: false, reasons: ['no data'] };
   const [base, quote] = inst.split('_');
   const reasons = [];
 
   if (r.structureScore <= 70) reasons.push('structure ≤ 70');
   if (r.trendValid !== 'VALID') reasons.push('trend not valid');
-  if (!(r.m15.state === 'EXPANSION' || r.m15.state === 'TREND')) reasons.push('M15 not expansion/trend');
+  // M15 timing is informational only — it no longer gates approval
+  // (compression often precedes the expansion, so it shouldn't block).
 
   // not trading directly into a strong opposing major level
   if (r.trend === 'BULLISH' && r.nearestResistance && r.nearestResistance.score >= 70) reasons.push('into resistance');
