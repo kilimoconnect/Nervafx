@@ -311,7 +311,8 @@ async function openForecast(pair) {
   bg.innerHTML = `<div class="se-modal"><div class="se-modal-hd"><span class="se-pair">${pair.replace('_','/')}</span><span class="x" onclick="this.closest('.se-modal-bg').remove()">✕</span></div><div class="se-loading"><span class="spin"></span> Loading history…</div></div>`;
   document.body.appendChild(bg);
   try {
-    const d = await api(`/api/structure-history?pair=${pair}&t=${Date.now()}`);
+    const atParam = _seAt ? `&at=${encodeURIComponent(_seAt)}` : '';
+    const d = await api(`/api/structure-history?pair=${pair}${atParam}&t=${Date.now()}`);
     const modal = bg.querySelector('.se-modal');
     const close = `<span class="x" onclick="this.closest('.se-modal-bg').remove()">✕</span>`;
     if (!d || (!d.summary && !d.history?.length)) {

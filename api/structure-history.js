@@ -127,21 +127,26 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // ── Per-pair 24h evolution + forecast ────────────────────────────────────
+    // ── Per-pair 24h evolution + forecast (as-of `at`, or now) ───────────────
     if (pair) {
-      const since = new Date(Date.now() - 7 * 24 * 3600000).toISOString();
-      const { data, error } = await sb
+      // Anchor: the hour we're analysing "as of" (selected historical hour or now)
+      const anchorMs = at ? (() => { const d = new Date(at); d.setUTCMinutes(0, 0, 0); return d.getTime(); })() : Date.now();
+      const anchorIso = new Date(anchorMs).toISOString();
+      const since = new Date(anchorMs - 7 * 24 * 3600000).toISOString();
+      let q = sb
         .from('structure_snapshots')
         .select('*')
         .eq('instrument', pair)
         .gte('time_utc', since)
+        .lte('time_utc', anchorIso)
         .order('time_utc', { ascending: false })
         .limit(200);
+      const { data, error } = await q;
       if (error) throw error;
       const rows = data || [];
       if (!rows.length) return res.json({ pair, history: [], forecast: null, note: 'no history yet' });
 
-      const last24 = rows.filter(r => new Date(r.time_utc) >= new Date(Date.now() - 24 * 3600000));
+      const last24 = rows.filter(r => new Date(r.time_utc) >= new Date(anchorMs - 24 * 3600000));
       const currentAge = trendAge(rows);
 
       // Historical average trend run-length for this pair (over the stored window)
@@ -173,16 +178,18 @@ module.exports = async function handler(req, res) {
       }
       const breakoutSuccess = bosTotal ? Math.round((bosSuccess / bosTotal) * 100) : null;
 
-      // Live structural detail for this pair (levels, swings, BOS age, trend health …)
+      // Structural detail as of the anchor hour (levels, swings, BOS age, trend health …)
       let live = null;
       try {
+        const endIso = new Date(anchorMs + 3600000).toISOString(); // include the anchor hour's candle
+        let h1Q = sb.from('backtest_candles').select('time, open, high, low, close')
+          .eq('instrument', pair).eq('timeframe', 'H1').eq('complete', true);
+        let m15Q = sb.from('backtest_candles').select('time, open, high, low, close')
+          .eq('instrument', pair).eq('timeframe', 'M15').eq('complete', true);
+        if (at) { h1Q = h1Q.lt('time', endIso); m15Q = m15Q.lt('time', endIso); }
         const [h1q, m15q] = await Promise.all([
-          sb.from('backtest_candles').select('time, open, high, low, close')
-            .eq('instrument', pair).eq('timeframe', 'H1').eq('complete', true)
-            .order('time', { ascending: false }).limit(500),
-          sb.from('backtest_candles').select('time, open, high, low, close')
-            .eq('instrument', pair).eq('timeframe', 'M15').eq('complete', true)
-            .order('time', { ascending: false }).limit(40),
+          h1Q.order('time', { ascending: false }).limit(500),
+          m15Q.order('time', { ascending: false }).limit(40),
         ]);
         const map = c => ({ time: c.time, open: +c.open, high: +c.high, low: +c.low, close: +c.close });
         live = engine.analysePair((h1q.data || []).map(map).reverse(), (m15q.data || []).map(map).reverse());
