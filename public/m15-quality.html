@@ -293,6 +293,10 @@ function render() {
   if (_mqSessionFilter !== 'ALL') timeline = timeline.filter(s => s.session === _mqSessionFilter);
 
   for (const snap of timeline) {
+    // Only show snapshots that have at least one structure break
+    const breakPairs = (snap.breaks || []).filter(p => p.direction !== 'NEUTRAL');
+    if (!breakPairs.length) continue;
+
     const sessClass = snap.session.toLowerCase();
     const avgColor = qColor(snap.avgQuality >= 65 ? 'TRADEABLE' : snap.avgQuality >= 50 ? 'WEAK' : 'CHOPPY');
 
@@ -310,9 +314,8 @@ function render() {
       </div>
     </div>`;
 
-    for (let i = 0; i < snap.top5.length; i++) {
-      const p = snap.top5[i];
-      if (p.direction === 'NEUTRAL') continue;
+    for (let i = 0; i < breakPairs.length; i++) {
+      const p = breakPairs[i];
       const cls = p.classification.toLowerCase();
       const dc = p.direction === 'BULLISH' ? 'buy' : p.direction === 'BEARISH' ? 'sell' : 'neutral';
       const barColor = qColor(p.classification);

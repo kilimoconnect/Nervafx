@@ -248,6 +248,7 @@ module.exports = async function handler(req, res) {
         time: snap.time,
         session: snap.session,
         top5: pairArr.slice(0, 5),
+        breaks: pairArr.filter(p => p.structureBreak),
         trendingCount: trending.size,
         breakCount: pairArr.filter(p => p.structureBreak).length,
         totalPairs: pairArr.length,
