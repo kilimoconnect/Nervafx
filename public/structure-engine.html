@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>NervaFX — Structure Engine</title>
+  <link rel="icon" type="image/png" href="/nervafx-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .grid { display: block !important; }
+    .sx-topbar {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 28px; height: 56px;
+      background: rgba(8,11,18,0.92);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+    .sx-topbar-left { display: flex; align-items: center; gap: 12px; }
+    .sx-logo img { height: 24px; display: block; }
+    .sx-sep { color: rgba(255,255,255,0.1); font-size: 20px; font-weight: 200; }
+    .sx-title-text { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+    .sx-back-btn {
+      display: flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: 8px;
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); font-size: 11px; font-weight: 600; cursor: pointer; text-decoration: none; transition: all 0.15s;
+    }
+    .sx-back-btn:hover { background: rgba(255,255,255,0.09); color: var(--text); }
+    .se-main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 80px; }
+
+    .se-intro { font-size: 12px; color: var(--text-muted); margin: 0 0 16px; }
+    .se-filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+    .se-fbtn {
+      padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 600;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); cursor: pointer; transition: all 0.15s;
+    }
+    .se-fbtn:hover { background: rgba(255,255,255,0.08); }
+    .se-fbtn.active { background: rgba(34,197,94,0.15); border-color: rgba(34,197,94,0.4); color: #22c55e; }
+
+    /* Currency strength strip */
+    .se-ccy-strip { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; margin-bottom: 20px; }
+    .se-ccy { border-radius: 8px; padding: 8px 6px; text-align: center; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); }
+    .se-ccy-code { font-size: 13px; font-weight: 800; }
+    .se-ccy-label { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; margin-top: 2px; }
+    .se-ccy-score { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+    .lbl-strong { color: #22c55e; } .lbl-weak { color: #ef4444; }
+    .lbl-improving { color: #3b82f6; } .lbl-deteriorating { color: #f97316; } .lbl-neutral { color: #64748b; }
+
+    /* Pair cards */
+    .se-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 12px; }
+    .se-card { border-radius: 10px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); padding: 12px 14px; }
+    .se-card.approved { border-color: rgba(34,197,94,0.45); box-shadow: 0 0 14px rgba(34,197,94,0.08); }
+    .se-card-hd { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .se-pair { font-size: 15px; font-weight: 800; }
+    .se-score { margin-left: auto; font-size: 18px; font-weight: 800; }
+    .se-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
+    .se-tag { font-size: 9px; font-weight: 800; padding: 2px 7px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.3px; }
+    .tag-bull { background: rgba(34,197,94,0.15); color: #22c55e; }
+    .tag-bear { background: rgba(239,68,68,0.15); color: #ef4444; }
+    .tag-range { background: rgba(255,255,255,0.07); color: var(--text-muted); }
+    .tag-valid { background: rgba(34,197,94,0.15); color: #22c55e; }
+    .tag-weakening { background: rgba(234,179,8,0.15); color: #eab308; }
+    .tag-broken { background: rgba(239,68,68,0.15); color: #ef4444; }
+    .tag-bos { background: rgba(168,85,247,0.18); color: #a855f7; }
+    .tag-choch { background: rgba(244,63,94,0.2); color: #fb7185; border: 1px solid rgba(244,63,94,0.5); }
+    .tag-state { background: rgba(59,130,246,0.15); color: #3b82f6; }
+    .tag-approved { background: rgba(34,197,94,0.25); color: #22c55e; border: 1px solid rgba(34,197,94,0.6); }
+    .se-rows { font-size: 11px; color: var(--text-muted); }
+    .se-row { display: flex; justify-content: space-between; padding: 2px 0; }
+    .se-row b { color: var(--text); font-weight: 700; }
+    .se-metrics { display: flex; gap: 10px; margin-top: 8px; font-size: 10px; color: var(--text-muted); }
+    .se-metrics b { color: rgba(255,255,255,0.8); }
+
+    .se-loading { text-align: center; padding: 60px; color: var(--text-muted); font-size: 13px; }
+    .se-loading .spin { display: inline-block; width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.1); border-top-color: #22c55e; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: middle; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .se-note { font-size: 10px; color: #475569; margin-top: 20px; text-align: center; }
+
+    @media (max-width: 600px) {
+      .sx-topbar { padding: 0 12px; height: 48px; }
+      .se-main { padding: 12px 8px 60px; }
+      .se-ccy-strip { grid-template-columns: repeat(4, 1fr); }
+      .se-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="sx-topbar">
+  <div class="sx-topbar-left">
+    <a href="/app" class="sx-logo"><img src="/nervafx-logo.png" alt="NervaFX" /></a>
+    <span class="sx-sep">/</span>
+    <span class="sx-title-text">Structure Engine</span>
+  </div>
+  <a href="/app" class="sx-back-btn">Dashboard</a>
+</div>
+
+<div class="se-main" id="se-root">
+  <div class="se-loading"><span class="spin"></span> Running hourly structure engine across 28 pairs…</div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://lfmhnelejjrpqfbvosmt.supabase.co';
+let _seData = null;
+let _seFilter = 'ALL';
+
+async function api(path) {
+  let token = localStorage.getItem('nfx_token');
+  let res = await fetch(path, { headers: { Authorization: `Bearer ${token}` } });
+  if (res.status === 401) {
+    const refresh = localStorage.getItem('nfx_refresh');
+    if (refresh) {
+      const r2 = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxmbWhuZWxlanpycHFmYnZvc210Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM2MTcxMTYsImV4cCI6MjA1OTE5MzExNn0.5T424U9jEgMLVreKMFCJ_7oVBGhFB96MvOi0k38_BPc' },
+        body: JSON.stringify({ refresh_token: refresh }),
+      });
+      if (r2.ok) {
+        const t = await r2.json();
+        localStorage.setItem('nfx_token', t.access_token);
+        localStorage.setItem('nfx_refresh', t.refresh_token);
+        res = await fetch(path, { headers: { Authorization: `Bearer ${t.access_token}` } });
+      }
+    }
+  }
+  if (res.status === 401) { location.href = '/login'; return null; }
+  if (!res.ok) throw new Error(`API ${res.status}`);
+  return res.json();
+}
+
+async function load() {
+  try {
+    document.getElementById('se-root').innerHTML = '<div class="se-loading"><span class="spin"></span> Running hourly structure engine across 28 pairs…</div>';
+    _seData = await api(`/api/structure-engine?t=${Date.now()}`);
+    if (_seData) render();
+  } catch (e) {
+    document.getElementById('se-root').innerHTML = `<div class="se-loading"><span style="color:#ef4444">Error: ${e.message}</span></div>`;
+  }
+}
+
+const fmtPrice = p => p == null ? '—' : (p >= 50 ? p.toFixed(2) : p.toFixed(5));
+const scoreColor = s => s >= 85 ? '#22c55e' : s >= 70 ? '#3b82f6' : s >= 55 ? '#eab308' : s >= 40 ? '#f97316' : '#ef4444';
+const ccyCls = l => 'lbl-' + l.toLowerCase();
+
+function render() {
+  const d = _seData;
+  const root = document.getElementById('se-root');
+  if (!d || !d.pairs.length) { root.innerHTML = '<div class="se-loading">No structure data available</div>'; return; }
+
+  let html = '';
+  html += `<p class="se-intro">Hourly market-structure analysis — swings, BOS/CHoCH, trend validation, key levels, market state and trade approval across all 28 pairs. <b style="color:#22c55e">${d.approvedCount}</b> approved setups.</p>`;
+
+  // Currency strip
+  html += '<div class="se-ccy-strip">';
+  for (const ccy of ['USD','EUR','GBP','JPY','CHF','CAD','AUD','NZD']) {
+    const c = d.currencies[ccy] || { avgStructure: 0, label: 'NEUTRAL' };
+    html += `<div class="se-ccy">
+      <div class="se-ccy-code">${ccy}</div>
+      <div class="se-ccy-label ${ccyCls(c.label)}">${c.label}</div>
+      <div class="se-ccy-score">${c.avgStructure}</div>
+    </div>`;
+  }
+  html += '</div>';
+
+  // Filters
+  html += '<div class="se-filters">';
+  for (const [label, key] of [['All','ALL'],['Approved','APPROVED'],['Bullish','BULLISH'],['Bearish','BEARISH'],['BOS','BOS'],['CHoCH','CHOCH']]) {
+    html += `<button class="se-fbtn ${_seFilter===key?'active':''}" onclick="_seFilter='${key}';render()">${label}</button>`;
+  }
+  html += '</div>';
+
+  let pairs = d.pairs;
+  if (_seFilter === 'APPROVED') pairs = pairs.filter(p => p.approval.approved);
+  else if (_seFilter === 'BULLISH') pairs = pairs.filter(p => p.trend === 'BULLISH');
+  else if (_seFilter === 'BEARISH') pairs = pairs.filter(p => p.trend === 'BEARISH');
+  else if (_seFilter === 'BOS') pairs = pairs.filter(p => p.bos);
+  else if (_seFilter === 'CHOCH') pairs = pairs.filter(p => p.choch);
+
+  html += '<div class="se-grid">';
+  for (const p of pairs) {
+    const trendCls = p.trend === 'BULLISH' ? 'tag-bull' : p.trend === 'BEARISH' ? 'tag-bear' : 'tag-range';
+    const tvCls = p.trendValid === 'VALID' ? 'tag-valid' : p.trendValid === 'WEAKENING' ? 'tag-weakening' : 'tag-broken';
+    html += `<div class="se-card${p.approval.approved ? ' approved' : ''}">
+      <div class="se-card-hd">
+        <span class="se-pair">${p.instrument.replace('_','/')}</span>
+        <span class="se-tag ${trendCls}">${p.trend}</span>
+        <span class="se-score" style="color:${scoreColor(p.structureScore)}">${p.structureScore}</span>
+      </div>
+      <div class="se-tags">
+        <span class="se-tag ${tvCls}">${p.trendValid}</span>
+        <span class="se-tag tag-state">${p.state.replace('_',' ')}</span>
+        ${p.bos ? `<span class="se-tag tag-bos">BOS ${p.bos.direction === 'BULLISH' ? '↑' : '↓'}</span>` : ''}
+        ${p.choch ? `<span class="se-tag tag-choch">CHoCH ${p.choch === 'BULLISH' ? '↑' : '↓'}</span>` : ''}
+        ${p.m15 ? `<span class="se-tag tag-state">M15 ${p.m15.state}</span>` : ''}
+        ${p.approval.approved ? '<span class="se-tag tag-approved">✓ APPROVED</span>' : ''}
+      </div>
+      <div class="se-rows">
+        <div class="se-row"><span>Resistance</span><b>${p.nearestResistance ? fmtPrice(p.nearestResistance.price) + ' · ' + p.nearestResistance.score : '—'}</b></div>
+        <div class="se-row"><span>Price</span><b>${fmtPrice(p.price)}</b></div>
+        <div class="se-row"><span>Support</span><b>${p.nearestSupport ? fmtPrice(p.nearestSupport.price) + ' · ' + p.nearestSupport.score : '—'}</b></div>
+        <div class="se-row"><span>Invalidation</span><b>${fmtPrice(p.invalidation)}</b></div>
+      </div>
+      <div class="se-metrics">
+        <span>Eff:<b>${p.efficiency}</b></span>
+        <span>Pers:<b>${p.persistence}</b></span>
+        <span>Pull:<b>${p.pullbackQuality}</b></span>
+        <span>Exp:<b>${p.expansion}</b></span>
+        ${p.m15 ? `<span>M15:<b>${p.m15.score}%</b></span>` : ''}
+      </div>
+      ${!p.approval.approved && p.approval.reasons.length ? `<div class="se-metrics" style="color:#64748b">⛔ ${p.approval.reasons.join(' · ')}</div>` : ''}
+    </div>`;
+  }
+  html += '</div>';
+
+  html += '<p class="se-note">Structure scores measure market structure quality, not guaranteed outcomes. Historical review & forecast layers coming next.</p>';
+
+  root.innerHTML = html;
+}
+
+(async () => {
+  const token = localStorage.getItem('nfx_token');
+  if (!token) { location.href = '/login'; return; }
+  await load();
+})();
+</script>
+</body>
+</html>

@@ -13,7 +13,8 @@
     "api/session-continuity.js":  { "maxDuration": 60 },
     "api/currency-continuity.js": { "maxDuration": 60 },
     "api/structure-break.js":     { "maxDuration": 60 },
-    "api/m15-quality.js":         { "maxDuration": 60 }
+    "api/m15-quality.js":         { "maxDuration": 60 },
+    "api/structure-engine.js":    { "maxDuration": 90 }
   },
   "rewrites": [
     { "source": "/",       "destination": "/login.html" },
@@ -30,7 +31,8 @@
     { "source": "/session-continuity", "destination": "/session-continuity.html" },
     { "source": "/currency-continuity", "destination": "/currency-continuity.html" },
     { "source": "/structure-break", "destination": "/structure-break.html" },
-    { "source": "/m15-quality", "destination": "/m15-quality.html" }
+    { "source": "/m15-quality", "destination": "/m15-quality.html" },
+    { "source": "/structure-engine", "destination": "/structure-engine.html" }
   ],
   "headers": [
     {
