@@ -3721,7 +3721,7 @@ function renderQualityPreview(el, h1Data, m15Data) {
   const h1Snaps = (h1Data?.timeline || []).slice(0, 2);
   // M15 card is break-only: keep snapshots that have at least one structure break
   const m15Snaps = (m15Data?.timeline || [])
-    .filter(s => (s.breaks || []).some(p => p.direction !== 'NEUTRAL'))
+    .filter(s => (s.breaks || []).some(p => p.direction !== 'NEUTRAL' && p.structureAligned !== false))
     .slice(0, 2);
 
   if (!h1Snaps.length && !m15Snaps.length) {
@@ -3765,12 +3765,13 @@ function _renderQpCard(snap, type) {
     <span class="qp-avg" style="color:${avgColor}">avg ${snap.avgQuality}%</span>
   </div>`;
 
-  // M15 card shows only structure-break pairs; H1 keeps its quality ranking
+  // M15 card shows only structure-break pairs that don't conflict with the H1
+  // structure trend at that hour; H1 keeps its quality ranking
   const source = type === 'm15' ? (snap.breaks || snap.top5 || []) : (snap.top5 || []);
   const pairs = source.filter(p => {
     if (p.direction === 'NEUTRAL') return false;
     if (type === 'h1') return p.quality >= 30 && (p.m15Quality == null || p.m15Quality >= 40);
-    return !!p.structureBreak;
+    return !!p.structureBreak && p.structureAligned !== false;
   }).slice(0, 5);
 
   for (let i = 0; i < pairs.length; i++) {
