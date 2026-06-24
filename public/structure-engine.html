@@ -286,27 +286,80 @@ async function openForecast(pair) {
   try {
     const d = await api(`/api/structure-history?pair=${pair}&t=${Date.now()}`);
     const modal = bg.querySelector('.se-modal');
-    if (!d || (!d.history?.length && !d.forecast)) {
-      modal.innerHTML = `<div class="se-modal-hd"><span class="se-pair">${pair.replace('_','/')}</span><span class="x" onclick="this.closest('.se-modal-bg').remove()">✕</span></div><p class="se-intro">No history yet for this pair. Forecasts populate after a few hourly engine runs.</p>`;
+    const close = `<span class="x" onclick="this.closest('.se-modal-bg').remove()">✕</span>`;
+    if (!d || (!d.summary && !d.history?.length)) {
+      modal.innerHTML = `<div class="se-modal-hd"><span class="se-pair">${pair.replace('_','/')}</span>${close}</div><p class="se-intro">No history yet for this pair. Forecasts populate after a few hourly engine runs.</p>`;
       return;
     }
-    const f = d.forecast || {};
-    let h = `<div class="se-modal-hd"><span class="se-pair">${pair.replace('_','/')}</span><span class="x" onclick="this.closest('.se-modal-bg').remove()">✕</span></div>`;
-    h += '<div class="se-fc-grid">';
-    h += `<div class="se-fc"><div class="se-fc-val" style="color:#22c55e">${f.continuationProbability ?? '—'}${f.continuationProbability!=null?'%':''}</div><div class="se-fc-lbl">Continuation</div></div>`;
-    h += `<div class="se-fc"><div class="se-fc-val" style="color:#ef4444">${f.exhaustionProbability ?? '—'}${f.exhaustionProbability!=null?'%':''}</div><div class="se-fc-lbl">Exhaustion</div></div>`;
-    h += `<div class="se-fc"><div class="se-fc-val">${f.trendAgeHours ?? '—'}h</div><div class="se-fc-lbl">Trend Age (avg ${f.avgTrendAgeHours ?? '—'}h)</div></div>`;
-    h += `<div class="se-fc"><div class="se-fc-val" style="color:#3b82f6">${f.breakoutSuccessProbability ?? '—'}${f.breakoutSuccessProbability!=null?'%':''}</div><div class="se-fc-lbl">Breakout Success</div></div>`;
+    const s = d.summary || {}, pa = d.priceAction || {}, lv = d.levels || {}, f = d.forecast || {};
+    const pp = s.trendHealthParts || {};
+    const dirCls = s.direction==='BULLISH'?'tag-bull':s.direction==='BEARISH'?'tag-bear':'tag-range';
+    const px = v => v == null ? '—' : v;
+
+    let h = `<div class="se-modal-hd"><span class="se-pair">${pair.replace('_','/')}</span><span class="se-tag ${dirCls}">${s.direction||'—'}</span><span class="se-score" style="margin-left:6px;color:${scoreColor(s.structureScore||0)}">${px(s.structureScore)}</span>${close}</div>`;
+
+    // 1. Market Structure Summary
+    h += '<div class="se-review-hd">Market Structure</div>';
+    h += '<div class="se-rows" style="margin-bottom:12px">';
+    h += `<div class="se-row"><span>State</span><b>${(s.marketState||'—').replace('_',' ')} · ${s.structureLabel||''}</b></div>`;
+    h += `<div class="se-row"><span>Trend Health</span><b style="color:${scoreColor(s.trendHealth||0)}">${px(s.trendHealth)}${s.trendHealth!=null?'%':''} ${pp.de!=null?`(DE ${pp.de} · Pers ${pp.persistence} · Pull ${pp.pullback})`:''}</b></div>`;
+    h += `<div class="se-row"><span>Trend Maturity</span><b>${px(s.trendMaturityPct)}${s.trendMaturityPct!=null?'%':''} · ${s.trendMaturity||'—'} (age ${px(s.trendAgeHours)}h / avg ${px(s.avgTrendAgeHours)}h)</b></div>`;
+    h += `<div class="se-row"><span>Validity</span><b>${s.trendValid||'—'}</b></div>`;
     h += '</div>';
-    h += '<div class="se-review-hd">24-Hour Evolution</div>';
-    for (const r of (d.history || [])) {
-      const t = new Date(r.time).toLocaleString('en-US', { weekday:'short', hour:'2-digit', minute:'2-digit', hour12:false });
-      h += `<div class="se-hist-row"><span class="t">${t}</span>
-        <span class="se-tag ${r.trend==='BULLISH'?'tag-bull':r.trend==='BEARISH'?'tag-bear':'tag-range'}">${r.trend}</span>
-        <span style="color:${scoreColor(r.score)};font-weight:800">${r.score}</span>
-        <span class="se-tag tag-state">${(r.state||'').replace('_',' ')}</span>
-        ${r.bos?`<span class="se-tag tag-bos">BOS</span>`:''}${r.choch?`<span class="se-tag tag-choch">CHoCH</span>`:''}${r.approved?`<span class="se-tag tag-approved">✓</span>`:''}</div>`;
+
+    // 2. Forecast scorecards
+    h += '<div class="se-fc-grid">';
+    h += `<div class="se-fc"><div class="se-fc-val" style="color:#22c55e">${px(f.continuationProbability)}${f.continuationProbability!=null?'%':''}</div><div class="se-fc-lbl">Continuation</div></div>`;
+    h += `<div class="se-fc"><div class="se-fc-val" style="color:#ef4444">${px(f.exhaustionProbability)}${f.exhaustionProbability!=null?'%':''}</div><div class="se-fc-lbl">Exhaustion</div></div>`;
+    h += `<div class="se-fc"><div class="se-fc-val">${px(s.trendHealth)}${s.trendHealth!=null?'%':''}</div><div class="se-fc-lbl">Trend Health</div></div>`;
+    h += `<div class="se-fc"><div class="se-fc-val" style="color:#3b82f6">${px(f.breakoutSuccessProbability)}${f.breakoutSuccessProbability!=null?'%':''}</div><div class="se-fc-lbl">Breakout Success</div></div>`;
+    h += '</div>';
+
+    // 3. Scenario forecast
+    if (f.scenarios && f.scenarios.length) {
+      h += '<div class="se-review-hd">Most Likely Scenarios</div>';
+      const cols = { Continuation:'#22c55e', Range:'#eab308', Reversal:'#ef4444' };
+      for (const sc of f.scenarios) {
+        h += `<div class="se-hist-row"><span style="color:${cols[sc.type]||'#fff'};font-weight:800;min-width:46px">${sc.prob}%</span><span><b style="color:${cols[sc.type]||'#fff'}">${sc.type}</b> — ${sc.text}</span></div>`;
+      }
     }
+
+    // 4. Key Levels
+    h += '<div class="se-review-hd" style="margin-top:12px">Key Levels</div>';
+    h += '<div class="se-rows" style="margin-bottom:12px">';
+    h += `<div class="se-row"><span>Resistance</span><b>${px(lv.resistance?.price)} ${lv.resistance?.strength?`· ${lv.resistance.strength}${lv.resistance.touches?` · ${lv.resistance.touches} touch`:''}`:''}</b></div>`;
+    h += `<div class="se-row"><span>Price</span><b>${px(pa.price)}</b></div>`;
+    h += `<div class="se-row"><span>Support</span><b>${px(lv.support?.price)} ${lv.support?.strength?`· ${lv.support.strength}${lv.support.touches?` · ${lv.support.touches} touch`:''}`:''}</b></div>`;
+    h += `<div class="se-row"><span>Next Target</span><b style="color:#3b82f6">${px(lv.nextTarget)}</b></div>`;
+    h += `<div class="se-row"><span>Invalidation</span><b style="color:#ef4444">${px(lv.invalidation)} ${s.direction==='BEARISH'?'(close above)':s.direction==='BULLISH'?'(close below)':''}</b></div>`;
+    h += '</div>';
+
+    // 5. Price Action (BOS / CHoCH / swings)
+    h += '<div class="se-review-hd">Price Action</div>';
+    h += '<div class="se-rows" style="margin-bottom:12px">';
+    h += `<div class="se-row"><span>Last BOS</span><b>${pa.lastBOS?`${px(pa.lastBOS.level)} · ${pa.lastBOS.direction} · ${pa.lastBOS.ageHours}h ago`:'None'}</b></div>`;
+    h += `<div class="se-row"><span>Last CHoCH</span><b>${pa.lastCHoCH||'None'}</b></div>`;
+    h += `<div class="se-row"><span>Major Swing High</span><b>${px(pa.swingHigh)}</b></div>`;
+    h += `<div class="se-row"><span>Major Swing Low</span><b>${px(pa.swingLow)}</b></div>`;
+    h += '</div>';
+
+    // 6. Continuation drivers / risks
+    if ((f.drivers && f.drivers.length) || (f.risks && f.risks.length)) {
+      h += '<div class="se-review-hd">Why</div><div class="se-rows" style="margin-bottom:12px">';
+      for (const x of (f.drivers||[])) h += `<div class="se-row"><span style="color:#22c55e">✓ ${x}</span></div>`;
+      for (const x of (f.risks||[]))   h += `<div class="se-row"><span style="color:#f59e0b">⚠ ${x}</span></div>`;
+      h += '</div>';
+    }
+
+    // Trend evolution story
+    if (d.evolution && d.evolution.length) {
+      h += '<div class="se-review-hd">Trend Evolution</div>';
+      for (const e of d.evolution) {
+        const t = new Date(e.time).toLocaleString('en-US', { weekday:'short', hour:'2-digit', minute:'2-digit', hour12:false });
+        h += `<div class="se-hist-row"><span class="t">${t}</span><span>${e.text}</span></div>`;
+      }
+    }
+
     modal.innerHTML = h;
   } catch (e) {
     bg.querySelector('.se-modal').innerHTML = `<div class="se-modal-hd"><span class="x" onclick="this.closest('.se-modal-bg').remove()">✕</span></div><p style="color:#ef4444">Error: ${e.message}</p>`;

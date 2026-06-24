@@ -14,11 +14,50 @@
 
 const { getClient, cors } = require('./_db');
 const { requirePlan } = require('./_plan');
+const engine = require('./structure-engine');
 
 function getSession(h) {
   if (h >= 21 || h < 7) return 'ASIA';
   if (h >= 7 && h < 13) return 'LONDON';
   return 'NEW_YORK';
+}
+
+const fmtP = p => p == null ? null : (Math.abs(p) >= 50 ? +p.toFixed(2) : +p.toFixed(5));
+
+// Trend maturity phase from age vs average run length
+function maturityPhase(pct) {
+  if (pct == null) return 'UNKNOWN';
+  if (pct < 40) return 'YOUNG';
+  if (pct < 80) return 'DEVELOPING';
+  if (pct <= 110) return 'MATURE';
+  return 'OVEREXTENDED';
+}
+
+// Build a human "trend evolution" story from the 24h state sequence (oldest→newest)
+function evolutionNarrative(asc) {
+  const out = [];
+  let prevState = null, prevTrend = null;
+  for (let i = 0; i < asc.length; i++) {
+    const r = asc[i];
+    const phrases = [];
+    if (i === 0) phrases.push(`${cap(r.trend)} structure`);
+    if (r.trend !== prevTrend && i > 0) phrases.push(`shift to ${cap(r.trend)}`);
+    if (r.choch) phrases.push('character change (CHoCH)');
+    if (r.bos_direction) phrases.push('break of structure');
+    if (r.market_state !== prevState) phrases.push(stateStory(r.market_state));
+    if (phrases.length) out.push({ time: r.time_utc, text: phrases.join(' · ') });
+    prevState = r.market_state; prevTrend = r.trend;
+  }
+  return out.slice(-8);
+}
+const cap = s => s ? s.charAt(0) + s.slice(1).toLowerCase() : s;
+function stateStory(s) {
+  return ({
+    COMPRESSION: 'compression building', ACCUMULATION: 'accumulation',
+    EXPANSION: 'expansion begins', TREND: 'trend running',
+    LATE_TREND: 'trend maturing', EXHAUSTION: 'exhaustion appears',
+    REVERSAL_RISK: 'reversal risk', CHOPPY: 'choppy / no edge',
+  })[s] || (s || '').toLowerCase().replace('_', ' ');
 }
 
 // Trend age: how many consecutive most-recent snapshots share the latest trend
@@ -89,22 +128,106 @@ module.exports = async function handler(req, res) {
       }
       const breakoutSuccess = bosTotal ? Math.round((bosSuccess / bosTotal) * 100) : null;
 
+      // Live structural detail for this pair (levels, swings, BOS age, trend health …)
+      let live = null;
+      try {
+        const [h1q, m15q] = await Promise.all([
+          sb.from('backtest_candles').select('time, open, high, low, close')
+            .eq('instrument', pair).eq('timeframe', 'H1').eq('complete', true)
+            .order('time', { ascending: false }).limit(500),
+          sb.from('backtest_candles').select('time, open, high, low, close')
+            .eq('instrument', pair).eq('timeframe', 'M15').eq('complete', true)
+            .order('time', { ascending: false }).limit(40),
+        ]);
+        const map = c => ({ time: c.time, open: +c.open, high: +c.high, low: +c.low, close: +c.close });
+        live = engine.analysePair((h1q.data || []).map(map).reverse(), (m15q.data || []).map(map).reverse());
+      } catch (_) { /* fall back to stored snapshot */ }
+
+      const r0 = rows[0];
+      const trend = live?.trend || r0.trend;
+      const dir = trend === 'BULLISH' ? 'higher' : trend === 'BEARISH' ? 'lower' : 'sideways';
+      const support = live?.nearestSupport || (r0.nearest_support != null ? { price: r0.nearest_support } : null);
+      const resistance = live?.nearestResistance || (r0.nearest_resistance != null ? { price: r0.nearest_resistance } : null);
+      const invalidation = live?.invalidation ?? r0.invalidation;
+      const target = live?.nextTarget ?? null;
+      const health = live?.trendHealth ?? null;
+
+      // Trend maturity
+      const maturityPct = avgRun > 0 ? Math.round((currentAge / avgRun) * 100) : null;
+      const maturity = maturityPhase(maturityPct);
+
+      // Continuation drivers & risk factors
+      const drivers = [], risks = [];
+      if ((live?.trendValid || r0.trend_valid) === 'VALID') drivers.push('Trend still valid');
+      else risks.push('Trend validation weakening');
+      if (trend === 'BEARISH' && resistance) drivers.push('Resistance holding above');
+      if (trend === 'BULLISH' && support) drivers.push('Support holding below');
+      if (!live?.choch && !r0.choch) drivers.push(`No ${trend === 'BEARISH' ? 'bullish' : 'bearish'} CHoCH`);
+      else risks.push('Opposing CHoCH printed');
+      if ((live?.efficiency ?? r0.efficiency) >= 55) drivers.push('Directional efficiency strong');
+      else risks.push('Directional efficiency fading');
+      if ((live?.persistence ?? r0.persistence) >= 60) drivers.push('Persistence strong');
+      if ((live?.pullbackQuality ?? r0.pullback_quality) < 55) risks.push('Pullbacks becoming deeper');
+      if (maturityPct != null && maturityPct >= 90) risks.push('Trend age at/over average lifespan');
+      if ((live?.state || r0.market_state) === 'EXHAUSTION') risks.push('Exhaustion signs present');
+
+      // Scenario forecast (probabilities normalised to 100)
+      let scenarios = [];
+      if (continuation != null) {
+        let pCont = continuation;
+        let pRange = Math.round((100 - pCont) * 0.65);
+        let pRev = 100 - pCont - pRange;
+        scenarios = [
+          { type: 'Continuation', prob: pCont,
+            text: `Continuation ${dir}${target ? ' toward ' + fmtP(target) : ''}${resistance && trend === 'BEARISH' ? ' while ' + fmtP(resistance.price) + ' caps' : ''}${support && trend === 'BULLISH' ? ' while ' + fmtP(support.price) + ' holds' : ''}` },
+          { type: 'Range', prob: pRange,
+            text: support && resistance ? `Range between ${fmtP(support.price)} and ${fmtP(resistance.price)}` : 'Range / consolidation' },
+          { type: 'Reversal', prob: pRev,
+            text: `${trend === 'BEARISH' ? 'Bullish' : 'Bearish'} CHoCH ${trend === 'BEARISH' ? 'above ' + fmtP(invalidation) : 'below ' + fmtP(invalidation)}` },
+        ].sort((a, b) => b.prob - a.prob);
+      }
+
       return res.json({
         pair,
-        history: last24.map(r => ({
-          time: r.time_utc, score: r.structure_score, label: r.structure_label,
-          trend: r.trend, state: r.market_state, trendValid: r.trend_valid,
-          bos: r.bos_direction, choch: r.choch, m15Score: r.m15_score,
-          approved: r.trade_approved,
-        })),
-        forecast: {
-          currentTrend: rows[0].trend,
+        summary: {
+          direction: trend,
+          structureScore: live?.structureScore ?? r0.structure_score,
+          structureLabel: live?.structureLabel ?? r0.structure_label,
+          marketState: live?.state ?? r0.market_state,
+          trendValid: live?.trendValid ?? r0.trend_valid,
+          trendHealth: health,
+          trendHealthParts: live ? { de: live.efficiency, persistence: live.persistence, pullback: live.pullbackQuality } : null,
           trendAgeHours: currentAge,
           avgTrendAgeHours: Math.round(avgRun * 10) / 10,
+          trendMaturityPct: maturityPct,
+          trendMaturity: maturity,
+        },
+        priceAction: {
+          price: fmtP(live?.price ?? null),
+          lastBOS: live?.bos ? { level: fmtP(live.bos.level), direction: live.bos.direction, ageHours: live.bos.ageHours } : null,
+          lastCHoCH: live?.choch || r0.choch || null,
+          swingHigh: fmtP(live?.swingHigh ?? null),
+          swingLow: fmtP(live?.swingLow ?? null),
+        },
+        levels: {
+          support: support ? { price: fmtP(support.price), strength: support.strength || null, touches: support.touches ?? null } : null,
+          resistance: resistance ? { price: fmtP(resistance.price), strength: resistance.strength || null, touches: resistance.touches ?? null } : null,
+          invalidation: fmtP(invalidation),
+          nextTarget: fmtP(target),
+        },
+        forecast: {
+          currentTrend: trend,
           continuationProbability: continuation,
           exhaustionProbability: exhaustion,
           breakoutSuccessProbability: breakoutSuccess,
+          drivers, risks, scenarios,
         },
+        evolution: evolutionNarrative(asc),
+        history: last24.map(r => ({
+          time: r.time_utc, score: r.structure_score, label: r.structure_label,
+          trend: r.trend, state: r.market_state, trendValid: r.trend_valid,
+          bos: r.bos_direction, choch: r.choch, m15Score: r.m15_score, approved: r.trade_approved,
+        })),
       });
     }
 

@@ -157,9 +157,14 @@ function buildLevels(candles, highs, lows) {
 
   return {
     levels: clusters,
+    resistances, supports,
     nearestResistance: resistances[0] || null,
     nearestSupport: supports[0] || null,
   };
+}
+
+function levelStrength(score) {
+  return score >= 75 ? 'HIGH' : score >= 55 ? 'MEDIUM' : 'LOW';
 }
 
 function avgRange(candles) {
@@ -274,7 +279,7 @@ function analysePair(h1, m15) {
   const trendInfo = classifyTrend(highs, lows);
   const { bos, choch } = detectBOS(h1, highs, lows, trendInfo.trend);
   const trendValid = validateTrend(h1, highs, lows, trendInfo.trend);
-  const { nearestSupport, nearestResistance } = buildLevels(h1, highs, lows);
+  const { nearestSupport, nearestResistance, supports, resistances } = buildLevels(h1, highs, lows);
 
   const trend50 = flowMetrics(h1.slice(-50));   // active momentum
   const trend200 = flowMetrics(h1.slice(-200)); // current trend
@@ -304,10 +309,37 @@ function analysePair(h1, m15) {
   if (trendInfo.trend === 'BULLISH' && lows.length) invalidation = lows[lows.length - 1].price;
   else if (trendInfo.trend === 'BEARISH' && highs.length) invalidation = highs[highs.length - 1].price;
 
+  // Trend Health — composite of persistence, directional efficiency, pullback quality
+  const trendHealth = Math.round(0.40 * trend50.persistence + 0.35 * trend50.efficiency + 0.25 * pullbackQ);
+
+  // Major swings (most recent confirmed)
+  const swingHigh = highs.length ? highs[highs.length - 1].price : null;
+  const swingLow  = lows.length  ? lows[lows.length - 1].price  : null;
+
+  // BOS age: how many H1 candles since the close first broke the level
+  let bosAge = null;
+  if (bos) {
+    let a = 0;
+    for (let i = h1.length - 1; i >= 0; i--) {
+      const broke = bos.direction === 'BULLISH' ? h1[i].close > bos.level : h1[i].close < bos.level;
+      if (broke) a++; else break;
+    }
+    bosAge = a;
+  }
+
+  // Next target — second level in the trend direction (or projected)
+  const atr = avgRange(h1.slice(-50));
+  let nextTarget = null;
+  if (trendInfo.trend === 'BEARISH') nextTarget = supports[1]?.price ?? (nearestSupport ? nearestSupport.price - atr * 2 : null);
+  else if (trendInfo.trend === 'BULLISH') nextTarget = resistances[1]?.price ?? (nearestResistance ? nearestResistance.price + atr * 2 : null);
+
+  const mkLevel = l => l ? { price: l.price, score: l.score, touches: l.reactions, strength: levelStrength(l.score) } : null;
+
   return {
     trend: trendInfo.trend,
     hh: trendInfo.hh, hl: trendInfo.hl, lh: trendInfo.lh, ll: trendInfo.ll,
-    bos, choch, trendValid,
+    bos: bos ? { ...bos, ageHours: bosAge } : null,
+    choch, trendValid,
     state,
     structureScore: structScore,
     structureLabel: structLabel,
@@ -315,9 +347,12 @@ function analysePair(h1, m15) {
     persistence: Math.round(trend50.persistence),
     expansion: Math.round(trend50.expansion),
     pullbackQuality: Math.round(pullbackQ),
+    trendHealth,
+    swingHigh, swingLow,
+    nextTarget,
     price: last.close,
-    nearestSupport: nearestSupport ? { price: nearestSupport.price, score: nearestSupport.score } : null,
-    nearestResistance: nearestResistance ? { price: nearestResistance.price, score: nearestResistance.score } : null,
+    nearestSupport: mkLevel(nearestSupport),
+    nearestResistance: mkLevel(nearestResistance),
     invalidation,
     m15: mq,
   };
@@ -446,5 +481,6 @@ async function handler(req, res) {
 
 module.exports = handler;
 module.exports.computeStructure = computeStructure;
+module.exports.analysePair = analysePair;
 module.exports.INSTRUMENTS = INSTRUMENTS;
 module.exports.maxDuration = 90;
