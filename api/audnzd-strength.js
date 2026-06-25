@@ -129,13 +129,11 @@ module.exports = async function handler(req, res) {
     const nzdStrongest = timeline.filter(t => t.nzd.signal === 'STRONGEST').length;
     const nzdWeakest   = timeline.filter(t => t.nzd.signal === 'WEAKEST').length;
 
-    // Signal events — require 4h+ streak, hide AUD/NZD conflicts
+    // Signal events — hide AUD/NZD conflicts
     const signals = timeline.filter(t => {
       if (!t.aud.signal && !t.nzd.signal) return false;
       if (t.aud.signal && t.nzd.signal && t.aud.signal !== t.nzd.signal) return false;
-      const audOk = t.aud.signal && t.aud.streak >= 3;
-      const nzdOk = t.nzd.signal && t.nzd.streak >= 3;
-      return audOk || nzdOk;
+      return true;
     });
 
     res.json({

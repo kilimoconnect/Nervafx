@@ -256,22 +256,19 @@
       if (d.signals.length) {
         html += '<div class="an-signals-hd">Signal Events (Rank #1 or #8)</div>';
         for (const sig of d.signals.slice().reverse()) {
-          const hasStreak = (sig.aud.streak >= 3) || (sig.nzd.streak >= 3);
-          html += `<div class="an-signal-row${hasStreak ? ' streak' : ''}">`;
+          html += '<div class="an-signal-row">';
           html += `<span class="an-signal-time">${fmtTime(sig.time)}</span>`;
           if (sig.aud.signal) {
             const cls = sig.aud.signal === 'STRONGEST' ? 'badge-strongest' : 'badge-weakest';
             html += `<span class="an-signal-badge ${cls}">AUD ${sig.aud.signal}</span>`;
             html += `<span class="an-signal-rank">#${sig.aud.rank}</span>`;
             html += `<span class="an-signal-val ${valClass(sig.aud.value)}">${fmtVal(sig.aud.value)}</span>`;
-            if (sig.aud.streak >= 3) html += `<span class="an-streak">🔥 ${sig.aud.streak}h streak</span>`;
           }
           if (sig.nzd.signal) {
             const cls = sig.nzd.signal === 'STRONGEST' ? 'badge-strongest' : 'badge-weakest';
             html += `<span class="an-signal-badge ${cls}">NZD ${sig.nzd.signal}</span>`;
             html += `<span class="an-signal-rank">#${sig.nzd.rank}</span>`;
             html += `<span class="an-signal-val ${valClass(sig.nzd.value)}">${fmtVal(sig.nzd.value)}</span>`;
-            if (sig.nzd.streak >= 3) html += `<span class="an-streak">🔥 ${sig.nzd.streak}h streak</span>`;
           }
           const trades = (sig.aud.trades || []).concat(sig.nzd.trades || []);
           if (trades.length) {
