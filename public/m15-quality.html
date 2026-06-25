@@ -307,6 +307,7 @@ function render() {
       return pair.includes('AUD') || pair.includes('NZD');
     });
     if (!allAudOrNzd) continue;
+    if (top5.some(p => p.quality < 40)) continue;
     const breakPairs = top5;
 
     const sessClass = snap.session.toLowerCase();
