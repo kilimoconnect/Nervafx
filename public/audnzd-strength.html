@@ -78,30 +78,6 @@
     .an-signal-rank { font-size: 11px; color: var(--text-muted); }
     .an-signal-val { font-size: 11px; font-weight: 700; margin-left: auto; }
 
-    /* Hourly table */
-    .an-table-wrap { overflow-x: auto; margin-top: 20px; }
-    .an-table {
-      width: 100%; border-collapse: collapse; font-size: 11px;
-    }
-    .an-table th {
-      padding: 8px 10px; text-align: left; font-weight: 700; font-size: 10px;
-      color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px;
-      border-bottom: 1px solid rgba(255,255,255,0.08); position: sticky; top: 0;
-      background: var(--bg, #080b12);
-    }
-    .an-table td {
-      padding: 7px 10px; border-bottom: 1px solid rgba(255,255,255,0.04);
-      white-space: nowrap;
-    }
-    .an-table tr:hover td { background: rgba(255,255,255,0.03); }
-    .an-table .aud-col { font-weight: 700; }
-    .an-table .nzd-col { font-weight: 700; }
-    .rank-1 { color: #22c55e; font-weight: 800; }
-    .rank-2 { color: #4ade80; }
-    .rank-3 { color: #86efac; }
-    .rank-6 { color: #fca5a5; }
-    .rank-7 { color: #f87171; }
-    .rank-8 { color: #ef4444; font-weight: 800; }
     .val-pos { color: #4ade80; }
     .val-neg { color: #f87171; }
     .val-zero { color: #64748b; }
@@ -109,9 +85,6 @@
     .an-empty { text-align: center; padding: 60px 20px; color: var(--text-muted); font-size: 13px; }
     .an-loading { text-align: center; padding: 60px; color: var(--text-muted); font-size: 13px; }
 
-    /* Highlight rows with signals */
-    .an-table tr.has-signal td { background: rgba(255,255,255,0.02); }
-    .an-table tr.has-signal td:first-child { border-left: 3px solid #3b82f6; }
   </style>
 </head>
 <body>
@@ -131,6 +104,8 @@
       <button class="an-btn active" id="btn7d" onclick="setRange(7)">7 Days</button>
       <button class="an-btn" id="btn14d" onclick="setRange(14)">14 Days</button>
       <button class="an-btn" id="btn30d" onclick="setRange(30)">30 Days</button>
+      <button class="an-btn" id="btn90d" onclick="setRange(90)">90 Days</button>
+      <button class="an-btn" id="btn180d" onclick="setRange(180)">180 Days</button>
       <span style="color:rgba(255,255,255,0.15);margin:0 4px">|</span>
       <input type="date" class="an-date-input" id="dateInput" />
       <button class="an-btn go" onclick="goDate()">Go</button>
@@ -184,11 +159,6 @@
       if (v > 0.0001) return 'val-pos';
       if (v < -0.0001) return 'val-neg';
       return 'val-zero';
-    }
-
-    function rankClass(r) {
-      if (r <= 3 || r >= 6) return 'rank-' + r;
-      return '';
     }
 
     async function load() {
@@ -246,7 +216,7 @@
       // Signal events
       if (d.signals.length) {
         html += '<div class="an-signals-hd">Signal Events (Rank #1 or #8)</div>';
-        for (const sig of d.signals.slice().reverse().slice(0, 50)) {
+        for (const sig of d.signals.slice().reverse()) {
           html += '<div class="an-signal-row">';
           html += `<span class="an-signal-time">${fmtTime(sig.time)}</span>`;
           if (sig.aud.signal) {
@@ -265,29 +235,6 @@
         }
       }
 
-      // Hourly table (most recent first)
-      html += '<div class="an-signals-hd">Hourly Breakdown</div>';
-      html += '<div class="an-table-wrap"><table class="an-table">';
-      html += '<thead><tr><th>Time</th><th>AUD Rank</th><th>AUD Value</th><th>NZD Rank</th><th>NZD Value</th><th>Strongest</th><th>Weakest</th></tr></thead>';
-      html += '<tbody>';
-
-      const rows = d.timeline.slice().reverse();
-      for (const t of rows) {
-        const hasSig = t.aud.signal || t.nzd.signal;
-        const strongest = t.ranking[0];
-        const weakest = t.ranking[7];
-        html += `<tr class="${hasSig ? 'has-signal' : ''}">`;
-        html += `<td>${fmtTime(t.time)}</td>`;
-        html += `<td class="aud-col ${rankClass(t.aud.rank)}">#${t.aud.rank}</td>`;
-        html += `<td class="aud-col ${valClass(t.aud.value)}">${fmtVal(t.aud.value)}</td>`;
-        html += `<td class="nzd-col ${rankClass(t.nzd.rank)}">#${t.nzd.rank}</td>`;
-        html += `<td class="nzd-col ${valClass(t.nzd.value)}">${fmtVal(t.nzd.value)}</td>`;
-        html += `<td style="color:#22c55e;font-weight:700">${strongest.currency} <span style="font-weight:400;color:var(--text-muted)">${fmtVal(strongest.value)}</span></td>`;
-        html += `<td style="color:#ef4444;font-weight:700">${weakest.currency} <span style="font-weight:400;color:var(--text-muted)">${fmtVal(weakest.value)}</span></td>`;
-        html += '</tr>';
-      }
-
-      html += '</tbody></table></div>';
       el.innerHTML = html;
     }
 

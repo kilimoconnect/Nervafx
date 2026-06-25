@@ -16,7 +16,7 @@ module.exports = async function handler(req, res) {
     if (gate.error) return res.status(gate.status).json({ error: gate.error, upgrade: gate.upgrade });
 
     const date = req.query?.date;  // YYYY-MM-DD
-    const days = Math.min(90, parseInt(req.query?.days || '7', 10) || 7);
+    const days = Math.min(180, parseInt(req.query?.days || '7', 10) || 7);
 
     let since, until;
     if (date) {
@@ -103,7 +103,6 @@ module.exports = async function handler(req, res) {
         nzd: { strongest: nzdStrongest, weakest: nzdWeakest },
       },
       signals,
-      timeline,
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
