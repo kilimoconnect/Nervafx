@@ -95,10 +95,10 @@ module.exports = async function handler(req, res) {
 
       // Signal: strongest (rank 1, value > +2%) or weakest (rank 8, value < -2%)
       let audSignal = null, nzdSignal = null;
-      if (audRank === 1 && audVal > 0.01) audSignal = 'STRONGEST';
-      else if (audRank === 8 && audVal < -0.01) audSignal = 'WEAKEST';
-      if (nzdRank === 1 && nzdVal > 0.01) nzdSignal = 'STRONGEST';
-      else if (nzdRank === 8 && nzdVal < -0.01) nzdSignal = 'WEAKEST';
+      if (audRank === 1 && audVal > 0.005) audSignal = 'STRONGEST';
+      else if (audRank === 8 && audVal < -0.005) audSignal = 'WEAKEST';
+      if (nzdRank === 1 && nzdVal > 0.005) nzdSignal = 'STRONGEST';
+      else if (nzdRank === 8 && nzdVal < -0.005) nzdSignal = 'WEAKEST';
 
       timeline.push({
         time: hour,
