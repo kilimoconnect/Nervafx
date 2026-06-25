@@ -27,14 +27,14 @@ module.exports = async function handler(req, res) {
       since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
     }
 
-    // Fetch raw_6h (unsmoothed) for all currencies in range
+    // Fetch raw_12h (unsmoothed) for all currencies in range
     const allRows = [];
     const PAGE = 1000;
     let offset = 0;
     while (true) {
       const { data, error } = await sb
         .from('currency_strength')
-        .select('time, currency, raw_6h')
+        .select('time, currency, raw_12h')
         .gte('time', since)
         .lte('time', until)
         .order('time', { ascending: true })
@@ -51,7 +51,7 @@ module.exports = async function handler(req, res) {
     for (const r of allRows) {
       const h = r.time;
       if (!byHour[h]) byHour[h] = {};
-      byHour[h][r.currency] = parseFloat(r.raw_6h) || 0;
+      byHour[h][r.currency] = parseFloat(r.raw_12h) || 0;
     }
 
     const hours = Object.keys(byHour).sort();
@@ -61,7 +61,7 @@ module.exports = async function handler(req, res) {
       const vals = byHour[hour];
       if (Object.keys(vals).length < 8) continue;
 
-      // Rank currencies by raw_6h (strongest first)
+      // Rank currencies by raw_12h (strongest first)
       const ranked = CURRENCIES
         .map(c => ({ currency: c, value: vals[c] }))
         .sort((a, b) => b.value - a.value);
