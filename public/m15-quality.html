@@ -302,9 +302,11 @@ function render() {
     if (top5.length < 5) continue;
     const hasAudNzdPair = top5.some(p => (p.pair || '').replace('_','').toUpperCase() === 'AUDNZD');
     if (hasAudNzdPair) continue;
-    const allAud = top5.every(p => (p.pair || '').toUpperCase().includes('AUD'));
-    const allNzd = top5.every(p => (p.pair || '').toUpperCase().includes('NZD'));
-    if (!allAud && !allNzd) continue;
+    const allAudOrNzd = top5.every(p => {
+      const pair = (p.pair || '').toUpperCase();
+      return pair.includes('AUD') || pair.includes('NZD');
+    });
+    if (!allAudOrNzd) continue;
     const breakPairs = top5;
 
     const sessClass = snap.session.toLowerCase();
