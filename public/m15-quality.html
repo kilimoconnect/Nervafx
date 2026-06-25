@@ -317,7 +317,14 @@ function render() {
       </div>
     </div>`;
 
-    const showPairs = breakPairs.slice(0, 5);
+    const showPairs = breakPairs
+      .filter(p => {
+        const pair = (p.pair || '').toUpperCase();
+        const hasAudNzd = pair.includes('AUD') || pair.includes('NZD');
+        return hasAudNzd && p.quality >= 30;
+      })
+      .slice(0, 5);
+    if (!showPairs.length) continue;
     for (let i = 0; i < showPairs.length; i++) {
       const p = showPairs[i];
       const cls = p.classification.toLowerCase();
