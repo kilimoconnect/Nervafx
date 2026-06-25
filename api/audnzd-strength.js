@@ -133,8 +133,8 @@ module.exports = async function handler(req, res) {
     const signals = timeline.filter(t => {
       if (!t.aud.signal && !t.nzd.signal) return false;
       if (t.aud.signal && t.nzd.signal && t.aud.signal !== t.nzd.signal) return false;
-      const audOk = t.aud.signal && t.aud.streak >= 4;
-      const nzdOk = t.nzd.signal && t.nzd.streak >= 4;
+      const audOk = t.aud.signal && t.aud.streak >= 3;
+      const nzdOk = t.nzd.signal && t.nzd.streak >= 3;
       return audOk || nzdOk;
     });
 
