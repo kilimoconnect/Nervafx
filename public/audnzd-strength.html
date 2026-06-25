@@ -84,6 +84,10 @@
     }
     .an-trade-buy { background: rgba(34,197,94,0.12); color: #4ade80; }
     .an-trade-sell { background: rgba(239,68,68,0.12); color: #f87171; }
+    .an-streak {
+      font-size: 9px; font-weight: 800; padding: 2px 7px; border-radius: 4px;
+      background: rgba(250,204,21,0.15); color: #facc15; letter-spacing: 0.3px;
+    }
 
     .an-score-toggle {
       font-size: 10px; font-weight: 600; color: #60a5fa; cursor: pointer;
@@ -255,12 +259,14 @@
             html += `<span class="an-signal-badge ${cls}">AUD ${sig.aud.signal}</span>`;
             html += `<span class="an-signal-rank">#${sig.aud.rank}</span>`;
             html += `<span class="an-signal-val ${valClass(sig.aud.value)}">${fmtVal(sig.aud.value)}</span>`;
+            if (sig.aud.streak >= 3) html += `<span class="an-streak">🔥 ${sig.aud.streak}h streak</span>`;
           }
           if (sig.nzd.signal) {
             const cls = sig.nzd.signal === 'STRONGEST' ? 'badge-strongest' : 'badge-weakest';
             html += `<span class="an-signal-badge ${cls}">NZD ${sig.nzd.signal}</span>`;
             html += `<span class="an-signal-rank">#${sig.nzd.rank}</span>`;
             html += `<span class="an-signal-val ${valClass(sig.nzd.value)}">${fmtVal(sig.nzd.value)}</span>`;
+            if (sig.nzd.streak >= 3) html += `<span class="an-streak">🔥 ${sig.nzd.streak}h streak</span>`;
           }
           const trades = (sig.aud.trades || []).concat(sig.nzd.trades || []);
           if (trades.length) {

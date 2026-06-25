@@ -108,6 +108,21 @@ module.exports = async function handler(req, res) {
       });
     }
 
+    // Compute consecutive streaks
+    let audStreak = 0, audPrevSig = null;
+    let nzdStreak = 0, nzdPrevSig = null;
+    for (const t of timeline) {
+      if (t.aud.signal && t.aud.signal === audPrevSig) audStreak++;
+      else audStreak = t.aud.signal ? 1 : 0;
+      audPrevSig = t.aud.signal;
+      t.aud.streak = audStreak;
+
+      if (t.nzd.signal && t.nzd.signal === nzdPrevSig) nzdStreak++;
+      else nzdStreak = t.nzd.signal ? 1 : 0;
+      nzdPrevSig = t.nzd.signal;
+      t.nzd.streak = nzdStreak;
+    }
+
     // Summary stats
     const audStrongest = timeline.filter(t => t.aud.signal === 'STRONGEST').length;
     const audWeakest   = timeline.filter(t => t.aud.signal === 'WEAKEST').length;
