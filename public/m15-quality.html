@@ -298,11 +298,7 @@ function render() {
   if (_mqSessionFilter !== 'ALL') timeline = timeline.filter(s => s.session === _mqSessionFilter);
 
   for (const snap of timeline) {
-    // Only show break pairs whose direction doesn't conflict with the H1 structure
-    // trend at that hour (hide direct conflicts; keep aligned/unknown). Max 5.
-    const breakPairs = (snap.breaks || [])
-      .filter(p => p.direction !== 'NEUTRAL' && p.structureAligned !== false)
-      .slice(0, 5);
+    const breakPairs = (snap.featured || []);
     if (!breakPairs.length) continue;
 
     const sessClass = snap.session.toLowerCase();

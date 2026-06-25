@@ -300,11 +300,17 @@ module.exports = async function handler(req, res) {
           return b.quality - a.quality;
         });
 
+      const featured = pairArr
+        .filter(p => p.structureBreak && (p.dayHigh || p.dayLow) && p.scoreRamp)
+        .sort((a, b) => b.quality - a.quality)
+        .slice(0, 5);
+
       return {
         time: snap.time,
         session: snap.session,
         top5: pairArr.slice(0, 5),
         breaks: pairArr.filter(p => p.structureBreak),
+        featured,
         trendingCount: trending.size,
         breakCount: pairArr.filter(p => p.structureBreak).length,
         totalPairs: pairArr.length,

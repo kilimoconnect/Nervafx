@@ -2142,10 +2142,12 @@ function _renderCqSnap(snap, type) {
   }
   html += '</div>';
 
-  const pairs = (snap.top5 || []).filter(p => {
-    if (p.direction === 'NEUTRAL') return false;
-    if (p.structureAligned === false) return false;
-    if (type === 'h1') return p.quality >= 30 && (p.m15Quality == null || p.m15Quality >= 40);
+  const pairs = (type === 'm15' ? (snap.featured || snap.top5 || []) : (snap.top5 || [])).filter(p => {
+    if (type === 'h1') {
+      if (p.direction === 'NEUTRAL') return false;
+      if (p.structureAligned === false) return false;
+      return p.quality >= 30 && (p.m15Quality == null || p.m15Quality >= 40);
+    }
     return true;
   });
 
@@ -3720,9 +3722,8 @@ function _qpSessionCls(s) {
 
 function renderQualityPreview(el, h1Data, m15Data) {
   const h1Snaps = (h1Data?.timeline || []).slice(0, 2);
-  // M15 card is break-only: keep snapshots that have at least one structure break
   const m15Snaps = (m15Data?.timeline || [])
-    .filter(s => (s.breaks || []).some(p => p.direction !== 'NEUTRAL' && p.structureAligned !== false))
+    .filter(s => (s.featured || []).length > 0)
     .slice(0, 2);
 
   if (!h1Snaps.length && !m15Snaps.length) {
@@ -3766,14 +3767,14 @@ function _renderQpCard(snap, type) {
     <span class="qp-avg" style="color:${avgColor}">avg ${snap.avgQuality}%</span>
   </div>`;
 
-  // M15 card shows only structure-break pairs that don't conflict with the H1
-  // structure trend at that hour; H1 keeps its quality ranking
-  const source = type === 'm15' ? (snap.breaks || snap.top5 || []) : (snap.top5 || []);
+  const source = type === 'm15' ? (snap.featured || snap.breaks || snap.top5 || []) : (snap.top5 || []);
   const pairs = source.filter(p => {
-    if (p.direction === 'NEUTRAL') return false;
-    if (p.structureAligned === false) return false;
-    if (type === 'h1') return p.quality >= 30 && (p.m15Quality == null || p.m15Quality >= 40);
-    return !!p.structureBreak;
+    if (type === 'h1') {
+      if (p.direction === 'NEUTRAL') return false;
+      if (p.structureAligned === false) return false;
+      return p.quality >= 30 && (p.m15Quality == null || p.m15Quality >= 40);
+    }
+    return true;
   }).slice(0, 5);
 
   for (let i = 0; i < pairs.length; i++) {
