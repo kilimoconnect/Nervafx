@@ -155,10 +155,10 @@ module.exports = async function handler(req, res) {
       const nzdVal = strength.NZD;
 
       let audSignal = null, nzdSignal = null;
-      if (audRank === 1 && audVal > 0.02) audSignal = 'STRONGEST';
-      else if (audRank === 8 && audVal < -0.02) audSignal = 'WEAKEST';
-      if (nzdRank === 1 && nzdVal > 0.02) nzdSignal = 'STRONGEST';
-      else if (nzdRank === 8 && nzdVal < -0.02) nzdSignal = 'WEAKEST';
+      if (audRank === 1) audSignal = 'STRONGEST';
+      else if (audRank === 8) audSignal = 'WEAKEST';
+      if (nzdRank === 1) nzdSignal = 'STRONGEST';
+      else if (nzdRank === 8) nzdSignal = 'WEAKEST';
 
       timeline.push({
         time,
