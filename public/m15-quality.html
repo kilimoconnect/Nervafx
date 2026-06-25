@@ -300,11 +300,9 @@ function render() {
   for (const snap of timeline) {
     const top5 = (snap.top5 || []).slice(0, 5);
     if (top5.length < 5) continue;
-    const allAudNzd = top5.every(p => {
-      const pair = (p.pair || '').toUpperCase();
-      return pair.includes('AUD') || pair.includes('NZD');
-    });
-    if (!allAudNzd) continue;
+    const allAud = top5.every(p => (p.pair || '').toUpperCase().includes('AUD'));
+    const allNzd = top5.every(p => (p.pair || '').toUpperCase().includes('NZD'));
+    if (!allAud && !allNzd) continue;
     const breakPairs = top5;
 
     const sessClass = snap.session.toLowerCase();
