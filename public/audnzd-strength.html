@@ -124,6 +124,20 @@
     .an-empty { text-align: center; padding: 60px 20px; color: var(--text-muted); font-size: 13px; }
     .an-loading { text-align: center; padding: 60px; color: var(--text-muted); font-size: 13px; }
 
+    /* Timeframe tabs */
+    .an-tabs { display: flex; gap: 0; margin-bottom: 16px; }
+    .an-tab {
+      padding: 8px 20px; font-size: 12px; font-weight: 700; cursor: pointer;
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); transition: all 0.15s;
+    }
+    .an-tab:first-child { border-radius: 8px 0 0 8px; }
+    .an-tab:last-child { border-radius: 0 8px 8px 0; border-left: none; }
+    .an-tab.active {
+      background: rgba(59,130,246,0.15); border-color: rgba(59,130,246,0.4); color: #3b82f6;
+    }
+    .an-tab:hover:not(.active) { background: rgba(255,255,255,0.06); }
+
   </style>
 </head>
 <body>
@@ -137,7 +151,12 @@
   </div>
 
   <div class="an-main">
-    <p class="an-intro">6-hour raw (unsmoothed) currency strength — identifies when AUD or NZD ranks #1 (strongest) or #8 (weakest) across all currencies.</p>
+    <div class="an-tabs">
+      <div class="an-tab active" id="tabH1" onclick="setTf('h1')">H1 (6H Strength)</div>
+      <div class="an-tab" id="tabM15" onclick="setTf('m15')">M15 (6H Strength)</div>
+    </div>
+
+    <p class="an-intro" id="tfIntro">6-hour raw (unsmoothed) currency strength from H1 candles — identifies when AUD or NZD ranks #1 (strongest) or #8 (weakest) across all currencies.</p>
 
     <div class="an-controls">
       <button class="an-btn active" id="btn7d" onclick="setRange(7)">7 Days</button>
@@ -159,12 +178,34 @@
     let _mode = 'range'; // 'range' or 'date'
     let _days = 7;
     let _date = null;
+    let _tf = 'h1'; // 'h1' or 'm15'
+
+    const MAX_DAYS = { h1: 180, m15: 30 };
+    const RANGE_OPTS = { h1: [7, 14, 30, 90, 180], m15: [7, 14, 30] };
+
+    function setTf(tf) {
+      _tf = tf;
+      document.getElementById('tabH1').classList.toggle('active', tf === 'h1');
+      document.getElementById('tabM15').classList.toggle('active', tf === 'm15');
+      document.getElementById('tfIntro').textContent = tf === 'h1'
+        ? '6-hour raw (unsmoothed) currency strength from H1 candles — identifies when AUD or NZD ranks #1 (strongest) or #8 (weakest) across all currencies.'
+        : '6-hour raw (unsmoothed) currency strength from M15 candles — identifies when AUD or NZD ranks #1 (strongest) or #8 (weakest) across all currencies. Max 30 days.';
+      // Update range buttons
+      const opts = RANGE_OPTS[tf];
+      ['7','14','30','90','180'].forEach(d => {
+        const btn = document.getElementById('btn' + d + 'd');
+        if (btn) btn.style.display = opts.includes(parseInt(d)) ? '' : 'none';
+      });
+      if (_days > MAX_DAYS[tf]) _days = opts[opts.length - 1];
+      setRange(_days);
+    }
 
     function setRange(d) {
-      _mode = 'range'; _days = d; _date = null;
+      _mode = 'range'; _days = Math.min(d, MAX_DAYS[_tf]); _date = null;
       document.getElementById('btnLive').style.display = 'none';
-      document.querySelectorAll('.an-btn').forEach(b => b.classList.remove('active'));
-      document.getElementById('btn' + d + 'd').classList.add('active');
+      document.querySelectorAll('.an-controls .an-btn:not(.go)').forEach(b => b.classList.remove('active'));
+      const btn = document.getElementById('btn' + _days + 'd');
+      if (btn) btn.classList.add('active');
       load();
     }
 
@@ -204,7 +245,8 @@
       const el = document.getElementById('content');
       el.innerHTML = '<div class="an-loading">Loading…</div>';
 
-      let url = '/api/audnzd-strength?';
+      const apiPath = _tf === 'm15' ? '/api/audnzd-strength-m15' : '/api/audnzd-strength';
+      let url = apiPath + '?';
       if (_mode === 'date') url += 'date=' + _date;
       else url += 'days=' + _days;
 
@@ -220,7 +262,8 @@
 
     function render(d) {
       const el = document.getElementById('content');
-      if (!d.totalHours) {
+      const totalCount = d.totalHours || d.totalBars || 0;
+      if (!totalCount) {
         el.innerHTML = '<div class="an-empty">No data for this period. Historical data starts May 2025.</div>';
         return;
       }
@@ -247,8 +290,8 @@
         <div class="an-stat-val" style="color:#ef4444">${s.nzd.weakest}</div>
       </div>`;
       html += `<div class="an-stat">
-        <div class="an-stat-label">Total Hours</div>
-        <div class="an-stat-val" style="color:#60a5fa">${d.totalHours}</div>
+        <div class="an-stat-label">${_tf === 'm15' ? 'Total Bars' : 'Total Hours'}</div>
+        <div class="an-stat-val" style="color:#60a5fa">${totalCount}</div>
       </div>`;
       html += '</div>';
 

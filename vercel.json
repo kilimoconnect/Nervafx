@@ -16,7 +16,8 @@
     "api/m15-quality.js":         { "maxDuration": 60 },
     "api/structure-engine.js":    { "maxDuration": 90 },
     "api/structure-history.js":   { "maxDuration": 30 },
-    "api/audnzd-strength.js":    { "maxDuration": 60 }
+    "api/audnzd-strength.js":    { "maxDuration": 60 },
+    "api/audnzd-strength-m15.js": { "maxDuration": 60 }
   },
   "rewrites": [
     { "source": "/",       "destination": "/login.html" },
