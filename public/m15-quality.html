@@ -298,8 +298,7 @@ function render() {
   if (_mqSessionFilter !== 'ALL') timeline = timeline.filter(s => s.session === _mqSessionFilter);
 
   for (const snap of timeline) {
-    const breakPairs = (snap.featured || []);
-    if (!breakPairs.length) continue;
+    const breakPairs = (snap.top5 || []);
 
     const sessClass = snap.session.toLowerCase();
     const avgColor = qColor(snap.avgQuality >= 65 ? 'TRADEABLE' : snap.avgQuality >= 50 ? 'WEAK' : 'CHOPPY');
