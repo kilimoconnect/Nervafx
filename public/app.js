@@ -3694,11 +3694,11 @@ async function fetchQualityPreview() {
   if (!el) return;
   try {
     const ts = Date.now(); // cache-bust so the browser/CDN never serves a stale snapshot
-    const [h1, m15] = await Promise.all([
+    const [h1, anm15] = await Promise.all([
       api(`/api/structure-break?hours=24&t=${ts}`),
-      api(`/api/m15-quality?hours=24&t=${ts}`),
+      api(`/api/audnzd-strength-m15?days=7&t=${ts}`),
     ]);
-    renderQualityPreview(el, h1, m15);
+    renderQualityPreview(el, h1, anm15);
   } catch (e) {
     el.innerHTML = `<p class="me-empty">Failed to load quality: ${e.message}</p>`;
   }
@@ -3720,13 +3720,22 @@ function _qpSessionCls(s) {
   return s === 'ASIA' ? 'qp-asia' : s === 'LONDON' ? 'qp-london' : 'qp-ny';
 }
 
-function renderQualityPreview(el, h1Data, m15Data) {
-  const h1Snaps = (h1Data?.timeline || []).slice(0, 2);
-  const m15Snaps = (m15Data?.timeline || [])
-    .filter(s => (s.featured || []).length > 0)
-    .slice(0, 2);
+function _anFmtVal(v) {
+  if (v == null) return '—';
+  return (v >= 0 ? '+' : '') + (v * 100).toFixed(3) + '%';
+}
 
-  if (!h1Snaps.length && !m15Snaps.length) {
+function _anValCls(v) {
+  if (v > 0.0001) return 'val-pos';
+  if (v < -0.0001) return 'val-neg';
+  return '';
+}
+
+function renderQualityPreview(el, h1Data, anm15Data) {
+  const h1Snaps = (h1Data?.timeline || []).slice(0, 2);
+  const anSignals = (anm15Data?.signals || []).slice(-4).reverse();
+
+  if (!h1Snaps.length && !anSignals.length) {
     el.innerHTML = '<p class="me-empty">No quality data available</p>';
     return;
   }
@@ -3742,17 +3751,54 @@ function renderQualityPreview(el, h1Data, m15Data) {
   if (!h1Snaps.length) html += '<p class="me-empty">No H1 data</p>';
   html += '</div>';
 
-  // M15 column
+  // M15 AUD/NZD Strength column
   html += '<div class="qp-col">';
-  html += '<div class="qp-col-hd"><a href="/m15-quality" class="qp-col-link">M15 Quality →</a></div>';
-  for (const snap of m15Snaps) {
-    html += _renderQpCard(snap, 'm15');
+  html += '<div class="qp-col-hd"><a href="/audnzd-strength" class="qp-col-link">M15 AUD/NZD →</a></div>';
+  for (const sig of anSignals) {
+    html += _renderAnM15Card(sig);
   }
-  if (!m15Snaps.length) html += '<p class="me-empty">No M15 data</p>';
+  if (!anSignals.length) html += '<p class="me-empty">No M15 signals</p>';
   html += '</div>';
 
   html += '</div>';
   el.innerHTML = html;
+}
+
+function _renderAnM15Card(sig) {
+  let html = '<div class="qp-card">';
+  html += `<div class="qp-card-hd"><span class="qp-time">${_qpTime(sig.time)}</span></div>`;
+
+  if (sig.aud.signal) {
+    const cls = sig.aud.signal === 'STRONGEST' ? 'qp-buy' : 'qp-sell';
+    const badge = sig.aud.signal === 'STRONGEST' ? 'badge-strongest' : 'badge-weakest';
+    html += `<div class="qp-pair">
+      <span class="an-signal-badge ${badge}" style="font-size:9px;padding:2px 6px">AUD ${sig.aud.signal}</span>
+      <span style="color:var(--text-muted);font-size:10px">#${sig.aud.rank}</span>
+      <span style="font-size:10px;font-weight:700" class="${_anValCls(sig.aud.value)}">${_anFmtVal(sig.aud.value)}</span>
+    </div>`;
+    for (const t of (sig.aud.trades || [])) {
+      const tCls = t.direction === 'BUY' ? 'qp-buy' : 'qp-sell';
+      const scoreTag = t.score != null ? `<span style="opacity:0.7;font-size:9px;margin-left:4px">(${t.score})</span>` : '';
+      html += `<div class="qp-pair"><span class="qp-dir ${tCls}">${t.direction}</span><span class="qp-pair-name">${t.pair}</span>${scoreTag}</div>`;
+    }
+  }
+
+  if (sig.nzd.signal) {
+    const badge = sig.nzd.signal === 'STRONGEST' ? 'badge-strongest' : 'badge-weakest';
+    html += `<div class="qp-pair">
+      <span class="an-signal-badge ${badge}" style="font-size:9px;padding:2px 6px">NZD ${sig.nzd.signal}</span>
+      <span style="color:var(--text-muted);font-size:10px">#${sig.nzd.rank}</span>
+      <span style="font-size:10px;font-weight:700" class="${_anValCls(sig.nzd.value)}">${_anFmtVal(sig.nzd.value)}</span>
+    </div>`;
+    for (const t of (sig.nzd.trades || [])) {
+      const tCls = t.direction === 'BUY' ? 'qp-buy' : 'qp-sell';
+      const scoreTag = t.score != null ? `<span style="opacity:0.7;font-size:9px;margin-left:4px">(${t.score})</span>` : '';
+      html += `<div class="qp-pair"><span class="qp-dir ${tCls}">${t.direction}</span><span class="qp-pair-name">${t.pair}</span>${scoreTag}</div>`;
+    }
+  }
+
+  html += '</div>';
+  return html;
 }
 
 function _renderQpCard(snap, type) {

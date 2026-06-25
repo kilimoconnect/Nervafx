@@ -8008,6 +8008,10 @@ body::after {
 .qp-dir { font-size: 9px; font-weight: 800; padding: 1px 4px; border-radius: 3px; }
 .qp-buy { background: rgba(34,197,94,0.12); color: #22c55e; }
 .qp-sell { background: rgba(239,68,68,0.12); color: #ef4444; }
+.badge-strongest { background: rgba(34,197,94,0.15); color: #22c55e; font-weight: 800; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.3px; }
+.badge-weakest { background: rgba(239,68,68,0.15); color: #ef4444; font-weight: 800; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.3px; }
+.val-pos { color: #4ade80; }
+.val-neg { color: #f87171; }
 .qp-neut { color: var(--text-muted); }
 .qp-rank {
   font-size: 10px; font-weight: 800; color: var(--text-muted);
