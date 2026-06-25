@@ -299,16 +299,13 @@ function render() {
 
   for (const snap of timeline) {
     const top5 = (snap.top5 || []).slice(0, 5);
-    const audNzdCount = top5.filter(p => {
+    if (top5.length < 5) continue;
+    const allAudNzd = top5.every(p => {
       const pair = (p.pair || '').toUpperCase();
       return pair.includes('AUD') || pair.includes('NZD');
-    }).length;
-    if (audNzdCount < 3) continue;
-    const breakPairs = top5.filter(p => {
-      const pair = (p.pair || '').toUpperCase();
-      return (pair.includes('AUD') || pair.includes('NZD')) && p.quality >= 30;
     });
-    if (!breakPairs.length) continue;
+    if (!allAudNzd) continue;
+    const breakPairs = top5;
 
     const sessClass = snap.session.toLowerCase();
     const avgColor = qColor(snap.avgQuality >= 65 ? 'TRADEABLE' : snap.avgQuality >= 50 ? 'WEAK' : 'CHOPPY');
