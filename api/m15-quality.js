@@ -301,7 +301,7 @@ module.exports = async function handler(req, res) {
         });
 
       const featured = pairArr
-        .filter(p => p.structureBreak && (p.dayHigh || p.dayLow) && p.scoreRamp)
+        .filter(p => p.quality > 40 && p.structureBreak && (p.dayHigh || p.dayLow) && p.scoreRamp)
         .sort((a, b) => b.quality - a.quality)
         .slice(0, 5);
 
