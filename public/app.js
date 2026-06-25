@@ -3733,7 +3733,7 @@ function renderQualityPreview(el, data) {
   html += `<span class="an-dash-stat"><span class="an-dash-stat-label">AUD</span> <span class="val-pos">${s.aud?.strongest || 0} strong</span> · <span class="val-neg">${s.aud?.weakest || 0} weak</span></span>`;
   html += `<span class="an-dash-stat"><span class="an-dash-stat-label">NZD</span> <span class="val-pos">${s.nzd?.strongest || 0} strong</span> · <span class="val-neg">${s.nzd?.weakest || 0} weak</span></span>`;
   html += `</div>`;
-  html += `<a href="/audnzd-strength" class="an-dash-link">View All →</a>`;
+  html += `<a href="/audnzd-strength#m15" class="an-dash-link">View All →</a>`;
   html += '</div>';
 
   html += '<div class="an-dash-signals">';
