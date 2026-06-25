@@ -181,7 +181,7 @@
 
     function render(d) {
       const el = document.getElementById('content');
-      if (!d.timeline || !d.timeline.length) {
+      if (!d.totalHours) {
         el.innerHTML = '<div class="an-empty">No data for this period. Historical data starts May 2025.</div>';
         return;
       }
