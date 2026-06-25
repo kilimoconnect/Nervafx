@@ -133,6 +133,10 @@ module.exports = async function handler(req, res) {
     const signals = timeline.filter(t => {
       if (!t.aud.signal && !t.nzd.signal) return false;
       if (t.aud.signal && t.nzd.signal && t.aud.signal !== t.nzd.signal) return false;
+      if (t.aud.signal === 'WEAKEST' && t.nzd.rank <= 3) return false;
+      if (t.aud.signal === 'STRONGEST' && t.nzd.rank >= 6) return false;
+      if (t.nzd.signal === 'WEAKEST' && t.aud.rank <= 3) return false;
+      if (t.nzd.signal === 'STRONGEST' && t.aud.rank >= 6) return false;
       return true;
     });
 

@@ -230,6 +230,12 @@ module.exports = async function handler(req, res) {
     const signals = timeline.filter(t => {
       if (!t.aud.signal && !t.nzd.signal) return false;
       if (t.aud.signal && t.nzd.signal && t.aud.signal !== t.nzd.signal) return false;
+      // Hide when AUD weak but NZD in top 3 (or AUD strong but NZD in bottom 3)
+      if (t.aud.signal === 'WEAKEST' && t.nzd.rank <= 3) return false;
+      if (t.aud.signal === 'STRONGEST' && t.nzd.rank >= 6) return false;
+      // Hide when NZD weak but AUD in top 3 (or NZD strong but AUD in bottom 3)
+      if (t.nzd.signal === 'WEAKEST' && t.aud.rank <= 3) return false;
+      if (t.nzd.signal === 'STRONGEST' && t.aud.rank >= 6) return false;
       return true;
     });
 
