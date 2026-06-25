@@ -68,6 +68,10 @@
       background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
       border-radius: 8px; margin-bottom: 6px; flex-wrap: wrap;
     }
+    .an-signal-row.streak {
+      background: rgba(250,204,21,0.06); border-color: rgba(250,204,21,0.25);
+      box-shadow: 0 0 12px rgba(250,204,21,0.05);
+    }
     .an-signal-time { font-size: 11px; font-weight: 600; color: var(--text-muted); min-width: 130px; }
     .an-signal-badge {
       font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 4px;
@@ -252,7 +256,8 @@
       if (d.signals.length) {
         html += '<div class="an-signals-hd">Signal Events (Rank #1 or #8)</div>';
         for (const sig of d.signals.slice().reverse()) {
-          html += '<div class="an-signal-row">';
+          const hasStreak = (sig.aud.streak >= 3) || (sig.nzd.streak >= 3);
+          html += `<div class="an-signal-row${hasStreak ? ' streak' : ''}">`;
           html += `<span class="an-signal-time">${fmtTime(sig.time)}</span>`;
           if (sig.aud.signal) {
             const cls = sig.aud.signal === 'STRONGEST' ? 'badge-strongest' : 'badge-weakest';
