@@ -129,8 +129,12 @@ module.exports = async function handler(req, res) {
     const nzdStrongest = timeline.filter(t => t.nzd.signal === 'STRONGEST').length;
     const nzdWeakest   = timeline.filter(t => t.nzd.signal === 'WEAKEST').length;
 
-    // Signal events (hours where AUD or NZD hit rank 1 or 8)
-    const signals = timeline.filter(t => t.aud.signal || t.nzd.signal);
+    // Signal events — hide when AUD and NZD conflict (one strong, one weak)
+    const signals = timeline.filter(t => {
+      if (!t.aud.signal && !t.nzd.signal) return false;
+      if (t.aud.signal && t.nzd.signal && t.aud.signal !== t.nzd.signal) return false;
+      return true;
+    });
 
     res.json({
       since, until,
