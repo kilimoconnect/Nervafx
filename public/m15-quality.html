@@ -318,8 +318,9 @@ function render() {
       </div>
     </div>`;
 
-    for (let i = 0; i < breakPairs.length; i++) {
-      const p = breakPairs[i];
+    const showPairs = breakPairs.slice(0, 5);
+    for (let i = 0; i < showPairs.length; i++) {
+      const p = showPairs[i];
       const cls = p.classification.toLowerCase();
       const dc = p.direction === 'BULLISH' ? 'buy' : p.direction === 'BEARISH' ? 'sell' : 'neutral';
       const barColor = qColor(p.classification);

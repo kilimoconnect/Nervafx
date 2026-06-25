@@ -307,9 +307,9 @@ function render() {
       </div>
     </div>`;
 
-    for (let i = 0; i < snap.top5.length; i++) {
-      const p = snap.top5[i];
-      if (p.quality < 30 || p.m15Quality < 40 || p.direction === 'NEUTRAL' || p.structureAligned === false) continue;
+    const showPairs = snap.top5.slice(0, 5);
+    for (let i = 0; i < showPairs.length; i++) {
+      const p = showPairs[i];
       const cls = p.classification.toLowerCase();
       const dc = p.direction === 'BULLISH' ? 'buy' : p.direction === 'BEARISH' ? 'sell' : 'neutral';
       const barColor = qColor(p.classification);
