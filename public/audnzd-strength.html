@@ -153,7 +153,7 @@
   <div class="an-main">
     <div class="an-tabs">
       <div class="an-tab active" id="tabH1" onclick="setTf('h1')">H1 (6H Strength)</div>
-      <div class="an-tab" id="tabM15" onclick="setTf('m15')">M15 (6H Strength)</div>
+      <div class="an-tab" id="tabM15" onclick="setTf('m15')">M15 (10-candle)</div>
     </div>
 
     <p class="an-intro" id="tfIntro">6-hour raw (unsmoothed) currency strength from H1 candles — identifies when AUD or NZD ranks #1 (strongest) or #8 (weakest) across all currencies.</p>
@@ -189,7 +189,7 @@
       document.getElementById('tabM15').classList.toggle('active', tf === 'm15');
       document.getElementById('tfIntro').textContent = tf === 'h1'
         ? '6-hour raw (unsmoothed) currency strength from H1 candles — identifies when AUD or NZD ranks #1 (strongest) or #8 (weakest) across all currencies.'
-        : '6-hour raw (unsmoothed) currency strength from M15 candles — identifies when AUD or NZD ranks #1 (strongest) or #8 (weakest) across all currencies. Max 30 days.';
+        : '10-candle raw currency strength from M15 candles — identifies when AUD or NZD ranks #1 (strongest) or #8 (weakest) across all currencies. Max 30 days.';
       // Update range buttons
       const opts = RANGE_OPTS[tf];
       ['7','14','30','90','180'].forEach(d => {

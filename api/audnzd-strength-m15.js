@@ -24,7 +24,7 @@ const BASE_OF = {
   NZD_USD: 'NZD', EUR_NZD: 'EUR', GBP_NZD: 'GBP', NZD_JPY: 'NZD', NZD_CHF: 'NZD', NZD_CAD: 'NZD',
 };
 
-const LOOKBACK = 24; // 24 M15 candles = 6 hours
+const LOOKBACK = 10; // 10 M15 candles
 
 function bestTrades(ccy, signal, ranked) {
   const others = ranked.filter(r => r.currency !== ccy && r.currency !== (ccy === 'AUD' ? 'NZD' : 'AUD'));
@@ -61,7 +61,7 @@ module.exports = async function handler(req, res) {
       since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
     }
 
-    // Need extra candles for lookback
+    // Fetch extra candles for the lookback window
     const fetchSince = new Date(new Date(since).getTime() - LOOKBACK * 15 * 60 * 1000).toISOString();
 
     // Fetch M15 candles for all 28 instruments
@@ -100,13 +100,16 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // Build lookup: { instrument: { isoTime: close } }
-    const lookup = {};
+    // Build per-instrument index: array of { time, close } sorted ascending
+    // and a time→index map for fast lookup
+    const indexByInst = {};
     for (const inst of INSTRUMENTS) {
-      lookup[inst] = {};
-      for (const c of (candlesByInst[inst] || [])) {
-        lookup[inst][c.time] = c.close;
+      const candles = candlesByInst[inst] || [];
+      const timeToIdx = {};
+      for (let i = 0; i < candles.length; i++) {
+        timeToIdx[candles[i].time] = i;
       }
+      indexByInst[inst] = { candles, timeToIdx };
     }
 
     // Collect all M15 timestamps within the actual range
@@ -120,7 +123,7 @@ module.exports = async function handler(req, res) {
     }
     const timestamps = [...allTimes].sort();
 
-    // Compute strength at each M15 timestamp
+    // Compute strength at each M15 timestamp using 10-candle lookback by index
     const timeline = [];
     for (const time of timestamps) {
       const strength = {};
@@ -128,16 +131,15 @@ module.exports = async function handler(req, res) {
 
       let valid = true;
       for (const inst of INSTRUMENTS) {
+        const { candles, timeToIdx } = indexByInst[inst];
+        const idx = timeToIdx[time];
+        if (idx === undefined || idx < LOOKBACK) { valid = false; break; }
+
         const [base, quote] = inst.split('_');
-        const closeNow = lookup[inst][time];
-        if (closeNow === undefined) { valid = false; break; }
+        const closeNow = candles[idx].close;
+        const closePast = candles[idx - LOOKBACK].close;
 
-        // Find candle LOOKBACK periods back
-        const pastTime = new Date(new Date(time).getTime() - LOOKBACK * 15 * 60 * 1000).toISOString();
-        const pastClose = lookup[inst][pastTime];
-        if (pastClose === undefined) { valid = false; break; }
-
-        const movement = (closeNow - pastClose) / pastClose;
+        const movement = (closeNow - closePast) / closePast;
         strength[base] += movement;
         strength[quote] -= movement;
       }
