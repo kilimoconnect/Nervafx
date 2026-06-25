@@ -402,11 +402,7 @@ module.exports = async function handler(req, res) {
             m15Quality: m15q[pair] || 0, dayHigh: !!ext.newHigh, dayLow: !!ext.newLow
           };
         })
-        .sort((a, b) => {
-          if (a.structureBreak !== b.structureBreak) return a.structureBreak ? -1 : 1;
-          if (a.m15Quality !== b.m15Quality) return b.m15Quality - a.m15Quality;
-          return b.quality - a.quality;
-        });
+        .sort((a, b) => b.quality - a.quality);
 
       const en = energyMap[snap.time] || {};
       return {
