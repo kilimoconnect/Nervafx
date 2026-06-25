@@ -284,6 +284,14 @@ function render() {
   if (_mqSessionFilter !== 'ALL') timeline = timeline.filter(s => s.session === _mqSessionFilter);
 
   for (const snap of timeline) {
+    const top5 = (snap.top5 || []).slice(0, 5);
+    if (top5.length < 5) continue;
+    const hasAudNzdPair = top5.some(p => (p.pair || '').replace('_','').toUpperCase() === 'AUDNZD');
+    if (hasAudNzdPair) continue;
+    const allAud = top5.every(p => (p.pair || '').toUpperCase().includes('AUD'));
+    const allNzd = top5.every(p => (p.pair || '').toUpperCase().includes('NZD'));
+    if (!allAud && !allNzd) continue;
+
     const sessClass = snap.session.toLowerCase();
     const avgColor = qColor(snap.avgQuality >= 45 ? 'TRADEABLE' : snap.avgQuality >= 30 ? 'WEAK' : 'CHOPPY');
 
@@ -307,7 +315,7 @@ function render() {
       </div>
     </div>`;
 
-    const showPairs = snap.top5.slice(0, 5);
+    const showPairs = top5;
     for (let i = 0; i < showPairs.length; i++) {
       const p = showPairs[i];
       const cls = p.classification.toLowerCase();
