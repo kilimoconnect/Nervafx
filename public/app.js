@@ -3720,7 +3720,7 @@ function _anTime(iso) {
 }
 
 function renderQualityPreview(el, data) {
-  const signals = (data?.signals || []).slice(-6).reverse();
+  const signals = (data?.signals || []).slice(-5).reverse();
 
   if (!signals.length) {
     el.innerHTML = '<p class="me-empty">No AUD/NZD M15 signals in the last 7 days</p>';
