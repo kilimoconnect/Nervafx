@@ -226,16 +226,18 @@ module.exports = async function handler(req, res) {
     const nzdStrongest = timeline.filter(t => t.nzd.signal === 'STRONGEST').length;
     const nzdWeakest = timeline.filter(t => t.nzd.signal === 'WEAKEST').length;
 
-    // Signal events — hide AUD/NZD conflicts
+    // Signal events — AUD and NZD must move in the same direction
     const signals = timeline.filter(t => {
       if (!t.aud.signal && !t.nzd.signal) return false;
       if (t.aud.signal && t.nzd.signal && t.aud.signal !== t.nzd.signal) return false;
-      // Hide when AUD weak but NZD in top 3 (or AUD strong but NZD in bottom 3)
-      if (t.aud.signal === 'WEAKEST' && t.nzd.rank <= 3) return false;
-      if (t.aud.signal === 'STRONGEST' && t.nzd.rank >= 6) return false;
-      // Hide when NZD weak but AUD in top 3 (or NZD strong but AUD in bottom 3)
-      if (t.nzd.signal === 'WEAKEST' && t.aud.rank <= 3) return false;
-      if (t.nzd.signal === 'STRONGEST' && t.aud.rank >= 6) return false;
+      // If AUD weak, NZD must also be weak half (rank 5-8)
+      if (t.aud.signal === 'WEAKEST' && t.nzd.rank <= 4) return false;
+      // If AUD strong, NZD must also be strong half (rank 1-4)
+      if (t.aud.signal === 'STRONGEST' && t.nzd.rank >= 5) return false;
+      // If NZD weak, AUD must also be weak half
+      if (t.nzd.signal === 'WEAKEST' && t.aud.rank <= 4) return false;
+      // If NZD strong, AUD must also be strong half
+      if (t.nzd.signal === 'STRONGEST' && t.aud.rank >= 5) return false;
       return true;
     });
 
