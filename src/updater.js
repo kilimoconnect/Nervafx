@@ -18,7 +18,7 @@ const { calculateFlowPerformance }       = require('./flowPerformance');
 const { calculateLatestVolumeAnalysis }  = require('./volumeAnalysis');
 const { calculateM15Energy }           = require('./m15Energy');
 const { evaluateAutoTrader }           = require('../api/autotrader-evaluate');
-const { sendQualityAlerts }            = require('./qualityAlerts');
+const { checkAudNzdAlerts }             = require('./audnzdAlerts');
 const { storeStructureSnapshots }      = require('./structureSnapshot');
 
 const PARALLEL = 7; // instruments fetched in parallel (OANDA rate-limit safe)
@@ -158,7 +158,7 @@ async function hourlyUpdate() {
   await step('journal',             () => writeJournalEntry());
   await step('outcomes',         () => runOutcomeReviews());
   await step('structure_engine', () => storeStructureSnapshots(supabase));
-  await step('quality_alerts',   () => sendQualityAlerts());
+  await step('audnzd_alerts',    () => checkAudNzdAlerts(supabase));
 
   console.log('[UPDATE] Complete.');
   return { status: 'CLEAN', check };
@@ -187,7 +187,7 @@ async function m15Update() {
   await step('autotrader',          () => evaluateAutoTrader(supabase));
   await step('m15_energy',        () => calculateM15Energy());
   await step('flow_perf',         () => calculateFlowPerformance());
-  await step('quality_alerts',    () => sendQualityAlerts());
+  await step('audnzd_alerts',     () => checkAudNzdAlerts(supabase));
 
   console.log('[M15-UPDATE] Complete.');
   return { status: 'OK' };
