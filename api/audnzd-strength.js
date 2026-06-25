@@ -5,6 +5,28 @@ const { requirePlan } = require('./_plan');
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
 
+const PAIR_MAP = {
+  AUD: { USD: 'AUD_USD', EUR: 'EUR_AUD', GBP: 'GBP_AUD', JPY: 'AUD_JPY', CHF: 'AUD_CHF', CAD: 'AUD_CAD', NZD: 'AUD_NZD' },
+  NZD: { USD: 'NZD_USD', EUR: 'EUR_NZD', GBP: 'GBP_NZD', JPY: 'NZD_JPY', CHF: 'NZD_CHF', CAD: 'NZD_CAD', AUD: 'AUD_NZD' },
+};
+const BASE_OF = {
+  AUD_USD: 'AUD', EUR_AUD: 'EUR', GBP_AUD: 'GBP', AUD_JPY: 'AUD', AUD_CHF: 'AUD', AUD_CAD: 'AUD', AUD_NZD: 'AUD',
+  NZD_USD: 'NZD', EUR_NZD: 'EUR', GBP_NZD: 'GBP', NZD_JPY: 'NZD', NZD_CHF: 'NZD', NZD_CAD: 'NZD',
+};
+
+function bestTrades(ccy, signal, ranked) {
+  const others = ranked.filter(r => r.currency !== ccy && r.currency !== (ccy === 'AUD' ? 'NZD' : 'AUD'));
+  const targets = signal === 'STRONGEST' ? others.slice(-3).reverse() : others.slice(0, 3);
+  return targets.map(t => {
+    const pair = PAIR_MAP[ccy][t.currency];
+    const isBase = BASE_OF[pair] === ccy;
+    const direction = signal === 'STRONGEST'
+      ? (isBase ? 'BUY' : 'SELL')
+      : (isBase ? 'SELL' : 'BUY');
+    return { pair: pair.replace('_', '/'), direction, vs: t.currency, vsRank: ranked.indexOf(t) + 1 };
+  });
+}
+
 module.exports = async function handler(req, res) {
   cors(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -81,8 +103,8 @@ module.exports = async function handler(req, res) {
       timeline.push({
         time: hour,
         ranking: ranked,
-        aud: { rank: audRank, value: audVal, signal: audSignal },
-        nzd: { rank: nzdRank, value: nzdVal, signal: nzdSignal },
+        aud: { rank: audRank, value: audVal, signal: audSignal, trades: audSignal ? bestTrades('AUD', audSignal, ranked) : [] },
+        nzd: { rank: nzdRank, value: nzdVal, signal: nzdSignal, trades: nzdSignal ? bestTrades('NZD', nzdSignal, ranked) : [] },
       });
     }
 
