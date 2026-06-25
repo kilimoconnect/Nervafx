@@ -293,6 +293,7 @@ function render() {
       return pair.includes('AUD') || pair.includes('NZD');
     });
     if (!allAudOrNzd) continue;
+    if (top5.some(p => p.quality < 30)) continue;
 
     const sessClass = snap.session.toLowerCase();
     const avgColor = qColor(snap.avgQuality >= 45 ? 'TRADEABLE' : snap.avgQuality >= 30 ? 'WEAK' : 'CHOPPY');
