@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>NervaFX — AUD/NZD Strength</title>
+  <link rel="icon" type="image/png" href="/nervafx-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .grid { display: block !important; }
+    .sx-topbar {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 28px; height: 56px;
+      background: rgba(8,11,18,0.92);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+    .sx-topbar-left { display: flex; align-items: center; gap: 12px; }
+    .sx-logo img { height: 24px; display: block; }
+    .sx-sep { color: rgba(255,255,255,0.1); font-size: 20px; font-weight: 200; }
+    .sx-title-text { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+    .sx-back-btn {
+      display: flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: 8px;
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); font-size: 11px; font-weight: 600; cursor: pointer; text-decoration: none; transition: all 0.15s;
+    }
+    .sx-back-btn:hover { background: rgba(255,255,255,0.09); color: var(--text); }
+
+    .an-main { max-width: 1000px; margin: 0 auto; padding: 20px 16px 80px; }
+    .an-intro { font-size: 12px; color: var(--text-muted); margin: 0 0 16px; }
+
+    /* Controls */
+    .an-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+    .an-date-input {
+      padding: 5px 10px; border-radius: 6px; font-size: 11px; font-weight: 600;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text); font-family: inherit; outline: none;
+    }
+    .an-date-input::-webkit-calendar-picker-indicator { filter: invert(0.7); }
+    .an-btn {
+      padding: 5px 14px; border-radius: 6px; font-size: 11px; font-weight: 700;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); cursor: pointer; transition: all 0.15s;
+    }
+    .an-btn:hover { background: rgba(255,255,255,0.08); }
+    .an-btn.active { background: rgba(59,130,246,0.15); border-color: rgba(59,130,246,0.4); color: #3b82f6; }
+    .an-btn.go { background: rgba(59,130,246,0.15); border-color: rgba(59,130,246,0.4); color: #3b82f6; }
+    .an-btn.go:hover { background: rgba(59,130,246,0.25); }
+
+    /* Summary cards */
+    .an-summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-bottom: 20px; }
+    .an-stat {
+      border-radius: 10px; padding: 14px 16px; text-align: center;
+      background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+    }
+    .an-stat-label { font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+    .an-stat-val { font-size: 22px; font-weight: 800; }
+
+    /* Signal events */
+    .an-signals-hd { font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px; margin: 20px 0 10px; }
+    .an-signal-row {
+      display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+      background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 8px; margin-bottom: 6px;
+    }
+    .an-signal-time { font-size: 11px; font-weight: 600; color: var(--text-muted); min-width: 130px; }
+    .an-signal-badge {
+      font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 4px;
+      text-transform: uppercase; letter-spacing: 0.3px;
+    }
+    .badge-strongest { background: rgba(34,197,94,0.15); color: #22c55e; }
+    .badge-weakest { background: rgba(239,68,68,0.15); color: #ef4444; }
+    .an-signal-rank { font-size: 11px; color: var(--text-muted); }
+    .an-signal-val { font-size: 11px; font-weight: 700; margin-left: auto; }
+
+    /* Hourly table */
+    .an-table-wrap { overflow-x: auto; margin-top: 20px; }
+    .an-table {
+      width: 100%; border-collapse: collapse; font-size: 11px;
+    }
+    .an-table th {
+      padding: 8px 10px; text-align: left; font-weight: 700; font-size: 10px;
+      color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px;
+      border-bottom: 1px solid rgba(255,255,255,0.08); position: sticky; top: 0;
+      background: var(--bg, #080b12);
+    }
+    .an-table td {
+      padding: 7px 10px; border-bottom: 1px solid rgba(255,255,255,0.04);
+      white-space: nowrap;
+    }
+    .an-table tr:hover td { background: rgba(255,255,255,0.03); }
+    .an-table .aud-col { font-weight: 700; }
+    .an-table .nzd-col { font-weight: 700; }
+    .rank-1 { color: #22c55e; font-weight: 800; }
+    .rank-2 { color: #4ade80; }
+    .rank-3 { color: #86efac; }
+    .rank-6 { color: #fca5a5; }
+    .rank-7 { color: #f87171; }
+    .rank-8 { color: #ef4444; font-weight: 800; }
+    .val-pos { color: #4ade80; }
+    .val-neg { color: #f87171; }
+    .val-zero { color: #64748b; }
+
+    .an-empty { text-align: center; padding: 60px 20px; color: var(--text-muted); font-size: 13px; }
+    .an-loading { text-align: center; padding: 60px; color: var(--text-muted); font-size: 13px; }
+
+    /* Highlight rows with signals */
+    .an-table tr.has-signal td { background: rgba(255,255,255,0.02); }
+    .an-table tr.has-signal td:first-child { border-left: 3px solid #3b82f6; }
+  </style>
+</head>
+<body>
+  <div class="sx-topbar">
+    <div class="sx-topbar-left">
+      <a class="sx-logo" href="/app"><img src="/nervafx-logo.png" alt="NervaFX"></a>
+      <span class="sx-sep">|</span>
+      <span class="sx-title-text">AUD / NZD Strength Engine</span>
+    </div>
+    <a class="sx-back-btn" href="/app">← Dashboard</a>
+  </div>
+
+  <div class="an-main">
+    <p class="an-intro">6-hour raw (unsmoothed) currency strength — identifies when AUD or NZD ranks #1 (strongest) or #8 (weakest) across all currencies.</p>
+
+    <div class="an-controls">
+      <button class="an-btn active" id="btn7d" onclick="setRange(7)">7 Days</button>
+      <button class="an-btn" id="btn14d" onclick="setRange(14)">14 Days</button>
+      <button class="an-btn" id="btn30d" onclick="setRange(30)">30 Days</button>
+      <span style="color:rgba(255,255,255,0.15);margin:0 4px">|</span>
+      <input type="date" class="an-date-input" id="dateInput" />
+      <button class="an-btn go" onclick="goDate()">Go</button>
+      <button class="an-btn" id="btnLive" onclick="goLive()" style="display:none">← Live</button>
+    </div>
+
+    <div id="content"><div class="an-loading">Loading…</div></div>
+  </div>
+
+  <script>
+    const TOKEN = localStorage.getItem('nfx_token');
+    let _mode = 'range'; // 'range' or 'date'
+    let _days = 7;
+    let _date = null;
+
+    function setRange(d) {
+      _mode = 'range'; _days = d; _date = null;
+      document.getElementById('btnLive').style.display = 'none';
+      document.querySelectorAll('.an-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('btn' + d + 'd').classList.add('active');
+      load();
+    }
+
+    function goDate() {
+      const v = document.getElementById('dateInput').value;
+      if (!v) return;
+      _mode = 'date'; _date = v;
+      document.querySelectorAll('.an-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('btnLive').style.display = '';
+      load();
+    }
+
+    function goLive() {
+      setRange(_days);
+    }
+
+    function fmtTime(iso) {
+      try {
+        const d = new Date(iso);
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        return d.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
+      } catch (_) { return iso; }
+    }
+
+    function fmtVal(v) {
+      if (v == null) return '—';
+      return (v >= 0 ? '+' : '') + (v * 100).toFixed(3) + '%';
+    }
+
+    function valClass(v) {
+      if (v > 0.0001) return 'val-pos';
+      if (v < -0.0001) return 'val-neg';
+      return 'val-zero';
+    }
+
+    function rankClass(r) {
+      if (r <= 3 || r >= 6) return 'rank-' + r;
+      return '';
+    }
+
+    async function load() {
+      const el = document.getElementById('content');
+      el.innerHTML = '<div class="an-loading">Loading…</div>';
+
+      let url = '/api/audnzd-strength?';
+      if (_mode === 'date') url += 'date=' + _date;
+      else url += 'days=' + _days;
+
+      try {
+        const r = await fetch(url, { headers: { Authorization: 'Bearer ' + TOKEN } });
+        const d = await r.json();
+        if (d.error) { el.innerHTML = `<div class="an-empty">${d.error}</div>`; return; }
+        render(d);
+      } catch (e) {
+        el.innerHTML = `<div class="an-empty">Error: ${e.message}</div>`;
+      }
+    }
+
+    function render(d) {
+      const el = document.getElementById('content');
+      if (!d.timeline || !d.timeline.length) {
+        el.innerHTML = '<div class="an-empty">No data for this period. Historical data starts May 2025.</div>';
+        return;
+      }
+
+      let html = '';
+
+      // Summary
+      const s = d.summary;
+      html += '<div class="an-summary">';
+      html += `<div class="an-stat">
+        <div class="an-stat-label">AUD Strongest</div>
+        <div class="an-stat-val" style="color:#22c55e">${s.aud.strongest}</div>
+      </div>`;
+      html += `<div class="an-stat">
+        <div class="an-stat-label">AUD Weakest</div>
+        <div class="an-stat-val" style="color:#ef4444">${s.aud.weakest}</div>
+      </div>`;
+      html += `<div class="an-stat">
+        <div class="an-stat-label">NZD Strongest</div>
+        <div class="an-stat-val" style="color:#22c55e">${s.nzd.strongest}</div>
+      </div>`;
+      html += `<div class="an-stat">
+        <div class="an-stat-label">NZD Weakest</div>
+        <div class="an-stat-val" style="color:#ef4444">${s.nzd.weakest}</div>
+      </div>`;
+      html += `<div class="an-stat">
+        <div class="an-stat-label">Total Hours</div>
+        <div class="an-stat-val" style="color:#60a5fa">${d.totalHours}</div>
+      </div>`;
+      html += '</div>';
+
+      // Signal events
+      if (d.signals.length) {
+        html += '<div class="an-signals-hd">Signal Events (Rank #1 or #8)</div>';
+        for (const sig of d.signals.slice().reverse().slice(0, 50)) {
+          html += '<div class="an-signal-row">';
+          html += `<span class="an-signal-time">${fmtTime(sig.time)}</span>`;
+          if (sig.aud.signal) {
+            const cls = sig.aud.signal === 'STRONGEST' ? 'badge-strongest' : 'badge-weakest';
+            html += `<span class="an-signal-badge ${cls}">AUD ${sig.aud.signal}</span>`;
+            html += `<span class="an-signal-rank">#${sig.aud.rank}</span>`;
+            html += `<span class="an-signal-val ${valClass(sig.aud.value)}">${fmtVal(sig.aud.value)}</span>`;
+          }
+          if (sig.nzd.signal) {
+            const cls = sig.nzd.signal === 'STRONGEST' ? 'badge-strongest' : 'badge-weakest';
+            html += `<span class="an-signal-badge ${cls}">NZD ${sig.nzd.signal}</span>`;
+            html += `<span class="an-signal-rank">#${sig.nzd.rank}</span>`;
+            html += `<span class="an-signal-val ${valClass(sig.nzd.value)}">${fmtVal(sig.nzd.value)}</span>`;
+          }
+          html += '</div>';
+        }
+      }
+
+      // Hourly table (most recent first)
+      html += '<div class="an-signals-hd">Hourly Breakdown</div>';
+      html += '<div class="an-table-wrap"><table class="an-table">';
+      html += '<thead><tr><th>Time</th><th>AUD Rank</th><th>AUD Value</th><th>NZD Rank</th><th>NZD Value</th><th>Strongest</th><th>Weakest</th></tr></thead>';
+      html += '<tbody>';
+
+      const rows = d.timeline.slice().reverse();
+      for (const t of rows) {
+        const hasSig = t.aud.signal || t.nzd.signal;
+        const strongest = t.ranking[0];
+        const weakest = t.ranking[7];
+        html += `<tr class="${hasSig ? 'has-signal' : ''}">`;
+        html += `<td>${fmtTime(t.time)}</td>`;
+        html += `<td class="aud-col ${rankClass(t.aud.rank)}">#${t.aud.rank}</td>`;
+        html += `<td class="aud-col ${valClass(t.aud.value)}">${fmtVal(t.aud.value)}</td>`;
+        html += `<td class="nzd-col ${rankClass(t.nzd.rank)}">#${t.nzd.rank}</td>`;
+        html += `<td class="nzd-col ${valClass(t.nzd.value)}">${fmtVal(t.nzd.value)}</td>`;
+        html += `<td style="color:#22c55e;font-weight:700">${strongest.currency} <span style="font-weight:400;color:var(--text-muted)">${fmtVal(strongest.value)}</span></td>`;
+        html += `<td style="color:#ef4444;font-weight:700">${weakest.currency} <span style="font-weight:400;color:var(--text-muted)">${fmtVal(weakest.value)}</span></td>`;
+        html += '</tr>';
+      }
+
+      html += '</tbody></table></div>';
+      el.innerHTML = html;
+    }
+
+    load();
+  </script>
+</body>
+</html>
