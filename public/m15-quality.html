@@ -301,7 +301,7 @@ function render() {
     const breakPairs = (snap.top5 || [])
       .filter(p => {
         const pair = (p.pair || '').toUpperCase();
-        return (pair.includes('AUD') || pair.includes('NZD')) && p.quality >= 30;
+        return (pair.includes('AUD') || pair.includes('NZD')) && p.quality >= 40;
       })
       .slice(0, 5);
     if (!breakPairs.length) continue;
