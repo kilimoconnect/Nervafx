@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>NervaFX — CHF/JPY Strength</title>
+  <link rel="icon" type="image/png" href="/nervafx-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .grid { display: block !important; }
+    .sx-topbar {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 28px; height: 56px;
+      background: rgba(8,11,18,0.92);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+    .sx-topbar-left { display: flex; align-items: center; gap: 12px; }
+    .sx-logo img { height: 24px; display: block; }
+    .sx-sep { color: rgba(255,255,255,0.1); font-size: 20px; font-weight: 200; }
+    .sx-title-text { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+    .sx-back-btn {
+      display: flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: 8px;
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); font-size: 11px; font-weight: 600; cursor: pointer; text-decoration: none; transition: all 0.15s;
+    }
+    .sx-back-btn:hover { background: rgba(255,255,255,0.09); color: var(--text); }
+
+    .an-main { max-width: 1000px; margin: 0 auto; padding: 20px 16px 80px; }
+    .an-intro { font-size: 12px; color: var(--text-muted); margin: 0 0 16px; }
+
+    .an-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+    .an-date-input {
+      padding: 5px 10px; border-radius: 6px; font-size: 11px; font-weight: 600;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text); font-family: inherit; outline: none;
+    }
+    .an-date-input::-webkit-calendar-picker-indicator { filter: invert(0.7); }
+    .an-btn {
+      padding: 5px 14px; border-radius: 6px; font-size: 11px; font-weight: 700;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); cursor: pointer; transition: all 0.15s;
+    }
+    .an-btn:hover { background: rgba(255,255,255,0.08); }
+    .an-btn.active { background: rgba(59,130,246,0.15); border-color: rgba(59,130,246,0.4); color: #3b82f6; }
+    .an-btn.go { background: rgba(59,130,246,0.15); border-color: rgba(59,130,246,0.4); color: #3b82f6; }
+    .an-btn.go:hover { background: rgba(59,130,246,0.25); }
+
+    .an-summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-bottom: 20px; }
+    .an-stat {
+      border-radius: 10px; padding: 14px 16px; text-align: center;
+      background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+    }
+    .an-stat-label { font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+    .an-stat-val { font-size: 22px; font-weight: 800; }
+
+    .an-signals-hd { font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px; margin: 20px 0 10px; }
+    .an-signal-row {
+      display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+      background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 8px; margin-bottom: 6px; flex-wrap: wrap;
+    }
+    .an-signal-time { font-size: 11px; font-weight: 600; color: var(--text-muted); min-width: 130px; }
+    .an-signal-badge {
+      font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 4px;
+      text-transform: uppercase; letter-spacing: 0.3px;
+    }
+    .badge-strongest { background: rgba(34,197,94,0.15); color: #22c55e; }
+    .badge-weakest { background: rgba(239,68,68,0.15); color: #ef4444; }
+    .an-signal-rank { font-size: 11px; color: var(--text-muted); }
+    .an-signal-val { font-size: 11px; font-weight: 700; }
+    .an-signal-trades { display: flex; gap: 6px; margin-left: auto; }
+    .an-trade {
+      font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 4px;
+      letter-spacing: 0.2px;
+    }
+    .an-trade-buy { background: rgba(34,197,94,0.12); color: #4ade80; }
+    .an-trade-sell { background: rgba(239,68,68,0.12); color: #f87171; }
+
+    .an-score-toggle {
+      font-size: 10px; font-weight: 600; color: #60a5fa; cursor: pointer;
+      background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.25);
+      padding: 2px 8px; border-radius: 4px; white-space: nowrap;
+    }
+    .an-score-toggle:hover { background: rgba(59,130,246,0.2); }
+    .an-scoreboard {
+      display: none; width: 100%; margin-top: 6px;
+      background: rgba(0,0,0,0.2); border-radius: 6px; padding: 8px 10px;
+    }
+    .an-scoreboard.open { display: block; }
+    .an-score-bar { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
+    .an-score-ccy { font-size: 11px; font-weight: 800; min-width: 30px; }
+    .an-score-meter { flex: 1; height: 6px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; position: relative; }
+    .an-score-fill { height: 100%; border-radius: 3px; position: absolute; }
+    .an-score-fill-pos { background: #22c55e; right: 50%; }
+    .an-score-fill-neg { background: #ef4444; left: 50%; }
+    .an-score-num { font-size: 10px; font-weight: 600; min-width: 55px; text-align: right; }
+    .an-score-rank-num { font-size: 9px; color: var(--text-muted); min-width: 18px; }
+    .ccy-chf { color: #f59e0b; }
+    .ccy-jpy { color: #ec4899; }
+
+    .val-pos { color: #4ade80; }
+    .val-neg { color: #f87171; }
+    .val-zero { color: #64748b; }
+
+    .an-empty { text-align: center; padding: 60px 20px; color: var(--text-muted); font-size: 13px; }
+    .an-loading { text-align: center; padding: 60px; color: var(--text-muted); font-size: 13px; }
+
+    .an-tabs { display: flex; gap: 0; margin-bottom: 16px; }
+    .an-tab {
+      padding: 8px 20px; font-size: 12px; font-weight: 700; cursor: pointer;
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); transition: all 0.15s;
+    }
+    .an-tab:first-child { border-radius: 8px 0 0 8px; }
+    .an-tab:last-child { border-radius: 0 8px 8px 0; border-left: none; }
+    .an-tab.active {
+      background: rgba(59,130,246,0.15); border-color: rgba(59,130,246,0.4); color: #3b82f6;
+    }
+    .an-tab:hover:not(.active) { background: rgba(255,255,255,0.06); }
+  </style>
+</head>
+<body>
+  <div class="sx-topbar">
+    <div class="sx-topbar-left">
+      <a class="sx-logo" href="/app"><img src="/nervafx-logo.png" alt="NervaFX"></a>
+      <span class="sx-sep">|</span>
+      <span class="sx-title-text">CHF / JPY Strength Engine</span>
+    </div>
+    <a class="sx-back-btn" href="/app">← Dashboard</a>
+  </div>
+
+  <div class="an-main">
+    <div class="an-tabs">
+      <div class="an-tab active" id="tabH1" onclick="setTf('h1')">H1 (6H Strength)</div>
+      <div class="an-tab" id="tabM15" onclick="setTf('m15')">M15 (10-candle)</div>
+    </div>
+
+    <p class="an-intro" id="tfIntro">6-hour raw (unsmoothed) currency strength from H1 candles — identifies when CHF or JPY ranks #1 (strongest) or #8 (weakest) across all currencies.</p>
+
+    <div class="an-controls">
+      <button class="an-btn active" id="btn7d" onclick="setRange(7)">7 Days</button>
+      <button class="an-btn" id="btn14d" onclick="setRange(14)">14 Days</button>
+      <button class="an-btn" id="btn30d" onclick="setRange(30)">30 Days</button>
+      <button class="an-btn" id="btn90d" onclick="setRange(90)">90 Days</button>
+      <button class="an-btn" id="btn180d" onclick="setRange(180)">180 Days</button>
+      <span style="color:rgba(255,255,255,0.15);margin:0 4px">|</span>
+      <input type="date" class="an-date-input" id="dateInput" />
+      <button class="an-btn go" onclick="goDate()">Go</button>
+      <button class="an-btn" id="btnLive" onclick="goLive()" style="display:none">← Live</button>
+    </div>
+
+    <div id="content"><div class="an-loading">Loading…</div></div>
+  </div>
+
+  <script>
+    const TOKEN = localStorage.getItem('nfx_token');
+    let _mode = 'range';
+    let _days = 7;
+    let _date = null;
+    let _tf = 'h1';
+
+    const MAX_DAYS = { h1: 180, m15: 30 };
+    const RANGE_OPTS = { h1: [7, 14, 30, 90, 180], m15: [7, 14, 30] };
+
+    function setTf(tf) {
+      _tf = tf;
+      document.getElementById('tabH1').classList.toggle('active', tf === 'h1');
+      document.getElementById('tabM15').classList.toggle('active', tf === 'm15');
+      document.getElementById('tfIntro').textContent = tf === 'h1'
+        ? '6-hour raw (unsmoothed) currency strength from H1 candles — identifies when CHF or JPY ranks #1 (strongest) or #8 (weakest) across all currencies.'
+        : '10-candle raw currency strength from M15 candles — identifies when CHF or JPY ranks #1 (strongest) or #8 (weakest) across all currencies. Max 30 days.';
+      const opts = RANGE_OPTS[tf];
+      ['7','14','30','90','180'].forEach(d => {
+        const btn = document.getElementById('btn' + d + 'd');
+        if (btn) btn.style.display = opts.includes(parseInt(d)) ? '' : 'none';
+      });
+      if (_days > MAX_DAYS[tf]) _days = opts[opts.length - 1];
+      setRange(_days);
+    }
+
+    function setRange(d) {
+      _mode = 'range'; _days = Math.min(d, MAX_DAYS[_tf]); _date = null;
+      document.getElementById('btnLive').style.display = 'none';
+      document.querySelectorAll('.an-controls .an-btn:not(.go)').forEach(b => b.classList.remove('active'));
+      const btn = document.getElementById('btn' + _days + 'd');
+      if (btn) btn.classList.add('active');
+      load();
+    }
+
+    function goDate() {
+      const v = document.getElementById('dateInput').value;
+      if (!v) return;
+      _mode = 'date'; _date = v;
+      document.querySelectorAll('.an-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('btnLive').style.display = '';
+      load();
+    }
+
+    function goLive() { setRange(_days); }
+
+    function fmtTime(iso) {
+      try {
+        const d = new Date(iso);
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        return d.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
+      } catch (_) { return iso; }
+    }
+
+    function fmtVal(v) {
+      if (v == null) return '—';
+      return (v >= 0 ? '+' : '') + (v * 100).toFixed(3) + '%';
+    }
+
+    function valClass(v) {
+      if (v > 0.0001) return 'val-pos';
+      if (v < -0.0001) return 'val-neg';
+      return 'val-zero';
+    }
+
+    async function load() {
+      const el = document.getElementById('content');
+      el.innerHTML = '<div class="an-loading">Loading…</div>';
+
+      const apiPath = _tf === 'm15' ? '/api/chfjpy-strength-m15' : '/api/chfjpy-strength';
+      let url = apiPath + '?';
+      if (_mode === 'date') url += 'date=' + _date;
+      else url += 'days=' + _days;
+
+      try {
+        const r = await fetch(url, { headers: { Authorization: 'Bearer ' + TOKEN } });
+        const d = await r.json();
+        if (d.error) { el.innerHTML = `<div class="an-empty">${d.error}</div>`; return; }
+        render(d);
+      } catch (e) {
+        el.innerHTML = `<div class="an-empty">Error: ${e.message}</div>`;
+      }
+    }
+
+    function render(d) {
+      const el = document.getElementById('content');
+      const totalCount = d.totalHours || d.totalBars || 0;
+      if (!totalCount) {
+        el.innerHTML = '<div class="an-empty">No data for this period. Historical data starts May 2025.</div>';
+        return;
+      }
+
+      let html = '';
+
+      const s = d.summary;
+      html += '<div class="an-summary">';
+      html += `<div class="an-stat">
+        <div class="an-stat-label">CHF Strongest</div>
+        <div class="an-stat-val" style="color:#22c55e">${s.chf.strongest}</div>
+      </div>`;
+      html += `<div class="an-stat">
+        <div class="an-stat-label">CHF Weakest</div>
+        <div class="an-stat-val" style="color:#ef4444">${s.chf.weakest}</div>
+      </div>`;
+      html += `<div class="an-stat">
+        <div class="an-stat-label">JPY Strongest</div>
+        <div class="an-stat-val" style="color:#22c55e">${s.jpy.strongest}</div>
+      </div>`;
+      html += `<div class="an-stat">
+        <div class="an-stat-label">JPY Weakest</div>
+        <div class="an-stat-val" style="color:#ef4444">${s.jpy.weakest}</div>
+      </div>`;
+      html += `<div class="an-stat">
+        <div class="an-stat-label">${_tf === 'm15' ? 'Total Bars' : 'Total Hours'}</div>
+        <div class="an-stat-val" style="color:#60a5fa">${totalCount}</div>
+      </div>`;
+      html += '</div>';
+
+      if (d.signals.length) {
+        html += '<div class="an-signals-hd">Signal Events (Rank #1 or #8)</div>';
+        for (const sig of d.signals.slice().reverse()) {
+          html += '<div class="an-signal-row">';
+          html += `<span class="an-signal-time">${fmtTime(sig.time)}</span>`;
+          if (sig.chf.signal) {
+            const cls = sig.chf.signal === 'STRONGEST' ? 'badge-strongest' : 'badge-weakest';
+            html += `<span class="an-signal-badge ${cls}">CHF ${sig.chf.signal}</span>`;
+            html += `<span class="an-signal-rank">#${sig.chf.rank}</span>`;
+            html += `<span class="an-signal-val ${valClass(sig.chf.value)}">${fmtVal(sig.chf.value)}</span>`;
+          }
+          if (sig.jpy.signal) {
+            const cls = sig.jpy.signal === 'STRONGEST' ? 'badge-strongest' : 'badge-weakest';
+            html += `<span class="an-signal-badge ${cls}">JPY ${sig.jpy.signal}</span>`;
+            html += `<span class="an-signal-rank">#${sig.jpy.rank}</span>`;
+            html += `<span class="an-signal-val ${valClass(sig.jpy.value)}">${fmtVal(sig.jpy.value)}</span>`;
+          }
+          const trades = (sig.chf.trades || []).concat(sig.jpy.trades || []);
+          if (trades.length) {
+            html += '<span class="an-signal-trades">';
+            for (const t of trades) {
+              const cls = t.direction === 'BUY' ? 'an-trade-buy' : 'an-trade-sell';
+              const scoreTag = t.score != null ? ` <span style="opacity:0.7;font-size:9px">(${t.score})</span>` : '';
+              html += `<span class="an-trade ${cls}">${t.direction} ${t.pair}${scoreTag}</span>`;
+            }
+            html += '</span>';
+          }
+          const sid = 'sb_' + sig.time.replace(/[^a-z0-9]/gi, '');
+          html += `<span class="an-score-toggle" onclick="document.getElementById('${sid}').classList.toggle('open')">▸ Scores</span>`;
+          const maxAbs = Math.max(...sig.ranking.map(r => Math.abs(r.value)), 0.001);
+          html += `<div class="an-scoreboard" id="${sid}">`;
+          for (let i = 0; i < sig.ranking.length; i++) {
+            const r = sig.ranking[i];
+            const pct = Math.abs(r.value) / maxAbs * 50;
+            const isChf = r.currency === 'CHF';
+            const isJpy = r.currency === 'JPY';
+            const ccyCls = isChf ? 'ccy-chf' : isJpy ? 'ccy-jpy' : '';
+            const fillCls = r.value >= 0 ? 'an-score-fill-pos' : 'an-score-fill-neg';
+            const fillStyle = r.value >= 0
+              ? `right:50%;width:${pct}%`
+              : `left:50%;width:${pct}%`;
+            html += `<div class="an-score-bar">
+              <span class="an-score-rank-num">#${i + 1}</span>
+              <span class="an-score-ccy ${ccyCls}">${r.currency}</span>
+              <div class="an-score-meter"><div class="an-score-fill ${fillCls}" style="${fillStyle}"></div></div>
+              <span class="an-score-num ${valClass(r.value)}">${fmtVal(r.value)}</span>
+            </div>`;
+          }
+          html += '</div>';
+          html += '</div>';
+        }
+      }
+
+      el.innerHTML = html;
+    }
+
+    if (location.hash === '#m15') setTf('m15');
+    load();
+  </script>
+</body>
+</html>

@@ -17,7 +17,9 @@
     "api/structure-history.js":   { "maxDuration": 30 },
     "api/audnzd-strength.js":    { "maxDuration": 60 },
     "api/cron-audnzd-alerts.js": { "maxDuration": 30 },
-    "api/audnzd-strength-m15.js": { "maxDuration": 60 }
+    "api/audnzd-strength-m15.js": { "maxDuration": 60 },
+    "api/chfjpy-strength.js":     { "maxDuration": 60 },
+    "api/chfjpy-strength-m15.js": { "maxDuration": 60 }
   },
   "rewrites": [
     { "source": "/",       "destination": "/login.html" },
@@ -36,7 +38,8 @@
     { "source": "/structure-break", "destination": "/structure-break.html" },
     { "source": "/m15-quality", "destination": "/m15-quality.html" },
     { "source": "/structure-engine", "destination": "/structure-engine.html" },
-    { "source": "/audnzd-strength", "destination": "/audnzd-strength.html" }
+    { "source": "/audnzd-strength", "destination": "/audnzd-strength.html" },
+    { "source": "/chfjpy-strength", "destination": "/chfjpy-strength.html" }
   ],
   "headers": [
     {
