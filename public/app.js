@@ -3693,31 +3693,12 @@ async function fetchQualityPreview() {
   const el = document.getElementById('quality-preview-display');
   if (!el) return;
   try {
-    const ts = Date.now(); // cache-bust so the browser/CDN never serves a stale snapshot
-    const [h1, anm15] = await Promise.all([
-      api(`/api/structure-break?hours=24&t=${ts}`),
-      api(`/api/audnzd-strength-m15?days=7&t=${ts}`),
-    ]);
-    renderQualityPreview(el, h1, anm15);
+    const ts = Date.now();
+    const data = await api(`/api/audnzd-strength-m15?days=7&t=${ts}`);
+    renderQualityPreview(el, data);
   } catch (e) {
-    el.innerHTML = `<p class="me-empty">Failed to load quality: ${e.message}</p>`;
+    el.innerHTML = `<p class="me-empty">Failed to load: ${e.message}</p>`;
   }
-}
-
-function _qpColor(q) {
-  return q >= 60 ? '#22c55e' : q >= 45 ? '#3b82f6' : q >= 30 ? '#eab308' : '#ef4444';
-}
-
-function _qpTime(iso) {
-  const d = new Date(iso);
-  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  const hh = String(d.getHours()).padStart(2,'0');
-  const mm = String(d.getMinutes()).padStart(2,'0');
-  return `${days[d.getDay()]} ${hh}:${mm}`;
-}
-
-function _qpSessionCls(s) {
-  return s === 'ASIA' ? 'qp-asia' : s === 'LONDON' ? 'qp-london' : 'qp-ny';
 }
 
 function _anFmtVal(v) {
@@ -3731,73 +3712,72 @@ function _anValCls(v) {
   return '';
 }
 
-function renderQualityPreview(el, h1Data, anm15Data) {
-  const h1Snaps = (h1Data?.timeline || []).slice(0, 2);
-  const anSignals = (anm15Data?.signals || []).slice(-4).reverse();
+function _anTime(iso) {
+  const d = new Date(iso);
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${days[d.getDay()]} ${d.getDate()} ${mon[d.getMonth()]} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
 
-  if (!h1Snaps.length && !anSignals.length) {
-    el.innerHTML = '<p class="me-empty">No quality data available</p>';
+function renderQualityPreview(el, data) {
+  const signals = (data?.signals || []).slice(-6).reverse();
+
+  if (!signals.length) {
+    el.innerHTML = '<p class="me-empty">No AUD/NZD M15 signals in the last 7 days</p>';
     return;
   }
 
-  let html = '<div class="qp-grid">';
+  let html = '<div class="an-dash-header">';
+  const s = data.summary || {};
+  html += `<div class="an-dash-stats">`;
+  html += `<span class="an-dash-stat"><span class="an-dash-stat-label">AUD</span> <span class="val-pos">${s.aud?.strongest || 0} strong</span> · <span class="val-neg">${s.aud?.weakest || 0} weak</span></span>`;
+  html += `<span class="an-dash-stat"><span class="an-dash-stat-label">NZD</span> <span class="val-pos">${s.nzd?.strongest || 0} strong</span> · <span class="val-neg">${s.nzd?.weakest || 0} weak</span></span>`;
+  html += `</div>`;
+  html += `<a href="/audnzd-strength" class="an-dash-link">View All →</a>`;
+  html += '</div>';
 
-  // H1 column
-  html += '<div class="qp-col">';
-  html += '<div class="qp-col-hd"><a href="/structure-break" class="qp-col-link">H1 Quality →</a></div>';
-  for (const snap of h1Snaps) {
-    html += _renderQpCard(snap, 'h1');
+  html += '<div class="an-dash-signals">';
+  for (const sig of signals) {
+    html += _renderAnDashCard(sig);
   }
-  if (!h1Snaps.length) html += '<p class="me-empty">No H1 data</p>';
   html += '</div>';
 
-  // M15 AUD/NZD Strength column
-  html += '<div class="qp-col">';
-  html += '<div class="qp-col-hd"><a href="/audnzd-strength" class="qp-col-link">M15 AUD/NZD →</a></div>';
-  for (const sig of anSignals) {
-    html += _renderAnM15Card(sig);
-  }
-  if (!anSignals.length) html += '<p class="me-empty">No M15 signals</p>';
-  html += '</div>';
-
-  html += '</div>';
   el.innerHTML = html;
 }
 
-function _renderAnM15Card(sig) {
-  let html = '<div class="qp-card">';
-  html += `<div class="qp-card-hd"><span class="qp-time">${_qpTime(sig.time)}</span></div>`;
+function _renderAnDashCard(sig) {
+  let html = '<div class="an-dash-card">';
+  html += `<div class="an-dash-card-time">${_anTime(sig.time)}</div>`;
+  html += '<div class="an-dash-card-body">';
 
-  if (sig.aud.signal) {
-    const cls = sig.aud.signal === 'STRONGEST' ? 'qp-buy' : 'qp-sell';
-    const badge = sig.aud.signal === 'STRONGEST' ? 'badge-strongest' : 'badge-weakest';
-    html += `<div class="qp-pair">
-      <span class="an-signal-badge ${badge}" style="font-size:9px;padding:2px 6px">AUD ${sig.aud.signal}</span>
-      <span style="color:var(--text-muted);font-size:10px">#${sig.aud.rank}</span>
-      <span style="font-size:10px;font-weight:700" class="${_anValCls(sig.aud.value)}">${_anFmtVal(sig.aud.value)}</span>
-    </div>`;
-    for (const t of (sig.aud.trades || [])) {
-      const tCls = t.direction === 'BUY' ? 'qp-buy' : 'qp-sell';
-      const scoreTag = t.score != null ? `<span style="opacity:0.7;font-size:9px;margin-left:4px">(${t.score})</span>` : '';
-      html += `<div class="qp-pair"><span class="qp-dir ${tCls}">${t.direction}</span><span class="qp-pair-name">${t.pair}</span>${scoreTag}</div>`;
+  const ccys = [];
+  if (sig.aud.signal) ccys.push({ ccy: 'AUD', ...sig.aud });
+  if (sig.nzd.signal) ccys.push({ ccy: 'NZD', ...sig.nzd });
+
+  for (const c of ccys) {
+    const badgeCls = c.signal === 'STRONGEST' ? 'an-dash-strong' : 'an-dash-weak';
+    html += `<div class="an-dash-ccy-row">`;
+    html += `<span class="an-dash-ccy-badge ${badgeCls}">${c.ccy} ${c.signal === 'STRONGEST' ? '▲' : '▼'}</span>`;
+    html += `<span class="an-dash-rank">#${c.rank}</span>`;
+    html += `<span class="an-dash-val ${_anValCls(c.value)}">${_anFmtVal(c.value)}</span>`;
+    html += `</div>`;
+
+    if (c.trades && c.trades.length) {
+      html += '<div class="an-dash-trades">';
+      for (const t of c.trades) {
+        const dirCls = t.direction === 'BUY' ? 'an-dash-buy' : 'an-dash-sell';
+        const scoreTag = t.score != null ? `<span class="an-dash-score">${t.score}</span>` : '';
+        html += `<div class="an-dash-trade">`;
+        html += `<span class="an-dash-dir ${dirCls}">${t.direction}</span>`;
+        html += `<span class="an-dash-pair">${t.pair}</span>`;
+        html += scoreTag;
+        html += `</div>`;
+      }
+      html += '</div>';
     }
   }
 
-  if (sig.nzd.signal) {
-    const badge = sig.nzd.signal === 'STRONGEST' ? 'badge-strongest' : 'badge-weakest';
-    html += `<div class="qp-pair">
-      <span class="an-signal-badge ${badge}" style="font-size:9px;padding:2px 6px">NZD ${sig.nzd.signal}</span>
-      <span style="color:var(--text-muted);font-size:10px">#${sig.nzd.rank}</span>
-      <span style="font-size:10px;font-weight:700" class="${_anValCls(sig.nzd.value)}">${_anFmtVal(sig.nzd.value)}</span>
-    </div>`;
-    for (const t of (sig.nzd.trades || [])) {
-      const tCls = t.direction === 'BUY' ? 'qp-buy' : 'qp-sell';
-      const scoreTag = t.score != null ? `<span style="opacity:0.7;font-size:9px;margin-left:4px">(${t.score})</span>` : '';
-      html += `<div class="qp-pair"><span class="qp-dir ${tCls}">${t.direction}</span><span class="qp-pair-name">${t.pair}</span>${scoreTag}</div>`;
-    }
-  }
-
-  html += '</div>';
+  html += '</div></div>';
   return html;
 }
 
