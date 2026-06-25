@@ -3694,7 +3694,7 @@ async function fetchQualityPreview() {
   if (!el) return;
   try {
     const ts = Date.now();
-    const data = await api(`/api/audnzd-strength-m15?days=7&t=${ts}`);
+    const data = await api(`/api/audnzd-strength-m15?days=1&t=${ts}`);
     renderQualityPreview(el, data);
   } catch (e) {
     el.innerHTML = `<p class="me-empty">Failed to load: ${e.message}</p>`;
@@ -3723,7 +3723,7 @@ function renderQualityPreview(el, data) {
   const signals = (data?.signals || []).slice(-5).reverse();
 
   if (!signals.length) {
-    el.innerHTML = '<p class="me-empty">No AUD/NZD M15 signals in the last 7 days</p>';
+    el.innerHTML = '<p class="me-empty">No AUD/NZD M15 signals today</p>';
     return;
   }
 
