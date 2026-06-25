@@ -101,7 +101,148 @@ function baseLayout(content) {
 </div></div></body></html>`;
 }
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function _fmtVal(v) {
+  if (v == null) return '—';
+  return (v >= 0 ? '+' : '') + (v * 100).toFixed(3) + '%';
+}
+
+function _fmtTime(iso) {
+  const d = new Date(iso);
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const hh = String(d.getUTCHours()).padStart(2,'0');
+  const mm = String(d.getUTCMinutes()).padStart(2,'0');
+  return `${days[d.getUTCDay()]}, ${d.getUTCDate()} ${mon[d.getUTCMonth()]} ${hh}:${mm} UTC`;
+}
+
+function _tradeRow(t) {
+  const isBuy = t.direction === 'BUY';
+  const bgColor = isBuy ? 'rgba(34,197,94,0.10)' : 'rgba(239,68,68,0.10)';
+  const borderColor = isBuy ? '#22c55e' : '#ef4444';
+  const dirColor = isBuy ? '#22c55e' : '#ef4444';
+  const arrow = isBuy ? '▲' : '▼';
+  const scoreHtml = t.score != null
+    ? `<span style="color:#94a3b8;font-size:12px;margin-left:8px">Score: <strong style="color:#e2e8f0">${t.score}</strong></span>`
+    : '';
+  return `<div style="background:${bgColor};border-left:3px solid ${borderColor};border-radius:6px;padding:10px 14px;margin:6px 0">
+    <span style="color:${dirColor};font-weight:700;font-size:14px">${arrow} ${t.direction}</span>
+    <span style="color:#f1f5f9;font-weight:700;font-size:14px;margin-left:8px">${t.pair}</span>
+    ${scoreHtml}
+    <span style="color:#64748b;font-size:11px;margin-left:8px">vs ${t.vs} (#${t.vsRank})</span>
+  </div>`;
+}
+
 // ── Email templates ──────────────────────────────────────────────────────────
+
+function audnzdSignalEmail(signal) {
+  const ccys = [];
+  if (signal.aud?.signal) ccys.push({ ccy: 'AUD', ...signal.aud });
+  if (signal.nzd?.signal) ccys.push({ ccy: 'NZD', ...signal.nzd });
+
+  const ccyCards = ccys.map(c => {
+    const isStrong = c.signal === 'STRONGEST';
+    const color = isStrong ? '#22c55e' : '#ef4444';
+    const icon = isStrong ? '▲' : '▼';
+    const label = isStrong ? 'STRONGEST' : 'WEAKEST';
+    const tagCls = isStrong ? 'tag-green' : 'tag-red';
+
+    const tradesHtml = (c.trades || []).map(t => _tradeRow(t)).join('');
+
+    return `<div class="card" style="border-color:${color}40">
+      <div style="padding:16px 14px;border-bottom:1px solid #1e293b">
+        <table width="100%" cellpadding="0" cellspacing="0"><tr>
+          <td><span style="color:${color};font-size:20px;font-weight:800">${icon} ${c.ccy} ${label}</span></td>
+          <td style="text-align:right">
+            <span class="tag ${tagCls}" style="font-size:13px;padding:4px 12px">Rank #${c.rank}</span>
+          </td>
+        </tr></table>
+        <div style="margin-top:8px;font-size:15px;font-weight:700;color:${color}">${_fmtVal(c.value)}</div>
+      </div>
+      <div style="padding:12px 14px">
+        <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Best Trade Pairs</div>
+        ${tradesHtml}
+      </div>
+    </div>`;
+  }).join('');
+
+  // Scoreboard
+  const ranking = signal.ranking || [];
+  const maxAbs = Math.max(...ranking.map(r => Math.abs(r.value || 0)), 0.001);
+  const scoreRows = ranking.map((r, i) => {
+    const isAud = r.currency === 'AUD';
+    const isNzd = r.currency === 'NZD';
+    const nameColor = isAud ? '#60a5fa' : isNzd ? '#a78bfa' : '#e2e8f0';
+    const nameWeight = (isAud || isNzd) ? '800' : '600';
+    const valColor = r.value > 0.0001 ? '#4ade80' : r.value < -0.0001 ? '#f87171' : '#94a3b8';
+    return `<tr style="border-bottom:1px solid rgba(30,41,59,0.4)">
+      <td style="padding:6px 14px;width:30px;color:#64748b;font-size:11px">#${i + 1}</td>
+      <td style="padding:6px 14px;color:${nameColor};font-weight:${nameWeight};font-size:13px">${r.currency}</td>
+      <td style="padding:6px 14px;text-align:right;color:${valColor};font-weight:600;font-size:13px">${_fmtVal(r.value)}</td>
+    </tr>`;
+  }).join('');
+
+  const scoreboardHtml = scoreRows ? `
+    <div class="card">
+      <div class="card-hd">Currency Scoreboard</div>
+      <div class="card-bd"><table width="100%" cellpadding="0" cellspacing="0">${scoreRows}</table></div>
+    </div>` : '';
+
+  const subjectCcys = ccys.map(c => `${c.ccy} ${c.signal}`).join(' + ');
+
+  return {
+    subject: `${subjectCcys} — AUD/NZD M15 Signal`,
+    html: baseLayout(`
+      <h2>AUD/NZD Strength Signal</h2>
+      <p class="sub">${_fmtTime(signal.time)} · M15 10-candle strength</p>
+      ${ccyCards}
+      ${scoreboardHtml}
+      <p style="text-align:center;margin:24px 0"><a class="cta" href="https://nervafx.com/audnzd-strength">View Full Analysis →</a></p>
+      <p class="sm" style="text-align:center">Market observation — not a trade recommendation. Always apply your own risk management.</p>
+    `),
+  };
+}
+
+function audnzdDirectionChangeEmail(change) {
+  const { currency, from, to, signal, time } = change;
+  const isNowStrong = to === 'STRONGEST';
+  const color = isNowStrong ? '#22c55e' : '#ef4444';
+  const icon = isNowStrong ? '▲' : '▼';
+  const fromLabel = from === 'STRONGEST' ? 'Strongest (#1)' : from === 'WEAKEST' ? 'Weakest (#8)' : 'Neutral';
+  const toLabel = to === 'STRONGEST' ? 'Strongest (#1)' : 'Weakest (#8)';
+
+  const tradesHtml = (signal.trades || []).map(t => _tradeRow(t)).join('');
+
+  return {
+    subject: `${currency} Direction Change: ${fromLabel} → ${toLabel}`,
+    html: baseLayout(`
+      <h2>Direction Change Detected</h2>
+      <p class="sub">${_fmtTime(time)} · M15 10-candle strength</p>
+
+      <div class="card" style="border-color:${color}40">
+        <div style="padding:20px 14px;text-align:center">
+          <div style="font-size:13px;color:#94a3b8;margin-bottom:12px">
+            <span class="tag tag-gray" style="font-size:12px;padding:4px 12px">${fromLabel}</span>
+            <span style="color:#64748b;margin:0 10px;font-size:16px">→</span>
+            <span class="tag ${isNowStrong ? 'tag-green' : 'tag-red'}" style="font-size:12px;padding:4px 12px">${toLabel}</span>
+          </div>
+          <div style="font-size:28px;font-weight:800;color:${color}">${icon} ${currency}</div>
+          <div style="font-size:15px;font-weight:700;color:${color};margin-top:4px">${_fmtVal(signal.value)}</div>
+        </div>
+      </div>
+
+      ${tradesHtml ? `
+      <div style="margin-top:16px">
+        <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Suggested Trades</div>
+        ${tradesHtml}
+      </div>` : ''}
+
+      <p style="text-align:center;margin:24px 0"><a class="cta" href="https://nervafx.com/audnzd-strength">View Dashboard →</a></p>
+      <p class="sm" style="text-align:center">Market observation — not a trade recommendation.</p>
+    `),
+  };
+}
 
 function confirmationEmail(firstName, code) {
   const name = firstName || 'Trader';
@@ -771,12 +912,7 @@ module.exports = {
   baseLayout,
   confirmationEmail,
   welcomeEmail,
-  signalAlertEmail,
-  dailyDigestEmail,
   upgradePromptEmail,
-  momentumAlertEmail,
-  confluenceAlertEmail,
-  approvedTradesEmail,
-  impulseAlertEmail,
-  flowSpreadAlertEmail,
+  audnzdSignalEmail,
+  audnzdDirectionChangeEmail,
 };
