@@ -286,13 +286,12 @@ function render() {
   for (const snap of timeline) {
     const top5 = (snap.top5 || []).slice(0, 5);
     if (top5.length < 5) continue;
-    const hasAudNzdPair = top5.some(p => (p.pair || '').replace('_','').toUpperCase() === 'AUDNZD');
-    if (hasAudNzdPair) continue;
-    const allAudOrNzd = top5.every(p => {
-      const pair = (p.pair || '').toUpperCase();
-      return pair.includes('AUD') || pair.includes('NZD');
-    });
-    if (!allAudOrNzd) continue;
+    const pairs = top5.map(p => (p.pair || '').replace('_','').toUpperCase());
+    const hasCrossPair = pairs.some(p => p === 'AUDNZD' || p === 'CHFJPY');
+    if (hasCrossPair) continue;
+    const allAudNzd = top5.every(p => { const pr = (p.pair||'').toUpperCase(); return pr.includes('AUD') || pr.includes('NZD'); });
+    const allChfJpy = top5.every(p => { const pr = (p.pair||'').toUpperCase(); return pr.includes('CHF') || pr.includes('JPY'); });
+    if (!allAudNzd && !allChfJpy) continue;
     if (top5.some(p => p.quality < 30)) continue;
 
     const sessClass = snap.session.toLowerCase();
