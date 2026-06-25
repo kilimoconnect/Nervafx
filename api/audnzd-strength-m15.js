@@ -24,9 +24,38 @@ const BASE_OF = {
   NZD_USD: 'NZD', EUR_NZD: 'EUR', GBP_NZD: 'GBP', NZD_JPY: 'NZD', NZD_CHF: 'NZD', NZD_CAD: 'NZD',
 };
 
-const LOOKBACK = 10; // 10 M15 candles
+const LOOKBACK = 10; // 10 M15 candles for strength
+const Q_CANDLES = 10; // 10 M15 candles for quality
 
-function bestTrades(ccy, signal, ranked) {
+function computeQuality(candles) {
+  if (candles.length < Q_CANDLES) return null;
+  const c = candles.slice(-Q_CANDLES);
+
+  const bullCandles = c.filter(x => x.close > x.open).length;
+  const bearCandles = c.filter(x => x.close < x.open).length;
+  const directionScore = ((bullCandles - bearCandles) / Q_CANDLES) * 100;
+  const mainDir = directionScore > 0 ? 'BULLISH' : directionScore < 0 ? 'BEARISH' : 'NEUTRAL';
+
+  const netMove = Math.abs(c[Q_CANDLES - 1].close - c[0].open);
+  const totalRange = c.reduce((s, x) => s + (x.high - x.low), 0);
+  const impulseStrength = totalRange > 0 ? (netMove / totalRange) * 100 : 0;
+
+  const totalWick = c.reduce((s, x) => {
+    const body = Math.abs(x.close - x.open);
+    return s + (x.high - x.low - body);
+  }, 0);
+  const wickCleanliness = totalRange > 0 ? 100 - (totalWick / totalRange) * 100 : 0;
+
+  const quality = Math.round(
+    0.15 * Math.abs(directionScore) +
+    0.80 * impulseStrength +
+    0.05 * wickCleanliness
+  );
+
+  return { direction: mainDir, quality };
+}
+
+function bestTrades(ccy, signal, ranked, ohlcByInst, time) {
   const others = ranked.filter(r => r.currency !== ccy && r.currency !== (ccy === 'AUD' ? 'NZD' : 'AUD'));
   const targets = signal === 'STRONGEST' ? others.slice(-3).reverse() : others.slice(0, 3);
   return targets.map(t => {
@@ -35,7 +64,23 @@ function bestTrades(ccy, signal, ranked) {
     const direction = signal === 'STRONGEST'
       ? (isBase ? 'BUY' : 'SELL')
       : (isBase ? 'SELL' : 'BUY');
-    return { pair: pair.replace('_', '/'), direction, vs: t.currency, vsRank: ranked.indexOf(t) + 1 };
+
+    // Compute M15 quality for this pair
+    let score = null, pairDir = null;
+    const instData = ohlcByInst[pair];
+    if (instData) {
+      const idx = instData.timeToIdx[time];
+      if (idx !== undefined && idx >= Q_CANDLES - 1) {
+        const slice = instData.candles.slice(idx - Q_CANDLES + 1, idx + 1);
+        const q = computeQuality(slice);
+        if (q) {
+          score = q.quality;
+          pairDir = q.direction;
+        }
+      }
+    }
+
+    return { pair: pair.replace('_', '/'), direction, vs: t.currency, vsRank: ranked.indexOf(t) + 1, score, pairDir };
   });
 }
 
@@ -64,8 +109,9 @@ module.exports = async function handler(req, res) {
     // Fetch extra candles for the lookback window
     const fetchSince = new Date(new Date(since).getTime() - LOOKBACK * 15 * 60 * 1000).toISOString();
 
-    // Fetch M15 candles for all 28 instruments
+    // Fetch M15 candles with OHLC for all 28 instruments
     const candlesByInst = {};
+    const ohlcByInst = {};
     for (let b = 0; b < INSTRUMENTS.length; b += 7) {
       const batch = INSTRUMENTS.slice(b, b + 7);
       const results = await Promise.all(batch.map(async (inst) => {
@@ -75,7 +121,7 @@ module.exports = async function handler(req, res) {
         while (true) {
           let q = sb
             .from('backtest_candles')
-            .select('time, close')
+            .select('time, open, high, low, close')
             .eq('instrument', inst)
             .eq('timeframe', 'M15')
             .eq('complete', true)
@@ -93,15 +139,21 @@ module.exports = async function handler(req, res) {
         return { inst, data: allData };
       }));
       for (const { inst, data } of results) {
-        candlesByInst[inst] = data.map(c => ({
+        const parsed = data.map(c => ({
           time: c.time,
+          open: parseFloat(c.open),
+          high: parseFloat(c.high),
+          low: parseFloat(c.low),
           close: parseFloat(c.close),
         }));
+        candlesByInst[inst] = parsed;
+        const timeToIdx = {};
+        for (let i = 0; i < parsed.length; i++) timeToIdx[parsed[i].time] = i;
+        ohlcByInst[inst] = { candles: parsed, timeToIdx };
       }
     }
 
-    // Build per-instrument index: array of { time, close } sorted ascending
-    // and a time→index map for fast lookup
+    // Build per-instrument index for strength (close only)
     const indexByInst = {};
     for (const inst of INSTRUMENTS) {
       const candles = candlesByInst[inst] || [];
@@ -163,8 +215,8 @@ module.exports = async function handler(req, res) {
       timeline.push({
         time,
         ranking: ranked,
-        aud: { rank: audRank, value: audVal, signal: audSignal, trades: audSignal ? bestTrades('AUD', audSignal, ranked) : [] },
-        nzd: { rank: nzdRank, value: nzdVal, signal: nzdSignal, trades: nzdSignal ? bestTrades('NZD', nzdSignal, ranked) : [] },
+        aud: { rank: audRank, value: audVal, signal: audSignal, trades: audSignal ? bestTrades('AUD', audSignal, ranked, ohlcByInst, time) : [] },
+        nzd: { rank: nzdRank, value: nzdVal, signal: nzdSignal, trades: nzdSignal ? bestTrades('NZD', nzdSignal, ranked, ohlcByInst, time) : [] },
       });
     }
 

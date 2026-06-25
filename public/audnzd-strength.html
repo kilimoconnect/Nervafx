@@ -318,7 +318,8 @@
             html += '<span class="an-signal-trades">';
             for (const t of trades) {
               const cls = t.direction === 'BUY' ? 'an-trade-buy' : 'an-trade-sell';
-              html += `<span class="an-trade ${cls}">${t.direction} ${t.pair}</span>`;
+              const scoreTag = t.score != null ? ` <span style="opacity:0.7;font-size:9px">(${t.score})</span>` : '';
+              html += `<span class="an-trade ${cls}">${t.direction} ${t.pair}${scoreTag}</span>`;
             }
             html += '</span>';
           }
