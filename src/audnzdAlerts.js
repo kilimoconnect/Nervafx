@@ -23,7 +23,7 @@ const BASE_OF = {
 };
 
 const LOOKBACK = 10;
-const THRESHOLD = 0.015;
+const THRESHOLD = 0.012;
 
 function computeQuality(candles) {
   if (candles.length < 10) return null;
