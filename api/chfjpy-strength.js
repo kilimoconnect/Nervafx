@@ -91,10 +91,10 @@ module.exports = async function handler(req, res) {
       const jpyVal = vals.JPY;
 
       let chfSignal = null, jpySignal = null;
-      if (chfRank === 1 && chfVal > 0.02) chfSignal = 'STRONGEST';
-      else if (chfRank === 8 && chfVal < -0.02) chfSignal = 'WEAKEST';
-      if (jpyRank === 1 && jpyVal > 0.02) jpySignal = 'STRONGEST';
-      else if (jpyRank === 8 && jpyVal < -0.02) jpySignal = 'WEAKEST';
+      if (chfRank === 1 && chfVal > 0.015) chfSignal = 'STRONGEST';
+      else if (chfRank === 8 && chfVal < -0.015) chfSignal = 'WEAKEST';
+      if (jpyRank === 1 && jpyVal > 0.015) jpySignal = 'STRONGEST';
+      else if (jpyRank === 8 && jpyVal < -0.015) jpySignal = 'WEAKEST';
 
       timeline.push({
         time: hour,
