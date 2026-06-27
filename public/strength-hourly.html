@@ -146,7 +146,7 @@
     <div class="sx-topbar-left">
       <a class="sx-logo" href="/app"><img src="/nervafx-logo.png" alt="NervaFX" onerror="this.style.display='none'"></a>
       <span class="sx-sep">/</span>
-      <span class="sx-title-text">Spread Momentum — 3H Consecutive</span>
+      <span class="sx-title-text">Spread Momentum — 2H Consecutive</span>
     </div>
     <a class="sx-back-btn" href="/app" onclick="window.close(); setTimeout(function(){ location.href='/app'; }, 150); return false;">&times; Close</a>
   </div>
@@ -155,7 +155,7 @@
     <div class="sx-card">
       <div class="sx-card-hd">
         <i data-lucide="trending-up"></i> Top 5 Diverging Pairs
-        <span class="sx-note" id="sx-note">Pairs where both currencies have trended consistently for 3 consecutive hours</span>
+        <span class="sx-note" id="sx-note">Pairs where both currencies have trended consistently for 2 consecutive hours</span>
         <span class="sx-ctrls" id="sx-ctrls">
           <button class="sx-btn sx-tf" data-tf="3h">3H</button>
           <button class="sx-btn sx-tf active" data-tf="6h">6H</button>
@@ -171,7 +171,7 @@
         <div id="sx-content"><div class="sx-loading"><span class="spinner"></span> Loading spread data…</div></div>
         <p style="margin:10px 0 0;font-size:10.5px;color:var(--text-dim)">
           Each card = one hour. Shows the top 5 pairs where one currency has been increasing and the other decreasing
-          for 3 consecutive hours. Spread = difference between the two currencies' strength values. Green dots = rising, Red dots = falling.
+          for 2 consecutive hours. Spread = difference between the two currencies' strength values. Green dots = rising, Red dots = falling.
         </p>
       </div>
     </div>
@@ -247,25 +247,23 @@
     const hourKeys = Object.keys(byHour).sort();
     const cards = [];
 
-    for (let i = 3; i < hourKeys.length; i++) {
+    for (let i = 2; i < hourKeys.length; i++) {
       const hk = hourKeys[i];
       const curMap = byHour[hk];
       if (Object.keys(curMap).length < 8) continue;
 
-      // Get values for last 4 hours (current + 3 prior) for trend detection
-      const priorKeys = [hourKeys[i-3], hourKeys[i-2], hourKeys[i-1], hk];
-      // Verify they are consecutive (each ~1 hour apart)
+      const priorKeys = [hourKeys[i-2], hourKeys[i-1], hk];
       const times = priorKeys.map(k => new Date(k + ':00:00Z').getTime());
-      const gaps = [times[1]-times[0], times[2]-times[1], times[3]-times[2]];
-      if (gaps.some(g => g > 2 * 3600000)) continue; // skip if gap > 2 hours
+      const gaps = [times[1]-times[0], times[2]-times[1]];
+      if (gaps.some(g => g > 2 * 3600000)) continue;
 
       const trending = {};
       const trendVals = {};
       for (const ccy of CURRENCIES) {
         const vals = priorKeys.map(k => (byHour[k] || {})[ccy] || 0);
         trendVals[ccy] = vals;
-        const rising  = vals[1] > vals[0] && vals[2] > vals[1] && vals[3] > vals[2];
-        const falling = vals[1] < vals[0] && vals[2] < vals[1] && vals[3] < vals[2];
+        const rising  = vals[1] > vals[0] && vals[2] > vals[1];
+        const falling = vals[1] < vals[0] && vals[2] < vals[1];
         if (rising) trending[ccy] = 'UP';
         else if (falling) trending[ccy] = 'DOWN';
       }
@@ -316,7 +314,7 @@
   function renderCards(cards) {
     const el = document.getElementById('sx-content');
     if (!cards.length) {
-      el.innerHTML = '<div class="hr-empty">No 3-hour consecutive spread momentum found for this period.</div>';
+      el.innerHTML = '<div class="hr-empty">No 2-hour consecutive spread momentum found for this period.</div>';
       return;
     }
 
