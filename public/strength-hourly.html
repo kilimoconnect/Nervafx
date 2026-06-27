@@ -296,13 +296,15 @@
 
       if (!pairs.length) continue;
       pairs.sort((a, b) => b.spread - a.spread);
+      const top5 = pairs.slice(0, 5).filter(p => pips(p.spread) >= 20);
+      if (!top5.length) continue;
 
       const time = hk + ':00:00Z';
       cards.push({
         time,
         label: hrLabel(time),
         sub: dayLabel(time),
-        top5: pairs.slice(0, 5),
+        top5,
         totalPairs: pairs.length,
         trending,
       });
