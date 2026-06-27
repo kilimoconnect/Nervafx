@@ -220,8 +220,8 @@
   const _cache = {};
 
   function valueOf(r) {
-    const fMap = { '6h': 'smooth_6h' };
-    return parseFloat(r[fMap[_tf] || 'smooth_3h']) || 0;
+    const fMap = { '6h': 'raw_6h' };
+    return parseFloat(r[fMap[_tf] || 'raw_3h']) || 0;
   }
 
   async function fetchRows(days) {
