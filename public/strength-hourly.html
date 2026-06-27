@@ -157,8 +157,8 @@
         <i data-lucide="trending-up"></i> Top 5 Diverging Pairs
         <span class="sx-note" id="sx-note">Pairs where both currencies have trended consistently for 3 consecutive hours</span>
         <span class="sx-ctrls" id="sx-ctrls">
-          <button class="sx-btn sx-tf active" data-tf="3h">3H</button>
-          <button class="sx-btn sx-tf" data-tf="6h">6H</button>
+          <button class="sx-btn sx-tf" data-tf="3h">3H</button>
+          <button class="sx-btn sx-tf active" data-tf="6h">6H</button>
           <span class="sx-ctrl-sep"></span>
           <button class="sx-btn sx-days active" data-days="1">1D</button>
           <button class="sx-btn sx-days" data-days="2">2D</button>
@@ -215,7 +215,7 @@
     return j;
   }
 
-  let _tf = '3h';
+  let _tf = '6h';
   let _days = 1;
   const _cache = {};
 
