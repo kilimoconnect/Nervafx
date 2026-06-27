@@ -339,7 +339,8 @@
     for (let ci = 0; ci < reversed.length; ci++) {
       const card = reversed[ci];
       const prev = reversed[ci + 1];
-      const consecutive5 = card.top5.length >= 5 && prev && prev.top5.length >= 5;
+      const hourDiff = prev ? (new Date(card.time).getTime() - new Date(prev.time).getTime()) / 3600000 : 0;
+      const consecutive5 = card.top5.length >= 5 && prev && prev.top5.length >= 5 && hourDiff === 1;
       html += `<div class="hr-card${consecutive5 ? ' hr-hot' : ''}">`;
       html += `<div class="hr-card-hd">
         <span class="hr-time">${card.label}</span>
