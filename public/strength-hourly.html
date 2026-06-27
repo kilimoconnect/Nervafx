@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <title>NervaFX — Hourly Strength Extremes</title>
+  <title>NervaFX — Spread Momentum</title>
   <link rel="icon" type="image/png" href="/nervafx-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -37,7 +37,7 @@
     }
     .sx-back-btn:hover { background: rgba(255,255,255,0.09); color: var(--text); }
 
-    .sx-main { max-width: 1200px; margin: 0 auto; padding: 20px 20px 80px; }
+    .sx-main { max-width: 1000px; margin: 0 auto; padding: 20px 20px 80px; }
 
     .sx-card {
       background: rgba(255,255,255,0.02);
@@ -61,77 +61,8 @@
     }
     .sx-btn:hover { color: var(--text); background: rgba(255,255,255,0.08); }
     .sx-btn.active { background: rgba(96,165,250,0.15); border-color: rgba(96,165,250,0.5); color: #60a5fa; }
-    .sx-btn:disabled, .sx-btn.disabled { opacity: 0.35; cursor: not-allowed; }
     .sx-ctrl-sep { width: 1px; height: 18px; background: rgba(255,255,255,0.1); }
-    .sx-date {
-      padding: 4px 8px; border-radius: 7px; font-size: 11px; font-weight: 600;
-      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
-      color: var(--text-muted); cursor: pointer; font-family: inherit; color-scheme: dark;
-      min-width: 110px;
-    }
-    .sx-date.active { background: rgba(96,165,250,0.15); border-color: rgba(96,165,250,0.5); color: #60a5fa; }
     .sx-note { font-size: 10.5px; color: var(--text-dim); text-transform: none; letter-spacing: 0; font-weight: 500; }
-
-    /* ── Bars area ── */
-    .sx-scroll {
-      overflow-x: auto; -webkit-overflow-scrolling: touch; cursor: grab;
-      scrollbar-color: rgba(96,165,250,0.35) rgba(255,255,255,0.03);
-    }
-    .sx-scroll.dragging { cursor: grabbing; }
-    .sx-scroll::-webkit-scrollbar { height: 10px; }
-    .sx-scroll::-webkit-scrollbar-track { background: rgba(255,255,255,0.03); border-radius: 5px; }
-    .sx-scroll::-webkit-scrollbar-thumb { background: rgba(96,165,250,0.35); border-radius: 5px; }
-    .sx-scroll::-webkit-scrollbar-thumb:hover { background: rgba(96,165,250,0.55); }
-
-    .sx-bars { display: flex; align-items: stretch; gap: 6px; padding: 8px 4px 4px; width: max-content; min-width: 100%; }
-    .sx-col {
-      display: flex; flex-direction: column; align-items: center;
-      width: 56px; flex: 0 0 56px; cursor: pointer; border-radius: 8px;
-      padding: 4px 2px; transition: background 0.12s;
-    }
-    .sx-col:hover { background: rgba(96,165,250,0.07); }
-    .sx-col.day-edge { border-left: 1px solid rgba(255,255,255,0.08); border-radius: 0; }
-
-    .sx-half { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 130px; width: 100%; }
-    .sx-half.bottom { justify-content: flex-start; }
-    .sx-val { font-size: 10px; font-weight: 800; font-family: var(--font-data); line-height: 1.2; }
-    .sx-cur { font-size: 10px; font-weight: 800; line-height: 1.3; }
-    .sx-bar { width: 22px; border-radius: 4px 4px 0 0; }
-    .sx-half.bottom .sx-bar { border-radius: 0 0 4px 4px; }
-    .sx-axis { width: 100%; border-top: 1px solid rgba(255,255,255,0.14); margin: 2px 0; }
-    .sx-hr { font-size: 9px; color: var(--text-dim); margin-top: 4px; white-space: nowrap; }
-    .sx-day { font-size: 8.5px; color: var(--text-dim); white-space: nowrap; }
-
-    .pos { color: #4ade80; } .neg { color: #f87171; }
-    .sx-bar.pos { background: #4ade80; } .sx-bar.neg { background: #f87171; }
-
-    /* ── Hour detail modal ── */
-    .sx-modal-overlay {
-      position: fixed; inset: 0; z-index: 300;
-      background: rgba(4,6,12,0.8); backdrop-filter: blur(6px);
-      display: none; align-items: center; justify-content: center; padding: 16px;
-    }
-    .sx-modal-overlay.open { display: flex; }
-    .sx-modal {
-      width: 100%; max-width: 420px; max-height: 90vh; overflow-y: auto;
-      background: #0b101c; border: 1px solid rgba(255,255,255,0.1); border-radius: 14px;
-    }
-    .sx-modal-hd {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 14px 18px; border-bottom: 1px solid rgba(255,255,255,0.06);
-    }
-    .sx-modal-title { font-size: 14px; font-weight: 800; color: var(--text); }
-    .sx-modal-close {
-      width: 30px; height: 30px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);
-      background: rgba(255,255,255,0.04); color: var(--text-muted);
-      font-size: 16px; cursor: pointer; line-height: 1;
-    }
-    .sx-modal-bd { padding: 14px 18px; }
-    .sx-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
-    .sx-row-cur { font-size: 11px; font-weight: 800; min-width: 34px; color: var(--text); }
-    .sx-row-track { flex: 1; height: 7px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden; position: relative; }
-    .sx-row-fill { position: absolute; top: 0; bottom: 0; }
-    .sx-row-num { font-size: 11px; font-weight: 700; min-width: 52px; text-align: right; font-family: var(--font-data); }
 
     .sx-loading { display: flex; align-items: center; gap: 8px; padding: 40px; color: var(--text-muted); font-size: 12px; justify-content: center; }
     .spinner {
@@ -140,11 +71,73 @@
     }
     @keyframes sxspin { to { transform: rotate(360deg); } }
 
+    /* ── Hour cards ── */
+    .hr-card {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 10px; margin-bottom: 10px; overflow: hidden;
+    }
+    .hr-card-hd {
+      display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .hr-time { font-size: 12px; font-weight: 700; color: var(--text); }
+    .hr-date { font-size: 11px; color: var(--text-muted); }
+    .hr-count {
+      margin-left: auto; font-size: 10px; font-weight: 700;
+      padding: 2px 8px; border-radius: 4px;
+      background: rgba(96,165,250,0.12); color: #60a5fa;
+    }
+
+    .hr-pairs { padding: 8px 14px; }
+    .hr-pair {
+      display: flex; align-items: center; gap: 10px; padding: 6px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+    .hr-pair:last-child { border-bottom: none; }
+
+    .hr-rank {
+      font-size: 10px; font-weight: 800; color: var(--text-dim);
+      min-width: 18px; text-align: center;
+    }
+    .hr-pair-name { font-size: 12px; font-weight: 800; color: var(--text); min-width: 75px; }
+
+    .hr-ccy-tag {
+      font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 4px;
+      letter-spacing: 0.2px;
+    }
+    .hr-ccy-up { background: rgba(34,197,94,0.12); color: #4ade80; }
+    .hr-ccy-down { background: rgba(239,68,68,0.12); color: #f87171; }
+
+    .hr-spread-bar {
+      flex: 1; height: 8px; background: rgba(255,255,255,0.04);
+      border-radius: 4px; overflow: hidden; min-width: 60px;
+    }
+    .hr-spread-fill {
+      height: 100%; border-radius: 4px;
+      background: linear-gradient(90deg, #4ade80, #60a5fa);
+    }
+    .hr-spread-val {
+      font-size: 11px; font-weight: 800; color: #60a5fa;
+      min-width: 50px; text-align: right; font-family: var(--font-data);
+    }
+
+    .hr-trend-dots {
+      display: flex; gap: 2px; align-items: center;
+    }
+    .hr-dot {
+      width: 5px; height: 5px; border-radius: 50%;
+    }
+    .hr-dot.up { background: #4ade80; }
+    .hr-dot.down { background: #f87171; }
+    .hr-dot.flat { background: rgba(255,255,255,0.15); }
+
+    .hr-empty { text-align: center; padding: 50px 20px; color: var(--text-muted); font-size: 13px; }
+
     @media (max-width: 640px) {
       .sx-main { padding: 14px 12px 60px; }
       .sx-ctrls { width: 100%; margin-left: 0; }
-      .sx-col { width: 48px; flex-basis: 48px; }
-      .sx-half { height: 100px; }
+      .hr-pair { flex-wrap: wrap; gap: 6px; }
     }
   </style>
 </head>
@@ -153,7 +146,7 @@
     <div class="sx-topbar-left">
       <a class="sx-logo" href="/app"><img src="/nervafx-logo.png" alt="NervaFX" onerror="this.style.display='none'"></a>
       <span class="sx-sep">/</span>
-      <span class="sx-title-text">Hourly Strength Extremes</span>
+      <span class="sx-title-text">Spread Momentum — 3H Consecutive</span>
     </div>
     <a class="sx-back-btn" href="/app" onclick="window.close(); setTimeout(function(){ location.href='/app'; }, 150); return false;">&times; Close</a>
   </div>
@@ -161,54 +154,30 @@
   <main class="sx-main">
     <div class="sx-card">
       <div class="sx-card-hd">
-        <i data-lucide="trending-up"></i> Strongest vs Weakest
-        <span class="sx-note" id="sx-note"></span>
+        <i data-lucide="trending-up"></i> Top 5 Diverging Pairs
+        <span class="sx-note" id="sx-note">Pairs where both currencies have trended consistently for 3 consecutive hours</span>
         <span class="sx-ctrls" id="sx-ctrls">
-          <button class="sx-btn sx-tf" data-tf="m15">M15</button>
           <button class="sx-btn sx-tf active" data-tf="3h">3H</button>
-          <button class="sx-btn sx-tf" data-tf="4h">4H</button>
           <button class="sx-btn sx-tf" data-tf="6h">6H</button>
-          <button class="sx-btn sx-tf" data-tf="12h">12H</button>
-          <button class="sx-btn sx-tf" data-tf="1d">Daily</button>
-          <button class="sx-btn sx-tf" data-tf="c36">3H+6H</button>
           <span class="sx-ctrl-sep"></span>
-          <button class="sx-btn sx-days" data-days="1">1D</button>
-          <button class="sx-btn sx-days active" data-days="2">2D</button>
+          <button class="sx-btn sx-days active" data-days="1">1D</button>
+          <button class="sx-btn sx-days" data-days="2">2D</button>
           <button class="sx-btn sx-days" data-days="5">5D</button>
           <button class="sx-btn sx-days" data-days="10">10D</button>
           <button class="sx-btn sx-days" data-days="30">30D</button>
-          <button class="sx-btn sx-days" data-days="90">90D</button>
-          <button class="sx-btn sx-days" data-days="365">1Y</button>
-          <button class="sx-btn sx-days" data-days="all">All</button>
-          <input type="date" id="sx-date" class="sx-date" title="Show a single day" />
-          <span class="sx-ctrl-sep"></span>
-          <button class="sx-btn sx-mode" data-mode="hourly">Hourly</button>
-          <button class="sx-btn sx-mode" data-mode="daily">Daily avg</button>
         </span>
       </div>
       <div class="sx-card-bd">
-        <div id="sx-content"><div class="sx-loading"><span class="spinner"></span> Loading strength data…</div></div>
+        <div id="sx-content"><div class="sx-loading"><span class="spinner"></span> Loading spread data…</div></div>
         <p style="margin:10px 0 0;font-size:10.5px;color:var(--text-dim)">
-          Each column = one hour (one 15-minute bar on M15, one day in Daily avg). Top bar = strongest currency, bottom bar = weakest, values in pips.
-          Click a column for the full 8-currency ranking. Drag or scroll to pan. All timeframes archived back to May 2025.
+          Each card = one hour. Shows the top 5 pairs where one currency has been increasing and the other decreasing
+          for 3 consecutive hours. Spread = difference between the two currencies' strength values. Green dots = rising, Red dots = falling.
         </p>
       </div>
     </div>
   </main>
 
-  <!-- Detail modal -->
-  <div class="sx-modal-overlay" id="sx-modal" onclick="if(event.target===this)sxCloseModal()">
-    <div class="sx-modal">
-      <div class="sx-modal-hd">
-        <span class="sx-modal-title" id="sx-modal-title">—</span>
-        <button class="sx-modal-close" onclick="sxCloseModal()">&times;</button>
-      </div>
-      <div class="sx-modal-bd" id="sx-modal-body"></div>
-    </div>
-  </div>
-
   <script>
-  // ── Auth gate ──
   (function () {
     const token = localStorage.getItem('nfx_token');
     if (!token) return location.replace('/login.html');
@@ -221,25 +190,21 @@
     } catch (_) { return location.replace('/login.html'); }
   })();
 
+  const CURRENCIES = ['USD','EUR','GBP','JPY','CHF','CAD','AUD','NZD'];
+  const PAIR_LABEL = {};
+  for (let i = 0; i < CURRENCIES.length; i++)
+    for (let j = i + 1; j < CURRENCIES.length; j++)
+      PAIR_LABEL[CURRENCIES[i] + '_' + CURRENCIES[j]] = CURRENCIES[i] + '/' + CURRENCIES[j];
+
   let _userTz = localStorage.getItem('nfx_tz') || 'auto';
   function _tz() { return (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC'); }
-  function hrLabel(t) {
-    return new Date(t).toLocaleTimeString('en-GB', { timeZone: _tz(), hour: '2-digit', minute: '2-digit', hour12: false });
-  }
-  function dayLabel(t) {
-    return new Date(t).toLocaleDateString('en-GB', { timeZone: _tz(), weekday: 'short', day: '2-digit', month: 'short' });
-  }
-  function dayLabelFull(t) {
-    return new Date(t).toLocaleDateString('en-GB', { timeZone: _tz(), day: '2-digit', month: 'short', year: 'numeric' });
-  }
-  function localDateOf(t) {
-    return new Date(t).toLocaleDateString('en-CA', { timeZone: _tz() }); // YYYY-MM-DD
-  }
+  function hrLabel(t) { return new Date(t).toLocaleTimeString('en-GB', { timeZone: _tz(), hour: '2-digit', minute: '2-digit', hour12: false }); }
+  function dayLabel(t) { return new Date(t).toLocaleDateString('en-GB', { timeZone: _tz(), weekday: 'short', day: '2-digit', month: 'short' }); }
   const _wdFmt = new Intl.DateTimeFormat('en-US', { timeZone: _tz(), weekday: 'short' });
-  function isWeekend(t) {
-    const wd = _wdFmt.format(new Date(t));
-    return wd === 'Sat' || wd === 'Sun';
-  }
+  function isWeekend(t) { const wd = _wdFmt.format(new Date(t)); return wd === 'Sat' || wd === 'Sun'; }
+
+  const pips = v => (v * 10000);
+  const fmt = v => (v >= 0 ? '+' : '') + pips(v).toFixed(1);
 
   async function api(path) {
     const token = localStorage.getItem('nfx_token');
@@ -250,291 +215,168 @@
     return j;
   }
 
-  // ── State ──
-  const DATA_START = '2025-05-20';                   // oldest stored strength data
-  const HOURLY_MAX_COLS = 2400;                      // beyond this hourly view auto-switches to daily
-
   let _tf = '3h';
-  let _daysSel = 2;       // number | 'all'
-  let _modeOverride = null;
-  let _mode = 'hourly';   // effective presentation
-  let _cols = [];         // plotted columns [{ time, label, sub, ranking, strongest, weakest }]
-  const _cache = {};      // `${src}:${days}` → rows
+  let _days = 1;
+  const _cache = {};
 
-  const pips = v => (v * 10000);
-  const fmt = v => (v >= 0 ? '+' : '') + pips(v).toFixed(1);
-
-  function daysOf(sel) {
-    if (sel === 'all') return Math.min(730, Math.ceil((Date.now() - new Date(DATA_START).getTime()) / 86400000) + 1);
-    return sel;
+  function valueOf(r) {
+    const fMap = { '6h': 'smooth_6h' };
+    return parseFloat(r[fMap[_tf] || 'smooth_3h']) || 0;
   }
 
   async function fetchRows(days) {
-    const src = _tf === 'm15' ? 'm15' : 'cs';
-    const key = `${src}:${days}`;
+    const key = `cs:${days}`;
     if (_cache[key]) return _cache[key];
-    const data = src === 'm15'
-      ? await api(`/api/m15-strength-history?days=${days}`)
-      : await api(`/api/strength-history?days=${days}&multi=1`);
+    const data = await api(`/api/strength-history?days=${days}&multi=1`);
     _cache[key] = data.rows || [];
     return _cache[key];
   }
 
-  function valueOf(r) {
-    if (_tf === 'c36') return ((parseFloat(r.smooth_3h) || 0) + (parseFloat(r.smooth_6h) || 0)) / 2;
-    const fMap = { '12h': 'smooth_12h', '6h': 'smooth_6h', '4h': 'smooth_4h', '1d': 'smooth_1d' };
-    const f = fMap[_tf] || 'smooth_3h';
-    return parseFloat(r[f]) || 0;
-  }
-
-  // ── Build per-hour currency maps ────────────────────────────────────────────
-  // currency_strength rows → { hourKey: { CUR: val } }
-  // m15_pair_spreads rows  → last smooth_45m per instrument per hour → derive
-  //   per-currency average (base +v, quote −v), same as the journal engine.
-  // M15 keeps native 15-minute resolution (key = YYYY-MM-DDTHH:MM);
-  // other timeframes group per hour (key = YYYY-MM-DDTHH).
-  function keyTime(k) { return k.length === 16 ? k + ':00Z' : k + ':00:00Z'; }
-
   function hourMaps(rows) {
     const byHour = {};
-    if (_tf === 'm15') {
-      // m15_currency_strength archive: one row per 15-min with all 8 values
-      for (const r of rows) {
-        if (isWeekend(r.time)) continue;
-        const k = r.time.slice(0, 16);
-        const m = {};
-        for (const [c, v] of Object.entries(r.values || {})) m[c] = parseFloat(v) || 0;
-        if (Object.keys(m).length >= 2) byHour[k] = m;
-      }
-    } else {
-      for (const r of rows) {
-        if (isWeekend(r.time)) continue;
-        const hk = r.time.slice(0, 13);
-        (byHour[hk] = byHour[hk] || {})[r.currency] = valueOf(r);
-      }
+    for (const r of rows) {
+      if (isWeekend(r.time)) continue;
+      const hk = r.time.slice(0, 13);
+      (byHour[hk] = byHour[hk] || {})[r.currency] = valueOf(r);
     }
     return byHour;
   }
 
-  function rankingOf(curMap) {
-    const entries = Object.entries(curMap).map(([cur, val]) => ({ cur, val }));
-    if (entries.length < 2) return null;
-    entries.sort((a, b) => b.val - a.val);
-    return entries;
-  }
-
-  function buildCols(rows, mode, dayFilter) {
+  function buildSpreadCards(rows) {
     const byHour = hourMaps(rows);
-    let hourKeys = Object.keys(byHour).sort();
-    if (dayFilter) hourKeys = hourKeys.filter(hk => localDateOf(keyTime(hk)) === dayFilter);
+    const hourKeys = Object.keys(byHour).sort();
+    const cards = [];
 
-    if (mode === 'hourly') {
-      return hourKeys.map(hk => {
-        const ranking = rankingOf(byHour[hk]);
-        if (!ranking) return null;
-        const time = keyTime(hk);
-        return { time, label: hrLabel(time), sub: dayLabel(time), ranking, strongest: ranking[0], weakest: ranking[ranking.length - 1] };
-      }).filter(Boolean);
-    }
+    for (let i = 3; i < hourKeys.length; i++) {
+      const hk = hourKeys[i];
+      const curMap = byHour[hk];
+      if (Object.keys(curMap).length < 8) continue;
 
-    // Daily: average each currency across the day's hours (local date)
-    const byDay = {};
-    for (const hk of hourKeys) {
-      const d = localDateOf(keyTime(hk));
-      (byDay[d] = byDay[d] || []).push(byHour[hk]);
-    }
-    return Object.keys(byDay).sort().map(d => {
-      const maps = byDay[d];
-      const sums = {}, counts = {};
-      for (const m of maps) {
-        for (const [c, v] of Object.entries(m)) {
-          sums[c] = (sums[c] || 0) + v; counts[c] = (counts[c] || 0) + 1;
+      // Get values for last 4 hours (current + 3 prior) for trend detection
+      const priorKeys = [hourKeys[i-3], hourKeys[i-2], hourKeys[i-1], hk];
+      // Verify they are consecutive (each ~1 hour apart)
+      const times = priorKeys.map(k => new Date(k + ':00:00Z').getTime());
+      const gaps = [times[1]-times[0], times[2]-times[1], times[3]-times[2]];
+      if (gaps.some(g => g > 2 * 3600000)) continue; // skip if gap > 2 hours
+
+      const trending = {};
+      const trendVals = {};
+      for (const ccy of CURRENCIES) {
+        const vals = priorKeys.map(k => (byHour[k] || {})[ccy] || 0);
+        trendVals[ccy] = vals;
+        const rising  = vals[1] > vals[0] && vals[2] > vals[1] && vals[3] > vals[2];
+        const falling = vals[1] < vals[0] && vals[2] < vals[1] && vals[3] < vals[2];
+        if (rising) trending[ccy] = 'UP';
+        else if (falling) trending[ccy] = 'DOWN';
+      }
+
+      // Build diverging pairs (one UP + one DOWN)
+      const pairs = [];
+      const trendingCcys = Object.keys(trending);
+      for (let a = 0; a < trendingCcys.length; a++) {
+        for (let b = a + 1; b < trendingCcys.length; b++) {
+          const ca = trendingCcys[a], cb = trendingCcys[b];
+          if (trending[ca] === trending[cb]) continue;
+          const spread = Math.abs(curMap[ca] - curMap[cb]);
+          const strong = trending[ca] === 'UP' ? ca : cb;
+          const weak = trending[ca] === 'DOWN' ? ca : cb;
+          const pairKey = CURRENCIES.indexOf(strong) < CURRENCIES.indexOf(weak)
+            ? strong + '_' + weak : weak + '_' + strong;
+          pairs.push({
+            pair: PAIR_LABEL[pairKey] || strong + '/' + weak,
+            strong, weak,
+            strongTrend: 'UP', weakTrend: 'DOWN',
+            spread,
+            strongVal: curMap[strong],
+            weakVal: curMap[weak],
+            strongDots: trendVals[strong],
+            weakDots: trendVals[weak],
+          });
         }
       }
-      const avg = {};
-      for (const c of Object.keys(sums)) avg[c] = sums[c] / counts[c];
-      const ranking = rankingOf(avg);
-      if (!ranking) return null;
-      const time = d + 'T12:00:00Z';
-      return { time, label: dayLabel(time), sub: '', ranking, strongest: ranking[0], weakest: ranking[ranking.length - 1], hours: maps.length };
-    }).filter(Boolean);
+
+      if (!pairs.length) continue;
+      pairs.sort((a, b) => b.spread - a.spread);
+
+      const time = hk + ':00:00Z';
+      cards.push({
+        time,
+        label: hrLabel(time),
+        sub: dayLabel(time),
+        top5: pairs.slice(0, 5),
+        totalPairs: pairs.length,
+        trending,
+      });
+    }
+
+    return cards;
   }
 
-  // ── Render ──
-  function render() {
+  function renderCards(cards) {
     const el = document.getElementById('sx-content');
-    if (!_cols.length) {
-      el.innerHTML = '<p style="font-size:12px;color:var(--text-muted)">No strength data for this selection.</p>';
+    if (!cards.length) {
+      el.innerHTML = '<div class="hr-empty">No 3-hour consecutive spread momentum found for this period.</div>';
       return;
     }
-    const maxAbs = Math.max(0.00005, ..._cols.map(h => Math.max(Math.abs(h.strongest.val), Math.abs(h.weakest.val))));
 
-    let prevSub = null;
-    const cols = _cols.map((h, i) => {
-      const sPct = Math.max(4, Math.round(Math.abs(h.strongest.val) / maxAbs * 100));
-      const wPct = Math.max(4, Math.round(Math.abs(h.weakest.val) / maxAbs * 100));
-      const dayEdge = _mode === 'hourly' && prevSub && h.sub !== prevSub;
-      const showSub = _mode === 'hourly' && (dayEdge || i === 0);
-      prevSub = h.sub;
-      return `<div class="sx-col${dayEdge ? ' day-edge' : ''}" onclick="sxOpenModal(${i})" title="Click for full ranking">
-        <div class="sx-half">
-          <span class="sx-val pos">${fmt(h.strongest.val)}</span>
-          <span class="sx-cur pos">${h.strongest.cur}</span>
-          <div class="sx-bar pos" style="height:${sPct}%"></div>
-        </div>
-        <div class="sx-axis"></div>
-        <div class="sx-half bottom">
-          <div class="sx-bar neg" style="height:${wPct}%"></div>
-          <span class="sx-cur neg">${h.weakest.cur}</span>
-          <span class="sx-val neg">${fmt(h.weakest.val)}</span>
-        </div>
-        <span class="sx-hr">${h.label}</span>
-        <span class="sx-day">${showSub ? h.sub : '&nbsp;'}</span>
+    const maxSpread = Math.max(0.00001, ...cards.flatMap(c => c.top5.map(p => p.spread)));
+    let html = '';
+
+    for (const card of cards.slice().reverse()) {
+      html += '<div class="hr-card">';
+      html += `<div class="hr-card-hd">
+        <span class="hr-time">${card.label}</span>
+        <span class="hr-date">${card.sub}</span>
+        <span class="hr-count">${card.totalPairs} pair${card.totalPairs !== 1 ? 's' : ''}</span>
       </div>`;
-    }).join('');
+      html += '<div class="hr-pairs">';
 
-    el.innerHTML = `<div class="sx-scroll" id="sx-scroll"><div class="sx-bars">${cols}</div></div>`;
-    const scroll = document.getElementById('sx-scroll');
-    scroll.scrollLeft = scroll.scrollWidth;
-    attachPan(scroll);
+      for (let i = 0; i < card.top5.length; i++) {
+        const p = card.top5[i];
+        const barPct = Math.max(5, Math.round(p.spread / maxSpread * 100));
+
+        html += '<div class="hr-pair">';
+        html += `<span class="hr-rank">#${i + 1}</span>`;
+        html += `<span class="hr-pair-name">${p.pair}</span>`;
+        html += `<span class="hr-ccy-tag hr-ccy-up">▲ ${p.strong}</span>`;
+        html += `<span class="hr-ccy-tag hr-ccy-down">▼ ${p.weak}</span>`;
+        html += `<div class="hr-spread-bar"><div class="hr-spread-fill" style="width:${barPct}%"></div></div>`;
+        html += `<span class="hr-spread-val">${fmt(p.spread)}</span>`;
+        html += '</div>';
+      }
+
+      html += '</div></div>';
+    }
+
+    el.innerHTML = html;
   }
 
-  function attachPan(scroll) {
-    let dragging = false, startX = 0, startScroll = 0, moved = false;
-    scroll.addEventListener('pointerdown', (ev) => {
-      if (ev.button !== 0) return;
-      dragging = true; moved = false;
-      startX = ev.clientX; startScroll = scroll.scrollLeft;
-      scroll.classList.add('dragging');
-    });
-    window.addEventListener('pointermove', (ev) => {
-      if (!dragging) return;
-      const dx = ev.clientX - startX;
-      if (Math.abs(dx) > 3) moved = true;
-      scroll.scrollLeft = startScroll - dx;
-    });
-    window.addEventListener('pointerup', () => { dragging = false; scroll.classList.remove('dragging'); });
-    scroll.addEventListener('click', (ev) => { if (moved) { ev.stopPropagation(); ev.preventDefault(); } }, true);
-    scroll.addEventListener('wheel', (ev) => {
-      if (scroll.scrollWidth <= scroll.clientWidth) return;
-      if (Math.abs(ev.deltaY) > Math.abs(ev.deltaX)) { ev.preventDefault(); scroll.scrollLeft += ev.deltaY; }
-    }, { passive: false });
+  async function load() {
+    const el = document.getElementById('sx-content');
+    el.innerHTML = '<div class="sx-loading"><span class="spinner"></span> Loading spread data…</div>';
+    try {
+      const rows = await fetchRows(_days + 1); // +1 to have 3h lookback on first hour
+      const cards = buildSpreadCards(rows);
+      renderCards(cards);
+    } catch (e) {
+      el.innerHTML = `<div class="hr-empty">Error: ${e.message}</div>`;
+    }
   }
 
-  // ── Modal ──
-  window.sxOpenModal = function (idx) {
-    const h = _cols[idx];
-    if (!h) return;
-    const tfLbl = _tf === 'c36' ? '3H+6H' : _tf.toUpperCase();
-    const when = _mode === 'hourly' ? `${dayLabel(h.time)} ${hrLabel(h.time)}` : `${dayLabelFull(h.time)} (avg of ${h.hours || '—'} hours)`;
-    document.getElementById('sx-modal-title').textContent = `${when} — ${tfLbl}`;
-    const maxAbs = Math.max(0.00005, ...h.ranking.map(e => Math.abs(e.val)));
-    document.getElementById('sx-modal-body').innerHTML = h.ranking.map(e => {
-      const pct = Math.round(Math.abs(e.val) / maxAbs * 50);
-      const cls = e.val >= 0 ? 'pos' : 'neg';
-      const side = e.val >= 0
-        ? `left:50%;width:${pct}%;background:#4ade80`
-        : `right:50%;width:${pct}%;background:#f87171`;
-      return `<div class="sx-row">
-        <span class="sx-row-cur">${e.cur}</span>
-        <div class="sx-row-track"><div class="sx-row-fill" style="${side}"></div></div>
-        <span class="sx-row-num ${cls}">${fmt(e.val)}</span>
-      </div>`;
-    }).join('');
-    document.getElementById('sx-modal').classList.add('open');
-  };
-  window.sxCloseModal = function () {
-    document.getElementById('sx-modal').classList.remove('open');
-  };
-
-  // ── Controls state ──
   function syncControls() {
     document.querySelectorAll('.sx-tf').forEach(b => b.classList.toggle('active', b.dataset.tf === _tf));
-    document.querySelectorAll('.sx-mode').forEach(b => b.classList.toggle('active', b.dataset.mode === _mode));
-    document.querySelectorAll('.sx-days').forEach(b => {
-      const sel = b.dataset.days === 'all' ? 'all' : parseInt(b.dataset.days, 10);
-      b.classList.toggle('active', String(_daysSel) === String(sel) && !document.getElementById('sx-date').value);
-    });
-  }
-
-  // ── Load ──
-  async function load(dayFilter) {
-    const el = document.getElementById('sx-content');
-    const note = document.getElementById('sx-note');
-    el.innerHTML = '<div class="sx-loading"><span class="spinner"></span> Loading strength data…</div>';
-    note.textContent = '';
-
-    let days, mode;
-    if (dayFilter) {
-      // Single day: fetch enough history to reach it, always hourly
-      days = Math.min(730, Math.max(2, Math.ceil((Date.now() - new Date(dayFilter + 'T00:00:00').getTime()) / 86400000) + 1));
-      mode = 'hourly';
-    } else {
-      days = daysOf(_daysSel);
-      mode = _modeOverride || (days <= 10 ? 'hourly' : 'daily');
-    }
-
-    let rows;
-    try {
-      rows = await fetchRows(days);
-    } catch (e) {
-      el.innerHTML = `<p style="font-size:12px;color:var(--text-muted)">Failed to load: ${e.message}</p>`;
-      return;
-    }
-
-    let cols = buildCols(rows, mode, dayFilter || null);
-    // Hourly over a very long range gets unwieldy — fall back to daily
-    if (mode === 'hourly' && cols.length > HOURLY_MAX_COLS && !dayFilter) {
-      mode = 'daily';
-      cols = buildCols(rows, mode, null);
-      note.textContent = '· range too long for hourly — showing daily averages';
-    } else if (dayFilter) {
-      note.textContent = `· ${dayLabelFull(dayFilter + 'T12:00:00')}`;
-    } else if (mode === 'daily') {
-      note.textContent = '· daily averages';
-    }
-    _mode = mode;
-    _cols = cols;
-    syncControls();
-    render();
+    document.querySelectorAll('.sx-days').forEach(b => b.classList.toggle('active', parseInt(b.dataset.days) === _days));
   }
 
   document.getElementById('sx-ctrls').addEventListener('click', (ev) => {
     const tfBtn = ev.target.closest('.sx-tf');
-    if (tfBtn) {
-      _tf = tfBtn.dataset.tf;
-      const dateVal = document.getElementById('sx-date').value;
-      load(dateVal || null);
-      return;
-    }
-    const mBtn = ev.target.closest('.sx-mode');
-    if (mBtn) {
-      _modeOverride = mBtn.dataset.mode;
-      document.getElementById('sx-date').value = '';
-      document.getElementById('sx-date').classList.remove('active');
-      load(null);
-      return;
-    }
+    if (tfBtn) { _tf = tfBtn.dataset.tf; syncControls(); load(); return; }
     const dBtn = ev.target.closest('.sx-days');
-    if (dBtn && !dBtn.disabled) {
-      _daysSel = dBtn.dataset.days === 'all' ? 'all' : parseInt(dBtn.dataset.days, 10);
-      document.getElementById('sx-date').value = '';
-      document.getElementById('sx-date').classList.remove('active');
-      load(null);
-    }
+    if (dBtn) { _days = parseInt(dBtn.dataset.days); syncControls(); load(); }
   });
 
-  const _dateInput = document.getElementById('sx-date');
-  _dateInput.max = new Date().toLocaleDateString('en-CA', { timeZone: _tz() });
-  _dateInput.min = DATA_START;
-  _dateInput.addEventListener('change', () => {
-    if (_dateInput.value) {
-      _dateInput.classList.add('active');
-      load(_dateInput.value);
-    }
-  });
-
-  load(null);
+  syncControls();
+  load();
   if (window.lucide) lucide.createIcons();
   </script>
 </body>
