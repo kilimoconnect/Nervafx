@@ -307,7 +307,8 @@
 
       if (!pairs.length) continue;
       pairs.sort((a, b) => b.spread - a.spread);
-      const top5 = pairs.slice(0, 5).filter(p => pips(p.spread) >= 20);
+      const minPips = _tf === '3h' ? 10 : 20;
+      const top5 = pairs.slice(0, 5).filter(p => pips(p.spread) >= minPips);
       if (!top5.length) continue;
 
       const time = hk + ':00:00Z';
