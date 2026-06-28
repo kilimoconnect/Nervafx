@@ -200,8 +200,7 @@
     <!-- Diverging pairs card -->
     <div class="sx-card">
       <div class="sx-card-hd">
-        <i data-lucide="trending-up"></i> Top 5 Diverging Pairs
-        <span class="sx-note">3 consecutive hours trending (raw daily strength)</span>
+        <i data-lucide="trending-up"></i> Top 5 Pairs by Spread (Hourly)
       </div>
       <div class="sx-card-bd">
         <div id="ds-pairs"><div class="sx-loading"><span class="spinner"></span> Loading spread data…</div></div>
@@ -432,75 +431,36 @@
     el.innerHTML = html;
   }
 
-  // ── Diverging pairs (3 consecutive hours) ──
+  // ── Top 5 pairs each hour (no filters) ──
   function buildPairCards(rows) {
-    const byKey = {};
-    for (const r of rows) {
-      if (isWeekend(r.time)) continue;
-      const hk = r.time.slice(0, 13);
-      const m = {};
-      for (const [c, v] of Object.entries(r.values || {})) m[c] = parseFloat(v) || 0;
-      if (r.pairs) m._pairs = r.pairs;
-      if (Object.keys(m).length >= 2) byKey[hk] = m;
-    }
-    const keys = Object.keys(byKey).sort();
+    const filtered = rows.filter(r => !isWeekend(r.time));
     const cards = [];
-    const consecutiveN = 3;
-    const maxGap = 2 * 3600000;
 
-    for (let i = consecutiveN; i < keys.length; i++) {
-      const hk = keys[i];
-      const curMap = byKey[hk];
-      if (Object.keys(curMap).length < 8) continue;
+    for (const r of filtered) {
+      const vals = r.values || {};
+      if (Object.keys(vals).length < 8) continue;
 
-      const priorKeys = [];
-      for (let j = consecutiveN; j >= 0; j--) priorKeys.push(keys[i - j]);
-
-      const times = priorKeys.map(k => new Date(k + ':00:00Z').getTime());
-      let gapOk = true;
-      for (let g = 1; g < times.length; g++) {
-        if (times[g] - times[g-1] > maxGap) { gapOk = false; break; }
-      }
-      if (!gapOk) continue;
-
-      const trending = {};
-      for (const ccy of CURRENCIES) {
-        const vals = priorKeys.map(k => (byKey[k] || {})[ccy] || 0);
-        let rising = true, falling = true;
-        for (let v = 1; v < vals.length; v++) {
-          if (vals[v] <= vals[v-1]) rising = false;
-          if (vals[v] >= vals[v-1]) falling = false;
-        }
-        if (rising) trending[ccy] = 'UP';
-        else if (falling) trending[ccy] = 'DOWN';
-      }
+      const ranked = CURRENCIES.map(c => ({ c, v: vals[c] || 0 }))
+        .sort((a, b) => b.v - a.v);
 
       const pairs = [];
-      const trendingCcys = Object.keys(trending);
-      for (let a = 0; a < trendingCcys.length; a++) {
-        for (let b = a + 1; b < trendingCcys.length; b++) {
-          const ca = trendingCcys[a], cb = trendingCcys[b];
-          if (trending[ca] === trending[cb]) continue;
-          const spread = Math.abs(curMap[ca] - curMap[cb]);
-          const strong = trending[ca] === 'UP' ? ca : cb;
-          const weak = trending[ca] === 'DOWN' ? ca : cb;
+      for (let a = 0; a < CURRENCIES.length; a++) {
+        for (let b = a + 1; b < CURRENCIES.length; b++) {
+          const ca = CURRENCIES[a], cb = CURRENCIES[b];
+          const va = vals[ca] || 0, vb = vals[cb] || 0;
+          const spread = Math.abs(va - vb);
+          const strong = va > vb ? ca : cb;
+          const weak = va > vb ? cb : ca;
           const pairLabel = stdPair(strong, weak);
           const base = pairLabel.split('/')[0];
-          const quote = pairLabel.split('/')[1];
-          const pairKey = base + '_' + quote;
           const direction = base === strong ? 'BUY' : 'SELL';
-          if (curMap._pairs && curMap._pairs[pairKey] !== undefined) {
-            const actualDir = curMap._pairs[pairKey] > 0 ? 'BUY' : 'SELL';
-            if (actualDir !== direction) continue;
-          }
           pairs.push({ pair: pairLabel, strong, weak, direction, spread });
         }
       }
-      if (!pairs.length) continue;
       pairs.sort((a, b) => b.spread - a.spread);
       const top5 = pairs.slice(0, 5);
 
-      const time = hk + ':00:00Z';
+      const time = r.time;
       cards.push({
         time, label: hrLabel(time), sub: dayLabel(time),
         top5, totalPairs: pairs.length,
@@ -512,7 +472,7 @@
   function renderPairCards(cards) {
     const el = document.getElementById('ds-pairs');
     if (!cards.length) {
-      el.innerHTML = '<div class="hr-empty">No 3-hour consecutive spread momentum found for this period.</div>';
+      el.innerHTML = '<div class="hr-empty">No data found for this period.</div>';
       return;
     }
     const maxSpread = Math.max(0.00001, ...cards.flatMap(c => c.top5.map(p => p.spread)));
@@ -520,14 +480,10 @@
     const reversed = cards.slice().reverse();
     for (let ci = 0; ci < reversed.length; ci++) {
       const card = reversed[ci];
-      const prev = reversed[ci + 1];
-      const timeDiff = prev ? (new Date(card.time).getTime() - new Date(prev.time).getTime()) : 0;
-      const consecutive5 = card.top5.length >= 5 && prev && prev.top5.length >= 5 && timeDiff === 3600000;
-      html += `<div class="hr-card${consecutive5 ? ' hr-hot' : ''}">`;
+      html += '<div class="hr-card">';
       html += `<div class="hr-card-hd">
         <span class="hr-time">${card.label}</span>
         <span class="hr-date">${card.sub}</span>
-        ${consecutive5 ? '<span class="hr-hot-tag">CONSECUTIVE</span>' : ''}
         <span class="hr-count">${card.totalPairs} pair${card.totalPairs !== 1 ? 's' : ''}</span>
       </div>`;
       html += '<div class="hr-pairs">';
