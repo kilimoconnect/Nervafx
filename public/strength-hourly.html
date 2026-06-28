@@ -286,6 +286,7 @@
         const m = {};
         for (const [c, v] of Object.entries(r.values || {})) m[c] = parseFloat(v) || 0;
         if (r.pairs) m._pairs = r.pairs;
+        if (r.closes) m._closes = r.closes;
         if (Object.keys(m).length >= 2) byKey[k] = m;
       }
     } else {
@@ -417,12 +418,13 @@
           const base = p.pair.split('/')[0];
           const quote = p.pair.split('/')[1];
           const pairKey = base + '_' + quote;
-          const entryMove = signalMap._pairs && signalMap._pairs[pairKey];
-          const futureMove = futureMap._pairs && futureMap._pairs[pairKey];
-          if (entryMove === undefined || futureMove === undefined) continue;
-          // Held = raw pair price still moving in same direction (not reversed)
-          const stillHolding = (p.direction === 'BUY' && futureMove > 0) ||
-                               (p.direction === 'SELL' && futureMove < 0);
+          const entryClose = signalMap._closes && signalMap._closes[pairKey];
+          const holdClose = futureMap._closes && futureMap._closes[pairKey];
+          if (entryClose === undefined || holdClose === undefined) continue;
+          // Compare raw close price at hold time vs entry time
+          const priceChange = holdClose - entryClose;
+          const stillHolding = (p.direction === 'BUY' && priceChange > 0) ||
+                               (p.direction === 'SELL' && priceChange < 0);
           if (stillHolding) {
             const spread = Math.abs((futureMap[p.strong] || 0) - (futureMap[p.weak] || 0));
             held.push({
