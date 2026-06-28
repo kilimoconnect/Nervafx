@@ -20,7 +20,8 @@
     "api/audnzd-strength-m15.js": { "maxDuration": 60 },
     "api/chfjpy-strength.js":     { "maxDuration": 60 },
     "api/chfjpy-strength-m15.js": { "maxDuration": 60 },
-    "api/m15-strength-10c.js":    { "maxDuration": 60 }
+    "api/m15-strength-10c.js":    { "maxDuration": 60 },
+    "api/h1-pair-moves.js":       { "maxDuration": 60 }
   },
   "rewrites": [
     { "source": "/",       "destination": "/login.html" },

@@ -264,6 +264,19 @@
     return _cache[key];
   }
 
+  async function fetchH1PairMoves(days) {
+    const key = `h1pm:${days}`;
+    if (_cache[key]) return _cache[key];
+    const data = await api(`/api/h1-pair-moves?days=${days}`);
+    const byHour = {};
+    for (const r of (data.rows || [])) {
+      const hk = r.time.slice(0, 13);
+      byHour[hk] = { pairs_3h: r.pairs_3h || {}, pairs_6h: r.pairs_6h || {} };
+    }
+    _cache[key] = byHour;
+    return byHour;
+  }
+
   function timeMaps(rows) {
     const byKey = {};
     if (_tf === 'm15') {
@@ -287,7 +300,7 @@
 
   function keyToISO(k) { return k.length === 16 ? k + ':00Z' : k + ':00:00Z'; }
 
-  function buildSpreadCards(rows) {
+  function buildSpreadCards(rows, h1PairMoves) {
     const byKey = timeMaps(rows);
     const keys = Object.keys(byKey).sort();
     const cards = [];
@@ -338,9 +351,19 @@
           const quote = pairLabel.split('/')[1];
           const pairKey = base + '_' + quote;
           const direction = base === strong ? 'BUY' : 'SELL';
+          // M15: pair moves embedded in curMap._pairs
           if (curMap._pairs && curMap._pairs[pairKey] !== undefined) {
             const actualDir = curMap._pairs[pairKey] > 0 ? 'BUY' : 'SELL';
             if (actualDir !== direction) continue;
+          }
+          // 3H/6H: pair moves from h1-pair-moves API
+          if (h1PairMoves && !curMap._pairs) {
+            const pmKey = _tf === '6h' ? 'pairs_6h' : 'pairs_3h';
+            const pm = h1PairMoves[hk];
+            if (pm && pm[pmKey] && pm[pmKey][pairKey] !== undefined) {
+              const actualDir = pm[pmKey][pairKey] > 0 ? 'BUY' : 'SELL';
+              if (actualDir !== direction) continue;
+            }
           }
           pairs.push({
             pair: pairLabel,
@@ -487,7 +510,9 @@
     el.innerHTML = '<div class="sx-loading"><span class="spinner"></span> Loading spread data…</div>';
     try {
       const rows = await fetchRows(_days + 1); // +1 to have 3h lookback on first hour
-      const cards = buildSpreadCards(rows);
+      let h1pm = null;
+      if (_tf !== 'm15') h1pm = await fetchH1PairMoves(_days + 1);
+      const cards = buildSpreadCards(rows, h1pm);
       renderCards(cards);
     } catch (e) {
       el.innerHTML = `<div class="hr-empty">Error: ${e.message}</div>`;
