@@ -2,8 +2,7 @@
   "version": 2,
   "crons": [
     { "path": "/api/cron-backtest-sync", "schedule": "1 * * * *" },
-    { "path": "/api/run-pipeline?force=1", "schedule": "3 * * * *" },
-    { "path": "/api/cron-h1-breaks-alerts", "schedule": "5 * * * *" }
+    { "path": "/api/run-pipeline?force=1", "schedule": "3 * * * *" }
   ],
   "functions": {
     "api/news-parse.js":          { "maxDuration": 30 },
