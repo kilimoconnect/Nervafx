@@ -14,7 +14,7 @@ const INSTRUMENTS = [
   'CHF_JPY',
 ];
 
-const LOOKBACK = 5;
+const LOOKBACK = 2;
 
 function scoreBreak(breakCandle, priorCandles, direction) {
   const body = Math.abs(breakCandle.close - breakCandle.open);
