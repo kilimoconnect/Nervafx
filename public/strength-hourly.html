@@ -272,6 +272,7 @@
         const k = r.time.slice(0, 16);
         const m = {};
         for (const [c, v] of Object.entries(r.values || {})) m[c] = parseFloat(v) || 0;
+        if (r.pairs) m._pairs = r.pairs;
         if (Object.keys(m).length >= 2) byKey[k] = m;
       }
     } else {
@@ -334,7 +335,14 @@
           const weak = trending[ca] === 'DOWN' ? ca : cb;
           const pairLabel = stdPair(strong, weak);
           const base = pairLabel.split('/')[0];
-          const direction = base === strong ? 'BUY' : 'SELL';
+          const quote = pairLabel.split('/')[1];
+          const pairKey = base + '_' + quote;
+          let direction;
+          if (curMap._pairs && curMap._pairs[pairKey] !== undefined) {
+            direction = curMap._pairs[pairKey] > 0 ? 'BUY' : 'SELL';
+          } else {
+            direction = base === strong ? 'BUY' : 'SELL';
+          }
           pairs.push({
             pair: pairLabel,
             strong, weak, direction,

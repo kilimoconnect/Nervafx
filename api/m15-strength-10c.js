@@ -103,7 +103,15 @@ module.exports = async function handler(req, res) {
       }
       if (!valid) continue;
 
-      rows.push({ time, values: strength });
+      const pairMoves = {};
+      for (const inst of INSTRUMENTS) {
+        const { candles, timeToIdx } = indexByInst[inst];
+        const idx = timeToIdx[time];
+        if (idx === undefined || idx < LOOKBACK) continue;
+        pairMoves[inst] = (candles[idx].close - candles[idx - LOOKBACK].close) / candles[idx - LOOKBACK].close;
+      }
+
+      rows.push({ time, values: strength, pairs: pairMoves });
     }
 
     res.json({ rows });
