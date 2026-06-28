@@ -243,6 +243,7 @@
       const reversed = rows.slice().reverse();
       for (const row of reversed) {
         if (isWeekend(row.time)) continue;
+        if (row.breaks.some(b => b.score < 70)) continue;
 
         html += '<div class="br-card">';
         html += `<div class="br-card-hd">
