@@ -337,7 +337,10 @@
 
       if (!pairs.length) continue;
       pairs.sort((a, b) => b.spread - a.spread);
-      const top5 = pairs.slice(0, 5);
+      const top5 = _tf === 'm15'
+        ? pairs.slice(0, 5).filter(p => pips(p.spread) >= 100)
+        : pairs.slice(0, 5);
+      if (!top5.length) continue;
 
       const time = keyToISO(hk);
       cards.push({
