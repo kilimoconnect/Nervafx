@@ -22,7 +22,7 @@
     "api/chfjpy-strength-m15.js": { "maxDuration": 60 },
     "api/m15-strength-10c.js":    { "maxDuration": 60 },
     "api/h1-pair-moves.js":       { "maxDuration": 60 },
-    "api/daily-raw-strength.js":  { "maxDuration": 60 }
+    "api/daily-raw-strength.js":  { "maxDuration": 120 }
   },
   "rewrites": [
     { "source": "/",       "destination": "/login.html" },

@@ -46,7 +46,7 @@ module.exports = async function handler(req, res) {
             .from('backtest_candles')
             .select('time, open, close')
             .eq('instrument', inst)
-            .eq('timeframe', 'H1')
+            .eq('timeframe', 'M15')
             .eq('complete', true)
             .gte('time', fetchSince)
             .lte('time', until)
@@ -87,21 +87,21 @@ module.exports = async function handler(req, res) {
       closeByInst[inst] = m;
     }
 
-    // Reference price = close of the 21:00 UTC candle for each forex day
+    // Reference price = open of the 21:00 UTC M15 candle (= the NY close price)
     const dayRefByInst = {};
     for (const inst of INSTRUMENTS) {
       const refs = {};
       for (const c of (candlesByInst[inst] || [])) {
-        const h = new Date(c.time).getUTCHours();
-        if (h === NY_CLOSE_UTC) {
+        const d = new Date(c.time);
+        if (d.getUTCHours() === NY_CLOSE_UTC && d.getUTCMinutes() === 0) {
           const fxDay = forexDayKey(c.time);
-          refs[fxDay] = c.close;
+          refs[fxDay] = c.open;
         }
       }
       dayRefByInst[inst] = refs;
     }
 
-    // Collect all hourly timestamps in range
+    // Collect all M15 timestamps in range
     const allTimes = new Set();
     for (const inst of INSTRUMENTS) {
       for (const c of (candlesByInst[inst] || [])) {
@@ -120,11 +120,11 @@ module.exports = async function handler(req, res) {
       let valid = true;
       for (const inst of INSTRUMENTS) {
         const dayRef = (dayRefByInst[inst] || {})[fxDay];
-        const hourClose = (closeByInst[inst] || {})[time];
-        if (dayRef === undefined || hourClose === undefined) { valid = false; break; }
+        const m15Close = (closeByInst[inst] || {})[time];
+        if (dayRef === undefined || m15Close === undefined) { valid = false; break; }
 
         const [base, quote] = inst.split('_');
-        const movement = (hourClose - dayRef) / dayRef;
+        const movement = (m15Close - dayRef) / dayRef;
         strength[base] += movement;
         strength[quote] -= movement;
         pairMoves[inst] = movement;
@@ -140,4 +140,4 @@ module.exports = async function handler(req, res) {
   }
 };
 
-module.exports.maxDuration = 60;
+module.exports.maxDuration = 120;
