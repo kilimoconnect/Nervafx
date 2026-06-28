@@ -486,10 +486,21 @@
       pairs.sort((a, b) => b.spread - a.spread);
       const top5 = pairs.slice(0, 5);
 
+      // Find dominating currency (most appearances in top 5)
+      const ccyCount = {};
+      for (const p of top5) {
+        ccyCount[p.strong] = (ccyCount[p.strong] || 0) + 1;
+        ccyCount[p.weak] = (ccyCount[p.weak] || 0) + 1;
+      }
+      let dominant = '', maxCount = 0;
+      for (const [c, n] of Object.entries(ccyCount)) {
+        if (n > maxCount) { maxCount = n; dominant = c; }
+      }
+
       const time = r.time;
       cards.push({
         time, label: hrLabel(time), sub: dayLabel(time),
-        top5, totalPairs: pairs.length,
+        top5, totalPairs: pairs.length, dominant, dominantCount: maxCount,
       });
     }
     return cards;
@@ -510,6 +521,7 @@
       html += `<div class="hr-card-hd">
         <span class="hr-time">${card.label}</span>
         <span class="hr-date">${card.sub}</span>
+        ${card.dominant ? `<span class="hr-ccy-tag" style="background:rgba(96,165,250,0.12);color:${CCY_COLORS[card.dominant] || '#60a5fa'};font-size:10px;font-weight:800">⚡ ${card.dominant} (${card.dominantCount}/5)</span>` : ''}
         <span class="hr-count">${card.totalPairs} pair${card.totalPairs !== 1 ? 's' : ''}</span>
       </div>`;
       html += '<div class="hr-pairs">';
