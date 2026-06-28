@@ -220,14 +220,20 @@
         return;
       }
 
-      // Track first break per pair+direction (chronological order)
+      // Track first break per pair+direction per forex day (resets at 21:00 UTC)
+      function forexDay(iso) {
+        const d = new Date(iso);
+        if (d.getUTCHours() >= 21) d.setUTCDate(d.getUTCDate() + 1);
+        return d.toISOString().slice(0, 10);
+      }
       const seenBreak = {};
       for (const row of rows) {
         if (isWeekend(row.time)) continue;
+        const day = forexDay(row.time);
         for (const b of row.breaks) {
-          const key = b.pair + '|' + b.direction;
+          const key = day + '|' + b.pair + '|' + b.direction;
           if (!seenBreak[key]) {
-            seenBreak[key] = row.time;
+            seenBreak[key] = true;
             b._first = true;
           }
         }
