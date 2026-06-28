@@ -163,7 +163,7 @@
   <main class="sx-main">
     <div class="sx-card">
       <div class="sx-card-hd">
-        <i data-lucide="zap"></i> H1 Structure Breaks — Close above 10H highs / below 10H lows
+        <i data-lucide="zap"></i> H1 Structure Breaks — 10H breakout with momentum confirmation
         <span class="sx-note">Ranked by break quality (body size, low wicks, impulse)</span>
         <span class="sx-ctrls" id="sx-ctrls">
           <button class="sx-btn sx-days active" data-days="1">1D</button>
@@ -243,7 +243,6 @@
       const reversed = rows.slice().reverse();
       for (const row of reversed) {
         if (isWeekend(row.time)) continue;
-        if (row.breaks.some(b => b.score < 70)) continue;
 
         html += '<div class="br-card">';
         html += `<div class="br-card-hd">

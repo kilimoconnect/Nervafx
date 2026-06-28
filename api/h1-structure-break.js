@@ -145,6 +145,15 @@ module.exports = async function handler(req, res) {
 
         if (!direction) continue;
 
+        // Momentum: at least 2 candles in the lookback must have closed
+        // above/below their previous candle in the same direction
+        let momentum = 0;
+        for (let p = 1; p < prior.length; p++) {
+          if (direction === 'BUY' && prior[p].close > prior[p - 1].high) momentum++;
+          if (direction === 'SELL' && prior[p].close < prior[p - 1].low) momentum++;
+        }
+        if (momentum < 2) continue;
+
         const score = scoreBreak(current, prior, direction);
         const level = direction === 'BUY' ? highestHigh : lowestLow;
         const breakDist = Math.abs(current.close - level);
