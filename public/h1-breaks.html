@@ -220,6 +220,19 @@
         return;
       }
 
+      // Track first break per pair+direction (chronological order)
+      const seenBreak = {};
+      for (const row of rows) {
+        if (isWeekend(row.time)) continue;
+        for (const b of row.breaks) {
+          const key = b.pair + '|' + b.direction;
+          if (!seenBreak[key]) {
+            seenBreak[key] = row.time;
+            b._first = true;
+          }
+        }
+      }
+
       let html = '';
       const reversed = rows.slice().reverse();
       for (const row of reversed) {
@@ -239,11 +252,14 @@
           const sc = scoreClass(b.score);
           const dirCls = b.direction === 'BUY' ? 'br-buy' : 'br-sell';
           const barPct = Math.max(5, b.score);
+          const isFirst = !!b._first;
+          const pairStyle = isFirst ? 'background:rgba(250,204,21,0.06);border-left:2px solid #facc15;padding-left:8px' : '';
 
-          html += '<div class="br-pair">';
+          html += `<div class="br-pair" style="${pairStyle}">`;
           html += `<span class="br-rank">#${i + 1}</span>`;
           html += `<span class="br-pair-name">${b.pair}</span>`;
           html += `<span class="br-tag ${dirCls}">${b.direction}</span>`;
+          if (isFirst) html += '<span class="br-tag" style="background:rgba(250,204,21,0.15);color:#facc15;font-size:9px">1ST BREAK</span>';
           html += `<div class="br-score-bar"><div class="br-score-fill ${sc}" style="width:${barPct}%"></div></div>`;
           html += `<span class="br-score-val ${sc}">${b.score}</span>`;
           html += '</div>';
@@ -256,7 +272,7 @@
         }
         html += '</div></div>';
       }
-      el.innerHTML = html || '<div class="br-empty">No weekday breaks found.</div>';
+      el.innerHTML = html || '<div class="br-empty">No all-green break cards found.</div>';
     }
 
     async function load() {
