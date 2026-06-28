@@ -243,7 +243,8 @@
       const reversed = rows.slice().reverse();
       for (const row of reversed) {
         if (isWeekend(row.time)) continue;
-        if (row.breaks.some(b => b.score < 70)) continue;
+        const greenBreaks = row.breaks.filter(b => b.score >= 70);
+        if (!greenBreaks.length) continue;
 
         html += '<div class="br-card">';
         html += `<div class="br-card-hd">
@@ -253,8 +254,8 @@
         </div>`;
         html += '<div class="br-pairs">';
 
-        for (let i = 0; i < row.breaks.length; i++) {
-          const b = row.breaks[i];
+        for (let i = 0; i < greenBreaks.length; i++) {
+          const b = greenBreaks[i];
           const sc = scoreClass(b.score);
           const dirCls = b.direction === 'BUY' ? 'br-buy' : 'br-sell';
           const barPct = Math.max(5, b.score);
