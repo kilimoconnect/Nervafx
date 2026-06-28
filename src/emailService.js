@@ -912,42 +912,171 @@ function h1BreaksEmail(data) {
   const { time, breaks, totalBreaks } = data;
   const timeStr = _fmtTime(time);
 
-  let rows = '';
-  for (const b of breaks) {
+  // Summary stats
+  const buyCount = breaks.filter(b => b.direction === 'BUY').length;
+  const sellCount = breaks.filter(b => b.direction === 'SELL').length;
+  const firstBreaks = breaks.filter(b => b._first).length;
+  const avgScore = breaks.length ? Math.round(breaks.reduce((s, b) => s + b.score, 0) / breaks.length) : 0;
+
+  // Summary metrics row
+  const metricsHtml = `
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0">
+      <tr>
+        <td style="width:25%;text-align:center;padding:12px 4px">
+          <div style="background:#0f172a;border:1px solid #1e293b;border-radius:8px;padding:14px 8px">
+            <div style="font-size:22px;font-weight:800;color:#f1f5f9">${breaks.length}</div>
+            <div style="font-size:10px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.8px;margin-top:4px">Qualified</div>
+          </div>
+        </td>
+        <td style="width:25%;text-align:center;padding:12px 4px">
+          <div style="background:#0f172a;border:1px solid #1e293b;border-radius:8px;padding:14px 8px">
+            <div style="font-size:22px;font-weight:800;color:#4ade80">${buyCount}</div>
+            <div style="font-size:10px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.8px;margin-top:4px">Buys</div>
+          </div>
+        </td>
+        <td style="width:25%;text-align:center;padding:12px 4px">
+          <div style="background:#0f172a;border:1px solid #1e293b;border-radius:8px;padding:14px 8px">
+            <div style="font-size:22px;font-weight:800;color:#f87171">${sellCount}</div>
+            <div style="font-size:10px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.8px;margin-top:4px">Sells</div>
+          </div>
+        </td>
+        <td style="width:25%;text-align:center;padding:12px 4px">
+          <div style="background:#0f172a;border:1px solid #1e293b;border-radius:8px;padding:14px 8px">
+            <div style="font-size:22px;font-weight:800;color:#facc15">${firstBreaks}</div>
+            <div style="font-size:10px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.8px;margin-top:4px">1st Break</div>
+          </div>
+        </td>
+      </tr>
+    </table>`;
+
+  // Break cards table
+  const breakRows = breaks.map((b, i) => {
     const isBuy = b.direction === 'BUY';
-    const bgColor = isBuy ? 'rgba(34,197,94,0.10)' : 'rgba(239,68,68,0.10)';
-    const borderColor = isBuy ? '#22c55e' : '#ef4444';
     const dirColor = isBuy ? '#22c55e' : '#ef4444';
+    const dirBg = isBuy ? 'rgba(34,197,94,0.10)' : 'rgba(239,68,68,0.10)';
     const arrow = isBuy ? '▲' : '▼';
-    const scoreColor = b.score >= 70 ? '#4ade80' : b.score >= 45 ? '#fbbf24' : '#f87171';
-    const firstTag = b._first ? '<span style="background:rgba(250,204,21,0.15);color:#facc15;font-size:10px;font-weight:700;padding:2px 6px;border-radius:3px;margin-left:8px">1ST BREAK</span>' : '';
     const decimals = b.close > 10 ? 3 : 5;
-    rows += `<div style="background:${bgColor};border-left:3px solid ${borderColor};border-radius:6px;padding:10px 14px;margin:6px 0">
-      <span style="color:${dirColor};font-weight:700;font-size:14px">${arrow} ${b.direction}</span>
-      <span style="color:#f1f5f9;font-weight:700;font-size:14px;margin-left:8px">${b.pair}</span>
-      <span style="color:${scoreColor};font-weight:700;font-size:13px;margin-left:8px">Score ${b.score}</span>
-      ${firstTag}
-      <div style="margin-top:6px;font-size:11px;color:#64748b">
-        Wick ${b.wickPct}% &middot; Level ${b.level.toFixed(decimals)} &middot; Close ${b.close.toFixed(decimals)}
+
+    // Score bar (visual)
+    const scoreWidth = Math.max(8, b.score);
+    const scoreColor = b.score >= 70 ? '#22c55e' : b.score >= 45 ? '#f59e0b' : '#ef4444';
+    const scoreBg = b.score >= 70 ? 'rgba(34,197,94,0.12)' : b.score >= 45 ? 'rgba(245,158,11,0.12)' : 'rgba(239,68,68,0.12)';
+
+    const firstBadge = b._first
+      ? `<div style="display:inline-block;background:rgba(250,204,21,0.15);color:#facc15;font-size:9px;font-weight:800;padding:2px 8px;border-radius:3px;letter-spacing:0.5px;margin-left:8px">1ST BREAK</div>`
+      : '';
+
+    const breakDist = Math.abs(b.close - b.level);
+    const pipsLabel = b.close > 10 ? (breakDist * 10).toFixed(1) : (breakDist * 10000).toFixed(1);
+
+    return `
+    <div style="background:#0f172a;border:1px solid #1e293b;border-left:3px solid ${dirColor};border-radius:8px;padding:0;margin:8px 0;overflow:hidden">
+      <!-- Header row -->
+      <div style="padding:14px 16px;border-bottom:1px solid rgba(30,41,59,0.6)">
+        <table width="100%" cellpadding="0" cellspacing="0"><tr>
+          <td>
+            <span style="background:${dirBg};color:${dirColor};font-size:11px;font-weight:800;padding:3px 10px;border-radius:4px;letter-spacing:0.3px">${arrow} ${b.direction}</span>
+            <span style="color:#f1f5f9;font-size:16px;font-weight:800;margin-left:10px;letter-spacing:-0.2px">${b.pair}</span>
+            ${firstBadge}
+          </td>
+          <td style="text-align:right">
+            <span style="color:#64748b;font-size:11px;font-weight:600">#${i + 1}</span>
+          </td>
+        </tr></table>
+      </div>
+
+      <!-- Score bar -->
+      <div style="padding:12px 16px;border-bottom:1px solid rgba(30,41,59,0.6)">
+        <table width="100%" cellpadding="0" cellspacing="0"><tr>
+          <td style="width:50px;color:#94a3b8;font-size:11px;font-weight:600">Score</td>
+          <td style="padding:0 12px">
+            <div style="background:rgba(255,255,255,0.04);border-radius:4px;height:8px;overflow:hidden">
+              <div style="width:${scoreWidth}%;height:100%;background:${scoreColor};border-radius:4px"></div>
+            </div>
+          </td>
+          <td style="width:40px;text-align:right">
+            <span style="background:${scoreBg};color:${scoreColor};font-size:13px;font-weight:800;padding:2px 8px;border-radius:4px">${b.score}</span>
+          </td>
+        </tr></table>
+      </div>
+
+      <!-- Metrics row -->
+      <div style="padding:10px 16px">
+        <table width="100%" cellpadding="0" cellspacing="0"><tr>
+          <td style="text-align:center;padding:4px">
+            <div style="font-size:10px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Wick</div>
+            <div style="font-size:13px;color:#e2e8f0;font-weight:700;margin-top:2px">${b.wickPct}%</div>
+          </td>
+          <td style="width:1px;background:#1e293b"></td>
+          <td style="text-align:center;padding:4px">
+            <div style="font-size:10px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Level</div>
+            <div style="font-size:13px;color:#e2e8f0;font-weight:700;margin-top:2px">${b.level.toFixed(decimals)}</div>
+          </td>
+          <td style="width:1px;background:#1e293b"></td>
+          <td style="text-align:center;padding:4px">
+            <div style="font-size:10px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Close</div>
+            <div style="font-size:13px;color:${dirColor};font-weight:700;margin-top:2px">${b.close.toFixed(decimals)}</div>
+          </td>
+          <td style="width:1px;background:#1e293b"></td>
+          <td style="text-align:center;padding:4px">
+            <div style="font-size:10px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Pips</div>
+            <div style="font-size:13px;color:${dirColor};font-weight:700;margin-top:2px">${pipsLabel}</div>
+          </td>
+        </tr></table>
       </div>
     </div>`;
-  }
+  }).join('');
 
   const html = baseLayout(`
-    <h2>H1 Structure Breaks</h2>
-    <p class="sub">${timeStr} &middot; ${totalBreaks} total break${totalBreaks !== 1 ? 's' : ''}</p>
-    <p>Close broke above 10H highs or below 10H lows with momentum confirmation.</p>
+    <div style="text-align:center;margin-bottom:6px">
+      <span style="display:inline-block;background:rgba(96,165,250,0.12);color:#60a5fa;font-size:10px;font-weight:700;padding:3px 12px;border-radius:10px;letter-spacing:0.8px;text-transform:uppercase">Structure Alert</span>
+    </div>
+    <h2 style="text-align:center">H1 Structure Breaks</h2>
+    <p class="sub" style="text-align:center">${timeStr}</p>
+    <p style="text-align:center;color:#94a3b8;font-size:13px;line-height:1.6;margin:0 0 4px">
+      Price closed beyond the <strong style="color:#e2e8f0">10-hour high/low</strong> with
+      <strong style="color:#e2e8f0">momentum confirmation</strong> and
+      <strong style="color:#e2e8f0">clean wick structure</strong>.
+    </p>
+    <p style="text-align:center;color:#64748b;font-size:11px;margin:0 0 16px">
+      ${totalBreaks} total break${totalBreaks !== 1 ? 's' : ''} detected &middot; Top ${breaks.length} shown
+    </p>
+
+    ${metricsHtml}
+
     <div class="section">
-      <div class="section-label">Top Breaks</div>
-      ${rows}
+      <div class="section-label">Top Structure Breaks</div>
+      ${breakRows}
     </div>
+
+    <div style="background:#0f172a;border:1px solid #1e293b;border-radius:8px;padding:16px;margin:20px 0">
+      <table width="100%" cellpadding="0" cellspacing="0"><tr>
+        <td style="width:40px;vertical-align:top">
+          <div style="background:rgba(96,165,250,0.12);width:32px;height:32px;border-radius:8px;text-align:center;line-height:32px;font-size:16px">&#9432;</div>
+        </td>
+        <td style="vertical-align:top;padding-left:8px">
+          <div style="font-size:11px;font-weight:700;color:#60a5fa;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">How to Read</div>
+          <div style="font-size:12px;color:#94a3b8;line-height:1.6">
+            <strong style="color:#e2e8f0">Score</strong> measures break quality — body size, wick cleanliness, and impulse strength.
+            <strong style="color:#facc15">1ST BREAK</strong> marks the first time a pair breaks in that direction today.
+            <strong style="color:#e2e8f0">Pips</strong> shows how far past the structure level price closed.
+          </div>
+        </td>
+      </tr></table>
+    </div>
+
     <div style="text-align:center;margin:28px 0 8px">
-      <a href="https://www.nervafx.com/h1-breaks" class="cta">View H1 Breaks</a>
+      <a href="https://www.nervafx.com/h1-breaks" class="cta" style="padding:14px 40px;font-size:15px">View All Breaks →</a>
     </div>
+
+    <p class="sm" style="text-align:center;margin-top:20px">Market observation — not a trade recommendation. Always apply your own risk management.</p>
   `);
 
+  // Clean subject line
+  const topPair = breaks[0];
+  const subjectDir = buyCount > sellCount ? 'Bullish' : sellCount > buyCount ? 'Bearish' : 'Mixed';
   return {
-    subject: `H1 Breaks: ${breaks.map(b => `${b.pair} ${b.direction}`).join(', ')} — ${timeStr}`,
+    subject: `⚡ H1 Break: ${topPair.pair} ${topPair.direction}${breaks.length > 1 ? ` +${breaks.length - 1} more` : ''} — ${subjectDir} Structure`,
     html,
   };
 }
