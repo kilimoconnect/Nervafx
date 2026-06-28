@@ -25,7 +25,7 @@ module.exports = async function handler(req, res) {
     const gate = await requirePlan(sb, req, 'premium');
     if (gate.error) return res.status(gate.status).json({ error: gate.error, upgrade: gate.upgrade });
 
-    const days = Math.min(30, parseInt(req.query?.days || '2', 10) || 2);
+    const days = Math.min(180, parseInt(req.query?.days || '2', 10) || 2);
     const until = new Date().toISOString();
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
     // Fetch extra day back to ensure we have day-open prices
