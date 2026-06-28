@@ -157,7 +157,7 @@
     <div class="sx-topbar-left">
       <a class="sx-logo" href="/app"><img src="/nervafx-logo.png" alt="NervaFX" onerror="this.style.display='none'"></a>
       <span class="sx-sep">/</span>
-      <span class="sx-title-text">Spread Momentum — 2H Consecutive</span>
+      <span class="sx-title-text">Spread Momentum</span>
     </div>
     <a class="sx-back-btn" href="/app" onclick="window.close(); setTimeout(function(){ location.href='/app'; }, 150); return false;">&times; Close</a>
   </div>
@@ -166,8 +166,9 @@
     <div class="sx-card">
       <div class="sx-card-hd">
         <i data-lucide="trending-up"></i> Top 5 Diverging Pairs
-        <span class="sx-note" id="sx-note">Pairs where both currencies have trended consistently for 2 consecutive hours</span>
+        <span class="sx-note" id="sx-note"></span>
         <span class="sx-ctrls" id="sx-ctrls">
+          <button class="sx-btn sx-tf" data-tf="m15">M15</button>
           <button class="sx-btn sx-tf" data-tf="3h">3H</button>
           <button class="sx-btn sx-tf active" data-tf="6h">6H</button>
           <span class="sx-ctrl-sep"></span>
@@ -182,7 +183,7 @@
         <div id="sx-content"><div class="sx-loading"><span class="spinner"></span> Loading spread data…</div></div>
         <p style="margin:10px 0 0;font-size:10.5px;color:var(--text-dim)">
           Each card = one hour. Shows the top 5 pairs where one currency has been increasing and the other decreasing
-          for 2 consecutive hours. Spread = difference between the two currencies' strength values. Green dots = rising, Red dots = falling.
+          consecutively. Spread = difference between the two currencies' strength values.
         </p>
       </div>
     </div>
@@ -236,6 +237,13 @@
   }
 
   async function fetchRows(days) {
+    if (_tf === 'm15') {
+      const key = `m15:${days}`;
+      if (_cache[key]) return _cache[key];
+      const data = await api(`/api/m15-strength-history?days=${days}`);
+      _cache[key] = data.rows || [];
+      return _cache[key];
+    }
     const key = `cs:${days}`;
     if (_cache[key]) return _cache[key];
     const data = await api(`/api/strength-history?days=${days}&multi=1`);
@@ -243,43 +251,65 @@
     return _cache[key];
   }
 
-  function hourMaps(rows) {
-    const byHour = {};
-    for (const r of rows) {
-      if (isWeekend(r.time)) continue;
-      const hk = r.time.slice(0, 13);
-      (byHour[hk] = byHour[hk] || {})[r.currency] = valueOf(r);
+  function timeMaps(rows) {
+    const byKey = {};
+    if (_tf === 'm15') {
+      for (const r of rows) {
+        if (isWeekend(r.time)) continue;
+        const k = r.time.slice(0, 16);
+        const m = {};
+        for (const [c, v] of Object.entries(r.values || {})) m[c] = parseFloat(v) || 0;
+        if (Object.keys(m).length >= 2) byKey[k] = m;
+      }
+    } else {
+      for (const r of rows) {
+        if (isWeekend(r.time)) continue;
+        const hk = r.time.slice(0, 13);
+        (byKey[hk] = byKey[hk] || {})[r.currency] = valueOf(r);
+      }
     }
-    return byHour;
+    return byKey;
   }
 
+  function keyToISO(k) { return k.length === 16 ? k + ':00Z' : k + ':00:00Z'; }
+
   function buildSpreadCards(rows) {
-    const byHour = hourMaps(rows);
-    const hourKeys = Object.keys(byHour).sort();
+    const byKey = timeMaps(rows);
+    const keys = Object.keys(byKey).sort();
     const cards = [];
 
-    for (let i = 2; i < hourKeys.length; i++) {
-      const hk = hourKeys[i];
-      const curMap = byHour[hk];
+    const consecutiveN = 3;
+    const maxGap = _tf === 'm15' ? 20 * 60000 : 2 * 3600000;
+
+    for (let i = consecutiveN; i < keys.length; i++) {
+      const hk = keys[i];
+      const curMap = byKey[hk];
       if (Object.keys(curMap).length < 8) continue;
 
-      const priorKeys = [hourKeys[i-2], hourKeys[i-1], hk];
-      const times = priorKeys.map(k => new Date(k + ':00:00Z').getTime());
-      const gaps = [times[1]-times[0], times[2]-times[1]];
-      if (gaps.some(g => g > 2 * 3600000)) continue;
+      const priorKeys = [];
+      for (let j = consecutiveN; j >= 0; j--) priorKeys.push(keys[i - j]);
+
+      const times = priorKeys.map(k => new Date(keyToISO(k)).getTime());
+      let gapOk = true;
+      for (let g = 1; g < times.length; g++) {
+        if (times[g] - times[g-1] > maxGap) { gapOk = false; break; }
+      }
+      if (!gapOk) continue;
 
       const trending = {};
       const trendVals = {};
       for (const ccy of CURRENCIES) {
-        const vals = priorKeys.map(k => (byHour[k] || {})[ccy] || 0);
+        const vals = priorKeys.map(k => (byKey[k] || {})[ccy] || 0);
         trendVals[ccy] = vals;
-        const rising  = vals[1] > vals[0] && vals[2] > vals[1];
-        const falling = vals[1] < vals[0] && vals[2] < vals[1];
+        let rising = true, falling = true;
+        for (let v = 1; v < vals.length; v++) {
+          if (vals[v] <= vals[v-1]) rising = false;
+          if (vals[v] >= vals[v-1]) falling = false;
+        }
         if (rising) trending[ccy] = 'UP';
         else if (falling) trending[ccy] = 'DOWN';
       }
 
-      // Build diverging pairs (one UP + one DOWN)
       const pairs = [];
       const trendingCcys = Object.keys(trending);
       for (let a = 0; a < trendingCcys.length; a++) {
@@ -307,11 +337,9 @@
 
       if (!pairs.length) continue;
       pairs.sort((a, b) => b.spread - a.spread);
-      const minPips = _tf === '3h' ? 10 : 20;
-      const top5 = pairs.slice(0, 5).filter(p => pips(p.spread) >= minPips);
-      if (!top5.length) continue;
+      const top5 = pairs.slice(0, 5);
 
-      const time = hk + ':00:00Z';
+      const time = keyToISO(hk);
       cards.push({
         time,
         label: hrLabel(time),
@@ -328,7 +356,8 @@
   function renderCards(cards) {
     const el = document.getElementById('sx-content');
     if (!cards.length) {
-      el.innerHTML = '<div class="hr-empty">No 2-hour consecutive spread momentum found for this period.</div>';
+      const label = _tf === 'm15' ? '3-bar' : '3-hour';
+      el.innerHTML = `<div class="hr-empty">No ${label} consecutive spread momentum found for this period.</div>`;
       return;
     }
 
@@ -339,8 +368,9 @@
     for (let ci = 0; ci < reversed.length; ci++) {
       const card = reversed[ci];
       const prev = reversed[ci + 1];
-      const hourDiff = prev ? (new Date(card.time).getTime() - new Date(prev.time).getTime()) / 3600000 : 0;
-      const consecutive5 = card.top5.length >= 5 && prev && prev.top5.length >= 5 && hourDiff === 1;
+      const timeDiff = prev ? (new Date(card.time).getTime() - new Date(prev.time).getTime()) : 0;
+      const expectedGap = _tf === 'm15' ? 15 * 60000 : 3600000;
+      const consecutive5 = card.top5.length >= 5 && prev && prev.top5.length >= 5 && timeDiff === expectedGap;
       html += `<div class="hr-card${consecutive5 ? ' hr-hot' : ''}">`;
       html += `<div class="hr-card-hd">
         <span class="hr-time">${card.label}</span>
@@ -387,6 +417,9 @@
   function syncControls() {
     document.querySelectorAll('.sx-tf').forEach(b => b.classList.toggle('active', b.dataset.tf === _tf));
     document.querySelectorAll('.sx-days').forEach(b => b.classList.toggle('active', parseInt(b.dataset.days) === _days));
+    const note = document.getElementById('sx-note');
+    if (_tf === 'm15') note.textContent = '3 consecutive M15 bars trending';
+    else note.textContent = '3 consecutive hours trending (' + _tf.toUpperCase() + ' strength)';
   }
 
   document.getElementById('sx-ctrls').addEventListener('click', (ev) => {
