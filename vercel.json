@@ -21,7 +21,8 @@
     "api/chfjpy-strength.js":     { "maxDuration": 60 },
     "api/chfjpy-strength-m15.js": { "maxDuration": 60 },
     "api/m15-strength-10c.js":    { "maxDuration": 60 },
-    "api/h1-pair-moves.js":       { "maxDuration": 60 }
+    "api/h1-pair-moves.js":       { "maxDuration": 60 },
+    "api/daily-raw-strength.js":  { "maxDuration": 60 }
   },
   "rewrites": [
     { "source": "/",       "destination": "/login.html" },
@@ -41,7 +42,8 @@
     { "source": "/m15-quality", "destination": "/m15-quality.html" },
     { "source": "/structure-engine", "destination": "/structure-engine.html" },
     { "source": "/audnzd-strength", "destination": "/audnzd-strength.html" },
-    { "source": "/chfjpy-strength", "destination": "/chfjpy-strength.html" }
+    { "source": "/chfjpy-strength", "destination": "/chfjpy-strength.html" },
+    { "source": "/daily-strength", "destination": "/daily-strength.html" }
   ],
   "headers": [
     {

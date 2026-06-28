@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>NervaFX — Daily Raw Strength</title>
+  <link rel="icon" type="image/png" href="/nervafx-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <link rel="stylesheet" href="style.css" />
+
+  <style>
+    .grid { display: block !important; }
+
+    .sx-topbar {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 28px; height: 56px;
+      background: rgba(8,11,18,0.92);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+    .sx-topbar-left { display: flex; align-items: center; gap: 12px; }
+    .sx-logo img { height: 24px; display: block; }
+    .sx-sep { color: rgba(255,255,255,0.1); font-size: 20px; font-weight: 200; }
+    .sx-title-text { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+    .sx-back-btn {
+      display: flex; align-items: center; gap: 5px;
+      padding: 6px 12px; border-radius: 8px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); font-size: 11px; font-weight: 600;
+      cursor: pointer; text-decoration: none; transition: all 0.15s;
+    }
+    .sx-back-btn:hover { background: rgba(255,255,255,0.09); color: var(--text); }
+
+    .sx-main { max-width: 1000px; margin: 0 auto; padding: 20px 20px 80px; }
+
+    .sx-card {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px; margin-bottom: 18px; overflow: hidden;
+    }
+    .sx-card-hd {
+      padding: 12px 16px; font-size: 12px; font-weight: 700;
+      color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    }
+    .sx-card-hd i { width: 15px; height: 15px; }
+    .sx-card-bd { padding: 14px 16px; }
+
+    .sx-ctrls { display: flex; gap: 6px; margin-left: auto; align-items: center; flex-wrap: wrap; }
+    .sx-btn {
+      padding: 4px 12px; border-radius: 7px; font-size: 11px; font-weight: 700;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); cursor: pointer; transition: all 0.15s;
+    }
+    .sx-btn:hover { color: var(--text); background: rgba(255,255,255,0.08); }
+    .sx-btn.active { background: rgba(96,165,250,0.15); border-color: rgba(96,165,250,0.5); color: #60a5fa; }
+    .sx-note { font-size: 10.5px; color: var(--text-dim); text-transform: none; letter-spacing: 0; font-weight: 500; }
+
+    .sx-loading { display: flex; align-items: center; gap: 8px; padding: 40px; color: var(--text-muted); font-size: 12px; justify-content: center; }
+    .spinner {
+      width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.15);
+      border-top-color: #60a5fa; border-radius: 50%; animation: sxspin 0.7s linear infinite;
+    }
+    @keyframes sxspin { to { transform: rotate(360deg); } }
+
+    /* ── Chart ── */
+    .ds-chart-wrap {
+      position: relative; width: 100%; height: 320px;
+      margin-bottom: 10px;
+    }
+    .ds-chart-wrap canvas { width: 100%; height: 100%; }
+
+    .ds-legend {
+      display: flex; flex-wrap: wrap; gap: 10px; padding: 8px 0;
+      justify-content: center;
+    }
+    .ds-legend-item {
+      display: flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700;
+      cursor: pointer; opacity: 1; transition: opacity 0.2s;
+    }
+    .ds-legend-item.off { opacity: 0.25; }
+    .ds-legend-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+    }
+
+    /* ── Pair cards ── */
+    .hr-card {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 10px; margin-bottom: 10px; overflow: hidden;
+    }
+    .hr-card-hd {
+      display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .hr-time { font-size: 12px; font-weight: 700; color: var(--text); }
+    .hr-date { font-size: 11px; color: var(--text-muted); }
+    .hr-count {
+      margin-left: auto; font-size: 10px; font-weight: 700;
+      padding: 2px 8px; border-radius: 4px;
+      background: rgba(96,165,250,0.12); color: #60a5fa;
+    }
+
+    .hr-pairs { padding: 8px 14px; }
+    .hr-pair {
+      display: flex; align-items: center; gap: 10px; padding: 6px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+    .hr-pair:last-child { border-bottom: none; }
+    .hr-rank {
+      font-size: 10px; font-weight: 800; color: var(--text-dim);
+      min-width: 18px; text-align: center;
+    }
+    .hr-pair-name { font-size: 12px; font-weight: 800; color: var(--text); min-width: 75px; }
+    .hr-ccy-tag {
+      font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 4px;
+      letter-spacing: 0.2px;
+    }
+    .hr-ccy-up { background: rgba(34,197,94,0.12); color: #4ade80; }
+    .hr-ccy-down { background: rgba(239,68,68,0.12); color: #f87171; }
+    .hr-spread-bar {
+      flex: 1; height: 8px; background: rgba(255,255,255,0.04);
+      border-radius: 4px; overflow: hidden; min-width: 60px;
+    }
+    .hr-spread-fill {
+      height: 100%; border-radius: 4px;
+      background: linear-gradient(90deg, #4ade80, #60a5fa);
+    }
+    .hr-spread-val {
+      font-size: 11px; font-weight: 800; color: #60a5fa;
+      min-width: 50px; text-align: right; font-family: var(--font-data);
+    }
+    .hr-card.hr-hot {
+      border-color: rgba(250,204,21,0.3);
+      background: rgba(250,204,21,0.04);
+      box-shadow: 0 0 20px rgba(250,204,21,0.08);
+    }
+    .hr-hot-tag {
+      font-size: 9px; font-weight: 800; padding: 2px 7px; border-radius: 4px;
+      background: rgba(250,204,21,0.15); color: #facc15;
+      letter-spacing: 0.5px;
+    }
+
+    .hr-empty { text-align: center; padding: 50px 20px; color: var(--text-muted); font-size: 13px; }
+
+    @media (max-width: 640px) {
+      .sx-main { padding: 14px 12px 60px; }
+      .sx-ctrls { width: 100%; margin-left: 0; }
+      .hr-pair { flex-wrap: wrap; gap: 6px; }
+      .ds-chart-wrap { height: 240px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="sx-topbar">
+    <div class="sx-topbar-left">
+      <a class="sx-logo" href="/app"><img src="/nervafx-logo.png" alt="NervaFX" onerror="this.style.display='none'"></a>
+      <span class="sx-sep">/</span>
+      <span class="sx-title-text">Daily Raw Strength</span>
+    </div>
+    <a class="sx-back-btn" href="/app" onclick="window.close(); setTimeout(function(){ location.href='/app'; }, 150); return false;">&times; Close</a>
+  </div>
+
+  <main class="sx-main">
+    <!-- Chart card -->
+    <div class="sx-card">
+      <div class="sx-card-hd">
+        <i data-lucide="activity"></i> Currency Strength (Day Open → Hourly Close)
+        <span class="sx-note" id="sx-note">Raw price change from day open</span>
+        <span class="sx-ctrls" id="sx-ctrls">
+          <button class="sx-btn sx-days active" data-days="1">1D</button>
+          <button class="sx-btn sx-days" data-days="2">2D</button>
+          <button class="sx-btn sx-days" data-days="5">5D</button>
+          <button class="sx-btn sx-days" data-days="10">10D</button>
+        </span>
+      </div>
+      <div class="sx-card-bd">
+        <div id="ds-legend" class="ds-legend"></div>
+        <div class="ds-chart-wrap"><canvas id="ds-chart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Ranking card -->
+    <div class="sx-card">
+      <div class="sx-card-hd">
+        <i data-lucide="bar-chart-3"></i> Current Ranking
+      </div>
+      <div class="sx-card-bd" id="ds-ranking">
+        <div class="sx-loading"><span class="spinner"></span> Loading…</div>
+      </div>
+    </div>
+
+    <!-- Diverging pairs card -->
+    <div class="sx-card">
+      <div class="sx-card-hd">
+        <i data-lucide="trending-up"></i> Top 5 Diverging Pairs
+        <span class="sx-note">3 consecutive hours trending (raw daily strength)</span>
+      </div>
+      <div class="sx-card-bd">
+        <div id="ds-pairs"><div class="sx-loading"><span class="spinner"></span> Loading spread data…</div></div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+  (function () {
+    const token = localStorage.getItem('nfx_token');
+    if (!token) return location.replace('/login.html');
+    try {
+      const pay = JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+      if (pay.exp && pay.exp * 1000 < Date.now()) {
+        localStorage.removeItem('nfx_token');
+        return location.replace('/login.html');
+      }
+    } catch (_) { return location.replace('/login.html'); }
+  })();
+
+  const CURRENCIES = ['USD','EUR','GBP','JPY','CHF','CAD','AUD','NZD'];
+  const CCY_COLORS = {
+    USD: '#60a5fa', EUR: '#f59e0b', GBP: '#ef4444', JPY: '#ec4899',
+    CHF: '#a78bfa', CAD: '#10b981', AUD: '#06b6d4', NZD: '#84cc16',
+  };
+  const BASE_PRIORITY = { EUR:1, GBP:2, AUD:3, NZD:4, USD:5, CAD:6, CHF:7, JPY:8 };
+  function stdPair(a, b) {
+    return BASE_PRIORITY[a] < BASE_PRIORITY[b] ? a + '/' + b : b + '/' + a;
+  }
+
+  let _userTz = localStorage.getItem('nfx_tz') || 'auto';
+  function _tz() { return (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC'); }
+  function hrLabel(t) { return new Date(t).toLocaleTimeString('en-GB', { timeZone: _tz(), hour: '2-digit', minute: '2-digit', hour12: false }); }
+  function dayLabel(t) { return new Date(t).toLocaleDateString('en-GB', { timeZone: _tz(), weekday: 'short', day: '2-digit', month: 'short' }); }
+  const _wdFmt = new Intl.DateTimeFormat('en-US', { timeZone: _tz(), weekday: 'short' });
+  function isWeekend(t) { const wd = _wdFmt.format(new Date(t)); return wd === 'Sat' || wd === 'Sun'; }
+
+  const pips = v => (v * 10000);
+  const fmt = v => (v >= 0 ? '+' : '') + pips(v).toFixed(1);
+
+  async function api(path) {
+    const token = localStorage.getItem('nfx_token');
+    const r = await fetch(path, { headers: { Authorization: `Bearer ${token}` } });
+    if (r.status === 401) { location.replace('/login.html'); throw new Error('Unauthorized'); }
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || `${r.status}`);
+    return j;
+  }
+
+  let _days = 1;
+  const _cache = {};
+  const _hidden = new Set();
+
+  async function fetchRows(days) {
+    const key = `dr:${days}`;
+    if (_cache[key]) return _cache[key];
+    const data = await api(`/api/daily-raw-strength?days=${days}`);
+    _cache[key] = data.rows || [];
+    return _cache[key];
+  }
+
+  // ── Chart ──
+  function drawChart(rows) {
+    const canvas = document.getElementById('ds-chart');
+    const ctx = canvas.getContext('2d');
+    const wrap = canvas.parentElement;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = wrap.clientWidth * dpr;
+    canvas.height = wrap.clientHeight * dpr;
+    ctx.scale(dpr, dpr);
+    const W = wrap.clientWidth, H = wrap.clientHeight;
+    const pad = { t: 10, r: 10, b: 30, l: 50 };
+    const cW = W - pad.l - pad.r, cH = H - pad.t - pad.b;
+
+    ctx.clearRect(0, 0, W, H);
+
+    const filtered = rows.filter(r => !isWeekend(r.time));
+    if (!filtered.length) return;
+
+    // Collect values for scale
+    let minV = Infinity, maxV = -Infinity;
+    for (const r of filtered) {
+      for (const c of CURRENCIES) {
+        if (_hidden.has(c)) continue;
+        const v = r.values[c] || 0;
+        if (v < minV) minV = v;
+        if (v > maxV) maxV = v;
+      }
+    }
+    const range = maxV - minV || 0.001;
+    minV -= range * 0.05;
+    maxV += range * 0.05;
+    const vRange = maxV - minV;
+
+    const xStep = cW / Math.max(1, filtered.length - 1);
+
+    // Zero line
+    const zeroY = pad.t + cH * (1 - (0 - minV) / vRange);
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(pad.l, zeroY);
+    ctx.lineTo(pad.l + cW, zeroY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Y-axis labels
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = '10px Inter, sans-serif';
+    ctx.textAlign = 'right';
+    const yTicks = 5;
+    for (let i = 0; i <= yTicks; i++) {
+      const v = minV + (vRange * i / yTicks);
+      const y = pad.t + cH * (1 - i / yTicks);
+      ctx.fillText(fmt(v), pad.l - 6, y + 3);
+      if (i > 0 && i < yTicks) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+        ctx.beginPath();
+        ctx.moveTo(pad.l, y);
+        ctx.lineTo(pad.l + cW, y);
+        ctx.stroke();
+      }
+    }
+
+    // X-axis labels
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    const labelEvery = Math.max(1, Math.floor(filtered.length / 12));
+    for (let i = 0; i < filtered.length; i += labelEvery) {
+      const x = pad.l + i * xStep;
+      ctx.fillText(hrLabel(filtered[i].time), x, H - 8);
+    }
+
+    // Day separators
+    let prevDay = '';
+    for (let i = 0; i < filtered.length; i++) {
+      const day = filtered[i].time.slice(0, 10);
+      if (day !== prevDay && prevDay) {
+        const x = pad.l + i * xStep;
+        ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 3]);
+        ctx.beginPath();
+        ctx.moveTo(x, pad.t);
+        ctx.lineTo(x, pad.t + cH);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(255,255,255,0.25)';
+        ctx.font = '9px Inter, sans-serif';
+        ctx.fillText(dayLabel(filtered[i].time), x + 30, pad.t + 12);
+      }
+      prevDay = day;
+    }
+
+    // Lines
+    for (const ccy of CURRENCIES) {
+      if (_hidden.has(ccy)) continue;
+      ctx.strokeStyle = CCY_COLORS[ccy];
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      for (let i = 0; i < filtered.length; i++) {
+        const v = filtered[i].values[ccy] || 0;
+        const x = pad.l + i * xStep;
+        const y = pad.t + cH * (1 - (v - minV) / vRange);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    // End labels
+    const last = filtered[filtered.length - 1];
+    ctx.font = 'bold 9px Inter, sans-serif';
+    ctx.textAlign = 'left';
+    const ranked = CURRENCIES.filter(c => !_hidden.has(c))
+      .map(c => ({ c, v: last.values[c] || 0 }))
+      .sort((a, b) => b.v - a.v);
+    let labelY = [];
+    for (const { c, v } of ranked) {
+      let y = pad.t + cH * (1 - (v - minV) / vRange);
+      for (const ly of labelY) { if (Math.abs(y - ly) < 11) y = ly + 11; }
+      labelY.push(y);
+      ctx.fillStyle = CCY_COLORS[c];
+      ctx.fillText(c, pad.l + cW + 2, y + 3);
+    }
+  }
+
+  function buildLegend() {
+    const el = document.getElementById('ds-legend');
+    el.innerHTML = CURRENCIES.map(c =>
+      `<div class="ds-legend-item${_hidden.has(c) ? ' off' : ''}" data-ccy="${c}">
+        <span class="ds-legend-dot" style="background:${CCY_COLORS[c]}"></span>${c}
+      </div>`
+    ).join('');
+    el.addEventListener('click', (e) => {
+      const item = e.target.closest('.ds-legend-item');
+      if (!item) return;
+      const ccy = item.dataset.ccy;
+      if (_hidden.has(ccy)) _hidden.delete(ccy); else _hidden.add(ccy);
+      item.classList.toggle('off');
+      load();
+    });
+  }
+
+  // ── Ranking ──
+  function renderRanking(rows) {
+    const el = document.getElementById('ds-ranking');
+    if (!rows.length) { el.innerHTML = '<div class="hr-empty">No data</div>'; return; }
+    const last = rows[rows.length - 1];
+    const ranked = CURRENCIES.map(c => ({ c, v: last.values[c] || 0 }))
+      .sort((a, b) => b.v - a.v);
+    const maxAbs = Math.max(0.0001, ...ranked.map(r => Math.abs(r.v)));
+    let html = '';
+    for (let i = 0; i < ranked.length; i++) {
+      const { c, v } = ranked[i];
+      const pct = Math.round(Math.abs(v) / maxAbs * 100);
+      const cls = v >= 0 ? 'hr-ccy-up' : 'hr-ccy-down';
+      const barColor = v >= 0 ? '#4ade80' : '#f87171';
+      html += `<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.03)">
+        <span style="font-size:10px;font-weight:800;color:var(--text-dim);min-width:18px;text-align:center">#${i + 1}</span>
+        <span style="font-size:12px;font-weight:800;min-width:36px;color:${CCY_COLORS[c]}">${c}</span>
+        <div style="flex:1;height:8px;background:rgba(255,255,255,0.04);border-radius:4px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;border-radius:4px;background:${barColor}"></div>
+        </div>
+        <span class="hr-ccy-tag ${cls}">${fmt(v)}</span>
+      </div>`;
+    }
+    el.innerHTML = html;
+  }
+
+  // ── Diverging pairs (3 consecutive hours) ──
+  function buildPairCards(rows) {
+    const byKey = {};
+    for (const r of rows) {
+      if (isWeekend(r.time)) continue;
+      const hk = r.time.slice(0, 13);
+      const m = {};
+      for (const [c, v] of Object.entries(r.values || {})) m[c] = parseFloat(v) || 0;
+      if (r.pairs) m._pairs = r.pairs;
+      if (Object.keys(m).length >= 2) byKey[hk] = m;
+    }
+    const keys = Object.keys(byKey).sort();
+    const cards = [];
+    const consecutiveN = 3;
+    const maxGap = 2 * 3600000;
+
+    for (let i = consecutiveN; i < keys.length; i++) {
+      const hk = keys[i];
+      const curMap = byKey[hk];
+      if (Object.keys(curMap).length < 8) continue;
+
+      const priorKeys = [];
+      for (let j = consecutiveN; j >= 0; j--) priorKeys.push(keys[i - j]);
+
+      const times = priorKeys.map(k => new Date(k + ':00:00Z').getTime());
+      let gapOk = true;
+      for (let g = 1; g < times.length; g++) {
+        if (times[g] - times[g-1] > maxGap) { gapOk = false; break; }
+      }
+      if (!gapOk) continue;
+
+      const trending = {};
+      for (const ccy of CURRENCIES) {
+        const vals = priorKeys.map(k => (byKey[k] || {})[ccy] || 0);
+        let rising = true, falling = true;
+        for (let v = 1; v < vals.length; v++) {
+          if (vals[v] <= vals[v-1]) rising = false;
+          if (vals[v] >= vals[v-1]) falling = false;
+        }
+        if (rising) trending[ccy] = 'UP';
+        else if (falling) trending[ccy] = 'DOWN';
+      }
+
+      const pairs = [];
+      const trendingCcys = Object.keys(trending);
+      for (let a = 0; a < trendingCcys.length; a++) {
+        for (let b = a + 1; b < trendingCcys.length; b++) {
+          const ca = trendingCcys[a], cb = trendingCcys[b];
+          if (trending[ca] === trending[cb]) continue;
+          const spread = Math.abs(curMap[ca] - curMap[cb]);
+          const strong = trending[ca] === 'UP' ? ca : cb;
+          const weak = trending[ca] === 'DOWN' ? ca : cb;
+          const pairLabel = stdPair(strong, weak);
+          const base = pairLabel.split('/')[0];
+          const quote = pairLabel.split('/')[1];
+          const pairKey = base + '_' + quote;
+          const direction = base === strong ? 'BUY' : 'SELL';
+          if (curMap._pairs && curMap._pairs[pairKey] !== undefined) {
+            const actualDir = curMap._pairs[pairKey] > 0 ? 'BUY' : 'SELL';
+            if (actualDir !== direction) continue;
+          }
+          pairs.push({ pair: pairLabel, strong, weak, direction, spread });
+        }
+      }
+      if (!pairs.length) continue;
+      pairs.sort((a, b) => b.spread - a.spread);
+      const top5 = pairs.slice(0, 5);
+
+      const time = hk + ':00:00Z';
+      cards.push({
+        time, label: hrLabel(time), sub: dayLabel(time),
+        top5, totalPairs: pairs.length,
+      });
+    }
+    return cards;
+  }
+
+  function renderPairCards(cards) {
+    const el = document.getElementById('ds-pairs');
+    if (!cards.length) {
+      el.innerHTML = '<div class="hr-empty">No 3-hour consecutive spread momentum found for this period.</div>';
+      return;
+    }
+    const maxSpread = Math.max(0.00001, ...cards.flatMap(c => c.top5.map(p => p.spread)));
+    let html = '';
+    const reversed = cards.slice().reverse();
+    for (let ci = 0; ci < reversed.length; ci++) {
+      const card = reversed[ci];
+      const prev = reversed[ci + 1];
+      const timeDiff = prev ? (new Date(card.time).getTime() - new Date(prev.time).getTime()) : 0;
+      const consecutive5 = card.top5.length >= 5 && prev && prev.top5.length >= 5 && timeDiff === 3600000;
+      html += `<div class="hr-card${consecutive5 ? ' hr-hot' : ''}">`;
+      html += `<div class="hr-card-hd">
+        <span class="hr-time">${card.label}</span>
+        <span class="hr-date">${card.sub}</span>
+        ${consecutive5 ? '<span class="hr-hot-tag">CONSECUTIVE</span>' : ''}
+        <span class="hr-count">${card.totalPairs} pair${card.totalPairs !== 1 ? 's' : ''}</span>
+      </div>`;
+      html += '<div class="hr-pairs">';
+      for (let i = 0; i < card.top5.length; i++) {
+        const p = card.top5[i];
+        const barPct = Math.max(5, Math.round(p.spread / maxSpread * 100));
+        const dirCls = p.direction === 'BUY' ? 'hr-ccy-up' : 'hr-ccy-down';
+        html += '<div class="hr-pair">';
+        html += `<span class="hr-rank">#${i + 1}</span>`;
+        html += `<span class="hr-pair-name">${p.pair}</span>`;
+        html += `<span class="hr-ccy-tag ${dirCls}">${p.direction}</span>`;
+        html += `<span class="hr-ccy-tag hr-ccy-up">▲ ${p.strong}</span>`;
+        html += `<span class="hr-ccy-tag hr-ccy-down">▼ ${p.weak}</span>`;
+        html += `<div class="hr-spread-bar"><div class="hr-spread-fill" style="width:${barPct}%"></div></div>`;
+        html += `<span class="hr-spread-val">${fmt(p.spread)}</span>`;
+        html += '</div>';
+      }
+      html += '</div></div>';
+    }
+    el.innerHTML = html;
+  }
+
+  async function load() {
+    document.getElementById('ds-pairs').innerHTML = '<div class="sx-loading"><span class="spinner"></span> Loading…</div>';
+    document.getElementById('ds-ranking').innerHTML = '<div class="sx-loading"><span class="spinner"></span> Loading…</div>';
+    try {
+      const rows = await fetchRows(_days + 1);
+      drawChart(rows);
+      renderRanking(rows);
+      const cards = buildPairCards(rows);
+      renderPairCards(cards);
+    } catch (e) {
+      document.getElementById('ds-pairs').innerHTML = `<div class="hr-empty">Error: ${e.message}</div>`;
+    }
+  }
+
+  document.getElementById('sx-ctrls').addEventListener('click', (ev) => {
+    const dBtn = ev.target.closest('.sx-days');
+    if (dBtn) {
+      _days = parseInt(dBtn.dataset.days);
+      document.querySelectorAll('.sx-days').forEach(b => b.classList.toggle('active', parseInt(b.dataset.days) === _days));
+      load();
+    }
+  });
+
+  buildLegend();
+  load();
+  window.addEventListener('resize', () => {
+    const key = `dr:${_days + 1}`;
+    if (_cache[key]) drawChart(_cache[key]);
+  });
+  if (window.lucide) lucide.createIcons();
+  </script>
+</body>
+</html>
