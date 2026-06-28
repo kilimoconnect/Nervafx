@@ -66,31 +66,17 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // Forex day starts at 17:00 New York time (NY close)
-    // Determine the NY hour for each UTC timestamp
-    const nyFmt = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/New_York',
-      hour: 'numeric', hour12: false,
-    });
-    function getNYHour(iso) {
-      return parseInt(nyFmt.format(new Date(iso)), 10);
-    }
-    // Get forex day key: the day resets at 17:00 NY
-    // Candles from 17:00 NY onward belong to the NEXT forex day
-    const nyDayFmt = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/New_York',
-      year: 'numeric', month: '2-digit', day: '2-digit',
-    });
+    // NY close = 00:00 EAT = 21:00 UTC
+    // Forex day resets at 21:00 UTC. Candles from 21:00 onward belong to the next day.
+    const NY_CLOSE_UTC = 21;
+
     function forexDayKey(iso) {
       const d = new Date(iso);
-      const nyH = getNYHour(iso);
-      // If hour >= 17, this candle belongs to the next forex day
-      if (nyH >= 17) d.setTime(d.getTime() + 24 * 3600000);
-      return nyDayFmt.format(d);
+      const h = d.getUTCHours();
+      if (h >= NY_CLOSE_UTC) d.setUTCDate(d.getUTCDate() + 1);
+      return d.toISOString().slice(0, 10);
     }
 
-    // Build NY-close reference prices per instrument per forex day
-    // The reference = close of the 17:00 NY candle (last candle of previous forex day)
     const closeByInst = {};
     for (const inst of INSTRUMENTS) {
       const m = {};
@@ -98,14 +84,13 @@ module.exports = async function handler(req, res) {
       closeByInst[inst] = m;
     }
 
-    // Find the 17:00 NY candle close for each forex day per instrument
+    // Reference price = close of the 21:00 UTC candle for each forex day
     const dayRefByInst = {};
     for (const inst of INSTRUMENTS) {
       const refs = {};
       for (const c of (candlesByInst[inst] || [])) {
-        const nyH = getNYHour(c.time);
-        if (nyH === 17) {
-          // This candle's close is the reference for the next forex day
+        const h = new Date(c.time).getUTCHours();
+        if (h === NY_CLOSE_UTC) {
           const fxDay = forexDayKey(c.time);
           refs[fxDay] = c.close;
         }
