@@ -154,6 +154,12 @@ module.exports = async function handler(req, res) {
         }
         if (momentum < 2) continue;
 
+        // Wick in break direction must be smaller than wick in opposite direction
+        const upperWick = current.high - Math.max(current.open, current.close);
+        const lowerWick = Math.min(current.open, current.close) - current.low;
+        if (direction === 'BUY' && upperWick > lowerWick) continue;
+        if (direction === 'SELL' && lowerWick > upperWick) continue;
+
         const score = scoreBreak(current, prior, direction);
         const level = direction === 'BUY' ? highestHigh : lowestLow;
         const breakDist = Math.abs(current.close - level);
