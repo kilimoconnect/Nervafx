@@ -906,6 +906,52 @@ async function sendBulk(recipients, template) {
   return results;
 }
 
+// ── H1 Structure Breaks email ───────────────────────────────────────────────
+
+function h1BreaksEmail(data) {
+  const { time, breaks, totalBreaks } = data;
+  const timeStr = _fmtTime(time);
+
+  let rows = '';
+  for (const b of breaks) {
+    const isBuy = b.direction === 'BUY';
+    const bgColor = isBuy ? 'rgba(34,197,94,0.10)' : 'rgba(239,68,68,0.10)';
+    const borderColor = isBuy ? '#22c55e' : '#ef4444';
+    const dirColor = isBuy ? '#22c55e' : '#ef4444';
+    const arrow = isBuy ? '▲' : '▼';
+    const scoreColor = b.score >= 70 ? '#4ade80' : b.score >= 45 ? '#fbbf24' : '#f87171';
+    const firstTag = b._first ? '<span style="background:rgba(250,204,21,0.15);color:#facc15;font-size:10px;font-weight:700;padding:2px 6px;border-radius:3px;margin-left:8px">1ST BREAK</span>' : '';
+    const decimals = b.close > 10 ? 3 : 5;
+    rows += `<div style="background:${bgColor};border-left:3px solid ${borderColor};border-radius:6px;padding:10px 14px;margin:6px 0">
+      <span style="color:${dirColor};font-weight:700;font-size:14px">${arrow} ${b.direction}</span>
+      <span style="color:#f1f5f9;font-weight:700;font-size:14px;margin-left:8px">${b.pair}</span>
+      <span style="color:${scoreColor};font-weight:700;font-size:13px;margin-left:8px">Score ${b.score}</span>
+      ${firstTag}
+      <div style="margin-top:6px;font-size:11px;color:#64748b">
+        Wick ${b.wickPct}% &middot; Level ${b.level.toFixed(decimals)} &middot; Close ${b.close.toFixed(decimals)}
+      </div>
+    </div>`;
+  }
+
+  const html = baseLayout(`
+    <h2>H1 Structure Breaks</h2>
+    <p class="sub">${timeStr} &middot; ${totalBreaks} total break${totalBreaks !== 1 ? 's' : ''}</p>
+    <p>Close broke above 10H highs or below 10H lows with momentum confirmation.</p>
+    <div class="section">
+      <div class="section-label">Top Breaks</div>
+      ${rows}
+    </div>
+    <div style="text-align:center;margin:28px 0 8px">
+      <a href="https://www.nervafx.com/h1-breaks" class="cta">View H1 Breaks</a>
+    </div>
+  `);
+
+  return {
+    subject: `H1 Breaks: ${breaks.map(b => `${b.pair} ${b.direction}`).join(', ')} — ${timeStr}`,
+    html,
+  };
+}
+
 module.exports = {
   sendEmail,
   sendBulk,
@@ -915,4 +961,5 @@ module.exports = {
   upgradePromptEmail,
   audnzdSignalEmail,
   audnzdDirectionChangeEmail,
+  h1BreaksEmail,
 };

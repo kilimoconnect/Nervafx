@@ -2,7 +2,8 @@
   "version": 2,
   "crons": [
     { "path": "/api/cron-backtest-sync", "schedule": "1 * * * *" },
-    { "path": "/api/run-pipeline?force=1", "schedule": "3 * * * *" }
+    { "path": "/api/run-pipeline?force=1", "schedule": "3 * * * *" },
+    { "path": "/api/cron-h1-breaks-alerts", "schedule": "5 * * * *" }
   ],
   "functions": {
     "api/news-parse.js":          { "maxDuration": 30 },
@@ -23,7 +24,8 @@
     "api/m15-strength-10c.js":    { "maxDuration": 60 },
     "api/h1-pair-moves.js":       { "maxDuration": 60 },
     "api/daily-raw-strength.js":  { "maxDuration": 120 },
-    "api/h1-structure-break.js":  { "maxDuration": 60 }
+    "api/h1-structure-break.js":  { "maxDuration": 60 },
+    "api/cron-h1-breaks-alerts.js": { "maxDuration": 30 }
   },
   "rewrites": [
     { "source": "/",       "destination": "/login.html" },
