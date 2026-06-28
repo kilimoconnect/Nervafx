@@ -61,7 +61,16 @@
     }
     .sx-btn:hover { color: var(--text); background: rgba(255,255,255,0.08); }
     .sx-btn.active { background: rgba(96,165,250,0.15); border-color: rgba(96,165,250,0.5); color: #60a5fa; }
+    .sx-ctrl-sep { width: 1px; height: 18px; background: rgba(255,255,255,0.1); }
     .sx-note { font-size: 10.5px; color: var(--text-dim); text-transform: none; letter-spacing: 0; font-weight: 500; }
+    .sx-date-input {
+      padding: 4px 8px; border-radius: 7px; font-size: 11px; font-weight: 600;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); font-family: inherit; outline: none;
+      transition: all 0.15s; cursor: pointer;
+    }
+    .sx-date-input:focus { border-color: rgba(96,165,250,0.5); color: var(--text); }
+    .sx-date-input::-webkit-calendar-picker-indicator { filter: invert(0.6); cursor: pointer; }
 
     .sx-loading { display: flex; align-items: center; gap: 8px; padding: 40px; color: var(--text-muted); font-size: 12px; justify-content: center; }
     .spinner {
@@ -182,6 +191,10 @@
           <button class="sx-btn sx-days" data-days="30">30D</button>
           <button class="sx-btn sx-days" data-days="90">90D</button>
           <button class="sx-btn sx-days" data-days="180">180D</button>
+          <span class="sx-ctrl-sep"></span>
+          <input type="date" class="sx-date-input" id="sx-date-from" title="From date">
+          <input type="date" class="sx-date-input" id="sx-date-to" title="To date">
+          <button class="sx-btn" id="sx-date-go">Go</button>
         </span>
       </div>
       <div class="sx-card-bd">
@@ -254,13 +267,23 @@
   }
 
   let _days = 1;
+  let _dateFrom = null;
+  let _dateTo = null;
   const _cache = {};
   const _hidden = new Set();
 
   async function fetchRows(days) {
-    const key = `dr:${days}`;
+    let url, key;
+    if (_dateFrom) {
+      key = `dr:${_dateFrom}:${_dateTo || 'now'}`;
+      url = `/api/daily-raw-strength?from=${_dateFrom}`;
+      if (_dateTo) url += `&to=${_dateTo}`;
+    } else {
+      key = `dr:${days}`;
+      url = `/api/daily-raw-strength?days=${days}`;
+    }
     if (_cache[key]) return _cache[key];
-    const data = await api(`/api/daily-raw-strength?days=${days}`);
+    const data = await api(url);
     _cache[key] = data.rows || [];
     return _cache[key];
   }
@@ -527,16 +550,30 @@
     const dBtn = ev.target.closest('.sx-days');
     if (dBtn) {
       _days = parseInt(dBtn.dataset.days);
+      _dateFrom = null;
+      _dateTo = null;
+      document.getElementById('sx-date-from').value = '';
+      document.getElementById('sx-date-to').value = '';
       document.querySelectorAll('.sx-days').forEach(b => b.classList.toggle('active', parseInt(b.dataset.days) === _days));
       load();
     }
   });
 
+  document.getElementById('sx-date-go').addEventListener('click', () => {
+    const from = document.getElementById('sx-date-from').value;
+    const to = document.getElementById('sx-date-to').value;
+    if (!from) return;
+    _dateFrom = from;
+    _dateTo = to || null;
+    document.querySelectorAll('.sx-days').forEach(b => b.classList.remove('active'));
+    load();
+  });
+
   buildLegend();
   load();
   window.addEventListener('resize', () => {
-    const key = `dr:${_days + 1}`;
-    if (_cache[key]) drawChart(_cache[key]);
+    const cacheKey = _dateFrom ? `dr:${_dateFrom}:${_dateTo || 'now'}` : `dr:${_days + 1}`;
+    if (_cache[cacheKey]) drawChart(_cache[cacheKey]);
   });
   if (window.lucide) lucide.createIcons();
   </script>

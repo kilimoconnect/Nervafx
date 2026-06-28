@@ -26,8 +26,11 @@ module.exports = async function handler(req, res) {
     if (gate.error) return res.status(gate.status).json({ error: gate.error, upgrade: gate.upgrade });
 
     const days = Math.min(180, parseInt(req.query?.days || '2', 10) || 2);
-    const until = new Date().toISOString();
-    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+    const qFrom = req.query?.from;
+    const qTo = req.query?.to;
+    const until = qTo ? new Date(qTo + 'T23:59:59Z').toISOString() : new Date().toISOString();
+    const since = qFrom ? new Date(qFrom + 'T00:00:00Z').toISOString()
+      : new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
     // Fetch extra day back to ensure we have day-open prices
     const fetchSince = new Date(new Date(since).getTime() - 24 * 3600000).toISOString();
 
