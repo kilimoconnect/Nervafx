@@ -512,6 +512,14 @@
       el.innerHTML = '<div class="hr-empty">No data found for this period.</div>';
       return;
     }
+    // Build spread lookup: for each card, map pair→spread from the previous card
+    const prevSpreadMap = {};
+    for (let ci = 0; ci < cards.length; ci++) {
+      const card = cards[ci];
+      card._prevSpreads = ci > 0 ? { ...prevSpreadMap } : {};
+      for (const p of card.top5) prevSpreadMap[p.pair] = p.spread;
+    }
+
     const maxSpread = Math.max(0.00001, ...cards.flatMap(c => c.top5.map(p => p.spread)));
     let html = '';
     const reversed = cards.slice().reverse();
@@ -529,14 +537,17 @@
         const p = card.top5[i];
         const barPct = Math.max(5, Math.round(p.spread / maxSpread * 100));
         const dirCls = p.direction === 'BUY' ? 'hr-ccy-up' : 'hr-ccy-down';
-        html += '<div class="hr-pair">';
+        const prevSpread = card._prevSpreads[p.pair];
+        const increasing = prevSpread !== undefined && p.spread > prevSpread;
+        const pairStyle = increasing ? 'background:rgba(34,197,94,0.06);border-left:2px solid #4ade80;padding-left:8px' : '';
+        html += `<div class="hr-pair" style="${pairStyle}">`;
         html += `<span class="hr-rank">#${i + 1}</span>`;
         html += `<span class="hr-pair-name">${p.pair}</span>`;
         html += `<span class="hr-ccy-tag ${dirCls}">${p.direction}</span>`;
         html += `<span class="hr-ccy-tag hr-ccy-up">▲ ${p.strong}</span>`;
         html += `<span class="hr-ccy-tag hr-ccy-down">▼ ${p.weak}</span>`;
         html += `<div class="hr-spread-bar"><div class="hr-spread-fill" style="width:${barPct}%"></div></div>`;
-        html += `<span class="hr-spread-val">${fmt(p.spread)}</span>`;
+        html += `<span class="hr-spread-val">${fmt(p.spread)}${increasing ? ' ↑' : ''}</span>`;
         html += '</div>';
       }
       html += '</div></div>';
