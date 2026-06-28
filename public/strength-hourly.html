@@ -238,9 +238,9 @@
 
   async function fetchRows(days) {
     if (_tf === 'm15') {
-      const key = `m15:${days}`;
+      const key = `m15_10c:${days}`;
       if (_cache[key]) return _cache[key];
-      const data = await api(`/api/m15-strength-history?days=${days}`);
+      const data = await api(`/api/m15-strength-10c?days=${days}`);
       _cache[key] = data.rows || [];
       return _cache[key];
     }
