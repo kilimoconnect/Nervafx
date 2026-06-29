@@ -186,7 +186,7 @@
     <div class="sx-card">
       <div class="sx-card-hd">
         <i data-lucide="activity"></i> Smooth Trend Score — Cleanest continuation setups
-        <span class="sx-note">W + D aligned · Ranked by 9-metric composite: DE, Persistence, Structure, Swing, Consecutive, Wick, Pullback</span>
+        <span class="sx-note">D + H1 aligned · Ranked by 9-metric composite: DE, Persistence, Structure, Swing, Consecutive, Wick, Pullback</span>
         <span class="sx-ctrls" id="sx-ctrls">
           <button class="sx-btn sx-days active" data-days="1">1D</button>
           <button class="sx-btn sx-days" data-days="2">2D</button>
@@ -294,9 +294,9 @@
           html += '<span class="br-pair-name">' + p.pair + '</span>';
           html += '<span class="br-tag ' + dirCls + '">' + p.direction + '</span>';
           html += '<div class="tf-badges">';
-          html += '<span class="tf-badge tf-aligned">W</span>';
           html += '<span class="tf-badge tf-aligned">D</span>';
-          if (p.h1Break) html += '<span class="tf-badge tf-bonus">H1</span>';
+          html += '<span class="tf-badge tf-aligned">H1</span>';
+          if (p.h1Break) html += '<span class="tf-badge tf-bonus">BRK</span>';
           html += '</div>';
           html += '<div class="br-score-bar"><div class="br-score-fill ' + cls + '" style="width:' + Math.max(5, p.score) + '%"></div></div>';
           html += '<span class="br-score-val ' + cls + '">' + p.score + '</span>';
@@ -304,7 +304,6 @@
 
           // Row 2: sub-score chips
           html += '<div class="sub-grid">';
-          html += chip('W', p.wkScore);
           html += chip('D', p.dyScore);
           html += chip('Str', p.structure);
           html += chip('DE', p.de);

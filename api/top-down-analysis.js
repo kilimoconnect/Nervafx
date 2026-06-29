@@ -32,15 +32,6 @@ function prevTradingDay(dayKey) {
   return d.toISOString().slice(0, 10);
 }
 
-function weekKey(iso) {
-  const d = new Date(iso);
-  const day = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - day);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  const weekNo = Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
-  return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
-}
-
 // ─── Swing detection (k=1 for short windows) ──────────────────────────────
 function detectSwings(candles) {
   const highs = [], lows = [];
@@ -167,18 +158,17 @@ function alignmentScore(close, open, atr) {
   return Math.min(100, Math.round(move / (atr * 5) * 100));
 }
 
-// Composite Smooth Trend Score
-function smoothTrendScore(wk, dy, sub) {
+// Composite Smooth Trend Score (Daily 15% + 7 H1 metrics 85%)
+function smoothTrendScore(dy, sub) {
   return Math.round(
-    wk * 0.15 +
     dy * 0.15 +
-    sub.structure * 0.15 +
-    sub.de * 0.15 +
+    sub.structure * 0.20 +
+    sub.de * 0.20 +
     sub.persistence * 0.10 +
     sub.swingClean * 0.10 +
     sub.consecutive * 0.10 +
-    sub.wickQuality * 0.05 +
-    sub.pullbackDepth * 0.05
+    sub.wickQuality * 0.08 +
+    sub.pullbackDepth * 0.07
   );
 }
 
@@ -254,23 +244,6 @@ module.exports = async function handler(req, res) {
       dailyOHLC[inst] = byDay;
     }
 
-    // Build weekly OHLC
-    const weeklyOHLC = {};
-    for (const inst of INSTRUMENTS) {
-      const byWeek = {};
-      const sorted = Object.entries(dailyOHLC[inst] || {}).sort((a, b) => a[0].localeCompare(b[0]));
-      for (const [dayKey, day] of sorted) {
-        const wk = weekKey(dayKey);
-        if (!byWeek[wk]) byWeek[wk] = { open: day.open, high: day.high, low: day.low, close: day.close };
-        else {
-          if (day.high > byWeek[wk].high) byWeek[wk].high = day.high;
-          if (day.low < byWeek[wk].low) byWeek[wk].low = day.low;
-          byWeek[wk].close = day.close;
-        }
-      }
-      weeklyOHLC[inst] = byWeek;
-    }
-
     // Timestamps in range
     const allTimes = new Set();
     for (const inst of INSTRUMENTS) {
@@ -293,14 +266,12 @@ module.exports = async function handler(req, res) {
     for (const time of timestamps) {
       const fxDay = forexDayKey(time);
       const prevDay = prevTradingDay(fxDay);
-      const wk = weekKey(fxDay);
       const pairs = [];
 
       for (const inst of INSTRUMENTS) {
-        const wkOHLC = (weeklyOHLC[inst] || {})[wk];
         const dayOH = (dailyOHLC[inst] || {})[fxDay];
         const prevDayOHLC = (dailyOHLC[inst] || {})[prevDay];
-        if (!wkOHLC || !dayOH || !prevDayOHLC) continue;
+        if (!dayOH || !prevDayOHLC) continue;
 
         const { candles, timeToIdx } = indexByInst[inst];
         const idx = timeToIdx[time];
@@ -308,16 +279,14 @@ module.exports = async function handler(req, res) {
 
         const currentClose = candles[idx].close;
 
-        // Weekly + Daily + H1 direction alignment filter
-        const weeklyDir = currentClose > wkOHLC.open ? 'BUY' : currentClose < wkOHLC.open ? 'SELL' : null;
-        if (!weeklyDir) continue;
+        // Daily + H1 direction alignment filter
         const dailyDir = currentClose > dayOH.open ? 'BUY' : currentClose < dayOH.open ? 'SELL' : null;
         if (!dailyDir) continue;
         const currentCandle = candles[idx];
         const h1Dir = currentCandle.close > currentCandle.open ? 'BUY' : currentCandle.close < currentCandle.open ? 'SELL' : null;
         if (!h1Dir) continue;
-        if (weeklyDir !== dailyDir || weeklyDir !== h1Dir) continue;
-        const direction = weeklyDir;
+        if (dailyDir !== h1Dir) continue;
+        const direction = dailyDir;
 
         // Need enough lookback for sub-scores
         const start = Math.max(0, idx - LOOKBACK + 1);
@@ -333,12 +302,11 @@ module.exports = async function handler(req, res) {
         const sub = computeSmooth(window, direction, atr);
         if (!sub) continue;
 
-        // Alignment strength scores
-        const wkScore = alignmentScore(currentClose, wkOHLC.open, atr);
+        // Daily alignment strength
         const dyScore = alignmentScore(currentClose, dayOH.open, atr);
 
         // Composite
-        const score = smoothTrendScore(wkScore, dyScore, sub);
+        const score = smoothTrendScore(dyScore, sub);
 
         // H1 break bonus (previous day high/low)
         let h1Break = false;
@@ -355,7 +323,6 @@ module.exports = async function handler(req, res) {
           pair: inst.replace('_', '/'),
           direction,
           score,
-          wkScore,
           dyScore,
           de: sub.de,
           persistence: sub.persistence,
@@ -367,7 +334,6 @@ module.exports = async function handler(req, res) {
           h1Break,
           breakLevel,
           close: currentClose,
-          weekOpen: wkOHLC.open,
           dayOpen: dayOH.open,
         });
       }
