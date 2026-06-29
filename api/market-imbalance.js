@@ -179,6 +179,10 @@ module.exports = async function handler(req, res) {
         tfResults[tf] = analyseTimeframe(strength);
       }
 
+      // Skip if no timeframe shows imbalance
+      const hasImbalance = ['3H', '4H', '6H', '12H'].some(tf => tfResults[tf].structure.imbalance);
+      if (!hasImbalance) continue;
+
       // Best score across timeframes
       const bestTf = ['3H', '4H', '6H', '12H'].reduce((best, tf) =>
         tfResults[tf].score > tfResults[best].score ? tf : best, '3H');
