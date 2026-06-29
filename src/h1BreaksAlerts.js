@@ -59,7 +59,7 @@ async function checkH1BreaksAlerts(sb) {
   if (!apiKey) { console.log('[H1-BREAKS] No BREVO_API_KEY — skipping'); return { sent: 0 }; }
 
   // Fetch last 4 days to cover previous trading day + weekend gap
-  const fetchSince = new Date(Date.now() - 4 * 24 * 3600000).toISOString();
+  const fetchSince = new Date(Date.now() - 6 * 24 * 3600000).toISOString();
 
   const candlesByInst = {};
   for (let b = 0; b < INSTRUMENTS.length; b += 7) {
@@ -88,16 +88,17 @@ async function checkH1BreaksAlerts(sb) {
     }
   }
 
-  // Build daily high/low per instrument
+  // Build daily OHLC per instrument
   const dailyHL = {};
   for (const inst of INSTRUMENTS) {
     const byDay = {};
     for (const c of (candlesByInst[inst] || [])) {
       const day = forexDayKey(c.time);
-      if (!byDay[day]) byDay[day] = { high: c.high, low: c.low };
+      if (!byDay[day]) byDay[day] = { open: c.open, high: c.high, low: c.low, close: c.close };
       else {
         if (c.high > byDay[day].high) byDay[day].high = c.high;
         if (c.low < byDay[day].low) byDay[day].low = c.low;
+        byDay[day].close = c.close;
       }
     }
     dailyHL[inst] = byDay;
@@ -169,6 +170,14 @@ async function checkH1BreaksAlerts(sb) {
     if (current.close > hl.high) direction = 'BUY';
     else if (current.close < hl.low) direction = 'SELL';
     if (!direction) continue;
+
+    // One of the last 2 trading days must have closed in the break direction
+    const day2 = prevTradingDay(prevDay);
+    const d1 = (dailyHL[inst] || {})[prevDay];
+    const d2 = (dailyHL[inst] || {})[day2];
+    const d1Match = d1 && (direction === 'BUY' ? d1.close > d1.open : d1.close < d1.open);
+    const d2Match = d2 && (direction === 'BUY' ? d2.close > d2.open : d2.close < d2.open);
+    if (!d1Match && !d2Match) continue;
 
     // Momentum
     const lookStart = Math.max(0, idx - 9);

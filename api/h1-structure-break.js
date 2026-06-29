@@ -72,8 +72,8 @@ module.exports = async function handler(req, res) {
     const until = qTo ? new Date(qTo + 'T23:59:59Z').toISOString() : new Date().toISOString();
     const since = qFrom ? new Date(qFrom + 'T00:00:00Z').toISOString()
       : new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-    // Fetch extra 3 days back to cover previous trading day (weekend gap)
-    const fetchSince = new Date(new Date(since).getTime() - 4 * 24 * 3600000).toISOString();
+    // Fetch extra 5 days back to cover 2 previous trading days (weekend gap)
+    const fetchSince = new Date(new Date(since).getTime() - 6 * 24 * 3600000).toISOString();
 
     const candlesByInst = {};
     for (let b = 0; b < INSTRUMENTS.length; b += 7) {
@@ -112,16 +112,17 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // Build daily high/low per instrument per forex day
+    // Build daily OHLC per instrument per forex day
     const dailyHL = {};
     for (const inst of INSTRUMENTS) {
       const byDay = {};
       for (const c of (candlesByInst[inst] || [])) {
         const day = forexDayKey(c.time);
-        if (!byDay[day]) byDay[day] = { high: c.high, low: c.low };
+        if (!byDay[day]) byDay[day] = { open: c.open, high: c.high, low: c.low, close: c.close };
         else {
           if (c.high > byDay[day].high) byDay[day].high = c.high;
           if (c.low < byDay[day].low) byDay[day].low = c.low;
+          byDay[day].close = c.close;
         }
       }
       dailyHL[inst] = byDay;
@@ -165,6 +166,14 @@ module.exports = async function handler(req, res) {
         if (current.close > hl.high) direction = 'BUY';
         else if (current.close < hl.low) direction = 'SELL';
         if (!direction) continue;
+
+        // One of the last 2 trading days must have closed in the break direction
+        const day2 = prevTradingDay(prevDay);
+        const d1 = (dailyHL[inst] || {})[prevDay];
+        const d2 = (dailyHL[inst] || {})[day2];
+        const d1Match = d1 && (direction === 'BUY' ? d1.close > d1.open : d1.close < d1.open);
+        const d2Match = d2 && (direction === 'BUY' ? d2.close > d2.open : d2.close < d2.open);
+        if (!d1Match && !d2Match) continue;
 
         // Momentum: at least 2 candles in last 10 closing past their previous candle
         const lookStart = Math.max(0, idx - 9);
