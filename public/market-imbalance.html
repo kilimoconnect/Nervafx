@@ -407,6 +407,9 @@
         if (!res.ok) throw new Error(await res.text());
         var json = await res.json();
         cachedRows = json.rows || [];
+        if (json.debug) {
+          console.log('IMBALANCE DEBUG:', JSON.stringify(json.debug, null, 2));
+        }
         renderCards(cachedRows);
       } catch (e) {
         document.getElementById('im-cards').innerHTML =

@@ -195,7 +195,23 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    res.json({ rows });
+    // Debug: sample one timestamp to verify values
+    let debug = null;
+    if (timestamps.length > 0) {
+      const sampleTime = timestamps[timestamps.length - 1];
+      const ccyData = byTime[sampleTime];
+      debug = {
+        totalRows: allRows.length,
+        totalTimestamps: timestamps.length,
+        sampleTime,
+        sampleData: ccyData,
+        ccyCount: Object.keys(ccyData || {}).length,
+      };
+    } else {
+      debug = { totalRows: allRows.length, totalTimestamps: 0, since, until };
+    }
+
+    res.json({ rows, debug });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
