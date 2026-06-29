@@ -14,40 +14,46 @@ const INSTRUMENTS = [
   'CHF_JPY',
 ];
 
-const LOOKBACK = 10;
+const NY_CLOSE_UTC = 21;
 
-function scoreBreak(breakCandle, priorCandles, direction) {
+function forexDayKey(iso) {
+  const d = new Date(iso);
+  if (d.getUTCHours() >= NY_CLOSE_UTC) d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function prevTradingDay(dayKey) {
+  const d = new Date(dayKey + 'T12:00:00Z');
+  const dow = d.getUTCDay();
+  if (dow === 1) d.setUTCDate(d.getUTCDate() - 3);
+  else if (dow === 0) d.setUTCDate(d.getUTCDate() - 2);
+  else d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function scoreBreak(breakCandle, direction, level) {
   const body = Math.abs(breakCandle.close - breakCandle.open);
   const range = breakCandle.high - breakCandle.low;
   if (range === 0) return 0;
 
-  // Body ratio: bigger body = cleaner break (less wick)
   const bodyRatio = body / range;
 
-  // Wick against direction: penalise wicks on the wrong side
   let wickAgainst;
   if (direction === 'BUY') {
     wickAgainst = (breakCandle.high - breakCandle.close) / range;
   } else {
-    wickAgainst = (breakCandle.open > breakCandle.close ? breakCandle.close : breakCandle.open - breakCandle.low) / range;
     wickAgainst = (breakCandle.close - breakCandle.low) / range;
   }
 
-  // Break distance: how far past the level
-  const level = direction === 'BUY'
-    ? Math.max(...priorCandles.map(c => c.high))
-    : Math.min(...priorCandles.map(c => c.low));
-  const breakPrice = direction === 'BUY' ? breakCandle.close : breakCandle.close;
   const breakDist = direction === 'BUY'
-    ? (breakPrice - level) / level
-    : (level - breakPrice) / level;
+    ? (breakCandle.close - level) / level
+    : (level - breakCandle.close) / level;
   const distScore = Math.min(1, breakDist * 1000);
 
-  // Impulse: is the candle moving in the break direction?
   const bullish = breakCandle.close > breakCandle.open;
   const impulse = (direction === 'BUY' && bullish) || (direction === 'SELL' && !bullish) ? 1 : 0.3;
 
-  return Math.round((bodyRatio * 40 + (1 - wickAgainst) * 30 + distScore * 20 + impulse * 10));
+  return Math.round(bodyRatio * 40 + (1 - wickAgainst) * 30 + distScore * 20 + impulse * 10);
 }
 
 module.exports = async function handler(req, res) {
@@ -66,7 +72,8 @@ module.exports = async function handler(req, res) {
     const until = qTo ? new Date(qTo + 'T23:59:59Z').toISOString() : new Date().toISOString();
     const since = qFrom ? new Date(qFrom + 'T00:00:00Z').toISOString()
       : new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-    const fetchSince = new Date(new Date(since).getTime() - (LOOKBACK + 1) * 3600000).toISOString();
+    // Fetch extra 3 days back to cover previous trading day (weekend gap)
+    const fetchSince = new Date(new Date(since).getTime() - 4 * 24 * 3600000).toISOString();
 
     const candlesByInst = {};
     for (let b = 0; b < INSTRUMENTS.length; b += 7) {
@@ -105,7 +112,22 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // Build breaks per hourly timestamp
+    // Build daily high/low per instrument per forex day
+    const dailyHL = {};
+    for (const inst of INSTRUMENTS) {
+      const byDay = {};
+      for (const c of (candlesByInst[inst] || [])) {
+        const day = forexDayKey(c.time);
+        if (!byDay[day]) byDay[day] = { high: c.high, low: c.low };
+        else {
+          if (c.high > byDay[day].high) byDay[day].high = c.high;
+          if (c.low < byDay[day].low) byDay[day].low = c.low;
+        }
+      }
+      dailyHL[inst] = byDay;
+    }
+
+    // Collect timestamps in range
     const allTimes = new Set();
     for (const inst of INSTRUMENTS) {
       for (const c of (candlesByInst[inst] || [])) {
@@ -114,7 +136,7 @@ module.exports = async function handler(req, res) {
     }
     const timestamps = [...allTimes].sort();
 
-    // Index candles by time per instrument
+    // Index candles
     const indexByInst = {};
     for (const inst of INSTRUMENTS) {
       const candles = candlesByInst[inst] || [];
@@ -125,44 +147,43 @@ module.exports = async function handler(req, res) {
 
     const rows = [];
     for (const time of timestamps) {
+      const fxDay = forexDayKey(time);
+      const prevDay = prevTradingDay(fxDay);
       const breaks = [];
 
       for (const inst of INSTRUMENTS) {
+        const hl = (dailyHL[inst] || {})[prevDay];
+        if (!hl) continue;
+
         const { candles, timeToIdx } = indexByInst[inst];
         const idx = timeToIdx[time];
-        if (idx === undefined || idx < LOOKBACK) continue;
+        if (idx === undefined) continue;
 
         const current = candles[idx];
-        const prior = candles.slice(idx - LOOKBACK, idx);
-        if (prior.length < LOOKBACK) continue;
-
-        const highestHigh = Math.max(...prior.map(c => c.high));
-        const lowestLow = Math.min(...prior.map(c => c.low));
 
         let direction = null;
-        if (current.close > highestHigh) direction = 'BUY';
-        else if (current.close < lowestLow) direction = 'SELL';
-
+        if (current.close > hl.high) direction = 'BUY';
+        else if (current.close < hl.low) direction = 'SELL';
         if (!direction) continue;
 
-        // Momentum: at least 2 candles in the lookback must have closed
-        // above/below their previous candle in the same direction
+        // Momentum: at least 2 candles in last 10 closing past their previous candle
+        const lookStart = Math.max(0, idx - 9);
+        const recent = candles.slice(lookStart, idx + 1);
         let momentum = 0;
-        for (let p = 1; p < prior.length; p++) {
-          if (direction === 'BUY' && prior[p].close > prior[p - 1].high) momentum++;
-          if (direction === 'SELL' && prior[p].close < prior[p - 1].low) momentum++;
+        for (let p = 1; p < recent.length; p++) {
+          if (direction === 'BUY' && recent[p].close > recent[p - 1].high) momentum++;
+          if (direction === 'SELL' && recent[p].close < recent[p - 1].low) momentum++;
         }
         if (momentum < 2) continue;
 
-        // Wick in break direction must be smaller than wick in opposite direction
+        // Wick filter
         const upperWick = current.high - Math.max(current.open, current.close);
         const lowerWick = Math.min(current.open, current.close) - current.low;
         if (direction === 'BUY' && upperWick > lowerWick) continue;
         if (direction === 'SELL' && lowerWick > upperWick) continue;
 
-        const score = scoreBreak(current, prior, direction);
-        const level = direction === 'BUY' ? highestHigh : lowestLow;
-        const breakDist = Math.abs(current.close - level);
+        const level = direction === 'BUY' ? hl.high : hl.low;
+        const score = scoreBreak(current, direction, level);
         const body = Math.abs(current.close - current.open);
         const range = current.high - current.low;
         const wickPct = range > 0 ? Math.round((1 - body / range) * 100) : 100;
@@ -173,7 +194,7 @@ module.exports = async function handler(req, res) {
           score,
           level,
           close: current.close,
-          breakPips: breakDist,
+          breakPips: Math.abs(current.close - level),
           wickPct,
           body,
           range,
