@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <title>NervaFX — Top-Down Analysis</title>
+  <title>NervaFX — Smooth Trend Score</title>
   <link rel="icon" type="image/png" href="/nervafx-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -51,7 +51,6 @@
       display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
     }
     .sx-card-hd i { width: 15px; height: 15px; }
-    .sx-card-bd { padding: 14px 16px; }
 
     .sx-ctrls { display: flex; gap: 6px; margin-left: auto; align-items: center; flex-wrap: wrap; }
     .sx-btn {
@@ -79,7 +78,7 @@
     }
     @keyframes sxspin { to { transform: rotate(360deg); } }
 
-    /* ── Break cards ── */
+    /* ── Pair cards ── */
     .br-card {
       background: rgba(255,255,255,0.02);
       border: 1px solid rgba(255,255,255,0.06);
@@ -98,11 +97,10 @@
     }
 
     .br-pairs { padding: 8px 14px; }
-    .br-pair {
-      display: flex; align-items: center; gap: 10px; padding: 8px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.03);
-    }
-    .br-pair:last-child { border-bottom: none; }
+    .br-item { padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
+    .br-item:last-child { border-bottom: none; }
+
+    .br-row1 { display: flex; align-items: center; gap: 10px; }
     .br-rank {
       font-size: 10px; font-weight: 800; color: var(--text-dim);
       min-width: 18px; text-align: center;
@@ -115,13 +113,20 @@
     .br-buy { background: rgba(34,197,94,0.12); color: #4ade80; }
     .br-sell { background: rgba(239,68,68,0.12); color: #f87171; }
 
+    .tf-badges { display: flex; gap: 4px; align-items: center; }
+    .tf-badge {
+      font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 3px;
+      letter-spacing: 0.3px;
+    }
+    .tf-aligned { background: rgba(34,197,94,0.15); color: #4ade80; }
+    .tf-bonus { background: rgba(250,204,21,0.15); color: #facc15; }
+
     .br-score-bar {
       flex: 1; height: 8px; background: rgba(255,255,255,0.04);
       border-radius: 4px; overflow: hidden; min-width: 60px;
     }
     .br-score-fill {
-      height: 100%; border-radius: 4px;
-      transition: width 0.3s;
+      height: 100%; border-radius: 4px; transition: width 0.3s;
     }
     .br-score-fill.high { background: linear-gradient(90deg, #4ade80, #22c55e); }
     .br-score-fill.mid { background: linear-gradient(90deg, #facc15, #f59e0b); }
@@ -135,27 +140,35 @@
     .br-score-val.mid { color: #facc15; }
     .br-score-val.low { color: #f87171; }
 
+    /* ── Sub-score grid ── */
+    .sub-grid {
+      display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 6px; padding-left: 28px;
+    }
+    .sub-chip {
+      display: inline-flex; align-items: center; gap: 3px;
+      font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 4px;
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05);
+    }
+    .sub-label { color: var(--text-dim); letter-spacing: 0.2px; }
+    .sub-val { font-family: var(--font-data); }
+    .sub-val.high { color: #4ade80; }
+    .sub-val.mid  { color: #facc15; }
+    .sub-val.low  { color: #f87171; }
+
     .br-meta {
       display: flex; gap: 8px; font-size: 9.5px; font-weight: 600;
-      color: var(--text-dim); margin-top: 3px;
+      color: var(--text-dim); margin-top: 4px; padding-left: 28px;
     }
     .br-meta span { white-space: nowrap; }
 
     .br-empty { text-align: center; padding: 50px 20px; color: var(--text-muted); font-size: 13px; }
 
-    /* ── TF badges (W / D / H1) ── */
-    .tf-badges { display: flex; gap: 4px; align-items: center; }
-    .tf-badge {
-      font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 3px;
-      letter-spacing: 0.3px;
-    }
-    .tf-aligned { background: rgba(34,197,94,0.15); color: #4ade80; }
-    .tf-bonus { background: rgba(250,204,21,0.15); color: #facc15; }
-
     @media (max-width: 640px) {
       .sx-main { padding: 14px 12px 60px; }
       .sx-ctrls { width: 100%; margin-left: 0; }
-      .br-pair { flex-wrap: wrap; gap: 6px; }
+      .br-row1 { flex-wrap: wrap; gap: 6px; }
+      .sub-grid { padding-left: 0; }
+      .br-meta { padding-left: 0; }
     }
   </style>
 </head>
@@ -164,7 +177,7 @@
     <div class="sx-topbar-left">
       <a class="sx-logo" href="/app"><img src="/nervafx-logo.png" alt="NervaFX" onerror="this.style.display='none'"></a>
       <span class="sx-sep">/</span>
-      <span class="sx-title-text">Top-Down Analysis</span>
+      <span class="sx-title-text">Smooth Trend Score</span>
     </div>
     <a class="sx-back-btn" href="/app" onclick="window.close(); setTimeout(function(){ location.href='/app'; }, 150); return false;">&times; Close</a>
   </div>
@@ -172,8 +185,8 @@
   <main class="sx-main">
     <div class="sx-card">
       <div class="sx-card-hd">
-        <i data-lucide="layers"></i> Top-Down Analysis — Weekly &amp; Daily alignment + H1 break bonus
-        <span class="sx-note">W + D must agree · H1 break = previous day high/low · Top 5 ranked by alignment strength</span>
+        <i data-lucide="activity"></i> Smooth Trend Score — Cleanest continuation setups
+        <span class="sx-note">W + D aligned · Ranked by 9-metric composite: DE, Persistence, Structure, Swing, Consecutive, Wick, Pullback</span>
         <span class="sx-ctrls" id="sx-ctrls">
           <button class="sx-btn sx-days active" data-days="1">1D</button>
           <button class="sx-btn sx-days" data-days="2">2D</button>
@@ -234,14 +247,15 @@
       return d === 0 || d === 6;
     }
 
-    function scoreClass(score) {
-      if (score >= 70) return 'high';
-      if (score >= 45) return 'mid';
-      return 'low';
-    }
+    function sc(v) { return v >= 70 ? 'high' : v >= 45 ? 'mid' : 'low'; }
 
     function fmtPrice(p) {
       return p > 10 ? p.toFixed(3) : p.toFixed(5);
+    }
+
+    function chip(label, val) {
+      var cls = sc(val);
+      return '<span class="sub-chip"><span class="sub-label">' + label + '</span><span class="sub-val ' + cls + '">' + val + '</span></span>';
     }
 
     function renderCards(rows) {
@@ -257,9 +271,7 @@
         var row = reversed[r];
         if (isWeekend(row.time)) continue;
         if (!inSession(row.time)) continue;
-
-        var pairs = row.pairs;
-        if (!pairs.length) continue;
+        if (!row.pairs.length) continue;
 
         html += '<div class="br-card">';
         html += '<div class="br-card-hd">';
@@ -269,36 +281,48 @@
         html += '</div>';
         html += '<div class="br-pairs">';
 
-        for (var i = 0; i < pairs.length; i++) {
-          var p = pairs[i];
-          var sc = scoreClass(p.score);
+        for (var i = 0; i < row.pairs.length; i++) {
+          var p = row.pairs[i];
+          var cls = sc(p.score);
           var dirCls = p.direction === 'BUY' ? 'br-buy' : 'br-sell';
-          var barPct = Math.max(5, p.score);
 
-          html += '<div class="br-pair">';
+          html += '<div class="br-item">';
+
+          // Row 1: rank, name, direction, TF badges, score bar
+          html += '<div class="br-row1">';
           html += '<span class="br-rank">#' + (i + 1) + '</span>';
           html += '<span class="br-pair-name">' + p.pair + '</span>';
           html += '<span class="br-tag ' + dirCls + '">' + p.direction + '</span>';
-
           html += '<div class="tf-badges">';
           html += '<span class="tf-badge tf-aligned">W</span>';
           html += '<span class="tf-badge tf-aligned">D</span>';
           if (p.h1Break) html += '<span class="tf-badge tf-bonus">H1</span>';
           html += '</div>';
-
-          html += '<div class="br-score-bar"><div class="br-score-fill ' + sc + '" style="width:' + barPct + '%"></div></div>';
-          html += '<span class="br-score-val ' + sc + '">' + p.score + '</span>';
+          html += '<div class="br-score-bar"><div class="br-score-fill ' + cls + '" style="width:' + Math.max(5, p.score) + '%"></div></div>';
+          html += '<span class="br-score-val ' + cls + '">' + p.score + '</span>';
           html += '</div>';
 
+          // Row 2: sub-score chips
+          html += '<div class="sub-grid">';
+          html += chip('W', p.wkScore);
+          html += chip('D', p.dyScore);
+          html += chip('Str', p.structure);
+          html += chip('DE', p.de);
+          html += chip('Per', p.persistence);
+          html += chip('Swg', p.swingClean);
+          html += chip('Con', p.consecutive);
+          html += chip('Wck', p.wickQuality);
+          html += chip('PB', p.pullbackDepth);
+          html += '</div>';
+
+          // Row 3: meta
           html += '<div class="br-meta">';
-          html += '<span>Week ' + fmtPrice(p.weekOpen) + '</span>';
-          html += '<span>Day ' + fmtPrice(p.dayOpen) + '</span>';
           html += '<span>Close ' + fmtPrice(p.close) + '</span>';
           if (p.h1Break) {
             html += '<span style="color:#facc15">Broke ' + (p.direction === 'BUY' ? 'High' : 'Low') + ' ' + fmtPrice(p.breakLevel) + '</span>';
-            html += '<span>Break ' + p.breakScore + '</span>';
           }
-          html += '<span>Wick ' + p.wickPct + '%</span>';
+          html += '</div>';
+
           html += '</div>';
         }
         html += '</div></div>';

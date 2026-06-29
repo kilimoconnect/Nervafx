@@ -15,6 +15,7 @@ const INSTRUMENTS = [
 ];
 
 const NY_CLOSE_UTC = 21;
+const LOOKBACK = 20;
 
 function forexDayKey(iso) {
   const d = new Date(iso);
@@ -31,7 +32,6 @@ function prevTradingDay(dayKey) {
   return d.toISOString().slice(0, 10);
 }
 
-// ISO week key (Mon=start)
 function weekKey(iso) {
   const d = new Date(iso);
   const day = d.getUTCDay() || 7;
@@ -41,20 +41,145 @@ function weekKey(iso) {
   return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
 }
 
-function scoreBreak(c, direction, level) {
-  const body = Math.abs(c.close - c.open);
-  const range = c.high - c.low;
-  if (range === 0) return 0;
-  const bodyRatio = body / range;
-  let wickAgainst;
-  if (direction === 'BUY') wickAgainst = (c.high - c.close) / range;
-  else wickAgainst = (c.close - c.low) / range;
-  const breakDist = direction === 'BUY'
-    ? (c.close - level) / level : (level - c.close) / level;
-  const distScore = Math.min(1, breakDist * 1000);
-  const bullish = c.close > c.open;
-  const impulse = (direction === 'BUY' && bullish) || (direction === 'SELL' && !bullish) ? 1 : 0.3;
-  return Math.round(bodyRatio * 40 + (1 - wickAgainst) * 30 + distScore * 20 + impulse * 10);
+// ─── Swing detection (k=1 for short windows) ──────────────────────────────
+function detectSwings(candles) {
+  const highs = [], lows = [];
+  for (let i = 1; i < candles.length - 1; i++) {
+    if (candles[i].high > candles[i - 1].high && candles[i].high > candles[i + 1].high)
+      highs.push({ idx: i, price: candles[i].high });
+    if (candles[i].low < candles[i - 1].low && candles[i].low < candles[i + 1].low)
+      lows.push({ idx: i, price: candles[i].low });
+  }
+  return { highs, lows };
+}
+
+// ─── 9-Metric Smooth Trend Score ──────────────────────────────────────────
+
+function computeSmooth(window, direction, atr) {
+  const n = window.length;
+  if (n < 10) return null;
+  const isBuy = direction === 'BUY';
+
+  // 1. Directional Efficiency (15%) — net move / total path
+  const netMove = Math.abs(window[n - 1].close - window[0].open);
+  let totalPath = 0;
+  for (let i = 1; i < n; i++) totalPath += Math.abs(window[i].close - window[i - 1].close);
+  const de = totalPath > 0 ? Math.min(100, Math.round(netMove / totalPath * 100)) : 0;
+
+  // 2. Persistence (10%) — candles closing in direction / total
+  let inDir = 0;
+  for (const c of window) {
+    if (isBuy ? c.close > c.open : c.close < c.open) inDir++;
+  }
+  const persistence = Math.round(inDir / n * 100);
+
+  // 3. Consecutive Closes (10%) — longest streak of same-direction closes
+  let maxStreak = 0, streak = 0;
+  for (const c of window) {
+    if (isBuy ? c.close > c.open : c.close < c.open) { streak++; if (streak > maxStreak) maxStreak = streak; }
+    else streak = 0;
+  }
+  const consecutive = Math.min(100, Math.round(maxStreak / n * 200));
+
+  // 4. Wick Quality / Close Position (5%) — close near high (BUY) or low (SELL)
+  let cpSum = 0;
+  for (const c of window) {
+    const r = c.high - c.low;
+    if (r === 0) { cpSum += 50; continue; }
+    cpSum += (isBuy ? (c.close - c.low) / r : (c.high - c.close) / r) * 100;
+  }
+  const wickQuality = Math.round(cpSum / n);
+
+  // 5. Pullback Depth (5%) — shallow pullbacks = high score
+  let impulses = [], pullbacks = [];
+  let segStart = 0, prevInDir = isBuy ? window[0].close > window[0].open : window[0].close < window[0].open;
+  for (let i = 1; i <= n; i++) {
+    const curInDir = i < n ? (isBuy ? window[i].close > window[i].open : window[i].close < window[i].open) : !prevInDir;
+    if (curInDir !== prevInDir || i === n) {
+      const seg = window.slice(segStart, i);
+      const move = Math.abs(seg[seg.length - 1].close - seg[0].open);
+      if (prevInDir) impulses.push(move); else pullbacks.push(move);
+      segStart = i;
+      prevInDir = curInDir;
+    }
+  }
+  const avgImp = impulses.length ? impulses.reduce((s, x) => s + x, 0) / impulses.length : 0;
+  const avgPB = pullbacks.length ? pullbacks.reduce((s, x) => s + x, 0) / pullbacks.length : 0;
+  const pullbackDepth = avgImp > 0 ? Math.max(0, Math.min(100, Math.round((1 - avgPB / avgImp) * 100))) : 50;
+
+  // 6. H1 Structure (15%) — HH/HL (buy) or LH/LL (sell)
+  const sw = detectSwings(window);
+  let structCorrect = 0, structTotal = 0;
+  for (let i = 1; i < sw.highs.length; i++) {
+    structTotal++;
+    if (isBuy ? sw.highs[i].price > sw.highs[i - 1].price : sw.highs[i].price < sw.highs[i - 1].price)
+      structCorrect++;
+  }
+  for (let i = 1; i < sw.lows.length; i++) {
+    structTotal++;
+    if (isBuy ? sw.lows[i].price > sw.lows[i - 1].price : sw.lows[i].price < sw.lows[i - 1].price)
+      structCorrect++;
+  }
+  const structure = structTotal > 0 ? Math.round(structCorrect / structTotal * 100) : 50;
+
+  // 7. Swing Cleanliness (10%) — alternation quality + progressive quality
+  const points = [
+    ...sw.highs.map(h => ({ type: 'H', price: h.price, idx: h.idx })),
+    ...sw.lows.map(l => ({ type: 'L', price: l.price, idx: l.idx })),
+  ].sort((a, b) => a.idx - b.idx);
+
+  let swingClean = 50;
+  if (points.length >= 3) {
+    let altOk = 0;
+    for (let i = 1; i < points.length; i++) {
+      if (points[i].type !== points[i - 1].type) altOk++;
+    }
+    const altScore = altOk / (points.length - 1) * 100;
+
+    let progOk = 0, progN = 0;
+    let lastH = null, lastL = null;
+    for (const p of points) {
+      if (p.type === 'H') {
+        if (lastH !== null) {
+          progN++;
+          if (isBuy ? p.price > lastH : p.price < lastH) progOk++;
+        }
+        lastH = p.price;
+      } else {
+        if (lastL !== null) {
+          progN++;
+          if (isBuy ? p.price > lastL : p.price < lastL) progOk++;
+        }
+        lastL = p.price;
+      }
+    }
+    const progScore = progN > 0 ? progOk / progN * 100 : 50;
+    swingClean = Math.round((altScore + progScore) / 2);
+  }
+
+  return { de, persistence, consecutive, wickQuality, pullbackDepth, structure, swingClean };
+}
+
+// Weekly/daily alignment strength — position within range normalized by ATR
+function alignmentScore(close, open, atr) {
+  if (atr <= 0) return 50;
+  const move = Math.abs(close - open);
+  return Math.min(100, Math.round(move / (atr * 5) * 100));
+}
+
+// Composite Smooth Trend Score
+function smoothTrendScore(wk, dy, sub) {
+  return Math.round(
+    wk * 0.15 +
+    dy * 0.15 +
+    sub.structure * 0.15 +
+    sub.de * 0.15 +
+    sub.persistence * 0.10 +
+    sub.swingClean * 0.10 +
+    sub.consecutive * 0.10 +
+    sub.wickQuality * 0.05 +
+    sub.pullbackDepth * 0.05
+  );
 }
 
 module.exports = async function handler(req, res) {
@@ -73,7 +198,6 @@ module.exports = async function handler(req, res) {
     const until = qTo ? new Date(qTo + 'T23:59:59Z').toISOString() : new Date().toISOString();
     const since = qFrom ? new Date(qFrom + 'T00:00:00Z').toISOString()
       : new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-    // Extra days for weekly + daily reference
     const fetchSince = new Date(new Date(since).getTime() - 10 * 24 * 3600000).toISOString();
 
     // Fetch H1 candles
@@ -114,7 +238,7 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // Build daily OHLC per instrument
+    // Build daily OHLC
     const dailyOHLC = {};
     for (const inst of INSTRUMENTS) {
       const byDay = {};
@@ -130,13 +254,12 @@ module.exports = async function handler(req, res) {
       dailyOHLC[inst] = byDay;
     }
 
-    // Build weekly OHLC per instrument
+    // Build weekly OHLC
     const weeklyOHLC = {};
     for (const inst of INSTRUMENTS) {
       const byWeek = {};
       const sorted = Object.entries(dailyOHLC[inst] || {}).sort((a, b) => a[0].localeCompare(b[0]));
       for (const [dayKey, day] of sorted) {
-        const d = new Date(dayKey + 'T12:00:00Z');
         const wk = weekKey(dayKey);
         if (!byWeek[wk]) byWeek[wk] = { open: day.open, high: day.high, low: day.low, close: day.close };
         else {
@@ -148,7 +271,7 @@ module.exports = async function handler(req, res) {
       weeklyOHLC[inst] = byWeek;
     }
 
-    // Collect H1 timestamps in range
+    // Timestamps in range
     const allTimes = new Set();
     for (const inst of INSTRUMENTS) {
       for (const c of (h1ByInst[inst] || [])) {
@@ -157,7 +280,7 @@ module.exports = async function handler(req, res) {
     }
     const timestamps = [...allTimes].sort();
 
-    // Index H1 candles
+    // Index
     const indexByInst = {};
     for (const inst of INSTRUMENTS) {
       const candles = h1ByInst[inst] || [];
@@ -177,76 +300,75 @@ module.exports = async function handler(req, res) {
         const wkOHLC = (weeklyOHLC[inst] || {})[wk];
         const dayOH = (dailyOHLC[inst] || {})[fxDay];
         const prevDayOHLC = (dailyOHLC[inst] || {})[prevDay];
-
         if (!wkOHLC || !dayOH || !prevDayOHLC) continue;
 
-        // Current weekly direction (using close up to this point)
         const { candles, timeToIdx } = indexByInst[inst];
         const idx = timeToIdx[time];
         if (idx === undefined) continue;
+
         const currentClose = candles[idx].close;
-        const currentCandle = candles[idx];
 
-        // Weekly: use week open vs current close
-        const weeklyBuy = currentClose > wkOHLC.open;
-        const weeklySell = currentClose < wkOHLC.open;
-        const weeklyDir = weeklyBuy ? 'BUY' : weeklySell ? 'SELL' : null;
+        // Weekly + Daily + H1 direction alignment filter
+        const weeklyDir = currentClose > wkOHLC.open ? 'BUY' : currentClose < wkOHLC.open ? 'SELL' : null;
         if (!weeklyDir) continue;
-
-        // Daily: use day open vs current close
-        const dailyBuy = currentClose > dayOH.open;
-        const dailySell = currentClose < dayOH.open;
-        const dailyDir = dailyBuy ? 'BUY' : dailySell ? 'SELL' : null;
+        const dailyDir = currentClose > dayOH.open ? 'BUY' : currentClose < dayOH.open ? 'SELL' : null;
         if (!dailyDir) continue;
-
-        // Weekly and daily must align
-        if (weeklyDir !== dailyDir) continue;
+        const currentCandle = candles[idx];
+        const h1Dir = currentCandle.close > currentCandle.open ? 'BUY' : currentCandle.close < currentCandle.open ? 'SELL' : null;
+        if (!h1Dir) continue;
+        if (weeklyDir !== dailyDir || weeklyDir !== h1Dir) continue;
         const direction = weeklyDir;
 
-        // Bonus: H1 close broke previous day high (BUY) or low (SELL)
+        // Need enough lookback for sub-scores
+        const start = Math.max(0, idx - LOOKBACK + 1);
+        const window = candles.slice(start, idx + 1);
+        if (window.length < 10) continue;
+
+        // ATR from lookback window
+        let atrSum = 0;
+        for (const c of window) atrSum += c.high - c.low;
+        const atr = atrSum / window.length;
+
+        // Sub-scores
+        const sub = computeSmooth(window, direction, atr);
+        if (!sub) continue;
+
+        // Alignment strength scores
+        const wkScore = alignmentScore(currentClose, wkOHLC.open, atr);
+        const dyScore = alignmentScore(currentClose, dayOH.open, atr);
+
+        // Composite
+        const score = smoothTrendScore(wkScore, dyScore, sub);
+
+        // H1 break bonus (previous day high/low)
         let h1Break = false;
-        let breakScore = 0;
         let breakLevel = null;
         if (direction === 'BUY' && currentClose > prevDayOHLC.high) {
           h1Break = true;
           breakLevel = prevDayOHLC.high;
-          breakScore = scoreBreak(currentCandle, direction, breakLevel);
         } else if (direction === 'SELL' && currentClose < prevDayOHLC.low) {
           h1Break = true;
           breakLevel = prevDayOHLC.low;
-          breakScore = scoreBreak(currentCandle, direction, breakLevel);
         }
-
-        // Alignment score: weekly + daily aligned = base score
-        // + bonus for H1 break
-        const weeklyStrength = Math.abs(currentClose - wkOHLC.open) / wkOHLC.open * 10000;
-        const dailyStrength = Math.abs(currentClose - dayOH.open) / dayOH.open * 10000;
-        let score = Math.round(
-          Math.min(40, weeklyStrength * 2) +
-          Math.min(40, dailyStrength * 4) +
-          (h1Break ? 20 : 0)
-        );
-        score = Math.min(100, score);
-
-        const body = Math.abs(currentCandle.close - currentCandle.open);
-        const range = currentCandle.high - currentCandle.low;
-        const wickPct = range > 0 ? Math.round((1 - body / range) * 100) : 100;
 
         pairs.push({
           pair: inst.replace('_', '/'),
           direction,
           score,
-          weeklyDir,
-          dailyDir,
+          wkScore,
+          dyScore,
+          de: sub.de,
+          persistence: sub.persistence,
+          consecutive: sub.consecutive,
+          wickQuality: sub.wickQuality,
+          pullbackDepth: sub.pullbackDepth,
+          structure: sub.structure,
+          swingClean: sub.swingClean,
           h1Break,
-          breakScore,
           breakLevel,
           close: currentClose,
           weekOpen: wkOHLC.open,
           dayOpen: dayOH.open,
-          prevHigh: prevDayOHLC.high,
-          prevLow: prevDayOHLC.low,
-          wickPct,
         });
       }
 
