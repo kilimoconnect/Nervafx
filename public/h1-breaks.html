@@ -172,6 +172,11 @@
           <button class="sx-btn sx-days" data-days="10">10D</button>
           <button class="sx-btn sx-days" data-days="30">30D</button>
           <span class="sx-ctrl-sep"></span>
+          <button class="sx-btn sx-session active" data-session="all">All</button>
+          <button class="sx-btn sx-session" data-session="asia">Asia</button>
+          <button class="sx-btn sx-session" data-session="london">London</button>
+          <button class="sx-btn sx-session" data-session="newyork">New York</button>
+          <span class="sx-ctrl-sep"></span>
           <input type="date" class="sx-date-input" id="sx-date-from" title="From date">
           <input type="date" class="sx-date-input" id="sx-date-to" title="To date">
           <button class="sx-btn" id="sx-date-go">Go</button>
@@ -192,6 +197,23 @@
     if (!TOKEN) { location.href = '/login'; return; }
 
     let currentDays = 1;
+    let currentSession = 'all';
+    let cachedRows = [];
+
+    // Session hours in UTC
+    const SESSIONS = {
+      all:     { start: 0, end: 24 },
+      asia:    { start: 0, end: 8 },
+      london:  { start: 7, end: 16 },
+      newyork: { start: 12, end: 21 },
+    };
+
+    function inSession(iso) {
+      if (currentSession === 'all') return true;
+      const h = new Date(iso).getUTCHours();
+      const s = SESSIONS[currentSession];
+      return h >= s.start && h < s.end;
+    }
 
     function hrLabel(iso) {
       const d = new Date(iso);
@@ -243,6 +265,7 @@
       const reversed = rows.slice().reverse();
       for (const row of reversed) {
         if (isWeekend(row.time)) continue;
+        if (!inSession(row.time)) continue;
         const greenBreaks = row.breaks.filter(b => b.score >= 70);
         if (!greenBreaks.length) continue;
 
@@ -300,7 +323,8 @@
         });
         if (!res.ok) throw new Error(await res.text());
         const json = await res.json();
-        renderCards(json.rows || []);
+        cachedRows = json.rows || [];
+        renderCards(cachedRows);
       } catch (e) {
         document.getElementById('br-cards').innerHTML =
           `<div class="br-empty" style="color:#f87171">Error: ${e.message}</div>`;
@@ -316,6 +340,16 @@
         document.getElementById('sx-date-from').value = '';
         document.getElementById('sx-date-to').value = '';
         load();
+      });
+    });
+
+    // Session buttons
+    document.querySelectorAll('.sx-session').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.sx-session').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentSession = btn.dataset.session;
+        renderCards(cachedRows);
       });
     });
 
