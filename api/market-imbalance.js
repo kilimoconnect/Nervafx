@@ -5,8 +5,8 @@ const { requirePlan } = require('./_plan');
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
 const TF_FIELDS = { '3H': 'smooth_3h', '4H': 'smooth_4h', '6H': 'smooth_6h', '12H': 'smooth_12h' };
-const STRONG_THRESHOLD = 3.0;
-const WEAK_THRESHOLD = -3.0;
+const STRONG_THRESHOLD = 2.0;
+const WEAK_THRESHOLD = -2.0;
 
 function classify(strength) {
   const strong = [], weak = [], neutral = [];
@@ -195,23 +195,7 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // Debug: sample one timestamp to verify values
-    let debug = null;
-    if (timestamps.length > 0) {
-      const sampleTime = timestamps[timestamps.length - 1];
-      const ccyData = byTime[sampleTime];
-      debug = {
-        totalRows: allRows.length,
-        totalTimestamps: timestamps.length,
-        sampleTime,
-        sampleData: ccyData,
-        ccyCount: Object.keys(ccyData || {}).length,
-      };
-    } else {
-      debug = { totalRows: allRows.length, totalTimestamps: 0, since, until };
-    }
-
-    res.json({ rows, debug });
+    res.json({ rows });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
