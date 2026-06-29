@@ -158,10 +158,10 @@ module.exports = async function handler(req, res) {
     for (const r of allRows) {
       if (!byTime[r.time]) byTime[r.time] = {};
       byTime[r.time][r.currency] = {
-        '3H': parseFloat(r.smooth_3h) || 0,
-        '4H': parseFloat(r.smooth_4h) || 0,
-        '6H': parseFloat(r.smooth_6h) || 0,
-        '12H': parseFloat(r.smooth_12h) || 0,
+        '3H': (parseFloat(r.smooth_3h) || 0) * 1000,
+        '4H': (parseFloat(r.smooth_4h) || 0) * 1000,
+        '6H': (parseFloat(r.smooth_6h) || 0) * 1000,
+        '12H': (parseFloat(r.smooth_12h) || 0) * 1000,
       };
     }
 
