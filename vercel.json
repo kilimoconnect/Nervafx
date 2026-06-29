@@ -24,7 +24,8 @@
     "api/h1-pair-moves.js":       { "maxDuration": 60 },
     "api/daily-raw-strength.js":  { "maxDuration": 120 },
     "api/h1-structure-break.js":  { "maxDuration": 60 },
-    "api/cron-h1-breaks-alerts.js": { "maxDuration": 30 }
+    "api/cron-h1-breaks-alerts.js": { "maxDuration": 30 },
+    "api/top-down-analysis.js": { "maxDuration": 90 }
   },
   "rewrites": [
     { "source": "/",       "destination": "/login.html" },

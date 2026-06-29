@@ -4,14 +4,17 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <title>NervaFX — Structure Engine</title>
+  <title>NervaFX — Top-Down Analysis</title>
   <link rel="icon" type="image/png" href="/nervafx-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <link rel="stylesheet" href="style.css" />
+
   <style>
     .grid { display: block !important; }
+
     .sx-topbar {
       position: sticky; top: 0; z-index: 100;
       display: flex; align-items: center; justify-content: space-between;
@@ -25,383 +28,338 @@
     .sx-sep { color: rgba(255,255,255,0.1); font-size: 20px; font-weight: 200; }
     .sx-title-text { font-size: 13px; font-weight: 600; color: var(--text-muted); }
     .sx-back-btn {
-      display: flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: 8px;
-      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
-      color: var(--text-muted); font-size: 11px; font-weight: 600; cursor: pointer; text-decoration: none; transition: all 0.15s;
+      display: flex; align-items: center; gap: 5px;
+      padding: 6px 12px; border-radius: 8px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); font-size: 11px; font-weight: 600;
+      cursor: pointer; text-decoration: none; transition: all 0.15s;
     }
     .sx-back-btn:hover { background: rgba(255,255,255,0.09); color: var(--text); }
-    .se-main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 80px; }
 
-    .se-intro { font-size: 12px; color: var(--text-muted); margin: 0 0 16px; }
-    .se-filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
-    .se-fbtn {
-      padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 600;
+    .sx-main { max-width: 1000px; margin: 0 auto; padding: 20px 20px 80px; }
+
+    .sx-card {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px; margin-bottom: 18px; overflow: hidden;
+    }
+    .sx-card-hd {
+      padding: 12px 16px; font-size: 12px; font-weight: 700;
+      color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    }
+    .sx-card-hd i { width: 15px; height: 15px; }
+    .sx-card-bd { padding: 14px 16px; }
+
+    .sx-ctrls { display: flex; gap: 6px; margin-left: auto; align-items: center; flex-wrap: wrap; }
+    .sx-btn {
+      padding: 4px 12px; border-radius: 7px; font-size: 11px; font-weight: 700;
       background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
       color: var(--text-muted); cursor: pointer; transition: all 0.15s;
     }
-    .se-fbtn:hover { background: rgba(255,255,255,0.08); }
-    .se-fbtn.active { background: rgba(34,197,94,0.15); border-color: rgba(34,197,94,0.4); color: #22c55e; }
-
-    /* Time controls */
-    .se-time { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
-    .se-date-input {
-      padding: 5px 10px; border-radius: 6px; font-size: 11px; font-weight: 600;
+    .sx-btn:hover { color: var(--text); background: rgba(255,255,255,0.08); }
+    .sx-btn.active { background: rgba(96,165,250,0.15); border-color: rgba(96,165,250,0.5); color: #60a5fa; }
+    .sx-ctrl-sep { width: 1px; height: 18px; background: rgba(255,255,255,0.1); }
+    .sx-note { font-size: 10.5px; color: var(--text-dim); text-transform: none; letter-spacing: 0; font-weight: 500; }
+    .sx-date-input {
+      padding: 4px 8px; border-radius: 7px; font-size: 11px; font-weight: 600;
       background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
-      color: var(--text); font-family: inherit; outline: none;
+      color: var(--text-muted); font-family: inherit; outline: none;
+      transition: all 0.15s; cursor: pointer;
     }
-    .se-date-input::-webkit-calendar-picker-indicator { filter: invert(0.7); }
-    .se-date-go {
-      padding: 5px 14px; border-radius: 6px; font-size: 11px; font-weight: 700;
-      background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.4);
-      color: #3b82f6; cursor: pointer;
+    .sx-date-input:focus { border-color: rgba(96,165,250,0.5); color: var(--text); }
+    .sx-date-input::-webkit-calendar-picker-indicator { filter: invert(0.6); cursor: pointer; }
+
+    .sx-loading { display: flex; align-items: center; gap: 8px; padding: 40px; color: var(--text-muted); font-size: 12px; justify-content: center; }
+    .spinner {
+      width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.15);
+      border-top-color: #60a5fa; border-radius: 50%; animation: sxspin 0.7s linear infinite;
     }
-    .se-date-go:hover { background: rgba(59,130,246,0.25); }
+    @keyframes sxspin { to { transform: rotate(360deg); } }
 
-    /* Currency strength strip */
-    .se-ccy-strip { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; margin-bottom: 20px; }
-    .se-ccy { border-radius: 8px; padding: 8px 6px; text-align: center; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); }
-    .se-ccy-code { font-size: 13px; font-weight: 800; }
-    .se-ccy-label { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; margin-top: 2px; }
-    .se-ccy-score { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
-    .lbl-strong { color: #22c55e; } .lbl-weak { color: #ef4444; }
-    .lbl-improving { color: #3b82f6; } .lbl-deteriorating { color: #f97316; } .lbl-neutral { color: #64748b; }
+    /* ── Break cards ── */
+    .br-card {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 10px; margin-bottom: 10px; overflow: hidden;
+    }
+    .br-card-hd {
+      display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .br-time { font-size: 12px; font-weight: 700; color: var(--text); }
+    .br-date { font-size: 11px; color: var(--text-muted); }
+    .br-count {
+      margin-left: auto; font-size: 10px; font-weight: 700;
+      padding: 2px 8px; border-radius: 4px;
+      background: rgba(96,165,250,0.12); color: #60a5fa;
+    }
 
-    /* Pair cards */
-    .se-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 12px; }
-    .se-card { border-radius: 10px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); padding: 12px 14px; }
-    .se-card.approved { border-color: rgba(34,197,94,0.45); box-shadow: 0 0 14px rgba(34,197,94,0.08); }
-    .se-card-hd { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-    .se-pair { font-size: 15px; font-weight: 800; }
-    .se-score { margin-left: auto; font-size: 18px; font-weight: 800; }
-    .se-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
-    .se-tag { font-size: 9px; font-weight: 800; padding: 2px 7px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.3px; }
-    .tag-bull { background: rgba(34,197,94,0.15); color: #22c55e; }
-    .tag-bear { background: rgba(239,68,68,0.15); color: #ef4444; }
-    .tag-range { background: rgba(255,255,255,0.07); color: var(--text-muted); }
-    .tag-valid { background: rgba(34,197,94,0.15); color: #22c55e; }
-    .tag-weakening { background: rgba(234,179,8,0.15); color: #eab308; }
-    .tag-broken { background: rgba(239,68,68,0.15); color: #ef4444; }
-    .tag-bos { background: rgba(168,85,247,0.18); color: #a855f7; }
-    .tag-choch { background: rgba(244,63,94,0.2); color: #fb7185; border: 1px solid rgba(244,63,94,0.5); }
-    .tag-state { background: rgba(59,130,246,0.15); color: #3b82f6; }
-    .tag-approved { background: rgba(34,197,94,0.25); color: #22c55e; border: 1px solid rgba(34,197,94,0.6); }
-    .se-rows { font-size: 11px; color: var(--text-muted); }
-    .se-row { display: flex; justify-content: space-between; padding: 2px 0; }
-    .se-row b { color: var(--text); font-weight: 700; }
-    .se-metrics { display: flex; gap: 10px; margin-top: 8px; font-size: 10px; color: var(--text-muted); }
-    .se-metrics b { color: rgba(255,255,255,0.8); }
+    .br-pairs { padding: 8px 14px; }
+    .br-pair {
+      display: flex; align-items: center; gap: 10px; padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+    .br-pair:last-child { border-bottom: none; }
+    .br-rank {
+      font-size: 10px; font-weight: 800; color: var(--text-dim);
+      min-width: 18px; text-align: center;
+    }
+    .br-pair-name { font-size: 12px; font-weight: 800; color: var(--text); min-width: 75px; }
+    .br-tag {
+      font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 4px;
+      letter-spacing: 0.2px;
+    }
+    .br-buy { background: rgba(34,197,94,0.12); color: #4ade80; }
+    .br-sell { background: rgba(239,68,68,0.12); color: #f87171; }
 
-    .se-loading { text-align: center; padding: 60px; color: var(--text-muted); font-size: 13px; }
-    .se-loading .spin { display: inline-block; width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.1); border-top-color: #22c55e; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: middle; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .se-note { font-size: 10px; color: #475569; margin-top: 20px; text-align: center; }
-    .se-card { cursor: pointer; }
-    .se-card:hover { border-color: rgba(255,255,255,0.15); }
+    .br-score-bar {
+      flex: 1; height: 8px; background: rgba(255,255,255,0.04);
+      border-radius: 4px; overflow: hidden; min-width: 60px;
+    }
+    .br-score-fill {
+      height: 100%; border-radius: 4px;
+      transition: width 0.3s;
+    }
+    .br-score-fill.high { background: linear-gradient(90deg, #4ade80, #22c55e); }
+    .br-score-fill.mid { background: linear-gradient(90deg, #facc15, #f59e0b); }
+    .br-score-fill.low { background: linear-gradient(90deg, #f87171, #ef4444); }
 
-    /* Forecast / history modal */
-    .se-modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 16px; }
-    .se-modal { background: #0b0f17; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; max-width: 520px; width: 100%; max-height: 86vh; overflow-y: auto; padding: 18px; }
-    .se-modal-hd { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
-    .se-modal-hd .x { margin-left: auto; cursor: pointer; color: var(--text-muted); font-size: 18px; }
-    .se-fc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
-    .se-fc { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 10px; text-align: center; }
-    .se-fc-val { font-size: 20px; font-weight: 800; }
-    .se-fc-lbl { font-size: 9px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; margin-top: 2px; }
-    .se-hist-row { display: flex; align-items: center; gap: 8px; font-size: 10px; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
-    .se-hist-row .t { color: var(--text-muted); min-width: 86px; }
+    .br-score-val {
+      font-size: 11px; font-weight: 800; min-width: 30px; text-align: right;
+      font-family: var(--font-data);
+    }
+    .br-score-val.high { color: #4ade80; }
+    .br-score-val.mid { color: #facc15; }
+    .br-score-val.low { color: #f87171; }
 
-    /* Reviews */
-    .se-reviews { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
-    .se-review-card { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 12px 14px; }
-    .se-review-hd { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 8px; }
-    .se-rev-row { display: flex; justify-content: space-between; font-size: 11px; padding: 2px 0; }
-    .se-rev-row b { font-weight: 700; }
-    @media (max-width: 600px) { .se-reviews { grid-template-columns: 1fr; } }
+    .br-meta {
+      display: flex; gap: 8px; font-size: 9.5px; font-weight: 600;
+      color: var(--text-dim); margin-top: 3px;
+    }
+    .br-meta span { white-space: nowrap; }
 
-    @media (max-width: 600px) {
-      .sx-topbar { padding: 0 12px; height: 48px; }
-      .se-main { padding: 12px 8px 60px; }
-      .se-ccy-strip { grid-template-columns: repeat(4, 1fr); }
-      .se-grid { grid-template-columns: 1fr; }
+    .br-empty { text-align: center; padding: 50px 20px; color: var(--text-muted); font-size: 13px; }
+
+    /* ── TF badges (W / D / H1) ── */
+    .tf-badges { display: flex; gap: 4px; align-items: center; }
+    .tf-badge {
+      font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 3px;
+      letter-spacing: 0.3px;
+    }
+    .tf-aligned { background: rgba(34,197,94,0.15); color: #4ade80; }
+    .tf-bonus { background: rgba(250,204,21,0.15); color: #facc15; }
+
+    @media (max-width: 640px) {
+      .sx-main { padding: 14px 12px 60px; }
+      .sx-ctrls { width: 100%; margin-left: 0; }
+      .br-pair { flex-wrap: wrap; gap: 6px; }
     }
   </style>
 </head>
 <body>
-
-<div class="sx-topbar">
-  <div class="sx-topbar-left">
-    <a href="/app" class="sx-logo"><img src="/nervafx-logo.png" alt="NervaFX" /></a>
-    <span class="sx-sep">/</span>
-    <span class="sx-title-text">Structure Engine</span>
+  <div class="sx-topbar">
+    <div class="sx-topbar-left">
+      <a class="sx-logo" href="/app"><img src="/nervafx-logo.png" alt="NervaFX" onerror="this.style.display='none'"></a>
+      <span class="sx-sep">/</span>
+      <span class="sx-title-text">Top-Down Analysis</span>
+    </div>
+    <a class="sx-back-btn" href="/app" onclick="window.close(); setTimeout(function(){ location.href='/app'; }, 150); return false;">&times; Close</a>
   </div>
-  <a href="/app" class="sx-back-btn">Dashboard</a>
-</div>
 
-<div class="se-main" id="se-root">
-  <div class="se-loading"><span class="spin"></span> Running hourly structure engine across 28 pairs…</div>
-</div>
+  <main class="sx-main">
+    <div class="sx-card">
+      <div class="sx-card-hd">
+        <i data-lucide="layers"></i> Top-Down Analysis — Weekly &amp; Daily alignment + H1 break bonus
+        <span class="sx-note">W + D must agree · H1 break = previous day high/low · Top 5 ranked by alignment strength</span>
+        <span class="sx-ctrls" id="sx-ctrls">
+          <button class="sx-btn sx-days active" data-days="1">1D</button>
+          <button class="sx-btn sx-days" data-days="2">2D</button>
+          <button class="sx-btn sx-days" data-days="5">5D</button>
+          <button class="sx-btn sx-days" data-days="10">10D</button>
+          <button class="sx-btn sx-days" data-days="30">30D</button>
+          <span class="sx-ctrl-sep"></span>
+          <button class="sx-btn sx-session active" data-session="all">All</button>
+          <button class="sx-btn sx-session" data-session="asia">Asia</button>
+          <button class="sx-btn sx-session" data-session="london">London</button>
+          <button class="sx-btn sx-session" data-session="newyork">New York</button>
+          <span class="sx-ctrl-sep"></span>
+          <input type="date" class="sx-date-input" id="sx-date-from" title="From date">
+          <input type="date" class="sx-date-input" id="sx-date-to" title="To date">
+          <button class="sx-btn" id="sx-date-go">Go</button>
+        </span>
+      </div>
+    </div>
 
-<script>
-const SUPABASE_URL = 'https://lfmhnelejjrpqfbvosmt.supabase.co';
-let _seData = null;
-let _seFilter = 'ALL';
-let _seAt = null; // null = live; otherwise an ISO hour to view historically
+    <div id="br-cards">
+      <div class="sx-loading"><span class="spinner"></span> Loading…</div>
+    </div>
+  </main>
 
-async function api(path) {
-  let token = localStorage.getItem('nfx_token');
-  let res = await fetch(path, { headers: { Authorization: `Bearer ${token}` } });
-  if (res.status === 401) {
-    const refresh = localStorage.getItem('nfx_refresh');
-    if (refresh) {
-      const r2 = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', apikey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxmbWhuZWxlanpycHFmYnZvc210Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM2MTcxMTYsImV4cCI6MjA1OTE5MzExNn0.5T424U9jEgMLVreKMFCJ_7oVBGhFB96MvOi0k38_BPc' },
-        body: JSON.stringify({ refresh_token: refresh }),
+  <script>
+  (function () {
+    'use strict';
+
+    var TOKEN = localStorage.getItem('nfx_token');
+    if (!TOKEN) { location.href = '/login'; return; }
+
+    var currentDays = 1;
+    var currentSession = 'all';
+    var cachedRows = [];
+
+    var SESSIONS = {
+      all:     { start: 0, end: 24 },
+      asia:    { start: 0, end: 8 },
+      london:  { start: 7, end: 16 },
+      newyork: { start: 12, end: 21 },
+    };
+
+    function inSession(iso) {
+      if (currentSession === 'all') return true;
+      var h = new Date(iso).getUTCHours();
+      var s = SESSIONS[currentSession];
+      return h >= s.start && h < s.end;
+    }
+
+    function hrLabel(iso) {
+      return new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Africa/Nairobi' });
+    }
+    function dayLabel(iso) {
+      return new Date(iso).toLocaleDateString('en-US', { weekday: 'short', day: '2-digit', month: 'short', timeZone: 'Africa/Nairobi' });
+    }
+    function isWeekend(iso) {
+      var d = new Date(iso).getUTCDay();
+      return d === 0 || d === 6;
+    }
+
+    function scoreClass(score) {
+      if (score >= 70) return 'high';
+      if (score >= 45) return 'mid';
+      return 'low';
+    }
+
+    function fmtPrice(p) {
+      return p > 10 ? p.toFixed(3) : p.toFixed(5);
+    }
+
+    function renderCards(rows) {
+      var el = document.getElementById('br-cards');
+      if (!rows.length) {
+        el.innerHTML = '<div class="br-empty">No aligned pairs found for this period.</div>';
+        return;
+      }
+
+      var html = '';
+      var reversed = rows.slice().reverse();
+      for (var r = 0; r < reversed.length; r++) {
+        var row = reversed[r];
+        if (isWeekend(row.time)) continue;
+        if (!inSession(row.time)) continue;
+
+        var pairs = row.pairs;
+        if (!pairs.length) continue;
+
+        html += '<div class="br-card">';
+        html += '<div class="br-card-hd">';
+        html += '<span class="br-time">' + hrLabel(row.time) + '</span>';
+        html += '<span class="br-date">' + dayLabel(row.time) + '</span>';
+        html += '<span class="br-count">' + row.totalAligned + ' aligned</span>';
+        html += '</div>';
+        html += '<div class="br-pairs">';
+
+        for (var i = 0; i < pairs.length; i++) {
+          var p = pairs[i];
+          var sc = scoreClass(p.score);
+          var dirCls = p.direction === 'BUY' ? 'br-buy' : 'br-sell';
+          var barPct = Math.max(5, p.score);
+
+          html += '<div class="br-pair">';
+          html += '<span class="br-rank">#' + (i + 1) + '</span>';
+          html += '<span class="br-pair-name">' + p.pair + '</span>';
+          html += '<span class="br-tag ' + dirCls + '">' + p.direction + '</span>';
+
+          html += '<div class="tf-badges">';
+          html += '<span class="tf-badge tf-aligned">W</span>';
+          html += '<span class="tf-badge tf-aligned">D</span>';
+          if (p.h1Break) html += '<span class="tf-badge tf-bonus">H1</span>';
+          html += '</div>';
+
+          html += '<div class="br-score-bar"><div class="br-score-fill ' + sc + '" style="width:' + barPct + '%"></div></div>';
+          html += '<span class="br-score-val ' + sc + '">' + p.score + '</span>';
+          html += '</div>';
+
+          html += '<div class="br-meta">';
+          html += '<span>Week ' + fmtPrice(p.weekOpen) + '</span>';
+          html += '<span>Day ' + fmtPrice(p.dayOpen) + '</span>';
+          html += '<span>Close ' + fmtPrice(p.close) + '</span>';
+          if (p.h1Break) {
+            html += '<span style="color:#facc15">Broke ' + (p.direction === 'BUY' ? 'High' : 'Low') + ' ' + fmtPrice(p.breakLevel) + '</span>';
+            html += '<span>Break ' + p.breakScore + '</span>';
+          }
+          html += '<span>Wick ' + p.wickPct + '%</span>';
+          html += '</div>';
+        }
+        html += '</div></div>';
+      }
+      el.innerHTML = html || '<div class="br-empty">No aligned pairs found.</div>';
+    }
+
+    async function load() {
+      document.getElementById('br-cards').innerHTML = '<div class="sx-loading"><span class="spinner"></span> Loading…</div>';
+
+      var fromEl = document.getElementById('sx-date-from');
+      var toEl = document.getElementById('sx-date-to');
+      var qs;
+      if (fromEl.value && toEl.value) {
+        qs = 'from=' + fromEl.value + '&to=' + toEl.value;
+      } else {
+        qs = 'days=' + currentDays;
+      }
+
+      try {
+        var res = await fetch('/api/top-down-analysis?' + qs, {
+          headers: { Authorization: 'Bearer ' + TOKEN },
+        });
+        if (!res.ok) throw new Error(await res.text());
+        var json = await res.json();
+        cachedRows = json.rows || [];
+        renderCards(cachedRows);
+      } catch (e) {
+        document.getElementById('br-cards').innerHTML =
+          '<div class="br-empty" style="color:#f87171">Error: ' + e.message + '</div>';
+      }
+    }
+
+    document.querySelectorAll('.sx-days').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        document.querySelectorAll('.sx-days').forEach(function(b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        currentDays = parseInt(btn.dataset.days, 10);
+        document.getElementById('sx-date-from').value = '';
+        document.getElementById('sx-date-to').value = '';
+        load();
       });
-      if (r2.ok) {
-        const t = await r2.json();
-        localStorage.setItem('nfx_token', t.access_token);
-        localStorage.setItem('nfx_refresh', t.refresh_token);
-        res = await fetch(path, { headers: { Authorization: `Bearer ${t.access_token}` } });
-      }
-    }
-  }
-  if (res.status === 401) { location.href = '/login'; return null; }
-  if (!res.ok) throw new Error(`API ${res.status}`);
-  return res.json();
-}
+    });
 
-async function load() {
-  try {
-    document.getElementById('se-root').innerHTML = '<div class="se-loading"><span class="spin"></span> ' + (_seAt ? 'Loading historical structure…' : 'Running hourly structure engine across 28 pairs…') + '</div>';
-    const url = _seAt
-      ? `/api/structure-history?at=${encodeURIComponent(_seAt)}&t=${Date.now()}`
-      : `/api/structure-engine?t=${Date.now()}`;
-    _seData = await api(url);
-    if (_seData) render();
-  } catch (e) {
-    document.getElementById('se-root').innerHTML = `<div class="se-loading"><span style="color:#ef4444">Error: ${e.message}</span></div>`;
-  }
-}
+    document.querySelectorAll('.sx-session').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        document.querySelectorAll('.sx-session').forEach(function(b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        currentSession = btn.dataset.session;
+        renderCards(cachedRows);
+      });
+    });
 
-// Floor a Date to the top of the UTC hour and return ISO
-function floorHourISO(ms) { const d = new Date(ms); d.setUTCMinutes(0, 0, 0); return d.toISOString(); }
-// Value for <input type=datetime-local> from an ISO (local time)
-function toLocalInput(iso) {
-  const d = iso ? new Date(iso) : new Date();
-  const p = n => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:00`;
-}
-function stepHours(h) {
-  const base = _seAt ? new Date(_seAt).getTime() : Date.now();
-  const next = base + h * 3600000;
-  if (next > Date.now()) { _seAt = null; } else { _seAt = floorHourISO(next); }
-  load();
-}
-function applyAt() {
-  const v = document.getElementById('se-at-input')?.value;
-  if (!v) return;
-  const ms = new Date(v).getTime();
-  _seAt = ms >= Date.now() - 3600000 ? null : floorHourISO(ms);
-  load();
-}
-function goLive() { _seAt = null; load(); }
+    document.getElementById('sx-date-go').addEventListener('click', function() {
+      document.querySelectorAll('.sx-days').forEach(function(b) { b.classList.remove('active'); });
+      load();
+    });
 
-const fmtPrice = p => p == null ? '—' : (p >= 50 ? p.toFixed(2) : p.toFixed(5));
-const lvlStr = l => l ? fmtPrice(l.price) + (l.strength ? ' · ' + l.strength + (l.touches ? ` · ${l.touches}t` : '') : (l.score != null ? ' · ' + l.score : '')) : '—';
-const scoreColor = s => s >= 85 ? '#22c55e' : s >= 70 ? '#3b82f6' : s >= 55 ? '#eab308' : s >= 40 ? '#f97316' : '#ef4444';
-const ccyCls = l => 'lbl-' + l.toLowerCase();
-
-function render() {
-  const d = _seData;
-  const root = document.getElementById('se-root');
-  if (!d || !d.pairs.length) { root.innerHTML = '<div class="se-loading">No structure data available</div>'; return; }
-
-  let html = '';
-  const when = _seAt
-    ? new Date(d.generatedAt || _seAt).toLocaleString('en-US', { weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit', hour12:false, timeZoneName:'short' })
-    : 'Live';
-  html += `<p class="se-intro">Hourly market-structure analysis across all 28 pairs — <b>${when}</b>${_seAt ? ' <span style="color:#f59e0b">(historical)</span>' : ''}. <b style="color:#22c55e">${d.approvedCount}</b> approved setups.</p>`;
-
-  // Time controls — view the evolution over hours / days / weeks
-  html += '<div class="se-time">';
-  html += `<button class="se-fbtn ${!_seAt?'active':''}" onclick="goLive()">● Live</button>`;
-  html += `<button class="se-fbtn" onclick="stepHours(-1)">◀ 1h</button>`;
-  html += `<button class="se-fbtn" onclick="stepHours(-24)">◀ 1d</button>`;
-  html += `<button class="se-fbtn" onclick="stepHours(-168)">◀ 1w</button>`;
-  html += `<input type="datetime-local" id="se-at-input" class="se-date-input" value="${toLocalInput(_seAt)}" />`;
-  html += `<button class="se-date-go" onclick="applyAt()">Go</button>`;
-  if (_seAt) {
-    html += `<button class="se-fbtn" onclick="stepHours(24)">1d ▶</button>`;
-    html += `<button class="se-fbtn" onclick="stepHours(1)">1h ▶</button>`;
-  }
-  html += '</div>';
-
-  // Currency strip
-  html += '<div class="se-ccy-strip">';
-  for (const ccy of ['USD','EUR','GBP','JPY','CHF','CAD','AUD','NZD']) {
-    const c = d.currencies[ccy] || { avgStructure: 0, label: 'NEUTRAL' };
-    html += `<div class="se-ccy">
-      <div class="se-ccy-code">${ccy}</div>
-      <div class="se-ccy-label ${ccyCls(c.label)}">${c.label}</div>
-      <div class="se-ccy-score">${c.avgStructure}</div>
-    </div>`;
-  }
-  html += '</div>';
-
-  // Filters
-  html += '<div class="se-filters">';
-  for (const [label, key] of [['All','ALL'],['Approved','APPROVED'],['Bullish','BULLISH'],['Bearish','BEARISH'],['BOS','BOS'],['CHoCH','CHOCH']]) {
-    html += `<button class="se-fbtn ${_seFilter===key?'active':''}" onclick="_seFilter='${key}';render()">${label}</button>`;
-  }
-  html += '</div>';
-
-  let pairs = d.pairs;
-  if (_seFilter === 'APPROVED') pairs = pairs.filter(p => p.approval.approved);
-  else if (_seFilter === 'BULLISH') pairs = pairs.filter(p => p.trend === 'BULLISH');
-  else if (_seFilter === 'BEARISH') pairs = pairs.filter(p => p.trend === 'BEARISH');
-  else if (_seFilter === 'BOS') pairs = pairs.filter(p => p.bos);
-  else if (_seFilter === 'CHOCH') pairs = pairs.filter(p => p.choch);
-
-  html += '<div class="se-grid">';
-  for (const p of pairs) {
-    const trendCls = p.trend === 'BULLISH' ? 'tag-bull' : p.trend === 'BEARISH' ? 'tag-bear' : 'tag-range';
-    const tvCls = p.trendValid === 'VALID' ? 'tag-valid' : p.trendValid === 'WEAKENING' ? 'tag-weakening' : 'tag-broken';
-    html += `<div class="se-card${p.approval.approved ? ' approved' : ''}" onclick="openForecast('${p.instrument}')">
-      <div class="se-card-hd">
-        <span class="se-pair">${p.instrument.replace('_','/')}</span>
-        <span class="se-tag ${trendCls}">${p.trend}</span>
-        <span class="se-score" style="color:${scoreColor(p.structureScore)}">${p.structureScore}</span>
-      </div>
-      <div class="se-tags">
-        <span class="se-tag ${tvCls}">${p.trendValid}</span>
-        <span class="se-tag tag-state">${p.state.replace('_',' ')}</span>
-        ${p.bos ? `<span class="se-tag tag-bos">BOS ${p.bos.direction === 'BULLISH' ? '↑' : '↓'}</span>` : ''}
-        ${p.choch ? `<span class="se-tag tag-choch">CHoCH ${p.choch === 'BULLISH' ? '↑' : '↓'}</span>` : ''}
-        ${p.m15 ? `<span class="se-tag tag-state">M15 ${p.m15.state}</span>` : ''}
-        ${p.approval.approved ? '<span class="se-tag tag-approved">✓ APPROVED</span>' : ''}
-      </div>
-      <div class="se-rows">
-        <div class="se-row"><span>Resistance</span><b>${lvlStr(p.nearestResistance)}</b></div>
-        ${p.price != null ? `<div class="se-row"><span>Price</span><b>${fmtPrice(p.price)}</b></div>` : ''}
-        <div class="se-row"><span>Support</span><b>${lvlStr(p.nearestSupport)}</b></div>
-        <div class="se-row"><span>Invalidation</span><b>${fmtPrice(p.invalidation)}</b></div>
-      </div>
-      <div class="se-metrics">
-        <span>Eff:<b>${p.efficiency}</b></span>
-        <span>Pers:<b>${p.persistence}</b></span>
-        <span>Pull:<b>${p.pullbackQuality}</b></span>
-        <span>Exp:<b>${p.expansion}</b></span>
-        ${p.m15 ? `<span>M15:<b>${p.m15.score}%</b></span>` : ''}
-      </div>
-      ${!p.approval.approved && p.approval.reasons.length ? `<div class="se-metrics" style="color:#64748b">⛔ ${p.approval.reasons.join(' · ')}</div>` : ''}
-    </div>`;
-  }
-  html += '</div>';
-
-  html += '<p class="se-note">Structure scores measure market structure quality, not guaranteed outcomes. Click any pair for its 24h evolution & forecast.</p>';
-
-  root.innerHTML = html;
-}
-
-async function openForecast(pair) {
-  const bg = document.createElement('div');
-  bg.className = 'se-modal-bg';
-  bg.onclick = (e) => { if (e.target === bg) bg.remove(); };
-  bg.innerHTML = `<div class="se-modal"><div class="se-modal-hd"><span class="se-pair">${pair.replace('_','/')}</span><span class="x" onclick="this.closest('.se-modal-bg').remove()">✕</span></div><div class="se-loading"><span class="spin"></span> Loading history…</div></div>`;
-  document.body.appendChild(bg);
-  try {
-    const atParam = _seAt ? `&at=${encodeURIComponent(_seAt)}` : '';
-    const d = await api(`/api/structure-history?pair=${pair}${atParam}&t=${Date.now()}`);
-    const modal = bg.querySelector('.se-modal');
-    const close = `<span class="x" onclick="this.closest('.se-modal-bg').remove()">✕</span>`;
-    if (!d || (!d.summary && !d.history?.length)) {
-      const msg = _seAt
-        ? 'No structure history at this time — stored history starts June 2025. Try a later hour.'
-        : 'No history yet for this pair. Forecasts populate after a few hourly engine runs.';
-      modal.innerHTML = `<div class="se-modal-hd"><span class="se-pair">${pair.replace('_','/')}</span>${close}</div><p class="se-intro">${msg}</p>`;
-      return;
-    }
-    const s = d.summary || {}, pa = d.priceAction || {}, lv = d.levels || {}, f = d.forecast || {};
-    const pp = s.trendHealthParts || {};
-    const dirCls = s.direction==='BULLISH'?'tag-bull':s.direction==='BEARISH'?'tag-bear':'tag-range';
-    const px = v => v == null ? '—' : v;
-
-    let h = `<div class="se-modal-hd"><span class="se-pair">${pair.replace('_','/')}</span><span class="se-tag ${dirCls}">${s.direction||'—'}</span><span class="se-score" style="margin-left:6px;color:${scoreColor(s.structureScore||0)}">${px(s.structureScore)}</span>${close}</div>`;
-
-    // 1. Market Structure Summary
-    h += '<div class="se-review-hd">Market Structure</div>';
-    h += '<div class="se-rows" style="margin-bottom:12px">';
-    h += `<div class="se-row"><span>State</span><b>${(s.marketState||'—').replace('_',' ')} · ${s.structureLabel||''}</b></div>`;
-    h += `<div class="se-row"><span>Trend Health</span><b style="color:${scoreColor(s.trendHealth||0)}">${px(s.trendHealth)}${s.trendHealth!=null?'%':''} ${pp.de!=null?`(DE ${pp.de} · Pers ${pp.persistence} · Pull ${pp.pullback})`:''}</b></div>`;
-    h += `<div class="se-row"><span>Trend Maturity</span><b>${px(s.trendMaturityPct)}${s.trendMaturityPct!=null?'%':''} · ${s.trendMaturity||'—'} (age ${px(s.trendAgeHours)}h / avg ${px(s.avgTrendAgeHours)}h)</b></div>`;
-    h += `<div class="se-row"><span>Validity</span><b>${s.trendValid||'—'}</b></div>`;
-    h += '</div>';
-
-    // 2. Forecast scorecards
-    h += '<div class="se-fc-grid">';
-    h += `<div class="se-fc"><div class="se-fc-val" style="color:#22c55e">${px(f.continuationProbability)}${f.continuationProbability!=null?'%':''}</div><div class="se-fc-lbl">Continuation</div></div>`;
-    h += `<div class="se-fc"><div class="se-fc-val" style="color:#ef4444">${px(f.exhaustionProbability)}${f.exhaustionProbability!=null?'%':''}</div><div class="se-fc-lbl">Exhaustion</div></div>`;
-    h += `<div class="se-fc"><div class="se-fc-val">${px(s.trendHealth)}${s.trendHealth!=null?'%':''}</div><div class="se-fc-lbl">Trend Health</div></div>`;
-    h += `<div class="se-fc"><div class="se-fc-val" style="color:#3b82f6">${px(f.breakoutSuccessProbability)}${f.breakoutSuccessProbability!=null?'%':''}</div><div class="se-fc-lbl">Breakout Success</div></div>`;
-    h += '</div>';
-
-    // 3. Scenario forecast
-    if (f.scenarios && f.scenarios.length) {
-      h += '<div class="se-review-hd">Most Likely Scenarios</div>';
-      const cols = { Continuation:'#22c55e', Range:'#eab308', Reversal:'#ef4444' };
-      for (const sc of f.scenarios) {
-        h += `<div class="se-hist-row"><span style="color:${cols[sc.type]||'#fff'};font-weight:800;min-width:46px">${sc.prob}%</span><span><b style="color:${cols[sc.type]||'#fff'}">${sc.type}</b> — ${sc.text}</span></div>`;
-      }
-    }
-
-    // 4. Key Levels
-    h += '<div class="se-review-hd" style="margin-top:12px">Key Levels</div>';
-    h += '<div class="se-rows" style="margin-bottom:12px">';
-    h += `<div class="se-row"><span>Resistance</span><b>${px(lv.resistance?.price)} ${lv.resistance?.strength?`· ${lv.resistance.strength}${lv.resistance.touches?` · ${lv.resistance.touches} touch`:''}`:''}</b></div>`;
-    h += `<div class="se-row"><span>Price</span><b>${px(pa.price)}</b></div>`;
-    h += `<div class="se-row"><span>Support</span><b>${px(lv.support?.price)} ${lv.support?.strength?`· ${lv.support.strength}${lv.support.touches?` · ${lv.support.touches} touch`:''}`:''}</b></div>`;
-    h += `<div class="se-row"><span>Next Target</span><b style="color:#3b82f6">${px(lv.nextTarget)}</b></div>`;
-    h += `<div class="se-row"><span>Invalidation</span><b style="color:#ef4444">${px(lv.invalidation)} ${s.direction==='BEARISH'?'(close above)':s.direction==='BULLISH'?'(close below)':''}</b></div>`;
-    h += '</div>';
-
-    // 5. Price Action (BOS / CHoCH / swings)
-    h += '<div class="se-review-hd">Price Action</div>';
-    h += '<div class="se-rows" style="margin-bottom:12px">';
-    h += `<div class="se-row"><span>Last BOS</span><b>${pa.lastBOS?`${px(pa.lastBOS.level)} · ${pa.lastBOS.direction} · ${pa.lastBOS.ageHours}h ago`:'None'}</b></div>`;
-    h += `<div class="se-row"><span>Last CHoCH</span><b>${pa.lastCHoCH||'None'}</b></div>`;
-    h += `<div class="se-row"><span>Major Swing High</span><b>${px(pa.swingHigh)}</b></div>`;
-    h += `<div class="se-row"><span>Major Swing Low</span><b>${px(pa.swingLow)}</b></div>`;
-    h += '</div>';
-
-    // 6. Continuation drivers / risks
-    if ((f.drivers && f.drivers.length) || (f.risks && f.risks.length)) {
-      h += '<div class="se-review-hd">Why</div><div class="se-rows" style="margin-bottom:12px">';
-      for (const x of (f.drivers||[])) h += `<div class="se-row"><span style="color:#22c55e">✓ ${x}</span></div>`;
-      for (const x of (f.risks||[]))   h += `<div class="se-row"><span style="color:#f59e0b">⚠ ${x}</span></div>`;
-      h += '</div>';
-    }
-
-    // Trend evolution story
-    if (d.evolution && d.evolution.length) {
-      h += '<div class="se-review-hd">Trend Evolution</div>';
-      for (const e of d.evolution) {
-        const t = new Date(e.time).toLocaleString('en-US', { weekday:'short', hour:'2-digit', minute:'2-digit', hour12:false });
-        h += `<div class="se-hist-row"><span class="t">${t}</span><span>${e.text}</span></div>`;
-      }
-    }
-
-    modal.innerHTML = h;
-  } catch (e) {
-    bg.querySelector('.se-modal').innerHTML = `<div class="se-modal-hd"><span class="x" onclick="this.closest('.se-modal-bg').remove()">✕</span></div><p style="color:#ef4444">Error: ${e.message}</p>`;
-  }
-}
-
-(async () => {
-  const token = localStorage.getItem('nfx_token');
-  if (!token) { location.href = '/login'; return; }
-  await load();
-})();
-</script>
+    lucide.createIcons();
+    load();
+  })();
+  </script>
 </body>
 </html>
