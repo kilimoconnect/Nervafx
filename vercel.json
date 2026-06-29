@@ -25,7 +25,8 @@
     "api/daily-raw-strength.js":  { "maxDuration": 120 },
     "api/h1-structure-break.js":  { "maxDuration": 60 },
     "api/cron-h1-breaks-alerts.js": { "maxDuration": 30 },
-    "api/top-down-analysis.js": { "maxDuration": 90 }
+    "api/top-down-analysis.js": { "maxDuration": 90 },
+    "api/market-imbalance.js": { "maxDuration": 60 }
   },
   "rewrites": [
     { "source": "/",       "destination": "/login.html" },
@@ -47,7 +48,8 @@
     { "source": "/audnzd-strength", "destination": "/audnzd-strength.html" },
     { "source": "/chfjpy-strength", "destination": "/chfjpy-strength.html" },
     { "source": "/daily-strength", "destination": "/daily-strength.html" },
-    { "source": "/h1-breaks", "destination": "/h1-breaks.html" }
+    { "source": "/h1-breaks", "destination": "/h1-breaks.html" },
+    { "source": "/market-imbalance", "destination": "/market-imbalance.html" }
   ],
   "headers": [
     {
