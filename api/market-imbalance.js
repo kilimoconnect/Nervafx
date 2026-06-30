@@ -4,30 +4,23 @@ const { getClient, cors } = require('./_db');
 const { requirePlan } = require('./_plan');
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
-const TF_FIELDS = { '3H': 'smooth_3h', '4H': 'smooth_4h', '6H': 'smooth_6h', '12H': 'smooth_12h' };
-const STRONG_THRESHOLD = 3.0;
-const WEAK_THRESHOLD = -3.0;
 
 function classify(strength) {
-  const strong = [], weak = [], neutral = [];
+  const strong = [], weak = [];
   for (const ccy of CURRENCIES) {
     const v = strength[ccy] || 0;
-    if (v >= STRONG_THRESHOLD) strong.push(ccy);
-    else if (v <= WEAK_THRESHOLD) weak.push(ccy);
-    else neutral.push(ccy);
+    if (v > 0) strong.push(ccy);
+    else if (v < 0) weak.push(ccy);
   }
-  return { strong, weak, neutral };
+  return { strong, weak };
 }
 
 function groupStructure(strong, weak) {
   const s = strong.length, w = weak.length;
   if (s + w === 0) return { label: 'FLAT', imbalance: false };
-  if (s + w < 3) return { label: s + 'v' + w, imbalance: false };
-  // Imbalance when one side clearly dominates or both sides have members (capital flowing)
-  const imbalance = (s >= 3 && w === 0) || (w >= 3 && s === 0)
-    || (s >= 2 && w >= 1 && s > w) || (w >= 2 && s >= 1 && w > s)
-    || (s >= 3 && w >= 2) || (w >= 3 && s >= 2)
-    || Math.abs(s - w) >= 2;
+  if (s === 4 && w === 4) return { label: '4v4', imbalance: false };
+  // Imbalance = uneven split (5v3, 6v2, 7v1, 8v0 etc.)
+  const imbalance = Math.abs(s - w) >= 2;
   return { label: s + 'v' + w, imbalance };
 }
 
