@@ -5,8 +5,8 @@ const { requirePlan } = require('./_plan');
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
 const TF_FIELDS = { '3H': 'smooth_3h', '4H': 'smooth_4h', '6H': 'smooth_6h', '12H': 'smooth_12h' };
-const STRONG_THRESHOLD = 1.5;
-const WEAK_THRESHOLD = -1.5;
+const STRONG_THRESHOLD = 3.0;
+const WEAK_THRESHOLD = -3.0;
 
 function classify(strength) {
   const strong = [], weak = [], neutral = [];
@@ -157,10 +157,10 @@ module.exports = async function handler(req, res) {
     for (const r of allRows) {
       if (!byTime[r.time]) byTime[r.time] = {};
       byTime[r.time][r.currency] = {
-        '3H': (parseFloat(r.smooth_3h) || 0) * 1000,
-        '4H': (parseFloat(r.smooth_4h) || 0) * 1000,
-        '6H': (parseFloat(r.smooth_6h) || 0) * 1000,
-        '12H': (parseFloat(r.smooth_12h) || 0) * 1000,
+        '3H': (parseFloat(r.smooth_3h) || 0) * 10000,
+        '4H': (parseFloat(r.smooth_4h) || 0) * 10000,
+        '6H': (parseFloat(r.smooth_6h) || 0) * 10000,
+        '12H': (parseFloat(r.smooth_12h) || 0) * 10000,
       };
     }
 
