@@ -220,24 +220,24 @@ module.exports = async function handler(req, res) {
         const strongSorted = s.slice().sort((a, b) => strength[b] - strength[a]);
         const weakSorted = w.slice().sort((a, b) => strength[a] - strength[b]);
 
-        // Check AUD+NZD: both in same group, both in top 2 of that side, one is leader/loser
+        // Driver pair must be on the MAJORITY side (the dominant force)
+        const majority = s.length >= w.length ? 'strong' : 'weak';
+        const majGroup = majority === 'strong' ? s : w;
+        const majSorted = majority === 'strong' ? strongSorted : weakSorted;
+        const majLeader = majority === 'strong' ? leader : loser;
+
+        // Check AUD+NZD: both on majority side, both in top 2, one is the leader/loser
         let audnzd = false;
-        if (s.includes('AUD') && s.includes('NZD')) {
-          const top2 = new Set(strongSorted.slice(0, 2));
-          audnzd = top2.has('AUD') && top2.has('NZD') && (leader === 'AUD' || leader === 'NZD');
-        } else if (w.includes('AUD') && w.includes('NZD')) {
-          const top2 = new Set(weakSorted.slice(0, 2));
-          audnzd = top2.has('AUD') && top2.has('NZD') && (loser === 'AUD' || loser === 'NZD');
+        if (majGroup.includes('AUD') && majGroup.includes('NZD')) {
+          const top2 = new Set(majSorted.slice(0, 2));
+          audnzd = top2.has('AUD') && top2.has('NZD') && (majLeader === 'AUD' || majLeader === 'NZD');
         }
 
-        // Check CHF+JPY: both in same group, both in top 2 of that side, one is leader/loser
+        // Check CHF+JPY: both on majority side, both in top 2, one is the leader/loser
         let chfjpy = false;
-        if (s.includes('CHF') && s.includes('JPY')) {
-          const top2 = new Set(strongSorted.slice(0, 2));
-          chfjpy = top2.has('CHF') && top2.has('JPY') && (leader === 'CHF' || leader === 'JPY');
-        } else if (w.includes('CHF') && w.includes('JPY')) {
-          const top2 = new Set(weakSorted.slice(0, 2));
-          chfjpy = top2.has('CHF') && top2.has('JPY') && (loser === 'CHF' || loser === 'JPY');
+        if (majGroup.includes('CHF') && majGroup.includes('JPY')) {
+          const top2 = new Set(majSorted.slice(0, 2));
+          chfjpy = top2.has('CHF') && top2.has('JPY') && (majLeader === 'CHF' || majLeader === 'JPY');
         }
 
         if (audnzd || chfjpy) {
