@@ -394,8 +394,8 @@
         html += '</div>';
         html += '<div class="im-body">';
 
+        var tfs = row.qualifiedTfs || Object.keys(row.timeframes);
         html += '<div class="im-tabs">';
-        var tfs = ['3H', '4H', '6H', '12H'];
         for (var t = 0; t < tfs.length; t++) {
           var act = tfs[t] === row.bestTf ? ' active' : '';
           html += '<div class="im-tab' + act + '" data-uid="' + uid + '" data-tf="' + tfs[t] + '">' + tfs[t] + '</div>';

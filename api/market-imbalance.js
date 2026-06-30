@@ -203,32 +203,33 @@ module.exports = async function handler(req, res) {
       const ccyData = byTime[time];
       if (Object.keys(ccyData).length < 8) continue;
 
+      // Only keep timeframes where AUD+NZD or CHF+JPY are the minority 2 in a 6v2
       const tfResults = {};
       for (const tf of ['3H', '4H', '6H', '12H']) {
         const strength = {};
         for (const ccy of CURRENCIES) strength[ccy] = ccyData[ccy]?.[tf] || 0;
-        tfResults[tf] = analyseTimeframe(strength);
+        const result = analyseTimeframe(strength);
+        if (!result.structure.imbalance) continue;
+        const s = result.groups.strong, w = result.groups.weak;
+        const minority = s.length === 2 ? s : w.length === 2 ? w : null;
+        if (!minority) continue;
+        const set = new Set(minority);
+        if ((set.has('AUD') && set.has('NZD')) || (set.has('CHF') && set.has('JPY'))) {
+          result.driver = set.has('AUD') ? 'AUD+NZD' : 'CHF+JPY';
+          tfResults[tf] = result;
+        }
       }
 
-      // Skip unless AUD+NZD or CHF+JPY are the minority 2 in a 6v2
-      const hasDriver = ['3H', '4H', '6H', '12H'].some(tf => {
-        const r = tfResults[tf];
-        if (!r.structure.imbalance) return false;
-        const s = r.groups.strong, w = r.groups.weak;
-        const minority = s.length === 2 ? s : w.length === 2 ? w : null;
-        if (!minority) return false;
-        const set = new Set(minority);
-        return (set.has('AUD') && set.has('NZD')) || (set.has('CHF') && set.has('JPY'));
-      });
-      if (!hasDriver) continue;
+      const qualifiedTfs = Object.keys(tfResults);
+      if (!qualifiedTfs.length) continue;
 
-      // Best score across timeframes
-      const bestTf = ['3H', '4H', '6H', '12H'].reduce((best, tf) =>
-        tfResults[tf].score > tfResults[best].score ? tf : best, '3H');
+      const bestTf = qualifiedTfs.reduce((best, tf) =>
+        tfResults[tf].score > tfResults[best].score ? tf : best, qualifiedTfs[0]);
 
       rows.push({
         time,
         timeframes: tfResults,
+        qualifiedTfs,
         bestTf,
         bestScore: tfResults[bestTf].score,
       });
