@@ -221,8 +221,7 @@ module.exports = async function handler(req, res) {
       }
 
       const qualifiedTfs = Object.keys(tfResults);
-      // At least 3H, 4H and 6H must all qualify
-      if (!tfResults['3H'] || !tfResults['4H'] || !tfResults['6H']) continue;
+      if (!qualifiedTfs.length) continue;
 
       const bestTf = qualifiedTfs.reduce((best, tf) =>
         tfResults[tf].score > tfResults[best].score ? tf : best, qualifiedTfs[0]);
