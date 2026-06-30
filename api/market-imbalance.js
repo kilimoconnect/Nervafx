@@ -18,9 +18,8 @@ function classify(strength) {
 function groupStructure(strong, weak) {
   const s = strong.length, w = weak.length;
   if (s + w === 0) return { label: 'FLAT', imbalance: false };
-  if (s === 4 && w === 4) return { label: '4v4', imbalance: false };
-  // Imbalance = uneven split (5v3, 6v2, 7v1, 8v0 etc.)
-  const imbalance = Math.abs(s - w) >= 2;
+  // Only 6v2 (or 2v6) counts as imbalance
+  const imbalance = (s === 6 && w === 2) || (s === 2 && w === 6);
   return { label: s + 'v' + w, imbalance };
 }
 
