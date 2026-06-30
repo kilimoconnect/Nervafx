@@ -25,8 +25,8 @@ function classify(strength) {
 function groupStructure(strong, weak) {
   const s = strong.length, w = weak.length;
   if (s + w === 0) return { label: 'FLAT', imbalance: false };
-  // Only 6v2 (or 2v6) counts as imbalance
-  const imbalance = (s === 6 && w === 2) || (s === 2 && w === 6);
+  // 5v3 or more extreme (6v2, 7v1) counts as imbalance
+  const imbalance = Math.abs(s - w) >= 2 && (s + w) >= 8;
   return { label: s + 'v' + w, imbalance };
 }
 
@@ -203,19 +203,45 @@ module.exports = async function handler(req, res) {
       const ccyData = byTime[time];
       if (Object.keys(ccyData).length < 8) continue;
 
-      // Only keep timeframes where AUD+NZD or CHF+JPY are the minority 2 in a 6v2
+      // Only keep timeframes where AUD+NZD or CHF+JPY are top 2 on their side
+      // and one of them is the overall leader or loser
       const tfResults = {};
       for (const tf of ['3H', '4H', '6H', '12H']) {
         const strength = {};
         for (const ccy of CURRENCIES) strength[ccy] = ccyData[ccy]?.[tf] || 0;
         const result = analyseTimeframe(strength);
         if (!result.structure.imbalance) continue;
+
         const s = result.groups.strong, w = result.groups.weak;
-        const minority = s.length === 2 ? s : w.length === 2 ? w : null;
-        if (!minority) continue;
-        const set = new Set(minority);
-        if ((set.has('AUD') && set.has('NZD')) || (set.has('CHF') && set.has('JPY'))) {
-          result.driver = set.has('AUD') ? 'AUD+NZD' : 'CHF+JPY';
+        const leader = result.leaderLoser.leader;
+        const loser = result.leaderLoser.loser;
+
+        // Sort each side by strength
+        const strongSorted = s.slice().sort((a, b) => strength[b] - strength[a]);
+        const weakSorted = w.slice().sort((a, b) => strength[a] - strength[b]);
+
+        // Check AUD+NZD: both in same group, both in top 2 of that side, one is leader/loser
+        let audnzd = false;
+        if (s.includes('AUD') && s.includes('NZD')) {
+          const top2 = new Set(strongSorted.slice(0, 2));
+          audnzd = top2.has('AUD') && top2.has('NZD') && (leader === 'AUD' || leader === 'NZD');
+        } else if (w.includes('AUD') && w.includes('NZD')) {
+          const top2 = new Set(weakSorted.slice(0, 2));
+          audnzd = top2.has('AUD') && top2.has('NZD') && (loser === 'AUD' || loser === 'NZD');
+        }
+
+        // Check CHF+JPY: both in same group, both in top 2 of that side, one is leader/loser
+        let chfjpy = false;
+        if (s.includes('CHF') && s.includes('JPY')) {
+          const top2 = new Set(strongSorted.slice(0, 2));
+          chfjpy = top2.has('CHF') && top2.has('JPY') && (leader === 'CHF' || leader === 'JPY');
+        } else if (w.includes('CHF') && w.includes('JPY')) {
+          const top2 = new Set(weakSorted.slice(0, 2));
+          chfjpy = top2.has('CHF') && top2.has('JPY') && (loser === 'CHF' || loser === 'JPY');
+        }
+
+        if (audnzd || chfjpy) {
+          result.driver = audnzd ? 'AUD+NZD' : 'CHF+JPY';
           tfResults[tf] = result;
         }
       }
