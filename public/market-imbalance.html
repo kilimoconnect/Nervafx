@@ -353,7 +353,7 @@
       if (d.pairs && d.pairs.length) {
         html += '<div class="im-pairs">';
         html += '<div class="im-pairs-label">Tradeable Pairs — Strong vs Weak crosses</div>';
-        for (var p = 0; p < d.pairs.length; p++) {
+        for (var p = 0; p < Math.min(5, d.pairs.length); p++) {
           var pr = d.pairs[p];
           html += '<div class="im-pair-row">';
           html += '<span class="im-pair-name">' + pr.pair + '</span>';
