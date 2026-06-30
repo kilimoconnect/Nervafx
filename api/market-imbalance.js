@@ -4,6 +4,13 @@ const { getClient, cors } = require('./_db');
 const { requirePlan } = require('./_plan');
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
+const VALID_PAIRS = new Set([
+  'EUR_USD', 'GBP_USD', 'AUD_USD', 'NZD_USD', 'USD_JPY', 'USD_CHF', 'USD_CAD',
+  'EUR_GBP', 'EUR_JPY', 'EUR_CHF', 'EUR_CAD', 'EUR_AUD', 'EUR_NZD',
+  'GBP_JPY', 'GBP_CHF', 'GBP_CAD', 'GBP_AUD', 'GBP_NZD',
+  'AUD_JPY', 'AUD_CHF', 'AUD_CAD', 'AUD_NZD',
+  'NZD_JPY', 'NZD_CHF', 'NZD_CAD', 'CAD_JPY', 'CAD_CHF', 'CHF_JPY',
+]);
 
 function classify(strength) {
   const strong = [], weak = [];
@@ -90,6 +97,37 @@ function imbalanceScore(struct, minority, sep, ll) {
   return Math.min(100, Math.round(score));
 }
 
+function buildPairs(strong, weak, strength) {
+  const pairs = [];
+  for (const s of strong) {
+    for (const w of weak) {
+      const fwd = s + '_' + w;
+      const rev = w + '_' + s;
+      if (VALID_PAIRS.has(fwd)) {
+        // Base is strong, quote is weak → BUY
+        pairs.push({
+          pair: s + '/' + w,
+          direction: 'BUY',
+          spread: Math.round((strength[s] - strength[w]) * 100) / 100,
+          base: s, baseVal: Math.round(strength[s] * 100) / 100,
+          quote: w, quoteVal: Math.round(strength[w] * 100) / 100,
+        });
+      } else if (VALID_PAIRS.has(rev)) {
+        // Base is weak, quote is strong → SELL
+        pairs.push({
+          pair: w + '/' + s,
+          direction: 'SELL',
+          spread: Math.round((strength[s] - strength[w]) * 100) / 100,
+          base: w, baseVal: Math.round(strength[w] * 100) / 100,
+          quote: s, quoteVal: Math.round(strength[s] * 100) / 100,
+        });
+      }
+    }
+  }
+  pairs.sort((a, b) => b.spread - a.spread);
+  return pairs;
+}
+
 function analyseTimeframe(strength) {
   const groups = classify(strength);
   const struct = groupStructure(groups.strong, groups.weak);
@@ -97,6 +135,7 @@ function analyseTimeframe(strength) {
   const sep = groupSeparation(groups.strong, groups.weak, strength);
   const ll = leaderLoser(strength);
   const score = imbalanceScore(struct, minority, sep, ll);
+  const pairs = struct.imbalance ? buildPairs(groups.strong, groups.weak, strength) : [];
 
   return {
     strength,
@@ -106,6 +145,7 @@ function analyseTimeframe(strength) {
     separation: sep,
     leaderLoser: ll,
     score,
+    pairs,
   };
 }
 
