@@ -224,6 +224,8 @@ module.exports = async function handler(req, res) {
         const minority = s.length <= w.length ? s : w;
         const minSorted = s.length <= w.length ? strongSorted : weakSorted;
         const minLeader = s.length <= w.length ? leader : loser;
+        const minLeaderVal = Math.abs(s.length <= w.length ? result.leaderLoser.leaderVal : result.leaderLoser.loserVal);
+        if (minLeaderVal < 20) continue;
 
         // Check AUD+NZD: both on minority side, both in top 2, one is the leader/loser
         let audnzd = false;
