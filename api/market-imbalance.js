@@ -210,9 +210,17 @@ module.exports = async function handler(req, res) {
         tfResults[tf] = analyseTimeframe(strength);
       }
 
-      // Skip if no timeframe shows imbalance
-      const hasImbalance = ['3H', '4H', '6H', '12H'].some(tf => tfResults[tf].structure.imbalance);
-      if (!hasImbalance) continue;
+      // Skip unless AUD+NZD or CHF+JPY are the minority 2 in a 6v2
+      const hasDriver = ['3H', '4H', '6H', '12H'].some(tf => {
+        const r = tfResults[tf];
+        if (!r.structure.imbalance) return false;
+        const s = r.groups.strong, w = r.groups.weak;
+        const minority = s.length === 2 ? s : w.length === 2 ? w : null;
+        if (!minority) return false;
+        const set = new Set(minority);
+        return (set.has('AUD') && set.has('NZD')) || (set.has('CHF') && set.has('JPY'));
+      });
+      if (!hasDriver) continue;
 
       // Best score across timeframes
       const bestTf = ['3H', '4H', '6H', '12H'].reduce((best, tf) =>
