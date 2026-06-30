@@ -215,6 +215,9 @@ module.exports = async function handler(req, res) {
         if (!minority) continue;
         const set = new Set(minority);
         if ((set.has('AUD') && set.has('NZD')) || (set.has('CHF') && set.has('JPY'))) {
+          const leaderVal = Math.abs(result.leaderLoser.leaderVal);
+          const loserVal = Math.abs(result.leaderLoser.loserVal);
+          if (Math.max(leaderVal, loserVal) < 10) continue;
           result.driver = set.has('AUD') ? 'AUD+NZD' : 'CHF+JPY';
           tfResults[tf] = result;
         }
