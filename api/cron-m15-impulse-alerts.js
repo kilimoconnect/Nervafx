@@ -11,7 +11,7 @@ const INSTRUMENTS = [
   'NZD_JPY','NZD_CHF','NZD_CAD','CAD_JPY','CAD_CHF','CHF_JPY',
 ];
 
-const MIN_CONSECUTIVE = 3;
+const MIN_CONSECUTIVE = 2;
 const MIN_BODY_RATIO = 0.70;
 
 function getDB() {
