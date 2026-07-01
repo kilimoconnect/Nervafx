@@ -11,7 +11,6 @@ const INSTRUMENTS = [
   'NZD_JPY','NZD_CHF','NZD_CAD','CAD_JPY','CAD_CHF','CHF_JPY',
 ];
 
-const NY_CLOSE_UTC = 21;
 const MIN_CONSECUTIVE = 3;
 const MIN_BODY_RATIO = 0.75;
 
@@ -25,21 +24,6 @@ function pipSize(inst) {
 
 function fmtTime(iso) {
   return iso.slice(11, 16);
-}
-
-function forexDayKey(iso) {
-  const d = new Date(iso);
-  if (d.getUTCHours() >= NY_CLOSE_UTC) d.setUTCDate(d.getUTCDate() + 1);
-  return d.toISOString().slice(0, 10);
-}
-
-function prevTradingDay(dayKey) {
-  const d = new Date(dayKey + 'T12:00:00Z');
-  const dow = d.getUTCDay();
-  if (dow === 1) d.setUTCDate(d.getUTCDate() - 3);
-  else if (dow === 0) d.setUTCDate(d.getUTCDate() - 2);
-  else d.setUTCDate(d.getUTCDate() - 1);
-  return d.toISOString().slice(0, 10);
 }
 
 function detectImpulse(candles) {
@@ -129,46 +113,23 @@ module.exports = async function handler(req, res) {
 
   try {
     const since = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-    const fetchSince = new Date(Date.now() - 5 * 86400000).toISOString();
     const signals = [];
 
     for (let b = 0; b < INSTRUMENTS.length; b += 7) {
       const batch = INSTRUMENTS.slice(b, b + 7);
       const results = await Promise.all(batch.map(async inst => {
-        const [m15Res, h1Res] = await Promise.all([
-          sb.from('backtest_candles')
-            .select('time, open, high, low, close')
-            .eq('instrument', inst).eq('timeframe', 'M15').eq('complete', true)
-            .gte('time', since).order('time', { ascending: true }).limit(20),
-          sb.from('backtest_candles')
-            .select('time, open, high, low, close')
-            .eq('instrument', inst).eq('timeframe', 'H1').eq('complete', true)
-            .gte('time', fetchSince).order('time', { ascending: true }).limit(500),
-        ]);
-        return {
-          inst,
-          m15: (m15Res.error ? [] : m15Res.data || []),
-          h1: (h1Res.error ? [] : h1Res.data || []),
-        };
+        const { data, error } = await sb
+          .from('backtest_candles')
+          .select('time, open, high, low, close')
+          .eq('instrument', inst).eq('timeframe', 'M15').eq('complete', true)
+          .gte('time', since).order('time', { ascending: true }).limit(20);
+        return { inst, data: error ? [] : data || [] };
       }));
 
-      for (const { inst, m15, h1 } of results) {
-        if (!m15.length) continue;
+      for (const { inst, data } of results) {
+        if (!data.length) continue;
 
-        // Build daily OHLC from H1
-        const dailyOHLC = {};
-        for (const c of h1) {
-          const o = parseFloat(c.open), h = parseFloat(c.high), l = parseFloat(c.low), cl = parseFloat(c.close);
-          const day = forexDayKey(c.time);
-          if (!dailyOHLC[day]) dailyOHLC[day] = { open: o, high: h, low: l, close: cl };
-          else {
-            if (h > dailyOHLC[day].high) dailyOHLC[day].high = h;
-            if (l < dailyOHLC[day].low) dailyOHLC[day].low = l;
-            dailyOHLC[day].close = cl;
-          }
-        }
-
-        const candles = m15.map(c => ({
+        const candles = data.map(c => ({
           time: c.time,
           open: parseFloat(c.open),
           high: parseFloat(c.high),
@@ -179,20 +140,6 @@ module.exports = async function handler(req, res) {
         const impulse = detectImpulse(candles);
         if (!impulse) continue;
 
-        // Must break previous day high/low
-        const fxDay = forexDayKey(impulse.endTime);
-        const prevDay = prevTradingDay(fxDay);
-        const prev = dailyOHLC[prevDay];
-        if (!prev) continue;
-
-        let breakLevel = null;
-        if (impulse.direction === 'BUY' && impulse.closePrice > prev.high) {
-          breakLevel = prev.high;
-        } else if (impulse.direction === 'SELL' && impulse.closePrice < prev.low) {
-          breakLevel = prev.low;
-        }
-        if (breakLevel === null) continue;
-
         const pip = pipSize(inst);
         signals.push({
           pair: inst.replace('_', '/'),
@@ -202,13 +149,12 @@ module.exports = async function handler(req, res) {
           movePips: impulse.moveRaw / pip,
           startTime: impulse.startTime,
           endTime: impulse.endTimeFmt,
-          breakLevel,
         });
       }
     }
 
     if (!signals.length) {
-      return res.json({ ok: true, sent: 0, reason: 'no impulses with day break detected' });
+      return res.json({ ok: true, sent: 0, reason: 'no impulses detected' });
     }
 
     signals.sort((a, b) => b.count - a.count || b.movePips - a.movePips);

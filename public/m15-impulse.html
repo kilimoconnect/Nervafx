@@ -112,6 +112,16 @@
     .imp-candle-bar.BUY { background: rgba(34,197,94,0.5); }
     .imp-candle-bar.SELL { background: rgba(239,68,68,0.5); }
 
+    /* ── Pair row inside card ── */
+    .imp-pair-row {
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .imp-pair-row:last-child { border-bottom: none; }
+    .imp-pair-hd {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap;
+    }
+
     /* ── Time range ── */
     .imp-time-range {
       font-size: 10px; color: var(--text-dim); font-weight: 600; margin-top: 6px;
@@ -140,7 +150,7 @@
     <div class="sx-card">
       <div class="sx-card-hd">
         <i data-lucide="rocket"></i> M15 Impulse — Strong directional moves
-        <span class="sx-note">3+ consecutive M15 candles in one direction with avg body ratio ≥ 60%</span>
+        <span class="sx-note">3+ consecutive M15 candles in one direction with avg body ratio ≥ 75%</span>
         <span class="sx-ctrls">
           <button class="sx-btn sx-days active" data-days="1">1D</button>
           <button class="sx-btn sx-days" data-days="2">2D</button>
@@ -213,50 +223,49 @@
         var row = reversed[r];
         if (isWeekend(row.time)) continue;
         if (!inSession(row.time)) continue;
-
-        var dirCls = row.direction;
-        var pipsCls = 'pips-' + row.direction.toLowerCase();
+        if (!row.pairs || !row.pairs.length) continue;
 
         html += '<div class="imp-card">';
 
-        // Header
+        // Card header — hour + count
         html += '<div class="imp-hd">';
         html += '<span class="imp-time">' + hrLabel(row.time) + '</span>';
         html += '<span class="imp-date">' + dayLabel(row.time) + '</span>';
-        html += '<span class="imp-pair">' + row.pair + '</span>';
-        html += '<span class="imp-dir ' + dirCls + '">' + row.direction + '</span>';
-        var brkLabel = row.direction === 'BUY' ? 'BRK HIGH' : 'BRK LOW';
-        var brkPrice = row.breakLevel != null ? (row.pair.includes('JPY') ? row.breakLevel.toFixed(3) : row.breakLevel.toFixed(5)) : '';
-        html += '<span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:4px;background:rgba(250,204,21,0.15);color:#facc15;border:1px solid rgba(250,204,21,0.3)">' + brkLabel + (brkPrice ? ' ' + brkPrice : '') + '</span>';
+        html += '<span style="margin-left:auto;font-size:11px;font-weight:700;color:var(--text-dim)">' + row.pairs.length + ' pair' + (row.pairs.length > 1 ? 's' : '') + '</span>';
         html += '</div>';
 
-        // Body
-        html += '<div class="imp-body">';
+        // Each pair as a row inside the card
+        for (var p = 0; p < row.pairs.length; p++) {
+          var s = row.pairs[p];
+          var dirCls = s.direction;
+          var pipsCls = 'pips-' + s.direction.toLowerCase();
 
-        // Metrics
-        html += '<div class="imp-metrics">';
-        html += '<span class="imp-metric"><span class="imp-metric-label">Candles</span><span class="imp-metric-val">' + row.count + '</span></span>';
-        html += '<span class="imp-metric"><span class="imp-metric-label">Avg Body</span><span class="imp-metric-val">' + row.avgBodyPct + '%</span></span>';
-        html += '<span class="imp-metric"><span class="imp-metric-label">Move</span><span class="imp-metric-val ' + pipsCls + '">' + row.movePips.toFixed(1) + ' pips</span></span>';
-        html += '<span class="imp-metric"><span class="imp-metric-label">Open</span><span class="imp-metric-val">' + row.openPrice.toFixed(row.pair.includes('JPY') ? 3 : 5) + '</span></span>';
-        html += '<span class="imp-metric"><span class="imp-metric-label">Close</span><span class="imp-metric-val">' + row.closePrice.toFixed(row.pair.includes('JPY') ? 3 : 5) + '</span></span>';
-        html += '</div>';
+          html += '<div class="imp-pair-row">';
 
-        // Visual candle bars
-        var maxH = 40;
-        html += '<div class="imp-candles">';
-        for (var c = 0; c < row.count; c++) {
-          var h = Math.max(6, Math.round((c + 1) / row.count * maxH));
-          html += '<div class="imp-candle-bar ' + dirCls + '" style="height:' + h + 'px"></div>';
+          // Pair header
+          html += '<div class="imp-pair-hd">';
+          html += '<span class="imp-pair">' + s.pair + '</span>';
+          html += '<span class="imp-dir ' + dirCls + '">' + s.direction + '</span>';
+          html += '</div>';
+
+          // Metrics
+          html += '<div class="imp-metrics">';
+          html += '<span class="imp-metric"><span class="imp-metric-label">Candles</span><span class="imp-metric-val">' + s.count + '</span></span>';
+          html += '<span class="imp-metric"><span class="imp-metric-label">Avg Body</span><span class="imp-metric-val">' + s.avgBodyPct + '%</span></span>';
+          html += '<span class="imp-metric"><span class="imp-metric-label">Move</span><span class="imp-metric-val ' + pipsCls + '">' + s.movePips.toFixed(1) + ' pips</span></span>';
+          html += '<span class="imp-metric"><span class="imp-metric-label">Open</span><span class="imp-metric-val">' + s.openPrice.toFixed(s.pair.includes('JPY') ? 3 : 5) + '</span></span>';
+          html += '<span class="imp-metric"><span class="imp-metric-label">Close</span><span class="imp-metric-val">' + s.closePrice.toFixed(s.pair.includes('JPY') ? 3 : 5) + '</span></span>';
+          html += '</div>';
+
+          // Time range
+          html += '<div class="imp-time-range">';
+          html += '<span>' + hrLabel(s.time) + '</span> → <span>' + hrLabel(s.endTime) + '</span> UTC+3';
+          html += '</div>';
+
+          html += '</div>';
         }
-        html += '</div>';
 
-        // Time range
-        html += '<div class="imp-time-range">';
-        html += '<span>' + hrLabel(row.time) + '</span> → <span>' + hrLabel(row.endTime) + '</span> UTC+3';
         html += '</div>';
-
-        html += '</div></div>';
       }
       el.innerHTML = html || '<div class="br-empty">No data found.</div>';
     }
