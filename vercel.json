@@ -32,7 +32,8 @@
     "api/pair-imbalance.js": { "maxDuration": 60 },
     "api/cron-pair-imbalance-alerts.js": { "maxDuration": 30 },
     "api/cron-m15-impulse-alerts.js": { "maxDuration": 30 },
-    "api/m15-impulse.js": { "maxDuration": 60 }
+    "api/m15-impulse.js": { "maxDuration": 60 },
+    "api/currency-acceleration.js": { "maxDuration": 60 }
   },
   "rewrites": [
     { "source": "/",       "destination": "/login.html" },
@@ -57,7 +58,8 @@
     { "source": "/h1-breaks", "destination": "/h1-breaks.html" },
     { "source": "/market-imbalance", "destination": "/market-imbalance.html" },
     { "source": "/pair-imbalance", "destination": "/pair-imbalance.html" },
-    { "source": "/m15-impulse", "destination": "/m15-impulse.html" }
+    { "source": "/m15-impulse", "destination": "/m15-impulse.html" },
+    { "source": "/currency-acceleration", "destination": "/currency-acceleration.html" }
   ],
   "headers": [
     {
