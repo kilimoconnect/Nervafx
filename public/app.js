@@ -109,7 +109,7 @@ function _updateAlertBadge() {
   const panel = document.getElementById('hdr-panel-alerts');
   if (!panel) return;
   let count = 0;
-  const bars = ['news-alert-bar'];
+  const bars = ['news-alert-bar', 'imbalance-alert-bar'];
   for (const id of bars) {
     const el = document.getElementById(id);
     if (el && el.style.display !== 'none') count++;
@@ -136,6 +136,82 @@ document.addEventListener('click', function(e) {
 // Sync header height on load + resize
 window.addEventListener('load', _syncHeaderHeight);
 window.addEventListener('resize', _syncHeaderHeight);
+
+// ── Imbalance pair notification ──────────────────────────────────────
+const _IMB_PAIRS = new Set([
+  'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
+  'EUR_GBP','EUR_JPY','EUR_CHF','EUR_CAD','EUR_AUD','EUR_NZD',
+  'GBP_JPY','GBP_CHF','GBP_CAD','GBP_AUD','GBP_NZD',
+  'AUD_JPY','AUD_CHF','AUD_CAD','AUD_NZD',
+  'NZD_JPY','NZD_CHF','NZD_CAD','CAD_JPY','CAD_CHF','CHF_JPY',
+]);
+function _checkImbalancePairs(currencies) {
+  if (!currencies || !currencies.length) return;
+  const bar = document.getElementById('imbalance-alert-bar');
+  const chips = document.getElementById('imbalance-chips');
+  if (!bar || !chips) return;
+
+  const tfs = [
+    { key: 'smooth_3h', label: '3H' },
+    { key: 'smooth_4h', label: '4H' },
+    { key: 'smooth_6h', label: '6H' },
+  ];
+
+  // For each TF, find strongest and weakest
+  const results = tfs.map(tf => {
+    let best = null, worst = null;
+    for (const c of currencies) {
+      const v = (parseFloat(c[tf.key]) || 0) * 10000;
+      if (!best || v > best.v) best = { cur: c.currency, v };
+      if (!worst || v < worst.v) worst = { cur: c.currency, v };
+    }
+    return { tf: tf.label, best, worst };
+  });
+
+  // All 3 TFs must agree on same strongest AND same weakest
+  const strongest = results[0].best.cur;
+  const weakest = results[0].worst.cur;
+  const aligned = results.every(r => r.best.cur === strongest && r.worst.cur === weakest);
+
+  if (!aligned) {
+    bar.style.display = 'none';
+    _updateAlertBadge();
+    return;
+  }
+
+  // Build the pair
+  const fwd = strongest + '_' + weakest;
+  const rev = weakest + '_' + strongest;
+  let pair, dir;
+  if (_IMB_PAIRS.has(fwd)) {
+    pair = strongest + '/' + weakest;
+    dir = 'BUY';
+  } else if (_IMB_PAIRS.has(rev)) {
+    pair = weakest + '/' + strongest;
+    dir = 'SELL';
+  } else {
+    bar.style.display = 'none';
+    _updateAlertBadge();
+    return;
+  }
+
+  const sVal = results[0].best.v.toFixed(1);
+  const wVal = results[0].worst.v.toFixed(1);
+  const spread = (results[0].best.v - results[0].worst.v).toFixed(1);
+
+  chips.innerHTML =
+    '<span style="font-weight:800;color:var(--text)">' + pair + '</span>' +
+    '<span style="padding:2px 8px;border-radius:4px;font-size:10px;font-weight:800;' +
+      (dir === 'BUY' ? 'background:rgba(34,197,94,0.12);color:#4ade80' : 'background:rgba(239,68,68,0.12);color:#f87171') + '">' + dir + '</span>' +
+    '<span style="font-size:10px;color:#4ade80">' + strongest + ' +' + sVal + '</span>' +
+    '<span style="font-size:10px;color:var(--text-dim)">vs</span>' +
+    '<span style="font-size:10px;color:#f87171">' + weakest + ' ' + wVal + '</span>' +
+    '<span style="font-size:10px;color:#60a5fa">spread ' + spread + '</span>' +
+    '<span style="font-size:9px;color:var(--text-dim)">3H+4H+6H aligned</span>';
+
+  bar.style.display = '';
+  _updateAlertBadge();
+}
 
 const REFRESH_MS = 60000;
 let strengthChart = null;
@@ -1325,6 +1401,7 @@ function _m15CurrencyStrength() {
 function buildChart(data, tf) {
   if (!data?.currencies) return;
   strengthData = data;
+  _checkImbalancePairs(data.currencies);
   // Show current time (data refreshes every 15 min via pipeline)
   document.getElementById('strength-time').textContent = 'As of ' + fmtTime(new Date().toISOString());
 
