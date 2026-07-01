@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>NervaFX — M15 Impulse</title>
+  <link rel="icon" type="image/png" href="/nervafx-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .grid { display: block !important; }
+    .sx-topbar {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 28px; height: 56px;
+      background: rgba(8,11,18,0.92);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+    .sx-topbar-left { display: flex; align-items: center; gap: 12px; }
+    .sx-logo img { height: 24px; display: block; }
+    .sx-sep { color: rgba(255,255,255,0.1); font-size: 20px; font-weight: 200; }
+    .sx-title-text { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+    .sx-back-btn {
+      display: flex; align-items: center; gap: 5px;
+      padding: 6px 12px; border-radius: 8px;
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); font-size: 11px; font-weight: 600;
+      cursor: pointer; text-decoration: none; transition: all 0.15s;
+    }
+    .sx-back-btn:hover { background: rgba(255,255,255,0.09); color: var(--text); }
+    .sx-main { max-width: 1000px; margin: 0 auto; padding: 20px 20px 80px; }
+    .sx-card {
+      background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px; margin-bottom: 18px; overflow: hidden;
+    }
+    .sx-card-hd {
+      padding: 12px 16px; font-size: 12px; font-weight: 700;
+      color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    }
+    .sx-card-hd i { width: 15px; height: 15px; }
+    .sx-ctrls { display: flex; gap: 6px; margin-left: auto; align-items: center; flex-wrap: wrap; }
+    .sx-btn {
+      padding: 4px 12px; border-radius: 7px; font-size: 11px; font-weight: 700;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); cursor: pointer; transition: all 0.15s;
+    }
+    .sx-btn:hover { color: var(--text); background: rgba(255,255,255,0.08); }
+    .sx-btn.active { background: rgba(96,165,250,0.15); border-color: rgba(96,165,250,0.5); color: #60a5fa; }
+    .sx-ctrl-sep { width: 1px; height: 18px; background: rgba(255,255,255,0.1); }
+    .sx-note { font-size: 10.5px; color: var(--text-dim); text-transform: none; letter-spacing: 0; font-weight: 500; }
+    .sx-date-input {
+      padding: 4px 8px; border-radius: 7px; font-size: 11px; font-weight: 600;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); font-family: inherit; outline: none;
+      transition: all 0.15s; cursor: pointer;
+    }
+    .sx-date-input:focus { border-color: rgba(96,165,250,0.5); color: var(--text); }
+    .sx-date-input::-webkit-calendar-picker-indicator { filter: invert(0.6); cursor: pointer; }
+    .sx-loading { display: flex; align-items: center; gap: 8px; padding: 40px; color: var(--text-muted); font-size: 12px; justify-content: center; }
+    .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.15); border-top-color: #60a5fa; border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Impulse Cards ── */
+    .imp-card {
+      background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 10px; margin-bottom: 10px; overflow: hidden;
+    }
+    .imp-hd {
+      display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.04); flex-wrap: wrap;
+    }
+    .imp-time { font-size: 12px; font-weight: 700; color: var(--text); }
+    .imp-date { font-size: 11px; color: var(--text-muted); }
+    .imp-pair { font-size: 14px; font-weight: 800; color: var(--text); margin-left: auto; }
+    .imp-dir {
+      font-size: 10px; font-weight: 800; padding: 2px 10px; border-radius: 4px;
+    }
+    .imp-dir.BUY { background: rgba(34,197,94,0.12); color: #4ade80; }
+    .imp-dir.SELL { background: rgba(239,68,68,0.12); color: #f87171; }
+    .imp-body { padding: 10px 14px; }
+
+    /* ── Metrics row ── */
+    .imp-metrics {
+      display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;
+    }
+    .imp-metric {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 6px 12px; border-radius: 8px;
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+      font-size: 11px; font-weight: 600;
+    }
+    .imp-metric-label { color: var(--text-dim); }
+    .imp-metric-val { color: var(--text); font-weight: 800; font-family: var(--font-data); }
+    .imp-metric-val.pips-buy { color: #4ade80; }
+    .imp-metric-val.pips-sell { color: #f87171; }
+
+    /* ── Candle bar visual ── */
+    .imp-candles {
+      display: flex; align-items: flex-end; gap: 3px; height: 40px; padding: 4px 0;
+    }
+    .imp-candle-bar {
+      flex: 1; max-width: 32px; border-radius: 3px; min-height: 6px;
+      transition: height 0.2s;
+    }
+    .imp-candle-bar.BUY { background: rgba(34,197,94,0.5); }
+    .imp-candle-bar.SELL { background: rgba(239,68,68,0.5); }
+
+    /* ── Time range ── */
+    .imp-time-range {
+      font-size: 10px; color: var(--text-dim); font-weight: 600; margin-top: 6px;
+    }
+    .imp-time-range span { color: var(--text-muted); }
+
+    .br-empty { text-align: center; padding: 50px 20px; color: var(--text-muted); font-size: 13px; }
+
+    @media (max-width: 640px) {
+      .sx-main { padding: 14px 12px 60px; }
+      .sx-ctrls { width: 100%; margin-left: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="sx-topbar">
+    <div class="sx-topbar-left">
+      <a class="sx-logo" href="/app"><img src="/nervafx-logo.png" alt="NervaFX" onerror="this.style.display='none'"></a>
+      <span class="sx-sep">/</span>
+      <span class="sx-title-text">M15 Impulse</span>
+    </div>
+    <a class="sx-back-btn" href="/app" onclick="window.close(); setTimeout(function(){ location.href='/app'; }, 150); return false;">&times; Close</a>
+  </div>
+
+  <main class="sx-main">
+    <div class="sx-card">
+      <div class="sx-card-hd">
+        <i data-lucide="rocket"></i> M15 Impulse — Strong directional moves
+        <span class="sx-note">3+ consecutive M15 candles in one direction with avg body ratio ≥ 60%</span>
+        <span class="sx-ctrls">
+          <button class="sx-btn sx-days active" data-days="1">1D</button>
+          <button class="sx-btn sx-days" data-days="2">2D</button>
+          <button class="sx-btn sx-days" data-days="5">5D</button>
+          <button class="sx-btn sx-days" data-days="10">10D</button>
+          <button class="sx-btn sx-days" data-days="30">30D</button>
+          <span class="sx-ctrl-sep"></span>
+          <button class="sx-btn sx-session active" data-session="all">All</button>
+          <button class="sx-btn sx-session" data-session="asia">Asia</button>
+          <button class="sx-btn sx-session" data-session="london">London</button>
+          <button class="sx-btn sx-session" data-session="newyork">New York</button>
+          <span class="sx-ctrl-sep"></span>
+          <input type="date" class="sx-date-input" id="sx-date-from" title="From date">
+          <input type="date" class="sx-date-input" id="sx-date-to" title="To date">
+          <button class="sx-btn" id="sx-date-go">Go</button>
+        </span>
+      </div>
+    </div>
+    <div id="imp-cards">
+      <div class="sx-loading"><span class="spinner"></span> Loading…</div>
+    </div>
+  </main>
+
+  <script>
+  (function () {
+    'use strict';
+
+    var TOKEN = localStorage.getItem('nfx_token');
+    if (!TOKEN) { location.href = '/login'; return; }
+
+    var currentDays = 1;
+    var currentSession = 'all';
+    var cachedRows = [];
+
+    var SESSIONS = {
+      all:     { start: 0, end: 24 },
+      asia:    { start: 0, end: 8 },
+      london:  { start: 7, end: 16 },
+      newyork: { start: 12, end: 21 },
+    };
+
+    function inSession(iso) {
+      if (currentSession === 'all') return true;
+      var h = new Date(iso).getUTCHours();
+      var s = SESSIONS[currentSession];
+      return h >= s.start && h < s.end;
+    }
+
+    function hrLabel(iso) {
+      return new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Africa/Nairobi' });
+    }
+    function dayLabel(iso) {
+      return new Date(iso).toLocaleDateString('en-US', { weekday: 'short', day: '2-digit', month: 'short', timeZone: 'Africa/Nairobi' });
+    }
+    function isWeekend(iso) {
+      var d = new Date(iso).getUTCDay();
+      return d === 0 || d === 6;
+    }
+
+    function renderCards(rows) {
+      var el = document.getElementById('imp-cards');
+      if (!rows.length) {
+        el.innerHTML = '<div class="br-empty">No M15 impulses found for this period.</div>';
+        return;
+      }
+
+      var html = '';
+      var reversed = rows.slice().reverse();
+      for (var r = 0; r < reversed.length; r++) {
+        var row = reversed[r];
+        if (isWeekend(row.time)) continue;
+        if (!inSession(row.time)) continue;
+
+        var dirCls = row.direction;
+        var pipsCls = 'pips-' + row.direction.toLowerCase();
+
+        html += '<div class="imp-card">';
+
+        // Header
+        html += '<div class="imp-hd">';
+        html += '<span class="imp-time">' + hrLabel(row.time) + '</span>';
+        html += '<span class="imp-date">' + dayLabel(row.time) + '</span>';
+        html += '<span class="imp-pair">' + row.pair + '</span>';
+        html += '<span class="imp-dir ' + dirCls + '">' + row.direction + '</span>';
+        html += '</div>';
+
+        // Body
+        html += '<div class="imp-body">';
+
+        // Metrics
+        html += '<div class="imp-metrics">';
+        html += '<span class="imp-metric"><span class="imp-metric-label">Candles</span><span class="imp-metric-val">' + row.count + '</span></span>';
+        html += '<span class="imp-metric"><span class="imp-metric-label">Avg Body</span><span class="imp-metric-val">' + row.avgBodyPct + '%</span></span>';
+        html += '<span class="imp-metric"><span class="imp-metric-label">Move</span><span class="imp-metric-val ' + pipsCls + '">' + row.movePips.toFixed(1) + ' pips</span></span>';
+        html += '<span class="imp-metric"><span class="imp-metric-label">Open</span><span class="imp-metric-val">' + row.openPrice.toFixed(row.pair.includes('JPY') ? 3 : 5) + '</span></span>';
+        html += '<span class="imp-metric"><span class="imp-metric-label">Close</span><span class="imp-metric-val">' + row.closePrice.toFixed(row.pair.includes('JPY') ? 3 : 5) + '</span></span>';
+        html += '</div>';
+
+        // Visual candle bars
+        var maxH = 40;
+        html += '<div class="imp-candles">';
+        for (var c = 0; c < row.count; c++) {
+          var h = Math.max(6, Math.round((c + 1) / row.count * maxH));
+          html += '<div class="imp-candle-bar ' + dirCls + '" style="height:' + h + 'px"></div>';
+        }
+        html += '</div>';
+
+        // Time range
+        html += '<div class="imp-time-range">';
+        html += '<span>' + hrLabel(row.time) + '</span> → <span>' + hrLabel(row.endTime) + '</span> UTC+3';
+        html += '</div>';
+
+        html += '</div></div>';
+      }
+      el.innerHTML = html || '<div class="br-empty">No data found.</div>';
+    }
+
+    async function load() {
+      document.getElementById('imp-cards').innerHTML = '<div class="sx-loading"><span class="spinner"></span> Loading…</div>';
+
+      var fromEl = document.getElementById('sx-date-from');
+      var toEl = document.getElementById('sx-date-to');
+      var qs;
+      if (fromEl.value && toEl.value) {
+        qs = 'from=' + fromEl.value + '&to=' + toEl.value;
+      } else {
+        qs = 'days=' + currentDays;
+      }
+
+      try {
+        var res = await fetch('/api/m15-impulse?' + qs, {
+          headers: { Authorization: 'Bearer ' + TOKEN },
+        });
+        if (!res.ok) throw new Error(await res.text());
+        var json = await res.json();
+        cachedRows = json.rows || [];
+        renderCards(cachedRows);
+      } catch (e) {
+        document.getElementById('imp-cards').innerHTML =
+          '<div class="br-empty" style="color:#f87171">Error: ' + e.message + '</div>';
+      }
+    }
+
+    document.querySelectorAll('.sx-days').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        document.querySelectorAll('.sx-days').forEach(function(b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        currentDays = parseInt(btn.dataset.days, 10);
+        document.getElementById('sx-date-from').value = '';
+        document.getElementById('sx-date-to').value = '';
+        load();
+      });
+    });
+
+    document.querySelectorAll('.sx-session').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        document.querySelectorAll('.sx-session').forEach(function(b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        currentSession = btn.dataset.session;
+        renderCards(cachedRows);
+      });
+    });
+
+    document.getElementById('sx-date-go').addEventListener('click', function() {
+      document.querySelectorAll('.sx-days').forEach(function(b) { b.classList.remove('active'); });
+      load();
+    });
+
+    lucide.createIcons();
+    load();
+  })();
+  </script>
+</body>
+</html>

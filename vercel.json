@@ -2,7 +2,9 @@
   "version": 2,
   "crons": [
     { "path": "/api/cron-backtest-sync", "schedule": "1 * * * *" },
-    { "path": "/api/run-pipeline?force=1", "schedule": "3 * * * *" }
+    { "path": "/api/run-pipeline?force=1", "schedule": "3 * * * *" },
+    { "path": "/api/cron-pair-imbalance-alerts?force=1", "schedule": "8 * * * *" },
+    { "path": "/api/cron-m15-impulse-alerts?force=1", "schedule": "*/15 * * * *" }
   ],
   "functions": {
     "api/news-parse.js":          { "maxDuration": 30 },
@@ -27,7 +29,10 @@
     "api/cron-h1-breaks-alerts.js": { "maxDuration": 30 },
     "api/top-down-analysis.js": { "maxDuration": 90 },
     "api/market-imbalance.js": { "maxDuration": 60 },
-    "api/pair-imbalance.js": { "maxDuration": 60 }
+    "api/pair-imbalance.js": { "maxDuration": 60 },
+    "api/cron-pair-imbalance-alerts.js": { "maxDuration": 30 },
+    "api/cron-m15-impulse-alerts.js": { "maxDuration": 30 },
+    "api/m15-impulse.js": { "maxDuration": 60 }
   },
   "rewrites": [
     { "source": "/",       "destination": "/login.html" },
@@ -51,7 +56,8 @@
     { "source": "/daily-strength", "destination": "/daily-strength.html" },
     { "source": "/h1-breaks", "destination": "/h1-breaks.html" },
     { "source": "/market-imbalance", "destination": "/market-imbalance.html" },
-    { "source": "/pair-imbalance", "destination": "/pair-imbalance.html" }
+    { "source": "/pair-imbalance", "destination": "/pair-imbalance.html" },
+    { "source": "/m15-impulse", "destination": "/m15-impulse.html" }
   ],
   "headers": [
     {

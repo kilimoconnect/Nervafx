@@ -1081,6 +1081,109 @@ function h1BreaksEmail(data) {
   };
 }
 
+function pairImbalanceEmail(signals) {
+  if (!signals || !signals.length) return null;
+
+  const rows = signals.map(s => {
+    const dirColor = s.direction === 'BUY' ? '#22c55e' : '#ef4444';
+    const dirBg = s.direction === 'BUY' ? '#062b15' : '#2b0606';
+    const brkBadge = s.h1Break
+      ? `<span style="display:inline-block;padding:2px 8px;border-radius:4px;background:#3d2f00;color:#facc15;font-size:11px;font-weight:700;margin-left:6px">BRK ${s.direction === 'BUY' ? 'HIGH' : 'LOW'}</span>`
+      : '';
+
+    return `
+      <tr>
+        <td style="padding:12px 16px;border-bottom:1px solid #1e293b">
+          <div style="margin-bottom:6px">
+            <span style="font-size:16px;font-weight:800;color:#e2e8f0">${s.pair}</span>
+            <span style="display:inline-block;padding:2px 10px;border-radius:4px;background:${dirBg};color:${dirColor};font-size:11px;font-weight:800;margin-left:6px">${s.direction}</span>
+            ${brkBadge}
+          </div>
+          <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">
+            <span style="color:#4ade80;font-weight:700">${s.strongest} +${s.strongVal.s6.toFixed(1)}</span>
+            <span style="color:#64748b"> vs </span>
+            <span style="color:#f87171;font-weight:700">${s.weakest} ${s.weakVal.s6.toFixed(1)}</span>
+          </div>
+          <div style="font-size:11px;color:#64748b">
+            Spread: 3H ${s.spread.s3.toFixed(1)} · 4H ${s.spread.s4.toFixed(1)} · 6H ${s.spread.s6.toFixed(1)}
+          </div>
+        </td>
+      </tr>`;
+  }).join('');
+
+  const time = new Date().toLocaleString('en-US', { timeZone: 'Africa/Nairobi', hour: '2-digit', minute: '2-digit', hour12: false, day: '2-digit', month: 'short' });
+
+  const html = baseLayout(`
+    <div style="text-align:center;margin-bottom:20px">
+      <div style="font-size:20px;font-weight:800;color:#e2e8f0;margin-bottom:4px">⚡ Pair Imbalance Alert</div>
+      <div style="font-size:12px;color:#64748b">${time} EAT · Strongest vs Weakest aligned on 3H + 4H + 6H</div>
+    </div>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#0f172a;border-radius:8px;border:1px solid #1e293b">
+      ${rows}
+    </table>
+    <div style="text-align:center;margin-top:20px">
+      <a href="https://www.nervafx.com/pair-imbalance" style="display:inline-block;padding:10px 24px;background:#3b82f6;color:#fff;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none">View Pair Imbalance →</a>
+    </div>
+  `);
+
+  const topPair = signals[0];
+  return {
+    subject: `⚡ Pair Imbalance: ${topPair.pair} ${topPair.direction}${signals.length > 1 ? ` +${signals.length - 1} more` : ''} — ${topPair.strongest} vs ${topPair.weakest}`,
+    html,
+  };
+}
+
+function m15ImpulseEmail(signals) {
+  if (!signals || !signals.length) return null;
+
+  const rows = signals.map(s => {
+    const dirColor = s.direction === 'BUY' ? '#22c55e' : '#ef4444';
+    const dirBg = s.direction === 'BUY' ? '#062b15' : '#2b0606';
+    const pips = s.movePips != null ? s.movePips.toFixed(1) : '—';
+
+    return `
+      <tr>
+        <td style="padding:14px 16px;border-bottom:1px solid #1e293b">
+          <div style="margin-bottom:6px">
+            <span style="font-size:16px;font-weight:800;color:#e2e8f0">${s.pair}</span>
+            <span style="display:inline-block;padding:2px 10px;border-radius:4px;background:${dirBg};color:${dirColor};font-size:11px;font-weight:800;margin-left:6px">${s.direction}</span>
+          </div>
+          <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">
+            <span style="font-weight:700;color:#e2e8f0">${s.count}</span> consecutive M15 candles
+            <span style="color:#64748b">·</span>
+            Avg body <span style="font-weight:700;color:#e2e8f0">${s.avgBodyPct}%</span>
+          </div>
+          <div style="font-size:12px;color:#94a3b8">
+            Move: <span style="font-weight:700;color:${dirColor}">${pips} pips</span>
+            <span style="color:#64748b">·</span>
+            ${s.startTime} → ${s.endTime} UTC
+          </div>
+        </td>
+      </tr>`;
+  }).join('');
+
+  const time = new Date().toLocaleString('en-US', { timeZone: 'Africa/Nairobi', hour: '2-digit', minute: '2-digit', hour12: false, day: '2-digit', month: 'short' });
+
+  const html = baseLayout(`
+    <div style="text-align:center;margin-bottom:20px">
+      <div style="font-size:20px;font-weight:800;color:#e2e8f0;margin-bottom:4px">🚀 M15 Impulse Detected</div>
+      <div style="font-size:12px;color:#64748b">${time} EAT · Strong directional M15 moves</div>
+    </div>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#0f172a;border-radius:8px;border:1px solid #1e293b">
+      ${rows}
+    </table>
+    <div style="text-align:center;margin-top:20px">
+      <a href="https://www.nervafx.com/app" style="display:inline-block;padding:10px 24px;background:#3b82f6;color:#fff;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none">Open Dashboard →</a>
+    </div>
+  `);
+
+  const top = signals[0];
+  return {
+    subject: `🚀 M15 Impulse: ${top.pair} ${top.direction} — ${top.count} candles${signals.length > 1 ? ` +${signals.length - 1} more` : ''}`,
+    html,
+  };
+}
+
 module.exports = {
   sendEmail,
   sendBulk,
@@ -1091,4 +1194,6 @@ module.exports = {
   audnzdSignalEmail,
   audnzdDirectionChangeEmail,
   h1BreaksEmail,
+  pairImbalanceEmail,
+  m15ImpulseEmail,
 };
