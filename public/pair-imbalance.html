@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>NervaFX — Pair Imbalance</title>
+  <link rel="icon" type="image/png" href="/nervafx-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .grid { display: block !important; }
+    .sx-topbar {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 28px; height: 56px;
+      background: rgba(8,11,18,0.92);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+    .sx-topbar-left { display: flex; align-items: center; gap: 12px; }
+    .sx-logo img { height: 24px; display: block; }
+    .sx-sep { color: rgba(255,255,255,0.1); font-size: 20px; font-weight: 200; }
+    .sx-title-text { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+    .sx-back-btn {
+      display: flex; align-items: center; gap: 5px;
+      padding: 6px 12px; border-radius: 8px;
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); font-size: 11px; font-weight: 600;
+      cursor: pointer; text-decoration: none; transition: all 0.15s;
+    }
+    .sx-back-btn:hover { background: rgba(255,255,255,0.09); color: var(--text); }
+    .sx-main { max-width: 1000px; margin: 0 auto; padding: 20px 20px 80px; }
+    .sx-card {
+      background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px; margin-bottom: 18px; overflow: hidden;
+    }
+    .sx-card-hd {
+      padding: 12px 16px; font-size: 12px; font-weight: 700;
+      color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    }
+    .sx-card-hd i { width: 15px; height: 15px; }
+    .sx-ctrls { display: flex; gap: 6px; margin-left: auto; align-items: center; flex-wrap: wrap; }
+    .sx-btn {
+      padding: 4px 12px; border-radius: 7px; font-size: 11px; font-weight: 700;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); cursor: pointer; transition: all 0.15s;
+    }
+    .sx-btn:hover { color: var(--text); background: rgba(255,255,255,0.08); }
+    .sx-btn.active { background: rgba(96,165,250,0.15); border-color: rgba(96,165,250,0.5); color: #60a5fa; }
+    .sx-ctrl-sep { width: 1px; height: 18px; background: rgba(255,255,255,0.1); }
+    .sx-note { font-size: 10.5px; color: var(--text-dim); text-transform: none; letter-spacing: 0; font-weight: 500; }
+    .sx-date-input {
+      padding: 4px 8px; border-radius: 7px; font-size: 11px; font-weight: 600;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); font-family: inherit; outline: none;
+      transition: all 0.15s; cursor: pointer;
+    }
+    .sx-date-input:focus { border-color: rgba(96,165,250,0.5); color: var(--text); }
+    .sx-date-input::-webkit-calendar-picker-indicator { filter: invert(0.6); cursor: pointer; }
+    .sx-loading { display: flex; align-items: center; gap: 8px; padding: 40px; color: var(--text-muted); font-size: 12px; justify-content: center; }
+    .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.15); border-top-color: #60a5fa; border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Cards ── */
+    .pi-card {
+      background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 10px; margin-bottom: 10px; overflow: hidden;
+    }
+    .pi-hd {
+      display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.04); flex-wrap: wrap;
+    }
+    .pi-time { font-size: 12px; font-weight: 700; color: var(--text); }
+    .pi-date { font-size: 11px; color: var(--text-muted); }
+    .pi-pair { font-size: 14px; font-weight: 800; color: var(--text); margin-left: auto; }
+    .pi-dir {
+      font-size: 10px; font-weight: 800; padding: 2px 10px; border-radius: 4px;
+    }
+    .pi-dir.BUY { background: rgba(34,197,94,0.12); color: #4ade80; }
+    .pi-dir.SELL { background: rgba(239,68,68,0.12); color: #f87171; }
+
+    .pi-body { padding: 10px 14px; }
+
+    /* ── Strength row ── */
+    .pi-strength {
+      display: flex; gap: 16px; margin-bottom: 10px; flex-wrap: wrap;
+    }
+    .pi-ccy-box {
+      flex: 1; min-width: 120px; padding: 8px 12px; border-radius: 8px;
+      text-align: center;
+    }
+    .pi-ccy-box.strong { background: rgba(34,197,94,0.06); border: 1px solid rgba(34,197,94,0.15); }
+    .pi-ccy-box.weak { background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.15); }
+    .pi-ccy-name { font-size: 14px; font-weight: 800; margin-bottom: 4px; }
+    .pi-ccy-name.strong { color: #4ade80; }
+    .pi-ccy-name.weak { color: #f87171; }
+    .pi-ccy-vals { font-size: 10px; font-weight: 600; color: var(--text-dim); display: flex; gap: 8px; justify-content: center; }
+    .pi-ccy-val { font-family: var(--font-data); }
+    .pi-ccy-val.pos { color: #4ade80; }
+    .pi-ccy-val.neg { color: #f87171; }
+
+    /* ── Spreads ── */
+    .pi-spreads {
+      display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap;
+    }
+    .pi-spread-chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 10px; border-radius: 5px;
+      background: rgba(96,165,250,0.08); border: 1px solid rgba(96,165,250,0.15);
+      font-size: 10px; font-weight: 700;
+    }
+    .pi-spread-label { color: var(--text-dim); }
+    .pi-spread-val { color: #60a5fa; font-family: var(--font-data); }
+
+    /* ── Ranking ── */
+    .pi-ranking { display: flex; flex-wrap: wrap; gap: 4px; }
+    .pi-rank {
+      display: inline-flex; align-items: center; gap: 3px;
+      font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px;
+    }
+    .pi-rank.top { background: rgba(34,197,94,0.08); color: #4ade80; }
+    .pi-rank.bot { background: rgba(239,68,68,0.08); color: #f87171; }
+    .pi-rank.mid { background: rgba(255,255,255,0.03); color: var(--text-dim); }
+    .pi-rank-v { font-family: var(--font-data); font-size: 9px; opacity: 0.8; }
+
+    .br-empty { text-align: center; padding: 50px 20px; color: var(--text-muted); font-size: 13px; }
+
+    /* ── Session filter ── */
+    .sx-session-row { display: flex; gap: 6px; }
+
+    @media (max-width: 640px) {
+      .sx-main { padding: 14px 12px 60px; }
+      .sx-ctrls { width: 100%; margin-left: 0; }
+      .pi-strength { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <div class="sx-topbar">
+    <div class="sx-topbar-left">
+      <a class="sx-logo" href="/app"><img src="/nervafx-logo.png" alt="NervaFX" onerror="this.style.display='none'"></a>
+      <span class="sx-sep">/</span>
+      <span class="sx-title-text">Pair Imbalance</span>
+    </div>
+    <a class="sx-back-btn" href="/app" onclick="window.close(); setTimeout(function(){ location.href='/app'; }, 150); return false;">&times; Close</a>
+  </div>
+
+  <main class="sx-main">
+    <div class="sx-card">
+      <div class="sx-card-hd">
+        <i data-lucide="zap"></i> Pair Imbalance — Strongest vs Weakest aligned on 3H + 4H + 6H
+        <span class="sx-note">Any currency pair where one is #1 strongest and another is #1 weakest across all three timeframes</span>
+        <span class="sx-ctrls">
+          <button class="sx-btn sx-days active" data-days="1">1D</button>
+          <button class="sx-btn sx-days" data-days="2">2D</button>
+          <button class="sx-btn sx-days" data-days="5">5D</button>
+          <button class="sx-btn sx-days" data-days="10">10D</button>
+          <button class="sx-btn sx-days" data-days="30">30D</button>
+          <span class="sx-ctrl-sep"></span>
+          <button class="sx-btn sx-session active" data-session="all">All</button>
+          <button class="sx-btn sx-session" data-session="asia">Asia</button>
+          <button class="sx-btn sx-session" data-session="london">London</button>
+          <button class="sx-btn sx-session" data-session="newyork">New York</button>
+          <span class="sx-ctrl-sep"></span>
+          <input type="date" class="sx-date-input" id="sx-date-from" title="From date">
+          <input type="date" class="sx-date-input" id="sx-date-to" title="To date">
+          <button class="sx-btn" id="sx-date-go">Go</button>
+        </span>
+      </div>
+    </div>
+    <div id="pi-cards">
+      <div class="sx-loading"><span class="spinner"></span> Loading…</div>
+    </div>
+  </main>
+
+  <script>
+  (function () {
+    'use strict';
+
+    var TOKEN = localStorage.getItem('nfx_token');
+    if (!TOKEN) { location.href = '/login'; return; }
+
+    var currentDays = 1;
+    var currentSession = 'all';
+    var cachedRows = [];
+
+    var SESSIONS = {
+      all:     { start: 0, end: 24 },
+      asia:    { start: 0, end: 8 },
+      london:  { start: 7, end: 16 },
+      newyork: { start: 12, end: 21 },
+    };
+
+    function inSession(iso) {
+      if (currentSession === 'all') return true;
+      var h = new Date(iso).getUTCHours();
+      var s = SESSIONS[currentSession];
+      return h >= s.start && h < s.end;
+    }
+
+    function hrLabel(iso) {
+      return new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Africa/Nairobi' });
+    }
+    function dayLabel(iso) {
+      return new Date(iso).toLocaleDateString('en-US', { weekday: 'short', day: '2-digit', month: 'short', timeZone: 'Africa/Nairobi' });
+    }
+    function isWeekend(iso) {
+      var d = new Date(iso).getUTCDay();
+      return d === 0 || d === 6;
+    }
+    function vcls(v) { return v >= 0 ? 'pos' : 'neg'; }
+    function vfmt(v) { return (v >= 0 ? '+' : '') + v.toFixed(1); }
+
+    function renderCards(rows) {
+      var el = document.getElementById('pi-cards');
+      if (!rows.length) {
+        el.innerHTML = '<div class="br-empty">No pair imbalance found for this period.</div>';
+        return;
+      }
+
+      var html = '';
+      var reversed = rows.slice().reverse();
+      for (var r = 0; r < reversed.length; r++) {
+        var row = reversed[r];
+        if (isWeekend(row.time)) continue;
+        if (!inSession(row.time)) continue;
+
+        html += '<div class="pi-card">';
+        html += '<div class="pi-hd">';
+        html += '<span class="pi-time">' + hrLabel(row.time) + '</span>';
+        html += '<span class="pi-date">' + dayLabel(row.time) + '</span>';
+        html += '<span class="pi-pair">' + row.pair + '</span>';
+        html += '<span class="pi-dir ' + row.direction + '">' + row.direction + '</span>';
+        html += '</div>';
+
+        html += '<div class="pi-body">';
+
+        // Strongest vs Weakest boxes
+        html += '<div class="pi-strength">';
+        html += '<div class="pi-ccy-box strong">';
+        html += '<div class="pi-ccy-name strong">' + row.strongest + ' — Strongest</div>';
+        html += '<div class="pi-ccy-vals">';
+        html += '<span>3H: <span class="pi-ccy-val ' + vcls(row.strongVal.s3) + '">' + vfmt(row.strongVal.s3) + '</span></span>';
+        html += '<span>4H: <span class="pi-ccy-val ' + vcls(row.strongVal.s4) + '">' + vfmt(row.strongVal.s4) + '</span></span>';
+        html += '<span>6H: <span class="pi-ccy-val ' + vcls(row.strongVal.s6) + '">' + vfmt(row.strongVal.s6) + '</span></span>';
+        html += '</div></div>';
+
+        html += '<div class="pi-ccy-box weak">';
+        html += '<div class="pi-ccy-name weak">' + row.weakest + ' — Weakest</div>';
+        html += '<div class="pi-ccy-vals">';
+        html += '<span>3H: <span class="pi-ccy-val ' + vcls(row.weakVal.s3) + '">' + vfmt(row.weakVal.s3) + '</span></span>';
+        html += '<span>4H: <span class="pi-ccy-val ' + vcls(row.weakVal.s4) + '">' + vfmt(row.weakVal.s4) + '</span></span>';
+        html += '<span>6H: <span class="pi-ccy-val ' + vcls(row.weakVal.s6) + '">' + vfmt(row.weakVal.s6) + '</span></span>';
+        html += '</div></div>';
+        html += '</div>';
+
+        // Spread chips
+        html += '<div class="pi-spreads">';
+        html += '<span class="pi-spread-chip"><span class="pi-spread-label">3H spread</span><span class="pi-spread-val">' + row.spread.s3.toFixed(1) + '</span></span>';
+        html += '<span class="pi-spread-chip"><span class="pi-spread-label">4H spread</span><span class="pi-spread-val">' + row.spread.s4.toFixed(1) + '</span></span>';
+        html += '<span class="pi-spread-chip"><span class="pi-spread-label">6H spread</span><span class="pi-spread-val">' + row.spread.s6.toFixed(1) + '</span></span>';
+        html += '</div>';
+
+        // All 8 ranking
+        html += '<div class="pi-ranking">';
+        for (var i = 0; i < row.ranking.length; i++) {
+          var c = row.ranking[i];
+          var cls = i === 0 ? 'top' : i === row.ranking.length - 1 ? 'bot' : 'mid';
+          html += '<span class="pi-rank ' + cls + '">' + c.cur + ' <span class="pi-rank-v">' + vfmt(c.v6) + '</span></span>';
+        }
+        html += '</div>';
+
+        html += '</div></div>';
+      }
+      el.innerHTML = html || '<div class="br-empty">No data found.</div>';
+    }
+
+    async function load() {
+      document.getElementById('pi-cards').innerHTML = '<div class="sx-loading"><span class="spinner"></span> Loading…</div>';
+
+      var fromEl = document.getElementById('sx-date-from');
+      var toEl = document.getElementById('sx-date-to');
+      var qs;
+      if (fromEl.value && toEl.value) {
+        qs = 'from=' + fromEl.value + '&to=' + toEl.value;
+      } else {
+        qs = 'days=' + currentDays;
+      }
+
+      try {
+        var res = await fetch('/api/pair-imbalance?' + qs, {
+          headers: { Authorization: 'Bearer ' + TOKEN },
+        });
+        if (!res.ok) throw new Error(await res.text());
+        var json = await res.json();
+        cachedRows = json.rows || [];
+        renderCards(cachedRows);
+      } catch (e) {
+        document.getElementById('pi-cards').innerHTML =
+          '<div class="br-empty" style="color:#f87171">Error: ' + e.message + '</div>';
+      }
+    }
+
+    document.querySelectorAll('.sx-days').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        document.querySelectorAll('.sx-days').forEach(function(b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        currentDays = parseInt(btn.dataset.days, 10);
+        document.getElementById('sx-date-from').value = '';
+        document.getElementById('sx-date-to').value = '';
+        load();
+      });
+    });
+
+    document.querySelectorAll('.sx-session').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        document.querySelectorAll('.sx-session').forEach(function(b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        currentSession = btn.dataset.session;
+        renderCards(cachedRows);
+      });
+    });
+
+    document.getElementById('sx-date-go').addEventListener('click', function() {
+      document.querySelectorAll('.sx-days').forEach(function(b) { b.classList.remove('active'); });
+      load();
+    });
+
+    lucide.createIcons();
+    load();
+  })();
+  </script>
+</body>
+</html>
