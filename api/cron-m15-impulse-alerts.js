@@ -12,7 +12,7 @@ const INSTRUMENTS = [
 ];
 
 const MIN_CONSECUTIVE = 3;
-const MIN_BODY_RATIO = 0.75;
+const MIN_BODY_RATIO = 0.70;
 
 function getDB() {
   return createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);

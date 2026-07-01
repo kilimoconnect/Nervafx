@@ -12,7 +12,7 @@ const INSTRUMENTS = [
 ];
 
 const MIN_CONSECUTIVE = 3;
-const MIN_BODY_RATIO = 0.75;
+const MIN_BODY_RATIO = 0.70;
 
 function pipSize(inst) {
   return inst.includes('JPY') ? 0.01 : 0.0001;
