@@ -288,6 +288,13 @@ module.exports = async function handler(req, res) {
         if (dailyDir !== h1Dir) continue;
         const direction = dailyDir;
 
+        // At least one of the last 2 daily candles must have closed in current direction
+        const prev2Day = prevTradingDay(prevDay);
+        const prev2DayOHLC = (dailyOHLC[inst] || {})[prev2Day];
+        const d1Closed = prevDayOHLC.close > prevDayOHLC.open ? 'BUY' : prevDayOHLC.close < prevDayOHLC.open ? 'SELL' : null;
+        const d2Closed = prev2DayOHLC ? (prev2DayOHLC.close > prev2DayOHLC.open ? 'BUY' : prev2DayOHLC.close < prev2DayOHLC.open ? 'SELL' : null) : null;
+        if (d1Closed !== direction && d2Closed !== direction) continue;
+
         // Need enough lookback for sub-scores
         const start = Math.max(0, idx - LOOKBACK + 1);
         const window = candles.slice(start, idx + 1);
