@@ -247,6 +247,11 @@
           html += '<div class="imp-pair-hd">';
           html += '<span class="imp-pair">' + s.pair + '</span>';
           html += '<span class="imp-dir ' + dirCls + '">' + s.direction + '</span>';
+          if (s.breakLevel != null) {
+            var brkLabel = s.direction === 'BUY' ? 'BRK HH' : 'BRK LL';
+            var brkPrice = s.pair.includes('JPY') ? s.breakLevel.toFixed(3) : s.breakLevel.toFixed(5);
+            html += '<span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:4px;background:rgba(250,204,21,0.15);color:#facc15;border:1px solid rgba(250,204,21,0.3)">' + brkLabel + ' ' + brkPrice + '</span>';
+          }
           html += '</div>';
 
           // Metrics

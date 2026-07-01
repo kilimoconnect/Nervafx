@@ -18,6 +18,26 @@ function pipSize(inst) {
   return inst.includes('JPY') ? 0.01 : 0.0001;
 }
 
+function findSwingHighs(candles, endIdx) {
+  const highs = [];
+  for (let i = 1; i < endIdx && i < candles.length - 1; i++) {
+    if (candles[i].high > candles[i - 1].high && candles[i].high > candles[i + 1].high) {
+      highs.push(candles[i].high);
+    }
+  }
+  return highs;
+}
+
+function findSwingLows(candles, endIdx) {
+  const lows = [];
+  for (let i = 1; i < endIdx && i < candles.length - 1; i++) {
+    if (candles[i].low < candles[i - 1].low && candles[i].low < candles[i + 1].low) {
+      lows.push(candles[i].low);
+    }
+  }
+  return lows;
+}
+
 function detectImpulses(candles, inst) {
   const results = [];
   if (candles.length < MIN_CONSECUTIVE) return results;
@@ -79,6 +99,7 @@ function detectImpulses(candles, inst) {
         movePips: Math.round((moveRaw / pip) * 10) / 10,
         openPrice: start.open,
         closePrice: end.close,
+        _startIdx: i,
       });
       i = j;
     } else {
@@ -106,6 +127,8 @@ module.exports = async function handler(req, res) {
     const since = qFrom ? new Date(qFrom + 'T00:00:00Z').toISOString()
       : new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
+    // Fetch extra lookback for swing detection before the visible range
+    const lookbackSince = new Date(new Date(since).getTime() - 12 * 60 * 60 * 1000).toISOString();
     const allSignals = [];
 
     for (let b = 0; b < INSTRUMENTS.length; b += 7) {
@@ -121,7 +144,7 @@ module.exports = async function handler(req, res) {
             .eq('instrument', inst)
             .eq('timeframe', 'M15')
             .eq('complete', true)
-            .gte('time', since)
+            .gte('time', lookbackSince)
             .lte('time', until)
             .order('time', { ascending: true })
             .range(offset, offset + PAGE - 1);
@@ -143,7 +166,33 @@ module.exports = async function handler(req, res) {
           low: parseFloat(c.low),
           close: parseFloat(c.close),
         }));
-        allSignals.push(...detectImpulses(candles, inst));
+        const impulses = detectImpulses(candles, inst);
+
+        for (const imp of impulses) {
+          // Only include impulses that start within the requested range
+          if (imp.time < since) continue;
+
+          const si = imp._startIdx;
+          if (imp.direction === 'BUY') {
+            const swingHighs = findSwingHighs(candles, si);
+            if (!swingHighs.length) continue;
+            const lastHH = swingHighs[swingHighs.length - 1];
+            if (imp.closePrice > lastHH) {
+              imp.breakLevel = lastHH;
+              delete imp._startIdx;
+              allSignals.push(imp);
+            }
+          } else {
+            const swingLows = findSwingLows(candles, si);
+            if (!swingLows.length) continue;
+            const lastLL = swingLows[swingLows.length - 1];
+            if (imp.closePrice < lastLL) {
+              imp.breakLevel = lastLL;
+              delete imp._startIdx;
+              allSignals.push(imp);
+            }
+          }
+        }
       }
     }
 

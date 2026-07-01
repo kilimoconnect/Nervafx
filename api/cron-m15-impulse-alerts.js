@@ -26,6 +26,26 @@ function fmtTime(iso) {
   return iso.slice(11, 16);
 }
 
+function findSwingHighs(candles, endIdx) {
+  const highs = [];
+  for (let i = 1; i < endIdx && i < candles.length - 1; i++) {
+    if (candles[i].high > candles[i - 1].high && candles[i].high > candles[i + 1].high) {
+      highs.push(candles[i].high);
+    }
+  }
+  return highs;
+}
+
+function findSwingLows(candles, endIdx) {
+  const lows = [];
+  for (let i = 1; i < endIdx && i < candles.length - 1; i++) {
+    if (candles[i].low < candles[i - 1].low && candles[i].low < candles[i + 1].low) {
+      lows.push(candles[i].low);
+    }
+  }
+  return lows;
+}
+
 function detectImpulse(candles) {
   if (candles.length < MIN_CONSECUTIVE) return null;
 
@@ -74,7 +94,7 @@ function detectImpulse(candles) {
     avgBodyPct: Math.round(avgBodyRatio * 100),
     moveRaw,
     closePrice: endCandle.close,
-    endTime: endCandle.time,
+    startIdx,
     startTime: fmtTime(startCandle.time),
     endTimeFmt: fmtTime(endCandle.time),
   };
@@ -116,7 +136,9 @@ module.exports = async function handler(req, res) {
   const sb = getDB();
 
   try {
-    const since = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    // Fetch extra lookback for swing detection
+    const since = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
+    const recentSince = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
     const signals = [];
 
     for (let b = 0; b < INSTRUMENTS.length; b += 7) {
@@ -126,7 +148,7 @@ module.exports = async function handler(req, res) {
           .from('backtest_candles')
           .select('time, open, high, low, close')
           .eq('instrument', inst).eq('timeframe', 'M15').eq('complete', true)
-          .gte('time', since).order('time', { ascending: true }).limit(20);
+          .gte('time', since).order('time', { ascending: true }).limit(100);
         return { inst, data: error ? [] : data || [] };
       }));
 
@@ -141,8 +163,27 @@ module.exports = async function handler(req, res) {
           close: parseFloat(c.close),
         }));
 
+        // Only check if most recent candles form an impulse
+        const recentCandles = candles.filter(c => c.time >= recentSince);
+        if (recentCandles.length < MIN_CONSECUTIVE) continue;
+
         const impulse = detectImpulse(candles);
         if (!impulse) continue;
+
+        // Check M15 swing break
+        let breakLevel = null;
+        if (impulse.direction === 'BUY') {
+          const swingHighs = findSwingHighs(candles, impulse.startIdx);
+          if (!swingHighs.length) continue;
+          const lastHH = swingHighs[swingHighs.length - 1];
+          if (impulse.closePrice > lastHH) breakLevel = lastHH;
+        } else {
+          const swingLows = findSwingLows(candles, impulse.startIdx);
+          if (!swingLows.length) continue;
+          const lastLL = swingLows[swingLows.length - 1];
+          if (impulse.closePrice < lastLL) breakLevel = lastLL;
+        }
+        if (breakLevel === null) continue;
 
         const pip = pipSize(inst);
         signals.push({
@@ -153,12 +194,13 @@ module.exports = async function handler(req, res) {
           movePips: impulse.moveRaw / pip,
           startTime: impulse.startTime,
           endTime: impulse.endTimeFmt,
+          breakLevel,
         });
       }
     }
 
     if (!signals.length) {
-      return res.json({ ok: true, sent: 0, reason: 'no impulses detected' });
+      return res.json({ ok: true, sent: 0, reason: 'no impulses with swing break detected' });
     }
 
     signals.sort((a, b) => b.count - a.count || b.movePips - a.movePips);
