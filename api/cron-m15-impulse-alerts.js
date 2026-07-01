@@ -11,6 +11,7 @@ const INSTRUMENTS = [
   'NZD_JPY','NZD_CHF','NZD_CAD','CAD_JPY','CAD_CHF','CHF_JPY',
 ];
 
+const NY_CLOSE_UTC = 21;
 const MIN_CONSECUTIVE = 3;
 const MIN_BODY_RATIO = 0.60;
 
@@ -26,10 +27,24 @@ function fmtTime(iso) {
   return iso.slice(11, 16);
 }
 
+function forexDayKey(iso) {
+  const d = new Date(iso);
+  if (d.getUTCHours() >= NY_CLOSE_UTC) d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function prevTradingDay(dayKey) {
+  const d = new Date(dayKey + 'T12:00:00Z');
+  const dow = d.getUTCDay();
+  if (dow === 1) d.setUTCDate(d.getUTCDate() - 3);
+  else if (dow === 0) d.setUTCDate(d.getUTCDate() - 2);
+  else d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
 function detectImpulse(candles) {
   if (candles.length < MIN_CONSECUTIVE) return null;
 
-  // Walk backwards from most recent candle to find consecutive same-direction candles
   const last = candles[candles.length - 1];
   const dir = last.close > last.open ? 'BUY' : last.close < last.open ? 'SELL' : null;
   if (!dir) return null;
@@ -47,7 +62,7 @@ function detectImpulse(candles) {
     const candleDir = c.close > c.open ? 'BUY' : c.close < c.open ? 'SELL' : null;
 
     if (candleDir !== dir) break;
-    if (bodyRatio < 0.40) break; // allow slightly weaker candles in the chain but check avg later
+    if (bodyRatio < 0.40) break;
 
     count++;
     bodyRatioSum += bodyRatio;
@@ -70,8 +85,10 @@ function detectImpulse(candles) {
     count,
     avgBodyPct: Math.round(avgBodyRatio * 100),
     moveRaw,
+    closePrice: endCandle.close,
+    endTime: endCandle.time,
     startTime: fmtTime(startCandle.time),
-    endTime: fmtTime(endCandle.time),
+    endTimeFmt: fmtTime(endCandle.time),
   };
 }
 
@@ -111,30 +128,47 @@ module.exports = async function handler(req, res) {
   const sb = getDB();
 
   try {
-    // Fetch last 2 hours of M15 candles for all instruments (8 candles per hour)
     const since = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    const fetchSince = new Date(Date.now() - 5 * 86400000).toISOString();
     const signals = [];
 
-    // Batch fetch in groups of 7
     for (let b = 0; b < INSTRUMENTS.length; b += 7) {
       const batch = INSTRUMENTS.slice(b, b + 7);
       const results = await Promise.all(batch.map(async inst => {
-        const { data, error } = await sb
-          .from('backtest_candles')
-          .select('time, open, high, low, close')
-          .eq('instrument', inst)
-          .eq('timeframe', 'M15')
-          .eq('complete', true)
-          .gte('time', since)
-          .order('time', { ascending: true })
-          .limit(20);
-        if (error) return { inst, data: [] };
-        return { inst, data: data || [] };
+        const [m15Res, h1Res] = await Promise.all([
+          sb.from('backtest_candles')
+            .select('time, open, high, low, close')
+            .eq('instrument', inst).eq('timeframe', 'M15').eq('complete', true)
+            .gte('time', since).order('time', { ascending: true }).limit(20),
+          sb.from('backtest_candles')
+            .select('time, open, high, low, close')
+            .eq('instrument', inst).eq('timeframe', 'H1').eq('complete', true)
+            .gte('time', fetchSince).order('time', { ascending: true }).limit(500),
+        ]);
+        return {
+          inst,
+          m15: (m15Res.error ? [] : m15Res.data || []),
+          h1: (h1Res.error ? [] : h1Res.data || []),
+        };
       }));
 
-      for (const { inst, data } of results) {
-        if (!data.length) continue;
-        const candles = data.map(c => ({
+      for (const { inst, m15, h1 } of results) {
+        if (!m15.length) continue;
+
+        // Build daily OHLC from H1
+        const dailyOHLC = {};
+        for (const c of h1) {
+          const o = parseFloat(c.open), h = parseFloat(c.high), l = parseFloat(c.low), cl = parseFloat(c.close);
+          const day = forexDayKey(c.time);
+          if (!dailyOHLC[day]) dailyOHLC[day] = { open: o, high: h, low: l, close: cl };
+          else {
+            if (h > dailyOHLC[day].high) dailyOHLC[day].high = h;
+            if (l < dailyOHLC[day].low) dailyOHLC[day].low = l;
+            dailyOHLC[day].close = cl;
+          }
+        }
+
+        const candles = m15.map(c => ({
           time: c.time,
           open: parseFloat(c.open),
           high: parseFloat(c.high),
@@ -145,6 +179,20 @@ module.exports = async function handler(req, res) {
         const impulse = detectImpulse(candles);
         if (!impulse) continue;
 
+        // Must break previous day high/low
+        const fxDay = forexDayKey(impulse.endTime);
+        const prevDay = prevTradingDay(fxDay);
+        const prev = dailyOHLC[prevDay];
+        if (!prev) continue;
+
+        let breakLevel = null;
+        if (impulse.direction === 'BUY' && impulse.closePrice > prev.high) {
+          breakLevel = prev.high;
+        } else if (impulse.direction === 'SELL' && impulse.closePrice < prev.low) {
+          breakLevel = prev.low;
+        }
+        if (breakLevel === null) continue;
+
         const pip = pipSize(inst);
         signals.push({
           pair: inst.replace('_', '/'),
@@ -153,19 +201,17 @@ module.exports = async function handler(req, res) {
           avgBodyPct: impulse.avgBodyPct,
           movePips: impulse.moveRaw / pip,
           startTime: impulse.startTime,
-          endTime: impulse.endTime,
+          endTime: impulse.endTimeFmt,
+          breakLevel,
         });
       }
     }
 
     if (!signals.length) {
-      return res.json({ ok: true, sent: 0, reason: 'no impulses detected' });
+      return res.json({ ok: true, sent: 0, reason: 'no impulses with day break detected' });
     }
 
-    // Sort by candle count descending, then by pips
     signals.sort((a, b) => b.count - a.count || b.movePips - a.movePips);
-
-    // Cap at top 5
     const top = signals.slice(0, 5);
 
     const template = m15ImpulseEmail(top);

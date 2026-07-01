@@ -225,6 +225,9 @@
         html += '<span class="imp-date">' + dayLabel(row.time) + '</span>';
         html += '<span class="imp-pair">' + row.pair + '</span>';
         html += '<span class="imp-dir ' + dirCls + '">' + row.direction + '</span>';
+        var brkLabel = row.direction === 'BUY' ? 'BRK HIGH' : 'BRK LOW';
+        var brkPrice = row.breakLevel != null ? (row.pair.includes('JPY') ? row.breakLevel.toFixed(3) : row.breakLevel.toFixed(5)) : '';
+        html += '<span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:4px;background:rgba(250,204,21,0.15);color:#facc15;border:1px solid rgba(250,204,21,0.3)">' + brkLabel + (brkPrice ? ' ' + brkPrice : '') + '</span>';
         html += '</div>';
 
         // Body
