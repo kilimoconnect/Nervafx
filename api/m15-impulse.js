@@ -13,7 +13,7 @@ const INSTRUMENTS = [
 
 const NY_CLOSE_UTC = 21;
 const MIN_CONSECUTIVE = 3;
-const MIN_BODY_RATIO = 0.80;
+const MIN_BODY_RATIO = 0.75;
 
 function pipSize(inst) {
   return inst.includes('JPY') ? 0.01 : 0.0001;
