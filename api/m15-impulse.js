@@ -30,24 +30,39 @@ function detectImpulses(candles, inst) {
     const dir = c.close > c.open ? 'BUY' : c.close < c.open ? 'SELL' : null;
     if (!dir) { i++; continue; }
 
-    let count = 0;
+    let inDir = 0;
     let bodyRatioSum = 0;
+    let counterRun = 0;
     let j = i;
 
     while (j < candles.length) {
       const cc = candles[j];
       const range = cc.high - cc.low;
-      if (range <= 0) break;
+      if (range <= 0) { j++; continue; }
       const body = Math.abs(cc.close - cc.open);
       const bodyRatio = body / range;
       const candleDir = cc.close > cc.open ? 'BUY' : cc.close < cc.open ? 'SELL' : null;
-      if (candleDir !== dir) break;
-      count++;
-      bodyRatioSum += bodyRatio;
+
+      if (candleDir === dir) {
+        counterRun = 0;
+        inDir++;
+        bodyRatioSum += bodyRatio;
+      } else {
+        counterRun++;
+        if (counterRun >= 2) break;
+      }
       j++;
     }
 
-    if (count >= MIN_CONSECUTIVE && (bodyRatioSum / count) >= MIN_BODY_RATIO) {
+    // Trim trailing counter-candles from the run
+    while (j > i) {
+      const last = candles[j - 1];
+      const lastDir = last.close > last.open ? 'BUY' : last.close < last.open ? 'SELL' : null;
+      if (lastDir === dir) break;
+      j--;
+    }
+
+    if (inDir >= MIN_CONSECUTIVE && (bodyRatioSum / inDir) >= MIN_BODY_RATIO) {
       const start = candles[i];
       const end = candles[j - 1];
       const moveRaw = dir === 'BUY'
@@ -59,8 +74,8 @@ function detectImpulses(candles, inst) {
         endTime: end.time,
         pair: inst.replace('_', '/'),
         direction: dir,
-        count,
-        avgBodyPct: Math.round((bodyRatioSum / count) * 100),
+        count: inDir,
+        avgBodyPct: Math.round((bodyRatioSum / inDir) * 100),
         movePips: Math.round((moveRaw / pip) * 10) / 10,
         openPrice: start.open,
         closePrice: end.close,
