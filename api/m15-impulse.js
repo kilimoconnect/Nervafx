@@ -42,7 +42,6 @@ function detectImpulses(candles, inst) {
       const bodyRatio = body / range;
       const candleDir = cc.close > cc.open ? 'BUY' : cc.close < cc.open ? 'SELL' : null;
       if (candleDir !== dir) break;
-      if (bodyRatio < 0.40) break;
       count++;
       bodyRatioSum += bodyRatio;
       j++;
