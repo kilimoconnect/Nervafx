@@ -237,6 +237,9 @@
         html += '<span class="pi-date">' + dayLabel(row.time) + '</span>';
         html += '<span class="pi-pair">' + row.pair + '</span>';
         html += '<span class="pi-dir ' + row.direction + '">' + row.direction + '</span>';
+        if (row.h1Break) {
+          html += '<span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:4px;background:rgba(250,204,21,0.15);color:#facc15;border:1px solid rgba(250,204,21,0.3)">BRK ' + (row.direction === 'BUY' ? 'HIGH' : 'LOW') + '</span>';
+        }
         html += '</div>';
 
         html += '<div class="pi-body">';
