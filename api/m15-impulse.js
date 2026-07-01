@@ -133,21 +133,41 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // Group by start hour so one card can hold multiple pairs
-    const byHour = {};
+    // Sort all signals by start time
+    allSignals.sort((a, b) => a.time < b.time ? -1 : a.time > b.time ? 1 : 0);
+
+    // Group into overlapping intervals: if a signal's start <= group's endTime, merge
+    const groups = [];
     for (const s of allSignals) {
-      const hk = s.time.slice(0, 13); // YYYY-MM-DDTHH
-      if (!byHour[hk]) byHour[hk] = { time: s.time.slice(0, 13) + ':00:00Z', pairs: [] };
-      byHour[hk].pairs.push(s);
+      const sStart = new Date(s.time).getTime();
+      const sEnd = new Date(s.endTime).getTime();
+
+      let merged = false;
+      for (const g of groups) {
+        if (sStart <= g.endMs) {
+          g.pairs.push(s);
+          if (sEnd > g.endMs) { g.endMs = sEnd; g.endTime = s.endTime; }
+          if (sStart < g.startMs) { g.startMs = sStart; g.startTime = s.time; }
+          merged = true;
+          break;
+        }
+      }
+      if (!merged) {
+        groups.push({
+          startTime: s.time,
+          endTime: s.endTime,
+          startMs: sStart,
+          endMs: sEnd,
+          pairs: [s],
+        });
+      }
     }
 
-    const rows = Object.values(byHour)
-      .sort((a, b) => a.time < b.time ? -1 : a.time > b.time ? 1 : 0);
-
-    // Sort pairs within each hour by pips descending
-    for (const row of rows) {
-      row.pairs.sort((a, b) => b.movePips - a.movePips);
-    }
+    const rows = groups.map(g => ({
+      startTime: g.startTime,
+      endTime: g.endTime,
+      pairs: g.pairs.sort((a, b) => b.movePips - a.movePips),
+    }));
 
     res.json({ rows });
   } catch (e) {
