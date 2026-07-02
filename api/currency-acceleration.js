@@ -38,7 +38,7 @@ module.exports = async function handler(req, res) {
     while (true) {
       const { data, error } = await sb
         .from('currency_strength')
-        .select('time, currency, smooth_3h, smooth_4h, smooth_6h')
+        .select('time, currency, smooth_3h')
         .gte('time', fetchSince)
         .lte('time', until)
         .order('time', { ascending: true })
@@ -56,8 +56,6 @@ module.exports = async function handler(req, res) {
       if (!byTime[r.time]) byTime[r.time] = {};
       byTime[r.time][r.currency] = {
         s3: (parseFloat(r.smooth_3h) || 0) * 10000,
-        s4: (parseFloat(r.smooth_4h) || 0) * 10000,
-        s6: (parseFloat(r.smooth_6h) || 0) * 10000,
       };
     }
 
@@ -109,8 +107,6 @@ module.exports = async function handler(req, res) {
           currency: ccy,
           acceleration: Math.round(accel * 100) / 100,
           s3: Math.round(s3now * 100) / 100,
-          s4: Math.round((cur[ccy]?.s4 || 0) * 100) / 100,
-          s6: Math.round((cur[ccy]?.s6 || 0) * 100) / 100,
         };
       });
 
