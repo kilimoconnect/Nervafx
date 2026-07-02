@@ -77,6 +77,7 @@ module.exports = async function handler(req, res) {
       for (const { inst, data } of results) {
         candleCache[inst] = data.map(c => ({
           time: c.time,
+          open: parseFloat(c.open),
           high: parseFloat(c.high),
           low: parseFloat(c.low),
           close: parseFloat(c.close),
@@ -150,15 +151,15 @@ module.exports = async function handler(req, res) {
 
           let broke = false;
           let breakLevel = null;
-          let breakPct = 0;
+          const currBody = Math.abs(curr.close - curr.open);
+          const prevBody = Math.abs(prevC.close - prevC.open) || 0.00001;
+          const bodyPct = Math.round((currBody / prevBody) * 100);
           if (direction === 'BUY' && curr.close > prevC.high) {
             broke = true;
             breakLevel = prevC.high;
-            breakPct = Math.round(((curr.close - prevC.high) / prevC.high) * 10000) / 100;
           } else if (direction === 'SELL' && curr.close < prevC.low) {
             broke = true;
             breakLevel = prevC.low;
-            breakPct = Math.round(((prevC.low - curr.close) / prevC.low) * 10000) / 100;
           }
           if (!broke) continue;
 
@@ -174,7 +175,7 @@ module.exports = async function handler(req, res) {
             weakAccel: weak.acceleration,
             spread,
             breakLevel,
-            breakPct,
+            bodyPct,
             strongScore: strong.score,
             weakScore: weak.score,
           });
