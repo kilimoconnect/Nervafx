@@ -138,11 +138,14 @@ module.exports = async function handler(req, res) {
             direction = 'SELL';
           } else continue;
 
-          // Check break of previous candle high/low
+          // Find latest completed H1 candle at or before this hour, and the one before it
           const candles = candleCache[inst] || [];
-          const ci = candles.findIndex(c => c.time >= time);
+          let ci = -1;
+          for (let k = candles.length - 1; k >= 0; k--) {
+            if (candles[k].time <= time) { ci = k; break; }
+          }
           if (ci < 1) continue;
-          const curr = candles[ci] || candles[candles.length - 1];
+          const curr = candles[ci];
           const prevC = candles[ci - 1];
 
           let broke = false;
