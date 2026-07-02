@@ -96,13 +96,21 @@ module.exports = async function handler(req, res) {
         a.score = Math.round((a.acceleration / maxAbs) * 100);
       }
 
-      // Generate candidate pairs: top 2 accelerators vs bottom 2
-      const top2 = accels.slice(0, 2);
-      const bot2 = accels.slice(-2).reverse();
-      const candidates = [];
+      // Confirmed strong: 3H > 0 AND acceleration > 0 (strong and getting stronger)
+      const confirmed_strong = accels.filter(a => a.s3 > 0 && a.acceleration > 0);
+      // Confirmed weak: 3H < 0 AND acceleration < 0 (weak and getting weaker)
+      const confirmed_weak = accels.filter(a => a.s3 < 0 && a.acceleration < 0);
 
-      for (const strong of top2) {
-        for (const weak of bot2) {
+      // Sort strong by 3H descending, weak by 3H ascending
+      confirmed_strong.sort((a, b) => b.s3 - a.s3);
+      confirmed_weak.sort((a, b) => a.s3 - b.s3);
+
+      const candidates = [];
+      const topStrong = confirmed_strong.slice(0, 3);
+      const topWeak = confirmed_weak.slice(0, 3);
+
+      for (const strong of topStrong) {
+        for (const weak of topWeak) {
           const fwd = strong.currency + '_' + weak.currency;
           const rev = weak.currency + '_' + strong.currency;
           let pair, direction;
@@ -114,12 +122,14 @@ module.exports = async function handler(req, res) {
             direction = 'SELL';
           } else continue;
 
-          const spread = Math.round((strong.acceleration - weak.acceleration) * 100) / 100;
+          const spread = Math.round((strong.s3 - weak.s3) * 100) / 100;
           candidates.push({
             pair,
             direction,
             strongCcy: strong.currency,
             weakCcy: weak.currency,
+            strongS3: strong.s3,
+            weakS3: weak.s3,
             strongAccel: strong.acceleration,
             weakAccel: weak.acceleration,
             spread,
