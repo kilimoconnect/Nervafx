@@ -33,21 +33,23 @@
       cursor: pointer; text-decoration: none; transition: all 0.15s;
     }
     .sx-back-btn:hover { background: rgba(255,255,255,0.09); color: var(--text); }
-    .sx-main { max-width: 1000px; margin: 0 auto; padding: 20px 20px 80px; }
+    .sx-main { max-width: 1060px; margin: 0 auto; padding: 24px 20px 80px; }
+
+    /* ── Filter bar ── */
     .sx-card {
       background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
-      border-radius: 12px; margin-bottom: 18px; overflow: hidden;
+      border-radius: 12px; margin-bottom: 20px; overflow: hidden;
     }
     .sx-card-hd {
-      padding: 12px 16px; font-size: 12px; font-weight: 700;
+      padding: 14px 18px; font-size: 12px; font-weight: 700;
       color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px;
       border-bottom: 1px solid rgba(255,255,255,0.05);
-      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
     }
     .sx-card-hd i { width: 15px; height: 15px; }
     .sx-ctrls { display: flex; gap: 6px; margin-left: auto; align-items: center; flex-wrap: wrap; }
     .sx-btn {
-      padding: 4px 12px; border-radius: 7px; font-size: 11px; font-weight: 700;
+      padding: 5px 14px; border-radius: 7px; font-size: 11px; font-weight: 700;
       background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
       color: var(--text-muted); cursor: pointer; transition: all 0.15s;
     }
@@ -56,107 +58,195 @@
     .sx-ctrl-sep { width: 1px; height: 18px; background: rgba(255,255,255,0.1); }
     .sx-note { font-size: 10.5px; color: var(--text-dim); text-transform: none; letter-spacing: 0; font-weight: 500; }
     .sx-date-input {
-      padding: 4px 8px; border-radius: 7px; font-size: 11px; font-weight: 600;
+      padding: 5px 10px; border-radius: 7px; font-size: 11px; font-weight: 600;
       background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
       color: var(--text-muted); font-family: inherit; outline: none;
       transition: all 0.15s; cursor: pointer;
     }
     .sx-date-input:focus { border-color: rgba(96,165,250,0.5); color: var(--text); }
     .sx-date-input::-webkit-calendar-picker-indicator { filter: invert(0.6); cursor: pointer; }
-    .sx-loading { display: flex; align-items: center; gap: 8px; padding: 40px; color: var(--text-muted); font-size: 12px; justify-content: center; }
+    .sx-loading { display: flex; align-items: center; gap: 8px; padding: 50px; color: var(--text-muted); font-size: 12px; justify-content: center; }
     .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.15); border-top-color: #60a5fa; border-radius: 50%; animation: spin 0.7s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .br-empty { text-align: center; padding: 50px 20px; color: var(--text-muted); font-size: 13px; }
+    .br-empty { text-align: center; padding: 60px 20px; color: var(--text-muted); font-size: 13px; }
 
-    /* ── Acceleration Card ── */
+    /* ══════════ Acceleration Card ══════════ */
     .acc-card {
-      background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
-      border-radius: 10px; margin-bottom: 14px; overflow: hidden;
+      background: rgba(255,255,255,0.015);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 14px; margin-bottom: 16px; overflow: hidden;
+      transition: border-color 0.2s;
     }
-    .acc-hd {
-      display: flex; align-items: center; gap: 10px; padding: 10px 14px;
-      border-bottom: 1px solid rgba(255,255,255,0.04); flex-wrap: wrap;
-    }
-    .acc-time { font-size: 12px; font-weight: 700; color: var(--text); }
-    .acc-date { font-size: 11px; color: var(--text-muted); }
+    .acc-card:hover { border-color: rgba(255,255,255,0.1); }
+    .acc-card.has-candidates { border-color: rgba(96,165,250,0.2); }
+    .acc-card.has-candidates:hover { border-color: rgba(96,165,250,0.35); }
 
-    .acc-body { padding: 12px 14px; }
+    .acc-hd {
+      display: flex; align-items: center; gap: 12px; padding: 14px 18px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .acc-time-block { display: flex; flex-direction: column; }
+    .acc-time { font-size: 18px; font-weight: 800; color: var(--text); letter-spacing: -0.5px; line-height: 1; }
+    .acc-date { font-size: 10px; color: var(--text-dim); font-weight: 600; margin-top: 3px; }
+    .acc-cand-count {
+      margin-left: auto; font-size: 10px; font-weight: 800;
+      padding: 3px 10px; border-radius: 20px;
+      background: rgba(96,165,250,0.1); color: #60a5fa;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .acc-cand-count.none { background: rgba(255,255,255,0.04); color: var(--text-dim); }
+
+    /* ── Two-column layout: ranking + candidates ── */
+    .acc-body {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+    }
+    .acc-body.no-cands { grid-template-columns: 1fr; }
+
+    .acc-ranking-wrap {
+      padding: 14px 18px;
+    }
+    .acc-cands-wrap {
+      padding: 14px 18px;
+      border-left: 1px solid rgba(255,255,255,0.04);
+      background: rgba(255,255,255,0.01);
+    }
+
+    /* ── Section labels ── */
+    .acc-section-label {
+      font-size: 9px; font-weight: 800; color: var(--text-dim);
+      text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 10px;
+    }
 
     /* ── Ranking table ── */
-    .acc-ranking { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
+    .acc-ranking { width: 100%; border-collapse: separate; border-spacing: 0; }
     .acc-ranking th {
-      text-align: left; font-size: 10px; font-weight: 700; color: var(--text-dim);
-      text-transform: uppercase; letter-spacing: 0.8px; padding: 4px 8px;
-      border-bottom: 1px solid rgba(255,255,255,0.06);
+      text-align: left; font-size: 9px; font-weight: 800; color: var(--text-dim);
+      text-transform: uppercase; letter-spacing: 0.8px; padding: 0 8px 8px;
     }
     .acc-ranking td {
-      padding: 6px 8px; font-size: 12px; font-weight: 600;
-      border-bottom: 1px solid rgba(255,255,255,0.03);
+      padding: 5px 8px; font-size: 12px; font-weight: 600;
     }
-    .acc-rank-num { color: var(--text-dim); font-size: 11px; width: 24px; }
-    .acc-ccy { font-weight: 800; font-size: 13px; }
+    .acc-ranking tr { transition: background 0.1s; }
+    .acc-ranking tbody tr:hover { background: rgba(255,255,255,0.03); }
+    .acc-ranking tr:first-child td {
+      border-top: 1px solid rgba(34,197,94,0.15);
+    }
+    .acc-ranking tr:last-child td {
+      border-bottom: 1px solid rgba(239,68,68,0.15);
+    }
+
+    .acc-rank-num { color: var(--text-dim); font-size: 10px; width: 20px; font-weight: 700; }
+    .acc-ccy { font-weight: 800; font-size: 12px; letter-spacing: 0.3px; }
     .acc-ccy.pos { color: #4ade80; }
     .acc-ccy.neg { color: #f87171; }
-    .acc-accel { font-family: var(--font-data); font-weight: 700; }
+    .acc-ccy.zero { color: var(--text-muted); }
+    .acc-accel { font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace; font-weight: 700; font-size: 11px; }
     .acc-accel.pos { color: #4ade80; }
     .acc-accel.neg { color: #f87171; }
-    .acc-score-cell { width: 100px; }
+    .acc-accel.zero { color: var(--text-muted); }
+    .acc-str { font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace; font-size: 10px; font-weight: 600; }
+    .acc-str.pos { color: rgba(74,222,128,0.65); }
+    .acc-str.neg { color: rgba(248,113,113,0.65); }
+    .acc-str.zero { color: var(--text-dim); }
 
-    /* ── Score bar ── */
+    .acc-score-cell { width: 90px; }
     .acc-score-bar {
-      position: relative; height: 16px; border-radius: 3px;
-      background: rgba(255,255,255,0.04); overflow: hidden;
+      position: relative; height: 14px; border-radius: 3px;
+      background: rgba(255,255,255,0.03); overflow: hidden;
     }
     .acc-score-fill {
       position: absolute; top: 0; height: 100%; border-radius: 3px;
-      transition: width 0.3s;
+      transition: width 0.4s ease;
     }
-    .acc-score-fill.pos { background: rgba(34,197,94,0.4); right: 50%; }
-    .acc-score-fill.neg { background: rgba(239,68,68,0.4); left: 50%; }
+    .acc-score-fill.pos { background: linear-gradient(90deg, rgba(34,197,94,0.15), rgba(34,197,94,0.45)); right: 50%; }
+    .acc-score-fill.neg { background: linear-gradient(270deg, rgba(239,68,68,0.15), rgba(239,68,68,0.45)); left: 50%; }
     .acc-score-mid {
       position: absolute; top: 0; left: 50%; width: 1px; height: 100%;
-      background: rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.12);
     }
     .acc-score-val {
       position: absolute; top: 0; left: 0; right: 0; text-align: center;
-      font-size: 9px; font-weight: 800; line-height: 16px; color: var(--text);
+      font-size: 8px; font-weight: 800; line-height: 14px; color: rgba(255,255,255,0.7);
+      letter-spacing: 0.3px;
     }
 
-    /* ── Strength values ── */
-    .acc-str { font-family: var(--font-data); font-size: 10px; color: var(--text-dim); }
-    .acc-str.pos { color: rgba(74,222,128,0.7); }
-    .acc-str.neg { color: rgba(248,113,113,0.7); }
-
-    /* ── Candidates ── */
-    .acc-cands-label {
-      font-size: 10px; font-weight: 700; color: var(--text-dim);
-      text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px;
-    }
-    .acc-cands { display: flex; gap: 8px; flex-wrap: wrap; }
+    /* ── Candidate cards ── */
     .acc-cand {
-      display: flex; align-items: center; gap: 6px;
-      padding: 6px 12px; border-radius: 8px;
-      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 10px; padding: 12px 14px;
+      background: rgba(255,255,255,0.02);
+      margin-bottom: 8px;
+      transition: border-color 0.15s, background 0.15s;
     }
-    .acc-cand-pair { font-size: 13px; font-weight: 800; color: var(--text); }
+    .acc-cand:hover { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.1); }
+    .acc-cand:last-child { margin-bottom: 0; }
+
+    .acc-cand-top {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+    }
+    .acc-cand-pair { font-size: 15px; font-weight: 800; color: var(--text); letter-spacing: -0.3px; }
     .acc-cand-dir {
-      font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 4px;
+      font-size: 9px; font-weight: 800; padding: 2px 8px; border-radius: 4px;
+      text-transform: uppercase; letter-spacing: 0.5px;
     }
     .acc-cand-dir.BUY { background: rgba(34,197,94,0.12); color: #4ade80; }
     .acc-cand-dir.SELL { background: rgba(239,68,68,0.12); color: #f87171; }
-    .brk-badge { font-size:10px; padding:2px 6px; border-radius:4px; background:rgba(251,191,36,0.15); color:#fbbf24; font-weight:700; }
-    .acc-cand-spread {
-      font-size: 10px; font-weight: 700; color: var(--text-muted);
-      font-family: var(--font-data);
-    }
-    .acc-cand-ccys {
-      font-size: 10px; color: var(--text-dim); font-weight: 600;
+
+    .brk-badge {
+      font-size: 9px; padding: 2px 7px; border-radius: 4px;
+      background: rgba(251,191,36,0.12); color: #fbbf24;
+      font-weight: 800; letter-spacing: 0.3px;
     }
 
-    @media (max-width: 640px) {
+    .acc-cand-spread-badge {
+      margin-left: auto;
+      font-size: 11px; font-weight: 800;
+      font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+      color: #60a5fa;
+    }
+
+    .acc-cand-detail {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+    }
+    .acc-cand-side {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 10px; border-radius: 6px;
+      font-size: 11px; font-weight: 700;
+    }
+    .acc-cand-side.strong {
+      background: rgba(34,197,94,0.06); border: 1px solid rgba(34,197,94,0.1);
+    }
+    .acc-cand-side.weak {
+      background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.1);
+    }
+    .acc-cand-side-ccy { font-weight: 800; font-size: 12px; }
+    .acc-cand-side.strong .acc-cand-side-ccy { color: #4ade80; }
+    .acc-cand-side.weak .acc-cand-side-ccy { color: #f87171; }
+    .acc-cand-side-val {
+      font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+      font-size: 10px; font-weight: 700; color: var(--text-muted);
+    }
+    .acc-cand-side-label {
+      font-size: 8px; font-weight: 700; color: var(--text-dim);
+      text-transform: uppercase; letter-spacing: 0.5px; margin-left: auto;
+    }
+
+    /* ── No candidates message ── */
+    .acc-no-cands {
+      font-size: 11px; color: var(--text-dim); font-style: italic;
+      padding: 10px 0;
+    }
+
+    @media (max-width: 720px) {
+      .acc-body { grid-template-columns: 1fr; }
+      .acc-cands-wrap { border-left: none; border-top: 1px solid rgba(255,255,255,0.04); }
       .sx-main { padding: 14px 12px 60px; }
       .sx-ctrls { width: 100%; margin-left: 0; }
       .acc-score-cell { width: 70px; }
+      .acc-time { font-size: 15px; }
+      .acc-cand-detail { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -173,8 +263,8 @@
   <main class="sx-main">
     <div class="sx-card">
       <div class="sx-card-hd">
-        <i data-lucide="gauge"></i> Currency Acceleration — Hourly momentum change
-        <span class="sx-note">Which currencies are accelerating fastest vs decelerating</span>
+        <i data-lucide="gauge"></i> Acceleration
+        <span class="sx-note">Hourly momentum shift — ranked by 3H delta with H1 break confirmation</span>
         <span class="sx-ctrls">
           <button class="sx-btn sx-days active" data-days="1">1D</button>
           <button class="sx-btn sx-days" data-days="2">2D</button>
@@ -226,18 +316,18 @@
       return new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Africa/Nairobi' });
     }
     function dayLabel(iso) {
-      return new Date(iso).toLocaleDateString('en-US', { weekday: 'short', day: '2-digit', month: 'short', timeZone: 'Africa/Nairobi' });
+      return new Date(iso).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: '2-digit', timeZone: 'Africa/Nairobi' });
     }
     function isWeekend(iso) {
       var d = new Date(iso).getUTCDay();
       return d === 0 || d === 6;
     }
-    function vcls(v) { return v >= 0 ? 'pos' : 'neg'; }
+    function vcls(v) { return v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero'; }
     function vfmt(v) { return (v >= 0 ? '+' : '') + v.toFixed(1); }
 
     function scoreBar(score) {
       var cls = score >= 0 ? 'pos' : 'neg';
-      var w = Math.abs(score) / 2; // 50% = full half
+      var w = Math.abs(score) / 2;
       var style = cls === 'pos'
         ? 'right:50%;width:' + w + '%;transform-origin:right'
         : 'left:50%;width:' + w + '%;transform-origin:left';
@@ -262,22 +352,31 @@
         if (isWeekend(row.time)) continue;
         if (!inSession(row.time)) continue;
 
-        html += '<div class="acc-card">';
+        var hasCands = row.candidates.length > 0;
+        html += '<div class="acc-card' + (hasCands ? ' has-candidates' : '') + '">';
 
         // Header
         html += '<div class="acc-hd">';
+        html += '<div class="acc-time-block">';
         html += '<span class="acc-time">' + hrLabel(row.time) + '</span>';
         html += '<span class="acc-date">' + dayLabel(row.time) + '</span>';
-        if (row.candidates.length) {
-          html += '<span style="margin-left:auto;font-size:11px;font-weight:700;color:var(--text-dim)">' + row.candidates.length + ' candidate' + (row.candidates.length > 1 ? 's' : '') + '</span>';
+        html += '</div>';
+        if (hasCands) {
+          html += '<span class="acc-cand-count">' + row.candidates.length + ' signal' + (row.candidates.length > 1 ? 's' : '') + '</span>';
+        } else {
+          html += '<span class="acc-cand-count none">No breaks</span>';
         }
         html += '</div>';
 
-        html += '<div class="acc-body">';
+        // Body: two-column layout
+        html += '<div class="acc-body' + (hasCands ? '' : ' no-cands') + '">';
 
-        // Ranking table
+        // Left: Ranking table
+        html += '<div class="acc-ranking-wrap">';
+        html += '<div class="acc-section-label">Currency Ranking</div>';
         html += '<table class="acc-ranking">';
-        html += '<tr><th>#</th><th>Currency</th><th>Accel</th><th>3H</th><th class="acc-score-cell">Score</th></tr>';
+        html += '<thead><tr><th>#</th><th>Currency</th><th>Accel</th><th>3H</th><th class="acc-score-cell">Score</th></tr></thead>';
+        html += '<tbody>';
         for (var i = 0; i < row.ranking.length; i++) {
           var a = row.ranking[i];
           html += '<tr>';
@@ -288,21 +387,40 @@
           html += '<td class="acc-score-cell">' + scoreBar(a.score) + '</td>';
           html += '</tr>';
         }
-        html += '</table>';
+        html += '</tbody></table>';
+        html += '</div>';
 
-        // Candidate pairs
-        if (row.candidates.length) {
-          html += '<div class="acc-cands-label">Candidate Pairs</div>';
-          html += '<div class="acc-cands">';
+        // Right: Candidates
+        if (hasCands) {
+          html += '<div class="acc-cands-wrap">';
+          html += '<div class="acc-section-label">Confirmed Pairs</div>';
           for (var c = 0; c < row.candidates.length; c++) {
             var cd = row.candidates[c];
             html += '<div class="acc-cand">';
+
+            // Top row: pair, direction, break badge, spread
+            html += '<div class="acc-cand-top">';
             html += '<span class="acc-cand-pair">' + cd.pair + '</span>';
             html += '<span class="acc-cand-dir ' + cd.direction + '">' + cd.direction + '</span>';
             var brkLabel = cd.direction === 'BUY' ? 'BRK HH' : 'BRK LL';
             html += '<span class="brk-badge">' + brkLabel + ' ' + cd.breakLevel + '</span>';
-            html += '<span class="acc-cand-spread">spread ' + vfmt(cd.spread) + '</span>';
-            html += '<span class="acc-cand-ccys">' + cd.strongCcy + ' 3H ' + vfmt(cd.strongS3) + ' vs ' + cd.weakCcy + ' 3H ' + vfmt(cd.weakS3) + '</span>';
+            html += '<span class="acc-cand-spread-badge">' + vfmt(cd.spread) + '</span>';
+            html += '</div>';
+
+            // Detail row: strong vs weak
+            html += '<div class="acc-cand-detail">';
+            html += '<div class="acc-cand-side strong">';
+            html += '<span class="acc-cand-side-ccy">' + cd.strongCcy + '</span>';
+            html += '<span class="acc-cand-side-val">3H ' + vfmt(cd.strongS3) + '</span>';
+            html += '<span class="acc-cand-side-label">Strong</span>';
+            html += '</div>';
+            html += '<div class="acc-cand-side weak">';
+            html += '<span class="acc-cand-side-ccy">' + cd.weakCcy + '</span>';
+            html += '<span class="acc-cand-side-val">3H ' + vfmt(cd.weakS3) + '</span>';
+            html += '<span class="acc-cand-side-label">Weak</span>';
+            html += '</div>';
+            html += '</div>';
+
             html += '</div>';
           }
           html += '</div>';
