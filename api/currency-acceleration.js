@@ -76,10 +76,10 @@ module.exports = async function handler(req, res) {
       if (!cur || !prev) continue;
       if (Object.keys(cur).length < 8 || Object.keys(prev).length < 8) continue;
 
-      // Calculate acceleration per currency (delta of 3H strength between hours)
+      // Calculate acceleration per currency (delta of 6H strength between hours)
       const accels = CURRENCIES.map(ccy => {
-        const curVal = cur[ccy]?.s3 || 0;
-        const prevVal = prev[ccy]?.s3 || 0;
+        const curVal = cur[ccy]?.s6 || 0;
+        const prevVal = prev[ccy]?.s6 || 0;
         return {
           currency: ccy,
           current: Math.round(curVal * 100) / 100,
