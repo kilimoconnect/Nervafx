@@ -154,11 +154,11 @@ module.exports = async function handler(req, res) {
           if (direction === 'BUY' && curr.close > prevC.high) {
             broke = true;
             breakLevel = prevC.high;
-            breakPct = Math.round(((curr.close - prevC.high) / prevC.high) * 10000) / 100;
+            breakPct = Math.round(((curr.high - curr.close) / curr.high) * 10000) / 100;
           } else if (direction === 'SELL' && curr.close < prevC.low) {
             broke = true;
             breakLevel = prevC.low;
-            breakPct = Math.round(((prevC.low - curr.close) / prevC.low) * 10000) / 100;
+            breakPct = Math.round(((curr.close - curr.low) / curr.low) * 10000) / 100;
           }
           if (!broke) continue;
 
