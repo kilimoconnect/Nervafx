@@ -29,7 +29,8 @@ module.exports = async function handler(req, res) {
     const since = qFrom ? new Date(qFrom + 'T00:00:00Z').toISOString()
       : new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
-    const fetchSince = since;
+    // Fetch 1 extra hour for first delta
+    const fetchSince = new Date(new Date(since).getTime() - 3600000).toISOString();
 
     const allRows = [];
     const PAGE = 1000;
@@ -63,27 +64,29 @@ module.exports = async function handler(req, res) {
     const timestamps = Object.keys(byTime).sort();
     const rows = [];
 
-    for (let t = 0; t < timestamps.length; t++) {
+    for (let t = 1; t < timestamps.length; t++) {
       const time = timestamps[t];
+      const prevTime = timestamps[t - 1];
 
-      // Skip if before requested range
+      // Skip if before requested range (we fetched extra for first delta)
       if (time < since) continue;
 
       const cur = byTime[time];
-      if (!cur) continue;
-      if (Object.keys(cur).length < 8) continue;
+      const prev = byTime[prevTime];
+      if (!cur || !prev) continue;
+      if (Object.keys(cur).length < 8 || Object.keys(prev).length < 8) continue;
 
-      // Calculate acceleration per currency (3H minus 6H at same timestamp)
+      // Acceleration = hourly delta of 3H strength
       const accels = CURRENCIES.map(ccy => {
-        const s3 = cur[ccy]?.s3 || 0;
-        const s6 = cur[ccy]?.s6 || 0;
-        const accel = s3 - s6;
+        const s3now = cur[ccy]?.s3 || 0;
+        const s3prev = prev[ccy]?.s3 || 0;
+        const accel = s3now - s3prev;
         return {
           currency: ccy,
           acceleration: Math.round(accel * 100) / 100,
-          s3: Math.round(s3 * 100) / 100,
+          s3: Math.round(s3now * 100) / 100,
           s4: Math.round((cur[ccy]?.s4 || 0) * 100) / 100,
-          s6: Math.round(s6 * 100) / 100,
+          s6: Math.round((cur[ccy]?.s6 || 0) * 100) / 100,
         };
       });
 
