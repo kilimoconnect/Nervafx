@@ -99,18 +99,11 @@ module.exports = async function handler(req, res) {
         a.score = Math.round((a.acceleration / maxAbs) * 100);
       }
 
-      // Confirmed strong: 3H > 0 AND acceleration > 0 (strong and getting stronger)
-      const confirmed_strong = accels.filter(a => a.s3 > 0 && a.acceleration > 0);
-      // Confirmed weak: 3H < 0 AND acceleration < 0 (weak and getting weaker)
-      const confirmed_weak = accels.filter(a => a.s3 < 0 && a.acceleration < 0);
-
-      // Sort strong by 3H descending, weak by 3H ascending
-      confirmed_strong.sort((a, b) => b.s3 - a.s3);
-      confirmed_weak.sort((a, b) => a.s3 - b.s3);
-
+      // Rank by 3H strength: top = strongest, bottom = weakest
+      const byStrength = [...accels].sort((a, b) => b.s3 - a.s3);
+      const topStrong = byStrength.slice(0, 2);
+      const topWeak = byStrength.slice(-2).reverse();
       const candidates = [];
-      const topStrong = confirmed_strong.slice(0, 3);
-      const topWeak = confirmed_weak.slice(0, 3);
 
       for (const strong of topStrong) {
         for (const weak of topWeak) {
