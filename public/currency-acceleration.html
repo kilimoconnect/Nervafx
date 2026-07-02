@@ -144,6 +144,7 @@
     }
     .acc-cand-dir.BUY { background: rgba(34,197,94,0.12); color: #4ade80; }
     .acc-cand-dir.SELL { background: rgba(239,68,68,0.12); color: #f87171; }
+    .brk-badge { font-size:10px; padding:2px 6px; border-radius:4px; background:rgba(251,191,36,0.15); color:#fbbf24; font-weight:700; }
     .acc-cand-spread {
       font-size: 10px; font-weight: 700; color: var(--text-muted);
       font-family: var(--font-data);
@@ -299,8 +300,10 @@
             html += '<div class="acc-cand">';
             html += '<span class="acc-cand-pair">' + cd.pair + '</span>';
             html += '<span class="acc-cand-dir ' + cd.direction + '">' + cd.direction + '</span>';
+            var brkLabel = cd.direction === 'BUY' ? 'BRK HH' : 'BRK LL';
+            html += '<span class="brk-badge">' + brkLabel + ' ' + cd.breakLevel + '</span>';
             html += '<span class="acc-cand-spread">spread ' + vfmt(cd.spread) + '</span>';
-            html += '<span class="acc-cand-ccys">' + cd.strongCcy + ' 3H ' + vfmt(cd.strongS3) + ' ↑' + vfmt(cd.strongAccel) + ' vs ' + cd.weakCcy + ' 3H ' + vfmt(cd.weakS3) + ' ↓' + vfmt(cd.weakAccel) + '</span>';
+            html += '<span class="acc-cand-ccys">' + cd.strongCcy + ' 3H ' + vfmt(cd.strongS3) + ' vs ' + cd.weakCcy + ' 3H ' + vfmt(cd.weakS3) + '</span>';
             html += '</div>';
           }
           html += '</div>';

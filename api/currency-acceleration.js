@@ -61,6 +61,31 @@ module.exports = async function handler(req, res) {
       };
     }
 
+    // Fetch H1 candles for all 28 pairs (for break detection)
+    const candleSince = new Date(new Date(fetchSince).getTime() - 2 * 3600000).toISOString();
+    const candleCache = {};
+    const ALL_PAIRS = [...VALID_PAIRS];
+    for (let b = 0; b < ALL_PAIRS.length; b += 7) {
+      const batch = ALL_PAIRS.slice(b, b + 7);
+      const results = await Promise.all(batch.map(async inst => {
+        const { data, error } = await sb
+          .from('backtest_candles')
+          .select('time, open, high, low, close')
+          .eq('instrument', inst).eq('timeframe', 'H1').eq('complete', true)
+          .gte('time', candleSince).lte('time', until)
+          .order('time', { ascending: true }).limit(500);
+        return { inst, data: error ? [] : data || [] };
+      }));
+      for (const { inst, data } of results) {
+        candleCache[inst] = data.map(c => ({
+          time: c.time,
+          high: parseFloat(c.high),
+          low: parseFloat(c.low),
+          close: parseFloat(c.close),
+        }));
+      }
+    }
+
     const timestamps = Object.keys(byTime).sort();
     const rows = [];
 
@@ -68,7 +93,6 @@ module.exports = async function handler(req, res) {
       const time = timestamps[t];
       const prevTime = timestamps[t - 1];
 
-      // Skip if before requested range (we fetched extra for first delta)
       if (time < since) continue;
 
       const cur = byTime[time];
@@ -90,10 +114,8 @@ module.exports = async function handler(req, res) {
         };
       });
 
-      // Rank by acceleration descending
       accels.sort((a, b) => b.acceleration - a.acceleration);
 
-      // Normalize to ±100 score
       const maxAbs = Math.max(...accels.map(a => Math.abs(a.acceleration)), 0.01);
       for (const a of accels) {
         a.score = Math.round((a.acceleration / maxAbs) * 100);
@@ -109,14 +131,34 @@ module.exports = async function handler(req, res) {
         for (const weak of topWeak) {
           const fwd = strong.currency + '_' + weak.currency;
           const rev = weak.currency + '_' + strong.currency;
-          let pair, direction;
+          let inst, pair, direction;
           if (VALID_PAIRS.has(fwd)) {
+            inst = fwd;
             pair = strong.currency + '/' + weak.currency;
             direction = 'BUY';
           } else if (VALID_PAIRS.has(rev)) {
+            inst = rev;
             pair = weak.currency + '/' + strong.currency;
             direction = 'SELL';
           } else continue;
+
+          // Check break of previous candle high/low
+          const candles = candleCache[inst] || [];
+          const ci = candles.findIndex(c => c.time >= time);
+          if (ci < 1) continue;
+          const curr = candles[ci] || candles[candles.length - 1];
+          const prevC = candles[ci - 1];
+
+          let broke = false;
+          let breakLevel = null;
+          if (direction === 'BUY' && curr.close > prevC.high) {
+            broke = true;
+            breakLevel = prevC.high;
+          } else if (direction === 'SELL' && curr.close < prevC.low) {
+            broke = true;
+            breakLevel = prevC.low;
+          }
+          if (!broke) continue;
 
           const spread = Math.round((strong.s3 - weak.s3) * 100) / 100;
           candidates.push({
@@ -129,6 +171,7 @@ module.exports = async function handler(req, res) {
             strongAccel: strong.acceleration,
             weakAccel: weak.acceleration,
             spread,
+            breakLevel,
             strongScore: strong.score,
             weakScore: weak.score,
           });
