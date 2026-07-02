@@ -276,13 +276,14 @@
 
         // Ranking table
         html += '<table class="acc-ranking">';
-        html += '<tr><th>#</th><th>Currency</th><th>Accel</th><th>6H</th><th class="acc-score-cell">Score</th></tr>';
+        html += '<tr><th>#</th><th>Currency</th><th>Accel</th><th>3H</th><th>6H</th><th class="acc-score-cell">Score</th></tr>';
         for (var i = 0; i < row.ranking.length; i++) {
           var a = row.ranking[i];
           html += '<tr>';
           html += '<td class="acc-rank-num">' + (i + 1) + '</td>';
           html += '<td class="acc-ccy ' + vcls(a.acceleration) + '">' + a.currency + '</td>';
           html += '<td class="acc-accel ' + vcls(a.acceleration) + '">' + vfmt(a.acceleration) + '</td>';
+          html += '<td class="acc-str ' + vcls(a.s3) + '">' + vfmt(a.s3) + '</td>';
           html += '<td class="acc-str ' + vcls(a.s6) + '">' + vfmt(a.s6) + '</td>';
           html += '<td class="acc-score-cell">' + scoreBar(a.score) + '</td>';
           html += '</tr>';

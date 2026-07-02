@@ -29,8 +29,7 @@ module.exports = async function handler(req, res) {
     const since = qFrom ? new Date(qFrom + 'T00:00:00Z').toISOString()
       : new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
-    // Fetch currency_strength with 1 extra hour for first delta
-    const fetchSince = new Date(new Date(since).getTime() - 2 * 3600000).toISOString();
+    const fetchSince = since;
 
     const allRows = [];
     const PAGE = 1000;
@@ -64,30 +63,27 @@ module.exports = async function handler(req, res) {
     const timestamps = Object.keys(byTime).sort();
     const rows = [];
 
-    for (let t = 1; t < timestamps.length; t++) {
+    for (let t = 0; t < timestamps.length; t++) {
       const time = timestamps[t];
-      const prevTime = timestamps[t - 1];
 
-      // Skip if before requested range (we fetched extra for first delta)
+      // Skip if before requested range
       if (time < since) continue;
 
       const cur = byTime[time];
-      const prev = byTime[prevTime];
-      if (!cur || !prev) continue;
-      if (Object.keys(cur).length < 8 || Object.keys(prev).length < 8) continue;
+      if (!cur) continue;
+      if (Object.keys(cur).length < 8) continue;
 
-      // Calculate acceleration per currency (delta of 6H strength between hours)
+      // Calculate acceleration per currency (3H minus 6H at same timestamp)
       const accels = CURRENCIES.map(ccy => {
-        const curVal = cur[ccy]?.s6 || 0;
-        const prevVal = prev[ccy]?.s6 || 0;
+        const s3 = cur[ccy]?.s3 || 0;
+        const s6 = cur[ccy]?.s6 || 0;
+        const accel = s3 - s6;
         return {
           currency: ccy,
-          current: Math.round(curVal * 100) / 100,
-          previous: Math.round(prevVal * 100) / 100,
-          acceleration: Math.round((curVal - prevVal) * 100) / 100,
-          s3: Math.round((cur[ccy]?.s3 || 0) * 100) / 100,
+          acceleration: Math.round(accel * 100) / 100,
+          s3: Math.round(s3 * 100) / 100,
           s4: Math.round((cur[ccy]?.s4 || 0) * 100) / 100,
-          s6: Math.round((cur[ccy]?.s6 || 0) * 100) / 100,
+          s6: Math.round(s6 * 100) / 100,
         };
       });
 
