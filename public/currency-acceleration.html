@@ -403,7 +403,7 @@
             html += '<span class="acc-cand-pair">' + cd.pair + '</span>';
             html += '<span class="acc-cand-dir ' + cd.direction + '">' + cd.direction + '</span>';
             var brkLabel = cd.direction === 'BUY' ? 'BRK HH' : 'BRK LL';
-            html += '<span class="brk-badge">' + brkLabel + ' ' + cd.breakLevel + '</span>';
+            html += '<span class="brk-badge">' + brkLabel + ' ' + cd.breakLevel + ' (' + cd.breakPct.toFixed(2) + '%)</span>';
             html += '<span class="acc-cand-spread-badge">' + vfmt(cd.spread) + '</span>';
             html += '</div>';
 

@@ -150,12 +150,15 @@ module.exports = async function handler(req, res) {
 
           let broke = false;
           let breakLevel = null;
+          let breakPct = 0;
           if (direction === 'BUY' && curr.close > prevC.high) {
             broke = true;
             breakLevel = prevC.high;
+            breakPct = Math.round(((curr.close - prevC.high) / prevC.high) * 10000) / 100;
           } else if (direction === 'SELL' && curr.close < prevC.low) {
             broke = true;
             breakLevel = prevC.low;
+            breakPct = Math.round(((prevC.low - curr.close) / prevC.low) * 10000) / 100;
           }
           if (!broke) continue;
 
@@ -171,6 +174,7 @@ module.exports = async function handler(req, res) {
             weakAccel: weak.acceleration,
             spread,
             breakLevel,
+            breakPct,
             strongScore: strong.score,
             weakScore: weak.score,
           });
