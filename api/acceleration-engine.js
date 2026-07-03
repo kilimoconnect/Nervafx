@@ -266,13 +266,13 @@ module.exports = async function handler(req, res) {
         a.isLeader = leaderCcys.has(a.currency);
       }
 
-      // Generate CONFIRMED pairs: Growth/Birth bulls vs Growth/Birth bears + break
+      // Generate CONFIRMED pairs: Growth bulls vs Growth bears (consecutive >= 5)
       const bulls = ranking.filter(a =>
-        a.direction === 'bull' && (a.phase === PHASES.GROWTH || a.phase === PHASES.BIRTH)
+        a.direction === 'bull' && (a.phase === PHASES.GROWTH || a.phase === PHASES.BIRTH) && a.consecutive >= 5
       ).sort((a, b) => b.s45 - a.s45);
 
       const bears = ranking.filter(a =>
-        a.direction === 'bear' && (a.phase === PHASES.GROWTH || a.phase === PHASES.BIRTH)
+        a.direction === 'bear' && (a.phase === PHASES.GROWTH || a.phase === PHASES.BIRTH) && a.consecutive >= 5
       ).sort((a, b) => a.s45 - b.s45);
 
       const candidates = [];
