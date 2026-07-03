@@ -58,6 +58,40 @@ module.exports = async function handler(req, res) {
       offset += PAGE;
     }
 
+    // Fetch hourly 6H smoothed strength for trend confirmation
+    const h6Rows = [];
+    let h6off = 0;
+    while (true) {
+      const { data, error } = await sb
+        .from('currency_strength')
+        .select('time, currency, smooth_6h')
+        .gte('time', fetchSince)
+        .lte('time', until)
+        .order('time', { ascending: true })
+        .range(h6off, h6off + PAGE - 1);
+      if (error) throw error;
+      if (!data || !data.length) break;
+      h6Rows.push(...data);
+      if (data.length < PAGE) break;
+      h6off += PAGE;
+    }
+
+    // Build 6H lookup: sorted hourly timestamps → { ccy: value }
+    const h6ByTime = {};
+    for (const r of h6Rows) {
+      if (!h6ByTime[r.time]) h6ByTime[r.time] = {};
+      h6ByTime[r.time][r.currency] = (parseFloat(r.smooth_6h) || 0) * 10000;
+    }
+    const h6Timestamps = Object.keys(h6ByTime).sort();
+
+    function getH6(ccy, atTime) {
+      let best = null;
+      for (let i = h6Timestamps.length - 1; i >= 0; i--) {
+        if (h6Timestamps[i] <= atTime) { best = h6ByTime[h6Timestamps[i]]; break; }
+      }
+      return best ? (best[ccy] || 0) : 0;
+    }
+
     // Fetch H1 candles for break confirmation
     const candleSince = new Date(new Date(fetchSince).getTime() - 2 * 3600000).toISOString();
     const h1Cache = {};
@@ -289,6 +323,13 @@ module.exports = async function handler(req, res) {
 
           if (!h1Break || !m15Break) continue;
 
+          // 6H strength confirmation:
+          // BUY = strongCcy accelerating up, weakCcy accelerating down
+          // For qualification: weakCcy must be stronger on 6H (fresh turn, not chasing)
+          const strong6H = getH6(strong.currency, time);
+          const weak6H = getH6(weak.currency, time);
+          if (weak6H <= strong6H) continue;
+
           // Confidence score
           let confidence = 0;
           if (strong.phase === PHASES.GROWTH) confidence += 20;
@@ -320,6 +361,8 @@ module.exports = async function handler(req, res) {
             pair, direction,
             strongCcy: strong.currency, weakCcy: weak.currency,
             strongS45: strong.s45, weakS45: weak.s45,
+            strongH6: Math.round(strong6H * 100) / 100,
+            weakH6: Math.round(weak6H * 100) / 100,
             strongPhase: strong.phase, weakPhase: weak.phase,
             strongConsec: strong.consecutive, weakConsec: weak.consecutive,
             strongIsLeader: strong.isLeader, weakIsLeader: weak.isLeader,
