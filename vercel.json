@@ -34,7 +34,8 @@
     "api/cron-m15-impulse-alerts.js": { "maxDuration": 30 },
     "api/m15-impulse.js": { "maxDuration": 60 },
     "api/currency-acceleration.js": { "maxDuration": 60 },
-    "api/m15-acceleration.js": { "maxDuration": 60 }
+    "api/m15-acceleration.js": { "maxDuration": 60 },
+    "api/acceleration-engine.js": { "maxDuration": 60 }
   },
   "rewrites": [
     { "source": "/",       "destination": "/login.html" },
@@ -61,7 +62,8 @@
     { "source": "/pair-imbalance", "destination": "/pair-imbalance.html" },
     { "source": "/m15-impulse", "destination": "/m15-impulse.html" },
     { "source": "/currency-acceleration", "destination": "/currency-acceleration.html" },
-    { "source": "/m15-acceleration", "destination": "/m15-acceleration.html" }
+    { "source": "/m15-acceleration", "destination": "/m15-acceleration.html" },
+    { "source": "/acceleration-engine", "destination": "/acceleration-engine.html" }
   ],
   "headers": [
     {
