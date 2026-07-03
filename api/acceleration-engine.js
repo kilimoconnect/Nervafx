@@ -29,44 +29,38 @@ module.exports = async function handler(req, res) {
     const gate = await requirePlan(sb, req, 'premium');
     if (gate.error) return res.status(gate.status).json({ error: gate.error, upgrade: gate.upgrade });
 
-    const days = Math.min(30, parseInt(req.query?.days || '2', 10) || 2);
+    const days = Math.min(30, parseInt(req.query?.days || '1', 10) || 1);
     const qFrom = req.query?.from;
     const qTo = req.query?.to;
     const until = qTo ? new Date(qTo + 'T23:59:59Z').toISOString() : new Date().toISOString();
     const since = qFrom ? new Date(qFrom + 'T00:00:00Z').toISOString()
       : new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
-    // Extra lookback for lifecycle state buildup
-    const fetchSince = new Date(new Date(since).getTime() - 6 * 3600000).toISOString();
+    // Extra lookback for lifecycle state buildup (2 hours of M15 bars = 8 bars)
+    const fetchSince = new Date(new Date(since).getTime() - 2 * 3600000).toISOString();
 
-    // Fetch hourly currency strength
-    const allRows = [];
+    // Fetch M15 currency strength (45M smooth at 15-min intervals)
+    const allStrength = [];
     const PAGE = 1000;
     let offset = 0;
     while (true) {
       const { data, error } = await sb
-        .from('currency_strength')
-        .select('time, currency, smooth_3h')
+        .from('m15_currency_strength')
+        .select('time, values')
         .gte('time', fetchSince)
         .lte('time', until)
         .order('time', { ascending: true })
         .range(offset, offset + PAGE - 1);
       if (error) throw error;
       if (!data || !data.length) break;
-      allRows.push(...data);
+      allStrength.push(...data);
       if (data.length < PAGE) break;
       offset += PAGE;
     }
 
-    const byTime = {};
-    for (const r of allRows) {
-      if (!byTime[r.time]) byTime[r.time] = {};
-      byTime[r.time][r.currency] = (parseFloat(r.smooth_3h) || 0) * 10000;
-    }
-
     // Fetch H1 candles for break confirmation
     const candleSince = new Date(new Date(fetchSince).getTime() - 2 * 3600000).toISOString();
-    const candleCache = {};
+    const h1Cache = {};
     const ALL_PAIRS = [...VALID_PAIRS];
     for (let b = 0; b < ALL_PAIRS.length; b += 7) {
       const batch = ALL_PAIRS.slice(b, b + 7);
@@ -80,7 +74,7 @@ module.exports = async function handler(req, res) {
         return { inst, data: error ? [] : data || [] };
       }));
       for (const { inst, data } of results) {
-        candleCache[inst] = data.map(c => ({
+        h1Cache[inst] = data.map(c => ({
           time: c.time,
           open: parseFloat(c.open),
           high: parseFloat(c.high),
@@ -90,7 +84,7 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // Fetch M15 candles for cross-timeframe confirmation
+    // Fetch M15 candles for break confirmation
     const m15Cache = {};
     for (let b = 0; b < ALL_PAIRS.length; b += 7) {
       const batch = ALL_PAIRS.slice(b, b + 7);
@@ -124,14 +118,12 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    const timestamps = Object.keys(byTime).sort();
-
     // Per-currency lifecycle state (persists across timestamps)
     const state = {};
     for (const ccy of CURRENCIES) {
       state[ccy] = {
         phase: PHASES.IDLE,
-        direction: null,       // 'bull' or 'bear'
+        direction: null,
         consecutiveCount: 0,
         peakAccel: 0,
         birthTime: null,
@@ -141,54 +133,48 @@ module.exports = async function handler(req, res) {
 
     const rows = [];
 
-    for (let t = 1; t < timestamps.length; t++) {
-      const time = timestamps[t];
-      const prevTime = timestamps[t - 1];
-      const cur = byTime[time];
-      const prev = byTime[prevTime];
-      if (!cur || !prev) continue;
-      if (Object.keys(cur).length < 8 || Object.keys(prev).length < 8) continue;
+    for (let t = 1; t < allStrength.length; t++) {
+      const cur = allStrength[t];
+      const prev = allStrength[t - 1];
+      const time = cur.time;
+      if (!cur.values || !prev.values) continue;
+
+      const curVals = cur.values;
+      const prevVals = prev.values;
 
       const ranking = [];
 
       for (const ccy of CURRENCIES) {
-        const s3 = cur[ccy] || 0;
-        const s3prev = prev[ccy] || 0;
-        const accel = s3 - s3prev;
+        const s45 = (parseFloat(curVals[ccy]) || 0) * 10000;
+        const s45prev = (parseFloat(prevVals[ccy]) || 0) * 10000;
+        const accel = s45 - s45prev;
         const accelR = Math.round(accel * 100) / 100;
-        const s3R = Math.round(s3 * 100) / 100;
+        const s45R = Math.round(s45 * 100) / 100;
         const dir = accel > 0 ? 'bull' : accel < 0 ? 'bear' : null;
         const absAccel = Math.abs(accel);
         const st = state[ccy];
 
-        // Phase transition logic
         if (!dir) {
-          // No acceleration — reset to idle
           st.phase = PHASES.IDLE;
           st.direction = null;
           st.consecutiveCount = 0;
           st.peakAccel = 0;
           st.birthTime = null;
         } else if (dir !== st.direction) {
-          // Direction changed — BIRTH of new cycle
           st.phase = PHASES.BIRTH;
           st.direction = dir;
           st.consecutiveCount = 1;
           st.peakAccel = absAccel;
           st.birthTime = time;
         } else {
-          // Same direction continues
           st.consecutiveCount++;
 
           if (absAccel >= st.peakAccel) {
-            // Acceleration still growing — GROWTH
             st.peakAccel = absAccel;
             st.phase = st.consecutiveCount >= 2 ? PHASES.GROWTH : PHASES.BIRTH;
           } else if (absAccel < st.peakAccel * 0.6) {
-            // Acceleration dropped significantly — EXHAUSTION
             st.phase = PHASES.EXHAUSTION;
           } else if (st.consecutiveCount >= 2) {
-            // Holding but not growing — still GROWTH
             st.phase = PHASES.GROWTH;
           }
         }
@@ -198,7 +184,7 @@ module.exports = async function handler(req, res) {
         ranking.push({
           currency: ccy,
           acceleration: accelR,
-          s3: s3R,
+          s45: s45R,
           phase: st.phase,
           direction: st.direction,
           consecutive: st.consecutiveCount,
@@ -207,7 +193,7 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      // Skip timestamps before requested range (we used lookback for state buildup)
+      // Skip timestamps before requested range (lookback was for state buildup)
       if (time < since) continue;
 
       // Score: normalize
@@ -216,28 +202,23 @@ module.exports = async function handler(req, res) {
         a.score = Math.round((a.acceleration / maxAbs) * 100);
       }
 
-      // Sort ranking by acceleration descending
       ranking.sort((a, b) => b.acceleration - a.acceleration);
 
-      // Detect ROTATION: any currency entering Exhaustion while another enters Birth/Growth
+      // Detect ROTATION
       const exhausting = ranking.filter(a => a.phase === PHASES.EXHAUSTION);
       const emerging = ranking.filter(a => a.phase === PHASES.BIRTH || a.phase === PHASES.GROWTH);
       const rotations = [];
       for (const ex of exhausting) {
         for (const em of emerging) {
-          if (ex.direction === em.direction) continue; // same direction = not rotation
+          if (ex.direction === em.direction) continue;
           rotations.push({
-            from: ex.currency,
-            fromPhase: ex.phase,
-            fromDir: ex.direction,
-            to: em.currency,
-            toPhase: em.phase,
-            toDir: em.direction,
+            from: ex.currency, fromPhase: ex.phase, fromDir: ex.direction,
+            to: em.currency, toPhase: em.phase, toDir: em.direction,
           });
         }
       }
 
-      // Detect LEADERSHIP: earliest birthTime among Growth currencies
+      // Detect LEADERSHIP
       const leaders = ranking
         .filter(a => a.phase === PHASES.GROWTH && a.birthTime)
         .sort((a, b) => a.birthTime < b.birthTime ? -1 : 1);
@@ -255,11 +236,11 @@ module.exports = async function handler(req, res) {
       // Generate CONFIRMED pairs: Growth/Birth bulls vs Growth/Birth bears + break
       const bulls = ranking.filter(a =>
         a.direction === 'bull' && (a.phase === PHASES.GROWTH || a.phase === PHASES.BIRTH)
-      ).sort((a, b) => b.s3 - a.s3);
+      ).sort((a, b) => b.s45 - a.s45);
 
       const bears = ranking.filter(a =>
         a.direction === 'bear' && (a.phase === PHASES.GROWTH || a.phase === PHASES.BIRTH)
-      ).sort((a, b) => a.s3 - b.s3);
+      ).sort((a, b) => a.s45 - b.s45);
 
       const candidates = [];
       const topBulls = bulls.slice(0, 3);
@@ -277,7 +258,7 @@ module.exports = async function handler(req, res) {
           } else continue;
 
           // H1 break check
-          const h1Candles = candleCache[inst] || [];
+          const h1Candles = h1Cache[inst] || [];
           let h1ci = -1;
           for (let k = h1Candles.length - 1; k >= 0; k--) {
             if (h1Candles[k].time <= time) { h1ci = k; break; }
@@ -310,41 +291,35 @@ module.exports = async function handler(req, res) {
 
           // Confidence score
           let confidence = 0;
-          // Phase scoring
           if (strong.phase === PHASES.GROWTH) confidence += 20;
           if (strong.phase === PHASES.BIRTH) confidence += 10;
           if (weak.phase === PHASES.GROWTH) confidence += 20;
           if (weak.phase === PHASES.BIRTH) confidence += 10;
-          // Consecutive periods
           confidence += Math.min(strong.consecutive, 5) * 4;
           confidence += Math.min(weak.consecutive, 5) * 4;
-          // Break alignment
           if (h1Break) confidence += 15;
           if (m15Break) confidence += 10;
-          if (h1Break && m15Break) confidence += 10; // bonus for both
-          // Leadership
+          if (h1Break && m15Break) confidence += 10;
           if (strong.isLeader) confidence += 5;
           if (weak.isLeader) confidence += 5;
-          // Exhaustion penalty (shouldn't happen but safety)
           if (strong.phase === PHASES.EXHAUSTION) confidence -= 20;
           if (weak.phase === PHASES.EXHAUSTION) confidence -= 20;
-
           confidence = Math.min(100, Math.max(0, confidence));
 
-          const spread = Math.round((strong.s3 - weak.s3) * 100) / 100;
+          const spread = Math.round((strong.s45 - weak.s45) * 100) / 100;
 
-          // Body % from H1
+          // Body % from M15 candle
           let bodyPct = 0;
-          if (h1ci >= 1) {
-            const currBody = Math.abs(h1Candles[h1ci].close - h1Candles[h1ci].open);
-            const prevBody = Math.abs(h1Candles[h1ci - 1].close - h1Candles[h1ci - 1].open) || 0.00001;
+          if (m15ci >= 1) {
+            const currBody = Math.abs(m15Candles[m15ci].close - m15Candles[m15ci].open);
+            const prevBody = Math.abs(m15Candles[m15ci - 1].close - m15Candles[m15ci - 1].open) || 0.00001;
             bodyPct = Math.round((currBody / prevBody) * 100);
           }
 
           candidates.push({
             pair, direction,
             strongCcy: strong.currency, weakCcy: weak.currency,
-            strongS3: strong.s3, weakS3: weak.s3,
+            strongS45: strong.s45, weakS45: weak.s45,
             strongPhase: strong.phase, weakPhase: weak.phase,
             strongConsec: strong.consecutive, weakConsec: weak.consecutive,
             strongIsLeader: strong.isLeader, weakIsLeader: weak.isLeader,
