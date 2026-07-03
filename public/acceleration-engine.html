@@ -502,19 +502,10 @@
             html += '</div>';
             html += '</div>';
 
-            // Break tags
+            // Tags
             html += '<div class="brk-row">';
-            if (cd.h1Break && cd.m15Break) {
-              html += '<span class="brk-tag both">H1+M15 ALIGNED</span>';
-            } else {
-              html += '<span class="brk-tag ' + (cd.h1Break ? 'h1-on' : 'h1-off') + '">H1 ' + (cd.h1Break ? '✓' : '—') + '</span>';
-              html += '<span class="brk-tag ' + (cd.m15Break ? 'm15-on' : 'm15-off') + '">M15 ' + (cd.m15Break ? '✓' : '—') + '</span>';
-            }
-            html += '<span class="phase-badge ' + cd.strongPhase + '">' + cd.strongCcy + ' ' + cd.strongPhase + '</span>';
-            html += '<span class="phase-badge ' + cd.weakPhase + '">' + cd.weakCcy + ' ' + cd.weakPhase + '</span>';
-            if (cd.bodyPct > 0) {
-              html += '<span class="brk-tag" style="background:rgba(96,165,250,0.12);color:#60a5fa">' + cd.bodyPct + '% body</span>';
-            }
+            html += '<span class="phase-badge growth">' + cd.strongCcy + ' ' + cd.strongConsec + 'x</span>';
+            html += '<span class="phase-badge growth">' + cd.weakCcy + ' ' + cd.weakConsec + 'x</span>';
             if (cd.h1Consec >= 2) {
               html += '<span class="brk-tag momentum">' + cd.h1Consec + 'x H1</span>';
             }

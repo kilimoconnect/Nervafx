@@ -117,40 +117,6 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // Fetch M15 candles for break confirmation
-    const m15Cache = {};
-    for (let b = 0; b < ALL_PAIRS.length; b += 7) {
-      const batch = ALL_PAIRS.slice(b, b + 7);
-      const results = await Promise.all(batch.map(async inst => {
-        const allData = [];
-        let off = 0;
-        while (true) {
-          const { data, error } = await sb
-            .from('backtest_candles')
-            .select('time, open, high, low, close')
-            .eq('instrument', inst).eq('timeframe', 'M15').eq('complete', true)
-            .gte('time', candleSince).lte('time', until)
-            .order('time', { ascending: true })
-            .range(off, off + PAGE - 1);
-          if (error) throw error;
-          if (!data || !data.length) break;
-          allData.push(...data);
-          if (data.length < PAGE) break;
-          off += PAGE;
-        }
-        return { inst, data: allData };
-      }));
-      for (const { inst, data } of results) {
-        m15Cache[inst] = data.map(c => ({
-          time: c.time,
-          open: parseFloat(c.open),
-          high: parseFloat(c.high),
-          low: parseFloat(c.low),
-          close: parseFloat(c.close),
-        }));
-      }
-    }
-
     // Per-currency lifecycle state (persists across timestamps)
     const state = {};
     for (const ccy of CURRENCIES) {
@@ -266,13 +232,13 @@ module.exports = async function handler(req, res) {
         a.isLeader = leaderCcys.has(a.currency);
       }
 
-      // Generate CONFIRMED pairs: Growth/Birth bulls vs Growth/Birth bears + break
+      // Generate pairs: Growth currencies with consecutive >= 5
       const bulls = ranking.filter(a =>
-        a.direction === 'bull' && (a.phase === PHASES.GROWTH || a.phase === PHASES.BIRTH)
+        a.direction === 'bull' && a.phase === PHASES.GROWTH && a.consecutive >= 5
       ).sort((a, b) => b.s45 - a.s45);
 
       const bears = ranking.filter(a =>
-        a.direction === 'bear' && (a.phase === PHASES.GROWTH || a.phase === PHASES.BIRTH)
+        a.direction === 'bear' && a.phase === PHASES.GROWTH && a.consecutive >= 5
       ).sort((a, b) => a.s45 - b.s45);
 
       const candidates = [];
@@ -290,37 +256,12 @@ module.exports = async function handler(req, res) {
             inst = rev; pair = weak.currency + '/' + strong.currency; direction = 'SELL';
           } else continue;
 
-          // H1 break check
+          // H1 candle lookup for forward view and consecutive count
           const h1Candles = h1Cache[inst] || [];
           let h1ci = -1;
           for (let k = h1Candles.length - 1; k >= 0; k--) {
             if (h1Candles[k].time <= time) { h1ci = k; break; }
           }
-          let h1Break = false;
-          let h1Level = null;
-          if (h1ci >= 1) {
-            const h1c = h1Candles[h1ci];
-            const h1p = h1Candles[h1ci - 1];
-            if (direction === 'BUY' && h1c.close > h1p.high) { h1Break = true; h1Level = h1p.high; }
-            else if (direction === 'SELL' && h1c.close < h1p.low) { h1Break = true; h1Level = h1p.low; }
-          }
-
-          // M15 break check
-          const m15Candles = m15Cache[inst] || [];
-          let m15ci = -1;
-          for (let k = m15Candles.length - 1; k >= 0; k--) {
-            if (m15Candles[k].time <= time) { m15ci = k; break; }
-          }
-          let m15Break = false;
-          let m15Level = null;
-          if (m15ci >= 1) {
-            const m15c = m15Candles[m15ci];
-            const m15p = m15Candles[m15ci - 1];
-            if (direction === 'BUY' && m15c.close > m15p.high) { m15Break = true; m15Level = m15p.high; }
-            else if (direction === 'SELL' && m15c.close < m15p.low) { m15Break = true; m15Level = m15p.low; }
-          }
-
-          if (!h1Break || !m15Break) continue;
 
           // H1 momentum: count consecutive candles in trade direction
           let h1Consec = 0;
@@ -343,32 +284,16 @@ module.exports = async function handler(req, res) {
 
           // Confidence score
           let confidence = 0;
-          if (strong.phase === PHASES.GROWTH) confidence += 20;
-          if (strong.phase === PHASES.BIRTH) confidence += 10;
-          if (weak.phase === PHASES.GROWTH) confidence += 20;
-          if (weak.phase === PHASES.BIRTH) confidence += 10;
-          confidence += Math.min(strong.consecutive, 5) * 4;
-          confidence += Math.min(weak.consecutive, 5) * 4;
-          if (h1Break) confidence += 15;
-          if (m15Break) confidence += 10;
-          if (h1Break && m15Break) confidence += 10;
+          confidence += 20; // strong in growth
+          confidence += 20; // weak in growth
+          confidence += Math.min(strong.consecutive, 10) * 4;
+          confidence += Math.min(weak.consecutive, 10) * 4;
           if (strong.isLeader) confidence += 5;
           if (weak.isLeader) confidence += 5;
-          // H1 consecutive candle bonus
           confidence += Math.min(h1Consec, 5) * 3;
-          if (strong.phase === PHASES.EXHAUSTION) confidence -= 20;
-          if (weak.phase === PHASES.EXHAUSTION) confidence -= 20;
           confidence = Math.min(100, Math.max(0, confidence));
 
           const spread = Math.round((strong.s45 - weak.s45) * 100) / 100;
-
-          // Body % from M15 candle
-          let bodyPct = 0;
-          if (m15ci >= 1) {
-            const currBody = Math.abs(m15Candles[m15ci].close - m15Candles[m15ci].open);
-            const prevBody = Math.abs(m15Candles[m15ci - 1].close - m15Candles[m15ci - 1].open) || 0.00001;
-            bodyPct = Math.round((currBody / prevBody) * 100);
-          }
 
           // Forward H1 candles: signal candle + next 10 hours
           const entryPrice = h1ci >= 0 ? h1Candles[h1ci].close : null;
@@ -397,10 +322,9 @@ module.exports = async function handler(req, res) {
             strongPhase: strong.phase, weakPhase: weak.phase,
             strongConsec: strong.consecutive, weakConsec: weak.consecutive,
             strongIsLeader: strong.isLeader, weakIsLeader: weak.isLeader,
-            h1Break, h1Level, m15Break, m15Level,
             h1Consec, entryPrice,
             h1Forward,
-            spread, bodyPct, confidence,
+            spread, confidence,
           });
         }
       }
