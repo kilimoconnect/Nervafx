@@ -405,7 +405,8 @@ module.exports = async function handler(req, res) {
 
       candidates.sort((a, b) => b.confidence - a.confidence || b.spread - a.spread);
 
-      if (!candidates.length) continue;
+      const growthCount = ranking.filter(a => a.phase === PHASES.GROWTH).length;
+      if (!candidates.length || growthCount < 5) continue;
 
       rows.push({
         time,
