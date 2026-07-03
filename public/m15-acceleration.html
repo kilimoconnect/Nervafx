@@ -263,7 +263,7 @@
     <div class="sx-card">
       <div class="sx-card-hd">
         <i data-lucide="gauge"></i> M15 Acceleration
-        <span class="sx-note">Hourly momentum shift — ranked by 3H delta with M15 break confirmation</span>
+        <span class="sx-note">15-minute momentum shift — ranked by M15 strength delta with M15 break confirmation</span>
         <span class="sx-ctrls">
           <button class="sx-btn sx-days active" data-days="1">1D</button>
           <button class="sx-btn sx-days" data-days="2">2D</button>
@@ -374,7 +374,7 @@
         html += '<div class="acc-ranking-wrap">';
         html += '<div class="acc-section-label">Currency Ranking</div>';
         html += '<table class="acc-ranking">';
-        html += '<thead><tr><th>#</th><th>Currency</th><th>Accel</th><th>3H</th><th class="acc-score-cell">Score</th></tr></thead>';
+        html += '<thead><tr><th>#</th><th>Currency</th><th>Accel</th><th>45M</th><th class="acc-score-cell">Score</th></tr></thead>';
         html += '<tbody>';
         for (var i = 0; i < row.ranking.length; i++) {
           var a = row.ranking[i];
@@ -411,12 +411,12 @@
             html += '<div class="acc-cand-detail">';
             html += '<div class="acc-cand-side strong">';
             html += '<span class="acc-cand-side-ccy">' + cd.strongCcy + '</span>';
-            html += '<span class="acc-cand-side-val">3H ' + vfmt(cd.strongS3) + '</span>';
+            html += '<span class="acc-cand-side-val">45M ' + vfmt(cd.strongS3) + '</span>';
             html += '<span class="acc-cand-side-label">Strong</span>';
             html += '</div>';
             html += '<div class="acc-cand-side weak">';
             html += '<span class="acc-cand-side-ccy">' + cd.weakCcy + '</span>';
-            html += '<span class="acc-cand-side-val">3H ' + vfmt(cd.weakS3) + '</span>';
+            html += '<span class="acc-cand-side-val">45M ' + vfmt(cd.weakS3) + '</span>';
             html += '<span class="acc-cand-side-label">Weak</span>';
             html += '</div>';
             html += '</div>';

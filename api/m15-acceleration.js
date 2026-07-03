@@ -22,45 +22,37 @@ module.exports = async function handler(req, res) {
     const gate = await requirePlan(sb, req, 'premium');
     if (gate.error) return res.status(gate.status).json({ error: gate.error, upgrade: gate.upgrade });
 
-    const days = Math.min(30, parseInt(req.query?.days || '2', 10) || 2);
+    const days = Math.min(30, parseInt(req.query?.days || '1', 10) || 1);
     const qFrom = req.query?.from;
     const qTo = req.query?.to;
     const until = qTo ? new Date(qTo + 'T23:59:59Z').toISOString() : new Date().toISOString();
     const since = qFrom ? new Date(qFrom + 'T00:00:00Z').toISOString()
       : new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
-    // Fetch 1 extra hour for first delta
-    const fetchSince = new Date(new Date(since).getTime() - 3600000).toISOString();
+    // Fetch 1 extra M15 bar for first delta
+    const fetchSince = new Date(new Date(since).getTime() - 15 * 60000).toISOString();
 
-    const allRows = [];
+    // Fetch M15 currency strength
+    const allStrength = [];
     const PAGE = 1000;
     let offset = 0;
     while (true) {
       const { data, error } = await sb
-        .from('currency_strength')
-        .select('time, currency, smooth_3h')
+        .from('m15_currency_strength')
+        .select('time, values')
         .gte('time', fetchSince)
         .lte('time', until)
         .order('time', { ascending: true })
         .range(offset, offset + PAGE - 1);
       if (error) throw error;
       if (!data || !data.length) break;
-      allRows.push(...data);
+      allStrength.push(...data);
       if (data.length < PAGE) break;
       offset += PAGE;
     }
 
-    // Group by time
-    const byTime = {};
-    for (const r of allRows) {
-      if (!byTime[r.time]) byTime[r.time] = {};
-      byTime[r.time][r.currency] = {
-        s3: (parseFloat(r.smooth_3h) || 0) * 10000,
-      };
-    }
-
     // Fetch M15 candles for all 28 pairs (for break detection)
-    const candleSince = new Date(new Date(fetchSince).getTime() - 2 * 3600000).toISOString();
+    const candleSince = new Date(new Date(fetchSince).getTime() - 30 * 60000).toISOString();
     const candleCache = {};
     const ALL_PAIRS = [...VALID_PAIRS];
     for (let b = 0; b < ALL_PAIRS.length; b += 7) {
@@ -95,29 +87,28 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    const timestamps = Object.keys(byTime).sort();
     const rows = [];
 
-    for (let t = 1; t < timestamps.length; t++) {
-      const time = timestamps[t];
-      const prevTime = timestamps[t - 1];
+    for (let t = 1; t < allStrength.length; t++) {
+      const cur = allStrength[t];
+      const prev = allStrength[t - 1];
+      const time = cur.time;
 
       if (time < since) continue;
+      if (!cur.values || !prev.values) continue;
 
-      const cur = byTime[time];
-      const prev = byTime[prevTime];
-      if (!cur || !prev) continue;
-      if (Object.keys(cur).length < 8 || Object.keys(prev).length < 8) continue;
+      const curVals = cur.values;
+      const prevVals = prev.values;
 
-      // Acceleration = hourly delta of 3H strength
+      // Acceleration = M15 delta of 45M smooth strength (×10000 for display)
       const accels = CURRENCIES.map(ccy => {
-        const s3now = cur[ccy]?.s3 || 0;
-        const s3prev = prev[ccy]?.s3 || 0;
-        const accel = s3now - s3prev;
+        const s = (parseFloat(curVals[ccy]) || 0) * 10000;
+        const sp = (parseFloat(prevVals[ccy]) || 0) * 10000;
+        const accel = s - sp;
         return {
           currency: ccy,
           acceleration: Math.round(accel * 100) / 100,
-          s3: Math.round(s3now * 100) / 100,
+          s3: Math.round(s * 100) / 100,
         };
       });
 
@@ -128,7 +119,7 @@ module.exports = async function handler(req, res) {
         a.score = Math.round((a.acceleration / maxAbs) * 100);
       }
 
-      // Rank by 3H strength: top = strongest, bottom = weakest
+      // Rank by strength: top = strongest, bottom = weakest
       const byStrength = [...accels].sort((a, b) => b.s3 - a.s3);
       const topStrong = byStrength.slice(0, 2);
       const topWeak = byStrength.slice(-2).reverse();
@@ -149,7 +140,7 @@ module.exports = async function handler(req, res) {
             direction = 'SELL';
           } else continue;
 
-          // Find latest completed M15 candle at or before this hour, and the one before it
+          // Find latest completed M15 candle at or before this time, and the one before it
           const candles = candleCache[inst] || [];
           let ci = -1;
           for (let k = candles.length - 1; k >= 0; k--) {
