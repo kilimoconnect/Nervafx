@@ -163,6 +163,9 @@ module.exports = async function handler(req, res) {
           }
           if (!broke) continue;
 
+          // 3H strength confirmation: strong currency must lead on 3H
+          if (strong.s3 <= weak.s3) continue;
+
           const spread = Math.round((strong.s3 - weak.s3) * 100) / 100;
           candidates.push({
             pair,

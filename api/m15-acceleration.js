@@ -51,6 +51,39 @@ module.exports = async function handler(req, res) {
       offset += PAGE;
     }
 
+    // Fetch hourly 3H smoothed strength for trend confirmation
+    const h3Rows = [];
+    let h3off = 0;
+    while (true) {
+      const { data, error } = await sb
+        .from('currency_strength')
+        .select('time, currency, smooth_3h')
+        .gte('time', fetchSince)
+        .lte('time', until)
+        .order('time', { ascending: true })
+        .range(h3off, h3off + PAGE - 1);
+      if (error) throw error;
+      if (!data || !data.length) break;
+      h3Rows.push(...data);
+      if (data.length < PAGE) break;
+      h3off += PAGE;
+    }
+
+    const h3ByTime = {};
+    for (const r of h3Rows) {
+      if (!h3ByTime[r.time]) h3ByTime[r.time] = {};
+      h3ByTime[r.time][r.currency] = (parseFloat(r.smooth_3h) || 0) * 10000;
+    }
+    const h3Timestamps = Object.keys(h3ByTime).sort();
+
+    function getH3(ccy, atTime) {
+      let best = null;
+      for (let i = h3Timestamps.length - 1; i >= 0; i--) {
+        if (h3Timestamps[i] <= atTime) { best = h3ByTime[h3Timestamps[i]]; break; }
+      }
+      return best ? (best[ccy] || 0) : 0;
+    }
+
     // Fetch M15 candles for all 28 pairs (for break detection)
     const candleSince = new Date(new Date(fetchSince).getTime() - 30 * 60000).toISOString();
     const candleCache = {};
@@ -163,6 +196,11 @@ module.exports = async function handler(req, res) {
             breakLevel = prevC.low;
           }
           if (!broke) continue;
+
+          // 3H strength confirmation: strong currency must lead on 3H
+          const strong3H = getH3(strong.currency, time);
+          const weak3H = getH3(weak.currency, time);
+          if (strong3H <= weak3H) continue;
 
           const spread = Math.round((strong.s3 - weak.s3) * 100) / 100;
           candidates.push({
