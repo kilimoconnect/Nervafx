@@ -408,70 +408,67 @@ module.exports = async function handler(req, res) {
       const growthCount = ranking.filter(a => a.phase === PHASES.GROWTH).length;
       if (!candidates.length || growthCount < 5) continue;
 
-      // ═══ Four-Score Engine ═══
+      // ═══ Market Expansion Score (MES) ═══
+      // MES = 0.30B + 0.25D + 0.20P + 0.15C + 0.10I
 
-      // 1. ACCELERATION: spread between strongest and weakest acceleration
-      const topAccel = ranking[0].acceleration;
-      const botAccel = ranking[ranking.length - 1].acceleration;
-      const accelSpread = topAccel - botAccel;
-      const accelScore = Math.min(100, Math.round((accelSpread / 20) * 100));
+      // 1. BREADTH (B): (N_strong + N_weak) / 8
+      const nStrong = ranking.filter(a => a.s45 > 0).length;
+      const nWeak = ranking.filter(a => a.s45 < 0).length;
+      const breadth = (nStrong + nWeak) / 8;
 
-      // 2. PERSISTENCE: average consecutive count of growth currencies
-      const growthCcys = ranking.filter(a => a.phase === PHASES.GROWTH);
+      // 2. DISPERSION (D): (max(Accel) - min(Accel)) / normalization
+      const maxAccel = ranking[0].acceleration;
+      const minAccel = ranking[ranking.length - 1].acceleration;
+      const dispersionRaw = maxAccel - minAccel;
+      const dispersionNorm = 10;
+      const dispersion = Math.min(1, dispersionRaw / dispersionNorm);
+
+      // 3. PERSISTENCE (P): avg consecutive same-direction bars / max lookback
+      const growthCcys = ranking.filter(a => a.phase === PHASES.GROWTH || a.phase === PHASES.BIRTH);
       const avgConsec = growthCcys.length
         ? growthCcys.reduce((s, a) => s + a.consecutive, 0) / growthCcys.length
         : 0;
-      const persistScore = Math.min(100, Math.round((avgConsec / 10) * 100));
+      const maxLookback = 10;
+      const persistence = Math.min(1, avgConsec / maxLookback);
 
-      // 3. CONSENSUS: how coordinated are currency directions
-      const bullCount = ranking.filter(a => a.direction === 'bull').length;
-      const bearCount = ranking.filter(a => a.direction === 'bear').length;
-      const dirSplit = Math.max(bullCount, bearCount);
-      const posAbove1 = ranking.filter(a => a.s45 > 10).length;
-      const negBelow1 = ranking.filter(a => a.s45 < -10).length;
-      const thresholdCcys = posAbove1 + negBelow1;
-      const splitScore = Math.round(((dirSplit - 4) / 4) * 60);
-      const threshScore = Math.round((thresholdCcys / 8) * 40);
-      const consensusScore = Math.min(100, Math.max(0, splitScore + threshScore + (growthCount >= 5 ? 20 : 0)));
+      // 4. CONFIRMATION (C): H1+M15 aligned signals / total signals
+      const alignedCount = candidates.filter(cd => cd.h1Break && cd.m15Break).length;
+      const confirmation = candidates.length > 0 ? alignedCount / candidates.length : 0;
 
-      // 4. EXPANSION: candle size + breaks on candidates
-      let expansionPoints = 0;
-      let expansionMax = 0;
+      // 5. IMPULSE (I): current candle body / avg body (last 5-10 candles)
+      let impulseSum = 0;
+      let impulseCount = 0;
       for (const cd of candidates) {
-        expansionMax += 5;
-        if (cd.h1Break) expansionPoints += 1;
-        if (cd.m15Break) expansionPoints += 1;
-        if (cd.h1Break && cd.m15Break) expansionPoints += 1;
-        if (cd.bodyPct > 150) expansionPoints += 1;
-        if (cd.h1Consec >= 3) expansionPoints += 1;
+        if (cd.bodyPct > 0) {
+          impulseSum += cd.bodyPct / 100;
+          impulseCount++;
+        }
       }
-      const candExpansion = expansionMax > 0
-        ? Math.round((expansionPoints / expansionMax) * 70) : 0;
-      const strengthExpansion = Math.round((thresholdCcys / 8) * 30);
-      const expansionScore = Math.min(100, candExpansion + strengthExpansion);
+      const impulse = impulseCount > 0 ? Math.min(1, (impulseSum / impulseCount) / 3) : 0;
 
-      // TRADE QUALITY: weighted combination
-      const tradeQuality = Math.round(
-        accelScore * 0.2 + persistScore * 0.3 + consensusScore * 0.25 + expansionScore * 0.25
-      );
-      let qualityLabel;
-      if (tradeQuality >= 80) qualityLabel = 'Excellent';
-      else if (tradeQuality >= 60) qualityLabel = 'Good';
-      else if (tradeQuality >= 40) qualityLabel = 'Moderate';
-      else qualityLabel = 'Low';
+      // MES composite
+      const mes = 0.30 * breadth + 0.25 * dispersion + 0.20 * persistence + 0.15 * confirmation + 0.10 * impulse;
+      const mesRounded = Math.round(mes * 100) / 100;
+
+      let mesLabel;
+      if (mes > 0.90) mesLabel = 'Strong Trend';
+      else if (mes > 0.75) mesLabel = 'Trade Allowed';
+      else if (mes >= 0.60) mesLabel = 'Caution';
+      else mesLabel = 'Noise';
 
       rows.push({
         time,
         ranking,
         candidates,
         rotations: rotations.length ? rotations : undefined,
-        scores: {
-          acceleration: accelScore,
-          persistence: persistScore,
-          consensus: consensusScore,
-          expansion: expansionScore,
-          tradeQuality,
-          qualityLabel,
+        mes: {
+          score: mesRounded,
+          label: mesLabel,
+          breadth: Math.round(breadth * 100) / 100,
+          dispersion: Math.round(dispersion * 100) / 100,
+          persistence: Math.round(persistence * 100) / 100,
+          confirmation: Math.round(confirmation * 100) / 100,
+          impulse: Math.round(impulse * 100) / 100,
         },
       });
     }
