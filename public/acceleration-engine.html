@@ -195,9 +195,40 @@
       background: rgba(255,255,255,0.02);
       margin-bottom: 8px;
       transition: border-color 0.15s, background 0.15s;
+      cursor: pointer;
     }
     .eng-cand:hover { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.1); }
     .eng-cand:last-child { margin-bottom: 0; }
+
+    /* Forward candle table */
+    .eng-fwd { display: none; margin-top: 10px; }
+    .eng-cand.open .eng-fwd { display: block; }
+    .eng-fwd-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+    .eng-fwd-table th {
+      text-align: left; font-size: 8px; font-weight: 800; color: var(--text-dim);
+      text-transform: uppercase; letter-spacing: 0.8px; padding: 4px 6px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .eng-fwd-table td {
+      padding: 4px 6px; font-size: 11px; font-weight: 600;
+      font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+    .eng-fwd-table tr:first-child td {
+      background: rgba(20,184,166,0.06);
+    }
+    .eng-fwd-table tr:hover td { background: rgba(255,255,255,0.03); }
+    .eng-fwd-time { color: var(--text-muted); font-size: 10px; }
+    .eng-fwd-bull { color: #4ade80; }
+    .eng-fwd-bear { color: #f87171; }
+    .eng-fwd-pips { font-weight: 800; }
+    .eng-fwd-entry { font-size: 9px; color: var(--text-dim); margin-bottom: 6px; }
+    .eng-fwd-label {
+      font-size: 8px; font-weight: 800; color: var(--text-dim);
+      text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .eng-fwd-label i { width: 11px; height: 11px; }
 
     .eng-cand-top {
       display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap;
@@ -507,6 +538,33 @@
             html += '</div>';
             html += '</div>';
 
+            // Forward candle table (hidden by default)
+            if (cd.h1Forward && cd.h1Forward.length) {
+              html += '<div class="eng-fwd">';
+              html += '<div class="eng-fwd-label"><i data-lucide="candlestick-chart"></i> H1 Candles from signal (' + cd.h1Forward.length + ' available)</div>';
+              if (cd.entryPrice) html += '<div class="eng-fwd-entry">Entry: ' + cd.entryPrice.toFixed(cd.pair.includes('JPY') ? 3 : 5) + '</div>';
+              html += '<table class="eng-fwd-table">';
+              html += '<thead><tr><th>Time</th><th>Open</th><th>High</th><th>Low</th><th>Close</th><th>Pips</th></tr></thead>';
+              html += '<tbody>';
+              var prec = cd.pair.includes('JPY') ? 3 : 5;
+              for (var f = 0; f < cd.h1Forward.length; f++) {
+                var fc = cd.h1Forward[f];
+                var bull = fc.close > fc.open;
+                var cls = bull ? 'eng-fwd-bull' : 'eng-fwd-bear';
+                var pipCls = fc.pips >= 0 ? 'eng-fwd-bull' : 'eng-fwd-bear';
+                html += '<tr>';
+                html += '<td class="eng-fwd-time">' + hrLabel(fc.time) + '</td>';
+                html += '<td class="' + cls + '">' + fc.open.toFixed(prec) + '</td>';
+                html += '<td class="' + cls + '">' + fc.high.toFixed(prec) + '</td>';
+                html += '<td class="' + cls + '">' + fc.low.toFixed(prec) + '</td>';
+                html += '<td class="' + cls + '">' + fc.close.toFixed(prec) + '</td>';
+                html += '<td class="eng-fwd-pips ' + pipCls + '">' + (fc.pips >= 0 ? '+' : '') + fc.pips + '</td>';
+                html += '</tr>';
+              }
+              html += '</tbody></table>';
+              html += '</div>';
+            }
+
             html += '</div>';
           }
           html += '</div>';
@@ -515,6 +573,9 @@
         html += '</div></div>';
       }
       el.innerHTML = html || '<div class="br-empty">No data found.</div>';
+      el.querySelectorAll('.eng-cand').forEach(function(card) {
+        card.addEventListener('click', function() { card.classList.toggle('open'); });
+      });
       if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 

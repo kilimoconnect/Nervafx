@@ -370,8 +370,26 @@ module.exports = async function handler(req, res) {
             bodyPct = Math.round((currBody / prevBody) * 100);
           }
 
+          // Forward H1 candles: signal candle + next 10 hours
+          const entryPrice = h1ci >= 0 ? h1Candles[h1ci].close : null;
+          const isJpy = inst.includes('JPY');
+          const pipDiv = isJpy ? 0.01 : 0.0001;
+          const h1Forward = [];
+          for (let k = h1ci; k < h1Candles.length && h1Forward.length < 11; k++) {
+            if (k < 0) continue;
+            const fc = h1Candles[k];
+            const pips = entryPrice
+              ? Math.round(((direction === 'BUY' ? fc.close - entryPrice : entryPrice - fc.close) / pipDiv) * 10) / 10
+              : 0;
+            h1Forward.push({
+              time: fc.time,
+              open: fc.open, high: fc.high, low: fc.low, close: fc.close,
+              pips,
+            });
+          }
+
           candidates.push({
-            pair, direction,
+            pair, direction, inst,
             strongCcy: strong.currency, weakCcy: weak.currency,
             strongS45: strong.s45, weakS45: weak.s45,
             strongH3: Math.round(strong3H * 100) / 100,
@@ -380,7 +398,8 @@ module.exports = async function handler(req, res) {
             strongConsec: strong.consecutive, weakConsec: weak.consecutive,
             strongIsLeader: strong.isLeader, weakIsLeader: weak.isLeader,
             h1Break, h1Level, m15Break, m15Level,
-            h1Consec,
+            h1Consec, entryPrice,
+            h1Forward,
             spread, bodyPct, confidence,
           });
         }
