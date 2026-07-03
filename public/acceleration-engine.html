@@ -238,6 +238,7 @@
     .brk-tag.h1-off { background: rgba(255,255,255,0.04); color: var(--text-dim); }
     .brk-tag.m15-off { background: rgba(255,255,255,0.04); color: var(--text-dim); }
     .brk-tag.both { background: rgba(20,184,166,0.12); color: #2dd4bf; }
+    .brk-tag.momentum { background: rgba(251,146,60,0.12); color: #fb923c; }
 
     .eng-cand-detail {
       display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
@@ -482,6 +483,9 @@
             html += '<span class="phase-badge ' + cd.weakPhase + '">' + cd.weakCcy + ' ' + cd.weakPhase + '</span>';
             if (cd.bodyPct > 0) {
               html += '<span class="brk-tag" style="background:rgba(96,165,250,0.12);color:#60a5fa">' + cd.bodyPct + '% body</span>';
+            }
+            if (cd.h1Consec >= 2) {
+              html += '<span class="brk-tag momentum">' + cd.h1Consec + 'x H1' + (cd.h1Expanding ? ' ↑' : '') + '</span>';
             }
             html += '</div>';
 

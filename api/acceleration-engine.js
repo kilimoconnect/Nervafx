@@ -322,6 +322,29 @@ module.exports = async function handler(req, res) {
 
           if (!h1Break || !m15Break) continue;
 
+          // H1 momentum pattern: consecutive candles + body expansion
+          let h1Consec = 0;
+          let h1Expanding = false;
+          let h1Bodies = [];
+          if (h1ci >= 1) {
+            const isBuy = direction === 'BUY';
+            for (let k = h1ci; k >= 0; k--) {
+              const c = h1Candles[k];
+              const bullish = c.close > c.open;
+              if ((isBuy && bullish) || (!isBuy && !bullish)) {
+                h1Consec++;
+                h1Bodies.push(Math.abs(c.close - c.open));
+              } else break;
+            }
+            if (h1Bodies.length >= 2) {
+              let expandCount = 0;
+              for (let k = 0; k < h1Bodies.length - 1; k++) {
+                if (h1Bodies[k] > h1Bodies[k + 1]) expandCount++;
+              }
+              h1Expanding = expandCount >= Math.floor((h1Bodies.length - 1) / 2);
+            }
+          }
+
           // 3H strength confirmation:
           // BUY = strongCcy accelerating up — strongCcy must be stronger on 3H
           // SELL = strongCcy up, weakCcy down — strongCcy must be stronger on 3H
@@ -342,6 +365,9 @@ module.exports = async function handler(req, res) {
           if (h1Break && m15Break) confidence += 10;
           if (strong.isLeader) confidence += 5;
           if (weak.isLeader) confidence += 5;
+          // H1 momentum pattern bonus
+          confidence += Math.min(h1Consec, 5) * 3;
+          if (h1Expanding) confidence += 5;
           if (strong.phase === PHASES.EXHAUSTION) confidence -= 20;
           if (weak.phase === PHASES.EXHAUSTION) confidence -= 20;
           confidence = Math.min(100, Math.max(0, confidence));
@@ -366,6 +392,7 @@ module.exports = async function handler(req, res) {
             strongConsec: strong.consecutive, weakConsec: weak.consecutive,
             strongIsLeader: strong.isLeader, weakIsLeader: weak.isLeader,
             h1Break, h1Level, m15Break, m15Level,
+            h1Consec, h1Expanding,
             spread, bodyPct, confidence,
           });
         }
