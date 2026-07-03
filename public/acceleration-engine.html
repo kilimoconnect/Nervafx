@@ -103,6 +103,51 @@
     }
     .eng-rotation-banner i { width: 13px; height: 13px; }
 
+    /* ── Trade Quality Scores ── */
+    .eng-scores-bar {
+      display: flex; align-items: center; gap: 12px; padding: 12px 18px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      background: rgba(255,255,255,0.01); flex-wrap: wrap;
+    }
+    .eng-score-item {
+      display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 70px;
+    }
+    .eng-score-label {
+      font-size: 8px; font-weight: 800; color: var(--text-dim);
+      text-transform: uppercase; letter-spacing: 0.8px;
+    }
+    .eng-score-ring {
+      position: relative; width: 44px; height: 44px;
+    }
+    .eng-score-ring svg { width: 44px; height: 44px; transform: rotate(-90deg); }
+    .eng-score-ring-bg { fill: none; stroke: rgba(255,255,255,0.06); stroke-width: 4; }
+    .eng-score-ring-fill { fill: none; stroke-width: 4; stroke-linecap: round; transition: stroke-dashoffset 0.6s ease; }
+    .eng-score-ring-val {
+      position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 800;
+      font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+    }
+
+    .eng-quality-block {
+      margin-left: auto; display: flex; align-items: center; gap: 10px;
+      padding: 8px 16px; border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.06);
+      background: rgba(255,255,255,0.02);
+    }
+    .eng-quality-score {
+      font-size: 28px; font-weight: 800; line-height: 1;
+      font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+    }
+    .eng-quality-meta { display: flex; flex-direction: column; }
+    .eng-quality-label-top {
+      font-size: 8px; font-weight: 800; color: var(--text-dim);
+      text-transform: uppercase; letter-spacing: 0.8px;
+    }
+    .eng-quality-label {
+      font-size: 13px; font-weight: 800; letter-spacing: -0.3px;
+    }
+
     /* ── Two-column layout ── */
     .eng-body {
       display: grid; grid-template-columns: 1fr 1fr; gap: 0;
@@ -455,6 +500,40 @@
             html += rot.from + ' (' + rot.fromDir + ' exhaust) &rarr; ' + rot.to + ' (' + rot.toDir + ' emerging)';
           }
           html += '</div>';
+        }
+
+        // Scores bar
+        if (row.scores) {
+          var sc = row.scores;
+          html += '<div class="eng-scores-bar">';
+          var scoreItems = [
+            { label: 'ACCEL', val: sc.acceleration },
+            { label: 'PERSIST', val: sc.persistence },
+            { label: 'CONSENS', val: sc.consensus },
+            { label: 'EXPANS', val: sc.expansion }
+          ];
+          for (var si = 0; si < scoreItems.length; si++) {
+            var s = scoreItems[si];
+            var pct = Math.max(0, Math.min(100, s.val));
+            var circ = 2 * Math.PI * 18;
+            var offset = circ - (pct / 100) * circ;
+            var sColor = pct >= 70 ? '#14b8a6' : pct >= 40 ? '#f59e0b' : '#ef4444';
+            html += '<div class="eng-score-item">';
+            html += '<div class="eng-score-ring">';
+            html += '<svg viewBox="0 0 44 44"><circle class="eng-score-ring-bg" cx="22" cy="22" r="18"/>';
+            html += '<circle class="eng-score-ring-fill" cx="22" cy="22" r="18" stroke="' + sColor + '" stroke-dasharray="' + circ.toFixed(1) + '" stroke-dashoffset="' + offset.toFixed(1) + '"/></svg>';
+            html += '<span class="eng-score-ring-val" style="color:' + sColor + '">' + Math.round(pct) + '</span>';
+            html += '</div>';
+            html += '<span class="eng-score-label">' + s.label + '</span>';
+            html += '</div>';
+          }
+          var qColor = sc.tradeQuality >= 80 ? '#14b8a6' : sc.tradeQuality >= 60 ? '#22c55e' : sc.tradeQuality >= 40 ? '#f59e0b' : '#ef4444';
+          html += '<div class="eng-quality-block">';
+          html += '<span class="eng-quality-score" style="color:' + qColor + '">' + Math.round(sc.tradeQuality) + '</span>';
+          html += '<div class="eng-quality-meta">';
+          html += '<span class="eng-quality-label-top">Trade Quality</span>';
+          html += '<span class="eng-quality-label" style="color:' + qColor + '">' + sc.qualityLabel + '</span>';
+          html += '</div></div></div>';
         }
 
         // Body
