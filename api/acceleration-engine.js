@@ -287,7 +287,7 @@ module.exports = async function handler(req, res) {
             else if (direction === 'SELL' && m15c.close < m15p.low) { m15Break = true; m15Level = m15p.low; }
           }
 
-          if (!h1Break && !m15Break) continue;
+          if (!h1Break || !m15Break) continue;
 
           // Confidence score
           let confidence = 0;
