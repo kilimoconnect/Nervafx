@@ -405,6 +405,8 @@ module.exports = async function handler(req, res) {
 
       candidates.sort((a, b) => b.confidence - a.confidence || b.spread - a.spread);
 
+      if (!candidates.length) continue;
+
       rows.push({
         time,
         ranking,
