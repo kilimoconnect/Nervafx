@@ -37,6 +37,10 @@ module.exports = async function handler(req, res) {
       dayStart = new Date(picked);
       dayStart.setUTCHours(21, 0, 0, 0);
       prevDayStart = new Date(dayStart.getTime() - 24 * 3600000);
+      // Skip weekends for prevDayStart (if picking Monday, yesterday = Friday)
+      const pdDay2 = prevDayStart.getUTCDay();
+      if (pdDay2 === 6) prevDayStart.setUTCDate(prevDayStart.getUTCDate() - 2);
+      else if (pdDay2 === 5) prevDayStart.setUTCDate(prevDayStart.getUTCDate() - 1);
     } else {
       // Auto-detect current forex day
       const h = now.getUTCHours();
@@ -58,6 +62,10 @@ module.exports = async function handler(req, res) {
         dayStart.setUTCDate(dayStart.getUTCDate() - 2);
       }
       prevDayStart = new Date(dayStart.getTime() - 24 * 3600000);
+      // Skip weekends for prevDayStart (Monday: prevDay lands on Saturday)
+      const pdDay = prevDayStart.getUTCDay();
+      if (pdDay === 6) prevDayStart.setUTCDate(prevDayStart.getUTCDate() - 2); // Sat → Thu
+      else if (pdDay === 5) prevDayStart.setUTCDate(prevDayStart.getUTCDate() - 1); // Fri → Thu
     }
 
     const dayEnd = new Date(dayStart.getTime() + 24 * 3600000);
