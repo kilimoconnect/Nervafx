@@ -30,9 +30,12 @@ module.exports = async function handler(req, res) {
     let dayStart, prevDayStart;
 
     if (todayDate) {
-      dayStart = new Date(todayDate + 'T21:00:00Z');
-      // If todayDate is e.g. 2026-07-03, dayStart = Jul 3 21:00 = start of Jul 4 forex day
-      // Adjust: if current time is before 21:00, the forex day started yesterday at 21:00
+      // User picks June 23 = they want June 23's forex day
+      // Forex day for June 23 starts June 22 at 21:00 UTC
+      const picked = new Date(todayDate + 'T00:00:00Z');
+      picked.setUTCDate(picked.getUTCDate() - 1);
+      dayStart = new Date(picked);
+      dayStart.setUTCHours(21, 0, 0, 0);
       prevDayStart = new Date(dayStart.getTime() - 24 * 3600000);
     } else {
       // Auto-detect current forex day
@@ -49,7 +52,7 @@ module.exports = async function handler(req, res) {
 
     const dayEnd = new Date(dayStart.getTime() + 24 * 3600000);
     const fetchSince = prevDayStart.toISOString();
-    const fetchUntil = (now < dayEnd ? now : dayEnd).toISOString();
+    const fetchUntil = todayDate ? dayEnd.toISOString() : (now < dayEnd ? now : dayEnd).toISOString();
 
     // Fetch H1 candles for all pairs covering yesterday + today
     const PAGE = 1000;
