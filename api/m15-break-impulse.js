@@ -98,7 +98,7 @@ module.exports = async function handler(req, res) {
         const curr = candles[idx];
         const prev = candles[idx - 1];
         const pd = pipDiv(inst);
-        const minPips = GBP_PAIRS.has(inst) ? 15 : 10;
+        const minPips = GBP_PAIRS.has(inst) ? 30 : 20;
 
         // Check single candle break
         const body1 = Math.abs(curr.close - curr.open);
