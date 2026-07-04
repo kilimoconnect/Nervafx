@@ -47,6 +47,16 @@ module.exports = async function handler(req, res) {
       } else {
         dayStart = new Date(base); dayStart.setUTCDate(dayStart.getUTCDate() - 1); dayStart.setUTCHours(21);
       }
+      // Skip weekends: "today" should be the last trading day
+      // dayStart is the start of the forex day (prev calendar day 21:00)
+      // If dayStart falls on Fri 21:00 (= Saturday's forex day), go back to Thu 21:00
+      // If dayStart falls on Sat 21:00 (= Sunday's forex day), go back to Thu 21:00
+      const dsDay = dayStart.getUTCDay();
+      if (dsDay === 5) { // Friday 21:00 = Saturday forex day → back to Thursday 21:00
+        dayStart.setUTCDate(dayStart.getUTCDate() - 1);
+      } else if (dsDay === 6) { // Saturday 21:00 = Sunday forex day → back to Thursday 21:00
+        dayStart.setUTCDate(dayStart.getUTCDate() - 2);
+      }
       prevDayStart = new Date(dayStart.getTime() - 24 * 3600000);
     }
 
