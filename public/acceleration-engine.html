@@ -389,6 +389,9 @@
     var TOKEN = localStorage.getItem('nfx_token');
     if (!TOKEN) { location.href = '/login'; return; }
 
+    var _userTz = localStorage.getItem('nfx_tz') || 'auto';
+    function _tz() { return (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC'); }
+
     var currentDays = 1;
     var currentSession = 'all';
     var cachedRows = [];
@@ -408,10 +411,10 @@
     }
 
     function hrLabel(iso) {
-      return new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Africa/Nairobi' });
+      return new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: _tz() });
     }
     function dayLabel(iso) {
-      return new Date(iso).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: '2-digit', timeZone: 'Africa/Nairobi' });
+      return new Date(iso).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: '2-digit', timeZone: _tz() });
     }
     function isWeekend(iso) {
       var d = new Date(iso).getUTCDay();

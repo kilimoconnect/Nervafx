@@ -175,17 +175,19 @@
 
   <script>
     var TOKEN = localStorage.getItem('nfx_token') || '';
+    var _userTz = localStorage.getItem('nfx_tz') || 'auto';
+    function _tz() { return (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC'); }
     var currentDays = 1;
     var currentSession = 'all';
     var cachedRows = [];
 
     function hrLabel(t) {
       var d = new Date(t);
-      return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }) + ' UTC';
+      return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: _tz() });
     }
     function dayLabel(t) {
       var d = new Date(t);
-      return d.toLocaleDateString('en-GB', { weekday: 'short', month: 'short', day: '2-digit', timeZone: 'UTC' });
+      return d.toLocaleDateString('en-GB', { weekday: 'short', month: 'short', day: '2-digit', timeZone: _tz() });
     }
     function isWeekend(t) {
       var d = new Date(t).getUTCDay();
