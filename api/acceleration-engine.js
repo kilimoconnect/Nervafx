@@ -151,6 +151,55 @@ module.exports = async function handler(req, res) {
       }
     }
 
+    // ═══ Daily Continuation Direction (yesterday's daily candle) ═══
+    // Compute forex "yesterday" for each pair using H1 candles
+    const now2 = new Date();
+    const h2 = now2.getUTCHours();
+    let dcDayStart;
+    if (h2 >= 21) {
+      dcDayStart = new Date(now2); dcDayStart.setUTCHours(21, 0, 0, 0);
+    } else {
+      dcDayStart = new Date(now2); dcDayStart.setUTCDate(dcDayStart.getUTCDate() - 1); dcDayStart.setUTCHours(21, 0, 0, 0);
+    }
+    // Skip weekends
+    const dcDsDay = dcDayStart.getUTCDay();
+    if (dcDsDay === 5) dcDayStart.setUTCDate(dcDayStart.getUTCDate() - 1);
+    else if (dcDsDay === 6) dcDayStart.setUTCDate(dcDayStart.getUTCDate() - 2);
+
+    let dcPrevStart = new Date(dcDayStart.getTime() - 24 * 3600000);
+    const dcPdDay = dcPrevStart.getUTCDay();
+    if (dcPdDay === 6) dcPrevStart.setUTCDate(dcPrevStart.getUTCDate() - 2);
+    else if (dcPdDay === 5) dcPrevStart.setUTCDate(dcPrevStart.getUTCDate() - 1);
+
+    const dcDayStartISO = dcDayStart.toISOString();
+    const dcPrevStartISO = dcPrevStart.toISOString();
+
+    // Build daily direction per pair from H1 cache
+    const dailyDirection = {};
+    for (const inst of ALL_PAIRS) {
+      const candles = h1Cache[inst] || [];
+      const ydCandles = candles.filter(c => c.time >= dcPrevStartISO && c.time < dcDayStartISO);
+      if (ydCandles.length < 5) continue;
+      const ydOpen = ydCandles[0].open;
+      const ydClose = ydCandles[ydCandles.length - 1].close;
+      let ydHigh = -Infinity, ydLow = Infinity;
+      for (const c of ydCandles) {
+        if (c.high > ydHigh) ydHigh = c.high;
+        if (c.low < ydLow) ydLow = c.low;
+      }
+      const ydRange = ydHigh - ydLow;
+      const pd = inst.includes('JPY') ? 0.01 : 0.0001;
+      if (ydRange < pd) continue;
+      const ydBody = Math.abs(ydClose - ydOpen);
+      const ydBodyPct = Math.round((ydBody / ydRange) * 100);
+      const ydBull = ydClose > ydOpen;
+      dailyDirection[inst] = {
+        direction: ydBull ? 'BUY' : 'SELL',
+        bodyPct: ydBodyPct,
+        rangePips: Math.round((ydRange / pd) * 10) / 10,
+      };
+    }
+
     // Per-currency lifecycle state (persists across timestamps)
     const state = {};
     for (const ccy of CURRENCIES) {
@@ -339,6 +388,11 @@ module.exports = async function handler(req, res) {
           const weak3H = getH3(weak.currency, time);
           if (strong3H <= weak3H) continue;
 
+          // Daily Continuation filter: direction must match yesterday's daily candle
+          const dc = dailyDirection[inst];
+          if (!dc) continue;
+          if (dc.direction !== direction) continue;
+
           // Confidence score
           let confidence = 0;
           if (strong.phase === PHASES.GROWTH) confidence += 20;
@@ -399,6 +453,7 @@ module.exports = async function handler(req, res) {
             h1Consec, entryPrice,
             h1Forward,
             spread, bodyPct, confidence,
+            daily: { direction: dc.direction, bodyPct: dc.bodyPct, rangePips: dc.rangePips },
           });
         }
       }
