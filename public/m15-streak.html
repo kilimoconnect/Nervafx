@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>NervaFX — M15 Streak Engine</title>
+  <link rel="icon" type="image/png" href="/nervafx-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .grid { display: block !important; }
+    .sx-topbar {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 28px; height: 56px;
+      background: rgba(8,11,18,0.92);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+    .sx-topbar-left { display: flex; align-items: center; gap: 12px; }
+    .sx-logo img { height: 24px; display: block; }
+    .sx-sep { color: rgba(255,255,255,0.1); font-size: 20px; font-weight: 200; }
+    .sx-title-text { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+    .sx-back-btn {
+      display: flex; align-items: center; gap: 5px;
+      padding: 6px 12px; border-radius: 8px;
+      background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+      color: var(--text-muted); font-size: 12px; cursor: pointer; text-decoration: none;
+    }
+    .sx-back-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
+    .sx-subtitle {
+      text-align: center; padding: 18px 20px 10px;
+      font-size: 11px; color: var(--text-dim); letter-spacing: 0.3px;
+    }
+
+    /* Filters */
+    .sx-filters {
+      display: flex; align-items: center; gap: 8px; padding: 10px 20px;
+      flex-wrap: wrap; justify-content: center;
+    }
+    .sx-days {
+      padding: 5px 12px; border-radius: 7px; font-size: 11px; font-weight: 600;
+      background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+      color: var(--text-muted); cursor: pointer;
+    }
+    .sx-days.active { background: rgba(168,85,247,0.15); border-color: rgba(168,85,247,0.4); color: #c084fc; }
+    .sx-days:hover { background: rgba(255,255,255,0.08); }
+    .sx-session-filter {
+      padding: 5px 10px; border-radius: 7px; font-size: 11px; font-weight: 600;
+      background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+      color: var(--text-muted); cursor: pointer;
+    }
+    .sx-session-filter.active { background: rgba(168,85,247,0.12); border-color: rgba(168,85,247,0.3); color: #c084fc; }
+    .sx-date-input {
+      padding: 5px 10px; border-radius: 7px; font-size: 11px;
+      background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+      color: var(--text-muted); width: 110px;
+    }
+    .sx-go-btn {
+      padding: 5px 12px; border-radius: 7px; font-size: 11px; font-weight: 700;
+      background: rgba(168,85,247,0.2); border: 1px solid rgba(168,85,247,0.4);
+      color: #c084fc; cursor: pointer;
+    }
+
+    /* Cards */
+    .str-card {
+      margin: 12px 20px; border-radius: 14px;
+      background: rgba(255,255,255,0.02); border: 1px solid var(--border);
+      overflow: hidden;
+    }
+    .str-hd {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 18px; border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .str-time-block { display: flex; flex-direction: column; }
+    .str-time { font-size: 16px; font-weight: 800; color: #fff; }
+    .str-date { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+    .str-count {
+      font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 6px;
+      background: rgba(168,85,247,0.12); color: #c084fc;
+    }
+
+    /* Signal rows */
+    .str-signals { padding: 12px 18px; }
+    .str-signal {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 14px; margin-bottom: 8px; border-radius: 10px;
+      background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04);
+      cursor: pointer; transition: background 0.2s;
+    }
+    .str-signal:hover { background: rgba(255,255,255,0.04); }
+    .str-signal.open .str-candles { display: block; }
+    .str-pair { font-size: 14px; font-weight: 800; color: #fff; min-width: 70px; }
+    .str-dir {
+      font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 5px;
+      letter-spacing: 0.5px;
+    }
+    .str-dir.BUY { background: rgba(34,197,94,0.15); color: #4ade80; }
+    .str-dir.SELL { background: rgba(239,68,68,0.15); color: #f87171; }
+    .str-streak {
+      font-size: 12px; font-weight: 800; color: #c084fc;
+      font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+    }
+    .str-pips {
+      font-size: 12px; font-weight: 700;
+      font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+    }
+    .str-pips.pos { color: #4ade80; }
+    .str-pips.neg { color: #f87171; }
+    .str-avg {
+      font-size: 10px; color: var(--text-dim); margin-left: auto;
+    }
+
+    /* Candle detail table */
+    .str-candles {
+      display: none; margin-top: 10px; width: 100%;
+      border-top: 1px solid rgba(255,255,255,0.04); padding-top: 8px;
+    }
+    .str-candle-table {
+      width: 100%; border-collapse: collapse; font-size: 10px;
+    }
+    .str-candle-table th {
+      text-align: left; padding: 4px 8px; color: var(--text-dim);
+      font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .str-candle-table td { padding: 4px 8px; }
+    .str-bull { color: #4ade80; }
+    .str-bear { color: #f87171; }
+
+    /* Dots visualization */
+    .str-dots { display: flex; gap: 3px; align-items: center; }
+    .str-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+    }
+    .str-dot.buy { background: #4ade80; }
+    .str-dot.sell { background: #f87171; }
+
+    @media (max-width: 600px) {
+      .str-card { margin: 8px 10px; }
+      .str-signal { flex-wrap: wrap; gap: 8px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="sx-topbar">
+    <div class="sx-topbar-left">
+      <a href="/app" class="sx-logo"><img src="/nervafx-logo.png" alt="NervaFX" /></a>
+      <span class="sx-sep">|</span>
+      <span class="sx-title-text">M15 Streak Engine</span>
+    </div>
+    <a href="/app" class="sx-back-btn"><i data-lucide="arrow-left" style="width:12px;height:12px"></i> Back</a>
+  </div>
+
+  <div class="sx-subtitle">M15 candle streak detection — pairs with 8+ consecutive buy or sell candles in last 10</div>
+
+  <div class="sx-filters">
+    <button class="sx-days active" data-days="1">1D</button>
+    <button class="sx-days" data-days="2">2D</button>
+    <button class="sx-days" data-days="5">5D</button>
+    <button class="sx-days" data-days="10">10D</button>
+    <button class="sx-session-filter active" data-session="all">All</button>
+    <button class="sx-session-filter" data-session="asia">Asia</button>
+    <button class="sx-session-filter" data-session="london">London</button>
+    <button class="sx-session-filter" data-session="newyork">New York</button>
+    <input type="date" class="sx-date-input" id="sx-date-from" placeholder="dd/mm/yyyy" />
+    <input type="date" class="sx-date-input" id="sx-date-to" placeholder="dd/mm/yyyy" />
+    <button class="sx-go-btn" id="sx-go">Go</button>
+  </div>
+
+  <div id="str-cards"></div>
+
+  <script>
+    var TOKEN = localStorage.getItem('nfx_token') || '';
+    var currentDays = 1;
+    var currentSession = 'all';
+    var cachedRows = [];
+
+    function hrLabel(t) {
+      var d = new Date(t);
+      return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
+    }
+    function dayLabel(t) {
+      var d = new Date(t);
+      return d.toLocaleDateString('en-GB', { weekday: 'short', month: 'short', day: '2-digit', timeZone: 'UTC' });
+    }
+    function isWeekend(t) {
+      var d = new Date(t).getUTCDay();
+      return d === 0 || d === 6;
+    }
+    function inSession(t) {
+      if (currentSession === 'all') return true;
+      var h = new Date(t).getUTCHours();
+      if (currentSession === 'asia') return h >= 0 && h < 9;
+      if (currentSession === 'london') return h >= 7 && h < 16;
+      if (currentSession === 'newyork') return h >= 13 && h < 22;
+      return true;
+    }
+
+    function renderCards(rows) {
+      var el = document.getElementById('str-cards');
+      var html = '';
+      var reversed = rows.slice().reverse();
+
+      for (var r = 0; r < reversed.length; r++) {
+        var row = reversed[r];
+        if (isWeekend(row.time)) continue;
+        if (!inSession(row.time)) continue;
+
+        html += '<div class="str-card">';
+        html += '<div class="str-hd">';
+        html += '<div class="str-time-block">';
+        html += '<span class="str-time">' + hrLabel(row.time) + '</span>';
+        html += '<span class="str-date">' + dayLabel(row.time) + '</span>';
+        html += '</div>';
+        html += '<span class="str-count">' + row.signals.length + ' pair' + (row.signals.length > 1 ? 's' : '') + '</span>';
+        html += '</div>';
+
+        html += '<div class="str-signals">';
+        for (var s = 0; s < row.signals.length; s++) {
+          var sig = row.signals[s];
+          html += '<div class="str-signal">';
+
+          // Main row
+          html += '<span class="str-pair">' + sig.pair + '</span>';
+          html += '<span class="str-dir ' + sig.direction + '">' + sig.direction + '</span>';
+          html += '<span class="str-streak">' + sig.count + '/10</span>';
+
+          // Dots
+          html += '<div class="str-dots">';
+          for (var di = 0; di < sig.candles.length; di++) {
+            var dc = sig.candles[di];
+            html += '<span class="str-dot ' + (dc.direction === 'BUY' ? 'buy' : 'sell') + '"></span>';
+          }
+          html += '</div>';
+
+          html += '<span class="str-pips ' + (sig.totalPips >= 0 ? 'pos' : 'neg') + '">' + (sig.totalPips >= 0 ? '+' : '') + sig.totalPips + ' pips</span>';
+          html += '<span class="str-avg">avg ' + sig.avgBodyPips + ' pip/candle</span>';
+
+          // Candle detail table (hidden)
+          html += '<div class="str-candles">';
+          html += '<table class="str-candle-table">';
+          html += '<thead><tr><th>#</th><th>Time</th><th>Open</th><th>High</th><th>Low</th><th>Close</th><th>Dir</th></tr></thead>';
+          html += '<tbody>';
+          var prec = sig.pair.includes('JPY') ? 3 : 5;
+          for (var ci = 0; ci < sig.candles.length; ci++) {
+            var c = sig.candles[ci];
+            var cls = c.direction === 'BUY' ? 'str-bull' : 'str-bear';
+            html += '<tr class="' + cls + '">';
+            html += '<td>' + (ci + 1) + '</td>';
+            html += '<td>' + hrLabel(c.time) + '</td>';
+            html += '<td>' + c.open.toFixed(prec) + '</td>';
+            html += '<td>' + c.high.toFixed(prec) + '</td>';
+            html += '<td>' + c.low.toFixed(prec) + '</td>';
+            html += '<td>' + c.close.toFixed(prec) + '</td>';
+            html += '<td>' + c.direction + '</td>';
+            html += '</tr>';
+          }
+          html += '</tbody></table></div>';
+
+          html += '</div>';
+        }
+        html += '</div></div>';
+      }
+
+      el.innerHTML = html || '<div class="br-empty">No streaks found in this period.</div>';
+      el.querySelectorAll('.str-signal').forEach(function(card) {
+        card.addEventListener('click', function() { card.classList.toggle('open'); });
+      });
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
+    async function load() {
+      document.getElementById('str-cards').innerHTML = '<div class="sx-loading"><span class="spinner"></span> Loading…</div>';
+
+      var fromEl = document.getElementById('sx-date-from');
+      var toEl = document.getElementById('sx-date-to');
+      var qs;
+      if (fromEl.value && toEl.value) {
+        qs = 'from=' + fromEl.value + '&to=' + toEl.value;
+      } else {
+        qs = 'days=' + currentDays;
+      }
+
+      try {
+        var res = await fetch('/api/m15-streak?' + qs, {
+          headers: { Authorization: 'Bearer ' + TOKEN },
+        });
+        if (!res.ok) throw new Error(await res.text());
+        var json = await res.json();
+        cachedRows = json.rows || [];
+        renderCards(cachedRows);
+      } catch (e) {
+        document.getElementById('str-cards').innerHTML =
+          '<div class="br-empty" style="color:#f87171">Error: ' + e.message + '</div>';
+      }
+    }
+
+    document.querySelectorAll('.sx-days').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        document.querySelectorAll('.sx-days').forEach(function(b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        currentDays = parseInt(btn.dataset.days, 10);
+        document.getElementById('sx-date-from').value = '';
+        document.getElementById('sx-date-to').value = '';
+        load();
+      });
+    });
+    document.querySelectorAll('.sx-session-filter').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        document.querySelectorAll('.sx-session-filter').forEach(function(b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        currentSession = btn.dataset.session;
+        renderCards(cachedRows);
+      });
+    });
+    document.getElementById('sx-go').addEventListener('click', load);
+
+    load();
+    setInterval(load, 15 * 60 * 1000);
+  </script>
+</body>
+</html>

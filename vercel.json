@@ -35,7 +35,8 @@
     "api/m15-impulse.js": { "maxDuration": 60 },
     "api/currency-acceleration.js": { "maxDuration": 60 },
     "api/m15-acceleration.js": { "maxDuration": 60 },
-    "api/acceleration-engine.js": { "maxDuration": 60 }
+    "api/acceleration-engine.js": { "maxDuration": 60 },
+    "api/m15-streak.js": { "maxDuration": 60 }
   },
   "rewrites": [
     { "source": "/",       "destination": "/login.html" },
@@ -63,7 +64,8 @@
     { "source": "/m15-impulse", "destination": "/m15-impulse.html" },
     { "source": "/currency-acceleration", "destination": "/currency-acceleration.html" },
     { "source": "/m15-acceleration", "destination": "/m15-acceleration.html" },
-    { "source": "/acceleration-engine", "destination": "/acceleration-engine.html" }
+    { "source": "/acceleration-engine", "destination": "/acceleration-engine.html" },
+    { "source": "/m15-streak", "destination": "/m15-streak.html" }
   ],
   "headers": [
     {
