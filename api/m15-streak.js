@@ -44,7 +44,7 @@ module.exports = async function handler(req, res) {
           const { data, error } = await sb
             .from('backtest_candles')
             .select('time, open, high, low, close')
-            .eq('instrument', inst).eq('timeframe', 'M15').eq('complete', true)
+            .eq('instrument', inst).eq('timeframe', 'M15')
             .gte('time', fetchSince).lte('time', until)
             .order('time', { ascending: true })
             .range(off, off + PAGE - 1);
@@ -67,7 +67,7 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // Collect all unique M15 timestamps within the requested range
+    // Collect unique M15 timestamps, keep only 1 per hour (xx:00) to avoid flooding
     const allTimes = new Set();
     for (const inst of VALID_PAIRS) {
       const candles = candleCache[inst] || [];
@@ -75,7 +75,14 @@ module.exports = async function handler(req, res) {
         if (c.time >= since) allTimes.add(c.time);
       }
     }
-    const timestamps = [...allTimes].sort();
+    const allSorted = [...allTimes].sort();
+    // Keep last M15 bar per hour
+    const hourMap = {};
+    for (const t of allSorted) {
+      const hourKey = t.slice(0, 13);
+      hourMap[hourKey] = t;
+    }
+    const timestamps = Object.values(hourMap).sort();
 
     const rows = [];
 
