@@ -229,8 +229,9 @@
 
           html += '<span class="brk-pair">' + sig.pair + '</span>';
           html += '<span class="brk-dir ' + sig.direction + '">' + sig.direction + '</span>';
-          html += '<span class="brk-body-tag">' + sig.bodyPips + ' pip body</span>';
+          html += '<span class="brk-body-tag">' + sig.bodyPips + ' pip' + (sig.candleCount === 2 ? ' (2x)' : '') + '</span>';
           html += '<span class="brk-break-tag ' + sig.direction + '">' + (sig.direction === 'BUY' ? '▲' : '▼') + ' ' + sig.breakPips + ' pip break</span>';
+          if (sig.candleCount === 2) html += '<span class="brk-gbp-tag" style="background:rgba(168,85,247,0.1);color:#c084fc">2 candles</span>';
           if (isGbp) html += '<span class="brk-gbp-tag">GBP 15+</span>';
           html += '<span class="brk-min-label">min ' + sig.minPips + ' pips</span>';
 
@@ -254,6 +255,21 @@
             html += '<td>' + pc.high.toFixed(prec) + '</td>';
             html += '<td>' + pc.low.toFixed(prec) + '</td>';
             html += '<td>' + pc.close.toFixed(prec) + '</td>';
+            html += '</tr>';
+          }
+
+          // Mid candle (for 2-candle breaks)
+          if (sig.midCandle) {
+            var mc = sig.midCandle;
+            var mcBull = mc.close > mc.open;
+            var mcCls = mcBull ? 'brk-bull' : 'brk-bear';
+            html += '<tr class="' + mcCls + '">';
+            html += '<td class="brk-label-row">Mid</td>';
+            html += '<td>' + hrLabel(mc.time) + '</td>';
+            html += '<td>' + mc.open.toFixed(prec) + '</td>';
+            html += '<td>' + mc.high.toFixed(prec) + '</td>';
+            html += '<td>' + mc.low.toFixed(prec) + '</td>';
+            html += '<td>' + mc.close.toFixed(prec) + '</td>';
             html += '</tr>';
           }
 

@@ -97,37 +97,69 @@ module.exports = async function handler(req, res) {
 
         const curr = candles[idx];
         const prev = candles[idx - 1];
-
-        const body = Math.abs(curr.close - curr.open);
         const pd = pipDiv(inst);
-        const bodyPips = Math.round((body / pd) * 10) / 10;
-
         const minPips = GBP_PAIRS.has(inst) ? 15 : 10;
-        if (bodyPips < minPips) continue;
+
+        // Check single candle break
+        const body1 = Math.abs(curr.close - curr.open);
+        const body1Pips = Math.round((body1 / pd) * 10) / 10;
 
         let direction = null;
-        if (curr.close > curr.open && curr.close > prev.high) {
-          direction = 'BUY';
-        } else if (curr.close < curr.open && curr.close < prev.low) {
-          direction = 'SELL';
+        let bodyPips = 0;
+        let candleCount = 0;
+        let breakRef = prev; // candle whose high/low is being broken
+
+        if (body1Pips >= minPips) {
+          // Single candle meets threshold
+          if (curr.close > curr.open && curr.close > prev.high) {
+            direction = 'BUY'; bodyPips = body1Pips; candleCount = 1;
+          } else if (curr.close < curr.open && curr.close < prev.low) {
+            direction = 'SELL'; bodyPips = body1Pips; candleCount = 1;
+          }
         }
+
+        // Check two consecutive candles if single didn't qualify
+        if (!direction && idx >= 2) {
+          const prev2 = candles[idx - 2];
+          const prevC = candles[idx - 1];
+          const prevBull = prevC.close > prevC.open;
+          const currBull = curr.close > curr.open;
+
+          if (prevBull && currBull) {
+            const combined = Math.abs(prevC.close - prevC.open) + Math.abs(curr.close - curr.open);
+            const combinedPips = Math.round((combined / pd) * 10) / 10;
+            if (combinedPips >= minPips && curr.close > prev2.high) {
+              direction = 'BUY'; bodyPips = combinedPips; candleCount = 2;
+              breakRef = prev2;
+            }
+          } else if (!prevBull && !currBull) {
+            const combined = Math.abs(prevC.close - prevC.open) + Math.abs(curr.close - curr.open);
+            const combinedPips = Math.round((combined / pd) * 10) / 10;
+            if (combinedPips >= minPips && curr.close < prev2.low) {
+              direction = 'SELL'; bodyPips = combinedPips; candleCount = 2;
+              breakRef = prev2;
+            }
+          }
+        }
+
         if (!direction) continue;
 
         const breakPips = direction === 'BUY'
-          ? Math.round(((curr.close - prev.high) / pd) * 10) / 10
-          : Math.round(((prev.low - curr.close) / pd) * 10) / 10;
+          ? Math.round(((curr.close - breakRef.high) / pd) * 10) / 10
+          : Math.round(((breakRef.low - curr.close) / pd) * 10) / 10;
 
         const pair = inst.replace('_', '/');
 
-        signals.push({
+        const sig = {
           pair,
           instrument: inst,
           direction,
           bodyPips,
           breakPips,
           minPips,
-          prevHigh: prev.high,
-          prevLow: prev.low,
+          candleCount,
+          prevHigh: breakRef.high,
+          prevLow: breakRef.low,
           candle: {
             time: curr.time,
             open: curr.open,
@@ -136,13 +168,27 @@ module.exports = async function handler(req, res) {
             close: curr.close,
           },
           prevCandle: {
-            time: prev.time,
-            open: prev.open,
-            high: prev.high,
-            low: prev.low,
-            close: prev.close,
+            time: breakRef.time,
+            open: breakRef.open,
+            high: breakRef.high,
+            low: breakRef.low,
+            close: breakRef.close,
           },
-        });
+        };
+
+        // Include the middle candle for 2-candle breaks
+        if (candleCount === 2) {
+          const mid = candles[idx - 1];
+          sig.midCandle = {
+            time: mid.time,
+            open: mid.open,
+            high: mid.high,
+            low: mid.low,
+            close: mid.close,
+          };
+        }
+
+        signals.push(sig);
       }
 
       if (signals.length > 0) {
