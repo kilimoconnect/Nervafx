@@ -2,6 +2,7 @@
 
 const { getClient, cors } = require('./_db');
 const { requirePlan } = require('./_plan');
+const { fetchDailyDirection, VALID_PAIRS: ALL_28 } = require('./_daily-direction');
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
 
@@ -74,6 +75,9 @@ module.exports = async function handler(req, res) {
       byHour[h][r.currency] = parseFloat(r.raw_6h) || 0;
     }
 
+    // Daily continuation direction filter
+    const dailyDirection = await fetchDailyDirection(sb, ALL_28);
+
     const hours = Object.keys(byHour).sort();
     const timeline = [];
 
@@ -96,11 +100,22 @@ module.exports = async function handler(req, res) {
       if (jpyRank === 1 && jpyVal > 0.015) jpySignal = 'STRONGEST';
       else if (jpyRank === 8 && jpyVal < -0.015) jpySignal = 'WEAKEST';
 
+      const chfTrades = chfSignal ? bestTrades('CHF', chfSignal, ranked).filter(t => {
+        const inst = t.pair.replace('/', '_');
+        const dc = dailyDirection[inst];
+        return dc && dc.direction === t.direction;
+      }) : [];
+      const jpyTrades = jpySignal ? bestTrades('JPY', jpySignal, ranked).filter(t => {
+        const inst = t.pair.replace('/', '_');
+        const dc = dailyDirection[inst];
+        return dc && dc.direction === t.direction;
+      }) : [];
+
       timeline.push({
         time: hour,
         ranking: ranked,
-        chf: { rank: chfRank, value: chfVal, signal: chfSignal, trades: chfSignal ? bestTrades('CHF', chfSignal, ranked) : [] },
-        jpy: { rank: jpyRank, value: jpyVal, signal: jpySignal, trades: jpySignal ? bestTrades('JPY', jpySignal, ranked) : [] },
+        chf: { rank: chfRank, value: chfVal, signal: chfSignal, trades: chfTrades },
+        jpy: { rank: jpyRank, value: jpyVal, signal: jpySignal, trades: jpyTrades },
       });
     }
 

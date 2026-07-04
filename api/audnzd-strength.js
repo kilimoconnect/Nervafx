@@ -2,6 +2,7 @@
 
 const { getClient, cors } = require('./_db');
 const { requirePlan } = require('./_plan');
+const { fetchDailyDirection, VALID_PAIRS: ALL_28 } = require('./_daily-direction');
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
 
@@ -76,6 +77,9 @@ module.exports = async function handler(req, res) {
       byHour[h][r.currency] = parseFloat(r.raw_6h) || 0;
     }
 
+    // Daily continuation direction filter
+    const dailyDirection = await fetchDailyDirection(sb, ALL_28);
+
     const hours = Object.keys(byHour).sort();
     const timeline = [];
 
@@ -99,11 +103,22 @@ module.exports = async function handler(req, res) {
       if (nzdRank === 1 && nzdVal > 0.015) nzdSignal = 'STRONGEST';
       else if (nzdRank === 8 && nzdVal < -0.015) nzdSignal = 'WEAKEST';
 
+      const audTrades = audSignal ? bestTrades('AUD', audSignal, ranked).filter(t => {
+        const inst = t.pair.replace('/', '_');
+        const dc = dailyDirection[inst];
+        return dc && dc.direction === t.direction;
+      }) : [];
+      const nzdTrades = nzdSignal ? bestTrades('NZD', nzdSignal, ranked).filter(t => {
+        const inst = t.pair.replace('/', '_');
+        const dc = dailyDirection[inst];
+        return dc && dc.direction === t.direction;
+      }) : [];
+
       timeline.push({
         time: hour,
         ranking: ranked,
-        aud: { rank: audRank, value: audVal, signal: audSignal, trades: audSignal ? bestTrades('AUD', audSignal, ranked) : [] },
-        nzd: { rank: nzdRank, value: nzdVal, signal: nzdSignal, trades: nzdSignal ? bestTrades('NZD', nzdSignal, ranked) : [] },
+        aud: { rank: audRank, value: audVal, signal: audSignal, trades: audTrades },
+        nzd: { rank: nzdRank, value: nzdVal, signal: nzdSignal, trades: nzdTrades },
       });
     }
 

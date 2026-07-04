@@ -2,6 +2,7 @@
 
 const { getClient, cors } = require('./_db');
 const { requirePlan } = require('./_plan');
+const { fetchDailyDirection } = require('./_daily-direction');
 
 const VALID_PAIRS = [
   'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
@@ -71,6 +72,9 @@ module.exports = async function handler(req, res) {
         }));
       }
     }
+
+    // Daily continuation direction filter
+    const dailyDirection = await fetchDailyDirection(sb, VALID_PAIRS);
 
     // Collect all M15 timestamps in range
     const allTimes = new Set();
@@ -143,6 +147,10 @@ module.exports = async function handler(req, res) {
         }
 
         if (!direction) continue;
+
+        // Daily continuation filter
+        const dc = dailyDirection[inst];
+        if (!dc || dc.direction !== direction) continue;
 
         const breakPips = direction === 'BUY'
           ? Math.round(((curr.close - breakRef.high) / pd) * 10) / 10

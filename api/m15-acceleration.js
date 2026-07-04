@@ -2,6 +2,7 @@
 
 const { getClient, cors } = require('./_db');
 const { requirePlan } = require('./_plan');
+const { fetchDailyDirection } = require('./_daily-direction');
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
 const VALID_PAIRS = new Set([
@@ -120,6 +121,10 @@ module.exports = async function handler(req, res) {
       }
     }
 
+    // Daily continuation direction filter
+    const ALL_PAIRS = [...VALID_PAIRS];
+    const dailyDirection = await fetchDailyDirection(sb, ALL_PAIRS);
+
     const rows = [];
 
     for (let t = 1; t < allStrength.length; t++) {
@@ -201,6 +206,10 @@ module.exports = async function handler(req, res) {
           const strong3H = getH3(strong.currency, time);
           const weak3H = getH3(weak.currency, time);
           if (strong3H <= weak3H) continue;
+
+          // Daily continuation filter
+          const dc = dailyDirection[inst];
+          if (!dc || dc.direction !== direction) continue;
 
           const spread = Math.round((strong.s3 - weak.s3) * 100) / 100;
           candidates.push({

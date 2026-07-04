@@ -2,6 +2,7 @@
 
 const { getClient, cors } = require('./_db');
 const { requirePlan } = require('./_plan');
+const { computeDailyDirectionFromCache } = require('./_daily-direction');
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
 const VALID_PAIRS = new Set([
@@ -59,8 +60,8 @@ module.exports = async function handler(req, res) {
       };
     }
 
-    // Fetch H1 candles for all 28 pairs (for break detection)
-    const candleSince = new Date(new Date(fetchSince).getTime() - 2 * 3600000).toISOString();
+    // Fetch H1 candles for all 28 pairs (for break detection + daily direction)
+    const candleSince = new Date(Math.min(new Date(fetchSince).getTime() - 2 * 3600000, Date.now() - 3 * 24 * 3600000)).toISOString();
     const candleCache = {};
     const ALL_PAIRS = [...VALID_PAIRS];
     for (let b = 0; b < ALL_PAIRS.length; b += 7) {
@@ -84,6 +85,9 @@ module.exports = async function handler(req, res) {
         }));
       }
     }
+
+    // Daily continuation direction filter
+    const dailyDirection = computeDailyDirectionFromCache(candleCache, ALL_PAIRS);
 
     const timestamps = Object.keys(byTime).sort();
     const rows = [];
@@ -165,6 +169,10 @@ module.exports = async function handler(req, res) {
 
           // 3H strength confirmation: strong currency must lead on 3H
           if (strong.s3 <= weak.s3) continue;
+
+          // Daily continuation filter
+          const dc = dailyDirection[inst];
+          if (!dc || dc.direction !== direction) continue;
 
           const spread = Math.round((strong.s3 - weak.s3) * 100) / 100;
           candidates.push({
