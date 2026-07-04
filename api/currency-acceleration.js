@@ -143,33 +143,6 @@ module.exports = async function handler(req, res) {
             direction = 'SELL';
           } else continue;
 
-          // Find latest completed H1 candle at or before this hour, and the one before it
-          const candles = candleCache[inst] || [];
-          let ci = -1;
-          for (let k = candles.length - 1; k >= 0; k--) {
-            if (candles[k].time <= time) { ci = k; break; }
-          }
-          if (ci < 1) continue;
-          const curr = candles[ci];
-          const prevC = candles[ci - 1];
-
-          let broke = false;
-          let breakLevel = null;
-          const currBody = Math.abs(curr.close - curr.open);
-          const prevBody = Math.abs(prevC.close - prevC.open) || 0.00001;
-          const bodyPct = Math.round((currBody / prevBody) * 100);
-          if (direction === 'BUY' && curr.close > prevC.high) {
-            broke = true;
-            breakLevel = prevC.high;
-          } else if (direction === 'SELL' && curr.close < prevC.low) {
-            broke = true;
-            breakLevel = prevC.low;
-          }
-          if (!broke) continue;
-
-          // 3H strength confirmation: strong currency must lead on 3H
-          if (strong.s3 <= weak.s3) continue;
-
           // Daily continuation filter
           const dc = dailyDirection[inst];
           if (!dc || dc.direction !== direction) continue;
@@ -185,8 +158,6 @@ module.exports = async function handler(req, res) {
             strongAccel: strong.acceleration,
             weakAccel: weak.acceleration,
             spread,
-            breakLevel,
-            bodyPct,
             strongScore: strong.score,
             weakScore: weak.score,
           });
