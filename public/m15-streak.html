@@ -181,7 +181,7 @@
 
     function hrLabel(t) {
       var d = new Date(t);
-      return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
+      return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }) + ' UTC';
     }
     function dayLabel(t) {
       var d = new Date(t);
