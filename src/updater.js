@@ -108,6 +108,10 @@ async function hourlyUpdate() {
     const n = await syncCandles('H1');
     if (n > 0) console.log(`[UPDATE]   synced ${n} H1 candles`);
   });
+  await step('sync_m5', async () => {
+    const n = await syncCandles('M5');
+    if (n > 0) console.log(`[UPDATE]   synced ${n} M5 candles`);
+  });
 
   // ── Phase 1: Quality check + repair ────────────────────────────────────────
   let check;
@@ -172,10 +176,14 @@ async function hourlyUpdate() {
 async function m15Update() {
   console.log(`[M15-UPDATE] ${new Date().toISOString()} - Starting M15 update...`);
 
-  // Only sync M15 candles (fast — no H1 sync, no quality check)
+  // Only sync M15 + M5 candles (fast — no H1 sync, no quality check)
   await step('sync_m15', async () => {
     const n = await syncCandles('M15');
     if (n > 0) console.log(`[M15-UPDATE]   synced ${n} M15 candles`);
+  });
+  await step('sync_m5', async () => {
+    const n = await syncCandles('M5');
+    if (n > 0) console.log(`[M15-UPDATE]   synced ${n} M5 candles`);
   });
 
   // Fast engines that use M15 data
