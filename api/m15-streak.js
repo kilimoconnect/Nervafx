@@ -31,17 +31,14 @@ module.exports = async function handler(req, res) {
     // Need 5 extra M15 bars for lookback
     const fetchSince = new Date(new Date(since).getTime() - 5 * 15 * 60000).toISOString();
 
-    // Fetch latest currency strength (3H smooth) for strength filter
+    // Fetch latest M15 currency strength for strength filter
     const { data: csRows, error: csErr } = await sb
-      .from('currency_strength')
-      .select('time, currency, smooth_3h')
+      .from('m15_currency_strength')
+      .select('time, values')
       .order('time', { ascending: false })
-      .limit(8);
+      .limit(1);
     if (csErr) throw csErr;
-    const csMap = {};
-    for (const r of csRows || []) {
-      if (!csMap[r.currency]) csMap[r.currency] = parseFloat(r.smooth_3h) || 0;
-    }
+    const csMap = (csRows && csRows[0]) ? csRows[0].values : {};
 
     const PAGE = 1000;
     const candleCache = {};
@@ -146,11 +143,11 @@ module.exports = async function handler(req, res) {
           const minPips = isGbp ? 15 : 10;
           if (totalPips < minPips) continue;
 
-          // Currency strength filter: base must be stronger than quote for BUY, weaker for SELL
+          // M15 currency strength filter: base must be stronger than quote for BUY, weaker for SELL
           const [base, quote] = inst.split('_');
-          const baseStr = csMap[base];
-          const quoteStr = csMap[quote];
-          if (baseStr !== undefined && quoteStr !== undefined) {
+          const baseStr = parseFloat(csMap[base]);
+          const quoteStr = parseFloat(csMap[quote]);
+          if (!isNaN(baseStr) && !isNaN(quoteStr)) {
             if (direction === 'BUY' && baseStr <= quoteStr) continue;
             if (direction === 'SELL' && baseStr >= quoteStr) continue;
           }
