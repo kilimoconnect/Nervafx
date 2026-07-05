@@ -2,7 +2,7 @@
 
 const { getClient, cors } = require('./_db');
 const { requirePlan } = require('./_plan');
-const { fetchDailyDirection } = require('./_daily-direction');
+const { fetchDailyDirectionMap, getDirectionForTime } = require('./_daily-direction');
 
 const VALID_PAIRS = [
   'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
@@ -29,7 +29,7 @@ module.exports = async function handler(req, res) {
     const gate = await requirePlan(sb, req, 'premium');
     if (gate.error) return res.status(gate.status).json({ error: gate.error, upgrade: gate.upgrade });
 
-    const days = Math.min(30, parseInt(req.query?.days || '1', 10) || 1);
+    const days = Math.min(365, parseInt(req.query?.days || '1', 10) || 1);
     const qFrom = req.query?.from;
     const qTo = req.query?.to;
     const until = qTo ? new Date(qTo + 'T23:59:59Z').toISOString() : new Date().toISOString();
@@ -73,8 +73,8 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // Daily continuation direction filter
-    const dailyDirection = await fetchDailyDirection(sb, VALID_PAIRS);
+    // Per-day daily continuation direction map (works for historical date ranges)
+    const dailyDirectionMap = await fetchDailyDirectionMap(sb, VALID_PAIRS, since, until);
 
     // Collect all M15 timestamps in range
     const allTimes = new Set();
@@ -148,8 +148,8 @@ module.exports = async function handler(req, res) {
 
         if (!direction) continue;
 
-        // Daily continuation filter
-        const dc = dailyDirection[inst];
+        // Daily continuation filter (per-day, matches historical timestamps)
+        const dc = getDirectionForTime(dailyDirectionMap, inst, time);
         if (!dc || dc.direction !== direction) continue;
 
         const breakPips = direction === 'BUY'
