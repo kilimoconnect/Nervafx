@@ -403,6 +403,9 @@
             html += '<div class="acc-cand-top">';
             html += '<span class="acc-cand-pair">' + cd.pair + '</span>';
             html += '<span class="acc-cand-dir ' + cd.direction + '">' + cd.direction + '</span>';
+            if (cd.dirSource === 'BOTH') html += '<span class="brk-badge" style="background:rgba(20,184,166,0.12);color:#2dd4bf">D1 + PB</span>';
+            else if (cd.dirSource === 'PULLBACK') html += '<span class="brk-badge" style="background:rgba(14,165,233,0.12);color:#38bdf8">Pullback</span>';
+            else if (cd.dirSource === 'CONT') html += '<span class="brk-badge" style="background:rgba(59,130,246,0.12);color:#60a5fa">D1 Cont.</span>';
             html += '<span class="acc-cand-spread-badge">' + vfmt(cd.spread) + '</span>';
             html += '</div>';
 

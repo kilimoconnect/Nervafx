@@ -2,7 +2,7 @@
 
 const { getClient, cors } = require('./_db');
 const { requirePlan } = require('./_plan');
-const { computeDailyDirectionFromCache } = require('./_daily-direction');
+const { computeDailyDirectionFromCache, computePullbackDirectionFromCache } = require('./_daily-direction');
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
 const VALID_PAIRS = new Set([
@@ -60,8 +60,8 @@ module.exports = async function handler(req, res) {
       };
     }
 
-    // Fetch H1 candles for all 28 pairs (for break detection + daily direction)
-    const candleSince = new Date(Math.min(new Date(fetchSince).getTime() - 2 * 3600000, Date.now() - 3 * 24 * 3600000)).toISOString();
+    // Fetch H1 candles for all 28 pairs (daily continuation + pullback direction need ~4 trading days + weekend)
+    const candleSince = new Date(Math.min(new Date(fetchSince).getTime() - 2 * 3600000, Date.now() - 8 * 24 * 3600000)).toISOString();
     const candleCache = {};
     const ALL_PAIRS = [...VALID_PAIRS];
     for (let b = 0; b < ALL_PAIRS.length; b += 7) {
@@ -86,8 +86,9 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // Daily continuation direction filter
+    // Direction filter sources: daily continuation (yesterday's candle) + daily pullback setup
     const dailyDirection = computeDailyDirectionFromCache(candleCache, ALL_PAIRS);
+    const pullbackDirection = computePullbackDirectionFromCache(candleCache, ALL_PAIRS);
 
     const timestamps = Object.keys(byTime).sort();
     const rows = [];
@@ -143,14 +144,18 @@ module.exports = async function handler(req, res) {
             direction = 'SELL';
           } else continue;
 
-          // Daily continuation filter
+          // Direction must match daily continuation OR an active pullback setup
           const dc = dailyDirection[inst];
-          if (!dc || dc.direction !== direction) continue;
+          const pb = pullbackDirection[inst];
+          const contOk = dc && dc.direction === direction;
+          const pbOk = pb && pb.direction === direction;
+          if (!contOk && !pbOk) continue;
 
           const spread = Math.round((strong.s3 - weak.s3) * 100) / 100;
           candidates.push({
             pair,
             direction,
+            dirSource: contOk && pbOk ? 'BOTH' : (contOk ? 'CONT' : 'PULLBACK'),
             strongCcy: strong.currency,
             weakCcy: weak.currency,
             strongS3: strong.s3,
