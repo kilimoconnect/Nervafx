@@ -101,6 +101,41 @@ module.exports = async function handler(req, res) {
       }
     }
 
+    // Fetch M15 candles for today (15-minute live updates)
+    const m15Cache = {};
+    const m15Since = dayStart.toISOString();
+    for (let b = 0; b < VALID_PAIRS.length; b += 7) {
+      const batch = VALID_PAIRS.slice(b, b + 7);
+      const results = await Promise.all(batch.map(async inst => {
+        const allData = [];
+        let off = 0;
+        while (true) {
+          const { data, error } = await sb
+            .from('backtest_candles')
+            .select('time, open, high, low, close')
+            .eq('instrument', inst).eq('timeframe', 'M15')
+            .gte('time', m15Since).lte('time', fetchUntil)
+            .order('time', { ascending: true })
+            .range(off, off + PAGE - 1);
+          if (error) throw error;
+          if (!data || !data.length) break;
+          allData.push(...data);
+          if (data.length < PAGE) break;
+          off += PAGE;
+        }
+        return { inst, data: allData };
+      }));
+      for (const { inst, data } of results) {
+        m15Cache[inst] = data.map(c => ({
+          time: c.time,
+          open: parseFloat(c.open),
+          high: parseFloat(c.high),
+          low: parseFloat(c.low),
+          close: parseFloat(c.close),
+        }));
+      }
+    }
+
     const dayStartISO = dayStart.toISOString();
     const pairs = [];
 
@@ -232,8 +267,8 @@ module.exports = async function handler(req, res) {
       score = Math.max(20, Math.min(98, score));
       const initialScore = score;
 
-      // Phase 2: today's H1 updates (same engine as daily-continuation)
-      const today = allCandles.filter(c => c.time >= dayStartISO);
+      // Phase 2: today's M15 updates (same engine as daily-continuation, 15-minute cadence)
+      const today = m15Cache[inst] || [];
 
       const timeline = [{
         time: dayStartISO,
