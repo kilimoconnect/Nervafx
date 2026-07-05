@@ -216,22 +216,22 @@
       var html = '';
       var reversed = rows.slice().reverse();
 
-      // Pre-build repeat map: for each row, check if pair+direction existed in the previous (earlier) row
+      // Pre-build repeat map: mark pairs that appeared in any earlier row on the same day
       var repeatMap = {};
-      var prevRowPairs = {};
+      var seenByDay = {};
       for (var ri = 0; ri < rows.length; ri++) {
         var rr = rows[ri];
         if (isWeekend(rr.time) || !inSession(rr.time)) continue;
-        var curRowPairs = {};
+        var dayKey = rr.time.slice(0, 10);
+        if (!seenByDay[dayKey]) seenByDay[dayKey] = {};
         for (var si = 0; si < rr.signals.length; si++) {
           var key = rr.signals[si].pair + ':' + rr.signals[si].direction;
-          curRowPairs[key] = true;
-          if (prevRowPairs[key]) {
+          if (seenByDay[dayKey][key]) {
             if (!repeatMap[rr.time]) repeatMap[rr.time] = {};
             repeatMap[rr.time][key] = true;
           }
+          seenByDay[dayKey][key] = true;
         }
-        prevRowPairs = curRowPairs;
       }
 
       for (var r = 0; r < reversed.length; r++) {
