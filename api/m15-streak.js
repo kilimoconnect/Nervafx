@@ -31,6 +31,18 @@ module.exports = async function handler(req, res) {
     // Need 5 extra M15 bars for lookback
     const fetchSince = new Date(new Date(since).getTime() - 5 * 15 * 60000).toISOString();
 
+    // Fetch latest currency strength (3H smooth) for strength filter
+    const { data: csRows, error: csErr } = await sb
+      .from('currency_strength')
+      .select('time, currency, smooth_3h')
+      .order('time', { ascending: false })
+      .limit(8);
+    if (csErr) throw csErr;
+    const csMap = {};
+    for (const r of csRows || []) {
+      if (!csMap[r.currency]) csMap[r.currency] = parseFloat(r.smooth_3h) || 0;
+    }
+
     const PAGE = 1000;
     const candleCache = {};
 
@@ -133,6 +145,15 @@ module.exports = async function handler(req, res) {
           const isGbp = inst.includes('GBP');
           const minPips = isGbp ? 15 : 10;
           if (totalPips < minPips) continue;
+
+          // Currency strength filter: base must be stronger than quote for BUY, weaker for SELL
+          const [base, quote] = inst.split('_');
+          const baseStr = csMap[base];
+          const quoteStr = csMap[quote];
+          if (baseStr !== undefined && quoteStr !== undefined) {
+            if (direction === 'BUY' && baseStr <= quoteStr) continue;
+            if (direction === 'SELL' && baseStr >= quoteStr) continue;
+          }
 
           // Average body size
           let bodySum = 0;
