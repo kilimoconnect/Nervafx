@@ -214,17 +214,28 @@
       var html = '';
       var reversed = rows.slice().reverse();
 
-      var prevPairs = {};
+      // Pre-build repeat map: for each row, check if pair+direction existed in the previous (earlier) row
+      var repeatMap = {};
+      var prevRowPairs = {};
+      for (var ri = 0; ri < rows.length; ri++) {
+        var rr = rows[ri];
+        if (isWeekend(rr.time) || !inSession(rr.time)) continue;
+        var curRowPairs = {};
+        for (var si = 0; si < rr.signals.length; si++) {
+          var key = rr.signals[si].pair + ':' + rr.signals[si].direction;
+          curRowPairs[key] = true;
+          if (prevRowPairs[key]) {
+            if (!repeatMap[rr.time]) repeatMap[rr.time] = {};
+            repeatMap[rr.time][key] = true;
+          }
+        }
+        prevRowPairs = curRowPairs;
+      }
+
       for (var r = 0; r < reversed.length; r++) {
         var row = reversed[r];
         if (isWeekend(row.time)) continue;
         if (!inSession(row.time)) continue;
-
-        // Current row's pairs for next iteration
-        var currentPairs = {};
-        for (var s2 = 0; s2 < row.signals.length; s2++) {
-          currentPairs[row.signals[s2].pair + ':' + row.signals[s2].direction] = true;
-        }
 
         html += '<div class="str-card">';
         html += '<div class="str-hd">';
@@ -238,7 +249,7 @@
         html += '<div class="str-signals">';
         for (var s = 0; s < row.signals.length; s++) {
           var sig = row.signals[s];
-          var isRepeat = prevPairs[sig.pair + ':' + sig.direction];
+          var isRepeat = repeatMap[row.time] && repeatMap[row.time][sig.pair + ':' + sig.direction];
           html += '<div class="str-signal' + (isRepeat ? ' str-repeat' : '') + '">';
 
           // Main row
@@ -281,7 +292,6 @@
           html += '</div>';
         }
         html += '</div></div>';
-        prevPairs = currentPairs;
       }
 
       el.innerHTML = html || '<div class="br-empty">No streaks found in this period.</div>';
