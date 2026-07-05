@@ -94,6 +94,12 @@
       cursor: pointer; transition: background 0.2s;
     }
     .str-signal:hover { background: rgba(255,255,255,0.04); }
+    .str-signal.str-repeat {
+      background: rgba(168,85,247,0.06); border-color: rgba(168,85,247,0.2);
+    }
+    .str-repeat-tag {
+      font-size: 10px; color: #c084fc; margin-left: 4px; font-weight: 600;
+    }
     .str-signal.open .str-candles { display: block; }
     .str-pair { font-size: 14px; font-weight: 800; color: #fff; min-width: 70px; }
     .str-dir {
@@ -208,10 +214,17 @@
       var html = '';
       var reversed = rows.slice().reverse();
 
+      var prevPairs = {};
       for (var r = 0; r < reversed.length; r++) {
         var row = reversed[r];
         if (isWeekend(row.time)) continue;
         if (!inSession(row.time)) continue;
+
+        // Current row's pairs for next iteration
+        var currentPairs = {};
+        for (var s2 = 0; s2 < row.signals.length; s2++) {
+          currentPairs[row.signals[s2].pair + ':' + row.signals[s2].direction] = true;
+        }
 
         html += '<div class="str-card">';
         html += '<div class="str-hd">';
@@ -225,10 +238,11 @@
         html += '<div class="str-signals">';
         for (var s = 0; s < row.signals.length; s++) {
           var sig = row.signals[s];
-          html += '<div class="str-signal">';
+          var isRepeat = prevPairs[sig.pair + ':' + sig.direction];
+          html += '<div class="str-signal' + (isRepeat ? ' str-repeat' : '') + '">';
 
           // Main row
-          html += '<span class="str-pair">' + sig.pair + '</span>';
+          html += '<span class="str-pair">' + sig.pair + (isRepeat ? ' <span class="str-repeat-tag">↻</span>' : '') + '</span>';
           html += '<span class="str-dir ' + sig.direction + '">' + sig.direction + '</span>';
           html += '<span class="str-streak">' + sig.count + '/5</span>';
 
@@ -267,6 +281,7 @@
           html += '</div>';
         }
         html += '</div></div>';
+        prevPairs = currentPairs;
       }
 
       el.innerHTML = html || '<div class="br-empty">No streaks found in this period.</div>';
