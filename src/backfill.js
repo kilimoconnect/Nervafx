@@ -30,6 +30,7 @@ const RATE_MS       = 250;  // slightly conservative vs 200ms default
 const CHUNK_MS = {
   H1:  180 * 24 * 60 * 60 * 1000, // 180 days ≈ 4 320 H1 candles
   M15:  45 * 24 * 60 * 60 * 1000, //  45 days ≈ 4 320 M15 candles (under 5000 limit)
+  M5:   15 * 24 * 60 * 60 * 1000, //  15 days ≈ 4 320 M5 candles (under 5000 limit)
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -152,6 +153,7 @@ async function main() {
 
   if (arg === 'H1')       timeframes = ['H1'];
   else if (arg === 'M15') timeframes = ['M15'];
+  else if (arg === 'M5')  timeframes = ['M5'];
   else                    timeframes = ['H1', 'M15'];
 
   console.log(`\nNervaFX Historical Backfill`);
