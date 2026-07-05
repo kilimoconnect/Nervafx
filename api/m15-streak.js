@@ -28,8 +28,8 @@ module.exports = async function handler(req, res) {
     const since = qFrom ? new Date(qFrom + 'T00:00:00Z').toISOString()
       : new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
-    // Need 10 extra M15 bars for lookback
-    const fetchSince = new Date(new Date(since).getTime() - 10 * 15 * 60000).toISOString();
+    // Need 5 extra M15 bars for lookback
+    const fetchSince = new Date(new Date(since).getTime() - 5 * 15 * 60000).toISOString();
 
     const PAGE = 1000;
     const candleCache = {};
@@ -97,13 +97,12 @@ module.exports = async function handler(req, res) {
         for (let k = candles.length - 1; k >= 0; k--) {
           if (candles[k].time <= time) { idx = k; break; }
         }
-        if (idx < 9) continue; // need at least 10 candles
+        if (idx < 4) continue;
 
-        // Look back 10 candles including current
         let buyCount = 0;
         let sellCount = 0;
         const window = [];
-        for (let k = idx - 9; k <= idx; k++) {
+        for (let k = idx - 4; k <= idx; k++) {
           const c = candles[k];
           const bull = c.close > c.open;
           if (bull) buyCount++;
@@ -118,13 +117,13 @@ module.exports = async function handler(req, res) {
           });
         }
 
-        if (buyCount >= 7 || sellCount >= 7) {
-          const direction = buyCount >= 7 ? 'BUY' : 'SELL';
+        if (buyCount >= 4 || sellCount >= 4) {
+          const direction = buyCount >= 4 ? 'BUY' : 'SELL';
 
           const count = direction === 'BUY' ? buyCount : sellCount;
           const pair = inst.replace('_', '/');
 
-          // Calculate total move over the 10 candles
+          // Calculate total move over the 5 candles
           const firstOpen = window[0].open;
           const lastClose = window[window.length - 1].close;
           const isJpy = inst.includes('JPY');
