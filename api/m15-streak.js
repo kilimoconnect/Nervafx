@@ -130,9 +130,8 @@ module.exports = async function handler(req, res) {
           const pipDiv = isJpy ? 0.01 : 0.0001;
           const totalPips = Math.round(((lastClose - firstOpen) / pipDiv) * (direction === 'SELL' ? -1 : 1));
 
-          // Minimum pip filter: 30 pips for GBP pairs, 20 pips for others
           const isGbp = inst.includes('GBP');
-          const minPips = isGbp ? 30 : 20;
+          const minPips = isGbp ? 15 : 10;
           if (totalPips < minPips) continue;
 
           // Average body size
