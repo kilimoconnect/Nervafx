@@ -2,7 +2,6 @@
 
 const { getClient, cors } = require('./_db');
 const { requirePlan } = require('./_plan');
-const { fetchDailyDirection } = require('./_daily-direction');
 
 const VALID_PAIRS = [
   'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
@@ -68,8 +67,6 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // Daily continuation direction filter
-    const dailyDirection = await fetchDailyDirection(sb, VALID_PAIRS);
 
     // Collect unique M15 timestamps, keep only 1 per hour (xx:00) to avoid flooding
     const allTimes = new Set();
@@ -123,10 +120,6 @@ module.exports = async function handler(req, res) {
 
         if (buyCount >= 7 || sellCount >= 7) {
           const direction = buyCount >= 7 ? 'BUY' : 'SELL';
-
-          // Daily continuation filter
-          const dc = dailyDirection[inst];
-          if (!dc || dc.direction !== direction) continue;
 
           const count = direction === 'BUY' ? buyCount : sellCount;
           const pair = inst.replace('_', '/');
