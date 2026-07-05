@@ -14,29 +14,12 @@ const VALID_PAIRS = [
 function isJpy(inst) { return inst.includes('JPY'); }
 function pipDiv(inst) { return isJpy(inst) ? 0.01 : 0.0001; }
 
-function forexDayBoundaries(count) {
-  const now = new Date();
-  const h = now.getUTCHours();
-  let current;
-  if (h >= 21) {
-    current = new Date(now); current.setUTCHours(21, 0, 0, 0);
-  } else {
-    current = new Date(now); current.setUTCDate(current.getUTCDate() - 1); current.setUTCHours(21, 0, 0, 0);
-  }
-  // Skip weekends for current day
-  const dsDay = current.getUTCDay();
-  if (dsDay === 5) current.setUTCDate(current.getUTCDate() - 1);
-  else if (dsDay === 6) current.setUTCDate(current.getUTCDate() - 2);
-
-  const days = [current];
-  for (let i = 1; i < count; i++) {
-    let prev = new Date(days[days.length - 1].getTime() - 24 * 3600000);
-    const pd = prev.getUTCDay();
-    if (pd === 6) prev.setUTCDate(prev.getUTCDate() - 2);
-    else if (pd === 5) prev.setUTCDate(prev.getUTCDate() - 1);
-    days.push(prev);
-  }
-  return days.reverse();
+function prevForexDay(d) {
+  const prev = new Date(d.getTime() - 24 * 3600000);
+  const pd = prev.getUTCDay();
+  if (pd === 6) prev.setUTCDate(prev.getUTCDate() - 2);
+  else if (pd === 5) prev.setUTCDate(prev.getUTCDate() - 1);
+  return prev;
 }
 
 module.exports = async function handler(req, res) {
@@ -49,10 +32,38 @@ module.exports = async function handler(req, res) {
     const gate = await requirePlan(sb, req, 'premium');
     if (gate.error) return res.status(gate.status).json({ error: gate.error, upgrade: gate.upgrade });
 
-    // Get last 6 forex day boundaries (to build 5 complete daily candles + today partial)
-    const dayBoundaries = forexDayBoundaries(7);
-    const fetchSince = dayBoundaries[0].toISOString();
-    const fetchUntil = new Date().toISOString();
+    // Determine "today" forex day (21:00 UTC to 21:00 UTC), same as daily-continuation
+    const now = new Date();
+    const todayDate = req.query?.date;
+    let dayStart;
+
+    if (todayDate) {
+      const picked = new Date(todayDate + 'T00:00:00Z');
+      picked.setUTCDate(picked.getUTCDate() - 1);
+      dayStart = new Date(picked);
+      dayStart.setUTCHours(21, 0, 0, 0);
+    } else {
+      const h = now.getUTCHours();
+      const base = new Date(now);
+      base.setUTCMinutes(0, 0, 0);
+      if (h >= 21) {
+        dayStart = new Date(base); dayStart.setUTCHours(21);
+      } else {
+        dayStart = new Date(base); dayStart.setUTCDate(dayStart.getUTCDate() - 1); dayStart.setUTCHours(21);
+      }
+      const dsDay = dayStart.getUTCDay();
+      if (dsDay === 5) dayStart.setUTCDate(dayStart.getUTCDate() - 1);
+      else if (dsDay === 6) dayStart.setUTCDate(dayStart.getUTCDate() - 2);
+    }
+
+    // Previous 4 completed forex days (enough for impulse + up to 2 pullbacks + spare)
+    const boundaries = [dayStart];
+    for (let i = 0; i < 4; i++) boundaries.unshift(prevForexDay(boundaries[0]));
+    // boundaries = [d-4, d-3, d-2, d-1, dayStart]
+
+    const dayEnd = new Date(dayStart.getTime() + 24 * 3600000);
+    const fetchSince = boundaries[0].toISOString();
+    const fetchUntil = todayDate ? dayEnd.toISOString() : (now < dayEnd ? now : dayEnd).toISOString();
 
     // Fetch H1 candles for all pairs
     const PAGE = 1000;
@@ -90,6 +101,7 @@ module.exports = async function handler(req, res) {
       }
     }
 
+    const dayStartISO = dayStart.toISOString();
     const pairs = [];
 
     for (const inst of VALID_PAIRS) {
@@ -99,13 +111,13 @@ module.exports = async function handler(req, res) {
       const pd = pipDiv(inst);
       const pair = inst.replace('_', '/');
 
-      // Build synthetic daily candles from H1s for each forex day
+      // Build synthetic daily candles for the 4 completed days before today
       const dailyCandles = [];
-      for (let d = 0; d < dayBoundaries.length - 1; d++) {
-        const start = dayBoundaries[d].toISOString();
-        const end = dayBoundaries[d + 1].toISOString();
+      for (let d = 0; d < boundaries.length - 1; d++) {
+        const start = boundaries[d].toISOString();
+        const end = boundaries[d + 1].toISOString();
         const h1s = allCandles.filter(c => c.time >= start && c.time < end);
-        if (h1s.length < 3) continue;
+        if (h1s.length < 5) continue;
 
         const open = h1s[0].open;
         const close = h1s[h1s.length - 1].close;
@@ -117,244 +129,271 @@ module.exports = async function handler(req, res) {
         const range = high - low;
         if (range < pd) continue;
         const body = Math.abs(close - open);
-        const bull = close > open;
 
         dailyCandles.push({
-          date: dayBoundaries[d].toISOString().slice(0, 10),
           dayStart: start,
           open, high, low, close,
-          bull,
+          bull: close > open,
           body,
           range,
           bodyPct: Math.round((body / range) * 100),
           rangePips: Math.round((range / pd) * 10) / 10,
           bodyPips: Math.round((body / pd) * 10) / 10,
-          h1Count: h1s.length,
+          lastH1: h1s[h1s.length - 1],
         });
       }
 
-      // Also build today's partial candle
-      if (dayBoundaries.length > 0) {
-        const todayStart = dayBoundaries[dayBoundaries.length - 1].toISOString();
-        const todayH1s = allCandles.filter(c => c.time >= todayStart);
-        if (todayH1s.length >= 1) {
-          const open = todayH1s[0].open;
-          const close = todayH1s[todayH1s.length - 1].close;
-          let high = -Infinity, low = Infinity;
-          for (const c of todayH1s) {
-            if (c.high > high) high = c.high;
-            if (c.low < low) low = c.low;
-          }
-          const range = high - low;
-          if (range >= pd) {
-            const body = Math.abs(close - open);
-            dailyCandles.push({
-              date: 'today',
-              dayStart: todayStart,
-              open, high, low, close,
-              bull: close > open,
-              body,
-              range,
-              bodyPct: Math.round((body / range) * 100),
-              rangePips: Math.round((range / pd) * 10) / 10,
-              bodyPips: Math.round((body / pd) * 10) / 10,
-              h1Count: todayH1s.length,
-              partial: true,
-            });
-          }
-        }
-      }
+      if (dailyCandles.length < 2) continue;
 
-      if (dailyCandles.length < 3) continue;
-
-      // Pattern detection: impulse → pullback (1-2 candles) → continuation
-      // Scan from end backwards for the pattern
+      // Detect pullback pattern ENDING YESTERDAY:
+      // strong impulse day, then 1-2 counter-trend pullback candles, last pullback = yesterday.
+      // Today is the expected continuation day (tracked live below).
+      const n = dailyCandles.length;
       let pattern = null;
 
-      for (let i = dailyCandles.length - 1; i >= 2; i--) {
-        // Try: impulse at i-2 or i-3, pullback at i-1 (or i-2 and i-1), continuation at i
-        // Pattern A: impulse(i-2), pullback(i-1), continuation(i)
-        if (i >= 2) {
-          const impulse = dailyCandles[i - 2];
-          const pullback = dailyCandles[i - 1];
-          const cont = dailyCandles[i];
-          const dir = impulse.bull ? 'BUY' : 'SELL';
+      // Pattern B: impulse at n-3, pullbacks at n-2 and n-1
+      if (n >= 3) {
+        const impulse = dailyCandles[n - 3];
+        const pb1 = dailyCandles[n - 2];
+        const pb2 = dailyCandles[n - 1];
 
-          // Impulse must be strong
-          if (impulse.bodyPct < 40) continue;
-
-          // Pullback must be counter-trend and smaller
-          const pbCounterTrend = impulse.bull ? !pullback.bull : pullback.bull;
-          const pbSmall = pullback.body < impulse.body * 0.6;
-
-          if (pbCounterTrend && pbSmall) {
-            // Check pullback stays within impulse range
-            let pbContained = true;
-            if (impulse.bull) {
-              if (pullback.low < impulse.open) pbContained = false;
-            } else {
-              if (pullback.high > impulse.open) pbContained = false;
-            }
-
-            // Continuation candle direction matches impulse
-            const contAligned = impulse.bull ? cont.bull : !cont.bull;
-
-            // Score the pattern
-            let score = 40;
-            // Impulse strength
-            if (impulse.bodyPct >= 75) score += 15;
-            else if (impulse.bodyPct >= 60) score += 10;
-            else score += 5;
-
-            // Pullback quality
-            if (pbContained) score += 15;
-            if (pullback.bodyPct <= 30) score += 10;
-            else if (pullback.bodyPct <= 50) score += 5;
-
-            // Pullback depth relative to impulse
-            const pbDepth = impulse.bull
-              ? (impulse.close - pullback.low) / impulse.range
-              : (pullback.high - impulse.close) / impulse.range;
-            if (pbDepth <= 0.38) score += 10;
-            else if (pbDepth <= 0.50) score += 5;
-            else if (pbDepth > 0.70) score -= 10;
-
-            // Continuation
-            let phase = 'PULLBACK';
-            if (contAligned) {
-              phase = 'CONTINUATION';
-              score += 10;
-              if (cont.bodyPct >= 50) score += 5;
-              // Continuation breaks beyond impulse close
-              if (impulse.bull && cont.close > impulse.close) score += 5;
-              else if (!impulse.bull && cont.close < impulse.close) score += 5;
-            } else {
-              score -= 5;
-            }
-
-            score = Math.max(0, Math.min(100, score));
-
-            if (score >= 30) {
-              pattern = {
-                direction: dir,
-                phase,
-                score,
-                pbDepthPct: Math.round(pbDepth * 100),
-                pbContained,
-                pullbackCount: 1,
-                candles: [impulse, pullback, cont],
-                impulseIdx: 0,
-                pullbackIdx: [1],
-                contIdx: 2,
-              };
-              break;
-            }
-          }
-        }
-
-        // Pattern B: impulse(i-3), pullback(i-2, i-1), continuation(i)
-        if (i >= 3) {
-          const impulse = dailyCandles[i - 3];
-          const pb1 = dailyCandles[i - 2];
-          const pb2 = dailyCandles[i - 1];
-          const cont = dailyCandles[i];
-          const dir = impulse.bull ? 'BUY' : 'SELL';
-
-          if (impulse.bodyPct < 40) continue;
-
+        if (impulse.bodyPct >= 40) {
           const pb1Counter = impulse.bull ? !pb1.bull : pb1.bull;
           const pb2Counter = impulse.bull ? !pb2.bull : pb2.bull;
           const pb1Small = pb1.body < impulse.body * 0.6;
           const pb2Small = pb2.body < impulse.body * 0.6;
 
           if ((pb1Counter || pb1Small) && (pb2Counter || pb2Small) && (pb1Counter || pb2Counter)) {
-            let pbContained = true;
-            if (impulse.bull) {
-              if (Math.min(pb1.low, pb2.low) < impulse.open) pbContained = false;
-            } else {
-              if (Math.max(pb1.high, pb2.high) > impulse.open) pbContained = false;
-            }
+            pattern = { impulse, pullbacks: [pb1, pb2] };
+          }
+        }
+      }
 
-            const contAligned = impulse.bull ? cont.bull : !cont.bull;
+      // Pattern A: impulse at n-2, pullback at n-1 (preferred if both match — fresher impulse)
+      if (n >= 2) {
+        const impulse = dailyCandles[n - 2];
+        const pb = dailyCandles[n - 1];
 
-            let score = 40;
-            if (impulse.bodyPct >= 75) score += 15;
-            else if (impulse.bodyPct >= 60) score += 10;
-            else score += 5;
-
-            if (pbContained) score += 15;
-            if (Math.max(pb1.bodyPct, pb2.bodyPct) <= 30) score += 10;
-            else if (Math.max(pb1.bodyPct, pb2.bodyPct) <= 50) score += 5;
-
-            const pbLow = impulse.bull
-              ? Math.min(pb1.low, pb2.low) : Math.max(pb1.high, pb2.high);
-            const pbDepth = impulse.bull
-              ? (impulse.close - pbLow) / impulse.range
-              : (pbLow - impulse.close) / impulse.range;
-            if (pbDepth <= 0.38) score += 10;
-            else if (pbDepth <= 0.50) score += 5;
-            else if (pbDepth > 0.70) score -= 10;
-
-            let phase = 'PULLBACK';
-            if (contAligned) {
-              phase = 'CONTINUATION';
-              score += 10;
-              if (cont.bodyPct >= 50) score += 5;
-              if (impulse.bull && cont.close > impulse.close) score += 5;
-              else if (!impulse.bull && cont.close < impulse.close) score += 5;
-            } else {
-              score -= 5;
-            }
-
-            score = Math.max(0, Math.min(100, score));
-
-            if (score >= 30 && (!pattern || score > pattern.score)) {
-              pattern = {
-                direction: dir,
-                phase,
-                score,
-                pbDepthPct: Math.round(pbDepth * 100),
-                pbContained,
-                pullbackCount: 2,
-                candles: [impulse, pb1, pb2, cont],
-                impulseIdx: 0,
-                pullbackIdx: [1, 2],
-                contIdx: 3,
-              };
-              break;
-            }
+        if (impulse.bodyPct >= 40) {
+          const pbCounter = impulse.bull ? !pb.bull : pb.bull;
+          const pbSmall = pb.body < impulse.body * 0.6;
+          if (pbCounter && pbSmall) {
+            pattern = { impulse, pullbacks: [pb] };
           }
         }
       }
 
       if (!pattern) continue;
 
-      let label;
-      if (pattern.score >= 80) label = 'Strong Setup';
-      else if (pattern.score >= 65) label = 'Good Setup';
-      else if (pattern.score >= 50) label = 'Forming';
-      else label = 'Weak';
+      const { impulse, pullbacks } = pattern;
+      const direction = impulse.bull ? 'BUY' : 'SELL';
+
+      // Pullback stats
+      let pbContained = true;
+      let pbExtreme; // deepest point of the pullback
+      if (impulse.bull) {
+        pbExtreme = Math.min(...pullbacks.map(p => p.low));
+        if (pbExtreme < impulse.open) pbContained = false;
+      } else {
+        pbExtreme = Math.max(...pullbacks.map(p => p.high));
+        if (pbExtreme > impulse.open) pbContained = false;
+      }
+      const pbDepth = impulse.bull
+        ? (impulse.close - pbExtreme) / impulse.range
+        : (pbExtreme - impulse.close) / impulse.range;
+      const pbDepthPct = Math.round(pbDepth * 100);
+      const maxPbBodyPct = Math.max(...pullbacks.map(p => p.bodyPct));
+
+      // Phase 1: initial score from pattern quality
+      let score = 50;
+
+      // Impulse strength
+      if (impulse.bodyPct >= 75) score += 15;
+      else if (impulse.bodyPct >= 60) score += 10;
+      else score += 5;
+
+      // Pullback containment
+      if (pbContained) score += 10;
+      else score -= 5;
+
+      // Pullback candles small
+      if (maxPbBodyPct <= 30) score += 8;
+      else if (maxPbBodyPct <= 50) score += 4;
+
+      // Pullback depth (shallow = healthy)
+      if (pbDepth <= 0.38) score += 8;
+      else if (pbDepth <= 0.5) score += 4;
+      else if (pbDepth > 0.7) score -= 10;
+
+      // Impulse range strength
+      if (impulse.rangePips > 100) score += 4;
+      else if (impulse.rangePips > 60) score += 2;
+
+      score = Math.max(20, Math.min(98, score));
+      const initialScore = score;
+
+      // Phase 2: today's H1 updates (same engine as daily-continuation)
+      const today = allCandles.filter(c => c.time >= dayStartISO);
+
+      const timeline = [{
+        time: dayStartISO,
+        score,
+        label: 'Daily Open',
+        event: (direction === 'BUY' ? 'Bullish' : 'Bearish') + ' pullback setup (' + pullbacks.length + ' PB candle' + (pullbacks.length > 1 ? 's' : '') + ')',
+      }];
+
+      // Reference range for retrace checks = impulse range
+      const refRange = impulse.range;
+      let runHigh = direction === 'BUY' ? Math.max(impulse.high, ...pullbacks.map(p => p.high)) : impulse.high;
+      let runLow = direction === 'SELL' ? Math.min(impulse.low, ...pullbacks.map(p => p.low)) : impulse.low;
+      let prevH1 = pullbacks[pullbacks.length - 1].lastH1;
+
+      for (let i = 0; i < today.length; i++) {
+        const h1 = today[i];
+        const h1Bull = h1.close > h1.open;
+        const h1Body = Math.abs(h1.close - h1.open);
+        const h1BodyPips = Math.round((h1Body / pd) * 10) / 10;
+        let delta = 0;
+        const events = [];
+
+        // 1. New high/low in continuation direction
+        if (direction === 'BUY') {
+          if (h1.high > runHigh) {
+            delta += 3;
+            events.push('New high');
+            runHigh = h1.high;
+          } else if (h1.high < prevH1.high && h1.low < prevH1.low) {
+            delta -= 4;
+            events.push('Lower high + lower low');
+          } else if (h1.high < prevH1.high) {
+            delta -= 2;
+            events.push('Lower high');
+          }
+        } else {
+          if (h1.low < runLow) {
+            delta += 3;
+            events.push('New low');
+            runLow = h1.low;
+          } else if (h1.low > prevH1.low && h1.high > prevH1.high) {
+            delta -= 4;
+            events.push('Higher low + higher high');
+          } else if (h1.low > prevH1.low) {
+            delta -= 2;
+            events.push('Higher low');
+          }
+        }
+
+        // 2. H1 close beyond previous H1 high/low
+        if (direction === 'BUY' && h1.close > prevH1.high) {
+          delta += 4;
+          events.push('Close above prev H1 high');
+        } else if (direction === 'SELL' && h1.close < prevH1.low) {
+          delta += 4;
+          events.push('Close below prev H1 low');
+        } else if (direction === 'BUY' && h1.close < prevH1.low) {
+          delta -= 6;
+          events.push('Close below prev H1 low');
+        } else if (direction === 'SELL' && h1.close > prevH1.high) {
+          delta -= 6;
+          events.push('Close above prev H1 high');
+        }
+
+        // 3. Body strength
+        if (direction === 'BUY') {
+          if (h1Bull && h1BodyPips > 10) { delta += 2; events.push('Strong bull body'); }
+          else if (!h1Bull && h1BodyPips > 10) { delta -= 3; events.push('Strong bear body'); }
+          if (!h1Bull && h1Body > 0) {
+            const prevBody = Math.abs(prevH1.close - prevH1.open);
+            if (h1Body > prevBody * 1.2 && prevH1.close > prevH1.open) {
+              delta -= 4; events.push('Bearish engulfing');
+            }
+          }
+        } else {
+          if (!h1Bull && h1BodyPips > 10) { delta += 2; events.push('Strong bear body'); }
+          else if (h1Bull && h1BodyPips > 10) { delta -= 3; events.push('Strong bull body'); }
+          if (h1Bull && h1Body > 0) {
+            const prevBody = Math.abs(prevH1.close - prevH1.open);
+            if (h1Body > prevBody * 1.2 && prevH1.close < prevH1.open) {
+              delta -= 4; events.push('Bullish engulfing');
+            }
+          }
+        }
+
+        // 4. Pullback getting too deep — invalidation zone
+        if (direction === 'BUY') {
+          const retrace = (runHigh - h1.low) / refRange;
+          if (retrace > 0.7) { delta -= 3; events.push('Deep pullback'); }
+          if (h1.close < impulse.open) { delta -= 6; events.push('Below impulse open'); }
+        } else {
+          const retrace = (h1.high - runLow) / refRange;
+          if (retrace > 0.7) { delta -= 3; events.push('Deep pullback'); }
+          if (h1.close > impulse.open) { delta -= 6; events.push('Above impulse open'); }
+        }
+
+        score = Math.max(0, Math.min(100, score + delta));
+
+        let statusLabel = '';
+        if (score >= 85) statusLabel = 'Strong Continuation';
+        else if (score >= 70) statusLabel = 'Continuation Holding';
+        else if (score >= 50) statusLabel = 'Weakening';
+        else if (score >= 30) statusLabel = 'Possible Reversal';
+        else statusLabel = 'Continuation Failed';
+
+        timeline.push({
+          time: h1.time,
+          score,
+          delta,
+          label: statusLabel,
+          event: events.join(', ') || 'No change',
+          h1: {
+            open: h1.open, high: h1.high, low: h1.low, close: h1.close,
+            bull: h1Bull, bodyPips: h1BodyPips,
+          },
+        });
+
+        prevH1 = h1;
+      }
+
+      const currentScore = score;
+      let currentLabel;
+      if (currentScore >= 85) currentLabel = 'Strong Continuation';
+      else if (currentScore >= 70) currentLabel = 'Continuation Holding';
+      else if (currentScore >= 50) currentLabel = 'Weakening';
+      else if (currentScore >= 30) currentLabel = 'Possible Reversal';
+      else currentLabel = 'Continuation Failed';
 
       pairs.push({
         pair,
         instrument: inst,
-        direction: pattern.direction,
-        phase: pattern.phase,
-        score: pattern.score,
-        label,
-        pullbackCount: pattern.pullbackCount,
-        pbDepthPct: pattern.pbDepthPct,
-        pbContained: pattern.pbContained,
-        candles: pattern.candles,
-        impulseIdx: pattern.impulseIdx,
-        pullbackIdx: pattern.pullbackIdx,
-        contIdx: pattern.contIdx,
+        direction,
+        currentScore,
+        currentLabel,
+        initialScore,
+        impulse: {
+          open: impulse.open, high: impulse.high, low: impulse.low, close: impulse.close,
+          bull: impulse.bull, bodyPct: impulse.bodyPct,
+          rangePips: impulse.rangePips, bodyPips: impulse.bodyPips,
+        },
+        pullbacks: pullbacks.map(p => ({
+          open: p.open, high: p.high, low: p.low, close: p.close,
+          bull: p.bull, bodyPct: p.bodyPct,
+          rangePips: p.rangePips, bodyPips: p.bodyPips,
+        })),
+        pullbackCount: pullbacks.length,
+        pbDepthPct,
+        pbContained,
+        timeline,
+        h1Count: today.length,
       });
     }
 
-    pairs.sort((a, b) => b.score - a.score);
+    // Sort: highest score first
+    pairs.sort((a, b) => b.currentScore - a.currentScore);
 
-    res.json({ pairs });
+    res.json({
+      dayStart: dayStart.toISOString(),
+      pairs,
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
