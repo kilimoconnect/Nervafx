@@ -362,6 +362,30 @@ module.exports = async function handler(req, res) {
       else if (currentScore >= 30) currentLabel = 'Possible Reversal';
       else currentLabel = 'Continuation Failed';
 
+      // Today's building daily candle (partial, from H1s so far)
+      let todayCandle = null;
+      if (today.length >= 1) {
+        const tOpen = today[0].open;
+        const tClose = today[today.length - 1].close;
+        let tHigh = -Infinity, tLow = Infinity;
+        for (const c of today) {
+          if (c.high > tHigh) tHigh = c.high;
+          if (c.low < tLow) tLow = c.low;
+        }
+        const tRange = tHigh - tLow;
+        if (tRange >= pd) {
+          const tBody = Math.abs(tClose - tOpen);
+          todayCandle = {
+            open: tOpen, high: tHigh, low: tLow, close: tClose,
+            bull: tClose > tOpen,
+            bodyPct: Math.round((tBody / tRange) * 100),
+            rangePips: Math.round((tRange / pd) * 10) / 10,
+            bodyPips: Math.round((tBody / pd) * 10) / 10,
+            partial: true,
+          };
+        }
+      }
+
       pairs.push({
         pair,
         instrument: inst,
@@ -382,6 +406,7 @@ module.exports = async function handler(req, res) {
         pullbackCount: pullbacks.length,
         pbDepthPct,
         pbContained,
+        today: todayCandle,
         timeline,
         h1Count: today.length,
       });

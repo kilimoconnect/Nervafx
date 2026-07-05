@@ -247,8 +247,14 @@
       var opacity = role === 'pullback' ? '0.65' : '1';
 
       var svg = '<svg viewBox="0 0 ' + w + ' ' + h + '" xmlns="http://www.w3.org/2000/svg" style="height:100%">';
-      svg += '<line x1="' + cx + '" y1="' + pxHigh + '" x2="' + cx + '" y2="' + pxLow + '" stroke="' + fill + '" stroke-width="2" opacity="' + opacity + '"/>';
-      svg += '<rect x="' + (cx - bodyW/2) + '" y="' + bodyTop + '" width="' + bodyW + '" height="' + bodyH + '" fill="' + fill + '" rx="1" opacity="' + opacity + '"/>';
+      if (role === 'today') {
+        // Building candle: dashed wick + outlined body
+        svg += '<line x1="' + cx + '" y1="' + pxHigh + '" x2="' + cx + '" y2="' + pxLow + '" stroke="' + fill + '" stroke-width="2" stroke-dasharray="3,2"/>';
+        svg += '<rect x="' + (cx - bodyW/2) + '" y="' + bodyTop + '" width="' + bodyW + '" height="' + bodyH + '" fill="' + fill + '" fill-opacity="0.35" stroke="' + fill + '" stroke-width="1.5" stroke-dasharray="3,2" rx="1"/>';
+      } else {
+        svg += '<line x1="' + cx + '" y1="' + pxHigh + '" x2="' + cx + '" y2="' + pxLow + '" stroke="' + fill + '" stroke-width="2" opacity="' + opacity + '"/>';
+        svg += '<rect x="' + (cx - bodyW/2) + '" y="' + bodyTop + '" width="' + bodyW + '" height="' + bodyH + '" fill="' + fill + '" rx="1" opacity="' + opacity + '"/>';
+      }
       svg += '</svg>';
       return svg;
     }
@@ -276,10 +282,13 @@
         html += '<div class="dc-score-label" style="color:' + sc + '">' + p.currentLabel + '</div>';
         html += '</div></div>';
 
-        // Pattern candle chart: impulse + pullbacks
+        // Pattern candle chart: impulse + pullbacks + today's building candle
         var chartCandles = [{ c: p.impulse, role: 'impulse', label: 'Impulse' }];
         for (var pb = 0; pb < p.pullbacks.length; pb++) {
           chartCandles.push({ c: p.pullbacks[pb], role: 'pullback', label: 'Pullback' });
+        }
+        if (p.today) {
+          chartCandles.push({ c: p.today, role: 'today', label: 'Today' });
         }
         var allHigh = -Infinity, allLow = Infinity;
         for (var ci = 0; ci < chartCandles.length; ci++) {
