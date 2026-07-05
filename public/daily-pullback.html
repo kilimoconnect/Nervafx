@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>NervaFX — Daily Pullback Continuation</title>
+  <link rel="icon" type="image/png" href="/nervafx-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script src="/auth-guard.js"></script>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .grid { display: block !important; }
+    .sx-topbar {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 28px; height: 56px;
+      background: rgba(8,11,18,0.92);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+    .sx-topbar-left { display: flex; align-items: center; gap: 12px; }
+    .sx-logo img { height: 24px; display: block; }
+    .sx-sep { color: rgba(255,255,255,0.1); font-size: 20px; font-weight: 200; }
+    .sx-title-text { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+    .sx-back-btn {
+      display: flex; align-items: center; gap: 5px;
+      padding: 6px 12px; border-radius: 8px;
+      background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+      color: var(--text-muted); font-size: 12px; cursor: pointer; text-decoration: none;
+    }
+    .sx-back-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
+    .sx-subtitle {
+      text-align: center; padding: 18px 20px 10px;
+      font-size: 11px; color: var(--text-dim); letter-spacing: 0.3px;
+    }
+    .sx-filters {
+      display: flex; align-items: center; gap: 8px; padding: 10px 20px;
+      flex-wrap: wrap; justify-content: center;
+    }
+    .sx-sort-btn {
+      padding: 5px 10px; border-radius: 7px; font-size: 11px; font-weight: 600;
+      background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+      color: var(--text-muted); cursor: pointer;
+    }
+    .sx-sort-btn.active { background: rgba(16,185,129,0.12); border-color: rgba(16,185,129,0.3); color: #34d399; }
+    .sx-filter-label { font-size: 10px; color: var(--text-dim); }
+
+    /* Grid */
+    .pb-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+      gap: 12px; padding: 12px 20px;
+    }
+
+    /* Card */
+    .pb-card {
+      border-radius: 14px; background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border); overflow: hidden;
+      transition: border-color 0.2s;
+    }
+    .pb-card:hover { border-color: rgba(255,255,255,0.1); }
+    .pb-card.phase-CONTINUATION { border-color: rgba(16,185,129,0.2); }
+    .pb-card.phase-PULLBACK { border-color: rgba(245,158,11,0.2); }
+
+    .pb-hd {
+      display: flex; align-items: center; gap: 10px;
+      padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .pb-pair { font-size: 15px; font-weight: 800; color: #fff; }
+    .pb-dir {
+      font-size: 9px; font-weight: 800; padding: 3px 7px; border-radius: 5px;
+      letter-spacing: 0.5px;
+    }
+    .pb-dir.BUY { background: rgba(34,197,94,0.15); color: #4ade80; }
+    .pb-dir.SELL { background: rgba(239,68,68,0.15); color: #f87171; }
+    .pb-phase {
+      font-size: 8px; font-weight: 800; padding: 3px 7px; border-radius: 5px;
+      letter-spacing: 0.5px; text-transform: uppercase;
+    }
+    .pb-phase.CONTINUATION { background: rgba(16,185,129,0.12); color: #34d399; }
+    .pb-phase.PULLBACK { background: rgba(245,158,11,0.12); color: #fbbf24; }
+    .pb-score-block { margin-left: auto; text-align: right; }
+    .pb-score-val {
+      font-size: 24px; font-weight: 800; line-height: 1;
+      font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+    }
+    .pb-score-label { font-size: 9px; font-weight: 700; margin-top: 2px; }
+
+    /* Candlestick visualization */
+    .pb-chart {
+      display: flex; align-items: flex-end; justify-content: center;
+      gap: 8px; padding: 16px 20px 12px; height: 120px;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+    .pb-candle-wrap {
+      display: flex; flex-direction: column; align-items: center; gap: 3px;
+      flex: 0 0 auto;
+    }
+    .pb-candle-label {
+      font-size: 7px; font-weight: 800; color: var(--text-dim);
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .pb-candle-svg { width: 28px; }
+
+    /* Tags */
+    .pb-tags {
+      display: flex; gap: 6px; padding: 10px 16px; flex-wrap: wrap;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+    .pb-tag {
+      font-size: 9px; font-weight: 700; padding: 3px 7px; border-radius: 5px;
+      background: rgba(255,255,255,0.04); color: var(--text-muted);
+    }
+    .pb-tag b { color: #fff; }
+
+    /* Score bar */
+    .pb-bar-wrap {
+      padding: 8px 16px 12px; display: flex; align-items: center; gap: 10px;
+    }
+    .pb-bar-track {
+      flex: 1; height: 6px; border-radius: 3px;
+      background: rgba(255,255,255,0.06); overflow: hidden;
+    }
+    .pb-bar-fill {
+      height: 100%; border-radius: 3px; transition: width 0.4s ease;
+    }
+    .pb-bar-labels {
+      display: flex; justify-content: space-between;
+      font-size: 8px; color: var(--text-dim); padding: 0 16px 8px;
+    }
+
+    @media (max-width: 600px) {
+      .pb-grid { grid-template-columns: 1fr; padding: 8px 10px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="sx-topbar">
+    <div class="sx-topbar-left">
+      <a href="/app" class="sx-logo"><img src="/nervafx-logo.png" alt="NervaFX" /></a>
+      <span class="sx-sep">|</span>
+      <span class="sx-title-text">Daily Pullback Continuation</span>
+    </div>
+    <a href="/app" class="sx-back-btn"><i data-lucide="arrow-left" style="width:12px;height:12px"></i> Back</a>
+  </div>
+
+  <div class="sx-subtitle">Impulse → Pullback → Continuation — daily candle structure pattern detection · <span id="pb-updated" style="color:var(--text-muted)"></span></div>
+
+  <div class="sx-filters">
+    <span class="sx-filter-label">Sort:</span>
+    <button class="sx-sort-btn active" data-sort="score">Score ↓</button>
+    <button class="sx-sort-btn" data-sort="buy">BUY only</button>
+    <button class="sx-sort-btn" data-sort="sell">SELL only</button>
+    <button class="sx-sort-btn" data-sort="continuation">Continuation</button>
+    <button class="sx-sort-btn" data-sort="pullback">Pullback</button>
+  </div>
+
+  <div id="pb-cards" class="pb-grid"></div>
+
+  <script>
+    var TOKEN = localStorage.getItem('nfx_token') || '';
+    var _userTz = localStorage.getItem('nfx_tz') || 'auto';
+    function _tz() { return (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC'); }
+    var currentSort = 'score';
+    var cachedPairs = [];
+
+    function scoreColor(s) {
+      if (s >= 80) return '#10b981';
+      if (s >= 65) return '#22c55e';
+      if (s >= 50) return '#f59e0b';
+      return '#ef4444';
+    }
+
+    function drawCandle(c, minPrice, priceRange, height, role, isBull) {
+      var h = height;
+      var w = 28;
+      var bodyW = 14;
+      var wickW = 2;
+      var cx = w / 2;
+
+      // Normalize to pixel positions (top = high, bottom = low)
+      var pxHigh = h - ((c.high - minPrice) / priceRange) * (h - 10) - 5;
+      var pxLow = h - ((c.low - minPrice) / priceRange) * (h - 10) - 5;
+      var pxOpen = h - ((c.open - minPrice) / priceRange) * (h - 10) - 5;
+      var pxClose = h - ((c.close - minPrice) / priceRange) * (h - 10) - 5;
+
+      var bodyTop = Math.min(pxOpen, pxClose);
+      var bodyBot = Math.max(pxOpen, pxClose);
+      var bodyH = Math.max(bodyBot - bodyTop, 1);
+
+      var fill = isBull ? '#22c55e' : '#ef4444';
+      var opacity = role === 'pullback' ? '0.7' : '1';
+
+      var svg = '<svg viewBox="0 0 ' + w + ' ' + h + '" xmlns="http://www.w3.org/2000/svg" style="height:100%">';
+      // Wick
+      svg += '<line x1="' + cx + '" y1="' + pxHigh + '" x2="' + cx + '" y2="' + pxLow + '" stroke="' + fill + '" stroke-width="' + wickW + '" opacity="' + opacity + '"/>';
+      // Body
+      svg += '<rect x="' + (cx - bodyW/2) + '" y="' + bodyTop + '" width="' + bodyW + '" height="' + bodyH + '" fill="' + fill + '" rx="1" opacity="' + opacity + '"/>';
+      svg += '</svg>';
+      return svg;
+    }
+
+    function renderCards(pairs) {
+      var filtered = pairs;
+      if (currentSort === 'buy') filtered = pairs.filter(function(p) { return p.direction === 'BUY'; });
+      else if (currentSort === 'sell') filtered = pairs.filter(function(p) { return p.direction === 'SELL'; });
+      else if (currentSort === 'continuation') filtered = pairs.filter(function(p) { return p.phase === 'CONTINUATION'; });
+      else if (currentSort === 'pullback') filtered = pairs.filter(function(p) { return p.phase === 'PULLBACK'; });
+
+      var el = document.getElementById('pb-cards');
+      var html = '';
+
+      for (var i = 0; i < filtered.length; i++) {
+        var p = filtered[i];
+        var sc = scoreColor(p.score);
+
+        html += '<div class="pb-card phase-' + p.phase + '">';
+
+        // Header
+        html += '<div class="pb-hd">';
+        html += '<span class="pb-pair">' + p.pair + '</span>';
+        html += '<span class="pb-dir ' + p.direction + '">' + p.direction + '</span>';
+        html += '<span class="pb-phase ' + p.phase + '">' + p.phase + '</span>';
+        html += '<div class="pb-score-block">';
+        html += '<div class="pb-score-val" style="color:' + sc + '">' + p.score + '</div>';
+        html += '<div class="pb-score-label" style="color:' + sc + '">' + p.label + '</div>';
+        html += '</div></div>';
+
+        // Candlestick chart
+        if (p.candles && p.candles.length) {
+          var allHigh = -Infinity, allLow = Infinity;
+          for (var ci = 0; ci < p.candles.length; ci++) {
+            if (p.candles[ci].high > allHigh) allHigh = p.candles[ci].high;
+            if (p.candles[ci].low < allLow) allLow = p.candles[ci].low;
+          }
+          var priceRange = allHigh - allLow || 0.0001;
+          var chartH = 90;
+
+          html += '<div class="pb-chart">';
+          for (var ci = 0; ci < p.candles.length; ci++) {
+            var c = p.candles[ci];
+            var role = 'impulse';
+            if (p.pullbackIdx.indexOf(ci) !== -1) role = 'pullback';
+            else if (ci === p.contIdx) role = 'cont';
+
+            var label = role === 'impulse' ? 'Impulse' : role === 'pullback' ? 'Pullback' : (c.partial ? 'Today' : 'Contin.');
+
+            html += '<div class="pb-candle-wrap">';
+            html += '<div class="pb-candle-svg">' + drawCandle(c, allLow, priceRange, chartH, role, c.bull) + '</div>';
+            html += '<span class="pb-candle-label">' + label + '</span>';
+            html += '</div>';
+          }
+          html += '</div>';
+        }
+
+        // Tags
+        html += '<div class="pb-tags">';
+        var imp = p.candles[p.impulseIdx];
+        html += '<span class="pb-tag">Impulse <b>' + imp.bodyPct + '%</b> body</span>';
+        html += '<span class="pb-tag">Range <b>' + imp.rangePips + '</b> pips</span>';
+        html += '<span class="pb-tag">PB depth <b>' + p.pbDepthPct + '%</b></span>';
+        html += '<span class="pb-tag">' + p.pullbackCount + ' PB candle' + (p.pullbackCount > 1 ? 's' : '') + '</span>';
+        if (p.pbContained) html += '<span class="pb-tag" style="color:#34d399">Contained ✓</span>';
+        else html += '<span class="pb-tag" style="color:#f87171">Extended ✗</span>';
+        html += '</div>';
+
+        // Score bar
+        html += '<div class="pb-bar-wrap">';
+        html += '<div class="pb-bar-track">';
+        html += '<div class="pb-bar-fill" style="width:' + p.score + '%;background:' + sc + '"></div>';
+        html += '</div></div>';
+        html += '<div class="pb-bar-labels"><span>0 — Weak</span><span>50 — Forming</span><span>100 — Strong</span></div>';
+
+        html += '</div>';
+      }
+
+      el.innerHTML = html || '<div class="br-empty">No pullback patterns found.</div>';
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
+    async function load() {
+      document.getElementById('pb-cards').innerHTML = '<div class="sx-loading"><span class="spinner"></span> Loading…</div>';
+
+      try {
+        var res = await fetch('/api/daily-pullback', {
+          headers: { Authorization: 'Bearer ' + TOKEN },
+        });
+        if (!res.ok) throw new Error(await res.text());
+        var json = await res.json();
+        cachedPairs = json.pairs || [];
+        renderCards(cachedPairs);
+        var now = new Date();
+        var tz = _tz();
+        var timeStr = now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', timeZone: tz });
+        document.getElementById('pb-updated').textContent = 'Updated ' + timeStr + ' · refreshes hourly';
+      } catch (e) {
+        document.getElementById('pb-cards').innerHTML =
+          '<div class="br-empty" style="color:#f87171">Error: ' + e.message + '</div>';
+      }
+    }
+
+    document.querySelectorAll('.sx-sort-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        document.querySelectorAll('.sx-sort-btn').forEach(function(b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        currentSort = btn.dataset.sort;
+        renderCards(cachedPairs);
+      });
+    });
+
+    load();
+    setInterval(load, 60 * 60 * 1000);
+  </script>
+</body>
+</html>

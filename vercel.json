@@ -38,7 +38,8 @@
     "api/acceleration-engine.js": { "maxDuration": 60 },
     "api/m15-streak.js": { "maxDuration": 60 },
     "api/m15-break-impulse.js": { "maxDuration": 60 },
-    "api/daily-continuation.js": { "maxDuration": 60 }
+    "api/daily-continuation.js": { "maxDuration": 60 },
+    "api/daily-pullback.js": { "maxDuration": 60 }
   },
   "rewrites": [
     { "source": "/",       "destination": "/login.html" },
@@ -69,7 +70,8 @@
     { "source": "/acceleration-engine", "destination": "/acceleration-engine.html" },
     { "source": "/m15-streak", "destination": "/m15-streak.html" },
     { "source": "/m15-break-impulse", "destination": "/m15-break-impulse.html" },
-    { "source": "/daily-continuation", "destination": "/daily-continuation.html" }
+    { "source": "/daily-continuation", "destination": "/daily-continuation.html" },
+    { "source": "/daily-pullback", "destination": "/daily-pullback.html" }
   ],
   "headers": [
     {
