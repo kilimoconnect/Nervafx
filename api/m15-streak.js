@@ -121,8 +121,8 @@ module.exports = async function handler(req, res) {
           });
         }
 
-        if (buyCount >= 8 || sellCount >= 8) {
-          const direction = buyCount >= 8 ? 'BUY' : 'SELL';
+        if (buyCount >= 7 || sellCount >= 7) {
+          const direction = buyCount >= 7 ? 'BUY' : 'SELL';
 
           // Daily continuation filter
           const dc = dailyDirection[inst];
@@ -137,6 +137,11 @@ module.exports = async function handler(req, res) {
           const isJpy = inst.includes('JPY');
           const pipDiv = isJpy ? 0.01 : 0.0001;
           const totalPips = Math.round(((lastClose - firstOpen) / pipDiv) * (direction === 'SELL' ? -1 : 1));
+
+          // Minimum pip filter: 30 pips for GBP pairs, 20 pips for others
+          const isGbp = inst.includes('GBP');
+          const minPips = isGbp ? 30 : 20;
+          if (totalPips < minPips) continue;
 
           // Average body size
           let bodySum = 0;
