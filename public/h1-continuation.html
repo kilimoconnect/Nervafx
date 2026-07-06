@@ -307,16 +307,33 @@
       if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
-    // Populate H4 window selector (00, 04, 08, 12, 16, 20 in profile timezone)
-    (function() {
+    // Populate H4 window selector — list the local hours that map to UTC H4
+    // boundaries (00/04/08/12/16/20 UTC), since H4 buckets are UTC-aligned.
+    function populateH4Selector() {
       var sel = document.getElementById('sx-hour');
-      for (var h = 0; h < 24; h += 4) {
+      var dateStr = document.getElementById('sx-date').value ||
+        new Intl.DateTimeFormat('en-CA', { timeZone: _tz() }).format(new Date());
+      var tz = _tz();
+      var hours = [];
+      var seen = {};
+      for (var u = 0; u < 24; u += 4) {
+        var utcDate = new Date(dateStr + 'T' + String(u).padStart(2, '0') + ':00:00Z');
+        var lh = parseInt(new Intl.DateTimeFormat('en-US', {
+          timeZone: tz, hour: '2-digit', hour12: false,
+        }).format(utcDate), 10);
+        if (lh === 24) lh = 0;
+        if (!seen[lh]) { seen[lh] = 1; hours.push(lh); }
+      }
+      hours.sort(function(a, b) { return a - b; });
+      sel.innerHTML = '<option value="">Hour</option>';
+      for (var i = 0; i < hours.length; i++) {
         var opt = document.createElement('option');
-        opt.value = h;
-        opt.textContent = String(h).padStart(2, '0') + ':00';
+        opt.value = hours[i];
+        opt.textContent = String(hours[i]).padStart(2, '0') + ':00';
         sel.appendChild(opt);
       }
-    })();
+    }
+    populateH4Selector();
 
     // Convert a wall-clock date+hour in the profile timezone to UTC
     function tzOffsetMs(tz, utcDate) {
@@ -392,7 +409,7 @@
       load();
     });
 
-    loadProfileTz().then(function() { load(); });
+    loadProfileTz().then(function() { populateH4Selector(); load(); });
 
     // Auto-refresh aligned to the data cron (runs every 15m at :01, :16, :31, :46).
     // Fire at :04, :19, :34, :49 — ~3 min after each cron trigger, once the M15 sync has landed.
