@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <title>NervaFX — H1 Continuation Engine</title>
+  <title>NervaFX — H4 Continuation Engine</title>
   <link rel="icon" type="image/png" href="/nervafx-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -168,12 +168,12 @@
     <div class="sx-topbar-left">
       <a href="/app" class="sx-logo"><img src="/nervafx-logo.png" alt="NervaFX" /></a>
       <span class="sx-sep">|</span>
-      <span class="sx-title-text">H1 Continuation Engine</span>
+      <span class="sx-title-text">H4 Continuation Engine</span>
     </div>
     <a href="/app" class="sx-back-btn"><i data-lucide="arrow-left" style="width:12px;height:12px"></i> Back</a>
   </div>
 
-  <div class="sx-subtitle">Last H1 candle → current hour's M5 confirmation — live tracking, updates every 5 minutes</div>
+  <div class="sx-subtitle">Last H4 candle → current window's M15 confirmation — live tracking, updates every 15 minutes</div>
 
   <div class="sx-filters">
     <span class="sx-filter-label">Date:</span>
@@ -246,7 +246,7 @@
 
         // Reference hour summary
         html += '<div class="dc-yesterday">';
-        html += '<span class="dc-yd-tag">H1 <b>' + hrLabel(rh.time) + '</b></span>';
+        html += '<span class="dc-yd-tag">H4 <b>' + hrLabel(rh.time) + '</b></span>';
         html += '<span class="dc-yd-tag">Body <b>' + rh.bodyPct + '%</b></span>';
         html += '<span class="dc-yd-tag">Upper <b>' + rh.upperWickPct + '%</b></span>';
         html += '<span class="dc-yd-tag">Lower <b>' + rh.lowerWickPct + '%</b></span>';
@@ -294,10 +294,10 @@
       if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
-    // Populate hour selector (00-23 in profile timezone)
+    // Populate H4 window selector (00, 04, 08, 12, 16, 20 in profile timezone)
     (function() {
       var sel = document.getElementById('sx-hour');
-      for (var h = 0; h < 24; h++) {
+      for (var h = 0; h < 24; h += 4) {
         var opt = document.createElement('option');
         opt.value = h;
         opt.textContent = String(h).padStart(2, '0') + ':00';
@@ -381,14 +381,14 @@
 
     load();
 
-    // Auto-refresh aligned to the data cron (runs at :01, :06, :11, ...).
-    // Fire at :04, :09, :14, ... — ~3 min after each cron trigger, once the M5 sync has landed.
+    // Auto-refresh aligned to the data cron (runs every 15m at :01, :16, :31, :46).
+    // Fire at :04, :19, :34, :49 — ~3 min after each cron trigger, once the M15 sync has landed.
     function scheduleAlignedRefresh() {
       var now = new Date();
-      var cycle = now.getUTCMinutes() % 5;
-      var minutesUntil = (4 - cycle + 5) % 5;
+      var cycle = now.getUTCMinutes() % 15;
+      var minutesUntil = (4 - cycle + 15) % 15;
       var delay = (minutesUntil * 60 - now.getUTCSeconds()) * 1000;
-      if (delay <= 0) delay += 5 * 60 * 1000;
+      if (delay <= 0) delay += 15 * 60 * 1000;
       setTimeout(function() {
         if (!document.getElementById('sx-date').value) load(true);
         scheduleAlignedRefresh();
