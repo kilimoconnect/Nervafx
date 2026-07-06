@@ -285,7 +285,7 @@ module.exports = async function handler(req, res) {
         } else if (refDirection === 'SELL' && m15.close > prevM15.high) {
           delta -= 6; events.push('Close above prev M15 high');
         } else {
-          events.push('No break of structure');
+          delta -= 2; events.push('No break of structure');
         }
 
         // 3. Body strength (M15 scale — pips thresholds slightly higher than M5)
