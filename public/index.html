@@ -160,8 +160,22 @@
     (function() {
       function positionMenu(btn, menu) {
         var r = btn.getBoundingClientRect();
+        var vw = window.innerWidth;
+        var pad = 8;
         menu.style.top = (r.bottom + 4) + 'px';
-        menu.style.left = r.left + 'px';
+        // Measure menu — display it briefly to get width
+        var prevDisplay = menu.style.display;
+        menu.style.visibility = 'hidden';
+        menu.style.display = 'block';
+        menu.style.left = '0px';
+        var menuW = menu.offsetWidth;
+        menu.style.display = prevDisplay;
+        menu.style.visibility = '';
+        // Prefer aligning left edge to button, but clamp so the menu stays within viewport
+        var left = r.left;
+        if (left + menuW + pad > vw) left = Math.max(pad, vw - menuW - pad);
+        if (left < pad) left = pad;
+        menu.style.left = left + 'px';
       }
       document.querySelectorAll('.dash-dd-btn').forEach(function(btn) {
         btn.addEventListener('click', function(e) {
