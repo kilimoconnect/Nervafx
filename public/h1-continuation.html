@@ -198,6 +198,19 @@
     var TOKEN = localStorage.getItem('nfx_token') || '';
     var _userTz = localStorage.getItem('nfx_tz') || 'auto';
     function _tz() { return (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC'); }
+
+    async function loadProfileTz() {
+      try {
+        if (!TOKEN) return;
+        var r = await fetch('/api/profile', { headers: { Authorization: 'Bearer ' + TOKEN } });
+        if (!r.ok) return;
+        var p = await r.json();
+        if (p.timezone) {
+          _userTz = (p.timezone === 'UTC') ? 'auto' : p.timezone;
+          try { localStorage.setItem('nfx_tz', _userTz); } catch (_) {}
+        }
+      } catch (_) {}
+    }
     var currentSort = 'score';
     var cachedPairs = [];
 
@@ -379,7 +392,7 @@
       load();
     });
 
-    load();
+    loadProfileTz().then(function() { load(); });
 
     // Auto-refresh aligned to the data cron (runs every 15m at :01, :16, :31, :46).
     // Fire at :04, :19, :34, :49 — ~3 min after each cron trigger, once the M15 sync has landed.
