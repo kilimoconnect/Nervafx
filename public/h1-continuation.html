@@ -42,6 +42,17 @@
       flex-wrap: wrap; justify-content: center;
     }
     .sx-filter-label { font-size: 10px; color: var(--text-dim); }
+    .sx-date-input {
+      padding: 5px 10px; border-radius: 7px; font-size: 11px;
+      background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+      color: var(--text-muted); width: 130px;
+    }
+    .sx-date-input option { background: #0b0f18; color: #cbd5e1; }
+    .sx-go-btn {
+      padding: 5px 12px; border-radius: 7px; font-size: 11px; font-weight: 700;
+      background: rgba(20,184,166,0.2); border: 1px solid rgba(20,184,166,0.4);
+      color: #2dd4bf; cursor: pointer;
+    }
     .sx-sort-btn {
       padding: 5px 10px; border-radius: 7px; font-size: 11px; font-weight: 600;
       background: rgba(255,255,255,0.04); border: 1px solid var(--border);
@@ -165,6 +176,14 @@
   <div class="sx-subtitle">Last H1 candle → current hour's M5 confirmation — live tracking, updates every 5 minutes</div>
 
   <div class="sx-filters">
+    <span class="sx-filter-label">Date:</span>
+    <input type="date" class="sx-date-input" id="sx-date" />
+    <select class="sx-date-input" id="sx-hour" style="width:90px">
+      <option value="">Hour (UTC)</option>
+    </select>
+    <button class="sx-go-btn" id="sx-go">Go</button>
+    <button class="sx-go-btn" id="sx-live" style="background:rgba(255,255,255,0.06);border-color:var(--border);color:var(--text-muted)">Live</button>
+    <span style="width:16px"></span>
     <span class="sx-filter-label">Sort:</span>
     <button class="sx-sort-btn active" data-sort="score">Score ↓</button>
     <button class="sx-sort-btn" data-sort="buy">BUY only</button>
@@ -272,11 +291,29 @@
       if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
+    // Populate hour selector (00-23 UTC)
+    (function() {
+      var sel = document.getElementById('sx-hour');
+      for (var h = 0; h < 24; h++) {
+        var opt = document.createElement('option');
+        opt.value = h;
+        opt.textContent = String(h).padStart(2, '0') + ':00';
+        sel.appendChild(opt);
+      }
+    })();
+
     async function load() {
       document.getElementById('dc-cards').innerHTML = '<div class="sx-loading"><span class="spinner"></span> Loading…</div>';
 
+      var dateEl = document.getElementById('sx-date');
+      var hourEl = document.getElementById('sx-hour');
+      var qs = '';
+      if (dateEl.value && hourEl.value !== '') {
+        qs = '?date=' + dateEl.value + '&hour=' + hourEl.value;
+      }
+
       try {
-        var res = await fetch('/api/h1-continuation', {
+        var res = await fetch('/api/h1-continuation' + qs, {
           headers: { Authorization: 'Bearer ' + TOKEN },
         });
         if (!res.ok) throw new Error(await res.text());
@@ -297,9 +334,18 @@
         renderCards(cachedPairs);
       });
     });
+    document.getElementById('sx-go').addEventListener('click', load);
+    document.getElementById('sx-live').addEventListener('click', function() {
+      document.getElementById('sx-date').value = '';
+      document.getElementById('sx-hour').value = '';
+      load();
+    });
 
     load();
-    setInterval(load, 5 * 60 * 1000);
+    // Auto-refresh only in live mode (no date selected)
+    setInterval(function() {
+      if (!document.getElementById('sx-date').value) load();
+    }, 5 * 60 * 1000);
   </script>
 </body>
 </html>

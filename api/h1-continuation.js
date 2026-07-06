@@ -25,9 +25,23 @@ module.exports = async function handler(req, res) {
     if (gate.error) return res.status(gate.status).json({ error: gate.error, upgrade: gate.upgrade });
 
     const now = new Date();
-    // Fetch enough history to survive weekends: last complete H1 + current hour M5s
-    const fetchSince = new Date(now.getTime() - 4 * 24 * 3600000).toISOString();
-    const fetchUntil = now.toISOString();
+
+    // Optional historical mode: ?date=YYYY-MM-DD&hour=HH selects a specific hour to replay
+    const qDate = req.query?.date;
+    const qHour = req.query?.hour;
+    let anchor = null;
+    if (qDate && qHour !== undefined && qHour !== '') {
+      const hh = String(parseInt(qHour, 10)).padStart(2, '0');
+      const parsed = new Date(qDate + 'T' + hh + ':00:00Z');
+      if (!isNaN(parsed.getTime())) anchor = parsed;
+    }
+
+    // Reference H1 must be strictly before the anchor hour (or before now in live mode)
+    const refCutoff = anchor ? anchor.toISOString() : now.toISOString();
+    const anchorMs = anchor ? anchor.getTime() : now.getTime();
+    // Fetch enough history to survive weekends: last complete H1 + tracked hour M5s
+    const fetchSince = new Date(anchorMs - 4 * 24 * 3600000).toISOString();
+    const fetchUntil = anchor ? new Date(anchorMs + 3600000).toISOString() : now.toISOString();
 
     const PAGE = 1000;
     const h1Cache = {};
@@ -41,7 +55,7 @@ module.exports = async function handler(req, res) {
           .from('backtest_candles')
           .select('time, open, high, low, close')
           .eq('instrument', inst).eq('timeframe', 'H1').eq('complete', true)
-          .gte('time', fetchSince).lte('time', fetchUntil)
+          .gte('time', fetchSince).lt('time', refCutoff)
           .order('time', { ascending: false })
           .limit(3);
         return { inst, data: error ? [] : (data || []).reverse() };
@@ -57,8 +71,8 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // Fetch M5 candles covering the reference hour + current hour
-    const m5Since = new Date(now.getTime() - 5 * 3600000).toISOString();
+    // Fetch M5 candles covering the reference hour + tracked hour
+    const m5Since = new Date(anchorMs - 5 * 3600000).toISOString();
     for (let b = 0; b < VALID_PAIRS.length; b += 7) {
       const batch = VALID_PAIRS.slice(b, b + 7);
       const results = await Promise.all(batch.map(async inst => {
@@ -91,10 +105,12 @@ module.exports = async function handler(req, res) {
       const pd = pipDiv(inst);
       const pair = inst.replace('_', '/');
 
-      // Reference candle = last complete H1
+      // Reference candle = last complete H1 before the tracked hour
       const ref = h1s[h1s.length - 1];
       const refStart = ref.time;
-      const trackStart = new Date(new Date(refStart).getTime() + 3600000).toISOString();
+      const trackStart = anchor
+        ? anchor.toISOString()
+        : new Date(new Date(refStart).getTime() + 3600000).toISOString();
 
       const refRange = ref.high - ref.low;
       if (refRange < pd) continue;
