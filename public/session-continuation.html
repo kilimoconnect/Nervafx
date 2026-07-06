@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>NervaFX — Session Continuation Engine</title>
+  <link rel="icon" type="image/png" href="/nervafx-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script src="/auth-guard.js"></script>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .grid { display: block !important; }
+    .sx-topbar {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 28px; height: 56px;
+      background: rgba(8,11,18,0.92);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+    .sx-topbar-left { display: flex; align-items: center; gap: 12px; }
+    .sx-logo img { height: 24px; display: block; }
+    .sx-sep { color: rgba(255,255,255,0.1); font-size: 20px; font-weight: 200; }
+    .sx-title-text { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+    .sx-back-btn {
+      display: flex; align-items: center; gap: 5px;
+      padding: 6px 12px; border-radius: 8px;
+      background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+      color: var(--text-muted); font-size: 12px; cursor: pointer; text-decoration: none;
+    }
+    .sx-back-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
+    .sx-subtitle {
+      text-align: center; padding: 18px 20px 10px;
+      font-size: 11px; color: var(--text-dim); letter-spacing: 0.3px;
+    }
+    .sx-filters {
+      display: flex; align-items: center; gap: 8px; padding: 10px 20px;
+      flex-wrap: wrap; justify-content: center;
+    }
+    .sx-filter-label { font-size: 10px; color: var(--text-dim); }
+    .sx-date-input {
+      padding: 5px 10px; border-radius: 7px; font-size: 11px;
+      background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+      color: var(--text-muted); width: 130px;
+    }
+    .sx-date-input option { background: #0b0f18; color: #cbd5e1; }
+    .sx-go-btn {
+      padding: 5px 12px; border-radius: 7px; font-size: 11px; font-weight: 700;
+      background: rgba(236,72,153,0.2); border: 1px solid rgba(236,72,153,0.4);
+      color: #f472b6; cursor: pointer;
+    }
+    .sx-sort-btn {
+      padding: 5px 10px; border-radius: 7px; font-size: 11px; font-weight: 600;
+      background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+      color: var(--text-muted); cursor: pointer;
+    }
+    .sx-sort-btn.active { background: rgba(236,72,153,0.12); border-color: rgba(236,72,153,0.3); color: #f472b6; }
+
+    /* Pair cards */
+    .dc-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 12px; padding: 12px 20px;
+    }
+    .dc-card {
+      border-radius: 14px; background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border); overflow: hidden; cursor: pointer;
+      transition: border-color 0.2s;
+    }
+    .dc-card:hover { border-color: rgba(255,255,255,0.1); }
+    .dc-card.open .dc-timeline { display: block; }
+
+    .dc-hd {
+      display: flex; align-items: center; gap: 10px;
+      padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .dc-pair { font-size: 15px; font-weight: 800; color: #fff; }
+    .dc-dir {
+      font-size: 9px; font-weight: 800; padding: 3px 7px; border-radius: 5px;
+      letter-spacing: 0.5px;
+    }
+    .dc-dir.BUY { background: rgba(34,197,94,0.15); color: #4ade80; }
+    .dc-dir.SELL { background: rgba(239,68,68,0.15); color: #f87171; }
+    .dc-score-block { margin-left: auto; text-align: right; }
+    .dc-score-val {
+      font-size: 24px; font-weight: 800; line-height: 1;
+      font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+    }
+    .dc-score-label { font-size: 9px; font-weight: 700; margin-top: 2px; }
+
+    /* Reference session summary */
+    .dc-yesterday {
+      display: flex; gap: 8px; padding: 10px 16px; flex-wrap: wrap;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+    .dc-yd-tag {
+      font-size: 9px; font-weight: 700; padding: 3px 7px; border-radius: 5px;
+      background: rgba(255,255,255,0.04); color: var(--text-muted);
+    }
+    .dc-yd-tag b { color: #fff; }
+
+    .dc-bar-wrap {
+      padding: 8px 16px 12px; display: flex; align-items: center; gap: 10px;
+    }
+    .dc-bar-track {
+      flex: 1; height: 6px; border-radius: 3px;
+      background: rgba(255,255,255,0.06); overflow: hidden; position: relative;
+    }
+    .dc-bar-fill { height: 100%; border-radius: 3px; transition: width 0.4s ease; }
+    .dc-bar-init {
+      position: absolute; top: -2px; bottom: -2px; width: 2px;
+      background: rgba(255,255,255,0.3); border-radius: 1px;
+    }
+    .dc-bar-labels {
+      display: flex; justify-content: space-between;
+      font-size: 8px; color: var(--text-dim); padding: 0 16px 8px;
+    }
+
+    .dc-timeline {
+      display: none; border-top: 1px solid rgba(255,255,255,0.04);
+      max-height: 400px; overflow-y: auto;
+    }
+    .dc-tl-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 16px; border-bottom: 1px solid rgba(255,255,255,0.02);
+      font-size: 10px;
+    }
+    .dc-tl-row:last-child { border-bottom: none; }
+    .dc-tl-time {
+      min-width: 40px; font-weight: 700; color: var(--text-dim);
+      font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+    }
+    .dc-tl-score {
+      min-width: 28px; font-weight: 800; text-align: right;
+      font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+    }
+    .dc-tl-delta {
+      min-width: 28px; font-size: 9px; font-weight: 700;
+      font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+    }
+    .dc-tl-delta.pos { color: #4ade80; }
+    .dc-tl-delta.neg { color: #f87171; }
+    .dc-tl-event {
+      flex: 1; color: var(--text-dim); font-size: 9px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .dc-tl-label {
+      font-size: 8px; font-weight: 700; padding: 2px 5px; border-radius: 4px;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 600px) {
+      .dc-grid { grid-template-columns: 1fr; padding: 8px 10px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="sx-topbar">
+    <div class="sx-topbar-left">
+      <a href="/app" class="sx-logo"><img src="/nervafx-logo.png" alt="NervaFX" /></a>
+      <span class="sx-sep">|</span>
+      <span class="sx-title-text">Session Continuation Engine</span>
+    </div>
+    <a href="/app" class="sx-back-btn"><i data-lucide="arrow-left" style="width:12px;height:12px"></i> Back</a>
+  </div>
+
+  <div class="sx-subtitle">Previous session's candle → current session's M15 confirmation — Asia / London / New York</div>
+
+  <div class="sx-filters">
+    <span class="sx-filter-label">Date:</span>
+    <input type="date" class="sx-date-input" id="sx-date" />
+    <select class="sx-date-input" id="sx-session" style="width:110px">
+      <option value="">Session</option>
+      <option value="ASIA">Asia</option>
+      <option value="LONDON">London</option>
+      <option value="NY">New York</option>
+    </select>
+    <button class="sx-go-btn" id="sx-go">Go</button>
+    <button class="sx-go-btn" id="sx-live" style="background:rgba(255,255,255,0.06);border-color:var(--border);color:var(--text-muted)">Live</button>
+    <span style="width:16px"></span>
+    <span class="sx-filter-label">Sort:</span>
+    <button class="sx-sort-btn active" data-sort="score">Score ↓</button>
+    <button class="sx-sort-btn" data-sort="buy">BUY only</button>
+    <button class="sx-sort-btn" data-sort="sell">SELL only</button>
+    <span style="width:16px"></span>
+    <button class="sx-sort-btn" id="sx-expand-all">Expand all</button>
+  </div>
+
+  <div id="dc-cards" class="dc-grid"></div>
+
+  <script>
+    var TOKEN = localStorage.getItem('nfx_token') || '';
+    var _userTz = localStorage.getItem('nfx_tz') || 'auto';
+    function _tz() { return (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC'); }
+    var currentSort = 'score';
+    var cachedPairs = [];
+    var allExpanded = false;
+
+    function hrLabel(t) {
+      return new Date(t).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: _tz() });
+    }
+
+    function scoreColor(s) {
+      if (s >= 85) return '#14b8a6';
+      if (s >= 70) return '#22c55e';
+      if (s >= 50) return '#f59e0b';
+      if (s >= 30) return '#f97316';
+      return '#ef4444';
+    }
+    function labelBg(s) {
+      return 'rgba(' +
+        parseInt(scoreColor(s).slice(1,3),16) + ',' +
+        parseInt(scoreColor(s).slice(3,5),16) + ',' +
+        parseInt(scoreColor(s).slice(5,7),16) + ',0.12)';
+    }
+
+    function renderCards(pairs) {
+      var filtered = pairs;
+      if (currentSort === 'buy') filtered = pairs.filter(function(p) { return p.direction === 'BUY'; });
+      else if (currentSort === 'sell') filtered = pairs.filter(function(p) { return p.direction === 'SELL'; });
+
+      var el = document.getElementById('dc-cards');
+      var html = '';
+
+      for (var i = 0; i < filtered.length; i++) {
+        var p = filtered[i];
+        var sc = scoreColor(p.currentScore);
+        var rs = p.refSession;
+        var cs = p.currentSession;
+
+        html += '<div class="dc-card">';
+
+        html += '<div class="dc-hd">';
+        html += '<span class="dc-pair">' + p.pair + '</span>';
+        html += '<span class="dc-dir ' + p.direction + '">' + p.direction + '</span>';
+        html += '<div class="dc-score-block">';
+        html += '<div class="dc-score-val" style="color:' + sc + '">' + p.currentScore + '</div>';
+        html += '<div class="dc-score-label" style="color:' + sc + '">' + p.currentLabel + '</div>';
+        html += '</div></div>';
+
+        html += '<div class="dc-yesterday">';
+        html += '<span class="dc-yd-tag">Ref <b>' + rs.name + '</b> ' + hrLabel(rs.start) + '-' + hrLabel(rs.end) + '</span>';
+        html += '<span class="dc-yd-tag">Now <b>' + cs.name + '</b></span>';
+        html += '<span class="dc-yd-tag">Body <b>' + rs.bodyPct + '%</b></span>';
+        html += '<span class="dc-yd-tag">Upper <b>' + rs.upperWickPct + '%</b></span>';
+        html += '<span class="dc-yd-tag">Lower <b>' + rs.lowerWickPct + '%</b></span>';
+        html += '<span class="dc-yd-tag">Range <b>' + rs.rangePips + '</b> pips</span>';
+        html += '<span class="dc-yd-tag">Init <b>' + p.initialScore + '</b></span>';
+        html += '</div>';
+
+        html += '<div class="dc-bar-wrap">';
+        html += '<div class="dc-bar-track">';
+        html += '<div class="dc-bar-fill" style="width:' + p.currentScore + '%;background:' + sc + '"></div>';
+        html += '<div class="dc-bar-init" style="left:' + p.initialScore + '%"></div>';
+        html += '</div></div>';
+        html += '<div class="dc-bar-labels"><span>0 — Failed</span><span>50 — Weakening</span><span>100 — Strong</span></div>';
+
+        html += '<div class="dc-timeline">';
+        for (var t = 0; t < p.timeline.length; t++) {
+          var tl = p.timeline[t];
+          var tlc = scoreColor(tl.score);
+          html += '<div class="dc-tl-row">';
+          html += '<span class="dc-tl-time">' + hrLabel(tl.time) + '</span>';
+          html += '<span class="dc-tl-score" style="color:' + tlc + '">' + tl.score + '</span>';
+
+          if (tl.delta !== undefined && tl.delta !== 0) {
+            html += '<span class="dc-tl-delta ' + (tl.delta > 0 ? 'pos' : 'neg') + '">' + (tl.delta > 0 ? '+' : '') + tl.delta + '</span>';
+          } else {
+            html += '<span class="dc-tl-delta"></span>';
+          }
+
+          html += '<span class="dc-tl-event">' + (tl.event || '') + '</span>';
+          html += '<span class="dc-tl-label" style="color:' + tlc + ';background:' + labelBg(tl.score) + '">' + tl.label + '</span>';
+          html += '</div>';
+        }
+        html += '</div>';
+
+        html += '</div>';
+      }
+
+      el.innerHTML = html || '<div class="br-empty">No continuation data available.</div>';
+      el.querySelectorAll('.dc-card').forEach(function(card) {
+        if (allExpanded) card.classList.add('open');
+        card.addEventListener('click', function() { card.classList.toggle('open'); });
+      });
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
+    async function load(silent) {
+      if (!silent) document.getElementById('dc-cards').innerHTML = '<div class="sx-loading"><span class="spinner"></span> Loading…</div>';
+
+      var dateEl = document.getElementById('sx-date');
+      var sessEl = document.getElementById('sx-session');
+      var qs = '';
+      if (dateEl.value && sessEl.value) {
+        qs = '?date=' + dateEl.value + '&session=' + sessEl.value;
+      }
+
+      try {
+        var res = await fetch('/api/session-continuation' + qs, {
+          headers: { Authorization: 'Bearer ' + TOKEN },
+          cache: 'no-store',
+        });
+        if (!res.ok) throw new Error(await res.text());
+        var json = await res.json();
+        cachedPairs = json.pairs || [];
+        renderCards(cachedPairs);
+      } catch (e) {
+        document.getElementById('dc-cards').innerHTML =
+          '<div class="br-empty" style="color:#f87171">Error: ' + e.message + '</div>';
+      }
+    }
+
+    document.querySelectorAll('.sx-sort-btn').forEach(function(btn) {
+      if (!btn.dataset.sort) return;
+      btn.addEventListener('click', function() {
+        document.querySelectorAll('.sx-sort-btn').forEach(function(b) { if (b.dataset.sort) b.classList.remove('active'); });
+        btn.classList.add('active');
+        currentSort = btn.dataset.sort;
+        renderCards(cachedPairs);
+      });
+    });
+    document.getElementById('sx-go').addEventListener('click', function() { load(); });
+    document.getElementById('sx-live').addEventListener('click', function() {
+      document.getElementById('sx-date').value = '';
+      document.getElementById('sx-session').value = '';
+      load();
+    });
+    document.getElementById('sx-expand-all').addEventListener('click', function() {
+      allExpanded = !allExpanded;
+      document.querySelectorAll('.dc-card').forEach(function(card) {
+        card.classList.toggle('open', allExpanded);
+      });
+      this.textContent = allExpanded ? 'Collapse all' : 'Expand all';
+      this.classList.toggle('active', allExpanded);
+    });
+
+    load();
+
+    // Auto-refresh aligned to cron (:04, :09, :14, ...)
+    function scheduleAlignedRefresh() {
+      var now = new Date();
+      var cycle = now.getUTCMinutes() % 5;
+      var minutesUntil = (4 - cycle + 5) % 5;
+      var delay = (minutesUntil * 60 - now.getUTCSeconds()) * 1000;
+      if (delay <= 0) delay += 5 * 60 * 1000;
+      setTimeout(function() {
+        if (!document.getElementById('sx-date').value) load(true);
+        scheduleAlignedRefresh();
+      }, delay);
+    }
+    scheduleAlignedRefresh();
+  </script>
+</body>
+</html>
