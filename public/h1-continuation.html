@@ -188,6 +188,8 @@
     <button class="sx-sort-btn active" data-sort="score">Score ↓</button>
     <button class="sx-sort-btn" data-sort="buy">BUY only</button>
     <button class="sx-sort-btn" data-sort="sell">SELL only</button>
+    <span style="width:16px"></span>
+    <button class="sx-sort-btn" id="sx-expand-all">Expand all</button>
   </div>
 
   <div id="dc-cards" class="dc-grid"></div>
@@ -286,6 +288,7 @@
 
       el.innerHTML = html || '<div class="br-empty">No continuation data available.</div>';
       el.querySelectorAll('.dc-card').forEach(function(card) {
+        if (allExpanded) card.classList.add('open');
         card.addEventListener('click', function() { card.classList.toggle('open'); });
       });
       if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -359,6 +362,16 @@
       });
     });
     document.getElementById('sx-go').addEventListener('click', load);
+
+    var allExpanded = false;
+    document.getElementById('sx-expand-all').addEventListener('click', function() {
+      allExpanded = !allExpanded;
+      document.querySelectorAll('.dc-card').forEach(function(card) {
+        card.classList.toggle('open', allExpanded);
+      });
+      this.textContent = allExpanded ? 'Collapse all' : 'Expand all';
+      this.classList.toggle('active', allExpanded);
+    });
     document.getElementById('sx-live').addEventListener('click', function() {
       document.getElementById('sx-date').value = '';
       document.getElementById('sx-hour').value = '';
