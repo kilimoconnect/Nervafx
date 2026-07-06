@@ -268,6 +268,17 @@ module.exports = async function handler(req, res) {
           }
         }
 
+        // 3b. Chop / indecision — small body + big wicks on both sides
+        if (h1Range > 0 && (h1Range / pd) > 12) {
+          const bodyPct = (h1Body / h1Range) * 100;
+          const upperPct = ((h1.high - Math.max(h1.open, h1.close)) / h1Range) * 100;
+          const lowerPct = ((Math.min(h1.open, h1.close) - h1.low) / h1Range) * 100;
+          if (bodyPct < 25 && upperPct > 30 && lowerPct > 30) {
+            delta -= 2;
+            events.push('Choppy candle');
+          }
+        }
+
         // 4. Pullback depth — check if price has retraced too far
         if (ydDirection === 'BUY') {
           const retrace = (runHigh - h1.low) / ydRange;

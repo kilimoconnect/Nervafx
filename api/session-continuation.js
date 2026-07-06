@@ -309,6 +309,20 @@ module.exports = async function handler(req, res) {
           }
         }
 
+        // 3b. Chop / indecision — small body + big wicks on both sides
+        {
+          const m15Range = m15.high - m15.low;
+          if (m15Range > 0 && (m15Range / pd) > 6) {
+            const bodyPct = (m15Body / m15Range) * 100;
+            const upperPct = ((m15.high - Math.max(m15.open, m15.close)) / m15Range) * 100;
+            const lowerPct = ((Math.min(m15.open, m15.close) - m15.low) / m15Range) * 100;
+            if (bodyPct < 25 && upperPct > 30 && lowerPct > 30) {
+              delta -= 2;
+              events.push('Choppy candle');
+            }
+          }
+        }
+
         // 4. Pullback depth vs reference session range
         if (refDirection === 'BUY') {
           const retrace = (runHigh - m15.low) / ref.range;

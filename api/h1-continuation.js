@@ -251,6 +251,20 @@ module.exports = async function handler(req, res) {
           }
         }
 
+        // 3b. Chop / indecision — small body + big wicks on both sides
+        {
+          const m5Range = m5.high - m5.low;
+          if (m5Range > 0 && (m5Range / pd) > 4) {
+            const bodyPct = (m5Body / m5Range) * 100;
+            const upperPct = ((m5.high - Math.max(m5.open, m5.close)) / m5Range) * 100;
+            const lowerPct = ((Math.min(m5.open, m5.close) - m5.low) / m5Range) * 100;
+            if (bodyPct < 25 && upperPct > 30 && lowerPct > 30) {
+              delta -= 2;
+              events.push('Choppy candle');
+            }
+          }
+        }
+
         // 4. Pullback depth — retraced too far against the reference candle
         if (refDirection === 'BUY') {
           const retrace = (runHigh - m5.low) / refRange;
