@@ -147,7 +147,7 @@
       padding: 4px;
       box-shadow: 0 8px 24px rgba(0,0,0,0.4);
     }
-    .dash-dd.open .dash-dd-menu { display: block; }
+    .dash-dd-menu.open { display: block; }
     .dash-dd-menu a {
       display: block; padding: 7px 12px; border-radius: 6px;
       font-size: 12px; font-weight: 600;
@@ -158,6 +158,20 @@
   </style>
   <script>
     (function() {
+      // Move dropdown menus to <body> to escape any ancestor with backdrop-filter,
+      // transform, or filter (which trap position:fixed children).
+      document.querySelectorAll('.dash-dd').forEach(function(wrap) {
+        var menu = wrap.querySelector('.dash-dd-menu');
+        if (menu) {
+          menu.dataset.owner = 'dd-' + Math.random().toString(36).slice(2, 8);
+          wrap.dataset.menuId = menu.dataset.owner;
+          document.body.appendChild(menu);
+        }
+      });
+      function menuOf(wrap) {
+        return document.querySelector('.dash-dd-menu[data-owner="' + wrap.dataset.menuId + '"]');
+      }
+
       function positionMenu(btn, menu) {
         var r = btn.getBoundingClientRect();
         var vw = window.innerWidth;
@@ -177,31 +191,42 @@
         if (left < pad) left = pad;
         menu.style.left = left + 'px';
       }
+      function closeAll() {
+        document.querySelectorAll('.dash-dd.open').forEach(function(d) {
+          d.classList.remove('open');
+          var m = menuOf(d);
+          if (m) m.classList.remove('open');
+        });
+      }
       document.querySelectorAll('.dash-dd-btn').forEach(function(btn) {
         btn.addEventListener('click', function(e) {
           e.stopPropagation();
           var wrap = btn.parentElement;
-          var menu = wrap.querySelector('.dash-dd-menu');
+          var menu = menuOf(wrap);
           var wasOpen = wrap.classList.contains('open');
-          document.querySelectorAll('.dash-dd').forEach(function(d) { d.classList.remove('open'); });
-          if (!wasOpen) {
+          closeAll();
+          if (!wasOpen && menu) {
             positionMenu(btn, menu);
             wrap.classList.add('open');
+            menu.classList.add('open');
           }
         });
       });
-      document.addEventListener('click', function() {
-        document.querySelectorAll('.dash-dd').forEach(function(d) { d.classList.remove('open'); });
+      // Clicks inside menu shouldn't close it (except link clicks, which navigate)
+      document.querySelectorAll('.dash-dd-menu').forEach(function(m) {
+        m.addEventListener('click', function(e) { e.stopPropagation(); });
       });
-      // Reposition open menus on scroll/resize
+      document.addEventListener('click', closeAll);
       window.addEventListener('resize', function() {
         document.querySelectorAll('.dash-dd.open').forEach(function(d) {
-          positionMenu(d.querySelector('.dash-dd-btn'), d.querySelector('.dash-dd-menu'));
+          var m = menuOf(d);
+          if (m) positionMenu(d.querySelector('.dash-dd-btn'), m);
         });
       });
       window.addEventListener('scroll', function() {
         document.querySelectorAll('.dash-dd.open').forEach(function(d) {
-          positionMenu(d.querySelector('.dash-dd-btn'), d.querySelector('.dash-dd-menu'));
+          var m = menuOf(d);
+          if (m) positionMenu(d.querySelector('.dash-dd-btn'), m);
         });
       }, true);
     })();
