@@ -324,8 +324,8 @@
       return utc;
     }
 
-    async function load() {
-      document.getElementById('dc-cards').innerHTML = '<div class="sx-loading"><span class="spinner"></span> Loading…</div>';
+    async function load(silent) {
+      if (!silent) document.getElementById('dc-cards').innerHTML = '<div class="sx-loading"><span class="spinner"></span> Loading…</div>';
 
       var dateEl = document.getElementById('sx-date');
       var hourEl = document.getElementById('sx-hour');
@@ -368,7 +368,7 @@
     load();
     // Auto-refresh only in live mode (no date selected)
     setInterval(function() {
-      if (!document.getElementById('sx-date').value) load();
+      if (!document.getElementById('sx-date').value) load(true);
     }, 5 * 60 * 1000);
   </script>
 </body>

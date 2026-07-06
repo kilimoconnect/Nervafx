@@ -437,8 +437,8 @@
       el.innerHTML = html || '<div class="br-empty">No data found.</div>';
     }
 
-    async function load() {
-      document.getElementById('acc-cards').innerHTML = '<div class="sx-loading"><span class="spinner"></span> Loading…</div>';
+    async function load(silent) {
+      if (!silent) document.getElementById('acc-cards').innerHTML = '<div class="sx-loading"><span class="spinner"></span> Loading…</div>';
 
       var fromEl = document.getElementById('sx-date-from');
       var toEl = document.getElementById('sx-date-to');
@@ -490,6 +490,7 @@
 
     lucide.createIcons();
     load();
+    setInterval(function() { load(true); }, 5 * 60 * 1000);
   })();
   </script>
 </body>

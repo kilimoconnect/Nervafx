@@ -242,9 +242,9 @@
       return 'val-zero';
     }
 
-    async function load() {
+    async function load(silent) {
       const el = document.getElementById('content');
-      el.innerHTML = '<div class="an-loading">Loading…</div>';
+      if (!silent) el.innerHTML = '<div class="an-loading">Loading…</div>';
 
       const apiPath = _tf === 'm15' ? '/api/audnzd-strength-m15' : '/api/audnzd-strength';
       let url = apiPath + '?';
@@ -357,6 +357,7 @@
 
     if (location.hash === '#m15') setTf('m15');
     load();
+    setInterval(function() { load(true); }, 5 * 60 * 1000);
   </script>
 </body>
 </html>
