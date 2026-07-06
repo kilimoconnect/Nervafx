@@ -53,26 +53,47 @@ module.exports = async function handler(req, res) {
     const h4Cache = {};
     const m15Cache = {};
 
-    // Fetch last complete H4 candles per pair
+    // H4 candles are synthesized from H1 buckets aligned to 00/04/08/12/16/20 UTC.
+    // Fetch H1 candles covering enough history to yield 2+ complete H4 buckets before the anchor.
     for (let b = 0; b < VALID_PAIRS.length; b += 7) {
       const batch = VALID_PAIRS.slice(b, b + 7);
       const results = await Promise.all(batch.map(async inst => {
         const { data, error } = await sb
           .from('backtest_candles')
           .select('time, open, high, low, close')
-          .eq('instrument', inst).eq('timeframe', 'H4').eq('complete', true)
+          .eq('instrument', inst).eq('timeframe', 'H1').eq('complete', true)
           .gte('time', fetchSince).lt('time', refCutoff)
-          .order('time', { ascending: false })
-          .limit(3);
-        return { inst, data: error ? [] : (data || []).reverse() };
+          .order('time', { ascending: true })
+          .limit(PAGE);
+        return { inst, data: error ? [] : data || [] };
       }));
       for (const { inst, data } of results) {
-        h4Cache[inst] = data.map(c => ({
-          time: c.time,
-          open: parseFloat(c.open),
-          high: parseFloat(c.high),
-          low: parseFloat(c.low),
-          close: parseFloat(c.close),
+        // Group H1s into 4h buckets keyed by bucket start ISO
+        const buckets = new Map();
+        for (const c of data) {
+          const t = new Date(c.time);
+          const bucketMs = Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate(),
+            Math.floor(t.getUTCHours() / 4) * 4, 0, 0, 0);
+          const key = new Date(bucketMs).toISOString();
+          let bkt = buckets.get(key);
+          if (!bkt) {
+            bkt = { time: key, open: null, high: -Infinity, low: Infinity, close: null, count: 0, firstMs: bucketMs };
+            buckets.set(key, bkt);
+          }
+          const h = parseFloat(c.high), l = parseFloat(c.low), o = parseFloat(c.open), cl = parseFloat(c.close);
+          if (bkt.open === null) bkt.open = o;
+          if (h > bkt.high) bkt.high = h;
+          if (l < bkt.low) bkt.low = l;
+          bkt.close = cl;
+          bkt.count++;
+        }
+        // Keep only complete buckets (4 H1s) and require bucket end <= refCutoff
+        const cutoffMs = new Date(refCutoff).getTime();
+        const complete = Array.from(buckets.values())
+          .filter(bk => bk.count === 4 && (bk.firstMs + H4_MS) <= cutoffMs)
+          .sort((a, b) => a.firstMs - b.firstMs);
+        h4Cache[inst] = complete.slice(-3).map(bk => ({
+          time: bk.time, open: bk.open, high: bk.high, low: bk.low, close: bk.close,
         }));
       }
     }
