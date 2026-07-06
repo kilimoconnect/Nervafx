@@ -179,7 +179,7 @@
     <span class="sx-filter-label">Date:</span>
     <input type="date" class="sx-date-input" id="sx-date" />
     <select class="sx-date-input" id="sx-hour" style="width:90px">
-      <option value="">Hour (UTC)</option>
+      <option value="">Hour</option>
     </select>
     <button class="sx-go-btn" id="sx-go">Go</button>
     <button class="sx-go-btn" id="sx-live" style="background:rgba(255,255,255,0.06);border-color:var(--border);color:var(--text-muted)">Live</button>
@@ -291,7 +291,7 @@
       if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
-    // Populate hour selector (00-23 UTC)
+    // Populate hour selector (00-23 in profile timezone)
     (function() {
       var sel = document.getElementById('sx-hour');
       for (var h = 0; h < 24; h++) {
@@ -302,6 +302,28 @@
       }
     })();
 
+    // Convert a wall-clock date+hour in the profile timezone to UTC
+    function tzOffsetMs(tz, utcDate) {
+      var dtf = new Intl.DateTimeFormat('en-US', {
+        timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+      });
+      var parts = {};
+      dtf.formatToParts(utcDate).forEach(function(p) { parts[p.type] = p.value; });
+      var asUTC = Date.UTC(
+        parseInt(parts.year, 10), parseInt(parts.month, 10) - 1, parseInt(parts.day, 10),
+        parts.hour === '24' ? 0 : parseInt(parts.hour, 10), parseInt(parts.minute, 10), parseInt(parts.second, 10)
+      );
+      return asUTC - utcDate.getTime();
+    }
+    function wallToUtc(dateStr, hour, tz) {
+      var wallMs = Date.parse(dateStr + 'T' + String(hour).padStart(2, '0') + ':00:00Z');
+      var utc = new Date(wallMs - tzOffsetMs(tz, new Date(wallMs)));
+      // Second pass handles DST boundaries
+      utc = new Date(wallMs - tzOffsetMs(tz, utc));
+      return utc;
+    }
+
     async function load() {
       document.getElementById('dc-cards').innerHTML = '<div class="sx-loading"><span class="spinner"></span> Loading…</div>';
 
@@ -309,7 +331,9 @@
       var hourEl = document.getElementById('sx-hour');
       var qs = '';
       if (dateEl.value && hourEl.value !== '') {
-        qs = '?date=' + dateEl.value + '&hour=' + hourEl.value;
+        // Selected date+hour is in the profile timezone — convert to UTC for the API
+        var utc = wallToUtc(dateEl.value, parseInt(hourEl.value, 10), _tz());
+        qs = '?date=' + utc.toISOString().slice(0, 10) + '&hour=' + utc.getUTCHours();
       }
 
       try {
