@@ -213,6 +213,10 @@ module.exports = async function handler(req, res) {
         } else if (refDirection === 'SELL' && m5.close > prevM5.high) {
           delta -= 6;
           events.push('Close above prev M5 high');
+        } else {
+          // No break of structure in the continuation direction — penalize
+          delta -= 2;
+          events.push('No break of structure');
         }
 
         // 3. Body strength (M5 scale)

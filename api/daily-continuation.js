@@ -230,6 +230,10 @@ module.exports = async function handler(req, res) {
         } else if (ydDirection === 'SELL' && h1.close > prevH1.high) {
           delta -= 6;
           events.push('Close above prev H1 high');
+        } else {
+          // No break of structure in the continuation direction — penalize
+          delta -= 2;
+          events.push('No break of structure');
         }
 
         // 3. Body strength
