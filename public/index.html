@@ -100,18 +100,77 @@
     <a href="/structure-engine" class="dash-tab" style="text-decoration:none">Top-Down ↗</a>
     <a href="/archive" class="dash-tab" style="text-decoration:none">Archive</a>
     <a href="/autotrader" class="dash-tab" style="text-decoration:none">AutoTrader</a>
-    <a href="/audnzd-strength" class="dash-tab" style="text-decoration:none">AUD/NZD</a>
-    <a href="/chfjpy-strength" class="dash-tab" style="text-decoration:none">CHF/JPY</a>
-    <a href="/currency-acceleration" class="dash-tab" style="text-decoration:none">Accel H1</a>
-    <a href="/m15-acceleration" class="dash-tab" style="text-decoration:none">Accel M15</a>
-    <a href="/acceleration-engine" class="dash-tab" style="text-decoration:none;background:linear-gradient(135deg,rgba(20,184,166,0.15),rgba(20,184,166,0.05));border-color:rgba(20,184,166,0.3);color:#2dd4bf">Engine</a>
-    <a href="/m15-streak" class="dash-tab" style="text-decoration:none;background:linear-gradient(135deg,rgba(168,85,247,0.15),rgba(168,85,247,0.05));border-color:rgba(168,85,247,0.3);color:#c084fc">Streak</a>
-    <a href="/m15-break-impulse" class="dash-tab" style="text-decoration:none;background:linear-gradient(135deg,rgba(245,158,11,0.15),rgba(245,158,11,0.05));border-color:rgba(245,158,11,0.3);color:#fbbf24">Impulse</a>
-    <a href="/daily-continuation" class="dash-tab" style="text-decoration:none;background:linear-gradient(135deg,rgba(59,130,246,0.15),rgba(59,130,246,0.05));border-color:rgba(59,130,246,0.3);color:#60a5fa">Contin.</a>
-    <a href="/daily-pullback" class="dash-tab" style="text-decoration:none;background:linear-gradient(135deg,rgba(14,165,233,0.15),rgba(14,165,233,0.05));border-color:rgba(14,165,233,0.3);color:#38bdf8">Pullback</a>
-    <a href="/h1-continuation" class="dash-tab" style="text-decoration:none;background:linear-gradient(135deg,rgba(20,184,166,0.15),rgba(20,184,166,0.05));border-color:rgba(20,184,166,0.3);color:#2dd4bf">H1 Cont.</a>
-    <a href="/session-continuation" class="dash-tab" style="text-decoration:none;background:linear-gradient(135deg,rgba(236,72,153,0.15),rgba(236,72,153,0.05));border-color:rgba(236,72,153,0.3);color:#f472b6">Session</a>
+    <div class="dash-dd">
+      <button type="button" class="dash-tab dash-dd-btn">Pair Strength ▾</button>
+      <div class="dash-dd-menu">
+        <a href="/audnzd-strength">AUD/NZD</a>
+        <a href="/chfjpy-strength">CHF/JPY</a>
+      </div>
+    </div>
+    <div class="dash-dd">
+      <button type="button" class="dash-tab dash-dd-btn">Momentum ▾</button>
+      <div class="dash-dd-menu">
+        <a href="/currency-acceleration">Accel H1</a>
+        <a href="/m15-acceleration">Accel M15</a>
+        <a href="/acceleration-engine" style="color:#2dd4bf">Engine</a>
+        <a href="/m15-streak" style="color:#c084fc">Streak</a>
+        <a href="/m15-break-impulse" style="color:#fbbf24">Impulse</a>
+      </div>
+    </div>
+    <div class="dash-dd">
+      <button type="button" class="dash-tab dash-dd-btn">Continuation ▾</button>
+      <div class="dash-dd-menu">
+        <a href="/daily-continuation" style="color:#60a5fa">Contin.</a>
+        <a href="/daily-pullback" style="color:#38bdf8">Pullback</a>
+        <a href="/h1-continuation" style="color:#2dd4bf">H1 Cont.</a>
+        <a href="/session-continuation" style="color:#f472b6">Session</a>
+      </div>
+    </div>
   </nav>
+
+  <style>
+    .dash-dd { position: relative; display: inline-block; }
+    .dash-dd-btn { cursor: pointer; }
+    .dash-dd.open .dash-dd-btn {
+      background: var(--bg-hover);
+      color: var(--text);
+    }
+    .dash-dd-menu {
+      display: none;
+      position: absolute; top: calc(100% + 4px); left: 0;
+      min-width: 160px; z-index: 200;
+      background: rgba(15,20,30,0.98);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 4px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+    .dash-dd.open .dash-dd-menu { display: block; }
+    .dash-dd-menu a {
+      display: block; padding: 7px 12px; border-radius: 6px;
+      font-size: 12px; font-weight: 600;
+      color: var(--text-muted); text-decoration: none;
+      white-space: nowrap;
+    }
+    .dash-dd-menu a:hover { background: rgba(255,255,255,0.06); color: #fff; }
+  </style>
+  <script>
+    (function() {
+      document.querySelectorAll('.dash-dd-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          var wrap = btn.parentElement;
+          var wasOpen = wrap.classList.contains('open');
+          document.querySelectorAll('.dash-dd').forEach(function(d) { d.classList.remove('open'); });
+          if (!wasOpen) wrap.classList.add('open');
+        });
+      });
+      document.addEventListener('click', function() {
+        document.querySelectorAll('.dash-dd').forEach(function(d) { d.classList.remove('open'); });
+      });
+    })();
+  </script>
 
   <!-- ═══ TAB 1: OVERVIEW ═══ -->
   <main class="grid tab-panel active" id="tab-overview" data-tab="overview">
