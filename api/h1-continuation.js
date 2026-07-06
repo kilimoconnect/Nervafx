@@ -173,12 +173,19 @@ module.exports = async function handler(req, res) {
         let delta = 0;
         const events = [];
 
-        // 1. New high/low
+        // Closing break of structure in the continuation direction
+        const brokeFor = refDirection === 'BUY' ? m5.close > prevM5.high : m5.close < prevM5.low;
+
+        // 1. New high/low — only rewarded when the candle also closes through structure
         if (refDirection === 'BUY') {
           if (m5.high > runHigh) {
-            delta += 3;
-            events.push('New high');
             runHigh = m5.high;
+            if (brokeFor) {
+              delta += 3;
+              events.push('New high');
+            } else {
+              events.push('New high (wick only)');
+            }
           } else if (m5.high < prevM5.high && m5.low < prevM5.low) {
             delta -= 4;
             events.push('Lower high + lower low');
@@ -188,9 +195,13 @@ module.exports = async function handler(req, res) {
           }
         } else {
           if (m5.low < runLow) {
-            delta += 3;
-            events.push('New low');
             runLow = m5.low;
+            if (brokeFor) {
+              delta += 3;
+              events.push('New low');
+            } else {
+              events.push('New low (wick only)');
+            }
           } else if (m5.low > prevM5.low && m5.high > prevM5.high) {
             delta -= 4;
             events.push('Higher low + higher high');
