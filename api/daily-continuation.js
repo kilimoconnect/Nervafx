@@ -242,8 +242,6 @@ module.exports = async function handler(req, res) {
           delta -= 6;
           events.push('Close above prev H1 high');
         } else {
-          // No break of structure in the continuation direction — penalize
-          delta -= 2;
           events.push('No break of structure');
         }
 
