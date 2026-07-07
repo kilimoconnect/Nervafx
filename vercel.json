@@ -41,7 +41,8 @@
     "api/daily-continuation.js": { "maxDuration": 60 },
     "api/daily-pullback.js": { "maxDuration": 60 },
     "api/h1-continuation.js": { "maxDuration": 60 },
-    "api/session-continuation.js": { "maxDuration": 60 }
+    "api/session-continuation.js": { "maxDuration": 60 },
+    "api/h1-clean-break.js": { "maxDuration": 60 }
   },
   "rewrites": [
     { "source": "/",       "destination": "/login.html" },
@@ -75,7 +76,8 @@
     { "source": "/daily-continuation", "destination": "/daily-continuation.html" },
     { "source": "/daily-pullback", "destination": "/daily-pullback.html" },
     { "source": "/h1-continuation", "destination": "/h1-continuation.html" },
-    { "source": "/session-continuation", "destination": "/session-continuation.html" }
+    { "source": "/session-continuation", "destination": "/session-continuation.html" },
+    { "source": "/h1-clean-break", "destination": "/h1-clean-break.html" }
   ],
   "headers": [
     {
