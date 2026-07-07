@@ -405,8 +405,8 @@
         if (!inSession(row.time)) continue;
 
         var allTfs = row.qualifiedTfs || Object.keys(row.timeframes);
-        // Require both 3H and 6H to have qualified — hide anything without that confluence
-        if (allTfs.indexOf('3H') === -1 || allTfs.indexOf('6H') === -1) continue;
+        // Require at least one of 3H or 6H to have qualified
+        if (allTfs.indexOf('3H') === -1 && allTfs.indexOf('6H') === -1) continue;
 
         var tfs = (currentTf === 'all') ? allTfs : allTfs.filter(function(x) { return x === currentTf; });
         if (!tfs.length) continue;
