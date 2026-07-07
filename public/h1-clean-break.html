@@ -343,6 +343,9 @@
           var row = rows[r];
           if (isWeekend(row.time)) continue;
 
+          // Only show hours where at least 5 pairs qualified
+          if (row.signals.length < MAX_PAIRS_PER_CARD) continue;
+
           var sigs = row.signals;
           if (currentDir !== 'all') {
             sigs = sigs.filter(function(s) { return s.direction === currentDir; });
