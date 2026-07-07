@@ -11,8 +11,9 @@ const VALID_PAIRS = new Set([
   'AUD_JPY', 'AUD_CHF', 'AUD_CAD', 'AUD_NZD',
   'NZD_JPY', 'NZD_CHF', 'NZD_CAD', 'CAD_JPY', 'CAD_CHF', 'CHF_JPY',
 ]);
-const TIMEFRAMES = ['15M', '3H', '6H', '12H'];
+const TIMEFRAMES = ['15M', '3H', '4H', '6H'];
 const RATIO_THRESHOLD = 0.70;
+const EXTREME_RATIO_THRESHOLD = 0.28;
 
 function classify(strength) {
   const strong = [], weak = [];
@@ -59,20 +60,36 @@ function leaderLoser(strength) {
   };
 }
 
-// Top 2 vs bottom 2 imbalance:
-//   A = sum of the two most positive currencies
-//   B = |sum of the two most negative currencies|
-//   Qualifies as imbalanced when min(A,B) / max(A,B) < 0.70
-//   (i.e. one side is more than ~43% larger than the other)
+// Market imbalance qualifies when ANY of these holds:
+//   1. Top-2 vs Bottom-2 ratio: A = sum of top-2 strengths, B = |sum of bottom-2|;
+//      min(A,B)/max(A,B) < 0.70 (one side dwarfs the other by more than ~43%)
+//   2. Leader dominance: strength[2nd] / strength[1st] < 0.28
+//   3. Loser dominance:  strength[7th] / strength[8th] < 0.28
 function ratioCheck(strength) {
   const sorted = CURRENCIES.slice().sort((a, b) => strength[b] - strength[a]);
   const A = strength[sorted[0]] + strength[sorted[1]];
   const B = -(strength[sorted[6]] + strength[sorted[7]]);
-  if (A <= 0 || B <= 0) return { valid: false, ratio: 0, top2Sum: A, bot2Sum: B, top2: [sorted[0], sorted[1]], bot2: [sorted[6], sorted[7]] };
-  const r = Math.min(A, B) / Math.max(A, B);
+
+  const sidesValid = A > 0 && B > 0;
+  const ratio = sidesValid ? Math.min(A, B) / Math.max(A, B) : 1;
+  const ratioValid = sidesValid && ratio < RATIO_THRESHOLD;
+
+  const leaderRatio = strength[sorted[0]] !== 0
+    ? strength[sorted[1]] / strength[sorted[0]] : 1;
+  const leaderValid = strength[sorted[0]] > 0 && leaderRatio < EXTREME_RATIO_THRESHOLD;
+
+  const loserRatio = strength[sorted[7]] !== 0
+    ? strength[sorted[6]] / strength[sorted[7]] : 1;
+  const loserValid = strength[sorted[7]] < 0 && loserRatio < EXTREME_RATIO_THRESHOLD;
+
   return {
-    valid: r < RATIO_THRESHOLD,
-    ratio: Math.round(r * 1000) / 1000,
+    valid: ratioValid || leaderValid || loserValid,
+    ratio: Math.round(ratio * 1000) / 1000,
+    ratioValid,
+    leaderRatio: Math.round(leaderRatio * 1000) / 1000,
+    leaderValid,
+    loserRatio: Math.round(loserRatio * 1000) / 1000,
+    loserValid,
     top2Sum: Math.round(A * 100) / 100,
     bot2Sum: Math.round(B * 100) / 100,
     top2: [sorted[0], sorted[1]],
@@ -181,7 +198,7 @@ module.exports = async function handler(req, res) {
       while (true) {
         const { data, error } = await sb
           .from('currency_strength')
-          .select('time, currency, smooth_3h, smooth_6h, smooth_12h')
+          .select('time, currency, smooth_3h, smooth_4h, smooth_6h')
           .gte('time', hourlySince)
           .lte('time', until)
           .order('time', { ascending: true })
@@ -199,9 +216,9 @@ module.exports = async function handler(req, res) {
     for (const r of hourlyRows) {
       if (!hourlyByTime[r.time]) hourlyByTime[r.time] = {};
       hourlyByTime[r.time][r.currency] = {
-        '3H':  (parseFloat(r.smooth_3h)  || 0) * 10000,
-        '6H':  (parseFloat(r.smooth_6h)  || 0) * 10000,
-        '12H': (parseFloat(r.smooth_12h) || 0) * 10000,
+        '3H': (parseFloat(r.smooth_3h) || 0) * 10000,
+        '4H': (parseFloat(r.smooth_4h) || 0) * 10000,
+        '6H': (parseFloat(r.smooth_6h) || 0) * 10000,
       };
     }
     const hourlyTimes = Object.keys(hourlyByTime).sort();
@@ -229,7 +246,7 @@ module.exports = async function handler(req, res) {
       for (const c of CURRENCIES) strengths['15M'][c] = (parseFloat(m15Values[c]) || 0) * 10000;
 
       if (hourlyValues && Object.keys(hourlyValues).length === CURRENCIES.length) {
-        for (const tf of ['3H', '6H', '12H']) {
+        for (const tf of ['3H', '4H', '6H']) {
           strengths[tf] = {};
           for (const c of CURRENCIES) strengths[tf][c] = hourlyValues[c]?.[tf] || 0;
         }

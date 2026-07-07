@@ -238,7 +238,7 @@
     <div class="sx-card">
       <div class="sx-card-hd">
         <i data-lucide="scale"></i> Market Imbalance Engine — Capital flow detection
-        <span class="sx-note">Top-2 vs Bottom-2 ratio &lt; 70% · 15M / 3H / 6H / 12H</span>
+        <span class="sx-note">T/B &lt; 70% OR 2/1 &lt; 28% OR 7/8 &lt; 28% · 15M / 3H / 4H / 6H</span>
         <span class="sx-ctrls">
           <button class="sx-btn sx-days active" data-days="1">1D</button>
           <button class="sx-btn sx-days" data-days="2">2D</button>
@@ -254,8 +254,8 @@
           <button class="sx-btn sx-tf active" data-tf="all">All TF</button>
           <button class="sx-btn sx-tf" data-tf="15M">15M</button>
           <button class="sx-btn sx-tf" data-tf="3H">3H</button>
+          <button class="sx-btn sx-tf" data-tf="4H">4H</button>
           <button class="sx-btn sx-tf" data-tf="6H">6H</button>
-          <button class="sx-btn sx-tf" data-tf="12H">12H</button>
           <span class="sx-ctrl-sep"></span>
           <input type="date" class="sx-date-input" id="sx-date-from" title="From date">
           <input type="date" class="sx-date-input" id="sx-date-to" title="To date">
@@ -351,10 +351,16 @@
       html += '<div class="im-meta">';
       if (d.ratio) {
         var rPct = Math.round(d.ratio.ratio * 100);
-        var rCls = rPct < 50 ? 'high' : rPct < 70 ? 'mid' : 'low';
+        var rCls = d.ratio.ratioValid ? 'high' : 'low';
         html += '<span class="im-chip"><span class="im-chip-label">Top2</span><span class="im-chip-val high">' + d.ratio.top2.join('+') + ' ' + d.ratio.top2Sum.toFixed(1) + '</span></span>';
         html += '<span class="im-chip"><span class="im-chip-label">Bot2</span><span class="im-chip-val low">' + d.ratio.bot2.join('+') + ' ' + d.ratio.bot2Sum.toFixed(1) + '</span></span>';
-        html += '<span class="im-chip"><span class="im-chip-label">Ratio</span><span class="im-chip-val ' + rCls + '">' + rPct + '%</span></span>';
+        html += '<span class="im-chip"><span class="im-chip-label">T/B</span><span class="im-chip-val ' + rCls + '">' + rPct + '%</span></span>';
+        var ldPct = Math.round(d.ratio.leaderRatio * 100);
+        var ldCls = d.ratio.leaderValid ? 'high' : 'low';
+        html += '<span class="im-chip"><span class="im-chip-label">2/1</span><span class="im-chip-val ' + ldCls + '">' + ldPct + '%</span></span>';
+        var lsPct = Math.round(d.ratio.loserRatio * 100);
+        var lsCls = d.ratio.loserValid ? 'high' : 'low';
+        html += '<span class="im-chip"><span class="im-chip-label">7/8</span><span class="im-chip-val ' + lsCls + '">' + lsPct + '%</span></span>';
       }
       var sepCls = d.separation.separation >= 15 ? 'high' : d.separation.separation >= 8 ? 'mid' : 'low';
       html += '<span class="im-chip"><span class="im-chip-label">Sep</span><span class="im-chip-val ' + sepCls + '">' + d.separation.separation.toFixed(1) + ' ' + d.separation.label + '</span></span>';
