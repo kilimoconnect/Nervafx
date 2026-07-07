@@ -2,7 +2,6 @@
 
 const { getClient, cors } = require('./_db');
 const { requirePlan } = require('./_plan');
-const { computeDailyDirectionFromCache, computePullbackDirectionFromCache } = require('./_daily-direction');
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
 const VALID_PAIRS = new Set([
@@ -60,36 +59,6 @@ module.exports = async function handler(req, res) {
       };
     }
 
-    // Fetch H1 candles for all 28 pairs (daily continuation + pullback direction need ~4 trading days + weekend)
-    const candleSince = new Date(Math.min(new Date(fetchSince).getTime() - 2 * 3600000, Date.now() - 8 * 24 * 3600000)).toISOString();
-    const candleCache = {};
-    const ALL_PAIRS = [...VALID_PAIRS];
-    for (let b = 0; b < ALL_PAIRS.length; b += 7) {
-      const batch = ALL_PAIRS.slice(b, b + 7);
-      const results = await Promise.all(batch.map(async inst => {
-        const { data, error } = await sb
-          .from('backtest_candles')
-          .select('time, open, high, low, close')
-          .eq('instrument', inst).eq('timeframe', 'H1').eq('complete', true)
-          .gte('time', candleSince).lte('time', until)
-          .order('time', { ascending: true }).limit(500);
-        return { inst, data: error ? [] : data || [] };
-      }));
-      for (const { inst, data } of results) {
-        candleCache[inst] = data.map(c => ({
-          time: c.time,
-          open: parseFloat(c.open),
-          high: parseFloat(c.high),
-          low: parseFloat(c.low),
-          close: parseFloat(c.close),
-        }));
-      }
-    }
-
-    // Direction filter sources: daily continuation (yesterday's candle) + daily pullback setup
-    const dailyDirection = computeDailyDirectionFromCache(candleCache, ALL_PAIRS);
-    const pullbackDirection = computePullbackDirectionFromCache(candleCache, ALL_PAIRS);
-
     const timestamps = Object.keys(byTime).sort();
     const rows = [];
 
@@ -144,18 +113,10 @@ module.exports = async function handler(req, res) {
             direction = 'SELL';
           } else continue;
 
-          // Direction must match daily continuation OR an active pullback setup
-          const dc = dailyDirection[inst];
-          const pb = pullbackDirection[inst];
-          const contOk = dc && dc.direction === direction;
-          const pbOk = pb && pb.direction === direction;
-          if (!contOk && !pbOk) continue;
-
           const spread = Math.round((strong.s3 - weak.s3) * 100) / 100;
           candidates.push({
             pair,
             direction,
-            dirSource: contOk && pbOk ? 'BOTH' : (contOk ? 'CONT' : 'PULLBACK'),
             strongCcy: strong.currency,
             weakCcy: weak.currency,
             strongS3: strong.s3,
