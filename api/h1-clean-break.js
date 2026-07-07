@@ -130,6 +130,7 @@ module.exports = async function handler(req, res) {
       }
 
       const pd = pipDiv(inst);
+      const LOOKAHEAD_H1S = 4;
 
       for (let i = 1; i < h1s.length; i++) {
         const target = h1s[i];
@@ -154,6 +155,21 @@ module.exports = async function handler(req, res) {
         const range = target.high - target.low;
         const body = Math.abs(target.close - target.open);
 
+        // Follow-through outcome — next 4 H1s' final close vs signal close
+        const future = h1s.slice(i + 1, i + 1 + LOOKAHEAD_H1S);
+        let outcome = null;
+        if (future.length === LOOKAHEAD_H1S) {
+          const finalClose = future[future.length - 1].close;
+          const rawMove = direction === 'BUY'
+            ? finalClose - target.close
+            : target.close - finalClose;
+          const pipMove = rawMove / pd;
+          outcome = {
+            pips: Math.round(pipMove * 10) / 10,
+            win: pipMove > 0,
+          };
+        }
+
         const signal = {
           pair: inst.replace('_', '/'),
           instrument: inst,
@@ -171,6 +187,7 @@ module.exports = async function handler(req, res) {
             bull: c.close > c.open,
             bodyPips: Math.round((Math.abs(c.close - c.open) / pd) * 10) / 10,
           })),
+          outcome,
         };
 
         let bucket = byTime.get(target.time);
@@ -194,7 +211,47 @@ module.exports = async function handler(req, res) {
     // Newest first
     rows.sort((a, b) => (a.time < b.time ? 1 : -1));
 
-    res.json({ rows });
+    // Per-pair performance ranking across the range
+    const statsByPair = new Map();
+    for (const row of rows) {
+      for (const s of row.signals) {
+        let st = statsByPair.get(s.pair);
+        if (!st) {
+          st = { pair: s.pair, total: 0, settled: 0, wins: 0, pips: 0, pending: 0, buy: 0, sell: 0 };
+          statsByPair.set(s.pair, st);
+        }
+        st.total++;
+        if (s.direction === 'BUY') st.buy++; else st.sell++;
+        if (s.outcome) {
+          st.settled++;
+          st.pips += s.outcome.pips;
+          if (s.outcome.win) st.wins++;
+        } else {
+          st.pending++;
+        }
+      }
+    }
+    const pairRanking = Array.from(statsByPair.values()).map(st => ({
+      pair: st.pair,
+      total: st.total,
+      settled: st.settled,
+      pending: st.pending,
+      buy: st.buy,
+      sell: st.sell,
+      wins: st.wins,
+      losses: st.settled - st.wins,
+      hitRate: st.settled > 0 ? Math.round((st.wins / st.settled) * 100) : null,
+      avgPips: st.settled > 0 ? Math.round((st.pips / st.settled) * 10) / 10 : 0,
+      totalPips: Math.round(st.pips * 10) / 10,
+    })).sort((a, b) => {
+      // Settled pairs first (highest hit rate, then avg pips), pending-only pairs last
+      if (a.hitRate == null && b.hitRate == null) return b.total - a.total;
+      if (a.hitRate == null) return 1;
+      if (b.hitRate == null) return -1;
+      return b.hitRate - a.hitRate || b.avgPips - a.avgPips;
+    });
+
+    res.json({ rows, pairRanking });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
