@@ -119,14 +119,13 @@ module.exports = async function handler(req, res) {
       if (h1s.length < 2) continue;
       const m15s = m15Cache[inst] || [];
 
-      // Group M15 candles by H1 bucket ISO for fast lookup
+      // Group M15 candles by H1 bucket start (ms) for fast lookup
       const m15ByHour = new Map();
       for (const c of m15s) {
         const t = new Date(c.time).getTime();
         const bucketMs = Math.floor(t / H1_MS) * H1_MS;
-        const key = new Date(bucketMs).toISOString();
-        let arr = m15ByHour.get(key);
-        if (!arr) { arr = []; m15ByHour.set(key, arr); }
+        let arr = m15ByHour.get(bucketMs);
+        if (!arr) { arr = []; m15ByHour.set(bucketMs, arr); }
         arr.push(c);
       }
 
@@ -144,7 +143,7 @@ module.exports = async function handler(req, res) {
         else if (target.close < prev.low) { direction = 'SELL'; breakLevel = prev.low; }
         else continue;
 
-        const inner = m15ByHour.get(target.time);
+        const inner = m15ByHour.get(targetMs);
         if (!inner || inner.length !== 4) continue;
 
         const aligned = inner.every(c =>
