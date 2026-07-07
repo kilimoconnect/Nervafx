@@ -251,6 +251,12 @@
           <button class="sx-btn sx-session" data-session="london">London</button>
           <button class="sx-btn sx-session" data-session="newyork">New York</button>
           <span class="sx-ctrl-sep"></span>
+          <button class="sx-btn sx-tf active" data-tf="all">All TF</button>
+          <button class="sx-btn sx-tf" data-tf="15M">15M</button>
+          <button class="sx-btn sx-tf" data-tf="3H">3H</button>
+          <button class="sx-btn sx-tf" data-tf="6H">6H</button>
+          <button class="sx-btn sx-tf" data-tf="12H">12H</button>
+          <span class="sx-ctrl-sep"></span>
           <input type="date" class="sx-date-input" id="sx-date-from" title="From date">
           <input type="date" class="sx-date-input" id="sx-date-to" title="To date">
           <button class="sx-btn" id="sx-date-go">Go</button>
@@ -272,6 +278,7 @@
 
     var currentDays = 1;
     var currentSession = 'all';
+    var currentTf = 'all';
     var cachedRows = [];
 
     var SESSIONS = {
@@ -391,6 +398,17 @@
         if (isWeekend(row.time)) continue;
         if (!inSession(row.time)) continue;
 
+        var allTfs = row.qualifiedTfs || Object.keys(row.timeframes);
+        // Require both 3H and 6H to have qualified — hide anything without that confluence
+        if (allTfs.indexOf('3H') === -1 || allTfs.indexOf('6H') === -1) continue;
+
+        var tfs = (currentTf === 'all') ? allTfs : allTfs.filter(function(x) { return x === currentTf; });
+        if (!tfs.length) continue;
+
+        var activeTf = (currentTf === 'all')
+          ? row.bestTf
+          : tfs[0];
+
         var uid = 'card-' + cardIdx;
         cardIdx++;
 
@@ -398,20 +416,19 @@
         html += '<div class="im-card-hd">';
         html += '<span class="im-time">' + hrLabel(row.time) + '</span>';
         html += '<span class="im-date">' + dayLabel(row.time) + '</span>';
-        html += '<span class="im-best-tf">Best: ' + row.bestTf + ' (' + row.bestScore + ')</span>';
+        html += '<span class="im-best-tf">' + (currentTf === 'all' ? 'Best: ' : '') + activeTf + ' (' + row.timeframes[activeTf].score + ')</span>';
         html += '</div>';
         html += '<div class="im-body">';
 
-        var tfs = row.qualifiedTfs || Object.keys(row.timeframes);
         html += '<div class="im-tabs">';
         for (var t = 0; t < tfs.length; t++) {
-          var act = tfs[t] === row.bestTf ? ' active' : '';
+          var act = tfs[t] === activeTf ? ' active' : '';
           html += '<div class="im-tab' + act + '" data-uid="' + uid + '" data-tf="' + tfs[t] + '">' + tfs[t] + '</div>';
         }
         html += '</div>';
 
         for (var t = 0; t < tfs.length; t++) {
-          var act = tfs[t] === row.bestTf ? ' active' : '';
+          var act = tfs[t] === activeTf ? ' active' : '';
           html += '<div class="im-tf-content' + act + '" id="' + uid + '-' + tfs[t] + '">';
           html += renderTf(tfs[t], row.timeframes[tfs[t]]);
           html += '</div>';
@@ -478,6 +495,15 @@
         document.querySelectorAll('.sx-session').forEach(function(b) { b.classList.remove('active'); });
         btn.classList.add('active');
         currentSession = btn.dataset.session;
+        renderCards(cachedRows);
+      });
+    });
+
+    document.querySelectorAll('.sx-tf').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        document.querySelectorAll('.sx-tf').forEach(function(b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        currentTf = btn.dataset.tf;
         renderCards(cachedRows);
       });
     });
