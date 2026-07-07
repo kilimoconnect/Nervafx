@@ -11,7 +11,7 @@ const VALID_PAIRS = new Set([
   'AUD_JPY', 'AUD_CHF', 'AUD_CAD', 'AUD_NZD',
   'NZD_JPY', 'NZD_CHF', 'NZD_CAD', 'CAD_JPY', 'CAD_CHF', 'CHF_JPY',
 ]);
-const TIMEFRAMES = ['15M', '3H', '4H', '6H'];
+const TIMEFRAMES = ['3H', '4H', '6H'];
 const RATIO_THRESHOLD = 0.70;
 const EXTREME_RATIO_THRESHOLD = 0.28;
 const MAGNITUDE_THRESHOLD = 15;
@@ -175,29 +175,7 @@ module.exports = async function handler(req, res) {
 
     const PAGE = 1000;
 
-    // Fetch M15 currency strength (one row per 15m with values.CCY)
-    const m15Rows = [];
-    {
-      let offset = 0;
-      while (true) {
-        const { data, error } = await sb
-          .from('m15_currency_strength')
-          .select('time, values')
-          .gte('time', since)
-          .lte('time', until)
-          .order('time', { ascending: true })
-          .range(offset, offset + PAGE - 1);
-        if (error) throw error;
-        if (!data || !data.length) break;
-        m15Rows.push(...data);
-        if (data.length < PAGE) break;
-        offset += PAGE;
-      }
-    }
-
-    // Fetch hourly currency strength — extend since by 1h so we can carry-forward the
-    // last hourly reading for any M15 timestamp that predates the first hourly row in range
-    const hourlySince = new Date(new Date(since).getTime() - 60 * 60 * 1000).toISOString();
+    // Fetch hourly currency strength
     const hourlyRows = [];
     {
       let offset = 0;
@@ -205,7 +183,7 @@ module.exports = async function handler(req, res) {
         const { data, error } = await sb
           .from('currency_strength')
           .select('time, currency, smooth_3h, smooth_4h, smooth_6h')
-          .gte('time', hourlySince)
+          .gte('time', since)
           .lte('time', until)
           .order('time', { ascending: true })
           .range(offset, offset + PAGE - 1);
@@ -227,42 +205,22 @@ module.exports = async function handler(req, res) {
         '6H': (parseFloat(r.smooth_6h) || 0) * 10000,
       };
     }
-    const hourlyTimes = Object.keys(hourlyByTime).sort();
-
-    function lastHourlyAtOrBefore(t) {
-      let lo = 0, hi = hourlyTimes.length - 1, best = -1;
-      while (lo <= hi) {
-        const mid = (lo + hi) >> 1;
-        if (hourlyTimes[mid] <= t) { best = mid; lo = mid + 1; }
-        else hi = mid - 1;
-      }
-      return best >= 0 ? hourlyByTime[hourlyTimes[best]] : null;
-    }
 
     const rows = [];
 
-    for (const m15Row of m15Rows) {
-      const t = m15Row.time;
-      // Present hourly only — skip anything that isn't on a top-of-hour boundary
-      if (new Date(t).getUTCMinutes() !== 0) continue;
-      const m15Values = m15Row.values || {};
-      const hourlyValues = lastHourlyAtOrBefore(t);
+    for (const t of Object.keys(hourlyByTime).sort()) {
+      const hourlyValues = hourlyByTime[t];
+      if (Object.keys(hourlyValues).length !== CURRENCIES.length) continue;
 
       // Build strengths per timeframe
       const strengths = {};
-      strengths['15M'] = {};
-      for (const c of CURRENCIES) strengths['15M'][c] = (parseFloat(m15Values[c]) || 0) * 10000;
-
-      if (hourlyValues && Object.keys(hourlyValues).length === CURRENCIES.length) {
-        for (const tf of ['3H', '4H', '6H']) {
-          strengths[tf] = {};
-          for (const c of CURRENCIES) strengths[tf][c] = hourlyValues[c]?.[tf] || 0;
-        }
+      for (const tf of TIMEFRAMES) {
+        strengths[tf] = {};
+        for (const c of CURRENCIES) strengths[tf][c] = hourlyValues[c]?.[tf] || 0;
       }
 
       const tfResults = {};
       for (const tf of TIMEFRAMES) {
-        if (!strengths[tf]) continue;
         const result = analyseTimeframe(strengths[tf]);
         if (!result.ratio.valid) continue;
         // Magnitude gate applies to 6H only
