@@ -20,7 +20,6 @@ function pipDiv(inst) { return isJpy(inst) ? 0.01 : 0.0001; }
 //   NY:     13:00 → 21:00                (8h)
 const SESSION_ORDER = ['ASIA', 'LONDON', 'NY'];
 
-// Find the session containing timestamp `t` and its start Date (in UTC).
 function currentSessionAt(t) {
   const d = new Date(t);
   const h = d.getUTCHours();
@@ -49,47 +48,38 @@ function sessionEnd(name, start) {
   return end;
 }
 
-// Given the start of a session, return the previous session's { name, start, end }.
 function previousSession(name, start) {
   let prevName, prevStart;
   if (name === 'ASIA') {
-    // Previous NY = same forex day - 1
     prevName = 'NY';
     prevStart = new Date(start);
-    prevStart.setUTCHours(13, 0, 0, 0); // 13:00 same calendar day as Asia starts... but Asia starts 21:00 prev cal day
-    // Asia start is on calendar day X-1 at 21:00 → previous NY is on X-1 at 13:00
-    // start.getUTCDate() gives day of start (which is X-1 if start is 21:00)
-    // Simpler: prev NY end = Asia start (21:00). NY duration 8h → NY start = 13:00 same cal day as Asia start.
+    prevStart.setUTCHours(13, 0, 0, 0);
   } else if (name === 'LONDON') {
-    // Previous Asia = ends at 07:00 same cal day, starts 21:00 previous cal day
     prevName = 'ASIA';
     prevStart = new Date(start);
     prevStart.setUTCDate(prevStart.getUTCDate() - 1);
     prevStart.setUTCHours(21, 0, 0, 0);
   } else {
-    // NY: previous London (same cal day 07:00-13:00)
     prevName = 'LONDON';
     prevStart = new Date(start);
     prevStart.setUTCHours(7, 0, 0, 0);
   }
-  // Skip weekend: if the previous session start lands on Sat/Sun, roll back
-  // Fri 21:00 UTC opens forex week (Sunday 21:00 actually), Sat/Sun sessions don't exist.
   const day = prevStart.getUTCDay();
-  if (day === 6) { // Saturday session — nothing traded → back one more day
+  if (day === 6) {
     prevStart.setUTCDate(prevStart.getUTCDate() - 1);
-  } else if (day === 0 && prevStart.getUTCHours() < 21) { // Sunday before 21:00
+  } else if (day === 0 && prevStart.getUTCHours() < 21) {
     prevStart.setUTCDate(prevStart.getUTCDate() - 2);
   }
   return { name: prevName, start: prevStart, end: sessionEnd(prevName, prevStart) };
 }
 
-function buildSessionCandle(inst, m15s) {
-  if (!m15s.length) return null;
+function buildSessionCandle(inst, candles) {
+  if (!candles.length) return null;
   const pd = pipDiv(inst);
-  const open = m15s[0].open;
-  const close = m15s[m15s.length - 1].close;
+  const open = candles[0].open;
+  const close = candles[candles.length - 1].close;
   let high = -Infinity, low = Infinity;
-  for (const c of m15s) {
+  for (const c of candles) {
     if (c.high > high) high = c.high;
     if (c.low < low) low = c.low;
   }
@@ -104,7 +94,7 @@ function buildSessionCandle(inst, m15s) {
     bodyPips: Math.round((body / pd) * 10) / 10,
     upperWickPct: Math.round(((bull ? high - close : high - open) / range) * 100),
     lowerWickPct: Math.round(((bull ? open - low : close - low) / range) * 100),
-    lastM15: m15s[m15s.length - 1],
+    lastCandle: candles[candles.length - 1],
   };
 }
 
@@ -120,7 +110,6 @@ module.exports = async function handler(req, res) {
 
     const now = new Date();
 
-    // Optional historical mode: ?date=YYYY-MM-DD&session=ASIA|LONDON|NY replays that session.
     const qDate = req.query?.date;
     const qSession = (req.query?.session || '').toUpperCase();
     let anchor = null;
@@ -137,22 +126,19 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // Current session (live) or picked session (historical)
     const cur = anchor
       ? { name: anchorSession, start: anchor }
       : currentSessionAt(now);
     const curEnd = sessionEnd(cur.name, cur.start);
     const trackStart = cur.start;
 
-    // Reference session = the previous one
     const prev = previousSession(cur.name, cur.start);
 
-    // Fetch M15 candles covering the ref session start through end-of-current-session
     const fetchSince = prev.start.toISOString();
     const fetchUntil = anchor ? curEnd.toISOString() : now.toISOString();
 
     const PAGE = 1000;
-    const m15Cache = {};
+    const h1Cache = {};
 
     for (let b = 0; b < VALID_PAIRS.length; b += 7) {
       const batch = VALID_PAIRS.slice(b, b + 7);
@@ -163,7 +149,7 @@ module.exports = async function handler(req, res) {
           const { data, error } = await sb
             .from('backtest_candles')
             .select('time, open, high, low, close')
-            .eq('instrument', inst).eq('timeframe', 'M15')
+            .eq('instrument', inst).eq('timeframe', 'H1')
             .gte('time', fetchSince).lte('time', fetchUntil)
             .order('time', { ascending: true })
             .range(off, off + PAGE - 1);
@@ -176,7 +162,7 @@ module.exports = async function handler(req, res) {
         return { inst, data: allData };
       }));
       for (const { inst, data } of results) {
-        m15Cache[inst] = data.map(c => ({
+        h1Cache[inst] = data.map(c => ({
           time: c.time,
           open: parseFloat(c.open),
           high: parseFloat(c.high),
@@ -194,20 +180,18 @@ module.exports = async function handler(req, res) {
     const pairs = [];
 
     for (const inst of VALID_PAIRS) {
-      const m5all = m15Cache[inst] || [];
-      if (!m5all.length) continue;
+      const allH1 = h1Cache[inst] || [];
+      if (!allH1.length) continue;
 
       const pd = pipDiv(inst);
       const pair = inst.replace('_', '/');
 
-      // Reference session candle built from M15s in the previous session
-      const prevM15s = m5all.filter(c => c.time >= prevStartISO && c.time < prevEndISO);
-      const ref = buildSessionCandle(inst, prevM15s);
+      const prevH1s = allH1.filter(c => c.time >= prevStartISO && c.time < prevEndISO);
+      const ref = buildSessionCandle(inst, prevH1s);
       if (!ref) continue;
 
       const refDirection = ref.bull ? 'BUY' : 'SELL';
 
-      // Phase 1: Initial score from the reference session
       let score = 50;
 
       if (ref.bodyPct >= 80) score += 25;
@@ -220,15 +204,13 @@ module.exports = async function handler(req, res) {
       else if (rejectionWick <= 15) score += 5;
       else if (rejectionWick >= 30) score -= 5;
 
-      // Session-scale range bonus
       if (ref.rangePips > 60) score += 5;
       else if (ref.rangePips > 35) score += 3;
 
       score = Math.max(20, Math.min(98, score));
       const initialScore = score;
 
-      // Phase 2: current session's M15 candles update the score
-      const today = m5all.filter(c => c.time >= trackStartISO && c.time < curEndISO);
+      const today = allH1.filter(c => c.time >= trackStartISO && c.time < curEndISO);
 
       const timeline = [{
         time: trackStartISO,
@@ -239,71 +221,70 @@ module.exports = async function handler(req, res) {
 
       let runHigh = ref.bull ? ref.close : ref.high;
       let runLow = ref.bull ? ref.low : ref.close;
-      let prevM15 = ref.lastM15;
+      let prevH1 = ref.lastCandle;
 
       for (let i = 0; i < today.length; i++) {
-        const m15 = today[i];
-        const m15Bull = m15.close > m15.open;
-        const m15Body = Math.abs(m15.close - m15.open);
-        const m15BodyPips = Math.round((m15Body / pd) * 10) / 10;
+        const h1 = today[i];
+        const h1Bull = h1.close > h1.open;
+        const h1Body = Math.abs(h1.close - h1.open);
+        const h1BodyPips = Math.round((h1Body / pd) * 10) / 10;
         let delta = 0;
         const events = [];
 
-        // Closing break of structure in the continuation direction
-        const brokeFor = refDirection === 'BUY' ? m15.close > prevM15.high : m15.close < prevM15.low;
+        const brokeFor = refDirection === 'BUY' ? h1.close > prevH1.high : h1.close < prevH1.low;
 
         // 1. New high/low — only rewarded when the candle also closes through structure
         if (refDirection === 'BUY') {
-          if (m15.high > runHigh) {
-            runHigh = m15.high;
+          if (h1.high > runHigh) {
+            runHigh = h1.high;
             if (brokeFor) { delta += 3; events.push('New high'); }
             else { events.push('New high (wick only)'); }
-          } else if (m15.high < prevM15.high && m15.low < prevM15.low) {
+          } else if (h1.high < prevH1.high && h1.low < prevH1.low) {
             delta -= 4; events.push('Lower high + lower low');
-          } else if (m15.high < prevM15.high) {
+          } else if (h1.high < prevH1.high) {
             delta -= 2; events.push('Lower high');
           }
         } else {
-          if (m15.low < runLow) {
-            runLow = m15.low;
+          if (h1.low < runLow) {
+            runLow = h1.low;
             if (brokeFor) { delta += 3; events.push('New low'); }
             else { events.push('New low (wick only)'); }
-          } else if (m15.low > prevM15.low && m15.high > prevM15.high) {
+          } else if (h1.low > prevH1.low && h1.high > prevH1.high) {
             delta -= 4; events.push('Higher low + higher high');
-          } else if (m15.low > prevM15.low) {
+          } else if (h1.low > prevH1.low) {
             delta -= 2; events.push('Higher low');
           }
         }
 
         // 2. Break of structure (closing)
-        if (refDirection === 'BUY' && m15.close > prevM15.high) {
-          delta += 4; events.push('Close above prev M15 high');
-        } else if (refDirection === 'SELL' && m15.close < prevM15.low) {
-          delta += 4; events.push('Close below prev M15 low');
-        } else if (refDirection === 'BUY' && m15.close < prevM15.low) {
-          delta -= 6; events.push('Close below prev M15 low');
-        } else if (refDirection === 'SELL' && m15.close > prevM15.high) {
-          delta -= 6; events.push('Close above prev M15 high');
+        if (refDirection === 'BUY' && h1.close > prevH1.high) {
+          delta += 4; events.push('Close above prev H1 high');
+        } else if (refDirection === 'SELL' && h1.close < prevH1.low) {
+          delta += 4; events.push('Close below prev H1 low');
+        } else if (refDirection === 'BUY' && h1.close < prevH1.low) {
+          delta -= 6; events.push('Close below prev H1 low');
+        } else if (refDirection === 'SELL' && h1.close > prevH1.high) {
+          delta -= 6; events.push('Close above prev H1 high');
         } else {
-          delta -= 2; events.push('No break of structure');
+          events.push('No break of structure');
         }
 
-        // 3. Body strength (M15 scale — pips thresholds slightly higher than M5)
+        // 3. Body strength (H1 scale)
         if (refDirection === 'BUY') {
-          if (m15Bull && m15BodyPips > 6) { delta += 2; events.push('Strong bull body'); }
-          else if (!m15Bull && m15BodyPips > 6) { delta -= 3; events.push('Strong bear body'); }
-          if (!m15Bull && m15Body > 0) {
-            const prevBody = Math.abs(prevM15.close - prevM15.open);
-            if (m15Body > prevBody * 1.2 && prevM15.close > prevM15.open) {
+          if (h1Bull && h1BodyPips > 10) { delta += 2; events.push('Strong bull body'); }
+          else if (!h1Bull && h1BodyPips > 10) { delta -= 3; events.push('Strong bear body'); }
+          if (!h1Bull && h1Body > 0) {
+            const prevBody = Math.abs(prevH1.close - prevH1.open);
+            if (h1Body > prevBody * 1.2 && prevH1.close > prevH1.open) {
               delta -= 4; events.push('Bearish engulfing');
             }
           }
         } else {
-          if (!m15Bull && m15BodyPips > 6) { delta += 2; events.push('Strong bear body'); }
-          else if (m15Bull && m15BodyPips > 6) { delta -= 3; events.push('Strong bull body'); }
-          if (m15Bull && m15Body > 0) {
-            const prevBody = Math.abs(prevM15.close - prevM15.open);
-            if (m15Body > prevBody * 1.2 && prevM15.close < prevM15.open) {
+          if (!h1Bull && h1BodyPips > 10) { delta += 2; events.push('Strong bear body'); }
+          else if (h1Bull && h1BodyPips > 10) { delta -= 3; events.push('Strong bull body'); }
+          if (h1Bull && h1Body > 0) {
+            const prevBody = Math.abs(prevH1.close - prevH1.open);
+            if (h1Body > prevBody * 1.2 && prevH1.close < prevH1.open) {
               delta -= 4; events.push('Bullish engulfing');
             }
           }
@@ -311,11 +292,11 @@ module.exports = async function handler(req, res) {
 
         // 3b. Chop / indecision — small body + big wicks on both sides
         {
-          const m15Range = m15.high - m15.low;
-          if (m15Range > 0 && (m15Range / pd) > 6) {
-            const bodyPct = (m15Body / m15Range) * 100;
-            const upperPct = ((m15.high - Math.max(m15.open, m15.close)) / m15Range) * 100;
-            const lowerPct = ((Math.min(m15.open, m15.close) - m15.low) / m15Range) * 100;
+          const h1Range = h1.high - h1.low;
+          if (h1Range > 0 && (h1Range / pd) > 12) {
+            const bodyPct = (h1Body / h1Range) * 100;
+            const upperPct = ((h1.high - Math.max(h1.open, h1.close)) / h1Range) * 100;
+            const lowerPct = ((Math.min(h1.open, h1.close) - h1.low) / h1Range) * 100;
             if (bodyPct < 25 && upperPct > 30 && lowerPct > 30) {
               delta -= 2;
               events.push('Choppy candle');
@@ -325,10 +306,10 @@ module.exports = async function handler(req, res) {
 
         // 4. Pullback depth vs reference session range
         if (refDirection === 'BUY') {
-          const retrace = (runHigh - m15.low) / ref.range;
+          const retrace = (runHigh - h1.low) / ref.range;
           if (retrace > 0.7) { delta -= 3; events.push('Deep pullback'); }
         } else {
-          const retrace = (m15.high - runLow) / ref.range;
+          const retrace = (h1.high - runLow) / ref.range;
           if (retrace > 0.7) { delta -= 3; events.push('Deep pullback'); }
         }
 
@@ -342,18 +323,18 @@ module.exports = async function handler(req, res) {
         else statusLabel = 'Continuation Failed';
 
         timeline.push({
-          time: m15.time,
+          time: h1.time,
           score,
           delta,
           label: statusLabel,
           event: events.join(', ') || 'No change',
-          m15: {
-            open: m15.open, high: m15.high, low: m15.low, close: m15.close,
-            bull: m15Bull, bodyPips: m15BodyPips,
+          h1: {
+            open: h1.open, high: h1.high, low: h1.low, close: h1.close,
+            bull: h1Bull, bodyPips: h1BodyPips,
           },
         });
 
-        prevM15 = m15;
+        prevH1 = h1;
       }
 
       const currentScore = score;
@@ -386,7 +367,7 @@ module.exports = async function handler(req, res) {
           end: curEndISO,
         },
         timeline,
-        m15Count: today.length,
+        h1Count: today.length,
       });
     }
 
