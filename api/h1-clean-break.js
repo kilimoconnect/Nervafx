@@ -15,7 +15,7 @@ function isJpy(inst) { return inst.includes('JPY'); }
 function pipDiv(inst) { return isJpy(inst) ? 0.01 : 0.0001; }
 
 const H1_MS = 3600000;
-const M15_MS = 15 * 60000;
+const DAY_MS = 24 * H1_MS;
 
 module.exports = async function handler(req, res) {
   cors(res);
@@ -27,43 +27,42 @@ module.exports = async function handler(req, res) {
     const gate = await requirePlan(sb, req, 'premium');
     if (gate.error) return res.status(gate.status).json({ error: gate.error, upgrade: gate.upgrade });
 
-    const now = new Date();
+    const days = Math.min(30, parseInt(req.query?.days || '1', 10) || 1);
+    const qFrom = req.query?.from;
+    const qTo = req.query?.to;
+    const until = qTo ? new Date(qTo + 'T23:59:59Z').toISOString() : new Date().toISOString();
+    const since = qFrom ? new Date(qFrom + 'T00:00:00Z').toISOString()
+      : new Date(Date.now() - days * DAY_MS).toISOString();
 
-    // Historical replay: ?date=YYYY-MM-DD&hour=HH selects a specific H1 to score.
-    // Live mode: use the latest complete H1 available.
-    const qDate = req.query?.date;
-    const qHour = req.query?.hour;
-    let anchor = null;
-    if (qDate && qHour !== undefined && qHour !== '') {
-      const hh = String(parseInt(qHour, 10)).padStart(2, '0');
-      const parsed = new Date(qDate + 'T' + hh + ':00:00Z');
-      if (!isNaN(parsed.getTime())) anchor = parsed;
-    }
-
-    // Fetch enough H1 history to get the target H1 + its previous
-    const fetchUntil = anchor
-      ? new Date(anchor.getTime() + H1_MS).toISOString()
-      : now.toISOString();
-    const fetchSince = new Date(
-      (anchor ? anchor.getTime() : now.getTime()) - 4 * 24 * 3600000
-    ).toISOString();
+    // Fetch a small extra buffer for the "previous H1" comparison at the range start
+    const h1FetchSince = new Date(new Date(since).getTime() - 2 * H1_MS).toISOString();
+    const m15FetchSince = new Date(new Date(since).getTime() - H1_MS).toISOString();
 
     const PAGE = 1000;
     const h1Cache = {};
     const m15Cache = {};
 
-    // H1 candles per pair — last few complete ones
+    // H1 candles per pair
     for (let b = 0; b < VALID_PAIRS.length; b += 7) {
       const batch = VALID_PAIRS.slice(b, b + 7);
       const results = await Promise.all(batch.map(async inst => {
-        const { data, error } = await sb
-          .from('backtest_candles')
-          .select('time, open, high, low, close')
-          .eq('instrument', inst).eq('timeframe', 'H1').eq('complete', true)
-          .gte('time', fetchSince).lte('time', fetchUntil)
-          .order('time', { ascending: true })
-          .limit(PAGE);
-        return { inst, data: error ? [] : data || [] };
+        const allData = [];
+        let off = 0;
+        while (true) {
+          const { data, error } = await sb
+            .from('backtest_candles')
+            .select('time, open, high, low, close')
+            .eq('instrument', inst).eq('timeframe', 'H1').eq('complete', true)
+            .gte('time', h1FetchSince).lte('time', until)
+            .order('time', { ascending: true })
+            .range(off, off + PAGE - 1);
+          if (error) throw error;
+          if (!data || !data.length) break;
+          allData.push(...data);
+          if (data.length < PAGE) break;
+          off += PAGE;
+        }
+        return { inst, data: allData };
       }));
       for (const { inst, data } of results) {
         h1Cache[inst] = data.map(c => ({
@@ -76,21 +75,27 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // M15 candles per pair — narrow window around the target H1
-    const m15Since = new Date(
-      (anchor ? anchor.getTime() : now.getTime()) - 2 * 3600000
-    ).toISOString();
+    // M15 candles per pair
     for (let b = 0; b < VALID_PAIRS.length; b += 7) {
       const batch = VALID_PAIRS.slice(b, b + 7);
       const results = await Promise.all(batch.map(async inst => {
-        const { data, error } = await sb
-          .from('backtest_candles')
-          .select('time, open, high, low, close')
-          .eq('instrument', inst).eq('timeframe', 'M15')
-          .gte('time', m15Since).lte('time', fetchUntil)
-          .order('time', { ascending: true })
-          .limit(PAGE);
-        return { inst, data: error ? [] : data || [] };
+        const allData = [];
+        let off = 0;
+        while (true) {
+          const { data, error } = await sb
+            .from('backtest_candles')
+            .select('time, open, high, low, close')
+            .eq('instrument', inst).eq('timeframe', 'M15')
+            .gte('time', m15FetchSince).lte('time', until)
+            .order('time', { ascending: true })
+            .range(off, off + PAGE - 1);
+          if (error) throw error;
+          if (!data || !data.length) break;
+          allData.push(...data);
+          if (data.length < PAGE) break;
+          off += PAGE;
+        }
+        return { inst, data: allData };
       }));
       for (const { inst, data } of results) {
         m15Cache[inst] = data.map(c => ({
@@ -103,92 +108,94 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    const signals = [];
-    let targetH1Time = null;
+    const sinceMs = new Date(since).getTime();
+    const untilMs = new Date(until).getTime();
+
+    // Bucket signals per H1 timestamp
+    const byTime = new Map();
 
     for (const inst of VALID_PAIRS) {
       const h1s = h1Cache[inst] || [];
       if (h1s.length < 2) continue;
+      const m15s = m15Cache[inst] || [];
 
-      // Pick the target H1: anchor bucket if provided, else latest complete
-      let targetIdx = -1;
-      if (anchor) {
-        const anchorISO = anchor.toISOString();
-        for (let i = h1s.length - 1; i >= 0; i--) {
-          if (h1s[i].time === anchorISO) { targetIdx = i; break; }
-        }
-        if (targetIdx < 1) continue;
-      } else {
-        targetIdx = h1s.length - 1;
-      }
-      const target = h1s[targetIdx];
-      const prev = h1s[targetIdx - 1];
-      if (!prev) continue;
-
-      // Break-of-structure check
-      let direction = null;
-      let breakLevel = null;
-      if (target.close > prev.high) { direction = 'BUY'; breakLevel = prev.high; }
-      else if (target.close < prev.low) { direction = 'SELL'; breakLevel = prev.low; }
-      else continue;
-
-      // Collect the 4 M15 candles inside the target H1
-      const targetMs = new Date(target.time).getTime();
-      const m15s = (m15Cache[inst] || []).filter(c => {
+      // Group M15 candles by H1 bucket ISO for fast lookup
+      const m15ByHour = new Map();
+      for (const c of m15s) {
         const t = new Date(c.time).getTime();
-        return t >= targetMs && t < targetMs + H1_MS;
-      });
-      if (m15s.length !== 4) continue;
-
-      // All 4 M15 candles must be aligned with the direction
-      const aligned = m15s.every(c =>
-        direction === 'BUY' ? c.close > c.open : c.close < c.open
-      );
-      if (!aligned) continue;
+        const bucketMs = Math.floor(t / H1_MS) * H1_MS;
+        const key = new Date(bucketMs).toISOString();
+        let arr = m15ByHour.get(key);
+        if (!arr) { arr = []; m15ByHour.set(key, arr); }
+        arr.push(c);
+      }
 
       const pd = pipDiv(inst);
-      const range = target.high - target.low;
-      const body = Math.abs(target.close - target.open);
 
-      signals.push({
-        pair: inst.replace('_', '/'),
-        instrument: inst,
-        direction,
-        h1Time: target.time,
-        breakLevel: Math.round(breakLevel / pd) * pd,
-        prev: {
-          time: prev.time,
-          open: prev.open, high: prev.high, low: prev.low, close: prev.close,
-        },
-        h1: {
-          open: target.open, high: target.high, low: target.low, close: target.close,
-          rangePips: Math.round((range / pd) * 10) / 10,
-          bodyPips: Math.round((body / pd) * 10) / 10,
-          bodyPct: range > 0 ? Math.round((body / range) * 100) : 0,
-        },
-        m15: m15s.map(c => ({
-          time: c.time,
-          open: c.open, high: c.high, low: c.low, close: c.close,
-          bull: c.close > c.open,
-          bodyPips: Math.round((Math.abs(c.close - c.open) / pd) * 10) / 10,
-        })),
-      });
+      for (let i = 1; i < h1s.length; i++) {
+        const target = h1s[i];
+        const targetMs = new Date(target.time).getTime();
+        if (targetMs < sinceMs || targetMs > untilMs) continue;
 
-      if (!targetH1Time) targetH1Time = target.time;
+        const prev = h1s[i - 1];
+        let direction = null;
+        let breakLevel = null;
+        if (target.close > prev.high) { direction = 'BUY'; breakLevel = prev.high; }
+        else if (target.close < prev.low) { direction = 'SELL'; breakLevel = prev.low; }
+        else continue;
+
+        const inner = m15ByHour.get(target.time);
+        if (!inner || inner.length !== 4) continue;
+
+        const aligned = inner.every(c =>
+          direction === 'BUY' ? c.close > c.open : c.close < c.open
+        );
+        if (!aligned) continue;
+
+        const range = target.high - target.low;
+        const body = Math.abs(target.close - target.open);
+
+        const signal = {
+          pair: inst.replace('_', '/'),
+          instrument: inst,
+          direction,
+          breakLevel: Math.round(breakLevel / pd) * pd,
+          h1: {
+            open: target.open, high: target.high, low: target.low, close: target.close,
+            rangePips: Math.round((range / pd) * 10) / 10,
+            bodyPips: Math.round((body / pd) * 10) / 10,
+            bodyPct: range > 0 ? Math.round((body / range) * 100) : 0,
+          },
+          m15: inner.map(c => ({
+            time: c.time,
+            open: c.open, high: c.high, low: c.low, close: c.close,
+            bull: c.close > c.open,
+            bodyPips: Math.round((Math.abs(c.close - c.open) / pd) * 10) / 10,
+          })),
+        };
+
+        let bucket = byTime.get(target.time);
+        if (!bucket) { bucket = []; byTime.set(target.time, bucket); }
+        bucket.push(signal);
+      }
     }
 
-    // Sort BUY first, then SELL, then by body size descending
-    signals.sort((a, b) => {
-      if (a.direction !== b.direction) return a.direction === 'BUY' ? -1 : 1;
-      return b.h1.bodyPips - a.h1.bodyPips;
-    });
+    // Order signals within each bucket: BUY first, then SELL, then by body size desc
+    const rows = [];
+    for (const [time, signals] of byTime.entries()) {
+      signals.sort((a, b) => {
+        if (a.direction !== b.direction) return a.direction === 'BUY' ? -1 : 1;
+        return b.h1.bodyPips - a.h1.bodyPips;
+      });
+      const buyCount = signals.filter(s => s.direction === 'BUY').length;
+      const sellCount = signals.length - buyCount;
+      rows.push({ time, buyCount, sellCount, signals });
+    }
 
-    res.json({
-      h1Time: targetH1Time,
-      buyCount: signals.filter(s => s.direction === 'BUY').length,
-      sellCount: signals.filter(s => s.direction === 'SELL').length,
-      signals,
-    });
+    // Newest first
+    rows.sort((a, b) => (a.time < b.time ? 1 : -1));
+
+    res.json({ rows });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

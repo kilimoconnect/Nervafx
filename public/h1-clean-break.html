@@ -34,99 +34,115 @@
       color: var(--text-muted); font-size: 12px; cursor: pointer; text-decoration: none;
     }
     .sx-back-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
-    .sx-subtitle {
-      text-align: center; padding: 14px 20px 6px;
-      font-size: 11px; color: var(--text-dim); letter-spacing: 0.3px;
-    }
 
-    .sx-filters {
-      display: flex; align-items: center; gap: 8px; padding: 8px 20px 12px;
-      flex-wrap: wrap; justify-content: center;
-    }
-    .sx-filter-label { font-size: 10.5px; font-weight: 600; color: var(--text-dim); }
-    .sx-date-input {
-      padding: 5px 10px; border-radius: 7px; font-size: 11px; font-weight: 600;
-      background: rgba(255,255,255,0.04); border: 1px solid var(--border);
-      color: var(--text-muted); font-family: inherit; outline: none;
-    }
-    .sx-go-btn, .sx-sort-btn {
-      padding: 5px 12px; border-radius: 7px; font-size: 11px; font-weight: 700;
-      background: rgba(96,165,250,0.15); border: 1px solid rgba(96,165,250,0.5);
-      color: #60a5fa; cursor: pointer;
-    }
-    .sx-sort-btn { background: rgba(255,255,255,0.04); border-color: var(--border); color: var(--text-muted); }
-    .sx-sort-btn.active { background: rgba(96,165,250,0.15); border-color: rgba(96,165,250,0.5); color: #60a5fa; }
+    .sx-main { max-width: 1000px; margin: 0 auto; padding: 20px 20px 80px; }
 
-    .cb-header {
-      max-width: 900px; margin: 6px auto 4px; padding: 0 20px;
-      display: flex; align-items: center; gap: 10px;
-    }
-    .cb-h1-tag {
-      font-size: 11px; font-weight: 700; letter-spacing: 0.3px;
-      padding: 4px 10px; border-radius: 6px;
-      background: rgba(96,165,250,0.10); color: #60a5fa;
-    }
-    .cb-count {
-      font-size: 11px; font-weight: 700;
-      padding: 4px 10px; border-radius: 6px;
-      background: rgba(255,255,255,0.04); color: var(--text-muted);
-    }
-    .cb-count.buy { background: rgba(34,197,94,0.10); color: #4ade80; }
-    .cb-count.sell { background: rgba(239,68,68,0.10); color: #f87171; }
-
-    .cb-grid {
-      max-width: 900px; margin: 0 auto; padding: 8px 20px 60px;
-      display: grid; grid-template-columns: 1fr; gap: 8px;
-    }
-
-    .cb-card {
+    /* Filter bar */
+    .sx-card {
       background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
-      border-radius: 10px; padding: 12px 14px;
-      display: grid; grid-template-columns: auto auto 1fr auto; gap: 12px 14px;
-      align-items: center;
+      border-radius: 12px; margin-bottom: 18px; overflow: hidden;
     }
-    .cb-card.BUY { border-left: 3px solid #22c55e; }
-    .cb-card.SELL { border-left: 3px solid #ef4444; }
+    .sx-card-hd {
+      padding: 12px 16px; font-size: 12px; font-weight: 700;
+      color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    }
+    .sx-card-hd i { width: 15px; height: 15px; }
 
-    .cb-pair { font-size: 15px; font-weight: 800; color: var(--text); }
+    .sx-ctrls { display: flex; gap: 6px; margin-left: auto; align-items: center; flex-wrap: wrap; }
+    .sx-btn {
+      padding: 4px 12px; border-radius: 7px; font-size: 11px; font-weight: 700;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); cursor: pointer; transition: all 0.15s;
+    }
+    .sx-btn:hover { color: var(--text); background: rgba(255,255,255,0.08); }
+    .sx-btn.active { background: rgba(96,165,250,0.15); border-color: rgba(96,165,250,0.5); color: #60a5fa; }
+    .sx-ctrl-sep { width: 1px; height: 18px; background: rgba(255,255,255,0.1); }
+    .sx-note { font-size: 10.5px; color: var(--text-dim); text-transform: none; letter-spacing: 0; font-weight: 500; }
+    .sx-date-input {
+      padding: 4px 8px; border-radius: 7px; font-size: 11px; font-weight: 600;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); font-family: inherit; outline: none;
+      transition: all 0.15s; cursor: pointer;
+    }
+    .sx-date-input:focus { border-color: rgba(96,165,250,0.5); color: var(--text); }
+    .sx-date-input::-webkit-calendar-picker-indicator { filter: invert(0.6); cursor: pointer; }
+
+    .sx-loading { display: flex; align-items: center; gap: 8px; padding: 40px; color: var(--text-muted); font-size: 12px; justify-content: center; }
+    .spinner {
+      width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.15);
+      border-top-color: #60a5fa; border-radius: 50%; animation: sxspin 0.7s linear infinite;
+    }
+    @keyframes sxspin { to { transform: rotate(360deg); } }
+    .br-empty { text-align: center; padding: 50px 20px; color: var(--text-muted); font-size: 13px; }
+
+    /* Hour card */
+    .cb-card {
+      background: rgba(255,255,255,0.015); border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px; margin-bottom: 12px; overflow: hidden;
+    }
+    .cb-card-hd {
+      display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      flex-wrap: wrap;
+    }
+    .cb-time { font-size: 13px; font-weight: 800; color: var(--text); }
+    .cb-date { font-size: 11px; color: var(--text-muted); }
+    .cb-count {
+      font-size: 10px; font-weight: 700;
+      padding: 3px 8px; border-radius: 5px;
+    }
+    .cb-count.buy { background: rgba(34,197,94,0.12); color: #4ade80; }
+    .cb-count.sell { background: rgba(239,68,68,0.12); color: #f87171; }
+    .cb-truncated {
+      margin-left: auto;
+      font-size: 10px; font-weight: 600; color: var(--text-dim);
+      padding: 3px 8px; border-radius: 5px;
+      background: rgba(255,255,255,0.04);
+    }
+
+    .cb-body { padding: 8px 12px 12px; display: grid; grid-template-columns: 1fr; gap: 6px; }
+
+    .cb-sig {
+      display: grid; grid-template-columns: 70px 44px 1fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.04);
+    }
+    .cb-sig.BUY { border-left: 3px solid #22c55e; }
+    .cb-sig.SELL { border-left: 3px solid #ef4444; }
+
+    .cb-pair { font-size: 13px; font-weight: 800; color: var(--text); }
     .cb-dir {
-      font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 5px;
-      letter-spacing: 0.4px;
+      font-size: 9px; font-weight: 800; padding: 3px 6px; border-radius: 4px;
+      letter-spacing: 0.4px; text-align: center;
     }
     .cb-dir.BUY { background: rgba(34,197,94,0.15); color: #4ade80; }
     .cb-dir.SELL { background: rgba(239,68,68,0.15); color: #f87171; }
 
-    .cb-meta { display: flex; flex-wrap: wrap; gap: 4px 8px; font-size: 10px; color: var(--text-dim); }
+    .cb-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 10px; color: var(--text-dim); }
     .cb-meta-item { white-space: nowrap; }
     .cb-meta-item b { color: var(--text-muted); font-weight: 700; }
     .cb-meta-item .pos { color: #4ade80; }
     .cb-meta-item .neg { color: #f87171; }
 
-    .cb-m15 { display: flex; gap: 3px; align-items: end; height: 32px; }
-    .cb-m15-bar {
-      width: 10px; border-radius: 2px;
-      transition: transform 0.15s;
-    }
+    .cb-m15 { display: flex; gap: 3px; align-items: end; height: 28px; }
+    .cb-m15-bar { width: 8px; border-radius: 2px; }
     .cb-m15-bar.bull { background: linear-gradient(180deg, #4ade80, #22c55e); }
     .cb-m15-bar.bear { background: linear-gradient(0deg, #f87171, #ef4444); }
 
-    .br-empty {
-      max-width: 500px; margin: 40px auto; padding: 40px 20px;
-      text-align: center; color: var(--text-muted); font-size: 13px;
-      background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
-      border-radius: 10px;
-    }
-
-    .sx-loading { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 50px; color: var(--text-muted); font-size: 12px; }
-    .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.15); border-top-color: #60a5fa; border-radius: 50%; animation: spin 0.7s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    @media (max-width: 700px) {
-      .cb-card {
-        grid-template-columns: auto auto 1fr;
+    @media (max-width: 640px) {
+      .sx-ctrls { width: 100%; margin-left: 0; }
+      .cb-sig {
+        grid-template-columns: 1fr auto;
         grid-template-areas:
-          "pair dir meta"
-          "m15 m15 m15";
+          "pair dir"
+          "meta meta"
+          "m15  m15";
       }
       .cb-pair { grid-area: pair; }
       .cb-dir { grid-area: dir; }
@@ -138,213 +154,228 @@
 <body>
   <div class="sx-topbar">
     <div class="sx-topbar-left">
-      <a href="/app" class="sx-logo"><img src="/nervafx-logo.png" alt="NervaFX" /></a>
-      <span class="sx-sep">|</span>
+      <a class="sx-logo" href="/app"><img src="/nervafx-logo.png" alt="NervaFX" onerror="this.style.display='none'"></a>
+      <span class="sx-sep">/</span>
       <span class="sx-title-text">H1 Clean Break</span>
     </div>
-    <a href="/app" class="sx-back-btn"><i data-lucide="arrow-left" style="width:12px;height:12px"></i> Back</a>
+    <a class="sx-back-btn" href="/app" onclick="window.close(); setTimeout(function(){ location.href='/app'; }, 150); return false;">&times; Close</a>
   </div>
 
-  <div class="sx-subtitle">H1 closes beyond previous high/low AND all 4 M15 candles inside align with the break — refreshes hourly</div>
+  <main class="sx-main">
+    <div class="sx-card">
+      <div class="sx-card-hd">
+        <i data-lucide="zap"></i> H1 Clean Break — H1 breaks structure AND all 4 M15s align
+        <span class="sx-note">Max 5 pairs per hour · newest first</span>
+        <span class="sx-ctrls">
+          <button class="sx-btn sx-days active" data-days="1">1D</button>
+          <button class="sx-btn sx-days" data-days="2">2D</button>
+          <button class="sx-btn sx-days" data-days="5">5D</button>
+          <button class="sx-btn sx-days" data-days="10">10D</button>
+          <button class="sx-btn sx-days" data-days="30">30D</button>
+          <span class="sx-ctrl-sep"></span>
+          <button class="sx-btn sx-dir active" data-dir="all">All</button>
+          <button class="sx-btn sx-dir" data-dir="BUY">BUY</button>
+          <button class="sx-btn sx-dir" data-dir="SELL">SELL</button>
+          <span class="sx-ctrl-sep"></span>
+          <input type="date" class="sx-date-input" id="sx-date-from" title="From date">
+          <input type="date" class="sx-date-input" id="sx-date-to" title="To date">
+          <button class="sx-btn" id="sx-date-go">Go</button>
+        </span>
+      </div>
+    </div>
 
-  <div class="sx-filters">
-    <span class="sx-filter-label">Date:</span>
-    <input type="date" class="sx-date-input" id="sx-date" />
-    <select class="sx-date-input" id="sx-hour" style="width:80px">
-      <option value="">Hour</option>
-    </select>
-    <button class="sx-go-btn" id="sx-go">Go</button>
-    <button class="sx-go-btn" id="sx-live" style="background:rgba(255,255,255,0.06);border-color:var(--border);color:var(--text-muted)">Live</button>
-    <span style="width:16px"></span>
-    <span class="sx-filter-label">Sort:</span>
-    <button class="sx-sort-btn active" data-sort="all">All</button>
-    <button class="sx-sort-btn" data-sort="buy">BUY</button>
-    <button class="sx-sort-btn" data-sort="sell">SELL</button>
-  </div>
-
-  <div class="cb-header" id="cb-header" style="display:none">
-    <span class="cb-h1-tag" id="cb-h1-tag">H1 —</span>
-    <span class="cb-count buy" id="cb-buy-count">0 BUY</span>
-    <span class="cb-count sell" id="cb-sell-count">0 SELL</span>
-  </div>
-
-  <div id="cb-cards" class="cb-grid"></div>
+    <div id="cb-cards">
+      <div class="sx-loading"><span class="spinner"></span> Loading…</div>
+    </div>
+  </main>
 
   <script>
-    var TOKEN = localStorage.getItem('nfx_token') || '';
-    var _userTz = localStorage.getItem('nfx_tz') || 'auto';
-    function _tz() { return (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC'); }
+    (function () {
+      'use strict';
 
-    async function loadProfileTz() {
-      try {
-        if (!TOKEN) return;
-        var r = await fetch('/api/profile', { headers: { Authorization: 'Bearer ' + TOKEN } });
-        if (!r.ok) return;
-        var p = await r.json();
-        if (p.timezone) {
-          _userTz = (p.timezone === 'UTC') ? 'auto' : p.timezone;
-          try { localStorage.setItem('nfx_tz', _userTz); } catch (_) {}
+      var TOKEN = localStorage.getItem('nfx_token');
+      if (!TOKEN) { location.href = '/login'; return; }
+
+      var _userTz = localStorage.getItem('nfx_tz') || 'auto';
+      function _tz() { return (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC'); }
+
+      async function loadProfileTz() {
+        try {
+          var r = await fetch('/api/profile', { headers: { Authorization: 'Bearer ' + TOKEN } });
+          if (!r.ok) return;
+          var p = await r.json();
+          if (p.timezone) {
+            _userTz = (p.timezone === 'UTC') ? 'auto' : p.timezone;
+            try { localStorage.setItem('nfx_tz', _userTz); } catch (_) {}
+          }
+        } catch (_) {}
+      }
+
+      var currentDays = 1;
+      var currentDir = 'all';
+      var cachedRows = [];
+      var MAX_PAIRS_PER_CARD = 5;
+
+      function hrLabel(iso) {
+        return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: _tz() });
+      }
+      function dayLabel(iso) {
+        return new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', timeZone: _tz() });
+      }
+      function isWeekend(iso) {
+        var d = new Date(iso).getUTCDay();
+        return d === 0 || d === 6;
+      }
+
+      function m15Bars(m15s) {
+        if (!m15s || !m15s.length) return '';
+        var maxBody = 0;
+        for (var i = 0; i < m15s.length; i++) {
+          if (m15s[i].bodyPips > maxBody) maxBody = m15s[i].bodyPips;
         }
-      } catch (_) {}
-    }
-
-    var currentSort = 'all';
-    var cachedData = { signals: [] };
-
-    function hrLabel(t) {
-      return new Date(t).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: _tz() });
-    }
-    function dayLabel(t) {
-      return new Date(t).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', timeZone: _tz() });
-    }
-
-    function m15Bars(m15s) {
-      if (!m15s || !m15s.length) return '';
-      var maxBody = 0;
-      for (var i = 0; i < m15s.length; i++) {
-        if (m15s[i].bodyPips > maxBody) maxBody = m15s[i].bodyPips;
-      }
-      if (maxBody === 0) maxBody = 1;
-      var html = '';
-      for (var i = 0; i < m15s.length; i++) {
-        var c = m15s[i];
-        var h = Math.max(4, Math.round((c.bodyPips / maxBody) * 32));
-        var cls = c.bull ? 'bull' : 'bear';
-        html += '<div class="cb-m15-bar ' + cls + '" style="height:' + h + 'px" title="' + hrLabel(c.time) + ' — ' + (c.bull ? 'BULL' : 'BEAR') + ' ' + c.bodyPips + ' pips"></div>';
-      }
-      return html;
-    }
-
-    function renderCards() {
-      var el = document.getElementById('cb-cards');
-      var header = document.getElementById('cb-header');
-      var all = cachedData.signals || [];
-
-      // Update header
-      if (cachedData.h1Time) {
-        header.style.display = 'flex';
-        document.getElementById('cb-h1-tag').textContent = 'H1 ' + hrLabel(cachedData.h1Time) + ' · ' + dayLabel(cachedData.h1Time);
-        document.getElementById('cb-buy-count').textContent = (cachedData.buyCount || 0) + ' BUY';
-        document.getElementById('cb-sell-count').textContent = (cachedData.sellCount || 0) + ' SELL';
-      } else {
-        header.style.display = 'none';
+        if (maxBody === 0) maxBody = 1;
+        var html = '';
+        for (var i = 0; i < m15s.length; i++) {
+          var c = m15s[i];
+          var h = Math.max(4, Math.round((c.bodyPips / maxBody) * 28));
+          var cls = c.bull ? 'bull' : 'bear';
+          html += '<div class="cb-m15-bar ' + cls + '" style="height:' + h + 'px" title="' + hrLabel(c.time) + ' — ' + (c.bull ? 'BULL' : 'BEAR') + ' ' + c.bodyPips + ' pips"></div>';
+        }
+        return html;
       }
 
-      var filtered = all;
-      if (currentSort === 'buy') filtered = all.filter(function(s) { return s.direction === 'BUY'; });
-      else if (currentSort === 'sell') filtered = all.filter(function(s) { return s.direction === 'SELL'; });
+      function renderCards(rows) {
+        var el = document.getElementById('cb-cards');
+        if (!rows.length) {
+          el.innerHTML = '<div class="br-empty">No clean H1 break signals found for this period.</div>';
+          return;
+        }
 
-      if (!filtered.length) {
-        el.innerHTML = '<div class="br-empty">No clean H1 break signals for this hour.</div>';
-        return;
+        var html = '';
+        var shownAny = false;
+
+        for (var r = 0; r < rows.length; r++) {
+          var row = rows[r];
+          if (isWeekend(row.time)) continue;
+
+          var sigs = row.signals;
+          if (currentDir !== 'all') {
+            sigs = sigs.filter(function(s) { return s.direction === currentDir; });
+          }
+          if (!sigs.length) continue;
+
+          var total = sigs.length;
+          var truncated = total > MAX_PAIRS_PER_CARD;
+          var shown = sigs.slice(0, MAX_PAIRS_PER_CARD);
+          shownAny = true;
+
+          var buyShown = shown.filter(function(s) { return s.direction === 'BUY'; }).length;
+          var sellShown = shown.length - buyShown;
+
+          html += '<div class="cb-card">';
+          html += '<div class="cb-card-hd">';
+          html += '<span class="cb-time">' + hrLabel(row.time) + '</span>';
+          html += '<span class="cb-date">' + dayLabel(row.time) + '</span>';
+          if (buyShown) html += '<span class="cb-count buy">' + buyShown + ' BUY</span>';
+          if (sellShown) html += '<span class="cb-count sell">' + sellShown + ' SELL</span>';
+          if (truncated) html += '<span class="cb-truncated">+' + (total - MAX_PAIRS_PER_CARD) + ' more</span>';
+          html += '</div>';
+
+          html += '<div class="cb-body">';
+          for (var i = 0; i < shown.length; i++) {
+            var s = shown[i];
+            var brkLabel = s.direction === 'BUY' ? 'BRK HH' : 'BRK LL';
+            var dirCls = s.direction === 'BUY' ? 'pos' : 'neg';
+            var digits = s.pair.indexOf('JPY') > -1 ? 3 : 5;
+            html += '<div class="cb-sig ' + s.direction + '">';
+            html += '<span class="cb-pair">' + s.pair + '</span>';
+            html += '<span class="cb-dir ' + s.direction + '">' + s.direction + '</span>';
+            html += '<div class="cb-meta">';
+            html += '<span class="cb-meta-item"><b>' + brkLabel + '</b> ' + Number(s.breakLevel).toFixed(digits) + '</span>';
+            html += '<span class="cb-meta-item">Body <b class="' + dirCls + '">' + s.h1.bodyPips + '</b> pips (' + s.h1.bodyPct + '%)</span>';
+            html += '<span class="cb-meta-item">Range <b>' + s.h1.rangePips + '</b> pips</span>';
+            html += '</div>';
+            html += '<div class="cb-m15">' + m15Bars(s.m15) + '</div>';
+            html += '</div>';
+          }
+          html += '</div>';
+          html += '</div>';
+        }
+
+        el.innerHTML = shownAny ? html : '<div class="br-empty">No clean H1 break signals found for this period.</div>';
       }
 
-      var html = '';
-      for (var i = 0; i < filtered.length; i++) {
-        var s = filtered[i];
-        var brkLabel = s.direction === 'BUY' ? 'BRK HH' : 'BRK LL';
-        var dirCls = s.direction === 'BUY' ? 'pos' : 'neg';
-        html += '<div class="cb-card ' + s.direction + '">';
-        html += '<span class="cb-pair">' + s.pair + '</span>';
-        html += '<span class="cb-dir ' + s.direction + '">' + s.direction + '</span>';
-        html += '<div class="cb-meta">';
-        html += '<span class="cb-meta-item"><b>' + brkLabel + '</b> ' + s.breakLevel.toFixed(s.pair.indexOf('JPY') > -1 ? 3 : 5) + '</span>';
-        html += '<span class="cb-meta-item">Body <b class="' + dirCls + '">' + s.h1.bodyPips + '</b> pips (' + s.h1.bodyPct + '%)</span>';
-        html += '<span class="cb-meta-item">Range <b>' + s.h1.rangePips + '</b> pips</span>';
-        html += '</div>';
-        html += '<div class="cb-m15">' + m15Bars(s.m15) + '</div>';
-        html += '</div>';
-      }
-      el.innerHTML = html;
-    }
+      async function load() {
+        document.getElementById('cb-cards').innerHTML = '<div class="sx-loading"><span class="spinner"></span> Loading…</div>';
 
-    // Populate hour selector (00-23)
-    (function() {
-      var sel = document.getElementById('sx-hour');
-      for (var h = 0; h < 24; h++) {
-        var opt = document.createElement('option');
-        opt.value = h;
-        opt.textContent = String(h).padStart(2, '0') + ':00';
-        sel.appendChild(opt);
-      }
-    })();
+        var fromEl = document.getElementById('sx-date-from');
+        var toEl = document.getElementById('sx-date-to');
+        var qs;
+        if (fromEl.value && toEl.value) {
+          qs = 'from=' + fromEl.value + '&to=' + toEl.value;
+        } else {
+          qs = 'days=' + currentDays;
+        }
 
-    function tzOffsetMs(tz, utcDate) {
-      var dtf = new Intl.DateTimeFormat('en-US', {
-        timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
-        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
-      });
-      var parts = {};
-      dtf.formatToParts(utcDate).forEach(function(p) { parts[p.type] = p.value; });
-      var asUTC = Date.UTC(
-        parseInt(parts.year, 10), parseInt(parts.month, 10) - 1, parseInt(parts.day, 10),
-        parts.hour === '24' ? 0 : parseInt(parts.hour, 10), parseInt(parts.minute, 10), parseInt(parts.second, 10)
-      );
-      return asUTC - utcDate.getTime();
-    }
-    function wallToUtc(dateStr, hour, tz) {
-      var wallMs = Date.parse(dateStr + 'T' + String(hour).padStart(2, '0') + ':00:00Z');
-      var utc = new Date(wallMs - tzOffsetMs(tz, new Date(wallMs)));
-      utc = new Date(wallMs - tzOffsetMs(tz, utc));
-      return utc;
-    }
-
-    async function load(silent) {
-      if (!silent) document.getElementById('cb-cards').innerHTML = '<div class="sx-loading"><span class="spinner"></span> Loading…</div>';
-
-      var dateEl = document.getElementById('sx-date');
-      var hourEl = document.getElementById('sx-hour');
-      var qs = '';
-      if (dateEl.value && hourEl.value !== '') {
-        var utc = wallToUtc(dateEl.value, parseInt(hourEl.value, 10), _tz());
-        qs = '?date=' + utc.toISOString().slice(0, 10) + '&hour=' + utc.getUTCHours();
+        try {
+          var res = await fetch('/api/h1-clean-break?' + qs, {
+            headers: { Authorization: 'Bearer ' + TOKEN },
+            cache: 'no-store',
+          });
+          if (!res.ok) throw new Error(await res.text());
+          var json = await res.json();
+          cachedRows = json.rows || [];
+          renderCards(cachedRows);
+        } catch (e) {
+          document.getElementById('cb-cards').innerHTML =
+            '<div class="br-empty" style="color:#f87171">Error: ' + e.message + '</div>';
+        }
       }
 
-      try {
-        var res = await fetch('/api/h1-clean-break' + qs, {
-          headers: { Authorization: 'Bearer ' + TOKEN },
-          cache: 'no-store',
+      document.querySelectorAll('.sx-days').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          document.querySelectorAll('.sx-days').forEach(function(b) { b.classList.remove('active'); });
+          btn.classList.add('active');
+          currentDays = parseInt(btn.dataset.days, 10);
+          document.getElementById('sx-date-from').value = '';
+          document.getElementById('sx-date-to').value = '';
+          load();
         });
-        if (!res.ok) throw new Error(await res.text());
-        var json = await res.json();
-        cachedData = json;
-        renderCards();
-      } catch (e) {
-        document.getElementById('cb-cards').innerHTML =
-          '<div class="br-empty" style="color:#f87171">Error: ' + e.message + '</div>';
-      }
-    }
-
-    document.querySelectorAll('.sx-sort-btn').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        document.querySelectorAll('.sx-sort-btn').forEach(function(b) { b.classList.remove('active'); });
-        btn.classList.add('active');
-        currentSort = btn.dataset.sort;
-        renderCards();
       });
-    });
-    document.getElementById('sx-go').addEventListener('click', function() { load(); });
-    document.getElementById('sx-live').addEventListener('click', function() {
-      document.getElementById('sx-date').value = '';
-      document.getElementById('sx-hour').value = '';
-      load();
-    });
 
-    loadProfileTz().then(function() { load(); });
+      document.querySelectorAll('.sx-dir').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          document.querySelectorAll('.sx-dir').forEach(function(b) { b.classList.remove('active'); });
+          btn.classList.add('active');
+          currentDir = btn.dataset.dir;
+          renderCards(cachedRows);
+        });
+      });
 
-    // Auto-refresh aligned to the 15m data cron (fires at :04, :19, :34, :49)
-    function scheduleAlignedRefresh() {
-      var now = new Date();
-      var cycle = now.getUTCMinutes() % 15;
-      var minutesUntil = (4 - cycle + 15) % 15;
-      var delay = (minutesUntil * 60 - now.getUTCSeconds()) * 1000;
-      if (delay <= 0) delay += 15 * 60 * 1000;
-      setTimeout(function() {
-        if (!document.getElementById('sx-date').value) load(true);
-        scheduleAlignedRefresh();
-      }, delay);
-    }
-    scheduleAlignedRefresh();
+      document.getElementById('sx-date-go').addEventListener('click', function() {
+        document.querySelectorAll('.sx-days').forEach(function(b) { b.classList.remove('active'); });
+        load();
+      });
+
+      lucide.createIcons();
+
+      loadProfileTz().then(function() { load(); });
+
+      // Auto-refresh aligned to the 15m data cron (fires at :04, :19, :34, :49)
+      function scheduleAlignedRefresh() {
+        var now = new Date();
+        var cycle = now.getUTCMinutes() % 15;
+        var minutesUntil = (4 - cycle + 15) % 15;
+        var delay = (minutesUntil * 60 - now.getUTCSeconds()) * 1000;
+        if (delay <= 0) delay += 15 * 60 * 1000;
+        setTimeout(function() {
+          var fromEl = document.getElementById('sx-date-from');
+          if (!fromEl.value) load();
+          scheduleAlignedRefresh();
+        }, delay);
+      }
+      scheduleAlignedRefresh();
+    })();
   </script>
 </body>
 </html>
