@@ -14,6 +14,7 @@ const VALID_PAIRS = new Set([
 const TIMEFRAMES = ['15M', '3H', '4H', '6H'];
 const RATIO_THRESHOLD = 0.70;
 const EXTREME_RATIO_THRESHOLD = 0.28;
+const MAGNITUDE_THRESHOLD = 15;
 
 function classify(strength) {
   const strong = [], weak = [];
@@ -82,8 +83,13 @@ function ratioCheck(strength) {
     ? strength[sorted[6]] / strength[sorted[7]] : 1;
   const loserValid = strength[sorted[7]] < 0 && loserRatio < EXTREME_RATIO_THRESHOLD;
 
+  // Magnitude gate — require at least one extreme to be meaningful
+  const magnitudeValid = strength[sorted[0]] > MAGNITUDE_THRESHOLD
+    || strength[sorted[7]] < -MAGNITUDE_THRESHOLD;
+
   return {
-    valid: ratioValid || leaderValid || loserValid,
+    valid: magnitudeValid && (ratioValid || leaderValid || loserValid),
+    magnitudeValid,
     ratio: Math.round(ratio * 1000) / 1000,
     ratioValid,
     leaderRatio: Math.round(leaderRatio * 1000) / 1000,
