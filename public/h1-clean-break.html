@@ -105,7 +105,7 @@
     .cb-body { padding: 8px 12px 12px; display: grid; grid-template-columns: 1fr; gap: 6px; }
 
     .cb-sig {
-      display: grid; grid-template-columns: 70px 44px 1fr auto auto;
+      display: grid; grid-template-columns: 70px 44px 1fr auto;
       gap: 10px;
       align-items: center;
       padding: 8px 10px;
@@ -224,8 +224,6 @@
         </span>
       </div>
     </div>
-
-    <div id="rank-container"></div>
 
     <div id="cb-cards">
       <div class="sx-loading"><span class="spinner"></span> Loading…</div>
@@ -384,13 +382,6 @@
             html += '<span class="cb-meta-item">Range <b>' + s.h1.rangePips + '</b> pips</span>';
             html += '</div>';
             html += '<div class="cb-m15">' + m15Bars(s.m15) + '</div>';
-            if (s.outcome) {
-              var oCls = s.outcome.win ? 'win' : 'loss';
-              var oPips = (s.outcome.pips > 0 ? '+' : '') + s.outcome.pips;
-              html += '<span class="cb-outcome ' + oCls + '">' + (s.outcome.win ? 'WIN' : 'LOSS') + ' ' + oPips + '</span>';
-            } else {
-              html += '<span class="cb-outcome pending">PENDING</span>';
-            }
             html += '</div>';
           }
           html += '</div>';
@@ -420,8 +411,6 @@
           if (!res.ok) throw new Error(await res.text());
           var json = await res.json();
           cachedRows = json.rows || [];
-          cachedRanking = json.pairRanking || [];
-          renderRanking(cachedRanking);
           renderCards(cachedRows);
         } catch (e) {
           document.getElementById('cb-cards').innerHTML =
