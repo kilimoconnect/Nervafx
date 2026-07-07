@@ -11,6 +11,8 @@ const VALID_PAIRS = new Set([
   'AUD_JPY', 'AUD_CHF', 'AUD_CAD', 'AUD_NZD',
   'NZD_JPY', 'NZD_CHF', 'NZD_CAD', 'CAD_JPY', 'CAD_CHF', 'CHF_JPY',
 ]);
+const TIMEFRAMES = ['15M', '3H', '6H', '12H'];
+const RATIO_THRESHOLD = 0.70;
 
 function classify(strength) {
   const strong = [], weak = [];
@@ -24,31 +26,8 @@ function classify(strength) {
 
 function groupStructure(strong, weak) {
   const s = strong.length, w = weak.length;
-  if (s + w === 0) return { label: 'FLAT', imbalance: false };
-  // 5v3 or more extreme (6v2, 7v1) counts as imbalance
-  const imbalance = Math.abs(s - w) >= 2 && (s + w) >= 8;
-  return { label: s + 'v' + w, imbalance };
-}
-
-function minorityExtremeCheck(strong, weak, strength) {
-  if (strong.length === weak.length) return { valid: true, reason: 'balanced' };
-  const minority = strong.length < weak.length ? strong : weak;
-  if (minority.length === 0 || minority.length > 3) return { valid: true, reason: 'no minority or too large' };
-
-  let maxCcy = CURRENCIES[0], minCcy = CURRENCIES[0];
-  for (const c of CURRENCIES) {
-    if (strength[c] > strength[maxCcy]) maxCcy = c;
-    if (strength[c] < strength[minCcy]) minCcy = c;
-  }
-
-  const hasStrongest = minority.includes(maxCcy);
-  const hasWeakest = minority.includes(minCcy);
-  return {
-    valid: hasStrongest || hasWeakest,
-    strongest: maxCcy,
-    weakest: minCcy,
-    reason: hasStrongest ? 'has strongest' : hasWeakest ? 'has weakest' : 'no extreme in minority',
-  };
+  if (s + w === 0) return { label: 'FLAT' };
+  return { label: s + 'v' + w };
 }
 
 function groupSeparation(strong, weak, strength) {
@@ -80,21 +59,25 @@ function leaderLoser(strength) {
   };
 }
 
-function imbalanceScore(struct, minority, sep, ll) {
-  if (!struct.imbalance) return 0;
-  let score = 0;
-  const parts = struct.label.split('v').map(Number);
-  const ratio = Math.max(parts[0], parts[1]) / 8;
-  score += ratio * 30;
-  score += minority.valid ? 25 : 0;
-  if (sep.label === 'EXTREME') score += 25;
-  else if (sep.label === 'STRONG') score += 20;
-  else if (sep.label === 'GOOD') score += 15;
-  else if (sep.label === 'MILD') score += 8;
-  const dominance = Math.max(ll.leaderGap, ll.loserGap);
-  score += Math.min(20, dominance * 2);
-  if (!minority.valid) score = Math.round(score * 0.65);
-  return Math.min(100, Math.round(score));
+// Top 2 vs bottom 2 imbalance:
+//   A = sum of the two most positive currencies
+//   B = |sum of the two most negative currencies|
+//   Qualifies as imbalanced when min(A,B) / max(A,B) < 0.70
+//   (i.e. one side is more than ~43% larger than the other)
+function ratioCheck(strength) {
+  const sorted = CURRENCIES.slice().sort((a, b) => strength[b] - strength[a]);
+  const A = strength[sorted[0]] + strength[sorted[1]];
+  const B = -(strength[sorted[6]] + strength[sorted[7]]);
+  if (A <= 0 || B <= 0) return { valid: false, ratio: 0, top2Sum: A, bot2Sum: B, top2: [sorted[0], sorted[1]], bot2: [sorted[6], sorted[7]] };
+  const r = Math.min(A, B) / Math.max(A, B);
+  return {
+    valid: r < RATIO_THRESHOLD,
+    ratio: Math.round(r * 1000) / 1000,
+    top2Sum: Math.round(A * 100) / 100,
+    bot2Sum: Math.round(B * 100) / 100,
+    top2: [sorted[0], sorted[1]],
+    bot2: [sorted[6], sorted[7]],
+  };
 }
 
 function buildPairs(strong, weak, strength) {
@@ -104,7 +87,6 @@ function buildPairs(strong, weak, strength) {
       const fwd = s + '_' + w;
       const rev = w + '_' + s;
       if (VALID_PAIRS.has(fwd)) {
-        // Base is strong, quote is weak → BUY
         pairs.push({
           pair: s + '/' + w,
           direction: 'BUY',
@@ -113,7 +95,6 @@ function buildPairs(strong, weak, strength) {
           quote: w, quoteVal: Math.round(strength[w] * 100) / 100,
         });
       } else if (VALID_PAIRS.has(rev)) {
-        // Base is weak, quote is strong → SELL
         pairs.push({
           pair: w + '/' + s,
           direction: 'SELL',
@@ -131,17 +112,20 @@ function buildPairs(strong, weak, strength) {
 function analyseTimeframe(strength) {
   const groups = classify(strength);
   const struct = groupStructure(groups.strong, groups.weak);
-  const minority = minorityExtremeCheck(groups.strong, groups.weak, strength);
   const sep = groupSeparation(groups.strong, groups.weak, strength);
   const ll = leaderLoser(strength);
-  const score = imbalanceScore(struct, minority, sep, ll);
-  const pairs = struct.imbalance ? buildPairs(groups.strong, groups.weak, strength) : [];
+  const ratio = ratioCheck(strength);
+  // Score reflects how imbalanced the two sides are — 0 when balanced, 100 when one side dwarfs the other
+  const score = ratio.valid
+    ? Math.min(100, Math.round((1 - ratio.ratio) * 100))
+    : Math.max(0, Math.round((1 - ratio.ratio) * 100));
+  const pairs = ratio.valid ? buildPairs(groups.strong, groups.weak, strength) : [];
 
   return {
     strength,
     groups,
-    structure: struct,
-    minority,
+    structure: { label: struct.label, imbalance: ratio.valid },
+    ratio,
     separation: sep,
     leaderLoser: ll,
     score,
@@ -166,85 +150,96 @@ module.exports = async function handler(req, res) {
     const since = qFrom ? new Date(qFrom + 'T00:00:00Z').toISOString()
       : new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
-    const allRows = [];
     const PAGE = 1000;
-    let offset = 0;
-    while (true) {
-      const { data, error } = await sb
-        .from('currency_strength')
-        .select('time, currency, smooth_3h, smooth_4h, smooth_6h, smooth_12h')
-        .gte('time', since)
-        .lte('time', until)
-        .order('time', { ascending: true })
-        .range(offset, offset + PAGE - 1);
-      if (error) throw error;
-      if (!data || !data.length) break;
-      allRows.push(...data);
-      if (data.length < PAGE) break;
-      offset += PAGE;
+
+    // Fetch M15 currency strength (one row per 15m with values.CCY)
+    const m15Rows = [];
+    {
+      let offset = 0;
+      while (true) {
+        const { data, error } = await sb
+          .from('m15_currency_strength')
+          .select('time, values')
+          .gte('time', since)
+          .lte('time', until)
+          .order('time', { ascending: true })
+          .range(offset, offset + PAGE - 1);
+        if (error) throw error;
+        if (!data || !data.length) break;
+        m15Rows.push(...data);
+        if (data.length < PAGE) break;
+        offset += PAGE;
+      }
     }
 
-    // Group by time
-    const byTime = {};
-    for (const r of allRows) {
-      if (!byTime[r.time]) byTime[r.time] = {};
-      byTime[r.time][r.currency] = {
-        '3H': (parseFloat(r.smooth_3h) || 0) * 10000,
-        '4H': (parseFloat(r.smooth_4h) || 0) * 10000,
-        '6H': (parseFloat(r.smooth_6h) || 0) * 10000,
+    // Fetch hourly currency strength — extend since by 1h so we can carry-forward the
+    // last hourly reading for any M15 timestamp that predates the first hourly row in range
+    const hourlySince = new Date(new Date(since).getTime() - 60 * 60 * 1000).toISOString();
+    const hourlyRows = [];
+    {
+      let offset = 0;
+      while (true) {
+        const { data, error } = await sb
+          .from('currency_strength')
+          .select('time, currency, smooth_3h, smooth_6h, smooth_12h')
+          .gte('time', hourlySince)
+          .lte('time', until)
+          .order('time', { ascending: true })
+          .range(offset, offset + PAGE - 1);
+        if (error) throw error;
+        if (!data || !data.length) break;
+        hourlyRows.push(...data);
+        if (data.length < PAGE) break;
+        offset += PAGE;
+      }
+    }
+
+    // Index hourly rows by time
+    const hourlyByTime = {};
+    for (const r of hourlyRows) {
+      if (!hourlyByTime[r.time]) hourlyByTime[r.time] = {};
+      hourlyByTime[r.time][r.currency] = {
+        '3H':  (parseFloat(r.smooth_3h)  || 0) * 10000,
+        '6H':  (parseFloat(r.smooth_6h)  || 0) * 10000,
         '12H': (parseFloat(r.smooth_12h) || 0) * 10000,
       };
     }
+    const hourlyTimes = Object.keys(hourlyByTime).sort();
 
-    const timestamps = Object.keys(byTime).sort();
+    function lastHourlyAtOrBefore(t) {
+      let lo = 0, hi = hourlyTimes.length - 1, best = -1;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        if (hourlyTimes[mid] <= t) { best = mid; lo = mid + 1; }
+        else hi = mid - 1;
+      }
+      return best >= 0 ? hourlyByTime[hourlyTimes[best]] : null;
+    }
+
     const rows = [];
 
-    for (const time of timestamps) {
-      const ccyData = byTime[time];
-      if (Object.keys(ccyData).length < 8) continue;
+    for (const m15Row of m15Rows) {
+      const t = m15Row.time;
+      const m15Values = m15Row.values || {};
+      const hourlyValues = lastHourlyAtOrBefore(t);
 
-      // Only keep timeframes where AUD+NZD or CHF+JPY are top 2 on their side
-      // and one of them is the overall leader or loser
+      // Build strengths per timeframe
+      const strengths = {};
+      strengths['15M'] = {};
+      for (const c of CURRENCIES) strengths['15M'][c] = (parseFloat(m15Values[c]) || 0) * 10000;
+
+      if (hourlyValues && Object.keys(hourlyValues).length === CURRENCIES.length) {
+        for (const tf of ['3H', '6H', '12H']) {
+          strengths[tf] = {};
+          for (const c of CURRENCIES) strengths[tf][c] = hourlyValues[c]?.[tf] || 0;
+        }
+      }
+
       const tfResults = {};
-      for (const tf of ['3H', '4H', '6H', '12H']) {
-        const strength = {};
-        for (const ccy of CURRENCIES) strength[ccy] = ccyData[ccy]?.[tf] || 0;
-        const result = analyseTimeframe(strength);
-        if (!result.structure.imbalance) continue;
-
-        const s = result.groups.strong, w = result.groups.weak;
-        const leader = result.leaderLoser.leader;
-        const loser = result.leaderLoser.loser;
-
-        // Sort each side by strength
-        const strongSorted = s.slice().sort((a, b) => strength[b] - strength[a]);
-        const weakSorted = w.slice().sort((a, b) => strength[a] - strength[b]);
-
-        // Driver pair must be on the MINORITY side
-        const minority = s.length <= w.length ? s : w;
-        const minSorted = s.length <= w.length ? strongSorted : weakSorted;
-        const minLeader = s.length <= w.length ? leader : loser;
-        const minLeaderVal = Math.abs(s.length <= w.length ? result.leaderLoser.leaderVal : result.leaderLoser.loserVal);
-        if (minLeaderVal < 20) continue;
-
-        // Check AUD+NZD: both on minority side, both in top 2, one is the leader/loser
-        let audnzd = false;
-        if (minority.includes('AUD') && minority.includes('NZD')) {
-          const top2 = new Set(minSorted.slice(0, 2));
-          audnzd = top2.has('AUD') && top2.has('NZD') && (minLeader === 'AUD' || minLeader === 'NZD');
-        }
-
-        // Check CHF+JPY: both on minority side, both in top 2, one is the leader/loser
-        let chfjpy = false;
-        if (minority.includes('CHF') && minority.includes('JPY')) {
-          const top2 = new Set(minSorted.slice(0, 2));
-          chfjpy = top2.has('CHF') && top2.has('JPY') && (minLeader === 'CHF' || minLeader === 'JPY');
-        }
-
-        if (audnzd || chfjpy) {
-          result.driver = audnzd ? 'AUD+NZD' : 'CHF+JPY';
-          tfResults[tf] = result;
-        }
+      for (const tf of TIMEFRAMES) {
+        if (!strengths[tf]) continue;
+        const result = analyseTimeframe(strengths[tf]);
+        if (result.ratio.valid) tfResults[tf] = result;
       }
 
       const qualifiedTfs = Object.keys(tfResults);
@@ -254,7 +249,7 @@ module.exports = async function handler(req, res) {
         tfResults[tf].score > tfResults[best].score ? tf : best, qualifiedTfs[0]);
 
       rows.push({
-        time,
+        time: t,
         timeframes: tfResults,
         qualifiedTfs,
         bestTf,
