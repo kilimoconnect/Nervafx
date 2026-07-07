@@ -14,7 +14,7 @@ const VALID_PAIRS = new Set([
 const TIMEFRAMES = ['3H', '4H', '6H'];
 const RATIO_THRESHOLD = 0.70;
 const EXTREME_RATIO_THRESHOLD = 0.28;
-const MAGNITUDE_THRESHOLD = 15;
+const MAGNITUDE_THRESHOLDS = { '3H': 10, '4H': 10, '6H': 15 };
 
 function classify(strength) {
   const strong = [], weak = [];
@@ -83,13 +83,14 @@ function ratioCheck(strength) {
     ? strength[sorted[6]] / strength[sorted[7]] : 1;
   const loserValid = strength[sorted[7]] < 0 && loserRatio < EXTREME_RATIO_THRESHOLD;
 
-  // Magnitude info — used only by the 6H gate in the caller
-  const magnitudeValid = strength[sorted[0]] > MAGNITUDE_THRESHOLD
-    || strength[sorted[7]] < -MAGNITUDE_THRESHOLD;
+  // Magnitude info — per-TF threshold applied by the caller
+  const top1Val = strength[sorted[0]];
+  const bot8Val = strength[sorted[7]];
 
   return {
     valid: ratioValid || leaderValid || loserValid,
-    magnitudeValid,
+    top1Val: Math.round(top1Val * 100) / 100,
+    bot8Val: Math.round(bot8Val * 100) / 100,
     ratio: Math.round(ratio * 1000) / 1000,
     ratioValid,
     leaderRatio: Math.round(leaderRatio * 1000) / 1000,
@@ -223,8 +224,13 @@ module.exports = async function handler(req, res) {
       for (const tf of TIMEFRAMES) {
         const result = analyseTimeframe(strengths[tf]);
         if (!result.ratio.valid) continue;
-        // Magnitude gate applies to 6H only
-        if (tf === '6H' && !result.ratio.magnitudeValid) continue;
+        // Per-TF magnitude gate — require #1 > threshold OR #8 < -threshold
+        const magThresh = MAGNITUDE_THRESHOLDS[tf];
+        if (magThresh != null) {
+          const passes = result.ratio.top1Val > magThresh
+            || result.ratio.bot8Val < -magThresh;
+          if (!passes) continue;
+        }
         tfResults[tf] = result;
       }
 
