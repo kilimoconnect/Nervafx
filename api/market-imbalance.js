@@ -83,12 +83,12 @@ function ratioCheck(strength) {
     ? strength[sorted[6]] / strength[sorted[7]] : 1;
   const loserValid = strength[sorted[7]] < 0 && loserRatio < EXTREME_RATIO_THRESHOLD;
 
-  // Magnitude gate — require at least one extreme to be meaningful
+  // Magnitude info — used only by the 6H gate in the caller
   const magnitudeValid = strength[sorted[0]] > MAGNITUDE_THRESHOLD
     || strength[sorted[7]] < -MAGNITUDE_THRESHOLD;
 
   return {
-    valid: magnitudeValid && (ratioValid || leaderValid || loserValid),
+    valid: ratioValid || leaderValid || loserValid,
     magnitudeValid,
     ratio: Math.round(ratio * 1000) / 1000,
     ratioValid,
@@ -264,7 +264,10 @@ module.exports = async function handler(req, res) {
       for (const tf of TIMEFRAMES) {
         if (!strengths[tf]) continue;
         const result = analyseTimeframe(strengths[tf]);
-        if (result.ratio.valid) tfResults[tf] = result;
+        if (!result.ratio.valid) continue;
+        // Magnitude gate applies to 6H only
+        if (tf === '6H' && !result.ratio.magnitudeValid) continue;
+        tfResults[tf] = result;
       }
 
       const qualifiedTfs = Object.keys(tfResults);
