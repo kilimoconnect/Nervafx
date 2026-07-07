@@ -237,6 +237,8 @@ module.exports = async function handler(req, res) {
 
     for (const m15Row of m15Rows) {
       const t = m15Row.time;
+      // Present hourly only — skip anything that isn't on a top-of-hour boundary
+      if (new Date(t).getUTCMinutes() !== 0) continue;
       const m15Values = m15Row.values || {};
       const hourlyValues = lastHourlyAtOrBefore(t);
 
