@@ -15,6 +15,8 @@ const TIMEFRAMES = ['3H', '4H', '6H'];
 const RATIO_THRESHOLD = 0.70;
 const EXTREME_RATIO_THRESHOLD = 0.28;
 const MAGNITUDE_THRESHOLDS = { '3H': 10, '4H': 10, '6H': 15 };
+const EXTREMES_RATIO_THRESHOLD = 0.60;
+const EXTREMES_TFS = new Set(['3H', '6H']);
 
 function classify(strength) {
   const strong = [], weak = [];
@@ -87,10 +89,17 @@ function ratioCheck(strength) {
   const top1Val = strength[sorted[0]];
   const bot8Val = strength[sorted[7]];
 
+  // Extremes-asymmetry ratio — min(|#1|,|#8|) / max(|#1|,|#8|) — used for 3H/6H
+  const absTop = Math.abs(top1Val), absBot = Math.abs(bot8Val);
+  const extremesRatio = (absTop > 0 && absBot > 0)
+    ? Math.min(absTop, absBot) / Math.max(absTop, absBot)
+    : 1;
+
   return {
     valid: ratioValid || leaderValid || loserValid,
     top1Val: Math.round(top1Val * 100) / 100,
     bot8Val: Math.round(bot8Val * 100) / 100,
+    extremesRatio: Math.round(extremesRatio * 1000) / 1000,
     ratio: Math.round(ratio * 1000) / 1000,
     ratioValid,
     leaderRatio: Math.round(leaderRatio * 1000) / 1000,
@@ -223,7 +232,10 @@ module.exports = async function handler(req, res) {
       const tfResults = {};
       for (const tf of TIMEFRAMES) {
         const result = analyseTimeframe(strengths[tf]);
-        if (!result.ratio.valid) continue;
+        // Qualifies via ratio rules OR (for 3H/6H) via extremes asymmetry < 60%
+        const extremesValid = EXTREMES_TFS.has(tf)
+          && result.ratio.extremesRatio < EXTREMES_RATIO_THRESHOLD;
+        if (!result.ratio.valid && !extremesValid) continue;
         // Per-TF magnitude gate — require #1 > threshold OR #8 < -threshold
         const magThresh = MAGNITUDE_THRESHOLDS[tf];
         if (magThresh != null) {
@@ -231,6 +243,7 @@ module.exports = async function handler(req, res) {
             || result.ratio.bot8Val < -magThresh;
           if (!passes) continue;
         }
+        result.ratio.extremesValid = extremesValid;
         tfResults[tf] = result;
       }
 
