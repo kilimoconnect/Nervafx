@@ -173,7 +173,7 @@
     <a href="/app" class="sx-back-btn"><i data-lucide="arrow-left" style="width:12px;height:12px"></i> Back</a>
   </div>
 
-  <div class="sx-subtitle">Last H4 candle → current window's M15 confirmation — live tracking, updates every 15 minutes</div>
+  <div class="sx-subtitle">Last H4 candle → current window's H1 confirmation — live tracking, updates every 15 minutes</div>
 
   <div class="sx-filters">
     <span class="sx-filter-label">Date:</span>
@@ -411,8 +411,8 @@
 
     loadProfileTz().then(function() { populateH4Selector(); load(); });
 
-    // Auto-refresh aligned to the data cron (runs every 15m at :01, :16, :31, :46).
-    // Fire at :04, :19, :34, :49 — ~3 min after each cron trigger, once the M15 sync has landed.
+    // Auto-refresh aligned to the 15m data cron (runs at :01, :16, :31, :46).
+    // Fire at :04, :19, :34, :49 — ~3 min after each cron trigger.
     function scheduleAlignedRefresh() {
       var now = new Date();
       var cycle = now.getUTCMinutes() % 15;

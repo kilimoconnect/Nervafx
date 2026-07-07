@@ -340,13 +340,13 @@
 
     load();
 
-    // Auto-refresh aligned to the H1 sync (fires ~:04 past each hour)
+    // Auto-refresh aligned to the 15m data cron (fires at :04, :19, :34, :49)
     function scheduleAlignedRefresh() {
       var now = new Date();
-      var cycle = now.getUTCMinutes();
-      var minutesUntil = (4 - cycle + 60) % 60;
+      var cycle = now.getUTCMinutes() % 15;
+      var minutesUntil = (4 - cycle + 15) % 15;
       var delay = (minutesUntil * 60 - now.getUTCSeconds()) * 1000;
-      if (delay <= 0) delay += 60 * 60 * 1000;
+      if (delay <= 0) delay += 15 * 60 * 1000;
       setTimeout(function() {
         if (!document.getElementById('sx-date').value) load(true);
         scheduleAlignedRefresh();
