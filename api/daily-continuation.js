@@ -146,43 +146,81 @@ module.exports = async function handler(req, res) {
       const ydRangePips = Math.round((ydRange / pd) * 10) / 10;
       const ydBodyPips = Math.round((ydBody / pd) * 10) / 10;
 
-      // Phase 1: Initial continuation score from yesterday's candle
+      // Phase 1: locate the TRIGGER H1 — first H1 that closes beyond yesterday's high (BUY)
+      // or below yesterday's low (SELL). Monitoring only starts here.
+      let triggerIdx = -1;
+      let direction = null;
+      for (let i = 0; i < today.length; i++) {
+        const c = today[i];
+        if (c.close > ydHigh) { triggerIdx = i; direction = 'BUY'; break; }
+        if (c.close < ydLow)  { triggerIdx = i; direction = 'SELL'; break; }
+      }
+
+      // No trigger yet — skip this pair
+      if (triggerIdx === -1) continue;
+
+      const trigger = today[triggerIdx];
+      const triggerBreakPips = direction === 'BUY'
+        ? (trigger.close - ydHigh) / pd
+        : (ydLow - trigger.close) / pd;
+
+      // Initial score = 50 + bonus proportional to how far past the level the trigger closed
       let score = 50;
+      score += 20; // baseline for triggering
+      if (triggerBreakPips > 20) score += 15;
+      else if (triggerBreakPips > 10) score += 10;
+      else if (triggerBreakPips > 5) score += 5;
 
-      // Body dominance
-      if (ydBodyPct >= 80) score += 25;
-      else if (ydBodyPct >= 65) score += 20;
-      else if (ydBodyPct >= 50) score += 15;
-      else if (ydBodyPct >= 35) score += 8;
-      else score += 0;
-
-      // Clean close (small rejection wick)
-      const rejectionWick = ydBull ? upperWickPct : lowerWickPct;
-      if (rejectionWick <= 5) score += 10;
-      else if (rejectionWick <= 15) score += 5;
-      else if (rejectionWick >= 30) score -= 5;
-
-      // Range strength
-      if (ydRangePips > 100) score += 5;
-      else if (ydRangePips > 60) score += 3;
+      // Body direction alignment bonus (trigger H1 body vs direction)
+      const triggerBull = trigger.close > trigger.open;
+      if ((direction === 'BUY' && triggerBull) || (direction === 'SELL' && !triggerBull)) score += 5;
 
       score = Math.max(20, Math.min(98, score));
       const initialScore = score;
 
-      // Phase 2: H1 updates
+      // Phase 2: score subsequent H1s until a close falls back inside [ydLow, ydHigh]
       const timeline = [{
-        time: dayStartISO,
+        time: trigger.time,
         score,
-        label: 'Daily Open',
-        event: ydDirection === 'BUY' ? 'Bullish Expansion' : 'Bearish Expansion',
+        label: 'Trigger',
+        event: direction === 'BUY'
+          ? 'Close above prev daily high (' + Math.round(triggerBreakPips * 10) / 10 + ' pips)'
+          : 'Close below prev daily low (' + Math.round(triggerBreakPips * 10) / 10 + ' pips)',
+        h1: {
+          open: trigger.open, high: trigger.high, low: trigger.low, close: trigger.close,
+          bull: triggerBull,
+          bodyPips: Math.round((Math.abs(trigger.close - trigger.open) / pd) * 10) / 10,
+        },
       }];
 
-      let runHigh = ydBull ? ydClose : ydHigh;
-      let runLow = ydBull ? ydLow : ydClose;
-      let prevH1 = yesterday[yesterday.length - 1];
+      let runHigh = direction === 'BUY' ? trigger.high : trigger.high;
+      let runLow = direction === 'SELL' ? trigger.low : trigger.low;
+      let prevH1 = trigger;
+      let state = 'MONITORING';
+      let stoppedTime = null;
 
-      for (let i = 0; i < today.length; i++) {
+      for (let i = triggerIdx + 1; i < today.length; i++) {
         const h1 = today[i];
+
+        // Invalidation check: close back inside yesterday's daily range
+        if (h1.close < ydHigh && h1.close > ydLow) {
+          state = 'STOPPED';
+          stoppedTime = h1.time;
+          timeline.push({
+            time: h1.time,
+            score,
+            delta: 0,
+            label: 'Monitoring Stopped',
+            event: 'Close back inside prev daily range',
+            h1: {
+              open: h1.open, high: h1.high, low: h1.low, close: h1.close,
+              bull: h1.close > h1.open,
+              bodyPips: Math.round((Math.abs(h1.close - h1.open) / pd) * 10) / 10,
+            },
+          });
+          break;
+        }
+
         const h1Bull = h1.close > h1.open;
         const h1Body = Math.abs(h1.close - h1.open);
         const h1BodyPips = Math.round((h1Body / pd) * 10) / 10;
@@ -190,65 +228,48 @@ module.exports = async function handler(req, res) {
         let delta = 0;
         const events = [];
 
-        // Closing break of structure in the continuation direction
-        const brokeFor = ydDirection === 'BUY' ? h1.close > prevH1.high : h1.close < prevH1.low;
+        const brokeFor = direction === 'BUY' ? h1.close > prevH1.high : h1.close < prevH1.low;
 
         // 1. New high/low — only rewarded when the candle also closes through structure
-        if (ydDirection === 'BUY') {
+        if (direction === 'BUY') {
           if (h1.high > runHigh) {
             runHigh = h1.high;
-            if (brokeFor) {
-              delta += 3;
-              events.push('New high');
-            } else {
-              events.push('New high (wick only)');
-            }
+            if (brokeFor) { delta += 3; events.push('New high'); }
+            else { events.push('New high (wick only)'); }
           } else if (h1.high < prevH1.high && h1.low < prevH1.low) {
-            delta -= 4;
-            events.push('Lower high + lower low');
+            delta -= 4; events.push('Lower high + lower low');
           } else if (h1.high < prevH1.high) {
-            delta -= 2;
-            events.push('Lower high');
+            delta -= 2; events.push('Lower high');
           }
         } else {
           if (h1.low < runLow) {
             runLow = h1.low;
-            if (brokeFor) {
-              delta += 3;
-              events.push('New low');
-            } else {
-              events.push('New low (wick only)');
-            }
+            if (brokeFor) { delta += 3; events.push('New low'); }
+            else { events.push('New low (wick only)'); }
           } else if (h1.low > prevH1.low && h1.high > prevH1.high) {
-            delta -= 4;
-            events.push('Higher low + higher high');
+            delta -= 4; events.push('Higher low + higher high');
           } else if (h1.low > prevH1.low) {
-            delta -= 2;
-            events.push('Higher low');
+            delta -= 2; events.push('Higher low');
           }
         }
 
         // 2. H1 close beyond previous H1 high/low
-        if (ydDirection === 'BUY' && h1.close > prevH1.high) {
-          delta += 4;
-          events.push('Close above prev H1 high');
-        } else if (ydDirection === 'SELL' && h1.close < prevH1.low) {
-          delta += 4;
-          events.push('Close below prev H1 low');
-        } else if (ydDirection === 'BUY' && h1.close < prevH1.low) {
-          delta -= 6;
-          events.push('Close below prev H1 low');
-        } else if (ydDirection === 'SELL' && h1.close > prevH1.high) {
-          delta -= 6;
-          events.push('Close above prev H1 high');
+        //    Reward continuation break; adverse close still penalizes; no penalty for
+        //    a candle that simply failed to break the previous H1 level.
+        if (direction === 'BUY' && h1.close > prevH1.high) {
+          delta += 4; events.push('Close above prev H1 high');
+        } else if (direction === 'SELL' && h1.close < prevH1.low) {
+          delta += 4; events.push('Close below prev H1 low');
+        } else if (direction === 'BUY' && h1.close < prevH1.low) {
+          delta -= 6; events.push('Close below prev H1 low');
+        } else if (direction === 'SELL' && h1.close > prevH1.high) {
+          delta -= 6; events.push('Close above prev H1 high');
         } else {
-          // No break of structure in the continuation direction — penalize
-          delta -= 2;
           events.push('No break of structure');
         }
 
         // 3. Body strength
-        if (ydDirection === 'BUY') {
+        if (direction === 'BUY') {
           if (h1Bull && h1BodyPips > 10) { delta += 2; events.push('Strong bull body'); }
           else if (!h1Bull && h1BodyPips > 10) { delta -= 3; events.push('Strong bear body'); }
           if (!h1Bull && h1Body > 0 && h1Range > 0) {
@@ -279,8 +300,8 @@ module.exports = async function handler(req, res) {
           }
         }
 
-        // 4. Pullback depth — check if price has retraced too far
-        if (ydDirection === 'BUY') {
+        // 4. Pullback depth vs yesterday's range
+        if (direction === 'BUY') {
           const retrace = (runHigh - h1.low) / ydRange;
           if (retrace > 0.7) { delta -= 3; events.push('Deep pullback'); }
         } else {
@@ -314,7 +335,8 @@ module.exports = async function handler(req, res) {
 
       const currentScore = score;
       let currentLabel;
-      if (currentScore >= 85) currentLabel = 'Strong Continuation';
+      if (state === 'STOPPED') currentLabel = 'Monitoring Stopped';
+      else if (currentScore >= 85) currentLabel = 'Strong Continuation';
       else if (currentScore >= 70) currentLabel = 'Continuation Holding';
       else if (currentScore >= 50) currentLabel = 'Weakening';
       else if (currentScore >= 30) currentLabel = 'Possible Reversal';
@@ -323,10 +345,14 @@ module.exports = async function handler(req, res) {
       pairs.push({
         pair,
         instrument: inst,
-        direction: ydDirection,
+        direction,
         currentScore,
         currentLabel,
         initialScore,
+        state,
+        triggerTime: trigger.time,
+        stoppedTime,
+        triggerBreakPips: Math.round(triggerBreakPips * 10) / 10,
         yesterday: {
           open: ydOpen, high: ydHigh, low: ydLow, close: ydClose,
           bodyPct: ydBodyPct, upperWickPct, lowerWickPct,
@@ -334,7 +360,7 @@ module.exports = async function handler(req, res) {
           direction: ydDirection,
         },
         timeline,
-        h1Count: today.length,
+        h1Count: today.length - triggerIdx,
       });
     }
 
