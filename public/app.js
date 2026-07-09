@@ -2860,8 +2860,6 @@ async function _energyRefreshTick() {
     if (!fresh) return;
     _energySignalsCache = fresh;
     await renderEnergySignals(fresh);
-    // Also re-render flow performance since it depends on energy pairs
-    renderFlowPerformance();
     // Refresh structure watch alongside signals
     fetchCompressionBreakout();
     hydrateIcons();
@@ -7524,7 +7522,6 @@ async function refresh() {
     renderStates(states, m15Data);
     renderSpreads(spreads);
     renderRanking12H(spreads, strength);
-    renderFlowPerformance();
     renderM15Spreads(m15Data);
     updateM15Bar();
     renderRisk(risk);
