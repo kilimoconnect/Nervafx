@@ -123,17 +123,40 @@ module.exports = async function handler(req, res) {
 
     for (const inst of VALID_PAIRS) {
       const h4s = h4Cache[inst] || [];
-      if (!h4s.length) continue;
+      if (h4s.length < 2) continue;
 
       const pd = pipDiv(inst);
       const pair = inst.replace('_', '/');
 
-      // Reference candle = last complete H4 before the tracked window
-      const ref = h4s[h4s.length - 1];
+      // Reference candle = last complete H4 before the tracked window (H4[-1]);
+      // H4[-2] and H4[-3] are used for direction confirmation.
+      const ref  = h4s[h4s.length - 1];
+      const ref2 = h4s[h4s.length - 2];
+      const ref3 = h4s.length >= 3 ? h4s[h4s.length - 3] : null;
       const refStart = ref.time;
       const trackStart = anchor
         ? anchor.toISOString()
         : new Date(new Date(refStart).getTime() + H4_MS).toISOString();
+
+      // Direction confirmation: one of the last two H4s must have CLOSED beyond
+      // its own previous H4's high (BUY) or low (SELL).
+      const r1BuyBrk  = ref.close  > ref2.high;
+      const r1SellBrk = ref.close  < ref2.low;
+      const r2BuyBrk  = ref3 ? ref2.close > ref3.high : false;
+      const r2SellBrk = ref3 ? ref2.close < ref3.low  : false;
+
+      const buyConfirm  = r1BuyBrk  || r2BuyBrk;
+      const sellConfirm = r1SellBrk || r2SellBrk;
+
+      let confirmedDirection = null;
+      if (buyConfirm && !sellConfirm) confirmedDirection = 'BUY';
+      else if (sellConfirm && !buyConfirm) confirmedDirection = 'SELL';
+      else if (buyConfirm && sellConfirm) {
+        if (r1BuyBrk) confirmedDirection = 'BUY';
+        else if (r1SellBrk) confirmedDirection = 'SELL';
+        else confirmedDirection = r2BuyBrk ? 'BUY' : 'SELL';
+      }
+      if (!confirmedDirection) continue;
 
       const refRange = ref.high - ref.low;
       if (refRange < pd) continue;
@@ -154,13 +177,14 @@ module.exports = async function handler(req, res) {
       if (!m15s.length) continue;
 
       // Phase 1: locate the TRIGGER M15 — first M15 that closes beyond the ref H4's
-      // high (BUY) or below its low (SELL). Monitoring only starts here.
+      // high in the confirmed BUY direction, or below its low in the confirmed SELL
+      // direction. Monitoring only starts here.
       let triggerIdx = -1;
-      let direction = null;
+      const direction = confirmedDirection;
       for (let i = 0; i < m15s.length; i++) {
         const c = m15s[i];
-        if (c.close > ref.high) { triggerIdx = i; direction = 'BUY'; break; }
-        if (c.close < ref.low)  { triggerIdx = i; direction = 'SELL'; break; }
+        if (direction === 'BUY' && c.close > ref.high) { triggerIdx = i; break; }
+        if (direction === 'SELL' && c.close < ref.low) { triggerIdx = i; break; }
       }
       if (triggerIdx === -1) continue;
 

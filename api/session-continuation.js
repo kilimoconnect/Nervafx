@@ -157,9 +157,11 @@ module.exports = async function handler(req, res) {
     const curEnd = sessionEnd(cur.name, cur.start);
     const trackStart = cur.start;
 
-    const prev = previousSession(cur.name, cur.start);
+    const prev  = previousSession(cur.name, cur.start);
+    const prev2 = previousSession(prev.name, prev.start);
+    const prev3 = previousSession(prev2.name, prev2.start);
 
-    const fetchSince = prev.start.toISOString();
+    const fetchSince = prev3.start.toISOString();
     const fetchUntil = anchor ? curEnd.toISOString() : now.toISOString();
 
     const PAGE = 1000;
@@ -197,10 +199,14 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    const prevStartISO = prev.start.toISOString();
-    const prevEndISO = prev.end.toISOString();
+    const prevStartISO  = prev.start.toISOString();
+    const prevEndISO    = prev.end.toISOString();
+    const prev2StartISO = prev2.start.toISOString();
+    const prev2EndISO   = prev2.end.toISOString();
+    const prev3StartISO = prev3.start.toISOString();
+    const prev3EndISO   = prev3.end.toISOString();
     const trackStartISO = trackStart.toISOString();
-    const curEndISO = curEnd.toISOString();
+    const curEndISO     = curEnd.toISOString();
 
     const pairs = [];
 
@@ -211,10 +217,34 @@ module.exports = async function handler(req, res) {
       const pd = pipDiv(inst);
       const pair = inst.replace('_', '/');
 
-      // Previous session synthetic candle (from M15s in the ref window)
-      const prevM15s = all.filter(c => c.time >= prevStartISO && c.time < prevEndISO);
-      const ref = buildSessionCandle(inst, prevM15s);
-      if (!ref) continue;
+      // Build synthetic candles for the last three sessions
+      const prevM15s  = all.filter(c => c.time >= prevStartISO  && c.time < prevEndISO);
+      const prev2M15s = all.filter(c => c.time >= prev2StartISO && c.time < prev2EndISO);
+      const prev3M15s = all.filter(c => c.time >= prev3StartISO && c.time < prev3EndISO);
+      const ref  = buildSessionCandle(inst, prevM15s);
+      const ref2 = buildSessionCandle(inst, prev2M15s);
+      const ref3 = buildSessionCandle(inst, prev3M15s);
+      if (!ref || !ref2) continue;
+
+      // Direction confirmation: one of the last two sessions must have CLOSED beyond
+      // its own previous session's high (BUY) or low (SELL).
+      const r1BuyBrk  = ref.close  > ref2.high;
+      const r1SellBrk = ref.close  < ref2.low;
+      const r2BuyBrk  = ref3 ? ref2.close > ref3.high : false;
+      const r2SellBrk = ref3 ? ref2.close < ref3.low  : false;
+
+      const buyConfirm  = r1BuyBrk  || r2BuyBrk;
+      const sellConfirm = r1SellBrk || r2SellBrk;
+
+      let confirmedDirection = null;
+      if (buyConfirm && !sellConfirm) confirmedDirection = 'BUY';
+      else if (sellConfirm && !buyConfirm) confirmedDirection = 'SELL';
+      else if (buyConfirm && sellConfirm) {
+        if (r1BuyBrk) confirmedDirection = 'BUY';
+        else if (r1SellBrk) confirmedDirection = 'SELL';
+        else confirmedDirection = r2BuyBrk ? 'BUY' : 'SELL';
+      }
+      if (!confirmedDirection) continue;
 
       // Current session M15s → M30 candles
       const curM15s = all.filter(c => c.time >= trackStartISO && c.time < curEndISO);
@@ -222,13 +252,14 @@ module.exports = async function handler(req, res) {
       if (!m30s.length) continue;
 
       // Phase 1: locate the TRIGGER M30 — first M30 that closes beyond the prev session's
-      // high (BUY) or below its low (SELL). Monitoring only starts here.
+      // high in the confirmed BUY direction, or below its low in the confirmed SELL
+      // direction. Monitoring only starts here.
       let triggerIdx = -1;
-      let direction = null;
+      const direction = confirmedDirection;
       for (let i = 0; i < m30s.length; i++) {
         const c = m30s[i];
-        if (c.close > ref.high) { triggerIdx = i; direction = 'BUY'; break; }
-        if (c.close < ref.low)  { triggerIdx = i; direction = 'SELL'; break; }
+        if (direction === 'BUY' && c.close > ref.high) { triggerIdx = i; break; }
+        if (direction === 'SELL' && c.close < ref.low) { triggerIdx = i; break; }
       }
       if (triggerIdx === -1) continue;
 

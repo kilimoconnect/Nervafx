@@ -69,7 +69,20 @@ module.exports = async function handler(req, res) {
     }
 
     const dayEnd = new Date(dayStart.getTime() + 24 * 3600000);
-    const fetchSince = prevDayStart.toISOString();
+
+    // Also compute day-before-yesterday (D-2) and D-3 starts with weekend skipping,
+    // so the direction check can look at breaks over the last two ref candles.
+    function backOneTradingDay(from) {
+      const prev = new Date(from.getTime() - 24 * 3600000);
+      const d = prev.getUTCDay();
+      if (d === 6) prev.setUTCDate(prev.getUTCDate() - 2);
+      else if (d === 5) prev.setUTCDate(prev.getUTCDate() - 1);
+      return prev;
+    }
+    const prev2DayStart = backOneTradingDay(prevDayStart);
+    const prev3DayStart = backOneTradingDay(prev2DayStart);
+
+    const fetchSince = prev3DayStart.toISOString();
     const fetchUntil = todayDate ? dayEnd.toISOString() : (now < dayEnd ? now : dayEnd).toISOString();
 
     // Fetch H1 candles for all pairs covering yesterday + today
@@ -117,21 +130,63 @@ module.exports = async function handler(req, res) {
       const pd = pipDiv(inst);
       const pair = inst.replace('_', '/');
 
-      // Split into yesterday and today candles
+      // Split into daily windows: today, D-1 (yesterday), D-2, D-3
       const dayStartISO = dayStart.toISOString();
-      const yesterday = candles.filter(c => c.time >= prevDayStart.toISOString() && c.time < dayStartISO);
+      const prevDayStartISO = prevDayStart.toISOString();
+      const prev2StartISO = prev2DayStart.toISOString();
+      const prev3StartISO = prev3DayStart.toISOString();
+
+      const yesterday = candles.filter(c => c.time >= prevDayStartISO && c.time < dayStartISO);
+      const dayBefore = candles.filter(c => c.time >= prev2StartISO && c.time < prevDayStartISO);
+      const day3 = candles.filter(c => c.time >= prev3StartISO && c.time < prev2StartISO);
       const today = candles.filter(c => c.time >= dayStartISO);
 
-      if (yesterday.length < 5) continue;
+      if (yesterday.length < 5 || dayBefore.length < 5) continue;
 
-      // Build yesterday's synthetic daily candle
-      const ydOpen = yesterday[0].open;
-      const ydClose = yesterday[yesterday.length - 1].close;
-      let ydHigh = -Infinity, ydLow = Infinity;
-      for (const c of yesterday) {
-        if (c.high > ydHigh) ydHigh = c.high;
-        if (c.low < ydLow) ydLow = c.low;
+      // Build a synthetic daily candle from an H1 window
+      function synth(win) {
+        if (!win.length) return null;
+        const open = win[0].open;
+        const close = win[win.length - 1].close;
+        let high = -Infinity, low = Infinity;
+        for (const c of win) {
+          if (c.high > high) high = c.high;
+          if (c.low < low) low = c.low;
+        }
+        return { open, high, low, close };
       }
+
+      const d1 = synth(yesterday);
+      const d2 = synth(dayBefore);
+      const d3 = synth(day3);
+      if (!d1 || !d2) continue;
+
+      // Direction confirmation: one of the last two daily candles must have CLOSED
+      // beyond its own previous day's high (BUY) or low (SELL).
+      const d1BreakBuy  = d1.close > d2.high;
+      const d1BreakSell = d1.close < d2.low;
+      const d2BreakBuy  = d3 ? d2.close > d3.high : false;
+      const d2BreakSell = d3 ? d2.close < d3.low  : false;
+
+      const buyConfirm  = d1BreakBuy  || d2BreakBuy;
+      const sellConfirm = d1BreakSell || d2BreakSell;
+
+      let confirmedDirection = null;
+      if (buyConfirm && !sellConfirm) confirmedDirection = 'BUY';
+      else if (sellConfirm && !buyConfirm) confirmedDirection = 'SELL';
+      else if (buyConfirm && sellConfirm) {
+        // Both fired — prefer the more recent (D-1) break
+        if (d1BreakBuy) confirmedDirection = 'BUY';
+        else if (d1BreakSell) confirmedDirection = 'SELL';
+        else confirmedDirection = d2BreakBuy ? 'BUY' : 'SELL';
+      }
+      if (!confirmedDirection) continue;
+
+      // D-1 = the level reference for triggering monitoring today
+      const ydOpen = d1.open;
+      const ydClose = d1.close;
+      const ydHigh = d1.high;
+      const ydLow = d1.low;
       const ydRange = ydHigh - ydLow;
       if (ydRange < pd) continue;
 
@@ -146,14 +201,15 @@ module.exports = async function handler(req, res) {
       const ydRangePips = Math.round((ydRange / pd) * 10) / 10;
       const ydBodyPips = Math.round((ydBody / pd) * 10) / 10;
 
-      // Phase 1: locate the TRIGGER H1 — first H1 that closes beyond yesterday's high (BUY)
-      // or below yesterday's low (SELL). Monitoring only starts here.
+      // Phase 1: locate the TRIGGER H1 — first H1 that closes beyond yesterday's high
+      // in the confirmed BUY direction, or below yesterday's low in the confirmed SELL
+      // direction. Monitoring only starts here.
       let triggerIdx = -1;
-      let direction = null;
+      const direction = confirmedDirection;
       for (let i = 0; i < today.length; i++) {
         const c = today[i];
-        if (c.close > ydHigh) { triggerIdx = i; direction = 'BUY'; break; }
-        if (c.close < ydLow)  { triggerIdx = i; direction = 'SELL'; break; }
+        if (direction === 'BUY' && c.close > ydHigh) { triggerIdx = i; break; }
+        if (direction === 'SELL' && c.close < ydLow) { triggerIdx = i; break; }
       }
 
       // No trigger yet — skip this pair
