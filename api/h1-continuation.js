@@ -23,8 +23,11 @@ module.exports = async function handler(req, res) {
 
   try {
     const sb = getClient();
-    const gate = await requirePlan(sb, req, 'premium');
-    if (gate.error) return res.status(gate.status).json({ error: gate.error, upgrade: gate.upgrade });
+    const isCron = process.env.CRON_SECRET && req.headers?.['x-cron-secret'] === process.env.CRON_SECRET;
+    if (!isCron) {
+      const gate = await requirePlan(sb, req, 'premium');
+      if (gate.error) return res.status(gate.status).json({ error: gate.error, upgrade: gate.upgrade });
+    }
 
     const now = new Date();
 
@@ -184,6 +187,8 @@ module.exports = async function handler(req, res) {
       const direction = confirmedDirection;
       for (let i = 0; i < m15s.length; i++) {
         const c = m15s[i];
+        // Blackout window: skip triggers between 21:00 and 22:00 UTC (00:00-01:00 EAT)
+        if (new Date(c.time).getUTCHours() === 21) continue;
         if (direction === 'BUY' && c.close > ref.high) { triggerIdx = i; break; }
         if (direction === 'SELL' && c.close < ref.low) { triggerIdx = i; break; }
       }

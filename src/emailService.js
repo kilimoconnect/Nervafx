@@ -1184,6 +1184,72 @@ function m15ImpulseEmail(signals) {
   };
 }
 
+// ── Continuation top-3 alert ─────────────────────────────────────────────────
+
+function continuationAlertsEmail({ daily = [], h4 = [], session = [] }) {
+  const totalCount = daily.length + h4.length + session.length;
+  if (!totalCount) return null;
+
+  function pipTag(n) {
+    if (n == null) return '';
+    return `<span style="color:#38bdf8;font-weight:700;font-size:12px;margin-left:6px">+${n} pips</span>`;
+  }
+
+  function scoreTag(n) {
+    if (n == null) return '';
+    const color = n >= 70 ? '#4ade80' : n >= 50 ? '#facc15' : '#f87171';
+    return `<span style="color:${color};font-weight:700;font-size:12px;margin-left:8px">${n}</span>`;
+  }
+
+  function row(p) {
+    const isBuy = p.direction === 'BUY';
+    const bg = isBuy ? 'rgba(34,197,94,0.10)' : 'rgba(239,68,68,0.10)';
+    const bd = isBuy ? '#22c55e' : '#ef4444';
+    const dc = isBuy ? '#22c55e' : '#ef4444';
+    const arrow = isBuy ? '▲' : '▼';
+    const trig = p.triggerTime ? _fmtTime(p.triggerTime) : '';
+    return `<div style="background:${bg};border-left:3px solid ${bd};border-radius:6px;padding:10px 14px;margin:6px 0">
+      <span style="color:${dc};font-weight:700;font-size:14px">${arrow} ${p.direction}</span>
+      <span style="color:#f1f5f9;font-weight:700;font-size:14px;margin-left:8px">${p.pair}</span>
+      ${scoreTag(p.currentScore)}
+      ${pipTag(p.triggerBreakPips)}
+      <div style="color:#64748b;font-size:11px;margin-top:4px">Triggered ${trig}</div>
+    </div>`;
+  }
+
+  function group(label, href, list) {
+    if (!list.length) {
+      return `<div class="card">
+        <div class="card-hd">${label}</div>
+        <div style="padding:12px 14px;color:#64748b;font-size:12px">No live triggers.</div>
+      </div>`;
+    }
+    return `<div class="card">
+      <div class="card-hd">${label}</div>
+      <div style="padding:8px 14px 12px">${list.map(row).join('')}</div>
+      <div style="padding:0 14px 12px">
+        <a href="${href}" style="color:#60a5fa;font-size:12px;font-weight:600;text-decoration:none">View all →</a>
+      </div>
+    </div>`;
+  }
+
+  const html = baseLayout(`
+    <h2>Continuation triggers</h2>
+    <p class="sub">Top 3 earliest triggers per engine · ${_fmtTime(new Date().toISOString())}</p>
+    ${group('Daily Continuation', 'https://www.nervafx.com/daily-continuation', daily)}
+    ${group('H4 Continuation',    'https://www.nervafx.com/h1-continuation',    h4)}
+    ${group('Session Continuation', 'https://www.nervafx.com/session-continuation', session)}
+    <div style="text-align:center;margin-top:20px">
+      <a href="https://www.nervafx.com/app" style="display:inline-block;padding:10px 24px;background:#3b82f6;color:#fff;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none">Open Dashboard →</a>
+    </div>
+  `);
+
+  return {
+    subject: `Continuation triggers: ${daily.length}D · ${h4.length}H4 · ${session.length}S`,
+    html,
+  };
+}
+
 module.exports = {
   sendEmail,
   sendBulk,
@@ -1196,4 +1262,5 @@ module.exports = {
   h1BreaksEmail,
   pairImbalanceEmail,
   m15ImpulseEmail,
+  continuationAlertsEmail,
 };

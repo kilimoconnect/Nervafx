@@ -21,8 +21,11 @@ module.exports = async function handler(req, res) {
 
   try {
     const sb = getClient();
-    const gate = await requirePlan(sb, req, 'premium');
-    if (gate.error) return res.status(gate.status).json({ error: gate.error, upgrade: gate.upgrade });
+    const isCron = process.env.CRON_SECRET && req.headers?.['x-cron-secret'] === process.env.CRON_SECRET;
+    if (!isCron) {
+      const gate = await requirePlan(sb, req, 'premium');
+      if (gate.error) return res.status(gate.status).json({ error: gate.error, upgrade: gate.upgrade });
+    }
 
     // Determine "today" and "yesterday" in UTC (forex day = 21:00 UTC to 21:00 UTC)
     const now = new Date();
@@ -208,6 +211,8 @@ module.exports = async function handler(req, res) {
       const direction = confirmedDirection;
       for (let i = 0; i < today.length; i++) {
         const c = today[i];
+        // Blackout window: skip triggers between 21:00 and 22:00 UTC (00:00-01:00 EAT)
+        if (new Date(c.time).getUTCHours() === 21) continue;
         if (direction === 'BUY' && c.close > ydHigh) { triggerIdx = i; break; }
         if (direction === 'SELL' && c.close < ydLow) { triggerIdx = i; break; }
       }
