@@ -422,8 +422,8 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // Sort: highest score first
-    pairs.sort((a, b) => b.currentScore - a.currentScore);
+    // Sort: earliest trigger first (longest-running setups on top)
+    pairs.sort((a, b) => (a.triggerTime < b.triggerTime ? -1 : 1));
 
     res.json({
       dayStart: dayStart.toISOString(),
