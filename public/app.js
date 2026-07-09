@@ -3771,8 +3771,12 @@ async function fetchQualityPreview() {
   if (!el) return;
   try {
     const ts = Date.now();
-    const data = await api(`/api/audnzd-strength-m15?days=1&t=${ts}`);
-    renderQualityPreview(el, data);
+    const [daily, h4, session] = await Promise.all([
+      api(`/api/daily-continuation?t=${ts}`).catch(() => ({ pairs: [] })),
+      api(`/api/h1-continuation?t=${ts}`).catch(() => ({ pairs: [] })),
+      api(`/api/session-continuation?t=${ts}`).catch(() => ({ pairs: [] })),
+    ]);
+    renderQualityPreview(el, { daily, h4, session });
   } catch (e) {
     el.innerHTML = `<p class="me-empty">Failed to load: ${e.message}</p>`;
   }
@@ -3797,29 +3801,54 @@ function _anTime(iso) {
 }
 
 function renderQualityPreview(el, data) {
-  const signals = (data?.signals || []).slice(-5).reverse();
+  const groups = [
+    { key: 'daily',   label: 'Daily',   href: '/daily-continuation',   pairs: data.daily?.pairs   || [] },
+    { key: 'h4',      label: 'H4',      href: '/h1-continuation',      pairs: data.h4?.pairs      || [] },
+    { key: 'session', label: 'Session', href: '/session-continuation', pairs: data.session?.pairs || [] },
+  ];
 
-  if (!signals.length) {
-    el.innerHTML = '<p class="me-empty">No AUD/NZD M15 signals today</p>';
+  const total = groups.reduce((n, g) => n + g.pairs.length, 0);
+  if (!total) {
+    el.innerHTML = '<p class="me-empty">No live continuation signals</p>';
     return;
   }
 
-  let html = '<div class="an-dash-header">';
-  const s = data.summary || {};
-  html += `<div class="an-dash-stats">`;
-  html += `<span class="an-dash-stat"><span class="an-dash-stat-label">AUD</span> <span class="val-pos">${s.aud?.strongest || 0} strong</span> · <span class="val-neg">${s.aud?.weakest || 0} weak</span></span>`;
-  html += `<span class="an-dash-stat"><span class="an-dash-stat-label">NZD</span> <span class="val-pos">${s.nzd?.strongest || 0} strong</span> · <span class="val-neg">${s.nzd?.weakest || 0} weak</span></span>`;
-  html += `</div>`;
-  html += `<a href="/audnzd-strength#m15" class="an-dash-link">View All →</a>`;
-  html += '</div>';
+  let html = '<div class="cs-dash-grid">';
+  for (const g of groups) {
+    const top = g.pairs.slice(0, 3);
+    html += '<div class="cs-dash-group">';
+    html += `<div class="cs-dash-group-hd">`;
+    html += `<span class="cs-dash-group-label">${g.label}</span>`;
+    html += `<a class="cs-dash-group-link" href="${g.href}">View →</a>`;
+    html += `</div>`;
 
-  html += '<div class="an-dash-signals">';
-  for (const sig of signals) {
-    html += _renderAnDashCard(sig);
+    if (!top.length) {
+      html += '<div class="cs-dash-empty">No signals</div>';
+    } else {
+      for (const p of top) html += _renderCsDashRow(p);
+    }
+    html += '</div>';
   }
   html += '</div>';
 
   el.innerHTML = html;
+}
+
+function _renderCsDashRow(p) {
+  const dirCls = p.direction === 'BUY' ? 'an-dash-buy' : 'an-dash-sell';
+  const t = p.triggerTime ? _anTime(p.triggerTime) : '';
+  const brk = p.triggerBreakPips != null
+    ? `<span class="cs-dash-brk">+${p.triggerBreakPips} pips</span>`
+    : '';
+  return (
+    `<div class="cs-dash-row">` +
+    `<span class="cs-dash-time">${t}</span>` +
+    `<span class="an-dash-dir ${dirCls}">${p.direction}</span>` +
+    `<span class="cs-dash-pair">${p.pair}</span>` +
+    `<span class="an-dash-score">${p.currentScore}</span>` +
+    brk +
+    `</div>`
+  );
 }
 
 function _renderAnDashCard(sig) {
