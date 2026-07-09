@@ -109,11 +109,8 @@ function _updateAlertBadge() {
   const panel = document.getElementById('hdr-panel-alerts');
   if (!panel) return;
   let count = 0;
-  const bars = ['news-alert-bar', 'imbalance-alert-bar'];
-  for (const id of bars) {
-    const el = document.getElementById(id);
-    if (el && el.style.display !== 'none') count++;
-  }
+  const el = document.getElementById('news-alert-bar');
+  if (el && el.style.display !== 'none') count++;
   const badge = document.getElementById('hdr-alert-badge');
   if (!badge) return;
   if (count > 0) {
@@ -1401,7 +1398,6 @@ function _m15CurrencyStrength() {
 function buildChart(data, tf) {
   if (!data?.currencies) return;
   strengthData = data;
-  _checkImbalancePairs(data.currencies);
   // Show current time (data refreshes every 15 min via pipeline)
   document.getElementById('strength-time').textContent = 'As of ' + fmtTime(new Date().toISOString());
 
