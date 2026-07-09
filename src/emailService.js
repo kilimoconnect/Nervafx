@@ -1190,57 +1190,110 @@ function continuationAlertsEmail({ daily = [], h4 = [], session = [] }) {
   const totalCount = daily.length + h4.length + session.length;
   if (!totalCount) return null;
 
-  function pipTag(n) {
-    if (n == null) return '';
-    return `<span style="color:#38bdf8;font-weight:700;font-size:12px;margin-left:6px">+${n} pips</span>`;
+  function scoreColor(n) {
+    if (n == null) return '#94a3b8';
+    if (n >= 70) return '#4ade80';
+    if (n >= 50) return '#fbbf24';
+    return '#f87171';
   }
 
-  function scoreTag(n) {
-    if (n == null) return '';
-    const color = n >= 70 ? '#4ade80' : n >= 50 ? '#facc15' : '#f87171';
-    return `<span style="color:${color};font-weight:700;font-size:12px;margin-left:8px">${n}</span>`;
-  }
-
+  // One signal row. Table-based, single-cell layout that stacks cleanly on mobile.
   function row(p) {
     const isBuy = p.direction === 'BUY';
-    const bg = isBuy ? 'rgba(34,197,94,0.10)' : 'rgba(239,68,68,0.10)';
-    const bd = isBuy ? '#22c55e' : '#ef4444';
-    const dc = isBuy ? '#22c55e' : '#ef4444';
-    const arrow = isBuy ? '▲' : '▼';
+    const dirBg = isBuy ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)';
+    const dirColor = isBuy ? '#4ade80' : '#f87171';
+    const accent = isBuy ? '#22c55e' : '#ef4444';
+    const scColor = scoreColor(p.currentScore);
     const trig = p.triggerTime ? _fmtTime(p.triggerTime) : '';
-    return `<div style="background:${bg};border-left:3px solid ${bd};border-radius:6px;padding:10px 14px;margin:6px 0">
-      <span style="color:${dc};font-weight:700;font-size:14px">${arrow} ${p.direction}</span>
-      <span style="color:#f1f5f9;font-weight:700;font-size:14px;margin-left:8px">${p.pair}</span>
-      ${scoreTag(p.currentScore)}
-      ${pipTag(p.triggerBreakPips)}
-      <div style="color:#64748b;font-size:11px;margin-top:4px">Triggered ${trig}</div>
-    </div>`;
+    const pipsHtml = p.triggerBreakPips != null
+      ? `<span style="color:#38bdf8;font-weight:700;font-size:12px">+${p.triggerBreakPips} pips</span>`
+      : '';
+
+    return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;border-spacing:0;margin:6px 0">
+      <tr>
+        <td style="background:#0f172a;border-left:3px solid ${accent};border-radius:6px;padding:12px 14px">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="vertical-align:middle;padding-right:10px">
+                <span style="display:inline-block;background:${dirBg};color:${dirColor};font-weight:700;font-size:11px;padding:3px 9px;border-radius:4px;letter-spacing:0.5px">${p.direction}</span>
+                <span style="color:#f1f5f9;font-weight:800;font-size:15px;margin-left:8px;letter-spacing:-0.2px">${p.pair}</span>
+              </td>
+              <td align="right" style="vertical-align:middle;white-space:nowrap">
+                <span style="color:${scColor};font-weight:800;font-size:15px;font-family:'SF Mono','Cascadia Code','Fira Code',Menlo,Consolas,monospace">${p.currentScore ?? '—'}</span>
+              </td>
+            </tr>
+            <tr>
+              <td colspan="2" style="padding-top:6px;color:#94a3b8;font-size:11px">
+                <span style="color:#64748b">Triggered</span> ${trig}${pipsHtml ? ' &nbsp;·&nbsp; ' + pipsHtml : ''}
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>`;
   }
 
-  function group(label, href, list) {
-    if (!list.length) {
-      return `<div class="card">
-        <div class="card-hd">${label}</div>
-        <div style="padding:12px 14px;color:#64748b;font-size:12px">No live triggers.</div>
-      </div>`;
-    }
-    return `<div class="card">
-      <div class="card-hd">${label}</div>
-      <div style="padding:8px 14px 12px">${list.map(row).join('')}</div>
-      <div style="padding:0 14px 12px">
-        <a href="${href}" style="color:#60a5fa;font-size:12px;font-weight:600;text-decoration:none">View all →</a>
-      </div>
-    </div>`;
+  function group(label, sub, href, list) {
+    const body = list.length
+      ? list.map(row).join('')
+      : `<div style="padding:14px;color:#64748b;font-size:12px">No live triggers.</div>`;
+    return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0f172a;border:1px solid #1e293b;border-radius:8px;margin:14px 0;overflow:hidden">
+      <tr>
+        <td style="padding:12px 14px;border-bottom:1px solid #1e293b">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="color:#f1f5f9;font-weight:700;font-size:13px;letter-spacing:0.3px">${label}</td>
+              <td align="right" style="color:#64748b;font-size:11px;font-weight:600">${sub}</td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:6px 12px 12px">
+          ${body}
+          ${list.length ? `<div style="text-align:right;padding:6px 4px 0"><a href="${href}" style="color:#60a5fa;font-size:12px;font-weight:600;text-decoration:none">View all →</a></div>` : ''}
+        </td>
+      </tr>
+    </table>`;
   }
+
+  const dailySub   = daily.length   ? `${daily.length} trigger${daily.length > 1 ? 's' : ''}`   : '—';
+  const h4Sub      = h4.length      ? `${h4.length} trigger${h4.length > 1 ? 's' : ''}`         : '—';
+  const sessionSub = session.length ? `${session.length} trigger${session.length > 1 ? 's' : ''}` : '—';
 
   const html = baseLayout(`
     <h2>Continuation triggers</h2>
     <p class="sub">Top 3 earliest triggers per engine · ${_fmtTime(new Date().toISOString())}</p>
-    ${group('Daily Continuation', 'https://www.nervafx.com/daily-continuation', daily)}
-    ${group('H4 Continuation',    'https://www.nervafx.com/h1-continuation',    h4)}
-    ${group('Session Continuation', 'https://www.nervafx.com/session-continuation', session)}
-    <div style="text-align:center;margin-top:20px">
-      <a href="https://www.nervafx.com/app" style="display:inline-block;padding:10px 24px;background:#3b82f6;color:#fff;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none">Open Dashboard →</a>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:14px 0">
+      <tr>
+        <td style="background:#0f172a;border:1px solid #1e293b;border-radius:8px;padding:12px 14px">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td align="center" style="padding:0 6px">
+                <div style="color:#64748b;font-size:10px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase">Daily</div>
+                <div style="color:#f1f5f9;font-size:20px;font-weight:800;margin-top:4px;font-family:'SF Mono',monospace">${daily.length}</div>
+              </td>
+              <td align="center" style="padding:0 6px;border-left:1px solid #1e293b">
+                <div style="color:#64748b;font-size:10px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase">H4</div>
+                <div style="color:#f1f5f9;font-size:20px;font-weight:800;margin-top:4px;font-family:'SF Mono',monospace">${h4.length}</div>
+              </td>
+              <td align="center" style="padding:0 6px;border-left:1px solid #1e293b">
+                <div style="color:#64748b;font-size:10px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase">Session</div>
+                <div style="color:#f1f5f9;font-size:20px;font-weight:800;margin-top:4px;font-family:'SF Mono',monospace">${session.length}</div>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+
+    ${group('Daily Continuation',   dailySub,   'https://www.nervafx.com/daily-continuation',   daily)}
+    ${group('H4 Continuation',      h4Sub,      'https://www.nervafx.com/h1-continuation',      h4)}
+    ${group('Session Continuation', sessionSub, 'https://www.nervafx.com/session-continuation', session)}
+
+    <div style="text-align:center;margin-top:24px">
+      <a href="https://www.nervafx.com/app" class="cta" style="display:inline-block;padding:12px 32px;background:#3b82f6;color:#fff;font-weight:700;text-decoration:none;border-radius:6px;font-size:14px;letter-spacing:0.2px">Open Dashboard →</a>
     </div>
   `);
 
