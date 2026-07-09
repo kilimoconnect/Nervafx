@@ -94,8 +94,9 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // Fetch M15 candles for the tracked window
-    const m15Since = new Date(anchorMs - 2 * H4_MS).toISOString();
+    // Fetch M15 candles for the tracked window — go back 4 days so that on Monday
+    // we still cover Friday's tail M15s when the ref H4 sits before the weekend.
+    const m15Since = new Date(anchorMs - 4 * 24 * 3600000).toISOString();
     for (let b = 0; b < VALID_PAIRS.length; b += 7) {
       const batch = VALID_PAIRS.slice(b, b + 7);
       const results = await Promise.all(batch.map(async inst => {
