@@ -14,7 +14,6 @@ const VALID_PAIRS = [
 function isJpy(inst) { return inst.includes('JPY'); }
 function pipDiv(inst) { return isJpy(inst) ? 0.01 : 0.0001; }
 
-const M30_MS = 30 * 60000;
 
 // Sessions (all UTC hours):
 //   ASIA:   21:00 (prev day) → 07:00  (10h)
@@ -98,29 +97,6 @@ function buildSessionCandle(inst, candles) {
     upperWickPct: Math.round(((bull ? high - close : high - open) / range) * 100),
     lowerWickPct: Math.round(((bull ? open - low : close - low) / range) * 100),
   };
-}
-
-// Pair consecutive M15s (aligned to :00 and :30) into 30-minute candles
-function buildM30s(m15s) {
-  const buckets = new Map();
-  for (const c of m15s) {
-    const t = new Date(c.time).getTime();
-    const bucketMs = Math.floor(t / M30_MS) * M30_MS;
-    let b = buckets.get(bucketMs);
-    if (!b) { b = { time: new Date(bucketMs).toISOString(), open: null, high: -Infinity, low: Infinity, close: null, count: 0 }; buckets.set(bucketMs, b); }
-    if (b.open === null) b.open = c.open;
-    if (c.high > b.high) b.high = c.high;
-    if (c.low < b.low) b.low = c.low;
-    b.close = c.close;
-    b.count++;
-  }
-  const out = [];
-  const keys = Array.from(buckets.keys()).sort((a, b) => a - b);
-  for (const k of keys) {
-    const b = buckets.get(k);
-    if (b.count === 2) out.push({ time: b.time, open: b.open, high: b.high, low: b.low, close: b.close });
-  }
-  return out;
 }
 
 module.exports = async function handler(req, res) {
@@ -246,24 +222,23 @@ module.exports = async function handler(req, res) {
       }
       if (!confirmedDirection) continue;
 
-      // Current session M15s → M30 candles
+      // Current session's M15 candles
       const curM15s = all.filter(c => c.time >= trackStartISO && c.time < curEndISO);
-      const m30s = buildM30s(curM15s);
-      if (!m30s.length) continue;
+      if (!curM15s.length) continue;
 
-      // Phase 1: locate the TRIGGER M30 — first M30 that closes beyond the prev session's
+      // Phase 1: locate the TRIGGER M15 — first M15 that closes beyond the prev session's
       // high in the confirmed BUY direction, or below its low in the confirmed SELL
       // direction. Monitoring only starts here.
       let triggerIdx = -1;
       const direction = confirmedDirection;
-      for (let i = 0; i < m30s.length; i++) {
-        const c = m30s[i];
+      for (let i = 0; i < curM15s.length; i++) {
+        const c = curM15s[i];
         if (direction === 'BUY' && c.close > ref.high) { triggerIdx = i; break; }
         if (direction === 'SELL' && c.close < ref.low) { triggerIdx = i; break; }
       }
       if (triggerIdx === -1) continue;
 
-      const trigger = m30s[triggerIdx];
+      const trigger = curM15s[triggerIdx];
       const triggerBreakPips = direction === 'BUY'
         ? (trigger.close - ref.high) / pd
         : (ref.low - trigger.close) / pd;
@@ -288,7 +263,7 @@ module.exports = async function handler(req, res) {
         event: direction === 'BUY'
           ? 'Close above prev session high (' + Math.round(triggerBreakPips * 10) / 10 + ' pips)'
           : 'Close below prev session low (' + Math.round(triggerBreakPips * 10) / 10 + ' pips)',
-        m30: {
+        m15: {
           open: trigger.open, high: trigger.high, low: trigger.low, close: trigger.close,
           bull: triggerBull,
           bodyPips: Math.round((Math.abs(trigger.close - trigger.open) / pd) * 10) / 10,
@@ -301,8 +276,8 @@ module.exports = async function handler(req, res) {
       let state = 'MONITORING';
       let stoppedTime = null;
 
-      for (let i = triggerIdx + 1; i < m30s.length; i++) {
-        const c = m30s[i];
+      for (let i = triggerIdx + 1; i < curM15s.length; i++) {
+        const c = curM15s[i];
 
         // Invalidation: close back inside prev session's range
         if (c.close < ref.high && c.close > ref.low) {
@@ -343,25 +318,25 @@ module.exports = async function handler(req, res) {
           }
         }
 
-        // 2. M30 close beyond previous M30 high/low
+        // 2. M15 close beyond previous M15 high/low
         //    Reward continuation break; adverse close still penalizes; no penalty for
-        //    a candle that simply failed to break the previous M30 level.
+        //    a candle that simply failed to break the previous M15 level.
         if (direction === 'BUY' && c.close > prevC.high) {
-          delta += 4; events.push('Close above prev M30 high');
+          delta += 4; events.push('Close above prev M15 high');
         } else if (direction === 'SELL' && c.close < prevC.low) {
-          delta += 4; events.push('Close below prev M30 low');
+          delta += 4; events.push('Close below prev M15 low');
         } else if (direction === 'BUY' && c.close < prevC.low) {
-          delta -= 6; events.push('Close below prev M30 low');
+          delta -= 6; events.push('Close below prev M15 low');
         } else if (direction === 'SELL' && c.close > prevC.high) {
-          delta -= 6; events.push('Close above prev M30 high');
+          delta -= 6; events.push('Close above prev M15 high');
         } else {
           events.push('No break of structure');
         }
 
-        // 3. Body strength (M30 scale)
+        // 3. Body strength (M15 scale)
         if (direction === 'BUY') {
-          if (cBull && cBodyPips > 8) { delta += 2; events.push('Strong bull body'); }
-          else if (!cBull && cBodyPips > 8) { delta -= 3; events.push('Strong bear body'); }
+          if (cBull && cBodyPips > 6) { delta += 2; events.push('Strong bull body'); }
+          else if (!cBull && cBodyPips > 6) { delta -= 3; events.push('Strong bear body'); }
           if (!cBull && cBody > 0) {
             const prevBody = Math.abs(prevC.close - prevC.open);
             if (cBody > prevBody * 1.2 && prevC.close > prevC.open) {
@@ -369,8 +344,8 @@ module.exports = async function handler(req, res) {
             }
           }
         } else {
-          if (!cBull && cBodyPips > 8) { delta += 2; events.push('Strong bear body'); }
-          else if (cBull && cBodyPips > 8) { delta -= 3; events.push('Strong bull body'); }
+          if (!cBull && cBodyPips > 6) { delta += 2; events.push('Strong bear body'); }
+          else if (cBull && cBodyPips > 6) { delta -= 3; events.push('Strong bull body'); }
           if (cBull && cBody > 0) {
             const prevBody = Math.abs(prevC.close - prevC.open);
             if (cBody > prevBody * 1.2 && prevC.close < prevC.open) {
@@ -380,7 +355,7 @@ module.exports = async function handler(req, res) {
         }
 
         // 3b. Chop / indecision — small body + big wicks on both sides
-        if (cRange > 0 && (cRange / pd) > 10) {
+        if (cRange > 0 && (cRange / pd) > 6) {
           const bodyPct = (cBody / cRange) * 100;
           const upperPct = ((c.high - Math.max(c.open, c.close)) / cRange) * 100;
           const lowerPct = ((Math.min(c.open, c.close) - c.low) / cRange) * 100;
@@ -414,7 +389,7 @@ module.exports = async function handler(req, res) {
           delta,
           label: statusLabel,
           event: events.join(', ') || 'No change',
-          m30: {
+          m15: {
             open: c.open, high: c.high, low: c.low, close: c.close,
             bull: cBull, bodyPips: cBodyPips,
           },
@@ -460,7 +435,7 @@ module.exports = async function handler(req, res) {
           end: curEndISO,
         },
         timeline,
-        m30Count: m30s.length - triggerIdx,
+        m15Count: curM15s.length - triggerIdx,
       });
     }
 
