@@ -464,8 +464,11 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // Sort: earliest trigger first (longest-running setups on top)
-    pairs.sort((a, b) => (a.triggerTime < b.triggerTime ? -1 : 1));
+    // Sort: earliest trigger first; tie-break by trigger break pips (stronger first)
+    pairs.sort((a, b) => {
+      if (a.triggerTime !== b.triggerTime) return a.triggerTime < b.triggerTime ? -1 : 1;
+      return b.triggerBreakPips - a.triggerBreakPips;
+    });
     res.json({ pairs });
   } catch (e) {
     res.status(500).json({ error: e.message });
