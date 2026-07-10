@@ -263,7 +263,7 @@ module.exports = async function handler(req, res) {
       const timeline = [{
         time: trigger.time,
         score,
-        label: 'Trigger',
+        label: 'Break',
         event: direction === 'BUY'
           ? 'Close above prev session high (' + Math.round(triggerBreakPips * 10) / 10 + ' pips)'
           : 'Close below prev session low (' + Math.round(triggerBreakPips * 10) / 10 + ' pips)',
@@ -273,6 +273,12 @@ module.exports = async function handler(req, res) {
           bodyPips: Math.round((Math.abs(trigger.close - trigger.open) / pd) * 10) / 10,
         },
       }];
+
+      let qualifiedTime = score >= 84 ? trigger.time : null;
+      if (qualifiedTime) {
+        timeline[0].label = 'Trigger';
+        timeline[0].qualified = true;
+      }
 
       let runHigh = trigger.high;
       let runLow = trigger.low;
@@ -399,12 +405,23 @@ module.exports = async function handler(req, res) {
         else if (score >= 30) statusLabel = 'Possible Reversal';
         else statusLabel = 'Continuation Failed';
 
+        let entryLabel = statusLabel;
+        let justQualified = false;
+        if (qualifiedTime === null && score >= 84) {
+          qualifiedTime = c.time;
+          entryLabel = 'Trigger';
+          justQualified = true;
+        }
+
         timeline.push({
           time: c.time,
           score,
           delta,
-          label: statusLabel,
-          event: events.join(', ') || 'No change',
+          label: entryLabel,
+          event: justQualified
+            ? 'Score crossed 84 (' + (events.join(', ') || 'No change') + ')'
+            : (events.join(', ') || 'No change'),
+          qualified: justQualified || undefined,
           m15: {
             open: c.open, high: c.high, low: c.low, close: c.close,
             bull: cBull, bodyPips: cBodyPips,
@@ -431,7 +448,9 @@ module.exports = async function handler(req, res) {
         currentLabel,
         initialScore,
         state,
-        triggerTime: trigger.time,
+        breakTime: trigger.time,
+        triggerTime: qualifiedTime,
+        qualified: qualifiedTime !== null,
         stoppedTime,
         triggerBreakPips: Math.round(triggerBreakPips * 10) / 10,
         refSession: {
@@ -453,9 +472,14 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // Sort: earliest trigger first; tie-break by trigger break pips (stronger first)
+    // Sort: qualified triggers first (score reached 84), earliest first;
+    //       then unqualified pairs by break time; tie-break by break pips.
     pairs.sort((a, b) => {
-      if (a.triggerTime !== b.triggerTime) return a.triggerTime < b.triggerTime ? -1 : 1;
+      if (a.triggerTime && !b.triggerTime) return -1;
+      if (!a.triggerTime && b.triggerTime) return 1;
+      const at = a.triggerTime || a.breakTime;
+      const bt = b.triggerTime || b.breakTime;
+      if (at !== bt) return at < bt ? -1 : 1;
       return b.triggerBreakPips - a.triggerBreakPips;
     });
     res.json({ pairs });

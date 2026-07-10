@@ -242,7 +242,7 @@ module.exports = async function handler(req, res) {
       const timeline = [{
         time: trigger.time,
         score,
-        label: 'Trigger',
+        label: 'Break',
         event: direction === 'BUY'
           ? 'Close above prev daily high (' + Math.round(triggerBreakPips * 10) / 10 + ' pips)'
           : 'Close below prev daily low (' + Math.round(triggerBreakPips * 10) / 10 + ' pips)',
@@ -252,6 +252,13 @@ module.exports = async function handler(req, res) {
           bodyPips: Math.round((Math.abs(trigger.close - trigger.open) / pd) * 10) / 10,
         },
       }];
+
+      // Trigger qualifies once score first reaches 84.
+      let qualifiedTime = score >= 84 ? trigger.time : null;
+      if (qualifiedTime) {
+        timeline[0].label = 'Trigger';
+        timeline[0].qualified = true;
+      }
 
       let runHigh = direction === 'BUY' ? trigger.high : trigger.high;
       let runLow = direction === 'SELL' ? trigger.low : trigger.low;
@@ -378,12 +385,24 @@ module.exports = async function handler(req, res) {
         else if (score >= 30) statusLabel = 'Possible Reversal';
         else statusLabel = 'Continuation Failed';
 
+        // Mark the moment score first crosses 84 as the trigger
+        let entryLabel = statusLabel;
+        let justQualified = false;
+        if (qualifiedTime === null && score >= 84) {
+          qualifiedTime = h1.time;
+          entryLabel = 'Trigger';
+          justQualified = true;
+        }
+
         timeline.push({
           time: h1.time,
           score,
           delta,
-          label: statusLabel,
-          event: events.join(', ') || 'No change',
+          label: entryLabel,
+          event: justQualified
+            ? 'Score crossed 84 (' + (events.join(', ') || 'No change') + ')'
+            : (events.join(', ') || 'No change'),
+          qualified: justQualified || undefined,
           h1: {
             open: h1.open, high: h1.high, low: h1.low, close: h1.close,
             bull: h1Bull, bodyPips: h1BodyPips,
@@ -410,7 +429,9 @@ module.exports = async function handler(req, res) {
         currentLabel,
         initialScore,
         state,
-        triggerTime: trigger.time,
+        breakTime: trigger.time,
+        triggerTime: qualifiedTime,
+        qualified: qualifiedTime !== null,
         stoppedTime,
         triggerBreakPips: Math.round(triggerBreakPips * 10) / 10,
         yesterday: {
@@ -424,9 +445,15 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // Sort: earliest trigger first; tie-break by trigger break pips (stronger first)
+    // Sort: qualified triggers first (score reached 84), earliest first;
+    //       then unqualified (still-monitoring) pairs by break time; tie-break
+    //       by trigger break pips (stronger first).
     pairs.sort((a, b) => {
-      if (a.triggerTime !== b.triggerTime) return a.triggerTime < b.triggerTime ? -1 : 1;
+      if (a.triggerTime && !b.triggerTime) return -1;
+      if (!a.triggerTime && b.triggerTime) return 1;
+      const at = a.triggerTime || a.breakTime;
+      const bt = b.triggerTime || b.breakTime;
+      if (at !== bt) return at < bt ? -1 : 1;
       return b.triggerBreakPips - a.triggerBreakPips;
     });
 
