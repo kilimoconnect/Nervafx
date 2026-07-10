@@ -27,7 +27,6 @@ const { calculateLatestVolumeAnalysis } = require('../src/volumeAnalysis');
 const { calculateFlowPerformance }     = require('../src/flowPerformance');
 const { evaluateAutoTrader }           = require('./autotrader-evaluate');
 const { storeStructureSnapshots }      = require('../src/structureSnapshot');
-const { checkAudNzdAlerts }            = require('../src/audnzdAlerts');
 
 const ADMIN_ID = '140f3854-2c85-488c-8e0a-0f965d562654';
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
@@ -404,7 +403,6 @@ module.exports = async function handler(req, res) {
   await step('volume_analysis',  () => calculateLatestVolumeAnalysis());
   await step('sentiment',        () => calculateLatestSentiment());
   await step('session_backfill', () => backfillSessionActivity());
-  await step('audnzd_alerts',   () => checkAudNzdAlerts(sb));
   await step('risk',             () => checkLatestSignals());
   await step('actions',          () => processLatestActions());
   await step('flow_performance', () => calculateFlowPerformance());

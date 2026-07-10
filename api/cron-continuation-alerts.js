@@ -1,7 +1,7 @@
 'use strict';
 
 const { createClient } = require('@supabase/supabase-js');
-const { sendBulk, continuationAlertsEmail } = require('../src/emailService');
+const { sendBulk, continuationPairAlertEmail } = require('../src/emailService');
 
 const dailyHandler   = require('./daily-continuation.js');
 const h4Handler      = require('./h1-continuation.js');
@@ -11,39 +11,43 @@ function getDB() {
   return createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 }
 
+// Fetch subscribed users plus their profile timezone.
 async function getSubscribedUsers(sb) {
   const { data: users } = await sb.auth.admin.listUsers({ perPage: 1000 });
   if (!users?.users) return [];
 
-  const { data: prefs } = await sb
-    .from('email_preferences')
-    .select('user_id, signal_alerts, unsubscribed, notification_email');
+  const [prefRes, profRes] = await Promise.all([
+    sb.from('email_preferences').select('user_id, signal_alerts, unsubscribed, notification_email'),
+    sb.from('profiles').select('id, timezone, first_name'),
+  ]);
 
   const prefMap = {};
-  for (const p of prefs || []) prefMap[p.user_id] = p;
+  for (const p of prefRes.data || []) prefMap[p.user_id] = p;
+
+  const profMap = {};
+  for (const p of profRes.data || []) profMap[p.id] = p;
 
   return users.users.filter(u => {
     const p = prefMap[u.id];
     if (p?.unsubscribed) return false;
     if (p?.signal_alerts === false) return false;
     return true;
-  }).map(u => ({
-    email: prefMap[u.id]?.notification_email || u.email,
-    firstName: u.user_metadata?.first_name || '',
-    id: u.id,
-  }));
+  }).map(u => {
+    const prof = profMap[u.id] || {};
+    const pref = prefMap[u.id] || {};
+    return {
+      id: u.id,
+      email: pref.notification_email || u.email,
+      firstName: prof.first_name || u.user_metadata?.first_name || '',
+      timezone: prof.timezone || 'UTC',
+    };
+  });
 }
 
-// Invoke a continuation handler internally with the cron secret so it skips
-// the plan gate. Captures the JSON response.
+// Invoke a continuation handler internally and capture its JSON.
 async function invokeHandler(handler) {
   return await new Promise((resolve) => {
-    const req = {
-      method: 'GET',
-      query: {},
-      headers: {},
-      _internal: true,
-    };
+    const req = { method: 'GET', query: {}, headers: {}, _internal: true };
     let payload = null;
     let statusCode = 200;
     const res = {
@@ -73,35 +77,67 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    // Fire all three engines in parallel
     const [dailyRes, h4Res, sessionRes] = await Promise.all([
       invokeHandler(dailyHandler),
       invokeHandler(h4Handler),
       invokeHandler(sessionHandler),
     ]);
 
-    const daily   = (dailyRes.data?.pairs   || []).slice(0, 3);
-    const h4      = (h4Res.data?.pairs      || []).slice(0, 3);
-    const session = (sessionRes.data?.pairs || []).slice(0, 3);
+    const signals = [
+      ...((dailyRes.data?.pairs   || []).slice(0, 3)).map(p => ({ ...p, engine: 'Daily',   href: 'https://www.nervafx.com/daily-continuation' })),
+      ...((h4Res.data?.pairs      || []).slice(0, 3)).map(p => ({ ...p, engine: 'H4',      href: 'https://www.nervafx.com/h1-continuation' })),
+      ...((sessionRes.data?.pairs || []).slice(0, 3)).map(p => ({ ...p, engine: 'Session', href: 'https://www.nervafx.com/session-continuation' })),
+    ];
 
-    if (!daily.length && !h4.length && !session.length) {
+    if (!signals.length) {
       return res.json({ ok: true, sent: 0, reason: 'no triggers' });
     }
-
-    const template = continuationAlertsEmail({ daily, h4, session });
-    if (!template) return res.json({ ok: true, sent: 0, reason: 'template empty' });
 
     const sb = getDB();
     const users = await getSubscribedUsers(sb);
     if (!users.length) return res.json({ ok: true, sent: 0, reason: 'no subscribed users' });
 
-    const recipients = users.map(u => ({ email: u.email, name: u.firstName }));
-    await sendBulk(recipients, template);
+    // Deduplicate: send at most one alert per (user, signal) key across this run.
+    // Uses the email_alert_log table keyed by trigger identity (pair + engine + triggerTime).
+    // We track successfully-emailed keys locally within this run to avoid double sending
+    // when signals overlap between engines.
+    const seen = new Set();
+
+    // Group users by timezone so we can bulk-send within a tz per signal.
+    const byTz = new Map();
+    for (const u of users) {
+      const tz = u.timezone || 'UTC';
+      if (!byTz.has(tz)) byTz.set(tz, []);
+      byTz.get(tz).push(u);
+    }
+
+    let sent = 0;
+    let sends = 0;
+    for (const signal of signals) {
+      const key = `${signal.engine}|${signal.instrument || signal.pair}|${signal.triggerTime}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      for (const [tz, tzUsers] of byTz.entries()) {
+        const template = continuationPairAlertEmail(signal, tz);
+        if (!template) continue;
+        const recipients = tzUsers.map(u => ({ email: u.email, name: u.firstName }));
+        try {
+          await sendBulk(recipients, template);
+          sent += tzUsers.length;
+          sends++;
+        } catch (e) {
+          console.error('[cron-continuation-alerts] send failed', signal.pair, tz, e.message);
+        }
+      }
+    }
 
     return res.json({
       ok: true,
-      sent: users.length,
-      counts: { daily: daily.length, h4: h4.length, session: session.length },
+      users: users.length,
+      signals: signals.length,
+      sends,
+      totalRecipients: sent,
     });
   } catch (e) {
     console.error('[cron-continuation-alerts]', e);

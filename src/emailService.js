@@ -1303,6 +1303,84 @@ function continuationAlertsEmail({ daily = [], h4 = [], session = [] }) {
   };
 }
 
+// ── Single-pair continuation trigger alert (per-user timezone) ───────────────
+
+function _fmtTimeInTz(iso, tz) {
+  try {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: tz || 'UTC',
+      weekday: 'short', day: '2-digit', month: 'short',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+      timeZoneName: 'short',
+    }).formatToParts(new Date(iso));
+    const m = {};
+    for (const p of parts) m[p.type] = p.value;
+    return `${m.weekday}, ${m.day} ${m.month} ${m.hour}:${m.minute} ${m.timeZoneName || ''}`.trim();
+  } catch (_) {
+    return _fmtTime(iso);
+  }
+}
+
+function continuationPairAlertEmail(signal, tz) {
+  if (!signal) return null;
+  const isBuy = signal.direction === 'BUY';
+  const dirColor = isBuy ? '#22c55e' : '#ef4444';
+  const dirBg    = isBuy ? 'rgba(34,197,94,0.14)' : 'rgba(239,68,68,0.14)';
+  const arrow    = isBuy ? '▲' : '▼';
+  const scColor  = (signal.currentScore ?? 0) >= 70 ? '#4ade80'
+                 : (signal.currentScore ?? 0) >= 50 ? '#fbbf24' : '#f87171';
+  const trigTime = _fmtTimeInTz(signal.triggerTime, tz);
+  const pips     = signal.triggerBreakPips != null ? `+${signal.triggerBreakPips} pips` : '';
+
+  const html = baseLayout(`
+    <h2>${arrow} ${signal.pair} ${signal.direction} — ${signal.engine} continuation</h2>
+    <p class="sub">Triggered ${trigTime}</p>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0">
+      <tr>
+        <td style="background:#0f172a;border-left:4px solid ${dirColor};border-radius:8px;padding:18px 20px">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="vertical-align:middle">
+                <span style="display:inline-block;background:${dirBg};color:${dirColor};font-weight:800;font-size:13px;padding:5px 12px;border-radius:5px;letter-spacing:0.6px">${signal.direction}</span>
+                <span style="color:#f1f5f9;font-weight:800;font-size:22px;margin-left:12px;letter-spacing:-0.3px">${signal.pair}</span>
+              </td>
+              <td align="right" style="vertical-align:middle;white-space:nowrap">
+                <div style="color:#64748b;font-size:10px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase">Score</div>
+                <div style="color:${scColor};font-weight:800;font-size:22px;font-family:'SF Mono','Cascadia Code','Fira Code',Menlo,Consolas,monospace">${signal.currentScore ?? '—'}</div>
+              </td>
+            </tr>
+          </table>
+
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:14px;border-top:1px solid #1e293b;padding-top:12px">
+            <tr>
+              <td style="color:#64748b;font-size:11px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;padding:2px 0">Engine</td>
+              <td align="right" style="color:#f1f5f9;font-size:13px;font-weight:700;padding:2px 0">${signal.engine} Continuation</td>
+            </tr>
+            <tr>
+              <td style="color:#64748b;font-size:11px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;padding:2px 0">Break beyond level</td>
+              <td align="right" style="color:#38bdf8;font-size:13px;font-weight:700;padding:2px 0">${pips || '—'}</td>
+            </tr>
+            <tr>
+              <td style="color:#64748b;font-size:11px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;padding:2px 0">Trigger time</td>
+              <td align="right" style="color:#f1f5f9;font-size:13px;font-weight:600;padding:2px 0">${trigTime}</td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+
+    <div style="text-align:center;margin-top:24px">
+      <a href="${signal.href || 'https://www.nervafx.com/app'}" class="cta" style="display:inline-block;padding:12px 28px;background:${dirColor};color:#fff;font-weight:700;text-decoration:none;border-radius:6px;font-size:14px;letter-spacing:0.2px">Open ${signal.engine} Continuation →</a>
+    </div>
+  `);
+
+  return {
+    subject: `${arrow} ${signal.pair} ${signal.direction} — ${signal.engine} continuation triggered`,
+    html,
+  };
+}
+
 module.exports = {
   sendEmail,
   sendBulk,
@@ -1316,4 +1394,5 @@ module.exports = {
   pairImbalanceEmail,
   m15ImpulseEmail,
   continuationAlertsEmail,
+  continuationPairAlertEmail,
 };
