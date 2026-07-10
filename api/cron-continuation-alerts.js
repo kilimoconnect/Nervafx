@@ -41,7 +41,8 @@ async function invokeHandler(handler) {
     const req = {
       method: 'GET',
       query: {},
-      headers: { 'x-cron-secret': process.env.CRON_SECRET },
+      headers: {},
+      _internal: true,
     };
     let payload = null;
     let statusCode = 200;

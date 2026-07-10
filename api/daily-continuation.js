@@ -21,8 +21,7 @@ module.exports = async function handler(req, res) {
 
   try {
     const sb = getClient();
-    const isCron = process.env.CRON_SECRET && req.headers?.['x-cron-secret'] === process.env.CRON_SECRET;
-    if (!isCron) {
+    if (!req._internal) {
       const gate = await requirePlan(sb, req, 'premium');
       if (gate.error) return res.status(gate.status).json({ error: gate.error, upgrade: gate.upgrade });
     }
