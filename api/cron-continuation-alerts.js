@@ -92,10 +92,13 @@ module.exports = async function handler(req, res) {
       invokeHandler(sessionHandler),
     ]);
 
+    // Only alert on pairs still MONITORING — stopped/failed setups stay visible in
+    // the UI but don't fire email alerts.
+    const active = arr => (arr || []).filter(p => p.state === 'MONITORING');
     const signals = [
-      ...((dailyRes.data?.pairs   || []).slice(0, 3)).map(p => ({ ...p, engine: 'Daily',   href: 'https://www.nervafx.com/daily-continuation' })),
-      ...((h4Res.data?.pairs      || []).slice(0, 3)).map(p => ({ ...p, engine: 'H4',      href: 'https://www.nervafx.com/h1-continuation' })),
-      ...((sessionRes.data?.pairs || []).slice(0, 3)).map(p => ({ ...p, engine: 'Session', href: 'https://www.nervafx.com/session-continuation' })),
+      ...active(dailyRes.data?.pairs).slice(0, 3).map(p   => ({ ...p, engine: 'Daily',   href: 'https://www.nervafx.com/daily-continuation' })),
+      ...active(h4Res.data?.pairs).slice(0, 3).map(p      => ({ ...p, engine: 'H4',      href: 'https://www.nervafx.com/h1-continuation' })),
+      ...active(sessionRes.data?.pairs).slice(0, 3).map(p => ({ ...p, engine: 'Session', href: 'https://www.nervafx.com/session-continuation' })),
     ];
 
     if (!signals.length) {

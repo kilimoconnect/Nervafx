@@ -402,8 +402,6 @@ module.exports = async function handler(req, res) {
       else if (currentScore >= 30) currentLabel = 'Possible Reversal';
       else currentLabel = 'Continuation Failed';
 
-      if (state === 'STOPPED') continue;
-
       pairs.push({
         pair,
         instrument: inst,

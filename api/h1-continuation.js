@@ -352,9 +352,6 @@ module.exports = async function handler(req, res) {
         prevC = c;
       }
 
-      // Skip pairs whose monitoring has been invalidated
-      if (state === 'STOPPED') continue;
-
       const currentScore = score;
       let currentLabel;
       if (currentScore >= 85) currentLabel = 'Strong Continuation';
