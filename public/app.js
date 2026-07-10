@@ -3795,10 +3795,11 @@ function _anTime(iso) {
 }
 
 function renderQualityPreview(el, data) {
+  const qualified = arr => (arr || []).filter(p => p.qualified === true && p.state === 'MONITORING');
   const groups = [
-    { key: 'daily',   label: 'Daily',   href: '/daily-continuation',   pairs: data.daily?.pairs   || [] },
-    { key: 'h4',      label: 'H4',      href: '/h1-continuation',      pairs: data.h4?.pairs      || [] },
-    { key: 'session', label: 'Session', href: '/session-continuation', pairs: data.session?.pairs || [] },
+    { key: 'daily',   label: 'Daily',   href: '/daily-continuation',   pairs: qualified(data.daily?.pairs) },
+    { key: 'h4',      label: 'H4',      href: '/h1-continuation',      pairs: qualified(data.h4?.pairs) },
+    { key: 'session', label: 'Session', href: '/session-continuation', pairs: qualified(data.session?.pairs) },
   ];
 
   const total = groups.reduce((n, g) => n + g.pairs.length, 0);
