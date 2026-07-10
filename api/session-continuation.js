@@ -287,6 +287,18 @@ module.exports = async function handler(req, res) {
         if (c.close < ref.high && c.close > ref.low) {
           state = 'STOPPED';
           stoppedTime = c.time;
+          timeline.push({
+            time: c.time,
+            score,
+            delta: 0,
+            label: 'Monitoring Stopped',
+            event: 'Close back inside prev session range',
+            m15: {
+              open: c.open, high: c.high, low: c.low, close: c.close,
+              bull: c.close > c.open,
+              bodyPips: Math.round((Math.abs(c.close - c.open) / pd) * 10) / 10,
+            },
+          });
           break;
         }
 
@@ -404,7 +416,8 @@ module.exports = async function handler(req, res) {
 
       const currentScore = score;
       let currentLabel;
-      if (currentScore >= 85) currentLabel = 'Strong Continuation';
+      if (state === 'STOPPED') currentLabel = 'Monitoring Stopped';
+      else if (currentScore >= 85) currentLabel = 'Strong Continuation';
       else if (currentScore >= 70) currentLabel = 'Continuation Holding';
       else if (currentScore >= 50) currentLabel = 'Weakening';
       else if (currentScore >= 30) currentLabel = 'Possible Reversal';
