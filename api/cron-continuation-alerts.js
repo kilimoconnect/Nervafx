@@ -97,11 +97,30 @@ module.exports = async function handler(req, res) {
     const users = await getSubscribedUsers(sb);
     if (!users.length) return res.json({ ok: true, sent: 0, reason: 'no subscribed users' });
 
-    // Deduplicate: send at most one alert per (user, signal) key across this run.
-    // Uses the email_alert_log table keyed by trigger identity (pair + engine + triggerTime).
-    // We track successfully-emailed keys locally within this run to avoid double sending
-    // when signals overlap between engines.
-    const seen = new Set();
+    // Per-engine dedup window:
+    //   Daily   → 24h (one alert per pair per forex day)
+    //   H4      → 4h  (one alert per pair per H4 window)
+    //   Session → 10h (covers the longest session — Asia)
+    const ENGINE_COOLDOWN_MS = { Daily: 24 * 3600000, H4: 4 * 3600000, Session: 10 * 3600000 };
+    const nowMs = Date.now();
+    const lookbackCutoff = new Date(nowMs - 24 * 3600000).toISOString();
+
+    const { data: sentRows } = await sb
+      .from('email_alert_log')
+      .select('details, sent_at')
+      .eq('alert_type', 'continuation_trigger')
+      .gte('sent_at', lookbackCutoff);
+
+    // Track the most recent send time per (engine, instrument) pair.
+    const lastSentAt = new Map();
+    for (const r of sentRows || []) {
+      const d = r.details || {};
+      if (!d.engine || !d.instrument) continue;
+      const key = `${d.engine}|${d.instrument}`;
+      const t = new Date(r.sent_at).getTime();
+      const prev = lastSentAt.get(key) || 0;
+      if (t > prev) lastSentAt.set(key, t);
+    }
 
     // Group users by timezone so we can bulk-send within a tz per signal.
     const byTz = new Map();
@@ -111,12 +130,28 @@ module.exports = async function handler(req, res) {
       byTz.get(tz).push(u);
     }
 
-    let sent = 0;
-    let sends = 0;
+    // Track keys handled in THIS run so overlapping engines don't double-send.
+    const seenThisRun = new Set();
+    const results = [];
+
     for (const signal of signals) {
-      const key = `${signal.engine}|${signal.instrument || signal.pair}|${signal.triggerTime}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
+      const instrument = signal.instrument || (signal.pair || '').replace('/', '_');
+      const pairKey = `${signal.engine}|${instrument}`;
+
+      if (seenThisRun.has(pairKey)) {
+        results.push({ key: pairKey, skipped: true, reason: 'duplicate in run' });
+        continue;
+      }
+      const cooldown = ENGINE_COOLDOWN_MS[signal.engine] ?? 0;
+      const last = lastSentAt.get(pairKey) || 0;
+      if (cooldown && last && (nowMs - last) < cooldown) {
+        results.push({ key: pairKey, skipped: true, reason: 'within cooldown' });
+        continue;
+      }
+      seenThisRun.add(pairKey);
+
+      let recipientCount = 0;
+      let sendError = null;
 
       for (const [tz, tzUsers] of byTz.entries()) {
         const template = continuationPairAlertEmail(signal, tz);
@@ -124,20 +159,43 @@ module.exports = async function handler(req, res) {
         const recipients = tzUsers.map(u => ({ email: u.email, name: u.firstName }));
         try {
           await sendBulk(recipients, template);
-          sent += tzUsers.length;
-          sends++;
+          recipientCount += tzUsers.length;
         } catch (e) {
+          sendError = e.message;
           console.error('[cron-continuation-alerts] send failed', signal.pair, tz, e.message);
         }
       }
+
+      // Log the send so future runs skip this exact trigger.
+      if (recipientCount > 0) {
+        const { error: logErr } = await sb.from('email_alert_log').insert({
+          alert_type: 'continuation_trigger',
+          details: {
+            engine: signal.engine,
+            instrument,
+            pair: signal.pair,
+            direction: signal.direction,
+            triggerTime: signal.triggerTime,
+            recipients: recipientCount,
+          },
+        });
+        if (logErr) console.error('[cron-continuation-alerts] log insert failed', logErr.message);
+      }
+
+      results.push({ key, recipientCount, error: sendError });
     }
+
+    const dispatched = results.filter(r => r.recipientCount > 0).length;
+    const skipped    = results.filter(r => r.skipped).length;
+    const totalRecipients = results.reduce((n, r) => n + (r.recipientCount || 0), 0);
 
     return res.json({
       ok: true,
       users: users.length,
       signals: signals.length,
-      sends,
-      totalRecipients: sent,
+      dispatched,
+      skipped,
+      totalRecipients,
     });
   } catch (e) {
     console.error('[cron-continuation-alerts]', e);
