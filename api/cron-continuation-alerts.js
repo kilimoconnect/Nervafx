@@ -17,9 +17,12 @@ async function getSubscribedUsers(sb) {
   if (!users?.users) return [];
 
   const [prefRes, profRes] = await Promise.all([
-    sb.from('email_preferences').select('user_id, signal_alerts, unsubscribed, notification_email'),
-    sb.from('profiles').select('id, timezone, first_name'),
+    sb.from('email_preferences').select('user_id, signal_alerts, unsubscribed, notification_email').limit(2000),
+    sb.from('profiles').select('id, timezone, first_name').limit(2000),
   ]);
+
+  if (prefRes.error) console.error('[cron-continuation-alerts] email_preferences fetch:', prefRes.error.message);
+  if (profRes.error) console.error('[cron-continuation-alerts] profiles fetch:', profRes.error.message);
 
   const prefMap = {};
   for (const p of prefRes.data || []) prefMap[p.user_id] = p;
@@ -27,7 +30,7 @@ async function getSubscribedUsers(sb) {
   const profMap = {};
   for (const p of profRes.data || []) profMap[p.id] = p;
 
-  return users.users.filter(u => {
+  const list = users.users.filter(u => {
     const p = prefMap[u.id];
     if (p?.unsubscribed) return false;
     if (p?.signal_alerts === false) return false;
@@ -35,13 +38,19 @@ async function getSubscribedUsers(sb) {
   }).map(u => {
     const prof = profMap[u.id] || {};
     const pref = prefMap[u.id] || {};
+    const tz = (typeof prof.timezone === 'string' && prof.timezone.trim())
+      ? prof.timezone.trim()
+      : 'UTC';
     return {
       id: u.id,
       email: pref.notification_email || u.email,
       firstName: prof.first_name || u.user_metadata?.first_name || '',
-      timezone: prof.timezone || 'UTC',
+      timezone: tz,
     };
   });
+
+  console.log('[cron-continuation-alerts] recipients:', list.map(u => ({ email: u.email, tz: u.timezone })));
+  return list;
 }
 
 // Invoke a continuation handler internally and capture its JSON.
