@@ -288,10 +288,11 @@ module.exports = async function handler(req, res) {
       const timeline = [{
         time: trigger.time,
         score,
-        label: 'Break',
+        label: 'Trigger 1',
         event: direction === 'BUY'
           ? 'Close above 24-M15 high (' + Math.round(triggerBreakPips * 10) / 10 + ' pips)'
           : 'Close below 24-M15 low (' + Math.round(triggerBreakPips * 10) / 10 + ' pips)',
+        qualified: true,
         m15: {
           open: trigger.open, high: trigger.high, low: trigger.low, close: trigger.close,
           bull: triggerBull,
@@ -299,9 +300,9 @@ module.exports = async function handler(req, res) {
         },
       }];
 
-      // A setup fully qualifies only after TWO monitoring candles each produce
-      // a delta of at least +7 (Break → Trigger 1 → Trigger 2).
-      let firstTriggerTime = null;
+      // Break candle counts as Trigger 1; the setup qualifies once a monitoring
+      // candle posts delta >= +6 and score > 75 to become Trigger 2.
+      let firstTriggerTime = trigger.time;
       let qualifiedTime = null;
 
       let runHigh = trigger.high;
@@ -431,16 +432,11 @@ module.exports = async function handler(req, res) {
 
         let entryLabel = statusLabel;
         let justQualified = false;
-        // Each trigger candle: delta >= +6 AND running score above 75.
-        if (delta >= 6 && score > 75) {
-          if (firstTriggerTime === null) {
-            firstTriggerTime = c.time;
-            entryLabel = 'Trigger 1';
-          } else if (qualifiedTime === null) {
-            qualifiedTime = c.time;
-            entryLabel = 'Trigger 2';
-            justQualified = true;
-          }
+        // Looking for Trigger 2: delta >= +6 AND running score above 75.
+        if (qualifiedTime === null && delta >= 6 && score > 75) {
+          qualifiedTime = c.time;
+          entryLabel = 'Trigger 2';
+          justQualified = true;
         }
 
         timeline.push({
@@ -448,7 +444,7 @@ module.exports = async function handler(req, res) {
           score,
           delta,
           label: entryLabel,
-          event: (entryLabel === 'Trigger 1' || justQualified)
+          event: justQualified
             ? 'Delta +' + delta + ' (' + (events.join(', ') || 'No change') + ')'
             : (events.join(', ') || 'No change'),
           qualified: justQualified || undefined,
