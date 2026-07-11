@@ -265,8 +265,8 @@ module.exports = async function handler(req, res) {
         },
       }];
 
-      // Trigger qualifies once a single candle produces a delta of at least +9
-      // (e.g. New high + Close beyond prev H1 high + Strong body).
+      // Trigger qualifies once a single candle produces a delta of at least +7
+      // (e.g. New high + Close beyond prev H1 high).
       let qualifiedTime = null;
 
       let runHigh = direction === 'BUY' ? trigger.high : trigger.high;
@@ -397,7 +397,7 @@ module.exports = async function handler(req, res) {
         // Mark the first candle whose delta reaches +9 as the trigger
         let entryLabel = statusLabel;
         let justQualified = false;
-        if (qualifiedTime === null && delta >= 9) {
+        if (qualifiedTime === null && delta >= 7) {
           qualifiedTime = h1.time;
           entryLabel = 'Trigger';
           justQualified = true;

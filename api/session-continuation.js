@@ -286,8 +286,8 @@ module.exports = async function handler(req, res) {
         },
       }];
 
-      // Trigger qualifies once a single candle produces a delta of at least +9
-      // (e.g. New low + Close below prev M15 low + Strong body).
+      // Trigger qualifies once a single candle produces a delta of at least +7
+      // (e.g. New low + Close below prev M15 low).
       let qualifiedTime = null;
 
       let runHigh = trigger.high;
@@ -417,7 +417,7 @@ module.exports = async function handler(req, res) {
 
         let entryLabel = statusLabel;
         let justQualified = false;
-        if (qualifiedTime === null && delta >= 9) {
+        if (qualifiedTime === null && delta >= 7) {
           qualifiedTime = c.time;
           entryLabel = 'Trigger';
           justQualified = true;
