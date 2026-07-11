@@ -186,29 +186,42 @@ module.exports = async function handler(req, res) {
       const refRangePips = Math.round((refRange / pd) * 10) / 10;
       const refBodyPips = Math.round((Math.abs(ref.close - ref.open) / pd) * 10) / 10;
 
-      // M15 candles inside the current H4 window
+      // M15 candles (full window for lookback + tracking)
       const m15all = m15Cache[inst] || [];
-      const m15s = m15all.filter(c => c.time >= trackStart);
-      if (!m15s.length) continue;
+      if (m15all.length < 25) continue;
 
-      // Phase 1: locate the TRIGGER M15 — first M15 that closes beyond the ref H4's
-      // high in the confirmed BUY direction, or below its low in the confirmed SELL
-      // direction. Monitoring only starts here.
-      let triggerIdx = -1;
+      const trackStartMs = new Date(trackStart).getTime();
+
+      // Phase 1: locate the TRIGGER M15 — first M15 inside the current H4 window
+      // that closes beyond the highest high (BUY) or lowest low (SELL) of the
+      // preceding 24 M15 candles.
+      let triggerAllIdx = -1;
+      let breakLevel = 0;
       const direction = confirmedDirection;
-      for (let i = 0; i < m15s.length; i++) {
-        const c = m15s[i];
+      for (let i = 24; i < m15all.length; i++) {
+        const c = m15all[i];
+        const cMs = new Date(c.time).getTime();
+        if (cMs < trackStartMs) continue;
         // Blackout window: skip triggers between 21:00 and 22:00 UTC (00:00-01:00 EAT)
         if (new Date(c.time).getUTCHours() === 21) continue;
-        if (direction === 'BUY' && c.close > ref.high) { triggerIdx = i; break; }
-        if (direction === 'SELL' && c.close < ref.low) { triggerIdx = i; break; }
-      }
-      if (triggerIdx === -1) continue;
 
-      const trigger = m15s[triggerIdx];
+        let maxHigh = -Infinity, minLow = Infinity;
+        for (let j = i - 24; j < i; j++) {
+          if (m15all[j].high > maxHigh) maxHigh = m15all[j].high;
+          if (m15all[j].low < minLow) minLow = m15all[j].low;
+        }
+
+        if (direction === 'BUY' && c.close > maxHigh) { triggerAllIdx = i; breakLevel = maxHigh; break; }
+        if (direction === 'SELL' && c.close < minLow) { triggerAllIdx = i; breakLevel = minLow; break; }
+      }
+      if (triggerAllIdx === -1) continue;
+
+      const trigger = m15all[triggerAllIdx];
+      const m15s = m15all.slice(triggerAllIdx);
+      const triggerIdx = 0;
       const triggerBreakPips = direction === 'BUY'
-        ? (trigger.close - ref.high) / pd
-        : (ref.low - trigger.close) / pd;
+        ? (trigger.close - breakLevel) / pd
+        : (breakLevel - trigger.close) / pd;
 
       // Initial score
       let score = 50;
@@ -228,8 +241,8 @@ module.exports = async function handler(req, res) {
         score,
         label: 'Break',
         event: direction === 'BUY'
-          ? 'Close above prev H4 high (' + Math.round(triggerBreakPips * 10) / 10 + ' pips)'
-          : 'Close below prev H4 low (' + Math.round(triggerBreakPips * 10) / 10 + ' pips)',
+          ? 'Close above 24-M15 high (' + Math.round(triggerBreakPips * 10) / 10 + ' pips)'
+          : 'Close below 24-M15 low (' + Math.round(triggerBreakPips * 10) / 10 + ' pips)',
         m15: {
           open: trigger.open, high: trigger.high, low: trigger.low, close: trigger.close,
           bull: triggerBull,

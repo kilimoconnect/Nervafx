@@ -236,28 +236,41 @@ module.exports = async function handler(req, res) {
       }
       refBreakPips = Math.round(refBreakPips * 10) / 10;
 
-      // Current session's M15 candles
-      const curM15s = all.filter(c => c.time >= trackStartISO && c.time < curEndISO);
-      if (!curM15s.length) continue;
+      if (all.length < 25) continue;
 
-      // Phase 1: locate the TRIGGER M15 — first M15 that closes beyond the prev session's
-      // high in the confirmed BUY direction, or below its low in the confirmed SELL
-      // direction. Monitoring only starts here.
-      let triggerIdx = -1;
+      const trackStartMs = new Date(trackStartISO).getTime();
+      const curEndMs = new Date(curEndISO).getTime();
+
+      // Phase 1: locate the TRIGGER M15 — first M15 inside the current session
+      // that closes beyond the highest high (BUY) or lowest low (SELL) of the
+      // preceding 24 M15 candles.
+      let triggerAllIdx = -1;
+      let breakLevel = 0;
       const direction = confirmedDirection;
-      for (let i = 0; i < curM15s.length; i++) {
-        const c = curM15s[i];
+      for (let i = 24; i < all.length; i++) {
+        const c = all[i];
+        const cMs = new Date(c.time).getTime();
+        if (cMs < trackStartMs || cMs >= curEndMs) continue;
         // Blackout window: skip triggers between 21:00 and 22:00 UTC (00:00-01:00 EAT)
         if (new Date(c.time).getUTCHours() === 21) continue;
-        if (direction === 'BUY' && c.close > ref.high) { triggerIdx = i; break; }
-        if (direction === 'SELL' && c.close < ref.low) { triggerIdx = i; break; }
-      }
-      if (triggerIdx === -1) continue;
 
-      const trigger = curM15s[triggerIdx];
+        let maxHigh = -Infinity, minLow = Infinity;
+        for (let j = i - 24; j < i; j++) {
+          if (all[j].high > maxHigh) maxHigh = all[j].high;
+          if (all[j].low < minLow) minLow = all[j].low;
+        }
+
+        if (direction === 'BUY' && c.close > maxHigh) { triggerAllIdx = i; breakLevel = maxHigh; break; }
+        if (direction === 'SELL' && c.close < minLow) { triggerAllIdx = i; breakLevel = minLow; break; }
+      }
+      if (triggerAllIdx === -1) continue;
+
+      const trigger = all[triggerAllIdx];
+      const curM15s = all.slice(triggerAllIdx).filter(c => new Date(c.time).getTime() < curEndMs);
+      const triggerIdx = 0;
       const triggerBreakPips = direction === 'BUY'
-        ? (trigger.close - ref.high) / pd
-        : (ref.low - trigger.close) / pd;
+        ? (trigger.close - breakLevel) / pd
+        : (breakLevel - trigger.close) / pd;
 
       // Initial score
       let score = 50;
@@ -277,8 +290,8 @@ module.exports = async function handler(req, res) {
         score,
         label: 'Break',
         event: direction === 'BUY'
-          ? 'Close above prev session high (' + Math.round(triggerBreakPips * 10) / 10 + ' pips)'
-          : 'Close below prev session low (' + Math.round(triggerBreakPips * 10) / 10 + ' pips)',
+          ? 'Close above 24-M15 high (' + Math.round(triggerBreakPips * 10) / 10 + ' pips)'
+          : 'Close below 24-M15 low (' + Math.round(triggerBreakPips * 10) / 10 + ' pips)',
         m15: {
           open: trigger.open, high: trigger.high, low: trigger.low, close: trigger.close,
           bull: triggerBull,
