@@ -265,8 +265,9 @@ module.exports = async function handler(req, res) {
         },
       }];
 
-      // Trigger qualifies once a single candle produces a delta of at least +7
-      // (e.g. New high + Close beyond prev H1 high).
+      // A setup fully qualifies only after TWO monitoring candles each produce
+      // a delta of at least +7 (Break → Trigger 1 → Trigger 2).
+      let firstTriggerTime = null;
       let qualifiedTime = null;
 
       let runHigh = direction === 'BUY' ? trigger.high : trigger.high;
@@ -394,13 +395,18 @@ module.exports = async function handler(req, res) {
         else if (score >= 30) statusLabel = 'Possible Reversal';
         else statusLabel = 'Continuation Failed';
 
-        // Mark the first candle whose delta reaches +9 as the trigger
+        // Break → Trigger 1 → Trigger 2. Card only shows on the 2nd delta ≥ 7.
         let entryLabel = statusLabel;
         let justQualified = false;
-        if (qualifiedTime === null && delta >= 7) {
-          qualifiedTime = h1.time;
-          entryLabel = 'Trigger';
-          justQualified = true;
+        if (delta >= 7) {
+          if (firstTriggerTime === null) {
+            firstTriggerTime = h1.time;
+            entryLabel = 'Trigger 1';
+          } else if (qualifiedTime === null) {
+            qualifiedTime = h1.time;
+            entryLabel = 'Trigger 2';
+            justQualified = true;
+          }
         }
 
         timeline.push({
@@ -408,7 +414,7 @@ module.exports = async function handler(req, res) {
           score,
           delta,
           label: entryLabel,
-          event: justQualified
+          event: (entryLabel === 'Trigger 1' || justQualified)
             ? 'Delta +' + delta + ' (' + (events.join(', ') || 'No change') + ')'
             : (events.join(', ') || 'No change'),
           qualified: justQualified || undefined,
@@ -439,6 +445,7 @@ module.exports = async function handler(req, res) {
         initialScore,
         state,
         breakTime: trigger.time,
+        firstTriggerTime,
         triggerTime: qualifiedTime,
         qualified: qualifiedTime !== null,
         stoppedTime,
