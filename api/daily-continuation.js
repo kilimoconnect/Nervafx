@@ -395,10 +395,11 @@ module.exports = async function handler(req, res) {
         else if (score >= 30) statusLabel = 'Possible Reversal';
         else statusLabel = 'Continuation Failed';
 
-        // Break → Trigger 1 → Trigger 2. Card only shows on the 2nd delta ≥ 7.
+        // Break → Trigger 1 → Trigger 2. Each trigger candle must post
+        // delta >= +6 AND leave the running score above 75.
         let entryLabel = statusLabel;
         let justQualified = false;
-        if (delta >= 6) {
+        if (delta >= 6 && score > 75) {
           if (firstTriggerTime === null) {
             firstTriggerTime = h1.time;
             entryLabel = 'Trigger 1';

@@ -431,7 +431,8 @@ module.exports = async function handler(req, res) {
 
         let entryLabel = statusLabel;
         let justQualified = false;
-        if (delta >= 6) {
+        // Each trigger candle: delta >= +6 AND running score above 75.
+        if (delta >= 6 && score > 75) {
           if (firstTriggerTime === null) {
             firstTriggerTime = c.time;
             entryLabel = 'Trigger 1';
