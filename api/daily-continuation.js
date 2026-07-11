@@ -455,16 +455,16 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // Sort: qualified triggers first; then by how strongly the previous daily
-    // candle broke its predecessor (refBreakPips desc); then by trigger/break
-    // time asc; finally by triggerBreakPips desc.
+    // Sort: qualified triggers first, ranked by trigger time ascending
+    // (earliest trigger first); tie-break by refBreakPips desc then
+    // triggerBreakPips desc. Unqualified pairs follow by break time asc.
     pairs.sort((a, b) => {
       if (a.triggerTime && !b.triggerTime) return -1;
       if (!a.triggerTime && b.triggerTime) return 1;
-      if ((b.refBreakPips || 0) !== (a.refBreakPips || 0)) return (b.refBreakPips || 0) - (a.refBreakPips || 0);
       const at = a.triggerTime || a.breakTime;
       const bt = b.triggerTime || b.breakTime;
       if (at !== bt) return at < bt ? -1 : 1;
+      if ((b.refBreakPips || 0) !== (a.refBreakPips || 0)) return (b.refBreakPips || 0) - (a.refBreakPips || 0);
       return b.triggerBreakPips - a.triggerBreakPips;
     });
 
