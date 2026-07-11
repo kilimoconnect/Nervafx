@@ -381,7 +381,7 @@ module.exports = async function handler(req, res) {
 
         let entryLabel = statusLabel;
         let justQualified = false;
-        if (delta >= 7) {
+        if (delta >= 6) {
           if (firstTriggerTime === null) {
             firstTriggerTime = c.time;
             entryLabel = 'Trigger 1';

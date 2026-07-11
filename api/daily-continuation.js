@@ -398,7 +398,7 @@ module.exports = async function handler(req, res) {
         // Break → Trigger 1 → Trigger 2. Card only shows on the 2nd delta ≥ 7.
         let entryLabel = statusLabel;
         let justQualified = false;
-        if (delta >= 7) {
+        if (delta >= 6) {
           if (firstTriggerTime === null) {
             firstTriggerTime = h1.time;
             entryLabel = 'Trigger 1';
