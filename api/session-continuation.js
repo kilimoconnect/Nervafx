@@ -224,6 +224,18 @@ module.exports = async function handler(req, res) {
       }
       if (!confirmedDirection) continue;
 
+      // Strength of the confirming break (prev session broke its own predecessor
+      // by this many pips) — used to rank pairs.
+      let refBreakPips = 0;
+      if (confirmedDirection === 'BUY') {
+        if (r1BuyBrk) refBreakPips = (ref.close - ref2.high) / pd;
+        else if (r2BuyBrk) refBreakPips = (ref2.close - ref3.high) / pd;
+      } else {
+        if (r1SellBrk) refBreakPips = (ref2.low - ref.close) / pd;
+        else if (r2SellBrk) refBreakPips = (ref3.low - ref2.close) / pd;
+      }
+      refBreakPips = Math.round(refBreakPips * 10) / 10;
+
       // Current session's M15 candles
       const curM15s = all.filter(c => c.time >= trackStartISO && c.time < curEndISO);
       if (!curM15s.length) continue;
@@ -453,6 +465,7 @@ module.exports = async function handler(req, res) {
         qualified: qualifiedTime !== null,
         stoppedTime,
         triggerBreakPips: Math.round(triggerBreakPips * 10) / 10,
+        refBreakPips,
         refSession: {
           name: prev.name,
           start: prevStartISO,
@@ -472,11 +485,12 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // Sort: qualified triggers first (score reached 84), earliest first;
-    //       then unqualified pairs by break time; tie-break by break pips.
+    // Sort: qualified first; then by prev-session break strength (refBreakPips
+    // desc); then by trigger/break time asc; finally by triggerBreakPips desc.
     pairs.sort((a, b) => {
       if (a.triggerTime && !b.triggerTime) return -1;
       if (!a.triggerTime && b.triggerTime) return 1;
+      if ((b.refBreakPips || 0) !== (a.refBreakPips || 0)) return (b.refBreakPips || 0) - (a.refBreakPips || 0);
       const at = a.triggerTime || a.breakTime;
       const bt = b.triggerTime || b.breakTime;
       if (at !== bt) return at < bt ? -1 : 1;

@@ -184,6 +184,18 @@ module.exports = async function handler(req, res) {
       }
       if (!confirmedDirection) continue;
 
+      // Strength of the confirming break (prev daily candle broke its own
+      // predecessor by this many pips) — used to rank pairs.
+      let refBreakPips = 0;
+      if (confirmedDirection === 'BUY') {
+        if (d1BreakBuy) refBreakPips = (d1.close - d2.high) / pd;
+        else if (d2BreakBuy) refBreakPips = (d2.close - d3.high) / pd;
+      } else {
+        if (d1BreakSell) refBreakPips = (d2.low - d1.close) / pd;
+        else if (d2BreakSell) refBreakPips = (d3.low - d2.close) / pd;
+      }
+      refBreakPips = Math.round(refBreakPips * 10) / 10;
+
       // D-1 = the level reference for triggering monitoring today
       const ydOpen = d1.open;
       const ydClose = d1.close;
@@ -434,6 +446,7 @@ module.exports = async function handler(req, res) {
         qualified: qualifiedTime !== null,
         stoppedTime,
         triggerBreakPips: Math.round(triggerBreakPips * 10) / 10,
+        refBreakPips,
         yesterday: {
           open: ydOpen, high: ydHigh, low: ydLow, close: ydClose,
           bodyPct: ydBodyPct, upperWickPct, lowerWickPct,
@@ -445,12 +458,13 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // Sort: qualified triggers first (score reached 84), earliest first;
-    //       then unqualified (still-monitoring) pairs by break time; tie-break
-    //       by trigger break pips (stronger first).
+    // Sort: qualified triggers first; then by how strongly the previous daily
+    // candle broke its predecessor (refBreakPips desc); then by trigger/break
+    // time asc; finally by triggerBreakPips desc.
     pairs.sort((a, b) => {
       if (a.triggerTime && !b.triggerTime) return -1;
       if (!a.triggerTime && b.triggerTime) return 1;
+      if ((b.refBreakPips || 0) !== (a.refBreakPips || 0)) return (b.refBreakPips || 0) - (a.refBreakPips || 0);
       const at = a.triggerTime || a.breakTime;
       const bt = b.triggerTime || b.breakTime;
       if (at !== bt) return at < bt ? -1 : 1;
