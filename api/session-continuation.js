@@ -286,11 +286,9 @@ module.exports = async function handler(req, res) {
         },
       }];
 
-      let qualifiedTime = score >= 84 ? trigger.time : null;
-      if (qualifiedTime) {
-        timeline[0].label = 'Trigger';
-        timeline[0].qualified = true;
-      }
+      // Trigger qualifies once a single candle produces a delta of at least +9
+      // (e.g. New low + Close below prev M15 low + Strong body).
+      let qualifiedTime = null;
 
       let runHigh = trigger.high;
       let runLow = trigger.low;
@@ -419,7 +417,7 @@ module.exports = async function handler(req, res) {
 
         let entryLabel = statusLabel;
         let justQualified = false;
-        if (qualifiedTime === null && score >= 84) {
+        if (qualifiedTime === null && delta >= 9) {
           qualifiedTime = c.time;
           entryLabel = 'Trigger';
           justQualified = true;
@@ -431,7 +429,7 @@ module.exports = async function handler(req, res) {
           delta,
           label: entryLabel,
           event: justQualified
-            ? 'Score crossed 84 (' + (events.join(', ') || 'No change') + ')'
+            ? 'Delta +' + delta + ' (' + (events.join(', ') || 'No change') + ')'
             : (events.join(', ') || 'No change'),
           qualified: justQualified || undefined,
           m15: {

@@ -265,12 +265,9 @@ module.exports = async function handler(req, res) {
         },
       }];
 
-      // Trigger qualifies once score first reaches 84.
-      let qualifiedTime = score >= 84 ? trigger.time : null;
-      if (qualifiedTime) {
-        timeline[0].label = 'Trigger';
-        timeline[0].qualified = true;
-      }
+      // Trigger qualifies once a single candle produces a delta of at least +9
+      // (e.g. New high + Close beyond prev H1 high + Strong body).
+      let qualifiedTime = null;
 
       let runHigh = direction === 'BUY' ? trigger.high : trigger.high;
       let runLow = direction === 'SELL' ? trigger.low : trigger.low;
@@ -397,10 +394,10 @@ module.exports = async function handler(req, res) {
         else if (score >= 30) statusLabel = 'Possible Reversal';
         else statusLabel = 'Continuation Failed';
 
-        // Mark the moment score first crosses 84 as the trigger
+        // Mark the first candle whose delta reaches +9 as the trigger
         let entryLabel = statusLabel;
         let justQualified = false;
-        if (qualifiedTime === null && score >= 84) {
+        if (qualifiedTime === null && delta >= 9) {
           qualifiedTime = h1.time;
           entryLabel = 'Trigger';
           justQualified = true;
@@ -412,7 +409,7 @@ module.exports = async function handler(req, res) {
           delta,
           label: entryLabel,
           event: justQualified
-            ? 'Score crossed 84 (' + (events.join(', ') || 'No change') + ')'
+            ? 'Delta +' + delta + ' (' + (events.join(', ') || 'No change') + ')'
             : (events.join(', ') || 'No change'),
           qualified: justQualified || undefined,
           h1: {
