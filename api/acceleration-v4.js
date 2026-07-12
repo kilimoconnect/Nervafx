@@ -284,3 +284,9 @@ module.exports = async function handler(req, res) {
 };
 
 module.exports.maxDuration = 60;
+
+// Expose helpers so /api/acceleration-v4-history can reuse them without
+// invoking this handler N times.
+module.exports.analysePair = analysePair;
+module.exports.fetchCandles = fetchCandles;
+module.exports.VALID_PAIRS = VALID_PAIRS;

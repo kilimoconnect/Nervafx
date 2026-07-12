@@ -3,36 +3,51 @@
 /**
  * GET /api/acceleration-v4-history?from=YYYY-MM-DD&to=YYYY-MM-DD
  *
- * Iterates every M15 timestamp in the range and records any *qualified*
- * Forex Acceleration v4 signal. Used by the History card on the page.
- *
- * Response:
- *   { rows: [ { time, pair, direction, finalScore, m15Accel, m15Velocity } ... ] }
+ * Pre-fetches H1 + M15 candles for every pair across the range ONCE, then
+ * iterates every 15-minute anchor in memory. Much faster than invoking the
+ * live handler per anchor — a 1-day scan is ~56 DB queries instead of ~5400.
  */
 
-const v4 = require('./acceleration-v4.js');
-const { cors } = require('./_db');
-const { requirePlan } = require('./_plan');
-
 const { createClient } = require('@supabase/supabase-js');
+const { cors, getClient } = require('./_db');
+const { requirePlan } = require('./_plan');
+const v4 = require('./acceleration-v4.js');
+
+const VALID_PAIRS = v4.VALID_PAIRS;
+const analysePair = v4.analysePair;
 
 function getServiceClient() {
   return createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 }
 
-// Invoke the v4 handler internally with a mock res that captures the JSON.
-async function invoke(query) {
-  return await new Promise((resolve) => {
-    const req = { method: 'GET', query, headers: {}, _internal: true };
-    let payload = null;
-    const res = {
-      setHeader() {},
-      status(c) { this._c = c; return this; },
-      json(d) { payload = d; resolve({ status: this._c || 200, data: d }); return this; },
-      end() { resolve({ status: this._c || 200, data: payload }); },
-    };
-    v4(req, res).catch((e) => resolve({ status: 500, data: { error: e.message } }));
-  });
+// Fetch all candles for one pair/timeframe across a wide window with pagination.
+async function fetchAll(sb, inst, tf, since, until) {
+  const PAGE = 1000;
+  const all = [];
+  let offset = 0;
+  while (true) {
+    const { data, error } = await sb
+      .from('backtest_candles')
+      .select('time, open, high, low, close, volume')
+      .eq('instrument', inst).eq('timeframe', tf)
+      .gte('time', since).lte('time', until)
+      .order('time', { ascending: true })
+      .range(offset, offset + PAGE - 1);
+    if (error) throw error;
+    if (!data || !data.length) break;
+    all.push(...data.map(c => ({
+      time: c.time,
+      open: parseFloat(c.open),
+      high: parseFloat(c.high),
+      low:  parseFloat(c.low),
+      close: parseFloat(c.close),
+      volume: c.volume == null ? 0 : Number(c.volume),
+      _ms: new Date(c.time).getTime(),
+    })));
+    if (data.length < PAGE) break;
+    offset += PAGE;
+  }
+  return all;
 }
 
 module.exports = async function handler(req, res) {
@@ -53,33 +68,65 @@ module.exports = async function handler(req, res) {
   const end   = new Date(to   + 'T23:45:00Z');
   if (isNaN(start) || isNaN(end)) return res.status(400).json({ error: 'invalid dates' });
 
-  // Iterate every 15 minutes across the range. Cap at 4000 anchors to keep the
-  // serverless function bounded.
-  const CAP = 4000;
+  const t0 = Date.now();
+  const sb = getClient();
+
+  // Fetch enough history for the indicators to warm up. H1 needs 51 candles for
+  // EMA50; M15 needs 51 for ATR50. Add generous buffer for the earliest anchor.
+  const fetchSince = new Date(start.getTime() - 5 * 24 * 3600000).toISOString();
+  const fetchUntil = new Date(end.getTime()   + 60 * 60000).toISOString();
+
+  const cache = {};
+  const errors = [];
+  for (let b = 0; b < VALID_PAIRS.length; b += 7) {
+    const batch = VALID_PAIRS.slice(b, b + 7);
+    await Promise.all(batch.map(async inst => {
+      try {
+        const [h1, m15] = await Promise.all([
+          fetchAll(sb, inst, 'H1',  fetchSince, fetchUntil),
+          fetchAll(sb, inst, 'M15', fetchSince, fetchUntil),
+        ]);
+        cache[inst] = { h1, m15 };
+      } catch (e) {
+        errors.push(`${inst}: ${e.message}`);
+        cache[inst] = { h1: [], m15: [] };
+      }
+    }));
+  }
+
   const rows = [];
+  const CAP = 4000;
   let anchor = new Date(start.getTime());
   let iterations = 0;
-  const t0 = Date.now();
 
   while (anchor <= end && iterations < CAP) {
-    // Skip weekends (Sat 00:00 UTC through Sun 21:00 UTC)
     const day = anchor.getUTCDay();
     const skipWeekend = day === 6 || (day === 0 && anchor.getUTCHours() < 21);
     if (!skipWeekend) {
-      const date = anchor.toISOString().slice(0, 10);
-      const time = String(anchor.getUTCHours()).padStart(2, '0') + ':' + String(anchor.getUTCMinutes()).padStart(2, '0');
-      const r = await invoke({ date, time });
-      if (r.status === 200 && r.data?.selected) {
-        const s = r.data.selected;
+      const anchorMs = anchor.getTime();
+      const results = [];
+      for (const inst of VALID_PAIRS) {
+        const cached = cache[inst];
+        if (!cached) continue;
+        // Slice to snapshots strictly on or before the anchor
+        const h1Slice  = cached.h1.filter(c  => c._ms  <= anchorMs);
+        const m15Slice = cached.m15.filter(c => c._ms <= anchorMs);
+        if (h1Slice.length < 51 || m15Slice.length < 51) continue;
+        const r = analysePair(inst, h1Slice, m15Slice);
+        if (r) results.push(r);
+      }
+      results.sort((a, b) => b.finalScore - a.finalScore);
+      const selected = results.find(r => r.qualifies);
+      if (selected) {
         rows.push({
-          time: r.data.generatedAt,
-          pair: s.pair,
-          direction: s.direction,
-          finalScore: s.finalScore,
-          m15Accel: s.components.m15Acceleration.score,
-          m15Velocity: s.components.m15Velocity.score,
-          candleControl: s.components.candleControl.score,
-          compression: s.components.compression.score,
+          time: anchor.toISOString(),
+          pair: selected.pair,
+          direction: selected.direction,
+          finalScore: selected.finalScore,
+          m15Accel: selected.components.m15Acceleration.score,
+          m15Velocity: selected.components.m15Velocity.score,
+          candleControl: selected.components.candleControl.score,
+          compression: selected.components.compression.score,
         });
       }
     }
@@ -92,6 +139,7 @@ module.exports = async function handler(req, res) {
     anchors_scanned: iterations,
     qualified: rows.length,
     duration_sec: Math.round((Date.now() - t0) / 100) / 10,
+    errors: errors.slice(0, 5),
     rows,
   });
 };
