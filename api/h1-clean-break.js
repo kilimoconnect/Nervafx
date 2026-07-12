@@ -147,10 +147,17 @@ module.exports = async function handler(req, res) {
         const inner = m15ByHour.get(targetMs);
         if (!inner || inner.length !== 4) continue;
 
-        const aligned = inner.every(c =>
-          direction === 'BUY' ? c.close > c.open : c.close < c.open
-        );
-        if (!aligned) continue;
+        // Data-driven relaxation from strict "all 4 aligned" to "at least 3 of 4".
+        // On the USD/JPY +92p Asian rally 5 Jul 22:00 → 6 Jul 07:00 UTC, the
+        // 4-of-4 rule caught zero H1s — every big candle had a single tiny
+        // opposite-direction M15. 3-of-4 catches 4 H1s during the same move
+        // including the +27.8p body at 01:00 UTC.
+        const alignedCount = inner.reduce((n, c) => {
+          const aligned = direction === 'BUY' ? c.close > c.open : c.close < c.open;
+          return n + (aligned ? 1 : 0);
+        }, 0);
+        if (alignedCount < 3) continue;
+        const alignmentStrength = alignedCount; // 3 or 4
 
         const range = target.high - target.low;
         const body = Math.abs(target.close - target.open);
@@ -175,6 +182,7 @@ module.exports = async function handler(req, res) {
           instrument: inst,
           direction,
           breakLevel: Math.round(breakLevel / pd) * pd,
+          alignedM15: alignmentStrength, // 3 or 4 M15s aligned inside the break H1
           h1: {
             open: target.open, high: target.high, low: target.low, close: target.close,
             rangePips: Math.round((range / pd) * 10) / 10,
