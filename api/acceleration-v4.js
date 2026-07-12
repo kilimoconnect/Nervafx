@@ -269,17 +269,22 @@ module.exports = async function handler(req, res) {
       for (const r of results) if (r == null) skippedInsufficient++; else rows.push(r);
     }
 
-    // Rank by final score descending
-    rows.sort((a, b) => b.finalScore - a.finalScore);
+    // Rank by final score descending; only surface pairs whose H1 bias is set
+    // (Close > EMA20 > EMA50 for BUY, Close < EMA20 < EMA50 for SELL). Neutrals
+    // disqualify by definition — hide them so the list stays actionable.
+    const biased = rows.filter(r => r.direction != null);
+    biased.sort((a, b) => b.finalScore - a.finalScore);
 
-    const qualified = rows.filter(r => r.qualifies);
+    const qualified = biased.filter(r => r.qualifies);
     const selected = qualified[0] || null;
 
     res.json({
       generatedAt: untilTs,
-      total: rows.length,
+      total: biased.length,
+      analysed: rows.length,
       qualifiedCount: qualified.length,
       skippedInsufficient,
+      skippedNeutralBias: rows.length - biased.length,
       warmup: {
         needH1: 51,
         needM15: 51,
@@ -287,7 +292,7 @@ module.exports = async function handler(req, res) {
         haveM15: maxM15Seen,
       },
       selected,
-      results: rows,
+      results: biased,
     });
   } catch (e) {
     console.error('[acceleration-v4]', e);
