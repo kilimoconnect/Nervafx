@@ -141,15 +141,19 @@ module.exports = async function handler(req, res) {
         ? anchor.toISOString()
         : new Date(new Date(refStart).getTime() + H4_MS).toISOString();
 
-      // Direction confirmation: one of the last two H4s must have CLOSED beyond
-      // its own previous H4's high (BUY) or low (SELL).
+      // Direction confirmation. Primary: last H4 broke against the H4 before.
+      // Fallback: H4[-2] broke, but only if H4[-1]'s own body agrees. Prevents
+      // a stale H4 break from firing after the very next H4 has already
+      // reversed direction.
       const r1BuyBrk  = ref.close  > ref2.high;
       const r1SellBrk = ref.close  < ref2.low;
       const r2BuyBrk  = ref3 ? ref2.close > ref3.high : false;
       const r2SellBrk = ref3 ? ref2.close < ref3.low  : false;
+      const refBullish = ref.close > ref.open;
+      const refBearish = ref.close < ref.open;
 
-      const buyConfirm  = r1BuyBrk  || r2BuyBrk;
-      const sellConfirm = r1SellBrk || r2SellBrk;
+      const buyConfirm  = r1BuyBrk  || (r2BuyBrk  && refBullish);
+      const sellConfirm = r1SellBrk || (r2SellBrk && refBearish);
 
       let confirmedDirection = null;
       if (buyConfirm && !sellConfirm) confirmedDirection = 'BUY';
@@ -157,7 +161,7 @@ module.exports = async function handler(req, res) {
       else if (buyConfirm && sellConfirm) {
         if (r1BuyBrk) confirmedDirection = 'BUY';
         else if (r1SellBrk) confirmedDirection = 'SELL';
-        else confirmedDirection = r2BuyBrk ? 'BUY' : 'SELL';
+        else confirmedDirection = refBullish ? 'BUY' : 'SELL';
       }
       if (!confirmedDirection) continue;
 

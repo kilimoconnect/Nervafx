@@ -204,15 +204,19 @@ module.exports = async function handler(req, res) {
       const ref3 = buildSessionCandle(inst, prev3M15s);
       if (!ref || !ref2) continue;
 
-      // Direction confirmation: one of the last two sessions must have CLOSED beyond
-      // its own previous session's high (BUY) or low (SELL).
+      // Direction confirmation. Primary: prev session broke against its own
+      // predecessor. Fallback: session-before broke, but only if the more recent
+      // prev session's own body agrees. Prevents stale breaks (e.g. Thu dump)
+      // from setting direction after a reversing next session.
       const r1BuyBrk  = ref.close  > ref2.high;
       const r1SellBrk = ref.close  < ref2.low;
       const r2BuyBrk  = ref3 ? ref2.close > ref3.high : false;
       const r2SellBrk = ref3 ? ref2.close < ref3.low  : false;
+      const refBullish = ref.close > ref.open;
+      const refBearish = ref.close < ref.open;
 
-      const buyConfirm  = r1BuyBrk  || r2BuyBrk;
-      const sellConfirm = r1SellBrk || r2SellBrk;
+      const buyConfirm  = r1BuyBrk  || (r2BuyBrk  && refBullish);
+      const sellConfirm = r1SellBrk || (r2SellBrk && refBearish);
 
       let confirmedDirection = null;
       if (buyConfirm && !sellConfirm) confirmedDirection = 'BUY';
@@ -220,7 +224,7 @@ module.exports = async function handler(req, res) {
       else if (buyConfirm && sellConfirm) {
         if (r1BuyBrk) confirmedDirection = 'BUY';
         else if (r1SellBrk) confirmedDirection = 'SELL';
-        else confirmedDirection = r2BuyBrk ? 'BUY' : 'SELL';
+        else confirmedDirection = refBullish ? 'BUY' : 'SELL';
       }
       if (!confirmedDirection) continue;
 

@@ -163,24 +163,29 @@ module.exports = async function handler(req, res) {
       const d3 = synth(day3);
       if (!d1 || !d2) continue;
 
-      // Direction confirmation: one of the last two daily candles must have CLOSED
-      // beyond its own previous day's high (BUY) or low (SELL).
+      // Direction confirmation. Primary: D-1 closed beyond D-2's high (BUY) or
+      // low (SELL). Fallback: D-2 broke D-3, but only if D-1's own body agrees
+      // with that direction. This vetoes stale D-2 signals when D-1 has already
+      // reversed (audited whipsaw: USD/JPY on 6 Jul 2026 — D-2 (Thu) broke down
+      // through D-3, but D-1 (Fri) closed bullish, and Mon rallied +92 pips).
       const d1BreakBuy  = d1.close > d2.high;
       const d1BreakSell = d1.close < d2.low;
       const d2BreakBuy  = d3 ? d2.close > d3.high : false;
       const d2BreakSell = d3 ? d2.close < d3.low  : false;
+      const d1Bullish = d1.close > d1.open;
+      const d1Bearish = d1.close < d1.open;
 
-      const buyConfirm  = d1BreakBuy  || d2BreakBuy;
-      const sellConfirm = d1BreakSell || d2BreakSell;
+      const buyConfirm  = d1BreakBuy  || (d2BreakBuy  && d1Bullish);
+      const sellConfirm = d1BreakSell || (d2BreakSell && d1Bearish);
 
       let confirmedDirection = null;
       if (buyConfirm && !sellConfirm) confirmedDirection = 'BUY';
       else if (sellConfirm && !buyConfirm) confirmedDirection = 'SELL';
       else if (buyConfirm && sellConfirm) {
-        // Both fired — prefer the more recent (D-1) break
+        // Both fired — prefer the D-1 direct break
         if (d1BreakBuy) confirmedDirection = 'BUY';
         else if (d1BreakSell) confirmedDirection = 'SELL';
-        else confirmedDirection = d2BreakBuy ? 'BUY' : 'SELL';
+        else confirmedDirection = d1Bullish ? 'BUY' : 'SELL';
       }
       if (!confirmedDirection) continue;
 
