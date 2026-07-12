@@ -200,23 +200,35 @@ function analysePair(inst, h1, m15) {
 }
 
 // ── Data fetch ─────────────────────────────────────────────────────────────
-async function fetchCandles(sb, inst, tf, since, until, limit) {
-  const { data, error } = await sb
-    .from('backtest_candles')
-    .select('time, open, high, low, close, volume')
-    .eq('instrument', inst).eq('timeframe', tf)
-    .gte('time', since).lte('time', until)
-    .order('time', { ascending: true })
-    .limit(limit);
-  if (error) throw error;
-  return (data || []).map(c => ({
-    time: c.time,
-    open: parseFloat(c.open),
-    high: parseFloat(c.high),
-    low: parseFloat(c.low),
-    close: parseFloat(c.close),
-    volume: c.volume == null ? 0 : Number(c.volume),
-  }));
+// Paginates so we can pull a full trading week of M15s without silently
+// dropping rows to a limit cap. Weekends are gaps in the data; we just take
+// whatever rows exist and let the indicators walk across the gap.
+async function fetchCandles(sb, inst, tf, since, until) {
+  const PAGE = 1000;
+  const all = [];
+  let offset = 0;
+  while (true) {
+    const { data, error } = await sb
+      .from('backtest_candles')
+      .select('time, open, high, low, close, volume')
+      .eq('instrument', inst).eq('timeframe', tf)
+      .gte('time', since).lte('time', until)
+      .order('time', { ascending: true })
+      .range(offset, offset + PAGE - 1);
+    if (error) throw error;
+    if (!data || !data.length) break;
+    all.push(...data.map(c => ({
+      time: c.time,
+      open: parseFloat(c.open),
+      high: parseFloat(c.high),
+      low:  parseFloat(c.low),
+      close: parseFloat(c.close),
+      volume: c.volume == null ? 0 : Number(c.volume),
+    })));
+    if (data.length < PAGE) break;
+    offset += PAGE;
+  }
+  return all;
 }
 
 module.exports = async function handler(req, res) {
@@ -246,9 +258,12 @@ module.exports = async function handler(req, res) {
       }
     }
     const untilTs = anchor ? anchor.toISOString() : now.toISOString();
-    // Enough history: 60 * 15m ≈ 15h for M15, 55 * 1h ≈ 55h for H1
-    const m15Since = new Date(new Date(untilTs).getTime() - 20 * 60 * 60000).toISOString();
-    const h1Since  = new Date(new Date(untilTs).getTime() - 80 * 60 * 60000).toISOString();
+    // Trading days are Mon-Fri. Weekend leaves a ~48h gap in candle data, so
+    // early Monday runs need to reach back to Friday (and ideally Thursday) to
+    // gather the 51 H1 / 51 M15 needed for EMA50 + ATR50. Fetch a wide window
+    // and let pagination pull everything.
+    const m15Since = new Date(new Date(untilTs).getTime() - 8  * 24 * 3600000).toISOString();
+    const h1Since  = new Date(new Date(untilTs).getTime() - 12 * 24 * 3600000).toISOString();
 
     const rows = [];
     let skippedInsufficient = 0;
@@ -258,8 +273,8 @@ module.exports = async function handler(req, res) {
       const batch = VALID_PAIRS.slice(b, b + 7);
       const results = await Promise.all(batch.map(async inst => {
         const [h1, m15] = await Promise.all([
-          fetchCandles(sb, inst, 'H1',  h1Since,  untilTs, 200),
-          fetchCandles(sb, inst, 'M15', m15Since, untilTs, 200),
+          fetchCandles(sb, inst, 'H1',  h1Since,  untilTs),
+          fetchCandles(sb, inst, 'M15', m15Since, untilTs),
         ]);
         if (h1.length > maxH1Seen) maxH1Seen = h1.length;
         if (m15.length > maxM15Seen) maxM15Seen = m15.length;
