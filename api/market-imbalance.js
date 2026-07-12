@@ -15,7 +15,7 @@ const TIMEFRAMES = ['3H', '4H', '6H'];
 const RATIO_THRESHOLD = 0.70;
 const EXTREME_RATIO_THRESHOLD = 0.28;
 const MAGNITUDE_THRESHOLDS = { '3H': 10, '4H': 10, '6H': 15 };
-const ALLOWED_STRUCTURES = new Set(['1v7', '7v1', '2v6', '6v2']);
+const ALLOWED_STRUCTURES = new Set(['1v7', '7v1', '2v6', '6v2', '3v5', '5v3']);
 const EXTREMES_RATIO_THRESHOLD = 0.60;
 const EXTREMES_TFS = new Set(['3H', '6H']);
 
