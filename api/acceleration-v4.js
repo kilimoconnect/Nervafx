@@ -168,9 +168,15 @@ function compressionScore(m15) {
   const a50 = atr(m15, 50);
   if (!a14 || !a50 || a50 === 0) return { score: 0, ratio: 0 };
   const ratio = a14 / a50;
-  let score = 30;
+  // Softer tiering: normal-volatility trending (0.85–1.20) scores 60 instead
+  // of the old 30 punishment, so mid-trend anchors don't get math-blocked
+  // from reaching the 85 composite. Over-expansion (>1.20) still down-scores
+  // as an exhaustion signal.
+  let score = 60;
   if (ratio < 0.70) score = 100;
-  else if (ratio <= 0.85) score = 70;
+  else if (ratio <= 0.85) score = 80;
+  else if (ratio <= 1.20) score = 60;
+  else score = 40;
   return { score, ratio: Math.round(ratio * 100) / 100 };
 }
 
@@ -220,8 +226,8 @@ function analysePair(inst, h1, m15) {
   const rules = {
     h1Bias:        h1Bias.direction != null,
     m15Aligned:    m15SignedAligned,
-    accelAbove70:  m15A.score > 70,
-    velocityAbove60: m15V.score > 60,
+    accelAbove60:  m15A.score > 60,
+    velocityAbove55: m15V.score > 55,
     finalAbove85:  finalScore > 85,
   };
   const qualifies = Object.values(rules).every(Boolean);
