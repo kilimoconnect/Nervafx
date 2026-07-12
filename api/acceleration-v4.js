@@ -216,7 +216,7 @@ function analysePair(inst, h1, m15) {
     m15Aligned:    m15SignedAligned,
     accelAbove55:  m15A.score > 55,
     velocityAbove55: m15V.score > 55,
-    finalAbove82:  finalScore > 82,
+    finalAbove75:  finalScore >= 75,
   };
   const qualifies = Object.values(rules).every(Boolean);
 
