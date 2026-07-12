@@ -404,8 +404,8 @@
         if (!inSession(row.time)) continue;
 
         var allTfs = row.qualifiedTfs || Object.keys(row.timeframes);
-        // Require at least one of 3H or 6H to have qualified
-        if (allTfs.indexOf('3H') === -1 && allTfs.indexOf('6H') === -1) continue;
+        // Require 3H, 4H and 6H all to have qualified
+        if (allTfs.indexOf('3H') === -1 || allTfs.indexOf('4H') === -1 || allTfs.indexOf('6H') === -1) continue;
 
         var tfs = (currentTf === 'all') ? allTfs : allTfs.filter(function(x) { return x === currentTf; });
         if (!tfs.length) continue;
