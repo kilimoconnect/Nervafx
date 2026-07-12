@@ -31,6 +31,8 @@
     "api/m15-impulse.js": { "maxDuration": 60 },
     "api/cron-continuation-alerts.js": { "maxDuration": 45 },
     "api/backtest-engine.js": { "maxDuration": 300 },
+    "api/acceleration-v4.js": { "maxDuration": 60 },
+    "api/acceleration-v4-history.js": { "maxDuration": 300 },
     "api/currency-acceleration.js": { "maxDuration": 60 },
     "api/m15-acceleration.js": { "maxDuration": 60 },
     "api/acceleration-engine.js": { "maxDuration": 60 },
@@ -76,7 +78,8 @@
     { "source": "/daily-pullback", "destination": "/daily-pullback.html" },
     { "source": "/h1-continuation", "destination": "/h1-continuation.html" },
     { "source": "/session-continuation", "destination": "/session-continuation.html" },
-    { "source": "/h1-clean-break", "destination": "/h1-clean-break.html" }
+    { "source": "/h1-clean-break", "destination": "/h1-clean-break.html" },
+    { "source": "/acceleration-v4", "destination": "/acceleration-v4.html" }
   ],
   "headers": [
     {
