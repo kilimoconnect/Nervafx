@@ -168,15 +168,14 @@ function compressionScore(m15) {
   const a50 = atr(m15, 50);
   if (!a14 || !a50 || a50 === 0) return { score: 0, ratio: 0 };
   const ratio = a14 / a50;
-  // Softer tiering: normal-volatility trending (0.85–1.20) scores 60 instead
-  // of the old 30 punishment, so mid-trend anchors don't get math-blocked
-  // from reaching the 85 composite. Over-expansion (>1.20) still down-scores
-  // as an exhaustion signal.
+  // Compression only ADDs when short-term ATR sits below the long-term band.
+  // Expansion (ratio > 1.20) is neutral — during a strong H1 trend the M15
+  // ATR routinely exceeds its 50-bar reading and that's continuation fuel,
+  // not exhaustion. Don't penalise it.
   let score = 60;
   if (ratio < 0.70) score = 100;
   else if (ratio <= 0.85) score = 80;
-  else if (ratio <= 1.20) score = 60;
-  else score = 40;
+  else score = 60;
   return { score, ratio: Math.round(ratio * 100) / 100 };
 }
 
