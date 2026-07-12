@@ -115,8 +115,13 @@ module.exports = async function handler(req, res) {
         const r = analysePair(inst, h1Slice, m15Slice);
         if (r) results.push(r);
       }
-      results.sort((a, b) => b.finalScore - a.finalScore);
-      const qualifiedPairs = results.filter(r => r.qualifies);
+      // Only include pairs where the H1 bias is set (Close > EMA20 > EMA50 for
+      // BUY, Close < EMA20 < EMA50 for SELL) — the same filter the live card
+      // applies. This is redundant with `qualifies` (which already requires H1
+      // direction), but stated explicitly so the semantics are obvious here.
+      const biased = results.filter(r => r.direction != null);
+      biased.sort((a, b) => b.finalScore - a.finalScore);
+      const qualifiedPairs = biased.filter(r => r.qualifies);
       if (qualifiedPairs.length) {
         // Keep the full pair record so the frontend can hydrate the detail modal
         // straight from history without re-fetching.
