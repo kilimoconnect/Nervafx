@@ -251,6 +251,9 @@ module.exports = async function handler(req, res) {
     const h1Since  = new Date(new Date(untilTs).getTime() - 80 * 60 * 60000).toISOString();
 
     const rows = [];
+    let skippedInsufficient = 0;
+    let maxH1Seen = 0;
+    let maxM15Seen = 0;
     for (let b = 0; b < VALID_PAIRS.length; b += 7) {
       const batch = VALID_PAIRS.slice(b, b + 7);
       const results = await Promise.all(batch.map(async inst => {
@@ -258,10 +261,12 @@ module.exports = async function handler(req, res) {
           fetchCandles(sb, inst, 'H1',  h1Since,  untilTs, 200),
           fetchCandles(sb, inst, 'M15', m15Since, untilTs, 200),
         ]);
+        if (h1.length > maxH1Seen) maxH1Seen = h1.length;
+        if (m15.length > maxM15Seen) maxM15Seen = m15.length;
         if (h1.length < 51 || m15.length < 51) return null;
         return analysePair(inst, h1, m15);
       }));
-      for (const r of results) if (r) rows.push(r);
+      for (const r of results) if (r == null) skippedInsufficient++; else rows.push(r);
     }
 
     // Rank by final score descending
@@ -274,6 +279,13 @@ module.exports = async function handler(req, res) {
       generatedAt: untilTs,
       total: rows.length,
       qualifiedCount: qualified.length,
+      skippedInsufficient,
+      warmup: {
+        needH1: 51,
+        needM15: 51,
+        haveH1: maxH1Seen,
+        haveM15: maxM15Seen,
+      },
       selected,
       results: rows,
     });

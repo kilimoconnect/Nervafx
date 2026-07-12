@@ -206,6 +206,14 @@
         <span class="card-note" id="live-time">Loading…</span>
       </div>
       <div class="card-body">
+        <div class="filters" style="margin-bottom:14px">
+          <span class="lbl">Anchor</span>
+          <input type="date" class="date-input" id="live-date">
+          <input type="time" class="date-input" id="live-time-input" step="900">
+          <button class="filter-btn active" id="live-go">Go</button>
+          <button class="filter-btn" id="live-now">Live</button>
+          <span id="live-warmup" style="font-size:10.5px;color:var(--text-dim);margin-left:8px"></span>
+        </div>
         <div id="selected-slot"></div>
         <div style="height:14px"></div>
         <div id="live-list" class="rank-list"></div>
@@ -387,19 +395,53 @@
 
     async function loadLive() {
       try {
-        var r = await fetch('/api/acceleration-v4', {
+        var dateVal = document.getElementById('live-date').value;
+        var timeVal = document.getElementById('live-time-input').value;
+        var qs = '';
+        if (dateVal && timeVal) {
+          qs = '?date=' + dateVal + '&time=' + timeVal;
+        }
+        var r = await fetch('/api/acceleration-v4' + qs, {
           headers: { Authorization: 'Bearer ' + TOKEN },
           cache: 'no-store',
         });
         if (!r.ok) throw new Error(await r.text());
         var json = await r.json();
         document.getElementById('live-time').textContent = 'Anchor ' + fmtTime(json.generatedAt) + ' · ' + json.total + ' pairs analysed';
+
+        var warmupEl = document.getElementById('live-warmup');
+        if (json.warmup && (json.warmup.haveH1 < json.warmup.needH1 || json.warmup.haveM15 < json.warmup.needM15)) {
+          warmupEl.textContent = 'Warming up — need ' + json.warmup.needH1 + ' H1 / ' + json.warmup.needM15 + ' M15, have ' + json.warmup.haveH1 + ' / ' + json.warmup.haveM15;
+          warmupEl.style.color = '#facc15';
+        } else if (json.skippedInsufficient) {
+          warmupEl.textContent = json.skippedInsufficient + ' pair(s) skipped (not enough candles)';
+          warmupEl.style.color = 'var(--text-dim)';
+        } else {
+          warmupEl.textContent = '';
+        }
+
+        if (!json.total) {
+          var need = json.warmup || { needH1: 51, needM15: 51, haveH1: 0, haveM15: 0 };
+          var msg = 'No pair has enough history at this anchor. Need ' + need.needH1 + ' H1 + ' + need.needM15 + ' M15 candles. Currently max seen: ' + need.haveH1 + ' H1 / ' + need.haveM15 + ' M15.';
+          document.getElementById('selected-slot').innerHTML = '<div class="selected-empty">' + msg + '</div>';
+          document.getElementById('live-list').innerHTML = '';
+          _lastResults = [];
+          return;
+        }
+
         renderSelected(json.selected, json.generatedAt);
         renderLive(json.results);
       } catch (e) {
         document.getElementById('live-list').innerHTML = '<div class="hist-empty" style="color:#f87171">Error: ' + e.message + '</div>';
       }
     }
+
+    document.getElementById('live-go').addEventListener('click', loadLive);
+    document.getElementById('live-now').addEventListener('click', function() {
+      document.getElementById('live-date').value = '';
+      document.getElementById('live-time-input').value = '';
+      loadLive();
+    });
 
     async function loadHistory() {
       var from = document.getElementById('hist-from').value;
