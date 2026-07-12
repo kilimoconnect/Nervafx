@@ -189,17 +189,6 @@ function candleControlScore(m15) {
   return { score: Math.round(eff * 100 * 10) / 10, efficiency: Math.round(eff * 100) / 100 };
 }
 
-function volumeExpansionScore(m15) {
-  if (m15.length < 21) return { score: 0, ratio: 0 };
-  const currentVol = m15[m15.length - 1].volume || 0;
-  const window = m15.slice(-21, -1);
-  const avgVol = window.reduce((s, c) => s + (c.volume || 0), 0) / window.length;
-  if (!avgVol) return { score: 0, ratio: 0 };
-  const ratio = currentVol / avgVol;
-  const score = Math.min(ratio * 50, 100);
-  return { score: Math.round(score * 10) / 10, ratio: Math.round(ratio * 100) / 100 };
-}
-
 function analysePair(inst, h1, m15) {
   const h1Bias = h1BiasScore(h1);
   const h1Mom  = h1MomentumScore(h1);
@@ -207,7 +196,6 @@ function analysePair(inst, h1, m15) {
   const m15A   = m15AccelerationScore(m15);
   const comp   = compressionScore(m15);
   const cand   = candleControlScore(m15);
-  const vol    = volumeExpansionScore(m15);
 
   // Final composite score: 30% H1 bias + 20% M15 velocity + 30% M15 accel + 10% compression + 10% candle.
   const finalScore = Math.round(
@@ -241,7 +229,7 @@ function analysePair(inst, h1, m15) {
     components: {
       h1Bias, h1Momentum: h1Mom,
       m15Velocity: m15V, m15Acceleration: m15A,
-      compression: comp, candleControl: cand, volume: vol,
+      compression: comp, candleControl: cand,
     },
     rules,
     price: {
