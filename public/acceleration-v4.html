@@ -82,6 +82,12 @@
     }
     .rank-row:hover { background: rgba(96,165,250,0.06); border-color: rgba(96,165,250,0.25); }
     .rank-row.qualified { border-color: rgba(34,197,94,0.28); background: rgba(34,197,94,0.04); }
+    .rank-row.recurring { box-shadow: inset 3px 0 0 #fbbf24; }
+    .rank-row .recur-dot,
+    .hist-pair-row .recur-dot {
+      display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+      background: #fbbf24; margin-left: 6px; vertical-align: middle;
+    }
     .rank-idx  { font-size: 11px; color: var(--text-dim); font-family: 'SF Mono', Menlo, monospace; text-align: right; }
     .rank-pair { font-size: 13px; font-weight: 800; color: #fff; }
     .rank-dir  { font-size: 10px; font-weight: 800; padding: 2px 6px; border-radius: 4px; text-align: center; }
@@ -132,6 +138,11 @@
       cursor: pointer; transition: background 0.12s, border-color 0.12s;
     }
     .hist-pair-row:hover { background: rgba(96,165,250,0.06); border-color: rgba(96,165,250,0.25); }
+    .hist-pair-row.recurring { box-shadow: inset 3px 0 0 #fbbf24; }
+    .hist-pair-row .recur-dot {
+      display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+      background: #fbbf24; margin-left: 6px; vertical-align: middle;
+    }
     .hist-pair-name { font-weight: 800; color: #fff; font-size: 13px; }
     .hist-pair-metrics { color: var(--text-dim); font-size: 10px; font-family: 'SF Mono', Menlo, monospace; }
     .hist-pair-metrics b { color: var(--text-muted); }
@@ -286,6 +297,7 @@
 
     var _lastResults = [];
     var _histCache = {};
+    var _prevLivePairs = new Set();
 
     function renderSelected(sel, generatedAt) {
       var el = document.getElementById('selected-slot');
@@ -309,13 +321,18 @@
       _lastResults = results;
       var el = document.getElementById('live-list');
       if (!results || !results.length) { el.innerHTML = '<div class="hist-empty">No live data yet.</div>'; return; }
+      var currentPairs = new Set();
       var html = '';
       results.forEach(function(r, i) {
         var qCls = r.qualifies ? ' qualified' : '';
         var dCls = r.direction || 'NONE';
-        html += '<div class="rank-row' + qCls + '" data-idx="' + i + '">'
+        var recurring = _prevLivePairs.has(r.pair);
+        var rCls = recurring ? ' recurring' : '';
+        var dotHtml = recurring ? ' <span class="recur-dot" title="Also in previous refresh"></span>' : '';
+        currentPairs.add(r.pair);
+        html += '<div class="rank-row' + qCls + rCls + '" data-idx="' + i + '">'
              +   '<div class="rank-idx">' + (i + 1) + '</div>'
-             +   '<div class="rank-pair">' + r.pair + '</div>'
+             +   '<div class="rank-pair">' + r.pair + dotHtml + '</div>'
              +   '<div class="rank-dir ' + dCls + '">' + (r.direction || '—') + '</div>'
              +   '<div class="rank-meta">'
              +     '<span>H1 <b>' + fmtNum(r.components.h1Bias.score, 0) + '</b></span>'
@@ -327,6 +344,7 @@
              +   '<div class="rank-score" style="color:' + scoreColor(r.finalScore) + '">' + r.finalScore + '</div>'
              + '</div>';
       });
+      _prevLivePairs = currentPairs;
       el.innerHTML = html;
       el.querySelectorAll('.rank-row').forEach(function(row) {
         row.addEventListener('click', function() {
@@ -477,9 +495,22 @@
         // Cache pair records keyed by "time|pair" so click → openDetail hydrates
         // straight from history without a second fetch.
         _histCache = {};
+        // Ordered newest-first for display. To highlight pairs that recur from
+        // the previous card (chronologically older = next in this reversed list),
+        // build a per-row Set of pair names first so we can look forward one row.
+        var displayRows = json.rows.slice().reverse();
+        var pairSets = displayRows.map(function(row) {
+          var s = new Set();
+          (row.pairs || []).forEach(function(p) { s.add(p.pair); });
+          return s;
+        });
+
         var html = '';
-        json.rows.slice().reverse().forEach(function(row, rIdx) {
+        displayRows.forEach(function(row, rIdx) {
           var pairs = row.pairs || [];
+          // The chronologically previous card is displayRows[rIdx+1] (older
+          // anchor). Highlight any pair here that also appears there.
+          var olderSet = pairSets[rIdx + 1] || new Set();
           html += '<div class="hist-card">';
           html += '<div class="hist-card-hd">';
           html += '<span class="hist-card-time">' + fmtTime(row.time) + '</span>';
@@ -495,8 +526,11 @@
             var vel   = p.components && p.components.m15Velocity     ? p.components.m15Velocity.score : 0;
             var comp  = p.components && p.components.compression     ? p.components.compression.score : 0;
             var cand  = p.components && p.components.candleControl   ? p.components.candleControl.score : 0;
-            html += '<div class="hist-pair-row" data-key="' + key + '">'
-                 +   '<span class="hist-pair-name">' + p.pair + '</span>'
+            var recurring = olderSet.has(p.pair);
+            var recurCls  = recurring ? ' recurring' : '';
+            var dotHtml   = recurring ? ' <span class="recur-dot" title="Also in previous anchor"></span>' : '';
+            html += '<div class="hist-pair-row' + recurCls + '" data-key="' + key + '">'
+                 +   '<span class="hist-pair-name">' + p.pair + dotHtml + '</span>'
                  +   '<span class="rank-dir ' + dCls + '">' + p.direction + '</span>'
                  +   '<span class="hist-pair-metrics">Accel <b>' + fmtNum(accel) + '</b> · Vel <b>' + fmtNum(vel) + '</b> · Comp <b>' + comp + '</b> · Cand <b>' + fmtNum(cand) + '</b></span>'
                  +   '<span class="hist-pair-score" style="color:' + col + '">' + p.finalScore + '</span>'
