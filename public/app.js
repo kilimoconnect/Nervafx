@@ -7614,38 +7614,18 @@ let _btEquityChart = null;
 // ─── Engine Definitions ─────────────────────────────────────────────────────
 
 const BT_ENGINES = [
-  { id: 'component_thresholds', name: 'Component Thresholds', icon: 'sliders-horizontal',
-    desc: 'Every indicator analyzed individually — find exact thresholds for movement, momentum, agreement, volatility, energy, pressure, liquidity, readiness, CS, and confidence.' },
-  { id: 'conditional_edge', name: 'Conditional Edge', icon: 'layers',
-    desc: 'Multi-factor stacking — discover how combining CS Diff + Energy + Agreement + Session + State compounds your win rate from baseline to 80%+.' },
-  { id: 'heatmaps', name: 'Cross-Component Heatmaps', icon: 'grid-3x3',
-    desc: 'Win rate at every intersection of two indicators. Reveals non-linear edge clusters that single-factor analysis misses entirely.' },
-  { id: 'regime_thresholds', name: 'Regime Thresholds', icon: 'repeat',
-    desc: 'Optimal thresholds per market regime (Dead, Compression, Breakout, Expansion, Exhaustion). The same indicator needs different thresholds per regime.' },
-  { id: 'session_thresholds', name: 'Session Thresholds', icon: 'clock',
-    desc: 'Per-session optimal filters — Asia needs higher agreement, London tolerates volatility, NY rewards dominance. Unique thresholds per window.' },
-  { id: 'transitions', name: 'Transition Discovery', icon: 'arrow-right-left',
-    desc: 'What happens when the market regime shifts. Compression→Expansion breakouts, Trend→Exhaustion danger — where the biggest moves and risks live.' },
-  { id: 'edge_stability', name: 'Edge Stability', icon: 'shield-check',
-    desc: 'Are discovered edges stable or decaying? Monthly win rate tracking, variance, decay detection, and stability scores to prevent overfitting.' },
-  { id: 'probability_curves', name: 'Probability Curves', icon: 'trending-up',
-    desc: 'Progressive probability — see exactly how continuation probability rises with each indicator value. No hard thresholds, just smooth probability gradients.' },
-  { id: 'energy_thresholds', name: 'Energy Deep Dive', icon: 'zap',
-    desc: 'Detailed breakdown of each energy sub-component (movement, momentum, agreement, volatility) bucketed by range with continuation rates.' },
-  { id: 'strength_thresholds', name: 'Strength Thresholds', icon: 'gauge',
-    desc: 'Currency strength differential analysis — at what spread level does directional edge appear, and how does reward-to-risk scale with spread size.' },
-  { id: 'state_outcomes', name: 'State Outcomes', icon: 'git-branch',
-    desc: 'Win rate and pip performance for every market state (Trend, Pullback, Ready-to-Enter, Reversal, No Trade). Confirms which states to trade and avoid.' },
-  { id: 'no_trade_zones', name: 'No-Trade Zones', icon: 'shield-off',
-    desc: 'Conditions where trades consistently lose money — low energy + low agreement, thin markets, choppy volatility. Hard rules for when NOT to trade.' },
-  { id: 'condition_combos', name: 'Condition Combos', icon: 'puzzle',
-    desc: 'Best multi-condition setups: High Energy + Agreement + Ready-to-Enter, Strong Trends, Compression Breakouts. The highest-probability entry patterns.' },
-  { id: 'move_distance', name: 'Move Distance', icon: 'ruler',
-    desc: 'Expected pip distance at 1H, 4H, 8H, 12H, 24H horizons — broken by energy level. Calibrate TP targets and stop losses to actual market data.' },
-  { id: 'session_performance', name: 'Session Performance', icon: 'bar-chart-3',
-    desc: 'Which trading session produces the biggest and most reliable moves. Average energy, 4H and 8H pip ranges per session window.' },
-  { id: 'structure_break', name: 'Structure Break', icon: 'split',
-    desc: 'H1 candle close above previous high (bullish break) or below previous low (bearish break). Currency and pair-level aggregation reveals who is driving and who is being driven.' },
+  { id: 'daily-continuation',    name: 'Daily Continuation',    icon: 'calendar-days',
+    desc: 'Replay the live Daily Continuation engine across every trading day — trigger fires when yesterday direction confirms and today\'s H1 breaks yesterday\'s high/low. Score = follow-through on next 4 H1s.' },
+  { id: 'h1-continuation',       name: 'H4 Continuation',       icon: 'clock-9',
+    desc: 'H4 reference + M15 trigger — direction confirmed by last 2 H4 breaks, trigger = M15 breakout of 24-M15 high/low. Replays every 4h anchor for the range.' },
+  { id: 'session-continuation',  name: 'Session Continuation',  icon: 'timer',
+    desc: 'Previous session break confirmation + M15 trigger during the current session. Replays Asia / London / NY anchors.' },
+  { id: 'h1-clean-break',        name: 'H1 Clean Break',        icon: 'zap',
+    desc: 'H1 closes past prev H1 high/low AND at least 3 of 4 M15s inside align. Momentum-only signal, evaluated hourly.' },
+  { id: 'market-imbalance',      name: 'Market Imbalance',      icon: 'scale',
+    desc: 'Multi-TF (3H/4H/6H) currency imbalance — top-2 vs bot-2 ratio, leader/loser dominance, extremes asymmetry. Best-TF pair emitted per qualifying hour.' },
+  { id: 'market-imbalance-m15',  name: 'Market Imbalance M15',  icon: 'scale',
+    desc: 'Single-TF (M15 45m) imbalance page — same qualification stack applied to the M15 45m normalised strength archive.' },
 ];
 
 let _btSelectedEngine = null;
@@ -7709,46 +7689,142 @@ async function runBacktest() {
 
   const engine = BT_ENGINES.find(e => e.id === _btSelectedEngine);
   btn.disabled = true;
-  status.innerHTML = `<span class="bt-spinner"></span> Running ${engine?.name || 'analysis'} — this may take a few minutes...`;
+  status.innerHTML = `<span class="bt-spinner"></span> Replaying ${engine?.name || 'engine'} across ${from} → ${to} — up to a few minutes for wide ranges...`;
 
   try {
-    const data = await api('/api/backtest-run', {
+    const data = await api('/api/backtest-engine', {
       method: 'POST',
       body: JSON.stringify({ from, to, engine: _btSelectedEngine }),
     });
 
-    status.textContent = `${engine?.name}: ${data.snapshots_analyzed} hourly snapshots analyzed in ${data.duration_sec}s`;
+    const trunc = data.truncated ? ` (truncated at ${data.signals?.length} of ${data.raw_signal_count})` : '';
+    status.textContent = `${engine?.name}: ${data.stats?.total || 0} signals${trunc}, ${data.duration_sec}s`;
 
-    // Render header
     const header = el('bt-result-header');
     if (header) {
       header.innerHTML = `<h2 class="card-title"><i data-lucide="${engine?.icon || 'flask-conical'}"></i> ${engine?.name || 'Results'}</h2>
         <p class="bt-section-subtitle">${engine?.desc || ''}</p>`;
     }
 
-    // Render the single engine result into bt-result-body
     const body = el('bt-result-body');
-    if (body) body.innerHTML = ''; // clear previous
+    if (body) body.innerHTML = '';
+    _btRenderEngineReplay(data, body);
 
-    const a = data.analysis;
-    const ins = data.insights || {};
-    const key = _btSelectedEngine;
-
-    // Each renderer now targets bt-result-body
-    _btRenderEngine(key, a[key], ins[key], body);
-
-    // Show result section
     const resultSection = el('section-bt-result');
     if (resultSection) resultSection.classList.remove('bt-hidden');
-
-    // _btLoadHistory(); // removed — no longer storing runs in Supabase
     if (window.lucide) lucide.createIcons();
-
   } catch (e) {
     status.textContent = `Error: ${e.message}`;
   } finally {
     btn.disabled = false;
   }
+}
+
+// Unified renderer for live-engine replay results (from /api/backtest-engine).
+function _btRenderEngineReplay(data, container) {
+  if (!container) return;
+  const stats = data.stats || {};
+  const sigs  = data.signals || [];
+
+  const rateColor = (r) => r == null ? 'var(--text-dim)' : r >= 55 ? '#4ade80' : r >= 45 ? '#facc15' : '#f87171';
+  const pipColor  = (p) => p == null ? 'var(--text-dim)' : p > 0 ? '#4ade80' : p < 0 ? '#f87171' : 'var(--text-dim)';
+
+  let html = '';
+
+  // Top KPI strip
+  html += '<div class="bt-kpi-grid">';
+  html += `<div class="bt-kpi"><div class="bt-kpi-label">Signals</div><div class="bt-kpi-value">${stats.total || 0}</div></div>`;
+  html += `<div class="bt-kpi"><div class="bt-kpi-label">Settled</div><div class="bt-kpi-value">${stats.settled || 0}</div></div>`;
+  html += `<div class="bt-kpi"><div class="bt-kpi-label">Win rate</div><div class="bt-kpi-value" style="color:${rateColor(stats.winRate)}">${stats.winRate == null ? '—' : stats.winRate + '%'}</div></div>`;
+  html += `<div class="bt-kpi"><div class="bt-kpi-label">Avg pips</div><div class="bt-kpi-value" style="color:${pipColor(stats.avgPips)}">${stats.avgPips > 0 ? '+' : ''}${stats.avgPips ?? 0}</div></div>`;
+  html += `<div class="bt-kpi"><div class="bt-kpi-label">Total pips</div><div class="bt-kpi-value" style="color:${pipColor(stats.totalPips)}">${stats.totalPips > 0 ? '+' : ''}${stats.totalPips ?? 0}</div></div>`;
+  const buy = stats.byDirection?.BUY || 0; const sell = stats.byDirection?.SELL || 0;
+  html += `<div class="bt-kpi"><div class="bt-kpi-label">BUY / SELL</div><div class="bt-kpi-value"><span style="color:#4ade80">${buy}</span> / <span style="color:#f87171">${sell}</span></div></div>`;
+  html += '</div>';
+
+  // Per-pair table
+  const pairs = Object.entries(stats.byPair || {})
+    .map(([p, s]) => ({ pair: p, ...s }))
+    .sort((a, b) => (b.hitRate ?? -1) - (a.hitRate ?? -1) || b.totalPips - a.totalPips);
+  if (pairs.length) {
+    html += '<div class="bt-section-label">Per-pair performance</div>';
+    html += '<div class="bt-table-wrap"><table class="bt-table"><thead><tr>';
+    html += '<th>#</th><th>Pair</th><th>Total</th><th>BUY / SELL</th><th>Wins</th><th>Losses</th><th>Hit %</th><th>Avg pips</th><th>Total pips</th>';
+    html += '</tr></thead><tbody>';
+    pairs.forEach((p, i) => {
+      html += '<tr>';
+      html += `<td>${i + 1}</td>`;
+      html += `<td class="bt-pair">${p.pair}</td>`;
+      html += `<td>${p.total}</td>`;
+      html += `<td><span style="color:#4ade80">${p.buys}</span> / <span style="color:#f87171">${p.sells}</span></td>`;
+      html += `<td>${p.wins}</td>`;
+      html += `<td>${p.losses}</td>`;
+      html += `<td style="color:${rateColor(p.hitRate)}">${p.hitRate == null ? '—' : p.hitRate + '%'}</td>`;
+      html += `<td style="color:${pipColor(p.avgPips)}">${p.avgPips > 0 ? '+' : ''}${p.avgPips}</td>`;
+      html += `<td style="color:${pipColor(p.totalPips)}">${p.totalPips > 0 ? '+' : ''}${p.totalPips}</td>`;
+      html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+  }
+
+  // Hour-of-day heatmap (compact)
+  const hh = stats.byHour || {};
+  if (Object.keys(hh).length) {
+    html += '<div class="bt-section-label">Signals by hour (UTC)</div>';
+    html += '<div class="bt-hour-grid">';
+    for (let h = 0; h < 24; h++) {
+      const b = hh[h] || { total: 0, wins: 0, losses: 0 };
+      const settled = b.wins + b.losses;
+      const rate = settled > 0 ? Math.round((b.wins / settled) * 100) : null;
+      const bg  = rate == null ? 'rgba(255,255,255,0.03)'
+              : rate >= 55    ? 'rgba(34,197,94,0.18)'
+              : rate >= 45    ? 'rgba(250,204,21,0.16)'
+              :                 'rgba(239,68,68,0.14)';
+      html += `<div class="bt-hour-cell" style="background:${bg}">`;
+      html += `<div class="bt-hour-h">${String(h).padStart(2,'0')}</div>`;
+      html += `<div class="bt-hour-n">${b.total}</div>`;
+      html += `<div class="bt-hour-r" style="color:${rateColor(rate)}">${rate == null ? '' : rate + '%'}</div>`;
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+
+  // Recent signal sample (last 40, newest first)
+  if (sigs.length) {
+    html += '<div class="bt-section-label">Signals (last 40)</div>';
+    html += '<div class="bt-table-wrap"><table class="bt-table"><thead><tr>';
+    html += '<th>Time</th><th>Pair</th><th>Dir</th><th>Break pips</th><th>Score</th><th>Outcome</th><th>Pips</th>';
+    html += '</tr></thead><tbody>';
+    const recent = sigs.slice().reverse().slice(0, 40);
+    for (const s of recent) {
+      const t = s.time ? new Date(s.time).toISOString().replace('T', ' ').slice(0, 16) : '—';
+      const outcomeLabel = s.outcome ? (s.outcome.win ? 'WIN' : 'LOSS') : '—';
+      const outcomeColor = s.outcome ? (s.outcome.win ? '#4ade80' : '#f87171') : 'var(--text-dim)';
+      const pips = s.outcome?.pips;
+      html += '<tr>';
+      html += `<td class="bt-mono">${t}Z</td>`;
+      html += `<td class="bt-pair">${s.pair}</td>`;
+      html += `<td style="color:${s.direction === 'BUY' ? '#4ade80' : '#f87171'};font-weight:800">${s.direction}</td>`;
+      html += `<td class="bt-mono">${s.breakPips ?? '—'}</td>`;
+      html += `<td class="bt-mono">${s.score ?? '—'}</td>`;
+      html += `<td style="color:${outcomeColor};font-weight:700">${outcomeLabel}</td>`;
+      html += `<td class="bt-mono" style="color:${pipColor(pips)}">${pips == null ? '—' : (pips > 0 ? '+' : '') + pips}</td>`;
+      html += '</tr>';
+    }
+    html += '</tbody></table></div>';
+  }
+
+  if (!stats.total) {
+    html += '<div class="bt-empty">No signals in this window. Try a wider date range or a different engine.</div>';
+  }
+
+  if (data.errors && data.errors.length) {
+    html += '<div class="bt-errors"><b>Warnings:</b><ul>';
+    for (const err of data.errors.slice(0, 5)) html += `<li>${err}</li>`;
+    html += '</ul></div>';
+  }
+
+  container.innerHTML = html;
 }
 
 // Master dispatch — renders a single engine's data into a target container

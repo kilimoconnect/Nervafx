@@ -30,6 +30,7 @@
     "api/pair-imbalance.js": { "maxDuration": 60 },
     "api/m15-impulse.js": { "maxDuration": 60 },
     "api/cron-continuation-alerts.js": { "maxDuration": 45 },
+    "api/backtest-engine.js": { "maxDuration": 300 },
     "api/currency-acceleration.js": { "maxDuration": 60 },
     "api/m15-acceleration.js": { "maxDuration": 60 },
     "api/acceleration-engine.js": { "maxDuration": 60 },
