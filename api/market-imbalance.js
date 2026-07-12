@@ -15,6 +15,7 @@ const TIMEFRAMES = ['3H', '4H', '6H'];
 const RATIO_THRESHOLD = 0.70;
 const EXTREME_RATIO_THRESHOLD = 0.28;
 const MAGNITUDE_THRESHOLDS = { '3H': 10, '4H': 10, '6H': 15 };
+const ALLOWED_STRUCTURES = new Set(['1v7', '7v1', '2v6', '6v2']);
 const EXTREMES_RATIO_THRESHOLD = 0.60;
 const EXTREMES_TFS = new Set(['3H', '6H']);
 
@@ -236,6 +237,9 @@ module.exports = async function handler(req, res) {
         const extremesValid = EXTREMES_TFS.has(tf)
           && result.ratio.extremesRatio < EXTREMES_RATIO_THRESHOLD;
         if (!result.ratio.valid && !extremesValid) continue;
+        // Structure gate — only 2v6 / 6v2 / 1v7 / 7v1 splits qualify
+        const structLabel = result.structure?.label;
+        if (!ALLOWED_STRUCTURES.has(structLabel)) continue;
         // Per-TF magnitude gate — require #1 > threshold OR #8 < -threshold
         const magThresh = MAGNITUDE_THRESHOLDS[tf];
         if (magThresh != null) {
