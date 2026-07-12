@@ -86,7 +86,21 @@ function h1BiasScore(h1) {
   if (bullish)      { direction = 'BUY';  score = 100; }
   else if (bearish) { direction = 'SELL'; score = 100; }
 
-  return { direction, score, closePx: cNow, ema20: e20Now, ema50: e50Now };
+  return {
+    direction,
+    score,
+    closePx: cNow,
+    ema20: e20Now,
+    ema50: e50Now,
+    // Debug snapshot of both H1 readings so the detail modal can prove exactly
+    // which H1 (current or previous) satisfied / failed the alignment rule.
+    now:  { close: cNow,  ema20: e20Now,  ema50: e50Now,
+            aboveEma20: cNow  > e20Now,  belowEma20: cNow  < e20Now,
+            e20AboveE50: e20Now > e50Now, e20BelowE50: e20Now < e50Now },
+    prev: { close: cPrev, ema20: e20Prev, ema50: e50Prev,
+            aboveEma20: cPrev > e20Prev, belowEma20: cPrev < e20Prev,
+            e20AboveE50: e20Prev > e50Prev, e20BelowE50: e20Prev < e50Prev },
+  };
 }
 
 function h1MomentumScore(h1) {

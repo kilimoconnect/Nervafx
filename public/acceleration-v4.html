@@ -353,8 +353,13 @@
       sc.style.color = scoreColor(r.finalScore);
 
       var comp = r.components;
+      var h1 = comp.h1Bias || {};
+      var h1Lines = [];
+      h1Lines.push(r.direction ? ('Direction ' + r.direction) : 'Neutral (H1 alignment failed)');
+      if (h1.now)  h1Lines.push('Now — C ' + fmtNum(h1.now.close, 5)  + ' / E20 ' + fmtNum(h1.now.ema20, 5)  + ' / E50 ' + fmtNum(h1.now.ema50, 5));
+      if (h1.prev) h1Lines.push('Prev — C ' + fmtNum(h1.prev.close, 5) + ' / E20 ' + fmtNum(h1.prev.ema20, 5) + ' / E50 ' + fmtNum(h1.prev.ema50, 5));
       var tiles = [
-        { title: 'H1 Bias',       score: comp.h1Bias.score,  detail: (r.direction ? 'Close ' + r.direction + ' · EMA20 ' + fmtNum(comp.h1Bias.ema20, 5) + ' / EMA50 ' + fmtNum(comp.h1Bias.ema50, 5) : 'Neutral (Close not aligned with EMAs)') },
+        { title: 'H1 Bias',       score: comp.h1Bias.score,  detail: h1Lines.join(' · ') },
         { title: 'M15 Velocity',  score: comp.m15Velocity.score, detail: 'v = ' + fmtNum(comp.m15Velocity.velocity, 2) + ' ATR (signed ' + fmtNum(comp.m15Velocity.signed, 2) + ')' },
         { title: 'M15 Acceleration', score: comp.m15Acceleration.score, detail: 'Δv = ' + fmtNum(comp.m15Acceleration.acceleration, 2) + '  (V1 ' + fmtNum(comp.m15Acceleration.v1, 2) + ' vs V2 ' + fmtNum(comp.m15Acceleration.v2, 2) + ')' },
         { title: 'Compression',   score: comp.compression.score, detail: 'ATR14/ATR50 = ' + fmtNum(comp.compression.ratio, 2) },
