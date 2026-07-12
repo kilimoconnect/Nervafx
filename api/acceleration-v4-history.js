@@ -29,7 +29,7 @@ async function fetchAll(sb, inst, tf, since, until) {
     const { data, error } = await sb
       .from('backtest_candles')
       .select('time, open, high, low, close, volume')
-      .eq('instrument', inst).eq('timeframe', tf)
+      .eq('instrument', inst).eq('timeframe', tf).eq('complete', true)
       .gte('time', since).lte('time', until)
       .order('time', { ascending: true })
       .range(offset, offset + PAGE - 1);

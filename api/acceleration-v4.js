@@ -245,6 +245,8 @@ function analysePair(inst, h1, m15) {
 // Paginates so we can pull a full trading week of M15s without silently
 // dropping rows to a limit cap. Weekends are gaps in the data; we just take
 // whatever rows exist and let the indicators walk across the gap.
+// Only complete candles are returned — a currently-forming H1 would carry a
+// partial close price and break the breakout / EMA-alignment gates.
 async function fetchCandles(sb, inst, tf, since, until) {
   const PAGE = 1000;
   const all = [];
@@ -253,7 +255,7 @@ async function fetchCandles(sb, inst, tf, since, until) {
     const { data, error } = await sb
       .from('backtest_candles')
       .select('time, open, high, low, close, volume')
-      .eq('instrument', inst).eq('timeframe', tf)
+      .eq('instrument', inst).eq('timeframe', tf).eq('complete', true)
       .gte('time', since).lte('time', until)
       .order('time', { ascending: true })
       .range(offset, offset + PAGE - 1);
