@@ -404,8 +404,13 @@
         if (!inSession(row.time)) continue;
 
         var allTfs = row.qualifiedTfs || Object.keys(row.timeframes);
-        // Require 3H, 4H and 6H all to have qualified
-        if (allTfs.indexOf('3H') === -1 || allTfs.indexOf('4H') === -1 || allTfs.indexOf('6H') === -1) continue;
+        // Require at least 2 of 3H / 4H / 6H to have qualified (data-driven —
+        // 3-of-3 was too strict on June 3 2026: only 2 hours across the whole
+        // day, vs 7 hours with the >=2 rule which matches the tradable window).
+        var mainTfCount = ['3H', '4H', '6H'].reduce(function(n, t) {
+          return n + (allTfs.indexOf(t) !== -1 ? 1 : 0);
+        }, 0);
+        if (mainTfCount < 2) continue;
 
         var tfs = (currentTf === 'all') ? allTfs : allTfs.filter(function(x) { return x === currentTf; });
         if (!tfs.length) continue;
