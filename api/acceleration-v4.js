@@ -69,17 +69,27 @@ function h1BiasScore(h1) {
   const e50Prev = ema(closesPrev,  50);
   const cNow    = closes[closes.length - 1];
   const cPrev   = closes[closes.length - 2];
+  const hPrev   = h1[h1.length - 2].high;
+  const lPrev   = h1[h1.length - 2].low;
 
   if (e20Now == null || e50Now == null || e20Prev == null || e50Prev == null) {
     return { direction: null, score: 0, closePx: cNow, ema20: e20Now, ema50: e50Now };
   }
 
+  // Structural break: current H1 must close beyond the previous H1's high
+  // (BUY) or low (SELL). Pairs that only sit inside the previous H1's range
+  // don't earn direction.
+  const breakoutUp   = cNow > hPrev;
+  const breakoutDown = cNow < lPrev;
+
   const bullish =
     cNow  > e20Now  && cPrev > e20Prev &&
-    e20Now > e50Now && e20Prev > e50Prev;
+    e20Now > e50Now && e20Prev > e50Prev &&
+    breakoutUp;
   const bearish =
     cNow  < e20Now  && cPrev < e20Prev &&
-    e20Now < e50Now && e20Prev < e50Prev;
+    e20Now < e50Now && e20Prev < e50Prev &&
+    breakoutDown;
 
   let direction = null;
   let score = 0;
@@ -92,12 +102,16 @@ function h1BiasScore(h1) {
     closePx: cNow,
     ema20: e20Now,
     ema50: e50Now,
+    breakoutUp,
+    breakoutDown,
+    prevHigh: hPrev,
+    prevLow:  lPrev,
     // Debug snapshot of both H1 readings so the detail modal can prove exactly
     // which H1 (current or previous) satisfied / failed the alignment rule.
     now:  { close: cNow,  ema20: e20Now,  ema50: e50Now,
             aboveEma20: cNow  > e20Now,  belowEma20: cNow  < e20Now,
             e20AboveE50: e20Now > e50Now, e20BelowE50: e20Now < e50Now },
-    prev: { close: cPrev, ema20: e20Prev, ema50: e50Prev,
+    prev: { close: cPrev, ema20: e20Prev, ema50: e50Prev, high: hPrev, low: lPrev,
             aboveEma20: cPrev > e20Prev, belowEma20: cPrev < e20Prev,
             e20AboveE50: e20Prev > e50Prev, e20BelowE50: e20Prev < e50Prev },
   };

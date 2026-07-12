@@ -358,6 +358,13 @@
       h1Lines.push(r.direction ? ('Direction ' + r.direction) : 'Neutral (H1 alignment failed)');
       if (h1.now)  h1Lines.push('Now — C ' + fmtNum(h1.now.close, 5)  + ' / E20 ' + fmtNum(h1.now.ema20, 5)  + ' / E50 ' + fmtNum(h1.now.ema50, 5));
       if (h1.prev) h1Lines.push('Prev — C ' + fmtNum(h1.prev.close, 5) + ' / E20 ' + fmtNum(h1.prev.ema20, 5) + ' / E50 ' + fmtNum(h1.prev.ema50, 5));
+      if (h1.prevHigh != null && h1.prevLow != null) {
+        var brk = '';
+        if (r.direction === 'BUY')       brk = 'H1 close ' + fmtNum(h1.now && h1.now.close, 5) + ' > prev H1 high ' + fmtNum(h1.prevHigh, 5);
+        else if (r.direction === 'SELL') brk = 'H1 close ' + fmtNum(h1.now && h1.now.close, 5) + ' < prev H1 low ' + fmtNum(h1.prevLow, 5);
+        else                             brk = 'prev H1 range ' + fmtNum(h1.prevLow, 5) + ' — ' + fmtNum(h1.prevHigh, 5);
+        h1Lines.push(brk);
+      }
       var tiles = [
         { title: 'H1 Bias',       score: comp.h1Bias.score,  detail: h1Lines.join(' · ') },
         { title: 'M15 Velocity',  score: comp.m15Velocity.score, detail: 'v = ' + fmtNum(comp.m15Velocity.velocity, 2) + ' ATR (signed ' + fmtNum(comp.m15Velocity.signed, 2) + ')' },
