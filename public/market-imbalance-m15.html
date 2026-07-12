@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>NervaFX — Market Imbalance M15</title>
+  <link rel="icon" type="image/png" href="/nervafx-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script src="/auth-guard.js"></script>
+  <link rel="stylesheet" href="style.css" />
+
+  <style>
+    .grid { display: block !important; }
+
+    .sx-topbar {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 28px; height: 56px;
+      background: rgba(8,11,18,0.92);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+    .sx-topbar-left { display: flex; align-items: center; gap: 12px; }
+    .sx-logo img { height: 24px; display: block; }
+    .sx-sep { color: rgba(255,255,255,0.1); font-size: 20px; font-weight: 200; }
+    .sx-title-text { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+    .sx-back-btn {
+      display: flex; align-items: center; gap: 5px;
+      padding: 6px 12px; border-radius: 8px;
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); font-size: 11px; font-weight: 600;
+      cursor: pointer; text-decoration: none; transition: all 0.15s;
+    }
+    .sx-back-btn:hover { background: rgba(255,255,255,0.09); color: var(--text); }
+
+    .sx-main { max-width: 1000px; margin: 0 auto; padding: 20px 20px 80px; }
+
+    .sx-card {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px; margin-bottom: 18px; overflow: hidden;
+    }
+    .sx-card-hd {
+      padding: 12px 16px; font-size: 12px; font-weight: 700;
+      color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    }
+    .sx-card-hd i { width: 15px; height: 15px; }
+
+    .sx-ctrls { display: flex; gap: 6px; margin-left: auto; align-items: center; flex-wrap: wrap; }
+    .sx-btn {
+      padding: 4px 12px; border-radius: 7px; font-size: 11px; font-weight: 700;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); cursor: pointer; transition: all 0.15s;
+    }
+    .sx-btn:hover { color: var(--text); background: rgba(255,255,255,0.08); }
+    .sx-btn.active { background: rgba(96,165,250,0.15); border-color: rgba(96,165,250,0.5); color: #60a5fa; }
+    .sx-ctrl-sep { width: 1px; height: 18px; background: rgba(255,255,255,0.1); }
+    .sx-note { font-size: 10.5px; color: var(--text-dim); text-transform: none; letter-spacing: 0; font-weight: 500; }
+    .sx-date-input {
+      padding: 4px 8px; border-radius: 7px; font-size: 11px; font-weight: 600;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted); font-family: inherit; outline: none;
+    }
+    .sx-date-input:focus { border-color: rgba(96,165,250,0.5); color: var(--text); }
+    .sx-date-input::-webkit-calendar-picker-indicator { filter: invert(0.6); cursor: pointer; }
+
+    .sx-loading { display: flex; align-items: center; gap: 8px; padding: 40px; color: var(--text-muted); font-size: 12px; justify-content: center; }
+    .spinner {
+      width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.15);
+      border-top-color: #60a5fa; border-radius: 50%; animation: sxspin 0.7s linear infinite;
+    }
+    @keyframes sxspin { to { transform: rotate(360deg); } }
+
+    .im-card {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 10px; margin-bottom: 10px; overflow: hidden;
+    }
+    .im-card-hd {
+      display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .im-time { font-size: 12px; font-weight: 700; color: var(--text); }
+    .im-date { font-size: 11px; color: var(--text-muted); }
+    .im-tag {
+      margin-left: auto;
+      font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 5px;
+      background: rgba(96,165,250,0.12); color: #60a5fa;
+    }
+
+    .im-body { padding: 10px 14px; }
+
+    .im-struct-row {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap;
+    }
+    .im-label-tag {
+      font-size: 12px; font-weight: 800; padding: 3px 10px; border-radius: 5px;
+      letter-spacing: 0.3px;
+      background: rgba(34,197,94,0.12); color: #4ade80;
+    }
+    .im-score-bar {
+      flex: 1; height: 8px; background: rgba(255,255,255,0.04);
+      border-radius: 4px; overflow: hidden; min-width: 80px;
+    }
+    .im-score-fill { height: 100%; border-radius: 4px; }
+    .im-score-fill.high { background: linear-gradient(90deg, #4ade80, #22c55e); }
+    .im-score-fill.mid { background: linear-gradient(90deg, #facc15, #f59e0b); }
+    .im-score-fill.low { background: linear-gradient(90deg, #f87171, #ef4444); }
+    .im-score-val {
+      font-size: 12px; font-weight: 800; min-width: 28px; text-align: right;
+    }
+    .im-score-val.high { color: #4ade80; }
+    .im-score-val.mid { color: #facc15; }
+    .im-score-val.low { color: #f87171; }
+
+    .im-groups { display: flex; gap: 12px; margin-bottom: 8px; flex-wrap: wrap; }
+    .im-group { flex: 1; min-width: 140px; }
+    .im-group-label {
+      font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+    .im-group-label.strong { color: #4ade80; }
+    .im-group-label.weak { color: #f87171; }
+
+    .im-ccy {
+      display: inline-flex; align-items: center; gap: 3px;
+      font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px;
+      margin: 1px 2px;
+    }
+    .im-ccy.strong { background: rgba(34,197,94,0.1); color: #4ade80; }
+    .im-ccy.weak { background: rgba(239,68,68,0.1); color: #f87171; }
+    .im-ccy-val { font-family: var(--font-data); font-size: 9px; opacity: 0.8; }
+
+    .im-meta {
+      display: flex; flex-wrap: wrap; gap: 6px; font-size: 9.5px; font-weight: 600;
+      color: var(--text-dim); margin-top: 6px;
+    }
+    .im-chip {
+      display: inline-flex; align-items: center; gap: 3px;
+      padding: 2px 7px; border-radius: 4px;
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05);
+    }
+    .im-chip-label { color: var(--text-dim); }
+    .im-chip-val { font-family: var(--font-data); }
+    .im-chip-val.high { color: #4ade80; }
+    .im-chip-val.mid { color: #facc15; }
+    .im-chip-val.low { color: #f87171; }
+
+    .im-pairs { margin-top: 10px; }
+    .im-pairs-label {
+      font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+      color: var(--text-dim); margin-bottom: 6px;
+    }
+    .im-pair-row {
+      display: flex; align-items: center; gap: 8px; padding: 5px 8px;
+      border-radius: 6px; margin-bottom: 3px;
+      background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04);
+    }
+    .im-pair-name { font-size: 12px; font-weight: 800; color: var(--text); min-width: 70px; }
+    .im-pair-dir {
+      font-size: 9px; font-weight: 800; padding: 2px 8px; border-radius: 4px;
+      min-width: 32px; text-align: center;
+    }
+    .im-pair-dir.BUY { background: rgba(34,197,94,0.12); color: #4ade80; }
+    .im-pair-dir.SELL { background: rgba(239,68,68,0.12); color: #f87171; }
+    .im-pair-spread {
+      font-size: 11px; font-weight: 700; font-family: var(--font-data);
+      margin-left: auto;
+    }
+    .im-pair-ccy {
+      font-size: 9px; font-weight: 600; color: var(--text-dim);
+      font-family: var(--font-data);
+    }
+    .im-pair-ccy .pos { color: #4ade80; }
+    .im-pair-ccy .neg { color: #f87171; }
+
+    .br-empty { text-align: center; padding: 50px 20px; color: var(--text-muted); font-size: 13px; }
+
+    @media (max-width: 640px) {
+      .sx-main { padding: 14px 12px 60px; }
+      .sx-ctrls { width: 100%; margin-left: 0; }
+      .im-groups { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <div class="sx-topbar">
+    <div class="sx-topbar-left">
+      <a class="sx-logo" href="/app"><img src="/nervafx-logo.png" alt="NervaFX" onerror="this.style.display='none'"></a>
+      <span class="sx-sep">/</span>
+      <span class="sx-title-text">Market Imbalance M15</span>
+    </div>
+    <a class="sx-back-btn" href="/app" onclick="window.close(); setTimeout(function(){ location.href='/app'; }, 150); return false;">&times; Close</a>
+  </div>
+
+  <main class="sx-main">
+    <div class="sx-card">
+      <div class="sx-card-hd">
+        <i data-lucide="scale"></i> Market Imbalance — M15 45m strength
+        <span class="sx-note">1v7 / 7v1 / 2v6 / 6v2 splits · ratio / leader / loser / extremes gates</span>
+        <span class="sx-ctrls">
+          <button class="sx-btn sx-days active" data-days="1">1D</button>
+          <button class="sx-btn sx-days" data-days="2">2D</button>
+          <button class="sx-btn sx-days" data-days="5">5D</button>
+          <button class="sx-btn sx-days" data-days="10">10D</button>
+          <button class="sx-btn sx-days" data-days="30">30D</button>
+          <span class="sx-ctrl-sep"></span>
+          <button class="sx-btn sx-session active" data-session="all">All</button>
+          <button class="sx-btn sx-session" data-session="asia">Asia</button>
+          <button class="sx-btn sx-session" data-session="london">London</button>
+          <button class="sx-btn sx-session" data-session="newyork">New York</button>
+          <span class="sx-ctrl-sep"></span>
+          <input type="date" class="sx-date-input" id="sx-date-from" title="From date">
+          <input type="date" class="sx-date-input" id="sx-date-to" title="To date">
+          <button class="sx-btn" id="sx-date-go">Go</button>
+        </span>
+      </div>
+    </div>
+
+    <div id="im-cards">
+      <div class="sx-loading"><span class="spinner"></span> Loading…</div>
+    </div>
+  </main>
+
+  <script>
+  (function () {
+    'use strict';
+
+    var TOKEN = localStorage.getItem('nfx_token');
+    if (!TOKEN) { location.href = '/login'; return; }
+
+    var _userTz = localStorage.getItem('nfx_tz') || 'auto';
+    function _tz() { return (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC'); }
+
+    async function loadProfileTz() {
+      try {
+        var r = await fetch('/api/profile', { headers: { Authorization: 'Bearer ' + TOKEN } });
+        if (!r.ok) return;
+        var p = await r.json();
+        if (p.timezone) {
+          _userTz = (p.timezone === 'UTC') ? 'auto' : p.timezone;
+          try { localStorage.setItem('nfx_tz', _userTz); } catch (_) {}
+        }
+      } catch (_) {}
+    }
+
+    var currentDays = 1;
+    var currentSession = 'all';
+    var cachedRows = [];
+
+    var SESSIONS = {
+      all:     { start: 0, end: 24 },
+      asia:    { start: 0, end: 8 },
+      london:  { start: 7, end: 16 },
+      newyork: { start: 12, end: 21 },
+    };
+
+    function inSession(iso) {
+      if (currentSession === 'all') return true;
+      var h = new Date(iso).getUTCHours();
+      var s = SESSIONS[currentSession];
+      return h >= s.start && h < s.end;
+    }
+
+    function hrLabel(iso) {
+      return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: _tz() });
+    }
+    function dayLabel(iso) {
+      return new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', timeZone: _tz() });
+    }
+    function isWeekend(iso) {
+      var d = new Date(iso).getUTCDay();
+      return d === 0 || d === 6;
+    }
+    function sc(v) { return v >= 70 ? 'high' : v >= 40 ? 'mid' : 'low'; }
+
+    function renderCcyList(list, strength, cls) {
+      var html = '';
+      for (var i = 0; i < list.length; i++) {
+        var c = list[i];
+        var v = strength[c];
+        html += '<span class="im-ccy ' + cls + '">' + c + ' <span class="im-ccy-val">' + (v > 0 ? '+' : '') + v.toFixed(1) + '</span></span>';
+      }
+      return html;
+    }
+
+    function renderResult(d) {
+      var html = '';
+      var scoreCls = sc(d.score);
+
+      html += '<div class="im-struct-row">';
+      html += '<span class="im-label-tag">' + d.structure.label + '</span>';
+      html += '<div class="im-score-bar"><div class="im-score-fill ' + scoreCls + '" style="width:' + Math.max(3, d.score) + '%"></div></div>';
+      html += '<span class="im-score-val ' + scoreCls + '">' + d.score + '</span>';
+      html += '</div>';
+
+      html += '<div class="im-groups">';
+      if (d.groups.strong.length) {
+        html += '<div class="im-group"><div class="im-group-label strong">Strong (' + d.groups.strong.length + ')</div>';
+        html += renderCcyList(d.groups.strong, d.strength, 'strong');
+        html += '</div>';
+      }
+      if (d.groups.weak.length) {
+        html += '<div class="im-group"><div class="im-group-label weak">Weak (' + d.groups.weak.length + ')</div>';
+        html += renderCcyList(d.groups.weak, d.strength, 'weak');
+        html += '</div>';
+      }
+      html += '</div>';
+
+      html += '<div class="im-meta">';
+      if (d.ratio) {
+        var rPct = Math.round(d.ratio.ratio * 100);
+        var rCls = d.ratio.ratioValid ? 'high' : 'low';
+        html += '<span class="im-chip"><span class="im-chip-label">Top2</span><span class="im-chip-val high">' + d.ratio.top2.join('+') + ' ' + d.ratio.top2Sum.toFixed(1) + '</span></span>';
+        html += '<span class="im-chip"><span class="im-chip-label">Bot2</span><span class="im-chip-val low">' + d.ratio.bot2.join('+') + ' ' + d.ratio.bot2Sum.toFixed(1) + '</span></span>';
+        html += '<span class="im-chip"><span class="im-chip-label">T/B</span><span class="im-chip-val ' + rCls + '">' + rPct + '%</span></span>';
+        var ldPct = Math.round(d.ratio.leaderRatio * 100);
+        var ldCls = d.ratio.leaderValid ? 'high' : 'low';
+        html += '<span class="im-chip"><span class="im-chip-label">2/1</span><span class="im-chip-val ' + ldCls + '">' + ldPct + '%</span></span>';
+        var lsPct = Math.round(d.ratio.loserRatio * 100);
+        var lsCls = d.ratio.loserValid ? 'high' : 'low';
+        html += '<span class="im-chip"><span class="im-chip-label">7/8</span><span class="im-chip-val ' + lsCls + '">' + lsPct + '%</span></span>';
+      }
+      var sepCls = d.separation.separation >= 10 ? 'high' : d.separation.separation >= 5 ? 'mid' : 'low';
+      html += '<span class="im-chip"><span class="im-chip-label">Sep</span><span class="im-chip-val ' + sepCls + '">' + d.separation.separation.toFixed(1) + ' ' + d.separation.label + '</span></span>';
+      html += '<span class="im-chip"><span class="im-chip-label">Leader</span><span class="im-chip-val high">' + d.leaderLoser.leader + ' +' + d.leaderLoser.leaderVal.toFixed(1) + '</span></span>';
+      html += '<span class="im-chip"><span class="im-chip-label">Loser</span><span class="im-chip-val low">' + d.leaderLoser.loser + ' ' + d.leaderLoser.loserVal.toFixed(1) + '</span></span>';
+      html += '</div>';
+
+      if (d.pairs && d.pairs.length) {
+        html += '<div class="im-pairs">';
+        html += '<div class="im-pairs-label">Tradeable Pairs — Strong vs Weak crosses</div>';
+        for (var p = 0; p < Math.min(5, d.pairs.length); p++) {
+          var pr = d.pairs[p];
+          html += '<div class="im-pair-row">';
+          html += '<span class="im-pair-name">' + pr.pair + '</span>';
+          html += '<span class="im-pair-dir ' + pr.direction + '">' + pr.direction + '</span>';
+          html += '<span class="im-pair-ccy"><span class="pos">' + pr.base + ' ' + (pr.baseVal >= 0 ? '+' : '') + pr.baseVal.toFixed(1) + '</span> vs <span class="neg">' + pr.quote + ' ' + (pr.quoteVal >= 0 ? '+' : '') + pr.quoteVal.toFixed(1) + '</span></span>';
+          html += '<span class="im-pair-spread" style="color:#60a5fa">spread ' + pr.spread.toFixed(1) + '</span>';
+          html += '</div>';
+        }
+        html += '</div>';
+      }
+
+      return html;
+    }
+
+    function renderCards(rows) {
+      var el = document.getElementById('im-cards');
+      if (!rows.length) {
+        el.innerHTML = '<div class="br-empty">No M15 imbalance found for this period.</div>';
+        return;
+      }
+
+      var html = '';
+      var reversed = rows.slice().reverse();
+      for (var r = 0; r < reversed.length; r++) {
+        var row = reversed[r];
+        if (isWeekend(row.time)) continue;
+        if (!inSession(row.time)) continue;
+
+        html += '<div class="im-card">';
+        html += '<div class="im-card-hd">';
+        html += '<span class="im-time">' + hrLabel(row.time) + '</span>';
+        html += '<span class="im-date">' + dayLabel(row.time) + '</span>';
+        html += '<span class="im-tag">Score ' + row.result.score + '</span>';
+        html += '</div>';
+        html += '<div class="im-body">';
+        html += renderResult(row.result);
+        html += '</div></div>';
+      }
+      el.innerHTML = html || '<div class="br-empty">No data found.</div>';
+    }
+
+    async function load() {
+      document.getElementById('im-cards').innerHTML = '<div class="sx-loading"><span class="spinner"></span> Loading…</div>';
+
+      var fromEl = document.getElementById('sx-date-from');
+      var toEl = document.getElementById('sx-date-to');
+      var qs;
+      if (fromEl.value && toEl.value) {
+        qs = 'from=' + fromEl.value + '&to=' + toEl.value;
+      } else {
+        qs = 'days=' + currentDays;
+      }
+
+      try {
+        var res = await fetch('/api/market-imbalance-m15?' + qs, {
+          headers: { Authorization: 'Bearer ' + TOKEN },
+        });
+        if (!res.ok) throw new Error(await res.text());
+        var json = await res.json();
+        cachedRows = json.rows || [];
+        renderCards(cachedRows);
+      } catch (e) {
+        document.getElementById('im-cards').innerHTML =
+          '<div class="br-empty" style="color:#f87171">Error: ' + e.message + '</div>';
+      }
+    }
+
+    document.querySelectorAll('.sx-days').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        document.querySelectorAll('.sx-days').forEach(function(b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        currentDays = parseInt(btn.dataset.days, 10);
+        document.getElementById('sx-date-from').value = '';
+        document.getElementById('sx-date-to').value = '';
+        load();
+      });
+    });
+
+    document.querySelectorAll('.sx-session').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        document.querySelectorAll('.sx-session').forEach(function(b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        currentSession = btn.dataset.session;
+        renderCards(cachedRows);
+      });
+    });
+
+    document.getElementById('sx-date-go').addEventListener('click', function() {
+      document.querySelectorAll('.sx-days').forEach(function(b) { b.classList.remove('active'); });
+      load();
+    });
+
+    lucide.createIcons();
+    loadProfileTz().then(function() { load(); });
+  })();
+  </script>
+</body>
+</html>
