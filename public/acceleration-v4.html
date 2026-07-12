@@ -107,19 +107,35 @@
       color: var(--text-muted); font-family: inherit; outline: none;
     }
 
-    /* History */
-    .hist-list { display: flex; flex-direction: column; gap: 4px; }
-    .hist-row {
-      display: grid; grid-template-columns: 130px 80px 60px 1fr auto; gap: 10px;
-      align-items: center;
-      padding: 6px 10px; border-radius: 5px;
-      background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04);
-      font-size: 11px;
+    /* History cards */
+    .hist-list { display: flex; flex-direction: column; gap: 10px; }
+    .hist-card {
+      background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 10px; overflow: hidden;
     }
-    .hist-time { color: var(--text-dim); font-family: 'SF Mono', Menlo, monospace; }
-    .hist-pair { font-weight: 800; color: #fff; font-size: 12px; }
-    .hist-metrics { color: var(--text-dim); font-size: 10px; font-family: 'SF Mono', Menlo, monospace; }
-    .hist-score { font-size: 13px; font-weight: 800; color: #4ade80; font-family: 'SF Mono', Menlo, monospace; }
+    .hist-card-hd {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .hist-card-time { font-size: 12px; font-weight: 700; color: #fff; font-family: 'SF Mono', Menlo, monospace; }
+    .hist-card-count {
+      margin-left: auto; font-size: 10px; font-weight: 700; letter-spacing: 0.4px;
+      padding: 3px 8px; border-radius: 5px;
+      background: rgba(34,197,94,0.14); color: #4ade80;
+    }
+    .hist-card-body { padding: 6px 10px 10px; display: flex; flex-direction: column; gap: 3px; }
+    .hist-pair-row {
+      display: grid; grid-template-columns: 80px 60px 1fr auto; gap: 10px;
+      align-items: center;
+      padding: 8px 10px; border-radius: 6px;
+      background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04);
+      cursor: pointer; transition: background 0.12s, border-color 0.12s;
+    }
+    .hist-pair-row:hover { background: rgba(96,165,250,0.06); border-color: rgba(96,165,250,0.25); }
+    .hist-pair-name { font-weight: 800; color: #fff; font-size: 13px; }
+    .hist-pair-metrics { color: var(--text-dim); font-size: 10px; font-family: 'SF Mono', Menlo, monospace; }
+    .hist-pair-metrics b { color: var(--text-muted); }
+    .hist-pair-score { font-size: 14px; font-weight: 800; font-family: 'SF Mono', Menlo, monospace; }
     .hist-empty { padding: 40px 20px; text-align: center; color: var(--text-muted); font-size: 13px; }
 
     /* Detail modal */
@@ -261,6 +277,7 @@
     function scoreColor(s) { return s >= 85 ? '#4ade80' : s >= 70 ? '#facc15' : s >= 50 ? '#fbbf24' : '#f87171'; }
 
     var _lastResults = [];
+    var _histCache = {};
 
     function renderSelected(sel, generatedAt) {
       var el = document.getElementById('selected-slot');
@@ -403,17 +420,43 @@
           listEl.innerHTML = '<div class="hist-empty">No qualified signals in this window.</div>';
           return;
         }
+        // Cache pair records keyed by "time|pair" so click → openDetail hydrates
+        // straight from history without a second fetch.
+        _histCache = {};
         var html = '';
-        json.rows.slice().reverse().forEach(function(row) {
-          html += '<div class="hist-row">'
-               +   '<div class="hist-time">' + fmtTime(row.time) + '</div>'
-               +   '<div class="hist-pair">' + row.pair + '</div>'
-               +   '<div class="rank-dir ' + row.direction + '">' + row.direction + '</div>'
-               +   '<div class="hist-metrics">Accel ' + fmtNum(row.m15Accel) + ' · Vel ' + fmtNum(row.m15Velocity) + ' · Comp ' + row.compression + ' · Cand ' + fmtNum(row.candleControl) + '</div>'
-               +   '<div class="hist-score">' + row.finalScore + '</div>'
-               + '</div>';
+        json.rows.slice().reverse().forEach(function(row, rIdx) {
+          var pairs = row.pairs || [];
+          html += '<div class="hist-card">';
+          html += '<div class="hist-card-hd">';
+          html += '<span class="hist-card-time">' + fmtTime(row.time) + '</span>';
+          html += '<span class="hist-card-count">' + pairs.length + ' PAIR' + (pairs.length > 1 ? 'S' : '') + '</span>';
+          html += '</div>';
+          html += '<div class="hist-card-body">';
+          pairs.forEach(function(p, pIdx) {
+            var key = rIdx + ':' + pIdx;
+            _histCache[key] = p;
+            var dCls = p.direction || 'NONE';
+            var col = p.finalScore >= 90 ? '#4ade80' : p.finalScore >= 85 ? '#a3e635' : '#facc15';
+            var accel = p.components && p.components.m15Acceleration ? p.components.m15Acceleration.score : 0;
+            var vel   = p.components && p.components.m15Velocity     ? p.components.m15Velocity.score : 0;
+            var comp  = p.components && p.components.compression     ? p.components.compression.score : 0;
+            var cand  = p.components && p.components.candleControl   ? p.components.candleControl.score : 0;
+            html += '<div class="hist-pair-row" data-key="' + key + '">'
+                 +   '<span class="hist-pair-name">' + p.pair + '</span>'
+                 +   '<span class="rank-dir ' + dCls + '">' + p.direction + '</span>'
+                 +   '<span class="hist-pair-metrics">Accel <b>' + fmtNum(accel) + '</b> · Vel <b>' + fmtNum(vel) + '</b> · Comp <b>' + comp + '</b> · Cand <b>' + fmtNum(cand) + '</b></span>'
+                 +   '<span class="hist-pair-score" style="color:' + col + '">' + p.finalScore + '</span>'
+                 + '</div>';
+          });
+          html += '</div></div>';
         });
         listEl.innerHTML = html;
+        listEl.querySelectorAll('.hist-pair-row').forEach(function(row) {
+          row.addEventListener('click', function() {
+            var rec = _histCache[row.dataset.key];
+            if (rec) openDetail(rec);
+          });
+        });
       } catch (e) {
         status.textContent = 'Error: ' + e.message;
         listEl.innerHTML = '<div class="hist-empty" style="color:#f87171">' + e.message + '</div>';

@@ -116,17 +116,22 @@ module.exports = async function handler(req, res) {
         if (r) results.push(r);
       }
       results.sort((a, b) => b.finalScore - a.finalScore);
-      const selected = results.find(r => r.qualifies);
-      if (selected) {
+      const qualifiedPairs = results.filter(r => r.qualifies);
+      if (qualifiedPairs.length) {
+        // Keep the full pair record so the frontend can hydrate the detail modal
+        // straight from history without re-fetching.
         rows.push({
           time: anchor.toISOString(),
-          pair: selected.pair,
-          direction: selected.direction,
-          finalScore: selected.finalScore,
-          m15Accel: selected.components.m15Acceleration.score,
-          m15Velocity: selected.components.m15Velocity.score,
-          candleControl: selected.components.candleControl.score,
-          compression: selected.components.compression.score,
+          count: qualifiedPairs.length,
+          pairs: qualifiedPairs.slice(0, 5).map(p => ({
+            pair: p.pair,
+            instrument: p.instrument,
+            direction: p.direction,
+            finalScore: p.finalScore,
+            components: p.components,
+            rules: p.rules,
+            price: p.price,
+          })),
         });
       }
     }
