@@ -179,13 +179,17 @@ function compressionScore(m15) {
   return { score, ratio: Math.round(ratio * 100) / 100 };
 }
 
-function candleControlScore(m15) {
-  if (m15.length < 1) return { score: 0, efficiency: 0 };
-  const c = m15[m15.length - 1];
+function candleControlScore(h1) {
+  if (h1.length < 1) return { score: 0, efficiency: 0, source: 'H1' };
+  const c = h1[h1.length - 1];
   const range = c.high - c.low;
-  if (range <= 0) return { score: 0, efficiency: 0 };
+  if (range <= 0) return { score: 0, efficiency: 0, source: 'H1' };
   const eff = Math.abs(c.close - c.open) / range;
-  return { score: Math.round(eff * 100 * 10) / 10, efficiency: Math.round(eff * 100) / 100 };
+  return {
+    score: Math.round(eff * 100 * 10) / 10,
+    efficiency: Math.round(eff * 100) / 100,
+    source: 'H1',
+  };
 }
 
 function analysePair(inst, h1, m15) {
@@ -194,7 +198,7 @@ function analysePair(inst, h1, m15) {
   const m15V   = m15VelocityScore(m15);
   const m15A   = m15AccelerationScore(m15);
   const comp   = compressionScore(m15);
-  const cand   = candleControlScore(m15);
+  const cand   = candleControlScore(h1);
 
   // Final composite score: 30% H1 bias + 20% M15 velocity + 30% M15 accel + 10% compression + 10% candle.
   const finalScore = Math.round(

@@ -388,7 +388,7 @@
         { title: 'M15 Velocity',  score: comp.m15Velocity.score, detail: 'v = ' + fmtNum(comp.m15Velocity.velocity, 2) + ' ATR (signed ' + fmtNum(comp.m15Velocity.signed, 2) + ')' },
         { title: 'M15 Acceleration', score: comp.m15Acceleration.score, detail: 'Δv = ' + fmtNum(comp.m15Acceleration.acceleration, 2) + '  (V1 ' + fmtNum(comp.m15Acceleration.v1, 2) + ' vs V2 ' + fmtNum(comp.m15Acceleration.v2, 2) + ')' },
         { title: 'Compression',   score: comp.compression.score, detail: 'ATR14/ATR50 = ' + fmtNum(comp.compression.ratio, 2) },
-        { title: 'Candle Control', score: comp.candleControl.score, detail: 'body / range = ' + fmtNum(comp.candleControl.efficiency * 100, 0) + '%' },
+        { title: 'Candle Control (H1)', score: comp.candleControl.score, detail: 'H1 body / range = ' + fmtNum(comp.candleControl.efficiency * 100, 0) + '%' },
       ];
       var html = '';
       tiles.forEach(function(t) {
