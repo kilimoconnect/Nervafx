@@ -57,16 +57,36 @@ function atr(candles, period) {
 function h1BiasScore(h1) {
   if (h1.length < 51) return { direction: null, score: 0, closePx: null, ema20: null, ema50: null };
   const closes = h1.map(c => c.close);
-  const e20 = ema(closes, 20);
-  const e50 = ema(closes, 50);
-  const closePx = closes[closes.length - 1];
-  if (e20 == null || e50 == null) return { direction: null, score: 0, closePx, ema20: e20, ema50: e50 };
+
+  // Compute EMA20 and EMA50 at the current close AND at the previous close.
+  // Both closes must sit on the aligned side of BOTH EMAs, and both EMA20
+  // readings must sit on the aligned side of both EMA50 readings, before we
+  // register a bias. Prevents single-candle whipsaws from flipping direction.
+  const closesPrev = closes.slice(0, -1);
+  const e20Now  = ema(closes,      20);
+  const e50Now  = ema(closes,      50);
+  const e20Prev = ema(closesPrev,  20);
+  const e50Prev = ema(closesPrev,  50);
+  const cNow    = closes[closes.length - 1];
+  const cPrev   = closes[closes.length - 2];
+
+  if (e20Now == null || e50Now == null || e20Prev == null || e50Prev == null) {
+    return { direction: null, score: 0, closePx: cNow, ema20: e20Now, ema50: e50Now };
+  }
+
+  const bullish =
+    cNow  > e20Now  && cPrev > e20Prev &&
+    e20Now > e50Now && e20Prev > e50Prev;
+  const bearish =
+    cNow  < e20Now  && cPrev < e20Prev &&
+    e20Now < e50Now && e20Prev < e50Prev;
 
   let direction = null;
   let score = 0;
-  if (closePx > e20 && e20 > e50)      { direction = 'BUY';  score = 100; }
-  else if (closePx < e20 && e20 < e50) { direction = 'SELL'; score = 100; }
-  return { direction, score, closePx, ema20: e20, ema50: e50 };
+  if (bullish)      { direction = 'BUY';  score = 100; }
+  else if (bearish) { direction = 'SELL'; score = 100; }
+
+  return { direction, score, closePx: cNow, ema20: e20Now, ema50: e50Now };
 }
 
 function h1MomentumScore(h1) {
