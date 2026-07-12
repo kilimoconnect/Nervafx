@@ -226,9 +226,9 @@ function analysePair(inst, h1, m15) {
   const rules = {
     h1Bias:        h1Bias.direction != null,
     m15Aligned:    m15SignedAligned,
-    accelAbove50:  m15A.score > 50,
-    velocityAbove50: m15V.score > 50,
-    finalAbove80:  finalScore > 80,
+    accelAbove55:  m15A.score > 55,
+    velocityAbove55: m15V.score > 55,
+    finalAbove82:  finalScore > 82,
   };
   const qualifies = Object.values(rules).every(Boolean);
 

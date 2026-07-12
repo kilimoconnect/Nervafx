@@ -302,7 +302,7 @@
     function renderSelected(sel, generatedAt) {
       var el = document.getElementById('selected-slot');
       if (!sel) {
-        el.innerHTML = '<div class="selected-empty">No qualifying trade right now. All pairs below don\'t meet the full rule stack (H1 bias · M15 accel &gt; 50 · velocity &gt; 50 · score &gt; 80).</div>';
+        el.innerHTML = '<div class="selected-empty">No qualifying trade right now. All pairs below don\'t meet the full rule stack (H1 bias · M15 accel &gt; 55 · velocity &gt; 55 · score &gt; 82).</div>';
         return;
       }
       var cls = sel.direction === 'BUY' ? 'BUY' : 'SELL';
@@ -408,9 +408,9 @@
       document.getElementById('modal-rules').innerHTML = ''
         + ruleLine(rules.h1Bias,          'H1 Bias non-neutral')
         + ruleLine(rules.m15Aligned,      'M15 4-candle move aligned with H1 direction')
-        + ruleLine(rules.accelAbove50,    'M15 Acceleration &gt; 50')
-        + ruleLine(rules.velocityAbove50, 'M15 Velocity &gt; 50')
-        + ruleLine(rules.finalAbove80,    'Final Score &gt; 80');
+        + ruleLine(rules.accelAbove55,    'M15 Acceleration &gt; 55')
+        + ruleLine(rules.velocityAbove55, 'M15 Velocity &gt; 55')
+        + ruleLine(rules.finalAbove82,    'Final Score &gt; 82');
 
       document.getElementById('modal-context').textContent = 'M15 close @ ' + fmtTime(r.price.m15Time) + ' · ' + fmtNum(r.price.m15Close, 5);
 
