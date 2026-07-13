@@ -28,6 +28,54 @@ const VALID_PAIRS = [
 function isJpy(inst) { return inst.includes('JPY'); }
 function pipDiv(inst) { return isJpy(inst) ? 0.01 : 0.0001; }
 
+// ── H1 EMA per-currency strength ────────────────────────────────────────────
+// Same maths as /api/currency-strength-h1-ema: score each pair's close vs
+// EMA20/EMA50, credit base +score, quote -score, divide by 7. Used to gate
+// pair selection so we only keep pairs where the strong currency aligns with
+// the trade direction (e.g. BUY AUD_USD → AUD strong AND USD weak).
+const CCYS = ['USD','EUR','GBP','JPY','CHF','CAD','AUD','NZD'];
+const STRENGTH_STRONG = 0.20;
+const STRENGTH_WEAK   = -0.20;
+
+function h1AlignmentScore(h1Slice) {
+  if (!h1Slice || h1Slice.length < 51) return null;
+  const closes = h1Slice.map(c => c.close);
+  const e20 = ema(closes, 20);
+  const e50 = ema(closes, 50);
+  const c   = closes[closes.length - 1];
+  if (e20 == null || e50 == null) return null;
+  if (c > e20 && e20 > e50)  return +1.0;
+  if (c < e20 && e20 < e50)  return -1.0;
+  if (c > e20 && e20 <= e50) return +0.5;
+  if (c < e20 && e20 >= e50) return -0.5;
+  return 0;
+}
+
+function computeCurrencyStrength(pairH1Map) {
+  const agg = {};
+  CCYS.forEach(k => agg[k] = 0);
+  for (const inst of VALID_PAIRS) {
+    const s = h1AlignmentScore(pairH1Map[inst]);
+    if (s == null) continue;
+    const [base, quote] = inst.split('_');
+    agg[base]  += s;
+    agg[quote] -= s;
+  }
+  const out = {};
+  for (const k of CCYS) out[k] = agg[k] / 7;
+  return out;
+}
+
+function strengthAligned(inst, direction, strength) {
+  if (!direction || !strength) return false;
+  const [base, quote] = inst.split('_');
+  const bs = strength[base] ?? 0;
+  const qs = strength[quote] ?? 0;
+  if (direction === 'BUY')  return bs >= STRENGTH_STRONG && qs <= STRENGTH_WEAK;
+  if (direction === 'SELL') return bs <= STRENGTH_WEAK   && qs >= STRENGTH_STRONG;
+  return false;
+}
+
 // ── Indicators ──────────────────────────────────────────────────────────────
 function ema(values, period) {
   if (values.length < period) return null;
@@ -313,6 +361,7 @@ module.exports = async function handler(req, res) {
     const h1Since  = new Date(new Date(untilTs).getTime() - 12 * 24 * 3600000).toISOString();
 
     const rows = [];
+    const pairH1 = {};
     let skippedInsufficient = 0;
     let maxH1Seen = 0;
     let maxM15Seen = 0;
@@ -326,16 +375,38 @@ module.exports = async function handler(req, res) {
         if (h1.length > maxH1Seen) maxH1Seen = h1.length;
         if (m15.length > maxM15Seen) maxM15Seen = m15.length;
         if (h1.length < 51 || m15.length < 51) return null;
+        pairH1[inst] = h1;
         return analysePair(inst, h1, m15);
       }));
       for (const r of results) if (r == null) skippedInsufficient++; else rows.push(r);
     }
+
+    // H1 EMA per-currency strength — used to gate pair direction. For a BUY
+    // pair the base currency must be strong AND the quote must be weak; SELL
+    // requires the reverse. Prevents surfacing high-score pairs where the
+    // broader currency context contradicts the direction.
+    const strength = computeCurrencyStrength(pairH1);
 
     // Rank by final score descending; only surface pairs whose H1 bias is set
     // (Close > EMA20 > EMA50 for BUY, Close < EMA20 < EMA50 for SELL). Neutrals
     // disqualify by definition — hide them so the list stays actionable.
     const biased = rows.filter(r => r.direction != null);
     biased.sort((a, b) => b.finalScore - a.finalScore);
+
+    // Annotate every biased row so the frontend can render the strength on the
+    // detail modal even for pairs that failed the alignment gate.
+    for (const r of biased) {
+      const [base, quote] = r.instrument.split('_');
+      r.currencyStrength = {
+        base:  { code: base,  value: strength[base]  },
+        quote: { code: quote, value: strength[quote] },
+        aligned: strengthAligned(r.instrument, r.direction, strength),
+      };
+      // Fold the alignment gate into `qualifies` so the frontend's existing
+      // colouring / selected-pair logic picks it up without further changes.
+      r.qualifies = r.qualifies && r.currencyStrength.aligned;
+      if (r.rules) r.rules.strengthAligned = r.currencyStrength.aligned;
+    }
 
     const qualified = biased.filter(r => r.qualifies);
     const selected = qualified[0] || null;
@@ -355,6 +426,7 @@ module.exports = async function handler(req, res) {
       },
       selected,
       results: biased,
+      currencyStrength: strength,
     });
   } catch (e) {
     console.error('[acceleration-v4]', e);
@@ -369,3 +441,7 @@ module.exports.maxDuration = 60;
 module.exports.analysePair = analysePair;
 module.exports.fetchCandles = fetchCandles;
 module.exports.VALID_PAIRS = VALID_PAIRS;
+module.exports.computeCurrencyStrength = computeCurrencyStrength;
+module.exports.strengthAligned = strengthAligned;
+module.exports.STRENGTH_STRONG = STRENGTH_STRONG;
+module.exports.STRENGTH_WEAK = STRENGTH_WEAK;

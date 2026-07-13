@@ -15,6 +15,8 @@ const v4 = require('./acceleration-v4.js');
 
 const VALID_PAIRS = v4.VALID_PAIRS;
 const analysePair = v4.analysePair;
+const computeCurrencyStrength = v4.computeCurrencyStrength;
+const strengthAligned = v4.strengthAligned;
 
 function getServiceClient() {
   return createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
@@ -105,6 +107,7 @@ module.exports = async function handler(req, res) {
     if (!skipWeekend) {
       const anchorMs = anchor.getTime();
       const results = [];
+      const pairH1Slice = {};
       for (const inst of VALID_PAIRS) {
         const cached = cache[inst];
         if (!cached) continue;
@@ -112,14 +115,29 @@ module.exports = async function handler(req, res) {
         const h1Slice  = cached.h1.filter(c  => c._ms  <= anchorMs);
         const m15Slice = cached.m15.filter(c => c._ms <= anchorMs);
         if (h1Slice.length < 51 || m15Slice.length < 51) continue;
+        pairH1Slice[inst] = h1Slice;
         const r = analysePair(inst, h1Slice, m15Slice);
         if (r) results.push(r);
       }
+      // Per-anchor H1 EMA currency strength — same maths as the live handler.
+      const strength = computeCurrencyStrength(pairH1Slice);
+
       // Only include pairs where the H1 bias is set (Close > EMA20 > EMA50 for
       // BUY, Close < EMA20 < EMA50 for SELL) — the same filter the live card
       // applies. This is redundant with `qualifies` (which already requires H1
       // direction), but stated explicitly so the semantics are obvious here.
       const biased = results.filter(r => r.direction != null);
+      // Fold currency-strength alignment into qualifies, matching live handler.
+      for (const r of biased) {
+        const [base, quote] = r.instrument.split('_');
+        r.currencyStrength = {
+          base:  { code: base,  value: strength[base]  },
+          quote: { code: quote, value: strength[quote] },
+          aligned: strengthAligned(r.instrument, r.direction, strength),
+        };
+        r.qualifies = r.qualifies && r.currencyStrength.aligned;
+        if (r.rules) r.rules.strengthAligned = r.currencyStrength.aligned;
+      }
       biased.sort((a, b) => b.finalScore - a.finalScore);
       const qualifiedPairs = biased.filter(r => r.qualifies);
       if (qualifiedPairs.length) {
@@ -136,6 +154,7 @@ module.exports = async function handler(req, res) {
             components: p.components,
             rules: p.rules,
             price: p.price,
+            currencyStrength: p.currencyStrength,
           })),
         });
       }
