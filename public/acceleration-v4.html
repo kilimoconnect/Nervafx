@@ -197,6 +197,75 @@
     .rule-icon { font-size: 14px; }
     .rule-ok { color: #4ade80; }
     .rule-no { color: #f87171; }
+
+    /* ── Mobile (≤ 640px) ─────────────────────────────────────────────── */
+    @media (max-width: 640px) {
+      .sx-topbar { padding: 0 14px; height: 50px; }
+      .sx-title-text { font-size: 12px; }
+      .sx-main { padding: 12px 12px 60px; }
+
+      .card-hd { padding: 10px 12px; font-size: 11px; }
+      .card-body { padding: 10px 12px; }
+
+      /* Selected banner: stack pair+reason / dir / score vertically.
+         The three top-level children in renderSelected() are, in order:
+         pair-and-reason wrapper, dir wrapper, score wrapper. */
+      .selected-wrap {
+        grid-template-columns: 1fr auto;
+        grid-template-areas:
+          "info  dir"
+          "info  score";
+        gap: 8px 10px; padding: 12px;
+      }
+      .selected-wrap > :nth-child(1) { grid-area: info; }
+      .selected-wrap > :nth-child(2) { grid-area: dir; justify-self: end; }
+      .selected-wrap > :nth-child(3) { grid-area: score; }
+      .sel-pair { font-size: 18px; }
+      .sel-score { font-size: 24px; }
+
+      /* Ranked rows: two-line layout so nothing gets crushed. */
+      .rank-row {
+        grid-template-columns: 24px 1fr auto auto;
+        grid-template-areas:
+          "idx pair dir score"
+          "idx meta meta score";
+        gap: 6px 8px; padding: 8px 10px;
+      }
+      .rank-row .rank-idx  { grid-area: idx; }
+      .rank-row .rank-pair { grid-area: pair; font-size: 12px; }
+      .rank-row .rank-dir  { grid-area: dir; font-size: 9px; padding: 2px 5px; }
+      .rank-row .rank-meta { grid-area: meta; font-size: 9px; gap: 8px; }
+      .rank-row .rank-score { grid-area: score; font-size: 14px; }
+
+      /* History cards */
+      .hist-card-hd { padding: 8px 12px; }
+      .hist-card-time { font-size: 11px; }
+      .hist-card-body { padding: 4px 8px 8px; }
+      .hist-pair-row {
+        grid-template-columns: 1fr auto auto;
+        grid-template-areas:
+          "pair dir score"
+          "metrics metrics score";
+        gap: 4px 8px; padding: 8px;
+      }
+      .hist-pair-row .hist-pair-name    { grid-area: pair; font-size: 12px; }
+      .hist-pair-row .rank-dir          { grid-area: dir; font-size: 9px; padding: 2px 5px; }
+      .hist-pair-row .hist-pair-metrics { grid-area: metrics; font-size: 9px; }
+      .hist-pair-row .hist-pair-score   { grid-area: score; font-size: 13px; }
+
+      /* Filters wrap tighter */
+      .filters { gap: 6px; }
+      .date-input, .filter-btn { font-size: 10px; padding: 4px 6px; }
+
+      /* Modal fills the screen with less chrome */
+      .modal-overlay { padding: 20px 8px; }
+      .modal-card { border-radius: 10px; }
+      .modal-hd { padding: 12px 14px; gap: 8px; }
+      .modal-body { padding: 14px; }
+      .comp-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
+      .comp-tile { padding: 8px 10px; }
+      .comp-score { font-size: 17px; }
+    }
   </style>
 </head>
 <body>
