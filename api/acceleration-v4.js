@@ -191,7 +191,10 @@ function m15VelocityScore(m15) {
   const c4 = m15[m15.length - 5].close;
   const signed = (c0 - c4) / a;
   const v = Math.abs(signed);
-  const score = Math.min(v * 33, 100);
+  // Cap raw velocity contribution at 2.0 ATR: anything faster is almost always
+  // a news spike, not a sustainable trend, so it saturates at 100 without
+  // dominating the composite. Linear ramp up to 2.0 → score of 100.
+  const score = Math.min(v, 2.0) * 50;
   return { score: Math.round(score * 10) / 10, velocity: Math.round(v * 100) / 100, signed: Math.round(signed * 100) / 100 };
 }
 
@@ -206,7 +209,9 @@ function m15AccelerationScore(m15) {
   const v1 = Math.abs(c0 - c4) / a;
   const v2 = Math.abs(c4 - c8) / a;
   const accel = v1 - v2;
-  const score = Math.min(Math.max(accel * 50, 0), 100);
+  // Cap raw acceleration at 1.5 ATR — same reasoning as velocity: violent
+  // spikes shouldn't out-score steady continuations. Saturates at 100.
+  const score = Math.min(Math.max(accel, 0), 1.5) * (100 / 1.5);
   return {
     score: Math.round(score * 10) / 10,
     acceleration: Math.round(accel * 100) / 100,
@@ -253,13 +258,16 @@ function analysePair(inst, h1, m15, opts) {
   const comp   = compressionScore(m15);
   const cand   = candleControlScore(h1);
 
-  // Final composite score: 30% H1 bias + 20% M15 velocity + 30% M15 accel + 10% compression + 10% candle.
+  // Final composite score: 30% H1 bias + 20% M15 velocity + 20% M15 accel
+  // + 10% compression + 20% candle control. Candle weight doubled (was 10%)
+  // to lift steady continuations with a fat H1 body; accel weight dropped
+  // (was 30%) so news spikes stop crowding out cleaner setups.
   const finalScore = Math.round(
     h1Bias.score  * 0.30 +
     m15V.score    * 0.20 +
-    m15A.score    * 0.30 +
+    m15A.score    * 0.20 +
     comp.score    * 0.10 +
-    cand.score    * 0.10
+    cand.score    * 0.20
   );
 
   // Direction alignment gate — M15 recent 4-candle move must agree with H1 bias.
@@ -270,7 +278,9 @@ function analysePair(inst, h1, m15, opts) {
   const rules = {
     h1Bias:        h1Bias.direction != null,
     m15Aligned:    m15SignedAligned,
-    accelAbove55:  m15A.score > 55,
+    // With the new accel cap (saturates at 1.5), a score of 40 is ~0.6 ATR of
+    // acceleration — enough to confirm a live move without demanding a spike.
+    accelAbove40:  m15A.score > 40,
     velocityAbove55: m15V.score > 55,
     finalAbove75:  finalScore >= 75,
   };
