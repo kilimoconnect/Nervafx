@@ -240,7 +240,7 @@
       <div class="card-body">
         <div class="filters" style="margin-bottom:12px">
           <span class="lbl">From</span>
-          <input type="date" class="date-input" id="hist-from" value="2025-08-01">
+          <input type="date" class="date-input" id="hist-from">
           <span class="lbl">To</span>
           <input type="date" class="date-input" id="hist-to">
           <button class="filter-btn active" id="hist-btn">Load history</button>
@@ -581,14 +581,19 @@
     }
     document.getElementById('hist-btn').addEventListener('click', loadHistory);
 
-    // Default hist-to to today
+    // Default both hist inputs to today (in the user's tz) and auto-load
+    // history so the card shows today's signals on arrival.
     (function() {
-      var d = new Date();
-      document.getElementById('hist-to').value = d.toISOString().slice(0, 10);
+      var today = new Date().toLocaleDateString('en-CA', { timeZone: _tz() });
+      document.getElementById('hist-from').value = today;
+      document.getElementById('hist-to').value = today;
     })();
 
     lucide.createIcons();
-    loadProfileTz().then(loadLive);
+    loadProfileTz().then(function() {
+      loadLive();
+      loadHistory();
+    });
 
     // Auto-refresh live every 15 minutes at :05 past
     (function schedule() {
