@@ -68,8 +68,16 @@ module.exports = async function handler(req, res) {
   if (!from || !to) return res.status(400).json({ error: 'from and to (YYYY-MM-DD) required' });
 
   const start = new Date(from + 'T00:00:00Z');
-  const end   = new Date(to   + 'T23:45:00Z');
+  let end     = new Date(to   + 'T23:45:00Z');
   if (isNaN(start) || isNaN(end)) return res.status(400).json({ error: 'invalid dates' });
+
+  // Never scan future anchors — no new candles exist past 'now', so the
+  // engine would just re-analyse the same slice and print the last-known
+  // signal for every 15-min bucket until 'to' 23:45. Snap end to the most
+  // recent completed M15 boundary at or before now.
+  const nowMs        = Date.now();
+  const lastComplete = Math.floor(nowMs / (15 * 60000)) * (15 * 60000) - 15 * 60000;
+  if (end.getTime() > lastComplete) end = new Date(lastComplete);
 
   const t0 = Date.now();
   const sb = getClient();
