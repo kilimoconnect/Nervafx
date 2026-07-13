@@ -106,7 +106,8 @@ function atr(candles, period) {
 }
 
 // ── Component scores ───────────────────────────────────────────────────────
-function h1BiasScore(h1) {
+function h1BiasScore(h1, opts) {
+  const requireBreakout = !opts || opts.requireBreakout !== false;
   if (h1.length < 51) return { direction: null, score: 0, closePx: null, ema20: null, ema50: null };
   const closes = h1.map(c => c.close);
 
@@ -137,11 +138,11 @@ function h1BiasScore(h1) {
   const bullish =
     cNow  > e20Now  && cPrev > e20Prev &&
     e20Now > e50Now && e20Prev > e50Prev &&
-    breakoutUp;
+    (!requireBreakout || breakoutUp);
   const bearish =
     cNow  < e20Now  && cPrev < e20Prev &&
     e20Now < e50Now && e20Prev < e50Prev &&
-    breakoutDown;
+    (!requireBreakout || breakoutDown);
 
   let direction = null;
   let score = 0;
@@ -244,8 +245,8 @@ function candleControlScore(h1) {
   };
 }
 
-function analysePair(inst, h1, m15) {
-  const h1Bias = h1BiasScore(h1);
+function analysePair(inst, h1, m15, opts) {
+  const h1Bias = h1BiasScore(h1, opts);
   const h1Mom  = h1MomentumScore(h1);
   const m15V   = m15VelocityScore(m15);
   const m15A   = m15AccelerationScore(m15);
@@ -386,7 +387,10 @@ module.exports = async function handler(req, res) {
         if (h1.length < 51 || m15.length < 51) return null;
         pairH1[inst]  = h1;
         pairM15[inst] = m15;
-        return analysePair(inst, h1, m15);
+        // In M15-strength mode we don't require a fresh H1 breakout — the M15
+        // strength picture is what drives selection, and the H1 breakout gate
+        // is too coarse for the faster timeframe's cadence.
+        return analysePair(inst, h1, m15, { requireBreakout: strengthTf !== 'M15' });
       }));
       for (const r of results) if (r == null) skippedInsufficient++; else rows.push(r);
     }

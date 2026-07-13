@@ -119,7 +119,7 @@ module.exports = async function handler(req, res) {
         if (h1Slice.length < 51 || m15Slice.length < 51) continue;
         pairH1Slice[inst]  = h1Slice;
         pairM15Slice[inst] = m15Slice;
-        const r = analysePair(inst, h1Slice, m15Slice);
+        const r = analysePair(inst, h1Slice, m15Slice, { requireBreakout: strengthTf !== 'M15' });
         if (r) results.push(r);
       }
       // Per-anchor currency strength — H1 by default, M15 when the caller
