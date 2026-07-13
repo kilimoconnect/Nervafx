@@ -1460,12 +1460,75 @@ function renderMomentumStrip(currencies) {
   }).join('');
 }
 
+// H1-EMA strength: cached response from /api/currency-strength-h1-ema.
+let _h1EmaStrength = null;
+
+async function _loadH1EmaStrength(force) {
+  if (_h1EmaStrength && !force) return _h1EmaStrength;
+  try {
+    const r = await fetch('/api/currency-strength-h1-ema');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    _h1EmaStrength = await r.json();
+  } catch (e) {
+    console.warn('H1 EMA strength fetch failed:', e);
+    _h1EmaStrength = { currencies: [], error: e.message };
+  }
+  return _h1EmaStrength;
+}
+
+function _renderH1EmaChart(data) {
+  if (!data?.currencies?.length) return;
+  const el = document.getElementById('strength-time');
+  if (el) el.textContent = 'H1 EMA20/EMA50 alignment · ' + fmtTime(data.generatedAt || new Date().toISOString());
+
+  const currencies   = [...data.currencies].sort((a, b) => b.strength - a.strength);
+  const labels       = currencies.map(c => c.currency);
+  const values       = currencies.map(c => c.strength);
+  const colors       = values.map(v => v >= 0 ? 'rgba(22,163,74,0.85)' : 'rgba(220,38,38,0.85)');
+  const borderColors = values.map(v => v >= 0 ? '#16a34a' : '#dc2626');
+
+  if (strengthChart) strengthChart.destroy();
+  const ctx = document.getElementById('strengthChart').getContext('2d');
+  strengthChart = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets: [{ data: values, backgroundColor: colors, borderColor: borderColors, borderWidth: 1, borderRadius: 4 }] },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const c = currencies[ctx.dataIndex];
+              return ' ' + c.strength.toFixed(3) + '   raw=' + c.raw_sum.toFixed(1) + '/7   dist=' + c.dist_pct.toFixed(3) + '%';
+            },
+          },
+        },
+      },
+      scales: {
+        x: { ticks: { color: '#94a3b8', font: { family: 'monospace', size: 11 } }, grid: { color: '#1e2128' } },
+        y: {
+          min: -1, max: 1,
+          ticks: { color: '#94a3b8', font: { family: 'monospace', size: 10 } },
+          grid: { color: '#1e2128' },
+        },
+      },
+    },
+  });
+}
+
 // TF toggle
 document.querySelectorAll('.tf-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
+  btn.addEventListener('click', async () => {
     document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     activeTF = btn.dataset.tf;
+    if (activeTF === 'h1ema') {
+      const data = await _loadH1EmaStrength(false);
+      _renderH1EmaChart(data);
+      return;
+    }
     if (strengthData) buildChart(strengthData, activeTF);
   });
 });
