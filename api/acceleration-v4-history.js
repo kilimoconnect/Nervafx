@@ -64,6 +64,7 @@ module.exports = async function handler(req, res) {
 
   const from = req.query?.from;
   const to   = req.query?.to;
+  const strengthTf = (req.query?.strengthTf === 'm15') ? 'M15' : 'H1';
   if (!from || !to) return res.status(400).json({ error: 'from and to (YYYY-MM-DD) required' });
 
   const start = new Date(from + 'T00:00:00Z');
@@ -107,7 +108,8 @@ module.exports = async function handler(req, res) {
     if (!skipWeekend) {
       const anchorMs = anchor.getTime();
       const results = [];
-      const pairH1Slice = {};
+      const pairH1Slice  = {};
+      const pairM15Slice = {};
       for (const inst of VALID_PAIRS) {
         const cached = cache[inst];
         if (!cached) continue;
@@ -115,12 +117,14 @@ module.exports = async function handler(req, res) {
         const h1Slice  = cached.h1.filter(c  => c._ms  <= anchorMs);
         const m15Slice = cached.m15.filter(c => c._ms <= anchorMs);
         if (h1Slice.length < 51 || m15Slice.length < 51) continue;
-        pairH1Slice[inst] = h1Slice;
+        pairH1Slice[inst]  = h1Slice;
+        pairM15Slice[inst] = m15Slice;
         const r = analysePair(inst, h1Slice, m15Slice);
         if (r) results.push(r);
       }
-      // Per-anchor H1 EMA currency strength — same maths as the live handler.
-      const strength = computeCurrencyStrength(pairH1Slice);
+      // Per-anchor currency strength — H1 by default, M15 when the caller
+      // explicitly requests the M15-strength variant.
+      const strength = computeCurrencyStrength(strengthTf === 'M15' ? pairM15Slice : pairH1Slice);
 
       // Only include pairs where the H1 bias is set (Close > EMA20 > EMA50 for
       // BUY, Close < EMA20 < EMA50 for SELL) — the same filter the live card
@@ -165,6 +169,7 @@ module.exports = async function handler(req, res) {
 
   res.json({
     from, to,
+    strengthTf,
     anchors_scanned: iterations,
     qualified: rows.length,
     duration_sec: Math.round((Date.now() - t0) / 100) / 10,

@@ -364,8 +364,13 @@ module.exports = async function handler(req, res) {
     const m15Since = new Date(new Date(untilTs).getTime() - 8  * 24 * 3600000).toISOString();
     const h1Since  = new Date(new Date(untilTs).getTime() - 12 * 24 * 3600000).toISOString();
 
+    // Which timeframe drives the currency-strength gate. Default H1, override
+    // via ?strengthTf=m15 for the M15 variant page.
+    const strengthTf = (req.query?.strengthTf === 'm15') ? 'M15' : 'H1';
+
     const rows = [];
     const pairH1 = {};
+    const pairM15 = {};
     let skippedInsufficient = 0;
     let maxH1Seen = 0;
     let maxM15Seen = 0;
@@ -379,17 +384,19 @@ module.exports = async function handler(req, res) {
         if (h1.length > maxH1Seen) maxH1Seen = h1.length;
         if (m15.length > maxM15Seen) maxM15Seen = m15.length;
         if (h1.length < 51 || m15.length < 51) return null;
-        pairH1[inst] = h1;
+        pairH1[inst]  = h1;
+        pairM15[inst] = m15;
         return analysePair(inst, h1, m15);
       }));
       for (const r of results) if (r == null) skippedInsufficient++; else rows.push(r);
     }
 
-    // H1 EMA per-currency strength — used to gate pair direction. For a BUY
-    // pair the base currency must be strong AND the quote must be weak; SELL
-    // requires the reverse. Prevents surfacing high-score pairs where the
-    // broader currency context contradicts the direction.
-    const strength = computeCurrencyStrength(pairH1);
+    // Per-currency strength — used to gate pair direction. For a BUY pair the
+    // base currency must be strong AND the quote must be weak; SELL requires
+    // the reverse. Prevents surfacing high-score pairs where the broader
+    // currency context contradicts the direction. Same maths for H1 and M15;
+    // only the candle series changes.
+    const strength = computeCurrencyStrength(strengthTf === 'M15' ? pairM15 : pairH1);
 
     // Rank by final score descending; only surface pairs whose H1 bias is set
     // (Close > EMA20 > EMA50 for BUY, Close < EMA20 < EMA50 for SELL). Neutrals
@@ -431,6 +438,7 @@ module.exports = async function handler(req, res) {
       selected,
       results: biased,
       currencyStrength: strength,
+      strengthTf,
     });
   } catch (e) {
     console.error('[acceleration-v4]', e);
