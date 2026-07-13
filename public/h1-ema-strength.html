@@ -148,7 +148,7 @@
       <table id="tbl">
         <thead>
           <tr>
-            <th style="text-align:left">Time (UTC)</th>
+            <th style="text-align:left">Time</th>
             <th>USD</th><th>EUR</th><th>GBP</th><th>JPY</th>
             <th>CHF</th><th>CAD</th><th>AUD</th><th>NZD</th>
           </tr>
@@ -182,10 +182,23 @@
     }
 
     function pad(n) { return n < 10 ? '0' + n : '' + n; }
+    var _userTz = localStorage.getItem('nfx_tz') || 'auto';
+    function _tz() {
+      return (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC');
+    }
     function fmtTime(iso) {
-      var d = new Date(iso);
-      return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate())
-        + ' ' + pad(d.getUTCHours()) + ':00';
+      try {
+        return new Intl.DateTimeFormat('en-GB', {
+          timeZone: _tz(),
+          day: '2-digit', month: 'short', year: 'numeric',
+          hour: '2-digit', minute: '2-digit', hour12: false,
+          timeZoneName: 'short',
+        }).format(new Date(iso));
+      } catch (_) {
+        var d = new Date(iso);
+        return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate())
+          + ' ' + pad(d.getUTCHours()) + ':00 UTC';
+      }
     }
 
     var CCYS = ['USD','EUR','GBP','JPY','CHF','CAD','AUD','NZD'];
