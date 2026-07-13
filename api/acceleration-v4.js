@@ -250,6 +250,29 @@ function candleControlScore(h1) {
   };
 }
 
+// Previous-UTC-day high/low from the H1 series. Used as a structural gate:
+// a BUY needs the anchor close to have broken above yesterday's high; a SELL
+// needs a close below yesterday's low. Guards against qualifying inside a
+// range on the daily timeframe.
+function previousDayRange(h1, anchorMs) {
+  if (!h1 || !h1.length) return null;
+  const d = new Date(anchorMs);
+  const todayStart = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  const yStart = todayStart - 24 * 3600000;
+  const yEnd   = todayStart;
+  let hi = -Infinity, lo = Infinity, count = 0;
+  for (const c of h1) {
+    const t = c._ms != null ? c._ms : new Date(c.time).getTime();
+    if (t >= yStart && t < yEnd) {
+      if (c.high > hi) hi = c.high;
+      if (c.low  < lo) lo = c.low;
+      count++;
+    }
+  }
+  if (!count) return null;
+  return { high: hi, low: lo, count, start: yStart, end: yEnd };
+}
+
 function analysePair(inst, h1, m15, opts) {
   const h1Bias = h1BiasScore(h1, opts);
   const h1Mom  = h1MomentumScore(h1);
@@ -257,6 +280,23 @@ function analysePair(inst, h1, m15, opts) {
   const m15A   = m15AccelerationScore(m15);
   const comp   = compressionScore(m15);
   const cand   = candleControlScore(h1);
+
+  // Previous-day range break — H1 close for the H1 variant, M15 close for the
+  // M15 variant so the "specific candle" that just closed is the one carrying
+  // the break signal.
+  const useM15 = opts && opts.dayBreakSource === 'M15';
+  const triggerClose = useM15
+    ? (m15.length ? m15[m15.length - 1].close : null)
+    : (h1.length  ? h1[h1.length - 1].close   : null);
+  const anchorMs = m15.length
+    ? (m15[m15.length - 1]._ms || new Date(m15[m15.length - 1].time).getTime())
+    : Date.now();
+  const prevDay = previousDayRange(h1, anchorMs);
+  let dayBreak = false;
+  if (prevDay && triggerClose != null) {
+    if (h1Bias.direction === 'BUY')  dayBreak = triggerClose > prevDay.high;
+    if (h1Bias.direction === 'SELL') dayBreak = triggerClose < prevDay.low;
+  }
 
   // Final composite score: 30% H1 bias + 20% M15 velocity + 20% M15 accel
   // + 10% compression + 20% candle control. Candle weight doubled (was 10%)
@@ -283,6 +323,7 @@ function analysePair(inst, h1, m15, opts) {
     accelAbove40:  m15A.score > 40,
     velocityAbove55: m15V.score > 55,
     finalAbove75:  finalScore >= 75,
+    dayBreak,
   };
   const qualifies = Object.values(rules).every(Boolean);
 
@@ -302,6 +343,10 @@ function analysePair(inst, h1, m15, opts) {
       h1Close: h1Bias.closePx,
       m15Close: m15.length ? m15[m15.length - 1].close : null,
       m15Time:  m15.length ? m15[m15.length - 1].time  : null,
+      prevDayHigh: prevDay ? prevDay.high : null,
+      prevDayLow:  prevDay ? prevDay.low  : null,
+      dayBreakSource: useM15 ? 'M15' : 'H1',
+      dayBreakClose: triggerClose,
     },
     pipDiv: pipDiv(inst),
   };
@@ -400,7 +445,10 @@ module.exports = async function handler(req, res) {
         // In M15-strength mode we don't require a fresh H1 breakout — the M15
         // strength picture is what drives selection, and the H1 breakout gate
         // is too coarse for the faster timeframe's cadence.
-        return analysePair(inst, h1, m15, { requireBreakout: strengthTf !== 'M15' });
+        return analysePair(inst, h1, m15, {
+          requireBreakout: strengthTf !== 'M15',
+          dayBreakSource:  strengthTf === 'M15' ? 'M15' : 'H1',
+        });
       }));
       for (const r of results) if (r == null) skippedInsufficient++; else rows.push(r);
     }
