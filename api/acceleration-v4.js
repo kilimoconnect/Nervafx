@@ -71,6 +71,10 @@ function strengthAligned(inst, direction, strength) {
   const [base, quote] = inst.split('_');
   const bs = strength[base] ?? 0;
   const qs = strength[quote] ?? 0;
+  // At least one of the two currencies must be at the extreme (|strength| ≥ 1) —
+  // i.e. all 7 of its pairs cleanly stacked in the same direction.
+  const extreme = Math.abs(bs) >= 0.999 || Math.abs(qs) >= 0.999;
+  if (!extreme) return false;
   if (direction === 'BUY')  return bs >= STRENGTH_STRONG && qs <= STRENGTH_WEAK;
   if (direction === 'SELL') return bs <= STRENGTH_WEAK   && qs >= STRENGTH_STRONG;
   return false;
