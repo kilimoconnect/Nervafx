@@ -37,9 +37,12 @@ const CCYS = ['USD','EUR','GBP','JPY','CHF','CAD','AUD','NZD'];
 const STRENGTH_STRONG = 0.20;
 const STRENGTH_WEAK   = -0.20;
 
-function h1AlignmentScore(h1Slice) {
-  if (!h1Slice || h1Slice.length < 51) return null;
-  const closes = h1Slice.map(c => c.close);
+// Discrete stack-alignment score used by the per-currency strength gate on
+// both variants. Timeframe-agnostic — takes whichever candle series (H1 for
+// the H1 page, M15 for the M15 page) and evaluates close vs EMA20 vs EMA50.
+function stackAlignmentScore(candles) {
+  if (!candles || candles.length < 51) return null;
+  const closes = candles.map(c => c.close);
   const e20 = ema(closes, 20);
   const e50 = ema(closes, 50);
   const c   = closes[closes.length - 1];
@@ -50,6 +53,7 @@ function h1AlignmentScore(h1Slice) {
   if (c < e20 && e20 >= e50) return -0.5;
   return 0;
 }
+const h1AlignmentScore = stackAlignmentScore; // back-compat alias
 
 // M15 EMA-slope strength — measures how steep the M15 EMA20 line is over the
 // last 10 candles, normalised by ATR14. Signed only when the price + EMA20 +
@@ -124,15 +128,17 @@ function m15SlopeScore(m15Slice) {
   return stackSign * combined;
 }
 
-// Aggregate pair scores per currency using either the H1 alignment score
-// (mode='H1') or the M15 EMA-slope magnitude (mode='M15'). Same divide-by-7
-// normalisation → strengths land in [-1, +1] regardless of mode.
-function computeCurrencyStrength(pairMap, mode) {
-  const scorer = mode === 'M15' ? m15SlopeScore : h1AlignmentScore;
+// Per-currency strength for the alignment gate. Both variants use the same
+// discrete stack-alignment score (close vs EMA20 vs EMA50); the only
+// difference is the candle series — H1 for the H1 variant, M15 for the M15
+// variant. The M15 slope composite is only for pair *ranking*, not for
+// currency-strength aggregation, so the extreme ±1 requirement still means
+// "every one of that currency's 7 pairs is cleanly stacked".
+function computeCurrencyStrength(pairMap /*, mode — kept for signature compat */) {
   const agg = {};
   CCYS.forEach(k => agg[k] = 0);
   for (const inst of VALID_PAIRS) {
-    const s = scorer(pairMap[inst]);
+    const s = stackAlignmentScore(pairMap[inst]);
     if (s == null) continue;
     const [base, quote] = inst.split('_');
     agg[base]  += s;
@@ -148,13 +154,11 @@ function strengthAligned(inst, direction, strength, mode) {
   const [base, quote] = inst.split('_');
   const bs = strength[base] ?? 0;
   const qs = strength[quote] ?? 0;
-  // H1 alignment scores are discrete (±1, ±0.5, 0) so the extreme requirement
-  // is |strength| ≥ 1.0 — every one of a currency's 7 pairs has to be cleanly
-  // stacked in the same direction. M15 slope scores are continuous magnitudes
-  // and land there much less often — a currency-wide average of 0.5 already
-  // means every pair is trending steeply, which is the intent.
-  const extremeThreshold = mode === 'M15' ? 0.5 : 0.999;
-  const extreme = Math.abs(bs) >= extremeThreshold || Math.abs(qs) >= extremeThreshold;
+  // Currency-strength aggregation uses the discrete stack-alignment score in
+  // both variants, so the extreme requirement is the same regardless of mode:
+  // at least one of the two currencies must have every one of its 7 pairs
+  // cleanly stacked in the same direction (|strength| ≥ 1.0).
+  const extreme = Math.abs(bs) >= 0.999 || Math.abs(qs) >= 0.999;
   if (!extreme) return false;
   if (direction === 'BUY')  return bs >= STRENGTH_STRONG && qs <= STRENGTH_WEAK;
   if (direction === 'SELL') return bs <= STRENGTH_WEAK   && qs >= STRENGTH_STRONG;
@@ -572,9 +576,21 @@ module.exports = async function handler(req, res) {
         r.finalScore = Math.round(Math.abs(score) * 100);
         r.qualifies  = stackAligned && slopeStrong;
       }
+      // Currency-strength gate: base currency strong AND quote weak, plus one
+      // extreme (|strength| = 1) — same rule the H1 variant uses, applied on
+      // top of the two-layer EMA selector.
       const biased = rows.filter(r => r.direction != null);
+      for (const r of biased) {
+        const [base, quote] = r.instrument.split('_');
+        r.currencyStrength = {
+          base:  { code: base,  value: strength[base]  },
+          quote: { code: quote, value: strength[quote] },
+          aligned: strengthAligned(r.instrument, r.direction, strength, strengthTf),
+        };
+        r.qualifies = r.qualifies && r.currencyStrength.aligned;
+        r.rules.strengthAligned = r.currencyStrength.aligned;
+      }
       biased.sort((a, b) => b.finalScore - a.finalScore);
-      // No currency-strength gate on this variant.
       const qualified = biased.filter(r => r.qualifies);
       const selected = qualified[0] || null;
       return res.json({

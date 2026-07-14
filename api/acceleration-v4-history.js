@@ -141,15 +141,14 @@ module.exports = async function handler(req, res) {
         strengthTf,
       );
 
-      // M15-strength page: only the two-layer EMA rule gates selection.
-      // All other components are still computed for display / diagnostics.
+      // M15-strength page: two-layer EMA rule + currency-strength gate.
       if (strengthTf === 'M15') {
         const SLOPE_QUAL = 0.30;
         for (const r of results) {
           const score = m15SlopeScore(pairM15Slice[r.instrument]);
           if (score == null) {
             r.direction = null; r.qualifies = false; r.finalScore = 0;
-            r.rules = { m15EmaStack: false, slopeDepthAbove30: false };
+            r.rules = { m15EmaStack: false, slopeDepthAbove30: false, strengthAligned: false };
             r.m15SlopeScore = null;
             continue;
           }
@@ -159,9 +158,19 @@ module.exports = async function handler(req, res) {
           else                            r.direction = null;
           const stackAligned = score !== 0;
           const slopeStrong  = Math.abs(score) >= SLOPE_QUAL;
-          r.rules = { m15EmaStack: stackAligned, slopeDepthAbove30: slopeStrong };
+          const [base, quote] = r.instrument.split('_');
+          r.currencyStrength = {
+            base:  { code: base,  value: strength[base]  },
+            quote: { code: quote, value: strength[quote] },
+            aligned: strengthAligned(r.instrument, r.direction, strength, strengthTf),
+          };
+          r.rules = {
+            m15EmaStack: stackAligned,
+            slopeDepthAbove30: slopeStrong,
+            strengthAligned: r.currencyStrength.aligned,
+          };
           r.finalScore = Math.round(Math.abs(score) * 100);
-          r.qualifies  = stackAligned && slopeStrong;
+          r.qualifies  = stackAligned && slopeStrong && r.currencyStrength.aligned;
         }
       } else {
         // H1-strength page: currency-strength alignment gate.
