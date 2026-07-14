@@ -88,22 +88,32 @@ function m15SlopeScore(m15Slice) {
   const slopePerCandle = num / den;
   const a14 = atr(m15Slice, 14);
   if (!a14 || a14 === 0) return null;
-  // Slope expressed in ATRs per candle. Multiply by 10 so a slope that moves
-  // the EMA one full ATR over the 10-candle window sits at magnitude 1.0.
-  const normalized = (slopePerCandle / a14) * 10;
+  // Slope in ATRs per candle × 10 → magnitude 1.0 = EMA moved one full ATR
+  // across the 10-candle window.
+  const slopeNorm = (slopePerCandle / a14) * 10;
 
-  const cur     = closes[closes.length - 1];
-  const e20Now  = e20Series[e20Series.length - 1];
+  const cur    = closes[closes.length - 1];
+  const e20Now = e20Series[e20Series.length - 1];
   let stackSign = 0;
-  if (cur > e20Now && e20Now > e50)  stackSign = +1;
+  if (cur > e20Now && e20Now > e50)      stackSign = +1;
   else if (cur < e20Now && e20Now < e50) stackSign = -1;
-  // Slope and stack must agree — a positive slope inside a bearish stack is
-  // still a downtrend that just bounced, so we call it flat.
-  const slopeSign = Math.sign(normalized);
+  const slopeSign = Math.sign(slopeNorm);
   if (stackSign === 0 || slopeSign !== stackSign) return 0;
 
-  // Cap magnitude at 1.0 (deep trend) so aggregates stay in [-1, +1].
-  return stackSign * Math.min(Math.abs(normalized), 1.0);
+  // Stack separation — how well the trend is established, not just how fast
+  // the EMA is turning. A steep slope on stacked-tight EMAs (fresh cross) is
+  // less reliable than a steep slope on a well-separated stack. Both gaps
+  // expressed in ATRs.
+  const priceGap = Math.abs(cur - e20Now)  / a14;   // price vs EMA20
+  const emaGap   = Math.abs(e20Now - e50)  / a14;   // EMA20 vs EMA50
+  const stackQuality = Math.min((priceGap + emaGap) / 2, 1.0);
+
+  const slopeMagnitude = Math.min(Math.abs(slopeNorm), 1.0);
+  // Composite: 50 % slope depth, 50 % stack quality. Both must be present for
+  // a strong score — a deep slope on tight EMAs sits around 0.5-0.6, a steep
+  // slope on well-separated EMAs (established trend) can reach 0.9+.
+  const combined = slopeMagnitude * 0.5 + stackQuality * 0.5;
+  return stackSign * combined;
 }
 
 // Aggregate pair scores per currency using either the H1 alignment score
