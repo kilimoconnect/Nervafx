@@ -100,19 +100,27 @@ function m15SlopeScore(m15Slice) {
   const slopeSign = Math.sign(slopeNorm);
   if (stackSign === 0 || slopeSign !== stackSign) return 0;
 
-  // Stack separation — how well the trend is established, not just how fast
-  // the EMA is turning. A steep slope on stacked-tight EMAs (fresh cross) is
-  // less reliable than a steep slope on a well-separated stack. Both gaps
-  // expressed in ATRs.
-  const priceGap = Math.abs(cur - e20Now)  / a14;   // price vs EMA20
-  const emaGap   = Math.abs(e20Now - e50)  / a14;   // EMA20 vs EMA50
-  const stackQuality = Math.min((priceGap + emaGap) / 2, 1.0);
+  // Stack separation — the actual price / EMA20 / EMA50 alignment expressed
+  // as ATR-normalised gaps. BUY needs price > EMA20 AND EMA20 > EMA50; SELL
+  // needs the mirror. Sign guard above already filtered stacks that disagree
+  // with the direction, so at this point the gaps are strictly positive.
+  //
+  // Both gaps count individually so pairs with big price-vs-EMA20 gap AND big
+  // EMA20-vs-EMA50 gap outrank pairs with only one of them.
+  const priceGap = Math.abs(cur - e20Now)  / a14;   // price vs EMA20 in ATRs
+  const emaGap   = Math.abs(e20Now - e50)  / a14;   // EMA20 vs EMA50 in ATRs
+  const priceGapNorm = Math.min(priceGap, 1.0);
+  const emaGapNorm   = Math.min(emaGap,   1.0);
+  const stackQuality = (priceGapNorm + emaGapNorm) / 2;
 
   const slopeMagnitude = Math.min(Math.abs(slopeNorm), 1.0);
-  // Composite: 50 % slope depth, 50 % stack quality. Both must be present for
-  // a strong score — a deep slope on tight EMAs sits around 0.5-0.6, a steep
-  // slope on well-separated EMAs (established trend) can reach 0.9+.
-  const combined = slopeMagnitude * 0.5 + stackQuality * 0.5;
+  // Composite: 40 % slope depth, 30 % price-vs-EMA20 gap, 30 % EMA20-vs-EMA50
+  // gap. Both alignment components are explicit contributors so the ranking
+  // rewards well-established stacks, not just steep EMA curves.
+  const combined =
+    slopeMagnitude * 0.40 +
+    priceGapNorm   * 0.30 +
+    emaGapNorm     * 0.30;
   return stackSign * combined;
 }
 
