@@ -498,12 +498,8 @@
 
       var rules = r.rules || {};
       document.getElementById('modal-rules').innerHTML = ''
-        + ruleLine(rules.h1Bias,          'H1 Bias non-neutral')
-        + ruleLine(rules.m15Aligned,      'M15 4-candle move aligned with H1 direction')
-        + ruleLine(rules.accelAbove40,    'M15 Acceleration &gt; 40')
-        + ruleLine(rules.velocityAbove55, 'M15 Velocity &gt; 55')
-        + ruleLine(rules.dayBreak,        'M15 close breaks previous day high/low')
-        + ruleLine(rules.finalAbove75,    'Final Score ≥ 75');
+        + ruleLine(rules.m15EmaStack,      'M15 price / EMA20 / EMA50 stack confirms direction')
+        + ruleLine(rules.slopeDepthAbove30,'M15 EMA20 slope depth ≥ 0.30 (strong trend)');
 
       document.getElementById('modal-context').textContent = 'M15 close @ ' + fmtTime(r.price.m15Time) + ' · ' + fmtNum(r.price.m15Close, 5);
 

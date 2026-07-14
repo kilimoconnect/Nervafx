@@ -17,6 +17,7 @@ const VALID_PAIRS = v4.VALID_PAIRS;
 const analysePair = v4.analysePair;
 const computeCurrencyStrength = v4.computeCurrencyStrength;
 const strengthAligned = v4.strengthAligned;
+const m15SlopeScore = v4.m15SlopeScore;
 
 function getServiceClient() {
   return createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
@@ -140,22 +141,44 @@ module.exports = async function handler(req, res) {
         strengthTf,
       );
 
-      // Only include pairs where the H1 bias is set (Close > EMA20 > EMA50 for
-      // BUY, Close < EMA20 < EMA50 for SELL) — the same filter the live card
-      // applies. This is redundant with `qualifies` (which already requires H1
-      // direction), but stated explicitly so the semantics are obvious here.
-      const biased = results.filter(r => r.direction != null);
-      // Fold currency-strength alignment into qualifies, matching live handler.
-      for (const r of biased) {
-        const [base, quote] = r.instrument.split('_');
-        r.currencyStrength = {
-          base:  { code: base,  value: strength[base]  },
-          quote: { code: quote, value: strength[quote] },
-          aligned: strengthAligned(r.instrument, r.direction, strength, strengthTf),
-        };
-        r.qualifies = r.qualifies && r.currencyStrength.aligned;
-        if (r.rules) r.rules.strengthAligned = r.currencyStrength.aligned;
+      // M15-strength page: only the two-layer EMA rule gates selection.
+      // All other components are still computed for display / diagnostics.
+      if (strengthTf === 'M15') {
+        const SLOPE_QUAL = 0.30;
+        for (const r of results) {
+          const score = m15SlopeScore(pairM15Slice[r.instrument]);
+          if (score == null) {
+            r.direction = null; r.qualifies = false; r.finalScore = 0;
+            r.rules = { m15EmaStack: false, slopeDepthAbove30: false };
+            r.m15SlopeScore = null;
+            continue;
+          }
+          r.m15SlopeScore = score;
+          if      (score >=  SLOPE_QUAL) r.direction = 'BUY';
+          else if (score <= -SLOPE_QUAL) r.direction = 'SELL';
+          else                            r.direction = null;
+          const stackAligned = score !== 0;
+          const slopeStrong  = Math.abs(score) >= SLOPE_QUAL;
+          r.rules = { m15EmaStack: stackAligned, slopeDepthAbove30: slopeStrong };
+          r.finalScore = Math.round(Math.abs(score) * 100);
+          r.qualifies  = stackAligned && slopeStrong;
+        }
+      } else {
+        // H1-strength page: currency-strength alignment gate.
+        for (const r of results) {
+          if (r.direction == null) continue;
+          const [base, quote] = r.instrument.split('_');
+          r.currencyStrength = {
+            base:  { code: base,  value: strength[base]  },
+            quote: { code: quote, value: strength[quote] },
+            aligned: strengthAligned(r.instrument, r.direction, strength, strengthTf),
+          };
+          r.qualifies = r.qualifies && r.currencyStrength.aligned;
+          if (r.rules) r.rules.strengthAligned = r.currencyStrength.aligned;
+        }
       }
+
+      const biased = results.filter(r => r.direction != null);
       biased.sort((a, b) => b.finalScore - a.finalScore);
       const qualifiedPairs = biased.filter(r => r.qualifies);
       if (qualifiedPairs.length) {

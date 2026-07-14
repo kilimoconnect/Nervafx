@@ -526,6 +526,54 @@ module.exports = async function handler(req, res) {
       strengthTf,
     );
 
+    // M15-strength page: only Layer 1 (EMA slope depth) + Layer 2 (price +
+    // EMA20/EMA50 stack) gate selection. All other components are still
+    // computed for display but do not gate qualification.
+    if (strengthTf === 'M15') {
+      const SLOPE_QUAL = 0.30; // > shallow, i.e. strong or deep trend
+      for (const r of rows) {
+        const score = m15SlopeScore(pairM15[r.instrument]);
+        if (score == null) {
+          r.direction = null;
+          r.qualifies = false;
+          r.finalScore = 0;
+          r.rules = { m15EmaStack: false, slopeDepthAbove30: false };
+          r.m15SlopeScore = null;
+          continue;
+        }
+        r.m15SlopeScore = score;
+        if      (score >=  SLOPE_QUAL) r.direction = 'BUY';
+        else if (score <= -SLOPE_QUAL) r.direction = 'SELL';
+        else                            r.direction = null;
+        // Both layers pass when |score| ≥ 0.30 — m15SlopeScore already returns
+        // 0 when the EMA20/EMA50 stack disagrees with the slope, so a non-zero
+        // score also implies the stack is aligned with direction.
+        const stackAligned = score !== 0;
+        const slopeStrong  = Math.abs(score) >= SLOPE_QUAL;
+        r.rules = { m15EmaStack: stackAligned, slopeDepthAbove30: slopeStrong };
+        r.finalScore = Math.round(Math.abs(score) * 100);
+        r.qualifies  = stackAligned && slopeStrong;
+      }
+      const biased = rows.filter(r => r.direction != null);
+      biased.sort((a, b) => b.finalScore - a.finalScore);
+      // No currency-strength gate on this variant.
+      const qualified = biased.filter(r => r.qualifies);
+      const selected = qualified[0] || null;
+      return res.json({
+        generatedAt: untilTs,
+        total: biased.length,
+        analysed: rows.length,
+        qualifiedCount: qualified.length,
+        skippedInsufficient,
+        skippedNeutralBias: rows.length - biased.length,
+        warmup: { needH1: 51, needM15: 51, haveH1: maxH1Seen, haveM15: maxM15Seen },
+        selected,
+        results: biased,
+        currencyStrength: strength,
+        strengthTf,
+      });
+    }
+
     // Rank by final score descending; only surface pairs whose H1 bias is set
     // (Close > EMA20 > EMA50 for BUY, Close < EMA20 < EMA50 for SELL). Neutrals
     // disqualify by definition — hide them so the list stays actionable.
@@ -583,5 +631,6 @@ module.exports.fetchCandles = fetchCandles;
 module.exports.VALID_PAIRS = VALID_PAIRS;
 module.exports.computeCurrencyStrength = computeCurrencyStrength;
 module.exports.strengthAligned = strengthAligned;
+module.exports.m15SlopeScore = m15SlopeScore;
 module.exports.STRENGTH_STRONG = STRENGTH_STRONG;
 module.exports.STRENGTH_WEAK = STRENGTH_WEAK;
