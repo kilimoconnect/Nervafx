@@ -72,14 +72,29 @@ function emaSeries(values, period) {
   return out;
 }
 
+// Raw slope/ATR classification exactly per the spec:
+//   0.00 - 0.10  Flat
+//   0.10 - 0.30  Shallow
+//   0.30 - 0.60  Strong
+//   0.60+        Deep
+function slopeClassification(abs) {
+  if (abs < 0.10) return 'FLAT';
+  if (abs < 0.30) return 'SHALLOW';
+  if (abs < 0.60) return 'STRONG';
+  return 'DEEP';
+}
+
 function m15SlopeScore(m15Slice) {
   if (!m15Slice || m15Slice.length < 60) return null;
   const closes = m15Slice.map(c => c.close);
   const e20Series = emaSeries(closes, 20);
   const e50 = ema(closes, 50);
   if (e20Series.length < 10 || e50 == null) return null;
+
+  // Linear regression slope over ALL 10 EMA20 values (x = 0..9, y = EMA20).
+  // Uses every point, not just the endpoints — matches the spec's regression
+  // formula: slope = Σ(x - x̄)(y - ȳ) / Σ(x - x̄)².
   const last10 = e20Series.slice(-10);
-  // Linear regression slope over x = 0..9, y = EMA20 values.
   const n = 10;
   const xMean = 4.5;
   const yMean = last10.reduce((a, b) => a + b, 0) / n;
@@ -90,11 +105,12 @@ function m15SlopeScore(m15Slice) {
     den += dx * dx;
   }
   const slopePerCandle = num / den;
+
   const a14 = atr(m15Slice, 14);
   if (!a14 || a14 === 0) return null;
-  // Slope in ATRs per candle × 10 → magnitude 1.0 = EMA moved one full ATR
-  // across the 10-candle window.
-  const slopeNorm = (slopePerCandle / a14) * 10;
+  // Normalised slope — direct spec: slope / ATR14. Typical range roughly
+  // 0.00-1.00; anything ≥ 0.30 counts as at least a Strong trend.
+  const slopeNorm = slopePerCandle / a14;
 
   const cur    = closes[closes.length - 1];
   const e20Now = e20Series[e20Series.length - 1];
@@ -105,38 +121,18 @@ function m15SlopeScore(m15Slice) {
   if (stackSign === 0 || slopeSign !== stackSign) return 0;
 
   // Raw candle direction guard — the last 4 M15 closes' net move must agree
-  // with the stack/slope direction. Catches the case where price is still
-  // above the stacked EMAs (lagging BUY signal) but the last few M15 candles
-  // have already rolled over into a sell. Threshold at 0.10 ATR to ignore
-  // pure noise flips.
+  // with the stack/slope direction. Threshold 0.10 ATR ignores noise flips.
   const close4Ago = closes[closes.length - 5];
   const rawMove = (cur - close4Ago) / a14;
   const rawSign = Math.abs(rawMove) < 0.10 ? 0 : Math.sign(rawMove);
   if (rawSign !== stackSign) return 0;
 
-  // Stack separation — the actual price / EMA20 / EMA50 alignment expressed
-  // as ATR-normalised gaps. BUY needs price > EMA20 AND EMA20 > EMA50; SELL
-  // needs the mirror. Sign guard above already filtered stacks that disagree
-  // with the direction, so at this point the gaps are strictly positive.
-  //
-  // Both gaps count individually so pairs with big price-vs-EMA20 gap AND big
-  // EMA20-vs-EMA50 gap outrank pairs with only one of them.
-  const priceGap = Math.abs(cur - e20Now)  / a14;   // price vs EMA20 in ATRs
-  const emaGap   = Math.abs(e20Now - e50)  / a14;   // EMA20 vs EMA50 in ATRs
-  const priceGapNorm = Math.min(priceGap, 1.0);
-  const emaGapNorm   = Math.min(emaGap,   1.0);
-  const stackQuality = (priceGapNorm + emaGapNorm) / 2;
-
-  const slopeMagnitude = Math.min(Math.abs(slopeNorm), 1.0);
-  // Composite: 40 % slope depth, 30 % price-vs-EMA20 gap, 30 % EMA20-vs-EMA50
-  // gap. Both alignment components are explicit contributors so the ranking
-  // rewards well-established stacks, not just steep EMA curves.
-  const combined =
-    slopeMagnitude * 0.40 +
-    priceGapNorm   * 0.30 +
-    emaGapNorm     * 0.30;
-  return stackSign * combined;
+  // Return the signed normalised slope directly. Callers use the raw value
+  // for gating (≥ 0.30 = Strong or better) and for classification.
+  return stackSign * Math.abs(slopeNorm);
 }
+
+module.exports.slopeClassification = slopeClassification;
 
 // Per-currency strength for the alignment gate. Both variants use the same
 // discrete stack-alignment score (close vs EMA20 vs EMA50); the only

@@ -499,7 +499,7 @@
       var rules = r.rules || {};
       document.getElementById('modal-rules').innerHTML = ''
         + ruleLine(rules.m15EmaStack,      'M15 price / EMA20 / EMA50 stack confirms direction')
-        + ruleLine(rules.slopeDepthAbove30,'M15 composite (slope depth + EMA separation) ≥ 0.30')
+        + ruleLine(rules.slopeDepthAbove30,'M15 EMA20 slope / ATR14 ≥ 0.30 (Strong trend or better)')
         + ruleLine(rules.strengthAligned,  'Currency strength — base strong, quote weak, one extreme ±1');
 
       document.getElementById('modal-context').textContent = 'M15 close @ ' + fmtTime(r.price.m15Time) + ' · ' + fmtNum(r.price.m15Close, 5);
