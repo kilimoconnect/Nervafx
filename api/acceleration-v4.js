@@ -104,6 +104,16 @@ function m15SlopeScore(m15Slice) {
   const slopeSign = Math.sign(slopeNorm);
   if (stackSign === 0 || slopeSign !== stackSign) return 0;
 
+  // Raw candle direction guard — the last 4 M15 closes' net move must agree
+  // with the stack/slope direction. Catches the case where price is still
+  // above the stacked EMAs (lagging BUY signal) but the last few M15 candles
+  // have already rolled over into a sell. Threshold at 0.10 ATR to ignore
+  // pure noise flips.
+  const close4Ago = closes[closes.length - 5];
+  const rawMove = (cur - close4Ago) / a14;
+  const rawSign = Math.abs(rawMove) < 0.10 ? 0 : Math.sign(rawMove);
+  if (rawSign !== stackSign) return 0;
+
   // Stack separation — the actual price / EMA20 / EMA50 alignment expressed
   // as ATR-normalised gaps. BUY needs price > EMA20 AND EMA20 > EMA50; SELL
   // needs the mirror. Sign guard above already filtered stacks that disagree
