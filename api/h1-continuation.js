@@ -1,5 +1,7 @@
 'use strict';
 
+const { alignFromCandles } = require('./_h1-ema-align');
+
 const { getClient, cors } = require('./_db');
 const { requirePlan } = require('./_plan');
 
@@ -52,6 +54,10 @@ module.exports = async function handler(req, res) {
     const PAGE = 1000;
     const h4Cache = {};
     const m15Cache = {};
+    // Raw H1 series retained separately so the EMA-alignment gate can walk
+    // full closes without re-fetching. The H1 -> H4 aggregation above only
+    // keeps the last 3 completed buckets, which isn't enough for EMA50.
+    const h1RawCache = {};
 
     // Fetch H1s (used to build synthetic H4 reference buckets)
     for (let b = 0; b < VALID_PAIRS.length; b += 7) {
@@ -67,6 +73,11 @@ module.exports = async function handler(req, res) {
         return { inst, data: error ? [] : data || [] };
       }));
       for (const { inst, data } of results) {
+        // Stash the raw H1 series before aggregation so the EMA gate can use it.
+        h1RawCache[inst] = (data || []).map(c => ({
+          time: c.time,
+          close: parseFloat(c.close),
+        }));
         // Group H1s into 4h buckets aligned to 00/04/08/12/16/20 UTC
         const buckets = new Map();
         const cutoffMs = new Date(refCutoff).getTime();
@@ -221,6 +232,11 @@ module.exports = async function handler(req, res) {
       if (triggerAllIdx === -1) continue;
 
       const trigger = m15all[triggerAllIdx];
+
+      // H1 EMA alignment gate at trigger time.
+      const triggerMs = new Date(trigger.time).getTime();
+      const emaAlign = alignFromCandles(h1RawCache[inst] || [], triggerMs, direction);
+      if (!emaAlign.aligned) continue;
       const m15s = m15all.slice(triggerAllIdx);
       const triggerIdx = 0;
       const triggerBreakPips = direction === 'BUY'

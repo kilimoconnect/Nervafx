@@ -2,6 +2,7 @@
 
 const { getClient, cors } = require('./_db');
 const { requirePlan } = require('./_plan');
+const { alignFromCandles } = require('./_h1-ema-align');
 
 const VALID_PAIRS = [
   'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
@@ -144,6 +145,10 @@ module.exports = async function handler(req, res) {
 
     const PAGE = 1000;
     const m15Cache = {};
+    // Separate H1 cache used only by the EMA-alignment gate on the trigger.
+    // Fetched further back to guarantee ≥ 51 complete H1 candles for EMA50.
+    const h1Cache = {};
+    const h1Since = new Date(new Date(fetchSince).getTime() - 5 * 24 * 3600000).toISOString();
 
     for (let b = 0; b < VALID_PAIRS.length; b += 7) {
       const batch = VALID_PAIRS.slice(b, b + 7);
@@ -164,9 +169,17 @@ module.exports = async function handler(req, res) {
           if (data.length < PAGE) break;
           off += PAGE;
         }
-        return { inst, data: allData };
+        const { data: h1Data, error: h1Err } = await sb
+          .from('backtest_candles')
+          .select('time, close')
+          .eq('instrument', inst).eq('timeframe', 'H1').eq('complete', true)
+          .gte('time', h1Since).lte('time', fetchUntil)
+          .order('time', { ascending: true })
+          .limit(400);
+        if (h1Err) throw h1Err;
+        return { inst, data: allData, h1: h1Data || [] };
       }));
-      for (const { inst, data } of results) {
+      for (const { inst, data, h1 } of results) {
         m15Cache[inst] = data.map(c => ({
           time: c.time,
           open: parseFloat(c.open),
@@ -174,6 +187,7 @@ module.exports = async function handler(req, res) {
           low: parseFloat(c.low),
           close: parseFloat(c.close),
         }));
+        h1Cache[inst] = h1.map(c => ({ time: c.time, close: parseFloat(c.close) }));
       }
     }
 
@@ -270,6 +284,11 @@ module.exports = async function handler(req, res) {
       if (triggerAllIdx === -1) continue;
 
       const trigger = all[triggerAllIdx];
+
+      // H1 EMA alignment gate at trigger time.
+      const triggerMs = new Date(trigger.time).getTime();
+      const emaAlign = alignFromCandles(h1Cache[inst] || [], triggerMs, direction);
+      if (!emaAlign.aligned) continue;
       const curM15s = all.slice(triggerAllIdx).filter(c => new Date(c.time).getTime() < curEndMs);
       const triggerIdx = 0;
       const triggerBreakPips = direction === 'BUY'

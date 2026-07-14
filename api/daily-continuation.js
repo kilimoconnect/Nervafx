@@ -2,6 +2,7 @@
 
 const { getClient, cors } = require('./_db');
 const { requirePlan } = require('./_plan');
+const { alignFromCandles } = require('./_h1-ema-align');
 
 const VALID_PAIRS = [
   'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
@@ -84,7 +85,9 @@ module.exports = async function handler(req, res) {
     const prev2DayStart = backOneTradingDay(prevDayStart);
     const prev3DayStart = backOneTradingDay(prev2DayStart);
 
-    const fetchSince = prev3DayStart.toISOString();
+    // Widen by 5 extra days so we always have ≥ 51 complete H1 candles for
+    // the EMA50 that gates the trigger.
+    const fetchSince = new Date(prev3DayStart.getTime() - 5 * 24 * 3600000).toISOString();
     const fetchUntil = todayDate ? dayEnd.toISOString() : (now < dayEnd ? now : dayEnd).toISOString();
 
     // Fetch H1 candles for all pairs covering yesterday + today
@@ -237,6 +240,13 @@ module.exports = async function handler(req, res) {
       if (triggerIdx === -1) continue;
 
       const trigger = today[triggerIdx];
+
+      // H1 EMA alignment gate: BUY needs H1 close > EMA20 > EMA50 at trigger
+      // time; SELL needs H1 close < EMA20 < EMA50. Uses the full cached H1
+      // series so no extra query per pair.
+      const triggerMs = new Date(trigger.time).getTime();
+      const emaAlign = alignFromCandles(candles, triggerMs, direction);
+      if (!emaAlign.aligned) continue;
       const triggerBreakPips = direction === 'BUY'
         ? (trigger.close - ydHigh) / pd
         : (ydLow - trigger.close) / pd;
