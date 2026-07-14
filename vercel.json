@@ -79,7 +79,8 @@
     { "source": "/h1-continuation", "destination": "/h1-continuation.html" },
     { "source": "/session-continuation", "destination": "/session-continuation.html" },
     { "source": "/h1-clean-break", "destination": "/h1-clean-break.html" },
-    { "source": "/acceleration-v4", "destination": "/acceleration-v4.html" }
+    { "source": "/acceleration-v4", "destination": "/acceleration-v4.html" },
+    { "source": "/acceleration-v4-m15", "destination": "/acceleration-v4-m15.html" }
   ],
   "headers": [
     {
