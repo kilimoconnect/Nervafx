@@ -51,11 +51,70 @@ function h1AlignmentScore(h1Slice) {
   return 0;
 }
 
-function computeCurrencyStrength(pairH1Map) {
+// M15 EMA-slope strength — measures how steep the M15 EMA20 line is over the
+// last 10 candles, normalised by ATR14. Signed only when the price + EMA20 +
+// EMA50 stack agrees with the slope direction; otherwise treated as flat.
+//
+// Layer 1 of the user's design: pick pairs where the M15 EMA20 line is really
+// trending, not just barely positive. A deep slope means the trend has energy.
+function emaSeries(values, period) {
+  if (values.length < period) return [];
+  const k = 2 / (period + 1);
+  const seed = values.slice(0, period).reduce((a, b) => a + b, 0) / period;
+  const out = [seed];
+  for (let i = period; i < values.length; i++) {
+    out.push(values[i] * k + out[out.length - 1] * (1 - k));
+  }
+  return out;
+}
+
+function m15SlopeScore(m15Slice) {
+  if (!m15Slice || m15Slice.length < 60) return null;
+  const closes = m15Slice.map(c => c.close);
+  const e20Series = emaSeries(closes, 20);
+  const e50 = ema(closes, 50);
+  if (e20Series.length < 10 || e50 == null) return null;
+  const last10 = e20Series.slice(-10);
+  // Linear regression slope over x = 0..9, y = EMA20 values.
+  const n = 10;
+  const xMean = 4.5;
+  const yMean = last10.reduce((a, b) => a + b, 0) / n;
+  let num = 0, den = 0;
+  for (let i = 0; i < n; i++) {
+    const dx = i - xMean;
+    num += dx * (last10[i] - yMean);
+    den += dx * dx;
+  }
+  const slopePerCandle = num / den;
+  const a14 = atr(m15Slice, 14);
+  if (!a14 || a14 === 0) return null;
+  // Slope expressed in ATRs per candle. Multiply by 10 so a slope that moves
+  // the EMA one full ATR over the 10-candle window sits at magnitude 1.0.
+  const normalized = (slopePerCandle / a14) * 10;
+
+  const cur     = closes[closes.length - 1];
+  const e20Now  = e20Series[e20Series.length - 1];
+  let stackSign = 0;
+  if (cur > e20Now && e20Now > e50)  stackSign = +1;
+  else if (cur < e20Now && e20Now < e50) stackSign = -1;
+  // Slope and stack must agree — a positive slope inside a bearish stack is
+  // still a downtrend that just bounced, so we call it flat.
+  const slopeSign = Math.sign(normalized);
+  if (stackSign === 0 || slopeSign !== stackSign) return 0;
+
+  // Cap magnitude at 1.0 (deep trend) so aggregates stay in [-1, +1].
+  return stackSign * Math.min(Math.abs(normalized), 1.0);
+}
+
+// Aggregate pair scores per currency using either the H1 alignment score
+// (mode='H1') or the M15 EMA-slope magnitude (mode='M15'). Same divide-by-7
+// normalisation → strengths land in [-1, +1] regardless of mode.
+function computeCurrencyStrength(pairMap, mode) {
+  const scorer = mode === 'M15' ? m15SlopeScore : h1AlignmentScore;
   const agg = {};
   CCYS.forEach(k => agg[k] = 0);
   for (const inst of VALID_PAIRS) {
-    const s = h1AlignmentScore(pairH1Map[inst]);
+    const s = scorer(pairMap[inst]);
     if (s == null) continue;
     const [base, quote] = inst.split('_');
     agg[base]  += s;
@@ -66,14 +125,18 @@ function computeCurrencyStrength(pairH1Map) {
   return out;
 }
 
-function strengthAligned(inst, direction, strength) {
+function strengthAligned(inst, direction, strength, mode) {
   if (!direction || !strength) return false;
   const [base, quote] = inst.split('_');
   const bs = strength[base] ?? 0;
   const qs = strength[quote] ?? 0;
-  // At least one of the two currencies must be at the extreme (|strength| ≥ 1) —
-  // i.e. all 7 of its pairs cleanly stacked in the same direction.
-  const extreme = Math.abs(bs) >= 0.999 || Math.abs(qs) >= 0.999;
+  // H1 alignment scores are discrete (±1, ±0.5, 0) so the extreme requirement
+  // is |strength| ≥ 1.0 — every one of a currency's 7 pairs has to be cleanly
+  // stacked in the same direction. M15 slope scores are continuous magnitudes
+  // and land there much less often — a currency-wide average of 0.5 already
+  // means every pair is trending steeply, which is the intent.
+  const extremeThreshold = mode === 'M15' ? 0.5 : 0.999;
+  const extreme = Math.abs(bs) >= extremeThreshold || Math.abs(qs) >= extremeThreshold;
   if (!extreme) return false;
   if (direction === 'BUY')  return bs >= STRENGTH_STRONG && qs <= STRENGTH_WEAK;
   if (direction === 'SELL') return bs <= STRENGTH_WEAK   && qs >= STRENGTH_STRONG;
@@ -458,7 +521,10 @@ module.exports = async function handler(req, res) {
     // the reverse. Prevents surfacing high-score pairs where the broader
     // currency context contradicts the direction. Same maths for H1 and M15;
     // only the candle series changes.
-    const strength = computeCurrencyStrength(strengthTf === 'M15' ? pairM15 : pairH1);
+    const strength = computeCurrencyStrength(
+      strengthTf === 'M15' ? pairM15 : pairH1,
+      strengthTf,
+    );
 
     // Rank by final score descending; only surface pairs whose H1 bias is set
     // (Close > EMA20 > EMA50 for BUY, Close < EMA20 < EMA50 for SELL). Neutrals
@@ -473,7 +539,7 @@ module.exports = async function handler(req, res) {
       r.currencyStrength = {
         base:  { code: base,  value: strength[base]  },
         quote: { code: quote, value: strength[quote] },
-        aligned: strengthAligned(r.instrument, r.direction, strength),
+        aligned: strengthAligned(r.instrument, r.direction, strength, strengthTf),
       };
       // Fold the alignment gate into `qualifies` so the frontend's existing
       // colouring / selected-pair logic picks it up without further changes.

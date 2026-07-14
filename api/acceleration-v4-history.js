@@ -135,7 +135,10 @@ module.exports = async function handler(req, res) {
       }
       // Per-anchor currency strength — H1 by default, M15 when the caller
       // explicitly requests the M15-strength variant.
-      const strength = computeCurrencyStrength(strengthTf === 'M15' ? pairM15Slice : pairH1Slice);
+      const strength = computeCurrencyStrength(
+        strengthTf === 'M15' ? pairM15Slice : pairH1Slice,
+        strengthTf,
+      );
 
       // Only include pairs where the H1 bias is set (Close > EMA20 > EMA50 for
       // BUY, Close < EMA20 < EMA50 for SELL) — the same filter the live card
@@ -148,7 +151,7 @@ module.exports = async function handler(req, res) {
         r.currencyStrength = {
           base:  { code: base,  value: strength[base]  },
           quote: { code: quote, value: strength[quote] },
-          aligned: strengthAligned(r.instrument, r.direction, strength),
+          aligned: strengthAligned(r.instrument, r.direction, strength, strengthTf),
         };
         r.qualifies = r.qualifies && r.currencyStrength.aligned;
         if (r.rules) r.rules.strengthAligned = r.currencyStrength.aligned;
