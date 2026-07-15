@@ -33,6 +33,7 @@
     "api/backtest-engine.js": { "maxDuration": 300 },
     "api/acceleration-v4.js": { "maxDuration": 60 },
     "api/acceleration-v4-history.js": { "maxDuration": 300 },
+    "api/currency-strength-changes.js": { "maxDuration": 300 },
     "api/currency-acceleration.js": { "maxDuration": 60 },
     "api/m15-acceleration.js": { "maxDuration": 60 },
     "api/acceleration-engine.js": { "maxDuration": 60 },
@@ -80,7 +81,8 @@
     { "source": "/session-continuation", "destination": "/session-continuation.html" },
     { "source": "/h1-clean-break", "destination": "/h1-clean-break.html" },
     { "source": "/acceleration-v4", "destination": "/acceleration-v4.html" },
-    { "source": "/acceleration-v4-m15", "destination": "/acceleration-v4-m15.html" }
+    { "source": "/acceleration-v4-m15", "destination": "/acceleration-v4-m15.html" },
+    { "source": "/currency-strength-changes", "destination": "/currency-strength-changes.html" }
   ],
   "headers": [
     {
