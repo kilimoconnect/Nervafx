@@ -100,20 +100,30 @@ function regressionSlope(values) {
   return num / den;
 }
 
-// Trend Geometry Engine — three components together:
-//   1. EMA20 slope over last 5 candles (regression through every point)
-//      → trend speed / immediate momentum
-//   2. EMA50 slope over last 5 candles
-//      → trend stability / underlying trend
-//   3. Price position:
-//        D20 = (close - EMA20) / ATR14
-//        D50 = (close - EMA50) / ATR14
-//      → how stretched price is above / below the stack
+// Trend Geometry Engine — five components together, distinguishing healthy
+// trends from overextended ones:
+//   1. EMA20 slope over last 5 candles (regression) — trend SPEED
+//   2. EMA50 slope over last 5 candles              — trend STABILITY
+//   3. Price position: avg(|D20|, |D50|) in ATRs    — trend STRETCH
+//   4. EMA20 / EMA50 separation in ATRs             — trend WIDTH
+//   5. Pullback quality:
+//        (|EMA20-EMA50| - |close-EMA20|) / |EMA20-EMA50|
+//      1.0 = price sitting on EMA20, 0.0 = price at EMA50 or beyond,
+//      negative → price stretched past the EMA20-EMA50 separation
+//      (clamped to 0).
 //
 // Composite (signed, capped to ±1):
-//   45 % EMA20 slope (immediate momentum)
-//   25 % EMA50 slope (underlying trend agrees)
-//   30 % position    (average of |D20|, |D50|)
+//   35 % EMA20 slope
+//   25 % EMA50 slope
+//   20 % price position
+//   10 % EMA20-EMA50 separation
+//   10 % pullback quality
+//
+// Overextension penalty: when |close - EMA20| / ATR > 1.5 the composite
+// gets multiplied by (1 - min((extension - 1.5) × 0.6, 0.5)) — up to a
+// 50 % score cut at extension 2.33 ATR and beyond. Kills the case where
+// slope + slope + position all look great but price is so stretched that
+// the next M15 is far more likely to pull back than continue.
 function m15SlopeScore(m15Slice) {
   if (!m15Slice || m15Slice.length < 60) return null;
   const closes = m15Slice.map(c => c.close);
@@ -151,11 +161,23 @@ function m15SlopeScore(m15Slice) {
   const slope50 = regressionSlope(e50Window) / a14;
   if (Math.sign(slope50) !== stackSign && Math.abs(slope50) > 0.05) return 0;
 
-  // Component 3: Price position — |D20| + |D50| average, in ATRs. Signs
-  // already match stackSign by the guard above.
+  // Component 3: Price position — |D20| + |D50| average, in ATRs.
   const d20 = Math.abs(cur - e20) / a14;
   const d50 = Math.abs(cur - e50) / a14;
   const positionAvg = (d20 + d50) / 2;
+
+  // Component 4: EMA20 vs EMA50 separation — width of the stack.
+  const emaSep = Math.abs(e20 - e50) / a14;
+
+  // Component 5: Pullback quality — high when price hugs EMA20, low when
+  // price has drifted toward or past EMA50. Clamped to [0, 1] so a price
+  // stretched past |EMA20-EMA50| doesn't turn negative and mislead the
+  // composite; the extension penalty below handles that case.
+  let pullbackQuality = 0;
+  if (emaSep > 0.01) {
+    pullbackQuality = (Math.abs(e20 - e50) - Math.abs(cur - e20)) / Math.abs(e20 - e50);
+    pullbackQuality = Math.max(0, Math.min(1, pullbackQuality));
+  }
 
   // Raw M15 4-candle net move must confirm direction (0.10 ATR dead-zone).
   const close4Ago = closes[closes.length - 5];
@@ -166,7 +188,25 @@ function m15SlopeScore(m15Slice) {
   const s20 = Math.min(Math.abs(slope20), 1.0);
   const s50 = Math.min(Math.abs(slope50), 1.0);
   const pos = Math.min(positionAvg,       1.0);
-  const composite = s20 * 0.45 + s50 * 0.25 + pos * 0.30;
+  const sep = Math.min(emaSep,            1.0);
+  const pbq = pullbackQuality;
+
+  let composite =
+    s20 * 0.35 +
+    s50 * 0.25 +
+    pos * 0.20 +
+    sep * 0.10 +
+    pbq * 0.10;
+
+  // Overextension penalty — price too far above/below EMA20 raises pullback
+  // risk. Zero penalty up to 1.5 ATR, then linear cut peaking at 50 % off
+  // by 2.33 ATR of extension.
+  const extension = d20; // |close - EMA20| / ATR14
+  if (extension > 1.5) {
+    const penalty = Math.min((extension - 1.5) * 0.6, 0.5);
+    composite *= (1 - penalty);
+  }
+
   return stackSign * composite;
 }
 
@@ -428,15 +468,15 @@ function analysePair(inst, h1, m15, opts) {
   }
 
   // Final composite score: 30% H1 bias + 20% M15 velocity + 20% M15 accel
-  // + 10% compression + 20% candle control. Candle weight doubled (was 10%)
-  // to lift steady continuations with a fat H1 body; accel weight dropped
-  // (was 30%) so news spikes stop crowding out cleaner setups.
+  // + 30% candle control. Compression removed — it earns its keep on
+  // breakout setups but noise-penalises established trends (ATR14/ATR50
+  // ratio > 1 when a trend is running, which drags the score down for no
+  // reason). The 10 % it used to hold was reallocated to Candle Control.
   const finalScore = Math.round(
     h1Bias.score  * 0.30 +
     m15V.score    * 0.20 +
     m15A.score    * 0.20 +
-    comp.score    * 0.10 +
-    cand.score    * 0.20
+    cand.score    * 0.30
   );
 
   // Direction alignment gate — M15 recent 4-candle move must agree with H1 bias.
