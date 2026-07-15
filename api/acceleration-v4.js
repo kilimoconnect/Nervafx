@@ -558,7 +558,7 @@ module.exports = async function handler(req, res) {
     // EMA20/EMA50 stack) gate selection. All other components are still
     // computed for display but do not gate qualification.
     if (strengthTf === 'M15') {
-      const SLOPE_QUAL = 0.30; // > shallow, i.e. strong or deep trend
+      const SLOPE_QUAL = 0.18; // mid-shallow or better (spec: 0.10 shallow, 0.30 strong)
       for (const r of rows) {
         const score = m15SlopeScore(pairM15[r.instrument]);
         if (score == null) {

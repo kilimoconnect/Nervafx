@@ -143,7 +143,7 @@ module.exports = async function handler(req, res) {
 
       // M15-strength page: two-layer EMA rule + currency-strength gate.
       if (strengthTf === 'M15') {
-        const SLOPE_QUAL = 0.30;
+        const SLOPE_QUAL = 0.18;
         for (const r of results) {
           const score = m15SlopeScore(pairM15Slice[r.instrument]);
           if (score == null) {
