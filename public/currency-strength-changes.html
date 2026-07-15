@@ -71,7 +71,7 @@
 </head>
 <body>
   <h1>H1 EMA Currency Strength — Regime Changes</h1>
-  <div class="sub">Detects hours where at least one currency crossed the STRONG (≥ +0.50) / WEAK (≤ -0.50) / NEUTRAL boundary. Same H1 EMA maths as the Currency Strength card.</div>
+  <div class="sub">Detects only STRONG ↔ WEAK flips (per currency, in either direction). Drifts through NEUTRAL are transparent — a currency that goes STRONG at 11:00, NEUTRAL for hours, then WEAK at 18:00 fires a single STRONG → WEAK event at 18:00. Same H1 EMA maths as the Currency Strength card. Thresholds: STRONG ≥ +0.50, WEAK ≤ -0.50.</div>
 
   <div class="controls">
     <label>From <input type="date" id="from" value="2025-08-01"></label>

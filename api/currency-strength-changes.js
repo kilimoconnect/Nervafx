@@ -3,11 +3,12 @@
 /**
  * GET /api/currency-strength-changes?from=YYYY-MM-DD&to=YYYY-MM-DD[&severity=all|minor|major|massive]
  *
- * Walks the H1 EMA per-currency strength hour by hour and emits every hour
- * where at least one currency's regime flipped between STRONG / WEAK /
- * NEUTRAL. Same maths as /api/currency-strength-h1-ema-history for the
- * per-hour strengths; on top of that we snapshot each currency's regime
- * band and compare to the previous hour.
+ * Walks the H1 EMA per-currency strength hour by hour and emits only the
+ * hours where at least one currency crossed STRONG ↔ WEAK. Neutral hours
+ * are transparent — the comparison is against each currency's LAST
+ * non-neutral regime, so a currency that went STRONG (11:00) → NEUTRAL
+ * (12:00 - 17:00) → WEAK (18:00) still fires a single STRONG → WEAK flip
+ * at 18:00.
  *
  * Regime bands:
  *   STRONG  → strength ≥ +0.50
@@ -161,9 +162,13 @@ module.exports = async function handler(req, res) {
     pairScores[inst] = map;
   }
 
-  // Aggregate strengths per hour and detect regime flips.
+  // Aggregate strengths per hour and detect STRONG ↔ WEAK flips.
+  // For each currency we remember the last NON-NEUTRAL regime we saw. When
+  // the current regime is STRONG or WEAK and it differs from that memory,
+  // that's a flip. Neutral hours don't reset the memory, so drifts through
+  // NEUTRAL collapse to a single STRONG↔WEAK event at the far side.
   const rows = [];
-  let prev = null; // { time, regimes: {USD: 'STRONG', ...}, values: {...} }
+  const lastNonNeutral = {};   // { USD: { regime, value, time } }
   for (const h of targetHours) {
     const d = new Date(h);
     const dow = d.getUTCDay();
@@ -191,40 +196,44 @@ module.exports = async function handler(req, res) {
       regimes[k] = regime(values[k]);
     }
 
-    if (prev) {
-      const changes = [];
-      for (const k of CCYS) {
-        if (regimes[k] !== prev.regimes[k]) {
-          changes.push({
-            currency:  k,
-            from:      prev.regimes[k],
-            to:        regimes[k],
-            prevValue: prev.values[k],
-            value:     values[k],
-          });
-        }
+    const changes = [];
+    for (const k of CCYS) {
+      const cur = regimes[k];
+      if (cur === 'NEUTRAL') continue;                 // don't fire on entering neutral
+      const memo = lastNonNeutral[k];
+      if (!memo) { lastNonNeutral[k] = { regime: cur, value: values[k], time: h }; continue; }
+      if (memo.regime !== cur) {
+        // STRONG → WEAK or WEAK → STRONG (via any number of NEUTRAL hours).
+        changes.push({
+          currency:  k,
+          from:      memo.regime,
+          to:        cur,
+          prevValue: memo.value,
+          value:     values[k],
+          prevTime:  new Date(memo.time).toISOString(),
+        });
       }
-      const count = changes.length;
-      const sev   = severityLabel(count);
-      // Only emit hours inside the user's requested window (we included one
-      // seed hour before start to prime prevRegime — skip that seed).
-      if (h >= start.getTime() && count > 0) {
-        const passFilter =
-          sevFilter === 'all'     ||
-          sevFilter === sev.toLowerCase() ||
-          (sevFilter === 'major' && (sev === 'MAJOR' || sev === 'MASSIVE'));
-        if (passFilter) {
-          rows.push({
-            time: d.toISOString(),
-            severity: sev,
-            count,
-            changes,
-            currencies: values,
-          });
-        }
+      // Update memory to the latest non-neutral, whether flipped or unchanged.
+      lastNonNeutral[k] = { regime: cur, value: values[k], time: h };
+    }
+
+    const count = changes.length;
+    const sev   = severityLabel(count);
+    if (h >= start.getTime() && count > 0) {
+      const passFilter =
+        sevFilter === 'all'   ||
+        sevFilter === sev.toLowerCase() ||
+        (sevFilter === 'major' && (sev === 'MAJOR' || sev === 'MASSIVE'));
+      if (passFilter) {
+        rows.push({
+          time: d.toISOString(),
+          severity: sev,
+          count,
+          changes,
+          currencies: values,
+        });
       }
     }
-    prev = { time: h, regimes, values };
   }
 
   res.json({
