@@ -84,6 +84,36 @@ function slopeClassification(abs) {
   return 'DEEP';
 }
 
+// Linear regression slope through an ordered numeric series.
+// slope = Σ(x - x̄)(y - ȳ) / Σ(x - x̄)²
+function regressionSlope(values) {
+  const n = values.length;
+  if (n < 2) return 0;
+  const xMean = (n - 1) / 2;
+  const yMean = values.reduce((a, b) => a + b, 0) / n;
+  let num = 0, den = 0;
+  for (let i = 0; i < n; i++) {
+    const dx = i - xMean;
+    num += dx * (values[i] - yMean);
+    den += dx * dx;
+  }
+  return num / den;
+}
+
+// Trend Geometry Engine — three components together:
+//   1. EMA20 slope over last 5 candles (regression through every point)
+//      → trend speed / immediate momentum
+//   2. EMA50 slope over last 5 candles
+//      → trend stability / underlying trend
+//   3. Price position:
+//        D20 = (close - EMA20) / ATR14
+//        D50 = (close - EMA50) / ATR14
+//      → how stretched price is above / below the stack
+//
+// Composite (signed, capped to ±1):
+//   45 % EMA20 slope (immediate momentum)
+//   25 % EMA50 slope (underlying trend agrees)
+//   30 % position    (average of |D20|, |D50|)
 function m15SlopeScore(m15Slice) {
   if (!m15Slice || m15Slice.length < 60) return null;
   const closes = m15Slice.map(c => c.close);
@@ -92,40 +122,19 @@ function m15SlopeScore(m15Slice) {
   if (e20Series.length < 5 || e50Series.length < 5) return null;
   const e50 = e50Series[e50Series.length - 1];
 
-  // Linear regression slope over ALL 5 EMA20 values (x = 0..4, y = EMA20).
-  // Uses every point, not just the endpoints — matches the spec's regression
-  // formula: slope = Σ(x - x̄)(y - ȳ) / Σ(x - x̄)². Faster response than 10
-  // candles: the EMA20 line's turn is picked up ~35 min sooner.
-  const window = e20Series.slice(-5);
-  const n = 5;
-  const xMean = 2;
-  const yMean = window.reduce((a, b) => a + b, 0) / n;
-  let num = 0, den = 0;
-  for (let i = 0; i < n; i++) {
-    const dx = i - xMean;
-    num += dx * (window[i] - yMean);
-    den += dx * dx;
-  }
-  const slopePerCandle = num / den;
-
   const a14 = atr(m15Slice, 14);
   if (!a14 || a14 === 0) return null;
-  // Normalised slope — direct spec: slope / ATR14. Typical range roughly
-  // 0.00-1.00; anything ≥ 0.30 counts as at least a Strong trend.
-  const slopeNorm = slopePerCandle / a14;
 
-  const cur    = closes[closes.length - 1];
-  const e20Now = e20Series[e20Series.length - 1];
+  const cur = closes[closes.length - 1];
+  const e20 = e20Series[e20Series.length - 1];
+
+  // Layer 2 — stack aligned with direction.
   let stackSign = 0;
-  if (cur > e20Now && e20Now > e50)      stackSign = +1;
-  else if (cur < e20Now && e20Now < e50) stackSign = -1;
-  const slopeSign = Math.sign(slopeNorm);
-  if (stackSign === 0 || slopeSign !== stackSign) return 0;
+  if (cur > e20 && e20 > e50)      stackSign = +1;
+  else if (cur < e20 && e20 < e50) stackSign = -1;
+  if (stackSign === 0) return 0;
 
-  // EMA20 vs EMA50 must have been on the aligned side across EVERY candle
-  // in the slope window — for a BUY, EMA20 > EMA50 for all 5; for a SELL,
-  // EMA20 < EMA50 for all 5. Prevents scoring a slope that only just cleared
-  // the EMA50 mid-window (a fresh cross still finding its feet).
+  // EMA20 vs EMA50 aligned across EVERY candle in the window.
   const e20Window = e20Series.slice(-5);
   const e50Window = e50Series.slice(-5);
   for (let i = 0; i < 5; i++) {
@@ -133,16 +142,32 @@ function m15SlopeScore(m15Slice) {
     if (stackSign === -1 && !(e20Window[i] < e50Window[i])) return 0;
   }
 
-  // Raw candle direction guard — the last 4 M15 closes' net move must agree
-  // with the stack/slope direction. Threshold 0.10 ATR ignores noise flips.
+  // Component 1: EMA20 slope (trend speed), ATR-normalised.
+  const slope20 = regressionSlope(e20Window) / a14;
+  if (Math.sign(slope20) !== stackSign) return 0;
+
+  // Component 2: EMA50 slope (trend stability). Tolerates up to 0.05 ATR
+  // of counter-slope as flat — EMA50 lags, doesn't have to keep pace.
+  const slope50 = regressionSlope(e50Window) / a14;
+  if (Math.sign(slope50) !== stackSign && Math.abs(slope50) > 0.05) return 0;
+
+  // Component 3: Price position — |D20| + |D50| average, in ATRs. Signs
+  // already match stackSign by the guard above.
+  const d20 = Math.abs(cur - e20) / a14;
+  const d50 = Math.abs(cur - e50) / a14;
+  const positionAvg = (d20 + d50) / 2;
+
+  // Raw M15 4-candle net move must confirm direction (0.10 ATR dead-zone).
   const close4Ago = closes[closes.length - 5];
   const rawMove = (cur - close4Ago) / a14;
   const rawSign = Math.abs(rawMove) < 0.10 ? 0 : Math.sign(rawMove);
   if (rawSign !== stackSign) return 0;
 
-  // Return the signed normalised slope directly. Callers use the raw value
-  // for gating (≥ 0.30 = Strong or better) and for classification.
-  return stackSign * Math.abs(slopeNorm);
+  const s20 = Math.min(Math.abs(slope20), 1.0);
+  const s50 = Math.min(Math.abs(slope50), 1.0);
+  const pos = Math.min(positionAvg,       1.0);
+  const composite = s20 * 0.45 + s50 * 0.25 + pos * 0.30;
+  return stackSign * composite;
 }
 
 module.exports.slopeClassification = slopeClassification;
