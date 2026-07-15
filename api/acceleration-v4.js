@@ -89,19 +89,20 @@ function m15SlopeScore(m15Slice) {
   const closes = m15Slice.map(c => c.close);
   const e20Series = emaSeries(closes, 20);
   const e50 = ema(closes, 50);
-  if (e20Series.length < 10 || e50 == null) return null;
+  if (e20Series.length < 5 || e50 == null) return null;
 
-  // Linear regression slope over ALL 10 EMA20 values (x = 0..9, y = EMA20).
+  // Linear regression slope over ALL 5 EMA20 values (x = 0..4, y = EMA20).
   // Uses every point, not just the endpoints — matches the spec's regression
-  // formula: slope = Σ(x - x̄)(y - ȳ) / Σ(x - x̄)².
-  const last10 = e20Series.slice(-10);
-  const n = 10;
-  const xMean = 4.5;
-  const yMean = last10.reduce((a, b) => a + b, 0) / n;
+  // formula: slope = Σ(x - x̄)(y - ȳ) / Σ(x - x̄)². Faster response than 10
+  // candles: the EMA20 line's turn is picked up ~35 min sooner.
+  const window = e20Series.slice(-5);
+  const n = 5;
+  const xMean = 2;
+  const yMean = window.reduce((a, b) => a + b, 0) / n;
   let num = 0, den = 0;
   for (let i = 0; i < n; i++) {
     const dx = i - xMean;
-    num += dx * (last10[i] - yMean);
+    num += dx * (window[i] - yMean);
     den += dx * dx;
   }
   const slopePerCandle = num / den;
