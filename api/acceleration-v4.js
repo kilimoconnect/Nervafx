@@ -88,8 +88,9 @@ function m15SlopeScore(m15Slice) {
   if (!m15Slice || m15Slice.length < 60) return null;
   const closes = m15Slice.map(c => c.close);
   const e20Series = emaSeries(closes, 20);
-  const e50 = ema(closes, 50);
-  if (e20Series.length < 5 || e50 == null) return null;
+  const e50Series = emaSeries(closes, 50);
+  if (e20Series.length < 5 || e50Series.length < 5) return null;
+  const e50 = e50Series[e50Series.length - 1];
 
   // Linear regression slope over ALL 5 EMA20 values (x = 0..4, y = EMA20).
   // Uses every point, not just the endpoints — matches the spec's regression
@@ -120,6 +121,17 @@ function m15SlopeScore(m15Slice) {
   else if (cur < e20Now && e20Now < e50) stackSign = -1;
   const slopeSign = Math.sign(slopeNorm);
   if (stackSign === 0 || slopeSign !== stackSign) return 0;
+
+  // EMA20 vs EMA50 must have been on the aligned side across EVERY candle
+  // in the slope window — for a BUY, EMA20 > EMA50 for all 5; for a SELL,
+  // EMA20 < EMA50 for all 5. Prevents scoring a slope that only just cleared
+  // the EMA50 mid-window (a fresh cross still finding its feet).
+  const e20Window = e20Series.slice(-5);
+  const e50Window = e50Series.slice(-5);
+  for (let i = 0; i < 5; i++) {
+    if (stackSign === +1 && !(e20Window[i] > e50Window[i])) return 0;
+    if (stackSign === -1 && !(e20Window[i] < e50Window[i])) return 0;
+  }
 
   // Raw candle direction guard — the last 4 M15 closes' net move must agree
   // with the stack/slope direction. Threshold 0.10 ATR ignores noise flips.
