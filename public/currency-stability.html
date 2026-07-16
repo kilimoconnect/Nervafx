@@ -138,6 +138,9 @@
           <option value="h1">H1</option>
         </select>
       </label>
+      <label>Min |score|
+        <input type="number" id="hist-min" value="90" min="0" max="100" step="5" style="width:64px">
+      </label>
       <button id="loadHist">Load</button>
       <span class="status" id="hist-status"></span>
     </div>
@@ -227,17 +230,23 @@
         var json = await r.json();
         if (json.error) throw new Error(json.error);
         s.textContent = json.qualified_anchors + '/' + json.anchors + ' anchors qualified · ' + (json.duration_sec || 0) + 's';
-        renderHist(json.rows || []);
+        window._lastHistRows = json.rows || [];
+        renderHist(window._lastHistRows);
       } catch (e) { s.classList.add('error'); s.textContent = 'Error: ' + e.message; }
     }
 
     function renderHist(rows) {
       var el = document.getElementById('hist-list');
+      var minScore = parseInt(document.getElementById('hist-min').value, 10) || 0;
       if (!rows.length) { el.innerHTML = '<div class="empty">No qualified anchors in this window.</div>'; return; }
       var html = '';
+      var kept = 0;
       for (var i = rows.length - 1; i >= 0; i--) {
         var r = rows[i];
-        var pairs = (r.pairs || []).map(function(p) {
+        var filtered = (r.pairs || []).filter(function(p) { return Math.abs(p.score100) >= minScore; });
+        if (!filtered.length) continue;
+        kept++;
+        var pairs = filtered.map(function(p) {
           return '<span class="flip">'
             + '<span class="p">' + p.pair + '</span>'
             + '<span class="d ' + p.direction + '">' + p.direction + '</span>'
@@ -246,6 +255,7 @@
         }).join('');
         html += '<div class="row"><div class="time">' + fmtTime(r.time) + '</div><div>' + pairs + '</div></div>';
       }
+      if (!kept) { el.innerHTML = '<div class="empty">No pairs meet |score| ≥ ' + minScore + ' in this window.</div>'; return; }
       el.innerHTML = html;
     }
 
@@ -257,6 +267,11 @@
 
     document.getElementById('reloadLive').addEventListener('click', loadLive);
     document.getElementById('loadHist').addEventListener('click', loadHist);
+    // Re-render (client-side) when the threshold changes — no re-fetch needed.
+    document.getElementById('hist-min').addEventListener('input', function() {
+      var last = window._lastHistRows;
+      if (last) renderHist(last);
+    });
     document.getElementById('tf').addEventListener('change', loadLive);
     loadLive();
   </script>
