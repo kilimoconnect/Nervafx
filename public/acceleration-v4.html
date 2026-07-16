@@ -588,28 +588,34 @@
         // Cache pair records keyed by "time|pair" so click → openDetail hydrates
         // straight from history without a second fetch.
         _histCache = {};
-        // Ordered newest-first for display. Group cards by session so we can
-        // highlight any pair that appeared earlier in the SAME trading session
-        // (Asia / London / NY) — not just the immediately previous card.
+        // Ordered newest-first for display. Highlight a pair when it appears
+        // in 5 consecutive 15-min anchor cards (this card + the 4 before it,
+        // no gaps). Cards only exist for anchors that had qualified pairs, so
+        // if an intermediate 15-min window is missing entirely the streak breaks.
         var displayRows = json.rows.slice().reverse();
         var pairSets = displayRows.map(function(row) {
           var s = new Set();
           (row.pairs || []).forEach(function(p) { s.add(p.pair); });
           return s;
         });
-        var sessionIds = displayRows.map(function(row) { return getSessionId(row.time); });
+        var pairSetByMs = {};
+        displayRows.forEach(function(row, i) {
+          pairSetByMs[new Date(row.time).getTime()] = pairSets[i];
+        });
+        var STREAK_N   = 5;
+        var STREAK_STEP = 15 * 60 * 1000;
+        function hasConsecutiveStreak(anchorMs, pair) {
+          for (var k = 0; k < STREAK_N; k++) {
+            var set = pairSetByMs[anchorMs - k * STREAK_STEP];
+            if (!set || !set.has(pair)) return false;
+          }
+          return true;
+        }
 
         var html = '';
         displayRows.forEach(function(row, rIdx) {
           var pairs = row.pairs || [];
-          // Walk forward in the reversed list (chronologically earlier cards)
-          // and collect every pair seen in the same session as this row.
-          var mySession = sessionIds[rIdx];
-          var olderSet = new Set();
-          for (var oi = rIdx + 1; oi < displayRows.length; oi++) {
-            if (sessionIds[oi] !== mySession) continue;
-            pairSets[oi].forEach(function(p) { olderSet.add(p); });
-          }
+          var rowMs = new Date(row.time).getTime();
           html += '<div class="hist-card">';
           html += '<div class="hist-card-hd">';
           html += '<span class="hist-card-time">' + fmtTime(row.time) + '</span>';
@@ -625,9 +631,9 @@
             var vel   = p.components && p.components.m15Velocity     ? p.components.m15Velocity.score : 0;
             var comp  = p.components && p.components.compression     ? p.components.compression.score : 0;
             var cand  = p.components && p.components.candleControl   ? p.components.candleControl.score : 0;
-            var recurring = olderSet.has(p.pair);
+            var recurring = hasConsecutiveStreak(rowMs, p.pair);
             var recurCls  = recurring ? ' recurring' : '';
-            var dotHtml   = recurring ? ' <span class="recur-dot" title="Also earlier in this session"></span>' : '';
+            var dotHtml   = recurring ? ' <span class="recur-dot" title="5+ consecutive 15-min anchors"></span>' : '';
             html += '<div class="hist-pair-row' + recurCls + '" data-key="' + key + '">'
                  +   '<span class="hist-pair-name">' + p.pair + dotHtml + '</span>'
                  +   '<span class="rank-dir ' + dCls + '">' + p.direction + '</span>'
