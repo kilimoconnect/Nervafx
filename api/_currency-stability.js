@@ -49,16 +49,19 @@ function atr(candles, period) {
 // Impulse-phase filter — rejects leader-qualified pairs that look like slow
 // trend-grind (small bodies, price hugging EMA20, repeated pullbacks) and
 // keeps ones that look like real impulse moves (fat directional bodies, price
-// stretched well past EMA20).
+// stretched well past EMA20, current bar breaking structure).
 //
 // A) Extension: |close - EMA20| / ATR14 ≥ 1.5  AND  close on the aligned
 //    side of EMA20.
 // B) Directional dominance: at least 4 of the last 5 candles close in the
 //    trade direction (BUY → bullish body, SELL → bearish body). Allows one
 //    small counter-body without disqualifying an otherwise clean impulse.
+// C) 20-candle break: current close > max(high) of previous 20 candles for
+//    BUY, or < min(low) of previous 20 candles for SELL. Confirms the trade
+//    candle is actually taking out structure, not just adding to a drift.
 //
-// Both must pass. Returns diagnostic fields so callers can display why a pair
-// was accepted or rejected.
+// All three must pass. Returns diagnostic fields so callers can display why
+// a pair was accepted or rejected.
 function impulseFilter(candles, direction) {
   if (!Array.isArray(candles) || candles.length < 21) {
     return { pass: false, reason: 'insufficient-candles' };
@@ -78,14 +81,23 @@ function impulseFilter(candles, direction) {
 
   const last5 = candles.slice(-5);
   const alignedCount = last5.filter(c => Math.sign(c.close - c.open) === sign).length;
-  const allAligned   = alignedCount >= 4; // 4-of-5 tolerance
+  const allAligned   = alignedCount >= 4;
+
+  // C) 20-candle high/low break on the CURRENT close.
+  const prev20 = candles.slice(-21, -1); // the 20 bars BEFORE the current one
+  const prevHigh = Math.max(...prev20.map(c => c.high));
+  const prevLow  = Math.min(...prev20.map(c => c.low));
+  const breakOk  = sign === +1 ? cur > prevHigh : cur < prevLow;
 
   return {
-    pass: extensionOk && allAligned,
+    pass: extensionOk && allAligned && breakOk,
     extension: Math.round(extension * 100) / 100,
     extensionOk,
     alignedCount,
     allAligned,
+    prevHigh,
+    prevLow,
+    breakOk,
   };
 }
 
