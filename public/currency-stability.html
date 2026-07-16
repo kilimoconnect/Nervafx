@@ -76,6 +76,8 @@
     .flip .d.BUY  { background:rgba(22,163,74,0.20); color:#4ade80; }
     .flip .d.SELL { background:rgba(220,38,38,0.20); color:#f87171; }
     .flip .s { color:var(--muted); font-size:10px; }
+    .flip.repeat { box-shadow: inset 3px 0 0 var(--amber); border-color: rgba(251,191,36,0.35); }
+    .repeat-dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--amber); margin-left:4px; }
     .empty { text-align:center; color:var(--muted); padding:20px; }
 
     .tbl-scroll { max-height:70vh; overflow:auto; }
@@ -240,12 +242,26 @@
     function renderHist(rows) {
       var el = document.getElementById('hist-list');
       if (!rows.length) { el.innerHTML = '<div class="empty">No qualified anchors in this window.</div>'; return; }
+      // Step size for the "repeats in next window" check. Rows only exist for
+      // qualified anchors, so 'next' means anchorMs + stepMs — a pair recurring
+      // at exactly the following M5 / M15 / H1 boundary.
+      var tf = document.getElementById('hist-tf').value;
+      var stepMs = tf === 'm5' ? 5*60*1000 : tf === 'h1' ? 60*60*1000 : 15*60*1000;
+      var pairSetByMs = {};
+      rows.forEach(function(r) {
+        var s = {};
+        (r.pairs || []).forEach(function(p) { s[p.pair] = true; });
+        pairSetByMs[new Date(r.time).getTime()] = s;
+      });
       var html = '';
       for (var i = rows.length - 1; i >= 0; i--) {
         var r = rows[i];
+        var nextSet = pairSetByMs[new Date(r.time).getTime() + stepMs] || {};
         var pairs = (r.pairs || []).map(function(p) {
-          return '<span class="flip">'
-            + '<span class="p">' + p.pair + '</span>'
+          var repeats = !!nextSet[p.pair];
+          var cls = 'flip' + (repeats ? ' repeat' : '');
+          return '<span class="' + cls + '" title="' + (repeats ? 'Repeats in the next ' + tf.toUpperCase() + ' window' : '') + '">'
+            + '<span class="p">' + p.pair + (repeats ? '<span class="repeat-dot"></span>' : '') + '</span>'
             + '<span class="d ' + p.direction + '">' + p.direction + '</span>'
             + '<span class="s">' + p.score100 + '</span>'
             + '</span>';
