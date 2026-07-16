@@ -53,8 +53,9 @@ function atr(candles, period) {
 //
 // A) Extension: |close - EMA20| / ATR14 ≥ 1.5  AND  close on the aligned
 //    side of EMA20.
-// B) Consecutive-direction: every one of the last 5 candles closes in the
-//    trade direction (BUY → bullish body, SELL → bearish body).
+// B) Directional dominance: at least 4 of the last 5 candles close in the
+//    trade direction (BUY → bullish body, SELL → bearish body). Allows one
+//    small counter-body without disqualifying an otherwise clean impulse.
 //
 // Both must pass. Returns diagnostic fields so callers can display why a pair
 // was accepted or rejected.
@@ -76,12 +77,14 @@ function impulseFilter(candles, direction) {
   const extensionOk   = extension >= 1.5 && extensionSide === sign;
 
   const last5 = candles.slice(-5);
-  const allAligned = last5.every(c => Math.sign(c.close - c.open) === sign);
+  const alignedCount = last5.filter(c => Math.sign(c.close - c.open) === sign).length;
+  const allAligned   = alignedCount >= 4; // 4-of-5 tolerance
 
   return {
     pass: extensionOk && allAligned,
     extension: Math.round(extension * 100) / 100,
     extensionOk,
+    alignedCount,
     allAligned,
   };
 }
