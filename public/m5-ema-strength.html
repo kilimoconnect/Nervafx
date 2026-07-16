@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>M15 EMA Strength — History</title>
+  <title>M5 EMA Strength — History</title>
   <style>
     :root {
       --bg: #0b0d10;
@@ -121,11 +121,11 @@
   </style>
 </head>
 <body>
-  <h1>M15 EMA Strength — 15-Minute History</h1>
-  <div class="sub">Per-currency alignment from M15 close vs EMA20/EMA50 on all 28 pairs. One snapshot every 15 min. Range [-1, +1].</div>
+  <h1>M5 EMA Strength — 5-Minute History</h1>
+  <div class="sub">Per-currency alignment from M5 close vs EMA20/EMA50 on all 28 pairs. One snapshot every 5 min. Range [-1, +1]. Note: M5 candles begin accumulating only from when the sync started fetching them — no history back to Aug 2025 unless the DB is separately backfilled.</div>
 
   <div class="controls">
-    <label>From <input type="date" id="from" value="2025-08-01"></label>
+    <label>From <input type="date" id="from"></label>
     <label>To <input type="date" id="to"></label>
     <button id="load">Load</button>
     <span class="status" id="status"></span>
@@ -230,7 +230,7 @@
       status.classList.remove('error');
       status.textContent = 'Loading…';
       try {
-        var r = await fetch('/api/currency-strength-m15-ema-history?from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to));
+        var r = await fetch('/api/currency-strength-m5-ema-history?from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to));
         if (!r.ok) throw new Error('HTTP ' + r.status);
         var json = await r.json();
         if (json.error) throw new Error(json.error);
@@ -242,11 +242,12 @@
       }
     }
 
-    // Default 'to' = today.
+    // Default range = today (M5 candles have no long history).
     (function() {
       var now = new Date();
       var iso = now.getUTCFullYear() + '-' + pad(now.getUTCMonth() + 1) + '-' + pad(now.getUTCDate());
-      document.getElementById('to').value = iso;
+      document.getElementById('from').value = iso;
+      document.getElementById('to').value   = iso;
     })();
 
     document.getElementById('load').addEventListener('click', load);

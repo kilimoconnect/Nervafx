@@ -32,8 +32,10 @@ const INSTRUMENTS = [
   'CAD_JPY','CAD_CHF','CHF_JPY',
 ];
 
-// M15 first — needed for DE computation; H1 second
-const TIMEFRAMES    = ['M15', 'H1'];
+// Fetch order: M5 → M15 → H1. M5 added so the currency-strength-m5-ema
+// engines have a live series; the pipeline's DE computation still only
+// depends on M15 + H1 so the added timeframe is passive downstream.
+const TIMEFRAMES    = ['M5', 'M15', 'H1'];
 const BATCH_SIZE    = 500;   // DB upsert batch
 const PARALLEL      = 7;     // instruments fetched in parallel per batch
 const RATE_MS       = 150;   // delay between OANDA calls within a parallel batch
