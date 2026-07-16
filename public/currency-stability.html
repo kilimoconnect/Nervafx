@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Currency Stability Engine</title>
+  <style>
+    :root {
+      --bg:#0b0d10; --card:#12151a; --card2:#171a20; --border:#1e2128;
+      --text:#e2e8f0; --muted:#94a3b8; --accent:#60a5fa;
+      --pos:#16a34a; --neg:#dc2626; --neu:#64748b; --amber:#fbbf24;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text);
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-size:13px; padding:20px; }
+    h1 { font-size:18px; margin:0 0 4px; font-weight:600; }
+    .sub { color:var(--muted); font-size:12px; margin-bottom:16px; }
+    .controls { display:flex; gap:10px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
+    .controls label { color:var(--muted); font-size:12px; }
+    .controls input, .controls select, .controls button {
+      background:var(--card2); color:var(--text); border:1px solid var(--border);
+      border-radius:6px; padding:6px 10px; font-size:13px; font-family:inherit;
+    }
+    .controls button { background:var(--accent); color:#0b0d10; border:none; font-weight:600; cursor:pointer; }
+    .controls button:hover { filter:brightness(1.1); }
+    .status { color:var(--muted); font-size:12px; }
+    .status.error { color:#f87171; }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:16px; }
+    .card-hd { font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); font-size:11px; margin-bottom:10px; }
+
+    .leaders { display:flex; gap:24px; flex-wrap:wrap; }
+    .leader-group { flex:1; min-width:200px; }
+    .leader-title { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; }
+    .leader-pill {
+      display:inline-block; padding:5px 10px; border-radius:6px; margin:2px 4px 2px 0;
+      font-family:'SF Mono',Monaco,monospace; font-weight:700; font-size:12px;
+    }
+    .leader-pill.strong { background:rgba(22,163,74,0.20); color:#4ade80; }
+    .leader-pill.weak   { background:rgba(220,38,38,0.20); color:#f87171; }
+    .leader-pill.none   { background:rgba(100,116,139,0.15); color:var(--muted); }
+
+    .ccy-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:8px; }
+    .ccy-cell {
+      background:var(--card2); border:1px solid var(--border); border-radius:8px; padding:8px 10px;
+      display:grid; grid-template-columns:auto 1fr auto; gap:8px; align-items:center;
+      font-family:'SF Mono',Monaco,monospace; font-size:12px;
+    }
+    .ccy-code { font-weight:700; font-size:14px; }
+    .ccy-stats { font-size:11px; color:var(--muted); }
+    .ccy-css { font-weight:700; }
+    .ccy-css.pos { color:#4ade80; }
+    .ccy-css.neg { color:#f87171; }
+    .ccy-css.neu { color:var(--muted); }
+
+    .pair-row {
+      display:grid; grid-template-columns:110px 64px 60px 1fr 70px; gap:12px;
+      align-items:center; padding:8px 12px; border-bottom:1px solid var(--border);
+    }
+    .pair-row:last-child { border-bottom:none; }
+    .pair-row:hover { background:rgba(96,165,250,0.04); }
+    .pair-name { font-weight:700; }
+    .pair-dir { text-align:center; font-size:11px; font-weight:700; padding:3px 8px; border-radius:6px; }
+    .pair-dir.BUY  { background:rgba(22,163,74,0.20); color:#4ade80; }
+    .pair-dir.SELL { background:rgba(220,38,38,0.20); color:#f87171; }
+    .pair-score { text-align:right; font-weight:700; font-family:'SF Mono',Monaco,monospace; }
+    .pair-detail { color:var(--muted); font-size:11px; font-family:'SF Mono',Monaco,monospace; }
+
+    .row { display:grid; grid-template-columns:170px 1fr; gap:12px; padding:10px 12px; border-bottom:1px solid var(--border); }
+    .row:hover { background:rgba(96,165,250,0.04); }
+    .row .time { color:var(--muted); font-family:'SF Mono',Monaco,monospace; font-size:12px; }
+    .flip { display:inline-flex; align-items:center; gap:6px; margin:2px 6px 2px 0;
+      background:var(--card2); border:1px solid var(--border); border-radius:6px; padding:4px 10px;
+      font-family:'SF Mono',Monaco,monospace; font-size:11px; }
+    .flip .p { font-weight:700; }
+    .flip .d { padding:1px 5px; border-radius:3px; font-size:10px; }
+    .flip .d.BUY  { background:rgba(22,163,74,0.20); color:#4ade80; }
+    .flip .d.SELL { background:rgba(220,38,38,0.20); color:#f87171; }
+    .flip .s { color:var(--muted); font-size:10px; }
+    .empty { text-align:center; color:var(--muted); padding:20px; }
+
+    .tbl-scroll { max-height:70vh; overflow:auto; }
+    @media (max-width: 700px) {
+      .pair-row { grid-template-columns:90px 56px 44px 1fr 56px; gap:6px; padding:6px; font-size:12px; }
+      .pair-detail { display:none; }
+      .row { grid-template-columns:120px 1fr; gap:6px; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Currency Stability Engine</h1>
+  <div class="sub">
+    Ranks currencies by consistency of strength over the last 5 snapshots, then
+    picks pairs where a strong-leader base meets a weak-leader quote. Strong /
+    weak leader = top-2 or bottom-2 rank in ≥ 4 of the last 5 snapshots.
+    CSS = 0.5 × avg strength + 0.3 × stability + 0.2 × direction consistency.
+  </div>
+
+  <div class="controls">
+    <label>Timeframe
+      <select id="tf">
+        <option value="m15" selected>M15 (5 × 15 min = 75 min window)</option>
+        <option value="m5">M5 (5 × 5 min = 25 min window)</option>
+        <option value="h1">H1 (5 × 60 min = 5 h window)</option>
+      </select>
+    </label>
+    <button id="reloadLive">Refresh live</button>
+    <span class="status" id="live-status"></span>
+  </div>
+
+  <div class="card">
+    <div class="card-hd">Live Leaders</div>
+    <div class="leaders" id="live-leaders">
+      <div class="empty">Loading…</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd">Live CSS by Currency</div>
+    <div class="ccy-grid" id="live-ccy">
+      <div class="empty">Loading…</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd">Live Ranked Pairs (leader-qualified first)</div>
+    <div id="live-pairs"><div class="empty">Loading…</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd">History</div>
+    <div class="controls" style="margin-bottom:12px">
+      <label>From <input type="date" id="hist-from"></label>
+      <label>To <input type="date" id="hist-to"></label>
+      <label>TF
+        <select id="hist-tf">
+          <option value="m15" selected>M15</option>
+          <option value="m5">M5</option>
+          <option value="h1">H1</option>
+        </select>
+      </label>
+      <button id="loadHist">Load</button>
+      <span class="status" id="hist-status"></span>
+    </div>
+    <div class="tbl-scroll" id="hist-list"><div class="empty">Choose a range and click Load.</div></div>
+  </div>
+
+  <script>
+    var _userTz = localStorage.getItem('nfx_tz') || 'auto';
+    function _tz() { return (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC'); }
+    function pad(n) { return n < 10 ? '0'+n : ''+n; }
+    function fmtTime(iso) {
+      try {
+        return new Intl.DateTimeFormat('en-GB', {
+          timeZone:_tz(), day:'2-digit', month:'short', year:'numeric',
+          hour:'2-digit', minute:'2-digit', hour12:false, timeZoneName:'short',
+        }).format(new Date(iso));
+      } catch(_) { return iso; }
+    }
+    function classForCss(v) { return v > 0.1 ? 'pos' : v < -0.1 ? 'neg' : 'neu'; }
+
+    async function loadLive() {
+      var tf = document.getElementById('tf').value;
+      var s = document.getElementById('live-status');
+      s.classList.remove('error'); s.textContent = 'Loading…';
+      try {
+        var r = await fetch('/api/currency-stability?tf=' + tf);
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        var json = await r.json();
+        if (json.error) throw new Error(json.error);
+        renderLive(json);
+        s.textContent = fmtTime(json.anchor) + ' · ' + json.duration_ms + ' ms';
+      } catch (e) { s.classList.add('error'); s.textContent = 'Error: ' + e.message; }
+    }
+
+    function renderLive(json) {
+      var cse = json.cse; if (!cse) return;
+      // leaders
+      var l = document.getElementById('live-leaders');
+      var strongHtml = cse.leaders.strong.length
+        ? cse.leaders.strong.map(function(c) { return '<span class="leader-pill strong">' + c + '</span>'; }).join('')
+        : '<span class="leader-pill none">None</span>';
+      var weakHtml = cse.leaders.weak.length
+        ? cse.leaders.weak.map(function(c) { return '<span class="leader-pill weak">' + c + '</span>'; }).join('')
+        : '<span class="leader-pill none">None</span>';
+      l.innerHTML = ''
+        + '<div class="leader-group"><div class="leader-title">Strong Leaders (top-2 in ≥ 4 of 5)</div>' + strongHtml + '</div>'
+        + '<div class="leader-group"><div class="leader-title">Weak Leaders (bottom-2 in ≥ 4 of 5)</div>' + weakHtml + '</div>';
+
+      // currencies grid
+      var g = document.getElementById('live-ccy');
+      var order = Object.keys(cse.currencies).sort(function(a,b){ return cse.currencies[b].css - cse.currencies[a].css; });
+      g.innerHTML = order.map(function(k) {
+        var s = cse.currencies[k];
+        var cls = classForCss(s.css);
+        return '<div class="ccy-cell">'
+          + '<span class="ccy-code">' + k + '</span>'
+          + '<span class="ccy-stats">AS ' + s.AS.toFixed(2) + ' · Stab ' + s.stability.toFixed(2) + ' · DC ' + (s.dc*100).toFixed(0) + '%</span>'
+          + '<span class="ccy-css ' + cls + '">' + s.css.toFixed(2) + '</span>'
+          + '</div>';
+      }).join('');
+
+      // pairs
+      var p = document.getElementById('live-pairs');
+      p.innerHTML = cse.pairs.slice(0, 12).map(function(pr) {
+        var cls = pr.direction || 'NONE';
+        var scoreCls = pr.score > 0 ? 'pos' : pr.score < 0 ? 'neg' : 'neu';
+        return '<div class="pair-row">'
+          + '<span class="pair-name">' + pr.pair + '</span>'
+          + '<span class="pair-dir ' + cls + '">' + (pr.direction || '—') + '</span>'
+          + '<span class="pair-score" style="color:' + (scoreCls==='pos'?'#4ade80':scoreCls==='neg'?'#f87171':'#94a3b8') + '">' + pr.score100 + '</span>'
+          + '<span class="pair-detail">' + pr.base.code + ' ' + pr.base.css.toFixed(2) + ' vs ' + pr.quote.code + ' ' + pr.quote.css.toFixed(2) + '</span>'
+          + '<span class="pair-score" style="color:' + (scoreCls==='pos'?'#4ade80':scoreCls==='neg'?'#f87171':'#94a3b8') + '">' + pr.score.toFixed(2) + '</span>'
+          + '</div>';
+      }).join('');
+    }
+
+    async function loadHist() {
+      var from = document.getElementById('hist-from').value;
+      var to   = document.getElementById('hist-to').value;
+      var tf   = document.getElementById('hist-tf').value;
+      var s = document.getElementById('hist-status');
+      s.classList.remove('error'); s.textContent = 'Loading…';
+      try {
+        var r = await fetch('/api/currency-stability-history?from=' + encodeURIComponent(from)
+          + '&to=' + encodeURIComponent(to) + '&tf=' + tf);
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        var json = await r.json();
+        if (json.error) throw new Error(json.error);
+        s.textContent = json.qualified_anchors + '/' + json.anchors + ' anchors qualified · ' + (json.duration_sec || 0) + 's';
+        renderHist(json.rows || []);
+      } catch (e) { s.classList.add('error'); s.textContent = 'Error: ' + e.message; }
+    }
+
+    function renderHist(rows) {
+      var el = document.getElementById('hist-list');
+      if (!rows.length) { el.innerHTML = '<div class="empty">No qualified anchors in this window.</div>'; return; }
+      var html = '';
+      for (var i = rows.length - 1; i >= 0; i--) {
+        var r = rows[i];
+        var pairs = (r.pairs || []).map(function(p) {
+          return '<span class="flip">'
+            + '<span class="p">' + p.pair + '</span>'
+            + '<span class="d ' + p.direction + '">' + p.direction + '</span>'
+            + '<span class="s">' + p.score100 + '</span>'
+            + '</span>';
+        }).join('');
+        var lead = ''
+          + (r.leaders.strong.length ? '<span class="flip"><span class="s">STRONG</span>' + r.leaders.strong.map(function(c){return ' <span class="d BUY">'+c+'</span>';}).join('') + '</span>' : '')
+          + (r.leaders.weak.length   ? '<span class="flip"><span class="s">WEAK</span>'   + r.leaders.weak  .map(function(c){return ' <span class="d SELL">'+c+'</span>';}).join('') + '</span>' : '');
+        html += '<div class="row"><div class="time">' + fmtTime(r.time) + '</div><div>' + lead + pairs + '</div></div>';
+      }
+      el.innerHTML = html;
+    }
+
+    (function() {
+      var iso = new Date().toISOString().slice(0, 10);
+      document.getElementById('hist-from').value = iso;
+      document.getElementById('hist-to').value   = iso;
+    })();
+
+    document.getElementById('reloadLive').addEventListener('click', loadLive);
+    document.getElementById('loadHist').addEventListener('click', loadHist);
+    document.getElementById('tf').addEventListener('change', loadLive);
+    loadLive();
+  </script>
+</body>
+</html>
