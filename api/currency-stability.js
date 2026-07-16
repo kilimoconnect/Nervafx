@@ -38,15 +38,22 @@ function alignmentScore(close, e20, e50) {
   return 0;
 }
 
-async function fetchCloses(sb, inst, tf, limit) {
+async function fetchCandles(sb, inst, tf, limit) {
   const { data, error } = await sb
     .from('backtest_candles')
-    .select('time, close')
+    .select('time, open, high, low, close')
     .eq('instrument', inst).eq('timeframe', tf).eq('complete', true)
     .order('time', { ascending: false })
     .limit(limit);
   if (error) throw error;
-  return (data || []).reverse().map(c => ({ time: c.time, ms: new Date(c.time).getTime(), close: parseFloat(c.close) }));
+  return (data || []).reverse().map(c => ({
+    time: c.time,
+    ms: new Date(c.time).getTime(),
+    open:  parseFloat(c.open),
+    high:  parseFloat(c.high),
+    low:   parseFloat(c.low),
+    close: parseFloat(c.close),
+  }));
 }
 
 // Build the last 5 snapshots ending at anchor: for each of the 5 target
@@ -63,8 +70,8 @@ async function buildSnapshots(sb, tf, anchorMs) {
   for (let b = 0; b < PAIRS.length; b += 7) {
     const batch = PAIRS.slice(b, b + 7);
     await Promise.all(batch.map(async inst => {
-      const closes = await fetchCloses(sb, inst, tf, 80);
-      cache[inst] = closes.filter(c => c.ms <= anchorMs);
+      const candles = await fetchCandles(sb, inst, tf, 80);
+      cache[inst] = candles.filter(c => c.ms <= anchorMs);
     }));
   }
 
@@ -126,7 +133,12 @@ module.exports = async function handler(req, res) {
         snapshotsAvailable: snapshots.length,
       });
     }
-    const cse = computeCSE(snapshots);
+    // Hand the pair OHLC (ending at the anchor) to the CSE so the impulse
+    // filter can gate leader-qualified pairs — reject grind-phase setups,
+    // keep breakaway impulse moves.
+    const pairCandles = {};
+    for (const inst of PAIRS) pairCandles[inst] = cache[inst] || [];
+    const cse = computeCSE(snapshots, pairCandles);
     res.json({
       anchor: new Date(anchorMs).toISOString(),
       tf: tfIn,

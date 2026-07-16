@@ -48,14 +48,20 @@ async function fetchAll(sb, inst, tf, since, until) {
   while (true) {
     const { data, error } = await sb
       .from('backtest_candles')
-      .select('time, close')
+      .select('time, open, high, low, close')
       .eq('instrument', inst).eq('timeframe', tf).eq('complete', true)
       .gte('time', since).lte('time', until)
       .order('time', { ascending: true })
       .range(offset, offset + PAGE - 1);
     if (error) throw error;
     if (!data || !data.length) break;
-    all.push(...data.map(c => ({ ms: new Date(c.time).getTime(), close: parseFloat(c.close) })));
+    all.push(...data.map(c => ({
+      ms: new Date(c.time).getTime(),
+      open:  parseFloat(c.open),
+      high:  parseFloat(c.high),
+      low:   parseFloat(c.low),
+      close: parseFloat(c.close),
+    })));
     if (data.length < PAGE) break;
     offset += PAGE;
   }
@@ -157,7 +163,19 @@ module.exports = async function handler(req, res) {
       window.push(w);
     }
     if (window.length < 5) continue;
-    const cse = computeCSE(window);
+    // Slice pair OHLC up to and including this anchor for the impulse filter.
+    const pairCandles = {};
+    for (const inst of PAIRS) {
+      const seq = cache[inst] || [];
+      // Grab the tail — impulseFilter needs 21+ candles; give it 30 to be safe.
+      const upto = [];
+      for (let i = seq.length - 1; i >= 0 && upto.length < 30; i--) {
+        if (seq[i].ms <= t) upto.push(seq[i]);
+      }
+      upto.reverse();
+      pairCandles[inst] = upto;
+    }
+    const cse = computeCSE(window, pairCandles);
     if (!cse) continue;
     // Only emit anchors where at least one pair is leader-qualified.
     const qualified = cse.pairs.filter(p => p.direction != null);
@@ -170,6 +188,7 @@ module.exports = async function handler(req, res) {
         score100: p.score100,
         base:  { code: p.base.code,  css: p.base.css  },
         quote: { code: p.quote.code, css: p.quote.css },
+        impulse: p.impulse,
       })),
       snapshotEnd: cse.windowEnd,
     });

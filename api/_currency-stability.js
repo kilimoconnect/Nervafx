@@ -28,6 +28,64 @@ function std(arr) {
   return Math.sqrt(v);
 }
 
+function ema(values, period) {
+  if (values.length < period) return null;
+  const k = 2 / (period + 1);
+  let e = values.slice(0, period).reduce((a, b) => a + b, 0) / period;
+  for (let i = period; i < values.length; i++) e = values[i] * k + e * (1 - k);
+  return e;
+}
+
+function atr(candles, period) {
+  if (candles.length < period + 1) return null;
+  const trs = [];
+  for (let i = 1; i < candles.length; i++) {
+    const c = candles[i], p = candles[i - 1];
+    trs.push(Math.max(c.high - c.low, Math.abs(c.high - p.close), Math.abs(c.low - p.close)));
+  }
+  return trs.slice(-period).reduce((a, b) => a + b, 0) / period;
+}
+
+// Impulse-phase filter — rejects leader-qualified pairs that look like slow
+// trend-grind (small bodies, price hugging EMA20, repeated pullbacks) and
+// keeps ones that look like real impulse moves (fat directional bodies, price
+// stretched well past EMA20).
+//
+// A) Extension: |close - EMA20| / ATR14 ≥ 1.5  AND  close on the aligned
+//    side of EMA20.
+// B) Consecutive-direction: every one of the last 5 candles closes in the
+//    trade direction (BUY → bullish body, SELL → bearish body).
+//
+// Both must pass. Returns diagnostic fields so callers can display why a pair
+// was accepted or rejected.
+function impulseFilter(candles, direction) {
+  if (!Array.isArray(candles) || candles.length < 21) {
+    return { pass: false, reason: 'insufficient-candles' };
+  }
+  const closes = candles.map(c => c.close);
+  const e20 = ema(closes, 20);
+  const a14 = atr(candles, 14);
+  if (e20 == null || a14 == null || a14 === 0) return { pass: false, reason: 'ema-atr-null' };
+
+  const cur = closes[closes.length - 1];
+  const sign = direction === 'BUY' ? +1 : (direction === 'SELL' ? -1 : 0);
+  if (sign === 0) return { pass: false, reason: 'no-direction' };
+
+  const extension     = Math.abs(cur - e20) / a14;
+  const extensionSide = Math.sign(cur - e20);
+  const extensionOk   = extension >= 1.5 && extensionSide === sign;
+
+  const last5 = candles.slice(-5);
+  const allAligned = last5.every(c => Math.sign(c.close - c.open) === sign);
+
+  return {
+    pass: extensionOk && allAligned,
+    extension: Math.round(extension * 100) / 100,
+    extensionOk,
+    allAligned,
+  };
+}
+
 // Per-currency stats over the last N (usually 5) readings.
 function currencyStats(readings) {
   const n = readings.length;
@@ -64,10 +122,13 @@ function computeLeaders(snapshots) {
   return { strongLeaders, weakLeaders, topCounts, botCounts };
 }
 
-// Compute CSE at a single anchor from the last 5 snapshots (oldest → newest).
-// Returns { currencies:{...css, sig, stats}, pairs:[{pair, score, direction}],
-//           leaders:{strong, weak}, latestSnapshot }.
-function computeCSE(snapshots) {
+// Compute CSE at a single anchor.
+//   snapshots    — ordered array of last N (≥5) per-currency snapshots
+//   pairCandles  — optional { instrument: [{open,high,low,close}, ...] }
+//                  OHLC series ending at the anchor. When provided, each
+//                  leader-qualified pair goes through impulseFilter (A + B)
+//                  and only pairs that pass keep their direction.
+function computeCSE(snapshots, pairCandles) {
   if (!Array.isArray(snapshots) || snapshots.length < 5) return null;
   const window = snapshots.slice(-5);
 
@@ -79,7 +140,8 @@ function computeCSE(snapshots) {
   const { strongLeaders, weakLeaders, topCounts, botCounts } = computeLeaders(window);
 
   // Pair candidates: base must be in strong leaders, quote in weak leaders
-  // (for BUY) or vice versa (for SELL).
+  // (for BUY) or vice versa (for SELL). Leader-qualified pairs then face the
+  // impulse-phase filter if candles were supplied.
   const pairs = [];
   for (const inst of PAIRS) {
     const [base, quote] = inst.split('_');
@@ -91,12 +153,19 @@ function computeCSE(snapshots) {
     if (strongLeaders.includes(base) && weakLeaders.includes(quote))       direction = 'BUY';
     else if (weakLeaders.includes(base) && strongLeaders.includes(quote))  direction = 'SELL';
 
+    let impulse = null;
+    if (direction && pairCandles && pairCandles[inst]) {
+      impulse = impulseFilter(pairCandles[inst], direction);
+      if (!impulse.pass) direction = null;
+    }
+
     pairs.push({
       pair: inst.replace('_', '/'),
       instrument: inst,
-      score:  rawScore,             // signed, roughly [-2, +2]
-      score100: Math.round(rawScore * 50), // scaled to ~[-100, +100]
-      direction,                     // null if no leader alignment
+      score:  rawScore,
+      score100: Math.round(rawScore * 50),
+      direction,
+      impulse,
       base:  { code: base,  css: bCSS, sig: perCcy[base].sig,
                isStrongLeader: strongLeaders.includes(base),
                isWeakLeader:   weakLeaders.includes(base) },
@@ -122,4 +191,4 @@ function computeCSE(snapshots) {
   };
 }
 
-module.exports = { CCYS, PAIRS, currencyStats, computeLeaders, computeCSE };
+module.exports = { CCYS, PAIRS, currencyStats, computeLeaders, computeCSE, impulseFilter };
