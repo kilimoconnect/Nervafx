@@ -199,19 +199,24 @@
           + '</div>';
       }).join('');
 
-      // pairs
+      // pairs — leader-qualified + impulse-filter-passed only.
       var p = document.getElementById('live-pairs');
-      p.innerHTML = cse.pairs.slice(0, 12).map(function(pr) {
-        var cls = pr.direction || 'NONE';
-        var scoreCls = pr.score > 0 ? 'pos' : pr.score < 0 ? 'neg' : 'neu';
-        return '<div class="pair-row">'
-          + '<span class="pair-name">' + pr.pair + '</span>'
-          + '<span class="pair-dir ' + cls + '">' + (pr.direction || '—') + '</span>'
-          + '<span class="pair-score" style="color:' + (scoreCls==='pos'?'#4ade80':scoreCls==='neg'?'#f87171':'#94a3b8') + '">' + pr.score100 + '</span>'
-          + '<span class="pair-detail">' + pr.base.code + ' ' + pr.base.css.toFixed(2) + ' vs ' + pr.quote.code + ' ' + pr.quote.css.toFixed(2) + '</span>'
-          + '<span class="pair-score" style="color:' + (scoreCls==='pos'?'#4ade80':scoreCls==='neg'?'#f87171':'#94a3b8') + '">' + pr.score.toFixed(2) + '</span>'
-          + '</div>';
-      }).join('');
+      var qualified = cse.pairs.filter(function(pr) { return pr.direction != null; });
+      if (!qualified.length) {
+        p.innerHTML = '<div class="empty">No pairs currently pass leader-alignment + impulse filter.</div>';
+      } else {
+        p.innerHTML = qualified.map(function(pr) {
+          var scoreCls = pr.score > 0 ? 'pos' : pr.score < 0 ? 'neg' : 'neu';
+          var color = scoreCls === 'pos' ? '#4ade80' : scoreCls === 'neg' ? '#f87171' : '#94a3b8';
+          return '<div class="pair-row">'
+            + '<span class="pair-name">' + pr.pair + '</span>'
+            + '<span class="pair-dir ' + pr.direction + '">' + pr.direction + '</span>'
+            + '<span class="pair-score" style="color:' + color + '">' + pr.score100 + '</span>'
+            + '<span class="pair-detail">' + pr.base.code + ' ' + pr.base.css.toFixed(2) + ' vs ' + pr.quote.code + ' ' + pr.quote.css.toFixed(2) + '</span>'
+            + '<span class="pair-score" style="color:' + color + '">' + pr.score.toFixed(2) + '</span>'
+            + '</div>';
+        }).join('');
+      }
     }
 
     async function loadHist() {
