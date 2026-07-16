@@ -244,10 +244,7 @@
             + '<span class="s">' + p.score100 + '</span>'
             + '</span>';
         }).join('');
-        var lead = ''
-          + (r.leaders.strong.length ? '<span class="flip"><span class="s">STRONG</span>' + r.leaders.strong.map(function(c){return ' <span class="d BUY">'+c+'</span>';}).join('') + '</span>' : '')
-          + (r.leaders.weak.length   ? '<span class="flip"><span class="s">WEAK</span>'   + r.leaders.weak  .map(function(c){return ' <span class="d SELL">'+c+'</span>';}).join('') + '</span>' : '');
-        html += '<div class="row"><div class="time">' + fmtTime(r.time) + '</div><div>' + lead + pairs + '</div></div>';
+        html += '<div class="row"><div class="time">' + fmtTime(r.time) + '</div><div>' + pairs + '</div></div>';
       }
       el.innerHTML = html;
     }
