@@ -284,7 +284,10 @@
 
         for (var i = 0; i < row.pairs.length; i++) {
           var p = row.pairs[i];
-          var cls = sc(p.score);
+          // Ranking metric is now Swg (Swing Clean) instead of the composite
+          // smooth-trend score. Bar + colour + big value all read off swingClean.
+          var rank = p.swingClean;
+          var cls = sc(rank);
           var dirCls = p.direction === 'BUY' ? 'br-buy' : 'br-sell';
 
           html += '<div class="br-item">';
@@ -299,8 +302,8 @@
           html += '<span class="tf-badge tf-aligned">H1</span>';
           if (p.h1Break) html += '<span class="tf-badge tf-bonus">BRK</span>';
           html += '</div>';
-          html += '<div class="br-score-bar"><div class="br-score-fill ' + cls + '" style="width:' + Math.max(5, p.score) + '%"></div></div>';
-          html += '<span class="br-score-val ' + cls + '">' + p.score + '</span>';
+          html += '<div class="br-score-bar"><div class="br-score-fill ' + cls + '" style="width:' + Math.max(5, rank) + '%"></div></div>';
+          html += '<span class="br-score-val ' + cls + '">' + rank + '</span>';
           html += '</div>';
 
           // Row 2: sub-score chips
