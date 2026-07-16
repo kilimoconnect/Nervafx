@@ -242,9 +242,10 @@
     function renderHist(rows) {
       var el = document.getElementById('hist-list');
       if (!rows.length) { el.innerHTML = '<div class="empty">No qualified anchors in this window.</div>'; return; }
-      // Step size for the "repeats in next window" check. Rows only exist for
-      // qualified anchors, so 'next' means anchorMs + stepMs — a pair recurring
-      // at exactly the following M5 / M15 / H1 boundary.
+      // Highlight only the RECENT occurrence — a pair pill lights amber if
+      // the same pair also appeared at the IMMEDIATELY-PREVIOUS anchor at
+      // this timeframe (t - stepMs). The earlier of the pair sits unstyled;
+      // its repeater above it wears the highlight.
       var tf = document.getElementById('hist-tf').value;
       var stepMs = tf === 'm5' ? 5*60*1000 : tf === 'h1' ? 60*60*1000 : 15*60*1000;
       var pairSetByMs = {};
@@ -256,11 +257,11 @@
       var html = '';
       for (var i = rows.length - 1; i >= 0; i--) {
         var r = rows[i];
-        var nextSet = pairSetByMs[new Date(r.time).getTime() + stepMs] || {};
+        var prevSet = pairSetByMs[new Date(r.time).getTime() - stepMs] || {};
         var pairs = (r.pairs || []).map(function(p) {
-          var repeats = !!nextSet[p.pair];
+          var repeats = !!prevSet[p.pair];
           var cls = 'flip' + (repeats ? ' repeat' : '');
-          return '<span class="' + cls + '" title="' + (repeats ? 'Repeats in the next ' + tf.toUpperCase() + ' window' : '') + '">'
+          return '<span class="' + cls + '" title="' + (repeats ? 'Repeat of previous ' + tf.toUpperCase() + ' window' : '') + '">'
             + '<span class="p">' + p.pair + (repeats ? '<span class="repeat-dot"></span>' : '') + '</span>'
             + '<span class="d ' + p.direction + '">' + p.direction + '</span>'
             + '<span class="s">' + p.score100 + '</span>'
