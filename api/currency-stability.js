@@ -100,7 +100,7 @@ async function buildSnapshots(sb, tf, anchorMs) {
     for (const k of CCYS) currencies[k] = agg[k] / 7;
     snapshots.push({ time: new Date(t).toISOString(), currencies });
   }
-  return snapshots;
+  return { snapshots, cache };
 }
 
 module.exports = async function handler(req, res) {
@@ -125,7 +125,7 @@ module.exports = async function handler(req, res) {
   const t0 = Date.now();
   try {
     const sb = getClient();
-    const snapshots = await buildSnapshots(sb, tfIn, anchorMs);
+    const { snapshots, cache } = await buildSnapshots(sb, tfIn, anchorMs);
     if (snapshots.length < 5) {
       return res.status(200).json({
         anchor: new Date(anchorMs).toISOString(), tf: tfIn,
