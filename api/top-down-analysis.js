@@ -320,6 +320,10 @@ module.exports = async function handler(req, res) {
         const sub = computeSmooth(window, direction, atr);
         if (!sub) continue;
 
+        // Swing Clean gate — this is the ranking metric now, so demand a
+        // real structural quality of 80+ before the pair even shows up.
+        if (sub.swingClean < 80) continue;
+
         // Daily alignment strength
         const dyScore = alignmentScore(currentClose, dayOH.open, atr);
 
