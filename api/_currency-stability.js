@@ -53,9 +53,10 @@ function atr(candles, period) {
 //
 // A) Extension: |close - EMA20| / ATR14 ≥ 1.5  AND  close on the aligned
 //    side of EMA20.
-// B) Directional dominance: at least 4 of the last 5 candles close in the
-//    trade direction (BUY → bullish body, SELL → bearish body). Allows one
-//    small counter-body without disqualifying an otherwise clean impulse.
+// B) Directional dominance: at least 3 of the last 5 candles close in the
+//    trade direction (BUY → bullish body, SELL → bearish body). A simple
+//    majority is enough — pairs with two counter-bodies inside an impulse
+//    still count so long as the other rules confirm.
 // C) 20-candle break: current close > max(high) of previous 20 candles for
 //    BUY, or < min(low) of previous 20 candles for SELL. Confirms the trade
 //    candle is actually taking out structure, not just adding to a drift.
@@ -81,7 +82,7 @@ function impulseFilter(candles, direction) {
 
   const last5 = candles.slice(-5);
   const alignedCount = last5.filter(c => Math.sign(c.close - c.open) === sign).length;
-  const allAligned   = alignedCount >= 4;
+  const allAligned   = alignedCount >= 3;
 
   // C) 20-candle high/low break on the CURRENT close.
   const prev20 = candles.slice(-21, -1); // the 20 bars BEFORE the current one
