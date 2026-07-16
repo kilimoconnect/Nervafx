@@ -295,6 +295,17 @@ module.exports = async function handler(req, res) {
         const d2Closed = prev2DayOHLC ? (prev2DayOHLC.close > prev2DayOHLC.open ? 'BUY' : prev2DayOHLC.close < prev2DayOHLC.open ? 'SELL' : null) : null;
         if (d1Closed !== direction && d2Closed !== direction) continue;
 
+        // Previous-H1-candle break gate: the current H1 close must have broken
+        // the immediately preceding H1's high (BUY) or low (SELL). Filters out
+        // pairs where structure agrees with direction but the current bar
+        // isn't actually taking out fresh territory.
+        const prevH1 = candles[idx - 1];
+        if (!prevH1) continue;
+        const prevCandleBreak =
+          direction === 'BUY'  ? currentClose > prevH1.high :
+          direction === 'SELL' ? currentClose < prevH1.low  : false;
+        if (!prevCandleBreak) continue;
+
         // Need enough lookback for sub-scores
         const start = Math.max(0, idx - LOOKBACK + 1);
         const window = candles.slice(start, idx + 1);
