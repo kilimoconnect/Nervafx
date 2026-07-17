@@ -256,6 +256,9 @@
           });
         });
       });
+      // Hide low-momentum setups: on M5 the breaking-candle body must be
+      // ≥ 3 pips.
+      setups = setups.filter(function(s) { return s.bodyPips >= 3; });
       setups.sort(function(a, b) { return b.bodyPips - a.bodyPips; });
       return setups;
     }

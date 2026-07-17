@@ -269,6 +269,9 @@
           });
         });
       });
+      // Hide low-momentum setups: on H1 the breaking-candle body must be
+      // ≥ 10 pips. Filters out incidental fresh breaks with tiny bars.
+      setups = setups.filter(function(s) { return s.bodyPips >= 10; });
       setups.sort(function(a, b) { return b.bodyPips - a.bodyPips; });
       return setups;
     }
