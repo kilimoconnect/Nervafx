@@ -72,27 +72,41 @@ function regressionSlope(values) {
   return num / den;
 }
 
-// Piecewise price-position: 100 at EMA20, 90 at 0.5 ATR, 70 at 1.0, 30 at 2.0,
-// 0 at 3.0+. Linear between anchors. Assumes distanceInAtr ≥ 0 (magnitude only —
-// direction is handled by the caller).
+// Piecewise price-position (bell curve on |close - EMA20| / ATR14):
+//   0.0  → 40   (price on EMA20 = weak commitment, not healthy trend)
+//   0.3  → 90
+//   0.6  → 100  (ideal separation for a trending pair)
+//   1.0  → 95
+//   1.5  → 80
+//   2.0  → 55
+//   3.0  → 20
+//   4.0+ → 0    (extended, mean-revert risk)
+// Direction-sidedness is handled by the caller.
 function pricePositionScore(distanceInAtr) {
   const d = Math.max(0, distanceInAtr);
-  if (d >= 3.0) return 0;
-  if (d >= 2.0) return 30 - (d - 2.0) * 30;
-  if (d >= 1.0) return 70 - (d - 1.0) * 40;
-  if (d >= 0.5) return 90 - (d - 0.5) * 40;
-  return 100 - d * 20;
+  if (d <= 0.3) return 40 + (d / 0.3) * 50;
+  if (d <= 0.6) return 90 + ((d - 0.3) / 0.3) * 10;
+  if (d <= 1.0) return 100 - ((d - 0.6) / 0.4) * 5;
+  if (d <= 1.5) return 95 - ((d - 1.0) / 0.5) * 15;
+  if (d <= 2.0) return 80 - ((d - 1.5) / 0.5) * 25;
+  if (d <= 3.0) return 55 - ((d - 2.0) / 1.0) * 35;
+  if (d <= 4.0) return 20 - ((d - 3.0) / 1.0) * 20;
+  return 0;
 }
 
-// EMA20-vs-EMA50 separation: 0 at touching, 100 at 1 ATR apart, capped.
+// EMA20-vs-EMA50 separation: saturates at 0.3 ATR (a realistic strong-trend
+// spread on H1/M15). Was previously capped at 1 ATR which meant strong trends
+// only scored ~30 here.
 function emaStackScore(sepInAtr) {
-  return Math.min(100, Math.max(0, sepInAtr * 100));
+  return Math.min(100, Math.max(0, (sepInAtr / 0.3) * 100));
 }
 
-// Regression slope normalised by ATR, capped at 0.5 ATR per candle → 100.
+// Regression slope normalised by ATR, saturates at 0.1 ATR per candle → 100.
+// Was previously capped at 0.5 ATR/candle which is a slope you almost never
+// see on smoothed EMAs — real strong-trend slopes are 0.05-0.10 ATR/candle.
 function slopeMagnitudeScore(slopePerCandleNorm) {
-  const mag = Math.min(Math.abs(slopePerCandleNorm), 0.5);
-  return (mag / 0.5) * 100;
+  const mag = Math.min(Math.abs(slopePerCandleNorm), 0.10);
+  return (mag / 0.10) * 100;
 }
 
 function stdDev(vals) {

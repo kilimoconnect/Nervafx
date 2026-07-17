@@ -88,18 +88,24 @@ function regressionSlope(values) {
   }
   return num / den;
 }
+// Must stay in sync with api/mtre.js — see comments there for calibration
+// rationale. Bell curve on price position (peak at 0.6 ATR), EMA stack
+// saturates at 0.3 ATR, slope magnitude saturates at 0.1 ATR/candle.
 function pricePositionScore(d) {
   d = Math.max(0, d);
-  if (d >= 3.0) return 0;
-  if (d >= 2.0) return 30 - (d - 2.0) * 30;
-  if (d >= 1.0) return 70 - (d - 1.0) * 40;
-  if (d >= 0.5) return 90 - (d - 0.5) * 40;
-  return 100 - d * 20;
+  if (d <= 0.3) return 40 + (d / 0.3) * 50;
+  if (d <= 0.6) return 90 + ((d - 0.3) / 0.3) * 10;
+  if (d <= 1.0) return 100 - ((d - 0.6) / 0.4) * 5;
+  if (d <= 1.5) return 95 - ((d - 1.0) / 0.5) * 15;
+  if (d <= 2.0) return 80 - ((d - 1.5) / 0.5) * 25;
+  if (d <= 3.0) return 55 - ((d - 2.0) / 1.0) * 35;
+  if (d <= 4.0) return 20 - ((d - 3.0) / 1.0) * 20;
+  return 0;
 }
-function emaStackScore(s) { return Math.min(100, Math.max(0, s * 100)); }
+function emaStackScore(s) { return Math.min(100, Math.max(0, (s / 0.3) * 100)); }
 function slopeMagnitudeScore(n) {
-  const mag = Math.min(Math.abs(n), 0.5);
-  return (mag / 0.5) * 100;
+  const mag = Math.min(Math.abs(n), 0.10);
+  return (mag / 0.10) * 100;
 }
 function stdDev(vals) {
   if (!vals.length) return 0;
