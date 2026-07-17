@@ -54,7 +54,7 @@ async function fetchAllH1(sb, inst, since, until) {
   while (true) {
     const { data, error } = await sb
       .from('backtest_candles')
-      .select('time, high, low, close')
+      .select('time, open, high, low, close')
       .eq('instrument', inst).eq('timeframe', 'H1').eq('complete', true)
       .gte('time', since).lte('time', until)
       .order('time', { ascending: true })
@@ -63,8 +63,9 @@ async function fetchAllH1(sb, inst, since, until) {
     if (!data || !data.length) break;
     all.push(...data.map(c => ({
       ms:   new Date(c.time).getTime(),
-      high: parseFloat(c.high),
-      low:  parseFloat(c.low),
+      open:  parseFloat(c.open),
+      high:  parseFloat(c.high),
+      low:   parseFloat(c.low),
       close: parseFloat(c.close),
     })));
     if (data.length < PAGE) break;
@@ -72,6 +73,11 @@ async function fetchAllH1(sb, inst, since, until) {
   }
   return all;
 }
+
+// Pip divisor: non-JPY pairs quote to 5 decimals so 1 pip = 0.0001; JPY
+// pairs quote to 3 decimals so 1 pip = 0.01. Used to normalise body sizes
+// across the 28 majors so the ranking is comparable.
+function pipDiv(inst) { return inst.includes('JPY') ? 0.01 : 0.0001; }
 
 function alignmentScore(close, e20, e50) {
   if (close > e20 && e20 > e50)  return +1.0;
@@ -121,9 +127,10 @@ module.exports = async function handler(req, res) {
 
   // For each pair, compute score at each target hour AND record whether the
   // current H1 close broke the immediately-preceding H1's high (BUY-break)
-  // or low (SELL-break).
+  // or low (SELL-break). Also record the breaking bar's body size in pips
+  // so the frontend can rank setups by the strongest break.
   const pairScores = {}; // { pair: Map<hourMs, score> }
-  const pairBreaks = {}; // { pair: Map<hourMs, 'BUY' | 'SELL'> }
+  const pairBreaks = {}; // { pair: Map<hourMs, { direction, bodyPips }> }
   for (const inst of PAIRS) {
     const seq = candles[inst] || [];
     if (!seq.length) { pairScores[inst] = new Map(); pairBreaks[inst] = new Map(); continue; }
@@ -131,6 +138,7 @@ module.exports = async function handler(req, res) {
     const pushE50 = makeEma(50);
     const scoreMap = new Map();
     const breakMap = new Map();
+    const pd = pipDiv(inst);
     let prev = null;
     for (const c of seq) {
       const e20 = pushE20(c.close);
@@ -138,8 +146,9 @@ module.exports = async function handler(req, res) {
       if (e20 != null && e50 != null && targetSet.has(c.ms)) {
         scoreMap.set(c.ms, alignmentScore(c.close, e20, e50));
         if (prev) {
-          if      (c.close > prev.high) breakMap.set(c.ms, 'BUY');
-          else if (c.close < prev.low)  breakMap.set(c.ms, 'SELL');
+          const bodyPips = Math.round((Math.abs(c.close - c.open) / pd) * 10) / 10;
+          if      (c.close > prev.high) breakMap.set(c.ms, { direction: 'BUY',  bodyPips });
+          else if (c.close < prev.low)  breakMap.set(c.ms, { direction: 'SELL', bodyPips });
         }
       }
       prev = c;
@@ -171,8 +180,10 @@ module.exports = async function handler(req, res) {
     if (contributing < PAIRS.length * 0.7) continue; // skip hours with too few pairs
     const currencies = {};
     for (const k of CCYS) currencies[k] = agg[k] / 7;
-    // Per-anchor break map: pair → 'BUY' | 'SELL' for the direction of the
-    // break of the immediately-preceding H1 candle's high/low.
+    // Per-anchor break map: pair → { direction, bodyPips } for pairs whose
+    // current H1 broke the immediately-preceding H1's high/low. bodyPips is
+    // the absolute body size of the breaking candle in pips, used to rank
+    // setups.
     const breaks = {};
     for (const inst of PAIRS) {
       const b = pairBreaks[inst].get(h);

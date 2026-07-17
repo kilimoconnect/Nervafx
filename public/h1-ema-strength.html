@@ -241,10 +241,11 @@
       return null;
     }
 
-    // Build top-2 vs bottom-2 pair suggestions for a given hour row and
-    // filter out any setup where the current H1 hasn't broken the previous
-    // candle's high (BUY) or low (SELL). row.breaks is a map instrument →
-    // 'BUY' | 'SELL' emitted by the history endpoint.
+    // Build top-2 vs bottom-2 pair suggestions for a given hour row. Only
+    // keep pairs whose current H1 broke the previous candle's high (BUY)
+    // or low (SELL). Rank by breaking-candle body size in pips —
+    // strongest break first.
+    // row.breaks is { instrument: { direction, bodyPips } }.
     function buildSetups(row) {
       var breaks = row.breaks || {};
       var scores = CCYS.map(function(c) { return { c: c, v: row.currencies[c] || 0 }; });
@@ -256,17 +257,17 @@
         bot.forEach(function(b) {
           var m = findPair(t.c, b.c);
           if (!m) return;
-          // Only keep setups where the current H1 has actually broken the
-          // previous candle's high/low on the same side as the setup.
-          if (breaks[m.instrument] !== m.direction) return;
+          var br = breaks[m.instrument];
+          if (!br || br.direction !== m.direction) return;
           setups.push({
             pair: m.pair,
             direction: m.direction,
             spread: t.v - b.v,
+            bodyPips: br.bodyPips || 0,
           });
         });
       });
-      setups.sort(function(a, b) { return b.spread - a.spread; });
+      setups.sort(function(a, b) { return b.bodyPips - a.bodyPips; });
       return setups;
     }
 
@@ -276,7 +277,7 @@
         return '<span class="setup-pill">'
           + s.pair
           + '<span class="d ' + s.direction + '">' + s.direction + '</span>'
-          + '<span class="sp">Δ' + s.spread.toFixed(2) + '</span>'
+          + '<span class="sp">' + s.bodyPips.toFixed(1) + 'p</span>'
           + '</span>';
       }).join('');
     }
