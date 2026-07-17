@@ -88,6 +88,16 @@
 
     .empty { text-align:center; color:var(--muted); padding:20px; }
     .tbl-scroll { max-height:70vh; overflow:auto; }
+
+    /* Tab bar */
+    .tabs { display:flex; gap:2px; border-bottom:1px solid var(--border); margin-bottom:16px; }
+    .tab {
+      background:transparent; color:var(--muted); border:none; padding:10px 20px;
+      font-size:13px; font-weight:600; cursor:pointer; border-bottom:2px solid transparent;
+      font-family:inherit;
+    }
+    .tab:hover { color:var(--text); }
+    .tab.active { color:var(--accent); border-bottom-color:var(--accent); }
     @media (max-width: 700px) {
       .pair-row { grid-template-columns:90px 48px 48px 40px 40px 40px 48px 48px; gap:4px; padding:6px; font-size:11px; }
       .row { grid-template-columns:120px 50px 50px 50px 50px 50px 50px 100px; gap:6px; font-size:11px; }
@@ -105,18 +115,23 @@
     regime is visible directly.
   </div>
 
+  <div class="tabs">
+    <button class="tab active" data-tf="h1">H1 MTRE</button>
+    <button class="tab" data-tf="m15">M15 MTRE</button>
+  </div>
+
   <div class="controls">
     <button id="reloadLive">Refresh live</button>
     <span class="status" id="live-status"></span>
   </div>
 
   <div class="card">
-    <div class="card-hd">Market Snapshot</div>
+    <div class="card-hd" id="snapshot-hd">Market Snapshot</div>
     <div class="kpi-grid" id="live-kpis"><div class="empty">Loading…</div></div>
   </div>
 
   <div class="card">
-    <div class="card-hd">Currency Strength (H1)</div>
+    <div class="card-hd" id="ccy-hd">Currency Strength</div>
     <div class="ccy-row" id="live-ccy"><div class="empty">Loading…</div></div>
   </div>
 
@@ -128,7 +143,7 @@
       <div>M15 dir</div>
       <div>H1 R</div>
       <div>M15 R</div>
-      <div>H1 T/C pips</div>
+      <div id="tc-hd">H1 T/C pips</div>
       <div>Align</div>
       <div>—</div>
     </div>
@@ -161,6 +176,13 @@
     function scoreCls(v) { return v >= 80 ? 'hi' : v >= 60 ? 'mid' : 'lo'; }
     function ccyCls(v)   { return v >= 65 ? 'strong' : v <= 35 ? 'weak' : 'neutral'; }
 
+    // Active timeframe tab — 'h1' or 'm15'. Drives which side of the payload
+    // the KPI tiles, currency strength row, pair T/C column, and history
+    // table columns focus on.
+    var _tf = 'h1';
+    var _lastLive = null;
+    var _lastHist = null;
+
     async function loadLive() {
       var s = document.getElementById('live-status');
       s.classList.remove('error'); s.textContent = 'Loading…';
@@ -169,45 +191,68 @@
         if (!r.ok) throw new Error('HTTP ' + r.status);
         var json = await r.json();
         if (json.error) throw new Error(json.error);
+        _lastLive = json;
         renderLive(json);
         s.textContent = fmtTime(json.generatedAt) + ' · ' + json.duration_ms + ' ms';
       } catch (e) { s.classList.add('error'); s.textContent = 'Error: ' + e.message; }
     }
 
     function renderLive(json) {
-      var k = document.getElementById('live-kpis');
-      var domVal = json.dominantSide === 'BUY' ? json.h1BuyMtre : json.h1SellMtre;
-      k.innerHTML =
-          '<div class="kpi"><div class="kpi-label">Dominant H1</div><div class="kpi-value">' + domVal + '</div>'
-        + '<div style="margin-top:6px"><span class="state-badge s-' + json.state + '">' + json.state.replace('_',' ') + ' · ' + json.dominantSide + '</span></div></div>'
-        + '<div class="kpi"><div class="kpi-label">H1 BUY MTRE</div><div class="kpi-value" style="color:#4ade80">' + json.h1BuyMtre + '</div>'
-        + '<div class="status" style="margin-top:4px">' + json.h1BuyCount + ' pairs</div></div>'
-        + '<div class="kpi"><div class="kpi-label">H1 SELL MTRE</div><div class="kpi-value" style="color:#f87171">' + json.h1SellMtre + '</div>'
-        + '<div class="status" style="margin-top:4px">' + json.h1SellCount + ' pairs</div></div>'
-        + '<div class="kpi"><div class="kpi-label">M15 BUY MTRE</div><div class="kpi-value" style="color:#4ade80">' + json.m15BuyMtre + '</div>'
-        + '<div class="status" style="margin-top:4px">' + json.m15BuyCount + ' pairs</div></div>'
-        + '<div class="kpi"><div class="kpi-label">M15 SELL MTRE</div><div class="kpi-value" style="color:#f87171">' + json.m15SellMtre + '</div>'
-        + '<div class="status" style="margin-top:4px">' + json.m15SellCount + ' pairs</div></div>'
-        + '<div class="kpi"><div class="kpi-label">H1/M15 Alignment</div><div class="kpi-value">' + json.alignment + '</div></div>';
+      var tfUp   = _tf.toUpperCase();
+      var buy    = _tf === 'h1' ? json.h1BuyMtre  : json.m15BuyMtre;
+      var sell   = _tf === 'h1' ? json.h1SellMtre : json.m15SellMtre;
+      var buyN   = _tf === 'h1' ? json.h1BuyCount : json.m15BuyCount;
+      var sellN  = _tf === 'h1' ? json.h1SellCount: json.m15SellCount;
+      var domSide = buy >= sell ? 'BUY' : 'SELL';
+      var domVal  = domSide === 'BUY' ? buy : sell;
+      // Reuse the H1 state cutoffs for consistency across tabs.
+      var state = domVal >= 80 ? 'STRONG_TRENDING'
+                : domVal >= 65 ? 'HEALTHY_TREND'
+                : domVal >= 50 ? 'DEVELOPING'
+                : domVal >= 35 ? 'WEAK_TREND'
+                : 'CHAOTIC';
 
-      // Currency strength row (H1).
+      document.getElementById('snapshot-hd').textContent = tfUp + ' Market Snapshot';
+      document.getElementById('ccy-hd').textContent      = 'Currency Strength (' + tfUp + ')';
+      document.getElementById('tc-hd').textContent       = tfUp + ' T/C pips';
+
+      var k = document.getElementById('live-kpis');
+      k.innerHTML =
+          '<div class="kpi"><div class="kpi-label">Dominant ' + tfUp + '</div><div class="kpi-value">' + domVal + '</div>'
+        + '<div style="margin-top:6px"><span class="state-badge s-' + state + '">' + state.replace('_',' ') + ' · ' + domSide + '</span></div></div>'
+        + '<div class="kpi"><div class="kpi-label">' + tfUp + ' BUY MTRE</div><div class="kpi-value" style="color:#4ade80">' + buy + '</div>'
+        + '<div class="status" style="margin-top:4px">' + buyN + ' pairs</div></div>'
+        + '<div class="kpi"><div class="kpi-label">' + tfUp + ' SELL MTRE</div><div class="kpi-value" style="color:#f87171">' + sell + '</div>'
+        + '<div class="status" style="margin-top:4px">' + sellN + ' pairs</div></div>'
+        + '<div class="kpi"><div class="kpi-label">H1/M15 Alignment</div><div class="kpi-value">' + json.alignment + '</div>'
+        + '<div class="status" style="margin-top:4px">avg across pairs</div></div>';
+
+      // Currency strength row for active TF.
+      var ccMap = json.currencies[_tf] || json.currencies.h1;
       var cc = document.getElementById('live-ccy');
-      var ccys = Object.keys(json.currencies.h1).sort(function(a,b){ return json.currencies.h1[b] - json.currencies.h1[a]; });
+      var ccys = Object.keys(ccMap).sort(function(a,b){ return ccMap[b] - ccMap[a]; });
       cc.innerHTML = ccys.map(function(c) {
-        var v = json.currencies.h1[c];
+        var v = ccMap[c];
         return '<div class="ccy-cell"><span class="ccy-code">' + c + '</span><span class="ccy-val ' + ccyCls(v) + '">' + v + '</span></div>';
       }).join('');
 
-      // Pair breakdown.
+      // Pair breakdown — sort by active-TF respect.
+      var pairs = json.pairs.slice().sort(function(a, b) {
+        var ar = _tf === 'h1' ? a.h1Respect : a.m15Respect;
+        var br = _tf === 'h1' ? b.h1Respect : b.m15Respect;
+        return br - ar;
+      });
       var p = document.getElementById('live-pairs');
-      p.innerHTML = json.pairs.map(function(pr) {
+      p.innerHTML = pairs.map(function(pr) {
+        var tPips = _tf === 'h1' ? pr.h1TrendPips  : pr.m15TrendPips;
+        var cPips = _tf === 'h1' ? pr.h1CounterPips: pr.m15CounterPips;
         return '<div class="pair-row">'
           + '<span class="pair-name">' + pr.pair + '</span>'
           + '<span class="pair-tf ' + (pr.h1Direction || 'NONE') + '">' + (pr.h1Direction || '—') + '</span>'
           + '<span class="pair-tf ' + (pr.m15Direction || 'NONE') + '">' + (pr.m15Direction || '—') + '</span>'
           + '<span class="pair-score ' + scoreCls(pr.h1Respect) + '">' + pr.h1Respect + '</span>'
           + '<span class="pair-score ' + scoreCls(pr.m15Respect) + '">' + pr.m15Respect + '</span>'
-          + '<span class="status">' + (pr.h1TrendPips || 0).toFixed(0) + '/' + (pr.h1CounterPips || 0).toFixed(0) + 'p</span>'
+          + '<span class="status">' + (tPips || 0).toFixed(0) + '/' + (cPips || 0).toFixed(0) + 'p</span>'
           + '<span class="pair-score ' + scoreCls(pr.alignment) + '">' + pr.alignment + '</span>'
           + '<span class="status">' + (pr.dirsMatch ? '✓' : '✗') + '</span>'
           + '</div>';
@@ -224,28 +269,47 @@
         if (!r.ok) throw new Error('HTTP ' + r.status);
         var json = await r.json();
         if (json.error) throw new Error(json.error);
+        _lastHist = json.rows || [];
         s.textContent = json.hours + ' hours · ' + (json.duration_sec || 0) + 's';
-        renderHist(json.rows || []);
+        renderHist(_lastHist);
       } catch (e) { s.classList.add('error'); s.textContent = 'Error: ' + e.message; }
+    }
+
+    function classifyLocal(v) {
+      if (v >= 80) return 'STRONG_TRENDING';
+      if (v >= 65) return 'HEALTHY_TREND';
+      if (v >= 50) return 'DEVELOPING';
+      if (v >= 35) return 'WEAK_TREND';
+      return 'CHAOTIC';
     }
 
     function renderHist(rows) {
       var el = document.getElementById('hist-list');
       if (!rows.length) { el.innerHTML = '<div class="empty">No hours in this window.</div>'; return; }
+      var tfUp = _tf.toUpperCase();
       var html = '<div class="row head">'
-        + '<div>Hour</div><div>H1 BUY</div><div>H1 SELL</div><div>M15 BUY</div><div>M15 SELL</div>'
+        + '<div>Hour</div><div>' + tfUp + ' BUY</div><div>' + tfUp + ' SELL</div>'
+        + '<div>Other BUY</div><div>Other SELL</div>'
         + '<div>Align</div><div>Dom</div><div class="cls">State</div></div>';
       for (var i = rows.length - 1; i >= 0; i--) {
         var r = rows[i];
+        // Active-TF values drive the state; the other TF is shown for context.
+        var buy   = _tf === 'h1' ? r.h1BuyMtre   : r.m15BuyMtre;
+        var sell  = _tf === 'h1' ? r.h1SellMtre  : r.m15SellMtre;
+        var oBuy  = _tf === 'h1' ? r.m15BuyMtre  : r.h1BuyMtre;
+        var oSell = _tf === 'h1' ? r.m15SellMtre : r.h1SellMtre;
+        var domSide = buy >= sell ? 'BUY' : 'SELL';
+        var domVal  = Math.max(buy, sell);
+        var state   = classifyLocal(domVal);
         html += '<div class="row data" data-time="' + r.time + '" title="Click to load top pairs at this hour">'
           + '<div class="time">' + fmtTime(r.time) + '</div>'
-          + '<div style="color:#4ade80">' + r.h1BuyMtre + '</div>'
-          + '<div style="color:#f87171">' + r.h1SellMtre + '</div>'
-          + '<div style="color:#4ade80">' + r.m15BuyMtre + '</div>'
-          + '<div style="color:#f87171">' + r.m15SellMtre + '</div>'
+          + '<div style="color:#4ade80">' + buy + '</div>'
+          + '<div style="color:#f87171">' + sell + '</div>'
+          + '<div style="color:#4ade80;opacity:0.6">' + oBuy + '</div>'
+          + '<div style="color:#f87171;opacity:0.6">' + oSell + '</div>'
           + '<div>' + r.alignment + '</div>'
-          + '<div style="color:' + (r.dominantSide === 'BUY' ? '#4ade80' : '#f87171') + '">' + r.dominantSide + '</div>'
-          + '<div class="cls"><span class="state-badge s-' + r.state + '">' + r.state.replace('_',' ') + '</span></div>'
+          + '<div style="color:' + (domSide === 'BUY' ? '#4ade80' : '#f87171') + '">' + domSide + '</div>'
+          + '<div class="cls"><span class="state-badge s-' + state + '">' + state.replace('_',' ') + '</span></div>'
           + '</div>';
       }
       el.innerHTML = html;
@@ -293,6 +357,17 @@
 
     document.getElementById('reloadLive').addEventListener('click', loadLive);
     document.getElementById('loadHist').addEventListener('click', loadHist);
+    // Tab switch — re-renders live + history from cached payloads with the
+    // new active TF; no re-fetch needed.
+    document.querySelectorAll('.tab').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        _tf = btn.getAttribute('data-tf');
+        document.querySelectorAll('.tab').forEach(function(b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        if (_lastLive) renderLive(_lastLive);
+        if (_lastHist) renderHist(_lastHist);
+      });
+    });
     loadLive();
   </script>
 </body>
