@@ -3,36 +3,42 @@
 /**
  * GET /api/mtre[?anchor=ISO]
  *
- * Market Trend Respect Engine (redesign).
+ * Market Trend Respect Engine (v3).
  *
- * Per pair per TF:
- *   direction: EMA20 > EMA50 → BUY, EMA20 < EMA50 → SELL, else null.
- *   respect = (alignmentPoint + priceEma20 + priceEma50 + structure) / 4 × 100
- *     alignmentPoint = 1 (already implied by direction)
- *     priceEma20     = 1 if close on correct side of EMA20
- *     priceEma50     = 1 if close on correct side of EMA50
- *     structure      = count(last 10 candles making HH+HL for BUY, or LL+LH
- *                            for SELL) / 10
+ * Direction (per pair per TF):
+ *   spread = |EMA20 - EMA50| / ATR14
+ *   if spread < 0.10  → NEUTRAL (respect = 0)
+ *   elif EMA20 > EMA50 → BUY
+ *   else               → SELL
+ *
+ * Four Respect components (each 0-1):
+ *   A. EMA Quality = min(1, spread / 0.5)   — 0.5 ATR = perfect separation
+ *   B. Price/EMA20 = 1 if close on correct side of EMA20, else 0
+ *   C. Price/EMA50 = 1 if close on correct side of EMA50, else 0
+ *   D. Structure   = (HH count + HL count) / 20 for BUY   (over last 10 bars)
+ *                    (LH count + LL count) / 20 for SELL
+ *
+ *   Respect = (0.30 A + 0.25 B + 0.20 C + 0.25 D) × 100
  *
  * Per pair alignment = (H1.respect + M15.respect) / 2 when H1.dir == M15.dir,
  * else 0 — divergent pairs pull the market alignment down.
  *
- * Market metrics:
- *   H1 avg respect  = mean H1.respect across 28 pairs
- *   M15 avg respect = mean M15.respect across 28 pairs
- *   Avg alignment   = mean of the per-pair alignment values
- *   Strong BUY      = # pairs H1.direction == BUY AND H1.respect ≥ 70
- *   Strong SELL     = # pairs H1.direction == SELL AND H1.respect ≥ 70
+ * Market rollup:
+ *   H1AvgRespect  = mean H1.respect across 28 pairs
+ *   M15AvgRespect = mean M15.respect across 28 pairs
+ *   Alignment     = mean of per-pair alignment values
+ *   Breadth       = # pairs with H1.respect ≥ 70, out of the 28, × 100
+ *   StrongBuy     = # H1.direction == BUY  AND respect ≥ 70
+ *   StrongSell    = # H1.direction == SELL AND respect ≥ 70
  *
- *   MTRE = 0.40 × H1Avg + 0.40 × M15Avg + 0.20 × Alignment
+ *   MTRE = 0.35 H1Avg + 0.35 M15Avg + 0.20 Alignment + 0.10 Breadth
  *
  * States: CHAOTIC (<30) · WEAK_TREND (30-50) · DEVELOPING (50-70) ·
  *         HEALTHY_TREND (70-85) · STRONG_TRENDING (≥85).
  *
- * Currency layer: for each pair we credit the winning currency +respect and
+ * Currency layer: for each pair credit the winning currency +respect and
  * debit the losing one −respect, then average per currency across its 7
- * pairs and map −100..+100 → 0..100. Emitted on both TFs so the frontend
- * can show a strong/weak currency row.
+ * pairs and map −100..+100 → 0..100.
  */
 
 const { cors, getClient } = require('./_db');
@@ -54,50 +60,76 @@ function ema(values, period) {
   return e;
 }
 
-// Structure count: for the last 10 candles, count those that make HH + HL for
-// BUY (or LL + LH for SELL), each relative to the immediately preceding bar.
+function atr(candles, period) {
+  if (candles.length < period + 1) return null;
+  const trs = [];
+  for (let i = 1; i < candles.length; i++) {
+    const c = candles[i], p = candles[i - 1];
+    trs.push(Math.max(c.high - c.low, Math.abs(c.high - p.close), Math.abs(c.low - p.close)));
+  }
+  return trs.slice(-period).reduce((a, b) => a + b, 0) / period;
+}
+
+// Structure v3: HH + HL over the last 10 bars, divided by 20 (max possible).
+//   Inside candles no longer punish the score outright — a bar that fails HH
+//   but still respects HL contributes 0.5.
+//   BUY: HH = high[i] > high[i-1]; HL = low[i] > low[i-1]
+//   SELL: LH = high[i] < high[i-1]; LL = low[i] < low[i-1]
 function structureScore(candles, direction) {
   const N = 10;
   if (candles.length < N + 1) return 0;
   const win = candles.slice(-N - 1); // 11 candles → 10 comparisons
-  let count = 0;
+  let hits = 0;
   for (let i = 1; i < win.length; i++) {
     if (direction === 'BUY') {
-      if (win[i].high > win[i - 1].high && win[i].low > win[i - 1].low) count++;
+      if (win[i].high > win[i - 1].high) hits++;
+      if (win[i].low  > win[i - 1].low)  hits++;
     } else {
-      if (win[i].high < win[i - 1].high && win[i].low < win[i - 1].low) count++;
+      if (win[i].high < win[i - 1].high) hits++;
+      if (win[i].low  < win[i - 1].low)  hits++;
     }
   }
-  return count / N;
+  return hits / (N * 2); // 0.0 - 1.0
 }
+
+const SPREAD_NEUTRAL_THRESHOLD = 0.10;   // spread < 0.10 ATR → NEUTRAL
+const SPREAD_QUALITY_SATURATION = 0.50;  // spread ≥ 0.50 ATR → Quality = 1.0
 
 function pairRespect(candles) {
   if (!candles || candles.length < 51) return null;
   const closes = candles.map(c => c.close);
   const e20 = ema(closes, 20);
   const e50 = ema(closes, 50);
-  if (e20 == null || e50 == null) return null;
+  const a14 = atr(candles, 14);
+  if (e20 == null || e50 == null || !a14) return null;
   const cur = closes[closes.length - 1];
+
+  const spread = Math.abs(e20 - e50) / a14;
+  if (spread < SPREAD_NEUTRAL_THRESHOLD) {
+    return { direction: null, respect: 0, structure: 0, spread: +spread.toFixed(2), quality: 0 };
+  }
 
   let direction, priceE20, priceE50;
   if (e20 > e50) {
     direction = 'BUY';
     priceE20 = cur > e20 ? 1 : 0;
     priceE50 = cur > e50 ? 1 : 0;
-  } else if (e20 < e50) {
+  } else {
     direction = 'SELL';
     priceE20 = cur < e20 ? 1 : 0;
     priceE50 = cur < e50 ? 1 : 0;
-  } else {
-    return { direction: null, respect: 0, structure: 0 };
   }
 
-  const structure = structureScore(candles, direction); // 0.0 - 1.0
-  const respect = Math.round(((1 + priceE20 + priceE50 + structure) / 4) * 100);
+  const quality   = Math.min(1, spread / SPREAD_QUALITY_SATURATION);   // 0-1
+  const structure = structureScore(candles, direction);                // 0-1
+
+  const respect = Math.round((0.30 * quality + 0.25 * priceE20 + 0.20 * priceE50 + 0.25 * structure) * 100);
   return {
     direction,
     respect,
-    structure: Math.round(structure * 10),
+    structure:  Math.round(structure * 20),   // shown as N/20 in UI
+    spread:     +spread.toFixed(2),
+    quality:    +quality.toFixed(2),
     priceEma20: priceE20,
     priceEma50: priceE50,
   };
@@ -178,7 +210,7 @@ module.exports = async function handler(req, res) {
 
     // Roll up.
     let h1Sum = 0, m15Sum = 0, alignSum = 0, count = 0;
-    let strongBuy = 0, strongSell = 0;
+    let strongBuy = 0, strongSell = 0, strongPairs = 0;
     const pairs = [];
     for (const inst of PAIRS) {
       const { h1, m15 } = perPair[inst];
@@ -189,13 +221,14 @@ module.exports = async function handler(req, res) {
       const dirsMatch = h1.direction && m15.direction && h1.direction === m15.direction;
       const alignment = dirsMatch ? (h1.respect + m15.respect) / 2 : 0;
       alignSum += alignment;
+      if (h1.respect >= 70) strongPairs++;
       if (h1.direction === 'BUY'  && h1.respect >= 70) strongBuy++;
       if (h1.direction === 'SELL' && h1.respect >= 70) strongSell++;
       pairs.push({
         pair: inst.replace('_', '/'),
         instrument: inst,
-        h1Direction:  h1.direction,  h1Respect:  h1.respect,  h1Structure:  h1.structure,
-        m15Direction: m15.direction, m15Respect: m15.respect, m15Structure: m15.structure,
+        h1Direction:  h1.direction,  h1Respect:  h1.respect,  h1Structure:  h1.structure,  h1Quality:  h1.quality,  h1Spread:  h1.spread,
+        m15Direction: m15.direction, m15Respect: m15.respect, m15Structure: m15.structure, m15Quality: m15.quality, m15Spread: m15.spread,
         alignment: Math.round(alignment),
         dirsMatch,
       });
@@ -206,7 +239,8 @@ module.exports = async function handler(req, res) {
     const h1Avg      = Math.round(h1Sum / count);
     const m15Avg     = Math.round(m15Sum / count);
     const alignAvg   = Math.round(alignSum / count);
-    const mtre       = Math.round(0.40 * h1Avg + 0.40 * m15Avg + 0.20 * alignAvg);
+    const breadth    = Math.round((strongPairs / count) * 100);
+    const mtre       = Math.round(0.35 * h1Avg + 0.35 * m15Avg + 0.20 * alignAvg + 0.10 * breadth);
     const state      = classify(mtre);
 
     // Sort pairs strongest-aligned first, then by H1 respect.
@@ -226,8 +260,10 @@ module.exports = async function handler(req, res) {
       h1AvgRespect:  h1Avg,
       m15AvgRespect: m15Avg,
       alignment:     alignAvg,
+      breadth,
       strongBuy,
       strongSell,
+      strongPairs,
       totalPairs:    count,
       mtre,
       state,
