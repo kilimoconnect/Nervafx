@@ -3,10 +3,10 @@
 /**
  * GET /api/mtre-history?from=YYYY-MM-DD&to=YYYY-MM-DD
  *
- * Historical Market Trend Respect Engine. For every hour in the window,
- * emits { time, mti, breadth, agreement, health, classification }. Uses the
- * same weighted Respect maths as /api/mtre; only the top-line rollup is
- * kept per row (per-pair details would balloon the payload).
+ * Historical MTRE. For every hour in the window, emits the top-line rollup
+ * for the redesigned engine (see api/mtre.js). Pre-fetches every pair's H1
+ * and M15 candles once with rolling EMAs, snapshots at each hour, then
+ * evaluates the four Respect components.
  */
 
 const { cors, getClient } = require('./_db');
@@ -19,20 +19,18 @@ const PAIRS = [
   'NZD_JPY','NZD_CHF','NZD_CAD','CAD_JPY','CAD_CHF','CHF_JPY',
 ];
 
-function makeEmaSeries() {
-  return function(period) {
-    const k = 2 / (period + 1);
-    let seedBuf = [];
-    let e = null;
-    return function push(v) {
-      if (e === null) {
-        seedBuf.push(v);
-        if (seedBuf.length === period) e = seedBuf.reduce((a, b) => a + b, 0) / period;
-        return e;
-      }
-      e = v * k + e * (1 - k);
+function makeEma(period) {
+  const k = 2 / (period + 1);
+  let seedBuf = [];
+  let e = null;
+  return function push(v) {
+    if (e === null) {
+      seedBuf.push(v);
+      if (seedBuf.length === period) e = seedBuf.reduce((a, b) => a + b, 0) / period;
       return e;
-    };
+    }
+    e = v * k + e * (1 - k);
+    return e;
   };
 }
 
@@ -63,109 +61,49 @@ async function fetchAll(sb, inst, tf, since, until) {
   return all;
 }
 
-// Piecewise/continuous helpers — must stay in sync with api/mtre.js.
-function atrAt(candles, i, period) {
-  if (i < period) return null;
-  let sum = 0;
-  for (let k = i - period + 1; k <= i; k++) {
-    const c = candles[k];
-    const p = candles[k - 1] || c;
-    const tr = Math.max(c.high - c.low, Math.abs(c.high - p.close), Math.abs(c.low - p.close));
-    sum += tr;
+// Structure count at candle index i, looking back N candles.
+function structureAt(seq, i, direction, N) {
+  if (i < N) return 0;
+  let count = 0;
+  for (let k = i - N + 1; k <= i; k++) {
+    const c = seq[k], p = seq[k - 1];
+    if (direction === 'BUY') {
+      if (c.high > p.high && c.low > p.low) count++;
+    } else {
+      if (c.high < p.high && c.low < p.low) count++;
+    }
   }
-  return sum / period;
-}
-function regressionSlope(values) {
-  const n = values.length;
-  if (n < 2) return 0;
-  const xMean = (n - 1) / 2;
-  const yMean = values.reduce((a, b) => a + b, 0) / n;
-  let num = 0, den = 0;
-  for (let i = 0; i < n; i++) {
-    const dx = i - xMean;
-    num += dx * (values[i] - yMean);
-    den += dx * dx;
-  }
-  return num / den;
-}
-// Must stay in sync with api/mtre.js — see comments there for calibration
-// rationale. Bell curve on price position (peak at 0.6 ATR), EMA stack
-// saturates at 0.3 ATR, slope magnitude saturates at 0.1 ATR/candle.
-function pricePositionScore(d) {
-  d = Math.max(0, d);
-  if (d <= 0.3) return 40 + (d / 0.3) * 50;
-  if (d <= 0.6) return 90 + ((d - 0.3) / 0.3) * 10;
-  if (d <= 1.0) return 100 - ((d - 0.6) / 0.4) * 5;
-  if (d <= 1.5) return 95 - ((d - 1.0) / 0.5) * 15;
-  if (d <= 2.0) return 80 - ((d - 1.5) / 0.5) * 25;
-  if (d <= 3.0) return 55 - ((d - 2.0) / 1.0) * 35;
-  if (d <= 4.0) return 20 - ((d - 3.0) / 1.0) * 20;
-  return 0;
-}
-function emaStackScore(s) { return Math.min(100, Math.max(0, (s / 0.3) * 100)); }
-function slopeMagnitudeScore(n) {
-  const mag = Math.min(Math.abs(n), 0.10);
-  return (mag / 0.10) * 100;
-}
-function stdDev(vals) {
-  if (!vals.length) return 0;
-  const m = vals.reduce((a, b) => a + b, 0) / vals.length;
-  const v = vals.reduce((s, x) => s + (x - m) * (x - m), 0) / vals.length;
-  return Math.sqrt(v);
-}
-function directionalEfficiency(closes, endIdx, N) {
-  if (endIdx < N) return null;
-  let path = 0;
-  for (let k = endIdx - N + 1; k <= endIdx; k++) {
-    path += Math.abs(closes[k] - closes[k - 1]);
-  }
-  if (path === 0) return 0;
-  const net = Math.abs(closes[endIdx] - closes[endIdx - N]);
-  return Math.round((net / path) * 100);
+  return count / N;
 }
 
-// Per-pair continuous Respect + Persistence at anchor index i.
-function respectAt(candles, closes, e20, e50, i, N) {
+// Per-pair Respect at index i using the pre-built EMA series.
+function respectAt(seq, closes, e20, e50, i) {
   const cur20 = e20[i], cur50 = e50[i];
   if (cur20 == null || cur50 == null) return null;
-  const trend = cur20 > cur50 ? 'BUY' : cur20 < cur50 ? 'SELL' : null;
-  if (!trend) return { trend: null, respect: 0, persistence: 0 };
-  const sig = trend === 'BUY' ? +1 : -1;
-  const series = [];
-  for (let k = 0; k < N; k++) {
-    const idx = i - k;
-    if (idx < 20) break;
-    const a20 = e20[idx], a50 = e50[idx];
-    if (a20 == null || a50 == null) continue;
-    const atr = atrAt(candles, idx, 14);
-    if (!atr) continue;
-    const c = closes[idx];
-    const priceDist = (c - a20) / atr;
-    const posScore = Math.sign(priceDist) === sig ? pricePositionScore(Math.abs(priceDist)) : 0;
-    const stackDist = (a20 - a50) / atr;
-    const stackScore = Math.sign(stackDist) === sig ? emaStackScore(Math.abs(stackDist)) : 0;
-    const from = Math.max(0, idx - 5);
-    const win = [];
-    for (let m = from; m <= idx; m++) if (e20[m] != null) win.push(e20[m]);
-    let slpScore = 0;
-    if (win.length >= 3) {
-      const slope = regressionSlope(win) / atr;
-      slpScore = Math.sign(slope) === sig ? slopeMagnitudeScore(slope) : 0;
-    }
-    series.unshift(0.35 * posScore + 0.25 * stackScore + 0.40 * slpScore);
+  const cur = closes[i];
+  let direction, priceE20, priceE50;
+  if (cur20 > cur50) {
+    direction = 'BUY';
+    priceE20 = cur > cur20 ? 1 : 0;
+    priceE50 = cur > cur50 ? 1 : 0;
+  } else if (cur20 < cur50) {
+    direction = 'SELL';
+    priceE20 = cur < cur20 ? 1 : 0;
+    priceE50 = cur < cur50 ? 1 : 0;
+  } else {
+    return { direction: null, respect: 0 };
   }
-  if (!series.length) return { trend, respect: 0, persistence: 0, de: 0 };
-  const respect = series.reduce((a, b) => a + b, 0) / series.length;
-  const persistence = Math.max(0, 1 - stdDev(series) / 100);
-  const de = directionalEfficiency(closes, i, 20) || 0;
-  return { trend, respect: Math.round(respect), persistence, de };
+  const structure = structureAt(seq, i, direction, 10);
+  const respect = Math.round(((1 + priceE20 + priceE50 + structure) / 4) * 100);
+  return { direction, respect };
 }
 
-function classify(health) {
-  if (health >= 85) return 'TRENDING';
-  if (health >= 70) return 'GOOD_TREND';
-  if (health >= 50) return 'MIXED';
-  return 'REVERSAL_CHOPPY';
+function classify(mtre) {
+  if (mtre >= 85) return 'STRONG_TRENDING';
+  if (mtre >= 70) return 'HEALTHY_TREND';
+  if (mtre >= 50) return 'DEVELOPING';
+  if (mtre >= 30) return 'WEAK_TREND';
+  return 'CHAOTIC';
 }
 
 module.exports = async function handler(req, res) {
@@ -186,17 +124,12 @@ module.exports = async function handler(req, res) {
   const t0 = Date.now();
   const sb = getClient();
 
-  // Fetch buffer covers EMA50 warmup on both TFs.
-  const fetchSince = new Date(start.getTime() - 5 * 24 * 3600000).toISOString();
-  const fetchUntilH1 = new Date(end.getTime() + 60 * 60000).toISOString();
-  // For M15 sampling at every hour we still fetch the full M15 series so we
-  // can find the M15 candle whose time == the hour anchor.
+  const fetchSince    = new Date(start.getTime() - 5 * 24 * 3600000).toISOString();
+  const fetchUntilH1  = new Date(end.getTime() + 60 * 60000).toISOString();
   const fetchUntilM15 = fetchUntilH1;
 
-  // Per pair: full H1 + M15 series with pre-built EMA series.
   const perPair = {};
   const errors = [];
-  const makeEma = makeEmaSeries();
   for (let b = 0; b < PAIRS.length; b += 7) {
     const batch = PAIRS.slice(b, b + 7);
     await Promise.all(batch.map(async inst => {
@@ -205,7 +138,6 @@ module.exports = async function handler(req, res) {
           fetchAll(sb, inst, 'H1',  fetchSince, fetchUntilH1),
           fetchAll(sb, inst, 'M15', fetchSince, fetchUntilM15),
         ]);
-        // Build EMA series aligned to candles.
         function build(seq) {
           const closes = seq.map(c => c.close);
           const e20 = new Array(closes.length).fill(null);
@@ -228,9 +160,6 @@ module.exports = async function handler(req, res) {
     }));
   }
 
-  // Walk each hourly anchor. For each pair look up the H1 candle at that
-  // exact anchor and the M15 candle whose ms is exactly the anchor (M15 grid
-  // includes every :00, :15, :30, :45 so :00 always exists on a trading hour).
   const rows = [];
   const stepMs = 3600000;
   const scanStart = start.getTime();
@@ -241,47 +170,39 @@ module.exports = async function handler(req, res) {
     if (dow === 6) continue;
     if (dow === 0 && hr < 21) continue;
 
-    let respectSum = 0, respectCount = 0;
-    let strongCount = 0;
-    let agreeCount  = 0;
-    let persistenceSum = 0;
-    let deSum = 0;
+    let h1Sum = 0, m15Sum = 0, alignSum = 0, count = 0;
+    let strongBuy = 0, strongSell = 0;
     for (const inst of PAIRS) {
       const pp = perPair[inst];
       if (!pp || !pp.h1 || !pp.m15) continue;
       const h1i  = pp.h1.byMs.get(t);
       const m15i = pp.m15.byMs.get(t);
       if (h1i == null || m15i == null) continue;
-      const h1r  = respectAt(pp.h1.seq,  pp.h1.closes,  pp.h1.e20,  pp.h1.e50,  h1i,  10);
-      const m15r = respectAt(pp.m15.seq, pp.m15.closes, pp.m15.e20, pp.m15.e50, m15i, 10);
+      const h1r  = respectAt(pp.h1.seq,  pp.h1.closes,  pp.h1.e20,  pp.h1.e50,  h1i);
+      const m15r = respectAt(pp.m15.seq, pp.m15.closes, pp.m15.e20, pp.m15.e50, m15i);
       if (!h1r || !m15r) continue;
-      const combined = (h1r.respect + m15r.respect) / 2;
-      const combinedPers = (h1r.persistence + m15r.persistence) / 2;
-      const combinedDe   = (h1r.de + m15r.de) / 2;
-      respectSum     += combined;
-      persistenceSum += combinedPers;
-      deSum          += combinedDe;
-      respectCount++;
-      if (combined > 80) strongCount++;
-      if (h1r.trend && m15r.trend && h1r.trend === m15r.trend) agreeCount++;
+      count++;
+      h1Sum  += h1r.respect;
+      m15Sum += m15r.respect;
+      const dirsMatch = h1r.direction && m15r.direction && h1r.direction === m15r.direction;
+      alignSum += dirsMatch ? (h1r.respect + m15r.respect) / 2 : 0;
+      if (h1r.direction === 'BUY'  && h1r.respect >= 70) strongBuy++;
+      if (h1r.direction === 'SELL' && h1r.respect >= 70) strongSell++;
     }
-    if (respectCount < PAIRS.length * 0.7) continue;
-    const mti     = Math.round(respectSum / respectCount);
-    const breadth = Math.round((strongCount / respectCount) * 100);
-    const agree   = Math.round((agreeCount  / respectCount) * 100);
-    const tpi     = Math.round((persistenceSum / respectCount) * 100);
-    const mde     = Math.round(deSum / respectCount);
-    const health  = Math.round(
-      0.25 * mti +
-      0.20 * breadth +
-      0.15 * agree +
-      0.10 * tpi +
-      0.30 * mde
-    );
+    if (count < PAIRS.length * 0.7) continue;
+    const h1Avg  = Math.round(h1Sum  / count);
+    const m15Avg = Math.round(m15Sum / count);
+    const align  = Math.round(alignSum / count);
+    const mtre   = Math.round(0.40 * h1Avg + 0.40 * m15Avg + 0.20 * align);
     rows.push({
       time: d.toISOString(),
-      mti, breadth, agreement: agree, tpi, mde, health,
-      classification: classify(health),
+      h1AvgRespect: h1Avg,
+      m15AvgRespect: m15Avg,
+      alignment: align,
+      strongBuy,
+      strongSell,
+      mtre,
+      state: classify(mtre),
     });
   }
 

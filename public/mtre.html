@@ -29,42 +29,53 @@
     .kpi { background:var(--card2); border:1px solid var(--border); border-radius:8px; padding:12px 14px; }
     .kpi-label { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:0.5px; }
     .kpi-value { font-size:26px; font-weight:700; font-family:'SF Mono',Monaco,monospace; margin-top:4px; }
-    .health-badge { display:inline-block; padding:4px 10px; border-radius:6px; font-weight:700; font-size:11px; letter-spacing:0.5px; }
-    .h-TRENDING       { background:rgba(22,163,74,0.20); color:#4ade80; }
-    .h-GOOD_TREND     { background:rgba(163,230,53,0.20); color:#a3e635; }
-    .h-MIXED          { background:rgba(251,191,36,0.20); color:var(--amber); }
-    .h-REVERSAL_CHOPPY{ background:rgba(220,38,38,0.20); color:#f87171; }
+    .state-badge { display:inline-block; padding:4px 10px; border-radius:6px; font-weight:700; font-size:11px; letter-spacing:0.5px; }
+    .s-STRONG_TRENDING { background:rgba(22,163,74,0.20);  color:#4ade80; }
+    .s-HEALTHY_TREND   { background:rgba(163,230,53,0.20); color:#a3e635; }
+    .s-DEVELOPING      { background:rgba(96,165,250,0.20); color:var(--accent); }
+    .s-WEAK_TREND      { background:rgba(251,191,36,0.20); color:var(--amber); }
+    .s-CHAOTIC         { background:rgba(220,38,38,0.20);  color:#f87171; }
+
+    /* Currency strength row */
+    .ccy-row { display:flex; gap:8px; flex-wrap:wrap; }
+    .ccy-cell {
+      background:var(--card2); border:1px solid var(--border); border-radius:8px;
+      padding:8px 12px; font-family:'SF Mono',Monaco,monospace;
+      display:flex; align-items:center; gap:6px; min-width:90px;
+    }
+    .ccy-code { font-weight:700; font-size:13px; }
+    .ccy-val  { font-weight:700; margin-left:auto; }
+    .ccy-val.strong { color:#4ade80; }
+    .ccy-val.weak   { color:#f87171; }
+    .ccy-val.neutral{ color:var(--muted); }
 
     .pair-row {
-      display:grid; grid-template-columns:110px 64px 64px 1fr 64px; gap:12px;
+      display:grid; grid-template-columns:110px 60px 60px 50px 50px 50px 60px 60px; gap:8px;
       align-items:center; padding:8px 12px; border-bottom:1px solid var(--border);
       font-family:'SF Mono',Monaco,monospace; font-size:12px;
     }
     .pair-row:last-child { border-bottom:none; }
     .pair-row:hover { background:rgba(96,165,250,0.04); }
+    .pair-row.head { color:var(--muted); font-size:10px; text-transform:uppercase; background:var(--card2); font-weight:700; }
     .pair-name { font-weight:700; font-size:13px; }
-    .pair-tf { color:var(--muted); font-size:11px; text-align:center; padding:2px 6px; border-radius:4px; background:var(--card2); }
+    .pair-tf { text-align:center; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:700; background:var(--card2); }
     .pair-tf.BUY  { color:#4ade80; background:rgba(22,163,74,0.10); }
     .pair-tf.SELL { color:#f87171; background:rgba(220,38,38,0.10); }
     .pair-tf.NONE { color:var(--muted); }
-    .pair-agree.yes { color:#4ade80; }
-    .pair-agree.no  { color:#f87171; }
     .pair-score { text-align:right; font-weight:700; }
     .pair-score.hi { color:#4ade80; }
     .pair-score.mid { color:#facc15; }
     .pair-score.lo { color:#f87171; }
 
-    .row { display:grid; grid-template-columns:170px 70px 70px 70px 70px 70px 70px 120px; gap:10px;
+    .row { display:grid; grid-template-columns:170px 60px 70px 70px 70px 70px 70px 140px; gap:10px;
       padding:8px 12px; border-bottom:1px solid var(--border); font-family:'SF Mono',Monaco,monospace; font-size:12px; }
     .row.head { background:var(--card2); font-weight:700; color:var(--muted); font-size:11px; text-transform:uppercase; }
     .row.data { cursor:pointer; }
     .row.data:hover { background:rgba(96,165,250,0.06); }
     .row .time { color:var(--muted); }
     .row .cls { text-align:right; }
-    .row-details {
-      padding:8px 16px 12px 32px; background:rgba(96,165,250,0.03); border-bottom:1px solid var(--border);
-      font-family:'SF Mono',Monaco,monospace; font-size:12px;
-    }
+    .row-details { padding:8px 16px 12px 32px; background:rgba(96,165,250,0.03); border-bottom:1px solid var(--border);
+      font-family:'SF Mono',Monaco,monospace; font-size:12px; }
     .row-details .rd-hd { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; }
     .row-details .rd-loading { color:var(--muted); }
     .row-details .rd-err { color:#f87171; }
@@ -74,23 +85,22 @@
     }
     .rd-pair .rd-rank { color:var(--muted); font-size:11px; }
     .rd-pair .rd-name { font-weight:700; }
+
     .empty { text-align:center; color:var(--muted); padding:20px; }
     .tbl-scroll { max-height:70vh; overflow:auto; }
     @media (max-width: 700px) {
-      .pair-row { grid-template-columns:90px 50px 50px 1fr 50px; gap:6px; padding:6px; font-size:11px; }
-      .row { grid-template-columns:120px 60px 60px 60px 60px 90px; gap:6px; font-size:11px; }
+      .pair-row { grid-template-columns:90px 48px 48px 40px 40px 40px 48px 48px; gap:4px; padding:6px; font-size:11px; }
+      .row { grid-template-columns:120px 50px 50px 50px 50px 50px 50px 100px; gap:6px; font-size:11px; }
     }
   </style>
 </head>
 <body>
   <h1>Market Trend Respect Engine</h1>
   <div class="sub">
-    Scans all 28 majors on H1 + M15. Per-pair Trend Respect is a continuous weighted
-    average over the last 10 candles: 35% Price Position (bell curve on EMA20 distance),
-    25% EMA Stack (ATR-normalised), 40% EMA20 Slope (regression). TPI = 1 − σ(Respect) / 100.
-    MDE (Market Directional Efficiency) = mean per-pair |net move| / |total path| over
-    the last 20 candles — the true trend-vs-chop discriminator.
-    Market Health = 0.25 MTI + 0.20 Breadth + 0.15 Agreement + 0.10 TPI + 0.30 MDE.
+    Per pair Respect = (EMA alignment + close vs EMA20 + close vs EMA50 + last-10-candle
+    structure) / 4 × 100. H1 sets market direction, M15 confirms execution quality.
+    MTRE = 0.40 H1-avg + 0.40 M15-avg + 0.20 alignment. Currency strength = signed
+    respect summed per currency, mapped to 0-100.
   </div>
 
   <div class="controls">
@@ -99,12 +109,27 @@
   </div>
 
   <div class="card">
-    <div class="card-hd">Live Snapshot</div>
+    <div class="card-hd">Market Snapshot</div>
     <div class="kpi-grid" id="live-kpis"><div class="empty">Loading…</div></div>
   </div>
 
   <div class="card">
+    <div class="card-hd">Currency Strength (H1)</div>
+    <div class="ccy-row" id="live-ccy"><div class="empty">Loading…</div></div>
+  </div>
+
+  <div class="card">
     <div class="card-hd">Pair Breakdown</div>
+    <div class="pair-row head">
+      <div>Pair</div>
+      <div>H1 dir</div>
+      <div>M15 dir</div>
+      <div>H1 R</div>
+      <div>M15 R</div>
+      <div>Struct H/M</div>
+      <div>Align</div>
+      <div>—</div>
+    </div>
     <div id="live-pairs"><div class="empty">Loading…</div></div>
   </div>
 
@@ -132,6 +157,7 @@
       } catch(_) { return iso; }
     }
     function scoreCls(v) { return v >= 80 ? 'hi' : v >= 60 ? 'mid' : 'lo'; }
+    function ccyCls(v)   { return v >= 65 ? 'strong' : v <= 35 ? 'weak' : 'neutral'; }
 
     async function loadLive() {
       var s = document.getElementById('live-status');
@@ -149,28 +175,35 @@
     function renderLive(json) {
       var k = document.getElementById('live-kpis');
       k.innerHTML =
-          '<div class="kpi"><div class="kpi-label">Market Health</div><div class="kpi-value">' + json.health + '</div>'
-        + '<div style="margin-top:6px"><span class="health-badge h-' + json.classification + '">' + json.classification.replace('_',' ') + '</span></div></div>'
-        + '<div class="kpi"><div class="kpi-label">MTI (Avg Respect)</div><div class="kpi-value">' + json.mti + '</div></div>'
-        + '<div class="kpi"><div class="kpi-label">Breadth (Respect &gt; 80%)</div><div class="kpi-value">' + json.breadth + '%</div>'
-        + '<div class="status" style="margin-top:4px">' + json.strongCount + ' / ' + json.totalPairs + ' pairs</div></div>'
-        + '<div class="kpi"><div class="kpi-label">H1/M15 Agreement</div><div class="kpi-value">' + json.agreement + '%</div>'
-        + '<div class="status" style="margin-top:4px">' + json.agreeCount + ' / ' + json.totalPairs + ' pairs</div></div>'
-        + '<div class="kpi"><div class="kpi-label">TPI (Persistence)</div><div class="kpi-value">' + json.tpi + '</div>'
-        + '<div class="status" style="margin-top:4px">1 - σ / 100, averaged</div></div>'
-        + '<div class="kpi"><div class="kpi-label">MDE (Directional Eff.)</div><div class="kpi-value">' + json.mde + '</div>'
-        + '<div class="status" style="margin-top:4px">|net| / |path| × 100</div></div>';
+          '<div class="kpi"><div class="kpi-label">MTRE</div><div class="kpi-value">' + json.mtre + '</div>'
+        + '<div style="margin-top:6px"><span class="state-badge s-' + json.state + '">' + json.state.replace('_',' ') + '</span></div></div>'
+        + '<div class="kpi"><div class="kpi-label">H1 Avg Respect</div><div class="kpi-value">' + json.h1AvgRespect + '</div></div>'
+        + '<div class="kpi"><div class="kpi-label">M15 Avg Respect</div><div class="kpi-value">' + json.m15AvgRespect + '</div></div>'
+        + '<div class="kpi"><div class="kpi-label">Alignment</div><div class="kpi-value">' + json.alignment + '</div></div>'
+        + '<div class="kpi"><div class="kpi-label">Strong BUY / SELL</div><div class="kpi-value" style="font-size:20px">'
+        + '<span style="color:#4ade80">' + json.strongBuy + '</span> / <span style="color:#f87171">' + json.strongSell + '</span></div>'
+        + '<div class="status" style="margin-top:4px">of ' + json.totalPairs + ' pairs</div></div>';
 
+      // Currency strength row (H1).
+      var cc = document.getElementById('live-ccy');
+      var ccys = Object.keys(json.currencies.h1).sort(function(a,b){ return json.currencies.h1[b] - json.currencies.h1[a]; });
+      cc.innerHTML = ccys.map(function(c) {
+        var v = json.currencies.h1[c];
+        return '<div class="ccy-cell"><span class="ccy-code">' + c + '</span><span class="ccy-val ' + ccyCls(v) + '">' + v + '</span></div>';
+      }).join('');
+
+      // Pair breakdown.
       var p = document.getElementById('live-pairs');
       p.innerHTML = json.pairs.map(function(pr) {
-        var agreeCls = pr.trendsAgree ? 'yes' : 'no';
-        var agreeMark = pr.trendsAgree ? '✓' : '✗';
         return '<div class="pair-row">'
           + '<span class="pair-name">' + pr.pair + '</span>'
-          + '<span class="pair-tf ' + (pr.h1Trend || 'NONE') + '">H1 ' + (pr.h1Trend || '—') + '</span>'
-          + '<span class="pair-tf ' + (pr.m15Trend || 'NONE') + '">M15 ' + (pr.m15Trend || '—') + '</span>'
-          + '<span class="status">H1 ' + pr.h1Respect + ' · M15 ' + pr.m15Respect + ' · TPI ' + pr.combinedPersistence + ' · agree <span class="pair-agree ' + agreeCls + '">' + agreeMark + '</span></span>'
-          + '<span class="pair-score ' + scoreCls(pr.combinedRespect) + '">' + pr.combinedRespect + '</span>'
+          + '<span class="pair-tf ' + (pr.h1Direction || 'NONE') + '">' + (pr.h1Direction || '—') + '</span>'
+          + '<span class="pair-tf ' + (pr.m15Direction || 'NONE') + '">' + (pr.m15Direction || '—') + '</span>'
+          + '<span class="pair-score ' + scoreCls(pr.h1Respect) + '">' + pr.h1Respect + '</span>'
+          + '<span class="pair-score ' + scoreCls(pr.m15Respect) + '">' + pr.m15Respect + '</span>'
+          + '<span class="status">' + pr.h1Structure + '/' + pr.m15Structure + '</span>'
+          + '<span class="pair-score ' + scoreCls(pr.alignment) + '">' + pr.alignment + '</span>'
+          + '<span class="status">' + (pr.dirsMatch ? '✓' : '✗') + '</span>'
           + '</div>';
       }).join('');
     }
@@ -193,35 +226,32 @@
     function renderHist(rows) {
       var el = document.getElementById('hist-list');
       if (!rows.length) { el.innerHTML = '<div class="empty">No hours in this window.</div>'; return; }
-      var html = '<div class="row head"><div>Hour</div><div>Health</div><div>MTI</div><div>Breadth</div><div>Agree</div><div>TPI</div><div>MDE</div><div class="cls">Classification</div></div>';
+      var html = '<div class="row head">'
+        + '<div>Hour</div><div>MTRE</div><div>H1 R</div><div>M15 R</div><div>Align</div>'
+        + '<div>Buy≥70</div><div>Sell≥70</div><div class="cls">State</div></div>';
       for (var i = rows.length - 1; i >= 0; i--) {
         var r = rows[i];
         html += '<div class="row data" data-time="' + r.time + '" title="Click to load top pairs at this hour">'
           + '<div class="time">' + fmtTime(r.time) + '</div>'
-          + '<div>' + r.health + '</div>'
-          + '<div>' + r.mti + '</div>'
-          + '<div>' + r.breadth + '%</div>'
-          + '<div>' + r.agreement + '%</div>'
-          + '<div>' + (r.tpi != null ? r.tpi : '—') + '</div>'
-          + '<div>' + (r.mde != null ? r.mde : '—') + '</div>'
-          + '<div class="cls"><span class="health-badge h-' + r.classification + '">' + r.classification.replace('_',' ') + '</span></div>'
+          + '<div>' + r.mtre + '</div>'
+          + '<div>' + r.h1AvgRespect + '</div>'
+          + '<div>' + r.m15AvgRespect + '</div>'
+          + '<div>' + r.alignment + '</div>'
+          + '<div>' + r.strongBuy + '</div>'
+          + '<div>' + r.strongSell + '</div>'
+          + '<div class="cls"><span class="state-badge s-' + r.state + '">' + r.state.replace('_',' ') + '</span></div>'
           + '</div>';
       }
       el.innerHTML = html;
-      // Wire click → toggle inline detail panel with top 5 pairs at that anchor.
-      var rowsEls = el.querySelectorAll('.row.data');
-      rowsEls.forEach(function(rowEl) {
+      // Click → expand top pairs at that anchor.
+      el.querySelectorAll('.row.data').forEach(function(rowEl) {
         rowEl.addEventListener('click', function() {
           var next = rowEl.nextElementSibling;
-          if (next && next.classList && next.classList.contains('row-details')) {
-            next.remove();
-            return;
-          }
+          if (next && next.classList && next.classList.contains('row-details')) { next.remove(); return; }
           var iso = rowEl.getAttribute('data-time');
           var panel = document.createElement('div');
           panel.className = 'row-details';
-          panel.innerHTML = '<div class="rd-hd">Top 5 pairs at ' + fmtTime(iso) + '</div>'
-            + '<div class="rd-loading">Loading…</div>';
+          panel.innerHTML = '<div class="rd-hd">Top 5 pairs at ' + fmtTime(iso) + '</div><div class="rd-loading">Loading…</div>';
           rowEl.parentNode.insertBefore(panel, rowEl.nextSibling);
           fetch('/api/mtre?anchor=' + encodeURIComponent(iso))
             .then(function(res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
@@ -231,15 +261,13 @@
               if (!top.length) { panel.innerHTML = '<div class="rd-hd">Top pairs at ' + fmtTime(iso) + '</div><div class="rd-loading">No pairs.</div>'; return; }
               var body = '<div class="rd-hd">Top 5 pairs at ' + fmtTime(iso) + '</div>';
               top.forEach(function(pr, idx) {
-                var agreeCls = pr.trendsAgree ? 'yes' : 'no';
-                var agreeMark = pr.trendsAgree ? '✓' : '✗';
                 body += '<div class="rd-pair">'
                   + '<span class="rd-rank">#' + (idx + 1) + '</span>'
                   + '<span class="rd-name">' + pr.pair + '</span>'
-                  + '<span class="pair-tf ' + (pr.h1Trend || 'NONE') + '">H1 ' + (pr.h1Trend || '—') + '</span>'
-                  + '<span class="pair-tf ' + (pr.m15Trend || 'NONE') + '">M15 ' + (pr.m15Trend || '—') + '</span>'
-                  + '<span class="status">H1 ' + pr.h1Respect + ' · M15 ' + pr.m15Respect + ' · TPI ' + pr.combinedPersistence + ' · agree <span class="pair-agree ' + agreeCls + '">' + agreeMark + '</span></span>'
-                  + '<span class="pair-score ' + scoreCls(pr.combinedRespect) + '">' + pr.combinedRespect + '</span>'
+                  + '<span class="pair-tf ' + (pr.h1Direction || 'NONE') + '">H1 ' + (pr.h1Direction || '—') + '</span>'
+                  + '<span class="pair-tf ' + (pr.m15Direction || 'NONE') + '">M15 ' + (pr.m15Direction || '—') + '</span>'
+                  + '<span class="status">H1 ' + pr.h1Respect + ' · M15 ' + pr.m15Respect + ' · Align ' + pr.alignment + ' · ' + (pr.dirsMatch ? '✓' : '✗') + '</span>'
+                  + '<span class="pair-score ' + scoreCls(pr.alignment) + '">' + pr.alignment + '</span>'
                   + '</div>';
               });
               panel.innerHTML = body;
