@@ -134,6 +134,8 @@
     .setup-pill .d.BUY  { background: rgba(22,163,74,0.20);  color: #4ade80; }
     .setup-pill .d.SELL { background: rgba(220,38,38,0.20);  color: #f87171; }
     .setup-pill .sp { color: var(--muted); font-size: 10px; }
+    .setup-pill.repeat { box-shadow: inset 3px 0 0 #fbbf24; border-color: rgba(251,191,36,0.35); }
+    .repeat-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #fbbf24; margin-left: 3px; }
   </style>
 </head>
 <body>
@@ -258,15 +260,24 @@
       return setups;
     }
 
-    function renderSetups(setups) {
+    function renderSetups(setups, prevKeys) {
       if (!setups.length) return '<span style="color:var(--muted)">—</span>';
       return setups.map(function(s) {
-        return '<span class="setup-pill">'
-          + s.pair
+        var key = s.pair + '|' + s.direction;
+        var repeat = prevKeys && prevKeys[key];
+        return '<span class="setup-pill' + (repeat ? ' repeat' : '') + '"'
+          + (repeat ? ' title="Also present in the previous M15"' : '') + '>'
+          + s.pair + (repeat ? '<span class="repeat-dot"></span>' : '')
           + '<span class="d ' + s.direction + '">' + s.direction + '</span>'
           + '<span class="sp">' + s.bodyPips.toFixed(1) + 'p</span>'
           + '</span>';
       }).join('');
+    }
+
+    function keyMap(setups) {
+      var m = {};
+      setups.forEach(function(s) { m[s.pair + '|' + s.direction] = true; });
+      return m;
     }
 
     function render(rows) {
@@ -275,15 +286,18 @@
         tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:20px">No snapshots returned for this window.</td></tr>';
         return;
       }
+      var setupsByRow = rows.map(buildSetups);
+      var keysByRow   = setupsByRow.map(keyMap);
       var html = '';
       for (var i = rows.length - 1; i >= 0; i--) {
         var r = rows[i];
+        var prevKeys = i > 0 ? keysByRow[i - 1] : null;
         html += '<tr><td class="time">' + fmtTime(r.time) + '</td>';
         for (var j = 0; j < CCYS.length; j++) {
           var v = r.currencies[CCYS[j]] || 0;
           html += '<td class="cell" style="background:' + cellColor(v) + '">' + v.toFixed(2) + '</td>';
         }
-        html += '<td class="setups">' + renderSetups(buildSetups(r)) + '</td>';
+        html += '<td class="setups">' + renderSetups(setupsByRow[i], prevKeys) + '</td>';
         html += '</tr>';
       }
       tbody.innerHTML = html;
