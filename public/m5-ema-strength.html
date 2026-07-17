@@ -264,9 +264,13 @@
       if (!setups.length) return '<span style="color:var(--muted)">—</span>';
       return setups.map(function(s) {
         var key = s.pair + '|' + s.direction;
-        var repeat = prevKeys && prevKeys[key];
+        var prevPips = prevKeys && prevKeys[key] !== undefined ? prevKeys[key] : null;
+        var repeat = prevPips !== null && s.bodyPips > prevPips;
+        var title  = repeat
+          ? 'Repeat with growing momentum: previous ' + prevPips.toFixed(1) + 'p → now ' + s.bodyPips.toFixed(1) + 'p'
+          : '';
         return '<span class="setup-pill' + (repeat ? ' repeat' : '') + '"'
-          + (repeat ? ' title="Also present in the previous M5"' : '') + '>'
+          + (title ? ' title="' + title + '"' : '') + '>'
           + s.pair + (repeat ? '<span class="repeat-dot"></span>' : '')
           + '<span class="d ' + s.direction + '">' + s.direction + '</span>'
           + '<span class="sp">' + s.bodyPips.toFixed(1) + 'p</span>'
@@ -276,7 +280,7 @@
 
     function keyMap(setups) {
       var m = {};
-      setups.forEach(function(s) { m[s.pair + '|' + s.direction] = true; });
+      setups.forEach(function(s) { m[s.pair + '|' + s.direction] = s.bodyPips || 0; });
       return m;
     }
 
