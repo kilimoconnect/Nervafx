@@ -41,6 +41,8 @@
     "api/backfill-m5.js": { "maxDuration": 300 },
     "api/currency-stability.js": { "maxDuration": 30 },
     "api/currency-stability-history.js": { "maxDuration": 300 },
+    "api/mtre.js": { "maxDuration": 30 },
+    "api/mtre-history.js": { "maxDuration": 300 },
     "api/currency-acceleration.js": { "maxDuration": 60 },
     "api/m15-acceleration.js": { "maxDuration": 60 },
     "api/acceleration-engine.js": { "maxDuration": 60 },
@@ -90,7 +92,8 @@
     { "source": "/acceleration-v4", "destination": "/acceleration-v4.html" },
     { "source": "/acceleration-v4-m15", "destination": "/acceleration-v4-m15.html" },
     { "source": "/currency-strength-changes", "destination": "/currency-strength-changes.html" },
-    { "source": "/currency-stability", "destination": "/currency-stability.html" }
+    { "source": "/currency-stability", "destination": "/currency-stability.html" },
+    { "source": "/mtre", "destination": "/mtre.html" }
   ],
   "headers": [
     {

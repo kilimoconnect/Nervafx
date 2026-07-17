@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Market Trend Respect Engine</title>
+  <style>
+    :root {
+      --bg:#0b0d10; --card:#12151a; --card2:#171a20; --border:#1e2128;
+      --text:#e2e8f0; --muted:#94a3b8; --accent:#60a5fa;
+      --pos:#16a34a; --neg:#dc2626; --neu:#64748b; --amber:#fbbf24;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text);
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-size:13px; padding:20px; }
+    h1 { font-size:18px; margin:0 0 4px; font-weight:600; }
+    .sub { color:var(--muted); font-size:12px; margin-bottom:16px; }
+    .controls { display:flex; gap:10px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
+    .controls input, .controls button { background:var(--card2); color:var(--text);
+      border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px; font-family:inherit; }
+    .controls button { background:var(--accent); color:#0b0d10; border:none; font-weight:600; cursor:pointer; }
+    .status { color:var(--muted); font-size:12px; }
+    .status.error { color:#f87171; }
+
+    .card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:16px; }
+    .card-hd { font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); font-size:11px; margin-bottom:10px; }
+
+    .kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:10px; }
+    .kpi { background:var(--card2); border:1px solid var(--border); border-radius:8px; padding:12px 14px; }
+    .kpi-label { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:0.5px; }
+    .kpi-value { font-size:26px; font-weight:700; font-family:'SF Mono',Monaco,monospace; margin-top:4px; }
+    .health-badge { display:inline-block; padding:4px 10px; border-radius:6px; font-weight:700; font-size:11px; letter-spacing:0.5px; }
+    .h-TRENDING       { background:rgba(22,163,74,0.20); color:#4ade80; }
+    .h-GOOD_TREND     { background:rgba(163,230,53,0.20); color:#a3e635; }
+    .h-MIXED          { background:rgba(251,191,36,0.20); color:var(--amber); }
+    .h-REVERSAL_CHOPPY{ background:rgba(220,38,38,0.20); color:#f87171; }
+
+    .pair-row {
+      display:grid; grid-template-columns:110px 64px 64px 1fr 64px; gap:12px;
+      align-items:center; padding:8px 12px; border-bottom:1px solid var(--border);
+      font-family:'SF Mono',Monaco,monospace; font-size:12px;
+    }
+    .pair-row:last-child { border-bottom:none; }
+    .pair-row:hover { background:rgba(96,165,250,0.04); }
+    .pair-name { font-weight:700; font-size:13px; }
+    .pair-tf { color:var(--muted); font-size:11px; text-align:center; padding:2px 6px; border-radius:4px; background:var(--card2); }
+    .pair-tf.BUY  { color:#4ade80; background:rgba(22,163,74,0.10); }
+    .pair-tf.SELL { color:#f87171; background:rgba(220,38,38,0.10); }
+    .pair-tf.NONE { color:var(--muted); }
+    .pair-agree.yes { color:#4ade80; }
+    .pair-agree.no  { color:#f87171; }
+    .pair-score { text-align:right; font-weight:700; }
+    .pair-score.hi { color:#4ade80; }
+    .pair-score.mid { color:#facc15; }
+    .pair-score.lo { color:#f87171; }
+
+    .row { display:grid; grid-template-columns:170px 100px 100px 100px 100px 120px; gap:12px;
+      padding:8px 12px; border-bottom:1px solid var(--border); font-family:'SF Mono',Monaco,monospace; font-size:12px; }
+    .row.head { background:var(--card2); font-weight:700; color:var(--muted); font-size:11px; text-transform:uppercase; }
+    .row .time { color:var(--muted); }
+    .row .cls { text-align:right; }
+    .empty { text-align:center; color:var(--muted); padding:20px; }
+    .tbl-scroll { max-height:70vh; overflow:auto; }
+    @media (max-width: 700px) {
+      .pair-row { grid-template-columns:90px 50px 50px 1fr 50px; gap:6px; padding:6px; font-size:11px; }
+      .row { grid-template-columns:120px 60px 60px 60px 60px 90px; gap:6px; font-size:11px; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Market Trend Respect Engine</h1>
+  <div class="sub">
+    Scans all 28 majors on H1 + M15. Per pair the Trend Respect score is a weighted
+    average over the last 10 candles: 40% price on correct side of EMA20, 30% EMA20 on
+    correct side of EMA50, 30% EMA20 slope in trend direction. Market Health mixes:
+    0.40 × MTI + 0.35 × Breadth + 0.25 × H1/M15 Agreement.
+  </div>
+
+  <div class="controls">
+    <button id="reloadLive">Refresh live</button>
+    <span class="status" id="live-status"></span>
+  </div>
+
+  <div class="card">
+    <div class="card-hd">Live Snapshot</div>
+    <div class="kpi-grid" id="live-kpis"><div class="empty">Loading…</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd">Pair Breakdown</div>
+    <div id="live-pairs"><div class="empty">Loading…</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd">History</div>
+    <div class="controls" style="margin-bottom:12px">
+      <label class="status">From <input type="date" id="hist-from"></label>
+      <label class="status">To <input type="date" id="hist-to"></label>
+      <button id="loadHist">Load</button>
+      <span class="status" id="hist-status"></span>
+    </div>
+    <div class="tbl-scroll" id="hist-list"><div class="empty">Choose a range and click Load.</div></div>
+  </div>
+
+  <script>
+    var _userTz = localStorage.getItem('nfx_tz') || 'auto';
+    function _tz() { return (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC'); }
+    function pad(n) { return n < 10 ? '0'+n : ''+n; }
+    function fmtTime(iso) {
+      try {
+        return new Intl.DateTimeFormat('en-GB', {
+          timeZone:_tz(), day:'2-digit', month:'short', year:'numeric',
+          hour:'2-digit', minute:'2-digit', hour12:false, timeZoneName:'short',
+        }).format(new Date(iso));
+      } catch(_) { return iso; }
+    }
+    function scoreCls(v) { return v >= 80 ? 'hi' : v >= 60 ? 'mid' : 'lo'; }
+
+    async function loadLive() {
+      var s = document.getElementById('live-status');
+      s.classList.remove('error'); s.textContent = 'Loading…';
+      try {
+        var r = await fetch('/api/mtre');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        var json = await r.json();
+        if (json.error) throw new Error(json.error);
+        renderLive(json);
+        s.textContent = fmtTime(json.generatedAt) + ' · ' + json.duration_ms + ' ms';
+      } catch (e) { s.classList.add('error'); s.textContent = 'Error: ' + e.message; }
+    }
+
+    function renderLive(json) {
+      var k = document.getElementById('live-kpis');
+      k.innerHTML =
+          '<div class="kpi"><div class="kpi-label">Market Health</div><div class="kpi-value">' + json.health + '</div>'
+        + '<div style="margin-top:6px"><span class="health-badge h-' + json.classification + '">' + json.classification.replace('_',' ') + '</span></div></div>'
+        + '<div class="kpi"><div class="kpi-label">MTI (Avg Respect)</div><div class="kpi-value">' + json.mti + '</div></div>'
+        + '<div class="kpi"><div class="kpi-label">Breadth (Respect &gt; 80%)</div><div class="kpi-value">' + json.breadth + '%</div>'
+        + '<div class="status" style="margin-top:4px">' + json.strongCount + ' / ' + json.totalPairs + ' pairs</div></div>'
+        + '<div class="kpi"><div class="kpi-label">H1/M15 Agreement</div><div class="kpi-value">' + json.agreement + '%</div>'
+        + '<div class="status" style="margin-top:4px">' + json.agreeCount + ' / ' + json.totalPairs + ' pairs</div></div>';
+
+      var p = document.getElementById('live-pairs');
+      p.innerHTML = json.pairs.map(function(pr) {
+        var agreeCls = pr.trendsAgree ? 'yes' : 'no';
+        var agreeMark = pr.trendsAgree ? '✓' : '✗';
+        return '<div class="pair-row">'
+          + '<span class="pair-name">' + pr.pair + '</span>'
+          + '<span class="pair-tf ' + (pr.h1Trend || 'NONE') + '">H1 ' + (pr.h1Trend || '—') + '</span>'
+          + '<span class="pair-tf ' + (pr.m15Trend || 'NONE') + '">M15 ' + (pr.m15Trend || '—') + '</span>'
+          + '<span class="status">H1 ' + pr.h1Respect + '% · M15 ' + pr.m15Respect + '% · agree <span class="pair-agree ' + agreeCls + '">' + agreeMark + '</span></span>'
+          + '<span class="pair-score ' + scoreCls(pr.combinedRespect) + '">' + pr.combinedRespect + '</span>'
+          + '</div>';
+      }).join('');
+    }
+
+    async function loadHist() {
+      var from = document.getElementById('hist-from').value;
+      var to   = document.getElementById('hist-to').value;
+      var s = document.getElementById('hist-status');
+      s.classList.remove('error'); s.textContent = 'Loading…';
+      try {
+        var r = await fetch('/api/mtre-history?from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to));
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        var json = await r.json();
+        if (json.error) throw new Error(json.error);
+        s.textContent = json.hours + ' hours · ' + (json.duration_sec || 0) + 's';
+        renderHist(json.rows || []);
+      } catch (e) { s.classList.add('error'); s.textContent = 'Error: ' + e.message; }
+    }
+
+    function renderHist(rows) {
+      var el = document.getElementById('hist-list');
+      if (!rows.length) { el.innerHTML = '<div class="empty">No hours in this window.</div>'; return; }
+      var html = '<div class="row head"><div>Hour</div><div>Health</div><div>MTI</div><div>Breadth</div><div>Agree</div><div class="cls">Classification</div></div>';
+      for (var i = rows.length - 1; i >= 0; i--) {
+        var r = rows[i];
+        html += '<div class="row">'
+          + '<div class="time">' + fmtTime(r.time) + '</div>'
+          + '<div>' + r.health + '</div>'
+          + '<div>' + r.mti + '</div>'
+          + '<div>' + r.breadth + '%</div>'
+          + '<div>' + r.agreement + '%</div>'
+          + '<div class="cls"><span class="health-badge h-' + r.classification + '">' + r.classification.replace('_',' ') + '</span></div>'
+          + '</div>';
+      }
+      el.innerHTML = html;
+    }
+
+    (function() {
+      var iso = new Date().toISOString().slice(0, 10);
+      document.getElementById('hist-from').value = iso;
+      document.getElementById('hist-to').value   = iso;
+    })();
+
+    document.getElementById('reloadLive').addEventListener('click', loadLive);
+    document.getElementById('loadHist').addEventListener('click', loadHist);
+    loadLive();
+  </script>
+</body>
+</html>
