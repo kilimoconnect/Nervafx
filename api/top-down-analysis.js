@@ -344,6 +344,15 @@ module.exports = async function handler(req, res) {
         }
         if (!h1Break) continue;
 
+        // Dominant-body gate: the breaking H1 candle's body must be at least
+        // 1.5× the previous H1 candle's body. Filters out timid breaks where
+        // the level was cleared by a tiny bar and the move looks like it
+        // could stall immediately.
+        const prevH1 = candles[idx - 1];
+        const curBody  = Math.abs(currentCandle.close - currentCandle.open);
+        const prevBody = prevH1 ? Math.abs(prevH1.close - prevH1.open) : 0;
+        if (prevBody <= 0 || curBody < 1.5 * prevBody) continue;
+
         pairs.push({
           pair: inst.replace('_', '/'),
           direction,
