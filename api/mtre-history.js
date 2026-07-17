@@ -113,6 +113,16 @@ function stdDev(vals) {
   const v = vals.reduce((s, x) => s + (x - m) * (x - m), 0) / vals.length;
   return Math.sqrt(v);
 }
+function directionalEfficiency(closes, endIdx, N) {
+  if (endIdx < N) return null;
+  let path = 0;
+  for (let k = endIdx - N + 1; k <= endIdx; k++) {
+    path += Math.abs(closes[k] - closes[k - 1]);
+  }
+  if (path === 0) return 0;
+  const net = Math.abs(closes[endIdx] - closes[endIdx - N]);
+  return Math.round((net / path) * 100);
+}
 
 // Per-pair continuous Respect + Persistence at anchor index i.
 function respectAt(candles, closes, e20, e50, i, N) {
@@ -144,10 +154,11 @@ function respectAt(candles, closes, e20, e50, i, N) {
     }
     series.unshift(0.35 * posScore + 0.25 * stackScore + 0.40 * slpScore);
   }
-  if (!series.length) return { trend, respect: 0, persistence: 0 };
+  if (!series.length) return { trend, respect: 0, persistence: 0, de: 0 };
   const respect = series.reduce((a, b) => a + b, 0) / series.length;
   const persistence = Math.max(0, 1 - stdDev(series) / 100);
-  return { trend, respect: Math.round(respect), persistence };
+  const de = directionalEfficiency(closes, i, 20) || 0;
+  return { trend, respect: Math.round(respect), persistence, de };
 }
 
 function classify(health) {
@@ -234,6 +245,7 @@ module.exports = async function handler(req, res) {
     let strongCount = 0;
     let agreeCount  = 0;
     let persistenceSum = 0;
+    let deSum = 0;
     for (const inst of PAIRS) {
       const pp = perPair[inst];
       if (!pp || !pp.h1 || !pp.m15) continue;
@@ -245,8 +257,10 @@ module.exports = async function handler(req, res) {
       if (!h1r || !m15r) continue;
       const combined = (h1r.respect + m15r.respect) / 2;
       const combinedPers = (h1r.persistence + m15r.persistence) / 2;
+      const combinedDe   = (h1r.de + m15r.de) / 2;
       respectSum     += combined;
       persistenceSum += combinedPers;
+      deSum          += combinedDe;
       respectCount++;
       if (combined > 80) strongCount++;
       if (h1r.trend && m15r.trend && h1r.trend === m15r.trend) agreeCount++;
@@ -256,10 +270,17 @@ module.exports = async function handler(req, res) {
     const breadth = Math.round((strongCount / respectCount) * 100);
     const agree   = Math.round((agreeCount  / respectCount) * 100);
     const tpi     = Math.round((persistenceSum / respectCount) * 100);
-    const health  = Math.round(0.35 * mti + 0.25 * breadth + 0.20 * agree + 0.20 * tpi);
+    const mde     = Math.round(deSum / respectCount);
+    const health  = Math.round(
+      0.25 * mti +
+      0.20 * breadth +
+      0.15 * agree +
+      0.10 * tpi +
+      0.30 * mde
+    );
     rows.push({
       time: d.toISOString(),
-      mti, breadth, agreement: agree, tpi, health,
+      mti, breadth, agreement: agree, tpi, mde, health,
       classification: classify(health),
     });
   }

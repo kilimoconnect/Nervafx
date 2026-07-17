@@ -116,6 +116,22 @@ function stdDev(vals) {
   return Math.sqrt(variance);
 }
 
+// Directional Efficiency — the core trend-vs-chop discriminator.
+//   DE = |close[N] − close[0]| / Σ|close[i] − close[i-1]|
+// A pair moving 100 pips net over a total path of 130 pips → DE = 0.77
+// (highly directional). A choppy pair moving 20 pips net over 150 pips of
+// travel → DE = 0.13. Multiplied by 100 to sit on the 0-100 scale used by
+// the other Market metrics.
+function directionalEfficiency(closes, N) {
+  if (!closes || closes.length < N + 1) return null;
+  const window = closes.slice(-N - 1);
+  let path = 0;
+  for (let i = 1; i < window.length; i++) path += Math.abs(window[i] - window[i - 1]);
+  if (path === 0) return 0;
+  const net = Math.abs(window[window.length - 1] - window[0]);
+  return Math.round((net / path) * 100);
+}
+
 // Per-candle continuous Respect score at index i. Returns null on missing data.
 function candleRespect(candles, closes, e20, e50, i, direction) {
   const sig = direction === 'BUY' ? +1 : -1;
@@ -170,13 +186,15 @@ function pairRespect(candles) {
     const s = candleRespect(candles, closes, e20, e50, idx, trend);
     if (s != null) series.unshift(s);
   }
-  if (!series.length) return { trend, respect: 0, persistence: 0 };
+  if (!series.length) return { trend, respect: 0, persistence: 0, de: 0 };
   const respect = series.reduce((a, b) => a + b, 0) / series.length;
   const persistence = Math.max(0, 1 - stdDev(series) / 100);
+  const de = directionalEfficiency(closes, 20) || 0;
   return {
     trend,
     respect: Math.round(respect),
     persistence: Math.round(persistence * 100) / 100,
+    de,
   };
 }
 
@@ -234,27 +252,30 @@ module.exports = async function handler(req, res) {
     let respectSum = 0, respectCount = 0;
     let strongCount = 0;
     let agreeCount  = 0;
-    let persistenceSum = 0, persistenceCount = 0;
+    let persistenceSum = 0;
+    let deSum = 0;
     const pairs = [];
     for (const inst of PAIRS) {
       const { h1, m15 } = perPair[inst];
       if (!h1 || !m15) continue;
       const combined = (h1.respect + m15.respect) / 2;
       const combinedPersistence = (h1.persistence + m15.persistence) / 2;
-      respectSum   += combined;
-      respectCount++;
+      const combinedDe = (h1.de + m15.de) / 2;
+      respectSum     += combined;
       persistenceSum += combinedPersistence;
-      persistenceCount++;
+      deSum          += combinedDe;
+      respectCount++;
       if (combined > 80) strongCount++;
       const trendsAgree = h1.trend && m15.trend && h1.trend === m15.trend;
       if (trendsAgree) agreeCount++;
       pairs.push({
         pair: inst.replace('_', '/'),
         instrument: inst,
-        h1Trend: h1.trend, h1Respect: h1.respect, h1Persistence: h1.persistence,
-        m15Trend: m15.trend, m15Respect: m15.respect, m15Persistence: m15.persistence,
+        h1Trend: h1.trend, h1Respect: h1.respect, h1Persistence: h1.persistence, h1De: h1.de,
+        m15Trend: m15.trend, m15Respect: m15.respect, m15Persistence: m15.persistence, m15De: m15.de,
         combinedRespect: Math.round(combined),
         combinedPersistence: Math.round(combinedPersistence * 100),
+        combinedDe: Math.round(combinedDe),
         trendsAgree,
       });
     }
@@ -266,10 +287,23 @@ module.exports = async function handler(req, res) {
     const mti      = Math.round(respectSum / respectCount);
     const breadth  = Math.round((strongCount / respectCount) * 100);
     const agree    = Math.round((agreeCount / respectCount) * 100);
-    // Market TPI = mean per-pair persistence * 100 (persistence was 0-1).
-    const tpi      = Math.round((persistenceSum / persistenceCount) * 100);
-    // New composite: 0.35 MTI + 0.25 Breadth + 0.20 Agreement + 0.20 TPI.
-    const health   = Math.round(0.35 * mti + 0.25 * breadth + 0.20 * agree + 0.20 * tpi);
+    const tpi      = Math.round((persistenceSum / respectCount) * 100);
+    // MDE = Market Directional Efficiency — mean per-pair DE across the 28
+    // pairs. Trending days ~40-70, choppy days ~10-25.
+    const mde      = Math.round(deSum / respectCount);
+    // New composite (weights sum to 1.00):
+    //   0.25 MTI + 0.20 Breadth + 0.15 Agreement + 0.10 TPI + 0.30 MDE
+    // MDE gets the biggest single weight because directional efficiency is
+    // the true trend-vs-chop discriminator; the other four metrics were
+    // failing to separate 9 Jul (trending) from 7 Jul (choppy) even though
+    // the days had opposite character on the chart.
+    const health   = Math.round(
+      0.25 * mti +
+      0.20 * breadth +
+      0.15 * agree +
+      0.10 * tpi +
+      0.30 * mde
+    );
     const classification = classify(health);
 
     // Sort pairs by combined respect desc so the strongest sit up top.
@@ -282,6 +316,7 @@ module.exports = async function handler(req, res) {
       breadth,
       agreement: agree,
       tpi,
+      mde,
       health,
       classification,
       strongCount,

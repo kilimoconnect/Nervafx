@@ -54,7 +54,7 @@
     .pair-score.mid { color:#facc15; }
     .pair-score.lo { color:#f87171; }
 
-    .row { display:grid; grid-template-columns:170px 80px 80px 80px 80px 80px 120px; gap:12px;
+    .row { display:grid; grid-template-columns:170px 70px 70px 70px 70px 70px 70px 120px; gap:10px;
       padding:8px 12px; border-bottom:1px solid var(--border); font-family:'SF Mono',Monaco,monospace; font-size:12px; }
     .row.head { background:var(--card2); font-weight:700; color:var(--muted); font-size:11px; text-transform:uppercase; }
     .row.data { cursor:pointer; }
@@ -85,11 +85,12 @@
 <body>
   <h1>Market Trend Respect Engine</h1>
   <div class="sub">
-    Scans all 28 majors on H1 + M15. Per pair Trend Respect is now a CONTINUOUS
-    weighted average over the last 10 candles: 35% Price Position (piecewise, penalises
-    over-extension past 2 ATR), 25% EMA Stack (ATR-normalised EMA20-EMA50 separation),
-    40% EMA20 Slope (regression over 6 EMAs, ATR-normalised). TPI = 1 - σ(Respect) / 100
-    per pair. Market Health = 0.35 × MTI + 0.25 × Breadth + 0.20 × Agreement + 0.20 × TPI.
+    Scans all 28 majors on H1 + M15. Per-pair Trend Respect is a continuous weighted
+    average over the last 10 candles: 35% Price Position (bell curve on EMA20 distance),
+    25% EMA Stack (ATR-normalised), 40% EMA20 Slope (regression). TPI = 1 − σ(Respect) / 100.
+    MDE (Market Directional Efficiency) = mean per-pair |net move| / |total path| over
+    the last 20 candles — the true trend-vs-chop discriminator.
+    Market Health = 0.25 MTI + 0.20 Breadth + 0.15 Agreement + 0.10 TPI + 0.30 MDE.
   </div>
 
   <div class="controls">
@@ -156,7 +157,9 @@
         + '<div class="kpi"><div class="kpi-label">H1/M15 Agreement</div><div class="kpi-value">' + json.agreement + '%</div>'
         + '<div class="status" style="margin-top:4px">' + json.agreeCount + ' / ' + json.totalPairs + ' pairs</div></div>'
         + '<div class="kpi"><div class="kpi-label">TPI (Persistence)</div><div class="kpi-value">' + json.tpi + '</div>'
-        + '<div class="status" style="margin-top:4px">1 - σ / 100, averaged</div></div>';
+        + '<div class="status" style="margin-top:4px">1 - σ / 100, averaged</div></div>'
+        + '<div class="kpi"><div class="kpi-label">MDE (Directional Eff.)</div><div class="kpi-value">' + json.mde + '</div>'
+        + '<div class="status" style="margin-top:4px">|net| / |path| × 100</div></div>';
 
       var p = document.getElementById('live-pairs');
       p.innerHTML = json.pairs.map(function(pr) {
@@ -190,7 +193,7 @@
     function renderHist(rows) {
       var el = document.getElementById('hist-list');
       if (!rows.length) { el.innerHTML = '<div class="empty">No hours in this window.</div>'; return; }
-      var html = '<div class="row head"><div>Hour</div><div>Health</div><div>MTI</div><div>Breadth</div><div>Agree</div><div>TPI</div><div class="cls">Classification</div></div>';
+      var html = '<div class="row head"><div>Hour</div><div>Health</div><div>MTI</div><div>Breadth</div><div>Agree</div><div>TPI</div><div>MDE</div><div class="cls">Classification</div></div>';
       for (var i = rows.length - 1; i >= 0; i--) {
         var r = rows[i];
         html += '<div class="row data" data-time="' + r.time + '" title="Click to load top pairs at this hour">'
@@ -200,6 +203,7 @@
           + '<div>' + r.breadth + '%</div>'
           + '<div>' + r.agreement + '%</div>'
           + '<div>' + (r.tpi != null ? r.tpi : '—') + '</div>'
+          + '<div>' + (r.mde != null ? r.mde : '—') + '</div>'
           + '<div class="cls"><span class="health-badge h-' + r.classification + '">' + r.classification.replace('_',' ') + '</span></div>'
           + '</div>';
       }
