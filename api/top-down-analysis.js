@@ -329,7 +329,10 @@ module.exports = async function handler(req, res) {
         // Composite
         const score = smoothTrendScore(dyScore, sub);
 
-        // H1 break bonus (previous day high/low)
+        // Previous-day break gate (was previously just a BRK badge bonus):
+        // require the current H1 close to have taken out the prior day's
+        // high (BUY) or low (SELL). Sits on top of the 6-candle H1 break —
+        // both must be true for a pair to qualify.
         let h1Break = false;
         let breakLevel = null;
         if (direction === 'BUY' && currentClose > prevDayOHLC.high) {
@@ -339,6 +342,7 @@ module.exports = async function handler(req, res) {
           h1Break = true;
           breakLevel = prevDayOHLC.low;
         }
+        if (!h1Break) continue;
 
         pairs.push({
           pair: inst.replace('_', '/'),
