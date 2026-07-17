@@ -268,9 +268,9 @@
       return setups.map(function(s) {
         var key = s.pair + '|' + s.direction;
         var prevPips = prevKeys && prevKeys[key] !== undefined ? prevKeys[key] : null;
-        var repeat = prevPips !== null && s.bodyPips > prevPips;
+        var repeat = prevPips !== null;
         var title  = repeat
-          ? 'Repeat with growing momentum: previous ' + prevPips.toFixed(1) + 'p → now ' + s.bodyPips.toFixed(1) + 'p'
+          ? 'Repeat: previous ' + prevPips.toFixed(1) + 'p → now ' + s.bodyPips.toFixed(1) + 'p'
           : '';
         return '<span class="setup-pill' + (repeat ? ' repeat' : '') + '"'
           + (title ? ' title="' + title + '"' : '') + '>'
