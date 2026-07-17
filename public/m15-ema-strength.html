@@ -118,6 +118,22 @@
     tbody tr:hover { background: rgba(96,165,250,0.04); }
 
     .tbl-scroll { max-height: 78vh; overflow: auto; }
+
+    /* Setups column — top-2 vs bottom-2 pair suggestions per snapshot. */
+    td.setups { text-align: left; padding: 4px 8px; max-width: 320px; }
+    .setup-pill {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: var(--card2); border: 1px solid var(--border); border-radius: 6px;
+      padding: 2px 6px; margin: 2px 3px 2px 0;
+      font-family: 'SF Mono', Monaco, Consolas, monospace; font-size: 11px;
+      color: var(--text); white-space: nowrap;
+    }
+    .setup-pill .d {
+      font-weight: 700; font-size: 10px; padding: 1px 4px; border-radius: 3px;
+    }
+    .setup-pill .d.BUY  { background: rgba(22,163,74,0.20);  color: #4ade80; }
+    .setup-pill .d.SELL { background: rgba(220,38,38,0.20);  color: #f87171; }
+    .setup-pill .sp { color: var(--muted); font-size: 10px; }
   </style>
 </head>
 <body>
@@ -125,7 +141,7 @@
   <div class="sub">Per-currency alignment from M15 close vs EMA20/EMA50 on all 28 pairs. One snapshot every 15 min. Range [-1, +1].</div>
 
   <div class="controls">
-    <label>From <input type="date" id="from" value="2025-08-01"></label>
+    <label>From <input type="date" id="from"></label>
     <label>To <input type="date" id="to"></label>
     <button id="load">Load</button>
     <span class="status" id="status"></span>
@@ -151,10 +167,11 @@
             <th style="text-align:left">Time</th>
             <th>USD</th><th>EUR</th><th>GBP</th><th>JPY</th>
             <th>CHF</th><th>CAD</th><th>AUD</th><th>NZD</th>
+            <th style="text-align:left">Setups (top-2 vs bottom-2)</th>
           </tr>
         </thead>
         <tbody id="tbody">
-          <tr><td colspan="9" style="text-align:center;color:var(--muted);padding:20px">Choose a range and click Load.</td></tr>
+          <tr><td colspan="10" style="text-align:center;color:var(--muted);padding:20px">Choose a range and click Load.</td></tr>
         </tbody>
       </table>
     </div>
@@ -202,15 +219,63 @@
     }
 
     var CCYS = ['USD','EUR','GBP','JPY','CHF','CAD','AUD','NZD'];
+    var PAIRS = [
+      'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
+      'EUR_GBP','EUR_JPY','EUR_CHF','EUR_CAD','EUR_AUD','EUR_NZD',
+      'GBP_JPY','GBP_CHF','GBP_CAD','GBP_AUD','GBP_NZD',
+      'AUD_JPY','AUD_CHF','AUD_CAD','AUD_NZD',
+      'NZD_JPY','NZD_CHF','NZD_CAD','CAD_JPY','CAD_CHF','CHF_JPY'
+    ];
+    var PAIR_SET = {}; PAIRS.forEach(function(p) { PAIR_SET[p] = true; });
+
+    function findPair(strong, weak) {
+      if (PAIR_SET[strong + '_' + weak]) return { pair: strong + '/' + weak, instrument: strong + '_' + weak, direction: 'BUY' };
+      if (PAIR_SET[weak + '_' + strong]) return { pair: weak + '/' + strong, instrument: weak + '_' + strong, direction: 'SELL' };
+      return null;
+    }
+
+    // Setups gated by prev-M15-candle break, ranked by breaking-candle body pips.
+    function buildSetups(row) {
+      var breaks = row.breaks || {};
+      var scores = CCYS.map(function(c) { return { c: c, v: row.currencies[c] || 0 }; });
+      scores.sort(function(a, b) { return b.v - a.v; });
+      var top = [scores[0], scores[1]];
+      var bot = [scores[scores.length - 1], scores[scores.length - 2]];
+      var setups = [];
+      top.forEach(function(t) {
+        bot.forEach(function(b) {
+          var m = findPair(t.c, b.c);
+          if (!m) return;
+          var br = breaks[m.instrument];
+          if (!br || br.direction !== m.direction) return;
+          setups.push({
+            pair: m.pair, direction: m.direction,
+            spread: t.v - b.v, bodyPips: br.bodyPips || 0,
+          });
+        });
+      });
+      setups.sort(function(a, b) { return b.bodyPips - a.bodyPips; });
+      return setups;
+    }
+
+    function renderSetups(setups) {
+      if (!setups.length) return '<span style="color:var(--muted)">—</span>';
+      return setups.map(function(s) {
+        return '<span class="setup-pill">'
+          + s.pair
+          + '<span class="d ' + s.direction + '">' + s.direction + '</span>'
+          + '<span class="sp">' + s.bodyPips.toFixed(1) + 'p</span>'
+          + '</span>';
+      }).join('');
+    }
 
     function render(rows) {
       var tbody = document.getElementById('tbody');
       if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:20px">No snapshots returned for this window.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:20px">No snapshots returned for this window.</td></tr>';
         return;
       }
       var html = '';
-      // newest first
       for (var i = rows.length - 1; i >= 0; i--) {
         var r = rows[i];
         html += '<tr><td class="time">' + fmtTime(r.time) + '</td>';
@@ -218,6 +283,7 @@
           var v = r.currencies[CCYS[j]] || 0;
           html += '<td class="cell" style="background:' + cellColor(v) + '">' + v.toFixed(2) + '</td>';
         }
+        html += '<td class="setups">' + renderSetups(buildSetups(r)) + '</td>';
         html += '</tr>';
       }
       tbody.innerHTML = html;
@@ -242,11 +308,19 @@
       }
     }
 
-    // Default 'to' = today.
+    // Default range = last 5 working days (Mon-Fri) ending today.
     (function() {
-      var now = new Date();
-      var iso = now.getUTCFullYear() + '-' + pad(now.getUTCMonth() + 1) + '-' + pad(now.getUTCDate());
-      document.getElementById('to').value = iso;
+      function ymd(d) { return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate()); }
+      var to = new Date();
+      var from = new Date(to);
+      var count = 0;
+      while (count < 5) {
+        var day = from.getUTCDay();
+        if (day !== 0 && day !== 6) count++;
+        if (count < 5) from.setUTCDate(from.getUTCDate() - 1);
+      }
+      document.getElementById('from').value = ymd(from);
+      document.getElementById('to').value   = ymd(to);
     })();
 
     document.getElementById('load').addEventListener('click', load);
