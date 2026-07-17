@@ -61,67 +61,40 @@ async function fetchAll(sb, inst, tf, since, until) {
   return all;
 }
 
-// v3 structure: HH+HL over the last 10 bars, divided by 20 (max). Uses ONE
-// point per condition per bar so an inside candle only loses partial credit
-// instead of dropping to zero.
+// Structure count at candle index i, looking back N candles.
 function structureAt(seq, i, direction, N) {
   if (i < N) return 0;
-  let hits = 0;
+  let count = 0;
   for (let k = i - N + 1; k <= i; k++) {
     const c = seq[k], p = seq[k - 1];
     if (direction === 'BUY') {
-      if (c.high > p.high) hits++;
-      if (c.low  > p.low)  hits++;
+      if (c.high > p.high && c.low > p.low) count++;
     } else {
-      if (c.high < p.high) hits++;
-      if (c.low  < p.low)  hits++;
+      if (c.high < p.high && c.low < p.low) count++;
     }
   }
-  return hits / (N * 2);
+  return count / N;
 }
 
-// ATR at candle index i over `period` bars.
-function atrAt(seq, i, period) {
-  if (i < period) return null;
-  let sum = 0;
-  for (let k = i - period + 1; k <= i; k++) {
-    const c = seq[k];
-    const p = seq[k - 1] || c;
-    const tr = Math.max(c.high - c.low, Math.abs(c.high - p.close), Math.abs(c.low - p.close));
-    sum += tr;
-  }
-  return sum / period;
-}
-
-const SPREAD_NEUTRAL_THRESHOLD  = 0.10;
-const SPREAD_QUALITY_SATURATION = 0.50;
-
-// v3 respect: 30 % EMA Quality + 25 % priceE20 + 20 % priceE50 + 25 % structure.
+// Per-pair Respect at index i using the pre-built EMA series.
 function respectAt(seq, closes, e20, e50, i) {
   const cur20 = e20[i], cur50 = e50[i];
   if (cur20 == null || cur50 == null) return null;
-  const a14 = atrAt(seq, i, 14);
-  if (!a14) return null;
   const cur = closes[i];
-
-  const spread = Math.abs(cur20 - cur50) / a14;
-  if (spread < SPREAD_NEUTRAL_THRESHOLD) {
-    return { direction: null, respect: 0 };
-  }
-
   let direction, priceE20, priceE50;
   if (cur20 > cur50) {
     direction = 'BUY';
     priceE20 = cur > cur20 ? 1 : 0;
     priceE50 = cur > cur50 ? 1 : 0;
-  } else {
+  } else if (cur20 < cur50) {
     direction = 'SELL';
     priceE20 = cur < cur20 ? 1 : 0;
     priceE50 = cur < cur50 ? 1 : 0;
+  } else {
+    return { direction: null, respect: 0 };
   }
-  const quality   = Math.min(1, spread / SPREAD_QUALITY_SATURATION);
   const structure = structureAt(seq, i, direction, 10);
-  const respect = Math.round((0.30 * quality + 0.25 * priceE20 + 0.20 * priceE50 + 0.25 * structure) * 100);
+  const respect = Math.round(((1 + priceE20 + priceE50 + structure) / 4) * 100);
   return { direction, respect };
 }
 
@@ -198,7 +171,7 @@ module.exports = async function handler(req, res) {
     if (dow === 0 && hr < 21) continue;
 
     let h1Sum = 0, m15Sum = 0, alignSum = 0, count = 0;
-    let strongBuy = 0, strongSell = 0, strongPairs = 0;
+    let strongBuy = 0, strongSell = 0;
     for (const inst of PAIRS) {
       const pp = perPair[inst];
       if (!pp || !pp.h1 || !pp.m15) continue;
@@ -213,22 +186,19 @@ module.exports = async function handler(req, res) {
       m15Sum += m15r.respect;
       const dirsMatch = h1r.direction && m15r.direction && h1r.direction === m15r.direction;
       alignSum += dirsMatch ? (h1r.respect + m15r.respect) / 2 : 0;
-      if (h1r.respect >= 70) strongPairs++;
       if (h1r.direction === 'BUY'  && h1r.respect >= 70) strongBuy++;
       if (h1r.direction === 'SELL' && h1r.respect >= 70) strongSell++;
     }
     if (count < PAIRS.length * 0.7) continue;
-    const h1Avg   = Math.round(h1Sum  / count);
-    const m15Avg  = Math.round(m15Sum / count);
-    const align   = Math.round(alignSum / count);
-    const breadth = Math.round((strongPairs / count) * 100);
-    const mtre    = Math.round(0.35 * h1Avg + 0.35 * m15Avg + 0.20 * align + 0.10 * breadth);
+    const h1Avg  = Math.round(h1Sum  / count);
+    const m15Avg = Math.round(m15Sum / count);
+    const align  = Math.round(alignSum / count);
+    const mtre   = Math.round(0.40 * h1Avg + 0.40 * m15Avg + 0.20 * align);
     rows.push({
       time: d.toISOString(),
-      h1AvgRespect:  h1Avg,
+      h1AvgRespect: h1Avg,
       m15AvgRespect: m15Avg,
-      alignment:     align,
-      breadth,
+      alignment: align,
       strongBuy,
       strongSell,
       mtre,

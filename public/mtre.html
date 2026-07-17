@@ -67,7 +67,7 @@
     .pair-score.mid { color:#facc15; }
     .pair-score.lo { color:#f87171; }
 
-    .row { display:grid; grid-template-columns:170px 55px 60px 60px 60px 60px 60px 60px 130px; gap:8px;
+    .row { display:grid; grid-template-columns:170px 60px 70px 70px 70px 70px 70px 140px; gap:10px;
       padding:8px 12px; border-bottom:1px solid var(--border); font-family:'SF Mono',Monaco,monospace; font-size:12px; }
     .row.head { background:var(--card2); font-weight:700; color:var(--muted); font-size:11px; text-transform:uppercase; }
     .row.data { cursor:pointer; }
@@ -97,11 +97,10 @@
 <body>
   <h1>Market Trend Respect Engine</h1>
   <div class="sub">
-    Per pair Respect = 30% EMA Quality (|EMA20-EMA50|/ATR, saturates at 0.5) + 25%
-    Close vs EMA20 + 20% Close vs EMA50 + 25% Structure (HH+HL over last 10 bars / 20).
-    Pairs with EMA spread < 0.10 ATR classify NEUTRAL (respect = 0). H1 sets direction,
-    M15 confirms execution. MTRE = 0.35 H1 + 0.35 M15 + 0.20 Alignment + 0.10 Breadth
-    (Breadth = share of pairs with H1 respect ≥ 70).
+    Per pair Respect = (EMA alignment + close vs EMA20 + close vs EMA50 + last-10-candle
+    structure) / 4 × 100. H1 sets market direction, M15 confirms execution quality.
+    MTRE = 0.40 H1-avg + 0.40 M15-avg + 0.20 alignment. Currency strength = signed
+    respect summed per currency, mapped to 0-100.
   </div>
 
   <div class="controls">
@@ -181,8 +180,6 @@
         + '<div class="kpi"><div class="kpi-label">H1 Avg Respect</div><div class="kpi-value">' + json.h1AvgRespect + '</div></div>'
         + '<div class="kpi"><div class="kpi-label">M15 Avg Respect</div><div class="kpi-value">' + json.m15AvgRespect + '</div></div>'
         + '<div class="kpi"><div class="kpi-label">Alignment</div><div class="kpi-value">' + json.alignment + '</div></div>'
-        + '<div class="kpi"><div class="kpi-label">Breadth</div><div class="kpi-value">' + json.breadth + '%</div>'
-        + '<div class="status" style="margin-top:4px">' + (json.strongPairs != null ? json.strongPairs : '—') + ' / ' + json.totalPairs + ' respect ≥ 70</div></div>'
         + '<div class="kpi"><div class="kpi-label">Strong BUY / SELL</div><div class="kpi-value" style="font-size:20px">'
         + '<span style="color:#4ade80">' + json.strongBuy + '</span> / <span style="color:#f87171">' + json.strongSell + '</span></div>'
         + '<div class="status" style="margin-top:4px">of ' + json.totalPairs + ' pairs</div></div>';
@@ -231,7 +228,7 @@
       if (!rows.length) { el.innerHTML = '<div class="empty">No hours in this window.</div>'; return; }
       var html = '<div class="row head">'
         + '<div>Hour</div><div>MTRE</div><div>H1 R</div><div>M15 R</div><div>Align</div>'
-        + '<div>Breadth</div><div>Buy≥70</div><div>Sell≥70</div><div class="cls">State</div></div>';
+        + '<div>Buy≥70</div><div>Sell≥70</div><div class="cls">State</div></div>';
       for (var i = rows.length - 1; i >= 0; i--) {
         var r = rows[i];
         html += '<div class="row data" data-time="' + r.time + '" title="Click to load top pairs at this hour">'
@@ -240,7 +237,6 @@
           + '<div>' + r.h1AvgRespect + '</div>'
           + '<div>' + r.m15AvgRespect + '</div>'
           + '<div>' + r.alignment + '</div>'
-          + '<div>' + (r.breadth != null ? r.breadth + '%' : '—') + '</div>'
           + '<div>' + r.strongBuy + '</div>'
           + '<div>' + r.strongSell + '</div>'
           + '<div class="cls"><span class="state-badge s-' + r.state + '">' + r.state.replace('_',' ') + '</span></div>'
