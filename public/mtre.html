@@ -67,7 +67,7 @@
     .pair-score.mid { color:#facc15; }
     .pair-score.lo { color:#f87171; }
 
-    .row { display:grid; grid-template-columns:170px 60px 70px 70px 70px 70px 70px 140px; gap:10px;
+    .row { display:grid; grid-template-columns:180px 90px 90px 80px 80px 140px; gap:12px;
       padding:8px 12px; border-bottom:1px solid var(--border); font-family:'SF Mono',Monaco,monospace; font-size:12px; }
     .row.head { background:var(--card2); font-weight:700; color:var(--muted); font-size:11px; text-transform:uppercase; }
     .row.data { cursor:pointer; }
@@ -100,7 +100,7 @@
     .tab.active { color:var(--accent); border-bottom-color:var(--accent); }
     @media (max-width: 700px) {
       .pair-row { grid-template-columns:90px 48px 48px 40px 40px 40px 48px 48px; gap:4px; padding:6px; font-size:11px; }
-      .row { grid-template-columns:120px 50px 50px 50px 50px 50px 50px 100px; gap:6px; font-size:11px; }
+      .row { grid-template-columns:130px 60px 60px 55px 55px 100px; gap:6px; font-size:11px; }
     }
   </style>
 </head>
@@ -289,15 +289,11 @@
       var tfUp = _tf.toUpperCase();
       var html = '<div class="row head">'
         + '<div>Hour</div><div>' + tfUp + ' BUY</div><div>' + tfUp + ' SELL</div>'
-        + '<div>Other BUY</div><div>Other SELL</div>'
-        + '<div>Align</div><div>Dom</div><div class="cls">State</div></div>';
+        + '<div>Dom</div><div>Align</div><div class="cls">State</div></div>';
       for (var i = rows.length - 1; i >= 0; i--) {
         var r = rows[i];
-        // Active-TF values drive the state; the other TF is shown for context.
         var buy   = _tf === 'h1' ? r.h1BuyMtre   : r.m15BuyMtre;
         var sell  = _tf === 'h1' ? r.h1SellMtre  : r.m15SellMtre;
-        var oBuy  = _tf === 'h1' ? r.m15BuyMtre  : r.h1BuyMtre;
-        var oSell = _tf === 'h1' ? r.m15SellMtre : r.h1SellMtre;
         var domSide = buy >= sell ? 'BUY' : 'SELL';
         var domVal  = Math.max(buy, sell);
         var state   = classifyLocal(domVal);
@@ -305,10 +301,8 @@
           + '<div class="time">' + fmtTime(r.time) + '</div>'
           + '<div style="color:#4ade80">' + buy + '</div>'
           + '<div style="color:#f87171">' + sell + '</div>'
-          + '<div style="color:#4ade80;opacity:0.6">' + oBuy + '</div>'
-          + '<div style="color:#f87171;opacity:0.6">' + oSell + '</div>'
-          + '<div>' + r.alignment + '</div>'
           + '<div style="color:' + (domSide === 'BUY' ? '#4ade80' : '#f87171') + '">' + domSide + '</div>'
+          + '<div>' + r.alignment + '</div>'
           + '<div class="cls"><span class="state-badge s-' + state + '">' + state.replace('_',' ') + '</span></div>'
           + '</div>';
       }
