@@ -57,8 +57,23 @@
     .row { display:grid; grid-template-columns:170px 100px 100px 100px 100px 120px; gap:12px;
       padding:8px 12px; border-bottom:1px solid var(--border); font-family:'SF Mono',Monaco,monospace; font-size:12px; }
     .row.head { background:var(--card2); font-weight:700; color:var(--muted); font-size:11px; text-transform:uppercase; }
+    .row.data { cursor:pointer; }
+    .row.data:hover { background:rgba(96,165,250,0.06); }
     .row .time { color:var(--muted); }
     .row .cls { text-align:right; }
+    .row-details {
+      padding:8px 16px 12px 32px; background:rgba(96,165,250,0.03); border-bottom:1px solid var(--border);
+      font-family:'SF Mono',Monaco,monospace; font-size:12px;
+    }
+    .row-details .rd-hd { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; }
+    .row-details .rd-loading { color:var(--muted); }
+    .row-details .rd-err { color:#f87171; }
+    .rd-pair {
+      display:grid; grid-template-columns:28px 100px 60px 60px 1fr 56px; gap:10px;
+      align-items:center; padding:4px 0;
+    }
+    .rd-pair .rd-rank { color:var(--muted); font-size:11px; }
+    .rd-pair .rd-name { font-weight:700; }
     .empty { text-align:center; color:var(--muted); padding:20px; }
     .tbl-scroll { max-height:70vh; overflow:auto; }
     @media (max-width: 700px) {
@@ -175,7 +190,7 @@
       var html = '<div class="row head"><div>Hour</div><div>Health</div><div>MTI</div><div>Breadth</div><div>Agree</div><div class="cls">Classification</div></div>';
       for (var i = rows.length - 1; i >= 0; i--) {
         var r = rows[i];
-        html += '<div class="row">'
+        html += '<div class="row data" data-time="' + r.time + '" title="Click to load top pairs at this hour">'
           + '<div class="time">' + fmtTime(r.time) + '</div>'
           + '<div>' + r.health + '</div>'
           + '<div>' + r.mti + '</div>'
@@ -185,6 +200,47 @@
           + '</div>';
       }
       el.innerHTML = html;
+      // Wire click → toggle inline detail panel with top 5 pairs at that anchor.
+      var rowsEls = el.querySelectorAll('.row.data');
+      rowsEls.forEach(function(rowEl) {
+        rowEl.addEventListener('click', function() {
+          var next = rowEl.nextElementSibling;
+          if (next && next.classList && next.classList.contains('row-details')) {
+            next.remove();
+            return;
+          }
+          var iso = rowEl.getAttribute('data-time');
+          var panel = document.createElement('div');
+          panel.className = 'row-details';
+          panel.innerHTML = '<div class="rd-hd">Top 5 pairs at ' + fmtTime(iso) + '</div>'
+            + '<div class="rd-loading">Loading…</div>';
+          rowEl.parentNode.insertBefore(panel, rowEl.nextSibling);
+          fetch('/api/mtre?anchor=' + encodeURIComponent(iso))
+            .then(function(res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
+            .then(function(json) {
+              if (json.error) throw new Error(json.error);
+              var top = (json.pairs || []).slice(0, 5);
+              if (!top.length) { panel.innerHTML = '<div class="rd-hd">Top pairs at ' + fmtTime(iso) + '</div><div class="rd-loading">No pairs.</div>'; return; }
+              var body = '<div class="rd-hd">Top 5 pairs at ' + fmtTime(iso) + '</div>';
+              top.forEach(function(pr, idx) {
+                var agreeCls = pr.trendsAgree ? 'yes' : 'no';
+                var agreeMark = pr.trendsAgree ? '✓' : '✗';
+                body += '<div class="rd-pair">'
+                  + '<span class="rd-rank">#' + (idx + 1) + '</span>'
+                  + '<span class="rd-name">' + pr.pair + '</span>'
+                  + '<span class="pair-tf ' + (pr.h1Trend || 'NONE') + '">H1 ' + (pr.h1Trend || '—') + '</span>'
+                  + '<span class="pair-tf ' + (pr.m15Trend || 'NONE') + '">M15 ' + (pr.m15Trend || '—') + '</span>'
+                  + '<span class="status">H1 ' + pr.h1Respect + '% · M15 ' + pr.m15Respect + '% · agree <span class="pair-agree ' + agreeCls + '">' + agreeMark + '</span></span>'
+                  + '<span class="pair-score ' + scoreCls(pr.combinedRespect) + '">' + pr.combinedRespect + '</span>'
+                  + '</div>';
+              });
+              panel.innerHTML = body;
+            })
+            .catch(function(e) {
+              panel.innerHTML = '<div class="rd-hd">Top pairs at ' + fmtTime(iso) + '</div><div class="rd-err">Error: ' + e.message + '</div>';
+            });
+        });
+      });
     }
 
     (function() {
