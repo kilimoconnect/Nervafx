@@ -116,6 +116,9 @@ module.exports = async function handler(req, res) {
   for (let t = start.getTime(); t <= end.getTime(); t += STEP) targetAnchors.push(t);
   const targetSet = new Set(targetAnchors);
 
+  // Break check widens to the last 6 M15 candles: current close must beat
+  // max(high) (BUY) or drop below min(low) (SELL) of the preceding 6 bars.
+  const BREAK_LOOKBACK = 6;
   const pairScores = {};
   const pairBreaks = {}; // { pair: Map<ms, { direction, bodyPips }> }
   for (const inst of PAIRS) {
@@ -126,19 +129,22 @@ module.exports = async function handler(req, res) {
     const scoreMap = new Map();
     const breakMap = new Map();
     const pd = pipDiv(inst);
-    let prev = null;
+    const prevWin = [];
     for (const c of seq) {
       const e20 = pushE20(c.close);
       const e50 = pushE50(c.close);
       if (e20 != null && e50 != null && targetSet.has(c.ms)) {
         scoreMap.set(c.ms, alignmentScore(c.close, e20, e50));
-        if (prev) {
+        if (prevWin.length >= BREAK_LOOKBACK) {
+          let maxH = -Infinity, minL = Infinity;
+          for (const p of prevWin) { if (p.high > maxH) maxH = p.high; if (p.low < minL) minL = p.low; }
           const bodyPips = Math.round((Math.abs(c.close - c.open) / pd) * 10) / 10;
-          if      (c.close > prev.high) breakMap.set(c.ms, { direction: 'BUY',  bodyPips });
-          else if (c.close < prev.low)  breakMap.set(c.ms, { direction: 'SELL', bodyPips });
+          if      (c.close > maxH) breakMap.set(c.ms, { direction: 'BUY',  bodyPips });
+          else if (c.close < minL) breakMap.set(c.ms, { direction: 'SELL', bodyPips });
         }
       }
-      prev = c;
+      prevWin.push(c);
+      if (prevWin.length > BREAK_LOOKBACK) prevWin.shift();
     }
     pairScores[inst] = scoreMap;
     pairBreaks[inst] = breakMap;
