@@ -54,7 +54,7 @@
     .pair-score.mid { color:#facc15; }
     .pair-score.lo { color:#f87171; }
 
-    .row { display:grid; grid-template-columns:170px 100px 100px 100px 100px 120px; gap:12px;
+    .row { display:grid; grid-template-columns:170px 80px 80px 80px 80px 80px 120px; gap:12px;
       padding:8px 12px; border-bottom:1px solid var(--border); font-family:'SF Mono',Monaco,monospace; font-size:12px; }
     .row.head { background:var(--card2); font-weight:700; color:var(--muted); font-size:11px; text-transform:uppercase; }
     .row.data { cursor:pointer; }
@@ -85,10 +85,11 @@
 <body>
   <h1>Market Trend Respect Engine</h1>
   <div class="sub">
-    Scans all 28 majors on H1 + M15. Per pair the Trend Respect score is a weighted
-    average over the last 10 candles: 40% price on correct side of EMA20, 30% EMA20 on
-    correct side of EMA50, 30% EMA20 slope in trend direction. Market Health mixes:
-    0.40 × MTI + 0.35 × Breadth + 0.25 × H1/M15 Agreement.
+    Scans all 28 majors on H1 + M15. Per pair Trend Respect is now a CONTINUOUS
+    weighted average over the last 10 candles: 35% Price Position (piecewise, penalises
+    over-extension past 2 ATR), 25% EMA Stack (ATR-normalised EMA20-EMA50 separation),
+    40% EMA20 Slope (regression over 6 EMAs, ATR-normalised). TPI = 1 - σ(Respect) / 100
+    per pair. Market Health = 0.35 × MTI + 0.25 × Breadth + 0.20 × Agreement + 0.20 × TPI.
   </div>
 
   <div class="controls">
@@ -153,7 +154,9 @@
         + '<div class="kpi"><div class="kpi-label">Breadth (Respect &gt; 80%)</div><div class="kpi-value">' + json.breadth + '%</div>'
         + '<div class="status" style="margin-top:4px">' + json.strongCount + ' / ' + json.totalPairs + ' pairs</div></div>'
         + '<div class="kpi"><div class="kpi-label">H1/M15 Agreement</div><div class="kpi-value">' + json.agreement + '%</div>'
-        + '<div class="status" style="margin-top:4px">' + json.agreeCount + ' / ' + json.totalPairs + ' pairs</div></div>';
+        + '<div class="status" style="margin-top:4px">' + json.agreeCount + ' / ' + json.totalPairs + ' pairs</div></div>'
+        + '<div class="kpi"><div class="kpi-label">TPI (Persistence)</div><div class="kpi-value">' + json.tpi + '</div>'
+        + '<div class="status" style="margin-top:4px">1 - σ / 100, averaged</div></div>';
 
       var p = document.getElementById('live-pairs');
       p.innerHTML = json.pairs.map(function(pr) {
@@ -163,7 +166,7 @@
           + '<span class="pair-name">' + pr.pair + '</span>'
           + '<span class="pair-tf ' + (pr.h1Trend || 'NONE') + '">H1 ' + (pr.h1Trend || '—') + '</span>'
           + '<span class="pair-tf ' + (pr.m15Trend || 'NONE') + '">M15 ' + (pr.m15Trend || '—') + '</span>'
-          + '<span class="status">H1 ' + pr.h1Respect + '% · M15 ' + pr.m15Respect + '% · agree <span class="pair-agree ' + agreeCls + '">' + agreeMark + '</span></span>'
+          + '<span class="status">H1 ' + pr.h1Respect + ' · M15 ' + pr.m15Respect + ' · TPI ' + pr.combinedPersistence + ' · agree <span class="pair-agree ' + agreeCls + '">' + agreeMark + '</span></span>'
           + '<span class="pair-score ' + scoreCls(pr.combinedRespect) + '">' + pr.combinedRespect + '</span>'
           + '</div>';
       }).join('');
@@ -187,7 +190,7 @@
     function renderHist(rows) {
       var el = document.getElementById('hist-list');
       if (!rows.length) { el.innerHTML = '<div class="empty">No hours in this window.</div>'; return; }
-      var html = '<div class="row head"><div>Hour</div><div>Health</div><div>MTI</div><div>Breadth</div><div>Agree</div><div class="cls">Classification</div></div>';
+      var html = '<div class="row head"><div>Hour</div><div>Health</div><div>MTI</div><div>Breadth</div><div>Agree</div><div>TPI</div><div class="cls">Classification</div></div>';
       for (var i = rows.length - 1; i >= 0; i--) {
         var r = rows[i];
         html += '<div class="row data" data-time="' + r.time + '" title="Click to load top pairs at this hour">'
@@ -196,6 +199,7 @@
           + '<div>' + r.mti + '</div>'
           + '<div>' + r.breadth + '%</div>'
           + '<div>' + r.agreement + '%</div>'
+          + '<div>' + (r.tpi != null ? r.tpi : '—') + '</div>'
           + '<div class="cls"><span class="health-badge h-' + r.classification + '">' + r.classification.replace('_',' ') + '</span></div>'
           + '</div>';
       }
@@ -230,7 +234,7 @@
                   + '<span class="rd-name">' + pr.pair + '</span>'
                   + '<span class="pair-tf ' + (pr.h1Trend || 'NONE') + '">H1 ' + (pr.h1Trend || '—') + '</span>'
                   + '<span class="pair-tf ' + (pr.m15Trend || 'NONE') + '">M15 ' + (pr.m15Trend || '—') + '</span>'
-                  + '<span class="status">H1 ' + pr.h1Respect + '% · M15 ' + pr.m15Respect + '% · agree <span class="pair-agree ' + agreeCls + '">' + agreeMark + '</span></span>'
+                  + '<span class="status">H1 ' + pr.h1Respect + ' · M15 ' + pr.m15Respect + ' · TPI ' + pr.combinedPersistence + ' · agree <span class="pair-agree ' + agreeCls + '">' + agreeMark + '</span></span>'
                   + '<span class="pair-score ' + scoreCls(pr.combinedRespect) + '">' + pr.combinedRespect + '</span>'
                   + '</div>';
               });

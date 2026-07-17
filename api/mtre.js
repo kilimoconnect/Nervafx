@@ -44,40 +44,126 @@ function emaSeries(values, period) {
   return out;
 }
 
-// Per-pair Trend Respect on a series of candles:
-//   trend = 'BUY' (EMA20 > EMA50 at current close) or 'SELL' (EMA20 < EMA50).
-// Score is the mean over the last 10 candles of:
-//   0.40 * (close on correct side of EMA20 ? 1 : 0)
-//   0.30 * (EMA20 on correct side of EMA50 ? 1 : 0)
-//   0.30 * (EMA20 slope in trend direction ? 1 : 0)
-// Returned in [0, 100].
-function pairRespect(closes) {
-  if (!closes || closes.length < 60) return null;
+// ATR14 at candle index i using the standard true-range formula.
+function atrAt(candles, i, period) {
+  if (i < period) return null;
+  let sum = 0;
+  for (let k = i - period + 1; k <= i; k++) {
+    const c = candles[k];
+    const p = candles[k - 1] || c;
+    const tr = Math.max(c.high - c.low, Math.abs(c.high - p.close), Math.abs(c.low - p.close));
+    sum += tr;
+  }
+  return sum / period;
+}
+
+// Linear regression slope of an ordered numeric series.
+function regressionSlope(values) {
+  const n = values.length;
+  if (n < 2) return 0;
+  const xMean = (n - 1) / 2;
+  const yMean = values.reduce((a, b) => a + b, 0) / n;
+  let num = 0, den = 0;
+  for (let i = 0; i < n; i++) {
+    const dx = i - xMean;
+    num += dx * (values[i] - yMean);
+    den += dx * dx;
+  }
+  return num / den;
+}
+
+// Piecewise price-position: 100 at EMA20, 90 at 0.5 ATR, 70 at 1.0, 30 at 2.0,
+// 0 at 3.0+. Linear between anchors. Assumes distanceInAtr ≥ 0 (magnitude only —
+// direction is handled by the caller).
+function pricePositionScore(distanceInAtr) {
+  const d = Math.max(0, distanceInAtr);
+  if (d >= 3.0) return 0;
+  if (d >= 2.0) return 30 - (d - 2.0) * 30;
+  if (d >= 1.0) return 70 - (d - 1.0) * 40;
+  if (d >= 0.5) return 90 - (d - 0.5) * 40;
+  return 100 - d * 20;
+}
+
+// EMA20-vs-EMA50 separation: 0 at touching, 100 at 1 ATR apart, capped.
+function emaStackScore(sepInAtr) {
+  return Math.min(100, Math.max(0, sepInAtr * 100));
+}
+
+// Regression slope normalised by ATR, capped at 0.5 ATR per candle → 100.
+function slopeMagnitudeScore(slopePerCandleNorm) {
+  const mag = Math.min(Math.abs(slopePerCandleNorm), 0.5);
+  return (mag / 0.5) * 100;
+}
+
+function stdDev(vals) {
+  if (!vals || !vals.length) return 0;
+  const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+  const variance = vals.reduce((s, x) => s + (x - mean) * (x - mean), 0) / vals.length;
+  return Math.sqrt(variance);
+}
+
+// Per-candle continuous Respect score at index i. Returns null on missing data.
+function candleRespect(candles, closes, e20, e50, i, direction) {
+  const sig = direction === 'BUY' ? +1 : -1;
+  const cur20 = e20[i], cur50 = e50[i];
+  if (cur20 == null || cur50 == null) return null;
+  const atr = atrAt(candles, i, 14);
+  if (!atr) return null;
+  const cur = closes[i];
+
+  // 1) Price position — direction-aware. Wrong side of EMA20 → 0.
+  const priceDist = (cur - cur20) / atr;
+  const posScore = Math.sign(priceDist) === sig ? pricePositionScore(Math.abs(priceDist)) : 0;
+
+  // 2) EMA stack — direction-aware separation in ATRs.
+  const stackDist = (cur20 - cur50) / atr;
+  const stackScore = Math.sign(stackDist) === sig ? emaStackScore(Math.abs(stackDist)) : 0;
+
+  // 3) EMA20 slope from regression over last 6 EMA20 values (i-5..i).
+  const from = Math.max(0, i - 5);
+  const win = [];
+  for (let k = from; k <= i; k++) if (e20[k] != null) win.push(e20[k]);
+  let slpScore = 0;
+  if (win.length >= 3) {
+    const slope = regressionSlope(win);
+    const slopeNorm = slope / atr;
+    slpScore = Math.sign(slopeNorm) === sig ? slopeMagnitudeScore(slopeNorm) : 0;
+  }
+
+  return 0.35 * posScore + 0.25 * stackScore + 0.40 * slpScore;
+}
+
+// Per-pair Trend Respect on OHLC candles.
+//   trend = 'BUY' (EMA20 > EMA50 now) or 'SELL' (EMA20 < EMA50 now).
+//   respect = mean of the last 10 candle Respect scores (all continuous).
+//   persistence = 1 - σ(series) / 100 → measures how steady the score was.
+function pairRespect(candles) {
+  if (!candles || candles.length < 60) return null;
+  const closes = candles.map(c => c.close);
   const e20 = emaSeries(closes, 20);
   const e50 = emaSeries(closes, 50);
   const last = closes.length - 1;
   const curE20 = e20[last], curE50 = e50[last];
   if (curE20 == null || curE50 == null) return null;
   const trend = curE20 > curE50 ? 'BUY' : curE20 < curE50 ? 'SELL' : null;
-  if (!trend) return { trend: null, respect: 0 };
+  if (!trend) return { trend: null, respect: 0, persistence: 0 };
 
-  const sig = trend === 'BUY' ? +1 : -1;
   const N = 10;
-  let total = 0;
-  for (let i = 0; i < N; i++) {
-    const idx = last - i;
+  const series = [];
+  for (let k = 0; k < N; k++) {
+    const idx = last - k;
     if (idx < 20) break;
-    const c = closes[idx];
-    const a20 = e20[idx];
-    const a50 = e50[idx];
-    const a20prev = idx >= 5 ? e20[idx - 5] : null;
-    if (a20 == null || a50 == null || a20prev == null) continue;
-    const sideOk  = Math.sign(c - a20)   === sig ? 1 : 0;
-    const stackOk = Math.sign(a20 - a50) === sig ? 1 : 0;
-    const slopeOk = Math.sign(a20 - a20prev) === sig ? 1 : 0;
-    total += 0.40 * sideOk + 0.30 * stackOk + 0.30 * slopeOk;
+    const s = candleRespect(candles, closes, e20, e50, idx, trend);
+    if (s != null) series.unshift(s);
   }
-  return { trend, respect: Math.round((total / N) * 100) };
+  if (!series.length) return { trend, respect: 0, persistence: 0 };
+  const respect = series.reduce((a, b) => a + b, 0) / series.length;
+  const persistence = Math.max(0, 1 - stdDev(series) / 100);
+  return {
+    trend,
+    respect: Math.round(respect),
+    persistence: Math.round(persistence * 100) / 100,
+  };
 }
 
 function classify(health) {
@@ -87,15 +173,20 @@ function classify(health) {
   return 'REVERSAL_CHOPPY';
 }
 
-async function fetchCloses(sb, inst, tf, limit, untilIso) {
+async function fetchOHLC(sb, inst, tf, limit, untilIso) {
   let q = sb
     .from('backtest_candles')
-    .select('time, close')
+    .select('time, open, high, low, close')
     .eq('instrument', inst).eq('timeframe', tf).eq('complete', true);
   if (untilIso) q = q.lte('time', untilIso);
   const { data, error } = await q.order('time', { ascending: false }).limit(limit);
   if (error) throw error;
-  return (data || []).reverse().map(c => parseFloat(c.close));
+  return (data || []).reverse().map(c => ({
+    open:  parseFloat(c.open),
+    high:  parseFloat(c.high),
+    low:   parseFloat(c.low),
+    close: parseFloat(c.close),
+  }));
 }
 
 module.exports = async function handler(req, res) {
@@ -114,51 +205,57 @@ module.exports = async function handler(req, res) {
     for (let b = 0; b < PAIRS.length; b += 7) {
       const batch = PAIRS.slice(b, b + 7);
       await Promise.all(batch.map(async inst => {
-        const [h1Closes, m15Closes] = await Promise.all([
-          fetchCloses(sb, inst, 'H1',  80, anchorIso),
-          fetchCloses(sb, inst, 'M15', 80, anchorIso),
+        const [h1Candles, m15Candles] = await Promise.all([
+          fetchOHLC(sb, inst, 'H1',  80, anchorIso),
+          fetchOHLC(sb, inst, 'M15', 80, anchorIso),
         ]);
         perPair[inst] = {
-          h1:  pairRespect(h1Closes),
-          m15: pairRespect(m15Closes),
+          h1:  pairRespect(h1Candles),
+          m15: pairRespect(m15Candles),
         };
       }));
     }
 
-    // MTI (average of h1+m15 respect scores across the 28 pairs).
+    // Roll up across the 28 pairs.
     let respectSum = 0, respectCount = 0;
     let strongCount = 0;
     let agreeCount  = 0;
+    let persistenceSum = 0, persistenceCount = 0;
     const pairs = [];
     for (const inst of PAIRS) {
       const { h1, m15 } = perPair[inst];
       if (!h1 || !m15) continue;
       const combined = (h1.respect + m15.respect) / 2;
+      const combinedPersistence = (h1.persistence + m15.persistence) / 2;
       respectSum   += combined;
       respectCount++;
+      persistenceSum += combinedPersistence;
+      persistenceCount++;
       if (combined > 80) strongCount++;
       const trendsAgree = h1.trend && m15.trend && h1.trend === m15.trend;
       if (trendsAgree) agreeCount++;
       pairs.push({
         pair: inst.replace('_', '/'),
         instrument: inst,
-        h1Trend: h1.trend, h1Respect: h1.respect,
-        m15Trend: m15.trend, m15Respect: m15.respect,
+        h1Trend: h1.trend, h1Respect: h1.respect, h1Persistence: h1.persistence,
+        m15Trend: m15.trend, m15Respect: m15.respect, m15Persistence: m15.persistence,
         combinedRespect: Math.round(combined),
+        combinedPersistence: Math.round(combinedPersistence * 100),
         trendsAgree,
       });
     }
 
     if (!respectCount) {
-      return res.status(200).json({
-        error: 'No pairs had enough candles',
-      });
+      return res.status(200).json({ error: 'No pairs had enough candles' });
     }
 
     const mti      = Math.round(respectSum / respectCount);
     const breadth  = Math.round((strongCount / respectCount) * 100);
     const agree    = Math.round((agreeCount / respectCount) * 100);
-    const health   = Math.round(0.40 * mti + 0.35 * breadth + 0.25 * agree);
+    // Market TPI = mean per-pair persistence * 100 (persistence was 0-1).
+    const tpi      = Math.round((persistenceSum / persistenceCount) * 100);
+    // New composite: 0.35 MTI + 0.25 Breadth + 0.20 Agreement + 0.20 TPI.
+    const health   = Math.round(0.35 * mti + 0.25 * breadth + 0.20 * agree + 0.20 * tpi);
     const classification = classify(health);
 
     // Sort pairs by combined respect desc so the strongest sit up top.
@@ -170,6 +267,7 @@ module.exports = async function handler(req, res) {
       mti,
       breadth,
       agreement: agree,
+      tpi,
       health,
       classification,
       strongCount,
