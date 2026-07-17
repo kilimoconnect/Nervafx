@@ -169,7 +169,7 @@
             <th style="text-align:left">Time</th>
             <th>USD</th><th>EUR</th><th>GBP</th><th>JPY</th>
             <th>CHF</th><th>CAD</th><th>AUD</th><th>NZD</th>
-            <th style="text-align:left">Setups (top-2 vs bottom-2)</th>
+            <th style="text-align:left">Setups (top-3 vs bottom-3)</th>
           </tr>
         </thead>
         <tbody id="tbody">
@@ -236,13 +236,14 @@
       return null;
     }
 
-    // Setups gated by prev-M5-candle break, ranked by breaking-candle body pips.
+    // Top-3 vs bottom-3 setups gated by prev-M5-candle break, ranked by
+    // breaking-candle body pips.
     function buildSetups(row) {
       var breaks = row.breaks || {};
       var scores = CCYS.map(function(c) { return { c: c, v: row.currencies[c] || 0 }; });
       scores.sort(function(a, b) { return b.v - a.v; });
-      var top = [scores[0], scores[1]];
-      var bot = [scores[scores.length - 1], scores[scores.length - 2]];
+      var top = scores.slice(0, 3);
+      var bot = scores.slice(-3);
       var setups = [];
       top.forEach(function(t) {
         bot.forEach(function(b) {
