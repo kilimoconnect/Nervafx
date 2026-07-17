@@ -54,14 +54,19 @@ async function fetchAllH1(sb, inst, since, until) {
   while (true) {
     const { data, error } = await sb
       .from('backtest_candles')
-      .select('time, close')
+      .select('time, high, low, close')
       .eq('instrument', inst).eq('timeframe', 'H1').eq('complete', true)
       .gte('time', since).lte('time', until)
       .order('time', { ascending: true })
       .range(offset, offset + PAGE - 1);
     if (error) throw error;
     if (!data || !data.length) break;
-    all.push(...data.map(c => ({ ms: new Date(c.time).getTime(), close: parseFloat(c.close) })));
+    all.push(...data.map(c => ({
+      ms:   new Date(c.time).getTime(),
+      high: parseFloat(c.high),
+      low:  parseFloat(c.low),
+      close: parseFloat(c.close),
+    })));
     if (data.length < PAGE) break;
     offset += PAGE;
   }
@@ -114,23 +119,33 @@ module.exports = async function handler(req, res) {
   for (let t = start.getTime(); t <= end.getTime(); t += 3600000) targetHours.push(t);
   const targetSet = new Set(targetHours);
 
-  // For each pair, compute score at each target hour.
+  // For each pair, compute score at each target hour AND record whether the
+  // current H1 close broke the immediately-preceding H1's high (BUY-break)
+  // or low (SELL-break).
   const pairScores = {}; // { pair: Map<hourMs, score> }
+  const pairBreaks = {}; // { pair: Map<hourMs, 'BUY' | 'SELL'> }
   for (const inst of PAIRS) {
     const seq = candles[inst] || [];
-    if (!seq.length) { pairScores[inst] = new Map(); continue; }
+    if (!seq.length) { pairScores[inst] = new Map(); pairBreaks[inst] = new Map(); continue; }
     const pushE20 = makeEma(20);
     const pushE50 = makeEma(50);
-    const map = new Map();
+    const scoreMap = new Map();
+    const breakMap = new Map();
+    let prev = null;
     for (const c of seq) {
       const e20 = pushE20(c.close);
       const e50 = pushE50(c.close);
-      if (e20 == null || e50 == null) continue;
-      if (targetSet.has(c.ms)) {
-        map.set(c.ms, alignmentScore(c.close, e20, e50));
+      if (e20 != null && e50 != null && targetSet.has(c.ms)) {
+        scoreMap.set(c.ms, alignmentScore(c.close, e20, e50));
+        if (prev) {
+          if      (c.close > prev.high) breakMap.set(c.ms, 'BUY');
+          else if (c.close < prev.low)  breakMap.set(c.ms, 'SELL');
+        }
       }
+      prev = c;
     }
-    pairScores[inst] = map;
+    pairScores[inst] = scoreMap;
+    pairBreaks[inst] = breakMap;
   }
 
   // Aggregate per hour across all 28 pairs.
@@ -156,7 +171,14 @@ module.exports = async function handler(req, res) {
     if (contributing < PAIRS.length * 0.7) continue; // skip hours with too few pairs
     const currencies = {};
     for (const k of CCYS) currencies[k] = agg[k] / 7;
-    rows.push({ time: d.toISOString(), currencies });
+    // Per-anchor break map: pair → 'BUY' | 'SELL' for the direction of the
+    // break of the immediately-preceding H1 candle's high/low.
+    const breaks = {};
+    for (const inst of PAIRS) {
+      const b = pairBreaks[inst].get(h);
+      if (b) breaks[inst] = b;
+    }
+    rows.push({ time: d.toISOString(), currencies, breaks });
   }
 
   res.json({

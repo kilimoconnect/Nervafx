@@ -141,7 +141,7 @@
   <div class="sub">Per-currency alignment from H1 close vs EMA20/EMA50 on all 28 pairs. Range [-1, +1].</div>
 
   <div class="controls">
-    <label>From <input type="date" id="from" value="2025-08-01"></label>
+    <label>From <input type="date" id="from"></label>
     <label>To <input type="date" id="to"></label>
     <button id="load">Load</button>
     <span class="status" id="status"></span>
@@ -233,17 +233,20 @@
 
     function findPair(strong, weak) {
       if (PAIR_SET[strong + '_' + weak]) {
-        return { pair: strong + '/' + weak, direction: 'BUY' };
+        return { pair: strong + '/' + weak, instrument: strong + '_' + weak, direction: 'BUY' };
       }
       if (PAIR_SET[weak + '_' + strong]) {
-        return { pair: weak + '/' + strong, direction: 'SELL' };
+        return { pair: weak + '/' + strong, instrument: weak + '_' + strong, direction: 'SELL' };
       }
       return null;
     }
 
-    // Build top-2 vs bottom-2 pair suggestions for a given hour row.
-    // Returns up to 4 { pair, direction, spread } entries sorted by |spread|.
+    // Build top-2 vs bottom-2 pair suggestions for a given hour row and
+    // filter out any setup where the current H1 hasn't broken the previous
+    // candle's high (BUY) or low (SELL). row.breaks is a map instrument →
+    // 'BUY' | 'SELL' emitted by the history endpoint.
     function buildSetups(row) {
+      var breaks = row.breaks || {};
       var scores = CCYS.map(function(c) { return { c: c, v: row.currencies[c] || 0 }; });
       scores.sort(function(a, b) { return b.v - a.v; });
       var top = [scores[0], scores[1]];
@@ -252,7 +255,11 @@
       top.forEach(function(t) {
         bot.forEach(function(b) {
           var m = findPair(t.c, b.c);
-          if (m) setups.push({
+          if (!m) return;
+          // Only keep setups where the current H1 has actually broken the
+          // previous candle's high/low on the same side as the setup.
+          if (breaks[m.instrument] !== m.direction) return;
+          setups.push({
             pair: m.pair,
             direction: m.direction,
             spread: t.v - b.v,
@@ -314,11 +321,19 @@
       }
     }
 
-    // Default 'to' = today.
+    // Default range = last 5 working days (Mon-Fri) ending today.
     (function() {
-      var now = new Date();
-      var iso = now.getUTCFullYear() + '-' + pad(now.getUTCMonth() + 1) + '-' + pad(now.getUTCDate());
-      document.getElementById('to').value = iso;
+      function ymd(d) { return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate()); }
+      var to = new Date();
+      var from = new Date(to);
+      var count = 0;
+      while (count < 5) {
+        var day = from.getUTCDay();
+        if (day !== 0 && day !== 6) count++;
+        if (count < 5) from.setUTCDate(from.getUTCDate() - 1);
+      }
+      document.getElementById('from').value = ymd(from);
+      document.getElementById('to').value   = ymd(to);
     })();
 
     document.getElementById('load').addEventListener('click', load);
