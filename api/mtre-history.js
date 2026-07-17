@@ -3,10 +3,10 @@
 /**
  * GET /api/mtre-history?from=YYYY-MM-DD&to=YYYY-MM-DD
  *
- * Historical MTRE. For every hour in the window, emits the top-line rollup
- * for the redesigned engine (see api/mtre.js). Pre-fetches every pair's H1
- * and M15 candles once with rolling EMAs, snapshots at each hour, then
- * evaluates the four Respect components.
+ * Historical MTRE (movement-based). For every hour in the window, emits
+ * per-side MTRE averages (BUY / SELL) on both H1 and M15, plus the H1
+ * alignment average and a classification badge. Uses the same maths as
+ * /api/mtre — see comments there for the formula rationale.
  */
 
 const { cors, getClient } = require('./_db');
@@ -18,6 +18,7 @@ const PAIRS = [
   'AUD_JPY','AUD_CHF','AUD_CAD','AUD_NZD',
   'NZD_JPY','NZD_CHF','NZD_CAD','CAD_JPY','CAD_CHF','CHF_JPY',
 ];
+const LOOKBACK = 20;
 
 function makeEma(period) {
   const k = 2 / (period + 1);
@@ -39,8 +40,7 @@ async function fetchAll(sb, inst, tf, since, until) {
   const all = [];
   let offset = 0;
   while (true) {
-    const { data, error } = await sb
-      .from('backtest_candles')
+    const { data, error } = await sb.from('backtest_candles')
       .select('time, open, high, low, close')
       .eq('instrument', inst).eq('timeframe', tf).eq('complete', true)
       .gte('time', since).lte('time', until)
@@ -49,11 +49,9 @@ async function fetchAll(sb, inst, tf, since, until) {
     if (error) throw error;
     if (!data || !data.length) break;
     all.push(...data.map(c => ({
-      ms: new Date(c.time).getTime(),
-      open:  parseFloat(c.open),
-      high:  parseFloat(c.high),
-      low:   parseFloat(c.low),
-      close: parseFloat(c.close),
+      ms:   new Date(c.time).getTime(),
+      open:  parseFloat(c.open),  high:  parseFloat(c.high),
+      low:   parseFloat(c.low),   close: parseFloat(c.close),
     })));
     if (data.length < PAGE) break;
     offset += PAGE;
@@ -61,48 +59,34 @@ async function fetchAll(sb, inst, tf, since, until) {
   return all;
 }
 
-// Structure count at candle index i, looking back N candles.
-function structureAt(seq, i, direction, N) {
-  if (i < N) return 0;
-  let count = 0;
-  for (let k = i - N + 1; k <= i; k++) {
-    const c = seq[k], p = seq[k - 1];
-    if (direction === 'BUY') {
-      if (c.high > p.high && c.low > p.low) count++;
-    } else {
-      if (c.high < p.high && c.low < p.low) count++;
-    }
-  }
-  return count / N;
-}
-
-// Per-pair Respect at index i using the pre-built EMA series.
-function respectAt(seq, closes, e20, e50, i) {
+// Per-pair movement-based respect at index i. Reads e20/e50 series
+// pre-built by the caller and walks the last N candles for the sum.
+function respectAt(seq, e20, e50, i) {
   const cur20 = e20[i], cur50 = e50[i];
   if (cur20 == null || cur50 == null) return null;
-  const cur = closes[i];
-  let direction, priceE20, priceE50;
-  if (cur20 > cur50) {
-    direction = 'BUY';
-    priceE20 = cur > cur20 ? 1 : 0;
-    priceE50 = cur > cur50 ? 1 : 0;
-  } else if (cur20 < cur50) {
-    direction = 'SELL';
-    priceE20 = cur < cur20 ? 1 : 0;
-    priceE50 = cur < cur50 ? 1 : 0;
-  } else {
-    return { direction: null, respect: 0 };
+  const direction = cur20 > cur50 ? 'BUY' : cur20 < cur50 ? 'SELL' : null;
+  if (!direction) return { direction: null, respect: 0 };
+  const N = Math.min(LOOKBACK, i);
+  const start = i - N + 1;
+  let trendMove = 0, counterMove = 0;
+  for (let k = start; k <= i; k++) {
+    const c = seq[k], p = seq[k - 1];
+    if (!p) continue;
+    const highBreak = Math.max(0, c.high - p.high);
+    const lowBreak  = Math.max(0, p.low  - c.low);
+    if (direction === 'BUY') { trendMove += highBreak; counterMove += lowBreak; }
+    else                     { trendMove += lowBreak;  counterMove += highBreak; }
   }
-  const structure = structureAt(seq, i, direction, 10);
-  const respect = Math.round(((1 + priceE20 + priceE50 + structure) / 4) * 100);
+  const total = trendMove + counterMove;
+  const respect = total > 0 ? Math.round((trendMove / total) * 100) : 0;
   return { direction, respect };
 }
 
 function classify(mtre) {
-  if (mtre >= 85) return 'STRONG_TRENDING';
-  if (mtre >= 70) return 'HEALTHY_TREND';
+  if (mtre >= 80) return 'STRONG_TRENDING';
+  if (mtre >= 65) return 'HEALTHY_TREND';
   if (mtre >= 50) return 'DEVELOPING';
-  if (mtre >= 30) return 'WEAK_TREND';
+  if (mtre >= 35) return 'WEAK_TREND';
   return 'CHAOTIC';
 }
 
@@ -150,7 +134,7 @@ module.exports = async function handler(req, res) {
           }
           const byMs = new Map();
           for (let i = 0; i < seq.length; i++) byMs.set(seq[i].ms, i);
-          return { seq, closes, e20, e50, byMs };
+          return { seq, e20, e50, byMs };
         }
         perPair[inst] = { h1: build(h1), m15: build(m15) };
       } catch (e) {
@@ -162,47 +146,47 @@ module.exports = async function handler(req, res) {
 
   const rows = [];
   const stepMs = 3600000;
-  const scanStart = start.getTime();
-  for (let t = scanStart; t <= end.getTime(); t += stepMs) {
+  for (let t = start.getTime(); t <= end.getTime(); t += stepMs) {
     const d = new Date(t);
     const dow = d.getUTCDay();
     const hr  = d.getUTCHours();
     if (dow === 6) continue;
     if (dow === 0 && hr < 21) continue;
 
-    let h1Sum = 0, m15Sum = 0, alignSum = 0, count = 0;
-    let strongBuy = 0, strongSell = 0;
+    let h1BuySum = 0, h1BuyN = 0, h1SellSum = 0, h1SellN = 0;
+    let m15BuySum = 0, m15BuyN = 0, m15SellSum = 0, m15SellN = 0;
+    let alignSum = 0, count = 0;
     for (const inst of PAIRS) {
       const pp = perPair[inst];
       if (!pp || !pp.h1 || !pp.m15) continue;
       const h1i  = pp.h1.byMs.get(t);
       const m15i = pp.m15.byMs.get(t);
       if (h1i == null || m15i == null) continue;
-      const h1r  = respectAt(pp.h1.seq,  pp.h1.closes,  pp.h1.e20,  pp.h1.e50,  h1i);
-      const m15r = respectAt(pp.m15.seq, pp.m15.closes, pp.m15.e20, pp.m15.e50, m15i);
+      const h1r  = respectAt(pp.h1.seq,  pp.h1.e20,  pp.h1.e50,  h1i);
+      const m15r = respectAt(pp.m15.seq, pp.m15.e20, pp.m15.e50, m15i);
       if (!h1r || !m15r) continue;
       count++;
-      h1Sum  += h1r.respect;
-      m15Sum += m15r.respect;
+      if (h1r.direction === 'BUY')  { h1BuySum  += h1r.respect;  h1BuyN++;  }
+      if (h1r.direction === 'SELL') { h1SellSum += h1r.respect;  h1SellN++; }
+      if (m15r.direction === 'BUY') { m15BuySum += m15r.respect; m15BuyN++; }
+      if (m15r.direction === 'SELL'){ m15SellSum += m15r.respect; m15SellN++; }
       const dirsMatch = h1r.direction && m15r.direction && h1r.direction === m15r.direction;
       alignSum += dirsMatch ? (h1r.respect + m15r.respect) / 2 : 0;
-      if (h1r.direction === 'BUY'  && h1r.respect >= 70) strongBuy++;
-      if (h1r.direction === 'SELL' && h1r.respect >= 70) strongSell++;
     }
     if (count < PAIRS.length * 0.7) continue;
-    const h1Avg  = Math.round(h1Sum  / count);
-    const m15Avg = Math.round(m15Sum / count);
-    const align  = Math.round(alignSum / count);
-    const mtre   = Math.round(0.40 * h1Avg + 0.40 * m15Avg + 0.20 * align);
+    const h1Buy   = h1BuyN  ? Math.round(h1BuySum  / h1BuyN)  : 0;
+    const h1Sell  = h1SellN ? Math.round(h1SellSum / h1SellN) : 0;
+    const m15Buy  = m15BuyN ? Math.round(m15BuySum / m15BuyN) : 0;
+    const m15Sell = m15SellN? Math.round(m15SellSum/ m15SellN): 0;
+    const align   = Math.round(alignSum / count);
+    const h1Dominant = Math.max(h1Buy, h1Sell);
     rows.push({
       time: d.toISOString(),
-      h1AvgRespect: h1Avg,
-      m15AvgRespect: m15Avg,
+      h1BuyMtre: h1Buy, h1SellMtre: h1Sell,
+      m15BuyMtre: m15Buy, m15SellMtre: m15Sell,
       alignment: align,
-      strongBuy,
-      strongSell,
-      mtre,
-      state: classify(mtre),
+      dominantSide: h1Buy >= h1Sell ? 'BUY' : 'SELL',
+      state: classify(h1Dominant),
     });
   }
 
