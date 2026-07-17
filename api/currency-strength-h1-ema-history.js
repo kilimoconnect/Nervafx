@@ -129,9 +129,16 @@ module.exports = async function handler(req, res) {
   // current H1 close broke the highest high (BUY) or lowest low (SELL) of
   // the 6 immediately-preceding H1 candles. Records the breaking bar's body
   // size in pips so the frontend can rank setups by the strongest break.
+  //
+  // Also track a 20-candle trend-alignment window per pair: for each of the
+  // last 20 completed candles, classify as 'above' (close > EMA20 AND >
+  // EMA50), 'below' (close < both), or 'between'. Emitted on the break entry
+  // as { above, below } counts so the frontend can gate setups on the
+  // "≥ 10 of last 20 closed in trend direction" rule.
   const BREAK_LOOKBACK = 6;
+  const TREND_LOOKBACK = 20;
   const pairScores = {}; // { pair: Map<hourMs, score> }
-  const pairBreaks = {}; // { pair: Map<hourMs, { direction, bodyPips }> }
+  const pairBreaks = {}; // { pair: Map<hourMs, { direction, bodyPips, above, below }> }
   for (const inst of PAIRS) {
     const seq = candles[inst] || [];
     if (!seq.length) { pairScores[inst] = new Map(); pairBreaks[inst] = new Map(); continue; }
@@ -140,18 +147,29 @@ module.exports = async function handler(req, res) {
     const scoreMap = new Map();
     const breakMap = new Map();
     const pd = pipDiv(inst);
-    const prevWin = []; // rolling window of the last BREAK_LOOKBACK candles
+    const prevWin = []; // last BREAK_LOOKBACK candles for high/low break
+    const stateWin = []; // last TREND_LOOKBACK candles' classifications
     for (const c of seq) {
       const e20 = pushE20(c.close);
       const e50 = pushE50(c.close);
+      if (e20 != null && e50 != null) {
+        let state = 'between';
+        if (c.close > e20 && c.close > e50) state = 'above';
+        else if (c.close < e20 && c.close < e50) state = 'below';
+        stateWin.push(state);
+        if (stateWin.length > TREND_LOOKBACK) stateWin.shift();
+      }
       if (e20 != null && e50 != null && targetSet.has(c.ms)) {
         scoreMap.set(c.ms, alignmentScore(c.close, e20, e50));
         if (prevWin.length >= BREAK_LOOKBACK) {
           let maxH = -Infinity, minL = Infinity;
           for (const p of prevWin) { if (p.high > maxH) maxH = p.high; if (p.low < minL) minL = p.low; }
           const bodyPips = Math.round((Math.abs(c.close - c.open) / pd) * 10) / 10;
-          if      (c.close > maxH) breakMap.set(c.ms, { direction: 'BUY',  bodyPips });
-          else if (c.close < minL) breakMap.set(c.ms, { direction: 'SELL', bodyPips });
+          // Count trend-aligned closes over the last TREND_LOOKBACK bars.
+          let above = 0, below = 0;
+          for (const s of stateWin) { if (s === 'above') above++; else if (s === 'below') below++; }
+          if      (c.close > maxH) breakMap.set(c.ms, { direction: 'BUY',  bodyPips, above, below });
+          else if (c.close < minL) breakMap.set(c.ms, { direction: 'SELL', bodyPips, above, below });
         }
       }
       prevWin.push(c);

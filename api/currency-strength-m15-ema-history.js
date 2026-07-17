@@ -116,11 +116,14 @@ module.exports = async function handler(req, res) {
   for (let t = start.getTime(); t <= end.getTime(); t += STEP) targetAnchors.push(t);
   const targetSet = new Set(targetAnchors);
 
-  // Break check widens to the last 6 M15 candles: current close must beat
-  // max(high) (BUY) or drop below min(low) (SELL) of the preceding 6 bars.
+  // Break check on last 6 M15 candles + trend-alignment window on last 20.
+  // For each of the last 20 M15 closes we classify above (> EMA20 AND
+  // > EMA50), below (< both), or between. Emitted on the break entry so
+  // the frontend can gate setups on '≥ 10 of last 20 in trend direction'.
   const BREAK_LOOKBACK = 6;
+  const TREND_LOOKBACK = 20;
   const pairScores = {};
-  const pairBreaks = {}; // { pair: Map<ms, { direction, bodyPips }> }
+  const pairBreaks = {}; // { pair: Map<ms, { direction, bodyPips, above, below }> }
   for (const inst of PAIRS) {
     const seq = candles[inst] || [];
     if (!seq.length) { pairScores[inst] = new Map(); pairBreaks[inst] = new Map(); continue; }
@@ -130,17 +133,27 @@ module.exports = async function handler(req, res) {
     const breakMap = new Map();
     const pd = pipDiv(inst);
     const prevWin = [];
+    const stateWin = [];
     for (const c of seq) {
       const e20 = pushE20(c.close);
       const e50 = pushE50(c.close);
+      if (e20 != null && e50 != null) {
+        let state = 'between';
+        if (c.close > e20 && c.close > e50) state = 'above';
+        else if (c.close < e20 && c.close < e50) state = 'below';
+        stateWin.push(state);
+        if (stateWin.length > TREND_LOOKBACK) stateWin.shift();
+      }
       if (e20 != null && e50 != null && targetSet.has(c.ms)) {
         scoreMap.set(c.ms, alignmentScore(c.close, e20, e50));
         if (prevWin.length >= BREAK_LOOKBACK) {
           let maxH = -Infinity, minL = Infinity;
           for (const p of prevWin) { if (p.high > maxH) maxH = p.high; if (p.low < minL) minL = p.low; }
           const bodyPips = Math.round((Math.abs(c.close - c.open) / pd) * 10) / 10;
-          if      (c.close > maxH) breakMap.set(c.ms, { direction: 'BUY',  bodyPips });
-          else if (c.close < minL) breakMap.set(c.ms, { direction: 'SELL', bodyPips });
+          let above = 0, below = 0;
+          for (const s of stateWin) { if (s === 'above') above++; else if (s === 'below') below++; }
+          if      (c.close > maxH) breakMap.set(c.ms, { direction: 'BUY',  bodyPips, above, below });
+          else if (c.close < minL) breakMap.set(c.ms, { direction: 'SELL', bodyPips, above, below });
         }
       }
       prevWin.push(c);

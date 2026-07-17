@@ -261,11 +261,16 @@
           if (!m) return;
           var br = breaks[m.instrument];
           if (!br || br.direction !== m.direction) return;
+          // Trend-participation gate: at least 10 of the last 20 candles
+          // must have closed on the aligned side of BOTH EMA20 and EMA50.
+          var trendHits = m.direction === 'BUY' ? (br.above || 0) : (br.below || 0);
+          if (trendHits < 10) return;
           setups.push({
             pair: m.pair,
             direction: m.direction,
             spread: t.v - b.v,
             bodyPips: br.bodyPips || 0,
+            trendHits: trendHits,
           });
         });
       });

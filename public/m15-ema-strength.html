@@ -250,9 +250,12 @@
           if (!m) return;
           var br = breaks[m.instrument];
           if (!br || br.direction !== m.direction) return;
+          var trendHits = m.direction === 'BUY' ? (br.above || 0) : (br.below || 0);
+          if (trendHits < 10) return;
           setups.push({
             pair: m.pair, direction: m.direction,
             spread: t.v - b.v, bodyPips: br.bodyPips || 0,
+            trendHits: trendHits,
           });
         });
       });
