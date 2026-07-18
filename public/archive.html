@@ -874,15 +874,18 @@
       });
     }
 
-    // Energy chart: mark the LAST bar of every 3-consecutive-increase run
-    // as "confluence" (pink). Bars are chronologically ordered per day.
-    if (metric.field === 'market_energy') {
+    // Mark the LAST bar of every 3-consecutive-move run in the favourable
+    // direction. Non-inverted metrics = 3 rising bars; inverted metrics
+    // (higher value = worse) = 3 falling bars. Applied to all engines —
+    // energy shows this pink, others show green.
+    {
+      const inv = metric.inverted === true;
       for (const d of Object.keys(byDate)) {
         const arr = byDate[d];
         for (let i = 2; i < arr.length; i++) {
-          if (arr[i].val > arr[i - 1].val && arr[i - 1].val > arr[i - 2].val) {
-            arr[i].confl = true;
-          }
+          const a = arr[i - 2].val, b = arr[i - 1].val, c = arr[i].val;
+          const streak = inv ? (c < b && b < a) : (c > b && b > a);
+          if (streak) arr[i].confl = true;
         }
       }
     }
@@ -936,23 +939,21 @@
         const pct = Math.round((absVal / maxVal) * 100);
         const localTime = new Date(b.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
         const localHour = localTime.slice(0, 2);
-        // Threshold-based green: green when bar meets V2 engine threshold
-        // (energy bars keep session color — only pink full-confluence marks)
         const isEnergyMetric = metric.field === 'market_energy';
+        const isConfl = !!b.confl; // 3rd consecutive bar in the favourable direction
+        // Colour scheme:
+        //   canBeNegative → red/green by sign (unchanged)
+        //   energy        → session colour normally, pink on streak
+        //   others        → session colour normally, green on streak
         let barColor;
         if (metric.canBeNegative) {
           barColor = b.val > 0 ? '#22c55e' : b.val < 0 ? '#ef4444' : '#475569';
         } else if (isEnergyMetric) {
           barColor = color;
-        } else if (metric.inverted) {
-          barColor = (metric.v2Threshold !== undefined && b.val <= metric.v2Threshold) ? '#22c55e' : color;
         } else {
-          barColor = (metric.v2Threshold !== undefined && b.val >= metric.v2Threshold) ? '#22c55e' : color;
+          barColor = isConfl ? '#22c55e' : color;
         }
-        const meetsThreshold = metric.v2Threshold !== undefined
-          ? (metric.inverted ? b.val <= metric.v2Threshold : b.val >= metric.v2Threshold)
-          : false;
-        const cls = meetsThreshold && !metric.canBeNegative && !isEnergyMetric ? 'bc-bar bc-bar-streak' : 'bc-bar';
+        const cls = (isConfl && !metric.canBeNegative && !isEnergyMetric) ? 'bc-bar bc-bar-streak' : 'bc-bar';
         const displayVal = metric.canBeNegative && b.val > 0 ? `+${b.val}` : `${b.val}`;
 
         if (b.session !== prevSess && prevSess !== '') {
@@ -960,14 +961,11 @@
         }
         prevSess = b.session;
 
-        // Energy bars are clickable — open the hour drill-down page
-        const isEnergyBar = metric.field === 'market_energy';
-        const clickAttr = isEnergyBar
-          ? ` onclick="window.open('/energy-hour.html?time=${encodeURIComponent((b.time || '').slice(0, 13))}','_blank')"`
-          : '';
-        const isConfl = !!b.confl; // energy: third consecutive rising bar
-        const clsFinal = (isEnergyBar ? cls + ' bc-bar-click' : cls) + (isConfl ? ' bc-bar-confl' : '');
-        const conflTip = isConfl ? ' — 3rd consecutive rising bar' : (isEnergyBar ? ' — click for hour analysis' : '');
+        // All engine bars are clickable — open the hour drill-down page.
+        const clickAttr = ` onclick="window.open('/energy-hour.html?time=${encodeURIComponent((b.time || '').slice(0, 13))}','_blank')"`;
+        const clsFinal = cls + ' bc-bar-click' + (isConfl ? ' bc-bar-confl' : '');
+        const streakDir = metric.inverted ? 'falling' : 'rising';
+        const conflTip = isConfl ? ` — 3rd consecutive ${streakDir} bar` : ' — click for hour analysis';
 
         html += `<div class="${clsFinal}"${clickAttr} title="${SESS_LABEL[b.session] || b.session}: ${displayVal} at ${localTime} ${tzLabel}${conflTip}">
           <span class="bc-bar-val" ${metric.canBeNegative && b.val < 0 ? 'style="color:#ef4444"' : ''}>${displayVal}</span>
@@ -1046,7 +1044,9 @@
       <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#0ea5e9;margin-right:4px;vertical-align:middle"></span>London</span>
       <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#a855f7;margin-right:4px;vertical-align:middle"></span>New York</span>
       ${metric.v2Threshold !== undefined && metric.field !== 'market_energy' ? '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;margin-right:4px;vertical-align:middle"></span>Met threshold</span>' : ''}
-      ${metric.field === 'market_energy' ? '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ec4899;margin-right:4px;vertical-align:middle"></span>3rd consecutive rising bar</span>' : ''}
+      ${metric.field === 'market_energy'
+        ? '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ec4899;margin-right:4px;vertical-align:middle"></span>3rd consecutive ' + (metric.inverted ? 'falling' : 'rising') + ' bar</span>'
+        : '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;margin-right:4px;vertical-align:middle"></span>3rd consecutive ' + (metric.inverted ? 'falling' : 'rising') + ' bar (click for hour analysis)</span>'}
     </div>`;
 
     container.innerHTML = html;

@@ -6074,16 +6074,19 @@ function _renderMetricBars(container, rows, key) {
     });
   }
 
-  // For the energy chart, mark the LAST bar of every 3-consecutive-increase
-  // run as "confluence" (pink). Bars must be chronologically ordered per day
-  // — the source `rows` are already sorted, and byDate preserves order.
-  if (key === 'energy') {
+  // Mark the LAST bar of every 3-consecutive-move run in the favourable
+  // direction. For non-inverted metrics that means 3 rising bars in a row;
+  // for inverted metrics (higher value = worse) it means 3 falling bars.
+  // Fires on ALL engines — energy shows this as pink, other engines as
+  // their normal green highlight. Bars are chronologically ordered per day.
+  {
+    const inv = cfg.inverted === true;
     for (const d of Object.keys(byDate)) {
       const arr = byDate[d];
       for (let i = 2; i < arr.length; i++) {
-        if (arr[i].value > arr[i - 1].value && arr[i - 1].value > arr[i - 2].value) {
-          arr[i].confl = true;
-        }
+        const a = arr[i - 2].value, b = arr[i - 1].value, c = arr[i].value;
+        const streak = inv ? (c < b && b < a) : (c > b && b > a);
+        if (streak) arr[i].confl = true;
       }
     }
   }
@@ -6138,25 +6141,24 @@ function _renderMetricBars(container, rows, key) {
       const pct = Math.round((b.value / maxVal) * 100);
       const localTime = new Date(b.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
       const localHour = localTime.slice(0, 2);
-      const meetsThreshold = cfg.v2Threshold !== undefined
-        ? (cfg.inverted ? b.value <= cfg.v2Threshold : b.value >= cfg.v2Threshold)
-        : false;
-      // Energy bars: no green threshold coloring — only pink full-confluence marks
-      const barColor = (meetsThreshold && key !== 'energy') ? '#22c55e' : color;
-      const cls = (meetsThreshold && key !== 'energy') ? 'bc-bar bc-bar-streak' : 'bc-bar';
+      const isConfl = !!b.confl; // third consecutive bar in the favourable direction
+      // Colour scheme:
+      //   energy   → pink on the confluence bar, session colour otherwise
+      //   others   → green on the confluence bar, session colour otherwise
+      // Removed the old meetsThreshold gate — the streak IS the signal now.
+      const barColor = (isConfl && key !== 'energy') ? '#22c55e' : color;
+      const cls = (isConfl && key !== 'energy') ? 'bc-bar bc-bar-streak' : 'bc-bar';
 
       if (b.session !== prevSess && prevSess !== '') {
         html += '<div class="bc-sess-divider"></div>';
       }
       prevSess = b.session;
 
-      // Energy bars are clickable — open the hour drill-down page
-      const clickAttr = key === 'energy'
-        ? ` onclick="window.open('/energy-hour.html?time=${encodeURIComponent((b.time || '').slice(0, 13))}','_blank')"`
-        : '';
-      const isConfl = !!b.confl; // energy: third consecutive rising bar
-      const clsFinal = (key === 'energy' ? cls + ' bc-bar-click' : cls) + (isConfl ? ' bc-bar-confl' : '');
-      const conflTip = isConfl ? ' — 3rd consecutive rising bar' : (key === 'energy' ? ' — click for hour analysis' : '');
+      // All engine bars are clickable — open the hour drill-down page.
+      const clickAttr = ` onclick="window.open('/energy-hour.html?time=${encodeURIComponent((b.time || '').slice(0, 13))}','_blank')"`;
+      const clsFinal = cls + ' bc-bar-click' + (isConfl ? ' bc-bar-confl' : '');
+      const streakDir = cfg.inverted ? 'falling' : 'rising';
+      const conflTip = isConfl ? ` — 3rd consecutive ${streakDir} bar` : ' — click for hour analysis';
 
       html += `<div class="${clsFinal}"${clickAttr} title="${SESS_LABEL[b.session] || b.session}: ${b.value}${cfg.unit} at ${localTime} ${tzLabel}${conflTip}">
         <span class="bc-bar-val">${b.value}</span>
@@ -6194,10 +6196,12 @@ function _renderMetricBars(container, rows, key) {
 
     dayLines.push(`Peak of ${dayMax}${cfg.unit} at ${peakTime} during ${peakSess}.`);
 
-    if (cfg.v2Threshold !== undefined) {
-      if (thresholdPasses > 0) dayLines.push(`${thresholdPasses}/${values.length} bars met engine threshold — contributing to Engine Confluence.`);
-      else dayLines.push(`No bars met engine threshold — not contributing to Engine Confluence.`);
-    }
+    // Streak summary — count how many bars completed a 3-consecutive-move
+    // run in the favourable direction on this day.
+    const streakCount = bars.filter(b => b.confl).length;
+    const streakDir = cfg.inverted ? 'falling' : 'rising';
+    if (streakCount > 0) dayLines.push(`${streakCount} bar(s) completed a 3-consecutive-${streakDir} streak.`);
+    else dayLines.push(`No 3-consecutive-${streakDir} streaks on this day.`);
 
     for (const g of sessGroups) {
       const sBars = bars.filter(b => b.session === g.session);
@@ -6234,7 +6238,9 @@ function _renderMetricBars(container, rows, key) {
     <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#0ea5e9"></span> London</span>
     <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#a855f7"></span> New York</span>
     ${key !== 'energy' ? `<span class="bc-legend-item"><span class="bc-legend-dot" style="background:#22c55e"></span> ${thresholdLabel}</span>` : ''}
-    ${key === 'energy' ? '<span class="bc-legend-item"><span class="bc-legend-dot" style="background:#ec4899"></span> 3rd consecutive rising bar</span>' : ''}
+    ${key === 'energy'
+      ? '<span class="bc-legend-item"><span class="bc-legend-dot" style="background:#ec4899"></span> 3rd consecutive ' + (cfg.inverted ? 'falling' : 'rising') + ' bar</span>'
+      : '<span class="bc-legend-item"><span class="bc-legend-dot" style="background:#22c55e"></span> 3rd consecutive ' + (cfg.inverted ? 'falling' : 'rising') + ' bar</span>'}
   </div>`;
 
   container.innerHTML = html;
