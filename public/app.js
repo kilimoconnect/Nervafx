@@ -6759,21 +6759,25 @@ function _renderMeAnalysisModal() {
     </div>`;
 }
 
-function _meMarketCycleBanner(cycle, latestHourly) {
+function _meMarketCycleBanner(cycle, latestHourly, recentHourly) {
   const color = cycle ? (ME_MARKET_CYCLE_COLOR[cycle] || '#64748b') : '#64748b';
   const label = cycle ? (ME_MARKET_CYCLE_LABEL[cycle]  || cycle.replace(/_/g, ' ')) : '—';
 
-  // Check which engines meet their V2 threshold in the latest hourly bar
+  // Button turns green when the last 3 hourly bars completed a
+  // 3-consecutive-move in the favourable direction (rising for normal
+  // metrics, falling for inverted). Matches the pink/green streak rule on
+  // the individual metric charts.
   function engineBtn(key, displayLabel) {
     const cfg = METRIC_CHART_CONFIG[key];
-    if (!cfg || !latestHourly || cfg.sessionLevel) {
+    if (!cfg || cfg.sessionLevel) {
       return `<button class="me-ai-toggle me-btn-metric premium-only" onclick="openMetricChart('${key}')">${displayLabel}</button>`;
     }
-    const val = parseFloat(latestHourly[cfg.field]) || 0;
-    const meets = cfg.v2Threshold !== undefined
-      ? (cfg.inverted ? val <= cfg.v2Threshold : val >= cfg.v2Threshold)
-      : false;
-    const style = meets ? ' style="background:#22c55e;color:#fff;border-color:#22c55e"' : '';
+    let streak = false;
+    if (Array.isArray(recentHourly) && recentHourly.length >= 3 && cfg.field) {
+      const [a, b, c] = recentHourly.slice(-3).map(r => parseFloat(r[cfg.field]) || 0);
+      streak = cfg.inverted ? (c < b && b < a) : (c > b && b > a);
+    }
+    const style = streak ? ' style="background:#22c55e;color:#fff;border-color:#22c55e"' : '';
     return `<button class="me-ai-toggle me-btn-metric premium-only"${style} onclick="openMetricChart('${key}')">${displayLabel}</button>`;
   }
 
@@ -6958,7 +6962,7 @@ function renderMarketEnergy(sessions, expansionPressure, marketCycle, currentSes
   const latestHourlyRow = allHourly.length ? allHourly[allHourly.length - 1] : null;
 
   el.innerHTML = `
-    ${_meMarketCycleBanner(marketCycle, latestHourlyRow)}
+    ${_meMarketCycleBanner(marketCycle, latestHourlyRow, allHourly)}
     <div class="me-card-grid">
       ${sorted.map(({ name }) => _meSessionCard(name, byName[name] || null, _meSessionStatus(name, currentSession), allHourly)).join('')}
     </div>
