@@ -6062,13 +6062,6 @@ function _renderMetricBars(container, rows, key) {
     .formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value || '';
   const SKIP_SESSIONS = new Set(['LOW_LIQUIDITY', 'DEAD_HOURS']);
 
-  // Full engine confluence: all four supporting engines green in the same hour
-  const _allEnginesGreen = r =>
-    (parseFloat(r.tradability_score) || 0) >= 30 &&
-    (parseFloat(r.movement_score)    || 0) >= 35 &&
-    (parseFloat(r.breadth_score)     || 0) >= 70 &&
-    (parseFloat(r.agreement_score)   || 0) >= 35;
-
   const byDate = {};
   for (const r of rows) {
     if (SKIP_SESSIONS.has(r.session_name)) continue;
@@ -6078,8 +6071,21 @@ function _renderMetricBars(container, rows, key) {
       time: r.time_utc,
       session: r.session_name,
       value: Math.round(parseFloat(r[cfg.field]) || 0),
-      confl: key === 'energy' && _allEnginesGreen(r),
     });
+  }
+
+  // For the energy chart, mark the LAST bar of every 3-consecutive-increase
+  // run as "confluence" (pink). Bars must be chronologically ordered per day
+  // — the source `rows` are already sorted, and byDate preserves order.
+  if (key === 'energy') {
+    for (const d of Object.keys(byDate)) {
+      const arr = byDate[d];
+      for (let i = 2; i < arr.length; i++) {
+        if (arr[i].value > arr[i - 1].value && arr[i - 1].value > arr[i - 2].value) {
+          arr[i].confl = true;
+        }
+      }
+    }
   }
 
   const todayStr = _todayLocal();
@@ -6148,9 +6154,9 @@ function _renderMetricBars(container, rows, key) {
       const clickAttr = key === 'energy'
         ? ` onclick="window.open('/energy-hour.html?time=${encodeURIComponent((b.time || '').slice(0, 13))}','_blank')"`
         : '';
-      const isConfl = b.confl && meetsThreshold;
+      const isConfl = !!b.confl; // energy: third consecutive rising bar
       const clsFinal = (key === 'energy' ? cls + ' bc-bar-click' : cls) + (isConfl ? ' bc-bar-confl' : '');
-      const conflTip = isConfl ? ' — FULL CONFLUENCE: all engines green' : (key === 'energy' ? ' — click for hour analysis' : '');
+      const conflTip = isConfl ? ' — 3rd consecutive rising bar' : (key === 'energy' ? ' — click for hour analysis' : '');
 
       html += `<div class="${clsFinal}"${clickAttr} title="${SESS_LABEL[b.session] || b.session}: ${b.value}${cfg.unit} at ${localTime} ${tzLabel}${conflTip}">
         <span class="bc-bar-val">${b.value}</span>
@@ -6228,7 +6234,7 @@ function _renderMetricBars(container, rows, key) {
     <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#0ea5e9"></span> London</span>
     <span class="bc-legend-item"><span class="bc-legend-dot" style="background:#a855f7"></span> New York</span>
     ${key !== 'energy' ? `<span class="bc-legend-item"><span class="bc-legend-dot" style="background:#22c55e"></span> ${thresholdLabel}</span>` : ''}
-    ${key === 'energy' ? '<span class="bc-legend-item"><span class="bc-legend-dot" style="background:#ec4899"></span> Full confluence (all engines green)</span>' : ''}
+    ${key === 'energy' ? '<span class="bc-legend-item"><span class="bc-legend-dot" style="background:#ec4899"></span> 3rd consecutive rising bar</span>' : ''}
   </div>`;
 
   container.innerHTML = html;

@@ -862,13 +862,6 @@
 
     const SKIP = new Set(['LOW_LIQUIDITY', 'DEAD_HOURS']);
 
-    // Full engine confluence: all four supporting engines green in the same hour
-    const _allEnginesGreen = r =>
-      (parseFloat(r.tradability_score) || 0) >= 30 &&
-      (parseFloat(r.movement_score)    || 0) >= 35 &&
-      (parseFloat(r.breadth_score)     || 0) >= 70 &&
-      (parseFloat(r.agreement_score)   || 0) >= 35;
-
     const byDate = {};
     for (const r of rows) {
       if (SKIP.has(r.session_name)) continue;
@@ -878,8 +871,20 @@
         time: r.time_utc,
         session: r.session_name,
         val: Math.round(parseFloat(r[metric.field]) || 0),
-        confl: metric.field === 'market_energy' && _allEnginesGreen(r),
       });
+    }
+
+    // Energy chart: mark the LAST bar of every 3-consecutive-increase run
+    // as "confluence" (pink). Bars are chronologically ordered per day.
+    if (metric.field === 'market_energy') {
+      for (const d of Object.keys(byDate)) {
+        const arr = byDate[d];
+        for (let i = 2; i < arr.length; i++) {
+          if (arr[i].val > arr[i - 1].val && arr[i - 1].val > arr[i - 2].val) {
+            arr[i].confl = true;
+          }
+        }
+      }
     }
 
     const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC') }).format(new Date());
@@ -960,9 +965,9 @@
         const clickAttr = isEnergyBar
           ? ` onclick="window.open('/energy-hour.html?time=${encodeURIComponent((b.time || '').slice(0, 13))}','_blank')"`
           : '';
-        const isConfl = b.confl && meetsThreshold;
+        const isConfl = !!b.confl; // energy: third consecutive rising bar
         const clsFinal = (isEnergyBar ? cls + ' bc-bar-click' : cls) + (isConfl ? ' bc-bar-confl' : '');
-        const conflTip = isConfl ? ' — FULL CONFLUENCE: all engines green' : (isEnergyBar ? ' — click for hour analysis' : '');
+        const conflTip = isConfl ? ' — 3rd consecutive rising bar' : (isEnergyBar ? ' — click for hour analysis' : '');
 
         html += `<div class="${clsFinal}"${clickAttr} title="${SESS_LABEL[b.session] || b.session}: ${displayVal} at ${localTime} ${tzLabel}${conflTip}">
           <span class="bc-bar-val" ${metric.canBeNegative && b.val < 0 ? 'style="color:#ef4444"' : ''}>${displayVal}</span>
@@ -1041,7 +1046,7 @@
       <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#0ea5e9;margin-right:4px;vertical-align:middle"></span>London</span>
       <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#a855f7;margin-right:4px;vertical-align:middle"></span>New York</span>
       ${metric.v2Threshold !== undefined && metric.field !== 'market_energy' ? '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;margin-right:4px;vertical-align:middle"></span>Met threshold</span>' : ''}
-      ${metric.field === 'market_energy' ? '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ec4899;margin-right:4px;vertical-align:middle"></span>Full confluence (all engines green)</span>' : ''}
+      ${metric.field === 'market_energy' ? '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ec4899;margin-right:4px;vertical-align:middle"></span>3rd consecutive rising bar</span>' : ''}
     </div>`;
 
     container.innerHTML = html;
