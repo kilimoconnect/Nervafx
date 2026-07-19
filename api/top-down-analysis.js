@@ -381,11 +381,12 @@ module.exports = async function handler(req, res) {
       }
 
       if (!pairs.length) continue;
-      // Rank pairs by Structure (Str) — it's a more direct measure of
-      // structural quality than the smooth-trend composite, which mixes in
-      // Daily + DE + Persistence + wicks and can flatten the ranking when
-      // structure is really what we want to surface.
-      pairs.sort((a, b) => b.structure - a.structure);
+      // Rank pairs by the SUM of all 8 sub-scores
+      // (D + Str + DE + Per + Swg + Con + Wck + PB) rather than Structure
+      // alone — a pair only sorts high if it's strong across every metric.
+      const subSum = p => p.dyScore + p.structure + p.de + p.persistence
+        + p.swingClean + p.consecutive + p.wickQuality + p.pullbackDepth;
+      pairs.sort((a, b) => subSum(b) - subSum(a));
 
       rows.push({
         time,

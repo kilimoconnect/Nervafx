@@ -284,9 +284,12 @@
 
         for (var i = 0; i < row.pairs.length; i++) {
           var p = row.pairs[i];
-          // Ranking metric is Structure (Str) — the bar, colour class, and
-          // big value all read off it.
-          var rank = p.structure;
+          // Ranking metric is the combined average of all 8 sub-scores
+          // (D + Str + DE + Per + Swg + Con + Wck + PB) / 8 — ordered
+          // identically to the backend's sum-based sort, kept on the 0-100
+          // scale so the bar and colour class stay meaningful.
+          var rank = Math.round((p.dyScore + p.structure + p.de + p.persistence
+            + p.swingClean + p.consecutive + p.wickQuality + p.pullbackDepth) / 8);
           var cls = sc(rank);
           var dirCls = p.direction === 'BUY' ? 'br-buy' : 'br-sell';
 
