@@ -329,10 +329,15 @@ module.exports = async function handler(req, res) {
         // Composite
         const score = smoothTrendScore(dyScore, sub);
 
-        // Structure + Swing quality gates: both must be ≥ 70. The
-        // previous-day-high/low break gate is retired — the 6-candle H1
-        // break and structural quality gates carry the qualification.
+        // Quality gates. All four must pass:
+        //   Structure (Str)              ≥ 70
+        //   Swing Clean (Swg)            ≥ 70
+        //   Daily alignment (D / dyScore)≥ 50
+        //   Directional efficiency (DE)  ≥ 30
+        // The previous-day-high/low break gate is retired — the 6-candle H1
+        // break and the four quality gates carry the qualification.
         if (sub.structure < 70 || sub.swingClean < 70) continue;
+        if (dyScore < 50 || sub.de < 30) continue;
 
         // h1Break / breakLevel retained purely so the frontend BRK badge
         // still shows when the current close cleared yesterday's range;
