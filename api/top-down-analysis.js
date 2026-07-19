@@ -376,11 +376,11 @@ module.exports = async function handler(req, res) {
       }
 
       if (!pairs.length) continue;
-      // Rank pairs by Swing Clean (Swg) — it's a more direct measure of
+      // Rank pairs by Structure (Str) — it's a more direct measure of
       // structural quality than the smooth-trend composite, which mixes in
       // Daily + DE + Persistence + wicks and can flatten the ranking when
       // structure is really what we want to surface.
-      pairs.sort((a, b) => b.swingClean - a.swingClean);
+      pairs.sort((a, b) => b.structure - a.structure);
 
       rows.push({
         time,
