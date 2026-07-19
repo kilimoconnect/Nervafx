@@ -329,10 +329,14 @@ module.exports = async function handler(req, res) {
         // Composite
         const score = smoothTrendScore(dyScore, sub);
 
-        // Previous-day break gate (was previously just a BRK badge bonus):
-        // require the current H1 close to have taken out the prior day's
-        // high (BUY) or low (SELL). Sits on top of the 6-candle H1 break —
-        // both must be true for a pair to qualify.
+        // Structure + Swing quality gates: both must be ≥ 70. The
+        // previous-day-high/low break gate is retired — the 6-candle H1
+        // break and structural quality gates carry the qualification.
+        if (sub.structure < 70 || sub.swingClean < 70) continue;
+
+        // h1Break / breakLevel retained purely so the frontend BRK badge
+        // still shows when the current close cleared yesterday's range;
+        // it no longer disqualifies a pair.
         let h1Break = false;
         let breakLevel = null;
         if (direction === 'BUY' && currentClose > prevDayOHLC.high) {
@@ -342,7 +346,6 @@ module.exports = async function handler(req, res) {
           h1Break = true;
           breakLevel = prevDayOHLC.low;
         }
-        if (!h1Break) continue;
 
         // Dominant-body gate: the breaking H1 candle's body must be at least
         // 1.5× the previous H1 candle's body. Filters out timid breaks where
