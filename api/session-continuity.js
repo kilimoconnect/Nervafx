@@ -6,9 +6,7 @@ const { requirePlan } = require('./_plan');
 // GET /api/session-continuity?days=30
 // For each session, uses 6H strength to rank currencies and form pairs.
 // Checks the 2 previous sessions for continuation (same pair + same direction).
-// Filters by growing spread + current 2H strength confirmation, and — for the
-// live session only — an M15 breakout (latest M15 close beyond the previous
-// M15's high for BUY / low for SELL).
+// Filters by growing spread + current 2H strength confirmation.
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
 const VALID_PAIRS = new Set([
@@ -203,43 +201,40 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // Determine current session for the M15 breakout filter
+    // Determine current session for H1 breakout filter
     const nowH = new Date().getUTCHours();
     const currSess = getSession(nowH);
     const currDate = currSess ? sessionDate(new Date().toISOString(), currSess) : null;
 
-    // Fetch the last 2 complete M15 candles per pair for the breakout check
-    // (current session only). Monitoring on M15 rather than H1 means a live
-    // pair is re-evaluated every 15 minutes instead of once an hour, so a
-    // continuation is caught as it happens rather than up to 59 minutes late.
+    // Fetch last 2 complete H1 candles per pair for H1 breakout check (current session only)
     const allInstruments = [...VALID_PAIRS];
-    const m15Breakouts = {};
+    const h1Breakouts = {};
     if (currSess) {
-      const { data: m15Candles } = await sb
+      const { data: h1Candles } = await sb
         .from('backtest_candles')
         .select('instrument, time, high, low, close')
         .in('instrument', allInstruments)
-        .eq('timeframe', 'M15')
+        .eq('timeframe', 'H1')
         .eq('complete', true)
         .order('time', { ascending: false })
         .limit(allInstruments.length * 2);
 
-      const m15Map = {};
-      for (const c of (m15Candles || [])) {
-        if (!m15Map[c.instrument]) m15Map[c.instrument] = [];
-        if (m15Map[c.instrument].length < 2) {
-          m15Map[c.instrument].push({
+      const h1Map = {};
+      for (const c of (h1Candles || [])) {
+        if (!h1Map[c.instrument]) h1Map[c.instrument] = [];
+        if (h1Map[c.instrument].length < 2) {
+          h1Map[c.instrument].push({
             high: parseFloat(c.high),
             low: parseFloat(c.low),
             close: parseFloat(c.close),
           });
         }
       }
-      for (const [inst, candles] of Object.entries(m15Map)) {
+      for (const [inst, candles] of Object.entries(h1Map)) {
         if (candles.length >= 2) {
           const latest = candles[0];
           const prev = candles[1];
-          m15Breakouts[inst] = {
+          h1Breakouts[inst] = {
             buy: latest.close > prev.high,
             sell: latest.close < prev.low,
           };
@@ -247,7 +242,7 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // Filter: growing spread for all; 2H direction + M15 breakout for current session only
+    // Filter: growing spread for all; 2H direction + H1 breakout for current session only
     const has2h = Object.values(latest2h).some(v => v !== 0);
     for (const c of continuations) {
       const isCurrentSession = currSess && c.toSession === currSess && c.date === currDate;
@@ -256,7 +251,7 @@ module.exports = async function handler(req, res) {
           if (!p.growing) return false;
           if (isCurrentSession) {
             if (has2h && h2Dirs[p.instrument] !== p.dir) return false;
-            const bo = m15Breakouts[p.instrument];
+            const bo = h1Breakouts[p.instrument];
             if (!bo) return false;
             if (p.dir === 'BUY' && !bo.buy) return false;
             if (p.dir === 'SELL' && !bo.sell) return false;
