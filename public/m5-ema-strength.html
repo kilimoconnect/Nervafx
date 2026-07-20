@@ -284,10 +284,11 @@
           });
         });
       });
-      // Momentum gates: keep the per-TF pip floor as a raw sanity check, and
-      // require a real impulse — the body must be a meaningful fraction of
-      // the pair's own ATR with a decisive, low-wick close.
-      setups = setups.filter(function(s) { return s.bodyPips >= 2.5 && s.impulse >= IMPULSE_MIN; });
+      // Momentum gate: require a real impulse — the body must be a
+      // meaningful fraction of the pair's own ATR with a decisive, low-wick
+      // close. No raw pip floor; impulse is already ATR-normalised, so a
+      // fixed pip threshold only re-introduced the cross-pair bias.
+      setups = setups.filter(function(s) { return s.impulse >= IMPULSE_MIN; });
       setups.sort(function(a, b) { return b.impulse - a.impulse; });
       return setups;
     }
