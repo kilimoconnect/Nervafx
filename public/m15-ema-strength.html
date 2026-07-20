@@ -241,9 +241,11 @@
     // genuinely decisive breaks and drops limp ones.
     var IMPULSE_MIN = 60;
     // Directional efficiency floor: net move / total path over the last 20
-    // candles. A clean trend runs 0.4-0.8; chop sits near 0.1-0.25. This is
-    // the filter that rejects pairs drifting sideways across the EMAs.
-    var DE_MIN = 0.35;
+    // candles. Measured across a full day of breaks the median is ~0.29, so
+    // 0.45 keeps roughly the cleanest quartile. Raised from 0.35 after
+    // EUR/NZD 15-Jul 11:45 UTC passed at 0.38 while visibly overlapping —
+    // price there travelled ~2.6x the distance it actually covered.
+    var DE_MIN = 0.45;
     // Of the last 20 closes, how many must sit on the trend side of BOTH
     // EMAs. 10/20 was a coin flip — 14/20 demands real participation.
     var TREND_HITS_MIN = 14;
