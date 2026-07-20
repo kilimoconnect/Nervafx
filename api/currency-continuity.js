@@ -13,8 +13,8 @@ const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
 
 function getSession(h) {
   if (h >= 23 || h < 7) return 'ASIA';
-  if (h >= 7 && h < 13) return 'LONDON';
-  if (h >= 13 && h < 21) return 'NEW_YORK';
+  if (h >= 7 && h < 12) return 'LONDON';
+  if (h >= 12 && h < 21) return 'NEW_YORK';
   return null;
 }
 

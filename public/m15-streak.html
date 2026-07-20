@@ -207,7 +207,7 @@
       var h = new Date(t).getUTCHours();
       if (currentSession === 'asia') return h >= 0 && h < 9;
       if (currentSession === 'london') return h >= 7 && h < 16;
-      if (currentSession === 'newyork') return h >= 13 && h < 22;
+      if (currentSession === 'newyork') return h >= 12 && h < 22;
       return true;
     }
 
