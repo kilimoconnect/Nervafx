@@ -195,6 +195,7 @@ module.exports = async function handler(req, res) {
   const BREAK_LOOKBACK = 6;
   const TREND_LOOKBACK = 20;
   const ATR_PERIOD = 14;
+  const DE_LOOKBACK = 20;   // window for directional efficiency
   const pairScores = {}; // { pair: Map<hourMs, score> }
   const pairBreaks = {}; // { pair: Map<hourMs, { direction, bodyPips, atrPips, bodyAtr, efficiency, impulse, breakAtr, above, below }> }
   for (const inst of PAIRS) {
@@ -208,6 +209,7 @@ module.exports = async function handler(req, res) {
     const prevWin = []; // last BREAK_LOOKBACK candles for high/low break
     const stateWin = []; // last TREND_LOOKBACK candles' classifications
     const trWin = [];    // rolling true-range window for ATR14
+    const closeWin = []; // rolling closes for directional efficiency
     let prevClose = null;
     for (const c of seq) {
       // Rolling true range — the first bar has no previous close to compare.
@@ -219,6 +221,10 @@ module.exports = async function handler(req, res) {
       const atr = trWin.length === ATR_PERIOD
         ? trWin.reduce((a, b) => a + b, 0) / ATR_PERIOD
         : null;
+
+      // Include the current close so DE reflects the window ending here.
+      closeWin.push(c.close);
+      if (closeWin.length > DE_LOOKBACK + 1) closeWin.shift();
 
       const e20 = pushE20(c.close);
       const e50 = pushE50(c.close);
@@ -241,15 +247,27 @@ module.exports = async function handler(req, res) {
           const bodyAtr    = Math.round((body / atr) * 100) / 100;
           const efficiency = range > 0 ? Math.round((body / range) * 100) / 100 : 0;
           const impulse    = Math.round(bodyAtr * efficiency * 100);
+          // Directional efficiency: net displacement / total path travelled
+          // over the window. ~1.0 = a straight run, ~0.1 = pure chop. This is
+          // what separates a real trend from price oscillating around the EMA.
+          let de = 0;
+          if (closeWin.length >= DE_LOOKBACK + 1) {
+            let path = 0;
+            for (let i = 1; i < closeWin.length; i++) path += Math.abs(closeWin[i] - closeWin[i - 1]);
+            if (path > 0) {
+              const net = Math.abs(closeWin[closeWin.length - 1] - closeWin[0]);
+              de = Math.round((net / path) * 100) / 100;
+            }
+          }
           // Count trend-aligned closes over the last TREND_LOOKBACK bars.
           let above = 0, below = 0;
           for (const s of stateWin) { if (s === 'above') above++; else if (s === 'below') below++; }
           if (c.close > maxH) {
             const breakAtr = Math.round(((c.close - maxH) / atr) * 100) / 100;
-            breakMap.set(c.ms, { direction: 'BUY',  bodyPips, atrPips, bodyAtr, efficiency, impulse, breakAtr, above, below });
+            breakMap.set(c.ms, { direction: 'BUY',  bodyPips, atrPips, bodyAtr, efficiency, impulse, breakAtr, de, above, below });
           } else if (c.close < minL) {
             const breakAtr = Math.round(((minL - c.close) / atr) * 100) / 100;
-            breakMap.set(c.ms, { direction: 'SELL', bodyPips, atrPips, bodyAtr, efficiency, impulse, breakAtr, above, below });
+            breakMap.set(c.ms, { direction: 'SELL', bodyPips, atrPips, bodyAtr, efficiency, impulse, breakAtr, de, above, below });
           }
         }
       }

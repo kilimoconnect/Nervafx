@@ -247,6 +247,13 @@
     // so 100 means the body equalled a full ATR with zero wicks. 60 keeps
     // genuinely decisive breaks and drops limp ones.
     var IMPULSE_MIN = 60;
+    // Directional efficiency floor: net move / total path over the last 20
+    // candles. A clean trend runs 0.4-0.8; chop sits near 0.1-0.25. This is
+    // the filter that rejects pairs drifting sideways across the EMAs.
+    var DE_MIN = 0.35;
+    // Of the last 20 closes, how many must sit on the trend side of BOTH
+    // EMAs. 10/20 was a coin flip — 14/20 demands real participation.
+    var TREND_HITS_MIN = 14;
 
     // Build top-3 vs bottom-3 pair suggestions for a given hour row. Only
     // keep pairs whose current H1 broke the 6-candle high (BUY) or low
@@ -268,7 +275,10 @@
           // Trend-participation gate: at least 10 of the last 20 candles
           // must have closed on the aligned side of BOTH EMA20 and EMA50.
           var trendHits = m.direction === 'BUY' ? (br.above || 0) : (br.below || 0);
-          if (trendHits < 10) return;
+          if (trendHits < TREND_HITS_MIN) return;
+          // Chop filter: price must actually be going somewhere, not just
+          // oscillating around the EMAs.
+          if ((br.de || 0) < DE_MIN) return;
           // Lower-timeframe structure confirmation: M15 must have printed a
           // SECOND consecutive higher swing high (BUY) / lower swing low
           // (SELL) before we trust the H1 signal.
@@ -279,6 +289,7 @@
             spread: t.v - b.v,
             confirmTf:    br.confirmTf || '',
             confirmCount: (br.confirm && br.confirm.count) || 0,
+            de:         br.de         || 0,
             bodyPips:   br.bodyPips   || 0,
             bodyAtr:    br.bodyAtr    || 0,
             efficiency: br.efficiency || 0,
@@ -309,6 +320,7 @@
           + ', efficiency ' + Math.round(s.efficiency * 100) + '%'
           + ', cleared level by ' + s.breakAtr.toFixed(2) + '× ATR'
           + ', ' + s.trendHits + '/20 closes in trend'
+          + ', DE ' + s.de.toFixed(2)
           + ' · ' + s.confirmTf + ' confirmed ' + s.confirmCount + ' consecutive '
           + (s.direction === 'BUY' ? 'higher highs' : 'lower lows')
           + (repeat ? ' · repeat (prev impulse ' + prevImp + ')' : '');
