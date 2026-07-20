@@ -62,9 +62,9 @@ function computeM15Quality(candles) {
 }
 
 function getSession(h) {
-  if (h >= 21 || h < 7) return 'ASIA';
-  if (h >= 7 && h < 13) return 'LONDON';
-  return 'NEW_YORK';
+  if (h >= 21 || h < 6) return 'ASIA';
+  if (h >= 6 && h < 12) return 'LONDON';
+  return 'NEW_YORK'; // 12:00-20:59
 }
 
 function getSessionTimezone(session) {

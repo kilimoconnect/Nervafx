@@ -29,24 +29,26 @@ function currentSessionAt(t) {
   if (h >= 21) {
     name = 'ASIA';
     start = new Date(d); start.setUTCHours(21, 0, 0, 0);
-  } else if (h < 7) {
+  } else if (h < 6) {
     name = 'ASIA';
     start = new Date(d); start.setUTCDate(start.getUTCDate() - 1); start.setUTCHours(21, 0, 0, 0);
-  } else if (h < 13) {
+  } else if (h < 12) {
     name = 'LONDON';
-    start = new Date(d); start.setUTCHours(7, 0, 0, 0);
+    start = new Date(d); start.setUTCHours(6, 0, 0, 0);
   } else {
     name = 'NY';
-    start = new Date(d); start.setUTCHours(13, 0, 0, 0);
+    start = new Date(d); start.setUTCHours(12, 0, 0, 0);
   }
   return { name, start };
 }
 
 function sessionEnd(name, start) {
   const end = new Date(start);
-  if (name === 'ASIA')   end.setUTCHours(end.getUTCHours() + 10);
+  // ASIA 21:00→06:00 (9h, absorbs low-liquidity), LONDON 06:00→12:00 (6h),
+  // NY 12:00→21:00 (9h).
+  if (name === 'ASIA')   end.setUTCHours(end.getUTCHours() + 9);
   if (name === 'LONDON') end.setUTCHours(end.getUTCHours() + 6);
-  if (name === 'NY')     end.setUTCHours(end.getUTCHours() + 8);
+  if (name === 'NY')     end.setUTCHours(end.getUTCHours() + 9);
   return end;
 }
 
@@ -55,7 +57,7 @@ function previousSession(name, start) {
   if (name === 'ASIA') {
     prevName = 'NY';
     prevStart = new Date(start);
-    prevStart.setUTCHours(13, 0, 0, 0);
+    prevStart.setUTCHours(12, 0, 0, 0);
   } else if (name === 'LONDON') {
     prevName = 'ASIA';
     prevStart = new Date(start);
@@ -64,7 +66,7 @@ function previousSession(name, start) {
   } else {
     prevName = 'LONDON';
     prevStart = new Date(start);
-    prevStart.setUTCHours(7, 0, 0, 0);
+    prevStart.setUTCHours(6, 0, 0, 0);
   }
   const day = prevStart.getUTCDay();
   if (day === 6) {
@@ -124,8 +126,8 @@ module.exports = async function handler(req, res) {
       if (!isNaN(base.getTime())) {
         anchor = new Date(base);
         if (qSession === 'ASIA') { anchor.setUTCDate(anchor.getUTCDate() - 1); anchor.setUTCHours(21, 0, 0, 0); }
-        if (qSession === 'LONDON') anchor.setUTCHours(7, 0, 0, 0);
-        if (qSession === 'NY') anchor.setUTCHours(13, 0, 0, 0);
+        if (qSession === 'LONDON') anchor.setUTCHours(6, 0, 0, 0);
+        if (qSession === 'NY') anchor.setUTCHours(12, 0, 0, 0);
         anchorSession = qSession;
       }
     }

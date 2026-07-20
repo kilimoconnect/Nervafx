@@ -383,8 +383,8 @@
         var next = new Date(Date.UTC(y, m, day + 1));
         return 'ASIA|' + next.toISOString().slice(0, 10);
       }
-      if (h < 7)  return 'ASIA|'   + d.toISOString().slice(0, 10);
-      if (h < 13) return 'LONDON|' + d.toISOString().slice(0, 10);
+      if (h < 6)  return 'ASIA|'   + d.toISOString().slice(0, 10);
+      if (h < 12) return 'LONDON|' + d.toISOString().slice(0, 10);
       return 'NY|' + d.toISOString().slice(0, 10);
     }
 

@@ -3691,12 +3691,12 @@ async function renderCompressionBreakout(data) {
 // ─── Trading Session ──────────────────────────────────────────────────────────
 
 const SESSION_TIMELINE = [
-  { name: 'ASIA',        label: 'Asia',       hours: '23–06', quality: 'medium'    },
-  { name: 'LONDON_OPEN', label: 'LDN Open',   hours: '07–10', quality: 'high'      },
-  { name: 'LONDON',      label: 'London',     hours: '10–13', quality: 'high'      },
-  { name: 'LONDON_NY',   label: 'LDN/NY',     hours: '13–17', quality: 'very_high' },
-  { name: 'LATE_NY',     label: 'Late NY',    hours: '17–21', quality: 'low'       },
-  { name: 'DEAD_HOURS',  label: 'Low Liq.',   hours: '21–23', quality: 'blocked'   },
+  { name: 'ASIA',        label: 'Asia',       hours: '22–05', quality: 'medium'    },
+  { name: 'LONDON_OPEN', label: 'LDN Open',   hours: '06–09', quality: 'high'      },
+  { name: 'LONDON',      label: 'London',     hours: '09–12', quality: 'high'      },
+  { name: 'LONDON_NY',   label: 'LDN/NY',     hours: '12–16', quality: 'very_high' },
+  { name: 'LATE_NY',     label: 'Late NY',    hours: '16–21', quality: 'low'       },
+  { name: 'DEAD_HOURS',  label: 'Low Liq.',   hours: '21–22', quality: 'blocked'   },
 ];
 
 // Maps stored session_name keys (e.g. DEAD_HOURS) to human display labels.

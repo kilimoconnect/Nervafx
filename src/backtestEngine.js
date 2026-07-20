@@ -33,9 +33,9 @@ const HORIZONS   = [1, 4, 8, 12, 24]; // hours ahead to measure outcome
 
 function classifySession(isoTime) {
   const h = new Date(isoTime).getUTCHours();
-  if (h >= 23 || h < 7)  return 'ASIA';         // 23:00–07:00 (wraps midnight)
-  if (h >= 7  && h < 13) return 'LONDON';        // 07:00–13:00
-  if (h >= 13 && h < 21) return 'NEW_YORK';      // 13:00–21:00
+  if (h >= 22 || h < 6)  return 'ASIA';         // 22:00–06:00 (wraps midnight)
+  if (h >= 6  && h < 12) return 'LONDON';        // 06:00–12:00
+  if (h >= 12 && h < 21) return 'NEW_YORK';      // 12:00–21:00
   return 'LOW_LIQUIDITY';                        // 21:00–23:00
 }
 

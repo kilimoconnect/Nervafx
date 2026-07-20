@@ -474,10 +474,10 @@ function buildSessionRows(hourRows) {
   const groups = {};
   for (const r of hourRows) {
     let date = r.time_utc.slice(0, 10);
-    // ASIA wraps midnight (23:00–07:00): hour 23 belongs to next day's ASIA session
+    // ASIA wraps midnight (22:00–06:00): hours 22-23 belong to next day's ASIA session
     if (r.session_name === 'ASIA') {
       const h = new Date(r.time_utc).getUTCHours();
-      if (h === 23) {
+      if (h >= 22) {
         const next = new Date(r.time_utc);
         next.setUTCDate(next.getUTCDate() + 1);
         date = next.toISOString().slice(0, 10);

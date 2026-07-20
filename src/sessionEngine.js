@@ -21,16 +21,16 @@
 // ─── Session boundaries (UTC hours, inclusive open, exclusive close) ──────────
 
 const SESSION_BOUNDARIES = [
-  { session: 'ASIA',          open: 23, close: 7  }, // wraps midnight: 23:00–07:00
-  { session: 'LONDON',        open: 7,  close: 13 },
-  { session: 'NEW_YORK',      open: 13, close: 21 },
-  { session: 'LOW_LIQUIDITY', open: 21, close: 23 }, // 21:00–23:00
+  { session: 'ASIA',          open: 22, close: 6  }, // wraps midnight: 22:00–06:00
+  { session: 'LONDON',        open: 6,  close: 12 },
+  { session: 'NEW_YORK',      open: 12, close: 21 },
+  { session: 'LOW_LIQUIDITY', open: 21, close: 22 }, // 21:00–22:00
 ];
 
 // Zones annotated inside their parent session (informational only)
 const SESSION_ZONES = {
-  LONDON:   [{ name: 'LONDON_OPEN',  open: 7,  close: 9  }],
-  NEW_YORK: [{ name: 'NY_OVERLAP',   open: 13, close: 16 }],
+  LONDON:   [{ name: 'LONDON_OPEN',  open: 6,  close: 8  }],
+  NEW_YORK: [{ name: 'NY_OVERLAP',   open: 12, close: 15 }],
 };
 
 // ─── Session metadata ─────────────────────────────────────────────────────────
