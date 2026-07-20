@@ -169,7 +169,7 @@
             <th style="text-align:left">Time</th>
             <th>USD</th><th>EUR</th><th>GBP</th><th>JPY</th>
             <th>CHF</th><th>CAD</th><th>AUD</th><th>NZD</th>
-            <th style="text-align:left">Setups (top-3 vs bottom-3)</th>
+            <th style="text-align:left">Setups (top-3 vs bottom-3) · ⚡ = impulse</th>
           </tr>
         </thead>
         <tbody id="tbody">
@@ -243,11 +243,15 @@
       return null;
     }
 
+    // Minimum impulse to qualify. impulse = (body / ATR14) × efficiency × 100,
+    // so 100 means the body equalled a full ATR with zero wicks. 60 keeps
+    // genuinely decisive breaks and drops limp ones.
+    var IMPULSE_MIN = 60;
+
     // Build top-3 vs bottom-3 pair suggestions for a given hour row. Only
-    // keep pairs whose current H1 broke the previous candle's high (BUY)
-    // or low (SELL). Rank by breaking-candle body size in pips —
-    // strongest break first.
-    // row.breaks is { instrument: { direction, bodyPips } }.
+    // keep pairs whose current H1 broke the 6-candle high (BUY) or low
+    // (SELL). Rank by ATR-normalised impulse — raw pips aren't comparable
+    // across pairs of different volatility.
     function buildSetups(row) {
       var breaks = row.breaks || {};
       var scores = CCYS.map(function(c) { return { c: c, v: row.currencies[c] || 0 }; });
@@ -269,15 +273,20 @@
             pair: m.pair,
             direction: m.direction,
             spread: t.v - b.v,
-            bodyPips: br.bodyPips || 0,
+            bodyPips:   br.bodyPips   || 0,
+            bodyAtr:    br.bodyAtr    || 0,
+            efficiency: br.efficiency || 0,
+            impulse:    br.impulse    || 0,
+            breakAtr:   br.breakAtr   || 0,
             trendHits: trendHits,
           });
         });
       });
-      // Hide low-momentum setups: on H1 the breaking-candle body must be
-      // ≥ 10 pips. Filters out incidental fresh breaks with tiny bars.
-      setups = setups.filter(function(s) { return s.bodyPips >= 10; });
-      setups.sort(function(a, b) { return b.bodyPips - a.bodyPips; });
+      // Momentum gates: keep the per-TF pip floor as a raw sanity check, and
+      // require a real impulse — the body must be a meaningful fraction of
+      // the pair's own ATR with a decisive, low-wick close.
+      setups = setups.filter(function(s) { return s.bodyPips >= 10 && s.impulse >= IMPULSE_MIN; });
+      setups.sort(function(a, b) { return b.impulse - a.impulse; });
       return setups;
     }
 
@@ -285,30 +294,30 @@
       if (!setups.length) return '<span class="sp" style="color:var(--muted)">—</span>';
       return setups.map(function(s) {
         var key = s.pair + '|' + s.direction;
-        var prevPips = prevKeys && prevKeys[key] !== undefined ? prevKeys[key] : null;
-        // Any repeat qualifies — the previous setup was already above the
-        // page's body-pips threshold (it survived buildSetups' filter), so
-        // simply appearing twice is the signal. No 'must increase' rule.
-        var repeat = prevPips !== null;
-        var title  = repeat
-          ? 'Repeat: previous ' + prevPips.toFixed(1) + 'p → now ' + s.bodyPips.toFixed(1) + 'p'
-          : '';
-        return '<span class="setup-pill' + (repeat ? ' repeat' : '') + '"'
-          + (title ? ' title="' + title + '"' : '') + '>'
+        var prevImp = prevKeys && prevKeys[key] !== undefined ? prevKeys[key] : null;
+        // Any repeat qualifies — the previous setup already cleared the
+        // impulse threshold, so simply appearing twice is the signal.
+        var repeat = prevImp !== null;
+        var tip = 'Impulse ' + s.impulse
+          + ' — body ' + s.bodyPips.toFixed(1) + 'p (' + s.bodyAtr.toFixed(2) + '× ATR)'
+          + ', efficiency ' + Math.round(s.efficiency * 100) + '%'
+          + ', cleared level by ' + s.breakAtr.toFixed(2) + '× ATR'
+          + ', ' + s.trendHits + '/20 closes in trend'
+          + (repeat ? ' · repeat (prev impulse ' + prevImp + ')' : '');
+        return '<span class="setup-pill' + (repeat ? ' repeat' : '') + '" title="' + tip + '">'
           + s.pair + (repeat ? '<span class="repeat-dot"></span>' : '')
           + '<span class="d ' + s.direction + '">' + s.direction + '</span>'
-          + '<span class="sp">' + s.bodyPips.toFixed(1) + 'p</span>'
+          + '<span class="sp">⚡' + s.impulse + '</span>'
           + '</span>';
       }).join('');
     }
 
-    // Precompute setup key → bodyPips per row so a row can look up not only
-    // "did this pair + direction appear in the previous anchor?" but also
-    // "is the current bodyPips bigger than the previous one?" — the repeat
-    // highlight only fires when momentum is INCREASING.
+    // Precompute setup key → impulse per row so a row can look up whether
+    // this pair + direction also appeared in the previous anchor (and at
+    // what impulse, for the tooltip).
     function keyMap(setups) {
       var m = {};
-      setups.forEach(function(s) { m[s.pair + '|' + s.direction] = s.bodyPips || 0; });
+      setups.forEach(function(s) { m[s.pair + '|' + s.direction] = s.impulse || 0; });
       return m;
     }
 

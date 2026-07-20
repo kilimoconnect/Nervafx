@@ -118,8 +118,16 @@ module.exports = async function handler(req, res) {
 
   // Break on last 6 M5 candles + trend-alignment window on last 20. Same
   // above/below counts emitted on the break entry as the other TFs.
+  // Impulse metrics accompany every break so the frontend can judge HOW
+  // STRONG the move is, not just how many pips it covered. Raw pips aren't
+  // comparable across pairs, so we normalise by a rolling ATR14:
+  //   bodyAtr    = |close-open| / ATR14   → body vs the pair's typical range
+  //   efficiency = |close-open| / (high-low) → how decisive (body vs wicks)
+  //   impulse    = bodyAtr × efficiency × 100 → single comparable score
+  //   breakAtr   = distance past the broken level, in ATRs
   const BREAK_LOOKBACK = 6;
   const TREND_LOOKBACK = 20;
+  const ATR_PERIOD = 14;
   const pairScores = {};
   const pairBreaks = {};
   for (const inst of PAIRS) {
@@ -132,7 +140,19 @@ module.exports = async function handler(req, res) {
     const pd = pipDiv(inst);
     const prevWin = [];
     const stateWin = [];
+    const trWin = [];    // rolling true-range window for ATR14
+    let prevClose = null;
     for (const c of seq) {
+      // Rolling true range — the first bar has no previous close to compare.
+      const tr = prevClose == null
+        ? (c.high - c.low)
+        : Math.max(c.high - c.low, Math.abs(c.high - prevClose), Math.abs(c.low - prevClose));
+      trWin.push(tr);
+      if (trWin.length > ATR_PERIOD) trWin.shift();
+      const atr = trWin.length === ATR_PERIOD
+        ? trWin.reduce((a, b) => a + b, 0) / ATR_PERIOD
+        : null;
+
       const e20 = pushE20(c.close);
       const e50 = pushE50(c.close);
       if (e20 != null && e50 != null) {
@@ -144,18 +164,30 @@ module.exports = async function handler(req, res) {
       }
       if (e20 != null && e50 != null && targetSet.has(c.ms)) {
         scoreMap.set(c.ms, alignmentScore(c.close, e20, e50));
-        if (prevWin.length >= BREAK_LOOKBACK) {
+        if (prevWin.length >= BREAK_LOOKBACK && atr) {
           let maxH = -Infinity, minL = Infinity;
           for (const p of prevWin) { if (p.high > maxH) maxH = p.high; if (p.low < minL) minL = p.low; }
-          const bodyPips = Math.round((Math.abs(c.close - c.open) / pd) * 10) / 10;
+          const body  = Math.abs(c.close - c.open);
+          const range = c.high - c.low;
+          const bodyPips   = Math.round((body / pd) * 10) / 10;
+          const atrPips    = Math.round((atr  / pd) * 10) / 10;
+          const bodyAtr    = Math.round((body / atr) * 100) / 100;
+          const efficiency = range > 0 ? Math.round((body / range) * 100) / 100 : 0;
+          const impulse    = Math.round(bodyAtr * efficiency * 100);
           let above = 0, below = 0;
           for (const s of stateWin) { if (s === 'above') above++; else if (s === 'below') below++; }
-          if      (c.close > maxH) breakMap.set(c.ms, { direction: 'BUY',  bodyPips, above, below });
-          else if (c.close < minL) breakMap.set(c.ms, { direction: 'SELL', bodyPips, above, below });
+          if (c.close > maxH) {
+            const breakAtr = Math.round(((c.close - maxH) / atr) * 100) / 100;
+            breakMap.set(c.ms, { direction: 'BUY',  bodyPips, atrPips, bodyAtr, efficiency, impulse, breakAtr, above, below });
+          } else if (c.close < minL) {
+            const breakAtr = Math.round(((minL - c.close) / atr) * 100) / 100;
+            breakMap.set(c.ms, { direction: 'SELL', bodyPips, atrPips, bodyAtr, efficiency, impulse, breakAtr, above, below });
+          }
         }
       }
       prevWin.push(c);
       if (prevWin.length > BREAK_LOOKBACK) prevWin.shift();
+      prevClose = c.close;
     }
     pairScores[inst] = scoreMap;
     pairBreaks[inst] = breakMap;
