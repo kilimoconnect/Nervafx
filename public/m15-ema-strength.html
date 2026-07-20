@@ -271,15 +271,9 @@
           // Chop filter: price must actually be going somewhere, not just
           // oscillating around the EMAs.
           if ((br.de || 0) < DE_MIN) return;
-          // Lower-timeframe structure confirmation: the confirm TF must have
-          // printed a SECOND consecutive higher swing high (BUY) / lower
-          // swing low (SELL) before we trust the signal.
-          if (!br.confirm || !br.confirm.ok) return;
           setups.push({
             pair: m.pair, direction: m.direction,
             spread: t.v - b.v,
-            confirmTf:    br.confirmTf || '',
-            confirmCount: (br.confirm && br.confirm.count) || 0,
             de:         br.de         || 0,
             bodyPips:   br.bodyPips   || 0,
             bodyAtr:    br.bodyAtr    || 0,
@@ -310,8 +304,6 @@
           + ', cleared level by ' + s.breakAtr.toFixed(2) + '× ATR'
           + ', ' + s.trendHits + '/20 closes in trend'
           + ', DE ' + s.de.toFixed(2)
-          + ' · ' + s.confirmTf + ' confirmed ' + s.confirmCount + ' consecutive '
-          + (s.direction === 'BUY' ? 'higher highs' : 'lower lows')
           + (repeat ? ' · repeat (prev impulse ' + prevImp + ')' : '');
         return '<span class="setup-pill' + (repeat ? ' repeat' : '') + '" title="' + tip + '">'
           + s.pair + (repeat ? '<span class="repeat-dot"></span>' : '')

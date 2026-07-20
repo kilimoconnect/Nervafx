@@ -71,47 +71,6 @@ async function fetchAllM5(sb, inst, since, until) {
 
 function pipDiv(inst) { return inst.includes('JPY') ? 0.01 : 0.0001; }
 
-// ─── Lower-timeframe swing confirmation ─────────────────────────────────────
-// A signal is only trusted if the confirmation timeframe has already printed
-// a SECOND consecutive higher swing high (BUY) or second consecutive lower
-// swing low (SELL) — i.e. structure has actually turned, not just poked once.
-//
-//   H1 signal  → confirm on M15
-//   M15 signal → confirm on M5
-//   M5 signal  → confirm on M5 (its own structure)  ← this file
-const LTF = 'M5';
-const SWING_K = 1;        // fractal width: 1 candle each side
-const SWING_WINDOW = 60;  // LTF candles inspected per anchor
-const SWINGS_NEEDED = 2;  // "second" higher-high / lower-low
-
-function detectSwings(candles, k) {
-  const highs = [], lows = [];
-  for (let i = k; i < candles.length - k; i++) {
-    let isHigh = true, isLow = true;
-    for (let j = 1; j <= k; j++) {
-      if (!(candles[i].high > candles[i - j].high && candles[i].high > candles[i + j].high)) isHigh = false;
-      if (!(candles[i].low  < candles[i - j].low  && candles[i].low  < candles[i + j].low))  isLow = false;
-    }
-    if (isHigh) highs.push(candles[i].high);
-    if (isLow)  lows.push(candles[i].low);
-  }
-  return { highs, lows };
-}
-
-function swingConfirm(ltfCandles, direction, k, need) {
-  if (!ltfCandles || ltfCandles.length < 5) return { ok: false, count: 0 };
-  const { highs, lows } = detectSwings(ltfCandles, k);
-  const seq = direction === 'BUY' ? highs : lows;
-  if (seq.length < need + 1) return { ok: false, count: 0 };
-  let count = 0;
-  for (let i = seq.length - 1; i > 0; i--) {
-    const better = direction === 'BUY' ? seq[i] > seq[i - 1] : seq[i] < seq[i - 1];
-    if (!better) break;
-    count++;
-  }
-  return { ok: count >= need, count };
-}
-
 function alignmentScore(close, e20, e50) {
   if (close > e20 && e20 > e50)  return +1.0;
   if (close < e20 && e20 < e50)  return -1.0;
@@ -253,7 +212,6 @@ module.exports = async function handler(req, res) {
   }
 
   const rows = [];
-  const ltfPtr = {};   // per-pair cursor into the LTF series (monotonic)
   for (const t of targetAnchors) {
     const d = new Date(t);
     const dow = d.getUTCDay();
@@ -277,17 +235,7 @@ module.exports = async function handler(req, res) {
     const breaks = {};
     for (const inst of PAIRS) {
       const b = pairBreaks[inst].get(t);
-      if (!b) continue;
-      // M5 confirms against its own structure — reuse the same candle series
-      // that produced the break. ltfPtr advances monotonically because
-      // anchors are walked in ascending order.
-      const seq = candles[inst] || [];
-      let p = ltfPtr[inst] || 0;
-      while (p < seq.length && seq[p].ms <= t) p++;
-      ltfPtr[inst] = p;
-      const win = seq.slice(Math.max(0, p - SWING_WINDOW), p);
-      const confirm = swingConfirm(win, b.direction, SWING_K, SWINGS_NEEDED);
-      breaks[inst] = Object.assign({}, b, { confirm, confirmTf: LTF });
+      if (b) breaks[inst] = b;
     }
     rows.push({ time: d.toISOString(), currencies, breaks });
   }

@@ -80,52 +80,6 @@ const fetchAllH1 = (sb, inst, since, until) => fetchAllTf(sb, inst, 'H1', since,
 // across the 28 majors so the ranking is comparable.
 function pipDiv(inst) { return inst.includes('JPY') ? 0.01 : 0.0001; }
 
-// ─── Lower-timeframe swing confirmation ─────────────────────────────────────
-// A signal on this timeframe is only trusted if the NEXT TIMEFRAME DOWN has
-// already printed a SECOND consecutive higher swing high (BUY) or second
-// consecutive lower swing low (SELL) — i.e. the LTF structure has actually
-// turned, not just poked once.
-//
-//   H1 signal  → confirm on M15   ← this file
-//   M15 signal → confirm on M5
-//   M5 signal  → confirm on M5 (its own structure)
-const LTF = 'M15';
-const SWING_K = 1;        // fractal width: 1 candle each side
-const SWING_WINDOW = 60;  // LTF candles inspected per anchor
-const SWINGS_NEEDED = 2;  // "second" higher-high / lower-low
-
-// Fractal swings: candle i is a swing high if its high beats the k candles
-// on both sides; mirror for swing lows. Returned in chronological order.
-function detectSwings(candles, k) {
-  const highs = [], lows = [];
-  for (let i = k; i < candles.length - k; i++) {
-    let isHigh = true, isLow = true;
-    for (let j = 1; j <= k; j++) {
-      if (!(candles[i].high > candles[i - j].high && candles[i].high > candles[i + j].high)) isHigh = false;
-      if (!(candles[i].low  < candles[i - j].low  && candles[i].low  < candles[i + j].low))  isLow = false;
-    }
-    if (isHigh) highs.push(candles[i].high);
-    if (isLow)  lows.push(candles[i].low);
-  }
-  return { highs, lows };
-}
-
-// Count consecutive higher swing highs (BUY) / lower swing lows (SELL)
-// walking backwards from the most recent swing. `need` of them must chain.
-function swingConfirm(ltfCandles, direction, k, need) {
-  if (!ltfCandles || ltfCandles.length < 5) return { ok: false, count: 0 };
-  const { highs, lows } = detectSwings(ltfCandles, k);
-  const seq = direction === 'BUY' ? highs : lows;
-  if (seq.length < need + 1) return { ok: false, count: 0 };
-  let count = 0;
-  for (let i = seq.length - 1; i > 0; i--) {
-    const better = direction === 'BUY' ? seq[i] > seq[i - 1] : seq[i] < seq[i - 1];
-    if (!better) break;
-    count++;
-  }
-  return { ok: count >= need, count };
-}
-
 function alignmentScore(close, e20, e50) {
   if (close > e20 && e20 > e50)  return +1.0;
   if (close < e20 && e20 < e50)  return -1.0;
@@ -156,15 +110,12 @@ module.exports = async function handler(req, res) {
 
   // Pre-fetch all 28 pairs, 7 at a time.
   const candles = {};
-  const ltfCandles = {};   // lower-timeframe series for swing confirmation
   const errors = [];
   for (let b = 0; b < PAIRS.length; b += 7) {
     const batch = PAIRS.slice(b, b + 7);
     await Promise.all(batch.map(async inst => {
       try { candles[inst] = await fetchAllH1(sb, inst, fetchSince, fetchUntil); }
       catch (e) { errors.push(`${inst}: ${e.message}`); candles[inst] = []; }
-      try { ltfCandles[inst] = await fetchAllTf(sb, inst, LTF, fetchSince, fetchUntil); }
-      catch (e) { errors.push(`${inst} ${LTF}: ${e.message}`); ltfCandles[inst] = []; }
     }));
   }
 
@@ -281,7 +232,6 @@ module.exports = async function handler(req, res) {
 
   // Aggregate per hour across all 28 pairs.
   const rows = [];
-  const ltfPtr = {};   // per-pair cursor into the LTF series (monotonic)
   for (const h of targetHours) {
     // Skip weekend hours: Sat all day, Sun before 21:00 UTC.
     const d = new Date(h);
@@ -304,21 +254,11 @@ module.exports = async function handler(req, res) {
     const currencies = {};
     for (const k of CCYS) currencies[k] = agg[k] / 7;
     // Per-anchor break map: pair → break record for pairs whose current H1
-    // broke the 6-candle high/low, plus the impulse metrics and the
-    // lower-timeframe swing confirmation.
+    // broke the 6-candle high/low, with the impulse metrics attached.
     const breaks = {};
     for (const inst of PAIRS) {
       const b = pairBreaks[inst].get(h);
-      if (!b) continue;
-      // ltfPtr advances monotonically because hours are walked in ascending
-      // order, so the whole scan stays O(candles) not O(hours × candles).
-      const seq = ltfCandles[inst] || [];
-      let p = ltfPtr[inst] || 0;
-      while (p < seq.length && seq[p].ms <= h) p++;
-      ltfPtr[inst] = p;
-      const win = seq.slice(Math.max(0, p - SWING_WINDOW), p);
-      const confirm = swingConfirm(win, b.direction, SWING_K, SWINGS_NEEDED);
-      breaks[inst] = Object.assign({}, b, { confirm, confirmTf: LTF });
+      if (b) breaks[inst] = b;
     }
     rows.push({ time: d.toISOString(), currencies, breaks });
   }

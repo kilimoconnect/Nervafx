@@ -72,52 +72,6 @@ const fetchAllM15 = (sb, inst, since, until) => fetchAllTf(sb, inst, 'M15', sinc
 
 function pipDiv(inst) { return inst.includes('JPY') ? 0.01 : 0.0001; }
 
-// ─── Lower-timeframe swing confirmation ─────────────────────────────────────
-// A signal on this timeframe is only trusted if the NEXT TIMEFRAME DOWN has
-// already printed a SECOND consecutive higher swing high (BUY) or second
-// consecutive lower swing low (SELL) — i.e. the LTF structure has actually
-// turned, not just poked once.
-//
-//   H1 signal  → confirm on M15
-//   M15 signal → confirm on M5     ← this file
-//   M5 signal  → confirm on M5 (its own structure)
-const LTF = 'M5';
-const SWING_K = 1;        // fractal width: 1 candle each side
-const SWING_WINDOW = 60;  // LTF candles inspected per anchor
-const SWINGS_NEEDED = 2;  // "second" higher-high / lower-low
-
-// Fractal swings: candle i is a swing high if its high beats the k candles
-// on both sides; mirror for swing lows. Returned in chronological order.
-function detectSwings(candles, k) {
-  const highs = [], lows = [];
-  for (let i = k; i < candles.length - k; i++) {
-    let isHigh = true, isLow = true;
-    for (let j = 1; j <= k; j++) {
-      if (!(candles[i].high > candles[i - j].high && candles[i].high > candles[i + j].high)) isHigh = false;
-      if (!(candles[i].low  < candles[i - j].low  && candles[i].low  < candles[i + j].low))  isLow = false;
-    }
-    if (isHigh) highs.push(candles[i].high);
-    if (isLow)  lows.push(candles[i].low);
-  }
-  return { highs, lows };
-}
-
-// Count consecutive higher swing highs (BUY) / lower swing lows (SELL)
-// walking backwards from the most recent swing. `need` of them must chain.
-function swingConfirm(ltfCandles, direction, k, need) {
-  if (!ltfCandles || ltfCandles.length < 5) return { ok: false, count: 0 };
-  const { highs, lows } = detectSwings(ltfCandles, k);
-  const seq = direction === 'BUY' ? highs : lows;
-  if (seq.length < need + 1) return { ok: false, count: 0 };
-  let count = 0;
-  for (let i = seq.length - 1; i > 0; i--) {
-    const better = direction === 'BUY' ? seq[i] > seq[i - 1] : seq[i] < seq[i - 1];
-    if (!better) break;
-    count++;
-  }
-  return { ok: count >= need, count };
-}
-
 function alignmentScore(close, e20, e50) {
   if (close > e20 && e20 > e50)  return +1.0;
   if (close < e20 && e20 < e50)  return -1.0;
@@ -150,15 +104,12 @@ module.exports = async function handler(req, res) {
   const fetchUntil = new Date(end.getTime()   + 60 * 60000).toISOString();
 
   const candles = {};
-  const ltfCandles = {};   // lower-timeframe series for swing confirmation
   const errors  = [];
   for (let b = 0; b < PAIRS.length; b += 7) {
     const batch = PAIRS.slice(b, b + 7);
     await Promise.all(batch.map(async inst => {
       try { candles[inst] = await fetchAllM15(sb, inst, fetchSince, fetchUntil); }
       catch (e) { errors.push(`${inst}: ${e.message}`); candles[inst] = []; }
-      try { ltfCandles[inst] = await fetchAllTf(sb, inst, LTF, fetchSince, fetchUntil); }
-      catch (e) { errors.push(`${inst} ${LTF}: ${e.message}`); ltfCandles[inst] = []; }
     }));
   }
 
@@ -265,7 +216,6 @@ module.exports = async function handler(req, res) {
   }
 
   const rows = [];
-  const ltfPtr = {};   // per-pair cursor into the LTF series (monotonic)
   for (const t of targetAnchors) {
     const d = new Date(t);
     const dow = d.getUTCDay();
@@ -289,17 +239,7 @@ module.exports = async function handler(req, res) {
     const breaks = {};
     for (const inst of PAIRS) {
       const b = pairBreaks[inst].get(t);
-      if (!b) continue;
-      // Lower-timeframe swing confirmation at this anchor. ltfPtr advances
-      // monotonically because anchors are walked in ascending order, so the
-      // whole scan stays O(candles) rather than O(anchors × candles).
-      const seq = ltfCandles[inst] || [];
-      let p = ltfPtr[inst] || 0;
-      while (p < seq.length && seq[p].ms <= t) p++;
-      ltfPtr[inst] = p;
-      const win = seq.slice(Math.max(0, p - SWING_WINDOW), p);
-      const confirm = swingConfirm(win, b.direction, SWING_K, SWINGS_NEEDED);
-      breaks[inst] = Object.assign({}, b, { confirm, confirmTf: LTF });
+      if (b) breaks[inst] = b;
     }
     rows.push({ time: d.toISOString(), currencies, breaks });
   }
