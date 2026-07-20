@@ -17,8 +17,8 @@ const INSTRUMENTS = [
 
 function getSession(h) {
   // Cover all 24 hours so no snapshot is dropped (21:00-22:59 = Asia/Sydney open)
-  if (h >= 21 || h < 7) return 'ASIA';
-  if (h >= 7 && h < 12) return 'LONDON';
+  if (h >= 21 || h < 6) return 'ASIA';
+  if (h >= 6 && h < 12) return 'LONDON';
   return 'NEW_YORK'; // 12:00-20:59
 }
 

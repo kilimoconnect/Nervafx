@@ -12,15 +12,15 @@ const { requirePlan } = require('./_plan');
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
 
 function getSession(h) {
-  if (h >= 23 || h < 7) return 'ASIA';
-  if (h >= 7 && h < 12) return 'LONDON';
+  if (h >= 22 || h < 6) return 'ASIA';
+  if (h >= 6 && h < 12) return 'LONDON';
   if (h >= 12 && h < 21) return 'NEW_YORK';
   return null;
 }
 
 function sessionDate(iso, session) {
   const d = new Date(iso);
-  if (session === 'ASIA' && d.getUTCHours() === 23) {
+  if (session === 'ASIA' && d.getUTCHours() >= 22) {
     d.setUTCDate(d.getUTCDate() + 1);
   }
   return d.toISOString().slice(0, 10);

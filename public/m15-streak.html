@@ -205,8 +205,8 @@
     function inSession(t) {
       if (currentSession === 'all') return true;
       var h = new Date(t).getUTCHours();
-      if (currentSession === 'asia') return h >= 0 && h < 9;
-      if (currentSession === 'london') return h >= 7 && h < 16;
+      if (currentSession === 'asia') return h >= 23 || h < 9;
+      if (currentSession === 'london') return h >= 6 && h < 16;
       if (currentSession === 'newyork') return h >= 12 && h < 22;
       return true;
     }
