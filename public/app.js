@@ -3894,7 +3894,11 @@ function renderQualityPreview(el, data) {
 
 function _renderCsDashRow(p) {
   const dirCls = p.direction === 'BUY' ? 'an-dash-buy' : 'an-dash-sell';
-  const t = p.triggerTime ? _anTime(p.triggerTime) : '';
+  // Show when the signal actually fired — the trigger candle's close — rather
+  // than the candle's open timestamp. Each engine reports its own close time
+  // because their trigger timeframes differ (H1 for daily/session, M15 for H4).
+  const sigTime = p.triggerCloseTime || p.triggerTime;
+  const t = sigTime ? _anTime(sigTime) : '';
   const brk = p.triggerBreakPips != null
     ? `<span class="cs-dash-brk">+${p.triggerBreakPips} pips</span>`
     : '';

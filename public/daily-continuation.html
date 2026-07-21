@@ -264,7 +264,7 @@
           var tl = p.timeline[t];
           var tlc = scoreColor(tl.score);
           html += '<div class="dc-tl-row">';
-          html += '<span class="dc-tl-time">' + hrLabel(tl.time) + '</span>';
+          html += '<span class="dc-tl-time">' + hrLabel(tl.closeTime || tl.time) + '</span>';
           html += '<span class="dc-tl-score" style="color:' + tlc + '">' + tl.score + '</span>';
 
           if (tl.delta !== undefined && tl.delta !== 0) {

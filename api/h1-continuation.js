@@ -16,6 +16,13 @@ const VALID_PAIRS = [
 function isJpy(inst) { return inst.includes('JPY'); }
 function pipDiv(inst) { return isJpy(inst) ? 0.01 : 0.0001; }
 
+// Candles are stamped with their OPEN time, but a break is only confirmed when
+// the candle closes. This engine triggers on M15 (H1 is only used to build the
+// synthetic H4 reference), so the signal fires 15 minutes after the trigger
+// candle's timestamp.
+const TRIGGER_TF_MS = 15 * 60 * 1000;
+const closeTimeOf = iso => iso ? new Date(new Date(iso).getTime() + TRIGGER_TF_MS).toISOString() : null;
+
 const H4_MS = 4 * 3600000;
 
 module.exports = async function handler(req, res) {
@@ -405,6 +412,8 @@ module.exports = async function handler(req, res) {
 
         timeline.push({
           time: c.time,
+          // The row's score is only known once the candle closes.
+          closeTime: closeTimeOf(c.time),
           score,
           delta,
           label: entryLabel,
@@ -446,6 +455,8 @@ module.exports = async function handler(req, res) {
         // entirely. Reaching this point means the break happened, so the pair
         // is tracked from here.
         triggerTime: firstTriggerTime,
+        // When the break was actually confirmed — the trigger candle's close.
+        triggerCloseTime: closeTimeOf(firstTriggerTime),
         qualified: true,
         // Trigger 2 kept as an informational milestone, not a gate.
         strongConfirmTime: qualifiedTime,
