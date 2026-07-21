@@ -65,6 +65,13 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
+  // Email alerts are disabled — this endpoint exists only to fire sample
+  // alert emails at the admin, so it stays off with them. Short-circuit
+  // before any send so it can't be used to trigger one by accident.
+  return res.status(410).json({
+    error: 'Email sending is disabled — no test emails will be sent.',
+  });
+
   const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
   // Auth — admin only

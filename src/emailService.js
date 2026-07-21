@@ -885,7 +885,26 @@ async function sendEmail(to, template) {
   return send(apiKey, payload);
 }
 
+// ─── ALL ALERT EMAILS ARE DISABLED ──────────────────────────────────────────
+// Every alert path in the codebase (continuation, AUD/NZD, H1 breaks, quality,
+// approved-trade/structure, and the manual /api/email-notify endpoint) sends
+// through sendBulk. Neutralising it here is the single choke point that stops
+// them all, regardless of what triggers them — cron, the hourly pipeline, or a
+// manual request.
+//
+// The signature and return shape are unchanged so no caller breaks: they still
+// await it and get an array-ish result back, they just never reach the network.
+//
+// To re-enable, delete this guard and restore the body kept below it.
+const ALERT_EMAILS_DISABLED = true;
+
 async function sendBulk(recipients, template) {
+  if (ALERT_EMAILS_DISABLED) {
+    const n = Array.isArray(recipients) ? recipients.length : 0;
+    console.log(`[email] alerts disabled — suppressed "${template?.subject || 'untitled'}" to ${n} recipient(s)`);
+    return [];
+  }
+
   const apiKey = process.env.BREVO_API_KEY;
   if (!apiKey) { console.warn('[email] BREVO_API_KEY not set — skipping'); return null; }
 
