@@ -231,8 +231,12 @@ module.exports = async function handler(req, res) {
       const refBullish = ref.close > ref.open;
       const refBearish = ref.close < ref.open;
 
-      const buyConfirm  = r1BuyBrk  || (r2BuyBrk  && refBullish);
-      const sellConfirm = r1SellBrk || (r2SellBrk && refBearish);
+      // The previous session is checked first; if it produced no break at all,
+      // the session before it stands on its own. The fallback used to also
+      // require the previous session's body to agree, which meant a flat or
+      // opposing one killed the signal outright.
+      const buyConfirm  = r1BuyBrk  || r2BuyBrk;
+      const sellConfirm = r1SellBrk || r2SellBrk;
 
       let confirmedDirection = null;
       if (buyConfirm && !sellConfirm) confirmedDirection = 'BUY';
@@ -339,24 +343,11 @@ module.exports = async function handler(req, res) {
       for (let i = triggerIdx + 1; i < curM15s.length; i++) {
         const c = curM15s[i];
 
-        // Invalidation: close back inside prev session's range
-        if (c.close < ref.high && c.close > ref.low) {
-          state = 'STOPPED';
-          stoppedTime = c.time;
-          timeline.push({
-            time: c.time,
-            score,
-            delta: 0,
-            label: 'Monitoring Stopped',
-            event: 'Close back inside prev session range',
-            m15: {
-              open: c.open, high: c.high, low: c.low, close: c.close,
-              bull: c.close > c.open,
-              bodyPips: Math.round((Math.abs(c.close - c.open) / pd) * 10) / 10,
-            },
-          });
-          break;
-        }
+        // Closing back inside the reference range used to end monitoring
+        // outright. It now scores as the heaviest single penalty and tracking
+        // continues, so a pair that dips back in and then breaks out again
+        // stays visible instead of being dropped at the first pullback.
+        const backInside = c.close < ref.high && c.close > ref.low;
 
         const cBull = c.close > c.open;
         const cBody = Math.abs(c.close - c.open);
@@ -364,6 +355,9 @@ module.exports = async function handler(req, res) {
         const cRange = c.high - c.low;
         let delta = 0;
         const events = [];
+
+        // Bigger than any other single event, since this was previously fatal.
+        if (backInside) { delta -= 8; events.push('Back inside prev session range'); }
 
         const brokeFor = direction === 'BUY' ? c.close > prevC.high : c.close < prevC.low;
 
@@ -484,8 +478,7 @@ module.exports = async function handler(req, res) {
 
       const currentScore = score;
       let currentLabel;
-      if (state === 'STOPPED') currentLabel = 'Monitoring Stopped';
-      else if (currentScore >= 85) currentLabel = 'Strong Continuation';
+      if (currentScore >= 85) currentLabel = 'Strong Continuation';
       else if (currentScore >= 70) currentLabel = 'Continuation Holding';
       else if (currentScore >= 50) currentLabel = 'Weakening';
       else if (currentScore >= 30) currentLabel = 'Possible Reversal';

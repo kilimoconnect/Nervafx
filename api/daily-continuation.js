@@ -178,8 +178,11 @@ module.exports = async function handler(req, res) {
       const d1Bullish = d1.close > d1.open;
       const d1Bearish = d1.close < d1.open;
 
-      const buyConfirm  = d1BreakBuy  || (d2BreakBuy  && d1Bullish);
-      const sellConfirm = d1BreakSell || (d2BreakSell && d1Bearish);
+      // D-1 is checked first; if it produced no break at all, D-2's break
+      // stands on its own. The fallback used to also require D-1's body to
+      // agree, which meant a flat or opposing D-1 killed the signal outright.
+      const buyConfirm  = d1BreakBuy  || d2BreakBuy;
+      const sellConfirm = d1BreakSell || d2BreakSell;
 
       let confirmedDirection = null;
       if (buyConfirm && !sellConfirm) confirmedDirection = 'BUY';
@@ -295,24 +298,11 @@ module.exports = async function handler(req, res) {
       for (let i = triggerIdx + 1; i < today.length; i++) {
         const h1 = today[i];
 
-        // Invalidation check: close back inside yesterday's daily range
-        if (h1.close < ydHigh && h1.close > ydLow) {
-          state = 'STOPPED';
-          stoppedTime = h1.time;
-          timeline.push({
-            time: h1.time,
-            score,
-            delta: 0,
-            label: 'Monitoring Stopped',
-            event: 'Close back inside prev daily range',
-            h1: {
-              open: h1.open, high: h1.high, low: h1.low, close: h1.close,
-              bull: h1.close > h1.open,
-              bodyPips: Math.round((Math.abs(h1.close - h1.open) / pd) * 10) / 10,
-            },
-          });
-          break;
-        }
+        // Closing back inside the reference range used to end monitoring
+        // outright. It now scores as the heaviest single penalty and tracking
+        // continues, so a pair that dips back in and then breaks out again
+        // stays visible instead of being dropped at the first pullback.
+        const backInside = h1.close < ydHigh && h1.close > ydLow;
 
         const h1Bull = h1.close > h1.open;
         const h1Body = Math.abs(h1.close - h1.open);
@@ -320,6 +310,9 @@ module.exports = async function handler(req, res) {
         const h1Range = h1.high - h1.low;
         let delta = 0;
         const events = [];
+
+        // Bigger than any other single event, since this was previously fatal.
+        if (backInside) { delta -= 8; events.push('Back inside prev daily range'); }
 
         const brokeFor = direction === 'BUY' ? h1.close > prevH1.high : h1.close < prevH1.low;
 
@@ -441,8 +434,7 @@ module.exports = async function handler(req, res) {
 
       const currentScore = score;
       let currentLabel;
-      if (state === 'STOPPED') currentLabel = 'Monitoring Stopped';
-      else if (currentScore >= 85) currentLabel = 'Strong Continuation';
+      if (currentScore >= 85) currentLabel = 'Strong Continuation';
       else if (currentScore >= 70) currentLabel = 'Continuation Holding';
       else if (currentScore >= 50) currentLabel = 'Weakening';
       else if (currentScore >= 30) currentLabel = 'Possible Reversal';
