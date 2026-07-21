@@ -450,8 +450,16 @@ module.exports = async function handler(req, res) {
         state,
         breakTime: trigger.time,
         firstTriggerTime,
-        triggerTime: qualifiedTime,
-        qualified: qualifiedTime !== null,
+        // Monitoring begins at the FIRST trigger — the break candle itself.
+        // These previously pointed at Trigger 2 (the first monitoring candle
+        // to post delta >= +6 with score above 75), so a pair that broke but
+        // never got that second confirmation was filtered out of the page
+        // entirely. Reaching this point means the break happened, so the pair
+        // is tracked from here.
+        triggerTime: firstTriggerTime,
+        qualified: true,
+        // Trigger 2 kept as an informational milestone, not a gate.
+        strongConfirmTime: qualifiedTime,
         stoppedTime,
         triggerBreakPips: Math.round(triggerBreakPips * 10) / 10,
         refBreakPips,
@@ -466,9 +474,10 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // Sort: qualified triggers first, ranked by trigger time ascending
-    // (earliest trigger first); tie-break by refBreakPips desc then
-    // triggerBreakPips desc. Unqualified pairs follow by break time asc.
+    // Sort by trigger time ascending (earliest break first); tie-break by
+    // refBreakPips desc then triggerBreakPips desc. Every pair that gets here
+    // has triggered, so the qualified/unqualified split the first comparison
+    // used to make no longer separates anything.
     pairs.sort((a, b) => {
       if (a.triggerTime && !b.triggerTime) return -1;
       if (!a.triggerTime && b.triggerTime) return 1;
