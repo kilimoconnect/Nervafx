@@ -80,6 +80,10 @@
     .sc-row:hover { background: rgba(255,255,255,0.055); border-color: rgba(255,255,255,0.1); }
     .sc-row.open { background: rgba(96,165,250,0.06); border-color: rgba(96,165,250,0.25); }
     .sc-expand { margin-left: auto; font-size: 10px; color: var(--text-dim); }
+    .sc-live {
+      font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 4px;
+      background: rgba(34,197,94,0.15); color: #22c55e; letter-spacing: .04em;
+    }
 
     /* ── M15 evolution drill-down ───────────────────────────────────────── */
     .sc-evo { margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.07); padding-top: 10px; cursor: default; }
@@ -494,13 +498,20 @@
           <span class="sc-date-count">${items.length} continuation${items.length > 1 ? 's' : ''}, ${totalP} pair${totalP > 1 ? 's' : ''}</span>
         </div>`;
 
-        const growingItems = items.filter(c => c.pairs.some(p => p.growing));
+        // A live session's candle is still forming, so its move is necessarily
+        // smaller than the finished session it followed. The backend already
+        // drops non-growing pairs from completed blocks, so requiring `growing`
+        // again here would hide the live session entirely.
+        const growingItems = items.filter(c => c.partial || c.pairs.some(p => p.growing));
         for (const c of growingItems) {
           const fromCls = c.fromSession.toLowerCase();
           const toCls = c.toSession.toLowerCase();
-          const sumPips = pips(c.sum);
+          // sum / strongest / weakest are now % moves over the session, not
+          // strength readings, so they render as percentages rather than pips.
+          const sumPips = (c.sum || 0).toFixed(2);
 
-          const growingPairs = c.pairs.filter(p => p.growing).sort((a, b) => b.currSpread - a.currSpread);
+          const growingPairs = (c.partial ? c.pairs : c.pairs.filter(p => p.growing))
+            .sort((a, b) => b.currMovePct - a.currMovePct);
           const topPairs = growingPairs.slice(0, 4);
           const tracked = topPairs.map(p => p.instrument).join(',');
 
@@ -509,12 +520,13 @@
               <span class="sc-session ${fromCls}">${c.fromSession.replace('_', ' ')}</span>
               <span class="sc-arrow">→</span>
               <span class="sc-session ${toCls}">${c.toSession.replace('_', ' ')}</span>
-              <span class="sc-sum">${sumPips}p</span>
+              <span class="sc-sum">${sumPips}%</span>
               <span class="sc-ccys">
-                <span class="strong">${c.strongest?.currency || ''} +${pips(Math.abs(c.strongest?.val || 0))}</span>
+                <span class="strong">${c.strongest?.currency || ''} +${Math.abs(c.strongest?.val || 0).toFixed(2)}%</span>
                 &nbsp;
-                <span class="weak">${c.weakest?.currency || ''} ${pips(c.weakest?.val || 0)}</span>
+                <span class="weak">${c.weakest?.currency || ''} ${(c.weakest?.val || 0).toFixed(2)}%</span>
               </span>
+              ${c.partial ? '<span class="sc-live">LIVE</span>' : ''}
               <span class="sc-expand">▾ session evolution</span>
             </div>
             <div class="sc-pairs">`;
@@ -526,9 +538,9 @@
                 <span class="sc-pair-dir ${dirCls}">${p.dir}</span>
               </div>
               <div>
-                <span class="sc-pair-spread" style="color:#64748b">${pips(p.prevSpread)}p</span>
+                <span class="sc-pair-spread" style="color:#64748b">${p.prevMovePips.toFixed(1)}p</span>
                 <span style="color:#475569;font-size:10px;margin:0 2px">→</span>
-                <span class="sc-pair-spread" style="color:#e2e8f0;font-weight:700">${pips(p.currSpread)}p</span>
+                <span class="sc-pair-spread" style="color:#e2e8f0;font-weight:700">${p.currMovePips.toFixed(1)}p</span>
                 ${p.growing ? '<span class="sc-pair-growing">▲</span>' : ''}
               </div>
             </div>`;

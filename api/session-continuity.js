@@ -4,20 +4,38 @@ const { getClient, cors } = require('./_db');
 const { requirePlan } = require('./_plan');
 
 // GET /api/session-continuity?days=30
-// For each session, uses 6H strength to rank currencies and form pairs.
-// Checks the 2 previous sessions for continuation (same pair + same direction).
-// Filters by growing spread; the live session additionally requires 2H
-// strength to agree with the pair's direction.
+//
+// Treats each trading session as a candle. For every pair the session opens at
+// the first H1 bar of the session and closes at the last one; close above open
+// makes it a BUY session, below makes it a SELL session. A continuation is a
+// session whose direction matches the session before it — the move carried on
+// rather than reversed.
+//
+// This replaces the earlier model, which derived direction by comparing two
+// currencies' 6H strength readings. Direction now comes from what price
+// actually did between the session's open and its close.
+//
+// Magnitude is reported two ways because they answer different questions:
+//   movePips — the move in the pair's own pips, for reading
+//   movePct  — the same move as a percentage, for ranking and for the
+//              growing check, since raw pips are not comparable across pairs
+//              (80 pips on GBP/JPY is not 80 pips on EUR/CHF)
+//
+// The live session is still in progress, so its candle is partial and its move
+// is necessarily smaller than a finished session's. Those blocks are flagged
+// partial:true so the caller can avoid judging them on size alone.
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
-const VALID_PAIRS = new Set([
+const VALID_PAIRS = [
   'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
   'EUR_GBP','EUR_JPY','EUR_CHF','EUR_CAD','EUR_AUD','EUR_NZD',
   'GBP_JPY','GBP_CHF','GBP_CAD','GBP_AUD','GBP_NZD',
   'AUD_JPY','AUD_CHF','AUD_CAD','AUD_NZD',
   'NZD_JPY','NZD_CHF','NZD_CAD',
   'CHF_JPY','CAD_JPY','CAD_CHF',
-]);
+];
+
+function pipDiv(inst) { return inst.includes('JPY') ? 0.01 : 0.0001; }
 
 function getSession(h) {
   if (h >= 22 || h < 6) return 'ASIA';
@@ -38,6 +56,37 @@ function sessionOrder(s) {
   return s === 'ASIA' ? 0 : s === 'LONDON' ? 1 : 2;
 }
 
+// When the session closes, so we can tell a finished block from a live one.
+const SESSION_END_HOUR = { ASIA: 6, LONDON: 12, NEW_YORK: 21 };
+function sessionEndMs(dateKey, session) {
+  const d = new Date(`${dateKey}T00:00:00Z`);
+  d.setUTCHours(SESSION_END_HOUR[session] ?? 21, 0, 0, 0);
+  return d.getTime();
+}
+
+async function fetchH1(sb, sinceIso) {
+  const PAGE = 1000;
+  const rows = [];
+  let offset = 0;
+  while (true) {
+    const { data, error } = await sb
+      .from('backtest_candles')
+      .select('instrument, time, open, close')
+      .in('instrument', VALID_PAIRS)
+      .eq('timeframe', 'H1')
+      .eq('complete', true)
+      .gte('time', sinceIso)
+      .order('time', { ascending: true })
+      .range(offset, offset + PAGE - 1);
+    if (error) throw error;
+    if (!data || !data.length) break;
+    rows.push(...data);
+    if (data.length < PAGE) break;
+    offset += PAGE;
+  }
+  return rows;
+}
+
 module.exports = async function handler(req, res) {
   cors(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -51,140 +100,102 @@ module.exports = async function handler(req, res) {
     const days = Math.min(420, parseInt(req.query?.days || '30', 10) || 30);
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
-    // Fetch currency_strength (6H for session pairs, 2H for confirmation)
-    const allRows = [];
-    const PAGE = 1000;
-    let offset = 0;
-    while (true) {
-      const { data, error } = await sb
-        .from('currency_strength')
-        .select('time, currency, smooth_6h, smooth_2h')
-        .gte('time', since)
-        .order('time', { ascending: true })
-        .range(offset, offset + PAGE - 1);
-      if (error) throw error;
-      if (!data || !data.length) break;
-      allRows.push(...data);
-      if (data.length < PAGE) break;
-      offset += PAGE;
-    }
+    // ── Build a session candle per pair ─────────────────────────────────────
+    // Bars arrive oldest-first, so the first bar seen for a session sets the
+    // open and every later bar overwrites the close.
+    const candles = await fetchH1(sb, since);
 
-    // Group by hour
-    const byHour = {};
-    for (const r of allRows) {
-      const hk = r.time.slice(0, 13);
-      (byHour[hk] = byHour[hk] || []).push(r);
-    }
-
-    // Group by session block (date + session name)
-    const sessionBlocks = {};
-    for (const [hk, rows] of Object.entries(byHour)) {
-      const hour = parseInt(hk.slice(11, 13), 10);
+    const blocks = {}; // `${date}|${session}` -> { date, session, pairs }
+    for (const c of candles) {
+      const hour = new Date(c.time).getUTCHours();
       const sess = getSession(hour);
-      if (!sess) continue;
-
-      const iso = hk + ':00:00Z';
-      const dateKey = sessionDate(iso, sess);
-      const blockKey = `${dateKey}|${sess}`;
-
-      if (!sessionBlocks[blockKey]) {
-        sessionBlocks[blockKey] = { date: dateKey, session: sess, hours: {} };
-      }
-      for (const r of rows) {
-        const val6h = parseFloat(r.smooth_6h) || 0;
-        const val2h = parseFloat(r.smooth_2h) || 0;
-        if (!sessionBlocks[blockKey].hours[r.currency]) {
-          sessionBlocks[blockKey].hours[r.currency] = [];
-        }
-        sessionBlocks[blockKey].hours[r.currency].push({ val6h, val2h });
-      }
+      if (!sess) continue; // low-liquidity hours belong to no session
+      const dateKey = sessionDate(c.time, sess);
+      const key = `${dateKey}|${sess}`;
+      const b = blocks[key] || (blocks[key] = { date: dateKey, session: sess, pairs: {} });
+      const existing = b.pairs[c.instrument];
+      if (!existing) b.pairs[c.instrument] = { open: parseFloat(c.open), close: parseFloat(c.close) };
+      else existing.close = parseFloat(c.close);
     }
 
-    // For each session block: use 6H to rank currencies and form pairs
+    // ── Per session: pair directions, plus currency strength from the moves ──
+    const now = Date.now();
     const sessionList = [];
-    for (const [key, block] of Object.entries(sessionBlocks)) {
-      const ccyVals6h = {};
-      const ccyVals2h = {};
-      for (const ccy of CURRENCIES) {
-        const vals = block.hours[ccy] || [];
-        ccyVals6h[ccy] = vals.length ? vals[vals.length - 1].val6h : 0;
-        ccyVals2h[ccy] = vals.length ? vals[vals.length - 1].val2h : 0;
-      }
-      const ranked = CURRENCIES.map(ccy => ({ currency: ccy, val: ccyVals6h[ccy] }))
-        .sort((a, b) => b.val - a.val);
-      const sum = (ranked[0]?.val ? Math.abs(ranked[0].val) : 0) +
-                  (ranked[7]?.val ? Math.abs(ranked[7].val) : 0);
-
+    for (const b of Object.values(blocks)) {
       const pairs = [];
-      for (const instrument of VALID_PAIRS) {
-        const [base, quote] = instrument.split('_');
-        const bVal = ccyVals6h[base] || 0;
-        const qVal = ccyVals6h[quote] || 0;
-        const dir = bVal >= qVal ? 'BUY' : 'SELL';
-        const strong = dir === 'BUY' ? base : quote;
-        const weak = dir === 'BUY' ? quote : base;
-        const spread = Math.abs(bVal - qVal);
-        pairs.push({ instrument, dir, strong, weak, spread });
+      const sums = {}, counts = {};
+      for (const c of CURRENCIES) { sums[c] = 0; counts[c] = 0; }
+
+      for (const inst of VALID_PAIRS) {
+        const sc = b.pairs[inst];
+        if (!sc || !sc.open) continue;
+        const pct = ((sc.close - sc.open) / sc.open) * 100;
+        const dir = sc.close >= sc.open ? 'BUY' : 'SELL';
+        const [base, quote] = inst.split('_');
+        sums[base]  += pct; counts[base]++;
+        sums[quote] -= pct; counts[quote]++;
+        pairs.push({
+          instrument: inst,
+          dir,
+          strong: dir === 'BUY' ? base : quote,
+          weak:   dir === 'BUY' ? quote : base,
+          movePct:  Math.abs(pct),
+          movePips: Math.abs(sc.close - sc.open) / pipDiv(inst),
+        });
       }
+      if (!pairs.length) continue;
+
+      // Session currency strength = mean % move across the 7 pairs a currency
+      // appears in, signed so a rising base counts for it and against its quote.
+      const strength = {};
+      for (const c of CURRENCIES) strength[c] = counts[c] ? sums[c] / counts[c] : 0;
+      const ranked = CURRENCIES.map(c => ({ currency: c, val: strength[c] }))
+        .sort((a, b2) => b2.val - a.val);
 
       sessionList.push({
-        date: block.date,
-        session: block.session,
+        date: b.date,
+        session: b.session,
         strongest: ranked[0],
         weakest: ranked[ranked.length - 1],
-        sum,
+        sum: Math.abs(ranked[0].val) + Math.abs(ranked[ranked.length - 1].val),
         pairs,
-        ccyVals2h,
+        partial: sessionEndMs(b.date, b.session) > now,
       });
     }
 
-    // Sort by date + session order
     sessionList.sort((a, b) => {
       const dc = a.date.localeCompare(b.date);
       return dc !== 0 ? dc : sessionOrder(a.session) - sessionOrder(b.session);
     });
 
-    // Latest 2H strength for current confirmation filter
-    const latest2h = {};
-    if (sessionList.length) {
-      const last = sessionList[sessionList.length - 1];
-      for (const ccy of CURRENCIES) {
-        latest2h[ccy] = last.ccyVals2h?.[ccy] || 0;
-      }
-    }
-    const h2Dirs = {};
-    for (const instrument of VALID_PAIRS) {
-      const [base, quote] = instrument.split('_');
-      h2Dirs[instrument] = (latest2h[base] || 0) >= (latest2h[quote] || 0) ? 'BUY' : 'SELL';
-    }
-
-    // Find continuations: same pair + same dir across up to 2 previous sessions
-    // e.g. LONDON checks ASIA (1 back) + previous NEW_YORK (2 back)
+    // ── Continuations: this session's direction matches an earlier one ───────
     const continuations = [];
     for (let i = 1; i < sessionList.length; i++) {
       const curr = sessionList[i];
-
       const lookback = Math.min(2, i);
+
       for (let back = 1; back <= lookback; back++) {
         const prev = sessionList[i - back];
-
         const prevMap = {};
         for (const p of prev.pairs) prevMap[p.instrument] = p;
 
         const continued = [];
         for (const p of curr.pairs) {
-          const prevP = prevMap[p.instrument];
-          if (prevP && prevP.dir === p.dir) {
-            continued.push({
-              instrument: p.instrument,
-              dir: p.dir,
-              strong: p.strong,
-              weak: p.weak,
-              prevSpread: prevP.spread,
-              currSpread: p.spread,
-              growing: p.spread > prevP.spread,
-            });
-          }
+          const pp = prevMap[p.instrument];
+          if (!pp || pp.dir !== p.dir) continue;
+          continued.push({
+            instrument: p.instrument,
+            dir: p.dir,
+            strong: p.strong,
+            weak: p.weak,
+            prevMovePips: pp.movePips,
+            currMovePips: p.movePips,
+            prevMovePct:  pp.movePct,
+            currMovePct:  p.movePct,
+            // Extending harder than the session it followed. Meaningless while
+            // the current session is still open, hence the partial flag.
+            growing: p.movePct > pp.movePct,
+          });
         }
 
         if (continued.length) {
@@ -196,35 +207,50 @@ module.exports = async function handler(req, res) {
             strongest: curr.strongest,
             weakest: curr.weakest,
             sum: curr.sum,
-            pairs: continued.sort((a, b) => b.currSpread - a.currSpread),
+            partial: curr.partial,
+            pairs: continued.sort((a, b) => b.currMovePct - a.currMovePct),
           });
         }
       }
     }
 
-    // Determine the current session so the live block can get the extra
-    // 2H direction confirmation.
+    // ── Live session gets an extra 2H strength confirmation ──────────────────
+    // Only the newest hour is needed, so this is 8 rows rather than the whole
+    // range.
     const nowH = new Date().getUTCHours();
     const currSess = getSession(nowH);
     const currDate = currSess ? sessionDate(new Date().toISOString(), currSess) : null;
 
-    // Filter: growing spread for all; 2H direction confirmation for the
-    // current session only. The H1 breakout requirement that used to gate
-    // the live session has been removed — a continuation no longer has to
-    // wait for an H1 close beyond the previous H1's high/low to show up.
+    const latest2h = {};
+    const { data: csRows } = await sb
+      .from('currency_strength')
+      .select('time, currency, smooth_2h')
+      .order('time', { ascending: false })
+      .limit(CURRENCIES.length);
+    for (const r of (csRows || [])) {
+      if (latest2h[r.currency] === undefined) latest2h[r.currency] = parseFloat(r.smooth_2h) || 0;
+    }
+    const h2Dirs = {};
+    for (const instrument of VALID_PAIRS) {
+      const [base, quote] = instrument.split('_');
+      h2Dirs[instrument] = (latest2h[base] || 0) >= (latest2h[quote] || 0) ? 'BUY' : 'SELL';
+    }
     const has2h = Object.values(latest2h).some(v => v !== 0);
+
     for (const c of continuations) {
       const isCurrentSession = currSess && c.toSession === currSess && c.date === currDate;
       c.pairs = c.pairs
         .filter(p => {
-          if (!p.growing) return false;
-          if (isCurrentSession) {
-            if (has2h && h2Dirs[p.instrument] !== p.dir) return false;
-          }
+          // A finished session must have extended its predecessor. A live one
+          // cannot be judged that way yet — it has only run part of its span —
+          // so direction alone carries it, plus the 2H check below.
+          if (!c.partial && !p.growing) return false;
+          if (isCurrentSession && has2h && h2Dirs[p.instrument] !== p.dir) return false;
           return true;
         })
-        .sort((a, b) => b.currSpread - a.currSpread);
+        .sort((a, b) => b.currMovePct - a.currMovePct);
     }
+
     const filtered = continuations.filter(c => c.pairs.length > 0);
     res.json({ continuations: filtered.reverse(), total: filtered.length });
   } catch (e) {
