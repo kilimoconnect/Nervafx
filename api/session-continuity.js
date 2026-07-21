@@ -7,7 +7,8 @@ const { requirePlan } = require('./_plan');
 // For each session, uses 6H strength to rank currencies and form pairs.
 // Checks the 2 previous sessions for continuation (same pair + same direction).
 // Filters by growing spread; the live session additionally requires 2H
-// strength to agree with the pair's direction.
+// strength to agree with the pair's direction. That 2H strength is derived
+// from M15 candles at request time, so it refreshes every 15 minutes.
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
 const VALID_PAIRS = new Set([
@@ -58,7 +59,7 @@ module.exports = async function handler(req, res) {
     while (true) {
       const { data, error } = await sb
         .from('currency_strength')
-        .select('time, currency, smooth_6h, smooth_2h')
+        .select('time, currency, smooth_6h')
         .gte('time', since)
         .order('time', { ascending: true })
         .range(offset, offset + PAGE - 1);
@@ -92,11 +93,10 @@ module.exports = async function handler(req, res) {
       }
       for (const r of rows) {
         const val6h = parseFloat(r.smooth_6h) || 0;
-        const val2h = parseFloat(r.smooth_2h) || 0;
         if (!sessionBlocks[blockKey].hours[r.currency]) {
           sessionBlocks[blockKey].hours[r.currency] = [];
         }
-        sessionBlocks[blockKey].hours[r.currency].push({ val6h, val2h });
+        sessionBlocks[blockKey].hours[r.currency].push({ val6h });
       }
     }
 
@@ -104,11 +104,9 @@ module.exports = async function handler(req, res) {
     const sessionList = [];
     for (const [key, block] of Object.entries(sessionBlocks)) {
       const ccyVals6h = {};
-      const ccyVals2h = {};
       for (const ccy of CURRENCIES) {
         const vals = block.hours[ccy] || [];
         ccyVals6h[ccy] = vals.length ? vals[vals.length - 1].val6h : 0;
-        ccyVals2h[ccy] = vals.length ? vals[vals.length - 1].val2h : 0;
       }
       const ranked = CURRENCIES.map(ccy => ({ currency: ccy, val: ccyVals6h[ccy] }))
         .sort((a, b) => b.val - a.val);
@@ -134,7 +132,6 @@ module.exports = async function handler(req, res) {
         weakest: ranked[ranked.length - 1],
         sum,
         pairs,
-        ccyVals2h,
       });
     }
 
@@ -144,12 +141,50 @@ module.exports = async function handler(req, res) {
       return dc !== 0 ? dc : sessionOrder(a.session) - sessionOrder(b.session);
     });
 
-    // Latest 2H strength for current confirmation filter
+    // Live 2H currency strength, computed from M15 candles so it refreshes
+    // every 15 minutes. The currency_strength table only carries hourly rows
+    // AND lags the candle feed — measured on 2026-07-21 its newest row was
+    // 06:00 while M15 had already closed 08:00, a two-hour gap. A pair could
+    // therefore sit blocked (or wrongly allowed) on a stale direction.
+    //
+    // Method: for each pair take the % change across the last 2 hours
+    // (8 complete M15 bars), credit the base currency +change and the quote
+    // -change, then average per currency over the 7 pairs it appears in.
+    const M15_BARS_2H = 8;
     const latest2h = {};
-    if (sessionList.length) {
-      const last = sessionList[sessionList.length - 1];
+    for (const ccy of CURRENCIES) latest2h[ccy] = 0;
+    {
+      // 6h window gives ~24 bars per pair (672 rows across the 28) — well
+      // clear of the 9 needed, with slack for gaps, and under the row cap.
+      const m15Since = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+      const { data: m15Rows } = await sb
+        .from('backtest_candles')
+        .select('instrument, time, close')
+        .in('instrument', [...VALID_PAIRS])
+        .eq('timeframe', 'M15')
+        .eq('complete', true)
+        .gte('time', m15Since)
+        .order('time', { ascending: false })
+        .limit(1000);
+
+      const closesByInst = {};
+      for (const c of (m15Rows || [])) {
+        (closesByInst[c.instrument] = closesByInst[c.instrument] || []).push(parseFloat(c.close));
+      }
+      const sums = {}, counts = {};
+      for (const ccy of CURRENCIES) { sums[ccy] = 0; counts[ccy] = 0; }
+      for (const [inst, closes] of Object.entries(closesByInst)) {
+        // Newest first: index 0 is the latest close, index 8 is 2 hours back.
+        if (closes.length <= M15_BARS_2H) continue;
+        const nowPx = closes[0], thenPx = closes[M15_BARS_2H];
+        if (!thenPx) continue;
+        const pct = ((nowPx - thenPx) / thenPx) * 100;
+        const [base, quote] = inst.split('_');
+        sums[base]  += pct; counts[base]++;
+        sums[quote] -= pct; counts[quote]++;
+      }
       for (const ccy of CURRENCIES) {
-        latest2h[ccy] = last.ccyVals2h?.[ccy] || 0;
+        if (counts[ccy]) latest2h[ccy] = sums[ccy] / counts[ccy];
       }
     }
     const h2Dirs = {};
