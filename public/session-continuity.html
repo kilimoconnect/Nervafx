@@ -643,7 +643,7 @@
       }
 
       out += '</div>';
-      out += `<div class="sc-evo-note">Ranked by 2H currency-strength spread, recomputed from M15 at every step — the same measure the live session gate uses.</div>`;
+      out += `<div class="sc-evo-note">Ranked by 2H currency-strength spread, derived from M15 candles at every step. The live session gate reads hourly strength, so directions agree but values won't match exactly.</div>`;
       return out;
     }
 

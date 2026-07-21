@@ -6,10 +6,16 @@ const { requirePlan } = require('./_plan');
 // GET /api/session-continuity-evolution?date=YYYY-MM-DD&session=NEW_YORK
 //
 // Replays one session in 15-minute steps so you can watch how the pair list
-// arrived at what the card shows. At each M15 anchor it recomputes the same
-// 2H currency strength the live gate in session-continuity.js uses — % change
-// across the last 8 complete M15 bars, credited +base / -quote and averaged
-// per currency — then derives every pair's direction and spread from it.
+// arrived at what the card shows. At each M15 anchor it measures 2H currency
+// strength as the % change across the last 8 complete M15 bars, credited
+// +base / -quote and averaged per currency, then derives every pair's
+// direction and spread from it.
+//
+// Note this is computed independently of the live gate in
+// session-continuity.js, which reads the hourly smooth_2h column from the
+// currency_strength table. Hourly rows cannot express a 15-minute
+// progression, so this view derives its own from M15 candles. Expect the two
+// to agree in direction but not to match tick for tick.
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
 const VALID_PAIRS = [
