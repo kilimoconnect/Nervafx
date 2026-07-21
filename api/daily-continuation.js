@@ -3,6 +3,7 @@
 const { getClient, cors } = require('./_db');
 const { requirePlan } = require('./_plan');
 const { alignFromCandles } = require('./_h1-ema-align');
+const { loadStrength, strengthGate } = require('./_strength-gate');
 
 const VALID_PAIRS = [
   'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
@@ -95,6 +96,9 @@ module.exports = async function handler(req, res) {
     // the EMA50 that gates the trigger.
     const fetchSince = new Date(prev3DayStart.getTime() - 5 * 24 * 3600000).toISOString();
     const fetchUntil = todayDate ? dayEnd.toISOString() : (now < dayEnd ? now : dayEnd).toISOString();
+
+    // Hourly 3H/6H/12H strength, keyed hour -> currency.
+    const strengthByHour = await loadStrength(sb, fetchSince, fetchUntil);
 
     // Fetch H1 candles for all pairs covering yesterday + today
     const PAGE = 1000;
@@ -256,6 +260,11 @@ module.exports = async function handler(req, res) {
       const triggerMs = new Date(trigger.time).getTime();
       const emaAlign = alignFromCandles(candles, triggerMs, direction);
       if (!emaAlign.aligned) continue;
+
+      // Strength gate at trigger time — a break with neither currency
+      // committed is the kind that fades.
+      const trigStrength = strengthGate(strengthByHour, inst, direction, triggerMs, TRIGGER_TF_MS);
+      if (!trigStrength.ok) continue;
       const triggerBreakPips = direction === 'BUY'
         ? (trigger.close - ydHigh) / pd
         : (ydLow - trigger.close) / pd;
@@ -320,6 +329,12 @@ module.exports = async function handler(req, res) {
 
         // Bigger than any other single event, since this was previously fatal.
         if (backInside) { delta -= 8; events.push('Back inside prev daily range'); }
+
+        // Strength gate, scored rather than fatal here: an hour where neither
+        // currency holds conviction weakens the case without ending a run that
+        // may well reassert itself.
+        const cStrength = strengthGate(strengthByHour, inst, direction, new Date(h1.time).getTime(), TRIGGER_TF_MS);
+        if (!cStrength.ok) { delta -= 5; events.push('No strength conviction'); }
 
         const brokeFor = direction === 'BUY' ? h1.close > prevH1.high : h1.close < prevH1.low;
 
@@ -468,6 +483,12 @@ module.exports = async function handler(req, res) {
         triggerTime: firstTriggerTime,
         // When the break was actually confirmed — the trigger candle's close.
         triggerCloseTime: closeTimeOf(firstTriggerTime),
+        // Which leg and horizon carried the strength that let the trigger through.
+        strength: trigStrength.nodata ? null : {
+          currency: trigStrength.currency,
+          horizon: trigStrength.horizon,
+          value: +trigStrength.value.toFixed(5),
+        },
         qualified: true,
         // Trigger 2 kept as an informational milestone, not a gate.
         strongConfirmTime: qualifiedTime,

@@ -3,6 +3,7 @@
 const { getClient, cors } = require('./_db');
 const { requirePlan } = require('./_plan');
 const { alignFromCandles } = require('./_h1-ema-align');
+const { loadStrength, strengthGate } = require('./_strength-gate');
 
 const VALID_PAIRS = [
   'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
@@ -14,15 +15,6 @@ const VALID_PAIRS = [
 
 function isJpy(inst) { return inst.includes('JPY'); }
 function pipDiv(inst) { return isJpy(inst) ? 0.01 : 0.0001; }
-
-// 3H strength gate. One leg of the pair must carry real conviction in the
-// trade's direction — the base bid up, or the quote sold off — measured on the
-// smooth_3h currency strength series. Readings sit in the 0.0001-0.0025 band,
-// so 0.00100 keeps roughly the strongest quarter.
-const STRENGTH_MIN = 0.00100;
-// currency_strength trails the candle feed by an hour or so; accept the most
-// recent published reading rather than failing a pair over pipeline timing.
-const STRENGTH_STALE_HOURS = 3;
 
 // Candles are stamped with their OPEN time, but a break is only confirmed when
 // the candle closes. This engine triggers on H1, so the signal fires an hour
@@ -209,54 +201,8 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // Hourly 3H strength, keyed hour -> currency. Stamped with the H1 candle it
-    // derives from, so hour T only exists once that candle closes at T+1h —
-    // exactly when an H1 trigger at T is confirmed. Reading hour T alongside
-    // candle T therefore introduces no lookahead.
-    const strengthByHour = {};
-    {
-      const csSince = new Date(
-        new Date(fetchSince).getTime() - STRENGTH_STALE_HOURS * 3600000
-      ).toISOString();
-      const { data: csRows, error: csErr } = await sb
-        .from('currency_strength')
-        .select('time, currency, smooth_3h')
-        .gte('time', csSince).lte('time', fetchUntil)
-        .order('time', { ascending: true })
-        .limit(5000);
-      if (csErr) throw csErr;
-      for (const r of (csRows || [])) {
-        const hk = r.time.slice(0, 13);
-        (strengthByHour[hk] = strengthByHour[hk] || {})[r.currency] =
-          parseFloat(r.smooth_3h) || 0;
-      }
-    }
-
-    // Latest reading at or before ms, walking back over any pipeline gap.
-    function strengthAt(ms, ccy) {
-      for (let b = 0; b <= STRENGTH_STALE_HOURS; b++) {
-        const hk = new Date(ms - b * 3600000).toISOString().slice(0, 13);
-        const v = strengthByHour[hk]?.[ccy];
-        if (v !== undefined) return v;
-      }
-      return null;
-    }
-
-    function strengthGate(inst, direction, ms) {
-      const [base, quote] = inst.split('_');
-      const b = strengthAt(ms, base);
-      const q = strengthAt(ms, quote);
-      // A strength outage must not blank the board; pass unjudged and say so.
-      if (b === null || q === null) return { ok: true, nodata: true };
-      const bOk = direction === 'BUY' ? b >=  STRENGTH_MIN : b <= -STRENGTH_MIN;
-      const qOk = direction === 'BUY' ? q <= -STRENGTH_MIN : q >=  STRENGTH_MIN;
-      if (!bOk && !qOk) return { ok: false, base: b, quote: q };
-      // Credit the leg doing the most work when both clear.
-      const pick = bOk && (!qOk || Math.abs(b) >= Math.abs(q))
-        ? { currency: base, value: b }
-        : { currency: quote, value: q };
-      return { ok: true, ...pick, base: b, quote: q };
-    }
+    // Hourly 3H/6H/12H strength, keyed hour -> currency.
+    const strengthByHour = await loadStrength(sb, fetchSince, fetchUntil);
 
     const prevStartISO  = prev.start.toISOString();
     const prevEndISO    = prev.end.toISOString();
@@ -363,9 +309,9 @@ module.exports = async function handler(req, res) {
       const emaAlign = alignFromCandles(h1Cache[inst] || [], triggerMs, direction);
       if (!emaAlign.aligned) continue;
 
-      // 3H strength gate at trigger time — a break with neither currency
+      // Strength gate at trigger time — a break with neither currency
       // committed is the kind that fades.
-      const trigStrength = strengthGate(inst, direction, triggerMs);
+      const trigStrength = strengthGate(strengthByHour, inst, direction, triggerMs, TRIGGER_TF_MS);
       if (!trigStrength.ok) continue;
       const curCandles = all.slice(triggerAllIdx).filter(c => new Date(c.time).getTime() < curEndMs);
       const triggerIdx = 0;
@@ -432,11 +378,11 @@ module.exports = async function handler(req, res) {
         // Bigger than any other single event, since this was previously fatal.
         if (backInside) { delta -= 8; events.push('Back inside prev session range'); }
 
-        // 3H strength gate, scored rather than fatal here: an hour where
-        // neither currency holds conviction weakens the case without ending a
-        // run that may well reassert itself.
-        const cStrength = strengthGate(inst, direction, new Date(c.time).getTime());
-        if (!cStrength.ok) { delta -= 5; events.push('No 3H strength conviction'); }
+        // Strength gate, scored rather than fatal here: an hour where neither
+        // currency holds conviction weakens the case without ending a run that
+        // may well reassert itself.
+        const cStrength = strengthGate(strengthByHour, inst, direction, new Date(c.time).getTime(), TRIGGER_TF_MS);
+        if (!cStrength.ok) { delta -= 5; events.push('No strength conviction'); }
 
         const brokeFor = direction === 'BUY' ? c.close > prevC.high : c.close < prevC.low;
 
@@ -584,9 +530,10 @@ module.exports = async function handler(req, res) {
         triggerTime: firstTriggerTime,
         // When the break was actually confirmed — the trigger candle's close.
         triggerCloseTime: closeTimeOf(firstTriggerTime),
-        // Which leg carried the 3H strength that let the trigger through.
-        strength3h: trigStrength.nodata ? null : {
+        // Which leg and horizon carried the strength that let the trigger through.
+        strength: trigStrength.nodata ? null : {
           currency: trigStrength.currency,
+          horizon: trigStrength.horizon,
           value: +trigStrength.value.toFixed(5),
         },
         qualified: true,
