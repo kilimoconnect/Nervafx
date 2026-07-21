@@ -325,6 +325,7 @@ module.exports = async function handler(req, res) {
 
       const timeline = [{
         time: trigger.time,
+        closeTime: closeTimeOf(trigger.time),
         score,
         label: 'Trigger 1',
         event: direction === 'BUY'

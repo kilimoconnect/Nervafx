@@ -277,6 +277,7 @@ module.exports = async function handler(req, res) {
       // Phase 2: score subsequent H1s until a close falls back inside [ydLow, ydHigh]
       const timeline = [{
         time: trigger.time,
+        closeTime: closeTimeOf(trigger.time),
         score,
         label: 'Trigger 1',
         event: direction === 'BUY'
