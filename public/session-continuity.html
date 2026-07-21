@@ -75,7 +75,43 @@
       padding: 12px 14px; border-radius: 10px;
       background: rgba(255,255,255,0.03);
       border: 1px solid rgba(255,255,255,0.05);
+      cursor: pointer;
     }
+    .sc-row:hover { background: rgba(255,255,255,0.055); border-color: rgba(255,255,255,0.1); }
+    .sc-row.open { background: rgba(96,165,250,0.06); border-color: rgba(96,165,250,0.25); }
+    .sc-expand { margin-left: auto; font-size: 10px; color: var(--text-dim); }
+
+    /* ── M15 evolution drill-down ───────────────────────────────────────── */
+    .sc-evo { margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.07); padding-top: 10px; cursor: default; }
+    .sc-evo-hd {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .05em; color: var(--text-dim); margin-bottom: 8px;
+    }
+    .sc-evo-load { font-size: 11px; color: var(--text-dim); padding: 6px 0; }
+    .sc-evo-err { font-size: 11px; color: #ef4444; padding: 6px 0; }
+    .sc-evo-scroll { max-height: 340px; overflow-y: auto; }
+    .sc-step {
+      display: grid; grid-template-columns: 62px 108px 1fr; gap: 10px;
+      align-items: center; padding: 5px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .sc-step:last-child { border-bottom: none; }
+    .sc-step-t { font-size: 10px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+    .sc-step-ccy { font-size: 10px; font-variant-numeric: tabular-nums; }
+    .sc-step-ccy .s { color: #22c55e; font-weight: 700; }
+    .sc-step-ccy .w { color: #ef4444; font-weight: 700; }
+    .sc-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+    .sc-chip {
+      font-size: 9.5px; padding: 2px 6px; border-radius: 4px;
+      background: rgba(255,255,255,0.05); color: var(--text-dim);
+      white-space: nowrap; font-variant-numeric: tabular-nums;
+    }
+    /* Pairs that made the card's final list — watch them climb. */
+    .sc-chip.tracked { background: rgba(96,165,250,0.16); color: #93c5fd; font-weight: 700; }
+    .sc-chip.tracked.buy  { background: rgba(34,197,94,0.16);  color: #4ade80; }
+    .sc-chip.tracked.sell { background: rgba(239,68,68,0.16);  color: #f87171; }
+    .sc-chip .rk { opacity: .55; margin-right: 3px; }
+    .sc-evo-note { font-size: 10px; color: var(--text-dim); margin-top: 8px; }
     .sc-row-hdr {
       display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap;
     }
@@ -460,7 +496,11 @@
           const toCls = c.toSession.toLowerCase();
           const sumPips = pips(c.sum);
 
-          html += `<div class="sc-row">
+          const growingPairs = c.pairs.filter(p => p.growing).sort((a, b) => b.currSpread - a.currSpread);
+          const topPairs = growingPairs.slice(0, 4);
+          const tracked = topPairs.map(p => p.instrument).join(',');
+
+          html += `<div class="sc-row" data-date="${c.date}" data-session="${c.toSession}" data-tracked="${tracked}">
             <div class="sc-row-hdr">
               <span class="sc-session ${fromCls}">${c.fromSession.replace('_', ' ')}</span>
               <span class="sc-arrow">→</span>
@@ -471,11 +511,9 @@
                 &nbsp;
                 <span class="weak">${c.weakest?.currency || ''} ${pips(c.weakest?.val || 0)}</span>
               </span>
+              <span class="sc-expand">▾ 15m evolution</span>
             </div>
             <div class="sc-pairs">`;
-
-          const growingPairs = c.pairs.filter(p => p.growing).sort((a, b) => b.currSpread - a.currSpread);
-          const topPairs = growingPairs.slice(0, 4);
           for (const p of topPairs) {
             const dirCls = p.dir.toLowerCase();
             html += `<div class="sc-pair">
@@ -497,6 +535,116 @@
       }
       html += '</div>';
       body.innerHTML = html;
+      wireEvolution();
+    }
+
+    // ── M15 evolution drill-down ──────────────────────────────────────────
+    // Clicking a continuation card replays its session in 15-minute steps so
+    // you can watch the pair list build into what the card shows. Responses
+    // are cached per card so re-opening is instant.
+    const _evoCache = {};
+
+    function wireEvolution() {
+      document.querySelectorAll('.sc-row').forEach(row => {
+        row.addEventListener('click', ev => {
+          // Let the panel itself be scrolled/selected without collapsing.
+          if (ev.target.closest('.sc-evo')) return;
+          toggleEvolution(row);
+        });
+      });
+    }
+
+    async function toggleEvolution(row) {
+      const existing = row.querySelector('.sc-evo');
+      const caret = row.querySelector('.sc-expand');
+      if (existing) {
+        existing.remove();
+        row.classList.remove('open');
+        if (caret) caret.textContent = '▾ 15m evolution';
+        return;
+      }
+
+      const date = row.dataset.date;
+      const session = row.dataset.session;
+      const tracked = (row.dataset.tracked || '').split(',').filter(Boolean);
+      const key = `${date}|${session}`;
+
+      row.classList.add('open');
+      if (caret) caret.textContent = '▴ hide';
+
+      const panel = document.createElement('div');
+      panel.className = 'sc-evo';
+      panel.innerHTML = '<div class="sc-evo-load"><span class="spinner"></span> Loading 15m evolution…</div>';
+      row.appendChild(panel);
+
+      try {
+        let json = _evoCache[key];
+        if (!json) {
+          const url = `/api/session-continuity-evolution?date=${encodeURIComponent(date)}&session=${encodeURIComponent(session)}`;
+          let token = localStorage.getItem('nfx_token');
+          let res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+          // Same refresh-and-retry the main loader uses.
+          if (res.status === 401 || res.status === 403) {
+            const ok = await _refreshToken();
+            if (!ok) { _clearAuth(); return location.replace('/login.html'); }
+            token = localStorage.getItem('nfx_token');
+            res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+          }
+          json = await res.json().catch(() => ({}));
+          if (!res.ok || json.error) throw new Error(json.error || `HTTP ${res.status}`);
+          _evoCache[key] = json;
+        }
+        panel.innerHTML = renderEvolution(json, tracked);
+      } catch (e) {
+        panel.innerHTML = `<div class="sc-evo-err">Could not load evolution: ${e.message}</div>`;
+      }
+    }
+
+    function renderEvolution(json, tracked) {
+      const steps = json.steps || [];
+      if (!steps.length) {
+        return `<div class="sc-evo-note">${json.note || 'No 15m data for this session yet.'}</div>`;
+      }
+      const trackedSet = new Set(tracked);
+      const fmtT = iso => new Date(iso).toLocaleTimeString('en-GB', {
+        hour: '2-digit', minute: '2-digit', hour12: false, timeZone: _tz(),
+      });
+
+      let out = `<div class="sc-evo-hd">15m evolution — ${steps.length} steps · card pairs highlighted</div>`;
+      out += '<div class="sc-evo-scroll">';
+
+      for (const s of steps) {
+        // Top 6 by spread, plus any card pair that hasn't cracked the top 6
+        // yet, so a tracked pair is always visible with its live rank.
+        const top = s.pairs.slice(0, 6);
+        const shown = top.slice();
+        for (const inst of trackedSet) {
+          if (!shown.some(p => p.instrument === inst)) {
+            const found = s.pairs.find(p => p.instrument === inst);
+            if (found) shown.push(found);
+          }
+        }
+
+        const chips = shown.map(p => {
+          const rank = s.pairs.findIndex(x => x.instrument === p.instrument) + 1;
+          const isT = trackedSet.has(p.instrument);
+          const cls = 'sc-chip' + (isT ? ` tracked ${p.dir.toLowerCase()}` : '');
+          return `<span class="${cls}"><span class="rk">#${rank}</span>${p.instrument.replace('_', '/')} ${p.dir} ${pips(p.spread)}p</span>`;
+        }).join('');
+
+        out += `<div class="sc-step">
+          <span class="sc-step-t">${fmtT(s.time)}</span>
+          <span class="sc-step-ccy">
+            <span class="s">${s.strongest?.currency || ''}</span> /
+            <span class="w">${s.weakest?.currency || ''}</span>
+          </span>
+          <span class="sc-chips">${chips}</span>
+        </div>`;
+      }
+
+      out += '</div>';
+      out += `<div class="sc-evo-note">Ranked by 2H currency-strength spread, recomputed from M15 at every step — the same measure the live session gate uses.</div>`;
+      return out;
     }
 
     // Init

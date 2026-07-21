@@ -11,6 +11,7 @@
     "api/cron-backtest-sync.js":  { "maxDuration": 300 },
     "api/de-history.js":          { "maxDuration": 60 },
     "api/session-continuity.js":  { "maxDuration": 60 },
+    "api/session-continuity-evolution.js": { "maxDuration": 60 },
     "api/currency-continuity.js": { "maxDuration": 60 },
     "api/structure-break.js":     { "maxDuration": 60 },
     "api/m15-quality.js":         { "maxDuration": 60 },
