@@ -654,7 +654,7 @@
         }).join('');
 
         out += `<div class="sc-step">
-          <span class="sc-step-t">${fmtT(s.time)}</span>
+          <span class="sc-step-t">${fmtT(s.closeTime || s.time)}</span>
           <span class="sc-step-ccy">
             <span class="s">${s.strongest?.currency || ''}</span> /
             <span class="w">${s.weakest?.currency || ''}</span>

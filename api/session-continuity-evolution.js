@@ -145,6 +145,9 @@ module.exports = async function handler(req, res) {
 
       steps.push({
         time: new Date(t).toISOString(),
+        // Strength for the hour beginning at t is derived from the H1 candle
+        // that opens at t, so the reading only exists once that candle closes.
+        closeTime: new Date(t + HOUR_MS).toISOString(),
         strength: s6,
         strength2h: s2,
         strongest: ranked[0],
