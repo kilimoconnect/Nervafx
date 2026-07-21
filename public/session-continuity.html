@@ -111,6 +111,10 @@
     .sc-chip.tracked.buy  { background: rgba(34,197,94,0.16);  color: #4ade80; }
     .sc-chip.tracked.sell { background: rgba(239,68,68,0.16);  color: #f87171; }
     .sc-chip .rk { opacity: .55; margin-right: 3px; }
+    .sc-clash {
+      margin-left: 4px; padding: 0 3px; border-radius: 3px;
+      background: rgba(251,191,36,0.18); color: #fbbf24; font-weight: 700;
+    }
     .sc-evo-note { font-size: 10px; color: var(--text-dim); margin-top: 8px; }
     .sc-row-hdr {
       display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap;
@@ -511,7 +515,7 @@
                 &nbsp;
                 <span class="weak">${c.weakest?.currency || ''} ${pips(c.weakest?.val || 0)}</span>
               </span>
-              <span class="sc-expand">▾ 15m evolution</span>
+              <span class="sc-expand">▾ session evolution</span>
             </div>
             <div class="sc-pairs">`;
           for (const p of topPairs) {
@@ -539,9 +543,9 @@
     }
 
     // ── M15 evolution drill-down ──────────────────────────────────────────
-    // Clicking a continuation card replays its session in 15-minute steps so
-    // you can watch the pair list build into what the card shows. Responses
-    // are cached per card so re-opening is instant.
+    // Clicking a continuation card replays its session hour by hour so you
+    // can watch the pair list build into what the card shows. Responses are
+    // cached per card so re-opening is instant.
     const _evoCache = {};
 
     function wireEvolution() {
@@ -560,7 +564,7 @@
       if (existing) {
         existing.remove();
         row.classList.remove('open');
-        if (caret) caret.textContent = '▾ 15m evolution';
+        if (caret) caret.textContent = '▾ session evolution';
         return;
       }
 
@@ -574,7 +578,7 @@
 
       const panel = document.createElement('div');
       panel.className = 'sc-evo';
-      panel.innerHTML = '<div class="sc-evo-load"><span class="spinner"></span> Loading 15m evolution…</div>';
+      panel.innerHTML = '<div class="sc-evo-load"><span class="spinner"></span> Loading session evolution…</div>';
       row.appendChild(panel);
 
       try {
@@ -610,7 +614,7 @@
         hour: '2-digit', minute: '2-digit', hour12: false, timeZone: _tz(),
       });
 
-      let out = `<div class="sc-evo-hd">15m evolution — ${steps.length} steps · card pairs highlighted</div>`;
+      let out = `<div class="sc-evo-hd">Hourly evolution — ${steps.length} step${steps.length > 1 ? 's' : ''} · card pairs highlighted</div>`;
       out += '<div class="sc-evo-scroll">';
 
       for (const s of steps) {
@@ -629,7 +633,12 @@
           const rank = s.pairs.findIndex(x => x.instrument === p.instrument) + 1;
           const isT = trackedSet.has(p.instrument);
           const cls = 'sc-chip' + (isT ? ` tracked ${p.dir.toLowerCase()}` : '');
-          return `<span class="${cls}"><span class="rk">#${rank}</span>${p.instrument.replace('_', '/')} ${p.dir} ${pips(p.spread)}p</span>`;
+          // 2H disagreeing with the 6H ranking is exactly what the live gate
+          // filters on, so surface it rather than hiding the conflict.
+          const clash = p.agrees === false
+            ? `<span class="sc-clash" title="2H strength pointed ${p.dir2h} here">≠2H</span>`
+            : '';
+          return `<span class="${cls}"><span class="rk">#${rank}</span>${p.instrument.replace('_', '/')} ${p.dir} ${pips(p.spread)}p${clash}</span>`;
         }).join('');
 
         out += `<div class="sc-step">
@@ -643,7 +652,7 @@
       }
 
       out += '</div>';
-      out += `<div class="sc-evo-note">Ranked by 2H currency-strength spread, derived from M15 candles at every step. The live session gate reads hourly strength, so directions agree but values won't match exactly.</div>`;
+      out += `<div class="sc-evo-note">Ranked by 6H currency-strength spread — the same basis the card orders its pairs by. <span class="sc-clash">≠2H</span> marks an hour where 2H strength pointed the other way, which is what the live session gate screens out. Steps are hourly because that is the cadence the strength table publishes at.</div>`;
       return out;
     }
 
