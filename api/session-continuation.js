@@ -17,10 +17,39 @@ function isJpy(inst) { return inst.includes('JPY'); }
 function pipDiv(inst) { return isJpy(inst) ? 0.01 : 0.0001; }
 
 // Candles are stamped with their OPEN time, but a break is only confirmed when
-// the candle closes. This engine triggers on H1, so the signal fires an hour
-// after the trigger candle's timestamp.
-const TRIGGER_TF_MS = 60 * 60 * 1000;
+// the candle closes. Trigger and monitoring run on M30, so the signal fires 30
+// minutes after the trigger candle's timestamp.
+const TRIGGER_TF_MS = 30 * 60 * 1000;
 const closeTimeOf = iso => iso ? new Date(new Date(iso).getTime() + TRIGGER_TF_MS).toISOString() : null;
+
+// No M30 feed exists — only H1 and M15 are stored — so M30 is built by pairing
+// each :00+:15 and :30+:45 M15 candle. A 30-minute bar is emitted only when
+// both of its M15 candles are present, which naturally excludes the currently
+// forming half-hour. The H1 EMA and hourly strength gates are unaffected; they
+// keep their own H1 series.
+function m30FromM15(m15s) {
+  const buckets = new Map();
+  for (const c of m15s) {
+    const ms = new Date(c.time).getTime();
+    const key = Math.floor(ms / TRIGGER_TF_MS) * TRIGGER_TF_MS;
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push({ ms, c });
+  }
+  const out = [];
+  for (const [key, parts] of [...buckets.entries()].sort((a, b) => a[0] - b[0])) {
+    if (parts.length < 2) continue; // half-hour not yet complete
+    parts.sort((a, b) => a.ms - b.ms);
+    const cs = parts.map(p => p.c);
+    out.push({
+      time: new Date(key).toISOString(),
+      open: parseFloat(cs[0].open),
+      close: parseFloat(cs[cs.length - 1].close),
+      high: Math.max(...cs.map(c => parseFloat(c.high))),
+      low: Math.min(...cs.map(c => parseFloat(c.low))),
+    });
+  }
+  return out;
+}
 
 
 // Sessions (all UTC hours):
@@ -84,7 +113,7 @@ function previousSession(name, start) {
   return { name: prevName, start: prevStart, end: sessionEnd(prevName, prevStart) };
 }
 
-// Build a synthetic session candle from an ordered array of candles (H1 here,
+// Build a synthetic session candle from an ordered array of candles (M30 here,
 // but the maths is timeframe-agnostic)
 function buildSessionCandle(inst, candles) {
   if (!candles.length) return null;
@@ -163,13 +192,15 @@ module.exports = async function handler(req, res) {
     for (let b = 0; b < VALID_PAIRS.length; b += 7) {
       const batch = VALID_PAIRS.slice(b, b + 7);
       const results = await Promise.all(batch.map(async inst => {
+        // Pull M15 for the trigger/monitoring series — synthesized into M30
+        // below. There is no native M30 feed.
         const allData = [];
         let off = 0;
         while (true) {
           const { data, error } = await sb
             .from('backtest_candles')
             .select('time, open, high, low, close')
-            .eq('instrument', inst).eq('timeframe', 'H1').eq('complete', true)
+            .eq('instrument', inst).eq('timeframe', 'M15').eq('complete', true)
             .gte('time', fetchSince).lte('time', fetchUntil)
             .order('time', { ascending: true })
             .range(off, off + PAGE - 1);
@@ -190,13 +221,7 @@ module.exports = async function handler(req, res) {
         return { inst, data: allData, h1: h1Data || [] };
       }));
       for (const { inst, data, h1 } of results) {
-        candleCache[inst] = data.map(c => ({
-          time: c.time,
-          open: parseFloat(c.open),
-          high: parseFloat(c.high),
-          low: parseFloat(c.low),
-          close: parseFloat(c.close),
-        }));
+        candleCache[inst] = m30FromM15(data);
         h1Cache[inst] = h1.map(c => ({ time: c.time, close: parseFloat(c.close) }));
       }
     }
@@ -276,11 +301,11 @@ module.exports = async function handler(req, res) {
       const trackStartMs = new Date(trackStartISO).getTime();
       const curEndMs = new Date(curEndISO).getTime();
 
-      // Phase 1: locate the TRIGGER H1 — first H1 inside the current session
+      // Phase 1: locate the TRIGGER M30 — first M30 inside the current session
       // that closes beyond the highest high (BUY) or lowest low (SELL) of the
-      // preceding 6 H1 candles. Six hours of structure, which is the same span
-      // the previous 24-candle M15 lookback used to cover.
-      const BREAK_LOOKBACK = 6;
+      // preceding 12 M30 candles. Six hours of structure, the same span the H1
+      // engine covered with 6 candles.
+      const BREAK_LOOKBACK = 12;
       let triggerAllIdx = -1;
       let breakLevel = 0;
       const direction = confirmedDirection;
@@ -338,10 +363,10 @@ module.exports = async function handler(req, res) {
         score,
         label: 'Trigger 1',
         event: direction === 'BUY'
-          ? 'Close above 6-H1 high (' + Math.round(triggerBreakPips * 10) / 10 + ' pips)'
-          : 'Close below 6-H1 low (' + Math.round(triggerBreakPips * 10) / 10 + ' pips)',
+          ? 'Close above 12-M30 high (' + Math.round(triggerBreakPips * 10) / 10 + ' pips)'
+          : 'Close below 12-M30 low (' + Math.round(triggerBreakPips * 10) / 10 + ' pips)',
         qualified: true,
-        h1: {
+        m30: {
           open: trigger.open, high: trigger.high, low: trigger.low, close: trigger.close,
           bull: triggerBull,
           bodyPips: Math.round((Math.abs(trigger.close - trigger.open) / pd) * 10) / 10,
@@ -378,9 +403,12 @@ module.exports = async function handler(req, res) {
         // Bigger than any other single event, since this was previously fatal.
         if (backInside) { delta -= 8; events.push('Back inside prev session range'); }
 
-        // Strength gate, scored rather than fatal here: an hour where neither
+        // Strength gate, scored rather than fatal here: a candle where neither
         // currency holds conviction weakens the case without ending a run that
-        // may well reassert itself.
+        // may well reassert itself. Strength is hourly; the gate reads the
+        // freshest row already published at each M30 close, so the value only
+        // advances every second candle. The module derives that from tfMs, so
+        // there is no lookahead.
         const cStrength = strengthGate(strengthByHour, inst, direction, new Date(c.time).getTime(), TRIGGER_TF_MS);
         if (!cStrength.ok) { delta -= 5; events.push('No strength conviction'); }
 
@@ -409,22 +437,22 @@ module.exports = async function handler(req, res) {
           }
         }
 
-        // 2. H1 close beyond previous H1 high/low
+        // 2. M30 close beyond previous M30 high/low
         //    Reward continuation break; adverse close still penalizes; no penalty for
-        //    a candle that simply failed to break the previous H1 level.
+        //    a candle that simply failed to break the previous M30 level.
         if (direction === 'BUY' && c.close > prevC.high) {
-          delta += 4; events.push('Close above prev H1 high');
+          delta += 4; events.push('Close above prev M30 high');
         } else if (direction === 'SELL' && c.close < prevC.low) {
-          delta += 4; events.push('Close below prev H1 low');
+          delta += 4; events.push('Close below prev M30 low');
         } else if (direction === 'BUY' && c.close < prevC.low) {
-          delta -= 6; events.push('Close below prev H1 low');
+          delta -= 6; events.push('Close below prev M30 low');
         } else if (direction === 'SELL' && c.close > prevC.high) {
-          delta -= 6; events.push('Close above prev H1 high');
+          delta -= 6; events.push('Close above prev M30 high');
         } else {
           events.push('No break of structure');
         }
 
-        // 3. Body strength (H1 scale)
+        // 3. Body strength (pip thresholds retained from the H1 engine)
         if (direction === 'BUY') {
           if (cBull && cBodyPips > 6) { delta += 2; events.push('Strong bull body'); }
           else if (!cBull && cBodyPips > 6) { delta -= 3; events.push('Strong bear body'); }
@@ -494,7 +522,7 @@ module.exports = async function handler(req, res) {
             ? 'Delta +' + delta + ' (' + (events.join(', ') || 'No change') + ')'
             : (events.join(', ') || 'No change'),
           qualified: justQualified || undefined,
-          h1: {
+          m30: {
             open: c.open, high: c.high, low: c.low, close: c.close,
             bull: cBull, bodyPips: cBodyPips,
           },
@@ -557,7 +585,7 @@ module.exports = async function handler(req, res) {
           end: curEndISO,
         },
         timeline,
-        h1Count: curCandles.length - triggerIdx,
+        m30Count: curCandles.length - triggerIdx,
       });
     }
 
