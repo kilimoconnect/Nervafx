@@ -17,10 +17,40 @@ function isJpy(inst) { return inst.includes('JPY'); }
 function pipDiv(inst) { return isJpy(inst) ? 0.01 : 0.0001; }
 
 // Candles are stamped with their OPEN time, but a break is only confirmed when
-// the candle closes. This engine triggers on H1, so the signal fires an hour
-// after the trigger candle's timestamp.
+// the candle closes. The trigger runs on H1 (fires 1h after its timestamp);
+// post-trigger monitoring runs on M30 (fires 30 min after its timestamp).
 const TRIGGER_TF_MS = 60 * 60 * 1000;
-const closeTimeOf = iso => iso ? new Date(new Date(iso).getTime() + TRIGGER_TF_MS).toISOString() : null;
+const MONITOR_TF_MS = 30 * 60 * 1000;
+const closeTimeOf = (iso, tfMs = TRIGGER_TF_MS) =>
+  iso ? new Date(new Date(iso).getTime() + tfMs).toISOString() : null;
+
+// No M30 feed exists — only H1 and M15 are stored — so the monitoring series is
+// built by pairing each :00+:15 and :30+:45 M15 candle. A 30-minute bar is
+// emitted only when both of its M15 candles are present, which naturally
+// excludes the currently forming half-hour.
+function m30FromM15(m15s) {
+  const buckets = new Map();
+  for (const c of m15s) {
+    const ms = new Date(c.time).getTime();
+    const key = Math.floor(ms / MONITOR_TF_MS) * MONITOR_TF_MS;
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push({ ms, c });
+  }
+  const out = [];
+  for (const [key, parts] of [...buckets.entries()].sort((a, b) => a[0] - b[0])) {
+    if (parts.length < 2) continue; // half-hour not yet complete
+    parts.sort((a, b) => a.ms - b.ms);
+    const cs = parts.map(p => p.c);
+    out.push({
+      time: new Date(key).toISOString(),
+      open: parseFloat(cs[0].open),
+      close: parseFloat(cs[cs.length - 1].close),
+      high: Math.max(...cs.map(c => parseFloat(c.high))),
+      low: Math.min(...cs.map(c => parseFloat(c.low))),
+    });
+  }
+  return out;
+}
 
 
 // Sessions (all UTC hours):
@@ -154,10 +184,13 @@ module.exports = async function handler(req, res) {
     const fetchUntil = anchor ? curEnd.toISOString() : now.toISOString();
 
     const PAGE = 1000;
+    // H1 series driving the trigger and the session-reference candles.
     const candleCache = {};
     // Separate H1 cache used only by the EMA-alignment gate on the trigger.
     // Fetched further back to guarantee ≥ 51 complete H1 candles for EMA50.
     const h1Cache = {};
+    // M30 (synthesized from M15) driving post-trigger monitoring only.
+    const m30Cache = {};
     const h1Since = new Date(new Date(fetchSince).getTime() - 5 * 24 * 3600000).toISOString();
 
     for (let b = 0; b < VALID_PAIRS.length; b += 7) {
@@ -187,9 +220,27 @@ module.exports = async function handler(req, res) {
           .order('time', { ascending: true })
           .limit(400);
         if (h1Err) throw h1Err;
-        return { inst, data: allData, h1: h1Data || [] };
+
+        // M15 for the monitoring series — synthesized into M30 below.
+        const m15Data = [];
+        let m15Off = 0;
+        while (true) {
+          const { data, error } = await sb
+            .from('backtest_candles')
+            .select('time, open, high, low, close')
+            .eq('instrument', inst).eq('timeframe', 'M15').eq('complete', true)
+            .gte('time', fetchSince).lte('time', fetchUntil)
+            .order('time', { ascending: true })
+            .range(m15Off, m15Off + PAGE - 1);
+          if (error) throw error;
+          if (!data || !data.length) break;
+          m15Data.push(...data);
+          if (data.length < PAGE) break;
+          m15Off += PAGE;
+        }
+        return { inst, data: allData, h1: h1Data || [], m15: m15Data };
       }));
-      for (const { inst, data, h1 } of results) {
+      for (const { inst, data, h1, m15 } of results) {
         candleCache[inst] = data.map(c => ({
           time: c.time,
           open: parseFloat(c.open),
@@ -198,6 +249,7 @@ module.exports = async function handler(req, res) {
           close: parseFloat(c.close),
         }));
         h1Cache[inst] = h1.map(c => ({ time: c.time, close: parseFloat(c.close) }));
+        m30Cache[inst] = m30FromM15(m15);
       }
     }
 
@@ -313,8 +365,14 @@ module.exports = async function handler(req, res) {
       // committed is the kind that fades.
       const trigStrength = strengthGate(strengthByHour, inst, direction, triggerMs, TRIGGER_TF_MS);
       if (!trigStrength.ok) continue;
-      const curCandles = all.slice(triggerAllIdx).filter(c => new Date(c.time).getTime() < curEndMs);
-      const triggerIdx = 0;
+
+      // Monitoring runs on the M30 series, from the first M30 that opens after
+      // the trigger H1 has closed through to session end.
+      const triggerCloseMs = triggerMs + TRIGGER_TF_MS;
+      const monCandles = (m30Cache[inst] || []).filter(c => {
+        const ms = new Date(c.time).getTime();
+        return ms >= triggerCloseMs && ms < curEndMs;
+      });
       const triggerBreakPips = direction === 'BUY'
         ? (trigger.close - breakLevel) / pd
         : (breakLevel - trigger.close) / pd;
@@ -359,8 +417,8 @@ module.exports = async function handler(req, res) {
       let state = 'MONITORING';
       let stoppedTime = null;
 
-      for (let i = triggerIdx + 1; i < curCandles.length; i++) {
-        const c = curCandles[i];
+      for (let i = 0; i < monCandles.length; i++) {
+        const c = monCandles[i];
 
         // Closing back inside the reference range used to end monitoring
         // outright. It now scores as the heaviest single penalty and tracking
@@ -378,10 +436,11 @@ module.exports = async function handler(req, res) {
         // Bigger than any other single event, since this was previously fatal.
         if (backInside) { delta -= 8; events.push('Back inside prev session range'); }
 
-        // Strength gate, scored rather than fatal here: an hour where neither
+        // Strength gate, scored rather than fatal here: an M30 where neither
         // currency holds conviction weakens the case without ending a run that
-        // may well reassert itself.
-        const cStrength = strengthGate(strengthByHour, inst, direction, new Date(c.time).getTime(), TRIGGER_TF_MS);
+        // may well reassert itself. Strength is hourly, so the gate reads the
+        // freshest row already published at each M30 close — no lookahead.
+        const cStrength = strengthGate(strengthByHour, inst, direction, new Date(c.time).getTime(), MONITOR_TF_MS);
         if (!cStrength.ok) { delta -= 5; events.push('No strength conviction'); }
 
         const brokeFor = direction === 'BUY' ? c.close > prevC.high : c.close < prevC.low;
@@ -485,8 +544,8 @@ module.exports = async function handler(req, res) {
 
         timeline.push({
           time: c.time,
-          // The row's score is only known once the candle closes.
-          closeTime: closeTimeOf(c.time),
+          // The row's score is only known once the M30 candle closes.
+          closeTime: closeTimeOf(c.time, MONITOR_TF_MS),
           score,
           delta,
           label: entryLabel,
@@ -494,7 +553,7 @@ module.exports = async function handler(req, res) {
             ? 'Delta +' + delta + ' (' + (events.join(', ') || 'No change') + ')'
             : (events.join(', ') || 'No change'),
           qualified: justQualified || undefined,
-          h1: {
+          m30: {
             open: c.open, high: c.high, low: c.low, close: c.close,
             bull: cBull, bodyPips: cBodyPips,
           },
@@ -557,7 +616,7 @@ module.exports = async function handler(req, res) {
           end: curEndISO,
         },
         timeline,
-        h1Count: curCandles.length - triggerIdx,
+        monitorCount: monCandles.length,
       });
     }
 
