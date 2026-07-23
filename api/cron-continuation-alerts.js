@@ -92,11 +92,12 @@ module.exports = async function handler(req, res) {
       invokeHandler(sessionHandler),
     ]);
 
-    // Only alert on pairs still MONITORING whose score has actually reached the
-    // 84 qualification threshold. Broken-but-not-qualified pairs stay visible on
-    // the pages but don't fire email alerts.
+    // Only alert on pairs still MONITORING that have reached TRIGGER 2 — i.e. a
+    // monitoring candle posted delta >= +6 with running score above 75, which
+    // stamps strongConfirmTime. A pair that only reached the first trigger stays
+    // visible on the pages but does not fire an email.
     const active = arr => (arr || []).filter(p =>
-      p.state === 'MONITORING' && p.qualified === true && p.triggerTime
+      p.state === 'MONITORING' && p.strongConfirmTime && p.triggerTime
     );
     const signals = [
       ...active(dailyRes.data?.pairs).slice(0, 3).map(p   => ({ ...p, engine: 'Daily',   href: 'https://www.nervafx.com/daily-continuation' })),
@@ -173,7 +174,8 @@ module.exports = async function handler(req, res) {
         if (!template) continue;
         const recipients = tzUsers.map(u => ({ email: u.email, name: u.firstName }));
         try {
-          await sendBulk(recipients, template);
+          // force: this is the one alert path exempt from the global email block.
+          await sendBulk(recipients, template, { force: true });
           recipientCount += tzUsers.length;
         } catch (e) {
           sendError = e.message;
@@ -191,13 +193,14 @@ module.exports = async function handler(req, res) {
             pair: signal.pair,
             direction: signal.direction,
             triggerTime: signal.triggerTime,
+            strongConfirmTime: signal.strongConfirmTime,
             recipients: recipientCount,
           },
         });
         if (logErr) console.error('[cron-continuation-alerts] log insert failed', logErr.message);
       }
 
-      results.push({ key, recipientCount, error: sendError });
+      results.push({ key: pairKey, recipientCount, error: sendError });
     }
 
     const dispatched = results.filter(r => r.recipientCount > 0).length;

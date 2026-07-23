@@ -898,8 +898,12 @@ async function sendEmail(to, template) {
 // To re-enable, delete this guard and restore the body kept below it.
 const ALERT_EMAILS_DISABLED = true;
 
-async function sendBulk(recipients, template) {
-  if (ALERT_EMAILS_DISABLED) {
+// One alert path is exempt from the global block: the continuation Trigger-2
+// cron passes { force: true }. Everything else still routes through the guard
+// above and stays suppressed, so re-enabling this one alert did not resurrect
+// AUD/NZD, H1-break, quality, structure, or digest emails.
+async function sendBulk(recipients, template, opts = {}) {
+  if (ALERT_EMAILS_DISABLED && !opts.force) {
     const n = Array.isArray(recipients) ? recipients.length : 0;
     console.log(`[email] alerts disabled — suppressed "${template?.subject || 'untitled'}" to ${n} recipient(s)`);
     return [];
@@ -1349,11 +1353,12 @@ function continuationPairAlertEmail(signal, tz) {
   const scColor  = (signal.currentScore ?? 0) >= 70 ? '#4ade80'
                  : (signal.currentScore ?? 0) >= 50 ? '#fbbf24' : '#f87171';
   const trigTime = _fmtTimeInTz(signal.triggerTime, tz);
+  const confTime = signal.strongConfirmTime ? _fmtTimeInTz(signal.strongConfirmTime, tz) : null;
   const pips     = signal.triggerBreakPips != null ? `+${signal.triggerBreakPips} pips` : '';
 
   const html = baseLayout(`
     <h2>${arrow} ${signal.pair} ${signal.direction} — ${signal.engine} continuation</h2>
-    <p class="sub">Triggered ${trigTime}</p>
+    <p class="sub">Trigger 2 confirmed${confTime ? ` ${confTime}` : ''} · first break ${trigTime}</p>
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0">
       <tr>
@@ -1395,7 +1400,7 @@ function continuationPairAlertEmail(signal, tz) {
   `);
 
   return {
-    subject: `${arrow} ${signal.pair} ${signal.direction} — ${signal.engine} continuation triggered`,
+    subject: `${arrow} ${signal.pair} ${signal.direction} — ${signal.engine} continuation Trigger 2`,
     html,
   };
 }
