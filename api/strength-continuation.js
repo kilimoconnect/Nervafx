@@ -5,11 +5,11 @@
 // Qualification is pure currency strength — no EMA or other trend gate. A pair
 // is in the universe only if one of its currencies carries |strength| >= 0.0015
 // on smooth_6h OR smooth_12h (base bid up, or quote sold off, sets the
-// direction). The trigger is the FIRST H1 that closed beyond the previous H1
-// candle's high/low in that direction within a rolling 24h window (where the
-// current leg started), re-evaluated every hour as the window slides — no
-// calendar-day anchor. Monitoring then runs on M15 from the trigger forward and
-// Trigger 2 fires when a monitoring candle posts delta >= +6 with score > 75.
+// direction). The trigger is the MOST RECENT H1 that closed beyond the previous
+// H1 candle's high/low in that direction (within a 24h recency bound), re-
+// evaluated every hour as new H1s close — no calendar-day anchor. Monitoring
+// then runs on M15 for just the one hour following the break (up to 4 candles),
+// and Trigger 2 fires when a monitoring candle posts delta >= +6, score > 75.
 //
 // Live view evaluates as of now; ?date=YYYY-MM-DD gives an as-of-day-close
 // snapshot.
@@ -33,8 +33,8 @@ function pipDiv(inst) { return isJpy(inst) ? 0.01 : 0.0001; }
 const TRIGGER_TF_MS = 60 * 60 * 1000;
 const MONITOR_TF_MS = 15 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
-// Rolling trigger window: the first previous-H1 break within this lookback is
-// the leg's start. Slides forward hourly instead of snapping at midnight.
+// A previous-H1 break older than this is treated as stale (no live trigger).
+// The most recent break inside it is the one that's monitored.
 const TRIGGER_RECENCY_MS = 24 * HOUR_MS;
 const closeTimeOf = (iso, tfMs = TRIGGER_TF_MS) =>
   iso ? new Date(new Date(iso).getTime() + tfMs).toISOString() : null;
@@ -244,11 +244,10 @@ module.exports = async function handler(req, res) {
       if (!dir) continue;
       const direction = dir.direction;
 
-      // Trigger = the FIRST H1 that closed beyond the previous H1 candle's high
-      // (BUY) / low (SELL) in that direction within the rolling window — i.e.
-      // where the current leg started, so monitoring has M15 history to show.
-      // The window slides forward every hour (no calendar-day anchor), so the
-      // whole thing re-evaluates hourly.
+      // Trigger = the MOST RECENT H1 that closed beyond the previous H1 candle's
+      // high (BUY) / low (SELL) in that direction (keep the last match). The
+      // continuation is then monitored on M15 for just the one hour that
+      // follows the break, re-evaluating every hour as new H1s close.
       let triggerIdx = -1;
       let breakLevel = 0;
       for (let i = 1; i < all.length; i++) {
@@ -257,8 +256,8 @@ module.exports = async function handler(req, res) {
         if (cMs < recencyStartMs || cMs >= evalEndMs) continue;
 
         const prev = all[i - 1];
-        if (direction === 'BUY' && c.close > prev.high) { triggerIdx = i; breakLevel = prev.high; break; }
-        if (direction === 'SELL' && c.close < prev.low) { triggerIdx = i; breakLevel = prev.low; break; }
+        if (direction === 'BUY' && c.close > prev.high) { triggerIdx = i; breakLevel = prev.high; }
+        else if (direction === 'SELL' && c.close < prev.low) { triggerIdx = i; breakLevel = prev.low; }
       }
       if (triggerIdx === -1) continue;
 
@@ -274,11 +273,14 @@ module.exports = async function handler(req, res) {
       // Strength detail at the trigger (for display).
       const trigStrength = strengthGate(strengthByHour, inst, direction, triggerMs, TRIGGER_TF_MS);
 
-      // Monitoring: M15 candles opening after the trigger H1 closes, to now.
+      // Monitoring: the M15 candles in the one hour that follows the break H1's
+      // close (4 at most; fewer while that hour is still forming), capped at the
+      // evaluation moment. Resets to a new window when a later H1 break comes.
       const triggerCloseMs = triggerMs + TRIGGER_TF_MS;
+      const monEndMs = Math.min(triggerCloseMs + HOUR_MS, evalEndMs);
       const monCandles = (m15Cache[inst] || []).filter(c => {
         const ms = new Date(c.time).getTime();
-        return ms >= triggerCloseMs && ms < evalEndMs;
+        return ms >= triggerCloseMs && ms < monEndMs;
       });
 
       const triggerBreakPips = direction === 'BUY'
