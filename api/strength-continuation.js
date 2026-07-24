@@ -253,7 +253,11 @@ module.exports = async function handler(req, res) {
       for (let i = 1; i < all.length; i++) {
         const c = all[i];
         const cMs = new Date(c.time).getTime();
-        if (cMs < recencyStartMs || cMs >= evalEndMs) continue;
+        // The break's H1 must have CLOSED strictly before the evaluation moment.
+        // Using an unclosed candle would be lookahead; requiring the close also
+        // makes a selected hour show that hour's monitoring, not the next one.
+        if (cMs < recencyStartMs) continue;
+        if (cMs + TRIGGER_TF_MS >= evalEndMs) continue;
 
         const prev = all[i - 1];
         if (direction === 'BUY' && c.close > prev.high) { triggerIdx = i; breakLevel = prev.high; }
