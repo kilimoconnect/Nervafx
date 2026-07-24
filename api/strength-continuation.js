@@ -133,15 +133,21 @@ module.exports = async function handler(req, res) {
 
     const now = new Date();
 
-    // Evaluation moment: now for the live view, or the close of a ?date snapshot
-    // (capped at now). Everything is measured back from here — no midnight snap.
+    // Evaluation moment: now for the live view. History is addressable by the
+    // hour, since the engine re-runs hourly — ?date=YYYY-MM-DD with an optional
+    // ?hour=0..23 snapshots the state as of the close of that hour (or the
+    // whole day's close when no hour is given). Capped at now.
     const qDate = req.query?.date;
+    const qHour = req.query?.hour;
     let evalEnd = new Date(now);
     if (qDate && /^\d{4}-\d{2}-\d{2}$/.test(qDate)) {
-      const d = new Date(qDate + 'T00:00:00Z');
-      if (!isNaN(d.getTime())) {
-        const dEnd = new Date(d.getTime() + 24 * HOUR_MS);
-        evalEnd = dEnd.getTime() < now.getTime() ? dEnd : new Date(now);
+      const day = new Date(qDate + 'T00:00:00Z');
+      if (!isNaN(day.getTime())) {
+        const hasHour = qHour !== undefined && qHour !== '' && /^\d{1,2}$/.test(qHour)
+          && +qHour >= 0 && +qHour <= 23;
+        // Close of the selected hour, else close of the whole day.
+        const snap = new Date(day.getTime() + (hasHour ? (+qHour + 1) : 24) * HOUR_MS);
+        evalEnd = snap.getTime() < now.getTime() ? snap : new Date(now);
       }
     }
     const evalEndMs = evalEnd.getTime();

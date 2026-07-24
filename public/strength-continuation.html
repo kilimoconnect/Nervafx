@@ -172,6 +172,9 @@
   <div class="sx-filters">
     <span class="sx-filter-label">Date:</span>
     <input type="date" class="sx-date-input" id="sx-date" />
+    <select class="sx-date-input" id="sx-hour" style="width:120px">
+      <option value="">Whole day</option>
+    </select>
     <button class="sx-go-btn" id="sx-go">Go</button>
     <button class="sx-go-btn" id="sx-live" style="background:rgba(255,255,255,0.06);border-color:var(--border);color:var(--text-muted)">Live</button>
     <span style="width:16px"></span>
@@ -288,7 +291,12 @@
       if (!silent) document.getElementById('dc-cards').innerHTML = '<div class="sx-loading"><span class="spinner"></span> Loading…</div>';
 
       var dateEl = document.getElementById('sx-date');
-      var qs = dateEl.value ? '?date=' + dateEl.value : '';
+      var hourEl = document.getElementById('sx-hour');
+      var qs = '';
+      if (dateEl.value) {
+        qs = '?date=' + dateEl.value;
+        if (hourEl.value !== '') qs += '&hour=' + hourEl.value;
+      }
 
       try {
         var res = await fetch('/api/strength-continuation' + qs, {
@@ -314,9 +322,21 @@
         renderCards(cachedPairs);
       });
     });
+    // Populate the hour dropdown (00:00–23:00 UTC).
+    (function () {
+      var sel = document.getElementById('sx-hour');
+      for (var hh = 0; hh < 24; hh++) {
+        var o = document.createElement('option');
+        o.value = String(hh);
+        o.textContent = (hh < 10 ? '0' + hh : hh) + ':00 UTC';
+        sel.appendChild(o);
+      }
+    })();
+
     document.getElementById('sx-go').addEventListener('click', function() { load(); });
     document.getElementById('sx-live').addEventListener('click', function() {
       document.getElementById('sx-date').value = '';
+      document.getElementById('sx-hour').value = '';
       load();
     });
     document.getElementById('sx-expand-all').addEventListener('click', function() {
