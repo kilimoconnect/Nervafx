@@ -5,9 +5,10 @@
 // Qualification is pure currency strength — no EMA or other trend gate. A pair
 // is in the universe only if one of its currencies carries |strength| >= 0.0015
 // on smooth_6h OR smooth_12h (base bid up, or quote sold off, sets the
-// direction). From there the first trigger is an H1 close beyond the preceding
-// 6-H1 high/low, monitoring runs on M30, and Trigger 2 fires when a monitoring
-// candle posts delta >= +6 with running score above 75.
+// direction). From there the first trigger is an H1 close beyond the PREVIOUS
+// H1 candle's high/low in that direction; monitoring runs on M30 against the
+// current day's pre-trigger range, and Trigger 2 fires when a monitoring candle
+// posts delta >= +6 with running score above 75.
 //
 // Scoped to the current UTC day (or ?date=YYYY-MM-DD), evaluated live.
 
@@ -117,7 +118,7 @@ function m30FromM15(m15s) {
   return out;
 }
 
-// Synthetic candle over an ordered array (used for the 6-H1 reference block).
+// Synthetic candle over an ordered array (used for the intraday reference).
 function buildCandle(inst, candles) {
   if (!candles.length) return null;
   const pd = pipDiv(inst);
@@ -171,8 +172,8 @@ module.exports = async function handler(req, res) {
     const dayEndMs = dayEnd.getTime();
     const trackEndMs = trackEnd.getTime();
 
-    // H1 back 2 days before the day so the 6-H1 lookback has candles even at
-    // 00:00, and across a weekend.
+    // H1 back 2 days before the day so the trigger's previous-H1 comparison has
+    // a candle even for the day's first H1, across a weekend.
     const fetchSince = new Date(dayStartMs - 2 * 24 * HOUR_MS).toISOString();
     const fetchUntil = trackEnd.toISOString();
 
@@ -245,16 +246,15 @@ module.exports = async function handler(req, res) {
       const pair = inst.replace('_', '/');
 
       // Phase 1: first H1 inside the day that (a) has a qualifying strength
-      // direction as of its own close and (b) closes beyond the preceding
-      // 6-H1 high (BUY) or low (SELL). Direction is judged per candle from the
-      // strength published at that close — never from "now" — so a historical
-      // day reconstructs with the strength that actually existed then, with no
-      // lookahead.
-      const BREAK_LOOKBACK = 6;
+      // direction as of its own close (a currency at ±0.0015 on 6H/12H) and
+      // (b) closes beyond the PREVIOUS H1 candle's high (BUY) / low (SELL) in
+      // that direction. Direction is judged per candle from the strength
+      // published at that close — never from "now" — so a historical day
+      // reconstructs with the strength that existed then, lookahead-free.
       let triggerIdx = -1;
       let breakLevel = 0;
       let direction = null;
-      for (let i = BREAK_LOOKBACK; i < all.length; i++) {
+      for (let i = 1; i < all.length; i++) {
         const c = all[i];
         const cMs = new Date(c.time).getTime();
         if (cMs < dayStartMs || cMs >= trackEndMs) continue;
@@ -262,21 +262,24 @@ module.exports = async function handler(req, res) {
         const dirAt = directionFromStrength(strengthByHour, inst, cMs + TRIGGER_TF_MS);
         if (!dirAt) continue;
 
-        let maxHigh = -Infinity, minLow = Infinity;
-        for (let j = i - BREAK_LOOKBACK; j < i; j++) {
-          if (all[j].high > maxHigh) maxHigh = all[j].high;
-          if (all[j].low < minLow) minLow = all[j].low;
-        }
-        if (dirAt.direction === 'BUY' && c.close > maxHigh) { triggerIdx = i; breakLevel = maxHigh; direction = 'BUY'; break; }
-        if (dirAt.direction === 'SELL' && c.close < minLow) { triggerIdx = i; breakLevel = minLow; direction = 'SELL'; break; }
+        const prev = all[i - 1];
+        if (dirAt.direction === 'BUY' && c.close > prev.high) { triggerIdx = i; breakLevel = prev.high; direction = 'BUY'; break; }
+        if (dirAt.direction === 'SELL' && c.close < prev.low) { triggerIdx = i; breakLevel = prev.low; direction = 'SELL'; break; }
       }
       if (triggerIdx === -1) continue;
 
       const trigger = all[triggerIdx];
       const triggerMs = new Date(trigger.time).getTime();
 
-      // Reference block = the 6 H1 candles the trigger broke out of.
-      const refCandles = all.slice(triggerIdx - BREAK_LOOKBACK, triggerIdx);
+      // Reference range for monitoring = the current day's H1 candles before
+      // the trigger (the intraday structure it broke from). Current day only —
+      // no previous-day data. Falls back to the trigger candle itself if it
+      // fired on the day's first H1.
+      let refCandles = all.filter(x => {
+        const xm = new Date(x.time).getTime();
+        return xm >= dayStartMs && xm < triggerMs;
+      });
+      if (!refCandles.length) refCandles = [trigger];
       const ref = buildCandle(inst, refCandles);
       if (!ref) continue;
 
@@ -313,8 +316,8 @@ module.exports = async function handler(req, res) {
         score,
         label: 'Trigger 1',
         event: direction === 'BUY'
-          ? 'Close above 6-H1 high (' + Math.round(triggerBreakPips * 10) / 10 + ' pips)'
-          : 'Close below 6-H1 low (' + Math.round(triggerBreakPips * 10) / 10 + ' pips)',
+          ? 'Close above prev H1 high (' + Math.round(triggerBreakPips * 10) / 10 + ' pips)'
+          : 'Close below prev H1 low (' + Math.round(triggerBreakPips * 10) / 10 + ' pips)',
         qualified: true,
         h1: {
           open: trigger.open, high: trigger.high, low: trigger.low, close: trigger.close,
@@ -335,7 +338,7 @@ module.exports = async function handler(req, res) {
       for (let i = 0; i < monCandles.length; i++) {
         const c = monCandles[i];
 
-        // Closing back inside the broken 6-H1 range is the heaviest single
+        // Closing back inside the pre-trigger intraday range is the heaviest single
         // penalty, but tracking continues so a re-break stays visible.
         const backInside = c.close < ref.high && c.close > ref.low;
 
@@ -346,7 +349,7 @@ module.exports = async function handler(req, res) {
         let delta = 0;
         const events = [];
 
-        if (backInside) { delta -= 8; events.push('Back inside broken 6-H1 range'); }
+        if (backInside) { delta -= 8; events.push('Back inside intraday range'); }
 
         // Strength gate, scored not fatal: an M30 where neither currency holds
         // 0.0015 conviction weakens the case without ending the run.
@@ -422,7 +425,7 @@ module.exports = async function handler(req, res) {
           }
         }
 
-        // 4. Pullback depth vs the broken 6-H1 range
+        // 4. Pullback depth vs the pre-trigger intraday range
         if (direction === 'BUY') {
           const retrace = (runHigh - c.low) / ref.range;
           if (retrace > 0.7) { delta -= 3; events.push('Deep pullback'); }
@@ -476,7 +479,7 @@ module.exports = async function handler(req, res) {
       else currentLabel = 'Continuation Failed';
 
       const refStartISO = refCandles[0].time;
-      const refEndISO   = trigger.time;
+      const refEndISO   = refCandles[refCandles.length - 1].time;
 
       pairs.push({
         pair,
@@ -502,7 +505,7 @@ module.exports = async function handler(req, res) {
         triggerBreakPips: Math.round(triggerBreakPips * 10) / 10,
         refBreakPips: 0,
         refSession: {
-          name: 'Prior 6H structure',
+          name: 'Intraday (pre-trigger)',
           start: refStartISO,
           end: refEndISO,
           open: ref.open, high: ref.high, low: ref.low, close: ref.close,
