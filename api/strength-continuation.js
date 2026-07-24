@@ -5,10 +5,11 @@
 // Qualification is pure currency strength — no EMA or other trend gate. A pair
 // is in the universe only if one of its currencies carries |strength| >= 0.0015
 // on smooth_6h OR smooth_12h (base bid up, or quote sold off, sets the
-// direction). The trigger is the MOST RECENT H1 that closed beyond the previous
-// H1 candle's high/low in that direction, re-evaluated every hour as new H1s
-// close — no calendar-day anchor. Monitoring then runs on M15 and Trigger 2
-// fires when a monitoring candle posts delta >= +6 with running score above 75.
+// direction). The trigger is the FIRST H1 that closed beyond the previous H1
+// candle's high/low in that direction within a rolling 24h window (where the
+// current leg started), re-evaluated every hour as the window slides — no
+// calendar-day anchor. Monitoring then runs on M15 from the trigger forward and
+// Trigger 2 fires when a monitoring candle posts delta >= +6 with score > 75.
 //
 // Live view evaluates as of now; ?date=YYYY-MM-DD gives an as-of-day-close
 // snapshot.
@@ -32,8 +33,8 @@ function pipDiv(inst) { return isJpy(inst) ? 0.01 : 0.0001; }
 const TRIGGER_TF_MS = 60 * 60 * 1000;
 const MONITOR_TF_MS = 15 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
-// How far back the "most recent" H1 break may be and still count as a live
-// trigger. Keeps signals current without snapping at midnight.
+// Rolling trigger window: the first previous-H1 break within this lookback is
+// the leg's start. Slides forward hourly instead of snapping at midnight.
 const TRIGGER_RECENCY_MS = 24 * HOUR_MS;
 const closeTimeOf = (iso, tfMs = TRIGGER_TF_MS) =>
   iso ? new Date(new Date(iso).getTime() + tfMs).toISOString() : null;
@@ -134,18 +135,22 @@ module.exports = async function handler(req, res) {
     const now = new Date();
 
     // Evaluation moment: now for the live view. History is addressable by the
-    // hour, since the engine re-runs hourly — ?date=YYYY-MM-DD with an optional
-    // ?hour=0..23 snapshots the state as of the close of that hour (or the
-    // whole day's close when no hour is given). Capped at now.
+    // hour, since the engine re-runs hourly. The page resolves the user's local
+    // date + hour to an absolute UTC instant and passes it as ?at=<ISO>; a bare
+    // ?date=YYYY-MM-DD (+ optional ?hour, UTC) is kept for direct API use.
+    // Everything is capped at now.
+    const qAt = req.query?.at;
     const qDate = req.query?.date;
     const qHour = req.query?.hour;
     let evalEnd = new Date(now);
-    if (qDate && /^\d{4}-\d{2}-\d{2}$/.test(qDate)) {
+    if (qAt) {
+      const t = new Date(qAt);
+      if (!isNaN(t.getTime())) evalEnd = t.getTime() < now.getTime() ? t : new Date(now);
+    } else if (qDate && /^\d{4}-\d{2}-\d{2}$/.test(qDate)) {
       const day = new Date(qDate + 'T00:00:00Z');
       if (!isNaN(day.getTime())) {
         const hasHour = qHour !== undefined && qHour !== '' && /^\d{1,2}$/.test(qHour)
           && +qHour >= 0 && +qHour <= 23;
-        // Close of the selected hour, else close of the whole day.
         const snap = new Date(day.getTime() + (hasHour ? (+qHour + 1) : 24) * HOUR_MS);
         evalEnd = snap.getTime() < now.getTime() ? snap : new Date(now);
       }
@@ -239,9 +244,11 @@ module.exports = async function handler(req, res) {
       if (!dir) continue;
       const direction = dir.direction;
 
-      // Trigger = the MOST RECENT H1 that closed beyond the previous H1 candle's
-      // high (BUY) / low (SELL) in that direction, within the last 24h. Keeping
-      // the last match (no early break) is what makes it reset every hour.
+      // Trigger = the FIRST H1 that closed beyond the previous H1 candle's high
+      // (BUY) / low (SELL) in that direction within the rolling window — i.e.
+      // where the current leg started, so monitoring has M15 history to show.
+      // The window slides forward every hour (no calendar-day anchor), so the
+      // whole thing re-evaluates hourly.
       let triggerIdx = -1;
       let breakLevel = 0;
       for (let i = 1; i < all.length; i++) {
@@ -250,8 +257,8 @@ module.exports = async function handler(req, res) {
         if (cMs < recencyStartMs || cMs >= evalEndMs) continue;
 
         const prev = all[i - 1];
-        if (direction === 'BUY' && c.close > prev.high) { triggerIdx = i; breakLevel = prev.high; }
-        else if (direction === 'SELL' && c.close < prev.low) { triggerIdx = i; breakLevel = prev.low; }
+        if (direction === 'BUY' && c.close > prev.high) { triggerIdx = i; breakLevel = prev.high; break; }
+        if (direction === 'SELL' && c.close < prev.low) { triggerIdx = i; breakLevel = prev.low; break; }
       }
       if (triggerIdx === -1) continue;
 
