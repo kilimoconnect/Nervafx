@@ -234,7 +234,7 @@
     }
 
     function renderCards(pairs) {
-      var qualifiedPairs = pairs.filter(function(p) { return p.qualified === true; });
+      var qualifiedPairs = pairs.filter(function(p) { return p.qualified === true && p.strongConfirmTime; });
       var filtered = qualifiedPairs;
       if (currentSort === 'buy') filtered = qualifiedPairs.filter(function(p) { return p.direction === 'BUY'; });
       else if (currentSort === 'sell') filtered = qualifiedPairs.filter(function(p) { return p.direction === 'SELL'; });
