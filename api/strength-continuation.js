@@ -2,18 +2,17 @@
 
 // Strength Continuation Engine.
 //
-// Universe & direction come from currency strength, not session structure: a
-// pair qualifies only if one of its currencies carries |strength| >= 0.0015 on
-// smooth_6h OR smooth_12h (base bid up, or quote sold off, sets the direction).
-// From there it mirrors the session engine — first trigger is an H1 close beyond
-// the preceding 6-H1 high/low, then monitoring runs on M30 and Trigger 2 fires
-// when a monitoring candle posts delta >= +6 with running score above 75.
+// Qualification is pure currency strength — no EMA or other trend gate. A pair
+// is in the universe only if one of its currencies carries |strength| >= 0.0015
+// on smooth_6h OR smooth_12h (base bid up, or quote sold off, sets the
+// direction). From there the first trigger is an H1 close beyond the preceding
+// 6-H1 high/low, monitoring runs on M30, and Trigger 2 fires when a monitoring
+// candle posts delta >= +6 with running score above 75.
 //
 // Scoped to the current UTC day (or ?date=YYYY-MM-DD), evaluated live.
 
 const { getClient, cors } = require('./_db');
 const { requirePlan } = require('./_plan');
-const { alignFromCandles } = require('./_h1-ema-align');
 const { loadStrength } = require('./_strength-gate');
 
 const VALID_PAIRS = [
@@ -173,14 +172,12 @@ module.exports = async function handler(req, res) {
     const trackEndMs = trackEnd.getTime();
 
     // H1 back 2 days before the day so the 6-H1 lookback has candles even at
-    // 00:00, and across a weekend. EMA50 needs a longer H1 history.
+    // 00:00, and across a weekend.
     const fetchSince = new Date(dayStartMs - 2 * 24 * HOUR_MS).toISOString();
     const fetchUntil = trackEnd.toISOString();
-    const h1Since    = new Date(dayStartMs - 6 * 24 * HOUR_MS).toISOString();
 
     const PAGE = 1000;
     const h1Cache  = {};   // H1 for the trigger scan + reference
-    const emaCache = {};   // longer H1 close series for the EMA gate
     const m30Cache = {};   // M30 (from M15) for monitoring
 
     for (let b = 0; b < VALID_PAIRS.length; b += 7) {
@@ -203,15 +200,6 @@ module.exports = async function handler(req, res) {
           off += PAGE;
         }
 
-        const { data: emaData, error: emaErr } = await sb
-          .from('backtest_candles')
-          .select('time, close')
-          .eq('instrument', inst).eq('timeframe', 'H1').eq('complete', true)
-          .gte('time', h1Since).lte('time', fetchUntil)
-          .order('time', { ascending: true })
-          .limit(400);
-        if (emaErr) throw emaErr;
-
         const m15Data = [];
         let m15Off = 0;
         while (true) {
@@ -229,10 +217,10 @@ module.exports = async function handler(req, res) {
           m15Off += PAGE;
         }
 
-        return { inst, h1: h1Data, ema: emaData || [], m15: m15Data };
+        return { inst, h1: h1Data, m15: m15Data };
       }));
 
-      for (const { inst, h1, ema, m15 } of results) {
+      for (const { inst, h1, m15 } of results) {
         h1Cache[inst] = h1.map(c => ({
           time: c.time,
           open: parseFloat(c.open),
@@ -240,7 +228,6 @@ module.exports = async function handler(req, res) {
           low: parseFloat(c.low),
           close: parseFloat(c.close),
         }));
-        emaCache[inst] = ema.map(c => ({ time: c.time, close: parseFloat(c.close) }));
         m30Cache[inst] = m30FromM15(m15);
       }
     }
@@ -287,10 +274,6 @@ module.exports = async function handler(req, res) {
 
       const trigger = all[triggerIdx];
       const triggerMs = new Date(trigger.time).getTime();
-
-      // H1 EMA alignment gate at trigger time (close > EMA20 > EMA50 for BUY).
-      const emaAlign = alignFromCandles(emaCache[inst] || [], triggerMs, direction);
-      if (!emaAlign.aligned) continue;
 
       // Reference block = the 6 H1 candles the trigger broke out of.
       const refCandles = all.slice(triggerIdx - BREAK_LOOKBACK, triggerIdx);
