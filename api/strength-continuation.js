@@ -5,12 +5,13 @@
 // Qualification is pure currency strength — no EMA or other trend gate. A pair
 // is in the universe only if one of its currencies carries |strength| >= 0.0015
 // on smooth_6h OR smooth_12h (base bid up, or quote sold off, sets the
-// direction). From there the first trigger is an H1 close beyond the PREVIOUS
-// H1 candle's high/low in that direction; monitoring runs on M30 against the
-// current day's pre-trigger range, and Trigger 2 fires when a monitoring candle
-// posts delta >= +6 with running score above 75.
+// direction). The trigger is the MOST RECENT H1 that closed beyond the previous
+// H1 candle's high/low in that direction, re-evaluated every hour as new H1s
+// close — no calendar-day anchor. Monitoring then runs on M15 and Trigger 2
+// fires when a monitoring candle posts delta >= +6 with running score above 75.
 //
-// Scoped to the current UTC day (or ?date=YYYY-MM-DD), evaluated live.
+// Live view evaluates as of now; ?date=YYYY-MM-DD gives an as-of-day-close
+// snapshot.
 
 const { getClient, cors } = require('./_db');
 const { requirePlan } = require('./_plan');
@@ -27,10 +28,13 @@ const VALID_PAIRS = [
 function isJpy(inst) { return inst.includes('JPY'); }
 function pipDiv(inst) { return isJpy(inst) ? 0.01 : 0.0001; }
 
-// Trigger runs on H1 (fires 1h after its timestamp); monitoring runs on M30.
+// Trigger runs on H1 (fires 1h after its timestamp); monitoring runs on M15.
 const TRIGGER_TF_MS = 60 * 60 * 1000;
-const MONITOR_TF_MS = 30 * 60 * 1000;
+const MONITOR_TF_MS = 15 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
+// How far back the "most recent" H1 break may be and still count as a live
+// trigger. Keeps signals current without snapping at midnight.
+const TRIGGER_RECENCY_MS = 24 * HOUR_MS;
 const closeTimeOf = (iso, tfMs = TRIGGER_TF_MS) =>
   iso ? new Date(new Date(iso).getTime() + tfMs).toISOString() : null;
 
@@ -80,7 +84,7 @@ function strengthGate(byHour, inst, direction, openMs, tfMs) {
 
 // Direction implied by strength as of a given moment (asOfMs). Null when
 // neither side qualifies or strength is unavailable; the stronger side wins a
-// tie. Passing a candle's close time keeps historical days lookahead-free.
+// tie.
 function directionFromStrength(byHour, inst, asOfMs) {
   const buy  = strengthGate(byHour, inst, 'BUY',  asOfMs, 0);
   const sell = strengthGate(byHour, inst, 'SELL', asOfMs, 0);
@@ -93,32 +97,7 @@ function directionFromStrength(byHour, inst, asOfMs) {
   return null;
 }
 
-// ── M30 synthesis (no native M30 feed — pair consecutive M15s) ───────────────
-function m30FromM15(m15s) {
-  const buckets = new Map();
-  for (const c of m15s) {
-    const ms = new Date(c.time).getTime();
-    const key = Math.floor(ms / MONITOR_TF_MS) * MONITOR_TF_MS;
-    if (!buckets.has(key)) buckets.set(key, []);
-    buckets.get(key).push({ ms, c });
-  }
-  const out = [];
-  for (const [key, parts] of [...buckets.entries()].sort((a, b) => a[0] - b[0])) {
-    if (parts.length < 2) continue;
-    parts.sort((a, b) => a.ms - b.ms);
-    const cs = parts.map(p => p.c);
-    out.push({
-      time: new Date(key).toISOString(),
-      open: parseFloat(cs[0].open),
-      close: parseFloat(cs[cs.length - 1].close),
-      high: Math.max(...cs.map(c => parseFloat(c.high))),
-      low: Math.min(...cs.map(c => parseFloat(c.low))),
-    });
-  }
-  return out;
-}
-
-// Synthetic candle over an ordered array (used for the intraday reference).
+// Synthetic candle over an ordered array (used for the pre-trigger reference).
 function buildCandle(inst, candles) {
   if (!candles.length) return null;
   const pd = pipDiv(inst);
@@ -154,32 +133,28 @@ module.exports = async function handler(req, res) {
 
     const now = new Date();
 
-    // Current UTC day, or a specific ?date=YYYY-MM-DD.
+    // Evaluation moment: now for the live view, or the close of a ?date snapshot
+    // (capped at now). Everything is measured back from here — no midnight snap.
     const qDate = req.query?.date;
-    let dayStart;
+    let evalEnd = new Date(now);
     if (qDate && /^\d{4}-\d{2}-\d{2}$/.test(qDate)) {
-      dayStart = new Date(qDate + 'T00:00:00Z');
-    } else {
-      dayStart = new Date(now);
-      dayStart.setUTCHours(0, 0, 0, 0);
+      const d = new Date(qDate + 'T00:00:00Z');
+      if (!isNaN(d.getTime())) {
+        const dEnd = new Date(d.getTime() + 24 * HOUR_MS);
+        evalEnd = dEnd.getTime() < now.getTime() ? dEnd : new Date(now);
+      }
     }
-    if (isNaN(dayStart.getTime())) { dayStart = new Date(now); dayStart.setUTCHours(0, 0, 0, 0); }
-    const dayEnd = new Date(dayStart.getTime() + 24 * HOUR_MS);
-    const isToday = dayEnd.getTime() > now.getTime();
-    const trackEnd = isToday ? now : dayEnd;
+    const evalEndMs = evalEnd.getTime();
+    const recencyStartMs = evalEndMs - TRIGGER_RECENCY_MS;
 
-    const dayStartMs = dayStart.getTime();
-    const dayEndMs = dayEnd.getTime();
-    const trackEndMs = trackEnd.getTime();
-
-    // H1 back 2 days before the day so the trigger's previous-H1 comparison has
-    // a candle even for the day's first H1, across a weekend.
-    const fetchSince = new Date(dayStartMs - 2 * 24 * HOUR_MS).toISOString();
-    const fetchUntil = trackEnd.toISOString();
+    // Fetch 3 days back so a trigger up to 24h old still has its 6-H1 reference
+    // and full M15 monitoring history.
+    const fetchSince = new Date(evalEndMs - 3 * 24 * HOUR_MS).toISOString();
+    const fetchUntil = evalEnd.toISOString();
 
     const PAGE = 1000;
     const h1Cache  = {};   // H1 for the trigger scan + reference
-    const m30Cache = {};   // M30 (from M15) for monitoring
+    const m15Cache = {};   // M15 for monitoring
 
     for (let b = 0; b < VALID_PAIRS.length; b += 7) {
       const batch = VALID_PAIRS.slice(b, b + 7);
@@ -229,7 +204,13 @@ module.exports = async function handler(req, res) {
           low: parseFloat(c.low),
           close: parseFloat(c.close),
         }));
-        m30Cache[inst] = m30FromM15(m15);
+        m15Cache[inst] = m15.map(c => ({
+          time: c.time,
+          open: parseFloat(c.open),
+          high: parseFloat(c.high),
+          low: parseFloat(c.low),
+          close: parseFloat(c.close),
+        }));
       }
     }
 
@@ -245,54 +226,46 @@ module.exports = async function handler(req, res) {
       const pd = pipDiv(inst);
       const pair = inst.replace('_', '/');
 
-      // Universe + direction: at the evaluation moment — now for the live view,
-      // the viewed day's close for a historical date — one currency must hold
+      // Universe + direction: at the evaluation moment one currency must hold
       // |strength| >= 0.0015 on 6H or 12H. That selects the pair and fixes the
-      // direction. (Using the day's close, not real "now", is what keeps a
-      // historical date from being judged with today's strength.)
-      const dir = directionFromStrength(strengthByHour, inst, trackEndMs);
+      // direction.
+      const dir = directionFromStrength(strengthByHour, inst, evalEndMs);
       if (!dir) continue;
       const direction = dir.direction;
 
-      // First trigger: the first H1 in the day that closes beyond the PREVIOUS
-      // H1 candle's high (BUY) / low (SELL) in that direction — independent of
-      // what strength was doing at that earlier hour.
+      // Trigger = the MOST RECENT H1 that closed beyond the previous H1 candle's
+      // high (BUY) / low (SELL) in that direction, within the last 24h. Keeping
+      // the last match (no early break) is what makes it reset every hour.
       let triggerIdx = -1;
       let breakLevel = 0;
       for (let i = 1; i < all.length; i++) {
         const c = all[i];
         const cMs = new Date(c.time).getTime();
-        if (cMs < dayStartMs || cMs >= trackEndMs) continue;
+        if (cMs < recencyStartMs || cMs >= evalEndMs) continue;
 
         const prev = all[i - 1];
-        if (direction === 'BUY' && c.close > prev.high) { triggerIdx = i; breakLevel = prev.high; break; }
-        if (direction === 'SELL' && c.close < prev.low) { triggerIdx = i; breakLevel = prev.low; break; }
+        if (direction === 'BUY' && c.close > prev.high) { triggerIdx = i; breakLevel = prev.high; }
+        else if (direction === 'SELL' && c.close < prev.low) { triggerIdx = i; breakLevel = prev.low; }
       }
       if (triggerIdx === -1) continue;
 
       const trigger = all[triggerIdx];
       const triggerMs = new Date(trigger.time).getTime();
 
-      // Reference range for monitoring = the current day's H1 candles before
-      // the trigger (the intraday structure it broke from). Current day only —
-      // no previous-day data. Falls back to the trigger candle itself if it
-      // fired on the day's first H1.
-      let refCandles = all.filter(x => {
-        const xm = new Date(x.time).getTime();
-        return xm >= dayStartMs && xm < triggerMs;
-      });
-      if (!refCandles.length) refCandles = [trigger];
+      // Reference range for monitoring = the 6 H1 candles before the trigger
+      // (the local structure it broke from).
+      const refCandles = all.slice(Math.max(0, triggerIdx - 6), triggerIdx);
       const ref = buildCandle(inst, refCandles);
       if (!ref) continue;
 
       // Strength detail at the trigger (for display).
       const trigStrength = strengthGate(strengthByHour, inst, direction, triggerMs, TRIGGER_TF_MS);
 
-      // Monitoring: M30 candles opening after the trigger H1 closes, to day end.
+      // Monitoring: M15 candles opening after the trigger H1 closes, to now.
       const triggerCloseMs = triggerMs + TRIGGER_TF_MS;
-      const monCandles = (m30Cache[inst] || []).filter(c => {
+      const monCandles = (m15Cache[inst] || []).filter(c => {
         const ms = new Date(c.time).getTime();
-        return ms >= triggerCloseMs && ms < trackEndMs;
+        return ms >= triggerCloseMs && ms < evalEndMs;
       });
 
       const triggerBreakPips = direction === 'BUY'
@@ -340,7 +313,7 @@ module.exports = async function handler(req, res) {
       for (let i = 0; i < monCandles.length; i++) {
         const c = monCandles[i];
 
-        // Closing back inside the pre-trigger intraday range is the heaviest single
+        // Closing back inside the pre-trigger range is the heaviest single
         // penalty, but tracking continues so a re-break stays visible.
         const backInside = c.close < ref.high && c.close > ref.low;
 
@@ -351,9 +324,9 @@ module.exports = async function handler(req, res) {
         let delta = 0;
         const events = [];
 
-        if (backInside) { delta -= 8; events.push('Back inside intraday range'); }
+        if (backInside) { delta -= 8; events.push('Back inside pre-trigger range'); }
 
-        // Strength gate, scored not fatal: an M30 where neither currency holds
+        // Strength gate, scored not fatal: an M15 where neither currency holds
         // 0.0015 conviction weakens the case without ending the run.
         const cStrength = strengthGate(strengthByHour, inst, direction, new Date(c.time).getTime(), MONITOR_TF_MS);
         if (!cStrength.ok) { delta -= 5; events.push('No strength conviction'); }
@@ -383,20 +356,20 @@ module.exports = async function handler(req, res) {
           }
         }
 
-        // 2. M30 close beyond previous M30 high/low
+        // 2. M15 close beyond previous M15 high/low
         if (direction === 'BUY' && c.close > prevC.high) {
-          delta += 4; events.push('Close above prev M30 high');
+          delta += 4; events.push('Close above prev M15 high');
         } else if (direction === 'SELL' && c.close < prevC.low) {
-          delta += 4; events.push('Close below prev M30 low');
+          delta += 4; events.push('Close below prev M15 low');
         } else if (direction === 'BUY' && c.close < prevC.low) {
-          delta -= 6; events.push('Close below prev M30 low');
+          delta -= 6; events.push('Close below prev M15 low');
         } else if (direction === 'SELL' && c.close > prevC.high) {
-          delta -= 6; events.push('Close above prev M30 high');
+          delta -= 6; events.push('Close above prev M15 high');
         } else {
           events.push('No break of structure');
         }
 
-        // 3. Body strength (pip thresholds carried over from the H1 engine)
+        // 3. Body strength
         if (direction === 'BUY') {
           if (cBull && cBodyPips > 6) { delta += 2; events.push('Strong bull body'); }
           else if (!cBull && cBodyPips > 6) { delta -= 3; events.push('Strong bear body'); }
@@ -427,7 +400,7 @@ module.exports = async function handler(req, res) {
           }
         }
 
-        // 4. Pullback depth vs the pre-trigger intraday range
+        // 4. Pullback depth vs the pre-trigger range
         if (direction === 'BUY') {
           const retrace = (runHigh - c.low) / ref.range;
           if (retrace > 0.7) { delta -= 3; events.push('Deep pullback'); }
@@ -463,7 +436,7 @@ module.exports = async function handler(req, res) {
             ? 'Delta +' + delta + ' (' + (events.join(', ') || 'No change') + ')'
             : (events.join(', ') || 'No change'),
           qualified: justQualified || undefined,
-          m30: {
+          m15: {
             open: c.open, high: c.high, low: c.low, close: c.close,
             bull: cBull, bodyPips: cBodyPips,
           },
@@ -507,7 +480,7 @@ module.exports = async function handler(req, res) {
         triggerBreakPips: Math.round(triggerBreakPips * 10) / 10,
         refBreakPips: 0,
         refSession: {
-          name: 'Intraday (pre-trigger)',
+          name: 'Pre-trigger (6×H1)',
           start: refStartISO,
           end: refEndISO,
           open: ref.open, high: ref.high, low: ref.low, close: ref.close,
@@ -516,9 +489,9 @@ module.exports = async function handler(req, res) {
           direction: ref.bull ? 'BUY' : 'SELL',
         },
         currentSession: {
-          name: 'Today (UTC)',
-          start: dayStart.toISOString(),
-          end: trackEnd.toISOString(),
+          name: 'Rolling (hourly)',
+          start: new Date(recencyStartMs).toISOString(),
+          end: evalEnd.toISOString(),
         },
         timeline,
         monitorCount: monCandles.length,
@@ -526,7 +499,7 @@ module.exports = async function handler(req, res) {
     }
 
     // Ranked by live score, strongest continuation first; ties on break size
-    // then which fired first.
+    // then most recent trigger.
     pairs.sort((a, b) => {
       if (b.currentScore !== a.currentScore) return b.currentScore - a.currentScore;
       if ((b.triggerBreakPips || 0) !== (a.triggerBreakPips || 0)) {
@@ -534,10 +507,10 @@ module.exports = async function handler(req, res) {
       }
       const at = a.triggerTime || a.breakTime;
       const bt = b.triggerTime || b.breakTime;
-      return at < bt ? -1 : at > bt ? 1 : 0;
+      return at > bt ? -1 : at < bt ? 1 : 0;
     });
 
-    res.json({ pairs, day: dayStart.toISOString().slice(0, 10) });
+    res.json({ pairs, evaluatedAt: evalEnd.toISOString() });
   } catch (e) {
     console.error('[strength-continuation]', e);
     return res.status(500).json({ error: e.message });
