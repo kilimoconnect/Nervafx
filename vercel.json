@@ -45,7 +45,8 @@
     "api/m15-streak.js": { "maxDuration": 60 },
     "api/daily-continuation.js": { "maxDuration": 60 },
     "api/h1-continuation.js": { "maxDuration": 60 },
-    "api/session-continuation.js": { "maxDuration": 60 }
+    "api/session-continuation.js": { "maxDuration": 60 },
+    "api/strength-continuation.js": { "maxDuration": 60 }
   },
   "rewrites": [
     { "source": "/",       "destination": "/login.html" },
@@ -75,6 +76,7 @@
     { "source": "/daily-continuation", "destination": "/daily-continuation.html" },
     { "source": "/h1-continuation", "destination": "/h1-continuation.html" },
     { "source": "/session-continuation", "destination": "/session-continuation.html" },
+    { "source": "/strength-continuation", "destination": "/strength-continuation.html" },
     { "source": "/acceleration-v4-m15", "destination": "/acceleration-v4-m15.html" },
     { "source": "/currency-stability", "destination": "/currency-stability.html" },
     { "source": "/mtre", "destination": "/mtre.html" }

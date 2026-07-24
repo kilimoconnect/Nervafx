@@ -3,9 +3,10 @@
 const { createClient } = require('@supabase/supabase-js');
 const { sendBulk, continuationPairAlertEmail } = require('../src/emailService');
 
-const dailyHandler   = require('./daily-continuation.js');
-const h4Handler      = require('./h1-continuation.js');
-const sessionHandler = require('./session-continuation.js');
+const dailyHandler    = require('./daily-continuation.js');
+const h4Handler       = require('./h1-continuation.js');
+const sessionHandler  = require('./session-continuation.js');
+const strengthHandler = require('./strength-continuation.js');
 
 function getDB() {
   return createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
@@ -86,10 +87,11 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const [dailyRes, h4Res, sessionRes] = await Promise.all([
+    const [dailyRes, h4Res, sessionRes, strengthRes] = await Promise.all([
       invokeHandler(dailyHandler),
       invokeHandler(h4Handler),
       invokeHandler(sessionHandler),
+      invokeHandler(strengthHandler),
     ]);
 
     // Only alert on pairs still MONITORING that have reached TRIGGER 2 — i.e. a
@@ -103,6 +105,7 @@ module.exports = async function handler(req, res) {
       ...active(dailyRes.data?.pairs).slice(0, 3).map(p   => ({ ...p, engine: 'Daily',   href: 'https://www.nervafx.com/daily-continuation' })),
       ...active(h4Res.data?.pairs).slice(0, 3).map(p      => ({ ...p, engine: 'H4',      href: 'https://www.nervafx.com/h1-continuation' })),
       ...active(sessionRes.data?.pairs).slice(0, 3).map(p => ({ ...p, engine: 'Session', href: 'https://www.nervafx.com/session-continuation' })),
+      ...active(strengthRes.data?.pairs).slice(0, 3).map(p => ({ ...p, engine: 'Strength', href: 'https://www.nervafx.com/strength-continuation' })),
     ];
 
     if (!signals.length) {
@@ -117,7 +120,7 @@ module.exports = async function handler(req, res) {
     //   Daily   → 24h (one alert per pair per forex day)
     //   H4      → 4h  (one alert per pair per H4 window)
     //   Session → 10h (covers the longest session — Asia)
-    const ENGINE_COOLDOWN_MS = { Daily: 24 * 3600000, H4: 4 * 3600000, Session: 10 * 3600000 };
+    const ENGINE_COOLDOWN_MS = { Daily: 24 * 3600000, H4: 4 * 3600000, Session: 10 * 3600000, Strength: 24 * 3600000 };
     const nowMs = Date.now();
     const lookbackCutoff = new Date(nowMs - 24 * 3600000).toISOString();
 

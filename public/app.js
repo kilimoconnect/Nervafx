@@ -3828,12 +3828,13 @@ async function fetchQualityPreview() {
   if (!el) return;
   try {
     const ts = Date.now();
-    const [daily, h4, session] = await Promise.all([
+    const [daily, h4, session, strength] = await Promise.all([
       api(`/api/daily-continuation?t=${ts}`).catch(() => ({ pairs: [] })),
       api(`/api/h1-continuation?t=${ts}`).catch(() => ({ pairs: [] })),
       api(`/api/session-continuation?t=${ts}`).catch(() => ({ pairs: [] })),
+      api(`/api/strength-continuation?t=${ts}`).catch(() => ({ pairs: [] })),
     ]);
-    renderQualityPreview(el, { daily, h4, session });
+    renderQualityPreview(el, { daily, h4, session, strength });
   } catch (e) {
     el.innerHTML = `<p class="me-empty">Failed to load: ${e.message}</p>`;
   }
@@ -3863,6 +3864,7 @@ function renderQualityPreview(el, data) {
     { key: 'daily',   label: 'Daily',   href: '/daily-continuation',   pairs: qualified(data.daily?.pairs) },
     { key: 'h4',      label: 'H4',      href: '/h1-continuation',      pairs: qualified(data.h4?.pairs) },
     { key: 'session', label: 'Session', href: '/session-continuation', pairs: qualified(data.session?.pairs) },
+    { key: 'strength', label: 'Strength', href: '/strength-continuation', pairs: qualified(data.strength?.pairs) },
   ];
 
   const total = groups.reduce((n, g) => n + g.pairs.length, 0);
