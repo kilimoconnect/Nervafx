@@ -190,6 +190,21 @@
     var TOKEN = localStorage.getItem('nfx_token') || '';
     var _userTz = localStorage.getItem('nfx_tz') || 'auto';
     function _tz() { return (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC'); }
+
+    // Pull the timezone from the user's profile so the card and the hour picker
+    // both use it — without this the page silently falls back to the browser tz.
+    async function loadProfileTz() {
+      try {
+        if (!TOKEN) return;
+        var r = await fetch('/api/profile', { headers: { Authorization: 'Bearer ' + TOKEN } });
+        if (!r.ok) return;
+        var p = await r.json();
+        if (p.timezone) {
+          _userTz = (p.timezone === 'UTC') ? 'auto' : p.timezone;
+          try { localStorage.setItem('nfx_tz', _userTz); } catch (_) {}
+        }
+      } catch (_) {}
+    }
     var currentSort = 'score';
     var cachedPairs = [];
     var allExpanded = false;
@@ -333,8 +348,8 @@
       return utcGuess + (asIf.getTime() - back.getTime());
     }
 
-    // Populate the hour dropdown in the user's profile timezone, defaulting to
-    // the current local hour.
+    // Populate the hour dropdown (labels are tz-independent). The default hour
+    // is set after the profile timezone loads.
     (function () {
       var sel = document.getElementById('sx-hour');
       for (var hh = 0; hh < 24; hh++) {
@@ -343,11 +358,13 @@
         o.textContent = (hh < 10 ? '0' + hh : hh) + ':00';
         sel.appendChild(o);
       }
+    })();
+    function setDefaultHour() {
       var curHour = parseInt(new Intl.DateTimeFormat('en-US', {
         timeZone: _tz(), hour: '2-digit', hour12: false,
       }).format(new Date()), 10) % 24;
-      sel.value = String(curHour);
-    })();
+      document.getElementById('sx-hour').value = String(curHour);
+    }
 
     document.getElementById('sx-go').addEventListener('click', function() { load(); });
     document.getElementById('sx-live').addEventListener('click', function() {
@@ -364,7 +381,12 @@
       this.classList.toggle('active', allExpanded);
     });
 
-    load();
+    // Load the profile timezone first so the card and picker agree, then render.
+    (async function () {
+      await loadProfileTz();
+      setDefaultHour();
+      load();
+    })();
 
     // Auto-refresh aligned to the 15m data cron (fires at :04, :19, :34, :49)
     function scheduleAlignedRefresh() {
