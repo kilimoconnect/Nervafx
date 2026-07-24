@@ -78,11 +78,12 @@ function strengthGate(byHour, inst, direction, openMs, tfMs) {
   return best ? { ok: true, ...best } : { ok: false };
 }
 
-// Direction implied by current strength (evaluated at nowMs). Null when neither
-// side qualifies or strength is unavailable; the stronger side wins a tie.
-function directionFromStrength(byHour, inst, nowMs) {
-  const buy  = strengthGate(byHour, inst, 'BUY',  nowMs, 0);
-  const sell = strengthGate(byHour, inst, 'SELL', nowMs, 0);
+// Direction implied by strength as of a given moment (asOfMs). Null when
+// neither side qualifies or strength is unavailable; the stronger side wins a
+// tie. Passing a candle's close time keeps historical days lookahead-free.
+function directionFromStrength(byHour, inst, asOfMs) {
+  const buy  = strengthGate(byHour, inst, 'BUY',  asOfMs, 0);
+  const sell = strengthGate(byHour, inst, 'SELL', asOfMs, 0);
   const buyOk  = buy.ok  && !buy.nodata  && buy.currency;
   const sellOk = sell.ok && !sell.nodata && sell.currency;
   if (buyOk && !sellOk)  return { direction: 'BUY',  gate: buy };
@@ -246,7 +247,6 @@ module.exports = async function handler(req, res) {
 
     // Hourly 3H/6H/12H strength, keyed hour -> currency.
     const strengthByHour = await loadStrength(sb, fetchSince, fetchUntil);
-    const nowMs = now.getTime();
 
     const pairs = [];
 
@@ -257,28 +257,31 @@ module.exports = async function handler(req, res) {
       const pd = pipDiv(inst);
       const pair = inst.replace('_', '/');
 
-      // Universe + direction: one leg must hold >= 0.0015 on 6H or 12H now.
-      const dir = directionFromStrength(strengthByHour, inst, nowMs);
-      if (!dir) continue;
-      const direction = dir.direction;
-
-      // Phase 1: first H1 inside the day that closes beyond the highest high
-      // (BUY) or lowest low (SELL) of the preceding 6 H1 candles.
+      // Phase 1: first H1 inside the day that (a) has a qualifying strength
+      // direction as of its own close and (b) closes beyond the preceding
+      // 6-H1 high (BUY) or low (SELL). Direction is judged per candle from the
+      // strength published at that close — never from "now" — so a historical
+      // day reconstructs with the strength that actually existed then, with no
+      // lookahead.
       const BREAK_LOOKBACK = 6;
       let triggerIdx = -1;
       let breakLevel = 0;
+      let direction = null;
       for (let i = BREAK_LOOKBACK; i < all.length; i++) {
         const c = all[i];
         const cMs = new Date(c.time).getTime();
         if (cMs < dayStartMs || cMs >= trackEndMs) continue;
+
+        const dirAt = directionFromStrength(strengthByHour, inst, cMs + TRIGGER_TF_MS);
+        if (!dirAt) continue;
 
         let maxHigh = -Infinity, minLow = Infinity;
         for (let j = i - BREAK_LOOKBACK; j < i; j++) {
           if (all[j].high > maxHigh) maxHigh = all[j].high;
           if (all[j].low < minLow) minLow = all[j].low;
         }
-        if (direction === 'BUY' && c.close > maxHigh) { triggerIdx = i; breakLevel = maxHigh; break; }
-        if (direction === 'SELL' && c.close < minLow) { triggerIdx = i; breakLevel = minLow; break; }
+        if (dirAt.direction === 'BUY' && c.close > maxHigh) { triggerIdx = i; breakLevel = maxHigh; direction = 'BUY'; break; }
+        if (dirAt.direction === 'SELL' && c.close < minLow) { triggerIdx = i; breakLevel = minLow; direction = 'SELL'; break; }
       }
       if (triggerIdx === -1) continue;
 
