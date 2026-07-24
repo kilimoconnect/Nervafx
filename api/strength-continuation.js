@@ -245,26 +245,28 @@ module.exports = async function handler(req, res) {
       const pd = pipDiv(inst);
       const pair = inst.replace('_', '/');
 
-      // Phase 1: first H1 inside the day that (a) has a qualifying strength
-      // direction as of its own close (a currency at ±0.0015 on 6H/12H) and
-      // (b) closes beyond the PREVIOUS H1 candle's high (BUY) / low (SELL) in
-      // that direction. Direction is judged per candle from the strength
-      // published at that close — never from "now" — so a historical day
-      // reconstructs with the strength that existed then, lookahead-free.
+      // Universe + direction: at the evaluation moment — now for the live view,
+      // the viewed day's close for a historical date — one currency must hold
+      // |strength| >= 0.0015 on 6H or 12H. That selects the pair and fixes the
+      // direction. (Using the day's close, not real "now", is what keeps a
+      // historical date from being judged with today's strength.)
+      const dir = directionFromStrength(strengthByHour, inst, trackEndMs);
+      if (!dir) continue;
+      const direction = dir.direction;
+
+      // First trigger: the first H1 in the day that closes beyond the PREVIOUS
+      // H1 candle's high (BUY) / low (SELL) in that direction — independent of
+      // what strength was doing at that earlier hour.
       let triggerIdx = -1;
       let breakLevel = 0;
-      let direction = null;
       for (let i = 1; i < all.length; i++) {
         const c = all[i];
         const cMs = new Date(c.time).getTime();
         if (cMs < dayStartMs || cMs >= trackEndMs) continue;
 
-        const dirAt = directionFromStrength(strengthByHour, inst, cMs + TRIGGER_TF_MS);
-        if (!dirAt) continue;
-
         const prev = all[i - 1];
-        if (dirAt.direction === 'BUY' && c.close > prev.high) { triggerIdx = i; breakLevel = prev.high; direction = 'BUY'; break; }
-        if (dirAt.direction === 'SELL' && c.close < prev.low) { triggerIdx = i; breakLevel = prev.low; direction = 'SELL'; break; }
+        if (direction === 'BUY' && c.close > prev.high) { triggerIdx = i; breakLevel = prev.high; break; }
+        if (direction === 'SELL' && c.close < prev.low) { triggerIdx = i; breakLevel = prev.low; break; }
       }
       if (triggerIdx === -1) continue;
 
