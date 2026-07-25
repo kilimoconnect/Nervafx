@@ -5,11 +5,13 @@
 // Qualification is pure currency strength — no EMA or other trend gate. A pair
 // is in the universe only if one of its currencies carries |strength| >= 0.0015
 // on smooth_6h OR smooth_12h (base bid up, or quote sold off, sets the
-// direction). The trigger is the MOST RECENT H1 that closed beyond the previous
-// H1 candle's high/low in that direction (within a 24h recency bound), re-
-// evaluated every hour as new H1s close — no calendar-day anchor. Monitoring
-// then runs on M15 for just the one hour following the break (up to 4 candles),
+// direction). The trigger is the H1 whose close beyond the previous H1 candle's
+// high/low started the hour currently being viewed — i.e. it closed at the top
+// of that hour — re-evaluated every hour as new H1s close (no calendar-day
+// anchor). Monitoring then runs on M15 for just that one hour (up to 4 candles),
 // and Trigger 2 fires when a monitoring candle posts delta >= +6, score > 75.
+// A pair whose last break was earlier (its monitoring hour already past) is not
+// shown.
 //
 // Live view evaluates as of now; ?date=YYYY-MM-DD gives an as-of-day-close
 // snapshot.
@@ -33,9 +35,12 @@ function pipDiv(inst) { return isJpy(inst) ? 0.01 : 0.0001; }
 const TRIGGER_TF_MS = 60 * 60 * 1000;
 const MONITOR_TF_MS = 15 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
-// A previous-H1 break older than this is treated as stale (no live trigger).
-// The most recent break inside it is the one that's monitored.
-const TRIGGER_RECENCY_MS = 24 * HOUR_MS;
+// The break must be recent enough that its one-hour monitoring window is the
+// hour being viewed — i.e. it closed at the start of that hour. Combined with
+// the close-before-eval gate below, a 2h open-time bound pins the trigger to
+// exactly the candle whose monitoring hour ends at the evaluation moment; an
+// older break (whose monitoring hour has already passed) is not shown.
+const TRIGGER_RECENCY_MS = 2 * HOUR_MS;
 const closeTimeOf = (iso, tfMs = TRIGGER_TF_MS) =>
   iso ? new Date(new Date(iso).getTime() + tfMs).toISOString() : null;
 
