@@ -510,13 +510,15 @@ module.exports = async function handler(req, res) {
     // refBreakPips desc then triggerBreakPips desc. Every pair that gets here
     // has triggered, so the qualified/unqualified split the first comparison
     // used to make no longer separates anything.
-    // Ranked by second trigger (most recent Trigger 2 first), then by points
-    // (live score). Pairs that never reached Trigger 2 fall to the bottom,
-    // ordered by score among themselves.
+    // Ranked by second trigger — the pair whose Trigger 2 came first (earliest)
+    // leads — then by points (highest live score). Pairs that never reached
+    // Trigger 2 fall to the bottom, ordered by score among themselves.
     pairs.sort((a, b) => {
-      const as = a.strongConfirmTime || '';
-      const bs = b.strongConfirmTime || '';
-      if (as !== bs) return as < bs ? 1 : -1;
+      const as = a.strongConfirmTime;
+      const bs = b.strongConfirmTime;
+      if (as && !bs) return -1;
+      if (!as && bs) return 1;
+      if (as && bs && as !== bs) return as < bs ? -1 : 1;
       return b.currentScore - a.currentScore;
     });
 

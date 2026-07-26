@@ -522,12 +522,14 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // Ranked by second trigger (most recent Trigger 2 first), then by points
-    // (live score). Pairs that never reached Trigger 2 fall to the bottom.
+    // Ranked by second trigger — the pair whose Trigger 2 came first (earliest)
+    // leads — then by points (highest live score); pairs with no Trigger 2 last.
     pairs.sort((a, b) => {
-      const as = a.strongConfirmTime || '';
-      const bs = b.strongConfirmTime || '';
-      if (as !== bs) return as < bs ? 1 : -1;
+      const as = a.strongConfirmTime;
+      const bs = b.strongConfirmTime;
+      if (as && !bs) return -1;
+      if (!as && bs) return 1;
+      if (as && bs && as !== bs) return as < bs ? -1 : 1;
       return b.currentScore - a.currentScore;
     });
 
