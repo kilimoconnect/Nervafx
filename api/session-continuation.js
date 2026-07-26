@@ -445,10 +445,14 @@ module.exports = async function handler(req, res) {
 
         const brokeFor = direction === 'BUY' ? c.close > prevC.high : c.close < prevC.low;
 
+        // Did this M30 set a new session extreme (highest high / lowest low
+        // since the trigger)? Used as a Trigger 2 requirement.
+        let newExtreme = false;
+
         // 1. New high/low — only rewarded when the candle also closes through structure
         if (direction === 'BUY') {
           if (c.high > runHigh) {
-            runHigh = c.high;
+            runHigh = c.high; newExtreme = true;
             if (brokeFor) { delta += 3; events.push('New high'); }
             else { events.push('New high (wick only)'); }
           } else if (c.high < prevC.high && c.low < prevC.low) {
@@ -458,7 +462,7 @@ module.exports = async function handler(req, res) {
           }
         } else {
           if (c.low < runLow) {
-            runLow = c.low;
+            runLow = c.low; newExtreme = true;
             if (brokeFor) { delta += 3; events.push('New low'); }
             else { events.push('New low (wick only)'); }
           } else if (c.low > prevC.low && c.high > prevC.high) {
@@ -535,8 +539,11 @@ module.exports = async function handler(req, res) {
 
         let entryLabel = statusLabel;
         let justQualified = false;
-        // Looking for Trigger 2: delta >= +6 AND running score above 75.
-        if (qualifiedTime === null && delta >= 6 && score > 75) {
+        // Trigger 2: the M30 must close through structure (break the previous
+        // M30's high/low) AND set a new session extreme, with running score
+        // above 70. The break and the fresh session high/low are mandatory — a
+        // strong score alone no longer qualifies.
+        if (qualifiedTime === null && score > 70 && brokeFor && newExtreme) {
           qualifiedTime = c.time;
           entryLabel = 'Trigger 2';
           justQualified = true;
