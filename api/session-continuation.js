@@ -328,18 +328,16 @@ module.exports = async function handler(req, res) {
       const trackStartMs = new Date(trackStartISO).getTime();
       const curEndMs = new Date(curEndISO).getTime();
 
-      // Phase 1: locate the TRIGGER M30 — first M30 inside the current session
+      // Phase 1: locate the TRIGGER H1 — first H1 inside the current session
       // that closes beyond the highest high (BUY) or lowest low (SELL) of the
-      // preceding 12 M30 candles. That is six hours of structure (unchanged),
-      // but detection is on M30 so the trigger fires without waiting for a full
-      // H1 to close.
-      const m30s = m30Cache[inst] || [];
-      const BREAK_LOOKBACK = 12;
+      // preceding 6 H1 candles. Six hours of structure, which is the same span
+      // the previous 24-candle M15 lookback used to cover.
+      const BREAK_LOOKBACK = 6;
       let triggerAllIdx = -1;
       let breakLevel = 0;
       const direction = confirmedDirection;
-      for (let i = BREAK_LOOKBACK; i < m30s.length; i++) {
-        const c = m30s[i];
+      for (let i = BREAK_LOOKBACK; i < all.length; i++) {
+        const c = all[i];
         const cMs = new Date(c.time).getTime();
         if (cMs < trackStartMs || cMs >= curEndMs) continue;
         // Blackout window: skip triggers between 21:00 and 22:00 UTC (00:00-01:00 EAT)
@@ -347,8 +345,8 @@ module.exports = async function handler(req, res) {
 
         let maxHigh = -Infinity, minLow = Infinity;
         for (let j = i - BREAK_LOOKBACK; j < i; j++) {
-          if (m30s[j].high > maxHigh) maxHigh = m30s[j].high;
-          if (m30s[j].low < minLow) minLow = m30s[j].low;
+          if (all[j].high > maxHigh) maxHigh = all[j].high;
+          if (all[j].low < minLow) minLow = all[j].low;
         }
 
         if (direction === 'BUY' && c.close > maxHigh) { triggerAllIdx = i; breakLevel = maxHigh; break; }
@@ -356,21 +354,21 @@ module.exports = async function handler(req, res) {
       }
       if (triggerAllIdx === -1) continue;
 
-      const trigger = m30s[triggerAllIdx];
+      const trigger = all[triggerAllIdx];
 
-      // H1 EMA alignment gate at trigger time (trend filter stays on H1).
+      // H1 EMA alignment gate at trigger time.
       const triggerMs = new Date(trigger.time).getTime();
       const emaAlign = alignFromCandles(h1Cache[inst] || [], triggerMs, direction);
       if (!emaAlign.aligned) continue;
 
       // Strength gate at trigger time — a break with neither currency
       // committed is the kind that fades.
-      const trigStrength = strengthGate(strengthByHour, inst, direction, triggerMs, MONITOR_TF_MS);
+      const trigStrength = strengthGate(strengthByHour, inst, direction, triggerMs, TRIGGER_TF_MS);
       if (!trigStrength.ok) continue;
 
       // Monitoring runs on the M30 series, from the first M30 that opens after
-      // the trigger M30 has closed through to session end.
-      const triggerCloseMs = triggerMs + MONITOR_TF_MS;
+      // the trigger H1 has closed through to session end.
+      const triggerCloseMs = triggerMs + TRIGGER_TF_MS;
       const monCandles = (m30Cache[inst] || []).filter(c => {
         const ms = new Date(c.time).getTime();
         return ms >= triggerCloseMs && ms < curEndMs;
@@ -394,14 +392,14 @@ module.exports = async function handler(req, res) {
 
       const timeline = [{
         time: trigger.time,
-        closeTime: closeTimeOf(trigger.time, MONITOR_TF_MS),
+        closeTime: closeTimeOf(trigger.time),
         score,
         label: 'Trigger 1',
         event: direction === 'BUY'
-          ? 'M30 close above 6h high (' + Math.round(triggerBreakPips * 10) / 10 + ' pips)'
-          : 'M30 close below 6h low (' + Math.round(triggerBreakPips * 10) / 10 + ' pips)',
+          ? 'Close above 6-H1 high (' + Math.round(triggerBreakPips * 10) / 10 + ' pips)'
+          : 'Close below 6-H1 low (' + Math.round(triggerBreakPips * 10) / 10 + ' pips)',
         qualified: true,
-        m30: {
+        h1: {
           open: trigger.open, high: trigger.high, low: trigger.low, close: trigger.close,
           bull: triggerBull,
           bodyPips: Math.round((Math.abs(trigger.close - trigger.open) / pd) * 10) / 10,
@@ -474,22 +472,22 @@ module.exports = async function handler(req, res) {
           }
         }
 
-        // 2. M30 close beyond previous M30 high/low
+        // 2. H1 close beyond previous H1 high/low
         //    Reward continuation break; adverse close still penalizes; no penalty for
-        //    a candle that simply failed to break the previous M30 level.
+        //    a candle that simply failed to break the previous H1 level.
         if (direction === 'BUY' && c.close > prevC.high) {
-          delta += 4; events.push('Close above prev M30 high');
+          delta += 4; events.push('Close above prev H1 high');
         } else if (direction === 'SELL' && c.close < prevC.low) {
-          delta += 4; events.push('Close below prev M30 low');
+          delta += 4; events.push('Close below prev H1 low');
         } else if (direction === 'BUY' && c.close < prevC.low) {
-          delta -= 6; events.push('Close below prev M30 low');
+          delta -= 6; events.push('Close below prev H1 low');
         } else if (direction === 'SELL' && c.close > prevC.high) {
-          delta -= 6; events.push('Close above prev M30 high');
+          delta -= 6; events.push('Close above prev H1 high');
         } else {
           events.push('No break of structure');
         }
 
-        // 3. Body strength (M30 scale)
+        // 3. Body strength (H1 scale)
         if (direction === 'BUY') {
           if (cBull && cBodyPips > 6) { delta += 2; events.push('Strong bull body'); }
           else if (!cBull && cBodyPips > 6) { delta -= 3; events.push('Strong bear body'); }
@@ -597,7 +595,7 @@ module.exports = async function handler(req, res) {
         // is tracked from here.
         triggerTime: firstTriggerTime,
         // When the break was actually confirmed — the trigger candle's close.
-        triggerCloseTime: closeTimeOf(firstTriggerTime, MONITOR_TF_MS),
+        triggerCloseTime: closeTimeOf(firstTriggerTime),
         // Which leg and horizon carried the strength that let the trigger through.
         strength: trigStrength.nodata ? null : {
           currency: trigStrength.currency,
