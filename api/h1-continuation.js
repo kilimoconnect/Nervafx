@@ -506,15 +506,11 @@ module.exports = async function handler(req, res) {
     // Ranked by live score, strongest continuation first. Ties break on how far
     // the trigger cleared its level, then on which fired first.
     pairs.sort((a, b) => {
-      if (a.triggerTime && !b.triggerTime) return -1;
-      if (!a.triggerTime && b.triggerTime) return 1;
-      if (b.currentScore !== a.currentScore) return b.currentScore - a.currentScore;
-      if ((b.triggerBreakPips || 0) !== (a.triggerBreakPips || 0)) {
-        return (b.triggerBreakPips || 0) - (a.triggerBreakPips || 0);
-      }
-      const at = a.triggerTime || a.breakTime;
-      const bt = b.triggerTime || b.breakTime;
-      return at < bt ? -1 : at > bt ? 1 : 0;
+      // Second trigger (most recent Trigger 2) first, then points (live score).
+      const as = a.strongConfirmTime || '';
+      const bs = b.strongConfirmTime || '';
+      if (as !== bs) return as < bs ? 1 : -1;
+      return b.currentScore - a.currentScore;
     });
     res.json({ pairs });
   } catch (e) {
