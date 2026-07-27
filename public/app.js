@@ -4357,6 +4357,11 @@ function _meSessionExplain(s, label, status) {
   };
   lines.push(TRAD_DESC[tradGrade] || `Tradability: ${tradScore}/100`);
 
+  // Directional energy split — attribute the energy to the winning side.
+  const buyEnergy  = Math.round(energy * bull / 100);
+  const sellEnergy = Math.round(energy * bear / 100);
+  lines.push(`Energy ${energy} — BUY ${buyEnergy} / SELL ${sellEnergy} (${bull >= bear ? 'buyers' : 'sellers'} in control).`);
+
   // Movement
   if (mov >= 60) lines.push(`Strong price movement (${mov}) — high pip activity across pairs.`);
   else if (mov >= 35) lines.push(`Moderate movement (${mov}) — some pairs are active.`);
