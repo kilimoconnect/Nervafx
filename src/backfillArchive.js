@@ -252,10 +252,12 @@ function processHours(hourKeys, byTime) {
 
     const hourlyMoves  = [];
     const hourlyRanges = [];
+    const hourlyDEs    = []; // body/range efficiency per pair (structure quality)
     let activePairs    = 0;
     let bullishMag = 0, bearishMag = 0;
     let agrAligned = 0, agrTotal = 0;
     let ccyAligned = 0, ccyTotal = 0;
+    let impulsePairs = 0; // strong, body-dominant directional candles
 
     for (const inst of config.instruments) {
       const c    = candles[inst];
@@ -269,10 +271,16 @@ function processHours(hourKeys, byTime) {
       const hourlyRange = (c.high - c.low) / c.open;
       hourlyRanges.push(hourlyRange);
 
+      const range = c.high - c.low;
+      const de = range > 0 ? Math.abs(c.close - c.open) / range * 100 : 0;
+      if (range > 0) hourlyDEs.push(de);
+
       if (hourlyMove >= scale.breadthThreshold) {
         activePairs++;
         if (hourlyDir > 0) bullishMag += hourlyMove;
         else               bearishMag += hourlyMove;
+        // Impulse proxy: strong, body-dominant directional candle.
+        if (de >= 60 && hourlyMove >= scale.movementCap * 0.5) impulsePairs++;
       }
 
       // Pair alignment (hourly vs session direction)
@@ -334,13 +342,20 @@ function processHours(hourKeys, byTime) {
     const momentumAccel = prevHourScores?.momentum != null ? round1(momentumScore - prevHourScores.momentum) : 0;
     const momentumType  = classifyMomentum(momentumScore, momentumAccel, movementScore);
 
-    // Market Energy — matches live engine (sessionActivity.js)
-    // energy = 0.45×breadth + 0.35×movement + 0.10×volatility + 0.10×vol_quality
+    // Market Energy — matches live engine (sessionActivity.js).
+    // energy = 0.30·breadth + 0.25·movement + 0.25·directional_agreement
+    //        + 0.10·impulse_strength + 0.10·structure_quality
+    const directionalAgreement = round1((directionalControl + agreementScore) / 2);
+    const impulseStrength = round1((impulsePairs / TOTAL) * 100);
+    const structureQuality = hourlyDEs.length
+      ? round1(hourlyDEs.reduce((s, v) => s + v, 0) / hourlyDEs.length)
+      : 0;
     const energyBase = round1(
-      0.45 * breadthScore +
-      0.35 * movementScore +
-      0.10 * volatilityScore +
-      0.10 * volatilityQuality
+      0.30 * breadthScore +
+      0.25 * movementScore +
+      0.25 * directionalAgreement +
+      0.10 * impulseStrength +
+      0.10 * structureQuality
     );
     const marketEnergy = round1(Math.min(100, energyBase));
 
