@@ -138,9 +138,9 @@
       // newest first
       var rows = steps.slice().sort(function(a,b){ return a.time < b.time ? 1 : -1; });
 
-      var html = '<table class="evo"><thead><tr><th class="evo-time-h">Time</th><th title="1st ÷ 8th — larger magnitude over smaller">Gap</th>';
+      var html = '<table class="evo"><thead><tr><th class="evo-time-h">Time</th>';
       for (var c = 0; c < CCYS.length; c++) html += '<th>' + CCYS[c] + '</th>';
-      html += '<th style="text-align:left">Top pairs (gap ≥ 2)</th>';
+      html += '<th style="text-align:left">Top pairs</th>';
       html += '</tr></thead><tbody>';
 
       var lastDay = '';
@@ -148,32 +148,22 @@
         var s = rows[i];
         var day = fmtDay(s.signalTime || s.time);
         if (day !== lastDay) {
-          html += '<tr><td class="evo-time" style="color:#f472b6">' + day + '</td><td colspan="' + (CCYS.length + 2) + '" style="text-align:left;color:#64748b;font-size:10px">──</td></tr>';
+          html += '<tr><td class="evo-time" style="color:#f472b6">' + day + '</td><td colspan="' + (CCYS.length + 1) + '" style="text-align:left;color:#64748b;font-size:10px">──</td></tr>';
           lastDay = day;
         }
         var strong = s.strongest ? s.strongest.currency : '';
         var weak = s.weakest ? s.weakest.currency : '';
-        var gap = (s.gapRatio != null) ? s.gapRatio.toFixed(1) + '×' : '—';
-        var gapTitle = (s.gapHi != null) ? s.gapHi + ' / ' + s.gapLo : '';
-        var gapHot = (s.gapRatio != null && s.gapRatio >= 2);
-        var gapStyle = gapHot
-          ? 'font-weight:800;color:#0b0f18;background:#fbbf24;border-radius:3px;font-family:monospace'
-          : 'font-weight:700;color:#e2e8f0;font-family:monospace';
-        html += '<tr><td class="evo-time">' + fmtTime(s.signalTime || s.time) + '</td>'
-          + '<td style="' + gapStyle + '" title="' + gapTitle + '">' + gap + '</td>';
+        html += '<tr><td class="evo-time">' + fmtTime(s.signalTime || s.time) + '</td>';
         for (var c = 0; c < CCYS.length; c++) {
           var ccy = CCYS[c];
           var sc = (s.score && s.score[ccy] != null) ? s.score[ccy] : 0;
           var cls = 'evo-cell' + (ccy === strong ? ' evo-strong' : '') + (ccy === weak ? ' evo-weak' : '');
           html += '<td class="' + cls + '" style="background:' + cellBg(sc) + ';color:' + cellText(sc) + '">' + (sc > 0 ? '+' : '') + sc + '</td>';
         }
-        var pairsCell = '';
-        if (gapHot && s.topPairs && s.topPairs.length) {
-          pairsCell = s.topPairs.map(function (tp) {
-            var col = tp.direction === 'BUY' ? '#4ade80' : '#f87171';
-            return '<span style="color:' + col + ';font-weight:700">' + tp.pair + ' ' + tp.direction + '</span> <span style="color:#64748b">' + tp.spread + '</span>';
-          }).join(' &nbsp;·&nbsp; ');
-        }
+        var pairsCell = (s.topPairs || []).map(function (tp) {
+          var col = tp.direction === 'BUY' ? '#4ade80' : '#f87171';
+          return '<span style="color:' + col + ';font-weight:700">' + tp.pair + ' ' + tp.direction + '</span> <span style="color:#64748b">' + tp.spread + '</span>';
+        }).join(' &nbsp;·&nbsp; ');
         html += '<td style="text-align:left;white-space:nowrap;font-size:10px">' + pairsCell + '</td>';
         html += '</tr>';
       }
