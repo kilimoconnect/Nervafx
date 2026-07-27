@@ -136,6 +136,8 @@ module.exports = async function handler(req, res) {
 
       steps.push({
         time: new Date(t).toISOString(),
+        // The M15 candle at t closes at t+15m — that's when this reading exists.
+        signalTime: new Date(t + M15_MS).toISOString(),
         strength: norm,
         score,
         strongest: ranked[0],

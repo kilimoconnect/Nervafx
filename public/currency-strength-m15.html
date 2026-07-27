@@ -146,7 +146,7 @@
       var lastDay = '';
       for (var i = 0; i < rows.length; i++) {
         var s = rows[i];
-        var day = fmtDay(s.time);
+        var day = fmtDay(s.signalTime || s.time);
         if (day !== lastDay) {
           html += '<tr><td class="evo-time" style="color:#f472b6">' + day + '</td><td colspan="' + (CCYS.length + 2) + '" style="text-align:left;color:#64748b;font-size:10px">──</td></tr>';
           lastDay = day;
@@ -159,7 +159,7 @@
         var gapStyle = gapHot
           ? 'font-weight:800;color:#0b0f18;background:#fbbf24;border-radius:3px;font-family:monospace'
           : 'font-weight:700;color:#e2e8f0;font-family:monospace';
-        html += '<tr><td class="evo-time">' + fmtTime(s.time) + '</td>'
+        html += '<tr><td class="evo-time">' + fmtTime(s.signalTime || s.time) + '</td>'
           + '<td style="' + gapStyle + '" title="' + gapTitle + '">' + gap + '</td>';
         for (var c = 0; c < CCYS.length; c++) {
           var ccy = CCYS[c];
