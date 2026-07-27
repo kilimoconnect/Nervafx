@@ -444,7 +444,9 @@ module.exports = async function handler(req, res) {
 
         let entryLabel = statusLabel;
         let justQualified = false;
-        if (qualifiedTime === null && delta >= 6 && score > 75) {
+        // Trigger 2 = any candle closing beyond the previous candle's high
+        // (BUY) / low (SELL) in the trend direction, score > 50, points aside.
+        if (qualifiedTime === null && brokeFor && score > 50) {
           qualifiedTime = c.time;
           entryLabel = 'Trigger 2';
           justQualified = true;

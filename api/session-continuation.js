@@ -539,11 +539,10 @@ module.exports = async function handler(req, res) {
 
         let entryLabel = statusLabel;
         let justQualified = false;
-        // Trigger 2: the M30 must close through structure (break the previous
-        // M30's high/low) AND set a new session extreme, with running score
-        // above 70. The break and the fresh session high/low are mandatory — a
-        // strong score alone no longer qualifies.
-        if (qualifiedTime === null && score > 70 && brokeFor && newExtreme) {
+        // Trigger 2 = any monitoring candle that closes beyond the previous
+        // candle's high (BUY) / low (SELL) in the trend direction, with running
+        // score above 50 — regardless of points or a new session extreme.
+        if (qualifiedTime === null && brokeFor && score > 50) {
           qualifiedTime = c.time;
           entryLabel = 'Trigger 2';
           justQualified = true;

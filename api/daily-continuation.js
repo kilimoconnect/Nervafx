@@ -426,11 +426,12 @@ module.exports = async function handler(req, res) {
         else if (score >= 30) statusLabel = 'Possible Reversal';
         else statusLabel = 'Continuation Failed';
 
-        // Break candle = Trigger 1. Now looking for Trigger 2 — a monitoring
-        // candle with delta >= +6 AND running score above 75.
+        // Break candle = Trigger 1. Trigger 2 = any monitoring candle that
+        // closes beyond the previous candle's high (BUY) / low (SELL) in the
+        // trend direction, with running score above 50 — regardless of points.
         let entryLabel = statusLabel;
         let justQualified = false;
-        if (qualifiedTime === null && delta >= 6 && score > 75) {
+        if (qualifiedTime === null && brokeFor && score > 50) {
           qualifiedTime = h1.time;
           entryLabel = 'Trigger 2';
           justQualified = true;
