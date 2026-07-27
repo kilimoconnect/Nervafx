@@ -401,6 +401,7 @@ function processHours(hourKeys, byTime, onlyLast = false, _csStrengthIndex = nul
     let activePairs    = 0;
     let bullishMag = 0, bearishMag = 0;
     let agrAligned = 0, agrTotal = 0;
+    let impulsePairs = 0; // strong, body-dominant directional candles (H1 proxy)
 
     // Currency alignment: does each pair move consistently with currency strength?
     let ccyAligned = 0, ccyTotal = 0;
@@ -421,15 +422,16 @@ function processHours(hourKeys, byTime, onlyLast = false, _csStrengthIndex = nul
 
       // Directional Efficiency: body / range × 100 (how directional is the candle)
       const range = c.high - c.low;
-      if (range > 0) {
-        hourlyDEs.push(Math.abs(c.close - c.open) / range * 100);
-      }
+      const de = range > 0 ? Math.abs(c.close - c.open) / range * 100 : 0;
+      if (range > 0) hourlyDEs.push(de);
 
       // Breadth: is this pair "active" this hour?
       if (hourlyMove >= scale.breadthThreshold) {
         activePairs++;
         if (hourlyDir > 0) bullishMag += hourlyMove;
         else               bearishMag += hourlyMove;
+        // Impulse proxy: a strong, body-dominant (clean) directional candle.
+        if (de >= 60 && hourlyMove >= scale.movementCap * 0.5) impulsePairs++;
       }
 
       // ═══════════════════════════════════════════════════════════════════
@@ -527,17 +529,28 @@ function processHours(hourKeys, byTime, onlyLast = false, _csStrengthIndex = nul
     );
 
     // ═══════════════════════════════════════════════════════════════════════
-    // ENGINE 8: Market Energy (participation-driven formula)
-    // energy = 0.45×breadth + 0.35×movement + 0.10×volatility
-    //        + 0.10×volatility_quality
+    // ENGINE 8: Market Energy — directional FORCE, not just activity.
+    // energy = 0.30·breadth + 0.25·movement + 0.25·directional_agreement
+    //        + 0.10·impulse_strength + 0.10·structure_quality
     // ═══════════════════════════════════════════════════════════════════════
+    // Directional Agreement: blend of net one-sidedness (directional_control)
+    // and currency/pair agreement — high only when the whole board leans one
+    // way, so a 14-buy/14-sell CPI spike scores low despite all the activity.
+    const directionalAgreement = round1((directionalControl + agreementScore) / 2);
+    // Impulse Strength (H1 proxy): share of pairs firing a strong, clean move.
+    const impulseStrength = round1((impulsePairs / TOTAL) * 100);
+    // Structure Quality: average directional efficiency (clean candles vs chop).
+    const structureQuality = deScore;
     const energyBase = round1(
-      0.45 * breadthScore +
-      0.35 * movementScore +
-      0.10 * volatilityScore +
-      0.10 * volatilityQuality
+      0.30 * breadthScore +
+      0.25 * movementScore +
+      0.25 * directionalAgreement +
+      0.10 * impulseStrength +
+      0.10 * structureQuality
     );
     const marketEnergy = round1(Math.min(100, energyBase));
+    // Directional split (BUY/SELL energy) is derived on read from
+    // market_energy × bullish_breadth / bearish_breadth, both already stored.
 
     // Acceleration (vs previous same-session energy)
     const prevSessEB   = prevSameSessionEnergy[session] ?? null;

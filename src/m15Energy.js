@@ -150,6 +150,8 @@ function processM15Bar(candles, session, csHourData) {
   let bullishMag = 0, bearishMag = 0;
   let agrAligned = 0, agrTotal = 0;
   let ccyAligned = 0, ccyTotal = 0;
+  const hourlyDEs = []; // body/range efficiency per pair (structure quality)
+  let impulsePairs = 0; // strong, body-dominant directional candles
 
   for (const inst of config.instruments) {
     const c = candles[inst];
@@ -161,12 +163,16 @@ function processM15Bar(candles, session, csHourData) {
 
     const range = (c.high - c.low) / c.open;
     ranges.push(range);
+    const de = range > 0 ? (move / range) * 100 : 0; // body/range efficiency
+    hourlyDEs.push(de);
 
     // Breadth
     if (move >= scale.breadthThreshold) {
       activePairs++;
       if (dir > 0) bullishMag += move;
       else         bearishMag += move;
+      // Impulse proxy: strong, body-dominant directional candle.
+      if (de >= 60 && move >= scale.movementCap * 0.5) impulsePairs++;
     }
 
     // Pair agreement (direction consistency with currency strength)
@@ -223,19 +229,20 @@ function processM15Bar(candles, session, csHourData) {
 
   const volatilityType = classifyVolatility(volatilityScore, agreementScore, directionalControl);
 
-  // Market Energy (same formula as hourly)
+  // Market Energy — directional force (same formula as hourly):
+  // 0.30·breadth + 0.25·movement + 0.25·directional_agreement
+  //             + 0.10·impulse_strength + 0.10·structure_quality
+  const directionalAgreement = round1((directionalControl + agreementScore) / 2);
+  const impulseStrength = round1((impulsePairs / TOTAL) * 100);
+  const structureQuality = hourlyDEs.length ? round1(arrAvg(hourlyDEs)) : 0;
   const energyBase = round1(
-    0.30 * dispersionScore +
-    0.25 * breadthScore +
-    0.25 * agreementScore +
-    0.20 * movementScore
+    0.30 * breadthScore +
+    0.25 * movementScore +
+    0.25 * directionalAgreement +
+    0.10 * impulseStrength +
+    0.10 * structureQuality
   );
-
-  const qualityMult = volatilityType === 'CHAOTIC' ? 0.65
-                    : volatilityType === 'DEAD'    ? 0.55
-                    : volatilityType === 'HEALTHY' ? 1.10
-                    :                                0.90;
-  const marketEnergy = round1(Math.min(100, energyBase * qualityMult));
+  const marketEnergy = round1(Math.min(100, energyBase));
 
   return {
     market_energy:    marketEnergy,
