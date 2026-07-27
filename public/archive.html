@@ -1080,7 +1080,7 @@
     const dates = Object.keys(byDate)
       .filter(d => d === todayStr ? byDate[d].length >= 1 : byDate[d].length >= 8)
       .sort((a, b) => b.localeCompare(a))
-      .slice(0, 5);
+      .slice(0, _arcFilterDays || 30);
 
     if (!dates.length) { container.innerHTML = '<p class="me-empty">No M15 data for this filter.</p>'; return; }
 
