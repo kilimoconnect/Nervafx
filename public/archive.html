@@ -1218,8 +1218,11 @@
 
     html += '</div>';
 
-    // Legend — include volume indicators for energy
-    if (isEnergy) {
+    // Legend — include volume indicators for energy. Uses metricKey (the
+    // function param) rather than the per-day-loop `isEnergy`, which is out of
+    // scope here — referencing it threw "isEnergy is not defined" and aborted
+    // the whole M15 render.
+    if (metricKey === 'energy') {
       html += `<div class="bc-legend" style="margin-top:8px;display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:#94a3b8">
         <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f59e0b;margin-right:4px;vertical-align:middle"></span>Asia</span>
         <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#0ea5e9;margin-right:4px;vertical-align:middle"></span>London</span>
