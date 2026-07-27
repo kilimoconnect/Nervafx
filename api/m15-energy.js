@@ -16,9 +16,14 @@ module.exports = async function handler(req, res) {
   if (req.method !== 'GET')    return res.status(405).json({ error: 'GET only' });
 
   try {
-    const days  = Math.min(7, parseInt(req.query?.days || '3', 10) || 3);
+    const days  = Math.min(730, parseInt(req.query?.days || '3', 10) || 3);
     const sb    = getClient();
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+    // The volume table holds one row per instrument (28x), so a long window is
+    // enormous. Bound the overlay to a recent window; the energy bars still
+    // cover the full range, they just lack the volume line on older days.
+    const VOL_MAX_DAYS = 14;
+    const volSince = new Date(Date.now() - Math.min(days, VOL_MAX_DAYS) * 24 * 60 * 60 * 1000).toISOString();
 
     const allRows = [];
     const PAGE = 1000;
@@ -45,7 +50,7 @@ module.exports = async function handler(req, res) {
         const { data: vRows, error: vErr } = await sb
           .from('m15_volume_analysis')
           .select('time, participation_score')
-          .gte('time', since)
+          .gte('time', volSince)
           .order('time', { ascending: true })
           .range(vOffset, vOffset + PAGE - 1);
         if (vErr) { console.warn('[M15-ENERGY-API] volume fetch:', vErr.message); break; }

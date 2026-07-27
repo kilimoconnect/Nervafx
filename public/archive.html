@@ -783,7 +783,7 @@
   let _arcM15Loading = null;
 
   async function _loadM15Rows() {
-    const need = Math.min(7, _arcFilterDays || 3);
+    const need = _arcFilterDays || 3;
     if (_arcM15Rows) return _arcM15Rows;
     if (_arcM15Loading) return _arcM15Loading;
     _arcM15Loading = api('/api/m15-energy?days=' + need).then(data => {
@@ -835,10 +835,10 @@
       try {
         const bars = await _loadM15Rows();
         if (!bars.length) { content.innerHTML = '<p class="me-empty">No M15 data yet.</p>'; return; }
-        // Filter by session if needed
-        const filtered = _arcFilterSession === 'ALL'
-          ? bars
-          : bars.filter(r => r.session_name === _arcFilterSession);
+        // Respect the selected range even if a wider set is cached, then session.
+        const cutoff = new Date(Date.now() - (_arcFilterDays || 3) * 86400000).toISOString();
+        let filtered = bars.filter(r => r.time_utc >= cutoff);
+        if (_arcFilterSession !== 'ALL') filtered = filtered.filter(r => r.session_name === _arcFilterSession);
         renderM15MetricBars(content, filtered, ARC_METRICS[metricKey], metricKey);
       } catch (e) { content.innerHTML = `<p class="me-empty">Failed: ${e.message}</p>`; }
     }
