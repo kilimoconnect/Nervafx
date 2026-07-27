@@ -36,6 +36,7 @@
     "api/currency-strength-h1-ema-history.js": { "maxDuration": 300 },
     "api/currency-strength-m15-ema.js": { "maxDuration": 30 },
     "api/currency-strength-m15-45m.js": { "maxDuration": 60 },
+    "api/currency-state.js": { "maxDuration": 60 },
     "api/currency-strength-m15-ema-history.js": { "maxDuration": 300 },
     "api/currency-strength-m5-ema.js": { "maxDuration": 30 },
     "api/currency-strength-m5-ema-history.js": { "maxDuration": 300 },
@@ -80,6 +81,7 @@
     { "source": "/session-continuation", "destination": "/session-continuation.html" },
     { "source": "/strength-continuation", "destination": "/strength-continuation.html" },
     { "source": "/currency-strength-m15", "destination": "/currency-strength-m15.html" },
+    { "source": "/currency-state", "destination": "/currency-state.html" },
     { "source": "/acceleration-v4-m15", "destination": "/acceleration-v4-m15.html" },
     { "source": "/currency-stability", "destination": "/currency-stability.html" },
     { "source": "/mtre", "destination": "/mtre.html" }

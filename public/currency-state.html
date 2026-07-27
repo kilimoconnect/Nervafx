@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>NervaFX — Currency State Engine</title>
+  <link rel="icon" type="image/png" href="/nervafx-icon.png">
+  <script src="/auth-guard.js"></script>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .grid { display: block !important; }
+    .sx-topbar {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 28px; height: 56px;
+      background: rgba(8,11,18,0.92);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+    .sx-topbar-left { display: flex; align-items: center; gap: 12px; }
+    .sx-logo img { height: 24px; display: block; }
+    .sx-sep { color: rgba(255,255,255,0.1); font-size: 20px; font-weight: 200; }
+    .sx-title-text { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+    .sx-back-btn {
+      display: flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: 8px;
+      background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+      color: var(--text-muted); font-size: 12px; cursor: pointer; text-decoration: none;
+    }
+    .sx-back-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
+    .sx-subtitle { text-align: center; padding: 18px 20px 10px; font-size: 11px; color: var(--text-dim); letter-spacing: 0.3px; }
+    .cs-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; padding: 4px 16px 14px; }
+    .cs-card { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; }
+    .cs-card-hd { display: flex; justify-content: space-between; align-items: baseline; }
+    .cs-ccy { font-size: 14px; font-weight: 800; color: #fff; }
+    .cs-conv { font-size: 13px; font-weight: 700; font-family: monospace; }
+    .cs-state { font-size: 12px; font-weight: 600; color: var(--text-muted); margin: 3px 0 6px; }
+    .cs-lbar { display: flex; align-items: center; gap: 5px; margin: 1px 0; }
+    .cs-lbl { font-size: 8px; color: var(--text-dim); width: 20px; }
+    .cs-ltrack { flex: 1; height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; overflow: hidden; }
+    .cs-lfill { display: block; height: 100%; background: #60a5fa; border-radius: 2px; }
+    .sx-filters { display: flex; align-items: center; gap: 8px; padding: 10px 20px; flex-wrap: wrap; justify-content: center; }
+    .sx-filter-label { font-size: 10px; color: var(--text-dim); }
+    .sx-date-input {
+      padding: 5px 10px; border-radius: 7px; font-size: 11px;
+      background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+      color: var(--text-muted); width: 150px; color-scheme: dark;
+    }
+    .sx-go-btn {
+      padding: 5px 12px; border-radius: 7px; font-size: 11px; font-weight: 700;
+      background: rgba(236,72,153,0.2); border: 1px solid rgba(236,72,153,0.4); color: #f472b6; cursor: pointer;
+    }
+    .sx-live-btn {
+      padding: 5px 12px; border-radius: 7px; font-size: 11px; font-weight: 700;
+      background: rgba(255,255,255,0.06); border: 1px solid var(--border); color: var(--text-muted); cursor: pointer;
+    }
+
+    .evo-wrap { padding: 8px 16px 40px; max-height: calc(100vh - 150px); overflow: auto; }
+    table.evo { border-collapse: collapse; margin: 0 auto; font-size: 11px; }
+    table.evo th, table.evo td {
+      padding: 5px 8px; text-align: center; white-space: nowrap;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+    table.evo thead th {
+      position: sticky; top: 0; z-index: 5;
+      background: #0b0f18; color: var(--text-dim);
+      font-size: 10px; font-weight: 700; letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border);
+    }
+    /* Time header pins to both the top and the left (the scroll corner). */
+    table.evo thead th.evo-time-h { text-align: right; left: 0; z-index: 6; }
+    td.evo-time {
+      text-align: right; color: var(--text-dim); font-weight: 700;
+      font-family: 'SF Mono','Cascadia Code','Fira Code',monospace;
+      position: sticky; left: 0; background: #0b0f18; z-index: 4;
+    }
+    td.evo-cell { font-weight: 700; font-family: 'SF Mono','Cascadia Code','Fira Code',monospace; border-radius: 3px; }
+    td.evo-strong { box-shadow: inset 0 0 0 1.5px rgba(74,222,128,0.8); }
+    td.evo-weak   { box-shadow: inset 0 0 0 1.5px rgba(248,113,113,0.8); }
+    .evo-empty { text-align: center; color: var(--text-dim); padding: 40px; }
+    .evo-loading { text-align: center; color: var(--text-muted); padding: 40px; }
+    .spinner {
+      display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,0.2);
+      border-top-color:#f472b6;border-radius:50%;animation:spin 0.7s linear infinite;vertical-align:middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="sx-topbar">
+    <div class="sx-topbar-left">
+      <a href="/app" class="sx-logo"><img src="/nervafx-logo.png" alt="NervaFX" /></a>
+      <span class="sx-sep">|</span>
+      <span class="sx-title-text">Currency State Engine</span>
+    </div>
+    <a href="/app" class="sx-back-btn">← Back</a>
+  </div>
+
+  <div class="sx-subtitle">Each currency classified into a market state from its composite layers (strength · velocity · acceleration · persistence · breadth · trend · energy · session). 🚀 Explosive · 📈/📉 Healthy · 🔄 Pullback · 🔻 Exhaustion · 🔁 Reversal · ⚠️ Transition · ⏸️ Compression · 💀 Dead. M15, every 15 minutes.</div>
+
+  <div class="sx-filters">
+    <span class="sx-filter-label">Date:</span>
+    <input type="date" class="sx-date-input" id="sx-date" />
+    <button class="sx-go-btn" id="sx-go">Go</button>
+    <button class="sx-live-btn" id="sx-live">Live (24h)</button>
+  </div>
+
+  <div class="evo-wrap"><div id="evo-body"><div class="evo-loading"><span class="spinner"></span> Loading…</div></div></div>
+
+  <script>
+    var TOKEN = localStorage.getItem('nfx_token') || '';
+    var _userTz = localStorage.getItem('nfx_tz') || 'auto';
+    function _tz() { return (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC'); }
+    async function loadProfileTz() {
+      try {
+        if (!TOKEN) return;
+        var r = await fetch('/api/profile', { headers: { Authorization: 'Bearer ' + TOKEN } });
+        if (!r.ok) return;
+        var p = await r.json();
+        if (p.timezone) { _userTz = (p.timezone === 'UTC') ? 'auto' : p.timezone; try { localStorage.setItem('nfx_tz', _userTz); } catch (_) {} }
+      } catch (_) {}
+    }
+
+    var CCYS = ['USD','EUR','GBP','JPY','CHF','CAD','AUD','NZD'];
+
+    function fmtTime(iso) {
+      return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: _tz() });
+    }
+    function fmtDay(iso) {
+      return new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', timeZone: _tz() });
+    }
+    // score → background colour (diverging green/red around 0)
+    function cellBg(score) {
+      var mag = Math.min(Math.abs(score) / 70, 1); // conviction ±100; ~70 = strong
+      var a = 0.08 + mag * 0.42;
+      return score > 0 ? 'rgba(34,197,94,' + a.toFixed(2) + ')'
+           : score < 0 ? 'rgba(239,68,68,' + a.toFixed(2) + ')'
+           : 'transparent';
+    }
+    function cellText(score) {
+      return Math.abs(score) < 0.05 ? '#64748b' : (score > 0 ? '#dcfce7' : '#fee2e2');
+    }
+
+    function stateEdge(dir) { return dir === 'BULL' ? '#22c55e' : dir === 'BEAR' ? '#ef4444' : '#64748b'; }
+    function stateBg(dir)   { return dir === 'BULL' ? 'rgba(34,197,94,0.16)' : dir === 'BEAR' ? 'rgba(239,68,68,0.16)' : 'rgba(148,163,184,0.10)'; }
+    function layerBar(label, val) {
+      var v = Math.max(0, Math.min(100, Math.abs(val || 0)));
+      return '<div class="cs-lbar"><span class="cs-lbl">' + label + '</span><span class="cs-ltrack"><span class="cs-lfill" style="width:' + v + '%"></span></span></div>';
+    }
+
+    function render(data) {
+      var el = document.getElementById('evo-body');
+      var steps = (data && data.steps) || [];
+      if (!steps.length) { el.innerHTML = '<div class="evo-empty">No data for this window.</div>'; return; }
+
+      var html = '';
+
+      // Current-state cards, ordered strongest → weakest by conviction.
+      if (data.current && data.current.states) {
+        var cur = data.current.states;
+        var ordered = CCYS.slice().sort(function (a, b) { return (cur[b].conviction || 0) - (cur[a].conviction || 0); });
+        html += '<div class="cs-cards">';
+        for (var k = 0; k < ordered.length; k++) {
+          var c = ordered[k], st = cur[c], L = st.layers || {};
+          html += '<div class="cs-card" style="border-left:3px solid ' + stateEdge(st.dir) + '">'
+            + '<div class="cs-card-hd"><span class="cs-ccy">' + c + '</span>'
+            + '<span class="cs-conv" style="color:' + (st.conviction >= 0 ? '#4ade80' : '#f87171') + '">' + (st.conviction > 0 ? '+' : '') + st.conviction + '</span></div>'
+            + '<div class="cs-state">' + st.emoji + ' ' + st.label + '</div>'
+            + layerBar('Mov', L.movement) + layerBar('Per', L.persistence) + layerBar('Acc', L.accel)
+            + layerBar('Brd', L.breadth) + layerBar('Trn', L.trend) + layerBar('Enr', st.energy)
+            + '</div>';
+        }
+        html += '</div>';
+      }
+
+      // State history grid (newest first).
+      var rows = steps.slice().sort(function (a, b) { return a.time < b.time ? 1 : -1; });
+      html += '<table class="evo"><thead><tr><th class="evo-time-h">Time</th>';
+      for (var c2 = 0; c2 < CCYS.length; c2++) html += '<th>' + CCYS[c2] + '</th>';
+      html += '</tr></thead><tbody>';
+      var lastDay = '';
+      for (var i = 0; i < rows.length; i++) {
+        var s = rows[i], day = fmtDay(s.signalTime || s.time);
+        if (day !== lastDay) {
+          html += '<tr><td class="evo-time" style="color:#f472b6">' + day + '</td><td colspan="' + CCYS.length + '" style="text-align:left;color:#64748b;font-size:10px">──</td></tr>';
+          lastDay = day;
+        }
+        html += '<tr><td class="evo-time">' + fmtTime(s.signalTime || s.time) + '</td>';
+        for (var c3 = 0; c3 < CCYS.length; c3++) {
+          var stt = (s.states && s.states[CCYS[c3]]) || {};
+          html += '<td style="background:' + stateBg(stt.dir) + ';text-align:center" title="' + CCYS[c3] + ': ' + (stt.label || '') + ' (' + (stt.conviction || 0) + ')">' + (stt.emoji || '') + '</td>';
+        }
+        html += '</tr>';
+      }
+      html += '</tbody></table>';
+      el.innerHTML = html;
+    }
+
+    async function load(silent) {
+      if (!silent) document.getElementById('evo-body').innerHTML = '<div class="evo-loading"><span class="spinner"></span> Loading…</div>';
+      var dateEl = document.getElementById('sx-date');
+      var qs = dateEl.value ? '?date=' + dateEl.value : '';
+      try {
+        var res = await fetch('/api/currency-state' + qs, { headers: { Authorization: 'Bearer ' + TOKEN }, cache: 'no-store' });
+        if (!res.ok) throw new Error(await res.text());
+        render(await res.json());
+      } catch (e) {
+        document.getElementById('evo-body').innerHTML = '<div class="evo-empty" style="color:#f87171">Error: ' + e.message + '</div>';
+      }
+    }
+
+    document.getElementById('sx-go').addEventListener('click', function () { load(); });
+    document.getElementById('sx-live').addEventListener('click', function () { document.getElementById('sx-date').value = ''; load(); });
+
+    (async function () { await loadProfileTz(); load(); })();
+
+    // Auto-refresh live view aligned to the M15 close (~:01, :16, :31, :46).
+    function scheduleRefresh() {
+      var now = new Date();
+      var mins = now.getUTCMinutes() % 15;
+      var delay = ((15 - mins) % 15 * 60 - now.getUTCSeconds() + 60) * 1000;
+      if (delay <= 0) delay += 15 * 60 * 1000;
+      setTimeout(function () {
+        if (!document.getElementById('sx-date').value) load(true);
+        scheduleRefresh();
+      }, delay);
+    }
+    scheduleRefresh();
+  </script>
+</body>
+</html>
