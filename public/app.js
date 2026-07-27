@@ -3859,7 +3859,8 @@ function _anTime(iso) {
 }
 
 function renderQualityPreview(el, data) {
-  const qualified = arr => (arr || []).filter(p => p.qualified === true && p.state === 'MONITORING');
+  // Match the continuation pages exactly: only pairs that reached Trigger 2.
+  const qualified = arr => (arr || []).filter(p => p.qualified === true && p.strongConfirmTime);
   const groups = [
     { key: 'daily',   label: 'Daily',   href: '/daily-continuation',   pairs: qualified(data.daily?.pairs) },
     { key: 'h4',      label: 'H4',      href: '/h1-continuation',      pairs: qualified(data.h4?.pairs) },
