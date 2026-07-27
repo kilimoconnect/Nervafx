@@ -542,7 +542,7 @@ module.exports = async function handler(req, res) {
         // Trigger 2 = any monitoring candle that closes beyond the previous
         // candle's high (BUY) / low (SELL) in the trend direction, with running
         // score above 50 — regardless of points or a new session extreme.
-        if (qualifiedTime === null && brokeFor && score > 50) {
+        if (qualifiedTime === null && delta >= 4 && brokeFor && score > 50) {
           qualifiedTime = c.time;
           entryLabel = 'Trigger 2';
           justQualified = true;

@@ -431,7 +431,7 @@ module.exports = async function handler(req, res) {
         // trend direction, with running score above 50 — regardless of points.
         let entryLabel = statusLabel;
         let justQualified = false;
-        if (qualifiedTime === null && brokeFor && score > 50) {
+        if (qualifiedTime === null && delta >= 4 && brokeFor && score > 50) {
           qualifiedTime = h1.time;
           entryLabel = 'Trigger 2';
           justQualified = true;
