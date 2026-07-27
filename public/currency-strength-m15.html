@@ -45,19 +45,20 @@
       background: rgba(255,255,255,0.06); border: 1px solid var(--border); color: var(--text-muted); cursor: pointer;
     }
 
-    .evo-wrap { padding: 8px 16px 40px; overflow-x: auto; }
+    .evo-wrap { padding: 8px 16px 40px; max-height: calc(100vh - 150px); overflow: auto; }
     table.evo { border-collapse: collapse; margin: 0 auto; font-size: 11px; }
     table.evo th, table.evo td {
       padding: 5px 8px; text-align: center; white-space: nowrap;
       border-bottom: 1px solid rgba(255,255,255,0.03);
     }
     table.evo thead th {
-      position: sticky; top: 56px; z-index: 5;
+      position: sticky; top: 0; z-index: 5;
       background: #0b0f18; color: var(--text-dim);
       font-size: 10px; font-weight: 700; letter-spacing: 0.5px;
       border-bottom: 1px solid var(--border);
     }
-    table.evo thead th.evo-time-h { text-align: right; }
+    /* Time header pins to both the top and the left (the scroll corner). */
+    table.evo thead th.evo-time-h { text-align: right; left: 0; z-index: 6; }
     td.evo-time {
       text-align: right; color: var(--text-dim); font-weight: 700;
       font-family: 'SF Mono','Cascadia Code','Fira Code',monospace;
