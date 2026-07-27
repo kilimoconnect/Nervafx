@@ -121,9 +121,16 @@ module.exports = async function handler(req, res) {
           })),
         };
       };
-      return res.json({ debug: true, engines: [
-        brk(dailyRes, 'Daily'), brk(h4Res, 'H4'), brk(sessionRes, 'Session'), brk(strengthRes, 'Strength'),
-      ] });
+      return res.json({
+        debug: true,
+        env: {
+          cronSecretSet: !!process.env.CRON_SECRET,
+          brevoKeySet: !!process.env.BREVO_API_KEY,
+        },
+        engines: [
+          brk(dailyRes, 'Daily'), brk(h4Res, 'H4'), brk(sessionRes, 'Session'), brk(strengthRes, 'Strength'),
+        ],
+      });
     }
     const signals = [
       ...active(dailyRes.data?.pairs).slice(0, 3).map(p   => ({ ...p, engine: 'Daily',   href: 'https://www.nervafx.com/daily-continuation' })),
