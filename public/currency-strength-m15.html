@@ -86,7 +86,7 @@
     <a href="/app" class="sx-back-btn">← Back</a>
   </div>
 
-  <div class="sx-subtitle">Per-currency strength on M15 using a 45-minute (3-candle) window, sampled every 15 minutes. Green = strong, red = weak; outlined cells mark the strongest / weakest of each row.</div>
+  <div class="sx-subtitle">Composite M15 conviction (±100): sign = 45m movement, magnitude = 30% movement · 20% persistence · 15% acceleration · 15% breadth · 10% trend · 10% session. Sampled every 15 minutes. Green = strong, red = weak; outlined cells mark the strongest / weakest of each row.</div>
 
   <div class="sx-filters">
     <span class="sx-filter-label">Date:</span>
@@ -121,7 +121,7 @@
     }
     // score → background colour (diverging green/red around 0)
     function cellBg(score) {
-      var mag = Math.min(Math.abs(score) / 15, 1); // ~15 = strong
+      var mag = Math.min(Math.abs(score) / 70, 1); // conviction ±100; ~70 = strong
       var a = 0.08 + mag * 0.42;
       return score > 0 ? 'rgba(34,197,94,' + a.toFixed(2) + ')'
            : score < 0 ? 'rgba(239,68,68,' + a.toFixed(2) + ')'
