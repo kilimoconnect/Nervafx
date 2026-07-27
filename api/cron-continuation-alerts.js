@@ -76,7 +76,8 @@ module.exports = async function handler(req, res) {
 
   const auth = (req.headers.authorization || '').replace('Bearer ', '');
   const isCron = process.env.CRON_SECRET && auth === process.env.CRON_SECRET;
-  if (!isCron && req.query?.force !== '1') {
+  const isDebug = req.query?.debug === '1';
+  if (!isCron && req.query?.force !== '1' && !isDebug) {
     return res.status(403).json({ error: 'Cron only' });
   }
 
@@ -101,6 +102,29 @@ module.exports = async function handler(req, res) {
     const active = arr => (arr || []).filter(p =>
       p.state === 'MONITORING' && p.strongConfirmTime && p.triggerTime
     );
+
+    // Non-sending diagnostic: per-engine counts so we can see where the filter
+    // drops pairs. GET ?debug=1
+    if (isDebug) {
+      const brk = (r, label) => {
+        const pairs = r.data?.pairs || [];
+        return {
+          engine: label,
+          error: r.data?.error || null,
+          total: pairs.length,
+          withStrongConfirm: pairs.filter(p => p.strongConfirmTime).length,
+          monitoring: pairs.filter(p => p.state === 'MONITORING').length,
+          active: active(pairs).length,
+          sample: pairs.slice(0, 3).map(p => ({
+            pair: p.pair, state: p.state, score: p.currentScore,
+            strongConfirmTime: p.strongConfirmTime || null, triggerTime: p.triggerTime || null,
+          })),
+        };
+      };
+      return res.json({ debug: true, engines: [
+        brk(dailyRes, 'Daily'), brk(h4Res, 'H4'), brk(sessionRes, 'Session'), brk(strengthRes, 'Strength'),
+      ] });
+    }
     const signals = [
       ...active(dailyRes.data?.pairs).slice(0, 3).map(p   => ({ ...p, engine: 'Daily',   href: 'https://www.nervafx.com/daily-continuation' })),
       ...active(h4Res.data?.pairs).slice(0, 3).map(p      => ({ ...p, engine: 'H4',      href: 'https://www.nervafx.com/h1-continuation' })),
