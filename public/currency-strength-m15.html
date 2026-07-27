@@ -137,7 +137,7 @@
       // newest first
       var rows = steps.slice().sort(function(a,b){ return a.time < b.time ? 1 : -1; });
 
-      var html = '<table class="evo"><thead><tr><th class="evo-time-h">Time</th>';
+      var html = '<table class="evo"><thead><tr><th class="evo-time-h">Time</th><th title="1st ÷ 8th — larger magnitude over smaller">Gap</th>';
       for (var c = 0; c < CCYS.length; c++) html += '<th>' + CCYS[c] + '</th>';
       html += '</tr></thead><tbody>';
 
@@ -146,12 +146,15 @@
         var s = rows[i];
         var day = fmtDay(s.time);
         if (day !== lastDay) {
-          html += '<tr><td class="evo-time" style="color:#f472b6">' + day + '</td><td colspan="' + CCYS.length + '" style="text-align:left;color:#64748b;font-size:10px">──</td></tr>';
+          html += '<tr><td class="evo-time" style="color:#f472b6">' + day + '</td><td colspan="' + (CCYS.length + 1) + '" style="text-align:left;color:#64748b;font-size:10px">──</td></tr>';
           lastDay = day;
         }
         var strong = s.strongest ? s.strongest.currency : '';
         var weak = s.weakest ? s.weakest.currency : '';
-        html += '<tr><td class="evo-time">' + fmtTime(s.time) + '</td>';
+        var gap = (s.gapRatio != null) ? s.gapRatio.toFixed(1) + '×' : '—';
+        var gapTitle = (s.gapHi != null) ? s.gapHi + ' / ' + s.gapLo : '';
+        html += '<tr><td class="evo-time">' + fmtTime(s.time) + '</td>'
+          + '<td style="font-weight:700;color:#e2e8f0;font-family:monospace" title="' + gapTitle + '">' + gap + '</td>';
         for (var c = 0; c < CCYS.length; c++) {
           var ccy = CCYS[c];
           var sc = (s.score && s.score[ccy] != null) ? s.score[ccy] : 0;

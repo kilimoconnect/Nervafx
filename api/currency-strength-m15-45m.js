@@ -114,12 +114,23 @@ module.exports = async function handler(req, res) {
       const ranked = CCYS.map(c => ({ currency: c, value: norm[c], score: score[c] }))
         .sort((a, b) => b.value - a.value);
 
+      // Gap ratio between the extremes (1st vs 8th): larger magnitude over the
+      // smaller, e.g. 1st +7.5 & 8th -2.5 -> 7.5/2.5 = 3.0. A high ratio means
+      // the strength is concentrated on one side rather than evenly split.
+      const topAbs = Math.abs(ranked[0].score);
+      const botAbs = Math.abs(ranked[ranked.length - 1].score);
+      const hi = Math.max(topAbs, botAbs);
+      const lo = Math.min(topAbs, botAbs);
+
       steps.push({
         time: new Date(t).toISOString(),
         strength: norm,
         score,
         strongest: ranked[0],
         weakest: ranked[ranked.length - 1],
+        gapRatio: lo >= 0.05 ? +(hi / lo).toFixed(2) : null,
+        gapHi: +hi.toFixed(1),
+        gapLo: +lo.toFixed(1),
       });
     }
 
