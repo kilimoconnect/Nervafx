@@ -122,6 +122,18 @@ module.exports = async function handler(req, res) {
       const hi = Math.max(topAbs, botAbs);
       const lo = Math.min(topAbs, botAbs);
 
+      // Top trade pairs by strength spread (base − quote). Direction buys the
+      // stronger leg. Most useful on lopsided (high-gap) steps.
+      const topPairs = PAIRS.map(inst => {
+        const [base, quote] = inst.split('_');
+        const sp = norm[base] - norm[quote];
+        return {
+          pair: inst.replace('_', '/'),
+          direction: sp >= 0 ? 'BUY' : 'SELL',
+          spread: +(Math.abs(sp) * 10000).toFixed(1),
+        };
+      }).sort((a, b) => b.spread - a.spread).slice(0, 3);
+
       steps.push({
         time: new Date(t).toISOString(),
         strength: norm,
@@ -131,6 +143,7 @@ module.exports = async function handler(req, res) {
         gapRatio: lo >= 0.05 ? +(hi / lo).toFixed(2) : null,
         gapHi: +hi.toFixed(1),
         gapLo: +lo.toFixed(1),
+        topPairs,
       });
     }
 

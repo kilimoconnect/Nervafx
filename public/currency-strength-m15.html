@@ -139,6 +139,7 @@
 
       var html = '<table class="evo"><thead><tr><th class="evo-time-h">Time</th><th title="1st ÷ 8th — larger magnitude over smaller">Gap</th>';
       for (var c = 0; c < CCYS.length; c++) html += '<th>' + CCYS[c] + '</th>';
+      html += '<th style="text-align:left">Top pairs (gap ≥ 2)</th>';
       html += '</tr></thead><tbody>';
 
       var lastDay = '';
@@ -146,7 +147,7 @@
         var s = rows[i];
         var day = fmtDay(s.time);
         if (day !== lastDay) {
-          html += '<tr><td class="evo-time" style="color:#f472b6">' + day + '</td><td colspan="' + (CCYS.length + 1) + '" style="text-align:left;color:#64748b;font-size:10px">──</td></tr>';
+          html += '<tr><td class="evo-time" style="color:#f472b6">' + day + '</td><td colspan="' + (CCYS.length + 2) + '" style="text-align:left;color:#64748b;font-size:10px">──</td></tr>';
           lastDay = day;
         }
         var strong = s.strongest ? s.strongest.currency : '';
@@ -165,6 +166,14 @@
           var cls = 'evo-cell' + (ccy === strong ? ' evo-strong' : '') + (ccy === weak ? ' evo-weak' : '');
           html += '<td class="' + cls + '" style="background:' + cellBg(sc) + ';color:' + cellText(sc) + '">' + (sc > 0 ? '+' : '') + sc + '</td>';
         }
+        var pairsCell = '';
+        if (gapHot && s.topPairs && s.topPairs.length) {
+          pairsCell = s.topPairs.map(function (tp) {
+            var col = tp.direction === 'BUY' ? '#4ade80' : '#f87171';
+            return '<span style="color:' + col + ';font-weight:700">' + tp.pair + ' ' + tp.direction + '</span> <span style="color:#64748b">' + tp.spread + '</span>';
+          }).join(' &nbsp;·&nbsp; ');
+        }
+        html += '<td style="text-align:left;white-space:nowrap;font-size:10px">' + pairsCell + '</td>';
         html += '</tr>';
       }
       html += '</tbody></table>';
