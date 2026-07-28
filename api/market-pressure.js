@@ -94,6 +94,18 @@ function pairPressure(price, pms, inst, h1Arr, h1Map, m15Map, atrCache) {
   };
 }
 
+// Did the closed M15 candle at `idx` break the structure (high/low range) of
+// the previous six candles? +1 = close above prior 6 highs, -1 = below, 0 = no.
+function structureBreak(m15, idx) {
+  if (idx < 6) return 0;
+  let hi = -Infinity, lo = Infinity;
+  for (let k = idx - 6; k < idx; k++) { if (m15[k].high > hi) hi = m15[k].high; if (m15[k].low < lo) lo = m15[k].low; }
+  const close = m15[idx].close;
+  if (close > hi) return 1;
+  if (close < lo) return -1;
+  return 0;
+}
+
 // Every pair with valid pressure at price time `pms` (unranked, aligned flag
 // on each). Callers rank/filter; currency aggregation needs all pairs.
 function snapshotAt(pms, cache, atrCache) {
@@ -101,12 +113,12 @@ function snapshotAt(pms, cache, atrCache) {
   for (const inst of PAIRS) {
     const c = cache[inst];
     if (!c) continue;
-    let price = null;
-    for (let i = c.m15.length - 1; i >= 0; i--) { if (c.m15[i].ms <= pms) { price = c.m15[i].close; break; } }
+    let price = null, idx = -1;
+    for (let i = c.m15.length - 1; i >= 0; i--) { if (c.m15[i].ms <= pms) { price = c.m15[i].close; idx = i; break; } }
     if (price == null) continue;
     const p = pairPressure(price, pms, inst, c.h1, c.h1Map, c.m15Map, atrCache);
     if (!p) continue;
-    rows.push({ pair: inst.replace('_', '/'), instrument: inst, ...p });
+    rows.push({ pair: inst.replace('_', '/'), instrument: inst, breakDir: structureBreak(c.m15, idx), ...p });
   }
   return rows;
 }
@@ -190,7 +202,7 @@ module.exports = async function handler(req, res) {
       }));
       for (const { inst, h1raw, m15raw } of results) {
         const h1 = h1raw.map(c => ({ ms: new Date(c.time).getTime(), open: +c.open, high: +c.high, low: +c.low, close: +c.close }));
-        const m15 = m15raw.map(c => ({ ms: new Date(c.time).getTime(), open: +c.open, close: +c.close }));
+        const m15 = m15raw.map(c => ({ ms: new Date(c.time).getTime(), open: +c.open, high: +c.high, low: +c.low, close: +c.close }));
         const h1Map = {}; for (const c of h1) h1Map[c.ms] = c;
         const m15Map = {}; for (const c of m15) m15Map[c.ms] = c;
         cache[inst] = { h1, m15, h1Map, m15Map };
@@ -252,9 +264,11 @@ module.exports = async function handler(req, res) {
       prevCur = byCcy;
 
       if (o < windowStart) continue;                      // warm-up only
-      // Only tradable pairs (MODERATE/STRONG, |score| >= 0.50). They already
-      // sit at the top since ranking is by |score|, so this is the top block.
-      const tradable = aligned.filter(r => Math.abs(r.trendScore) >= 0.50);
+      // Tradable = MODERATE/STRONG (|score| >= 0.50) AND the closed M15 candle
+      // broke the last-6-candle structure in the pair's own direction.
+      const tradable = aligned.filter(r =>
+        Math.abs(r.trendScore) >= 0.50 &&
+        ((r.trendScore >= 0 && r.breakDir === 1) || (r.trendScore < 0 && r.breakDir === -1)));
       cards.push({
         time: new Date(o).toISOString(),
         signalTime: new Date(o + M15_MS).toISOString(),
