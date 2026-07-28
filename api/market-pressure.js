@@ -181,13 +181,26 @@ module.exports = async function handler(req, res) {
     if (!qAt && qDate && /^\d{4}-\d{2}-\d{2}$/.test(qDate)) {
       windowStart = new Date(qDate + 'T00:00:00Z').getTime();
     }
+    // Snapshot at each 15-min candle that has actually CLOSED (m15 holds only
+    // complete candles), so a card's close time never sits in the future. One
+    // candle before the window is kept as warm-up for the first rank delta.
+    const inWindow = new Set();
+    let warmup = 0;
+    for (const inst of PAIRS) {
+      for (const c of (cache[inst]?.m15 || [])) {
+        if (c.ms > evalMs) continue;
+        if (c.ms >= windowStart) inWindow.add(c.ms);
+        else if (c.ms > warmup) warmup = c.ms;
+      }
+    }
+    const steps = [...inWindow].sort((a, b) => a - b);
+    if (warmup) steps.unshift(warmup);
+
     const atrCache = {};
     const cards = [];
     let prevBy = null;
-    // Start one step early as warm-up so the first shown card gets a rank change.
-    const firstStep = Math.ceil(windowStart / M15_MS) * M15_MS;
-    for (let t = firstStep - M15_MS; t <= evalMs; t += M15_MS) {
-      const rows = snapshotAt(t, cache, atrCache);
+    for (const o of steps) {
+      const rows = snapshotAt(o, cache, atrCache);
       if (!rows.length) continue;
       const byInst = {};
       for (const r of rows) {
@@ -198,10 +211,10 @@ module.exports = async function handler(req, res) {
         byInst[r.instrument] = r;
       }
       prevBy = byInst;
-      if (t < firstStep) continue;                        // warm-up only
+      if (o < windowStart) continue;                      // warm-up only
       cards.push({
-        time: new Date(t).toISOString(),
-        signalTime: new Date(t + M15_MS).toISOString(),
+        time: new Date(o).toISOString(),
+        signalTime: new Date(o + M15_MS).toISOString(),
         validCount: rows.length,
         top: rows.slice(0, 5),
       });
