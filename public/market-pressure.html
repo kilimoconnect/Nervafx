@@ -69,6 +69,34 @@
     td.evo-weak   { box-shadow: inset 0 0 0 1.5px rgba(248,113,113,0.8); }
     .evo-empty { text-align: center; color: var(--text-dim); padding: 40px; }
     .evo-loading { text-align: center; color: var(--text-muted); padding: 40px; }
+
+    /* Snapshot cards — one per 15-min cycle, each showing its top 5 pairs. */
+    .mp-cards {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+      gap: 14px; padding: 8px 16px 48px;
+    }
+    .mp-card {
+      background: rgba(255,255,255,0.02); border: 1px solid var(--border);
+      border-radius: 12px; overflow: hidden;
+    }
+    .mp-card-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 9px 14px; border-bottom: 1px solid var(--border);
+      background: rgba(255,255,255,0.025);
+    }
+    .mp-card-time { font-family: 'SF Mono','Cascadia Code','Fira Code',monospace; font-weight: 700; color: #fff; font-size: 13px; }
+    .mp-card-valid { font-size: 10px; color: var(--text-dim); }
+    .mp-row {
+      display: grid; grid-template-columns: 20px 1fr auto; gap: 10px; align-items: center;
+      padding: 8px 14px; border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+    .mp-row:last-child { border-bottom: none; }
+    .mp-rank { font-weight: 800; color: #64748b; font-size: 12px; text-align: center; }
+    .mp-pair { font-weight: 700; color: #fff; font-size: 13px; display: flex; align-items: center; gap: 6px; }
+    .mp-tf { font-family: monospace; font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+    .mp-right { text-align: right; }
+    .mp-score { font-family: monospace; font-weight: 800; font-size: 13px; }
+    .mp-delta { font-size: 10px; margin-top: 2px; }
     .spinner {
       display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,0.2);
       border-top-color:#f472b6;border-radius:50%;animation:spin 0.7s linear infinite;vertical-align:middle;
@@ -86,14 +114,13 @@
     <a href="/app" class="sx-back-btn">← Back</a>
   </div>
 
-  <div class="sx-subtitle">D1/H4/H1 candle-pressure alignment (price vs open ÷ ATR14). Only pairs where all three timeframes agree are ranked; trend score = 0.50·D1 + 0.30·H4 + 0.20·H1, ranked by |score|. Recomputed every 15 minutes; rank change and momentum vs the prior snapshot.</div>
+  <div class="sx-subtitle">D1/H4/H1 candle-pressure alignment (price vs open ÷ ATR14). Only pairs where all three timeframes agree are ranked; trend score = 0.50·D1 + 0.30·H4 + 0.20·H1, ranked by |score|. One card per 15-min cycle showing its top 5 pairs — newest first; rank change and momentum vs the prior card.</div>
 
   <div class="sx-filters">
     <span class="sx-filter-label">Date:</span>
     <input type="date" class="sx-date-input" id="sx-date" />
-    <select class="sx-date-input" id="sx-hour" style="width:110px"></select>
     <button class="sx-go-btn" id="sx-go">Go</button>
-    <button class="sx-live-btn" id="sx-live">Live</button>
+    <button class="sx-live-btn" id="sx-live">Live (24h)</button>
   </div>
 
   <div class="evo-wrap"><div id="evo-body"><div class="evo-loading"><span class="spinner"></span> Loading…</div></div></div>
@@ -140,86 +167,56 @@
       var map = { STRONG: '#22c55e', MODERATE: '#facc15', WEAK: '#94a3b8', IGNORE: '#475569' };
       return '<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;background:' + (map[st] || '#475569') + '22;color:' + (map[st] || '#94a3b8') + '">' + st + '</span>';
     }
-    function rankChangeCell(rc) {
-      if (rc == null) return '<td style="text-align:center;color:#64748b">·</td>';
-      if (rc > 0) return '<td style="text-align:center;color:#4ade80;font-weight:700">↑ ' + rc + '</td>';
-      if (rc < 0) return '<td style="text-align:center;color:#f87171;font-weight:700">↓ ' + (-rc) + '</td>';
-      return '<td style="text-align:center;color:#64748b">–</td>';
+    function deltaText(rc) {
+      if (rc == null) return '<span style="color:#64748b">new</span>';
+      if (rc > 0) return '<span style="color:#4ade80">↑' + rc + '</span>';
+      if (rc < 0) return '<span style="color:#f87171">↓' + (-rc) + '</span>';
+      return '<span style="color:#64748b">–</span>';
+    }
+    function tfInline(v) {
+      var col = v > 0.05 ? '#4ade80' : v < -0.05 ? '#f87171' : '#64748b';
+      return '<span style="color:' + col + '">' + (v > 0 ? '+' : '') + v.toFixed(2) + '</span>';
+    }
+
+    function cardHtml(snap) {
+      var top = snap.top || [];
+      var head = '<div class="mp-card-head">'
+        + '<span class="mp-card-time">' + fmtTime(snap.signalTime) + '</span>'
+        + '<span class="mp-card-valid">' + snap.validCount + ' aligned</span></div>';
+      var rows = '';
+      for (var i = 0; i < top.length; i++) {
+        var p = top[i];
+        var scCol = p.trendScore >= 0 ? '#4ade80' : '#f87171';
+        rows += '<div class="mp-row">'
+          + '<div class="mp-rank">' + p.rank + '</div>'
+          + '<div><div class="mp-pair">' + p.pair + ' ' + stateBadge(p.state) + '</div>'
+          + '<div class="mp-tf">D1 ' + tfInline(p.d1) + ' · H4 ' + tfInline(p.h4) + ' · H1 ' + tfInline(p.h1) + '</div></div>'
+          + '<div class="mp-right">'
+          + '<div class="mp-score" style="color:' + scCol + '">' + (p.trendScore > 0 ? '+' : '') + p.trendScore.toFixed(2) + '</div>'
+          + '<div class="mp-delta">' + deltaText(p.rankChange) + '</div></div>'
+          + '</div>';
+      }
+      if (!top.length) rows = '<div class="mp-row" style="color:#64748b;font-size:12px">No aligned pairs.</div>';
+      return '<div class="mp-card">' + head + rows + '</div>';
     }
 
     function render(data) {
       var el = document.getElementById('evo-body');
-      var pairs = (data && data.pairs) || [];
-      if (!pairs.length) { el.innerHTML = '<div class="evo-empty">No aligned pairs for this snapshot.</div>'; return; }
-
-      var when = data.signalTime ? fmtTime(data.signalTime) : '';
-      var html = '<div style="padding:6px 16px;font-size:12px;color:var(--text-muted)">'
-        + 'Snapshot <b style="color:#fff">' + when + '</b> · Valid pairs '
-        + '<b style="color:#fff">' + data.validCount + '/' + data.total + '</b></div>';
-
-      html += '<table class="evo"><thead><tr>'
-        + '<th style="text-align:center">#</th><th class="evo-time-h" style="text-align:left">Pair</th>'
-        + '<th>Dir</th><th style="text-align:right">Score</th>'
-        + '<th style="text-align:right">D1</th><th style="text-align:right">H4</th><th style="text-align:right">H1</th>'
-        + '<th style="text-align:right">Mom.</th><th style="text-align:center">Δ Rank</th><th>State</th>'
-        + '</tr></thead><tbody>';
-
-      for (var i = 0; i < pairs.length; i++) {
-        var p = pairs[i];
-        var buy = p.direction === 'BUY';
-        var dirCol = buy ? '#4ade80' : '#f87171';
-        var scCol = p.trendScore >= 0 ? '#4ade80' : '#f87171';
-        var mom = (p.momentum == null) ? '·'
-          : '<span style="color:' + (p.momentum >= 0 ? '#4ade80' : '#f87171') + '">' + (p.momentum > 0 ? '+' : '') + p.momentum.toFixed(2) + '</span>';
-        html += '<tr>'
-          + '<td style="text-align:center;font-weight:700;color:#e2e8f0">' + p.rank + '</td>'
-          + '<td class="evo-time" style="text-align:left;font-weight:700;color:#fff">' + p.pair + '</td>'
-          + '<td style="color:' + dirCol + ';font-weight:700">' + p.direction + '</td>'
-          + '<td style="text-align:right;font-family:monospace;font-weight:800;color:' + scCol + '">' + (p.trendScore > 0 ? '+' : '') + p.trendScore.toFixed(2) + '</td>'
-          + tfCell(p.d1) + tfCell(p.h4) + tfCell(p.h1)
-          + '<td style="text-align:right;font-family:monospace">' + mom + '</td>'
-          + rankChangeCell(p.rankChange)
-          + '<td>' + stateBadge(p.state) + '</td>'
-          + '</tr>';
-      }
-      html += '</tbody></table>';
-      el.innerHTML = html;
-    }
-
-    // Resolve a local (profile-tz) wall-clock date + hour to a UTC instant.
-    function zonedWallToUtcMs(dateStr, hour) {
-      var tz = _tz();
-      var p = dateStr.split('-');
-      var wallUtc = Date.UTC(+p[0], (+p[1]) - 1, +p[2], hour, 0, 0);
-      var dtf = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour12: false,
-        year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      var m = {}; dtf.formatToParts(new Date(wallUtc)).forEach(function (pt) { m[pt.type] = pt.value; });
-      var tzAsUtc = Date.UTC(+m.year, (+m.month) - 1, +m.day, (+m.hour) % 24, +m.minute, +m.second);
-      return wallUtc - (tzAsUtc - wallUtc);
-    }
-    (function () {
-      var sel = document.getElementById('sx-hour');
-      for (var hh = 0; hh < 24; hh++) {
-        var o = document.createElement('option');
-        o.value = String(hh); o.textContent = (hh < 10 ? '0' + hh : hh) + ':00';
-        sel.appendChild(o);
-      }
-    })();
-    function setDefaultHour() {
-      var h = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: _tz(), hour: '2-digit', hour12: false }).format(new Date()), 10) % 24;
-      document.getElementById('sx-hour').value = String(h);
+      var snaps = (data && data.snapshots) || [];
+      if (!snaps.length) { el.innerHTML = '<div class="evo-empty">No snapshots for this window.</div>'; return; }
+      var head = '<div style="padding:6px 16px;font-size:12px;color:var(--text-muted)">'
+        + '<b style="color:#fff">' + snaps.length + '</b> snapshot cards · top 5 pairs each</div>';
+      var html = '<div class="mp-cards">';
+      for (var i = 0; i < snaps.length; i++) html += cardHtml(snaps[i]);
+      html += '</div>';
+      el.innerHTML = head + html;
     }
 
     async function load(silent) {
       if (!silent) document.getElementById('evo-body').innerHTML = '<div class="evo-loading"><span class="spinner"></span> Loading…</div>';
       var dateEl = document.getElementById('sx-date');
-      var hourEl = document.getElementById('sx-hour');
-      var qs = '';
-      if (dateEl.value) {
-        // End of the selected local hour → the snapshot as it stood then.
-        var atMs = zonedWallToUtcMs(dateEl.value, parseInt(hourEl.value, 10) || 0) + 3600000;
-        qs = '?at=' + encodeURIComponent(new Date(atMs).toISOString());
-      }
+      // A selected day returns that day's cards; live returns the last 24h.
+      var qs = dateEl.value ? '?date=' + encodeURIComponent(dateEl.value) : '';
       try {
         var res = await fetch('/api/market-pressure' + qs, { headers: { Authorization: 'Bearer ' + TOKEN }, cache: 'no-store' });
         if (!res.ok) throw new Error(await res.text());
@@ -231,10 +228,10 @@
 
     document.getElementById('sx-go').addEventListener('click', function () { load(); });
     document.getElementById('sx-live').addEventListener('click', function () {
-      document.getElementById('sx-date').value = ''; document.getElementById('sx-hour').value = ''; load();
+      document.getElementById('sx-date').value = ''; load();
     });
 
-    (async function () { await loadProfileTz(); setDefaultHour(); load(); })();
+    (async function () { await loadProfileTz(); load(); })();
 
     // Auto-refresh live view aligned to the M15 close (~:01, :16, :31, :46).
     function scheduleRefresh() {

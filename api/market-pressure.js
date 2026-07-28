@@ -60,8 +60,9 @@ function marketState(absScore) {
   return 'IGNORE';
 }
 
-// One pair's pressure at price time `pms`, from its H1 array + maps.
-function pairPressure(price, pms, h1Arr, h1Map, m15Map) {
+// One pair's pressure at price time `pms`, from its H1 array + maps. ATR is
+// memoized per (pair, period) via atrCache since it only changes at boundaries.
+function pairPressure(price, pms, inst, h1Arr, h1Map, m15Map, atrCache) {
   const dayStart = floorTo(pms, DAY);
   const h4Start = floorTo(pms, H4_MS);
   const h1Start = floorTo(pms, HOUR);
@@ -71,9 +72,10 @@ function pairPressure(price, pms, h1Arr, h1Map, m15Map) {
   const d1Open = openAt(dayStart), h4Open = openAt(h4Start), h1Open = openAt(h1Start);
   if (d1Open == null || h4Open == null || h1Open == null) return null;
 
-  const d1Atr = atr14(bucketize(h1Arr.filter(c => c.ms < dayStart), DAY));
-  const h4Atr = atr14(bucketize(h1Arr.filter(c => c.ms < h4Start), H4_MS));
-  const h1Atr = atr14(h1Arr.filter(c => c.ms < h1Start));
+  const memo = (k, fn) => { const key = inst + k; if (atrCache[key] === undefined) atrCache[key] = fn(); return atrCache[key]; };
+  const d1Atr = memo('D' + dayStart, () => atr14(bucketize(h1Arr.filter(c => c.ms < dayStart), DAY)));
+  const h4Atr = memo('4' + h4Start, () => atr14(bucketize(h1Arr.filter(c => c.ms < h4Start), H4_MS)));
+  const h1Atr = memo('1' + h1Start, () => atr14(h1Arr.filter(c => c.ms < h1Start)));
   if (!d1Atr || !h4Atr || !h1Atr) return null;
 
   const mk = (open, atr) => {
@@ -94,7 +96,7 @@ function pairPressure(price, pms, h1Arr, h1Map, m15Map) {
 }
 
 // Full ranked snapshot at price time `pms`.
-function snapshotAt(pms, cache) {
+function snapshotAt(pms, cache, atrCache) {
   const rows = [];
   for (const inst of PAIRS) {
     const c = cache[inst];
@@ -102,7 +104,7 @@ function snapshotAt(pms, cache) {
     let price = null;
     for (let i = c.m15.length - 1; i >= 0; i--) { if (c.m15[i].ms <= pms) { price = c.m15[i].close; break; } }
     if (price == null) continue;
-    const p = pairPressure(price, pms, c.h1, c.h1Map, c.m15Map);
+    const p = pairPressure(price, pms, inst, c.h1, c.h1Map, c.m15Map, atrCache);
     if (!p || !p.aligned) continue;
     rows.push({ pair: inst.replace('_', '/'), instrument: inst, ...p });
   }
@@ -172,33 +174,45 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // Latest complete M15 boundary at or before evalMs → the snapshot moment.
-    let curPms = 0;
-    for (const inst of PAIRS) {
-      const m15 = cache[inst]?.m15 || [];
-      for (let i = m15.length - 1; i >= 0; i--) { if (m15[i].ms <= evalMs) { if (m15[i].ms > curPms) curPms = m15[i].ms; break; } }
+    // Window of 15-min snapshot cards. A selected ?date covers that whole day;
+    // otherwise the last 24h ending at evalMs. Each card ranks its valid pairs
+    // and surfaces the TOP 5, with rank change / momentum vs the prior card.
+    let windowStart = evalMs - DAY;
+    if (!qAt && qDate && /^\d{4}-\d{2}-\d{2}$/.test(qDate)) {
+      windowStart = new Date(qDate + 'T00:00:00Z').getTime();
     }
-    if (!curPms) return res.json({ time: null, validCount: 0, pairs: [] });
-
-    const cur = snapshotAt(curPms, cache);
-    const prev = snapshotAt(curPms - M15_MS, cache);
-    const prevBy = {}; for (const r of prev) prevBy[r.instrument] = r;
-
-    for (const r of cur) {
-      const p = prevBy[r.instrument];
-      r.previousRank = p ? p.rank : null;
-      r.rankChange = p ? p.rank - r.rank : null;          // + = climbing
-      r.momentum = p ? +(r.trendScore - p.trendScore).toFixed(3) : null;
-      r.state = marketState(Math.abs(r.trendScore));
+    const atrCache = {};
+    const cards = [];
+    let prevBy = null;
+    // Start one step early as warm-up so the first shown card gets a rank change.
+    const firstStep = Math.ceil(windowStart / M15_MS) * M15_MS;
+    for (let t = firstStep - M15_MS; t <= evalMs; t += M15_MS) {
+      const rows = snapshotAt(t, cache, atrCache);
+      if (!rows.length) continue;
+      const byInst = {};
+      for (const r of rows) {
+        const p = prevBy ? prevBy[r.instrument] : null;
+        r.rankChange = p ? p.rank - r.rank : null;        // + = climbing
+        r.momentum = p ? +(r.trendScore - p.trendScore).toFixed(3) : null;
+        r.state = marketState(Math.abs(r.trendScore));
+        byInst[r.instrument] = r;
+      }
+      prevBy = byInst;
+      if (t < firstStep) continue;                        // warm-up only
+      cards.push({
+        time: new Date(t).toISOString(),
+        signalTime: new Date(t + M15_MS).toISOString(),
+        validCount: rows.length,
+        top: rows.slice(0, 5),
+      });
     }
+    cards.reverse();                                      // newest first
 
     res.json({
-      time: new Date(curPms).toISOString(),
-      signalTime: new Date(curPms + M15_MS).toISOString(),
-      validCount: cur.length,
       total: PAIRS.length,
       weights: WEIGHTS,
-      pairs: cur,
+      count: cards.length,
+      snapshots: cards,
     });
   } catch (e) {
     console.error('[market-pressure]', e.message);
