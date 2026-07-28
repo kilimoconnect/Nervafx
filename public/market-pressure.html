@@ -178,6 +178,11 @@
       var col = v > 0.05 ? '#4ade80' : v < -0.05 ? '#f87171' : '#64748b';
       return '<span style="color:' + col + '">' + (v > 0 ? '+' : '') + v.toFixed(2) + '</span>';
     }
+    function dirBadge(dir) {
+      var buy = dir === 'BUY';
+      var c = buy ? '#22c55e' : '#ef4444';
+      return '<span style="font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;background:' + c + '22;color:' + c + '">' + dir + '</span>';
+    }
 
     function cardHtml(snap) {
       var top = snap.top || [];
@@ -191,7 +196,7 @@
         var scCol = p.trendScore >= 0 ? '#4ade80' : '#f87171';
         rows += '<div class="mp-row">'
           + '<div class="mp-rank">' + p.rank + '</div>'
-          + '<div><div class="mp-pair">' + p.pair + ' ' + stateBadge(p.state) + '</div>'
+          + '<div><div class="mp-pair">' + p.pair + ' ' + dirBadge(p.direction) + ' ' + stateBadge(p.state) + '</div>'
           + '<div class="mp-tf">D1 ' + tfInline(p.d1) + ' · H4 ' + tfInline(p.h4) + ' · H1 ' + tfInline(p.h1) + '</div></div>'
           + '<div class="mp-right">'
           + '<div class="mp-score" style="color:' + scCol + '">' + (p.trendScore > 0 ? '+' : '') + p.trendScore.toFixed(2) + '</div>'
