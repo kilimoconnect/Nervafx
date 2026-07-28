@@ -70,6 +70,14 @@
     .evo-empty { text-align: center; color: var(--text-dim); padding: 40px; }
     .evo-loading { text-align: center; color: var(--text-muted); padding: 40px; }
 
+    /* Pairs / Currencies tab bar. */
+    .mp-tabs { display: flex; justify-content: center; gap: 8px; padding: 4px 20px 2px; }
+    .mp-tab {
+      padding: 6px 18px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer;
+      background: rgba(255,255,255,0.04); border: 1px solid var(--border); color: var(--text-muted);
+    }
+    .mp-tab.active { background: rgba(236,72,153,0.2); border-color: rgba(236,72,153,0.4); color: #f472b6; }
+
     /* Snapshot cards — one per 15-min cycle, each showing its top 5 pairs. */
     .mp-cards {
       display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
@@ -122,6 +130,11 @@
     <input type="date" class="sx-date-input" id="sx-date" />
     <button class="sx-go-btn" id="sx-go">Go</button>
     <button class="sx-live-btn" id="sx-live">Live (24h)</button>
+  </div>
+
+  <div class="mp-tabs">
+    <button class="mp-tab active" id="tab-pairs" data-view="pairs">Pairs</button>
+    <button class="mp-tab" id="tab-ccy" data-view="currencies">Currencies</button>
   </div>
 
   <div class="evo-wrap"><div id="evo-body"><div class="evo-loading"><span class="spinner"></span> Loading…</div></div></div>
@@ -207,14 +220,47 @@
       return '<div class="mp-card">' + head + rows + '</div>';
     }
 
+    function ccyCardHtml(snap) {
+      var list = snap.currencies || [];
+      var head = '<div class="mp-card-head"><div>'
+        + '<div class="mp-card-time">' + fmtTime(snap.signalTime) + '</div>'
+        + '<div class="mp-card-date">' + fmtDay(snap.signalTime) + '</div></div>'
+        + '<span class="mp-card-valid">' + list.length + ' ccy</span></div>';
+      var rows = '';
+      for (var i = 0; i < list.length; i++) {
+        var c = list[i];
+        var up = c.score >= 0;
+        var col = up ? '#4ade80' : '#f87171';
+        rows += '<div class="mp-row">'
+          + '<div class="mp-rank">' + c.rank + '</div>'
+          + '<div><div class="mp-pair">' + c.currency
+          + ' <span style="color:' + col + ';font-weight:800">' + (up ? '▲' : '▼') + '</span> '
+          + stateBadge(c.state) + '</div>'
+          + '<div class="mp-tf">' + c.agree + '/' + c.pairs + ' pairs agree</div></div>'
+          + '<div class="mp-right">'
+          + '<div class="mp-score" style="color:' + col + '">' + (c.score > 0 ? '+' : '') + c.score.toFixed(2) + '</div>'
+          + '<div class="mp-delta">' + deltaText(c.rankChange) + '</div></div>'
+          + '</div>';
+      }
+      if (!list.length) rows = '<div class="mp-row" style="color:#64748b;font-size:12px">No data</div>';
+      return '<div class="mp-card">' + head + rows + '</div>';
+    }
+
+    var _view = 'pairs';
+    var _lastData = null;
+
     function render(data) {
+      if (data) _lastData = data;
+      data = _lastData;
       var el = document.getElementById('evo-body');
       var snaps = (data && data.snapshots) || [];
       if (!snaps.length) { el.innerHTML = '<div class="evo-empty">No snapshots for this window.</div>'; return; }
+      var ccy = _view === 'currencies';
       var head = '<div style="padding:6px 16px;font-size:12px;color:var(--text-muted)">'
-        + '<b style="color:#fff">' + snaps.length + '</b> snapshot cards · top 5 pairs each</div>';
+        + '<b style="color:#fff">' + snaps.length + '</b> snapshot cards · '
+        + (ccy ? 'currency strength (net pressure)' : 'top 5 tradable pairs each') + '</div>';
       var html = '<div class="mp-cards">';
-      for (var i = 0; i < snaps.length; i++) html += cardHtml(snaps[i]);
+      for (var i = 0; i < snaps.length; i++) html += ccy ? ccyCardHtml(snaps[i]) : cardHtml(snaps[i]);
       html += '</div>';
       el.innerHTML = head + html;
     }
@@ -237,6 +283,15 @@
     document.getElementById('sx-live').addEventListener('click', function () {
       document.getElementById('sx-date').value = ''; load();
     });
+
+    function setView(v) {
+      _view = v;
+      document.getElementById('tab-pairs').classList.toggle('active', v === 'pairs');
+      document.getElementById('tab-ccy').classList.toggle('active', v === 'currencies');
+      render();   // re-render cached data, no refetch
+    }
+    document.getElementById('tab-pairs').addEventListener('click', function () { setView('pairs'); });
+    document.getElementById('tab-ccy').addEventListener('click', function () { setView('currencies'); });
 
     (async function () { await loadProfileTz(); load(); })();
 

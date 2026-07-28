@@ -24,6 +24,7 @@ const PAIRS = [
   'AUD_JPY','AUD_CHF','AUD_CAD','AUD_NZD',
   'NZD_JPY','NZD_CHF','NZD_CAD','CAD_JPY','CAD_CHF','CHF_JPY',
 ];
+const CCYS = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
 const HOUR = 3600000, H4_MS = 4 * HOUR, DAY = 24 * HOUR, M15_MS = 15 * 60 * 1000;
 const WEIGHTS = { d1: 0.50, h4: 0.30, h1: 0.20 };
 
@@ -95,7 +96,8 @@ function pairPressure(price, pms, inst, h1Arr, h1Map, m15Map, atrCache) {
   };
 }
 
-// Full ranked snapshot at price time `pms`.
+// Every pair with valid pressure at price time `pms` (unranked, aligned flag
+// on each). Callers rank/filter; currency aggregation needs all pairs.
 function snapshotAt(pms, cache, atrCache) {
   const rows = [];
   for (const inst of PAIRS) {
@@ -105,12 +107,35 @@ function snapshotAt(pms, cache, atrCache) {
     for (let i = c.m15.length - 1; i >= 0; i--) { if (c.m15[i].ms <= pms) { price = c.m15[i].close; break; } }
     if (price == null) continue;
     const p = pairPressure(price, pms, inst, c.h1, c.h1Map, c.m15Map, atrCache);
-    if (!p || !p.aligned) continue;
+    if (!p) continue;
     rows.push({ pair: inst.replace('_', '/'), instrument: inst, ...p });
   }
-  rows.sort((a, b) => Math.abs(b.trendScore) - Math.abs(a.trendScore));
-  rows.forEach((r, i) => { r.rank = i + 1; });
   return rows;
+}
+
+// Net per-currency pressure: average of its pairs' trend scores (base +, quote
+// -) across all valid pairs. Ranked strongest → weakest (signed).
+function aggregateCurrencies(rows) {
+  const acc = {}; for (const c of CCYS) acc[c] = { sum: 0, n: 0, pos: 0, neg: 0 };
+  for (const r of rows) {
+    const [base, quote] = r.instrument.split('_');
+    if (acc[base]) { acc[base].sum += r.trendScore; acc[base].n++; if (r.trendScore > 0) acc[base].pos++; else if (r.trendScore < 0) acc[base].neg++; }
+    if (acc[quote]) { acc[quote].sum -= r.trendScore; acc[quote].n++; if (r.trendScore < 0) acc[quote].pos++; else if (r.trendScore > 0) acc[quote].neg++; }
+  }
+  const out = [];
+  for (const c of CCYS) {
+    const a = acc[c];
+    if (!a.n) continue;
+    const score = a.sum / a.n;
+    out.push({
+      currency: c, score: +score.toFixed(3), pairs: a.n,
+      agree: score >= 0 ? a.pos : a.neg,           // pairs backing the net direction
+      state: marketState(Math.abs(score)),
+    });
+  }
+  out.sort((a, b) => b.score - a.score);           // strongest first
+  out.forEach((r, i) => { r.rank = i + 1; });
+  return out;
 }
 
 module.exports = async function handler(req, res) {
@@ -198,12 +223,17 @@ module.exports = async function handler(req, res) {
 
     const atrCache = {};
     const cards = [];
-    let prevBy = null;
+    let prevBy = null, prevCur = null;
     for (const o of steps) {
-      const rows = snapshotAt(o, cache, atrCache);
-      if (!rows.length) continue;
+      const all = snapshotAt(o, cache, atrCache);
+      if (!all.length) continue;
+
+      // Pairs: aligned only (D1=H4=H1), ranked by |score|.
+      const aligned = all.filter(r => r.aligned)
+        .sort((a, b) => Math.abs(b.trendScore) - Math.abs(a.trendScore));
+      aligned.forEach((r, i) => { r.rank = i + 1; });
       const byInst = {};
-      for (const r of rows) {
+      for (const r of aligned) {
         const p = prevBy ? prevBy[r.instrument] : null;
         r.rankChange = p ? p.rank - r.rank : null;        // + = climbing
         r.momentum = p ? +(r.trendScore - p.trendScore).toFixed(3) : null;
@@ -211,16 +241,29 @@ module.exports = async function handler(req, res) {
         byInst[r.instrument] = r;
       }
       prevBy = byInst;
+
+      // Currencies: net pressure across all valid pairs, ranked strong → weak.
+      const currencies = aggregateCurrencies(all);
+      const byCcy = {};
+      for (const r of currencies) {
+        const p = prevCur ? prevCur[r.currency] : null;
+        r.rankChange = p ? p.rank - r.rank : null;
+        r.momentum = p ? +(r.score - p.score).toFixed(3) : null;
+        byCcy[r.currency] = r;
+      }
+      prevCur = byCcy;
+
       if (o < windowStart) continue;                      // warm-up only
       // Only tradable pairs (MODERATE/STRONG, |score| >= 0.50). They already
       // sit at the top since ranking is by |score|, so this is the top block.
-      const tradable = rows.filter(r => Math.abs(r.trendScore) >= 0.50);
+      const tradable = aligned.filter(r => Math.abs(r.trendScore) >= 0.50);
       cards.push({
         time: new Date(o).toISOString(),
         signalTime: new Date(o + M15_MS).toISOString(),
-        validCount: rows.length,
+        validCount: aligned.length,
         tradableCount: tradable.length,
         top: tradable.slice(0, 5),
+        currencies,
       });
     }
     cards.reverse();                                      // newest first
