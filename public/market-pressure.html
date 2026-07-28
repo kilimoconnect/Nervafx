@@ -123,7 +123,7 @@
     <a href="/app" class="sx-back-btn">← Back</a>
   </div>
 
-  <div class="sx-subtitle">D1/H4/H1 candle-pressure alignment (price vs open ÷ ATR14). Only pairs where all three timeframes agree are ranked; trend score = 0.50·D1 + 0.30·H4 + 0.20·H1, ranked by |score|. One card per 15-min cycle showing its top tradable pairs (MODERATE/STRONG, |score| ≥ 0.50) — newest first, max 5; "No trade" when none qualify.</div>
+  <div class="sx-subtitle">D1/H4 candle-pressure alignment (price vs open ÷ ATR14). Only pairs where both timeframes agree are ranked; trend score = 0.60·D1 + 0.40·H4, ranked by |score|. One card per 15-min cycle showing its top tradable pairs (MODERATE/STRONG, |score| ≥ 0.50) — newest first, max 5; "No trade" when none qualify.</div>
 
   <div class="sx-filters">
     <span class="sx-filter-label">Date:</span>
@@ -217,7 +217,7 @@
         rows += '<div class="mp-row">'
           + '<div class="mp-rank">' + p.rank + '</div>'
           + '<div><div class="mp-pair">' + p.pair + ' ' + dirBadge(p.direction) + ' ' + stateBadge(p.state) + '</div>'
-          + '<div class="mp-tf">D1 ' + tfInline(p.d1) + ' · H4 ' + tfInline(p.h4) + ' · H1 ' + tfInline(p.h1) + '</div></div>'
+          + '<div class="mp-tf">D1 ' + tfInline(p.d1) + ' · H4 ' + tfInline(p.h4) + '</div></div>'
           + '<div class="mp-right">'
           + '<div class="mp-score" style="color:' + scCol + '">' + (p.trendScore > 0 ? '+' : '') + p.trendScore.toFixed(2) + '</div>'
           + '<div class="mp-delta">' + deltaText(p.rankChange) + '</div></div>'

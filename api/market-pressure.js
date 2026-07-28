@@ -3,13 +3,13 @@
 /**
  * GET /api/market-pressure  — Multi-Timeframe Market Pressure Ranking (MPR)
  *
- * For each of 28 pairs, measures D1/H4/H1 candle pressure vs the current price:
+ * For each of 28 pairs, measures D1/H4 candle pressure vs the current price:
  *   direction  = sign(price - candle_open)
  *   strength   = min(1, |price - candle_open| / ATR14(timeframe))
  *   score      = direction * strength                          (-1 .. +1)
- * Pairs are VALID only when D1, H4 and H1 agree in direction. The weighted
- * trend score = 0.50*D1 + 0.30*H4 + 0.20*H1, ranked by |trend score|. Rank
- * change and score momentum are measured against the snapshot 15 min earlier.
+ * Pairs are VALID only when D1 and H4 agree in direction. The weighted
+ * trend score = 0.60*D1 + 0.40*H4, ranked by |trend score|. Rank change
+ * and score momentum are measured against the snapshot 15 min earlier.
  *
  * D1 and H4 are synthesized from stored H1 candles (no native feed). Live
  * (no ?date) evaluates as of now; ?date=YYYY-MM-DD gives that day's close.
@@ -26,7 +26,7 @@ const PAIRS = [
 ];
 const CCYS = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
 const HOUR = 3600000, H4_MS = 4 * HOUR, DAY = 24 * HOUR, M15_MS = 15 * 60 * 1000;
-const WEIGHTS = { d1: 0.50, h4: 0.30, h1: 0.20 };
+const WEIGHTS = { d1: 0.60, h4: 0.40 };
 
 const floorTo = (ms, size) => Math.floor(ms / size) * size;
 
@@ -66,18 +66,16 @@ function marketState(absScore) {
 function pairPressure(price, pms, inst, h1Arr, h1Map, m15Map, atrCache) {
   const dayStart = floorTo(pms, DAY);
   const h4Start = floorTo(pms, H4_MS);
-  const h1Start = floorTo(pms, HOUR);
 
   const openAt = (t) => (h1Map[t] !== undefined ? h1Map[t].open
     : m15Map[t] !== undefined ? m15Map[t].open : null);
-  const d1Open = openAt(dayStart), h4Open = openAt(h4Start), h1Open = openAt(h1Start);
-  if (d1Open == null || h4Open == null || h1Open == null) return null;
+  const d1Open = openAt(dayStart), h4Open = openAt(h4Start);
+  if (d1Open == null || h4Open == null) return null;
 
   const memo = (k, fn) => { const key = inst + k; if (atrCache[key] === undefined) atrCache[key] = fn(); return atrCache[key]; };
   const d1Atr = memo('D' + dayStart, () => atr14(bucketize(h1Arr.filter(c => c.ms < dayStart), DAY)));
   const h4Atr = memo('4' + h4Start, () => atr14(bucketize(h1Arr.filter(c => c.ms < h4Start), H4_MS)));
-  const h1Atr = memo('1' + h1Start, () => atr14(h1Arr.filter(c => c.ms < h1Start)));
-  if (!d1Atr || !h4Atr || !h1Atr) return null;
+  if (!d1Atr || !h4Atr) return null;
 
   const mk = (open, atr) => {
     const dist = price - open;
@@ -85,14 +83,14 @@ function pairPressure(price, pms, inst, h1Arr, h1Map, m15Map, atrCache) {
     const strength = Math.min(1, Math.abs(dist) / atr);
     return { dir, score: dir * strength };
   };
-  const d1 = mk(d1Open, d1Atr), h4 = mk(h4Open, h4Atr), h1 = mk(h1Open, h1Atr);
-  const aligned = d1.dir !== 0 && d1.dir === h4.dir && h4.dir === h1.dir;
-  const trendScore = WEIGHTS.d1 * d1.score + WEIGHTS.h4 * h4.score + WEIGHTS.h1 * h1.score;
+  const d1 = mk(d1Open, d1Atr), h4 = mk(h4Open, h4Atr);
+  const aligned = d1.dir !== 0 && d1.dir === h4.dir;
+  const trendScore = WEIGHTS.d1 * d1.score + WEIGHTS.h4 * h4.score;
   return {
     aligned,
     direction: trendScore >= 0 ? 'BUY' : 'SELL',
     trendScore: +trendScore.toFixed(3),
-    d1: +d1.score.toFixed(3), h4: +h4.score.toFixed(3), h1: +h1.score.toFixed(3),
+    d1: +d1.score.toFixed(3), h4: +h4.score.toFixed(3),
   };
 }
 
