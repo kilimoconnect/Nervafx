@@ -135,6 +135,11 @@
   <div class="mp-tabs">
     <button class="mp-tab active" id="tab-pairs" data-view="pairs">Pairs</button>
     <button class="mp-tab" id="tab-ccy" data-view="currencies">Currencies</button>
+    <select class="sx-date-input" id="mp-strength" style="width:130px">
+      <option value="both">Both</option>
+      <option value="STRONG">Strong only</option>
+      <option value="MODERATE">Moderate only</option>
+    </select>
   </div>
 
   <div class="evo-wrap"><div id="evo-body"><div class="evo-loading"><span class="spinner"></span> Loading…</div></div></div>
@@ -198,7 +203,9 @@
     }
 
     function cardHtml(snap) {
-      var top = snap.top || [];
+      var top = (snap.top || []);
+      if (_pairFilter !== 'both') top = top.filter(function (p) { return p.state === _pairFilter; });
+      top = top.slice(0, 5);
       var head = '<div class="mp-card-head"><div>'
         + '<div class="mp-card-time">' + fmtTime(snap.signalTime) + '</div>'
         + '<div class="mp-card-date">' + fmtDay(snap.signalTime) + '</div></div>'
@@ -247,6 +254,7 @@
     }
 
     var _view = 'pairs';
+    var _pairFilter = 'both';
     var _lastData = null;
 
     function render(data) {
@@ -288,10 +296,14 @@
       _view = v;
       document.getElementById('tab-pairs').classList.toggle('active', v === 'pairs');
       document.getElementById('tab-ccy').classList.toggle('active', v === 'currencies');
+      document.getElementById('mp-strength').style.display = (v === 'pairs') ? '' : 'none';
       render();   // re-render cached data, no refetch
     }
     document.getElementById('tab-pairs').addEventListener('click', function () { setView('pairs'); });
     document.getElementById('tab-ccy').addEventListener('click', function () { setView('currencies'); });
+    document.getElementById('mp-strength').addEventListener('change', function () {
+      _pairFilter = this.value; render();
+    });
 
     (async function () { await loadProfileTz(); load(); })();
 

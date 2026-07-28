@@ -262,7 +262,7 @@ module.exports = async function handler(req, res) {
         signalTime: new Date(o + M15_MS).toISOString(),
         validCount: aligned.length,
         tradableCount: tradable.length,
-        top: tradable.slice(0, 5),
+        top: tradable,                 // full ranked list; client filters + slices to 5
         currencies,
       });
     }
