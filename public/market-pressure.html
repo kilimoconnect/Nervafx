@@ -115,7 +115,7 @@
     <a href="/app" class="sx-back-btn">← Back</a>
   </div>
 
-  <div class="sx-subtitle">D1/H4/H1 candle-pressure alignment (price vs open ÷ ATR14). Only pairs where all three timeframes agree are ranked; trend score = 0.50·D1 + 0.30·H4 + 0.20·H1, ranked by |score|. One card per 15-min cycle showing its top 5 pairs — newest first; rank change and momentum vs the prior card.</div>
+  <div class="sx-subtitle">D1/H4/H1 candle-pressure alignment (price vs open ÷ ATR14). Only pairs where all three timeframes agree are ranked; trend score = 0.50·D1 + 0.30·H4 + 0.20·H1, ranked by |score|. One card per 15-min cycle showing its top tradable pairs (MODERATE/STRONG, |score| ≥ 0.50) — newest first, max 5; "No trade" when none qualify.</div>
 
   <div class="sx-filters">
     <span class="sx-filter-label">Date:</span>
@@ -189,7 +189,7 @@
       var head = '<div class="mp-card-head"><div>'
         + '<div class="mp-card-time">' + fmtTime(snap.signalTime) + '</div>'
         + '<div class="mp-card-date">' + fmtDay(snap.signalTime) + '</div></div>'
-        + '<span class="mp-card-valid">' + snap.validCount + ' aligned</span></div>';
+        + '<span class="mp-card-valid">' + top.length + ' tradable</span></div>';
       var rows = '';
       for (var i = 0; i < top.length; i++) {
         var p = top[i];
@@ -203,7 +203,7 @@
           + '<div class="mp-delta">' + deltaText(p.rankChange) + '</div></div>'
           + '</div>';
       }
-      if (!top.length) rows = '<div class="mp-row" style="color:#64748b;font-size:12px">No aligned pairs.</div>';
+      if (!top.length) rows = '<div class="mp-row" style="color:#64748b;font-size:12px;font-weight:700">No trade</div>';
       return '<div class="mp-card">' + head + rows + '</div>';
     }
 

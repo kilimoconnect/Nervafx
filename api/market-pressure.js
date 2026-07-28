@@ -212,11 +212,15 @@ module.exports = async function handler(req, res) {
       }
       prevBy = byInst;
       if (o < windowStart) continue;                      // warm-up only
+      // Only tradable pairs (MODERATE/STRONG, |score| >= 0.50). They already
+      // sit at the top since ranking is by |score|, so this is the top block.
+      const tradable = rows.filter(r => Math.abs(r.trendScore) >= 0.50);
       cards.push({
         time: new Date(o).toISOString(),
         signalTime: new Date(o + M15_MS).toISOString(),
         validCount: rows.length,
-        top: rows.slice(0, 5),
+        tradableCount: tradable.length,
+        top: tradable.slice(0, 5),
       });
     }
     cards.reverse();                                      // newest first
