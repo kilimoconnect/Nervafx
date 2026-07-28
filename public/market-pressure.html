@@ -91,8 +91,9 @@
   <div class="sx-filters">
     <span class="sx-filter-label">Date:</span>
     <input type="date" class="sx-date-input" id="sx-date" />
+    <select class="sx-date-input" id="sx-hour" style="width:110px"></select>
     <button class="sx-go-btn" id="sx-go">Go</button>
-    <button class="sx-live-btn" id="sx-live">Live (24h)</button>
+    <button class="sx-live-btn" id="sx-live">Live</button>
   </div>
 
   <div class="evo-wrap"><div id="evo-body"><div class="evo-loading"><span class="spinner"></span> Loading…</div></div></div>
@@ -185,10 +186,40 @@
       el.innerHTML = html;
     }
 
+    // Resolve a local (profile-tz) wall-clock date + hour to a UTC instant.
+    function zonedWallToUtcMs(dateStr, hour) {
+      var tz = _tz();
+      var p = dateStr.split('-');
+      var wallUtc = Date.UTC(+p[0], (+p[1]) - 1, +p[2], hour, 0, 0);
+      var dtf = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour12: false,
+        year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      var m = {}; dtf.formatToParts(new Date(wallUtc)).forEach(function (pt) { m[pt.type] = pt.value; });
+      var tzAsUtc = Date.UTC(+m.year, (+m.month) - 1, +m.day, (+m.hour) % 24, +m.minute, +m.second);
+      return wallUtc - (tzAsUtc - wallUtc);
+    }
+    (function () {
+      var sel = document.getElementById('sx-hour');
+      for (var hh = 0; hh < 24; hh++) {
+        var o = document.createElement('option');
+        o.value = String(hh); o.textContent = (hh < 10 ? '0' + hh : hh) + ':00';
+        sel.appendChild(o);
+      }
+    })();
+    function setDefaultHour() {
+      var h = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: _tz(), hour: '2-digit', hour12: false }).format(new Date()), 10) % 24;
+      document.getElementById('sx-hour').value = String(h);
+    }
+
     async function load(silent) {
       if (!silent) document.getElementById('evo-body').innerHTML = '<div class="evo-loading"><span class="spinner"></span> Loading…</div>';
       var dateEl = document.getElementById('sx-date');
-      var qs = dateEl.value ? '?date=' + dateEl.value : '';
+      var hourEl = document.getElementById('sx-hour');
+      var qs = '';
+      if (dateEl.value) {
+        // End of the selected local hour → the snapshot as it stood then.
+        var atMs = zonedWallToUtcMs(dateEl.value, parseInt(hourEl.value, 10) || 0) + 3600000;
+        qs = '?at=' + encodeURIComponent(new Date(atMs).toISOString());
+      }
       try {
         var res = await fetch('/api/market-pressure' + qs, { headers: { Authorization: 'Bearer ' + TOKEN }, cache: 'no-store' });
         if (!res.ok) throw new Error(await res.text());
@@ -199,9 +230,11 @@
     }
 
     document.getElementById('sx-go').addEventListener('click', function () { load(); });
-    document.getElementById('sx-live').addEventListener('click', function () { document.getElementById('sx-date').value = ''; load(); });
+    document.getElementById('sx-live').addEventListener('click', function () {
+      document.getElementById('sx-date').value = ''; document.getElementById('sx-hour').value = ''; load();
+    });
 
-    (async function () { await loadProfileTz(); load(); })();
+    (async function () { await loadProfileTz(); setDefaultHour(); load(); })();
 
     // Auto-refresh live view aligned to the M15 close (~:01, :16, :31, :46).
     function scheduleRefresh() {

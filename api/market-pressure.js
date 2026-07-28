@@ -119,9 +119,15 @@ module.exports = async function handler(req, res) {
   const sb = getClient();
   try {
     const now = Date.now();
+    // History: ?at=<ISO> (the page resolves a local date+hour to a UTC instant)
+    // snapshots as of that moment; ?date=YYYY-MM-DD falls back to day close.
+    const qAt = req.query?.at;
     const qDate = req.query?.date;
     let evalMs = now;
-    if (qDate && /^\d{4}-\d{2}-\d{2}$/.test(qDate)) {
+    if (qAt) {
+      const t = new Date(qAt).getTime();
+      if (!isNaN(t)) evalMs = Math.min(t, now);
+    } else if (qDate && /^\d{4}-\d{2}-\d{2}$/.test(qDate)) {
       const end = new Date(qDate + 'T00:00:00Z').getTime() + DAY;
       evalMs = Math.min(end, now);
     }
