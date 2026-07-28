@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>NervaFX — Market Pressure Ranking</title>
+  <link rel="icon" type="image/png" href="/nervafx-icon.png">
+  <script src="/auth-guard.js"></script>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .grid { display: block !important; }
+    .sx-topbar {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 28px; height: 56px;
+      background: rgba(8,11,18,0.92);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+    .sx-topbar-left { display: flex; align-items: center; gap: 12px; }
+    .sx-logo img { height: 24px; display: block; }
+    .sx-sep { color: rgba(255,255,255,0.1); font-size: 20px; font-weight: 200; }
+    .sx-title-text { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+    .sx-back-btn {
+      display: flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: 8px;
+      background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+      color: var(--text-muted); font-size: 12px; cursor: pointer; text-decoration: none;
+    }
+    .sx-back-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
+    .sx-subtitle { text-align: center; padding: 18px 20px 10px; font-size: 11px; color: var(--text-dim); letter-spacing: 0.3px; }
+    .sx-filters { display: flex; align-items: center; gap: 8px; padding: 10px 20px; flex-wrap: wrap; justify-content: center; }
+    .sx-filter-label { font-size: 10px; color: var(--text-dim); }
+    .sx-date-input {
+      padding: 5px 10px; border-radius: 7px; font-size: 11px;
+      background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+      color: var(--text-muted); width: 150px; color-scheme: dark;
+    }
+    .sx-go-btn {
+      padding: 5px 12px; border-radius: 7px; font-size: 11px; font-weight: 700;
+      background: rgba(236,72,153,0.2); border: 1px solid rgba(236,72,153,0.4); color: #f472b6; cursor: pointer;
+    }
+    .sx-live-btn {
+      padding: 5px 12px; border-radius: 7px; font-size: 11px; font-weight: 700;
+      background: rgba(255,255,255,0.06); border: 1px solid var(--border); color: var(--text-muted); cursor: pointer;
+    }
+
+    .evo-wrap { padding: 8px 16px 40px; max-height: calc(100vh - 150px); overflow: auto; }
+    table.evo { border-collapse: collapse; margin: 0 auto; font-size: 11px; }
+    table.evo th, table.evo td {
+      padding: 5px 8px; text-align: center; white-space: nowrap;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+    table.evo thead th {
+      position: sticky; top: 0; z-index: 5;
+      background: #0b0f18; color: var(--text-dim);
+      font-size: 10px; font-weight: 700; letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border);
+    }
+    /* Time header pins to both the top and the left (the scroll corner). */
+    table.evo thead th.evo-time-h { text-align: right; left: 0; z-index: 6; }
+    td.evo-time {
+      text-align: right; color: var(--text-dim); font-weight: 700;
+      font-family: 'SF Mono','Cascadia Code','Fira Code',monospace;
+      position: sticky; left: 0; background: #0b0f18; z-index: 4;
+    }
+    td.evo-cell { font-weight: 700; font-family: 'SF Mono','Cascadia Code','Fira Code',monospace; border-radius: 3px; }
+    td.evo-strong { box-shadow: inset 0 0 0 1.5px rgba(74,222,128,0.8); }
+    td.evo-weak   { box-shadow: inset 0 0 0 1.5px rgba(248,113,113,0.8); }
+    .evo-empty { text-align: center; color: var(--text-dim); padding: 40px; }
+    .evo-loading { text-align: center; color: var(--text-muted); padding: 40px; }
+    .spinner {
+      display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,0.2);
+      border-top-color:#f472b6;border-radius:50%;animation:spin 0.7s linear infinite;vertical-align:middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="sx-topbar">
+    <div class="sx-topbar-left">
+      <a href="/app" class="sx-logo"><img src="/nervafx-logo.png" alt="NervaFX" /></a>
+      <span class="sx-sep">|</span>
+      <span class="sx-title-text">Market Pressure Ranking</span>
+    </div>
+    <a href="/app" class="sx-back-btn">← Back</a>
+  </div>
+
+  <div class="sx-subtitle">D1/H4/H1 candle-pressure alignment (price vs open ÷ ATR14). Only pairs where all three timeframes agree are ranked; trend score = 0.50·D1 + 0.30·H4 + 0.20·H1, ranked by |score|. Recomputed every 15 minutes; rank change and momentum vs the prior snapshot.</div>
+
+  <div class="sx-filters">
+    <span class="sx-filter-label">Date:</span>
+    <input type="date" class="sx-date-input" id="sx-date" />
+    <button class="sx-go-btn" id="sx-go">Go</button>
+    <button class="sx-live-btn" id="sx-live">Live (24h)</button>
+  </div>
+
+  <div class="evo-wrap"><div id="evo-body"><div class="evo-loading"><span class="spinner"></span> Loading…</div></div></div>
+
+  <script>
+    var TOKEN = localStorage.getItem('nfx_token') || '';
+    var _userTz = localStorage.getItem('nfx_tz') || 'auto';
+    function _tz() { return (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC'); }
+    async function loadProfileTz() {
+      try {
+        if (!TOKEN) return;
+        var r = await fetch('/api/profile', { headers: { Authorization: 'Bearer ' + TOKEN } });
+        if (!r.ok) return;
+        var p = await r.json();
+        if (p.timezone) { _userTz = (p.timezone === 'UTC') ? 'auto' : p.timezone; try { localStorage.setItem('nfx_tz', _userTz); } catch (_) {} }
+      } catch (_) {}
+    }
+
+    var CCYS = ['USD','EUR','GBP','JPY','CHF','CAD','AUD','NZD'];
+
+    function fmtTime(iso) {
+      return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: _tz() });
+    }
+    function fmtDay(iso) {
+      return new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', timeZone: _tz() });
+    }
+    // score → background colour (diverging green/red around 0)
+    function cellBg(score) {
+      var mag = Math.min(Math.abs(score) / 70, 1); // conviction ±100; ~70 = strong
+      var a = 0.08 + mag * 0.42;
+      return score > 0 ? 'rgba(34,197,94,' + a.toFixed(2) + ')'
+           : score < 0 ? 'rgba(239,68,68,' + a.toFixed(2) + ')'
+           : 'transparent';
+    }
+    function cellText(score) {
+      return Math.abs(score) < 0.05 ? '#64748b' : (score > 0 ? '#dcfce7' : '#fee2e2');
+    }
+
+    function tfCell(v) {
+      var col = v > 0.05 ? '#4ade80' : v < -0.05 ? '#f87171' : '#64748b';
+      return '<td style="text-align:right;font-family:monospace;color:' + col + '">' + (v > 0 ? '+' : '') + v.toFixed(2) + '</td>';
+    }
+    function stateBadge(st) {
+      var map = { STRONG: '#22c55e', MODERATE: '#facc15', WEAK: '#94a3b8', IGNORE: '#475569' };
+      return '<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;background:' + (map[st] || '#475569') + '22;color:' + (map[st] || '#94a3b8') + '">' + st + '</span>';
+    }
+    function rankChangeCell(rc) {
+      if (rc == null) return '<td style="text-align:center;color:#64748b">·</td>';
+      if (rc > 0) return '<td style="text-align:center;color:#4ade80;font-weight:700">↑ ' + rc + '</td>';
+      if (rc < 0) return '<td style="text-align:center;color:#f87171;font-weight:700">↓ ' + (-rc) + '</td>';
+      return '<td style="text-align:center;color:#64748b">–</td>';
+    }
+
+    function render(data) {
+      var el = document.getElementById('evo-body');
+      var pairs = (data && data.pairs) || [];
+      if (!pairs.length) { el.innerHTML = '<div class="evo-empty">No aligned pairs for this snapshot.</div>'; return; }
+
+      var when = data.signalTime ? fmtTime(data.signalTime) : '';
+      var html = '<div style="padding:6px 16px;font-size:12px;color:var(--text-muted)">'
+        + 'Snapshot <b style="color:#fff">' + when + '</b> · Valid pairs '
+        + '<b style="color:#fff">' + data.validCount + '/' + data.total + '</b></div>';
+
+      html += '<table class="evo"><thead><tr>'
+        + '<th style="text-align:center">#</th><th class="evo-time-h" style="text-align:left">Pair</th>'
+        + '<th>Dir</th><th style="text-align:right">Score</th>'
+        + '<th style="text-align:right">D1</th><th style="text-align:right">H4</th><th style="text-align:right">H1</th>'
+        + '<th style="text-align:right">Mom.</th><th style="text-align:center">Δ Rank</th><th>State</th>'
+        + '</tr></thead><tbody>';
+
+      for (var i = 0; i < pairs.length; i++) {
+        var p = pairs[i];
+        var buy = p.direction === 'BUY';
+        var dirCol = buy ? '#4ade80' : '#f87171';
+        var scCol = p.trendScore >= 0 ? '#4ade80' : '#f87171';
+        var mom = (p.momentum == null) ? '·'
+          : '<span style="color:' + (p.momentum >= 0 ? '#4ade80' : '#f87171') + '">' + (p.momentum > 0 ? '+' : '') + p.momentum.toFixed(2) + '</span>';
+        html += '<tr>'
+          + '<td style="text-align:center;font-weight:700;color:#e2e8f0">' + p.rank + '</td>'
+          + '<td class="evo-time" style="text-align:left;font-weight:700;color:#fff">' + p.pair + '</td>'
+          + '<td style="color:' + dirCol + ';font-weight:700">' + p.direction + '</td>'
+          + '<td style="text-align:right;font-family:monospace;font-weight:800;color:' + scCol + '">' + (p.trendScore > 0 ? '+' : '') + p.trendScore.toFixed(2) + '</td>'
+          + tfCell(p.d1) + tfCell(p.h4) + tfCell(p.h1)
+          + '<td style="text-align:right;font-family:monospace">' + mom + '</td>'
+          + rankChangeCell(p.rankChange)
+          + '<td>' + stateBadge(p.state) + '</td>'
+          + '</tr>';
+      }
+      html += '</tbody></table>';
+      el.innerHTML = html;
+    }
+
+    async function load(silent) {
+      if (!silent) document.getElementById('evo-body').innerHTML = '<div class="evo-loading"><span class="spinner"></span> Loading…</div>';
+      var dateEl = document.getElementById('sx-date');
+      var qs = dateEl.value ? '?date=' + dateEl.value : '';
+      try {
+        var res = await fetch('/api/market-pressure' + qs, { headers: { Authorization: 'Bearer ' + TOKEN }, cache: 'no-store' });
+        if (!res.ok) throw new Error(await res.text());
+        render(await res.json());
+      } catch (e) {
+        document.getElementById('evo-body').innerHTML = '<div class="evo-empty" style="color:#f87171">Error: ' + e.message + '</div>';
+      }
+    }
+
+    document.getElementById('sx-go').addEventListener('click', function () { load(); });
+    document.getElementById('sx-live').addEventListener('click', function () { document.getElementById('sx-date').value = ''; load(); });
+
+    (async function () { await loadProfileTz(); load(); })();
+
+    // Auto-refresh live view aligned to the M15 close (~:01, :16, :31, :46).
+    function scheduleRefresh() {
+      var now = new Date();
+      var mins = now.getUTCMinutes() % 15;
+      var delay = ((15 - mins) % 15 * 60 - now.getUTCSeconds() + 60) * 1000;
+      if (delay <= 0) delay += 15 * 60 * 1000;
+      setTimeout(function () {
+        if (!document.getElementById('sx-date').value) load(true);
+        scheduleRefresh();
+      }, delay);
+    }
+    scheduleRefresh();
+  </script>
+</body>
+</html>
