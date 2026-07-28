@@ -85,6 +85,7 @@
       background: rgba(255,255,255,0.025);
     }
     .mp-card-time { font-family: 'SF Mono','Cascadia Code','Fira Code',monospace; font-weight: 700; color: #fff; font-size: 13px; }
+    .mp-card-date { font-size: 10px; color: var(--text-dim); margin-top: 1px; }
     .mp-card-valid { font-size: 10px; color: var(--text-dim); }
     .mp-row {
       display: grid; grid-template-columns: 20px 1fr auto; gap: 10px; align-items: center;
@@ -180,8 +181,9 @@
 
     function cardHtml(snap) {
       var top = snap.top || [];
-      var head = '<div class="mp-card-head">'
-        + '<span class="mp-card-time">' + fmtTime(snap.signalTime) + '</span>'
+      var head = '<div class="mp-card-head"><div>'
+        + '<div class="mp-card-time">' + fmtTime(snap.signalTime) + '</div>'
+        + '<div class="mp-card-date">' + fmtDay(snap.signalTime) + '</div></div>'
         + '<span class="mp-card-valid">' + snap.validCount + ' aligned</span></div>';
       var rows = '';
       for (var i = 0; i < top.length; i++) {
