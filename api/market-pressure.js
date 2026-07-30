@@ -85,17 +85,22 @@ function pairPressure(price, pms, inst, h1Arr, h1Map, atrCache) {
 
   const memo = (k, fn) => { const key = inst + k; if (atrCache[key] === undefined) atrCache[key] = fn(); return atrCache[key]; };
   // Per timeframe: ATR14 over completed buckets + the last completed candle's
-  // direction (its close vs open).
+  // direction (close vs open) and its high/low (for the previous-day break).
   const tf = (k, floorFn, boundary) => memo(k, () => {
     const buckets = bucketize(h1Arr.filter(c => c.ms < boundary), floorFn);
     const last = buckets[buckets.length - 1];
     const prevDir = last ? (last.close > last.open ? 1 : last.close < last.open ? -1 : 0) : 0;
-    return { atr: atr14(buckets), prevDir };
+    return { atr: atr14(buckets), prevDir, prevHigh: last ? last.high : null, prevLow: last ? last.low : null };
   });
   const w1a = tf('W' + wkStart,  weekFloor, wkStart);
   const d1a = tf('D' + dayStart, (ms) => floorTo(ms, DAY),   dayStart);
   const h4a = tf('4' + h4Start,  (ms) => floorTo(ms, H4_MS), h4Start);
   if (!w1a.atr || !d1a.atr || !h4a.atr) return null;
+
+  // Previous-day break: current price beyond the prior completed daily candle's
+  // high (+1) or low (-1). 0 = still inside yesterday's range.
+  const dayBreak = (d1a.prevHigh != null && price > d1a.prevHigh) ? 1
+    : (d1a.prevLow != null && price < d1a.prevLow) ? -1 : 0;
 
   const mk = (open, atr) => {
     const dist = price - open;
@@ -113,6 +118,7 @@ function pairPressure(price, pms, inst, h1Arr, h1Map, atrCache) {
     w1: +w1.score.toFixed(3), d1: +d1.score.toFixed(3), h4: +h4.score.toFixed(3),
     d1Match: d1.dir !== 0 && d1.dir === d1a.prevDir,
     h4Match: h4.dir !== 0 && h4.dir === h4a.prevDir,
+    dayBreak,
   };
 }
 
@@ -268,9 +274,11 @@ module.exports = async function handler(req, res) {
 
       if (o < windowStart) continue;                      // warm-up only
       // Tradable = MODERATE/STRONG (|score| >= MIN_SCORE) AND continuation on
-      // both D1 and H4 (last completed candle matches the current candle's dir).
+      // both D1 and H4 AND the price has broken the previous day's high/low in
+      // the pair's own direction.
       const tradable = aligned.filter(r =>
-        Math.abs(r.trendScore) >= MIN_SCORE && r.d1Match && r.h4Match);
+        Math.abs(r.trendScore) >= MIN_SCORE && r.d1Match && r.h4Match &&
+        ((r.trendScore >= 0 && r.dayBreak === 1) || (r.trendScore < 0 && r.dayBreak === -1)));
       cards.push({
         time: new Date(o).toISOString(),
         signalTime: new Date(o + HOUR).toISOString(),
