@@ -3,16 +3,17 @@
 /**
  * GET /api/market-pressure  — Multi-Timeframe Market Pressure Ranking (MPR)
  *
- * For each of 28 pairs, measures D1/H4 candle pressure vs the current price:
+ * For each of 28 pairs, measures W1/D1/H4 candle pressure vs the current price:
  *   direction  = sign(price - candle_open)
  *   strength   = min(1, |price - candle_open| / ATR14(timeframe))
  *   score      = direction * strength                          (-1 .. +1)
- * Pairs are VALID only when D1 and H4 agree in direction. The weighted
- * trend score = 0.60*D1 + 0.40*H4, ranked by |trend score|. Rank change
- * and score momentum are measured against the snapshot 15 min earlier.
+ * Pairs are VALID only when W1, D1 and H4 agree in direction. The weighted
+ * trend score = 0.50*W1 + 0.30*D1 + 0.20*H4, ranked by |trend score|. Rank
+ * change and score momentum are measured against the snapshot 1 hour earlier.
  *
- * D1 and H4 are synthesized from stored H1 candles (no native feed). Live
- * (no ?date) evaluates as of now; ?date=YYYY-MM-DD gives that day's close.
+ * W1/D1/H4 are synthesized from stored H1 candles (no native feed) and a new
+ * card is produced on every H1 close (hourly). Live (no ?date) evaluates as of
+ * now; ?date=YYYY-MM-DD gives that day's hourly cards.
  */
 
 const { cors, getClient } = require('./_db');
@@ -25,16 +26,23 @@ const PAIRS = [
   'NZD_JPY','NZD_CHF','NZD_CAD','CAD_JPY','CAD_CHF','CHF_JPY',
 ];
 const CCYS = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
-const HOUR = 3600000, H4_MS = 4 * HOUR, DAY = 24 * HOUR, M15_MS = 15 * 60 * 1000;
-const WEIGHTS = { d1: 0.60, h4: 0.40 };
+const HOUR = 3600000, H4_MS = 4 * HOUR, DAY = 24 * HOUR;
+const WEIGHTS = { w1: 0.50, d1: 0.30, h4: 0.20 };
 
 const floorTo = (ms, size) => Math.floor(ms / size) * size;
+// Monday 00:00 UTC of the week containing ms (weekly candle anchor).
+function weekFloor(ms) {
+  const d = new Date(ms);
+  const dow = (d.getUTCDay() + 6) % 7;   // Mon=0 … Sun=6
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - dow * DAY;
+}
 
-// Group ascending H1 candles into buckets (open = first, close = last).
-function bucketize(h1Arr, size) {
+// Group ascending H1 candles into buckets keyed by floorFn(ms) (open = first,
+// close = last). floorFn maps a timestamp to its bucket start.
+function bucketize(h1Arr, floorFn) {
   const m = new Map();
   for (const c of h1Arr) {
-    const bs = floorTo(c.ms, size);
+    const bs = floorFn(c.ms);
     const b = m.get(bs);
     if (!b) m.set(bs, { start: bs, open: c.open, high: c.high, low: c.low, close: c.close });
     else { if (c.high > b.high) b.high = c.high; if (c.low < b.low) b.low = c.low; b.close = c.close; }
@@ -61,21 +69,22 @@ function marketState(absScore) {
   return 'IGNORE';
 }
 
-// One pair's pressure at price time `pms`, from its H1 array + maps. ATR is
+// One pair's pressure at price time `pms`, from its H1 array + map. ATR is
 // memoized per (pair, period) via atrCache since it only changes at boundaries.
-function pairPressure(price, pms, inst, h1Arr, h1Map, m15Map, atrCache) {
+function pairPressure(price, pms, inst, h1Arr, h1Map, atrCache) {
+  const wkStart = weekFloor(pms);
   const dayStart = floorTo(pms, DAY);
   const h4Start = floorTo(pms, H4_MS);
 
-  const openAt = (t) => (h1Map[t] !== undefined ? h1Map[t].open
-    : m15Map[t] !== undefined ? m15Map[t].open : null);
-  const d1Open = openAt(dayStart), h4Open = openAt(h4Start);
-  if (d1Open == null || h4Open == null) return null;
+  const openAt = (t) => (h1Map[t] !== undefined ? h1Map[t].open : null);
+  const w1Open = openAt(wkStart), d1Open = openAt(dayStart), h4Open = openAt(h4Start);
+  if (w1Open == null || d1Open == null || h4Open == null) return null;
 
   const memo = (k, fn) => { const key = inst + k; if (atrCache[key] === undefined) atrCache[key] = fn(); return atrCache[key]; };
-  const d1Atr = memo('D' + dayStart, () => atr14(bucketize(h1Arr.filter(c => c.ms < dayStart), DAY)));
-  const h4Atr = memo('4' + h4Start, () => atr14(bucketize(h1Arr.filter(c => c.ms < h4Start), H4_MS)));
-  if (!d1Atr || !h4Atr) return null;
+  const w1Atr = memo('W' + wkStart,  () => atr14(bucketize(h1Arr.filter(c => c.ms < wkStart),  weekFloor)));
+  const d1Atr = memo('D' + dayStart, () => atr14(bucketize(h1Arr.filter(c => c.ms < dayStart), (ms) => floorTo(ms, DAY))));
+  const h4Atr = memo('4' + h4Start,  () => atr14(bucketize(h1Arr.filter(c => c.ms < h4Start),  (ms) => floorTo(ms, H4_MS))));
+  if (!w1Atr || !d1Atr || !h4Atr) return null;
 
   const mk = (open, atr) => {
     const dist = price - open;
@@ -83,24 +92,24 @@ function pairPressure(price, pms, inst, h1Arr, h1Map, m15Map, atrCache) {
     const strength = Math.min(1, Math.abs(dist) / atr);
     return { dir, score: dir * strength };
   };
-  const d1 = mk(d1Open, d1Atr), h4 = mk(h4Open, h4Atr);
-  const aligned = d1.dir !== 0 && d1.dir === h4.dir;
-  const trendScore = WEIGHTS.d1 * d1.score + WEIGHTS.h4 * h4.score;
+  const w1 = mk(w1Open, w1Atr), d1 = mk(d1Open, d1Atr), h4 = mk(h4Open, h4Atr);
+  const aligned = w1.dir !== 0 && w1.dir === d1.dir && d1.dir === h4.dir;
+  const trendScore = WEIGHTS.w1 * w1.score + WEIGHTS.d1 * d1.score + WEIGHTS.h4 * h4.score;
   return {
     aligned,
     direction: trendScore >= 0 ? 'BUY' : 'SELL',
     trendScore: +trendScore.toFixed(3),
-    d1: +d1.score.toFixed(3), h4: +h4.score.toFixed(3),
+    w1: +w1.score.toFixed(3), d1: +d1.score.toFixed(3), h4: +h4.score.toFixed(3),
   };
 }
 
-// Did the closed M15 candle at `idx` break the structure (high/low range) of
-// the previous six candles? +1 = close above prior 6 highs, -1 = below, 0 = no.
-function structureBreak(m15, idx) {
+// Did the closed H1 candle at `idx` break the structure (high/low range) of the
+// previous six H1 candles? +1 = close above prior 6 highs, -1 = below, 0 = no.
+function structureBreak(h1, idx) {
   if (idx < 6) return 0;
   let hi = -Infinity, lo = Infinity;
-  for (let k = idx - 6; k < idx; k++) { if (m15[k].high > hi) hi = m15[k].high; if (m15[k].low < lo) lo = m15[k].low; }
-  const close = m15[idx].close;
+  for (let k = idx - 6; k < idx; k++) { if (h1[k].high > hi) hi = h1[k].high; if (h1[k].low < lo) lo = h1[k].low; }
+  const close = h1[idx].close;
   if (close > hi) return 1;
   if (close < lo) return -1;
   return 0;
@@ -114,11 +123,11 @@ function snapshotAt(pms, cache, atrCache) {
     const c = cache[inst];
     if (!c) continue;
     let price = null, idx = -1;
-    for (let i = c.m15.length - 1; i >= 0; i--) { if (c.m15[i].ms <= pms) { price = c.m15[i].close; idx = i; break; } }
+    for (let i = c.h1.length - 1; i >= 0; i--) { if (c.h1[i].ms <= pms) { price = c.h1[i].close; idx = i; break; } }
     if (price == null) continue;
-    const p = pairPressure(price, pms, inst, c.h1, c.h1Map, c.m15Map, atrCache);
+    const p = pairPressure(price, pms, inst, c.h1, c.h1Map, atrCache);
     if (!p) continue;
-    rows.push({ pair: inst.replace('_', '/'), instrument: inst, breakDir: structureBreak(c.m15, idx), ...p });
+    rows.push({ pair: inst.replace('_', '/'), instrument: inst, breakDir: structureBreak(c.h1, idx), ...p });
   }
   return rows;
 }
@@ -156,8 +165,8 @@ module.exports = async function handler(req, res) {
   const sb = getClient();
   try {
     const now = Date.now();
-    // History: ?at=<ISO> (the page resolves a local date+hour to a UTC instant)
-    // snapshots as of that moment; ?date=YYYY-MM-DD falls back to day close.
+    // History: ?at=<ISO> snapshots as of that moment; ?date=YYYY-MM-DD gives
+    // that day's hourly cards.
     const qAt = req.query?.at;
     const qDate = req.query?.date;
     let evalMs = now;
@@ -168,9 +177,8 @@ module.exports = async function handler(req, res) {
       const end = new Date(qDate + 'T00:00:00Z').getTime() + DAY;
       evalMs = Math.min(end, now);
     }
-    // 20 days of H1 covers D1 ATR14 (14 days) + buffer; 3 days of M15 for price.
-    const h1Since = new Date(evalMs - 20 * DAY).toISOString();
-    const m15Since = new Date(evalMs - 3 * DAY).toISOString();
+    // W1 ATR14 needs ~14 weeks of history; pull 120 days of H1 (+ buffer).
+    const h1Since = new Date(evalMs - 120 * DAY).toISOString();
     const until = new Date(evalMs).toISOString();
 
     const PAGE = 1000;
@@ -178,51 +186,45 @@ module.exports = async function handler(req, res) {
     for (let b = 0; b < PAIRS.length; b += 7) {
       const batch = PAIRS.slice(b, b + 7);
       const results = await Promise.all(batch.map(async inst => {
-        const fetchTf = async (tf, since) => {
-          const out = [];
-          let off = 0;
-          while (true) {
-            const { data, error } = await sb
-              .from('backtest_candles')
-              .select('time, open, high, low, close')
-              .eq('instrument', inst).eq('timeframe', tf).eq('complete', true)
-              .gte('time', since).lte('time', until)
-              .order('time', { ascending: true })
-              .range(off, off + PAGE - 1);
-            if (error) throw error;
-            if (!data || !data.length) break;
-            out.push(...data);
-            if (data.length < PAGE) break;
-            off += PAGE;
-          }
-          return out;
-        };
-        const [h1raw, m15raw] = await Promise.all([fetchTf('H1', h1Since), fetchTf('M15', m15Since)]);
-        return { inst, h1raw, m15raw };
+        const out = [];
+        let off = 0;
+        while (true) {
+          const { data, error } = await sb
+            .from('backtest_candles')
+            .select('time, open, high, low, close')
+            .eq('instrument', inst).eq('timeframe', 'H1').eq('complete', true)
+            .gte('time', h1Since).lte('time', until)
+            .order('time', { ascending: true })
+            .range(off, off + PAGE - 1);
+          if (error) throw error;
+          if (!data || !data.length) break;
+          out.push(...data);
+          if (data.length < PAGE) break;
+          off += PAGE;
+        }
+        return { inst, h1raw: out };
       }));
-      for (const { inst, h1raw, m15raw } of results) {
+      for (const { inst, h1raw } of results) {
         const h1 = h1raw.map(c => ({ ms: new Date(c.time).getTime(), open: +c.open, high: +c.high, low: +c.low, close: +c.close }));
-        const m15 = m15raw.map(c => ({ ms: new Date(c.time).getTime(), open: +c.open, high: +c.high, low: +c.low, close: +c.close }));
         const h1Map = {}; for (const c of h1) h1Map[c.ms] = c;
-        const m15Map = {}; for (const c of m15) m15Map[c.ms] = c;
-        cache[inst] = { h1, m15, h1Map, m15Map };
+        cache[inst] = { h1, h1Map };
       }
     }
 
-    // Window of 15-min snapshot cards. A selected ?date covers that whole day;
+    // Window of hourly snapshot cards. A selected ?date covers that whole day;
     // otherwise the last 24h ending at evalMs. Each card ranks its valid pairs
-    // and surfaces the TOP 5, with rank change / momentum vs the prior card.
+    // and surfaces the tradable ones, with rank change / momentum vs the prior card.
     let windowStart = evalMs - DAY;
     if (!qAt && qDate && /^\d{4}-\d{2}-\d{2}$/.test(qDate)) {
       windowStart = new Date(qDate + 'T00:00:00Z').getTime();
     }
-    // Snapshot at each 15-min candle that has actually CLOSED (m15 holds only
+    // Snapshot at each H1 candle that has actually CLOSED (h1 holds only
     // complete candles), so a card's close time never sits in the future. One
     // candle before the window is kept as warm-up for the first rank delta.
     const inWindow = new Set();
     let warmup = 0;
     for (const inst of PAIRS) {
-      for (const c of (cache[inst]?.m15 || [])) {
+      for (const c of (cache[inst]?.h1 || [])) {
         if (c.ms > evalMs) continue;
         if (c.ms >= windowStart) inWindow.add(c.ms);
         else if (c.ms > warmup) warmup = c.ms;
@@ -238,7 +240,7 @@ module.exports = async function handler(req, res) {
       const all = snapshotAt(o, cache, atrCache);
       if (!all.length) continue;
 
-      // Pairs: aligned only (D1=H4=H1), ranked by |score|.
+      // Pairs: aligned only (W1=D1=H4), ranked by |score|.
       const aligned = all.filter(r => r.aligned)
         .sort((a, b) => Math.abs(b.trendScore) - Math.abs(a.trendScore));
       aligned.forEach((r, i) => { r.rank = i + 1; });
@@ -264,14 +266,14 @@ module.exports = async function handler(req, res) {
       prevCur = byCcy;
 
       if (o < windowStart) continue;                      // warm-up only
-      // Tradable = MODERATE/STRONG (|score| >= 0.50) AND the closed M15 candle
+      // Tradable = MODERATE/STRONG (|score| >= 0.50) AND the closed H1 candle
       // broke the last-6-candle structure in the pair's own direction.
       const tradable = aligned.filter(r =>
         Math.abs(r.trendScore) >= 0.50 &&
         ((r.trendScore >= 0 && r.breakDir === 1) || (r.trendScore < 0 && r.breakDir === -1)));
       cards.push({
         time: new Date(o).toISOString(),
-        signalTime: new Date(o + M15_MS).toISOString(),
+        signalTime: new Date(o + HOUR).toISOString(),
         validCount: aligned.length,
         tradableCount: tradable.length,
         top: tradable,                 // full ranked list; client filters + slices to 5
@@ -292,4 +294,4 @@ module.exports = async function handler(req, res) {
   }
 };
 
-module.exports.maxDuration = 60;
+module.exports.maxDuration = 120;

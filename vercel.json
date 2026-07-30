@@ -37,7 +37,7 @@
     "api/currency-strength-m15-ema.js": { "maxDuration": 30 },
     "api/currency-strength-m15-45m.js": { "maxDuration": 60 },
     "api/currency-state.js": { "maxDuration": 60 },
-    "api/market-pressure.js": { "maxDuration": 60 },
+    "api/market-pressure.js": { "maxDuration": 120 },
     "api/currency-strength-m15-ema-history.js": { "maxDuration": 300 },
     "api/currency-strength-m5-ema.js": { "maxDuration": 30 },
     "api/currency-strength-m5-ema-history.js": { "maxDuration": 300 },

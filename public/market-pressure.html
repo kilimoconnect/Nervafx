@@ -123,7 +123,7 @@
     <a href="/app" class="sx-back-btn">← Back</a>
   </div>
 
-  <div class="sx-subtitle">D1/H4 candle-pressure alignment (price vs open ÷ ATR14). Only pairs where both timeframes agree are ranked; trend score = 0.60·D1 + 0.40·H4, ranked by |score|. One card per 15-min cycle showing its top tradable pairs (MODERATE/STRONG, |score| ≥ 0.50) whose closed M15 candle broke the last-6-candle structure in the trade direction — newest first, max 5; "No trade" when none qualify.</div>
+  <div class="sx-subtitle">W1/D1/H4 candle-pressure alignment (price vs open ÷ ATR14). Only pairs where all three timeframes agree are ranked; trend score = 0.50·W1 + 0.30·D1 + 0.20·H4, ranked by |score|. One card per hour showing its top tradable pairs (MODERATE/STRONG, |score| ≥ 0.50) whose closed H1 candle broke the last-6-candle structure in the trade direction — newest first, max 5; "No trade" when none qualify.</div>
 
   <div class="sx-filters">
     <span class="sx-filter-label">Date:</span>
@@ -217,8 +217,8 @@
         rows += '<div class="mp-row">'
           + '<div class="mp-rank">' + p.rank + '</div>'
           + '<div><div class="mp-pair">' + p.pair + ' ' + dirBadge(p.direction) + ' ' + stateBadge(p.state)
-          + ' <span style="font-size:9px;font-weight:800;padding:2px 5px;border-radius:4px;background:#f59e0b22;color:#f59e0b" title="closed M15 broke last-6-candle structure">⚡ BRK</span></div>'
-          + '<div class="mp-tf">D1 ' + tfInline(p.d1) + ' · H4 ' + tfInline(p.h4) + '</div></div>'
+          + ' <span style="font-size:9px;font-weight:800;padding:2px 5px;border-radius:4px;background:#f59e0b22;color:#f59e0b" title="closed H1 broke last-6-candle structure">⚡ BRK</span></div>'
+          + '<div class="mp-tf">W1 ' + tfInline(p.w1) + ' · D1 ' + tfInline(p.d1) + ' · H4 ' + tfInline(p.h4) + '</div></div>'
           + '<div class="mp-right">'
           + '<div class="mp-score" style="color:' + scCol + '">' + (p.trendScore > 0 ? '+' : '') + p.trendScore.toFixed(2) + '</div>'
           + '<div class="mp-delta">' + deltaText(p.rankChange) + '</div></div>'
@@ -308,12 +308,11 @@
 
     (async function () { await loadProfileTz(); load(); })();
 
-    // Auto-refresh live view aligned to the M15 close (~:01, :16, :31, :46).
+    // Auto-refresh live view hourly, ~2 min past the hour (after the H1 sync).
     function scheduleRefresh() {
       var now = new Date();
-      var mins = now.getUTCMinutes() % 15;
-      var delay = ((15 - mins) % 15 * 60 - now.getUTCSeconds() + 60) * 1000;
-      if (delay <= 0) delay += 15 * 60 * 1000;
+      var secsIntoHour = now.getUTCMinutes() * 60 + now.getUTCSeconds();
+      var delay = ((3600 - secsIntoHour) + 120) * 1000;
       setTimeout(function () {
         if (!document.getElementById('sx-date').value) load(true);
         scheduleRefresh();
