@@ -69,8 +69,10 @@ function marketState(absScore) {
   return 'IGNORE';
 }
 
-// One pair's pressure at price time `pms`, from its H1 array + map. ATR is
-// memoized per (pair, period) via atrCache since it only changes at boundaries.
+// One pair's pressure at price time `pms`, from its H1 array + map. ATR and the
+// last completed candle's direction are memoized per (pair, period) via atrCache
+// since they only change at boundaries. `d1Match`/`h4Match` flag continuation:
+// the last completed D1/H4 candle points the same way as the current one.
 function pairPressure(price, pms, inst, h1Arr, h1Map, atrCache) {
   const wkStart = weekFloor(pms);
   const dayStart = floorTo(pms, DAY);
@@ -81,10 +83,18 @@ function pairPressure(price, pms, inst, h1Arr, h1Map, atrCache) {
   if (w1Open == null || d1Open == null || h4Open == null) return null;
 
   const memo = (k, fn) => { const key = inst + k; if (atrCache[key] === undefined) atrCache[key] = fn(); return atrCache[key]; };
-  const w1Atr = memo('W' + wkStart,  () => atr14(bucketize(h1Arr.filter(c => c.ms < wkStart),  weekFloor)));
-  const d1Atr = memo('D' + dayStart, () => atr14(bucketize(h1Arr.filter(c => c.ms < dayStart), (ms) => floorTo(ms, DAY))));
-  const h4Atr = memo('4' + h4Start,  () => atr14(bucketize(h1Arr.filter(c => c.ms < h4Start),  (ms) => floorTo(ms, H4_MS))));
-  if (!w1Atr || !d1Atr || !h4Atr) return null;
+  // Per timeframe: ATR14 over completed buckets + the last completed candle's
+  // direction (its close vs open).
+  const tf = (k, floorFn, boundary) => memo(k, () => {
+    const buckets = bucketize(h1Arr.filter(c => c.ms < boundary), floorFn);
+    const last = buckets[buckets.length - 1];
+    const prevDir = last ? (last.close > last.open ? 1 : last.close < last.open ? -1 : 0) : 0;
+    return { atr: atr14(buckets), prevDir };
+  });
+  const w1a = tf('W' + wkStart,  weekFloor, wkStart);
+  const d1a = tf('D' + dayStart, (ms) => floorTo(ms, DAY),   dayStart);
+  const h4a = tf('4' + h4Start,  (ms) => floorTo(ms, H4_MS), h4Start);
+  if (!w1a.atr || !d1a.atr || !h4a.atr) return null;
 
   const mk = (open, atr) => {
     const dist = price - open;
@@ -92,7 +102,7 @@ function pairPressure(price, pms, inst, h1Arr, h1Map, atrCache) {
     const strength = Math.min(1, Math.abs(dist) / atr);
     return { dir, score: dir * strength };
   };
-  const w1 = mk(w1Open, w1Atr), d1 = mk(d1Open, d1Atr), h4 = mk(h4Open, h4Atr);
+  const w1 = mk(w1Open, w1a.atr), d1 = mk(d1Open, d1a.atr), h4 = mk(h4Open, h4a.atr);
   const aligned = w1.dir !== 0 && w1.dir === d1.dir && d1.dir === h4.dir;
   const trendScore = WEIGHTS.w1 * w1.score + WEIGHTS.d1 * d1.score + WEIGHTS.h4 * h4.score;
   return {
@@ -100,19 +110,9 @@ function pairPressure(price, pms, inst, h1Arr, h1Map, atrCache) {
     direction: trendScore >= 0 ? 'BUY' : 'SELL',
     trendScore: +trendScore.toFixed(3),
     w1: +w1.score.toFixed(3), d1: +d1.score.toFixed(3), h4: +h4.score.toFixed(3),
+    d1Match: d1.dir !== 0 && d1.dir === d1a.prevDir,
+    h4Match: h4.dir !== 0 && h4.dir === h4a.prevDir,
   };
-}
-
-// Did the closed H1 candle at `idx` break the structure (high/low range) of the
-// previous six H1 candles? +1 = close above prior 6 highs, -1 = below, 0 = no.
-function structureBreak(h1, idx) {
-  if (idx < 6) return 0;
-  let hi = -Infinity, lo = Infinity;
-  for (let k = idx - 6; k < idx; k++) { if (h1[k].high > hi) hi = h1[k].high; if (h1[k].low < lo) lo = h1[k].low; }
-  const close = h1[idx].close;
-  if (close > hi) return 1;
-  if (close < lo) return -1;
-  return 0;
 }
 
 // Every pair with valid pressure at price time `pms` (unranked, aligned flag
@@ -122,12 +122,12 @@ function snapshotAt(pms, cache, atrCache) {
   for (const inst of PAIRS) {
     const c = cache[inst];
     if (!c) continue;
-    let price = null, idx = -1;
-    for (let i = c.h1.length - 1; i >= 0; i--) { if (c.h1[i].ms <= pms) { price = c.h1[i].close; idx = i; break; } }
+    let price = null;
+    for (let i = c.h1.length - 1; i >= 0; i--) { if (c.h1[i].ms <= pms) { price = c.h1[i].close; break; } }
     if (price == null) continue;
     const p = pairPressure(price, pms, inst, c.h1, c.h1Map, atrCache);
     if (!p) continue;
-    rows.push({ pair: inst.replace('_', '/'), instrument: inst, breakDir: structureBreak(c.h1, idx), ...p });
+    rows.push({ pair: inst.replace('_', '/'), instrument: inst, ...p });
   }
   return rows;
 }
@@ -266,11 +266,10 @@ module.exports = async function handler(req, res) {
       prevCur = byCcy;
 
       if (o < windowStart) continue;                      // warm-up only
-      // Tradable = MODERATE/STRONG (|score| >= 0.50) AND the closed H1 candle
-      // broke the last-6-candle structure in the pair's own direction.
+      // Tradable = MODERATE/STRONG (|score| >= 0.50) AND continuation on both
+      // D1 and H4 (last completed candle matches the current candle's direction).
       const tradable = aligned.filter(r =>
-        Math.abs(r.trendScore) >= 0.50 &&
-        ((r.trendScore >= 0 && r.breakDir === 1) || (r.trendScore < 0 && r.breakDir === -1)));
+        Math.abs(r.trendScore) >= 0.50 && r.d1Match && r.h4Match);
       cards.push({
         time: new Date(o).toISOString(),
         signalTime: new Date(o + HOUR).toISOString(),
