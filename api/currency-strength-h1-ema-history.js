@@ -101,6 +101,11 @@ module.exports = async function handler(req, res) {
   const end   = new Date(to   + 'T23:00:00Z');
   if (isNaN(start) || isNaN(end)) return res.status(400).json({ error: 'invalid dates' });
 
+  // Optionally emit the full EMA stack (close/e20/e50/score) for these pairs
+  // at each hour, so pair-level pages can show history, not just aggregates.
+  const STACK_PAIRS = (req.query?.pairs ? String(req.query.pairs).split(',') : ['AUD_NZD', 'CHF_JPY']).filter(p => PAIRS.includes(p));
+  const STACK_SET = new Set(STACK_PAIRS);
+
   const t0 = Date.now();
   const sb = getClient();
 
@@ -149,9 +154,12 @@ module.exports = async function handler(req, res) {
   const DE_LOOKBACK = 20;   // window for directional efficiency
   const pairScores = {}; // { pair: Map<hourMs, score> }
   const pairBreaks = {}; // { pair: Map<hourMs, { direction, bodyPips, atrPips, bodyAtr, efficiency, impulse, breakAtr, above, below }> }
+  const pairStacks = {}; // { pair: Map<hourMs, { close, e20, e50, score }> }  (STACK_PAIRS only)
   for (const inst of PAIRS) {
+    const trackStack = STACK_SET.has(inst);
+    const stackMap = new Map();
     const seq = candles[inst] || [];
-    if (!seq.length) { pairScores[inst] = new Map(); pairBreaks[inst] = new Map(); continue; }
+    if (!seq.length) { pairScores[inst] = new Map(); pairBreaks[inst] = new Map(); pairStacks[inst] = stackMap; continue; }
     const pushE20 = makeEma(20);
     const pushE50 = makeEma(50);
     const scoreMap = new Map();
@@ -187,7 +195,9 @@ module.exports = async function handler(req, res) {
         if (stateWin.length > TREND_LOOKBACK) stateWin.shift();
       }
       if (e20 != null && e50 != null && targetSet.has(c.ms)) {
-        scoreMap.set(c.ms, alignmentScore(c.close, e20, e50));
+        const sc = alignmentScore(c.close, e20, e50);
+        scoreMap.set(c.ms, sc);
+        if (trackStack) stackMap.set(c.ms, { close: c.close, e20, e50, score: sc });
         if (prevWin.length >= BREAK_LOOKBACK && atr) {
           let maxH = -Infinity, minL = Infinity;
           for (const p of prevWin) { if (p.high > maxH) maxH = p.high; if (p.low < minL) minL = p.low; }
@@ -228,6 +238,7 @@ module.exports = async function handler(req, res) {
     }
     pairScores[inst] = scoreMap;
     pairBreaks[inst] = breakMap;
+    pairStacks[inst] = stackMap;
   }
 
   // Aggregate per hour across all 28 pairs.
@@ -260,7 +271,12 @@ module.exports = async function handler(req, res) {
       const b = pairBreaks[inst].get(h);
       if (b) breaks[inst] = b;
     }
-    rows.push({ time: d.toISOString(), currencies, breaks });
+    const pairs = {};
+    for (const inst of STACK_PAIRS) {
+      const st = pairStacks[inst] && pairStacks[inst].get(h);
+      if (st) pairs[inst] = st;
+    }
+    rows.push({ time: d.toISOString(), currencies, breaks, pairs });
   }
 
   res.json({

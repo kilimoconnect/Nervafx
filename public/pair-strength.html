@@ -62,6 +62,20 @@
 
     .ps-verdict { font-size: 12px; line-height: 1.5; color: var(--text-muted); }
     .ps-verdict b { color: #fff; }
+
+    .ps-tabs { display: flex; justify-content: center; gap: 8px; padding: 6px 20px 2px; }
+    .ps-tab { padding: 6px 18px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; background: rgba(255,255,255,0.04); border: 1px solid var(--border); color: var(--text-muted); }
+    .ps-tab.active { background: rgba(236,72,153,0.2); border-color: rgba(236,72,153,0.4); color: #f472b6; }
+    .ps-filters { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 20px 4px; flex-wrap: wrap; font-size: 11px; color: var(--text-dim); }
+    .sx-date-input { padding: 5px 10px; border-radius: 7px; font-size: 11px; background: rgba(255,255,255,0.04); border: 1px solid var(--border); color: var(--text-muted); color-scheme: dark; }
+    .sx-go-btn { padding: 5px 14px; border-radius: 7px; font-size: 11px; font-weight: 700; background: rgba(236,72,153,0.2); border: 1px solid rgba(236,72,153,0.4); color: #f472b6; cursor: pointer; }
+    .hist-wrap { max-width: 760px; margin: 0 auto; padding: 6px 16px 48px; }
+    table.hist { width: 100%; border-collapse: collapse; font-size: 12px; }
+    table.hist th, table.hist td { padding: 8px 10px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.04); white-space: nowrap; }
+    table.hist thead th { position: sticky; top: 56px; background: #0b0f18; color: var(--text-dim); font-size: 10px; font-weight: 700; letter-spacing: 0.5px; z-index: 5; }
+    td.hist-time { text-align: left; color: var(--text-dim); font-family: 'SF Mono','Cascadia Code',monospace; font-weight: 700; }
+    .hist-badge { font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 5px; }
+    .hist-delta { font-family: monospace; font-size: 10px; margin-left: 6px; }
   </style>
 </head>
 <body>
@@ -77,7 +91,19 @@
   <div class="sx-subtitle">AUD/NZD and CHF/JPY bias from H1 <b style="color:#94a3b8">EMA20 / EMA50 / price</b> stack, corroborated by each currency's EMA strength across all 28 pairs (base +score, quote −score, ÷7 → [−1, +1]).</div>
   <div class="sx-meta" id="ps-meta"></div>
 
+  <div class="ps-tabs">
+    <button class="ps-tab active" id="ps-tab-live">Live</button>
+    <button class="ps-tab" id="ps-tab-hist">History</button>
+  </div>
+
+  <div class="ps-filters" id="ps-filters" style="display:none">
+    <span>From</span><input type="date" id="ps-from" class="sx-date-input" />
+    <span>To</span><input type="date" id="ps-to" class="sx-date-input" />
+    <button id="ps-load" class="sx-go-btn">Load</button>
+  </div>
+
   <div id="ps-body"><div class="ps-loading"><span class="spinner"></span> Loading…</div></div>
+  <div id="ps-history" style="display:none"></div>
 
   <script>
     var TOKEN = localStorage.getItem('nfx_token') || '';
@@ -201,6 +227,71 @@
         document.getElementById('ps-body').innerHTML = '<div class="ps-empty" style="color:#f87171">Error: ' + e.message + '</div>';
       }
     }
+    // ---- History ----
+    function fmtHour(iso) {
+      return new Date(iso).toLocaleString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: _tz() });
+    }
+    function deltaSpan(v) {
+      var c = v >= 0 ? '#4ade80' : '#f87171';
+      return '<span class="hist-delta" style="color:' + c + '">Δ' + (v > 0 ? '+' : '') + v.toFixed(2) + '</span>';
+    }
+    function histPairCell(stack, diff) {
+      if (!stack) return '<span style="color:#475569">—</span>';
+      var b = biasInfo(stack.score);
+      return '<span class="hist-badge" style="background:' + b.col + '22;color:' + b.col + '">' + b.label + '</span>' + deltaSpan(diff);
+    }
+    function renderHistory(data) {
+      var el = document.getElementById('ps-history');
+      var rows = (data.rows || []).slice().reverse();   // newest first
+      if (!rows.length) { el.innerHTML = '<div class="ps-empty">No history for this range.</div>'; return; }
+      var h = '<div class="hist-wrap"><div style="font-size:11px;color:var(--text-dim);padding:4px 0 10px;text-align:center">'
+        + rows.length + ' hourly snapshots · newest first · bias from H1 EMA stack, Δ = base − quote strength</div>';
+      h += '<table class="hist"><thead><tr><th style="text-align:left">Time</th><th>AUD/NZD</th><th>CHF/JPY</th></tr></thead><tbody>';
+      for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        var an = r.pairs && r.pairs.AUD_NZD, cj = r.pairs && r.pairs.CHF_JPY;
+        var anD = (r.currencies.AUD || 0) - (r.currencies.NZD || 0);
+        var cjD = (r.currencies.CHF || 0) - (r.currencies.JPY || 0);
+        h += '<tr><td class="hist-time">' + fmtHour(r.time) + '</td>'
+          + '<td>' + histPairCell(an, anD) + '</td>'
+          + '<td>' + histPairCell(cj, cjD) + '</td></tr>';
+      }
+      h += '</tbody></table></div>';
+      el.innerHTML = h;
+    }
+    async function loadHistory() {
+      var from = document.getElementById('ps-from').value, to = document.getElementById('ps-to').value;
+      if (!from || !to) return;
+      var el = document.getElementById('ps-history');
+      el.innerHTML = '<div class="ps-loading"><span class="spinner"></span> Loading history…</div>';
+      try {
+        var res = await fetch('/api/currency-strength-h1-ema-history?from=' + from + '&to=' + to, { headers: { Authorization: 'Bearer ' + TOKEN }, cache: 'no-store' });
+        if (!res.ok) throw new Error(await res.text());
+        renderHistory(await res.json());
+      } catch (e) {
+        el.innerHTML = '<div class="ps-empty" style="color:#f87171">Error: ' + e.message + '</div>';
+      }
+    }
+    function setHistDefaults() {
+      var now = new Date();
+      document.getElementById('ps-to').value = now.toISOString().slice(0, 10);
+      document.getElementById('ps-from').value = new Date(now.getTime() - 2 * 86400000).toISOString().slice(0, 10);
+    }
+    function showTab(t) {
+      var live = t === 'live';
+      document.getElementById('ps-tab-live').classList.toggle('active', live);
+      document.getElementById('ps-tab-hist').classList.toggle('active', !live);
+      document.getElementById('ps-body').style.display = live ? '' : 'none';
+      document.getElementById('ps-filters').style.display = live ? 'none' : '';
+      document.getElementById('ps-history').style.display = live ? 'none' : '';
+      var el = document.getElementById('ps-history');
+      if (!live && !el.dataset.loaded) { el.dataset.loaded = '1'; loadHistory(); }
+    }
+    document.getElementById('ps-tab-live').addEventListener('click', function () { showTab('live'); });
+    document.getElementById('ps-tab-hist').addEventListener('click', function () { showTab('hist'); });
+    document.getElementById('ps-load').addEventListener('click', loadHistory);
+    setHistDefaults();
+
     load();
     setInterval(load, 5 * 60 * 1000);   // refresh every 5 min (H1 engine)
   </script>
