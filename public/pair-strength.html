@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>NervaFX — Pair Strength (H1 EMA)</title>
+  <link rel="icon" type="image/png" href="/nervafx-icon.png">
+  <script src="/auth-guard.js"></script>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .grid { display: block !important; }
+    .sx-topbar {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 28px; height: 56px;
+      background: rgba(8,11,18,0.92);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+    .sx-topbar-left { display: flex; align-items: center; gap: 12px; }
+    .sx-logo img { height: 24px; display: block; }
+    .sx-sep { color: rgba(255,255,255,0.1); font-size: 20px; font-weight: 200; }
+    .sx-title-text { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+    .sx-back-btn {
+      display: flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: 8px;
+      background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+      color: var(--text-muted); font-size: 12px; cursor: pointer; text-decoration: none;
+    }
+    .sx-back-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
+    .sx-subtitle { text-align: center; padding: 18px 20px 6px; font-size: 11px; color: var(--text-dim); letter-spacing: 0.3px; }
+    .sx-meta { text-align: center; padding: 0 20px 8px; font-size: 10px; color: var(--text-dim); }
+    .spinner {
+      display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,0.2);
+      border-top-color:#f472b6;border-radius:50%;animation:spin 0.7s linear infinite;vertical-align:middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .ps-loading, .ps-empty { text-align: center; color: var(--text-muted); padding: 40px; }
+
+    .ps-wrap { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 18px; padding: 10px 20px 48px; max-width: 900px; margin: 0 auto; }
+    .ps-card { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+    .ps-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border); background: rgba(255,255,255,0.025); }
+    .ps-pair { font-size: 18px; font-weight: 800; color: #fff; letter-spacing: 0.5px; }
+    .ps-bias { font-size: 12px; font-weight: 800; padding: 5px 12px; border-radius: 8px; }
+    .ps-section { padding: 14px 18px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    .ps-section:last-child { border-bottom: none; }
+    .ps-label { font-size: 10px; font-weight: 700; letter-spacing: 0.6px; color: var(--text-dim); text-transform: uppercase; margin-bottom: 10px; }
+
+    .ps-stack-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border-radius: 7px; margin-bottom: 5px; }
+    .ps-stack-k { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; }
+    .ps-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .ps-stack-v { font-family: 'SF Mono','Cascadia Code','Fira Code',monospace; font-size: 12px; color: #e2e8f0; }
+    .ps-stack-desc { font-size: 11px; color: var(--text-muted); margin-top: 6px; }
+
+    .ps-ccy-row { display: grid; grid-template-columns: 44px 1fr 68px; align-items: center; gap: 10px; margin-bottom: 9px; }
+    .ps-ccy-code { font-size: 13px; font-weight: 800; color: #fff; }
+    .ps-ccy-rank { font-size: 9px; color: var(--text-dim); font-weight: 600; }
+    .ps-bar-track { position: relative; height: 10px; background: rgba(255,255,255,0.05); border-radius: 5px; }
+    .ps-bar-mid { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: rgba(255,255,255,0.18); }
+    .ps-bar-fill { position: absolute; top: 0; bottom: 0; border-radius: 5px; }
+    .ps-ccy-val { font-family: monospace; font-size: 12px; font-weight: 800; text-align: right; }
+
+    .ps-verdict { font-size: 12px; line-height: 1.5; color: var(--text-muted); }
+    .ps-verdict b { color: #fff; }
+  </style>
+</head>
+<body>
+  <div class="sx-topbar">
+    <div class="sx-topbar-left">
+      <a href="/app" class="sx-logo"><img src="/nervafx-logo.png" alt="NervaFX" /></a>
+      <span class="sx-sep">|</span>
+      <span class="sx-title-text">Pair Strength — H1 EMA</span>
+    </div>
+    <a href="/app" class="sx-back-btn">← Back</a>
+  </div>
+
+  <div class="sx-subtitle">AUD/NZD and CHF/JPY bias from H1 <b style="color:#94a3b8">EMA20 / EMA50 / price</b> stack, corroborated by each currency's EMA strength across all 28 pairs (base +score, quote −score, ÷7 → [−1, +1]).</div>
+  <div class="sx-meta" id="ps-meta"></div>
+
+  <div id="ps-body"><div class="ps-loading"><span class="spinner"></span> Loading…</div></div>
+
+  <script>
+    var TOKEN = localStorage.getItem('nfx_token') || '';
+    var _userTz = localStorage.getItem('nfx_tz') || 'auto';
+    function _tz() { return (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC'); }
+
+    var TARGETS = [
+      { pair: 'AUD_NZD', base: 'AUD', quote: 'NZD' },
+      { pair: 'CHF_JPY', base: 'CHF', quote: 'JPY' },
+    ];
+
+    function fmtTime(iso) {
+      return new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: _tz() });
+    }
+    function dec(pair) { return pair.slice(-3) === 'JPY' ? 3 : 5; }
+
+    // pair EMA-stack score → bias
+    function biasInfo(score) {
+      if (score >= 1)    return { label: 'STRONG BUY',  dir: 'BUY',  col: '#22c55e', desc: 'Bull stack — price &gt; EMA20 &gt; EMA50' };
+      if (score === 0.5) return { label: 'BUY',         dir: 'BUY',  col: '#4ade80', desc: 'Price &gt; EMA20 (stack not yet confirmed)' };
+      if (score <= -1)   return { label: 'STRONG SELL', dir: 'SELL', col: '#ef4444', desc: 'Bear stack — price &lt; EMA20 &lt; EMA50' };
+      if (score === -0.5) return { label: 'SELL',        dir: 'SELL', col: '#f87171', desc: 'Price &lt; EMA20 (stack not yet confirmed)' };
+      return { label: 'NEUTRAL', dir: 'NEUTRAL', col: '#94a3b8', desc: 'Price pinched between EMAs' };
+    }
+
+    function stackHtml(row, d) {
+      var items = [
+        { k: 'Price', v: row.close, c: '#e2e8f0' },
+        { k: 'EMA20', v: row.e20,   c: '#38bdf8' },
+        { k: 'EMA50', v: row.e50,   c: '#a78bfa' },
+      ].sort(function (a, b) { return b.v - a.v; });
+      var order = items.map(function (i) { return i.k; }).join('>');
+      var bg = order === 'Price>EMA20>EMA50' ? 'rgba(34,197,94,0.10)'
+             : order === 'EMA50>EMA20>Price' ? 'rgba(239,68,68,0.10)'
+             : 'rgba(255,255,255,0.03)';
+      var h = '';
+      for (var i = 0; i < items.length; i++) {
+        h += '<div class="ps-stack-row" style="background:' + bg + '">'
+          + '<span class="ps-stack-k"><span class="ps-dot" style="background:' + items[i].c + '"></span>' + items[i].k + '</span>'
+          + '<span class="ps-stack-v">' + items[i].v.toFixed(d) + '</span></div>';
+      }
+      var distCol = row.dist_pct >= 0 ? '#4ade80' : '#f87171';
+      h += '<div class="ps-stack-desc">Price is <b style="color:' + distCol + '">' + (row.dist_pct > 0 ? '+' : '') + row.dist_pct.toFixed(2) + '%</b> vs EMA20</div>';
+      return h;
+    }
+
+    function ccyRow(code, s) {
+      var pos = s.strength >= 0;
+      var col = pos ? '#22c55e' : '#ef4444';
+      var w = Math.min(Math.abs(s.strength), 1) * 50;   // half-width max
+      var fill = pos
+        ? '<div class="ps-bar-fill" style="left:50%;width:' + w + '%;background:' + col + '"></div>'
+        : '<div class="ps-bar-fill" style="right:50%;width:' + w + '%;background:' + col + '"></div>';
+      return '<div class="ps-ccy-row">'
+        + '<div><div class="ps-ccy-code">' + code + '</div><div class="ps-ccy-rank">#' + s.rank + '/8</div></div>'
+        + '<div class="ps-bar-track"><div class="ps-bar-mid"></div>' + fill + '</div>'
+        + '<div class="ps-ccy-val" style="color:' + col + '">' + (s.strength > 0 ? '+' : '') + s.strength.toFixed(2) + '</div>'
+        + '</div>';
+    }
+
+    function verdict(t, row, baseS, quoteS) {
+      var b = biasInfo(row.score);
+      var diff = baseS.strength - quoteS.strength;   // >0 => base stronger
+      var diffFav = diff > 0 ? 'BUY' : diff < 0 ? 'SELL' : 'NEUTRAL';
+      var strong = t.base, weak = t.quote;
+      if (diff < 0) { strong = t.quote; weak = t.base; }
+      var agree = (b.dir !== 'NEUTRAL' && b.dir === diffFav);
+      var line;
+      if (b.dir === 'NEUTRAL') {
+        line = 'Stack is <b>neutral</b> — no EMA bias. Strength edge: <b>' + strong + '</b> over ' + weak + ' (' + (diff >= 0 ? '+' : '') + diff.toFixed(2) + ').';
+      } else if (agree) {
+        line = '<b style="color:' + b.col + '">Confirmed ' + b.dir + '.</b> ' + b.label + ' stack and the stronger currency (<b>' + strong + '</b>, Δ ' + Math.abs(diff).toFixed(2) + ') both favour ' + b.dir + ' ' + t.pair.replace('_', '/') + '.';
+      } else {
+        line = '<b style="color:#f59e0b">Mixed.</b> Stack reads ' + b.label + ', but the strength edge favours <b>' + strong + '</b> (' + diffFav + '). Wait for agreement.';
+      }
+      return '<div class="ps-verdict">' + line + '</div>';
+    }
+
+    function cardHtml(t, row, ccy) {
+      var b = biasInfo(row.score);
+      var d = dec(t.pair);
+      var baseS = ccy[t.base], quoteS = ccy[t.quote];
+      return '<div class="ps-card">'
+        + '<div class="ps-head"><span class="ps-pair">' + t.pair.replace('_', '/') + '</span>'
+        + '<span class="ps-bias" style="background:' + b.col + '22;color:' + b.col + '">' + b.label + '</span></div>'
+        + '<div class="ps-section"><div class="ps-label">H1 EMA stack</div>' + stackHtml(row, d)
+        + '<div class="ps-stack-desc" style="margin-top:8px;color:' + b.col + '">' + b.desc + '</div></div>'
+        + '<div class="ps-section"><div class="ps-label">Currency strength (H1 EMA, all pairs)</div>'
+        + ccyRow(t.base, baseS) + ccyRow(t.quote, quoteS) + '</div>'
+        + '<div class="ps-section"><div class="ps-label">Verdict</div>' + verdict(t, row, baseS, quoteS) + '</div>'
+        + '</div>';
+    }
+
+    function render(data) {
+      var body = document.getElementById('ps-body');
+      var pairs = data.pairs || [];
+      var pairMap = {}; for (var i = 0; i < pairs.length; i++) pairMap[pairs[i].pair] = pairs[i];
+
+      // rank currencies (data.currencies already sorted strongest→weakest)
+      var ccy = {};
+      (data.currencies || []).forEach(function (c, i) { ccy[c.currency] = { strength: c.strength, rank: i + 1 }; });
+
+      var missing = TARGETS.some(function (t) { return !pairMap[t.pair] || pairMap[t.pair].error || pairMap[t.pair].close == null; });
+      if (missing) { body.innerHTML = '<div class="ps-empty">Insufficient H1 data to compute EMA stacks right now.</div>'; return; }
+
+      var html = '<div class="ps-wrap">';
+      for (var j = 0; j < TARGETS.length; j++) html += cardHtml(TARGETS[j], pairMap[TARGETS[j].pair], ccy);
+      html += '</div>';
+      body.innerHTML = html;
+
+      var t = pairMap[TARGETS[0].pair].time;
+      document.getElementById('ps-meta').textContent = t ? ('Last H1 close: ' + fmtTime(t)) : '';
+    }
+
+    async function load() {
+      try {
+        var res = await fetch('/api/currency-strength-h1-ema', { headers: { Authorization: 'Bearer ' + TOKEN }, cache: 'no-store' });
+        if (!res.ok) throw new Error(await res.text());
+        render(await res.json());
+      } catch (e) {
+        document.getElementById('ps-body').innerHTML = '<div class="ps-empty" style="color:#f87171">Error: ' + e.message + '</div>';
+      }
+    }
+    load();
+    setInterval(load, 5 * 60 * 1000);   // refresh every 5 min (H1 engine)
+  </script>
+</body>
+</html>

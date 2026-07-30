@@ -72,6 +72,7 @@
     { "source": "/structure-engine-m15", "destination": "/structure-engine-m15.html" },
     { "source": "/audnzd-strength", "destination": "/audnzd-strength.html" },
     { "source": "/chfjpy-strength", "destination": "/chfjpy-strength.html" },
+    { "source": "/pair-strength", "destination": "/pair-strength.html" },
     { "source": "/daily-strength", "destination": "/daily-strength.html" },
     { "source": "/m15-impulse", "destination": "/m15-impulse.html" },
     { "source": "/currency-acceleration", "destination": "/currency-acceleration.html" },
