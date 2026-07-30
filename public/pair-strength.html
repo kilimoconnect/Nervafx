@@ -88,7 +88,7 @@
     <a href="/app" class="sx-back-btn">← Back</a>
   </div>
 
-  <div class="sx-subtitle">AUD/NZD and CHF/JPY bias from H1 <b style="color:#94a3b8">EMA20 / EMA50 / price</b> stack, corroborated by each currency's EMA strength across all 28 pairs (base +score, quote −score, ÷7 → [−1, +1]).</div>
+  <div class="sx-subtitle">AUD/NZD and CHF/JPY from H1 <b style="color:#94a3b8">EMA20 / EMA50 / price</b> stack. A signal only applies when one of the pair's currencies is ranked <b style="color:#94a3b8">#1 (strongest)</b> or <b style="color:#94a3b8">#8 (weakest)</b> by EMA strength across all 28 pairs; the EMA stack then confirms it (✓) or not.</div>
   <div class="sx-meta" id="ps-meta"></div>
 
   <div class="ps-tabs">
@@ -114,6 +114,32 @@
       { pair: 'AUD_NZD', base: 'AUD', quote: 'NZD' },
       { pair: 'CHF_JPY', base: 'CHF', quote: 'JPY' },
     ];
+    var CCYS = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
+
+    // A trade only applies when one of the pair's currencies is at a rank
+    // extreme: #1 (strongest) → buy it, #8 (weakest) → sell it.
+    function extremeSignal(base, quote, rankOf) {
+      var rb = rankOf[base], rq = rankOf[quote];
+      if (rb === 1) return { dir: 'BUY',  reason: base + ' strongest (#1)' };
+      if (rb === 8) return { dir: 'SELL', reason: base + ' weakest (#8)' };
+      if (rq === 1) return { dir: 'SELL', reason: quote + ' strongest (#1)' };
+      if (rq === 8) return { dir: 'BUY',  reason: quote + ' weakest (#8)' };
+      return null;
+    }
+    // Combine the rank-extreme gate with the H1 EMA stack confirmation.
+    function coreSignal(base, quote, score, rankOf) {
+      var b = biasInfo(score);
+      var ext = extremeSignal(base, quote, rankOf);
+      if (!ext) return { label: 'NO SIGNAL', col: '#64748b', state: 'none', b: b, ext: null };
+      var col = ext.dir === 'BUY' ? '#22c55e' : '#ef4444';
+      if (b.dir === ext.dir)   return { label: ext.dir + ' ✓', col: col, state: 'confirmed', dir: ext.dir, b: b, ext: ext };
+      if (b.dir === 'NEUTRAL') return { label: ext.dir + ' ?', col: col, state: 'pending',   dir: ext.dir, b: b, ext: ext };
+      return { label: 'CONFLICT', col: '#f59e0b', state: 'conflict', dir: ext.dir, b: b, ext: ext };
+    }
+    function rankMap(currencies) {
+      var arr = CCYS.map(function (c) { return { c: c, v: currencies[c] || 0 }; }).sort(function (a, b) { return b.v - a.v; });
+      var m = {}; arr.forEach(function (x, i) { m[x.c] = i + 1; }); return m;
+    }
 
     function fmtTime(iso) {
       return new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: _tz() });
@@ -164,36 +190,36 @@
         + '</div>';
     }
 
-    function verdict(t, row, baseS, quoteS) {
-      var b = biasInfo(row.score);
-      var diff = baseS.strength - quoteS.strength;   // >0 => base stronger
-      var diffFav = diff > 0 ? 'BUY' : diff < 0 ? 'SELL' : 'NEUTRAL';
-      var strong = t.base, weak = t.quote;
-      if (diff < 0) { strong = t.quote; weak = t.base; }
-      var agree = (b.dir !== 'NEUTRAL' && b.dir === diffFav);
+    function verdict(t, ccy, sig) {
+      var pair = t.pair.replace('_', '/');
+      var rb = ccy[t.base].rank, rq = ccy[t.quote].rank;
       var line;
-      if (b.dir === 'NEUTRAL') {
-        line = 'Stack is <b>neutral</b> — no EMA bias. Strength edge: <b>' + strong + '</b> over ' + weak + ' (' + (diff >= 0 ? '+' : '') + diff.toFixed(2) + ').';
-      } else if (agree) {
-        line = '<b style="color:' + b.col + '">Confirmed ' + b.dir + '.</b> ' + b.label + ' stack and the stronger currency (<b>' + strong + '</b>, Δ ' + Math.abs(diff).toFixed(2) + ') both favour ' + b.dir + ' ' + t.pair.replace('_', '/') + '.';
+      if (sig.state === 'none') {
+        line = '<b>No signal.</b> A setup needs one currency at a rank extreme — neither <b>' + t.base + '</b> (#' + rb + ') nor <b>' + t.quote + '</b> (#' + rq + ') is #1 or #8. Stand aside.';
+      } else if (sig.state === 'confirmed') {
+        line = '<b style="color:' + sig.col + '">Confirmed ' + sig.dir + ' ' + pair + '.</b> ' + sig.ext.reason + ', and the H1 EMA stack (' + sig.b.label + ') agrees.';
+      } else if (sig.state === 'pending') {
+        line = '<b style="color:' + sig.col + '">' + sig.dir + ' bias.</b> ' + sig.ext.reason + ', but the EMA stack is neutral — wait for price to ' + (sig.dir === 'BUY' ? 'reclaim' : 'lose') + ' the EMAs.';
       } else {
-        line = '<b style="color:#f59e0b">Mixed.</b> Stack reads ' + b.label + ', but the strength edge favours <b>' + strong + '</b> (' + diffFav + '). Wait for agreement.';
+        line = '<b style="color:#f59e0b">Conflict.</b> Rank extreme says ' + sig.dir + ' (' + sig.ext.reason + '), but the EMA stack reads ' + sig.b.label + '. Stand aside.';
       }
       return '<div class="ps-verdict">' + line + '</div>';
     }
 
     function cardHtml(t, row, ccy) {
-      var b = biasInfo(row.score);
       var d = dec(t.pair);
       var baseS = ccy[t.base], quoteS = ccy[t.quote];
+      var rankOf = {}; rankOf[t.base] = baseS.rank; rankOf[t.quote] = quoteS.rank;
+      var sig = coreSignal(t.base, t.quote, row.score, rankOf);
+      var b = sig.b;
       return '<div class="ps-card">'
         + '<div class="ps-head"><span class="ps-pair">' + t.pair.replace('_', '/') + '</span>'
-        + '<span class="ps-bias" style="background:' + b.col + '22;color:' + b.col + '">' + b.label + '</span></div>'
+        + '<span class="ps-bias" style="background:' + sig.col + '22;color:' + sig.col + '">' + sig.label + '</span></div>'
         + '<div class="ps-section"><div class="ps-label">H1 EMA stack</div>' + stackHtml(row, d)
         + '<div class="ps-stack-desc" style="margin-top:8px;color:' + b.col + '">' + b.desc + '</div></div>'
         + '<div class="ps-section"><div class="ps-label">Currency strength (H1 EMA, all pairs)</div>'
         + ccyRow(t.base, baseS) + ccyRow(t.quote, quoteS) + '</div>'
-        + '<div class="ps-section"><div class="ps-label">Verdict</div>' + verdict(t, row, baseS, quoteS) + '</div>'
+        + '<div class="ps-section"><div class="ps-label">Verdict</div>' + verdict(t, ccy, sig) + '</div>'
         + '</div>';
     }
 
@@ -235,26 +261,27 @@
       var c = v >= 0 ? '#4ade80' : '#f87171';
       return '<span class="hist-delta" style="color:' + c + '">Δ' + (v > 0 ? '+' : '') + v.toFixed(2) + '</span>';
     }
-    function histPairCell(stack, diff) {
+    function histPairCell(stack, base, quote, rankOf, diff) {
       if (!stack) return '<span style="color:#475569">—</span>';
-      var b = biasInfo(stack.score);
-      return '<span class="hist-badge" style="background:' + b.col + '22;color:' + b.col + '">' + b.label + '</span>' + deltaSpan(diff);
+      var sig = coreSignal(base, quote, stack.score, rankOf);
+      return '<span class="hist-badge" style="background:' + sig.col + '22;color:' + sig.col + '">' + sig.label + '</span>' + deltaSpan(diff);
     }
     function renderHistory(data) {
       var el = document.getElementById('ps-history');
       var rows = (data.rows || []).slice().reverse();   // newest first
       if (!rows.length) { el.innerHTML = '<div class="ps-empty">No history for this range.</div>'; return; }
       var h = '<div class="hist-wrap"><div style="font-size:11px;color:var(--text-dim);padding:4px 0 10px;text-align:center">'
-        + rows.length + ' hourly snapshots · newest first · bias from H1 EMA stack, Δ = base − quote strength</div>';
+        + rows.length + ' hourly snapshots · newest first · signal needs a #1/#8 currency, ✓ = EMA stack confirms · Δ = base − quote strength</div>';
       h += '<table class="hist"><thead><tr><th style="text-align:left">Time</th><th>AUD/NZD</th><th>CHF/JPY</th></tr></thead><tbody>';
       for (var i = 0; i < rows.length; i++) {
         var r = rows[i];
         var an = r.pairs && r.pairs.AUD_NZD, cj = r.pairs && r.pairs.CHF_JPY;
+        var rk = rankMap(r.currencies);
         var anD = (r.currencies.AUD || 0) - (r.currencies.NZD || 0);
         var cjD = (r.currencies.CHF || 0) - (r.currencies.JPY || 0);
         h += '<tr><td class="hist-time">' + fmtHour(r.time) + '</td>'
-          + '<td>' + histPairCell(an, anD) + '</td>'
-          + '<td>' + histPairCell(cj, cjD) + '</td></tr>';
+          + '<td>' + histPairCell(an, 'AUD', 'NZD', rk, anD) + '</td>'
+          + '<td>' + histPairCell(cj, 'CHF', 'JPY', rk, cjD) + '</td></tr>';
       }
       h += '</tbody></table></div>';
       el.innerHTML = h;
