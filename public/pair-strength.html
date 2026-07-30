@@ -63,6 +63,14 @@
     .ps-verdict { font-size: 12px; line-height: 1.5; color: var(--text-muted); }
     .ps-verdict b { color: #fff; }
 
+    .ps-driver { max-width: 900px; margin: 4px auto 0; padding: 12px 18px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 12px; }
+    .ps-driver-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px; color: var(--text-muted); flex-wrap: wrap; }
+    .ps-driver-lbl { font-size: 10px; font-weight: 800; letter-spacing: 0.6px; text-transform: uppercase; color: var(--text-dim); }
+    .ps-driver-list { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+    .ps-driver-item { font-size: 13px; color: #e2e8f0; }
+    .ps-driver-none { margin-top: 8px; font-size: 12px; color: var(--text-dim); }
+    .ps-driver-strip { padding: 8px 18px; font-size: 12px; font-weight: 600; border-bottom: 1px solid rgba(255,255,255,0.04); background: rgba(255,255,255,0.015); }
+
     .ps-tabs { display: flex; justify-content: center; gap: 8px; padding: 6px 20px 2px; }
     .ps-tab { padding: 6px 18px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; background: rgba(255,255,255,0.04); border: 1px solid var(--border); color: var(--text-muted); }
     .ps-tab.active { background: rgba(236,72,153,0.2); border-color: rgba(236,72,153,0.4); color: #f472b6; }
@@ -120,10 +128,10 @@
     // extreme: #1 (strongest) → buy it, #8 (weakest) → sell it.
     function extremeSignal(base, quote, rankOf) {
       var rb = rankOf[base], rq = rankOf[quote];
-      if (rb === 1) return { dir: 'BUY',  reason: base + ' strongest (#1)' };
-      if (rb === 8) return { dir: 'SELL', reason: base + ' weakest (#8)' };
-      if (rq === 1) return { dir: 'SELL', reason: quote + ' strongest (#1)' };
-      if (rq === 8) return { dir: 'BUY',  reason: quote + ' weakest (#8)' };
+      if (rb === 1) return { dir: 'BUY',  driver: base,  rank: 1, extreme: 'strongest', reason: base + ' strongest (#1)' };
+      if (rb === 8) return { dir: 'SELL', driver: base,  rank: 8, extreme: 'weakest',   reason: base + ' weakest (#8)' };
+      if (rq === 1) return { dir: 'SELL', driver: quote, rank: 1, extreme: 'strongest', reason: quote + ' strongest (#1)' };
+      if (rq === 8) return { dir: 'BUY',  driver: quote, rank: 8, extreme: 'weakest',   reason: quote + ' weakest (#8)' };
       return null;
     }
     // Combine the rank-extreme gate with the H1 EMA stack confirmation.
@@ -139,6 +147,33 @@
     function rankMap(currencies) {
       var arr = CCYS.map(function (c) { return { c: c, v: currencies[c] || 0 }; }).sort(function (a, b) { return b.v - a.v; });
       var m = {}; arr.forEach(function (x, i) { m[x.c] = i + 1; }); return m;
+    }
+
+    // Which of AUD/NZD/CHF/JPY is at a #1/#8 extreme and thus driving a pair.
+    function driverBanner(ccy) {
+      var byRank = {}; Object.keys(ccy).forEach(function (c) { byRank[ccy[c].rank] = c; });
+      var top = byRank[1], bot = byRank[8];
+      var drivers = [];
+      for (var i = 0; i < TARGETS.length; i++) {
+        var t = TARGETS[i], rankOf = {}; rankOf[t.base] = ccy[t.base].rank; rankOf[t.quote] = ccy[t.quote].rank;
+        var ext = extremeSignal(t.base, t.quote, rankOf);
+        if (ext) drivers.push({ t: t, ext: ext });
+      }
+      var h = '<div class="ps-driver"><div class="ps-driver-top">'
+        + '<span class="ps-driver-lbl">Market driver</span>'
+        + '<span>Strongest <b style="color:#4ade80">' + top + '</b> #1 · Weakest <b style="color:#f87171">' + bot + '</b> #8</span></div>';
+      if (drivers.length) {
+        h += '<div class="ps-driver-list">';
+        drivers.forEach(function (dv) {
+          var col = dv.ext.dir === 'BUY' ? '#22c55e' : '#ef4444';
+          h += '<div class="ps-driver-item"><b style="color:' + col + '">' + dv.ext.driver + '</b> is ' + dv.ext.extreme
+            + ' (#' + dv.ext.rank + ') → <b style="color:' + col + '">' + dv.ext.dir + ' ' + dv.t.pair.replace('_', '/') + '</b></div>';
+        });
+        h += '</div>';
+      } else {
+        h += '<div class="ps-driver-none">None of AUD / NZD / CHF / JPY is at a #1 or #8 extreme — no pair is being driven right now.</div>';
+      }
+      return h + '</div>';
     }
 
     function fmtTime(iso) {
@@ -212,9 +247,13 @@
       var rankOf = {}; rankOf[t.base] = baseS.rank; rankOf[t.quote] = quoteS.rank;
       var sig = coreSignal(t.base, t.quote, row.score, rankOf);
       var b = sig.b;
+      var driverStrip = sig.ext
+        ? '<div class="ps-driver-strip" style="color:' + sig.col + '">🎯 Driver: <b>' + sig.ext.driver + '</b> — ' + sig.ext.extreme + ' currency (#' + sig.ext.rank + ')</div>'
+        : '<div class="ps-driver-strip" style="color:#64748b">No driver — neither ' + t.base + ' nor ' + t.quote + ' is #1 or #8</div>';
       return '<div class="ps-card">'
         + '<div class="ps-head"><span class="ps-pair">' + t.pair.replace('_', '/') + '</span>'
         + '<span class="ps-bias" style="background:' + sig.col + '22;color:' + sig.col + '">' + sig.label + '</span></div>'
+        + driverStrip
         + '<div class="ps-section"><div class="ps-label">H1 EMA stack</div>' + stackHtml(row, d)
         + '<div class="ps-stack-desc" style="margin-top:8px;color:' + b.col + '">' + b.desc + '</div></div>'
         + '<div class="ps-section"><div class="ps-label">Currency strength (H1 EMA, all pairs)</div>'
@@ -235,7 +274,7 @@
       var missing = TARGETS.some(function (t) { return !pairMap[t.pair] || pairMap[t.pair].error || pairMap[t.pair].close == null; });
       if (missing) { body.innerHTML = '<div class="ps-empty">Insufficient H1 data to compute EMA stacks right now.</div>'; return; }
 
-      var html = '<div class="ps-wrap">';
+      var html = driverBanner(ccy) + '<div class="ps-wrap">';
       for (var j = 0; j < TARGETS.length; j++) html += cardHtml(TARGETS[j], pairMap[TARGETS[j].pair], ccy);
       html += '</div>';
       body.innerHTML = html;
@@ -264,7 +303,8 @@
     function histPairCell(stack, base, quote, rankOf, diff) {
       if (!stack) return '<span style="color:#475569">—</span>';
       var sig = coreSignal(base, quote, stack.score, rankOf);
-      return '<span class="hist-badge" style="background:' + sig.col + '22;color:' + sig.col + '">' + sig.label + '</span>' + deltaSpan(diff);
+      var tip = sig.ext ? ' title="Driver: ' + sig.ext.reason + '"' : ' title="No ' + base + '/' + quote + ' rank extreme"';
+      return '<span class="hist-badge"' + tip + ' style="background:' + sig.col + '22;color:' + sig.col + '">' + sig.label + '</span>' + deltaSpan(diff);
     }
     function renderHistory(data) {
       var el = document.getElementById('ps-history');
