@@ -28,7 +28,7 @@ const PAIRS = [
 const CCYS = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
 const HOUR = 3600000, H4_MS = 4 * HOUR, DAY = 24 * HOUR;
 const WEIGHTS = { w1: 0.50, d1: 0.30, h4: 0.20 };
-const MIN_SCORE = 0.25;   // display floor: show WEAK and up, hide only IGNORE
+const MIN_SCORE = 0.40;   // tradable floor (MODERATE); WEAK and below hidden
 
 const floorTo = (ms, size) => Math.floor(ms / size) * size;
 // Monday 00:00 UTC of the week containing ms (weekly candle anchor).
@@ -65,8 +65,8 @@ function atr14(candles) {
 
 function marketState(absScore) {
   if (absScore > 0.70) return 'STRONG';
-  if (absScore >= 0.40) return 'MODERATE';
-  if (absScore >= MIN_SCORE) return 'WEAK';
+  if (absScore >= MIN_SCORE) return 'MODERATE';
+  if (absScore >= 0.25) return 'WEAK';
   return 'IGNORE';
 }
 
@@ -267,9 +267,8 @@ module.exports = async function handler(req, res) {
       prevCur = byCcy;
 
       if (o < windowStart) continue;                      // warm-up only
-      // Tradable = |score| >= MIN_SCORE (WEAK and up; only flat/IGNORE hidden)
-      // AND continuation on both D1 and H4 (last completed candle matches the
-      // current candle's direction).
+      // Tradable = MODERATE/STRONG (|score| >= MIN_SCORE) AND continuation on
+      // both D1 and H4 (last completed candle matches the current candle's dir).
       const tradable = aligned.filter(r =>
         Math.abs(r.trendScore) >= MIN_SCORE && r.d1Match && r.h4Match);
       cards.push({
