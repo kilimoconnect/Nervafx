@@ -232,7 +232,7 @@ module.exports = async function handler(req, res) {
     let warmup = 0;
     for (const inst of PAIRS) {
       for (const c of (cache[inst]?.h1 || [])) {
-        if (c.ms > evalMs) continue;
+        if (c.ms >= evalMs) continue;                     // upper bound exclusive
         if (c.ms >= windowStart) inWindow.add(c.ms);
         else if (c.ms > warmup) warmup = c.ms;
       }

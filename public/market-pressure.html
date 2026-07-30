@@ -123,7 +123,7 @@
     <a href="/app" class="sx-back-btn">← Back</a>
   </div>
 
-  <div class="sx-subtitle">W1/D1/H4 candle-pressure alignment (price vs open ÷ ATR14). Only pairs where all three timeframes agree are ranked; trend score = 0.50·W1 + 0.30·D1 + 0.20·H4, ranked by |score|. One card per hour showing its top tradable pairs (MODERATE/STRONG, |score| ≥ 0.40) where the last completed D1 and H4 candles both match the current D1/H4 direction (continuation) and the price has broken the previous day's high/low in the trade direction — newest first, max 5; "No trade" when none qualify.</div>
+  <div class="sx-subtitle">W1/D1/H4 candle-pressure alignment (price vs open ÷ ATR14). Only pairs where all three timeframes agree are ranked; trend score = 0.50·W1 + 0.30·D1 + 0.20·H4, ranked by |score|. One card per hour showing its top tradable pairs (MODERATE/STRONG, |score| ≥ 0.40) where the last completed D1 and H4 candles both match the current D1/H4 direction (continuation) and the price has broken the previous day's high/low in the trade direction — newest first, max 5; "No trade" when none qualify. Each card is labelled by its H1 candle's open hour, in your local time.</div>
 
   <div class="sx-filters">
     <span class="sx-filter-label">Date:</span>
@@ -207,8 +207,8 @@
       if (_pairFilter !== 'both') top = top.filter(function (p) { return p.state === _pairFilter; });
       top = top.slice(0, 5);
       var head = '<div class="mp-card-head"><div>'
-        + '<div class="mp-card-time">' + fmtTime(snap.signalTime) + '</div>'
-        + '<div class="mp-card-date">' + fmtDay(snap.signalTime) + '</div></div>'
+        + '<div class="mp-card-time">' + fmtTime(snap.time) + '</div>'
+        + '<div class="mp-card-date">' + fmtDay(snap.time) + '</div></div>'
         + '<span class="mp-card-valid">' + top.length + ' tradable</span></div>';
       var rows = '';
       for (var i = 0; i < top.length; i++) {
@@ -231,8 +231,8 @@
     function ccyCardHtml(snap) {
       var list = snap.currencies || [];
       var head = '<div class="mp-card-head"><div>'
-        + '<div class="mp-card-time">' + fmtTime(snap.signalTime) + '</div>'
-        + '<div class="mp-card-date">' + fmtDay(snap.signalTime) + '</div></div>'
+        + '<div class="mp-card-time">' + fmtTime(snap.time) + '</div>'
+        + '<div class="mp-card-date">' + fmtDay(snap.time) + '</div></div>'
         + '<span class="mp-card-valid">' + list.length + ' ccy</span></div>';
       var rows = '';
       for (var i = 0; i < list.length; i++) {
@@ -274,11 +274,28 @@
       el.innerHTML = head + html;
     }
 
+    // Resolve a local (profile-tz) wall-clock date + hour to a UTC instant.
+    function zonedWallToUtcMs(dateStr, hour) {
+      var tz = _tz();
+      var p = dateStr.split('-');
+      var wallUtc = Date.UTC(+p[0], (+p[1]) - 1, +p[2], hour, 0, 0);
+      var dtf = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour12: false,
+        year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      var m = {}; dtf.formatToParts(new Date(wallUtc)).forEach(function (pt) { m[pt.type] = pt.value; });
+      var tzAsUtc = Date.UTC(+m.year, (+m.month) - 1, +m.day, (+m.hour) % 24, +m.minute, +m.second);
+      return wallUtc - (tzAsUtc - wallUtc);
+    }
+
     async function load(silent) {
       if (!silent) document.getElementById('evo-body').innerHTML = '<div class="evo-loading"><span class="spinner"></span> Loading…</div>';
       var dateEl = document.getElementById('sx-date');
-      // A selected day returns that day's cards; live returns the last 24h.
-      var qs = dateEl.value ? '?date=' + encodeURIComponent(dateEl.value) : '';
+      // A selected date shows that whole local day (end = next local midnight);
+      // live returns the last 24h. Cards are labelled by candle open hour.
+      var qs = '';
+      if (dateEl.value) {
+        var endMs = zonedWallToUtcMs(dateEl.value, 24);   // local next-midnight
+        qs = '?at=' + encodeURIComponent(new Date(endMs).toISOString());
+      }
       try {
         var res = await fetch('/api/market-pressure' + qs, { headers: { Authorization: 'Bearer ' + TOKEN }, cache: 'no-store' });
         if (!res.ok) throw new Error(await res.text());
