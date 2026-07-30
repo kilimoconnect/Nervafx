@@ -123,7 +123,7 @@
     <a href="/app" class="sx-back-btn">← Back</a>
   </div>
 
-  <div class="sx-subtitle">W1/D1/H4 candle-pressure alignment (price vs open ÷ ATR14). Only pairs where all three timeframes agree are ranked; trend score = 0.50·W1 + 0.30·D1 + 0.20·H4, ranked by |score|. One card per hour showing its top tradable pairs (MODERATE/STRONG, |score| ≥ 0.40) where the last completed D1 and H4 candles both match the current D1/H4 direction (continuation) — newest first, max 5; "No trade" when none qualify.</div>
+  <div class="sx-subtitle">W1/D1/H4 candle-pressure alignment (price vs open ÷ ATR14). Only pairs where all three timeframes agree are ranked; trend score = 0.50·W1 + 0.30·D1 + 0.20·H4, ranked by |score|. One card per hour showing its top tradable pairs (WEAK/MODERATE/STRONG, |score| ≥ 0.25 — only flat/IGNORE hidden) where the last completed D1 and H4 candles both match the current D1/H4 direction (continuation) — newest first, max 5; "No trade" when none qualify.</div>
 
   <div class="sx-filters">
     <span class="sx-filter-label">Date:</span>
@@ -136,9 +136,10 @@
     <button class="mp-tab active" id="tab-pairs" data-view="pairs">Pairs</button>
     <button class="mp-tab" id="tab-ccy" data-view="currencies">Currencies</button>
     <select class="sx-date-input" id="mp-strength" style="width:130px">
-      <option value="both">Both</option>
+      <option value="both">All</option>
       <option value="STRONG">Strong only</option>
       <option value="MODERATE">Moderate only</option>
+      <option value="WEAK">Weak only</option>
     </select>
   </div>
 
