@@ -106,6 +106,15 @@
     .mp-right { text-align: right; }
     .mp-score { font-family: monospace; font-weight: 800; font-size: 13px; }
     .mp-delta { font-size: 10px; margin-top: 2px; }
+
+    /* Session-continuation table. */
+    .mps-wrap { max-width: 820px; margin: 0 auto; padding: 8px 16px 48px; }
+    table.mps { width: 100%; border-collapse: collapse; font-size: 12px; }
+    table.mps th, table.mps td { padding: 8px 8px; border-bottom: 1px solid rgba(255,255,255,0.04); white-space: nowrap; text-align: center; }
+    table.mps thead th { position: sticky; top: 0; background: #0b0f18; color: var(--text-dim); font-size: 10px; font-weight: 700; letter-spacing: 0.4px; z-index: 5; }
+    table.mps thead th .mps-sub { display: block; font-size: 9px; font-weight: 500; color: #64748b; margin-top: 2px; }
+    td.mps-pair { text-align: left; font-weight: 800; color: #fff; }
+    .mps-cont { font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 5px; }
     .spinner {
       display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,0.2);
       border-top-color:#f472b6;border-radius:50%;animation:spin 0.7s linear infinite;vertical-align:middle;
@@ -135,6 +144,7 @@
   <div class="mp-tabs">
     <button class="mp-tab active" id="tab-pairs" data-view="pairs">Pairs</button>
     <button class="mp-tab" id="tab-ccy" data-view="currencies">Currencies</button>
+    <button class="mp-tab" id="tab-sess" data-view="sessions">Sessions</button>
     <select class="sx-date-input" id="mp-strength" style="width:130px">
       <option value="both">Both</option>
       <option value="STRONG">Strong only</option>
@@ -142,7 +152,10 @@
     </select>
   </div>
 
-  <div class="evo-wrap"><div id="evo-body"><div class="evo-loading"><span class="spinner"></span> Loading…</div></div></div>
+  <div class="evo-wrap">
+    <div id="evo-body"><div class="evo-loading"><span class="spinner"></span> Loading…</div></div>
+    <div id="mp-sessions" style="display:none"></div>
+  </div>
 
   <script>
     var TOKEN = localStorage.getItem('nfx_token') || '';
@@ -305,20 +318,76 @@
       }
     }
 
-    document.getElementById('sx-go').addEventListener('click', function () { load(); });
+    // ---- Session continuation ----
+    function sessCell(c) {
+      if (!c) return '<td style="color:#475569">·</td>';
+      var col = c.dir === 'BUY' ? '#22c55e' : '#ef4444';
+      return '<td><span style="color:' + col + ';font-weight:800">' + (c.dir === 'BUY' ? '▲' : '▼') + ' ' + c.dir + '</span>'
+        + ' <span style="font-size:9px;color:var(--text-dim)">' + c.hours + 'h</span></td>';
+    }
+    function renderSessions(data) {
+      var el = document.getElementById('mp-sessions');
+      var S = data.sessions || [], pairs = data.pairs || [];
+      if (!pairs.length) { el.innerHTML = '<div class="evo-empty">No pairs passed the gate in the last three sessions.</div>'; return; }
+      var h = '<div class="mps-wrap"><div style="font-size:11px;color:var(--text-dim);padding:4px 0 10px;text-align:center">'
+        + 'Pairs that passed the gate during the last three 8h sessions · sorted by continuation streak</div>';
+      h += '<table class="mps"><thead><tr><th style="text-align:left">Pair</th><th>Dir</th>';
+      for (var i = 0; i < S.length; i++) h += '<th>' + S[i].name + '<span class="mps-sub">' + fmtDay(S[i].start) + ' ' + fmtTime(S[i].start) + '–' + fmtTime(S[i].end) + '</span></th>';
+      h += '<th>Cont.</th></tr></thead><tbody>';
+      for (var j = 0; j < pairs.length; j++) {
+        var p = pairs[j];
+        var dcol = p.direction === 'BUY' ? '#4ade80' : '#f87171';
+        var cc = p.streak >= 3 ? '#22c55e' : p.streak === 2 ? '#facc15' : '#94a3b8';
+        h += '<tr><td class="mps-pair">' + p.pair + '</td>'
+          + '<td style="color:' + dcol + ';font-weight:800">' + (p.direction || '') + '</td>'
+          + sessCell(p.sessions[0]) + sessCell(p.sessions[1]) + sessCell(p.sessions[2])
+          + '<td><span class="mps-cont" style="background:' + cc + '22;color:' + cc + '">' + p.streak + '/3</span></td></tr>';
+      }
+      h += '</tbody></table></div>';
+      el.innerHTML = h;
+    }
+    async function loadSessions(silent) {
+      var el = document.getElementById('mp-sessions');
+      if (!silent) el.innerHTML = '<div class="evo-loading"><span class="spinner"></span> Loading sessions…</div>';
+      var dateEl = document.getElementById('sx-date');
+      var qs = '?sessions=1';
+      if (dateEl.value) qs += '&at=' + encodeURIComponent(new Date(zonedWallToUtcMs(dateEl.value, 24)).toISOString());
+      try {
+        var res = await fetch('/api/market-pressure' + qs, { headers: { Authorization: 'Bearer ' + TOKEN }, cache: 'no-store' });
+        if (!res.ok) throw new Error(await res.text());
+        el.dataset.loaded = '1';
+        renderSessions(await res.json());
+      } catch (e) {
+        el.innerHTML = '<div class="evo-empty" style="color:#f87171">Error: ' + e.message + '</div>';
+      }
+    }
+
+    function refreshActive() {
+      _lastData = null;                                   // invalidate pairs/currencies cache
+      document.getElementById('mp-sessions').dataset.loaded = '';
+      if (_view === 'sessions') loadSessions(); else load();
+    }
+    document.getElementById('sx-go').addEventListener('click', refreshActive);
     document.getElementById('sx-live').addEventListener('click', function () {
-      document.getElementById('sx-date').value = ''; load();
+      document.getElementById('sx-date').value = ''; refreshActive();
     });
 
     function setView(v) {
       _view = v;
       document.getElementById('tab-pairs').classList.toggle('active', v === 'pairs');
       document.getElementById('tab-ccy').classList.toggle('active', v === 'currencies');
+      document.getElementById('tab-sess').classList.toggle('active', v === 'sessions');
       document.getElementById('mp-strength').style.display = (v === 'pairs') ? '' : 'none';
-      render();   // re-render cached data, no refetch
+      var sessions = (v === 'sessions');
+      document.getElementById('evo-body').style.display = sessions ? 'none' : '';
+      document.getElementById('mp-sessions').style.display = sessions ? '' : 'none';
+      if (sessions) {
+        if (!document.getElementById('mp-sessions').dataset.loaded) loadSessions();
+      } else if (!_lastData) { load(); } else { render(); }
     }
     document.getElementById('tab-pairs').addEventListener('click', function () { setView('pairs'); });
     document.getElementById('tab-ccy').addEventListener('click', function () { setView('currencies'); });
+    document.getElementById('tab-sess').addEventListener('click', function () { setView('sessions'); });
     document.getElementById('mp-strength').addEventListener('change', function () {
       _pairFilter = this.value; render();
     });
@@ -331,7 +400,9 @@
       var secsIntoHour = now.getUTCMinutes() * 60 + now.getUTCSeconds();
       var delay = ((3600 - secsIntoHour) + 120) * 1000;
       setTimeout(function () {
-        if (!document.getElementById('sx-date').value) load(true);
+        if (!document.getElementById('sx-date').value) {
+          if (_view === 'sessions') loadSessions(true); else load(true);
+        }
         scheduleRefresh();
       }, delay);
     }

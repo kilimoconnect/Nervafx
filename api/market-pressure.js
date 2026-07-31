@@ -290,6 +290,45 @@ module.exports = async function handler(req, res) {
     }
     cards.reverse();                                      // newest first
 
+    // Session-continuation mode: group the hourly cards into the last three
+    // 8h UTC sessions (Asian 00-08 / London 08-16 / New York 16-24) and list
+    // pairs that passed the gate in each, so persistent setups stand out.
+    if (req.query?.sessions) {
+      const SESSION = 8 * HOUR;
+      const nameOf = (b) => { const h = new Date(b).getUTCHours(); return h < 8 ? 'Asian' : h < 16 ? 'London' : 'New York'; };
+      const cur = floorTo(evalMs - 1, SESSION);
+      const blocks = [cur - 2 * SESSION, cur - SESSION, cur];   // oldest → newest
+      const idxOf = (t) => { for (let i = 0; i < 3; i++) if (t >= blocks[i] && t < blocks[i] + SESSION) return i; return -1; };
+      const map = {};
+      for (const card of cards) {
+        const idx = idxOf(new Date(card.time).getTime());
+        if (idx < 0) continue;
+        for (const p of card.top) {
+          const e = map[p.instrument] || (map[p.instrument] = { pair: p.pair, instrument: p.instrument, sess: [null, null, null] });
+          const cell = e.sess[idx] || (e.sess[idx] = { dir: p.direction, hours: 0, bestAbs: 0, state: p.state });
+          cell.hours++;
+          const a = Math.abs(p.trendScore);
+          if (a >= cell.bestAbs) { cell.bestAbs = a; cell.state = p.state; cell.dir = p.direction; }
+        }
+      }
+      const pairs = Object.values(map).map(e => {
+        let streak = 0, dir = null;                       // consecutive recent sessions, same dir
+        for (let i = 2; i >= 0; i--) { const c = e.sess[i]; if (!c) break; if (dir === null) dir = c.dir; if (c.dir !== dir) break; streak++; }
+        let recentDir = null, recentScore = 0;
+        for (let i = 2; i >= 0; i--) if (e.sess[i]) { recentDir = e.sess[i].dir; recentScore = +e.sess[i].bestAbs.toFixed(3); break; }
+        return {
+          pair: e.pair, instrument: e.instrument, direction: recentDir, streak, score: recentScore,
+          total: e.sess.filter(Boolean).length,
+          sessions: e.sess.map(c => c ? { dir: c.dir, hours: c.hours, score: +c.bestAbs.toFixed(3), state: c.state } : null),
+        };
+      }).sort((a, b) => b.streak - a.streak || b.total - a.total || b.score - a.score);
+      return res.json({
+        asOf: new Date(evalMs).toISOString(),
+        sessions: blocks.map(b => ({ name: nameOf(b), start: new Date(b).toISOString(), end: new Date(b + SESSION).toISOString() })),
+        pairs,
+      });
+    }
+
     res.json({
       total: PAIRS.length,
       weights: WEIGHTS,
