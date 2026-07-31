@@ -63,6 +63,15 @@ function atr14(candles) {
   return last.length ? last.reduce((a, b) => a + b, 0) / last.length : null;
 }
 
+// Standard EMA over an ascending close series.
+function ema(values, period) {
+  if (values.length < period) return null;
+  const k = 2 / (period + 1);
+  let e = values.slice(0, period).reduce((a, b) => a + b, 0) / period;
+  for (let i = period; i < values.length; i++) e = values[i] * k + e * (1 - k);
+  return e;
+}
+
 function marketState(absScore) {
   if (absScore > 0.70) return 'STRONG';
   if (absScore >= MIN_SCORE) return 'MODERATE';
@@ -322,6 +331,32 @@ module.exports = async function handler(req, res) {
           sessions: e.sess.map(c => c ? { dir: c.dir, hours: c.hours, score: +c.bestAbs.toFixed(3), state: c.state } : null),
         };
       }).sort((a, b) => b.streak - a.streak || b.total - a.total || b.score - a.score);
+
+      // Current M15 EMA stack for each listed pair: price vs EMA20/EMA50.
+      // Confirms when the stack agrees with the pair's direction
+      // (BUY: close > EMA20 > EMA50; SELL: close < EMA20 < EMA50).
+      await Promise.all(pairs.map(async pr => {
+        pr.m15 = null;
+        try {
+          const { data, error } = await sb
+            .from('backtest_candles')
+            .select('close')
+            .eq('instrument', pr.instrument).eq('timeframe', 'M15').eq('complete', true)
+            .lte('time', until).order('time', { ascending: false }).limit(80);
+          if (error || !data) return;
+          const closes = data.map(c => +c.close).reverse();
+          const e20 = ema(closes, 20), e50 = ema(closes, 50), close = closes[closes.length - 1];
+          if (e20 == null || e50 == null || close == null) return;
+          const bull = close > e20 && e20 > e50, bear = close < e20 && e20 < e50;
+          const stack = bull ? 'BULL' : bear ? 'BEAR' : 'MIXED';
+          pr.m15 = {
+            stack,
+            confirms: (pr.direction === 'BUY' && bull) || (pr.direction === 'SELL' && bear),
+            close: +close.toFixed(6), e20: +e20.toFixed(6), e50: +e50.toFixed(6),
+          };
+        } catch (_) { /* leave null */ }
+      }));
+
       return res.json({
         asOf: new Date(evalMs).toISOString(),
         sessions: blocks.map(b => ({ name: nameOf(b), start: new Date(b).toISOString(), end: new Date(b + SESSION).toISOString() })),
