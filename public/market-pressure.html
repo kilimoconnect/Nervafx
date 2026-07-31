@@ -340,19 +340,22 @@
       var S = data.sessions || [], pairs = data.pairs || [];
       if (!pairs.length) { el.innerHTML = '<div class="evo-empty">No pairs passed the gate in the last three sessions.</div>'; return; }
       var h = '<div class="mps-wrap"><div style="font-size:11px;color:var(--text-dim);padding:4px 0 10px;text-align:center">'
-        + 'Pairs that passed the gate during the last three 8h sessions · sorted by continuation streak · 15m EMA = current M15 stack confirming the trade direction (price/EMA20/EMA50)</div>';
+        + 'Pairs that passed the gate during the last five 8h sessions · sorted by continuation streak · 15m EMA = current M15 stack confirming the trade direction (price/EMA20/EMA50)</div>';
       h += '<table class="mps"><thead><tr><th style="text-align:left">Pair</th><th>Dir</th>';
       for (var i = 0; i < S.length; i++) h += '<th>' + S[i].name + '<span class="mps-sub">' + fmtDay(S[i].start) + ' ' + fmtTime(S[i].start) + '–' + fmtTime(S[i].end) + '</span></th>';
       h += '<th>15m EMA<span class="mps-sub">current</span></th><th>Cont.</th></tr></thead><tbody>';
+      var full = S.length;
       for (var j = 0; j < pairs.length; j++) {
         var p = pairs[j];
         var dcol = p.direction === 'BUY' ? '#4ade80' : '#f87171';
-        var cc = p.streak >= 3 ? '#22c55e' : p.streak === 2 ? '#facc15' : '#94a3b8';
+        var cc = p.streak >= full ? '#22c55e' : p.streak >= Math.ceil(full / 2) ? '#facc15' : '#94a3b8';
+        var sc = '';
+        for (var k = 0; k < full; k++) sc += sessCell(p.sessions[k]);
         h += '<tr><td class="mps-pair">' + p.pair + '</td>'
           + '<td style="color:' + dcol + ';font-weight:800">' + (p.direction || '') + '</td>'
-          + sessCell(p.sessions[0]) + sessCell(p.sessions[1]) + sessCell(p.sessions[2])
+          + sc
           + m15Cell(p.m15, p.direction)
-          + '<td><span class="mps-cont" style="background:' + cc + '22;color:' + cc + '">' + p.streak + '/3</span></td></tr>';
+          + '<td><span class="mps-cont" style="background:' + cc + '22;color:' + cc + '">' + p.streak + '/' + full + '</span></td></tr>';
       }
       h += '</tbody></table></div>';
       el.innerHTML = h;

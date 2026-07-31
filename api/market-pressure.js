@@ -230,7 +230,8 @@ module.exports = async function handler(req, res) {
     // Window of hourly snapshot cards. A selected ?date covers that whole day;
     // otherwise the last 24h ending at evalMs. Each card ranks its valid pairs
     // and surfaces the tradable ones, with rank change / momentum vs the prior card.
-    let windowStart = evalMs - DAY;
+    // Sessions mode needs ~5×8h of history; pairs/currencies just the last 24h.
+    let windowStart = evalMs - (req.query?.sessions ? 2 * DAY : DAY);
     if (!qAt && qDate && /^\d{4}-\d{2}-\d{2}$/.test(qDate)) {
       windowStart = new Date(qDate + 'T00:00:00Z').getTime();
     }
@@ -299,21 +300,22 @@ module.exports = async function handler(req, res) {
     }
     cards.reverse();                                      // newest first
 
-    // Session-continuation mode: group the hourly cards into the last three
+    // Session-continuation mode: group the hourly cards into the last five
     // 8h UTC sessions (Asian 00-08 / London 08-16 / New York 16-24) and list
     // pairs that passed the gate in each, so persistent setups stand out.
     if (req.query?.sessions) {
-      const SESSION = 8 * HOUR;
+      const SESSION = 8 * HOUR, NSESS = 5;
       const nameOf = (b) => { const h = new Date(b).getUTCHours(); return h < 8 ? 'Asian' : h < 16 ? 'London' : 'New York'; };
       const cur = floorTo(evalMs - 1, SESSION);
-      const blocks = [cur - 2 * SESSION, cur - SESSION, cur];   // oldest → newest
-      const idxOf = (t) => { for (let i = 0; i < 3; i++) if (t >= blocks[i] && t < blocks[i] + SESSION) return i; return -1; };
+      const blocks = [];                                  // oldest → newest
+      for (let i = NSESS - 1; i >= 0; i--) blocks.push(cur - i * SESSION);
+      const idxOf = (t) => { for (let i = 0; i < NSESS; i++) if (t >= blocks[i] && t < blocks[i] + SESSION) return i; return -1; };
       const map = {};
       for (const card of cards) {
         const idx = idxOf(new Date(card.time).getTime());
         if (idx < 0) continue;
         for (const p of card.top) {
-          const e = map[p.instrument] || (map[p.instrument] = { pair: p.pair, instrument: p.instrument, sess: [null, null, null] });
+          const e = map[p.instrument] || (map[p.instrument] = { pair: p.pair, instrument: p.instrument, sess: new Array(NSESS).fill(null) });
           const cell = e.sess[idx] || (e.sess[idx] = { dir: p.direction, hours: 0, bestAbs: 0, state: p.state });
           cell.hours++;
           const a = Math.abs(p.trendScore);
@@ -322,9 +324,9 @@ module.exports = async function handler(req, res) {
       }
       const pairs = Object.values(map).map(e => {
         let streak = 0, dir = null;                       // consecutive recent sessions, same dir
-        for (let i = 2; i >= 0; i--) { const c = e.sess[i]; if (!c) break; if (dir === null) dir = c.dir; if (c.dir !== dir) break; streak++; }
+        for (let i = NSESS - 1; i >= 0; i--) { const c = e.sess[i]; if (!c) break; if (dir === null) dir = c.dir; if (c.dir !== dir) break; streak++; }
         let recentDir = null, recentScore = 0;
-        for (let i = 2; i >= 0; i--) if (e.sess[i]) { recentDir = e.sess[i].dir; recentScore = +e.sess[i].bestAbs.toFixed(3); break; }
+        for (let i = NSESS - 1; i >= 0; i--) if (e.sess[i]) { recentDir = e.sess[i].dir; recentScore = +e.sess[i].bestAbs.toFixed(3); break; }
         return {
           pair: e.pair, instrument: e.instrument, direction: recentDir, streak, score: recentScore,
           total: e.sess.filter(Boolean).length,
