@@ -334,25 +334,44 @@ module.exports = async function handler(req, res) {
 
       // Current M15 EMA stack for each listed pair: price vs EMA20/EMA50.
       // Confirms when the stack agrees with the pair's direction
-      // (BUY: close > EMA20 > EMA50; SELL: close < EMA20 < EMA50).
+      // (BUY: close > EMA20 > EMA50; SELL: close < EMA20 < EMA50). `since`/`bars`
+      // report how long the current confirming stack has held unbroken.
       await Promise.all(pairs.map(async pr => {
         pr.m15 = null;
         try {
           const { data, error } = await sb
             .from('backtest_candles')
-            .select('close')
+            .select('time, close')
             .eq('instrument', pr.instrument).eq('timeframe', 'M15').eq('complete', true)
-            .lte('time', until).order('time', { ascending: false }).limit(80);
-          if (error || !data) return;
-          const closes = data.map(c => +c.close).reverse();
-          const e20 = ema(closes, 20), e50 = ema(closes, 50), close = closes[closes.length - 1];
-          if (e20 == null || e50 == null || close == null) return;
-          const bull = close > e20 && e20 > e50, bear = close < e20 && e20 < e50;
-          const stack = bull ? 'BULL' : bear ? 'BEAR' : 'MIXED';
+            .lte('time', until).order('time', { ascending: false }).limit(240);
+          if (error || !data || data.length < 51) return;
+          const asc = data.slice().reverse();
+          const k20 = 2 / 21, k50 = 2 / 51;
+          let e20 = null, e50 = null; const s20 = [], s50 = [];
+          const seq = [];
+          for (const c of asc) {
+            const px = +c.close;
+            if (e20 === null) { s20.push(px); if (s20.length === 20) e20 = s20.reduce((a, b) => a + b, 0) / 20; }
+            else e20 = px * k20 + e20 * (1 - k20);
+            if (e50 === null) { s50.push(px); if (s50.length === 50) e50 = s50.reduce((a, b) => a + b, 0) / 50; }
+            else e50 = px * k50 + e50 * (1 - k50);
+            seq.push({ time: c.time, close: px, e20, e50 });
+          }
+          let last = -1;
+          for (let i = seq.length - 1; i >= 0; i--) { if (seq[i].e20 != null && seq[i].e50 != null) { last = i; break; } }
+          if (last < 0) return;
+          const stackAt = (x) => { const s = seq[x]; if (s.e20 == null || s.e50 == null) return 'MIXED'; if (s.close > s.e20 && s.e20 > s.e50) return 'BULL'; if (s.close < s.e20 && s.e20 < s.e50) return 'BEAR'; return 'MIXED'; };
+          const want = pr.direction === 'BUY' ? 'BULL' : 'BEAR';
+          const stack = stackAt(last);
+          const confirms = stack === want;
+          let since = null, bars = 0;
+          if (confirms) {
+            for (let i = last; i >= 0 && seq[i].e20 != null && stackAt(i) === want; i--) { since = seq[i].time; bars++; }
+          }
+          const s = seq[last];
           pr.m15 = {
-            stack,
-            confirms: (pr.direction === 'BUY' && bull) || (pr.direction === 'SELL' && bear),
-            close: +close.toFixed(6), e20: +e20.toFixed(6), e50: +e50.toFixed(6),
+            stack, confirms, since, bars,
+            close: +s.close.toFixed(6), e20: +s.e20.toFixed(6), e50: +s.e50.toFixed(6),
           };
         } catch (_) { /* leave null */ }
       }));

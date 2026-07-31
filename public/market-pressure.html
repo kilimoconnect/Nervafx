@@ -167,7 +167,7 @@
         var r = await fetch('/api/profile', { headers: { Authorization: 'Bearer ' + TOKEN } });
         if (!r.ok) return;
         var p = await r.json();
-        if (p.timezone) { _userTz = (p.timezone === 'UTC') ? 'auto' : p.timezone; try { localStorage.setItem('nfx_tz', _userTz); } catch (_) {} }
+        if (p.timezone) { _userTz = p.timezone; try { localStorage.setItem('nfx_tz', _userTz); } catch (_) {} }  // honor profile tz, incl. UTC
       } catch (_) {}
     }
 
@@ -330,7 +330,8 @@
       if (m.confirms) {
         var col = dir === 'BUY' ? '#22c55e' : '#ef4444';
         var txt = dir === 'BUY' ? 'P&gt;20&gt;50' : 'P&lt;20&lt;50';
-        return '<td><span style="color:' + col + ';font-weight:800;font-size:11px">✓ ' + txt + '</span></td>';
+        var since = m.since ? '<div style="font-size:9px;color:var(--text-dim)">since ' + fmtTime(m.since) + ' · ' + m.bars + ' bars</div>' : '';
+        return '<td><span style="color:' + col + ';font-weight:800;font-size:11px">✓ ' + txt + '</span>' + since + '</td>';
       }
       return '<td><span style="color:#94a3b8;font-size:11px" title="M15 EMA stack: ' + m.stack + '">' + (m.stack === 'MIXED' ? 'mixed' : m.stack.toLowerCase()) + '</span></td>';
     }
