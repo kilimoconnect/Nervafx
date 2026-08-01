@@ -165,18 +165,23 @@
       });
     });
 
-    // Resolve a local (profile-tz) wall-clock date + hour to a UTC instant.
-    function zonedWallToUtcMs(dateStr, hour) {
+    // Resolve a local (profile-tz) wall-clock date + hour:minute to a UTC instant.
+    function zonedWallToUtcMs(dateStr, hour, minute) {
       var tz = _tz(), p = dateStr.split('-');
-      var wallUtc = Date.UTC(+p[0], (+p[1]) - 1, +p[2], hour, 0, 0);
+      var wallUtc = Date.UTC(+p[0], (+p[1]) - 1, +p[2], hour, minute || 0, 0);
       var dtf = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
       var m = {}; dtf.formatToParts(new Date(wallUtc)).forEach(function (pt) { m[pt.type] = pt.value; });
       var tzAsUtc = Date.UTC(+m.year, (+m.month) - 1, +m.day, (+m.hour) % 24, +m.minute, +m.second);
       return wallUtc - (tzAsUtc - wallUtc);
     }
     (function () {
-      var sel = document.getElementById('pb-hour');
-      for (var hh = 0; hh < 24; hh++) { var o = document.createElement('option'); o.value = String(hh); o.textContent = (hh < 10 ? '0' + hh : hh) + ':00'; sel.appendChild(o); }
+      var sel = document.getElementById('pb-hour');   // 15-min marks (M15 is the trigger)
+      for (var mins = 0; mins < 24 * 60; mins += 15) {
+        var hh = Math.floor(mins / 60), mm = mins % 60;
+        var o = document.createElement('option'); o.value = String(mins);
+        o.textContent = (hh < 10 ? '0' + hh : hh) + ':' + (mm < 10 ? '0' + mm : mm);
+        sel.appendChild(o);
+      }
     })();
 
     async function load(silent) {
@@ -184,7 +189,8 @@
       var dateEl = document.getElementById('pb-date'), hourEl = document.getElementById('pb-hour');
       var qs = '';
       if (dateEl.value) {
-        var atMs = zonedWallToUtcMs(dateEl.value, parseInt(hourEl.value, 10) || 0) + 3600000; // end of the selected hour
+        var mins = parseInt(hourEl.value, 10) || 0;    // selected 15m close (signal) time
+        var atMs = zonedWallToUtcMs(dateEl.value, Math.floor(mins / 60), mins % 60);
         qs = '?at=' + encodeURIComponent(new Date(atMs).toISOString());
       }
       try {
@@ -203,8 +209,10 @@
     });
     (async function () {
       await loadProfileTz();
-      var h = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: _tz(), hour: '2-digit', hour12: false }).format(new Date()), 10) % 24;
-      document.getElementById('pb-hour').value = String(h);
+      var hh = 0, mm = 0;
+      new Intl.DateTimeFormat('en-US', { timeZone: _tz(), hour12: false, hour: '2-digit', minute: '2-digit' })
+        .formatToParts(new Date()).forEach(function (p) { if (p.type === 'hour') hh = +p.value % 24; if (p.type === 'minute') mm = +p.value; });
+      document.getElementById('pb-hour').value = String(Math.floor((hh * 60 + mm) / 15) * 15);
       load();
     })();
     setInterval(function () { if (!document.getElementById('pb-date').value) load(true); }, 5 * 60 * 1000);
