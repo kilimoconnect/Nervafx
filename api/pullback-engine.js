@@ -89,17 +89,23 @@ module.exports = async function handler(req, res) {
   const sb = getClient();
   try {
     // History: ?at=<ISO> evaluates the engine as of that instant.
+    const HOUR = 3600000, M15 = 900000;
     const now = Date.now();
     let evalMs = now;
     if (req.query?.at) { const t = new Date(req.query.at).getTime(); if (!isNaN(t)) evalMs = Math.min(t, now); }
-    const until = new Date(evalMs).toISOString();
+    // Use SIGNAL (close) time, not candle-open time: only include candles that
+    // have closed by evalMs. DB `time` = open, so a candle closes at open+TF;
+    // bound the open time to evalMs − TF so nothing closing after evalMs leaks in.
+    const untilH1 = new Date(evalMs - HOUR).toISOString();
+    const untilM15 = new Date(evalMs - M15).toISOString();
+    const signalMs = Math.floor(evalMs / M15) * M15;   // last M15 close at/before evalMs
 
-    // Per-pair H1 + M15 EMA snapshot (as of evalMs).
+    // Per-pair H1 + M15 EMA snapshot (as of the latest closed candles).
     const px = {};
     for (let b = 0; b < PAIRS.length; b += 7) {
       const batch = PAIRS.slice(b, b + 7);
       const rows = await Promise.all(batch.map(async inst => {
-        const [h1c, m15c] = await Promise.all([fetchCloses(sb, inst, 'H1', 220, until), fetchCloses(sb, inst, 'M15', 220, until)]);
+        const [h1c, m15c] = await Promise.all([fetchCloses(sb, inst, 'H1', 220, untilH1), fetchCloses(sb, inst, 'M15', 220, untilM15)]);
         const series = (closes) => (closes.length < 51 ? null : { closes, s20: emaSeries(closes, 20), s50: emaSeries(closes, 50) });
         const snapOf = (X) => {
           if (!X) return null;
@@ -210,7 +216,7 @@ module.exports = async function handler(req, res) {
     pairs.sort((a, b) => b.score - a.score);
 
     res.json({
-      generatedAt: new Date(evalMs).toISOString(),
+      generatedAt: new Date(signalMs).toISOString(),   // signal (candle-close) time
       thresholds: { strong: STRONG_TH, weak: WEAK_TH },
       currencies: { h1: ranked(sH1), m15: ranked(sM15) },
       pairs,
