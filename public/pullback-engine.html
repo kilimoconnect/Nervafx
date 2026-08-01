@@ -31,6 +31,10 @@
     .pb-cc-fill { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
     .pb-cc-val { font-family: monospace; font-size: 11px; font-weight: 700; }
 
+    .pb-filters { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 20px 2px; flex-wrap: wrap; }
+    .pb-input { padding: 5px 10px; border-radius: 7px; font-size: 11px; background: rgba(255,255,255,0.04); border: 1px solid var(--border); color: var(--text-muted); color-scheme: dark; }
+    .pb-go { padding: 5px 12px; border-radius: 7px; font-size: 11px; font-weight: 700; background: rgba(236,72,153,0.2); border: 1px solid rgba(236,72,153,0.4); color: #f472b6; cursor: pointer; }
+    .pb-live { padding: 5px 12px; border-radius: 7px; font-size: 11px; font-weight: 700; background: rgba(255,255,255,0.06); border: 1px solid var(--border); color: var(--text-muted); cursor: pointer; }
     .pb-tabs { display: flex; justify-content: center; gap: 8px; padding: 4px 20px 2px; flex-wrap: wrap; }
     .pb-tab { padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; background: rgba(255,255,255,0.04); border: 1px solid var(--border); color: var(--text-muted); }
     .pb-tab.active { background: rgba(236,72,153,0.2); border-color: rgba(236,72,153,0.4); color: #f472b6; }
@@ -55,14 +59,23 @@
     <a href="/app" class="sx-back-btn">← Back</a>
   </div>
 
-  <div class="sx-subtitle">H1 defines the trend (EMA20/EMA50 structure + currency strength) and must stay intact through the pullback; M15 detects the pullback and the realignment. A signal fires only when the M15 EMA stack and currency strength snap back into the unchanged H1 direction. Strong ≥ +33 · Weak ≤ −33 (strength −100…+100).</div>
+  <div class="sx-subtitle">H1 defines the trend (EMA20/EMA50 structure + currency strength) and must stay intact through the pullback; M15 detects the pullback and the realignment. ENTRY fires only after the sequence <b style="color:#94a3b8">trend → pullback → fresh M15 realignment</b> (a continuously-aligned pair shows TREND). Strong ≥ +33 · Weak ≤ −33 (strength −100…+100).</div>
   <div class="sx-meta" id="pb-meta"></div>
+
+  <div class="pb-filters" id="pb-filters">
+    <span style="font-size:10px;color:var(--text-dim)">As of:</span>
+    <input type="date" id="pb-date" class="pb-input" />
+    <select id="pb-hour" class="pb-input" style="width:96px"></select>
+    <button id="pb-go" class="pb-go">Go</button>
+    <button id="pb-live" class="pb-live">Live</button>
+  </div>
 
   <div id="pb-strength"></div>
 
   <div class="pb-tabs" id="pb-tabs">
     <button class="pb-tab active" data-f="ALL">All</button>
     <button class="pb-tab" data-f="ENTRY">Entry</button>
+    <button class="pb-tab" data-f="TREND">Trend</button>
     <button class="pb-tab" data-f="PULLBACK">Pullback</button>
     <button class="pb-tab" data-f="WAIT">Wait</button>
     <button class="pb-tab" data-f="REVERSAL_RISK">Reversal risk</button>
@@ -82,6 +95,7 @@
 
     var STATE = {
       ENTRY:        { c: '#22c55e', label: 'ENTRY' },
+      TREND:        { c: '#2dd4bf', label: 'TREND' },
       PULLBACK:     { c: '#38bdf8', label: 'PULLBACK' },
       WAIT:         { c: '#facc15', label: 'WAIT' },
       REVERSAL_RISK:{ c: '#f97316', label: 'REVERSAL RISK' },
@@ -151,19 +165,49 @@
       });
     });
 
-    async function load() {
+    // Resolve a local (profile-tz) wall-clock date + hour to a UTC instant.
+    function zonedWallToUtcMs(dateStr, hour) {
+      var tz = _tz(), p = dateStr.split('-');
+      var wallUtc = Date.UTC(+p[0], (+p[1]) - 1, +p[2], hour, 0, 0);
+      var dtf = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      var m = {}; dtf.formatToParts(new Date(wallUtc)).forEach(function (pt) { m[pt.type] = pt.value; });
+      var tzAsUtc = Date.UTC(+m.year, (+m.month) - 1, +m.day, (+m.hour) % 24, +m.minute, +m.second);
+      return wallUtc - (tzAsUtc - wallUtc);
+    }
+    (function () {
+      var sel = document.getElementById('pb-hour');
+      for (var hh = 0; hh < 24; hh++) { var o = document.createElement('option'); o.value = String(hh); o.textContent = (hh < 10 ? '0' + hh : hh) + ':00'; sel.appendChild(o); }
+    })();
+
+    async function load(silent) {
+      if (!silent) document.getElementById('pb-body').innerHTML = '<div class="pb-loading"><span class="spinner"></span> Loading…</div>';
+      var dateEl = document.getElementById('pb-date'), hourEl = document.getElementById('pb-hour');
+      var qs = '';
+      if (dateEl.value) {
+        var atMs = zonedWallToUtcMs(dateEl.value, parseInt(hourEl.value, 10) || 0) + 3600000; // end of the selected hour
+        qs = '?at=' + encodeURIComponent(new Date(atMs).toISOString());
+      }
       try {
-        var res = await fetch('/api/pullback-engine', { headers: { Authorization: 'Bearer ' + TOKEN }, cache: 'no-store' });
+        var res = await fetch('/api/pullback-engine' + qs, { headers: { Authorization: 'Bearer ' + TOKEN }, cache: 'no-store' });
         if (!res.ok) throw new Error(await res.text());
         _data = await res.json();
-        document.getElementById('pb-meta').textContent = 'Updated ' + fmtTime(_data.generatedAt) + ' · H1 currency strength shown above';
+        document.getElementById('pb-meta').textContent = (dateEl.value ? 'As of ' : 'Updated ') + fmtTime(_data.generatedAt) + ' · H1 currency strength shown above';
         render();
       } catch (e) {
         document.getElementById('pb-body').innerHTML = '<div class="pb-empty" style="color:#f87171">Error: ' + e.message + '</div>';
       }
     }
-    (async function () { await loadProfileTz(); load(); })();
-    setInterval(load, 5 * 60 * 1000);
+    document.getElementById('pb-go').addEventListener('click', function () { load(); });
+    document.getElementById('pb-live').addEventListener('click', function () {
+      document.getElementById('pb-date').value = ''; load();
+    });
+    (async function () {
+      await loadProfileTz();
+      var h = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: _tz(), hour: '2-digit', hour12: false }).format(new Date()), 10) % 24;
+      document.getElementById('pb-hour').value = String(h);
+      load();
+    })();
+    setInterval(function () { if (!document.getElementById('pb-date').value) load(true); }, 5 * 60 * 1000);
   </script>
 </body>
 </html>
