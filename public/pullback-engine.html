@@ -59,7 +59,7 @@
     <a href="/app" class="sx-back-btn">← Back</a>
   </div>
 
-  <div class="sx-subtitle">H1 defines the trend (EMA20/EMA50 structure + currency strength) and must stay intact through the pullback; M15 detects the pullback and the realignment. ENTRY fires only after the sequence <b style="color:#94a3b8">trend → pullback → fresh M15 realignment</b> (a continuously-aligned pair shows TREND). Strong ≥ +33 · Weak ≤ −33 (strength −100…+100).</div>
+  <div class="sx-subtitle">H1 defines the trend (EMA20/EMA50 structure + currency strength) and must stay intact through the pullback; M15 detects the pullback and the realignment. ENTRY fires only after the sequence <b style="color:#94a3b8">trend → pullback → fresh M15 realignment</b> (a continuously-aligned pair shows TREND). Strong ≥ +33 · Weak ≤ −33. The <b style="color:#94a3b8">Activity</b> column is a separate price-pressure axis — how hard the trend is actually pushing (ATR-normalised distance, directional efficiency, body size): Sleeping → Building → Expanding → Exploding, or Exhausting when momentum fades.</div>
   <div class="sx-meta" id="pb-meta"></div>
 
   <div class="pb-filters" id="pb-filters">
@@ -76,6 +76,7 @@
     <button class="pb-tab active" data-f="ALL">All</button>
     <button class="pb-tab" data-f="ENTRY">Entry</button>
     <button class="pb-tab" data-f="TREND">Trend</button>
+    <button class="pb-tab" data-f="MOVING">Moving</button>
     <button class="pb-tab" data-f="PULLBACK">Pullback</button>
     <button class="pb-tab" data-f="WAIT">Wait</button>
     <button class="pb-tab" data-f="REVERSAL_RISK">Reversal risk</button>
@@ -101,6 +102,15 @@
       REVERSAL_RISK:{ c: '#f97316', label: 'REVERSAL RISK' },
       NO_TREND:     { c: '#64748b', label: 'NO TREND' },
     };
+    var ACT = {
+      Exploding:  '#f43f5e', Expanding: '#22c55e', Building: '#facc15',
+      Sleeping:   '#64748b', Exhausting: '#f97316',
+    };
+    function actCell(p) {
+      var col = ACT[p.activity] || '#64748b';
+      return '<td><span class="pb-badge" style="background:' + col + '22;color:' + col + '">' + (p.activity || '—') + '</span>'
+        + '<div style="font-size:9px;color:var(--text-dim)">P ' + (p.pressure || 0) + '</div></td>';
+    }
     var _filter = 'ALL', _data = null;
 
     function ccState(st) {
@@ -130,11 +140,16 @@
       var body = document.getElementById('pb-body');
       if (!_data) return;
       document.getElementById('pb-strength').innerHTML = strengthStrip(_data.currencies.h1);
-      var pairs = _data.pairs.filter(function (p) { return _filter === 'ALL' ? p.state !== 'NO_TREND' : p.state === _filter; });
+      var pairs = _data.pairs.filter(function (p) {
+        if (_filter === 'ALL') return p.state !== 'NO_TREND';
+        if (_filter === 'MOVING') return p.state !== 'NO_TREND' && p.pressure >= 38;
+        return p.state === _filter;
+      });
+      if (_filter === 'MOVING') pairs = pairs.slice().sort(function (a, b) { return b.pressure - a.pressure; });
       if (!pairs.length) { body.innerHTML = '<div class="pb-empty">No pairs in this state.</div>'; return; }
 
       var h = '<div class="pb-wrap"><table class="pb"><thead><tr>'
-        + '<th style="text-align:left">Pair</th><th>Dir</th><th>Score</th><th>State</th>'
+        + '<th style="text-align:left">Pair</th><th>Dir</th><th>Score</th><th>State</th><th>Activity</th>'
         + '<th>H1 trend</th><th>H1 base</th><th>H1 quote</th>'
         + '<th>M15 base</th><th>M15 quote</th></tr></thead><tbody>';
       for (var i = 0; i < pairs.length; i++) {
@@ -145,6 +160,7 @@
           + '<td style="color:' + dcol + ';font-weight:800">' + (p.direction || '—') + '</td>'
           + '<td><span class="pb-score" style="color:' + scCol + '">' + p.score + '</span><div style="font-size:9px;color:var(--text-dim)">' + p.quality + '</div></td>'
           + '<td><span class="pb-badge" style="background:' + st.c + '22;color:' + st.c + '">' + st.label + '</span></td>'
+          + actCell(p)
           + '<td><span style="color:' + (p.h1.trend === 'BULL' ? '#4ade80' : p.h1.trend === 'BEAR' ? '#f87171' : '#64748b') + ';font-weight:700">' + p.h1.trend + '</span>'
           + ' <span style="font-size:9px;color:var(--text-dim)">' + p.h1.bars + 'b</span></td>'
           + '<td>' + ccPair(p.h1.base, p.h1.baseState) + '</td>'

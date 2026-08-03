@@ -82,6 +82,54 @@ async function fetchCloses(sb, inst, tf, limit, until) {
   return (data || []).map(c => +c.close).reverse();   // ascending
 }
 
+async function fetchOHLC(sb, inst, tf, limit, until) {
+  let q = sb.from('backtest_candles')
+    .select('open, high, low, close')
+    .eq('instrument', inst).eq('timeframe', tf).eq('complete', true);
+  if (until) q = q.lte('time', until);
+  const { data, error } = await q.order('time', { ascending: false }).limit(limit);
+  if (error) throw error;
+  return (data || []).map(c => ({ open: +c.open, high: +c.high, low: +c.low, close: +c.close })).reverse();
+}
+
+function atr14FromOHLC(c) {
+  if (c.length < 2) return null;
+  const trs = [];
+  for (let i = 1; i < c.length; i++) trs.push(Math.max(c[i].high - c[i].low, Math.abs(c[i].high - c[i - 1].close), Math.abs(c[i].low - c[i - 1].close)));
+  const last = trs.slice(-14);
+  return last.length ? last.reduce((a, b) => a + b, 0) / last.length : null;
+}
+
+// Activity / pressure — how hard the trend is pushing, from the last N trend-TF
+// candles measured in the trend direction (distance/efficiency/body blend → 0..100).
+function pressureFrom(candles, dirSign) {
+  const N = 14;
+  if (!candles || candles.length < N + 1) return null;
+  const atr = atr14FromOHLC(candles);
+  if (!atr || atr <= 0) return null;
+  const win = candles.slice(-N);
+  const net = (win[N - 1].close - win[0].close) * dirSign;
+  const dispATR = net / atr;
+  let path = 0; for (let i = 1; i < N; i++) path += Math.abs(win[i].close - win[i - 1].close);
+  const efficiency = path > 0 ? Math.abs(win[N - 1].close - win[0].close) / path : 0;
+  let bodySum = 0, cnt = 0;
+  for (const c of win) { const r = c.high - c.low; if (r > 0) { bodySum += Math.abs(c.close - c.open) / r; cnt++; } }
+  const bodyDom = cnt ? bodySum / cnt : 0;
+  const dispScore = Math.max(0, Math.min(1, dispATR / 6));
+  const pressure = Math.round(100 * (0.5 * dispScore + 0.3 * efficiency + 0.2 * bodyDom));
+  const half = Math.floor(N / 2);
+  const recent = (win[N - 1].close - win[N - 1 - half].close) * dirSign / atr;
+  const earlier = (win[N - 1 - half].close - win[0].close) * dirSign / atr;
+  const decel = earlier > 1 && recent < earlier * 0.4;
+  let activity;
+  if (decel && pressure >= 35) activity = 'Exhausting';
+  else if (pressure < 18) activity = 'Sleeping';
+  else if (pressure < 38) activity = 'Building';
+  else if (pressure < 60) activity = 'Expanding';
+  else activity = 'Exploding';
+  return { pressure, activity, dispATR: +dispATR.toFixed(2), efficiency: +efficiency.toFixed(2), bodyDom: +bodyDom.toFixed(2) };
+}
+
 module.exports = async function handler(req, res) {
   cors(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -101,7 +149,8 @@ module.exports = async function handler(req, res) {
     for (let b = 0; b < PAIRS.length; b += 7) {
       const batch = PAIRS.slice(b, b + 7);
       const rows = await Promise.all(batch.map(async inst => {
-        const [m15c, m5c] = await Promise.all([fetchCloses(sb, inst, 'M15', 220, untilM15), fetchCloses(sb, inst, 'M5', 400, untilM5)]);
+        const [m15ohlc, m5c] = await Promise.all([fetchOHLC(sb, inst, 'M15', 220, untilM15), fetchCloses(sb, inst, 'M5', 400, untilM5)]);
+        const m15c = m15ohlc.map(c => c.close);
         const m15 = snapOf(m15c);      // trend
         const m5 = snapOf(m5c);        // trigger
         // M5 phase evaluated in the M15 trend direction.
@@ -120,7 +169,7 @@ module.exports = async function handler(req, res) {
             phase = computePhase(struct, aligned);
           }
         }
-        return { inst, m15, m5, phase };
+        return { inst, m15, m5, phase, m15ohlc: m15ohlc.slice(-40) };
       }));
       for (const r of rows) px[r.inst] = r;
     }
@@ -153,6 +202,7 @@ module.exports = async function handler(req, res) {
       const bull = m15.e20 > m15.e50, bear = m15.e20 < m15.e50;
       const dir = bull ? 'BUY' : bear ? 'SELL' : null;
       const phase = P.phase;
+      const pr = dir ? pressureFrom(P.m15ohlc, dir === 'BUY' ? 1 : -1) : null;
 
       let state, score = 0;
       if (!dir) {
@@ -181,6 +231,8 @@ module.exports = async function handler(req, res) {
       pairs.push({
         pair: inst.replace('_', '/'), instrument: inst, direction: dir, phase,
         state, score, quality: qualityOf(score),
+        pressure: pr ? pr.pressure : 0, activity: pr ? pr.activity : 'Sleeping',
+        pressureDetail: pr ? { dispATR: pr.dispATR, efficiency: pr.efficiency, bodyDom: pr.bodyDom } : null,
         m15: {
           trend: bull ? 'BULL' : bear ? 'BEAR' : 'FLAT', bars: m15.bars,
           price: +m15.price.toFixed(6), e20: +m15.e20.toFixed(6), e50: +m15.e50.toFixed(6),

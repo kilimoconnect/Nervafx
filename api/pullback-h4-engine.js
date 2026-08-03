@@ -38,14 +38,57 @@ function emaSeries(vals, period) {
 
 // Synthesize the closed-H4 close series from ascending H1 {ms, close}. A 4h
 // bucket is used only once it has fully closed (bucketStart + 4h <= evalMs).
-function h4CloseSeries(h1, evalMs) {
+function h4OHLCSeries(h1, evalMs) {
   const m = new Map();
-  for (const c of h1) m.set(Math.floor(c.ms / H4_MS) * H4_MS, c.close);   // ascending → last close wins
+  for (const c of h1) {
+    const bs = Math.floor(c.ms / H4_MS) * H4_MS;
+    const b = m.get(bs);
+    if (!b) m.set(bs, { start: bs, open: c.open, high: c.high, low: c.low, close: c.close });
+    else { if (c.high > b.high) b.high = c.high; if (c.low < b.low) b.low = c.low; b.close = c.close; }
+  }
   const out = [];
-  for (const [start, close] of [...m.entries()].sort((a, b) => a[0] - b[0])) {
-    if (start <= evalMs - H4_MS) out.push(close);
+  for (const b of [...m.values()].sort((a, x) => a.start - x.start)) {
+    if (b.start <= evalMs - H4_MS) out.push({ open: b.open, high: b.high, low: b.low, close: b.close });
   }
   return out;
+}
+
+function atr14FromOHLC(c) {
+  if (c.length < 2) return null;
+  const trs = [];
+  for (let i = 1; i < c.length; i++) trs.push(Math.max(c[i].high - c[i].low, Math.abs(c[i].high - c[i - 1].close), Math.abs(c[i].low - c[i - 1].close)));
+  const last = trs.slice(-14);
+  return last.length ? last.reduce((a, b) => a + b, 0) / last.length : null;
+}
+
+// Activity / pressure — how hard the trend is pushing, from the last N trend-TF
+// candles measured in the trend direction (distance/efficiency/body blend → 0..100).
+function pressureFrom(candles, dirSign) {
+  const N = 14;
+  if (!candles || candles.length < N + 1) return null;
+  const atr = atr14FromOHLC(candles);
+  if (!atr || atr <= 0) return null;
+  const win = candles.slice(-N);
+  const net = (win[N - 1].close - win[0].close) * dirSign;
+  const dispATR = net / atr;
+  let path = 0; for (let i = 1; i < N; i++) path += Math.abs(win[i].close - win[i - 1].close);
+  const efficiency = path > 0 ? Math.abs(win[N - 1].close - win[0].close) / path : 0;
+  let bodySum = 0, cnt = 0;
+  for (const c of win) { const r = c.high - c.low; if (r > 0) { bodySum += Math.abs(c.close - c.open) / r; cnt++; } }
+  const bodyDom = cnt ? bodySum / cnt : 0;
+  const dispScore = Math.max(0, Math.min(1, dispATR / 6));
+  const pressure = Math.round(100 * (0.5 * dispScore + 0.3 * efficiency + 0.2 * bodyDom));
+  const half = Math.floor(N / 2);
+  const recent = (win[N - 1].close - win[N - 1 - half].close) * dirSign / atr;
+  const earlier = (win[N - 1 - half].close - win[0].close) * dirSign / atr;
+  const decel = earlier > 1 && recent < earlier * 0.4;
+  let activity;
+  if (decel && pressure >= 35) activity = 'Exhausting';
+  else if (pressure < 18) activity = 'Sleeping';
+  else if (pressure < 38) activity = 'Building';
+  else if (pressure < 60) activity = 'Expanding';
+  else activity = 'Exploding';
+  return { pressure, activity, dispATR: +dispATR.toFixed(2), efficiency: +efficiency.toFixed(2), bodyDom: +bodyDom.toFixed(2) };
 }
 
 function alignmentScore(close, e20, e50) {
@@ -86,12 +129,12 @@ function snapOf(closes) {
 
 async function fetchH1(sb, inst, until) {
   let q = sb.from('backtest_candles')
-    .select('time, close')
+    .select('time, open, high, low, close')
     .eq('instrument', inst).eq('timeframe', 'H1').eq('complete', true);
   if (until) q = q.lte('time', until);
   const { data, error } = await q.order('time', { ascending: false }).limit(700);
   if (error) throw error;
-  return (data || []).map(c => ({ ms: new Date(c.time).getTime(), close: +c.close })).reverse();   // ascending
+  return (data || []).map(c => ({ ms: new Date(c.time).getTime(), open: +c.open, high: +c.high, low: +c.low, close: +c.close })).reverse();
 }
 
 module.exports = async function handler(req, res) {
@@ -114,7 +157,8 @@ module.exports = async function handler(req, res) {
       const rows = await Promise.all(batch.map(async inst => {
         const h1raw = await fetchH1(sb, inst, untilH1);
         const h1Closes = h1raw.map(c => c.close);
-        const h4Closes = h4CloseSeries(h1raw, evalMs);
+        const h4ohlc = h4OHLCSeries(h1raw, evalMs);
+        const h4Closes = h4ohlc.map(c => c.close);
         const h4 = snapOf(h4Closes);      // trend
         const h1 = snapOf(h1Closes);      // trigger
         // H1 phase evaluated in the H4 trend direction.
@@ -133,7 +177,7 @@ module.exports = async function handler(req, res) {
             phase = computePhase(struct, aligned);
           }
         }
-        return { inst, h4, h1, phase };
+        return { inst, h4, h1, phase, h4ohlc: h4ohlc.slice(-40) };
       }));
       for (const r of rows) px[r.inst] = r;
     }
@@ -166,6 +210,7 @@ module.exports = async function handler(req, res) {
       const bull = h4.e20 > h4.e50, bear = h4.e20 < h4.e50;
       const dir = bull ? 'BUY' : bear ? 'SELL' : null;
       const phase = P.phase;
+      const pr = dir ? pressureFrom(P.h4ohlc, dir === 'BUY' ? 1 : -1) : null;
 
       let state, score = 0;
       if (!dir) {
@@ -194,6 +239,8 @@ module.exports = async function handler(req, res) {
       pairs.push({
         pair: inst.replace('_', '/'), instrument: inst, direction: dir, phase,
         state, score, quality: qualityOf(score),
+        pressure: pr ? pr.pressure : 0, activity: pr ? pr.activity : 'Sleeping',
+        pressureDetail: pr ? { dispATR: pr.dispATR, efficiency: pr.efficiency, bodyDom: pr.bodyDom } : null,
         h4: {
           trend: bull ? 'BULL' : bear ? 'BEAR' : 'FLAT', bars: h4.bars,
           price: +h4.price.toFixed(6), e20: +h4.e20.toFixed(6), e50: +h4.e50.toFixed(6),
