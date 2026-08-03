@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>NervaFX — Pullback Engine (H4/H1/M15)</title>
+  <link rel="icon" type="image/png" href="/nervafx-icon.png">
+  <script src="/auth-guard.js"></script>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .grid { display: block !important; }
+    .sx-topbar { position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; padding: 0 28px; height: 56px; background: rgba(8,11,18,0.92); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border); }
+    .sx-topbar-left { display: flex; align-items: center; gap: 12px; }
+    .sx-logo img { height: 24px; display: block; }
+    .sx-sep { color: rgba(255,255,255,0.1); font-size: 20px; font-weight: 200; }
+    .sx-title-text { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+    .sx-back-btn { display: flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: 8px; background: rgba(255,255,255,0.04); border: 1px solid var(--border); color: var(--text-muted); font-size: 12px; cursor: pointer; text-decoration: none; }
+    .sx-back-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
+    .sx-subtitle { text-align: center; padding: 16px 20px 6px; font-size: 11px; color: var(--text-dim); }
+    .sx-meta { text-align: center; padding: 0 20px 6px; font-size: 10px; color: var(--text-dim); }
+    .spinner { display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,0.2);border-top-color:#f472b6;border-radius:50%;animation:spin 0.7s linear infinite;vertical-align:middle; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .pb-loading, .pb-empty { text-align: center; color: var(--text-muted); padding: 40px; }
+    .pb-strength { max-width: 960px; margin: 6px auto; padding: 12px 16px; display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; }
+    .pb-cc { text-align: center; }
+    .pb-cc-code { font-size: 13px; font-weight: 800; color: #fff; }
+    .pb-cc-bar { height: 6px; border-radius: 3px; background: rgba(255,255,255,0.06); margin: 4px 0; position: relative; }
+    .pb-cc-fill { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
+    .pb-cc-val { font-family: monospace; font-size: 11px; font-weight: 700; }
+    .pb-filters { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 20px 2px; flex-wrap: wrap; }
+    .pb-input { padding: 5px 10px; border-radius: 7px; font-size: 11px; background: rgba(255,255,255,0.04); border: 1px solid var(--border); color: var(--text-muted); color-scheme: dark; }
+    .pb-go { padding: 5px 12px; border-radius: 7px; font-size: 11px; font-weight: 700; background: rgba(236,72,153,0.2); border: 1px solid rgba(236,72,153,0.4); color: #f472b6; cursor: pointer; }
+    .pb-live { padding: 5px 12px; border-radius: 7px; font-size: 11px; font-weight: 700; background: rgba(255,255,255,0.06); border: 1px solid var(--border); color: var(--text-muted); cursor: pointer; }
+    .pb-tabs { display: flex; justify-content: center; gap: 8px; padding: 4px 20px 2px; flex-wrap: wrap; }
+    .pb-tab { padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; background: rgba(255,255,255,0.04); border: 1px solid var(--border); color: var(--text-muted); }
+    .pb-tab.active { background: rgba(236,72,153,0.2); border-color: rgba(236,72,153,0.4); color: #f472b6; }
+    .pb-wrap { max-width: 1120px; margin: 0 auto; padding: 8px 12px 48px; overflow-x: auto; }
+    table.pb { width: 100%; border-collapse: collapse; font-size: 12px; }
+    table.pb th, table.pb td { padding: 8px 8px; border-bottom: 1px solid rgba(255,255,255,0.04); white-space: nowrap; text-align: center; }
+    table.pb thead th { position: sticky; top: 0; background: #0b0f18; color: var(--text-dim); font-size: 10px; font-weight: 700; letter-spacing: 0.4px; z-index: 5; }
+    td.pb-pair { text-align: left; font-weight: 800; color: #fff; }
+    .pb-badge { font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 5px; }
+    .pb-cc-tag { font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 4px; }
+    .pb-score { font-family: monospace; font-weight: 800; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="sx-topbar">
+    <div class="sx-topbar-left">
+      <a href="/app" class="sx-logo"><img src="/nervafx-logo.png" alt="NervaFX" /></a>
+      <span class="sx-sep">|</span>
+      <span class="sx-title-text">Pullback Engine — H4 / H1 / M15</span>
+    </div>
+    <a href="/app" class="sx-back-btn">← Back</a>
+  </div>
+
+  <div class="sx-subtitle">Triple timeframe: <b style="color:#94a3b8">H4</b> is the dominant trend (synthesized from H1), <b style="color:#94a3b8">H1</b> confirms, <b style="color:#94a3b8">M15</b> triggers. A pair takes a direction only when H4 and H1 agree; M15 runs the pullback → realignment. ENTRY = fresh M15 realignment with H4 currency separation. Strong ≥ +33 · Weak ≤ −33. Activity = H4 price-pressure (Sleeping → Exploding). Only pairs whose last H4 candle broke the prior 5 H4 candles' high/low in the trend direction are shown.</div>
+  <div class="sx-meta" id="pb-meta"></div>
+
+  <div class="pb-filters" id="pb-filters">
+    <span style="font-size:10px;color:var(--text-dim)">As of:</span>
+    <input type="date" id="pb-date" class="pb-input" />
+    <select id="pb-hour" class="pb-input" style="width:96px"></select>
+    <button id="pb-go" class="pb-go">Go</button>
+    <button id="pb-live" class="pb-live">Live</button>
+  </div>
+
+  <div id="pb-regime" style="text-align:center;padding:6px 20px 0"></div>
+  <div id="pb-strength"></div>
+
+  <div class="pb-tabs" id="pb-tabs">
+    <button class="pb-tab active" data-f="ALL">All</button>
+    <button class="pb-tab" data-f="ENTRY">Entry</button>
+    <button class="pb-tab" data-f="TREND">Trend</button>
+    <button class="pb-tab" data-f="MOVING">Moving</button>
+    <button class="pb-tab" data-f="PULLBACK">Pullback</button>
+    <button class="pb-tab" data-f="WAIT">Wait</button>
+    <button class="pb-tab" data-f="REVERSAL_RISK">Reversal risk</button>
+  </div>
+
+  <div id="pb-body"><div class="pb-loading"><span class="spinner"></span> Loading…</div></div>
+
+  <script>
+    var TOKEN = localStorage.getItem('nfx_token') || '';
+    var _userTz = localStorage.getItem('nfx_tz') || 'auto';
+    function _tz() { return (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC'); }
+    async function loadProfileTz() {
+      try { if (!TOKEN) return; var r = await fetch('/api/profile', { headers: { Authorization: 'Bearer ' + TOKEN } });
+        if (!r.ok) return; var p = await r.json(); if (p.timezone) { _userTz = p.timezone; try { localStorage.setItem('nfx_tz', _userTz); } catch (_) {} } } catch (_) {}
+    }
+    function fmtTime(iso) { return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: _tz() }); }
+
+    var STATE = {
+      ENTRY:        { c: '#22c55e', label: 'ENTRY' },
+      TREND:        { c: '#2dd4bf', label: 'TREND' },
+      PULLBACK:     { c: '#38bdf8', label: 'PULLBACK' },
+      WAIT:         { c: '#facc15', label: 'WAIT' },
+      REVERSAL_RISK:{ c: '#f97316', label: 'REVERSAL RISK' },
+      NO_TREND:     { c: '#64748b', label: 'NO TREND' },
+    };
+    var ACT = { Exploding: '#f43f5e', Expanding: '#22c55e', Building: '#facc15', Sleeping: '#64748b', Exhausting: '#f97316' };
+    function actCell(p) {
+      var col = ACT[p.activity] || '#64748b';
+      return '<td><span class="pb-badge" style="background:' + col + '22;color:' + col + '">' + (p.activity || '—') + '</span>'
+        + '<div style="font-size:9px;color:var(--text-dim)">P ' + (p.pressure || 0) + '</div></td>';
+    }
+    function marketBanner(data) {
+      var s = data.summary || {};
+      var active = s.active || 0, trend = s.trend || 0, moving = s.moving || 0, reversal = s.reversal || 0, top = s.topActivity || '—';
+      var regime, col;
+      if (active > 0 && reversal > active / 2) { regime = 'QUIET'; col = '#94a3b8'; }
+      else if (moving >= 6 || (trend >= 3 && moving >= 3)) { regime = 'ACTIVE'; col = '#22c55e'; }
+      else if (moving >= 3 || trend >= 2) { regime = 'MODERATE'; col = '#facc15'; }
+      else { regime = 'QUIET'; col = '#94a3b8'; }
+      var noTrade = regime === 'QUIET' ? ' &nbsp;·&nbsp; <b style="color:#f87171">no trade</b>' : '';
+      return '<div style="display:inline-block;padding:8px 18px;border:1px solid var(--border);border-radius:10px;background:' + col + '14;font-size:12px;color:var(--text-muted)">'
+        + 'Market <b style="color:' + col + ';font-size:13px">' + regime + '</b>'
+        + ' &nbsp;·&nbsp; <b style="color:#e2e8f0">' + trend + '</b> trend'
+        + ' &nbsp;·&nbsp; <b style="color:#e2e8f0">' + moving + '/' + active + '</b> expanding+'
+        + ' &nbsp;·&nbsp; <b style="color:#f97316">' + reversal + '</b> reversal'
+        + ' &nbsp;·&nbsp; top <b style="color:' + (ACT[top] || '#94a3b8') + '">' + top + '</b>' + noTrade + '</div>';
+    }
+    var _filter = 'ALL', _data = null;
+
+    function ccState(st) { var m = { STRONG: '#22c55e', WEAK: '#ef4444', NEUTRAL: '#94a3b8' }; return '<span class="pb-cc-tag" style="background:' + m[st] + '22;color:' + m[st] + '">' + st[0] + '</span>'; }
+    function ccPair(v, st) { var m = { STRONG: '#4ade80', WEAK: '#f87171', NEUTRAL: '#94a3b8' }; return '<span style="font-family:monospace;color:' + m[st] + '">' + (v > 0 ? '+' : '') + v + '</span> ' + ccState(st); }
+    function trendCell(t) { return '<span style="color:' + (t === 'BULL' ? '#4ade80' : t === 'BEAR' ? '#f87171' : '#64748b') + ';font-weight:700">' + t + '</span>'; }
+
+    function strengthStrip(list) {
+      var h = '<div class="pb-strength">';
+      for (var i = 0; i < list.length; i++) {
+        var c = list[i], pos = c.strength >= 0, col = c.state === 'STRONG' ? '#22c55e' : c.state === 'WEAK' ? '#ef4444' : '#94a3b8';
+        var w = Math.min(Math.abs(c.strength), 100) / 2;
+        var fill = pos ? '<div class="pb-cc-fill" style="left:50%;width:' + w + '%;background:' + col + '"></div>'
+                       : '<div class="pb-cc-fill" style="right:50%;width:' + w + '%;background:' + col + '"></div>';
+        h += '<div class="pb-cc"><div class="pb-cc-code">' + c.currency + '</div>'
+          + '<div class="pb-cc-bar"><div style="position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:rgba(255,255,255,0.15)"></div>' + fill + '</div>'
+          + '<div class="pb-cc-val" style="color:' + col + '">' + (c.strength > 0 ? '+' : '') + c.strength + '</div></div>';
+      }
+      return h + '</div>';
+    }
+
+    function render() {
+      var body = document.getElementById('pb-body');
+      if (!_data) return;
+      document.getElementById('pb-regime').innerHTML = marketBanner(_data);
+      document.getElementById('pb-strength').innerHTML = strengthStrip(_data.currencies.h4);
+      var pairs = _data.pairs.filter(function (p) {
+        if (_filter === 'ALL') return p.state !== 'NO_TREND';
+        if (_filter === 'MOVING') return p.state !== 'NO_TREND' && p.pressure >= 38;
+        return p.state === _filter;
+      });
+      if (_filter === 'MOVING') pairs = pairs.slice().sort(function (a, b) { return b.pressure - a.pressure; });
+      if (!pairs.length) { body.innerHTML = '<div class="pb-empty">No pairs in this state.</div>'; return; }
+
+      var h = '<div class="pb-wrap"><table class="pb"><thead><tr>'
+        + '<th style="text-align:left">Pair</th><th>Dir</th><th>Score</th><th>State</th><th>Activity</th>'
+        + '<th>H4 trend</th><th>H1 trend</th><th>H4 base</th><th>H4 quote</th>'
+        + '<th>M15 base</th><th>M15 quote</th></tr></thead><tbody>';
+      for (var i = 0; i < pairs.length; i++) {
+        var p = pairs[i], st = STATE[p.state] || STATE.NO_TREND;
+        var dcol = p.direction === 'BUY' ? '#4ade80' : p.direction === 'SELL' ? '#f87171' : '#64748b';
+        var scCol = p.score >= 90 ? '#22c55e' : p.score >= 80 ? '#4ade80' : p.score >= 70 ? '#facc15' : '#94a3b8';
+        h += '<tr><td class="pb-pair">' + p.pair + '</td>'
+          + '<td style="color:' + dcol + ';font-weight:800">' + (p.direction || '—') + '</td>'
+          + '<td><span class="pb-score" style="color:' + scCol + '">' + p.score + '</span><div style="font-size:9px;color:var(--text-dim)">' + p.quality + '</div></td>'
+          + '<td><span class="pb-badge" style="background:' + st.c + '22;color:' + st.c + '">' + st.label + '</span></td>'
+          + actCell(p)
+          + '<td>' + trendCell(p.h4.trend) + ' <span style="font-size:9px;color:var(--text-dim)">' + p.h4.bars + 'b</span></td>'
+          + '<td>' + trendCell(p.h1.trend) + '</td>'
+          + '<td>' + ccPair(p.h4.base, p.h4.baseState) + '</td>'
+          + '<td>' + ccPair(p.h4.quote, p.h4.quoteState) + '</td>'
+          + '<td>' + ccPair(p.m15.base, p.m15.baseState) + '</td>'
+          + '<td>' + ccPair(p.m15.quote, p.m15.quoteState) + '</td>'
+          + '</tr>';
+      }
+      h += '</tbody></table></div>';
+      body.innerHTML = h;
+    }
+
+    Array.prototype.forEach.call(document.querySelectorAll('.pb-tab'), function (btn) {
+      btn.addEventListener('click', function () {
+        _filter = btn.dataset.f;
+        Array.prototype.forEach.call(document.querySelectorAll('.pb-tab'), function (b) { b.classList.toggle('active', b === btn); });
+        render();
+      });
+    });
+
+    function zonedWallToUtcMs(dateStr, hour, minute) {
+      var tz = _tz(), p = dateStr.split('-');
+      var wallUtc = Date.UTC(+p[0], (+p[1]) - 1, +p[2], hour, minute || 0, 0);
+      var dtf = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      var m = {}; dtf.formatToParts(new Date(wallUtc)).forEach(function (pt) { m[pt.type] = pt.value; });
+      var tzAsUtc = Date.UTC(+m.year, (+m.month) - 1, +m.day, (+m.hour) % 24, +m.minute, +m.second);
+      return wallUtc - (tzAsUtc - wallUtc);
+    }
+    (function () {   // 15-min marks (M15 trigger)
+      var sel = document.getElementById('pb-hour');
+      for (var mins = 0; mins < 24 * 60; mins += 15) {
+        var hh = Math.floor(mins / 60), mm = mins % 60;
+        var o = document.createElement('option'); o.value = String(mins);
+        o.textContent = (hh < 10 ? '0' + hh : hh) + ':' + (mm < 10 ? '0' + mm : mm);
+        sel.appendChild(o);
+      }
+    })();
+
+    async function load(silent) {
+      if (!silent) document.getElementById('pb-body').innerHTML = '<div class="pb-loading"><span class="spinner"></span> Loading…</div>';
+      var dateEl = document.getElementById('pb-date'), hourEl = document.getElementById('pb-hour');
+      var qs = '';
+      if (dateEl.value) {
+        var mins = parseInt(hourEl.value, 10) || 0;
+        var atMs = zonedWallToUtcMs(dateEl.value, Math.floor(mins / 60), mins % 60);
+        qs = '?at=' + encodeURIComponent(new Date(atMs).toISOString());
+      }
+      try {
+        var res = await fetch('/api/pullback-tri-h4-engine' + qs, { headers: { Authorization: 'Bearer ' + TOKEN }, cache: 'no-store' });
+        if (!res.ok) throw new Error(await res.text());
+        _data = await res.json();
+        document.getElementById('pb-meta').textContent = (dateEl.value ? 'As of ' : 'Updated ') + fmtTime(_data.generatedAt) + ' · H4 currency strength shown above';
+        render();
+      } catch (e) {
+        document.getElementById('pb-body').innerHTML = '<div class="pb-empty" style="color:#f87171">Error: ' + e.message + '</div>';
+      }
+    }
+    document.getElementById('pb-go').addEventListener('click', function () { load(); });
+    document.getElementById('pb-live').addEventListener('click', function () { document.getElementById('pb-date').value = ''; load(); });
+    (async function () {
+      await loadProfileTz();
+      var hh = 0, mm = 0;
+      new Intl.DateTimeFormat('en-US', { timeZone: _tz(), hour12: false, hour: '2-digit', minute: '2-digit' })
+        .formatToParts(new Date()).forEach(function (pt) { if (pt.type === 'hour') hh = +pt.value % 24; if (pt.type === 'minute') mm = +pt.value; });
+      document.getElementById('pb-hour').value = String(Math.floor((hh * 60 + mm) / 15) * 15);
+      load();
+    })();
+    setInterval(function () { if (!document.getElementById('pb-date').value) load(true); }, 5 * 60 * 1000);
+  </script>
+</body>
+</html>
