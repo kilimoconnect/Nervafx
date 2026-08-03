@@ -58,7 +58,7 @@
     <a href="/app" class="sx-back-btn">← Back</a>
   </div>
 
-  <div class="sx-subtitle">M15 defines the trend (EMA20/EMA50 structure + currency strength) and must stay intact through the pullback; M5 is the trigger that detects the pullback and the realignment. ENTRY fires only after the sequence <b style="color:#94a3b8">trend → pullback → fresh M5 realignment</b> (a continuously-aligned pair shows TREND). Strong ≥ +33 · Weak ≤ −33. The <b style="color:#94a3b8">Activity</b> column is a separate price-pressure axis — how hard the trend is actually pushing (ATR-normalised distance, efficiency, body size): Sleeping → Building → Expanding → Exploding, or Exhausting when momentum fades.</div>
+  <div class="sx-subtitle">M15 defines the trend (EMA20/EMA50 structure + currency strength) and must stay intact through the pullback; M5 is the trigger that detects the pullback and the realignment. ENTRY fires only after the sequence <b style="color:#94a3b8">trend → pullback → fresh M5 realignment</b> (a continuously-aligned pair shows TREND). Strong ≥ +33 · Weak ≤ −33. The <b style="color:#94a3b8">Activity</b> column is a separate price-pressure axis — how hard the trend is actually pushing (ATR-normalised distance, efficiency, body size): Sleeping → Building → Expanding → Exploding, or Exhausting when momentum fades. Only pairs whose last M15 candle broke the prior 5 M15 candles' high/low in the trend direction are shown.</div>
   <div class="sx-meta" id="pb-meta"></div>
 
   <div class="pb-filters" id="pb-filters">
@@ -112,20 +112,20 @@
         + '<div style="font-size:9px;color:var(--text-dim)">P ' + (p.pressure || 0) + '</div></td>';
     }
     function marketBanner(data) {
-      var ps = (data.pairs || []).filter(function (p) { return p.state !== 'NO_TREND'; });
-      var trend = ps.filter(function (p) { return p.state === 'TREND' || p.state === 'ENTRY'; }).length;
-      var moving = ps.filter(function (p) { return p.pressure >= 38; }).length;
-      var order = ['Exploding', 'Expanding', 'Building', 'Exhausting', 'Sleeping'], top = '—';
-      for (var i = 0; i < order.length; i++) { if (ps.some(function (p) { return p.activity === order[i]; })) { top = order[i]; break; } }
+      var s = data.summary || {};
+      var active = s.active || 0, trend = s.trend || 0, moving = s.moving || 0, reversal = s.reversal || 0, top = s.topActivity || '—';
       var regime, col;
-      if (moving >= 6 || (trend >= 3 && moving >= 3)) { regime = 'ACTIVE'; col = '#22c55e'; }
+      if (active > 0 && reversal > active / 2) { regime = 'QUIET'; col = '#94a3b8'; }   // reversal-dominated → no trade
+      else if (moving >= 6 || (trend >= 3 && moving >= 3)) { regime = 'ACTIVE'; col = '#22c55e'; }
       else if (moving >= 3 || trend >= 2) { regime = 'MODERATE'; col = '#facc15'; }
       else { regime = 'QUIET'; col = '#94a3b8'; }
+      var noTrade = regime === 'QUIET' ? ' &nbsp;·&nbsp; <b style="color:#f87171">no trade</b>' : '';
       return '<div style="display:inline-block;padding:8px 18px;border:1px solid var(--border);border-radius:10px;background:' + col + '14;font-size:12px;color:var(--text-muted)">'
         + 'Market <b style="color:' + col + ';font-size:13px">' + regime + '</b>'
         + ' &nbsp;·&nbsp; <b style="color:#e2e8f0">' + trend + '</b> trend'
-        + ' &nbsp;·&nbsp; <b style="color:#e2e8f0">' + moving + '/' + ps.length + '</b> expanding+'
-        + ' &nbsp;·&nbsp; top <b style="color:' + (ACT[top] || '#94a3b8') + '">' + top + '</b></div>';
+        + ' &nbsp;·&nbsp; <b style="color:#e2e8f0">' + moving + '/' + active + '</b> expanding+'
+        + ' &nbsp;·&nbsp; <b style="color:#f97316">' + reversal + '</b> reversal'
+        + ' &nbsp;·&nbsp; top <b style="color:' + (ACT[top] || '#94a3b8') + '">' + top + '</b>' + noTrade + '</div>';
     }
     var _filter = 'ALL', _data = null;
 

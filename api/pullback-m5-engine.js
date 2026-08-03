@@ -130,6 +130,27 @@ function pressureFrom(candles, dirSign) {
   return { pressure, activity, dispATR: +dispATR.toFixed(2), efficiency: +efficiency.toFixed(2), bodyDom: +bodyDom.toFixed(2) };
 }
 
+function brokeStructure(candles, dirSign) {
+  if (!candles || candles.length < 6) return false;
+  const n = candles.length, last = candles[n - 1];
+  let hi = -Infinity, lo = Infinity;
+  for (let i = n - 6; i < n - 1; i++) { if (candles[i].high > hi) hi = candles[i].high; if (candles[i].low < lo) lo = candles[i].low; }
+  return dirSign > 0 ? last.high > hi : last.low < lo;
+}
+
+function summarize(pairs) {
+  const active = pairs.filter(p => p.state !== 'NO_TREND');
+  const order = ['Exploding', 'Expanding', 'Building', 'Exhausting', 'Sleeping'];
+  let top = null; for (const a of order) if (active.some(p => p.activity === a)) { top = a; break; }
+  return {
+    active: active.length,
+    trend: active.filter(p => p.state === 'TREND' || p.state === 'ENTRY').length,
+    reversal: active.filter(p => p.state === 'REVERSAL_RISK').length,
+    moving: active.filter(p => p.pressure >= 38).length,
+    topActivity: top,
+  };
+}
+
 module.exports = async function handler(req, res) {
   cors(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -203,6 +224,7 @@ module.exports = async function handler(req, res) {
       const dir = bull ? 'BUY' : bear ? 'SELL' : null;
       const phase = P.phase;
       const pr = dir ? pressureFrom(P.m15ohlc, dir === 'BUY' ? 1 : -1) : null;
+      const broke = dir ? brokeStructure(P.m15ohlc, dir === 'BUY' ? 1 : -1) : false;
 
       let state, score = 0;
       if (!dir) {
@@ -229,7 +251,7 @@ module.exports = async function handler(req, res) {
       }
 
       pairs.push({
-        pair: inst.replace('_', '/'), instrument: inst, direction: dir, phase,
+        pair: inst.replace('_', '/'), instrument: inst, direction: dir, phase, broke,
         state, score, quality: qualityOf(score),
         pressure: pr ? pr.pressure : 0, activity: pr ? pr.activity : 'Sleeping',
         pressureDetail: pr ? { dispATR: pr.dispATR, efficiency: pr.efficiency, bodyDom: pr.bodyDom } : null,
@@ -245,13 +267,15 @@ module.exports = async function handler(req, res) {
         },
       });
     }
-    pairs.sort((a, b) => b.score - a.score);
+    const summary = summarize(pairs);
+    const shown = pairs.filter(p => p.broke).sort((a, b) => b.score - a.score);
 
     res.json({
       generatedAt: new Date(signalMs).toISOString(),
       thresholds: { strong: STRONG_TH, weak: WEAK_TH },
       currencies: { m15: ranked(s15), m5: ranked(s5) },
-      pairs,
+      summary,
+      pairs: shown,
     });
   } catch (e) {
     console.error('[pullback-m5-engine]', e.message);
