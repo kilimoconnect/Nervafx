@@ -70,6 +70,7 @@
     <button id="pb-live" class="pb-live">Live</button>
   </div>
 
+  <div id="pb-regime" style="text-align:center;padding:6px 20px 0"></div>
   <div id="pb-strength"></div>
 
   <div class="pb-tabs" id="pb-tabs">
@@ -111,6 +112,22 @@
       return '<td><span class="pb-badge" style="background:' + col + '22;color:' + col + '">' + (p.activity || '—') + '</span>'
         + '<div style="font-size:9px;color:var(--text-dim)">P ' + (p.pressure || 0) + '</div></td>';
     }
+    function marketBanner(data) {
+      var ps = (data.pairs || []).filter(function (p) { return p.state !== 'NO_TREND'; });
+      var trend = ps.filter(function (p) { return p.state === 'TREND' || p.state === 'ENTRY'; }).length;
+      var moving = ps.filter(function (p) { return p.pressure >= 38; }).length;
+      var order = ['Exploding', 'Expanding', 'Building', 'Exhausting', 'Sleeping'], top = '—';
+      for (var i = 0; i < order.length; i++) { if (ps.some(function (p) { return p.activity === order[i]; })) { top = order[i]; break; } }
+      var regime, col;
+      if (moving >= 6 || (trend >= 3 && moving >= 3)) { regime = 'ACTIVE'; col = '#22c55e'; }
+      else if (moving >= 3 || trend >= 2) { regime = 'MODERATE'; col = '#facc15'; }
+      else { regime = 'QUIET'; col = '#94a3b8'; }
+      return '<div style="display:inline-block;padding:8px 18px;border:1px solid var(--border);border-radius:10px;background:' + col + '14;font-size:12px;color:var(--text-muted)">'
+        + 'Market <b style="color:' + col + ';font-size:13px">' + regime + '</b>'
+        + ' &nbsp;·&nbsp; <b style="color:#e2e8f0">' + trend + '</b> trend'
+        + ' &nbsp;·&nbsp; <b style="color:#e2e8f0">' + moving + '/' + ps.length + '</b> expanding+'
+        + ' &nbsp;·&nbsp; top <b style="color:' + (ACT[top] || '#94a3b8') + '">' + top + '</b></div>';
+    }
     var _filter = 'ALL', _data = null;
 
     function ccState(st) {
@@ -139,6 +156,7 @@
     function render() {
       var body = document.getElementById('pb-body');
       if (!_data) return;
+      document.getElementById('pb-regime').innerHTML = marketBanner(_data);
       document.getElementById('pb-strength').innerHTML = strengthStrip(_data.currencies.h1);
       var pairs = _data.pairs.filter(function (p) {
         if (_filter === 'ALL') return p.state !== 'NO_TREND';
