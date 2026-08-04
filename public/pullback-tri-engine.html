@@ -154,7 +154,7 @@
 
       var h = '<div class="pb-wrap"><table class="pb"><thead><tr>'
         + '<th style="text-align:left">Pair</th><th>Dir</th><th>Score</th><th>State</th><th>Activity</th>'
-        + '<th>H1 trend</th><th>M15 trend</th><th>H1 base</th><th>H1 quote</th>'
+        + '<th>H1 trend</th><th>M15 trend</th><th>M5 trend</th><th>H1 base</th><th>H1 quote</th>'
         + '<th>M5 base</th><th>M5 quote</th></tr></thead><tbody>';
       for (var i = 0; i < pairs.length; i++) {
         var p = pairs[i], st = STATE[p.state] || STATE.NO_TREND;
@@ -167,6 +167,7 @@
           + actCell(p)
           + '<td>' + trendCell(p.h1.trend) + ' <span style="font-size:9px;color:var(--text-dim)">' + p.h1.bars + 'b</span></td>'
           + '<td>' + trendCell(p.m15.trend) + '</td>'
+          + '<td>' + trendCell(p.m5.trend) + '</td>'
           + '<td>' + ccPair(p.h1.base, p.h1.baseState) + '</td>'
           + '<td>' + ccPair(p.h1.quote, p.h1.quoteState) + '</td>'
           + '<td>' + ccPair(p.m5.base, p.m5.baseState) + '</td>'

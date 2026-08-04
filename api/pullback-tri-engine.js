@@ -234,7 +234,7 @@ module.exports = async function handler(req, res) {
       const h1Bull = h1.e20 > h1.e50, h1Bear = h1.e20 < h1.e50;
       const m15Bull = m15.e20 > m15.e50, m15Bear = m15.e20 < m15.e50;
       const domDir = dH1;                               // dominant timeframe = H1
-      const dir = state === 'BULL_TREND' ? 'BUY' : state === 'BEAR_TREND' ? 'SELL' : null;
+      const dir = domDir > 0 ? 'BUY' : domDir < 0 ? 'SELL' : null;   // dominant-trend bias
       const pr = domDir !== 0 ? pressureFrom(P.h1ohlc, domDir) : null;
       const broke = domDir !== 0 ? brokeStructure(P.h1ohlc, domDir) : false;
 
