@@ -55,7 +55,7 @@
     <a href="/app" class="sx-back-btn">← Back</a>
   </div>
 
-  <div class="sx-subtitle">Triple timeframe: <b style="color:#94a3b8">H4</b> is the dominant trend (synthesized from H1), <b style="color:#94a3b8">H1</b> confirms, <b style="color:#94a3b8">M15</b> triggers. State = the three timeframes' EMA20/50 agreement: <b style="color:#22c55e">Bull Trend</b> (all three bullish), <b style="color:#ef4444">Bear Trend</b> (all three bearish), <b style="color:#facc15">Transition</b> (one or more disagree), No Trend (EMAs flat/mixed). Strong ≥ +33 · Weak ≤ −33. Activity = H4 price-pressure (Sleeping → Exploding). Only pairs whose last H4 candle broke the prior 5 H4 candles' high/low in the trend direction are shown.</div>
+  <div class="sx-subtitle">Triple timeframe: <b style="color:#94a3b8">H4</b> is the dominant trend (synthesized from H1), <b style="color:#94a3b8">H1</b> confirms, <b style="color:#94a3b8">M15</b> triggers. State = the three timeframes' EMA20/50 agreement: <b style="color:#22c55e">Bull Trend</b> (all three bullish), <b style="color:#ef4444">Bear Trend</b> (all three bearish), <b style="color:#facc15">Transition</b> (one or more disagree), No Trend (EMAs flat/mixed). Strong ≥ +33 · Weak ≤ −33. Activity = H4 price-pressure (Sleeping → Exploding). A ⚡ marks pairs whose last H4 candle broke the prior 5 H4 candles' high/low in the trend direction.</div>
   <div class="sx-meta" id="pb-meta"></div>
 
   <div class="pb-filters" id="pb-filters">
@@ -75,6 +75,7 @@
     <button class="pb-tab" data-f="BEAR_TREND">Bear Trend</button>
     <button class="pb-tab" data-f="TRANSITION">Transition</button>
     <button class="pb-tab" data-f="MOVING">Moving</button>
+    <button class="pb-tab" data-f="BROKE">Broke ⚡</button>
   </div>
 
   <div id="pb-body"><div class="pb-loading"><span class="spinner"></span> Loading…</div></div>
@@ -145,6 +146,7 @@
       var pairs = _data.pairs.filter(function (p) {
         if (_filter === 'ALL') return p.state !== 'NO_TREND';
         if (_filter === 'MOVING') return p.state !== 'NO_TREND' && p.pressure >= 38;
+        if (_filter === 'BROKE') return p.state !== 'NO_TREND' && p.broke;
         return p.state === _filter;
       });
       if (_filter === 'MOVING') pairs = pairs.slice().sort(function (a, b) { return b.pressure - a.pressure; });
@@ -158,7 +160,7 @@
         var p = pairs[i], st = STATE[p.state] || STATE.NO_TREND;
         var dcol = p.direction === 'BUY' ? '#4ade80' : p.direction === 'SELL' ? '#f87171' : '#64748b';
         var scCol = p.score >= 90 ? '#22c55e' : p.score >= 80 ? '#4ade80' : p.score >= 70 ? '#facc15' : '#94a3b8';
-        h += '<tr><td class="pb-pair">' + p.pair + '</td>'
+        h += '<tr><td class="pb-pair">' + p.pair + (p.broke ? ' <span style="color:#f59e0b" title="last H4 candle broke the prior 5 H4 candles high/low">⚡</span>' : '') + '</td>'
           + '<td style="color:' + dcol + ';font-weight:800">' + (p.direction || '—') + '</td>'
           + '<td><span class="pb-score" style="color:' + scCol + '">' + p.score + '</span><div style="font-size:9px;color:var(--text-dim)">' + p.quality + '</div></td>'
           + '<td><span class="pb-badge" style="background:' + st.c + '22;color:' + st.c + '">' + st.label + '</span></td>'

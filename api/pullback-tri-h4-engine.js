@@ -276,7 +276,7 @@ module.exports = async function handler(req, res) {
     }
 
     const summary = summarize(pairs);
-    const shown = pairs.filter(p => p.broke).sort((a, b) => b.score - a.score);
+    const shown = pairs.filter(p => p.state !== 'NO_TREND').sort((a, b) => b.score - a.score);
 
     res.json({
       generatedAt: new Date(signalMs).toISOString(),
