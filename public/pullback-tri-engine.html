@@ -76,6 +76,7 @@
     <button class="pb-tab" data-f="TRANSITION">Transition</button>
     <button class="pb-tab" data-f="MOVING">Moving</button>
     <button class="pb-tab" data-f="BROKE">Broke ⚡</button>
+    <button class="pb-tab" data-f="TRENDS">Trends ⏱</button>
   </div>
 
   <div id="pb-body"><div class="pb-loading"><span class="spinner"></span> Loading…</div></div>
@@ -118,7 +119,42 @@
         + ' &nbsp;·&nbsp; <b style="color:#facc15">' + transition + '</b> transition'
         + ' &nbsp;·&nbsp; top <b style="color:' + (ACT[top] || '#94a3b8') + '">' + top + '</b>' + noTrade + '</div>';
     }
-    var _filter = 'ALL', _data = null;
+    var _filter = 'ALL', _data = null, _view = 'live';
+    function fmtWhen(iso) { return new Date(iso).toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: _tz() }); }
+    function fmtDur(min) { var h = Math.floor(min / 60), m = min % 60; return (h ? h + 'h ' : '') + m + 'm'; }
+    function renderHistory(data) {
+      var el = document.getElementById('pb-body');
+      document.getElementById('pb-regime').innerHTML = '';
+      document.getElementById('pb-strength').innerHTML = '';
+      var eps = data.episodes || [];
+      if (!eps.length) { el.innerHTML = '<div class="pb-empty">No trend episodes in the last ' + (data.window || '') + '.</div>'; return; }
+      var h = '<div class="pb-wrap"><div style="font-size:11px;color:var(--text-dim);text-align:center;padding:4px 0 10px">'
+        + eps.length + ' trend episodes (all timeframes aligned) · last ' + data.window + ' · ongoing first</div>';
+      h += '<table class="pb"><thead><tr><th style="text-align:left">Pair</th><th>Dir</th><th>From</th><th>To</th><th>Duration</th></tr></thead><tbody>';
+      for (var i = 0; i < eps.length; i++) {
+        var e = eps[i], dcol = e.direction === 'BUY' ? '#4ade80' : '#f87171';
+        h += '<tr><td class="pb-pair">' + e.pair + '</td>'
+          + '<td style="color:' + dcol + ';font-weight:800">' + e.direction + '</td>'
+          + '<td style="color:var(--text-muted);font-family:monospace">' + fmtWhen(e.from) + '</td>'
+          + '<td style="font-family:monospace;' + (e.ongoing ? 'color:#22c55e;font-weight:700' : 'color:var(--text-muted)') + '">' + (e.ongoing ? '● ongoing' : fmtWhen(e.to)) + '</td>'
+          + '<td style="font-family:monospace;color:#e2e8f0">' + fmtDur(e.durationMin) + '</td></tr>';
+      }
+      h += '</tbody></table></div>';
+      el.innerHTML = h;
+    }
+    async function loadHistory(silent) {
+      if (!silent) document.getElementById('pb-body').innerHTML = '<div class="pb-loading"><span class="spinner"></span> Loading trends…</div>';
+      var dateEl = document.getElementById('pb-date'), hourEl = document.getElementById('pb-hour');
+      var qs = '?history=1';
+      if (dateEl.value) { var mins = parseInt(hourEl.value, 10) || 0; qs += '&at=' + encodeURIComponent(new Date(zonedWallToUtcMs(dateEl.value, Math.floor(mins / 60), mins % 60)).toISOString()); }
+      try {
+        var res = await fetch('/api/pullback-tri-engine' + qs, { headers: { Authorization: 'Bearer ' + TOKEN }, cache: 'no-store' });
+        if (!res.ok) throw new Error(await res.text());
+        var d = await res.json();
+        document.getElementById('pb-meta').textContent = (dateEl.value ? 'As of ' : 'Updated ') + fmtTime(d.generatedAt) + ' · trend history (H1+M15+M5 aligned)';
+        renderHistory(d);
+      } catch (e) { document.getElementById('pb-body').innerHTML = '<div class="pb-empty" style="color:#f87171">Error: ' + e.message + '</div>'; }
+    }
 
     function ccState(st) { var m = { STRONG: '#22c55e', WEAK: '#ef4444', NEUTRAL: '#94a3b8' }; return '<span class="pb-cc-tag" style="background:' + m[st] + '22;color:' + m[st] + '">' + st[0] + '</span>'; }
     function ccPair(v, st) { var m = { STRONG: '#4ade80', WEAK: '#f87171', NEUTRAL: '#94a3b8' }; return '<span style="font-family:monospace;color:' + m[st] + '">' + (v > 0 ? '+' : '') + v + '</span> ' + ccState(st); }
@@ -180,9 +216,9 @@
 
     Array.prototype.forEach.call(document.querySelectorAll('.pb-tab'), function (btn) {
       btn.addEventListener('click', function () {
-        _filter = btn.dataset.f;
         Array.prototype.forEach.call(document.querySelectorAll('.pb-tab'), function (b) { b.classList.toggle('active', b === btn); });
-        render();
+        if (btn.dataset.f === 'TRENDS') { _view = 'trends'; loadHistory(); }
+        else { _view = 'live'; _filter = btn.dataset.f; render(); }
       });
     });
 
@@ -223,8 +259,8 @@
         document.getElementById('pb-body').innerHTML = '<div class="pb-empty" style="color:#f87171">Error: ' + e.message + '</div>';
       }
     }
-    document.getElementById('pb-go').addEventListener('click', function () { load(); });
-    document.getElementById('pb-live').addEventListener('click', function () { document.getElementById('pb-date').value = ''; load(); });
+    document.getElementById('pb-go').addEventListener('click', function () { if (_view === 'trends') loadHistory(); else load(); });
+    document.getElementById('pb-live').addEventListener('click', function () { document.getElementById('pb-date').value = ''; if (_view === 'trends') loadHistory(); else load(); });
     (async function () {
       await loadProfileTz();
       var hh = 0, mm = 0;
@@ -233,7 +269,7 @@
       document.getElementById('pb-hour').value = String(Math.floor((hh * 60 + mm) / 5) * 5);
       load();
     })();
-    setInterval(function () { if (!document.getElementById('pb-date').value) load(true); }, 5 * 60 * 1000);
+    setInterval(function () { if (!document.getElementById('pb-date').value) { if (_view === 'trends') loadHistory(true); else load(true); } }, 5 * 60 * 1000);
   </script>
 </body>
 </html>

@@ -149,6 +149,14 @@ async function fetchCloses(sb, inst, tf, limit, until) {
   if (error) throw error;
   return (data || []).map(c => +c.close).reverse();
 }
+async function fetchTs(sb, inst, tf, limit, until) {
+  let q = sb.from('backtest_candles').select('time, close')
+    .eq('instrument', inst).eq('timeframe', tf).eq('complete', true);
+  if (until) q = q.lte('time', until);
+  const { data, error } = await q.order('time', { ascending: false }).limit(limit);
+  if (error) throw error;
+  return (data || []).map(c => ({ ms: new Date(c.time).getTime(), close: +c.close })).reverse();
+}
 async function fetchH1(sb, inst, until) {
   let q = sb.from('backtest_candles').select('time, open, high, low, close')
     .eq('instrument', inst).eq('timeframe', 'H1').eq('complete', true);
@@ -171,6 +179,57 @@ module.exports = async function handler(req, res) {
     const untilH1 = new Date(evalMs - HOUR).toISOString();
     const untilM15 = new Date(evalMs - M15_MS).toISOString();
     const signalMs = Math.floor(evalMs / M15_MS) * M15_MS;
+
+    // History mode: trend episodes (H4+H1+M15 all aligned) over the last 5 days,
+    // stepped at the M15 close, with start/end times.
+    if (req.query?.history) {
+      const DAY = 24 * HOUR, WINDOW = 5 * DAY, winStart = evalMs - WINDOW;
+      const emaMs = (cands) => {
+        const cl = cands.map(c => c.close), s20 = emaSeries(cl, 20), s50 = emaSeries(cl, 50);
+        return cands.map((c, i) => ({ ms: c.ms, e20: s20[i], e50: s50[i] }));
+      };
+      const h4Ema = (h1ts) => {   // synthesize closed-H4 close series (end-stamped) then EMA
+        const m = new Map();
+        for (const c of h1ts) m.set(Math.floor(c.ms / H4_MS) * H4_MS, c.close);
+        const buckets = [...m.entries()].filter(([s]) => s <= evalMs - H4_MS).sort((a, b) => a[0] - b[0]);
+        const cl = buckets.map(x => x[1]), s20 = emaSeries(cl, 20), s50 = emaSeries(cl, 50);
+        return buckets.map((x, i) => ({ ms: x[0] + H4_MS, e20: s20[i], e50: s50[i] }));
+      };
+      const episodes = [];
+      for (let b = 0; b < PAIRS.length; b += 7) {
+        const batch = PAIRS.slice(b, b + 7);
+        const rows = await Promise.all(batch.map(async inst => {
+          const [h1ts, m15] = await Promise.all([fetchTs(sb, inst, 'H1', 800, untilH1), fetchTs(sb, inst, 'M15', 600, untilM15)]);
+          return { inst, h4: h4Ema(h1ts), h1: emaMs(h1ts), m15: emaMs(m15) };
+        }));
+        for (const { inst, h4, h1, m15 } of rows) {
+          let hi = 0, di = 0, cur = 0, startMs = null, lastMs = null;
+          const push = (endMs, ongoing) => {
+            if (cur !== 0 && startMs != null) episodes.push({
+              pair: inst.replace('_', '/'), instrument: inst, direction: cur > 0 ? 'BUY' : 'SELL',
+              from: new Date(startMs).toISOString(), to: new Date(endMs).toISOString(), ongoing,
+              durationMin: Math.round((endMs - startMs) / 60000),
+            });
+          };
+          for (const p of m15) {
+            if (p.ms < winStart || p.e20 == null || p.e50 == null) continue;
+            while (di + 1 < h4.length && h4[di + 1].ms <= p.ms) di++;
+            while (hi + 1 < h1.length && h1[hi + 1].ms <= p.ms) hi++;
+            const d = h4[di], h = h1[hi];
+            let dir = 0;
+            if (d && h && d.e20 != null && d.e50 != null && h.e20 != null && h.e50 != null && d.ms <= p.ms && h.ms <= p.ms) {
+              const sd = Math.sign(d.e20 - d.e50), sh = Math.sign(h.e20 - h.e50), sm = Math.sign(p.e20 - p.e50);
+              if (sd !== 0 && sd === sh && sh === sm) dir = sd;
+            }
+            if (dir !== cur) { if (cur !== 0) push(lastMs, false); cur = dir; startMs = dir !== 0 ? p.ms : null; }
+            lastMs = p.ms;
+          }
+          if (cur !== 0) push(lastMs, true);
+        }
+      }
+      episodes.sort((a, b) => (b.ongoing - a.ongoing) || (new Date(b.from) - new Date(a.from)));
+      return res.json({ generatedAt: new Date(signalMs).toISOString(), window: '5d', episodes });
+    }
 
     const px = {};
     for (let b = 0; b < PAIRS.length; b += 7) {

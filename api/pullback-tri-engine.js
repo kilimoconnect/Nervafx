@@ -138,6 +138,14 @@ async function fetchCloses(sb, inst, tf, limit, until) {
   if (error) throw error;
   return (data || []).map(c => +c.close).reverse();
 }
+async function fetchTs(sb, inst, tf, limit, until) {
+  let q = sb.from('backtest_candles').select('time, close')
+    .eq('instrument', inst).eq('timeframe', tf).eq('complete', true);
+  if (until) q = q.lte('time', until);
+  const { data, error } = await q.order('time', { ascending: false }).limit(limit);
+  if (error) throw error;
+  return (data || []).map(c => ({ ms: new Date(c.time).getTime(), close: +c.close })).reverse();
+}
 async function fetchOHLC(sb, inst, tf, limit, until) {
   let q = sb.from('backtest_candles').select('open, high, low, close')
     .eq('instrument', inst).eq('timeframe', tf).eq('complete', true);
@@ -161,6 +169,54 @@ module.exports = async function handler(req, res) {
     const untilM15 = new Date(evalMs - M15_MS).toISOString();
     const untilM5 = new Date(evalMs - M5_MS).toISOString();
     const signalMs = Math.floor(evalMs / M5_MS) * M5_MS;
+
+    // History mode: trend episodes (H1+M15+M5 all aligned) over the last 48h,
+    // stepped at the M5 close, with start/end times.
+    if (req.query?.history) {
+      const WINDOW = 48 * HOUR, winStart = evalMs - WINDOW;
+      const emaMs = (cands) => {
+        const cl = cands.map(c => c.close), s20 = emaSeries(cl, 20), s50 = emaSeries(cl, 50);
+        return cands.map((c, i) => ({ ms: c.ms, e20: s20[i], e50: s50[i] }));
+      };
+      const episodes = [];
+      for (let b = 0; b < PAIRS.length; b += 7) {
+        const batch = PAIRS.slice(b, b + 7);
+        const rows = await Promise.all(batch.map(async inst => {
+          const [h1, m15, m5] = await Promise.all([
+            fetchTs(sb, inst, 'H1', 200, untilH1),
+            fetchTs(sb, inst, 'M15', 500, untilM15),
+            fetchTs(sb, inst, 'M5', 800, untilM5),
+          ]);
+          return { inst, h1: emaMs(h1), m15: emaMs(m15), m5: emaMs(m5) };
+        }));
+        for (const { inst, h1, m15, m5 } of rows) {
+          let hi = 0, mi = 0, cur = 0, startMs = null, lastMs = null;
+          const push = (endMs, ongoing) => {
+            if (cur !== 0 && startMs != null) episodes.push({
+              pair: inst.replace('_', '/'), instrument: inst, direction: cur > 0 ? 'BUY' : 'SELL',
+              from: new Date(startMs).toISOString(), to: new Date(endMs).toISOString(), ongoing,
+              durationMin: Math.round((endMs - startMs) / 60000),
+            });
+          };
+          for (const p of m5) {
+            if (p.ms < winStart || p.e20 == null || p.e50 == null) continue;
+            while (hi + 1 < h1.length && h1[hi + 1].ms <= p.ms) hi++;
+            while (mi + 1 < m15.length && m15[mi + 1].ms <= p.ms) mi++;
+            const h = h1[hi], m = m15[mi];
+            let dir = 0;
+            if (h && m && h.e20 != null && h.e50 != null && m.e20 != null && m.e50 != null && h.ms <= p.ms && m.ms <= p.ms) {
+              const sh = Math.sign(h.e20 - h.e50), sm = Math.sign(m.e20 - m.e50), s5 = Math.sign(p.e20 - p.e50);
+              if (sh !== 0 && sh === sm && sm === s5) dir = sh;
+            }
+            if (dir !== cur) { if (cur !== 0) push(lastMs, false); cur = dir; startMs = dir !== 0 ? p.ms : null; }
+            lastMs = p.ms;
+          }
+          if (cur !== 0) push(lastMs, true);
+        }
+      }
+      episodes.sort((a, b) => (b.ongoing - a.ongoing) || (new Date(b.from) - new Date(a.from)));
+      return res.json({ generatedAt: new Date(signalMs).toISOString(), window: '48h', episodes });
+    }
 
     const px = {};
     for (let b = 0; b < PAIRS.length; b += 7) {
