@@ -123,8 +123,8 @@ function summarize(pairs) {
   let top = null; for (const a of order) if (active.some(p => p.activity === a)) { top = a; break; }
   return {
     active: active.length,
-    trend: active.filter(p => p.state === 'TREND' || p.state === 'ENTRY').length,
-    reversal: active.filter(p => p.state === 'REVERSAL_RISK').length,
+    trend: active.filter(p => p.state === 'BULL_TREND' || p.state === 'BEAR_TREND').length,
+    transition: active.filter(p => p.state === 'TRANSITION').length,
     moving: active.filter(p => p.pressure >= 38).length,
     topActivity: top,
   };
@@ -219,43 +219,39 @@ module.exports = async function handler(req, res) {
       const b1 = classify(sH1[base]), q1 = classify(sH1[quote]);
       const b5 = classify(sM5[base]), q5 = classify(sM5[quote]);
 
+      // Trend state from the three timeframes' EMA20/50 direction.
+      const tfd = (s) => { const g = Math.abs(s.e20 - s.e50) / s.e50; if (g < 0.0004) return 0; return s.e20 > s.e50 ? 1 : -1; };
+      const dH1 = tfd(h1), dM15 = tfd(m15), dM5 = tfd(m5);
+      const bulls = [dH1, dM15, dM5].filter(d => d > 0).length;
+      const bears = [dH1, dM15, dM5].filter(d => d < 0).length;
+      const flats = 3 - bulls - bears;
+      let state;
+      if (bulls === 3) state = 'BULL_TREND';
+      else if (bears === 3) state = 'BEAR_TREND';
+      else if (flats >= 2) state = 'NO_TREND';
+      else state = 'TRANSITION';
+
       const h1Bull = h1.e20 > h1.e50, h1Bear = h1.e20 < h1.e50;
       const m15Bull = m15.e20 > m15.e50, m15Bear = m15.e20 < m15.e50;
-      // Direction requires H1 and M15 to agree.
-      const dir = (h1Bull && m15Bull) ? 'BUY' : (h1Bear && m15Bear) ? 'SELL' : null;
-      const phase = P.phase;
-      const pr = dir ? pressureFrom(P.h1ohlc, dir === 'BUY' ? 1 : -1) : null;
-      const broke = dir ? brokeStructure(P.h1ohlc, dir === 'BUY' ? 1 : -1) : false;
+      const domDir = dH1;                               // dominant timeframe = H1
+      const dir = state === 'BULL_TREND' ? 'BUY' : state === 'BEAR_TREND' ? 'SELL' : null;
+      const pr = domDir !== 0 ? pressureFrom(P.h1ohlc, domDir) : null;
+      const broke = domDir !== 0 ? brokeStructure(P.h1ohlc, domDir) : false;
 
-      let state, score = 0;
-      if (!dir) {
-        state = 'NO_TREND';
-      } else {
-        const isBuy = dir === 'BUY';
-        const h1Full = isBuy ? (h1.price > h1.e20 && h1.e20 > h1.e50) : (h1.price < h1.e20 && h1.e20 < h1.e50);
-        const m15Full = isBuy ? (m15.price > m15.e20 && m15.e20 > m15.e50) : (m15.price < m15.e20 && m15.e20 < m15.e50);
-        const h1CcyOk = isBuy ? (b1 === 'STRONG' && q1 === 'WEAK') : (b1 === 'WEAK' && q1 === 'STRONG');
-        const h1CcyHalf = isBuy ? (b1 === 'STRONG' || q1 === 'WEAK') : (b1 === 'WEAK' || q1 === 'STRONG');
-        const m5CcyMatch = isBuy ? (b5 === 'STRONG' && q5 === 'WEAK') : (b5 === 'WEAK' && q5 === 'STRONG');
-        const m5Flipped = isBuy ? (b5 === 'WEAK' || q5 === 'STRONG') : (b5 === 'STRONG' || q5 === 'WEAK');
-
-        // Score weights: H1 20 / M15 20 / H1 sep 20 / integrity 15 / no-flip 10 / M5 realign 15.
-        score += h1Full ? 20 : 10;
-        score += m15Full ? 20 : 10;
-        score += h1CcyOk ? 20 : h1CcyHalf ? 10 : 0;
-        score += 15;
-        score += m5Flipped ? 0 : 10;
-        score += phase === 'ENTRY' ? 15 : phase === 'TREND' ? 10 : 0;
-
-        if (m5Flipped || phase === 'TRIGGER_REVERSED') state = 'REVERSAL_RISK';
-        else if (phase === 'ENTRY' && h1CcyOk && m5CcyMatch) state = 'ENTRY';
-        else if (phase === 'PULLBACK') state = 'PULLBACK';
-        else if (phase === 'TREND') state = h1CcyOk ? 'TREND' : 'WAIT';
-        else state = 'WAIT';
+      const isBuyBias = domDir > 0;
+      const hCcyOk = domDir === 0 ? false : isBuyBias ? (b1 === 'STRONG' && q1 === 'WEAK') : (b1 === 'WEAK' && q1 === 'STRONG');
+      const hCcyHalf = domDir === 0 ? false : isBuyBias ? (b1 === 'STRONG' || q1 === 'WEAK') : (b1 === 'WEAK' || q1 === 'STRONG');
+      let score = 0;
+      if (state === 'BULL_TREND' || state === 'BEAR_TREND') {
+        const isBuy = state === 'BULL_TREND';
+        const domFull = isBuy ? (h1.price > h1.e20 && h1.e20 > h1.e50) : (h1.price < h1.e20 && h1.e20 < h1.e50);
+        score = 40 + (domFull ? 20 : 10) + (hCcyOk ? 30 : hCcyHalf ? 15 : 0) + (broke ? 10 : 0);
+      } else if (state === 'TRANSITION') {
+        score = 20 + (hCcyOk ? 10 : 0) + (broke ? 5 : 0);
       }
 
       pairs.push({
-        pair: inst.replace('_', '/'), instrument: inst, direction: dir, phase, broke,
+        pair: inst.replace('_', '/'), instrument: inst, direction: dir, broke,
         state, score, quality: qualityOf(score),
         pressure: pr ? pr.pressure : 0, activity: pr ? pr.activity : 'Sleeping',
         h1: {

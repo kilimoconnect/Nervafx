@@ -55,7 +55,7 @@
     <a href="/app" class="sx-back-btn">← Back</a>
   </div>
 
-  <div class="sx-subtitle">Triple timeframe: <b style="color:#94a3b8">H4</b> is the dominant trend (synthesized from H1), <b style="color:#94a3b8">H1</b> confirms, <b style="color:#94a3b8">M15</b> triggers. A pair takes a direction only when H4 and H1 agree; M15 runs the pullback → realignment. ENTRY = fresh M15 realignment with H4 currency separation. Strong ≥ +33 · Weak ≤ −33. Activity = H4 price-pressure (Sleeping → Exploding). Only pairs whose last H4 candle broke the prior 5 H4 candles' high/low in the trend direction are shown.</div>
+  <div class="sx-subtitle">Triple timeframe: <b style="color:#94a3b8">H4</b> is the dominant trend (synthesized from H1), <b style="color:#94a3b8">H1</b> confirms, <b style="color:#94a3b8">M15</b> triggers. State = the three timeframes' EMA20/50 agreement: <b style="color:#22c55e">Bull Trend</b> (all three bullish), <b style="color:#ef4444">Bear Trend</b> (all three bearish), <b style="color:#facc15">Transition</b> (one or more disagree), No Trend (EMAs flat/mixed). Strong ≥ +33 · Weak ≤ −33. Activity = H4 price-pressure (Sleeping → Exploding). Only pairs whose last H4 candle broke the prior 5 H4 candles' high/low in the trend direction are shown.</div>
   <div class="sx-meta" id="pb-meta"></div>
 
   <div class="pb-filters" id="pb-filters">
@@ -71,12 +71,10 @@
 
   <div class="pb-tabs" id="pb-tabs">
     <button class="pb-tab active" data-f="ALL">All</button>
-    <button class="pb-tab" data-f="ENTRY">Entry</button>
-    <button class="pb-tab" data-f="TREND">Trend</button>
+    <button class="pb-tab" data-f="BULL_TREND">Bull Trend</button>
+    <button class="pb-tab" data-f="BEAR_TREND">Bear Trend</button>
+    <button class="pb-tab" data-f="TRANSITION">Transition</button>
     <button class="pb-tab" data-f="MOVING">Moving</button>
-    <button class="pb-tab" data-f="PULLBACK">Pullback</button>
-    <button class="pb-tab" data-f="WAIT">Wait</button>
-    <button class="pb-tab" data-f="REVERSAL_RISK">Reversal risk</button>
   </div>
 
   <div id="pb-body"><div class="pb-loading"><span class="spinner"></span> Loading…</div></div>
@@ -92,12 +90,10 @@
     function fmtTime(iso) { return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: _tz() }); }
 
     var STATE = {
-      ENTRY:        { c: '#22c55e', label: 'ENTRY' },
-      TREND:        { c: '#2dd4bf', label: 'TREND' },
-      PULLBACK:     { c: '#38bdf8', label: 'PULLBACK' },
-      WAIT:         { c: '#facc15', label: 'WAIT' },
-      REVERSAL_RISK:{ c: '#f97316', label: 'REVERSAL RISK' },
-      NO_TREND:     { c: '#64748b', label: 'NO TREND' },
+      BULL_TREND: { c: '#22c55e', label: 'BULL TREND' },
+      BEAR_TREND: { c: '#ef4444', label: 'BEAR TREND' },
+      TRANSITION: { c: '#facc15', label: 'TRANSITION' },
+      NO_TREND:   { c: '#64748b', label: 'NO TREND' },
     };
     var ACT = { Exploding: '#f43f5e', Expanding: '#22c55e', Building: '#facc15', Sleeping: '#64748b', Exhausting: '#f97316' };
     function actCell(p) {
@@ -107,9 +103,9 @@
     }
     function marketBanner(data) {
       var s = data.summary || {};
-      var active = s.active || 0, trend = s.trend || 0, moving = s.moving || 0, reversal = s.reversal || 0, top = s.topActivity || '—';
+      var active = s.active || 0, trend = s.trend || 0, moving = s.moving || 0, transition = s.transition || 0, top = s.topActivity || '—';
       var regime, col;
-      if (active > 0 && reversal > active / 2) { regime = 'QUIET'; col = '#94a3b8'; }
+      if (active > 0 && transition > active / 2) { regime = 'QUIET'; col = '#94a3b8'; }
       else if (moving >= 6 || (trend >= 3 && moving >= 3)) { regime = 'ACTIVE'; col = '#22c55e'; }
       else if (moving >= 3 || trend >= 2) { regime = 'MODERATE'; col = '#facc15'; }
       else { regime = 'QUIET'; col = '#94a3b8'; }
@@ -118,7 +114,7 @@
         + 'Market <b style="color:' + col + ';font-size:13px">' + regime + '</b>'
         + ' &nbsp;·&nbsp; <b style="color:#e2e8f0">' + trend + '</b> trend'
         + ' &nbsp;·&nbsp; <b style="color:#e2e8f0">' + moving + '/' + active + '</b> expanding+'
-        + ' &nbsp;·&nbsp; <b style="color:#f97316">' + reversal + '</b> reversal'
+        + ' &nbsp;·&nbsp; <b style="color:#facc15">' + transition + '</b> transition'
         + ' &nbsp;·&nbsp; top <b style="color:' + (ACT[top] || '#94a3b8') + '">' + top + '</b>' + noTrade + '</div>';
     }
     var _filter = 'ALL', _data = null;
