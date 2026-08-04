@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>NervaFX — Sharp Reversal Engine</title>
+  <link rel="icon" type="image/png" href="/nervafx-icon.png">
+  <script src="/auth-guard.js"></script>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .grid { display: block !important; }
+    .sx-topbar { position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; padding: 0 28px; height: 56px; background: rgba(8,11,18,0.92); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border); }
+    .sx-topbar-left { display: flex; align-items: center; gap: 12px; }
+    .sx-logo img { height: 24px; display: block; }
+    .sx-sep { color: rgba(255,255,255,0.1); font-size: 20px; font-weight: 200; }
+    .sx-title-text { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+    .sx-back-btn { display: flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: 8px; background: rgba(255,255,255,0.04); border: 1px solid var(--border); color: var(--text-muted); font-size: 12px; cursor: pointer; text-decoration: none; }
+    .sx-back-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
+    .sx-subtitle { text-align: center; padding: 16px 20px 6px; font-size: 11px; color: var(--text-dim); }
+    .sx-meta { text-align: center; padding: 0 20px 6px; font-size: 10px; color: var(--text-dim); }
+    .spinner { display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,0.2);border-top-color:#f472b6;border-radius:50%;animation:spin 0.7s linear infinite;vertical-align:middle; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .pb-loading, .pb-empty { text-align: center; color: var(--text-muted); padding: 40px; }
+    .pb-strength { max-width: 960px; margin: 6px auto; padding: 12px 16px; display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; }
+    .pb-cc { text-align: center; }
+    .pb-cc-code { font-size: 13px; font-weight: 800; color: #fff; }
+    .pb-cc-bar { height: 6px; border-radius: 3px; background: rgba(255,255,255,0.06); margin: 4px 0; position: relative; }
+    .pb-cc-fill { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
+    .pb-cc-val { font-family: monospace; font-size: 11px; font-weight: 700; }
+    .pb-filters { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 20px 2px; flex-wrap: wrap; }
+    .pb-input { padding: 5px 10px; border-radius: 7px; font-size: 11px; background: rgba(255,255,255,0.04); border: 1px solid var(--border); color: var(--text-muted); color-scheme: dark; }
+    .pb-go { padding: 5px 12px; border-radius: 7px; font-size: 11px; font-weight: 700; background: rgba(236,72,153,0.2); border: 1px solid rgba(236,72,153,0.4); color: #f472b6; cursor: pointer; }
+    .pb-live { padding: 5px 12px; border-radius: 7px; font-size: 11px; font-weight: 700; background: rgba(255,255,255,0.06); border: 1px solid var(--border); color: var(--text-muted); cursor: pointer; }
+    .pb-tabs { display: flex; justify-content: center; gap: 8px; padding: 4px 20px 2px; flex-wrap: wrap; }
+    .pb-tab { padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; background: rgba(255,255,255,0.04); border: 1px solid var(--border); color: var(--text-muted); }
+    .pb-tab.active { background: rgba(236,72,153,0.2); border-color: rgba(236,72,153,0.4); color: #f472b6; }
+    .pb-mode.active { background: rgba(52,211,153,0.2); border-color: rgba(52,211,153,0.4); color: #34d399; }
+    .pb-wrap { max-width: 1040px; margin: 0 auto; padding: 8px 12px 48px; overflow-x: auto; }
+    table.pb { width: 100%; border-collapse: collapse; font-size: 12px; }
+    table.pb th, table.pb td { padding: 8px 8px; border-bottom: 1px solid rgba(255,255,255,0.04); white-space: nowrap; text-align: center; }
+    table.pb thead th { position: sticky; top: 0; background: #0b0f18; color: var(--text-dim); font-size: 10px; font-weight: 700; letter-spacing: 0.4px; z-index: 5; }
+    td.pb-pair { text-align: left; font-weight: 800; color: #fff; }
+    .pb-badge { font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 5px; }
+    .pb-score { font-family: monospace; font-weight: 800; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="sx-topbar">
+    <div class="sx-topbar-left">
+      <a href="/app" class="sx-logo"><img src="/nervafx-logo.png" alt="NervaFX" /></a>
+      <span class="sx-sep">|</span>
+      <span class="sx-title-text">Sharp Reversal Engine</span>
+    </div>
+    <a href="/app" class="sx-back-btn">← Back</a>
+  </div>
+
+  <div class="sx-subtitle">Finds markets <b style="color:#94a3b8">changing direction</b> after a strong trend — the birth of a trend, not established ones. Lifecycle: <b style="color:#94a3b8">Trend → Exhaustion → Reversal Candidate → Sharp Reversal → New Trend</b>, from prior-trend age, fading pressure, ATR-normalised reversal impulse, EMA20 recovery + slope change, and the EMA20/50 realignment. Detected on the dominant timeframe, impulse confirmed by the trigger.</div>
+  <div class="sx-meta" id="pb-meta"></div>
+
+  <div class="pb-filters">
+    <button class="pb-tab pb-mode active" data-mode="standard">Standard · H1/M15/M5</button>
+    <button class="pb-tab pb-mode" data-mode="swing">Swing · H4/H1/M15</button>
+    <span style="width:14px"></span>
+    <span style="font-size:10px;color:var(--text-dim)">As of:</span>
+    <input type="date" id="pb-date" class="pb-input" />
+    <select id="pb-hour" class="pb-input" style="width:96px"></select>
+    <button id="pb-go" class="pb-go">Go</button>
+    <button id="pb-live" class="pb-live">Live</button>
+  </div>
+
+  <div id="pb-strength"></div>
+
+  <div class="pb-tabs" id="pb-tabs">
+    <button class="pb-tab active" data-f="REVERSALS">Reversals</button>
+    <button class="pb-tab" data-f="ALL">All</button>
+    <button class="pb-tab" data-f="SHARP_REVERSAL">Sharp</button>
+    <button class="pb-tab" data-f="NEW_TREND">New Trend</button>
+    <button class="pb-tab" data-f="REVERSAL_CANDIDATE">Candidate</button>
+    <button class="pb-tab" data-f="EXHAUSTION">Exhaustion</button>
+    <button class="pb-tab" data-f="TREND">Trend</button>
+  </div>
+
+  <div id="pb-body"><div class="pb-loading"><span class="spinner"></span> Loading…</div></div>
+
+  <script>
+    var TOKEN = localStorage.getItem('nfx_token') || '';
+    var _userTz = localStorage.getItem('nfx_tz') || 'auto';
+    function _tz() { return (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC'); }
+    async function loadProfileTz() {
+      try { if (!TOKEN) return; var r = await fetch('/api/profile', { headers: { Authorization: 'Bearer ' + TOKEN } });
+        if (!r.ok) return; var p = await r.json(); if (p.timezone) { _userTz = p.timezone; try { localStorage.setItem('nfx_tz', _userTz); } catch (_) {} } } catch (_) {}
+    }
+    function fmtTime(iso) { return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: _tz() }); }
+
+    var STATE = {
+      SHARP_REVERSAL:     { c: '#f43f5e', label: 'SHARP REVERSAL' },
+      NEW_TREND:          { c: '#22c55e', label: 'NEW TREND' },
+      REVERSAL_CANDIDATE: { c: '#facc15', label: 'REVERSAL CANDIDATE' },
+      EXHAUSTION:         { c: '#f97316', label: 'EXHAUSTION' },
+      TREND:              { c: '#64748b', label: 'TREND' },
+    };
+    var _mode = 'standard', _filter = 'REVERSALS', _data = null;
+
+    function ccPair() { return ''; }
+    function trendCell(t) { return '<span style="color:' + (t === 'BULL' ? '#4ade80' : t === 'BEAR' ? '#f87171' : '#64748b') + ';font-weight:700">' + t + '</span>'; }
+
+    function strengthStrip(list) {
+      var h = '<div class="pb-strength">';
+      for (var i = 0; i < list.length; i++) {
+        var c = list[i], pos = c.strength >= 0, col = c.state === 'STRONG' ? '#22c55e' : c.state === 'WEAK' ? '#ef4444' : '#94a3b8';
+        var w = Math.min(Math.abs(c.strength), 100) / 2;
+        var fill = pos ? '<div class="pb-cc-fill" style="left:50%;width:' + w + '%;background:' + col + '"></div>'
+                       : '<div class="pb-cc-fill" style="right:50%;width:' + w + '%;background:' + col + '"></div>';
+        h += '<div class="pb-cc"><div class="pb-cc-code">' + c.currency + '</div>'
+          + '<div class="pb-cc-bar"><div style="position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:rgba(255,255,255,0.15)"></div>' + fill + '</div>'
+          + '<div class="pb-cc-val" style="color:' + col + '">' + (c.strength > 0 ? '+' : '') + c.strength + '</div></div>';
+      }
+      return h + '</div>';
+    }
+
+    function render() {
+      var body = document.getElementById('pb-body');
+      if (!_data) return;
+      document.getElementById('pb-strength').innerHTML = strengthStrip(_data.currencies);
+      var tf = _data.timeframes || {};
+      var pairs = _data.pairs.filter(function (p) {
+        if (_filter === 'ALL') return true;
+        if (_filter === 'REVERSALS') return p.state === 'SHARP_REVERSAL' || p.state === 'NEW_TREND' || p.state === 'REVERSAL_CANDIDATE' || p.state === 'EXHAUSTION';
+        return p.state === _filter;
+      });
+      if (!pairs.length) { body.innerHTML = '<div class="pb-empty">No pairs in this state.</div>'; return; }
+
+      var h = '<div class="pb-wrap"><table class="pb"><thead><tr>'
+        + '<th style="text-align:left">Pair</th><th>Dir</th><th>Score</th><th>State</th>'
+        + '<th>Impulse</th><th>' + (tf.dominant || 'Dom') + ' trend</th><th>Slope</th><th>Price/EMA20</th>'
+        + '<th>' + (tf.confirm || 'Mid') + '</th><th>' + (tf.trigger || 'Trig') + '</th></tr></thead><tbody>';
+      for (var i = 0; i < pairs.length; i++) {
+        var p = pairs[i], st = STATE[p.state] || STATE.TREND;
+        var dcol = p.direction === 'BUY' ? '#4ade80' : '#f87171';
+        var scCol = p.score >= 80 ? '#22c55e' : p.score >= 55 ? '#facc15' : '#94a3b8';
+        var imp = p.dom.impulseATR, impCol = imp > 0 ? '#4ade80' : imp < 0 ? '#f87171' : '#64748b';
+        h += '<tr><td class="pb-pair">' + p.pair + '</td>'
+          + '<td style="color:' + dcol + ';font-weight:800">' + p.direction + '</td>'
+          + '<td><span class="pb-score" style="color:' + scCol + '">' + p.score + '</span></td>'
+          + '<td><span class="pb-badge" style="background:' + st.c + '22;color:' + st.c + '">' + st.label + '</span></td>'
+          + '<td style="font-family:monospace;color:' + impCol + '">' + (imp > 0 ? '+' : '') + imp + ' ATR</td>'
+          + '<td>' + trendCell(p.dom.stack) + ' <span style="font-size:9px;color:var(--text-dim)">' + p.dom.bars + 'b</span></td>'
+          + '<td style="color:' + (p.dom.slope === 'UP' ? '#4ade80' : p.dom.slope === 'DOWN' ? '#f87171' : '#64748b') + ';font-weight:700">' + p.dom.slope + '</td>'
+          + '<td style="color:var(--text-muted)">' + p.dom.priceVs20 + '</td>'
+          + '<td>' + trendCell(p.mid.stack) + '</td>'
+          + '<td>' + trendCell(p.trig.stack) + '</td>'
+          + '</tr>';
+      }
+      h += '</tbody></table></div>';
+      body.innerHTML = h;
+    }
+
+    Array.prototype.forEach.call(document.querySelectorAll('.pb-tab[data-f]'), function (btn) {
+      btn.addEventListener('click', function () {
+        _filter = btn.dataset.f;
+        Array.prototype.forEach.call(document.querySelectorAll('.pb-tab[data-f]'), function (b) { b.classList.toggle('active', b === btn); });
+        render();
+      });
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.pb-mode'), function (btn) {
+      btn.addEventListener('click', function () {
+        _mode = btn.dataset.mode;
+        Array.prototype.forEach.call(document.querySelectorAll('.pb-mode'), function (b) { b.classList.toggle('active', b === btn); });
+        load();
+      });
+    });
+
+    function zonedWallToUtcMs(dateStr, hour, minute) {
+      var tz = _tz(), p = dateStr.split('-');
+      var wallUtc = Date.UTC(+p[0], (+p[1]) - 1, +p[2], hour, minute || 0, 0);
+      var dtf = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      var m = {}; dtf.formatToParts(new Date(wallUtc)).forEach(function (pt) { m[pt.type] = pt.value; });
+      var tzAsUtc = Date.UTC(+m.year, (+m.month) - 1, +m.day, (+m.hour) % 24, +m.minute, +m.second);
+      return wallUtc - (tzAsUtc - wallUtc);
+    }
+    (function () {
+      var sel = document.getElementById('pb-hour');
+      for (var mins = 0; mins < 24 * 60; mins += 5) {
+        var hh = Math.floor(mins / 60), mm = mins % 60;
+        var o = document.createElement('option'); o.value = String(mins);
+        o.textContent = (hh < 10 ? '0' + hh : hh) + ':' + (mm < 10 ? '0' + mm : mm);
+        sel.appendChild(o);
+      }
+    })();
+
+    async function load(silent) {
+      if (!silent) document.getElementById('pb-body').innerHTML = '<div class="pb-loading"><span class="spinner"></span> Loading…</div>';
+      var dateEl = document.getElementById('pb-date'), hourEl = document.getElementById('pb-hour');
+      var qs = '?mode=' + _mode;
+      if (dateEl.value) { var mins = parseInt(hourEl.value, 10) || 0; qs += '&at=' + encodeURIComponent(new Date(zonedWallToUtcMs(dateEl.value, Math.floor(mins / 60), mins % 60)).toISOString()); }
+      try {
+        var res = await fetch('/api/sharp-reversal-engine' + qs, { headers: { Authorization: 'Bearer ' + TOKEN }, cache: 'no-store' });
+        if (!res.ok) throw new Error(await res.text());
+        _data = await res.json();
+        var counts = {}; _data.pairs.forEach(function (p) { counts[p.state] = (counts[p.state] || 0) + 1; });
+        document.getElementById('pb-meta').textContent = (dateEl.value ? 'As of ' : 'Updated ') + fmtTime(_data.generatedAt)
+          + ' · sharp ' + (counts.SHARP_REVERSAL || 0) + ' · new trend ' + (counts.NEW_TREND || 0) + ' · candidate ' + (counts.REVERSAL_CANDIDATE || 0) + ' · exhaustion ' + (counts.EXHAUSTION || 0);
+        render();
+      } catch (e) {
+        document.getElementById('pb-body').innerHTML = '<div class="pb-empty" style="color:#f87171">Error: ' + e.message + '</div>';
+      }
+    }
+    document.getElementById('pb-go').addEventListener('click', function () { load(); });
+    document.getElementById('pb-live').addEventListener('click', function () { document.getElementById('pb-date').value = ''; load(); });
+    (async function () {
+      await loadProfileTz();
+      var hh = 0, mm = 0;
+      new Intl.DateTimeFormat('en-US', { timeZone: _tz(), hour12: false, hour: '2-digit', minute: '2-digit' })
+        .formatToParts(new Date()).forEach(function (pt) { if (pt.type === 'hour') hh = +pt.value % 24; if (pt.type === 'minute') mm = +pt.value; });
+      document.getElementById('pb-hour').value = String(Math.floor((hh * 60 + mm) / 5) * 5);
+      load();
+    })();
+    setInterval(function () { if (!document.getElementById('pb-date').value) load(true); }, 5 * 60 * 1000);
+  </script>
+</body>
+</html>
