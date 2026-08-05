@@ -84,12 +84,14 @@ function h4OHLC(h1, evalMs) {
     .map(b => ({ open: b.open, high: b.high, low: b.low, close: b.close }));
 }
 
-// Break of structure: last closed candle closed beyond the PREVIOUS candle's
-// high (buy) / low (sell).
-function brokePrevCandle(ohlc, dirSign) {
-  if (!ohlc || ohlc.length < 2) return false;
-  const n = ohlc.length, last = ohlc[n - 1], prev = ohlc[n - 2];
-  return dirSign > 0 ? last.close > prev.high : last.close < prev.low;
+// Break of structure: last closed candle closed beyond the highest high (buy) /
+// lowest low (sell) of the previous 5 candles.
+function brokeStructure(ohlc, dirSign) {
+  if (!ohlc || ohlc.length < 6) return false;
+  const n = ohlc.length, last = ohlc[n - 1];
+  let hi = -Infinity, lo = Infinity;
+  for (let i = n - 6; i < n - 1; i++) { if (ohlc[i].high > hi) hi = ohlc[i].high; if (ohlc[i].low < lo) lo = ohlc[i].low; }
+  return dirSign > 0 ? last.close > hi : last.close < lo;
 }
 
 async function fetchOHLC(sb, inst, tf, limit, until) {
@@ -148,7 +150,7 @@ module.exports = async function handler(req, res) {
         if (M.synth) {
           const [h1ohlc, m15c] = await Promise.all([fetchOHLC(sb, inst, 'H1', 700, untilFor('H1')), fetchCloses(sb, inst, 'M15', 220, untilFor('M15'))]);
           const dohlc = h4OHLC(h1ohlc, evalMs);
-          domOHLC = dohlc.slice(-5);
+          domOHLC = dohlc.slice(-10);
           dom = snap(dohlc.map(c => c.close), dohlc.slice(-40));
           mid = snap(h1ohlc.map(c => c.close), null);
           trig = snap(m15c, null);
@@ -158,7 +160,7 @@ module.exports = async function handler(req, res) {
             fetchCloses(sb, inst, 'M15', 220, untilFor('M15')),
             fetchCloses(sb, inst, 'M5', 300, untilFor('M5')),
           ]);
-          domOHLC = h1ohlc.slice(-5);
+          domOHLC = h1ohlc.slice(-10);
           dom = snap(h1ohlc.map(c => c.close), h1ohlc.slice(-40));
           mid = snap(m15c, null);
           trig = snap(m5c, null);
@@ -199,7 +201,7 @@ module.exports = async function handler(req, res) {
 
       const base = { SHARP_REVERSAL: 80, NEW_TREND: 70, REVERSAL_CANDIDATE: 55, EXHAUSTION: 42, TREND: 22 }[state];
       const score = Math.min(100, base + Math.min(20, Math.round(Math.abs(d.imp3) * 8)));
-      const broke = brokePrevCandle(P.domOHLC, dir);   // last dominant candle broke prev high/low in dir
+      const broke = brokeStructure(P.domOHLC, dir);   // last dominant candle broke prior-5 high/low in dir
 
       pairs.push({
         pair: inst.replace('_', '/'), instrument: inst,
