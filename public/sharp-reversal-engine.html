@@ -76,7 +76,6 @@
     <button class="pb-tab" data-f="ALL">All</button>
     <button class="pb-tab" data-f="SHARP_REVERSAL">Sharp</button>
     <button class="pb-tab" data-f="NEW_TREND">New Trend</button>
-    <button class="pb-tab" data-f="REVERSAL_CANDIDATE">Candidate</button>
     <button class="pb-tab" data-f="EXHAUSTION">Exhaustion</button>
     <button class="pb-tab" data-f="TREND">Trend</button>
   </div>
@@ -126,7 +125,7 @@
       var tf = _data.timeframes || {};
       var pairs = _data.pairs.filter(function (p) {
         if (_filter === 'ALL') return true;
-        if (_filter === 'REVERSALS') return p.state === 'SHARP_REVERSAL' || p.state === 'NEW_TREND' || p.state === 'REVERSAL_CANDIDATE' || p.state === 'EXHAUSTION';
+        if (_filter === 'REVERSALS') return p.state === 'SHARP_REVERSAL' || p.state === 'NEW_TREND' || p.state === 'EXHAUSTION';
         return p.state === _filter;
       });
       if (!pairs.length) { body.innerHTML = '<div class="pb-empty">No pairs in this state.</div>'; return; }
@@ -200,7 +199,7 @@
         _data = await res.json();
         var counts = {}; _data.pairs.forEach(function (p) { counts[p.state] = (counts[p.state] || 0) + 1; });
         document.getElementById('pb-meta').textContent = (dateEl.value ? 'As of ' : 'Updated ') + fmtTime(_data.generatedAt)
-          + ' · sharp ' + (counts.SHARP_REVERSAL || 0) + ' · new trend ' + (counts.NEW_TREND || 0) + ' · candidate ' + (counts.REVERSAL_CANDIDATE || 0) + ' · exhaustion ' + (counts.EXHAUSTION || 0);
+          + ' · sharp ' + (counts.SHARP_REVERSAL || 0) + ' · new trend ' + (counts.NEW_TREND || 0) + ' · exhaustion ' + (counts.EXHAUSTION || 0);
         render();
       } catch (e) {
         document.getElementById('pb-body').innerHTML = '<div class="pb-empty" style="color:#f87171">Error: ' + e.message + '</div>';

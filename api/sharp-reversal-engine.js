@@ -215,9 +215,9 @@ module.exports = async function handler(req, res) {
       });
     }
     const order = { SHARP_REVERSAL: 0, NEW_TREND: 1, REVERSAL_CANDIDATE: 2, EXHAUSTION: 3, TREND: 4 };
-    // Break-of-structure gate: only pairs whose last dominant candle broke the
-    // previous candle's high/low in the pair's direction qualify.
-    const shown = pairs.filter(p => p.broke).sort((a, b) => order[a.state] - order[b.state] || b.score - a.score);
+    // Break-of-structure gate + drop reversal candidates (not confirmed enough).
+    const shown = pairs.filter(p => p.broke && p.state !== 'REVERSAL_CANDIDATE')
+      .sort((a, b) => order[a.state] - order[b.state] || b.score - a.score);
 
     res.json({
       generatedAt: new Date(signalMs).toISOString(),
