@@ -204,7 +204,7 @@ module.exports = async function handler(req, res) {
       pairs.push({
         pair: inst.replace('_', '/'), instrument: inst,
         direction: dir > 0 ? 'BUY' : 'SELL', state, score, broke,
-        dom: { stack: S > 0 ? 'BULL' : 'BEAR', bars: d.bars, slope: d.slope > 0 ? 'UP' : d.slope < 0 ? 'DOWN' : 'FLAT', priceVs20: d.priceVs20 > 0 ? 'above' : 'below', impulseATR: +d.imp3.toFixed(2) },
+        dom: { stack: d.stack > 0 ? 'BULL' : d.stack < 0 ? 'BEAR' : 'FLAT', bars: d.bars, slope: d.slope > 0 ? 'UP' : d.slope < 0 ? 'DOWN' : 'FLAT', priceVs20: d.priceVs20 > 0 ? 'above' : 'below', impulseATR: +d.imp3.toFixed(2) },
         mid: { stack: P.mid.stack > 0 ? 'BULL' : P.mid.stack < 0 ? 'BEAR' : 'FLAT', bars: crossBars },
         trig: { stack: P.trig.stack > 0 ? 'BULL' : P.trig.stack < 0 ? 'BEAR' : 'FLAT' },
       });
