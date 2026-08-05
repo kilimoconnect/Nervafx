@@ -84,6 +84,14 @@ function h4OHLC(h1, evalMs) {
     .map(b => ({ open: b.open, high: b.high, low: b.low, close: b.close }));
 }
 
+// Break of structure: last closed candle closed beyond the PREVIOUS candle's
+// high (buy) / low (sell).
+function brokePrevCandle(ohlc, dirSign) {
+  if (!ohlc || ohlc.length < 2) return false;
+  const n = ohlc.length, last = ohlc[n - 1], prev = ohlc[n - 2];
+  return dirSign > 0 ? last.close > prev.high : last.close < prev.low;
+}
+
 async function fetchOHLC(sb, inst, tf, limit, until) {
   let q = sb.from('backtest_candles').select('time, open, high, low, close')
     .eq('instrument', inst).eq('timeframe', tf).eq('complete', true);
@@ -136,10 +144,11 @@ module.exports = async function handler(req, res) {
     for (let b = 0; b < PAIRS.length; b += 7) {
       const batch = PAIRS.slice(b, b + 7);
       const rows = await Promise.all(batch.map(async inst => {
-        let dom, mid, trig;
+        let dom, mid, trig, domOHLC;
         if (M.synth) {
           const [h1ohlc, m15c] = await Promise.all([fetchOHLC(sb, inst, 'H1', 700, untilFor('H1')), fetchCloses(sb, inst, 'M15', 220, untilFor('M15'))]);
           const dohlc = h4OHLC(h1ohlc, evalMs);
+          domOHLC = dohlc.slice(-5);
           dom = snap(dohlc.map(c => c.close), dohlc.slice(-40));
           mid = snap(h1ohlc.map(c => c.close), null);
           trig = snap(m15c, null);
@@ -149,11 +158,12 @@ module.exports = async function handler(req, res) {
             fetchCloses(sb, inst, 'M15', 220, untilFor('M15')),
             fetchCloses(sb, inst, 'M5', 300, untilFor('M5')),
           ]);
+          domOHLC = h1ohlc.slice(-5);
           dom = snap(h1ohlc.map(c => c.close), h1ohlc.slice(-40));
           mid = snap(m15c, null);
           trig = snap(m5c, null);
         }
-        return { inst, dom, mid, trig };
+        return { inst, dom, mid, trig, domOHLC };
       }));
       for (const r of rows) px[r.inst] = r;
     }
@@ -194,23 +204,26 @@ module.exports = async function handler(req, res) {
 
       const base = { SHARP_REVERSAL: 80, NEW_TREND: 70, REVERSAL_CANDIDATE: 55, EXHAUSTION: 42, TREND: 22 }[state];
       const score = Math.min(100, base + Math.min(20, Math.round(Math.abs(d.imp3) * 8)));
+      const broke = brokePrevCandle(P.domOHLC, dir);   // last dominant candle broke prev high/low in dir
 
       pairs.push({
         pair: inst.replace('_', '/'), instrument: inst,
-        direction: dir > 0 ? 'BUY' : 'SELL', state, score,
+        direction: dir > 0 ? 'BUY' : 'SELL', state, score, broke,
         dom: { stack: S > 0 ? 'BULL' : 'BEAR', bars: d.bars, slope: d.slope > 0 ? 'UP' : d.slope < 0 ? 'DOWN' : 'FLAT', priceVs20: d.priceVs20 > 0 ? 'above' : 'below', impulseATR: +d.imp3.toFixed(2) },
         mid: { stack: P.mid.stack > 0 ? 'BULL' : P.mid.stack < 0 ? 'BEAR' : 'FLAT' },
         trig: { stack: P.trig.stack > 0 ? 'BULL' : P.trig.stack < 0 ? 'BEAR' : 'FLAT' },
       });
     }
     const order = { SHARP_REVERSAL: 0, NEW_TREND: 1, REVERSAL_CANDIDATE: 2, EXHAUSTION: 3, TREND: 4 };
-    pairs.sort((a, b) => order[a.state] - order[b.state] || b.score - a.score);
+    // Break-of-structure gate: only pairs whose last dominant candle broke the
+    // previous candle's high/low in the pair's direction qualify.
+    const shown = pairs.filter(p => p.broke).sort((a, b) => order[a.state] - order[b.state] || b.score - a.score);
 
     res.json({
       generatedAt: new Date(signalMs).toISOString(),
       mode, timeframes: { dominant: M.dom, confirm: M.mid, trigger: M.trig },
       currencies: ranked,
-      pairs,
+      pairs: shown,
     });
   } catch (e) {
     console.error('[sharp-reversal-engine]', e.message);
