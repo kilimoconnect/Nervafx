@@ -189,10 +189,12 @@ module.exports = async function handler(req, res) {
       if (!S) continue;                  // flat confirm → no direction
       const dir = S;
 
-      // Confirm-TF cross recency defines the reversal / new-trend states.
+      // Confirm-TF cross recency + dominant still opposite = the reversal states.
+      // SHARP_REVERSAL needs a fresh confirm flip WHILE the dominant EMA20 is
+      // still the wrong side of EMA50 (buy: dom EMA20<EMA50, sell: EMA20>EMA50).
       let state;
-      if (crossBars <= 15) state = 'SHARP_REVERSAL';
-      else if (crossBars <= 30) state = 'NEW_TREND';
+      if (crossBars <= 15 && d.stack === -dir) state = 'SHARP_REVERSAL';
+      else if (crossBars <= 30) state = 'NEW_TREND';       // dominant has (or is) aligning
       else state = (isExhausted(d) && d.stack === S) ? 'EXHAUSTION' : 'TREND';
 
       const base = { SHARP_REVERSAL: 80, NEW_TREND: 70, REVERSAL_CANDIDATE: 55, EXHAUSTION: 42, TREND: 22 }[state];
