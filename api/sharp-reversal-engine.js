@@ -183,24 +183,17 @@ module.exports = async function handler(req, res) {
     for (const inst of PAIRS) {
       const P = px[inst];
       if (!P || !P.dom || !P.mid || !P.trig) continue;
-      const d = P.dom, S = d.stack, C = -S;
+      const d = P.dom;
+      const crossBars = P.mid.bars;      // bars since the confirm-TF (M15 std / H1 swing) EMA20/50 cross
+      const S = P.mid.stack;             // confirm-TF direction = the new trend direction
+      if (!S) continue;                  // flat confirm → no direction
+      const dir = S;
 
-      // Reversal signals against the current dominant stack S.
-      const recovered = d.priceVs20 === C;                       // EMA20 recovery
-      const slopeTurn = d.slope === C;                           // EMA20 slope change
-      const impulseC = Math.sign(d.imp3) === C && Math.abs(d.imp3) >= 1.0;   // reversal impulse
-      const trigFlip = P.trig.stack === C;                       // trigger flipped
-      const midFlip = P.mid.stack === C;                         // confirm flipped
-
-      let state, dir;
-      if (d.bars <= 6) { state = 'NEW_TREND'; dir = S; }         // fresh EMA20/50 cross = born trend
-      else {
-        const established = d.bars > 10;
-        if (established && recovered && slopeTurn && (impulseC || (trigFlip && midFlip))) { state = 'SHARP_REVERSAL'; dir = C; }
-        else if (established && (recovered || (slopeTurn && trigFlip))) { state = 'REVERSAL_CANDIDATE'; dir = C; }
-        else if (isExhausted(d)) { state = 'EXHAUSTION'; dir = S; }
-        else { state = 'TREND'; dir = S; }
-      }
+      // Confirm-TF cross recency defines the reversal / new-trend states.
+      let state;
+      if (crossBars <= 15) state = 'SHARP_REVERSAL';
+      else if (crossBars <= 30) state = 'NEW_TREND';
+      else state = (isExhausted(d) && d.stack === S) ? 'EXHAUSTION' : 'TREND';
 
       const base = { SHARP_REVERSAL: 80, NEW_TREND: 70, REVERSAL_CANDIDATE: 55, EXHAUSTION: 42, TREND: 22 }[state];
       const score = Math.min(100, base + Math.min(20, Math.round(Math.abs(d.imp3) * 8)));
@@ -210,7 +203,7 @@ module.exports = async function handler(req, res) {
         pair: inst.replace('_', '/'), instrument: inst,
         direction: dir > 0 ? 'BUY' : 'SELL', state, score, broke,
         dom: { stack: S > 0 ? 'BULL' : 'BEAR', bars: d.bars, slope: d.slope > 0 ? 'UP' : d.slope < 0 ? 'DOWN' : 'FLAT', priceVs20: d.priceVs20 > 0 ? 'above' : 'below', impulseATR: +d.imp3.toFixed(2) },
-        mid: { stack: P.mid.stack > 0 ? 'BULL' : P.mid.stack < 0 ? 'BEAR' : 'FLAT' },
+        mid: { stack: P.mid.stack > 0 ? 'BULL' : P.mid.stack < 0 ? 'BEAR' : 'FLAT', bars: crossBars },
         trig: { stack: P.trig.stack > 0 ? 'BULL' : P.trig.stack < 0 ? 'BEAR' : 'FLAT' },
       });
     }
