@@ -193,9 +193,9 @@ module.exports = async function handler(req, res) {
       // SHARP_REVERSAL needs a fresh confirm flip WHILE the dominant EMA20 is
       // still the wrong side of EMA50 (buy: dom EMA20<EMA50, sell: EMA20>EMA50).
       let state;
-      if (crossBars <= 15 && d.stack === -dir) state = 'SHARP_REVERSAL';
-      else if (crossBars <= 30) state = 'NEW_TREND';       // dominant has (or is) aligning
-      else state = (isExhausted(d) && d.stack === S) ? 'EXHAUSTION' : 'TREND';
+      if (crossBars <= 15 && d.stack === -dir) state = 'SHARP_REVERSAL';   // confirm just flipped, dominant still opposite
+      else if (d.bars <= 5 && d.stack === dir) state = 'NEW_TREND';         // dominant just crossed to align (last 5 candles)
+      else state = (isExhausted(d) && d.stack === dir) ? 'EXHAUSTION' : 'TREND';
 
       const base = { SHARP_REVERSAL: 80, NEW_TREND: 70, REVERSAL_CANDIDATE: 55, EXHAUSTION: 42, TREND: 22 }[state];
       const score = Math.min(100, base + Math.min(20, Math.round(Math.abs(d.imp3) * 8)));
