@@ -94,6 +94,30 @@ function brokeStructure(ohlc, dirSign) {
   return dirSign > 0 ? last.close > hi : last.close < lo;
 }
 
+// How far the last close broke beyond the prior-5 high/low, in ATR (negative if
+// it didn't break).
+function breakDistATR(ohlc, dirSign, atr) {
+  if (!ohlc || ohlc.length < 6 || !atr) return 0;
+  const n = ohlc.length, last = ohlc[n - 1];
+  let hi = -Infinity, lo = Infinity;
+  for (let i = n - 6; i < n - 1; i++) { if (ohlc[i].high > hi) hi = ohlc[i].high; if (ohlc[i].low < lo) lo = ohlc[i].low; }
+  return (dirSign > 0 ? (last.close - hi) : (lo - last.close)) / atr;
+}
+
+// Reversal Energy (0-100): conviction behind the move, independent of state.
+//   35% impulse · 25% break strength · 20% EMA20 expansion · 20% acceleration.
+function reversalEnergy(d, domOHLC, dir) {
+  const atr = d.atr || 1;
+  const impulse = Math.min(100, Math.abs(d.imp3) * 50);                        // ~2 ATR = 100
+  const brk = Math.max(0, Math.min(1, breakDistATR(domOHLC, dir, atr) / 0.6)) * 100;  // 0.6 ATR past = 100
+  const expansion = Math.max(0, Math.min(1, ((d.price - d.e20) * dir) / atr)) * 100;  // 1 ATR from EMA20 = 100
+  const cur = d.imp3 * dir, prev = d.imp3prev * dir;                           // impulse in the move's direction
+  const accel = cur <= 0 ? 0 : Math.max(0, Math.min(100, 50 + (cur - prev) * 50)); // growing >50, fading <50
+  const energy = Math.round(0.35 * impulse + 0.25 * brk + 0.20 * expansion + 0.20 * accel);
+  const label = energy >= 90 ? 'Explosive' : energy >= 75 ? 'Strong' : energy >= 60 ? 'Healthy' : energy >= 40 ? 'Weak' : 'Fading';
+  return { energy, label, parts: { impulse: Math.round(impulse), break: Math.round(brk), expansion: Math.round(expansion), accel: Math.round(accel) } };
+}
+
 async function fetchOHLC(sb, inst, tf, limit, until) {
   let q = sb.from('backtest_candles').select('time, open, high, low, close')
     .eq('instrument', inst).eq('timeframe', tf).eq('complete', true);
@@ -122,9 +146,9 @@ function snap(closes, ohlc) {
   let bars = 0;
   for (let j = i; j >= 0 && s20[j] != null && s50[j] != null && Math.sign(s20[j] - s50[j]) === sign; j--) bars++;
   const slope = s20[i - 4] != null ? Math.sign(e20 - s20[i - 4]) : 0;
-  let atr = null, imp3 = 0;
-  if (ohlc) { atr = atr14FromOHLC(ohlc); if (atr) imp3 = (price - closes[i - 3]) / atr; }
-  return { e20, e50, price, stack: sign, bars, slope, priceVs20: Math.sign(price - e20), atr, imp3 };
+  let atr = null, imp3 = 0, imp3prev = 0;
+  if (ohlc) { atr = atr14FromOHLC(ohlc); if (atr) { imp3 = (price - closes[i - 3]) / atr; if (i - 6 >= 0) imp3prev = (closes[i - 3] - closes[i - 6]) / atr; } }
+  return { e20, e50, price, stack: sign, bars, slope, priceVs20: Math.sign(price - e20), atr, imp3, imp3prev };
 }
 
 module.exports = async function handler(req, res) {
@@ -202,10 +226,12 @@ module.exports = async function handler(req, res) {
       const base = { SHARP_REVERSAL: 80, NEW_TREND: 70, REVERSAL_CANDIDATE: 55, EXHAUSTION: 42, TREND: 22 }[state];
       const score = Math.min(100, base + Math.min(20, Math.round(Math.abs(d.imp3) * 8)));
       const broke = brokeStructure(P.domOHLC, dir);   // last dominant candle broke prior-5 high/low in dir
+      const en = reversalEnergy(d, P.domOHLC, dir);   // conviction layer (state-independent)
 
       pairs.push({
         pair: inst.replace('_', '/'), instrument: inst,
         direction: dir > 0 ? 'BUY' : 'SELL', state, score, broke,
+        energy: en.energy, energyLabel: en.label, energyParts: en.parts,
         dom: { stack: d.stack > 0 ? 'BULL' : d.stack < 0 ? 'BEAR' : 'FLAT', bars: d.bars, slope: d.slope > 0 ? 'UP' : d.slope < 0 ? 'DOWN' : 'FLAT', priceVs20: d.priceVs20 > 0 ? 'above' : 'below', impulseATR: +d.imp3.toFixed(2) },
         mid: { stack: P.mid.stack > 0 ? 'BULL' : P.mid.stack < 0 ? 'BEAR' : 'FLAT', bars: crossBars },
         trig: { stack: P.trig.stack > 0 ? 'BULL' : P.trig.stack < 0 ? 'BEAR' : 'FLAT' },
@@ -214,7 +240,7 @@ module.exports = async function handler(req, res) {
     const order = { SHARP_REVERSAL: 0, NEW_TREND: 1, REVERSAL_CANDIDATE: 2, EXHAUSTION: 3, TREND: 4 };
     // Break-of-structure gate + drop reversal candidates (not confirmed enough).
     const shown = pairs.filter(p => p.broke && p.state !== 'REVERSAL_CANDIDATE')
-      .sort((a, b) => order[a.state] - order[b.state] || b.score - a.score);
+      .sort((a, b) => order[a.state] - order[b.state] || b.energy - a.energy);
 
     res.json({
       generatedAt: new Date(signalMs).toISOString(),
