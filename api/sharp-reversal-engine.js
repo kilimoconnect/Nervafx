@@ -45,6 +45,19 @@ function emaSeries(vals, period) {
   }
   return out;
 }
+// Direction of the latest Heikin-Ashi (smoothed) candle: +1 bull / -1 bear.
+function heikinAshi(ohlc) {
+  if (!ohlc || ohlc.length < 2) return 0;
+  let haOpen = (ohlc[0].open + ohlc[0].close) / 2;
+  let haClose = (ohlc[0].open + ohlc[0].high + ohlc[0].low + ohlc[0].close) / 4;
+  for (let i = 1; i < ohlc.length; i++) {
+    const c = ohlc[i];
+    haOpen = (haOpen + haClose) / 2;
+    haClose = (c.open + c.high + c.low + c.close) / 4;
+  }
+  return haClose > haOpen ? 1 : haClose < haOpen ? -1 : 0;
+}
+
 function atr14FromOHLC(c) {
   if (c.length < 2) return null;
   const trs = [];
@@ -173,26 +186,29 @@ module.exports = async function handler(req, res) {
     for (let b = 0; b < PAIRS.length; b += 7) {
       const batch = PAIRS.slice(b, b + 7);
       const rows = await Promise.all(batch.map(async inst => {
-        let dom, mid, trig, domOHLC;
+        let dom, mid, trig, domOHLC, m15ohlc;
         if (M.synth) {
-          const [m15ohlc, m5c] = await Promise.all([fetchOHLC(sb, inst, 'M15', 500, untilFor('M15')), fetchCloses(sb, inst, 'M5', 300, untilFor('M5'))]);
-          const dohlc = synthOHLC(m15ohlc, M30_MS, evalMs);   // M30 from M15
+          const [m15o, m5c] = await Promise.all([fetchOHLC(sb, inst, 'M15', 500, untilFor('M15')), fetchCloses(sb, inst, 'M5', 300, untilFor('M5'))]);
+          m15ohlc = m15o;
+          const dohlc = synthOHLC(m15o, M30_MS, evalMs);   // M30 from M15
           domOHLC = dohlc.slice(-10);
           dom = snap(dohlc.map(c => c.close), dohlc.slice(-40));
-          mid = snap(m15ohlc.map(c => c.close), null);
+          mid = snap(m15o.map(c => c.close), null);
           trig = snap(m5c, null);
         } else {
-          const [domRaw, midC, trigC] = await Promise.all([
+          const [domRaw, midC, trigC, m15extra] = await Promise.all([
             fetchOHLC(sb, inst, M.dom, 260, untilFor(M.dom)),
             fetchCloses(sb, inst, M.mid, 300, untilFor(M.mid)),
             fetchCloses(sb, inst, M.trig, 300, untilFor(M.trig)),
+            M.dom === 'M15' ? Promise.resolve(null) : fetchOHLC(sb, inst, 'M15', 80, untilFor('M15')),
           ]);
+          m15ohlc = M.dom === 'M15' ? domRaw : m15extra;
           domOHLC = domRaw.slice(-10);
           dom = snap(domRaw.map(c => c.close), domRaw.slice(-40));
           mid = snap(midC, null);
           trig = snap(trigC, null);
         }
-        return { inst, dom, mid, trig, domOHLC };
+        return { inst, dom, mid, trig, domOHLC, ha15: heikinAshi(m15ohlc) };
       }));
       for (const r of rows) px[r.inst] = r;
     }
@@ -240,6 +256,7 @@ module.exports = async function handler(req, res) {
         dom: { stack: d.stack > 0 ? 'BULL' : d.stack < 0 ? 'BEAR' : 'FLAT', bars: d.bars, slope: d.slope > 0 ? 'UP' : d.slope < 0 ? 'DOWN' : 'FLAT', priceVs20: d.priceVs20 > 0 ? 'above' : 'below', impulseATR: +d.imp3.toFixed(2) },
         mid: { stack: P.mid.stack > 0 ? 'BULL' : P.mid.stack < 0 ? 'BEAR' : 'FLAT', bars: crossBars },
         trig: { stack: P.trig.stack > 0 ? 'BULL' : P.trig.stack < 0 ? 'BEAR' : 'FLAT' },
+        ha15: P.ha15 > 0 ? 'BULL' : P.ha15 < 0 ? 'BEAR' : 'FLAT',
       });
     }
     const order = { SHARP_REVERSAL: 0, NEW_TREND: 1, REVERSAL_CANDIDATE: 2, EXHAUSTION: 3, TREND: 4 };

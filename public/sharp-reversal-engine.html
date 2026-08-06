@@ -134,7 +134,7 @@
 
       var h = '<div class="pb-wrap"><table class="pb"><thead><tr>'
         + '<th style="text-align:left">Pair</th><th>Dir</th><th>Score</th><th>State</th><th>Energy</th>'
-        + '<th>Impulse</th><th>' + (tf.dominant || 'Dom') + ' trend</th><th>Slope</th><th>Price/EMA20</th>'
+        + '<th>Impulse</th><th>' + (tf.dominant || 'Dom') + ' trend</th><th>Slope</th><th>Price/EMA20</th><th>15m HA</th>'
         + '<th>' + (tf.confirm || 'Mid') + '</th><th>' + (tf.trigger || 'Trig') + '</th></tr></thead><tbody>';
       for (var i = 0; i < pairs.length; i++) {
         var p = pairs[i], st = STATE[p.state] || STATE.TREND;
@@ -150,6 +150,7 @@
           + '<td>' + trendCell(p.dom.stack) + ' <span style="font-size:9px;color:var(--text-dim)">' + p.dom.bars + 'b</span></td>'
           + '<td style="color:' + (p.dom.slope === 'UP' ? '#4ade80' : p.dom.slope === 'DOWN' ? '#f87171' : '#64748b') + ';font-weight:700">' + p.dom.slope + '</td>'
           + '<td style="color:var(--text-muted)">' + p.dom.priceVs20 + '</td>'
+          + '<td>' + trendCell(p.ha15) + '</td>'
           + '<td>' + trendCell(p.mid.stack) + ' <span style="font-size:9px;color:var(--text-dim)" title="candles since confirm EMA20/50 cross">' + (p.mid.bars != null ? p.mid.bars + 'c' : '') + '</span></td>'
           + '<td>' + trendCell(p.trig.stack) + '</td>'
           + '</tr>';
