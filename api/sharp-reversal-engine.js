@@ -27,12 +27,12 @@ const PAIRS = [
   'NZD_JPY','NZD_CHF','NZD_CAD','CAD_JPY','CAD_CHF','CHF_JPY',
 ];
 const CCYS = ['USD','EUR','GBP','JPY','CHF','CAD','AUD','NZD'];
-const HOUR = 3600000, H4_MS = 4 * HOUR, M15_MS = 900000, M5_MS = 300000;
+const HOUR = 3600000, H4_MS = 4 * HOUR, M30_MS = 1800000, M15_MS = 900000, M5_MS = 300000;
 const STRONG_TH = 33, WEAK_TH = -33;
 
 const MODES = {
-  standard: { dom: 'H1', mid: 'M15', trig: 'M5', synth: false, trigMs: M5_MS },
-  swing:    { dom: 'H4', mid: 'H1', trig: 'M15', synth: true, trigMs: M15_MS },
+  standard: { dom: 'H1',  mid: 'M15', trig: 'M5', synth: false, trigMs: M5_MS },
+  swing:    { dom: 'M30', mid: 'M15', trig: 'M5', synth: true,  trigMs: M5_MS },   // M30 synthesized from M15
 };
 
 function emaSeries(vals, period) {
@@ -72,15 +72,16 @@ function pressureFrom(candles, dirSign) {
 }
 const classify = (s) => (s >= STRONG_TH ? 'STRONG' : s <= WEAK_TH ? 'WEAK' : 'NEUTRAL');
 
-// Synthesize closed-H4 OHLC from ascending H1 {ms,open,high,low,close}.
-function h4OHLC(h1, evalMs) {
+// Synthesize a closed OHLC series by bucketing ascending {ms,o,h,l,c} candles
+// into `size`-ms buckets (used for M30 from M15).
+function synthOHLC(src, size, evalMs) {
   const m = new Map();
-  for (const c of h1) {
-    const bs = Math.floor(c.ms / H4_MS) * H4_MS, b = m.get(bs);
+  for (const c of src) {
+    const bs = Math.floor(c.ms / size) * size, b = m.get(bs);
     if (!b) m.set(bs, { start: bs, open: c.open, high: c.high, low: c.low, close: c.close });
     else { if (c.high > b.high) b.high = c.high; if (c.low < b.low) b.low = c.low; b.close = c.close; }
   }
-  return [...m.values()].sort((a, b) => a.start - b.start).filter(b => b.start <= evalMs - H4_MS)
+  return [...m.values()].sort((a, b) => a.start - b.start).filter(b => b.start <= evalMs - size)
     .map(b => ({ open: b.open, high: b.high, low: b.low, close: b.close }));
 }
 
@@ -163,7 +164,8 @@ module.exports = async function handler(req, res) {
     const now = Date.now();
     let evalMs = now;
     if (req.query?.at) { const t = new Date(req.query.at).getTime(); if (!isNaN(t)) evalMs = Math.min(t, now); }
-    const untilFor = (tf) => new Date(evalMs - (tf === 'H4' ? H4_MS : tf === 'H1' ? HOUR : tf === 'M15' ? M15_MS : M5_MS)).toISOString();
+    const tfMs = { H4: H4_MS, M30: M30_MS, H1: HOUR, M15: M15_MS, M5: M5_MS };
+    const untilFor = (tf) => new Date(evalMs - (tfMs[tf] || M5_MS)).toISOString();
     const signalMs = Math.floor(evalMs / M.trigMs) * M.trigMs;
 
     const px = {};
@@ -172,12 +174,12 @@ module.exports = async function handler(req, res) {
       const rows = await Promise.all(batch.map(async inst => {
         let dom, mid, trig, domOHLC;
         if (M.synth) {
-          const [h1ohlc, m15c] = await Promise.all([fetchOHLC(sb, inst, 'H1', 700, untilFor('H1')), fetchCloses(sb, inst, 'M15', 220, untilFor('M15'))]);
-          const dohlc = h4OHLC(h1ohlc, evalMs);
+          const [m15ohlc, m5c] = await Promise.all([fetchOHLC(sb, inst, 'M15', 500, untilFor('M15')), fetchCloses(sb, inst, 'M5', 300, untilFor('M5'))]);
+          const dohlc = synthOHLC(m15ohlc, M30_MS, evalMs);   // M30 from M15
           domOHLC = dohlc.slice(-10);
           dom = snap(dohlc.map(c => c.close), dohlc.slice(-40));
-          mid = snap(h1ohlc.map(c => c.close), null);
-          trig = snap(m15c, null);
+          mid = snap(m15ohlc.map(c => c.close), null);
+          trig = snap(m5c, null);
         } else {
           const [h1ohlc, m15c, m5c] = await Promise.all([
             fetchOHLC(sb, inst, 'H1', 220, untilFor('H1')),
@@ -239,8 +241,8 @@ module.exports = async function handler(req, res) {
     }
     const order = { SHARP_REVERSAL: 0, NEW_TREND: 1, REVERSAL_CANDIDATE: 2, EXHAUSTION: 3, TREND: 4 };
     // Break-of-structure gate + drop reversal candidates (not confirmed enough).
-    const shown = pairs.filter(p => p.broke && p.state !== 'REVERSAL_CANDIDATE')
-      .sort((a, b) => order[a.state] - order[b.state] || b.energy - a.energy);
+    const shown = pairs.filter(p => p.broke && p.state !== 'REVERSAL_CANDIDATE' && p.energy >= 70)
+      .sort((a, b) => order[a.state] - order[b.state] || b.energy - a.energy);   // drop energy < 70
 
     res.json({
       generatedAt: new Date(signalMs).toISOString(),
