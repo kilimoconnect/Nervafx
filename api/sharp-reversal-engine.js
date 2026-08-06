@@ -33,6 +33,7 @@ const STRONG_TH = 33, WEAK_TH = -33;
 const MODES = {
   standard: { dom: 'H1',  mid: 'M15', trig: 'M5', synth: false, trigMs: M5_MS },
   swing:    { dom: 'M30', mid: 'M15', trig: 'M5', synth: true,  trigMs: M5_MS },   // M30 synthesized from M15
+  fast:     { dom: 'M15', mid: 'M5',  trig: 'M5', synth: false, trigMs: M5_MS },   // M15 dominant, M5 confirm/trigger
 };
 
 function emaSeries(vals, period) {
@@ -181,15 +182,15 @@ module.exports = async function handler(req, res) {
           mid = snap(m15ohlc.map(c => c.close), null);
           trig = snap(m5c, null);
         } else {
-          const [h1ohlc, m15c, m5c] = await Promise.all([
-            fetchOHLC(sb, inst, 'H1', 220, untilFor('H1')),
-            fetchCloses(sb, inst, 'M15', 220, untilFor('M15')),
-            fetchCloses(sb, inst, 'M5', 300, untilFor('M5')),
+          const [domRaw, midC, trigC] = await Promise.all([
+            fetchOHLC(sb, inst, M.dom, 260, untilFor(M.dom)),
+            fetchCloses(sb, inst, M.mid, 300, untilFor(M.mid)),
+            fetchCloses(sb, inst, M.trig, 300, untilFor(M.trig)),
           ]);
-          domOHLC = h1ohlc.slice(-10);
-          dom = snap(h1ohlc.map(c => c.close), h1ohlc.slice(-40));
-          mid = snap(m15c, null);
-          trig = snap(m5c, null);
+          domOHLC = domRaw.slice(-10);
+          dom = snap(domRaw.map(c => c.close), domRaw.slice(-40));
+          mid = snap(midC, null);
+          trig = snap(trigC, null);
         }
         return { inst, dom, mid, trig, domOHLC };
       }));
