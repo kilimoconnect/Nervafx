@@ -244,6 +244,8 @@ module.exports = async function handler(req, res) {
       else state = (isExhausted(d) && d.stack === dir) ? 'EXHAUSTION' : 'TREND';
 
       const broke = brokeStructure(P.domOHLC, dir);   // last dominant candle broke prior-5 high/low in dir
+      // 15m Heikin-Ashi, confirm (M15/M5) and trigger (M5) must all agree with dir.
+      const confirmAligned = P.ha15 === dir && P.mid.stack === dir && P.trig.stack === dir;
       // Ranking score = 40% state type + 35% energy + 25% ATR impulse.
       const stateW = { SHARP_REVERSAL: 100, NEW_TREND: 78, EXHAUSTION: 50, TREND: 35 }[state];
       const impScore = Math.min(100, Math.abs(d.imp3) * 40);   // ~2.5 ATR = 100
@@ -251,7 +253,7 @@ module.exports = async function handler(req, res) {
 
       pairs.push({
         pair: inst.replace('_', '/'), instrument: inst,
-        direction: dir > 0 ? 'BUY' : 'SELL', state, score, broke,
+        direction: dir > 0 ? 'BUY' : 'SELL', state, score, broke, confirmAligned,
         energy: en.energy, energyLabel: en.label, energyParts: en.parts,
         dom: { stack: d.stack > 0 ? 'BULL' : d.stack < 0 ? 'BEAR' : 'FLAT', bars: d.bars, slope: d.slope > 0 ? 'UP' : d.slope < 0 ? 'DOWN' : 'FLAT', priceVs20: d.priceVs20 > 0 ? 'above' : 'below', impulseATR: +d.imp3.toFixed(2) },
         mid: { stack: P.mid.stack > 0 ? 'BULL' : P.mid.stack < 0 ? 'BEAR' : 'FLAT', bars: crossBars },
@@ -261,8 +263,8 @@ module.exports = async function handler(req, res) {
     }
     const order = { SHARP_REVERSAL: 0, NEW_TREND: 1, REVERSAL_CANDIDATE: 2, EXHAUSTION: 3, TREND: 4 };
     // Break-of-structure gate + drop reversal candidates (not confirmed enough).
-    const shown = pairs.filter(p => p.broke && p.state !== 'REVERSAL_CANDIDATE' && p.energy >= 70)
-      .sort((a, b) => order[a.state] - order[b.state] || b.score - a.score);   // drop energy < 70
+    const shown = pairs.filter(p => p.broke && p.state !== 'REVERSAL_CANDIDATE' && p.energy >= 70 && p.confirmAligned)
+      .sort((a, b) => order[a.state] - order[b.state] || b.score - a.score);   // drop energy < 70 or misaligned 15mHA/M15/M5
 
     res.json({
       generatedAt: new Date(signalMs).toISOString(),

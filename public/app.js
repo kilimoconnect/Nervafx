@@ -3828,13 +3828,12 @@ async function fetchQualityPreview() {
   if (!el) return;
   try {
     const ts = Date.now();
-    const [daily, h4, session, strength] = await Promise.all([
-      api(`/api/daily-continuation?t=${ts}`).catch(() => ({ pairs: [] })),
-      api(`/api/h1-continuation?t=${ts}`).catch(() => ({ pairs: [] })),
-      api(`/api/session-continuation?t=${ts}`).catch(() => ({ pairs: [] })),
-      api(`/api/strength-continuation?t=${ts}`).catch(() => ({ pairs: [] })),
+    const [standard, scalp, fast] = await Promise.all([
+      api(`/api/sharp-reversal-engine?mode=standard&t=${ts}`).catch(() => ({ pairs: [] })),
+      api(`/api/sharp-reversal-engine?mode=swing&t=${ts}`).catch(() => ({ pairs: [] })),
+      api(`/api/sharp-reversal-engine?mode=fast&t=${ts}`).catch(() => ({ pairs: [] })),
     ]);
-    renderQualityPreview(el, { daily, h4, session, strength });
+    renderQualityPreview(el, { standard, scalp, fast });
   } catch (e) {
     el.innerHTML = `<p class="me-empty">Failed to load: ${e.message}</p>`;
   }
@@ -3859,18 +3858,18 @@ function _anTime(iso) {
 }
 
 function renderQualityPreview(el, data) {
-  // Match the continuation pages exactly: only pairs that reached Trigger 2.
-  const qualified = arr => (arr || []).filter(p => p.qualified === true && p.strongConfirmTime);
+  // Sharp Reversal engine — the reversal/new-trend signals per mode.
+  const rev = arr => (arr || []).filter(p => p.state === 'SHARP_REVERSAL' || p.state === 'NEW_TREND' || p.state === 'EXHAUSTION');
   const groups = [
-    { key: 'daily',   label: 'Daily',   href: '/daily-continuation',   pairs: qualified(data.daily?.pairs) },
-    { key: 'h4',      label: 'H4',      href: '/h1-continuation',      pairs: qualified(data.h4?.pairs) },
-    { key: 'session', label: 'Session', href: '/session-continuation', pairs: qualified(data.session?.pairs) },
-    { key: 'strength', label: 'Strength', href: '/strength-continuation', pairs: qualified(data.strength?.pairs) },
+    { label: 'Standard · H1/M15/M5', pairs: rev(data.standard?.pairs) },
+    { label: 'Scalp · M30/M15/M5',   pairs: rev(data.scalp?.pairs) },
+    { label: 'Fast · M15/M5',        pairs: rev(data.fast?.pairs) },
   ];
+  const href = '/sharp-reversal-engine';
 
   const total = groups.reduce((n, g) => n + g.pairs.length, 0);
   if (!total) {
-    el.innerHTML = '<p class="me-empty">No live continuation signals</p>';
+    el.innerHTML = '<p class="me-empty">No live reversal signals</p>';
     return;
   }
 
@@ -3880,13 +3879,13 @@ function renderQualityPreview(el, data) {
     html += '<div class="cs-dash-group">';
     html += `<div class="cs-dash-group-hd">`;
     html += `<span class="cs-dash-group-label">${g.label}</span>`;
-    html += `<a class="cs-dash-group-link" href="${g.href}">View →</a>`;
+    html += `<a class="cs-dash-group-link" href="${href}">View →</a>`;
     html += `</div>`;
 
     if (!top.length) {
       html += '<div class="cs-dash-empty">No signals</div>';
     } else {
-      for (const p of top) html += _renderCsDashRow(p);
+      for (const p of top) html += _renderSrDashRow(p);
     }
     html += '</div>';
   }
@@ -3895,23 +3894,17 @@ function renderQualityPreview(el, data) {
   el.innerHTML = html;
 }
 
-function _renderCsDashRow(p) {
+function _renderSrDashRow(p) {
   const dirCls = p.direction === 'BUY' ? 'an-dash-buy' : 'an-dash-sell';
-  // Show when the signal actually fired — the trigger candle's close — rather
-  // than the candle's open timestamp. Each engine reports its own close time
-  // because their trigger timeframes differ (H1 for daily/session, M15 for H4).
-  const sigTime = p.triggerCloseTime || p.triggerTime;
-  const t = sigTime ? _anTime(sigTime) : '';
-  const brk = p.triggerBreakPips != null
-    ? `<span class="cs-dash-brk">+${p.triggerBreakPips} pips</span>`
-    : '';
+  const stateShort = { SHARP_REVERSAL: 'Sharp Rev', NEW_TREND: 'New Trend', EXHAUSTION: 'Exhaustion' }[p.state] || p.state;
+  const eCol = p.energy >= 90 ? '#f43f5e' : p.energy >= 75 ? '#22c55e' : p.energy >= 60 ? '#84cc16' : '#facc15';
   return (
     `<div class="cs-dash-row">` +
-    `<span class="cs-dash-time">${t}</span>` +
+    `<span class="cs-dash-time">${stateShort}</span>` +
     `<span class="an-dash-dir ${dirCls}">${p.direction}</span>` +
     `<span class="cs-dash-pair">${p.pair}</span>` +
-    `<span class="an-dash-score">${p.currentScore}</span>` +
-    brk +
+    `<span class="an-dash-score">${p.score}</span>` +
+    `<span class="cs-dash-brk" style="color:${eCol}">E ${p.energy}</span>` +
     `</div>`
   );
 }
