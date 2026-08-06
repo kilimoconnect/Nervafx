@@ -212,21 +212,21 @@ module.exports = async function handler(req, res) {
       const P = px[inst];
       if (!P || !P.dom || !P.mid || !P.trig) continue;
       const d = P.dom;
-      const crossBars = P.mid.bars;      // bars since the confirm-TF (M15 std / H1 swing) EMA20/50 cross
+      const crossBars = P.mid.bars;      // bars since the confirm-TF (M15) EMA20/50 cross
       const S = P.mid.stack;             // confirm-TF direction = the new trend direction
       if (!S) continue;                  // flat confirm → no direction
       const dir = S;
+      const en = reversalEnergy(d, P.domOHLC, dir);   // conviction layer (drives the energy gate below)
 
-      // Confirm-TF cross recency + dominant still opposite = the reversal states.
-      // SHARP_REVERSAL needs a fresh confirm flip WHILE the dominant EMA20 is
-      // still the wrong side of EMA50 (buy: dom EMA20<EMA50, sell: EMA20>EMA50).
+      // Reversal states need the dominant EMA20 still the WRONG side of EMA50
+      // (buy: EMA20<EMA50, sell: EMA20>EMA50). SHARP_REVERSAL fires on a fresh
+      // M15 cross (<=15 candles) OR — cross not mandatory — when Energy >= 70.
       let state;
-      if (crossBars <= 15 && d.stack === -dir) state = 'SHARP_REVERSAL';   // confirm just flipped, dominant still opposite
-      else if (d.bars <= 5 && d.stack === dir) state = 'NEW_TREND';         // dominant just crossed to align (last 5 candles)
+      if (d.stack === -dir && (crossBars <= 15 || en.energy >= 70)) state = 'SHARP_REVERSAL';
+      else if (d.bars <= 5 && d.stack === dir) state = 'NEW_TREND';   // dominant just crossed to align (last 5 candles)
       else state = (isExhausted(d) && d.stack === dir) ? 'EXHAUSTION' : 'TREND';
 
       const broke = brokeStructure(P.domOHLC, dir);   // last dominant candle broke prior-5 high/low in dir
-      const en = reversalEnergy(d, P.domOHLC, dir);   // conviction layer (state-independent)
       // Ranking score = 40% state type + 35% energy + 25% ATR impulse.
       const stateW = { SHARP_REVERSAL: 100, NEW_TREND: 78, EXHAUSTION: 50, TREND: 35 }[state];
       const impScore = Math.min(100, Math.abs(d.imp3) * 40);   // ~2.5 ATR = 100
