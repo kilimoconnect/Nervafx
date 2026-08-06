@@ -225,10 +225,12 @@ module.exports = async function handler(req, res) {
       else if (d.bars <= 5 && d.stack === dir) state = 'NEW_TREND';         // dominant just crossed to align (last 5 candles)
       else state = (isExhausted(d) && d.stack === dir) ? 'EXHAUSTION' : 'TREND';
 
-      const base = { SHARP_REVERSAL: 80, NEW_TREND: 70, REVERSAL_CANDIDATE: 55, EXHAUSTION: 42, TREND: 22 }[state];
-      const score = Math.min(100, base + Math.min(20, Math.round(Math.abs(d.imp3) * 8)));
       const broke = brokeStructure(P.domOHLC, dir);   // last dominant candle broke prior-5 high/low in dir
       const en = reversalEnergy(d, P.domOHLC, dir);   // conviction layer (state-independent)
+      // Ranking score = 40% state type + 35% energy + 25% ATR impulse.
+      const stateW = { SHARP_REVERSAL: 100, NEW_TREND: 78, EXHAUSTION: 50, TREND: 35 }[state];
+      const impScore = Math.min(100, Math.abs(d.imp3) * 40);   // ~2.5 ATR = 100
+      const score = Math.round(0.4 * stateW + 0.35 * en.energy + 0.25 * impScore);
 
       pairs.push({
         pair: inst.replace('_', '/'), instrument: inst,
@@ -242,7 +244,7 @@ module.exports = async function handler(req, res) {
     const order = { SHARP_REVERSAL: 0, NEW_TREND: 1, REVERSAL_CANDIDATE: 2, EXHAUSTION: 3, TREND: 4 };
     // Break-of-structure gate + drop reversal candidates (not confirmed enough).
     const shown = pairs.filter(p => p.broke && p.state !== 'REVERSAL_CANDIDATE' && p.energy >= 70)
-      .sort((a, b) => order[a.state] - order[b.state] || b.energy - a.energy);   // drop energy < 70
+      .sort((a, b) => order[a.state] - order[b.state] || b.score - a.score);   // drop energy < 70
 
     res.json({
       generatedAt: new Date(signalMs).toISOString(),
