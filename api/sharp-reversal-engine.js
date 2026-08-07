@@ -58,6 +58,14 @@ function heikinAshi(ohlc) {
   return haClose > haOpen ? 1 : haClose < haOpen ? -1 : 0;
 }
 
+// Both of the last two closed M30 candles closed in the trade direction
+// (buy: close > open on each; sell: close < open on each).
+function twoM30SameDir(m30ohlc, dirSign) {
+  if (!m30ohlc || m30ohlc.length < 2 || !dirSign) return false;
+  const a = m30ohlc[m30ohlc.length - 1], b = m30ohlc[m30ohlc.length - 2];
+  return Math.sign(a.close - a.open) === dirSign && Math.sign(b.close - b.open) === dirSign;
+}
+
 function atr14FromOHLC(c) {
   if (c.length < 2) return null;
   const trs = [];
@@ -186,11 +194,12 @@ module.exports = async function handler(req, res) {
     for (let b = 0; b < PAIRS.length; b += 7) {
       const batch = PAIRS.slice(b, b + 7);
       const rows = await Promise.all(batch.map(async inst => {
-        let dom, mid, trig, domOHLC, m15ohlc;
+        let dom, mid, trig, domOHLC, m15ohlc, m30ohlc;
         if (M.synth) {
           const [m15o, m5c] = await Promise.all([fetchOHLC(sb, inst, 'M15', 500, untilFor('M15')), fetchCloses(sb, inst, 'M5', 300, untilFor('M5'))]);
           m15ohlc = m15o;
           const dohlc = synthOHLC(m15o, M30_MS, evalMs);   // M30 from M15
+          m30ohlc = dohlc;                                 // dominant already IS M30 here
           domOHLC = dohlc.slice(-10);
           dom = snap(dohlc.map(c => c.close), dohlc.slice(-40));
           mid = snap(m15o.map(c => c.close), null);
@@ -203,12 +212,13 @@ module.exports = async function handler(req, res) {
             M.dom === 'M15' ? Promise.resolve(null) : fetchOHLC(sb, inst, 'M15', 80, untilFor('M15')),
           ]);
           m15ohlc = M.dom === 'M15' ? domRaw : m15extra;
+          m30ohlc = synthOHLC(m15ohlc, M30_MS, evalMs);    // M30 from M15 for the two-candle gate
           domOHLC = domRaw.slice(-10);
           dom = snap(domRaw.map(c => c.close), domRaw.slice(-40));
           mid = snap(midC, null);
           trig = snap(trigC, null);
         }
-        return { inst, dom, mid, trig, domOHLC, ha15: heikinAshi(m15ohlc) };
+        return { inst, dom, mid, trig, domOHLC, ha15: heikinAshi(m15ohlc), m30ohlc };
       }));
       for (const r of rows) px[r.inst] = r;
     }
@@ -246,6 +256,8 @@ module.exports = async function handler(req, res) {
       const broke = brokeStructure(P.domOHLC, dir);   // last dominant candle broke prior-5 high/low in dir
       // 15m Heikin-Ashi, confirm (M15/M5) and trigger (M5) must all agree with dir.
       const confirmAligned = P.ha15 === dir && P.mid.stack === dir && P.trig.stack === dir;
+      // Require the last two closed M30 candles to both close in the trade direction.
+      const m30TwoDir = twoM30SameDir(P.m30ohlc, dir);
       // Ranking score = 40% state type + 35% energy + 25% ATR impulse.
       const stateW = { SHARP_REVERSAL: 100, NEW_TREND: 78, EXHAUSTION: 50, TREND: 35 }[state];
       const impScore = Math.min(100, Math.abs(d.imp3) * 40);   // ~2.5 ATR = 100
@@ -253,7 +265,7 @@ module.exports = async function handler(req, res) {
 
       pairs.push({
         pair: inst.replace('_', '/'), instrument: inst,
-        direction: dir > 0 ? 'BUY' : 'SELL', state, score, broke, confirmAligned,
+        direction: dir > 0 ? 'BUY' : 'SELL', state, score, broke, confirmAligned, m30TwoDir,
         energy: en.energy, energyLabel: en.label, energyParts: en.parts,
         dom: { stack: d.stack > 0 ? 'BULL' : d.stack < 0 ? 'BEAR' : 'FLAT', bars: d.bars, slope: d.slope > 0 ? 'UP' : d.slope < 0 ? 'DOWN' : 'FLAT', priceVs20: d.priceVs20 > 0 ? 'above' : 'below', impulseATR: +d.imp3.toFixed(2) },
         mid: { stack: P.mid.stack > 0 ? 'BULL' : P.mid.stack < 0 ? 'BEAR' : 'FLAT', bars: crossBars },
@@ -263,8 +275,8 @@ module.exports = async function handler(req, res) {
     }
     const order = { SHARP_REVERSAL: 0, NEW_TREND: 1, REVERSAL_CANDIDATE: 2, EXHAUSTION: 3, TREND: 4 };
     // Break-of-structure gate + drop reversal candidates (not confirmed enough).
-    const shown = pairs.filter(p => p.broke && p.state !== 'REVERSAL_CANDIDATE' && p.energy >= 70 && p.confirmAligned)
-      .sort((a, b) => order[a.state] - order[b.state] || b.score - a.score);   // energy >= 70, aligned 15mHA/M15/M5
+    const shown = pairs.filter(p => p.broke && p.state !== 'REVERSAL_CANDIDATE' && p.energy >= 70 && p.confirmAligned && p.m30TwoDir)
+      .sort((a, b) => order[a.state] - order[b.state] || b.score - a.score);   // energy >= 70, aligned 15mHA/M15/M5, 2 consecutive M30 in dir
 
     res.json({
       generatedAt: new Date(signalMs).toISOString(),
