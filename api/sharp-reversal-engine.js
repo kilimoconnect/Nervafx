@@ -254,7 +254,7 @@ module.exports = async function handler(req, res) {
       // (buy: EMA20<EMA50, sell: EMA20>EMA50). SHARP_REVERSAL fires on a fresh
       // M15 cross (<=15 candles) OR — cross not mandatory — when Energy >= 70.
       let state;
-      if (d.stack === -dir && (crossBars <= 15 || en.energy >= 90)) state = 'SHARP_REVERSAL';
+      if (d.stack === -dir && (crossBars <= 15 || en.energy >= 70)) state = 'SHARP_REVERSAL';
       else if (d.bars <= 5 && d.stack === dir) state = 'NEW_TREND';   // dominant just crossed to align (last 5 candles)
       else state = (isExhausted(d) && d.stack === dir) ? 'EXHAUSTION' : 'TREND';
 
@@ -280,8 +280,8 @@ module.exports = async function handler(req, res) {
     }
     const order = { SHARP_REVERSAL: 0, NEW_TREND: 1, REVERSAL_CANDIDATE: 2, EXHAUSTION: 3, TREND: 4 };
     // Break-of-structure gate + drop reversal candidates (not confirmed enough).
-    const shown = pairs.filter(p => p.broke && p.state !== 'REVERSAL_CANDIDATE' && p.energy >= 90 && p.confirmAligned && p.h1TwoDir)
-      .sort((a, b) => order[a.state] - order[b.state] || b.score - a.score);   // energy >= 90, aligned 15mHA/M15/M5, 2 consecutive H1 in dir
+    const shown = pairs.filter(p => p.broke && p.state !== 'REVERSAL_CANDIDATE' && p.energy >= 70 && p.confirmAligned && p.h1TwoDir)
+      .sort((a, b) => order[a.state] - order[b.state] || b.score - a.score);   // energy >= 70, aligned 15mHA/M15/M5, 2 consecutive H1 in dir
 
     res.json({
       generatedAt: new Date(signalMs).toISOString(),
