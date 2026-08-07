@@ -20,7 +20,6 @@ const srHandler = require('./sharp-reversal-engine.js');
 const MODES = [
   { key: 'standard', label: 'Standard', tf: 'H1 / M15 / M5' },
   { key: 'swing',    label: 'Scalp',    tf: 'M30 / M15 / M5' },
-  { key: 'fast',     label: 'Fast',     tf: 'M15 / M5' },
 ];
 
 // Per-mode dedup window. A faster dominant timeframe reverses more often, so it
@@ -28,7 +27,6 @@ const MODES = [
 const MODE_COOLDOWN_MS = {
   standard: 6 * 3600000,   // H1 dominant → 6h
   swing:    3 * 3600000,   // M30 dominant → 3h
-  fast:     90 * 60000,    // M15 dominant → 90m
 };
 
 function getDB() {

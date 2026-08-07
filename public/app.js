@@ -3828,12 +3828,11 @@ async function fetchQualityPreview() {
   if (!el) return;
   try {
     const ts = Date.now();
-    const [standard, scalp, fast] = await Promise.all([
+    const [standard, scalp] = await Promise.all([
       api(`/api/sharp-reversal-engine?mode=standard&t=${ts}`).catch(() => ({ pairs: [] })),
       api(`/api/sharp-reversal-engine?mode=swing&t=${ts}`).catch(() => ({ pairs: [] })),
-      api(`/api/sharp-reversal-engine?mode=fast&t=${ts}`).catch(() => ({ pairs: [] })),
     ]);
-    renderQualityPreview(el, { standard, scalp, fast });
+    renderQualityPreview(el, { standard, scalp });
   } catch (e) {
     el.innerHTML = `<p class="me-empty">Failed to load: ${e.message}</p>`;
   }
@@ -3863,7 +3862,6 @@ function renderQualityPreview(el, data) {
   const groups = [
     { label: 'Standard · H1/M15/M5', pairs: rev(data.standard?.pairs) },
     { label: 'Scalp · M30/M15/M5',   pairs: rev(data.scalp?.pairs) },
-    { label: 'Fast · M15/M5',        pairs: rev(data.fast?.pairs) },
   ];
   const href = '/sharp-reversal-engine';
 
