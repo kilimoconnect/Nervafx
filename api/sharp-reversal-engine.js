@@ -258,6 +258,8 @@ module.exports = async function handler(req, res) {
       const confirmAligned = P.ha15 === dir && P.mid.stack === dir && P.trig.stack === dir;
       // Require the last two closed M30 candles to both close in the trade direction.
       const m30TwoDir = twoM30SameDir(P.m30ohlc, dir);
+      // Require a strong dominant impulse: >= +2 ATR (buy) or <= -2 ATR (sell).
+      const impulseOK = d.imp3 * dir >= 2;
       // Ranking score = 40% state type + 35% energy + 25% ATR impulse.
       const stateW = { SHARP_REVERSAL: 100, NEW_TREND: 78, EXHAUSTION: 50, TREND: 35 }[state];
       const impScore = Math.min(100, Math.abs(d.imp3) * 40);   // ~2.5 ATR = 100
@@ -265,7 +267,7 @@ module.exports = async function handler(req, res) {
 
       pairs.push({
         pair: inst.replace('_', '/'), instrument: inst,
-        direction: dir > 0 ? 'BUY' : 'SELL', state, score, broke, confirmAligned, m30TwoDir,
+        direction: dir > 0 ? 'BUY' : 'SELL', state, score, broke, confirmAligned, m30TwoDir, impulseOK,
         energy: en.energy, energyLabel: en.label, energyParts: en.parts,
         dom: { stack: d.stack > 0 ? 'BULL' : d.stack < 0 ? 'BEAR' : 'FLAT', bars: d.bars, slope: d.slope > 0 ? 'UP' : d.slope < 0 ? 'DOWN' : 'FLAT', priceVs20: d.priceVs20 > 0 ? 'above' : 'below', impulseATR: +d.imp3.toFixed(2) },
         mid: { stack: P.mid.stack > 0 ? 'BULL' : P.mid.stack < 0 ? 'BEAR' : 'FLAT', bars: crossBars },
@@ -275,8 +277,8 @@ module.exports = async function handler(req, res) {
     }
     const order = { SHARP_REVERSAL: 0, NEW_TREND: 1, REVERSAL_CANDIDATE: 2, EXHAUSTION: 3, TREND: 4 };
     // Break-of-structure gate + drop reversal candidates (not confirmed enough).
-    const shown = pairs.filter(p => p.broke && p.state !== 'REVERSAL_CANDIDATE' && p.energy >= 70 && p.confirmAligned && p.m30TwoDir)
-      .sort((a, b) => order[a.state] - order[b.state] || b.score - a.score);   // energy >= 70, aligned 15mHA/M15/M5, 2 consecutive M30 in dir
+    const shown = pairs.filter(p => p.broke && p.state !== 'REVERSAL_CANDIDATE' && p.energy >= 70 && p.confirmAligned && p.m30TwoDir && p.impulseOK)
+      .sort((a, b) => order[a.state] - order[b.state] || b.score - a.score);   // energy >= 70, aligned 15mHA/M15/M5, 2 consecutive M30 in dir, |impulse| >= 2 ATR
 
     res.json({
       generatedAt: new Date(signalMs).toISOString(),
