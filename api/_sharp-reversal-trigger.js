@@ -36,14 +36,15 @@ function invokeScan(mode, fromISO, atISO) {
 // windowStartISO..evalISO define the engine's window; the trigger's cross must
 // fall inside it to count. sb is accepted for call-site compatibility (unused).
 async function loadSharpReversalTriggers(sb, windowStartISO, evalISO) {
-  const startMs = new Date(windowStartISO).getTime();
-  const endMs = new Date(evalISO).getTime();
-
   const [std, swing] = await Promise.all([
     invokeScan('standard', windowStartISO, evalISO),
     invokeScan('swing', windowStartISO, evalISO),
   ]);
 
+  // The scan only searched within [windowStart, evalISO], so any pair it returns
+  // qualified inside the window. Its triggerTime (confirm-TF cross) may sit just
+  // before the window when the reversal was already underway — that's fine, the
+  // engine clamps monitoring to the window start. Keep the earliest cross.
   const map = {};
   for (const r of [std, swing]) {
     const triggers = r.data?.triggers || {};
@@ -51,7 +52,7 @@ async function loadSharpReversalTriggers(sb, windowStartISO, evalISO) {
       const t = triggers[inst];
       if (!t || !t.direction || !t.triggerTime) continue;
       const tt = new Date(t.triggerTime).getTime();
-      if (isNaN(tt) || tt < startMs || tt > endMs) continue;   // cross must fall inside the window
+      if (isNaN(tt)) continue;
       const prev = map[inst];
       if (!prev || tt < new Date(prev.triggerTime).getTime()) {
         map[inst] = { direction: t.direction, triggerTime: t.triggerTime, mode: r.data?.mode || null };
