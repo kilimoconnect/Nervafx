@@ -1,7 +1,7 @@
 'use strict';
 
-const { alignFromCandles } = require('./_h1-ema-align');
 const { loadStrength, strengthGate } = require('./_strength-gate');
+const { loadSharpReversalTriggers } = require('./_sharp-reversal-trigger');
 
 const { getClient, cors } = require('./_db');
 const { requirePlan } = require('./_plan');
@@ -58,6 +58,11 @@ module.exports = async function handler(req, res) {
     const anchorMs = anchor ? anchor.getTime() : now.getTime();
     const fetchSince = new Date(anchorMs - 6 * 24 * 3600000).toISOString();
     const fetchUntil = anchor ? new Date(anchorMs + H4_MS).toISOString() : now.toISOString();
+
+    // The one trigger for this engine — earliest Sharp Reversal (Standard/Scalp)
+    // per pair, first-seen within the current H4 window.
+    const h4WindowStartMs = anchor ? anchorMs : Math.floor(now.getTime() / H4_MS) * H4_MS;
+    const srTriggers = await loadSharpReversalTriggers(sb, new Date(h4WindowStartMs).toISOString(), fetchUntil);
 
     const PAGE = 1000;
     const h4Cache = {};
@@ -165,45 +170,15 @@ module.exports = async function handler(req, res) {
         ? anchor.toISOString()
         : new Date(new Date(refStart).getTime() + H4_MS).toISOString();
 
-      // Direction confirmation. Primary: last H4 broke against the H4 before.
-      // Fallback: H4[-2] broke, but only if H4[-1]'s own body agrees. Prevents
-      // a stale H4 break from firing after the very next H4 has already
-      // reversed direction.
-      const r1BuyBrk  = ref.close  > ref2.high;
-      const r1SellBrk = ref.close  < ref2.low;
-      const r2BuyBrk  = ref3 ? ref2.close > ref3.high : false;
-      const r2SellBrk = ref3 ? ref2.close < ref3.low  : false;
-      const refBullish = ref.close > ref.open;
-      const refBearish = ref.close < ref.open;
-
-      // The last H4 is checked first; if it produced no break at all, the H4
-      // before it stands on its own. The fallback used to also require the
-      // last H4's body to agree, which meant a flat or opposing one killed
-      // the signal outright.
-      const buyConfirm  = r1BuyBrk  || r2BuyBrk;
-      const sellConfirm = r1SellBrk || r2SellBrk;
-
-      let confirmedDirection = null;
-      if (buyConfirm && !sellConfirm) confirmedDirection = 'BUY';
-      else if (sellConfirm && !buyConfirm) confirmedDirection = 'SELL';
-      else if (buyConfirm && sellConfirm) {
-        if (r1BuyBrk) confirmedDirection = 'BUY';
-        else if (r1SellBrk) confirmedDirection = 'SELL';
-        else confirmedDirection = refBullish ? 'BUY' : 'SELL';
-      }
-      if (!confirmedDirection) continue;
-
-      // Strength of the confirming break (prev H4 broke its own predecessor by
-      // this many pips) — used to rank pairs.
-      let refBreakPips = 0;
-      if (confirmedDirection === 'BUY') {
-        if (r1BuyBrk) refBreakPips = (ref.close - ref2.high) / pd;
-        else if (r2BuyBrk) refBreakPips = (ref2.close - ref3.high) / pd;
-      } else {
-        if (r1SellBrk) refBreakPips = (ref2.low - ref.close) / pd;
-        else if (r2SellBrk) refBreakPips = (ref3.low - ref2.close) / pd;
-      }
-      refBreakPips = Math.round(refBreakPips * 10) / 10;
+      // One trigger, from the Sharp Reversal engine (Standard or Scalp,
+      // whichever fired first). Direction comes from that signal — the old
+      // H4-break confirmation, EMA gate and strength gate are gone.
+      const srTrig = srTriggers[inst];
+      if (!srTrig) continue;
+      const triggerMs = new Date(srTrig.triggerTime).getTime();
+      if (isNaN(triggerMs)) continue;
+      const direction = srTrig.direction;
+      const refBreakPips = 0;
 
       const refRange = ref.high - ref.low;
       if (refRange < pd) continue;
@@ -224,46 +199,18 @@ module.exports = async function handler(req, res) {
 
       const trackStartMs = new Date(trackStart).getTime();
 
-      // Phase 1: locate the TRIGGER M15 — first M15 inside the current H4 window
-      // that closes beyond the highest high (BUY) or lowest low (SELL) of the
-      // preceding 24 M15 candles.
+      // Anchor monitoring to the M15 candle that was live when the Sharp Reversal
+      // fired; monitoring then scores every following M15 exactly as before.
+      if (triggerMs < trackStartMs) continue;   // trigger must fall inside the current H4 window
       let triggerAllIdx = -1;
-      let breakLevel = 0;
-      const direction = confirmedDirection;
-      for (let i = 24; i < m15all.length; i++) {
-        const c = m15all[i];
-        const cMs = new Date(c.time).getTime();
-        if (cMs < trackStartMs) continue;
-        // Blackout window: skip triggers between 21:00 and 22:00 UTC (00:00-01:00 EAT)
-        if (new Date(c.time).getUTCHours() === 21) continue;
-
-        let maxHigh = -Infinity, minLow = Infinity;
-        for (let j = i - 24; j < i; j++) {
-          if (m15all[j].high > maxHigh) maxHigh = m15all[j].high;
-          if (m15all[j].low < minLow) minLow = m15all[j].low;
-        }
-
-        if (direction === 'BUY' && c.close > maxHigh) { triggerAllIdx = i; breakLevel = maxHigh; break; }
-        if (direction === 'SELL' && c.close < minLow) { triggerAllIdx = i; breakLevel = minLow; break; }
+      for (let i = 0; i < m15all.length; i++) {
+        if (new Date(m15all[i].time).getTime() <= triggerMs) triggerAllIdx = i; else break;
       }
-      if (triggerAllIdx === -1) continue;
-
+      if (triggerAllIdx === -1) continue;   // no M15 at/before the trigger yet
       const trigger = m15all[triggerAllIdx];
-
-      // H1 EMA alignment gate at trigger time.
-      const triggerMs = new Date(trigger.time).getTime();
-      const emaAlign = alignFromCandles(h1RawCache[inst] || [], triggerMs, direction);
-      if (!emaAlign.aligned) continue;
-
-      // Strength gate at trigger time — a break with neither currency
-      // committed is the kind that fades.
-      const trigStrength = strengthGate(strengthByHour, inst, direction, triggerMs, TRIGGER_TF_MS);
-      if (!trigStrength.ok) continue;
       const m15s = m15all.slice(triggerAllIdx);
       const triggerIdx = 0;
-      const triggerBreakPips = direction === 'BUY'
-        ? (trigger.close - breakLevel) / pd
-        : (breakLevel - trigger.close) / pd;
+      const triggerBreakPips = 0;
 
       // Initial score
       let score = 50;
@@ -283,9 +230,7 @@ module.exports = async function handler(req, res) {
         closeTime: closeTimeOf(trigger.time),
         score,
         label: 'Trigger 1',
-        event: direction === 'BUY'
-          ? 'Close above 24-M15 high (' + Math.round(triggerBreakPips * 10) / 10 + ' pips)'
-          : 'Close below 24-M15 low (' + Math.round(triggerBreakPips * 10) / 10 + ' pips)',
+        event: 'Sharp Reversal trigger — ' + direction + (srTrig.mode ? ' (' + (srTrig.mode === 'swing' ? 'Scalp' : 'Standard') + ')' : ''),
         qualified: true,
         m15: {
           open: trigger.open, high: trigger.high, low: trigger.low, close: trigger.close,
@@ -477,12 +422,9 @@ module.exports = async function handler(req, res) {
         triggerTime: firstTriggerTime,
         // When the break was actually confirmed — the trigger candle's close.
         triggerCloseTime: closeTimeOf(firstTriggerTime),
-        // Which leg and horizon carried the strength that let the trigger through.
-        strength: trigStrength.nodata ? null : {
-          currency: trigStrength.currency,
-          horizon: trigStrength.horizon,
-          value: +trigStrength.value.toFixed(5),
-        },
+        // Trigger came from the Sharp Reversal engine, which mode won the race.
+        strength: null,
+        srMode: srTrig.mode === 'swing' ? 'Scalp' : srTrig.mode === 'standard' ? 'Standard' : null,
         qualified: true,
         // Trigger 2 kept as an informational milestone, not a gate.
         strongConfirmTime: qualifiedTime,

@@ -2,8 +2,8 @@
 
 const { getClient, cors } = require('./_db');
 const { requirePlan } = require('./_plan');
-const { alignFromCandles } = require('./_h1-ema-align');
 const { loadStrength, strengthGate } = require('./_strength-gate');
+const { loadSharpReversalTriggers } = require('./_sharp-reversal-trigger');
 
 const VALID_PAIRS = [
   'EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD',
@@ -79,6 +79,12 @@ module.exports = async function handler(req, res) {
     }
 
     const dayEnd = new Date(dayStart.getTime() + 24 * 3600000);
+    const dayStartMs = dayStart.getTime();
+
+    // The one trigger for this engine — earliest Sharp Reversal (Standard/Scalp)
+    // per pair, first-seen within today's forex day.
+    const srTriggers = await loadSharpReversalTriggers(
+      sb, dayStart.toISOString(), (now < dayEnd ? now : dayEnd).toISOString());
 
     // Also compute day-before-yesterday (D-2) and D-3 starts with weekend skipping,
     // so the direction check can look at breaks over the last two ref candles.
@@ -176,46 +182,15 @@ module.exports = async function handler(req, res) {
       const d3 = synth(day3);
       if (!d1 || !d2) continue;
 
-      // Direction confirmation. Primary: D-1 closed beyond D-2's high (BUY) or
-      // low (SELL). Fallback: D-2 broke D-3, but only if D-1's own body agrees
-      // with that direction. This vetoes stale D-2 signals when D-1 has already
-      // reversed (audited whipsaw: USD/JPY on 6 Jul 2026 — D-2 (Thu) broke down
-      // through D-3, but D-1 (Fri) closed bullish, and Mon rallied +92 pips).
-      const d1BreakBuy  = d1.close > d2.high;
-      const d1BreakSell = d1.close < d2.low;
-      const d2BreakBuy  = d3 ? d2.close > d3.high : false;
-      const d2BreakSell = d3 ? d2.close < d3.low  : false;
-      const d1Bullish = d1.close > d1.open;
-      const d1Bearish = d1.close < d1.open;
-
-      // D-1 is checked first; if it produced no break at all, D-2's break
-      // stands on its own. The fallback used to also require D-1's body to
-      // agree, which meant a flat or opposing D-1 killed the signal outright.
-      const buyConfirm  = d1BreakBuy  || d2BreakBuy;
-      const sellConfirm = d1BreakSell || d2BreakSell;
-
-      let confirmedDirection = null;
-      if (buyConfirm && !sellConfirm) confirmedDirection = 'BUY';
-      else if (sellConfirm && !buyConfirm) confirmedDirection = 'SELL';
-      else if (buyConfirm && sellConfirm) {
-        // Both fired — prefer the D-1 direct break
-        if (d1BreakBuy) confirmedDirection = 'BUY';
-        else if (d1BreakSell) confirmedDirection = 'SELL';
-        else confirmedDirection = d1Bullish ? 'BUY' : 'SELL';
-      }
-      if (!confirmedDirection) continue;
-
-      // Strength of the confirming break (prev daily candle broke its own
-      // predecessor by this many pips) — used to rank pairs.
-      let refBreakPips = 0;
-      if (confirmedDirection === 'BUY') {
-        if (d1BreakBuy) refBreakPips = (d1.close - d2.high) / pd;
-        else if (d2BreakBuy) refBreakPips = (d2.close - d3.high) / pd;
-      } else {
-        if (d1BreakSell) refBreakPips = (d2.low - d1.close) / pd;
-        else if (d2BreakSell) refBreakPips = (d3.low - d2.close) / pd;
-      }
-      refBreakPips = Math.round(refBreakPips * 10) / 10;
+      // One trigger, from the Sharp Reversal engine (Standard or Scalp,
+      // whichever fired first). Direction comes from that signal — the old
+      // daily-break confirmation, EMA gate and strength gate are gone.
+      const srTrig = srTriggers[inst];
+      if (!srTrig) continue;
+      const triggerMs = new Date(srTrig.triggerTime).getTime();
+      if (isNaN(triggerMs) || triggerMs < dayStartMs) continue;   // trigger must fall inside today's forex day
+      const direction = srTrig.direction;
+      const refBreakPips = 0;
 
       // D-1 = the level reference for triggering monitoring today
       const ydOpen = d1.open;
@@ -236,38 +211,16 @@ module.exports = async function handler(req, res) {
       const ydRangePips = Math.round((ydRange / pd) * 10) / 10;
       const ydBodyPips = Math.round((ydBody / pd) * 10) / 10;
 
-      // Phase 1: locate the TRIGGER H1 — first H1 that closes beyond yesterday's high
-      // in the confirmed BUY direction, or below yesterday's low in the confirmed SELL
-      // direction. Monitoring only starts here.
+      // Anchor monitoring to the H1 candle that was live when the Sharp Reversal
+      // fired; monitoring then scores every following H1 exactly as before.
+      if (!today.length) continue;
       let triggerIdx = -1;
-      const direction = confirmedDirection;
       for (let i = 0; i < today.length; i++) {
-        const c = today[i];
-        // Blackout window: skip triggers between 21:00 and 22:00 UTC (00:00-01:00 EAT)
-        if (new Date(c.time).getUTCHours() === 21) continue;
-        if (direction === 'BUY' && c.close > ydHigh) { triggerIdx = i; break; }
-        if (direction === 'SELL' && c.close < ydLow) { triggerIdx = i; break; }
+        if (new Date(today[i].time).getTime() <= triggerMs) triggerIdx = i; else break;
       }
-
-      // No trigger yet — skip this pair
-      if (triggerIdx === -1) continue;
-
+      if (triggerIdx === -1) triggerIdx = 0;   // fired before the first H1 of the day
       const trigger = today[triggerIdx];
-
-      // H1 EMA alignment gate: BUY needs H1 close > EMA20 > EMA50 at trigger
-      // time; SELL needs H1 close < EMA20 < EMA50. Uses the full cached H1
-      // series so no extra query per pair.
-      const triggerMs = new Date(trigger.time).getTime();
-      const emaAlign = alignFromCandles(candles, triggerMs, direction);
-      if (!emaAlign.aligned) continue;
-
-      // Strength gate at trigger time — a break with neither currency
-      // committed is the kind that fades.
-      const trigStrength = strengthGate(strengthByHour, inst, direction, triggerMs, TRIGGER_TF_MS);
-      if (!trigStrength.ok) continue;
-      const triggerBreakPips = direction === 'BUY'
-        ? (trigger.close - ydHigh) / pd
-        : (ydLow - trigger.close) / pd;
+      const triggerBreakPips = 0;
 
       // Initial score = 50 + bonus proportional to how far past the level the trigger closed
       let score = 50;
@@ -289,9 +242,7 @@ module.exports = async function handler(req, res) {
         closeTime: closeTimeOf(trigger.time),
         score,
         label: 'Trigger 1',
-        event: direction === 'BUY'
-          ? 'Close above prev daily high (' + Math.round(triggerBreakPips * 10) / 10 + ' pips)'
-          : 'Close below prev daily low (' + Math.round(triggerBreakPips * 10) / 10 + ' pips)',
+        event: 'Sharp Reversal trigger — ' + direction + (srTrig.mode ? ' (' + (srTrig.mode === 'swing' ? 'Scalp' : 'Standard') + ')' : ''),
         qualified: true,
         h1: {
           open: trigger.open, high: trigger.high, low: trigger.low, close: trigger.close,
@@ -484,12 +435,9 @@ module.exports = async function handler(req, res) {
         triggerTime: firstTriggerTime,
         // When the break was actually confirmed — the trigger candle's close.
         triggerCloseTime: closeTimeOf(firstTriggerTime),
-        // Which leg and horizon carried the strength that let the trigger through.
-        strength: trigStrength.nodata ? null : {
-          currency: trigStrength.currency,
-          horizon: trigStrength.horizon,
-          value: +trigStrength.value.toFixed(5),
-        },
+        // Trigger came from the Sharp Reversal engine, which mode won the race.
+        strength: null,
+        srMode: srTrig.mode === 'swing' ? 'Scalp' : srTrig.mode === 'standard' ? 'Standard' : null,
         qualified: true,
         // Trigger 2 kept as an informational milestone, not a gate.
         strongConfirmTime: qualifiedTime,

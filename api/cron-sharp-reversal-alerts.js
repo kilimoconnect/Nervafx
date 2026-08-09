@@ -143,6 +143,42 @@ module.exports = async function handler(req, res) {
     if (!signals.length) return res.json({ ok: true, sent: 0, reason: 'no qualifying reversals' });
 
     const sb = getDB();
+
+    // Persist first-seen triggers (independent of email delivery). This is the
+    // one trigger the Daily / H1 / Session continuation engines monitor from.
+    // Dedup per (mode|instrument|direction) within 24h so a reversal that keeps
+    // qualifying records ONE first-seen timestamp, not one every 5 minutes.
+    try {
+      const trigLookback = new Date(Date.now() - 24 * 3600000).toISOString();
+      const { data: trigRows } = await sb
+        .from('email_alert_log')
+        .select('details')
+        .eq('alert_type', 'sharp_reversal_trigger')
+        .gte('sent_at', trigLookback);
+      const activeTrig = new Set();
+      for (const r of trigRows || []) {
+        const d = r.details || {};
+        if (d.mode && d.instrument && d.direction) activeTrig.add(`${d.mode}|${d.instrument}|${d.direction}`);
+      }
+      const toInsert = [];
+      const seenTrig = new Set();
+      for (const s of signals) {
+        const key = `${s.mode}|${s.instrument}|${s.direction}`;
+        if (activeTrig.has(key) || seenTrig.has(key)) continue;
+        seenTrig.add(key);
+        toInsert.push({
+          alert_type: 'sharp_reversal_trigger',
+          details: { mode: s.mode, instrument: s.instrument, pair: s.pair, direction: s.direction, firstSeen: s.generatedAt },
+        });
+      }
+      if (toInsert.length) {
+        const { error: trigErr } = await sb.from('email_alert_log').insert(toInsert);
+        if (trigErr) console.error('[cron-sharp-reversal-alerts] trigger log insert failed', trigErr.message);
+      }
+    } catch (e) {
+      console.error('[cron-sharp-reversal-alerts] trigger persistence error', e.message);
+    }
+
     const users = await getSubscribedUsers(sb);
     if (!users.length) return res.json({ ok: true, sent: 0, reason: 'no subscribed users' });
 
