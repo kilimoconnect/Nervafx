@@ -3907,6 +3907,70 @@ function _renderSrDashRow(p) {
   );
 }
 
+async function fetchContinuationPreview() {
+  const el = document.getElementById('continuation-preview-display');
+  if (!el) return;
+  try {
+    const ts = Date.now();
+    const [daily, session, h4] = await Promise.all([
+      api(`/api/daily-continuation?t=${ts}`).catch(() => ({ pairs: [] })),
+      api(`/api/session-continuation?t=${ts}`).catch(() => ({ pairs: [] })),
+      api(`/api/h1-continuation?t=${ts}`).catch(() => ({ pairs: [] })),
+    ]);
+    renderContinuationPreview(el, { daily, session, h4 });
+  } catch (e) {
+    el.innerHTML = `<p class="me-empty">Failed to load: ${e.message}</p>`;
+  }
+}
+
+function renderContinuationPreview(el, data) {
+  // Continuation engines — top 3 pairs each by live score.
+  const top3 = arr => (arr || []).slice().sort((a, b) => (b.currentScore || 0) - (a.currentScore || 0)).slice(0, 3);
+  const groups = [
+    { label: 'Daily · H1',    href: '/daily-continuation',   pairs: top3(data.daily?.pairs) },
+    { label: 'Session · M30', href: '/session-continuation', pairs: top3(data.session?.pairs) },
+    { label: 'H4 · M15',      href: '/h1-continuation',      pairs: top3(data.h4?.pairs) },
+  ];
+
+  const total = groups.reduce((n, g) => n + g.pairs.length, 0);
+  if (!total) {
+    el.innerHTML = '<p class="me-empty">No live continuation signals</p>';
+    return;
+  }
+
+  let html = '<div class="cs-dash-grid">';
+  for (const g of groups) {
+    html += '<div class="cs-dash-group">';
+    html += `<div class="cs-dash-group-hd">`;
+    html += `<span class="cs-dash-group-label">${g.label}</span>`;
+    html += `<a class="cs-dash-group-link" href="${g.href}">View →</a>`;
+    html += `</div>`;
+    if (!g.pairs.length) {
+      html += '<div class="cs-dash-empty">No signals</div>';
+    } else {
+      for (const p of g.pairs) html += _renderContDashRow(p);
+    }
+    html += '</div>';
+  }
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function _renderContDashRow(p) {
+  const dirCls = p.direction === 'BUY' ? 'an-dash-buy' : 'an-dash-sell';
+  const sc = p.currentScore || 0;
+  const scCol = sc >= 70 ? '#22c55e' : sc >= 50 ? '#facc15' : '#f87171';
+  const label = (p.currentLabel || '').replace('Continuation ', '');
+  return (
+    `<div class="cs-dash-row">` +
+    `<span class="cs-dash-time">${label}</span>` +
+    `<span class="an-dash-dir ${dirCls}">${p.direction}</span>` +
+    `<span class="cs-dash-pair">${p.pair}</span>` +
+    `<span class="an-dash-score" style="color:${scCol}">${sc}</span>` +
+    `</div>`
+  );
+}
+
 function _renderAnDashCard(sig) {
   let html = '<div class="an-dash-card">';
   html += `<div class="an-dash-card-time">${_anTime(sig.time)}</div>`;
@@ -7593,6 +7657,7 @@ async function refresh() {
     renderSession(sessionData);
     fetchInlineM15EnergyBars(); // non-blocking — M15 energy bars below session
     fetchQualityPreview(); // non-blocking — H1 + M15 quality snapshot cards
+    fetchContinuationPreview(); // non-blocking — Daily/Session/H4 continuation top 3
     // Set caches BEFORE fetchMarketActivity so ME cards can read energy signal pairs
     _m15DataCache = m15Data;   // Cache for ME card flow ranking + scanner
     _volDataCache = _buildVolMap(volData);  // Cache volume analysis: instrument → latest row
