@@ -190,6 +190,14 @@ module.exports = async function handler(req, res) {
     const untilFor = (tf) => new Date(evalMs - (tfMs[tf] || M5_MS)).toISOString();
     const signalMs = Math.floor(evalMs / M.trigMs) * M.trigMs;
 
+    // Fine-grained replay: from ONE candle fetch, evaluate the reversal gate at
+    // every M15 step between ?from and the as-of time, returning each pair's
+    // earliest qualifying cross. Used by the continuation engines' trigger.
+    if (req.query?.scan === '1') {
+      const fromMs = req.query?.from ? new Date(req.query.from).getTime() : (evalMs - 6 * HOUR);
+      return await runScan(sb, M, mode, evalMs, fromMs, res);
+    }
+
     const px = {};
     for (let b = 0; b < PAIRS.length; b += 7) {
       const batch = PAIRS.slice(b, b + 7);
@@ -303,6 +311,108 @@ function isExhausted(d) {
   const pulledBack = d.priceVs20 !== S;          // price no longer beyond EMA20 in trend dir
   const impFading = Math.sign(d.imp3) !== S || Math.abs(d.imp3) < 0.3;
   return pulledBack && impFading;
+}
+
+// ── Fine-grained scan (in-memory replay) ─────────────────────────────────────
+// From one candle fetch per pair, rebuild the snapshot as-of an arbitrary time T
+// and re-run the exact reversal gate, so a reversal that qualified for only a
+// 15-minute window is still caught. Only standard (H1 dom) and swing (M30 synth)
+// are supported — the two modes the continuation engines use.
+const MAX_SCAN_MS = 12 * HOUR;
+
+// Rebuild {dom, mid, trig, domOHLC, ha15, m30ohlc} as-of time T from raw OHLC
+// arrays (each element carries ms). A candle on timeframe tf is closed by T when
+// its open ms <= T - tfMs.
+function buildPAt(raw, M, T) {
+  const m15c = raw.m15.filter(c => c.ms <= T - M15_MS);
+  const m5c  = raw.m5.filter(c => c.ms <= T - M5_MS);
+  if (m15c.length < 60 || m5c.length < 60) return null;
+  const ha15 = heikinAshi(m15c);
+  let dom, domOHLC, m30ohlc, mid, trig;
+  if (M.synth) {
+    const dohlc = synthOHLC(m15c, M30_MS, T);
+    if (dohlc.length < 40) return null;
+    dom = snap(dohlc.map(c => c.close), dohlc.slice(-40));
+    domOHLC = dohlc.slice(-10);
+    m30ohlc = dohlc;
+  } else {
+    const h1c = raw.h1.filter(c => c.ms <= T - HOUR);
+    if (h1c.length < 40) return null;
+    dom = snap(h1c.map(c => c.close), h1c.slice(-40));
+    domOHLC = h1c.slice(-10);
+    m30ohlc = synthOHLC(m15c, M30_MS, T);
+  }
+  mid = snap(m15c.map(c => c.close), null);   // confirm TF is M15 for both modes
+  trig = snap(m5c.map(c => c.close), null);   // trigger TF is M5 for both modes
+  return { dom, mid, trig, domOHLC, ha15, m30ohlc };
+}
+
+// Does the snapshot P pass the full "shown" reversal gate at time T? Returns the
+// trigger record or null. Mirrors the gate in the main handler exactly.
+function classifyAt(P, T) {
+  if (!P || !P.dom || !P.mid || !P.trig) return null;
+  const dir = P.mid.stack;
+  if (!dir) return null;
+  const d = P.dom;
+  const crossBars = P.mid.bars;
+  const en = reversalEnergy(d, P.domOHLC, dir);
+  let state;
+  if (d.stack === -dir && (crossBars <= 15 || en.energy >= 70)) state = 'SHARP_REVERSAL';
+  else if (d.bars <= 5 && d.stack === dir) state = 'NEW_TREND';
+  else state = (isExhausted(d) && d.stack === dir) ? 'EXHAUSTION' : 'TREND';
+  const broke = brokeStructure(P.domOHLC, dir);
+  const confirmAligned = P.ha15 === dir && P.mid.stack === dir && P.trig.stack === dir;
+  const m30TwoDir = twoM30SameDir(P.m30ohlc, dir);
+  const impulseOK = d.imp3 * dir >= 2;
+  if (!(broke && en.energy >= 70 && confirmAligned && m30TwoDir && impulseOK)) return null;
+  const signalMs = Math.floor(T / M5_MS) * M5_MS;
+  return {
+    direction: dir > 0 ? 'BUY' : 'SELL',
+    state,
+    triggerTime: new Date(signalMs - Math.max(1, crossBars) * M15_MS).toISOString(),
+  };
+}
+
+async function runScan(sb, M, mode, evalMs, fromMs, res) {
+  try {
+    const untilISO = new Date(evalMs).toISOString();
+    const raw = {};
+    for (let b = 0; b < PAIRS.length; b += 7) {
+      const batch = PAIRS.slice(b, b + 7);
+      const rows = await Promise.all(batch.map(async inst => {
+        const [m15, m5, h1] = await Promise.all([
+          fetchOHLC(sb, inst, 'M15', 600, untilISO),
+          fetchOHLC(sb, inst, 'M5', 400, untilISO),
+          M.synth ? Promise.resolve(null) : fetchOHLC(sb, inst, M.dom, 300, untilISO),
+        ]);
+        return { inst, m15, m5, h1 };
+      }));
+      for (const r of rows) raw[r.inst] = r;
+    }
+
+    const startMs = Math.max(fromMs, evalMs - MAX_SCAN_MS);
+    const triggers = {};
+    for (const inst of PAIRS) {
+      const r = raw[inst];
+      if (!r || !r.m15?.length || !r.m5?.length || (!M.synth && !r.h1?.length)) continue;
+      // Walk M15 steps ascending; the first step that passes the gate is the
+      // reversal's birth, and its triggerTime is the confirm-TF cross.
+      for (let T = Math.floor(startMs / M15_MS) * M15_MS; T <= evalMs; T += M15_MS) {
+        const rec = classifyAt(buildPAt(r, M, T), T);
+        if (rec) { triggers[inst] = rec; break; }
+      }
+    }
+
+    return res.json({
+      scan: true, mode,
+      from: new Date(startMs).toISOString(),
+      at: untilISO,
+      triggers,
+    });
+  } catch (e) {
+    console.error('[sharp-reversal-engine scan]', e.message);
+    return res.status(500).json({ error: e.message });
+  }
 }
 
 module.exports.maxDuration = 60;

@@ -14,13 +14,12 @@
 
 const srHandler = require('./sharp-reversal-engine.js');
 
-const STEP_MS = 2 * 3600000;      // evaluate every 2 hours across the window
-const MAX_STEPS = 7;              // cap total eval points (×2 modes = calls)
-const MAX_SPAN_MS = 12 * 3600000; // don't scan more than the last 12h of a window
-
-function invokeSR(mode, atISO) {
+// Invoke the Sharp Reversal engine's fine-grained scan (one candle fetch, every
+// M15 step) for a mode across [fromISO, atISO]. Returns { INST: {direction,
+// triggerTime, state} } — each pair's earliest qualifying cross in the window.
+function invokeScan(mode, fromISO, atISO) {
   return new Promise((resolve) => {
-    const query = { mode };
+    const query = { mode, scan: '1', from: fromISO };
     if (atISO) query.at = atISO;
     const req = { method: 'GET', query, headers: {}, _internal: true };
     let statusCode = 200, payload = null;
@@ -39,29 +38,23 @@ function invokeSR(mode, atISO) {
 async function loadSharpReversalTriggers(sb, windowStartISO, evalISO) {
   const startMs = new Date(windowStartISO).getTime();
   const endMs = new Date(evalISO).getTime();
-  const scanStartMs = Math.max(startMs, endMs - MAX_SPAN_MS);
 
-  // Eval points, most recent first, 2h apart, capped.
-  const times = [];
-  for (let t = endMs; t >= scanStartMs && times.length < MAX_STEPS; t -= STEP_MS) {
-    times.push(new Date(t).toISOString());
-  }
-  if (!times.length) times.push(new Date(endMs).toISOString());
-
-  const calls = [];
-  for (const t of times) { calls.push(invokeSR('standard', t)); calls.push(invokeSR('swing', t)); }
-  const results = await Promise.all(calls);
+  const [std, swing] = await Promise.all([
+    invokeScan('standard', windowStartISO, evalISO),
+    invokeScan('swing', windowStartISO, evalISO),
+  ]);
 
   const map = {};
-  for (const r of results) {
-    const mode = r.data?.mode || null;
-    for (const p of (r.data?.pairs || [])) {
-      if (!p.instrument || !p.direction || !p.triggerTime) continue;
-      const tt = new Date(p.triggerTime).getTime();
+  for (const r of [std, swing]) {
+    const triggers = r.data?.triggers || {};
+    for (const inst of Object.keys(triggers)) {
+      const t = triggers[inst];
+      if (!t || !t.direction || !t.triggerTime) continue;
+      const tt = new Date(t.triggerTime).getTime();
       if (isNaN(tt) || tt < startMs || tt > endMs) continue;   // cross must fall inside the window
-      const prev = map[p.instrument];
+      const prev = map[inst];
       if (!prev || tt < new Date(prev.triggerTime).getTime()) {
-        map[p.instrument] = { direction: p.direction, triggerTime: p.triggerTime, mode };
+        map[inst] = { direction: t.direction, triggerTime: t.triggerTime, mode: r.data?.mode || null };
       }
     }
   }
