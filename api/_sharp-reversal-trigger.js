@@ -13,11 +13,17 @@
 // [sinceISO, untilISO] window. Continuation engines use it as their one trigger.
 //
 //   { EUR_USD: { direction: 'BUY', triggerTime: ISO, mode: 'standard' }, ... }
-async function loadSharpReversalTriggers(sb, sinceISO, untilISO) {
+async function loadSharpReversalTriggers(sb, sinceISO, untilISO, maxAgeMs = 6 * 3600000) {
+  // A trigger must be RECENT to start fresh monitoring — a reversal from many
+  // hours ago has already played out. Cap the lookback to maxAgeMs (default 6h)
+  // even when the engine's monitoring window (e.g. the full forex day) is longer,
+  // so we don't surface every pair that reversed at some point today.
+  const untilMs = untilISO ? new Date(untilISO).getTime() : Date.now();
+  const effectiveSinceMs = Math.max(new Date(sinceISO).getTime(), untilMs - maxAgeMs);
   // sent_at is stamped ~5 min after firstSeen (the M5 close), so widen the
   // sent_at floor by 15 min to avoid dropping a trigger whose firstSeen sits
   // right at the window start. Callers filter by triggerTime themselves.
-  const sentFloor = new Date(new Date(sinceISO).getTime() - 15 * 60000).toISOString();
+  const sentFloor = new Date(effectiveSinceMs - 15 * 60000).toISOString();
   // Read both the dedicated trigger log and the sharp-reversal email log — the
   // latter already records qualifying pairs (with generatedAt) from before the
   // trigger log existed, so today's reversals surface without waiting for a
