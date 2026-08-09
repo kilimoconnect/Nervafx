@@ -278,26 +278,16 @@ module.exports = async function handler(req, res) {
       const pd = pipDiv(inst);
       const pair = inst.replace('_', '/');
 
-      // Build synthetic candles for the last three sessions
-      const prevSessionCandles  = all.filter(c => c.time >= prevStartISO  && c.time < prevEndISO);
-      const prev2SessionCandles = all.filter(c => c.time >= prev2StartISO && c.time < prev2EndISO);
-      const prev3SessionCandles = all.filter(c => c.time >= prev3StartISO && c.time < prev3EndISO);
-      const ref  = buildSessionCandle(inst, prevSessionCandles);
-      const ref2 = buildSessionCandle(inst, prev2SessionCandles);
-      const ref3 = buildSessionCandle(inst, prev3SessionCandles);
-      if (!ref || !ref2) continue;
+      if (all.length < 2) continue;
 
-      // One trigger, from the Sharp Reversal engine (Standard or Scalp,
-      // whichever fired first). Direction comes from that signal — the old
-      // session-break confirmation, EMA gate and strength gate are gone.
+      // One trigger, from the Sharp Reversal engine (Standard or Scalp, whichever
+      // crossed first). Direction comes from that signal — no previous-session data.
       const srTrig = srTriggers[inst];
       if (!srTrig) continue;
       let triggerMs = new Date(srTrig.triggerTime).getTime();
       if (isNaN(triggerMs)) continue;
       const direction = srTrig.direction;
       const refBreakPips = 0;
-
-      if (all.length < 25) continue;
 
       const trackStartMs = new Date(trackStartISO).getTime();
       const curEndMs = new Date(curEndISO).getTime();
@@ -317,6 +307,18 @@ module.exports = async function handler(req, res) {
       }
       if (triggerAllIdx === -1) continue;   // no session H1 at/before the trigger yet
       const trigger = all[triggerAllIdx];
+
+      // The trigger H1 candle IS the reference — back-inside and pullback are
+      // judged against it and the move built from it, not a previous session.
+      const refHigh = trigger.high, refLow = trigger.low;
+      const refRange = Math.max(trigger.high - trigger.low, pd);
+      const tBull = trigger.close > trigger.open;
+      const tBody = Math.abs(trigger.close - trigger.open);
+      const refBodyPct = Math.round((tBody / refRange) * 100);
+      const refUpperWickPct = Math.round(((trigger.high - Math.max(trigger.open, trigger.close)) / refRange) * 100);
+      const refLowerWickPct = Math.round(((Math.min(trigger.open, trigger.close) - trigger.low) / refRange) * 100);
+      const refRangePips = Math.round((refRange / pd) * 10) / 10;
+      const refBodyPips = Math.round((tBody / pd) * 10) / 10;
 
       // Monitoring runs on the M30 series, from the first completed M30 at or
       // after the Sharp Reversal trigger through to session end.
@@ -371,7 +373,7 @@ module.exports = async function handler(req, res) {
         // outright. It now scores as the heaviest single penalty and tracking
         // continues, so a pair that dips back in and then breaks out again
         // stays visible instead of being dropped at the first pullback.
-        const backInside = c.close < ref.high && c.close > ref.low;
+        const backInside = c.close < refHigh && c.close > refLow;
 
         const cBull = c.close > c.open;
         const cBody = Math.abs(c.close - c.open);
@@ -466,12 +468,14 @@ module.exports = async function handler(req, res) {
           }
         }
 
-        // 4. Pullback depth vs reference session range
+        // 4. Pullback depth vs the move built since the trigger
         if (direction === 'BUY') {
-          const retrace = (runHigh - c.low) / ref.range;
+          const moveExt = Math.max(runHigh - refLow, pd);
+          const retrace = (runHigh - c.low) / moveExt;
           if (retrace > 0.7) { delta -= 3; events.push('Deep pullback'); }
         } else {
-          const retrace = (c.high - runLow) / ref.range;
+          const moveExt = Math.max(refHigh - runLow, pd);
+          const retrace = (c.high - runLow) / moveExt;
           if (retrace > 0.7) { delta -= 3; events.push('Deep pullback'); }
         }
 
@@ -551,14 +555,15 @@ module.exports = async function handler(req, res) {
         stoppedTime,
         triggerBreakPips: Math.round(triggerBreakPips * 10) / 10,
         refBreakPips,
+        // Summary of the trigger H1 candle (shown where the old session ref was).
         refSession: {
-          name: prev.name,
-          start: prevStartISO,
-          end: prevEndISO,
-          open: ref.open, high: ref.high, low: ref.low, close: ref.close,
-          bodyPct: ref.bodyPct, upperWickPct: ref.upperWickPct, lowerWickPct: ref.lowerWickPct,
-          rangePips: ref.rangePips, bodyPips: ref.bodyPips,
-          direction: ref.bull ? 'BUY' : 'SELL',
+          name: cur.name,
+          start: trigger.time,
+          end: curEndISO,
+          open: trigger.open, high: trigger.high, low: trigger.low, close: trigger.close,
+          bodyPct: refBodyPct, upperWickPct: refUpperWickPct, lowerWickPct: refLowerWickPct,
+          rangePips: refRangePips, bodyPips: refBodyPips,
+          direction: tBull ? 'BUY' : 'SELL',
         },
         currentSession: {
           name: cur.name,

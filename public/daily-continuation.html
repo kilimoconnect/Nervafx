@@ -318,7 +318,7 @@
         renderCards(cachedPairs);
       });
     });
-    document.getElementById('sx-go').addEventListener('click', load);
+    document.getElementById('sx-go').addEventListener('click', function() { load(); });
 
     var allExpanded = false;
     document.getElementById('sx-expand-all').addEventListener('click', function() {

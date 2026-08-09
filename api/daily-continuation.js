@@ -150,70 +150,22 @@ module.exports = async function handler(req, res) {
       const pd = pipDiv(inst);
       const pair = inst.replace('_', '/');
 
-      // Split into daily windows: today, D-1 (yesterday), D-2, D-3
+      // Today's H1 candles (from the forex-day open). No previous-day data.
       const dayStartISO = dayStart.toISOString();
-      const prevDayStartISO = prevDayStart.toISOString();
-      const prev2StartISO = prev2DayStart.toISOString();
-      const prev3StartISO = prev3DayStart.toISOString();
-
-      const yesterday = candles.filter(c => c.time >= prevDayStartISO && c.time < dayStartISO);
-      const dayBefore = candles.filter(c => c.time >= prev2StartISO && c.time < prevDayStartISO);
-      const day3 = candles.filter(c => c.time >= prev3StartISO && c.time < prev2StartISO);
       const today = candles.filter(c => c.time >= dayStartISO);
+      if (!today.length) continue;
 
-      if (yesterday.length < 5 || dayBefore.length < 5) continue;
-
-      // Build a synthetic daily candle from an H1 window
-      function synth(win) {
-        if (!win.length) return null;
-        const open = win[0].open;
-        const close = win[win.length - 1].close;
-        let high = -Infinity, low = Infinity;
-        for (const c of win) {
-          if (c.high > high) high = c.high;
-          if (c.low < low) low = c.low;
-        }
-        return { open, high, low, close };
-      }
-
-      const d1 = synth(yesterday);
-      const d2 = synth(dayBefore);
-      const d3 = synth(day3);
-      if (!d1 || !d2) continue;
-
-      // One trigger, from the Sharp Reversal engine (Standard or Scalp,
-      // whichever fired first). Direction comes from that signal — the old
-      // daily-break confirmation, EMA gate and strength gate are gone.
+      // One trigger, from the Sharp Reversal engine (Standard or Scalp, whichever
+      // crossed first). Direction comes from that signal.
       const srTrig = srTriggers[inst];
       if (!srTrig) continue;
       let triggerMs = new Date(srTrig.triggerTime).getTime();
       if (isNaN(triggerMs)) continue;
-      if (triggerMs < dayStartMs) triggerMs = dayStartMs;   // cross predates the day → monitor from day start
+      if (triggerMs < dayStartMs) triggerMs = dayStartMs;   // cross predates the day → monitor from day open
       const direction = srTrig.direction;
       const refBreakPips = 0;
 
-      // D-1 = the level reference for triggering monitoring today
-      const ydOpen = d1.open;
-      const ydClose = d1.close;
-      const ydHigh = d1.high;
-      const ydLow = d1.low;
-      const ydRange = ydHigh - ydLow;
-      if (ydRange < pd) continue;
-
-      const ydBody = Math.abs(ydClose - ydOpen);
-      const ydBull = ydClose > ydOpen;
-      const ydDirection = ydBull ? 'BUY' : 'SELL';
-      const ydBodyPct = Math.round((ydBody / ydRange) * 100);
-      const upperWick = ydBull ? ydHigh - ydClose : ydHigh - ydOpen;
-      const lowerWick = ydBull ? ydOpen - ydLow : ydClose - ydLow;
-      const upperWickPct = Math.round((upperWick / ydRange) * 100);
-      const lowerWickPct = Math.round((lowerWick / ydRange) * 100);
-      const ydRangePips = Math.round((ydRange / pd) * 10) / 10;
-      const ydBodyPips = Math.round((ydBody / pd) * 10) / 10;
-
-      // Anchor monitoring to the H1 candle that was live when the Sharp Reversal
-      // fired; monitoring then scores every following H1 exactly as before.
-      if (!today.length) continue;
+      // Anchor monitoring to the H1 candle live when the Sharp Reversal fired.
       let triggerIdx = -1;
       for (let i = 0; i < today.length; i++) {
         if (new Date(today[i].time).getTime() <= triggerMs) triggerIdx = i; else break;
@@ -222,21 +174,28 @@ module.exports = async function handler(req, res) {
       const trigger = today[triggerIdx];
       const triggerBreakPips = 0;
 
-      // Initial score = 50 + bonus proportional to how far past the level the trigger closed
-      let score = 50;
-      score += 20; // baseline for triggering
-      if (triggerBreakPips > 20) score += 15;
-      else if (triggerBreakPips > 10) score += 10;
-      else if (triggerBreakPips > 5) score += 5;
-
-      // Body direction alignment bonus (trigger H1 body vs direction)
+      // The trigger H1 candle IS the reference — back-inside and pullback are
+      // judged against it and the move built from it, not against a previous day.
+      const refHigh = trigger.high, refLow = trigger.low;
+      const refRange = Math.max(trigger.high - trigger.low, pd);
       const triggerBull = trigger.close > trigger.open;
-      if ((direction === 'BUY' && triggerBull) || (direction === 'SELL' && !triggerBull)) score += 5;
+      const tBody = Math.abs(trigger.close - trigger.open);
+      const ydBodyPct = Math.round((tBody / refRange) * 100);
+      const upperWick = triggerBull ? trigger.high - trigger.close : trigger.high - trigger.open;
+      const lowerWick = triggerBull ? trigger.open - trigger.low : trigger.close - trigger.low;
+      const upperWickPct = Math.round((upperWick / refRange) * 100);
+      const lowerWickPct = Math.round((lowerWick / refRange) * 100);
+      const ydRangePips = Math.round((refRange / pd) * 10) / 10;
+      const ydBodyPips = Math.round((tBody / pd) * 10) / 10;
 
+      // Initial score — baseline for the trigger + body-alignment bonus.
+      let score = 50;
+      score += 20;
+      if ((direction === 'BUY' && triggerBull) || (direction === 'SELL' && !triggerBull)) score += 5;
       score = Math.max(20, Math.min(98, score));
       const initialScore = score;
 
-      // Phase 2: score subsequent H1s until a close falls back inside [ydLow, ydHigh]
+      // Phase 2: score subsequent H1s from the trigger candle onward
       const timeline = [{
         time: trigger.time,
         closeTime: closeTimeOf(trigger.time),
@@ -269,7 +228,7 @@ module.exports = async function handler(req, res) {
         // outright. It now scores as the heaviest single penalty and tracking
         // continues, so a pair that dips back in and then breaks out again
         // stays visible instead of being dropped at the first pullback.
-        const backInside = h1.close < ydHigh && h1.close > ydLow;
+        const backInside = h1.close < refHigh && h1.close > refLow;
 
         const h1Bull = h1.close > h1.open;
         const h1Body = Math.abs(h1.close - h1.open);
@@ -359,12 +318,14 @@ module.exports = async function handler(req, res) {
           }
         }
 
-        // 4. Pullback depth vs yesterday's range
+        // 4. Pullback depth vs the move built since the trigger
         if (direction === 'BUY') {
-          const retrace = (runHigh - h1.low) / ydRange;
+          const moveExt = Math.max(runHigh - refLow, pd);
+          const retrace = (runHigh - h1.low) / moveExt;
           if (retrace > 0.7) { delta -= 3; events.push('Deep pullback'); }
         } else {
-          const retrace = (h1.high - runLow) / ydRange;
+          const moveExt = Math.max(refHigh - runLow, pd);
+          const retrace = (h1.high - runLow) / moveExt;
           if (retrace > 0.7) { delta -= 3; events.push('Deep pullback'); }
         }
 
@@ -444,11 +405,12 @@ module.exports = async function handler(req, res) {
         stoppedTime,
         triggerBreakPips: Math.round(triggerBreakPips * 10) / 10,
         refBreakPips,
+        // Summary of the trigger H1 candle (shown where the old "yesterday" row was).
         yesterday: {
-          open: ydOpen, high: ydHigh, low: ydLow, close: ydClose,
+          open: trigger.open, high: trigger.high, low: trigger.low, close: trigger.close,
           bodyPct: ydBodyPct, upperWickPct, lowerWickPct,
           rangePips: ydRangePips, bodyPips: ydBodyPips,
-          direction: ydDirection,
+          direction: triggerBull ? 'BUY' : 'SELL',
         },
         timeline,
         h1Count: today.length - triggerIdx,

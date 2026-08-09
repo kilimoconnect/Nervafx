@@ -153,25 +153,16 @@ module.exports = async function handler(req, res) {
     const pairs = [];
 
     for (const inst of VALID_PAIRS) {
-      const h4s = h4Cache[inst] || [];
-      if (h4s.length < 2) continue;
-
       const pd = pipDiv(inst);
       const pair = inst.replace('_', '/');
 
-      // Reference candle = last complete H4 before the tracked window (H4[-1]);
-      // H4[-2] and H4[-3] are used for direction confirmation.
-      const ref  = h4s[h4s.length - 1];
-      const ref2 = h4s[h4s.length - 2];
-      const ref3 = h4s.length >= 3 ? h4s[h4s.length - 3] : null;
-      const refStart = ref.time;
+      // Current H4 window start — no previous-H4 reference data.
       const trackStart = anchor
         ? anchor.toISOString()
-        : new Date(new Date(refStart).getTime() + H4_MS).toISOString();
+        : new Date(Math.floor(now.getTime() / H4_MS) * H4_MS).toISOString();
 
-      // One trigger, from the Sharp Reversal engine (Standard or Scalp,
-      // whichever fired first). Direction comes from that signal — the old
-      // H4-break confirmation, EMA gate and strength gate are gone.
+      // One trigger, from the Sharp Reversal engine (Standard or Scalp, whichever
+      // crossed first). Direction comes from that signal.
       const srTrig = srTriggers[inst];
       if (!srTrig) continue;
       let triggerMs = new Date(srTrig.triggerTime).getTime();
@@ -179,27 +170,13 @@ module.exports = async function handler(req, res) {
       const direction = srTrig.direction;
       const refBreakPips = 0;
 
-      const refRange = ref.high - ref.low;
-      if (refRange < pd) continue;
-
-      const refBodyPct = refRange > 0 ? Math.round((Math.abs(ref.close - ref.open) / refRange) * 100) : 0;
-      const upperWickPct = refRange > 0
-        ? Math.round(((ref.high - Math.max(ref.open, ref.close)) / refRange) * 100)
-        : 0;
-      const lowerWickPct = refRange > 0
-        ? Math.round(((Math.min(ref.open, ref.close) - ref.low) / refRange) * 100)
-        : 0;
-      const refRangePips = Math.round((refRange / pd) * 10) / 10;
-      const refBodyPips = Math.round((Math.abs(ref.close - ref.open) / pd) * 10) / 10;
-
-      // M15 candles (full window for lookback + tracking)
+      // M15 candles for tracking.
       const m15all = m15Cache[inst] || [];
-      if (m15all.length < 25) continue;
+      if (!m15all.length) continue;
 
       const trackStartMs = new Date(trackStart).getTime();
 
-      // Anchor monitoring to the M15 candle that was live when the Sharp Reversal
-      // fired; monitoring then scores every following M15 exactly as before.
+      // Anchor monitoring to the M15 candle live when the Sharp Reversal fired.
       if (triggerMs < trackStartMs) triggerMs = trackStartMs;   // cross predates the H4 window → monitor from its start
       let triggerAllIdx = -1;
       for (let i = 0; i < m15all.length; i++) {
@@ -211,16 +188,22 @@ module.exports = async function handler(req, res) {
       const triggerIdx = 0;
       const triggerBreakPips = 0;
 
-      // Initial score
+      // The trigger M15 candle IS the reference — back-inside and pullback are
+      // judged against it and the move built from it, not a previous H4.
+      const refHigh = trigger.high, refLow = trigger.low;
+      const refRange = Math.max(trigger.high - trigger.low, pd);
+      const triggerBull = trigger.close > trigger.open;
+      const tBody = Math.abs(trigger.close - trigger.open);
+      const refBodyPct = Math.round((tBody / refRange) * 100);
+      const upperWickPct = Math.round(((trigger.high - Math.max(trigger.open, trigger.close)) / refRange) * 100);
+      const lowerWickPct = Math.round(((Math.min(trigger.open, trigger.close) - trigger.low) / refRange) * 100);
+      const refRangePips = Math.round((refRange / pd) * 10) / 10;
+      const refBodyPips = Math.round((tBody / pd) * 10) / 10;
+
+      // Initial score — baseline + body alignment.
       let score = 50;
       score += 20;
-      if (triggerBreakPips > 12) score += 15;
-      else if (triggerBreakPips > 6) score += 10;
-      else if (triggerBreakPips > 3) score += 5;
-
-      const triggerBull = trigger.close > trigger.open;
       if ((direction === 'BUY' && triggerBull) || (direction === 'SELL' && !triggerBull)) score += 5;
-
       score = Math.max(20, Math.min(98, score));
       const initialScore = score;
 
@@ -256,7 +239,7 @@ module.exports = async function handler(req, res) {
         // outright. It now scores as the heaviest single penalty and tracking
         // continues, so a pair that dips back in and then breaks out again
         // stays visible instead of being dropped at the first pullback.
-        const backInside = c.close < ref.high && c.close > ref.low;
+        const backInside = c.close < refHigh && c.close > refLow;
 
         const cBull = c.close > c.open;
         const cBody = Math.abs(c.close - c.open);
@@ -345,12 +328,14 @@ module.exports = async function handler(req, res) {
           }
         }
 
-        // 4. Pullback depth vs H4 reference range
+        // 4. Pullback depth vs the move built since the trigger
         if (direction === 'BUY') {
-          const retrace = (runHigh - c.low) / refRange;
+          const moveExt = Math.max(runHigh - refLow, pd);
+          const retrace = (runHigh - c.low) / moveExt;
           if (retrace > 0.7) { delta -= 3; events.push('Deep pullback'); }
         } else {
-          const retrace = (c.high - runLow) / refRange;
+          const moveExt = Math.max(refHigh - runLow, pd);
+          const retrace = (c.high - runLow) / moveExt;
           if (retrace > 0.7) { delta -= 3; events.push('Deep pullback'); }
         }
 
@@ -430,12 +415,13 @@ module.exports = async function handler(req, res) {
         stoppedTime,
         triggerBreakPips: Math.round(triggerBreakPips * 10) / 10,
         refBreakPips,
+        // Summary of the trigger M15 candle (shown where the old H4 ref row was).
         refHour: {
-          time: refStart,
-          open: ref.open, high: ref.high, low: ref.low, close: ref.close,
+          time: trigger.time,
+          open: trigger.open, high: trigger.high, low: trigger.low, close: trigger.close,
           bodyPct: refBodyPct, upperWickPct, lowerWickPct,
           rangePips: refRangePips, bodyPips: refBodyPips,
-          direction: ref.close > ref.open ? 'BUY' : 'SELL',
+          direction: triggerBull ? 'BUY' : 'SELL',
         },
         timeline,
         m15Count: m15s.length - triggerIdx,
