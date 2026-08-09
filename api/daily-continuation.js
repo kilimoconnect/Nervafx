@@ -81,11 +81,6 @@ module.exports = async function handler(req, res) {
     const dayEnd = new Date(dayStart.getTime() + 24 * 3600000);
     const dayStartMs = dayStart.getTime();
 
-    // The one trigger for this engine — earliest Sharp Reversal (Standard/Scalp)
-    // per pair, first-seen within today's forex day.
-    const srTriggers = await loadSharpReversalTriggers(
-      sb, dayStart.toISOString(), (now < dayEnd ? now : dayEnd).toISOString());
-
     // Also compute day-before-yesterday (D-2) and D-3 starts with weekend skipping,
     // so the direction check can look at breaks over the last two ref candles.
     function backOneTradingDay(from) {
@@ -102,6 +97,10 @@ module.exports = async function handler(req, res) {
     // the EMA50 that gates the trigger.
     const fetchSince = new Date(prev3DayStart.getTime() - 5 * 24 * 3600000).toISOString();
     const fetchUntil = todayDate ? dayEnd.toISOString() : (now < dayEnd ? now : dayEnd).toISOString();
+
+    // The one trigger for this engine — the Sharp Reversal engine (Standard or
+    // Scalp, earliest cross) evaluated at the page's as-of time (fetchUntil).
+    const srTriggers = await loadSharpReversalTriggers(sb, fetchUntil);
 
     // Hourly 3H/6H/12H strength, keyed hour -> currency.
     const strengthByHour = await loadStrength(sb, fetchSince, fetchUntil);
@@ -187,8 +186,9 @@ module.exports = async function handler(req, res) {
       // daily-break confirmation, EMA gate and strength gate are gone.
       const srTrig = srTriggers[inst];
       if (!srTrig) continue;
-      const triggerMs = new Date(srTrig.triggerTime).getTime();
-      if (isNaN(triggerMs) || triggerMs < dayStartMs) continue;   // trigger must fall inside today's forex day
+      let triggerMs = new Date(srTrig.triggerTime).getTime();
+      if (isNaN(triggerMs)) continue;
+      if (triggerMs < dayStartMs) triggerMs = dayStartMs;   // cross predates the day → monitor from day start
       const direction = srTrig.direction;
       const refBreakPips = 0;
 

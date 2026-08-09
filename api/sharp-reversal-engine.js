@@ -268,6 +268,9 @@ module.exports = async function handler(req, res) {
       pairs.push({
         pair: inst.replace('_', '/'), instrument: inst,
         direction: dir > 0 ? 'BUY' : 'SELL', state, score, broke, confirmAligned, m30TwoDir, impulseOK,
+        // When the reversal's confirm-TF (M15) EMA20/50 cross happened — the
+        // moment continuation monitoring should start from.
+        triggerTime: new Date(signalMs - Math.max(1, crossBars) * M15_MS).toISOString(),
         energy: en.energy, energyLabel: en.label, energyParts: en.parts,
         dom: { stack: d.stack > 0 ? 'BULL' : d.stack < 0 ? 'BEAR' : 'FLAT', bars: d.bars, slope: d.slope > 0 ? 'UP' : d.slope < 0 ? 'DOWN' : 'FLAT', priceVs20: d.priceVs20 > 0 ? 'above' : 'below', impulseATR: +d.imp3.toFixed(2) },
         mid: { stack: P.mid.stack > 0 ? 'BULL' : P.mid.stack < 0 ? 'BEAR' : 'FLAT', bars: crossBars },

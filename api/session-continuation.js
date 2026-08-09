@@ -183,9 +183,9 @@ module.exports = async function handler(req, res) {
     const fetchSince = prev3.start.toISOString();
     const fetchUntil = anchor ? curEnd.toISOString() : now.toISOString();
 
-    // The one trigger for this engine — earliest Sharp Reversal (Standard/Scalp)
-    // per pair, first-seen within the current session window.
-    const srTriggers = await loadSharpReversalTriggers(sb, trackStart.toISOString(), fetchUntil);
+    // The one trigger for this engine — the Sharp Reversal engine (Standard or
+    // Scalp, earliest cross) evaluated at the page's as-of time (fetchUntil).
+    const srTriggers = await loadSharpReversalTriggers(sb, fetchUntil);
 
     const PAGE = 1000;
     // H1 series driving the trigger and the session-reference candles.
@@ -292,7 +292,7 @@ module.exports = async function handler(req, res) {
       // session-break confirmation, EMA gate and strength gate are gone.
       const srTrig = srTriggers[inst];
       if (!srTrig) continue;
-      const triggerMs = new Date(srTrig.triggerTime).getTime();
+      let triggerMs = new Date(srTrig.triggerTime).getTime();
       if (isNaN(triggerMs)) continue;
       const direction = srTrig.direction;
       const refBreakPips = 0;
@@ -302,8 +302,10 @@ module.exports = async function handler(req, res) {
       const trackStartMs = new Date(trackStartISO).getTime();
       const curEndMs = new Date(curEndISO).getTime();
 
-      // Trigger must fall inside the current session window.
-      if (triggerMs < trackStartMs || triggerMs >= curEndMs) continue;
+      // Trigger must fall before the session ends; a cross that predates the
+      // session simply starts monitoring at the session open.
+      if (triggerMs >= curEndMs) continue;
+      if (triggerMs < trackStartMs) triggerMs = trackStartMs;
 
       // Anchor the timeline to the H1 that was live when the Sharp Reversal
       // fired; monitoring then scores the M30 series from that point, as before.

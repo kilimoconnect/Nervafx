@@ -1,49 +1,47 @@
 'use strict';
 
-// Shared reader for persisted Sharp Reversal triggers.
+// Shared trigger source for the continuation engines.
 //
-// The Sharp Reversal engine is a live snapshot — it does not record when a pair
-// first qualified. The 5-min cron (cron-sharp-reversal-alerts) logs the first
-// time each pair qualifies per mode into email_alert_log with
-// alert_type = 'sharp_reversal_trigger' and details { mode, instrument, pair,
-// direction, firstSeen }.
-//
-// This reader returns, per instrument, the EARLIEST first-seen trigger across
-// Standard (standard) and Scalp (swing) — "whichever came first" — within the
-// [sinceISO, untilISO] window. Continuation engines use it as their one trigger.
+// The one trigger comes from the Sharp Reversal engine, evaluated at the page's
+// as-of time (live = now, historical = the selected date/time). This works for
+// any date because the Sharp Reversal engine itself supports historical eval —
+// no persisted log required. Both modes (Standard = standard, Scalp = swing) are
+// evaluated and the EARLIEST reversal cross per pair wins ("whichever first").
 //
 //   { EUR_USD: { direction: 'BUY', triggerTime: ISO, mode: 'standard' }, ... }
-async function loadSharpReversalTriggers(sb, sinceISO, untilISO, maxAgeMs = 6 * 3600000) {
-  // A trigger must be RECENT to start fresh monitoring — a reversal from many
-  // hours ago has already played out. Cap the lookback to maxAgeMs (default 6h)
-  // even when the engine's monitoring window (e.g. the full forex day) is longer,
-  // so we don't surface every pair that reversed at some point today.
-  const untilMs = untilISO ? new Date(untilISO).getTime() : Date.now();
-  const effectiveSinceMs = Math.max(new Date(sinceISO).getTime(), untilMs - maxAgeMs);
-  // sent_at is stamped ~5 min after firstSeen (the M5 close), so widen the
-  // sent_at floor by 15 min to avoid dropping a trigger whose firstSeen sits
-  // right at the window start. Callers filter by triggerTime themselves.
-  const sentFloor = new Date(effectiveSinceMs - 15 * 60000).toISOString();
-  // Read both the dedicated trigger log and the sharp-reversal email log — the
-  // latter already records qualifying pairs (with generatedAt) from before the
-  // trigger log existed, so today's reversals surface without waiting for a
-  // fresh cron cycle.
-  let q = sb.from('email_alert_log')
-    .select('details, sent_at')
-    .in('alert_type', ['sharp_reversal_trigger', 'sharp_reversal'])
-    .gte('sent_at', sentFloor);
-  if (untilISO) q = q.lte('sent_at', untilISO);
-  const { data, error } = await q;
-  if (error) { console.error('[sharp-reversal-trigger] read failed:', error.message); return {}; }
 
+const srHandler = require('./sharp-reversal-engine.js');
+
+function invokeSR(mode, atISO) {
+  return new Promise((resolve) => {
+    const query = { mode };
+    if (atISO) query.at = atISO;
+    const req = { method: 'GET', query, headers: {}, _internal: true };
+    let statusCode = 200, payload = null;
+    const res = {
+      setHeader() {},
+      status(c) { statusCode = c; return this; },
+      json(d) { payload = d; resolve({ status: statusCode, data: d }); return this; },
+      end() { resolve({ status: statusCode, data: payload }); },
+    };
+    Promise.resolve(srHandler(req, res)).catch((e) => resolve({ status: 500, data: { error: e.message } }));
+  });
+}
+
+// sb is accepted for call-site compatibility but unused — the Sharp Reversal
+// engine opens its own client. evalISO is the as-of time to evaluate at.
+async function loadSharpReversalTriggers(sb, evalISO) {
+  const [std, swing] = await Promise.all([invokeSR('standard', evalISO), invokeSR('swing', evalISO)]);
   const map = {};
-  for (const r of data || []) {
-    const d = r.details || {};
-    if (!d.instrument || !d.direction) continue;
-    const t = d.firstSeen || d.generatedAt || r.sent_at;   // firstSeen (trigger log) or generatedAt (email log)
-    const prev = map[d.instrument];
-    if (!prev || new Date(t).getTime() < new Date(prev.triggerTime).getTime()) {
-      map[d.instrument] = { direction: d.direction, triggerTime: t, mode: d.mode || null };
+  for (const r of [std, swing]) {
+    const mode = r.data?.mode || null;
+    for (const p of (r.data?.pairs || [])) {
+      if (!p.instrument || !p.direction || !p.triggerTime) continue;
+      const t = new Date(p.triggerTime).getTime();
+      const prev = map[p.instrument];
+      if (!prev || t < new Date(prev.triggerTime).getTime()) {
+        map[p.instrument] = { direction: p.direction, triggerTime: p.triggerTime, mode };
+      }
     }
   }
   return map;

@@ -59,10 +59,9 @@ module.exports = async function handler(req, res) {
     const fetchSince = new Date(anchorMs - 6 * 24 * 3600000).toISOString();
     const fetchUntil = anchor ? new Date(anchorMs + H4_MS).toISOString() : now.toISOString();
 
-    // The one trigger for this engine — earliest Sharp Reversal (Standard/Scalp)
-    // per pair, first-seen within the current H4 window.
-    const h4WindowStartMs = anchor ? anchorMs : Math.floor(now.getTime() / H4_MS) * H4_MS;
-    const srTriggers = await loadSharpReversalTriggers(sb, new Date(h4WindowStartMs).toISOString(), fetchUntil);
+    // The one trigger for this engine — the Sharp Reversal engine (Standard or
+    // Scalp, earliest cross) evaluated at the page's as-of time (fetchUntil).
+    const srTriggers = await loadSharpReversalTriggers(sb, fetchUntil);
 
     const PAGE = 1000;
     const h4Cache = {};
@@ -175,7 +174,7 @@ module.exports = async function handler(req, res) {
       // H4-break confirmation, EMA gate and strength gate are gone.
       const srTrig = srTriggers[inst];
       if (!srTrig) continue;
-      const triggerMs = new Date(srTrig.triggerTime).getTime();
+      let triggerMs = new Date(srTrig.triggerTime).getTime();
       if (isNaN(triggerMs)) continue;
       const direction = srTrig.direction;
       const refBreakPips = 0;
@@ -201,7 +200,7 @@ module.exports = async function handler(req, res) {
 
       // Anchor monitoring to the M15 candle that was live when the Sharp Reversal
       // fired; monitoring then scores every following M15 exactly as before.
-      if (triggerMs < trackStartMs) continue;   // trigger must fall inside the current H4 window
+      if (triggerMs < trackStartMs) triggerMs = trackStartMs;   // cross predates the H4 window → monitor from its start
       let triggerAllIdx = -1;
       for (let i = 0; i < m15all.length; i++) {
         if (new Date(m15all[i].time).getTime() <= triggerMs) triggerAllIdx = i; else break;
