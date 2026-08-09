@@ -98,9 +98,9 @@ module.exports = async function handler(req, res) {
     const fetchSince = new Date(prev3DayStart.getTime() - 5 * 24 * 3600000).toISOString();
     const fetchUntil = todayDate ? dayEnd.toISOString() : (now < dayEnd ? now : dayEnd).toISOString();
 
-    // The one trigger for this engine — the Sharp Reversal engine (Standard or
-    // Scalp, earliest cross) evaluated at the page's as-of time (fetchUntil).
-    const srTriggers = await loadSharpReversalTriggers(sb, fetchUntil);
+    // The one trigger for this engine — the Sharp Reversal engine replayed
+    // across today's forex day (earliest cross per pair wins).
+    const srTriggers = await loadSharpReversalTriggers(sb, dayStart.toISOString(), fetchUntil);
 
     // Hourly 3H/6H/12H strength, keyed hour -> currency.
     const strengthByHour = await loadStrength(sb, fetchSince, fetchUntil);

@@ -183,9 +183,9 @@ module.exports = async function handler(req, res) {
     const fetchSince = prev3.start.toISOString();
     const fetchUntil = anchor ? curEnd.toISOString() : now.toISOString();
 
-    // The one trigger for this engine — the Sharp Reversal engine (Standard or
-    // Scalp, earliest cross) evaluated at the page's as-of time (fetchUntil).
-    const srTriggers = await loadSharpReversalTriggers(sb, fetchUntil);
+    // The one trigger for this engine — the Sharp Reversal engine replayed
+    // across the current session (earliest cross per pair wins).
+    const srTriggers = await loadSharpReversalTriggers(sb, trackStart.toISOString(), fetchUntil);
 
     const PAGE = 1000;
     // H1 series driving the trigger and the session-reference candles.
