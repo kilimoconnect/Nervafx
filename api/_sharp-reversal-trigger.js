@@ -18,9 +18,13 @@ async function loadSharpReversalTriggers(sb, sinceISO, untilISO) {
   // sent_at floor by 15 min to avoid dropping a trigger whose firstSeen sits
   // right at the window start. Callers filter by triggerTime themselves.
   const sentFloor = new Date(new Date(sinceISO).getTime() - 15 * 60000).toISOString();
+  // Read both the dedicated trigger log and the sharp-reversal email log — the
+  // latter already records qualifying pairs (with generatedAt) from before the
+  // trigger log existed, so today's reversals surface without waiting for a
+  // fresh cron cycle.
   let q = sb.from('email_alert_log')
     .select('details, sent_at')
-    .eq('alert_type', 'sharp_reversal_trigger')
+    .in('alert_type', ['sharp_reversal_trigger', 'sharp_reversal'])
     .gte('sent_at', sentFloor);
   if (untilISO) q = q.lte('sent_at', untilISO);
   const { data, error } = await q;
@@ -30,7 +34,7 @@ async function loadSharpReversalTriggers(sb, sinceISO, untilISO) {
   for (const r of data || []) {
     const d = r.details || {};
     if (!d.instrument || !d.direction) continue;
-    const t = d.firstSeen || r.sent_at;
+    const t = d.firstSeen || d.generatedAt || r.sent_at;   // firstSeen (trigger log) or generatedAt (email log)
     const prev = map[d.instrument];
     if (!prev || new Date(t).getTime() < new Date(prev.triggerTime).getTime()) {
       map[d.instrument] = { direction: d.direction, triggerTime: t, mode: d.mode || null };
