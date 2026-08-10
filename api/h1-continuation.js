@@ -59,10 +59,14 @@ module.exports = async function handler(req, res) {
     const fetchSince = new Date(anchorMs - 6 * 24 * 3600000).toISOString();
     const fetchUntil = anchor ? new Date(anchorMs + H4_MS).toISOString() : now.toISOString();
 
-    // The one trigger for this engine — the Sharp Reversal engine replayed
-    // across the current H4 window (earliest cross per pair wins).
+    // The one trigger for this engine — the Sharp Reversal engine evaluated at
+    // the As-of time; it anchors to the reversal run active then.
     const h4WinStartISO = anchor ? anchor.toISOString() : new Date(Math.floor(now.getTime() / H4_MS) * H4_MS).toISOString();
-    const srTriggers = await loadSharpReversalTriggers(sb, h4WinStartISO, fetchUntil);
+    const atMs = req.query?.at ? new Date(req.query.at).getTime() : NaN;
+    const srEvalISO = !isNaN(atMs)
+      ? new Date(Math.min(atMs, new Date(fetchUntil).getTime())).toISOString()
+      : fetchUntil;
+    const srTriggers = await loadSharpReversalTriggers(sb, h4WinStartISO, srEvalISO);
 
     const PAGE = 1000;
     const h4Cache = {};

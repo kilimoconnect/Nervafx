@@ -368,6 +368,8 @@
         // Selected date+hour is in the profile timezone — convert to UTC for the API
         var utc = wallToUtc(dateEl.value, parseInt(hourEl.value, 10), _tz());
         qs = '?date=' + utc.toISOString().slice(0, 10) + '&hour=' + utc.getUTCHours();
+        // Anchor the trigger to the reversal active at the selected hour.
+        qs += '&at=' + encodeURIComponent(utc.toISOString());
       }
 
       try {

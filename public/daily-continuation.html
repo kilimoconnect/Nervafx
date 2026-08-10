@@ -175,9 +175,11 @@
   <div class="sx-subtitle">Yesterday's daily candle → today's H1 confirmation — live continuation confidence tracking</div>
 
   <div class="sx-filters">
-    <span class="sx-filter-label">Date:</span>
+    <span class="sx-filter-label">As of:</span>
     <input type="date" class="sx-date-input" id="sx-date" />
+    <input type="time" class="sx-date-input" id="sx-time" />
     <button class="sx-go-btn" id="sx-go">Go</button>
+    <button class="sx-go-btn" id="sx-live" style="background:rgba(255,255,255,0.06)">Live</button>
     <span style="width:16px"></span>
     <span class="sx-filter-label">Sort:</span>
     <button class="sx-sort-btn active" data-sort="score">Score ↓</button>
@@ -290,11 +292,29 @@
       if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
+    // Convert a wall-clock date+time in the user's timezone to a UTC ms value
+    // (same helper the Sharp Reversal page uses for its As-of selector).
+    function zonedWallToUtcMs(dateStr, hour, minute) {
+      var tz = _tz(), p = dateStr.split('-');
+      var wallUtc = Date.UTC(+p[0], (+p[1]) - 1, +p[2], hour, minute || 0, 0);
+      var dtf = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      var m = {}; dtf.formatToParts(new Date(wallUtc)).forEach(function(pt) { if (pt.type !== 'literal') m[pt.type] = pt.value; });
+      var tzAsUtc = Date.UTC(+m.year, (+m.month) - 1, +m.day, (+m.hour) % 24, +m.minute, +m.second);
+      return wallUtc + (wallUtc - tzAsUtc);
+    }
+
     async function load(silent) {
       if (!silent) document.getElementById('dc-cards').innerHTML = '<div class="sx-loading"><span class="spinner"></span> Loading…</div>';
 
       var dateEl = document.getElementById('sx-date');
+      var timeEl = document.getElementById('sx-time');
       var qs = dateEl.value ? 'date=' + dateEl.value : '';
+      // As-of time: anchor the trigger to the reversal active at this moment.
+      if (dateEl.value && timeEl.value) {
+        var hm = timeEl.value.split(':');
+        var atMs = zonedWallToUtcMs(dateEl.value, parseInt(hm[0], 10) || 0, parseInt(hm[1], 10) || 0);
+        qs += (qs ? '&' : '') + 'at=' + encodeURIComponent(new Date(atMs).toISOString());
+      }
 
       try {
         var res = await fetch('/api/daily-continuation' + (qs ? '?' + qs : ''), {
@@ -319,6 +339,11 @@
       });
     });
     document.getElementById('sx-go').addEventListener('click', function() { load(); });
+    document.getElementById('sx-live').addEventListener('click', function() {
+      document.getElementById('sx-date').value = '';
+      document.getElementById('sx-time').value = '';
+      load();
+    });
 
     var allExpanded = false;
     document.getElementById('sx-expand-all').addEventListener('click', function() {
