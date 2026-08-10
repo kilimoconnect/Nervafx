@@ -178,7 +178,6 @@
       <option value="LONDON">London</option>
       <option value="NY">New York</option>
     </select>
-    <input type="time" class="sx-date-input" id="sx-time" title="As-of time (optional)" />
     <button class="sx-go-btn" id="sx-go">Go</button>
     <button class="sx-go-btn" id="sx-live" style="background:rgba(255,255,255,0.06);border-color:var(--border);color:var(--text-muted)">Live</button>
     <span style="width:16px"></span>
@@ -291,31 +290,14 @@
       if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
-    // Convert a wall-clock date+time in the user's timezone to a UTC ms value.
-    function zonedWallToUtcMs(dateStr, hour, minute) {
-      var tz = _tz(), p = dateStr.split('-');
-      var wallUtc = Date.UTC(+p[0], (+p[1]) - 1, +p[2], hour, minute || 0, 0);
-      var dtf = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      var m = {}; dtf.formatToParts(new Date(wallUtc)).forEach(function(pt) { if (pt.type !== 'literal') m[pt.type] = pt.value; });
-      var tzAsUtc = Date.UTC(+m.year, (+m.month) - 1, +m.day, (+m.hour) % 24, +m.minute, +m.second);
-      return wallUtc + (wallUtc - tzAsUtc);
-    }
-
     async function load(silent) {
       if (!silent) document.getElementById('dc-cards').innerHTML = '<div class="sx-loading"><span class="spinner"></span> Loading…</div>';
 
       var dateEl = document.getElementById('sx-date');
       var sessEl = document.getElementById('sx-session');
-      var timeEl = document.getElementById('sx-time');
       var qs = '';
       if (dateEl.value && sessEl.value) {
         qs = '?date=' + dateEl.value + '&session=' + sessEl.value;
-        // Optional As-of time: anchor the trigger to the reversal active then.
-        if (timeEl.value) {
-          var hm = timeEl.value.split(':');
-          var atMs = zonedWallToUtcMs(dateEl.value, parseInt(hm[0], 10) || 0, parseInt(hm[1], 10) || 0);
-          qs += '&at=' + encodeURIComponent(new Date(atMs).toISOString());
-        }
       }
 
       try {
@@ -346,7 +328,6 @@
     document.getElementById('sx-live').addEventListener('click', function() {
       document.getElementById('sx-date').value = '';
       document.getElementById('sx-session').value = '';
-      document.getElementById('sx-time').value = '';
       load();
     });
     document.getElementById('sx-expand-all').addEventListener('click', function() {
