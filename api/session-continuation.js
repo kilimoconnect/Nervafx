@@ -304,15 +304,18 @@ module.exports = async function handler(req, res) {
       // Anchor to the M30 candle at/containing the trigger — monitoring is also
       // M30, so Trigger 1 and every monitoring row share one timeframe and no
       // row can appear before Trigger 1.
+      // Trigger candle = the last M30 that had CLOSED by the trigger time, so
+      // Trigger 1 is stamped at the detection moment (its close).
       const m30s = m30Cache[inst] || [];
       let trigIdx = -1;
       for (let i = 0; i < m30s.length; i++) {
         const ms = new Date(m30s[i].time).getTime();
-        if (ms <= triggerMs && ms >= trackStartMs) trigIdx = i;
-        else if (ms > triggerMs) break;
+        if (ms < trackStartMs) continue;
+        if (ms + MONITOR_TF_MS <= triggerMs) trigIdx = i;
+        else break;
       }
       if (trigIdx === -1) {
-        // Trigger predates the first completed session M30 → start at it.
+        // Trigger at/before the first completed session M30 → start at it.
         trigIdx = m30s.findIndex(c => {
           const ms = new Date(c.time).getTime();
           return ms >= trackStartMs && ms < curEndMs;

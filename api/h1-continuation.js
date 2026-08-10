@@ -181,13 +181,14 @@ module.exports = async function handler(req, res) {
 
       const trackStartMs = new Date(trackStart).getTime();
 
-      // Anchor monitoring to the M15 candle live when the Sharp Reversal fired.
+      // Trigger candle = the last M15 that had CLOSED by the trigger time, so
+      // Trigger 1 is stamped at the detection moment (its close).
       if (triggerMs < trackStartMs) triggerMs = trackStartMs;   // cross predates the H4 window → monitor from its start
       let triggerAllIdx = -1;
       for (let i = 0; i < m15all.length; i++) {
-        if (new Date(m15all[i].time).getTime() <= triggerMs) triggerAllIdx = i; else break;
+        if (new Date(m15all[i].time).getTime() + TRIGGER_TF_MS <= triggerMs) triggerAllIdx = i; else break;
       }
-      if (triggerAllIdx === -1) continue;   // no M15 at/before the trigger yet
+      if (triggerAllIdx === -1) continue;   // no M15 closed at/before the trigger yet
       const trigger = m15all[triggerAllIdx];
       const m15s = m15all.slice(triggerAllIdx);
       const triggerIdx = 0;

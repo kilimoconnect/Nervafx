@@ -173,12 +173,14 @@ module.exports = async function handler(req, res) {
       const direction = srTrig.direction;
       const refBreakPips = 0;
 
-      // Anchor monitoring to the H1 candle live when the Sharp Reversal fired.
+      // Trigger candle = the last H1 that had CLOSED by the trigger time, so
+      // Trigger 1 is stamped at the detection moment (its close), not an hour
+      // later. Monitoring then scores the H1s that follow.
       let triggerIdx = -1;
       for (let i = 0; i < today.length; i++) {
-        if (new Date(today[i].time).getTime() <= triggerMs) triggerIdx = i; else break;
+        if (new Date(today[i].time).getTime() + TRIGGER_TF_MS <= triggerMs) triggerIdx = i; else break;
       }
-      if (triggerIdx === -1) triggerIdx = 0;   // fired before the first H1 of the day
+      if (triggerIdx === -1) triggerIdx = 0;   // trigger at/before the first H1 close of the day
       const trigger = today[triggerIdx];
       const triggerBreakPips = 0;
 
