@@ -364,7 +364,11 @@ function classifyAt(P, T) {
   const confirmAligned = P.ha15 === dir && P.mid.stack === dir && P.trig.stack === dir;
   const m30TwoDir = twoM30SameDir(P.m30ohlc, dir);
   const impulseOK = d.imp3 * dir >= 2;
-  if (!(broke && en.energy >= 70 && confirmAligned && m30TwoDir && impulseOK)) return null;
+  // Same criteria as the Sharp Reversal page's default "Reversals" view: a
+  // reversal state (Sharp Reversal / New Trend / Exhaustion) that also passes
+  // the shown gate. Plain TREND pairs do not trigger continuation.
+  const isReversal = state === 'SHARP_REVERSAL' || state === 'NEW_TREND' || state === 'EXHAUSTION';
+  if (!(isReversal && broke && en.energy >= 70 && confirmAligned && m30TwoDir && impulseOK)) return null;
   const signalMs = Math.floor(T / M5_MS) * M5_MS;
   return {
     direction: dir > 0 ? 'BUY' : 'SELL',
