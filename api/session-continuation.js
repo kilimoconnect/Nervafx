@@ -301,18 +301,27 @@ module.exports = async function handler(req, res) {
       if (triggerMs >= curEndMs) continue;
       if (triggerMs < trackStartMs) triggerMs = trackStartMs;
 
-      // Anchor the timeline to the H1 that was live when the Sharp Reversal
-      // fired; monitoring then scores the M30 series from that point, as before.
-      let triggerAllIdx = -1;
-      for (let i = 0; i < all.length; i++) {
-        const ms = new Date(all[i].time).getTime();
-        if (ms <= triggerMs && ms >= trackStartMs) triggerAllIdx = i;
+      // Anchor to the M30 candle at/containing the trigger — monitoring is also
+      // M30, so Trigger 1 and every monitoring row share one timeframe and no
+      // row can appear before Trigger 1.
+      const m30s = m30Cache[inst] || [];
+      let trigIdx = -1;
+      for (let i = 0; i < m30s.length; i++) {
+        const ms = new Date(m30s[i].time).getTime();
+        if (ms <= triggerMs && ms >= trackStartMs) trigIdx = i;
         else if (ms > triggerMs) break;
       }
-      if (triggerAllIdx === -1) continue;   // no session H1 at/before the trigger yet
-      const trigger = all[triggerAllIdx];
+      if (trigIdx === -1) {
+        // Trigger predates the first completed session M30 → start at it.
+        trigIdx = m30s.findIndex(c => {
+          const ms = new Date(c.time).getTime();
+          return ms >= trackStartMs && ms < curEndMs;
+        });
+        if (trigIdx === -1) continue;
+      }
+      const trigger = m30s[trigIdx];
 
-      // The trigger H1 candle IS the reference — back-inside and pullback are
+      // The trigger M30 candle IS the reference — back-inside and pullback are
       // judged against it and the move built from it, not a previous session.
       const refHigh = trigger.high, refLow = trigger.low;
       const refRange = Math.max(trigger.high - trigger.low, pd);
@@ -324,35 +333,26 @@ module.exports = async function handler(req, res) {
       const refRangePips = Math.round((refRange / pd) * 10) / 10;
       const refBodyPips = Math.round((tBody / pd) * 10) / 10;
 
-      // Monitoring runs on the M30 series, from the first completed M30 at or
-      // after the Sharp Reversal trigger through to session end.
-      const monCandles = (m30Cache[inst] || []).filter(c => {
-        const ms = new Date(c.time).getTime();
-        return ms >= triggerMs && ms < curEndMs;
-      });
+      // Monitoring = the M30s strictly after the trigger M30, through session end.
+      const monCandles = m30s.slice(trigIdx + 1).filter(c => new Date(c.time).getTime() < curEndMs);
       const triggerBreakPips = 0;
 
-      // Initial score
+      // Initial score — baseline + body alignment.
       let score = 50;
-      score += 20; // baseline for triggering
-      if (triggerBreakPips > 15) score += 15;
-      else if (triggerBreakPips > 8) score += 10;
-      else if (triggerBreakPips > 4) score += 5;
-
+      score += 20;
       const triggerBull = trigger.close > trigger.open;
       if ((direction === 'BUY' && triggerBull) || (direction === 'SELL' && !triggerBull)) score += 5;
-
       score = Math.max(20, Math.min(98, score));
       const initialScore = score;
 
       const timeline = [{
         time: trigger.time,
-        closeTime: closeTimeOf(trigger.time),
+        closeTime: closeTimeOf(trigger.time, MONITOR_TF_MS),
         score,
         label: 'Trigger 1',
         event: 'Sharp Reversal trigger — ' + direction + (srTrig.mode ? ' (' + (srTrig.mode === 'swing' ? 'Scalp' : 'Standard') + ')' : ''),
         qualified: true,
-        h1: {
+        m30: {
           open: trigger.open, high: trigger.high, low: trigger.low, close: trigger.close,
           bull: triggerBull,
           bodyPips: Math.round((Math.abs(trigger.close - trigger.open) / pd) * 10) / 10,
@@ -549,7 +549,7 @@ module.exports = async function handler(req, res) {
         // is tracked from here.
         triggerTime: firstTriggerTime,
         // When the break was actually confirmed — the trigger candle's close.
-        triggerCloseTime: closeTimeOf(firstTriggerTime),
+        triggerCloseTime: closeTimeOf(firstTriggerTime, MONITOR_TF_MS),
         // Trigger came from the Sharp Reversal engine, which mode won the race.
         strength: null,
         srMode: srTrig.mode === 'swing' ? 'Scalp' : srTrig.mode === 'standard' ? 'Standard' : null,
