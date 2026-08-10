@@ -234,21 +234,12 @@ module.exports = async function handler(req, res) {
       for (let i = triggerIdx + 1; i < today.length; i++) {
         const h1 = today[i];
 
-        // Closing back inside the reference range used to end monitoring
-        // outright. It now scores as the heaviest single penalty and tracking
-        // continues, so a pair that dips back in and then breaks out again
-        // stays visible instead of being dropped at the first pullback.
-        const backInside = h1.close < refHigh && h1.close > refLow;
-
         const h1Bull = h1.close > h1.open;
         const h1Body = Math.abs(h1.close - h1.open);
         const h1BodyPips = Math.round((h1Body / pd) * 10) / 10;
         const h1Range = h1.high - h1.low;
         let delta = 0;
         const events = [];
-
-        // Bigger than any other single event, since this was previously fatal.
-        if (backInside) { delta -= 8; events.push('Back inside prev daily range'); }
 
         // Strength gate, scored rather than fatal here: an hour where neither
         // currency holds conviction weakens the case without ending a run that

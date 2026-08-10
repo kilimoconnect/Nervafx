@@ -376,21 +376,12 @@ module.exports = async function handler(req, res) {
       for (let i = 0; i < monCandles.length; i++) {
         const c = monCandles[i];
 
-        // Closing back inside the reference range used to end monitoring
-        // outright. It now scores as the heaviest single penalty and tracking
-        // continues, so a pair that dips back in and then breaks out again
-        // stays visible instead of being dropped at the first pullback.
-        const backInside = c.close < refHigh && c.close > refLow;
-
         const cBull = c.close > c.open;
         const cBody = Math.abs(c.close - c.open);
         const cBodyPips = Math.round((cBody / pd) * 10) / 10;
         const cRange = c.high - c.low;
         let delta = 0;
         const events = [];
-
-        // Bigger than any other single event, since this was previously fatal.
-        if (backInside) { delta -= 8; events.push('Back inside prev session range'); }
 
         // Strength gate, scored rather than fatal here: an M30 where neither
         // currency holds conviction weakens the case without ending a run that
