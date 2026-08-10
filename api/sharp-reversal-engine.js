@@ -395,16 +395,33 @@ async function runScan(sb, M, mode, evalMs, fromMs, res) {
     }
 
     const startMs = Math.max(fromMs, evalMs - MAX_SCAN_MS);
+    const stepEnd = Math.floor(evalMs / M15_MS) * M15_MS;
     const triggers = {};
     for (const inst of PAIRS) {
       const r = raw[inst];
       if (!r || !r.m15?.length || !r.m5?.length || (!M.synth && !r.h1?.length)) continue;
-      // Walk M15 steps ascending; the first step that passes the gate is the
-      // reversal's birth, and its triggerTime is the confirm-TF cross.
-      for (let T = Math.floor(startMs / M15_MS) * M15_MS; T <= evalMs; T += M15_MS) {
+      // Anchor to the CURRENT reversal, not an older one that already faded:
+      // find the most recent M15 step that passes the gate, then walk back only
+      // while it keeps passing. The start of that unbroken run is the onset the
+      // continuation should trigger on (≈ when the reversal you're viewing began).
+      let end = null, endRec = null;
+      for (let T = stepEnd; T >= startMs; T -= M15_MS) {
         const rec = classifyAt(buildPAt(r, M, T), T);
-        if (rec) { triggers[inst] = rec; break; }
+        if (rec) { end = T; endRec = rec; break; }
       }
+      if (end === null) continue;
+      let onsetMs = end, onsetRec = endRec;
+      for (let T = end - M15_MS; T >= startMs; T -= M15_MS) {
+        const rec = classifyAt(buildPAt(r, M, T), T);
+        if (!rec) break;              // gap → the run started at onsetMs
+        onsetMs = T; onsetRec = rec;
+      }
+      triggers[inst] = {
+        direction: onsetRec.direction,
+        state: onsetRec.state,
+        // Trigger fires at the onset of the current run, not the confirm-TF cross.
+        triggerTime: new Date(onsetMs).toISOString(),
+      };
     }
 
     return res.json({
