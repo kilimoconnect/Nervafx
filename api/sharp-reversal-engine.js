@@ -318,7 +318,7 @@ function isExhausted(d) {
 // and re-run the exact reversal gate, so a reversal that qualified for only a
 // 15-minute window is still caught. Only standard (H1 dom) and swing (M30 synth)
 // are supported — the two modes the continuation engines use.
-const MAX_SCAN_MS = 12 * HOUR;
+const MAX_SCAN_MS = 26 * HOUR;   // cover a full forex day so "first trigger of the day" isn't clipped
 
 // Rebuild {dom, mid, trig, domOHLC, ha15, m30ohlc} as-of time T from raw OHLC
 // arrays (each element carries ms). A candle on timeframe tf is closed by T when
@@ -385,8 +385,8 @@ async function runScan(sb, M, mode, evalMs, fromMs, res) {
       const batch = PAIRS.slice(b, b + 7);
       const rows = await Promise.all(batch.map(async inst => {
         const [m15, m5, h1] = await Promise.all([
-          fetchOHLC(sb, inst, 'M15', 600, untilISO),
-          fetchOHLC(sb, inst, 'M5', 400, untilISO),
+          fetchOHLC(sb, inst, 'M15', 700, untilISO),
+          fetchOHLC(sb, inst, 'M5', 500, untilISO),
           M.synth ? Promise.resolve(null) : fetchOHLC(sb, inst, M.dom, 300, untilISO),
         ]);
         return { inst, m15, m5, h1 };
@@ -395,33 +395,21 @@ async function runScan(sb, M, mode, evalMs, fromMs, res) {
     }
 
     const startMs = Math.max(fromMs, evalMs - MAX_SCAN_MS);
-    const stepEnd = Math.floor(evalMs / M15_MS) * M15_MS;
     const triggers = {};
     for (const inst of PAIRS) {
       const r = raw[inst];
       if (!r || !r.m15?.length || !r.m5?.length || (!M.synth && !r.h1?.length)) continue;
-      // Anchor to the CURRENT reversal, not an older one that already faded:
-      // find the most recent M15 step that passes the gate, then walk back only
-      // while it keeps passing. The start of that unbroken run is the onset the
-      // continuation should trigger on (≈ when the reversal you're viewing began).
-      let end = null, endRec = null;
-      for (let T = stepEnd; T >= startMs; T -= M15_MS) {
+      // The FIRST trigger in the window: walk M15 steps ascending from the
+      // window start; the first step that passes the reversal gate is when the
+      // reversal first appeared, and that step is the trigger the continuation
+      // monitors from.
+      for (let T = Math.floor(startMs / M15_MS) * M15_MS; T <= evalMs; T += M15_MS) {
         const rec = classifyAt(buildPAt(r, M, T), T);
-        if (rec) { end = T; endRec = rec; break; }
+        if (rec) {
+          triggers[inst] = { direction: rec.direction, state: rec.state, triggerTime: new Date(T).toISOString() };
+          break;
+        }
       }
-      if (end === null) continue;
-      let onsetMs = end, onsetRec = endRec;
-      for (let T = end - M15_MS; T >= startMs; T -= M15_MS) {
-        const rec = classifyAt(buildPAt(r, M, T), T);
-        if (!rec) break;              // gap → the run started at onsetMs
-        onsetMs = T; onsetRec = rec;
-      }
-      triggers[inst] = {
-        direction: onsetRec.direction,
-        state: onsetRec.state,
-        // Trigger fires at the onset of the current run, not the confirm-TF cross.
-        triggerTime: new Date(onsetMs).toISOString(),
-      };
     }
 
     return res.json({
