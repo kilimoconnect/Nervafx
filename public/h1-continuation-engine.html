@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<title>NervaFX — H1 Continuation Engine</title>
+<link rel="icon" type="image/png" href="/nervafx-icon.png">
+<script src="/auth-guard.js"></script>
+<link rel="stylesheet" href="style.css" />
+<style>
+  .grid { display: block !important; }
+  .hc-topbar { position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; height: 56px; background: rgba(8,11,18,0.92); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border); }
+  .hc-left { display: flex; align-items: center; gap: 12px; }
+  .hc-logo img { height: 24px; display: block; }
+  .hc-sep { color: rgba(255,255,255,0.1); font-size: 20px; }
+  .hc-title { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+  .hc-back { padding: 6px 12px; border-radius: 8px; background: rgba(255,255,255,0.04); border: 1px solid var(--border); color: var(--text-muted); font-size: 12px; text-decoration: none; }
+  .hc-sub { text-align: center; padding: 14px 20px 4px; font-size: 11px; color: var(--text-dim); }
+  .hc-sub b { color: #94a3b8; }
+  .hc-meta { text-align: center; padding: 0 20px 6px; font-size: 10px; color: var(--text-dim); }
+  .hc-badge-h1 { display:inline-block; padding:1px 7px; border-radius:4px; background:rgba(167,139,250,0.14); color:#a78bfa; font-weight:700; font-size:10px; }
+  .hc-filters { display:flex; align-items:center; justify-content:center; gap:8px; padding:8px 16px; flex-wrap:wrap; }
+  .hc-input { padding:5px 10px; border-radius:7px; font-size:11px; background:rgba(255,255,255,0.04); border:1px solid var(--border); color:var(--text-muted); color-scheme:dark; }
+  .hc-btn { padding:5px 12px; border-radius:7px; font-size:11px; font-weight:700; background:rgba(167,139,250,0.2); border:1px solid rgba(167,139,250,0.4); color:#a78bfa; cursor:pointer; }
+  .hc-wrap { max-width: 1120px; margin: 0 auto; padding: 8px 14px 60px; }
+  .hc-group { margin: 18px 0 6px; }
+  .hc-group-hd { display:flex; align-items:center; gap:10px; font-size:12px; font-weight:800; letter-spacing:0.4px; text-transform:uppercase; padding:6px 2px; border-bottom:1px solid var(--border); }
+  .hc-group-count { font-size:11px; color:var(--text-dim); font-weight:600; }
+  .hc-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:12px; margin-top:10px; }
+  .hc-card { background:#0b0f18; border:1px solid var(--border); border-left-width:4px; border-radius:10px; padding:12px 14px; }
+  .hc-card-hd { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .hc-pair { font-size:16px; font-weight:800; color:#fff; }
+  .hc-dir { font-size:11px; font-weight:800; letter-spacing:0.4px; padding:2px 8px; border-radius:5px; }
+  .hc-dir.BUY { background:rgba(34,197,94,0.14); color:#4ade80; }
+  .hc-dir.SELL { background:rgba(239,68,68,0.14); color:#f87171; }
+  .hc-state { font-size:10px; font-weight:800; letter-spacing:0.5px; text-transform:uppercase; }
+  .hc-score { font-family:monospace; font-weight:800; font-size:15px; }
+  .hc-grade { font-size:10px; font-weight:700; color:var(--text-dim); }
+  .hc-rows { margin-top:10px; display:grid; grid-template-columns:1fr 1fr; gap:2px 14px; }
+  .hc-kv { display:flex; justify-content:space-between; font-size:11px; padding:1px 0; }
+  .hc-k { color:var(--text-dim); }
+  .hc-v { color:#e2e8f0; font-weight:600; }
+  .hc-reasons { margin-top:8px; font-size:10px; color:var(--text-dim); }
+  .hc-warn { margin-top:6px; font-size:10px; color:#fbbf24; }
+  .hc-foot { margin-top:8px; display:flex; align-items:center; justify-content:space-between; font-size:10px; color:var(--text-dim); }
+  .hc-details { margin-top:8px; }
+  .hc-details summary { cursor:pointer; font-size:10px; color:#a78bfa; }
+  .hc-details pre { font-size:10px; color:#94a3b8; overflow-x:auto; background:#080b12; padding:8px; border-radius:6px; margin-top:6px; }
+  .hc-empty, .hc-loading { text-align:center; color:var(--text-muted); padding:36px; }
+  .hc-spin { display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,0.2);border-top-color:#a78bfa;border-radius:50%;animation:hcspin 0.7s linear infinite;vertical-align:middle; }
+  @keyframes hcspin { to { transform: rotate(360deg); } }
+  @media (max-width:640px){ .hc-cards{grid-template-columns:1fr;} .hc-rows{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+
+<div class="hc-topbar">
+  <div class="hc-left">
+    <a href="/app" class="hc-logo"><img src="/nervafx-logo.png" alt="NervaFX" /></a>
+    <span class="hc-sep">|</span>
+    <span class="hc-title">H1 Continuation Engine</span>
+  </div>
+  <a href="/app" class="hc-back">← Back</a>
+</div>
+
+<div class="hc-sub">
+  <b>Impulse → pullback → two-candle failure → continuation</b>, on <b>completed H1 candles only</b>.
+  States are analytical classifications — <b>not entries or trade signals</b>. No stops, targets, sizing or execution.
+</div>
+<div class="hc-meta" id="hc-meta"></div>
+
+<div class="hc-filters">
+  <select id="f-dir" class="hc-input"><option value="">All directions</option><option value="BUY">BUY only</option><option value="SELL">SELL only</option></select>
+  <select id="f-state" class="hc-input"><option value="">All states</option></select>
+  <input id="f-score" type="number" class="hc-input" style="width:110px" placeholder="Min score" min="0" max="100" />
+  <input id="f-pair" type="text" class="hc-input" style="width:110px" placeholder="Pair search" />
+  <select id="f-sort" class="hc-input"><option value="state">Sort: State</option><option value="score">Sort: Score ↓</option><option value="recent">Sort: Recent</option></select>
+  <button id="f-refresh" class="hc-btn">Refresh</button>
+</div>
+
+<div class="hc-wrap" id="hc-body"><div class="hc-loading"><span class="hc-spin"></span> Loading…</div></div>
+
+<script>
+  var TOKEN = localStorage.getItem('nfx_token') || '';
+  var _userTz = localStorage.getItem('nfx_tz') || 'auto';
+  function _tz() { return (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC'); }
+  function fmt(iso) { if (!iso) return '—'; return new Date(iso).toLocaleString('en-GB', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit', timeZone:_tz() }); }
+  function fmtT(iso) { if (!iso) return '—'; return new Date(iso).toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit', timeZone:_tz() }); }
+  function px(v) { return v == null ? '—' : (+v).toFixed(5); }
+
+  var STATES = ['CONTINUATION_CONFIRMED','SECOND_PUSH_STARTED','CONTINUATION_READY','PULLBACK_VALID','PULLBACK_FORMING','INVALIDATED','EXPIRED'];
+  var GROUPS = [
+    { key:'CONTINUATION_CONFIRMED', label:'Continuation Confirmed', states:['CONTINUATION_CONFIRMED'] },
+    { key:'SECOND_PUSH_STARTED',    label:'Second Push Started',    states:['SECOND_PUSH_STARTED'] },
+    { key:'CONTINUATION_READY',     label:'Continuation Ready',     states:['CONTINUATION_READY'] },
+    { key:'PULLBACK_VALID',         label:'Pullback Valid',         states:['PULLBACK_VALID'] },
+    { key:'PULLBACK_FORMING',       label:'Pullback Forming',       states:['PULLBACK_FORMING'] },
+    { key:'HISTORY',                label:'Recent History',         states:['INVALIDATED','EXPIRED'] },
+  ];
+  var COLOR = {
+    PULLBACK_FORMING:'#64748b', PULLBACK_VALID:'#3b82f6', CONTINUATION_READY:'#f59e0b',
+    SECOND_PUSH_STARTED:'#a855f7', CONTINUATION_CONFIRMED:'#22c55e', INVALIDATED:'#ef4444', EXPIRED:'#6b7280',
+  };
+  var STATE_LABEL = {
+    CONTINUATION_CONFIRMED:'Confirmed', SECOND_PUSH_STARTED:'Second Push', CONTINUATION_READY:'Ready',
+    PULLBACK_VALID:'Pullback Valid', PULLBACK_FORMING:'Pullback Forming', INVALIDATED:'Invalidated', EXPIRED:'Expired',
+  };
+  var STATE_PRIORITY = { CONTINUATION_CONFIRMED:6, SECOND_PUSH_STARTED:5, CONTINUATION_READY:4, PULLBACK_VALID:3, PULLBACK_FORMING:2, INVALIDATED:-1, EXPIRED:-2 };
+
+  var _data = null;
+
+  (function initStateFilter() {
+    var sel = document.getElementById('f-state');
+    STATES.forEach(function (s) { var o = document.createElement('option'); o.value = s; o.textContent = STATE_LABEL[s] || s; sel.appendChild(o); });
+  })();
+
+  async function load(silent) {
+    var body = document.getElementById('hc-body');
+    if (!silent) body.innerHTML = '<div class="hc-loading"><span class="hc-spin"></span> Loading…</div>';
+    try {
+      var res = await fetch('/api/h1-continuation-engine', { headers: { Authorization: 'Bearer ' + TOKEN }, cache: 'no-store' });
+      if (!res.ok) throw new Error(await res.text());
+      _data = await res.json();
+      render();
+    } catch (e) {
+      body.innerHTML = '<div class="hc-empty" style="color:#f87171">Error: ' + (e.message || e) + '</div>';
+    }
+  }
+
+  function passesFilters(s) {
+    var dir = document.getElementById('f-dir').value;
+    var st = document.getElementById('f-state').value;
+    var minScore = parseInt(document.getElementById('f-score').value, 10);
+    var q = document.getElementById('f-pair').value.trim().toUpperCase();
+    if (dir && s.direction !== dir) return false;
+    if (st && s.state !== st) return false;
+    if (!isNaN(minScore) && (s.setupScore || 0) < minScore) return false;
+    if (q && s.pair.replace('/', '').indexOf(q.replace('/', '')) === -1) return false;
+    return true;
+  }
+
+  function sortSetups(arr) {
+    var mode = document.getElementById('f-sort').value;
+    return arr.slice().sort(function (a, b) {
+      if (mode === 'score') return (b.setupScore || 0) - (a.setupScore || 0);
+      if (mode === 'recent') return String(b.timestamps.evaluatedAt).localeCompare(String(a.timestamps.evaluatedAt)) || String(b.timestamps.impulseEnd).localeCompare(String(a.timestamps.impulseEnd));
+      return (STATE_PRIORITY[b.state] || 0) - (STATE_PRIORITY[a.state] || 0) || (b.setupScore || 0) - (a.setupScore || 0);
+    });
+  }
+
+  function kv(k, v) { return '<div class="hc-kv"><span class="hc-k">' + k + '</span><span class="hc-v">' + v + '</span></div>'; }
+
+  function card(s) {
+    var col = COLOR[s.state] || '#64748b';
+    var imp = s.impulse || {};
+    var pb = s.pullback || {};
+    var fail = s.failure || null;
+    var scoreHtml = s.setupScore != null ? ('<span class="hc-score" style="color:' + col + '">' + s.setupScore + '</span> <span class="hc-grade">' + (s.grade || '') + '</span>') : '';
+    var h = '<div class="hc-card" style="border-left-color:' + col + '">';
+    h += '<div class="hc-card-hd"><div><span class="hc-pair">' + s.pair + '</span> <span class="hc-dir ' + s.direction + '">' + s.direction + ' CONTINUATION</span></div><div style="text-align:right"><div class="hc-state" style="color:' + col + '">' + (STATE_LABEL[s.state] || s.state) + '</div>' + scoreHtml + '</div></div>';
+
+    h += '<div class="hc-rows">';
+    h += kv('Impulse', (imp.candleCount || '—') + ' H1 · ' + (imp.sizeAtr != null ? imp.sizeAtr + ' ATR' : '—'));
+    h += kv('Impulse quality', imp.quality != null ? imp.quality : '—');
+    h += kv('Prev aligned', s.previousAlignedImpulseCount != null ? s.previousAlignedImpulseCount : 0);
+    h += kv('Impulse span', fmtT(imp.startTime) + '–' + fmtT(imp.endTime));
+    h += kv('Ref high/low', px(s.referenceHigh) + ' / ' + px(s.referenceLow));
+    if (pb.count != null) {
+      h += kv('Pullback', pb.count + ' H1 · ' + (pb.type || '—'));
+      h += kv('Retrace / speed', (pb.retracePct != null ? pb.retracePct + '%' : '—') + ' · ' + (pb.speedRatio != null ? pb.speedRatio : '—'));
+    }
+    if (fail) {
+      h += kv('Failure', (fail.type || '—') + ' · Q' + (fail.quality != null ? fail.quality : '—'));
+      h += kv('Failure box', px(s.failureBoxHigh) + ' / ' + px(s.failureBoxLow));
+    }
+    if (s.secondPushLevel != null) h += kv('Second-push level', px(s.secondPushLevel));
+    h += kv('Confirmation level', px(s.confirmationLevel));
+    h += '</div>';
+
+    if (s.reasons && s.reasons.length) h += '<div class="hc-reasons">Reasons: ' + s.reasons.join(' · ') + '</div>';
+    h += '<div class="hc-foot"><span class="hc-badge-h1">Completed H1 data only</span><span>Evaluated ' + fmt(s.timestamps.evaluatedAt) + '</span></div>';
+    h += '<details class="hc-details"><summary>Technical details</summary><pre>' + JSON.stringify(s, null, 1) + '</pre></details>';
+    h += '</div>';
+    return h;
+  }
+
+  function render() {
+    var body = document.getElementById('hc-body');
+    var meta = document.getElementById('hc-meta');
+    if (!_data) return;
+    var sum = _data.summary || {};
+    meta.innerHTML = '<span class="hc-badge-h1">H1</span> · ' + _data.evaluated + '/' + _data.pairsRequested + ' pairs evaluated · '
+      + _data.dataErrors + ' data errors · generated ' + fmt(_data.generatedAt)
+      + (_data.persistence && !_data.persistence.ok ? ' · <span style="color:#fbbf24">persistence off</span>' : '');
+
+    var setups = (_data.setups || []).filter(passesFilters);
+    var any = false;
+    var html = '';
+    GROUPS.forEach(function (g) {
+      var group = sortSetups(setups.filter(function (s) { return g.states.indexOf(s.state) !== -1; }));
+      if (!group.length) return;
+      any = true;
+      html += '<div class="hc-group"><div class="hc-group-hd"><span>' + g.label + '</span><span class="hc-group-count">' + group.length + '</span></div>';
+      html += '<div class="hc-cards">' + group.map(card).join('') + '</div></div>';
+    });
+
+    // data-quality warnings
+    var errs = (_data.pairs || []).filter(function (p) { return !p.dataQuality.ok; });
+    if (errs.length) {
+      html += '<div class="hc-group"><div class="hc-group-hd"><span>Data-quality warnings</span><span class="hc-group-count">' + errs.length + '</span></div><div class="hc-warn" style="padding:8px 2px">'
+        + errs.map(function (p) { return p.pair + ': ' + (p.dataQuality.reason || 'error'); }).join(' · ') + '</div></div>';
+    }
+
+    body.innerHTML = any ? html : '<div class="hc-empty">No continuation setups match the current filters.</div>';
+  }
+
+  ['f-dir', 'f-state', 'f-score', 'f-pair', 'f-sort'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', function () { if (_data) render(); });
+  });
+  document.getElementById('f-refresh').addEventListener('click', function () { load(); });
+
+  (async function () {
+    try { if (TOKEN) { var r = await fetch('/api/profile', { headers: { Authorization: 'Bearer ' + TOKEN } }); if (r.ok) { var p = await r.json(); if (p.timezone) { _userTz = p.timezone; try { localStorage.setItem('nfx_tz', _userTz); } catch (_) {} } } } } catch (_) {}
+    load();
+  })();
+  // Hourly refresh aligned with completed H1 candles.
+  setInterval(function () { load(true); }, 60 * 60 * 1000);
+</script>
+</body>
+</html>
