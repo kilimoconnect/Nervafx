@@ -169,9 +169,11 @@ function snap(closes, ohlc) {
   let bars = 0;
   for (let j = i; j >= 0 && s20[j] != null && s50[j] != null && Math.sign(s20[j] - s50[j]) === sign; j--) bars++;
   const slope = s20[i - 4] != null ? Math.sign(e20 - s20[i - 4]) : 0;
+  // 50-EMA slope over the last 15 candles (the pre-reversal trend direction).
+  const slope50_15 = s50[i - 15] != null ? Math.sign(e50 - s50[i - 15]) : 0;
   let atr = null, imp3 = 0, imp3prev = 0;
   if (ohlc) { atr = atr14FromOHLC(ohlc); if (atr) { imp3 = (price - closes[i - 3]) / atr; if (i - 6 >= 0) imp3prev = (closes[i - 3] - closes[i - 6]) / atr; } }
-  return { e20, e50, price, stack: sign, bars, slope, priceVs20: Math.sign(price - e20), atr, imp3, imp3prev };
+  return { e20, e50, price, stack: sign, bars, slope, slope50_15, priceVs20: Math.sign(price - e20), atr, imp3, imp3prev };
 }
 
 module.exports = async function handler(req, res) {
@@ -268,6 +270,10 @@ module.exports = async function handler(req, res) {
       const m30TwoDir = twoM30SameDir(P.m30ohlc, dir);
       // Require a strong dominant impulse: >= +2 ATR (buy) or <= -2 ATR (sell).
       const impulseOK = d.imp3 * dir >= 2;
+      // Confirm a genuine reversal: the dominant 50-EMA must have been sloping
+      // AGAINST the trade over the last 15 candles — down for a BUY, up for a
+      // SELL (i.e. slope sign === -dir).
+      const emaSlopeOK = d.slope50_15 === -dir;
       // Ranking score = 40% state type + 35% energy + 25% ATR impulse.
       const stateW = { SHARP_REVERSAL: 100, NEW_TREND: 78, EXHAUSTION: 50, TREND: 35 }[state];
       const impScore = Math.min(100, Math.abs(d.imp3) * 40);   // ~2.5 ATR = 100
@@ -275,7 +281,7 @@ module.exports = async function handler(req, res) {
 
       pairs.push({
         pair: inst.replace('_', '/'), instrument: inst,
-        direction: dir > 0 ? 'BUY' : 'SELL', state, score, broke, confirmAligned, m30TwoDir, impulseOK,
+        direction: dir > 0 ? 'BUY' : 'SELL', state, score, broke, confirmAligned, m30TwoDir, impulseOK, emaSlopeOK,
         // When the reversal's confirm-TF (M15) EMA20/50 cross happened — the
         // moment continuation monitoring should start from.
         triggerTime: new Date(signalMs - Math.max(1, crossBars) * M15_MS).toISOString(),
@@ -288,8 +294,8 @@ module.exports = async function handler(req, res) {
     }
     const order = { SHARP_REVERSAL: 0, NEW_TREND: 1, REVERSAL_CANDIDATE: 2, EXHAUSTION: 3, TREND: 4 };
     // Break-of-structure gate + drop reversal candidates (not confirmed enough).
-    const shown = pairs.filter(p => p.broke && p.state !== 'REVERSAL_CANDIDATE' && p.energy >= 70 && p.confirmAligned && p.m30TwoDir && p.impulseOK)
-      .sort((a, b) => order[a.state] - order[b.state] || b.score - a.score);   // energy >= 70, aligned 15mHA/M15/M5, 2 consecutive M30 in dir, |impulse| >= 2 ATR
+    const shown = pairs.filter(p => p.broke && p.state !== 'REVERSAL_CANDIDATE' && p.energy >= 70 && p.confirmAligned && p.m30TwoDir && p.impulseOK && p.emaSlopeOK)
+      .sort((a, b) => order[a.state] - order[b.state] || b.score - a.score);   // + dominant 50-EMA sloped against the trade over last 15 candles
 
     res.json({
       generatedAt: new Date(signalMs).toISOString(),
