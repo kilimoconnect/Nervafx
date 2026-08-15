@@ -77,7 +77,10 @@ function chunk(arr, n) {
  * The store's per-run seen-set makes re-emissions across steps cheap no-ops.
  */
 async function persistBuckets(store, buckets, evalMs, cfg, tally) {
-  const signals = [].concat(buckets.confirmed || [], buckets.watch || []);
+  // Only genuinely tradable signals (M15-confirmed AND grade ≥ Confirmed) are
+  // persisted. Watch/pending/unconfirmed/expired are transient and re-derivable
+  // via replay, so they are not stored.
+  const signals = [].concat(buckets.confirmed || []);
   const bump = (kind, res) => { if (res && res.created) tally.created[kind] += 1; else tally.dupes[kind] += 1; };
 
   for (const sig of signals) {
