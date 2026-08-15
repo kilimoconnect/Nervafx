@@ -1,0 +1,119 @@
+'use strict';
+
+/**
+ * NervaFX Liquidity Failure Engine — chronological historical backfill (Portion 8A).
+ *
+ * Steps M15 by M15 from earliestSelectable toward commonLatest, evaluating only
+ * information available at each moment, persisting new levels/events/transitions/
+ * signals idempotently (never duplicating), stamping the config version, and
+ * checkpointing so an interrupted run resumes. Dry-run counts without writing.
+ * Never erases existing history.
+ */
+
+const { M15_MS, PAIRS, CONFIG } = require('./_lfe-constants');
+
+/** In-memory idempotent store — the unit-testable reference implementation. */
+function createMemoryStore() {
+  const levels = new Map();
+  const events = new Map();
+  const transitions = new Map();
+  const signals = new Map();
+  return {
+    levels, events, transitions, signals,
+    saveEvent(e) { const k = e.eventKey; if (events.has(k)) return { created: false }; events.set(k, e); return { created: true }; },
+    appendTransition(t) { const k = t.idempotencyKey || `${t.signalKey}|${t.toState}|${t.occurredAt}`; if (transitions.has(k)) return { created: false }; transitions.set(k, t); return { created: true }; },
+    upsertSignal(s) { const k = s.signalKey || s.eventKey; const existed = signals.has(k); signals.set(k, s); return { created: !existed }; },
+    saveLevel(l) { const k = l.levelKey; if (levels.has(k)) return { created: false }; levels.set(k, l); return { created: true }; },
+    counts() { return { levels: levels.size, events: events.size, transitions: transitions.size, signals: signals.size }; },
+  };
+}
+
+function chunk(arr, n) {
+  const out = [];
+  for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
+  return out;
+}
+
+/** Persist every record a bucket set produced, counting new vs duplicate. */
+function persistBuckets(store, buckets, evalMs, cfg, dryRun, tally) {
+  const signals = [].concat(buckets.confirmed || [], buckets.watch || [], buckets.pendingM15 || []);
+  const eventsOnly = [].concat(buckets.pendingDelayed || [], buckets.accepted || [], buckets.expiredInvalidated || []);
+
+  const bump = (kind, res) => { if (res.created) tally.created[kind] += 1; else tally.dupes[kind] += 1; };
+
+  for (const sig of signals) {
+    const ev = sig.event || {};
+    if (!dryRun) {
+      bump('events', store.saveEvent({ eventKey: sig.eventKey, pair: sig.pair, configVersion: cfg.version, firstSeenMs: evalMs, event: ev }));
+      for (const t of (ev.transitions || [])) bump('transitions', store.appendTransition(t));
+      bump('signals', store.upsertSignal({ signalKey: sig.signalKey || sig.eventKey, pair: sig.pair, direction: sig.direction, setupType: sig.setupType, score: sig.score ? sig.score.total : null, state: ev.state, configVersion: cfg.version, firstSeenMs: evalMs, payload: sig }));
+    } else { tally.created.events += 1; tally.created.signals += 1; }
+  }
+  for (const ev of eventsOnly) {
+    if (!dryRun) {
+      bump('events', store.saveEvent({ eventKey: ev.eventKey, pair: ev.pair, configVersion: cfg.version, firstSeenMs: evalMs, event: ev }));
+      for (const t of (ev.transitions || [])) bump('transitions', store.appendTransition(t));
+    } else { tally.created.events += 1; }
+  }
+}
+
+/**
+ * @param {object} opts
+ *   evaluate:   async (pair, evalMs) => buckets   (inject; defaults to DB scan)
+ *   store:      idempotent store (createMemoryStore or a DB-backed one)
+ *   from, to:   UTC ms bounds (from defaults to checkpoint.nextMs)
+ *   pairs, batchPairs, stepMs, maxSteps, dryRun, checkpoint, cfg
+ */
+async function runBackfill(opts) {
+  const cfg = opts.cfg || CONFIG;
+  const evaluate = opts.evaluate;
+  const store = opts.store;
+  const pairs = opts.pairs && opts.pairs.length ? opts.pairs : PAIRS;
+  const step = opts.stepMs || cfg.backtest.stepMs || M15_MS;
+  const batchPairs = opts.batchPairs || cfg.backtest.batchPairs || 7;
+  const dryRun = !!opts.dryRun;
+  const start = opts.checkpoint && opts.checkpoint.nextMs != null ? opts.checkpoint.nextMs : opts.from;
+  const to = opts.to;
+  const maxSteps = opts.maxSteps || Infinity;
+
+  const tally = {
+    created: { levels: 0, events: 0, transitions: 0, signals: 0 },
+    dupes: { levels: 0, events: 0, transitions: 0, signals: 0 },
+  };
+  const errors = [];
+  let ms = start;
+  let steps = 0;
+
+  while (ms <= to && steps < maxSteps) {
+    for (const batch of chunk(pairs, batchPairs)) {
+      // eslint-disable-next-line no-await-in-loop
+      const results = await Promise.all(batch.map(async (pair) => {
+        try { return { pair, buckets: await evaluate(pair, ms) }; }
+        catch (e) { return { pair, error: e.message }; }
+      }));
+      for (const r of results) {
+        if (r.error) { errors.push({ pair: r.pair, ms, error: r.error }); continue; }
+        persistBuckets(store, r.buckets, ms, cfg, dryRun, tally);
+      }
+    }
+    ms += step;
+    steps += 1;
+  }
+
+  const done = ms > to;
+  return {
+    done,
+    dryRun,
+    configVersion: cfg.version,
+    checkpoint: done ? null : { nextMs: ms, configVersion: cfg.version },
+    progress: {
+      fromMs: start, toMs: to, currentMs: ms, steps,
+      pct: to > start ? Math.min(1, Math.round(((ms - start) / (to - start)) * 1000) / 1000) : 1,
+    },
+    created: tally.created,
+    dupes: tally.dupes,
+    errors,
+  };
+}
+
+module.exports = { createMemoryStore, runBackfill, persistBuckets, chunk };
