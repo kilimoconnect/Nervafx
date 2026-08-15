@@ -97,7 +97,8 @@ function createDbStore(sb, cfg) {
       seenS.add(key);
       const row = {
         signal_key: key, pair: s.pair, direction: s.direction, setup_type: s.setupType,
-        score: s.score, state: s.state, first_seen_at: iso(s.firstSeenMs), updated_at: new Date().toISOString(),
+        score: s.score != null ? Math.round(s.score) : null,   // column is integer
+        state: s.state, first_seen_at: iso(s.firstSeenMs), updated_at: new Date().toISOString(),
         config_version: version, payload: s.payload || s,
       };
       const { error } = await sb.from('liquidity_failure_signals')

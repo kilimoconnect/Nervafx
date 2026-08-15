@@ -127,8 +127,13 @@ async function runBackfill(opts) {
       }));
       for (const r of results) {
         if (r.error) { errors.push({ pair: r.pair, ms, error: r.error }); continue; }
-        // eslint-disable-next-line no-await-in-loop
-        await persistBuckets(store, r.buckets, ms, cfg, tally);
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          await persistBuckets(store, r.buckets, ms, cfg, tally);
+        } catch (e) {
+          // A single bad row must not abort the whole chunk.
+          errors.push({ pair: r.pair, ms, error: e.message });
+        }
       }
     }
     ms += step;
