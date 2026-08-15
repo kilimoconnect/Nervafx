@@ -57,4 +57,47 @@ async function fetchPairData(sb, pair, evalMs) {
   return { h1, m15, d1 };
 }
 
-module.exports = { filterClosedCandles, fetchClosed, fetchPairData };
+/**
+ * Paginated fetch of ALL completed candles in [fromMs, toMs] (close ≤ toMs),
+ * ascending. Pages past Supabase's 1000-row cap by advancing a time cursor.
+ */
+async function fetchClosedRange(sb, inst, timeframe, fromMs, toMs, tfMs) {
+  const client = sb || require('./_db').getClient();
+  const untilISO = new Date(toMs - tfMs).toISOString();       // open ≤ toMs - tf
+  let cursor = new Date(fromMs).toISOString();
+  const all = [];
+  for (;;) {
+    // eslint-disable-next-line no-await-in-loop
+    const { data, error } = await client
+      .from('backtest_candles')
+      .select('time, open, high, low, close')
+      .eq('instrument', inst).eq('timeframe', timeframe).eq('complete', true)
+      .gte('time', cursor).lte('time', untilISO)
+      .order('time', { ascending: true })
+      .limit(1000);
+    if (error) throw error;
+    if (!data || !data.length) break;
+    for (const r of data) all.push(r);
+    if (data.length < 1000) break;
+    cursor = new Date(new Date(data[data.length - 1].time).getTime() + 1).toISOString();
+  }
+  return filterClosedCandles(all, toMs, tfMs);
+}
+
+/**
+ * Full H1/M15/D1 history for one pair across [fromMs, toMs], with enough warm-up
+ * lookback that an evaluation at fromMs already has its trailing window. Fetched
+ * once, then walked in memory by the backfill (no per-step re-fetch).
+ */
+async function fetchPairHistoryRange(sb, pair, fromMs, toMs) {
+  const warmup = Math.max(FETCH_LIMITS.h1 * HOUR_MS, FETCH_LIMITS.m15 * M15_MS);
+  const start = fromMs - warmup;
+  const [h1, m15, d1] = await Promise.all([
+    fetchClosedRange(sb, pair, 'H1', start, toMs, HOUR_MS),
+    fetchClosedRange(sb, pair, 'M15', start, toMs, M15_MS),
+    fetchClosedRange(sb, pair, 'D1', start - 2 * DAY_MS, toMs, DAY_MS),
+  ]);
+  return { h1, m15, d1 };
+}
+
+module.exports = { filterClosedCandles, fetchClosed, fetchPairData, fetchClosedRange, fetchPairHistoryRange };

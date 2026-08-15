@@ -10,7 +10,43 @@
  * Never erases existing history.
  */
 
-const { M15_MS, PAIRS, CONFIG } = require('./_lfe-constants');
+const { HOUR_MS, M15_MS, DAY_MS, FETCH_LIMITS, PAIRS, CONFIG } = require('./_lfe-constants');
+const { evaluatePair } = require('./_lfe-scan');
+
+function emptyBuckets() {
+  return { confirmed: [], watch: [], pendingDelayed: [], pendingM15: [], accepted: [], expiredInvalidated: [] };
+}
+
+/**
+ * Build an evaluate(pair, evalMs) that slices pre-fetched full histories in
+ * memory instead of re-querying the DB every step. Cursors advance monotonically
+ * (the backfill steps chronologically), so the whole walk is amortized O(candles)
+ * rather than O(steps × window). The trailing window matches the live fetch caps,
+ * so results are identical to the per-step fetch path.
+ *
+ * @param {object} histories  { pair: { h1:[], m15:[], d1:[] } } ascending, with warm-up
+ */
+function makeMemoryEvaluate(histories, cfg) {
+  cfg = cfg || CONFIG;
+  const cursors = {};
+  function windowOf(arr, tfMs, evalMs, st, key, limit) {
+    let i = st[key];
+    while (i + 1 < arr.length && arr[i + 1].openMs + tfMs <= evalMs) i += 1;
+    st[key] = i;
+    if (i < 0) return [];
+    return arr.slice(Math.max(0, i - limit + 1), i + 1);
+  }
+  return function evaluate(pair, evalMs) {
+    const h = histories[pair];
+    if (!h) return emptyBuckets();
+    if (!cursors[pair]) cursors[pair] = { h1: -1, m15: -1, d1: -1 };
+    const st = cursors[pair];
+    const h1 = windowOf(h.h1 || [], HOUR_MS, evalMs, st, 'h1', FETCH_LIMITS.h1);
+    const m15 = windowOf(h.m15 || [], M15_MS, evalMs, st, 'm15', FETCH_LIMITS.m15);
+    const d1 = windowOf(h.d1 || [], DAY_MS, evalMs, st, 'd1', FETCH_LIMITS.d1);
+    return evaluatePair(pair, { h1, m15, d1 }, evalMs, { rotation: null }, cfg);
+  };
+}
 
 /** In-memory idempotent store — the unit-testable reference implementation. */
 function createMemoryStore() {
@@ -116,4 +152,4 @@ async function runBackfill(opts) {
   };
 }
 
-module.exports = { createMemoryStore, runBackfill, persistBuckets, chunk };
+module.exports = { createMemoryStore, runBackfill, persistBuckets, chunk, makeMemoryEvaluate, emptyBuckets };

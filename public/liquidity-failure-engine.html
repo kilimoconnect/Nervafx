@@ -174,7 +174,7 @@
 
   // ── Coverage ────────────────────────────────────────────────────────────
   async function loadCoverage(){
-    var res = await fetch('/api/liquidity-failure-coverage', auth());
+    var res = await fetch('/api/liquidity-failure?action=coverage', auth());
     if(!res.ok) throw new Error(await res.text());
     COV = await res.json();
     COV.earliestMs = new Date(COV.earliestSelectable).getTime();
@@ -198,9 +198,9 @@
 
   // ── Snapshot ────────────────────────────────────────────────────────────
   function buildUrl(){
-    if(MODE==='latest') return '/api/liquidity-failure-snapshot?mode=latest_available&timezone='+encodeURIComponent(tz());
+    if(MODE==='latest') return '/api/liquidity-failure?action=snapshot&mode=latest_available&timezone='+encodeURIComponent(tz());
     var iso = new Date(SELECTED_MS).toISOString();
-    return '/api/liquidity-failure-snapshot?at='+encodeURIComponent(iso)+'&timezone='+encodeURIComponent(tz());
+    return '/api/liquidity-failure?action=snapshot&at='+encodeURIComponent(iso)+'&timezone='+encodeURIComponent(tz());
   }
   function syncUrl(){
     var u = new URL(window.location.href);
@@ -411,7 +411,7 @@
     var tb=document.querySelector('#lf-histtable tbody');
     tb.innerHTML='<tr><td colspan="7" style="color:var(--text-dim)">Loading…</td></tr>';
     try{
-      var res=await fetch('/api/liquidity-failure-history?'+q.toString(), auth());
+      var res=await fetch('/api/liquidity-failure?action=history&'+q.toString(), auth());
       if(!res.ok) throw new Error(await res.text());
       var d=await res.json(); HIST=d.items||[]; renderHistory();
     }catch(e){ tb.innerHTML='<tr><td colspan="7" style="color:#f87171">'+(e.message||e)+'</td></tr>'; }

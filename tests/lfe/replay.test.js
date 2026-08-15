@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 
 const { resolveSnapshotTime, evaluatePair } = require('../../api/_lfe-scan');
+const { makeMemoryEvaluate } = require('../../api/_lfe-backfill');
 const { filterClosedCandles } = require('../../api/_lfe-data');
 const { confirmM15 } = require('../../api/_lfe-mss');
 const { CONFIG, MSS_STATUS, HOUR_MS, M15_MS } = require('../../api/_lfe-constants');
@@ -107,4 +108,22 @@ test('evaluatePair is deterministic and buckets an unconfirmed failure to watch'
   assert.equal(a.error, null);
   assert.equal(a.confirmed.length, 0);    // no M15 data → not tradable
   assert.ok(a.watch.length >= 1);         // event stays visible as a watch candidate
+});
+
+test('the in-memory backfill walker matches the per-step evaluation', () => {
+  const hist = { EUR_USD: { h1: h1Fixture(), m15: [], d1: [] } };
+  const evalMs = h1Fixture()[20].openMs + HOUR_MS;
+  const mem = makeMemoryEvaluate(hist, smallCfg);
+  const walked = mem('EUR_USD', evalMs);
+  const direct = evaluatePair('EUR_USD', { h1: h1Fixture(), m15: [], d1: [] }, evalMs, { rotation: null }, smallCfg);
+  assert.deepEqual(walked, direct);       // identical to the DB-fetch path
+});
+
+test('the walker slices strictly as-of: the failure candle is invisible before it closes', () => {
+  const hist = { EUR_USD: { h1: h1Fixture(), m15: [], d1: [] } };
+  const mem = makeMemoryEvaluate(hist, smallCfg);
+  const before = mem('EUR_USD', h1Fixture()[20].openMs);        // failure candle not yet closed
+  assert.equal(before.watch.length, 0);
+  const after = mem('EUR_USD', h1Fixture()[20].openMs + HOUR_MS); // now closed
+  assert.ok(after.watch.length >= 1);
 });
