@@ -59,8 +59,13 @@ function stateAt(transitions, evalIso) {
  */
 function createDbStore(sb, cfg) {
   const version = (cfg && cfg.version) || 'lfe-config-v1';
+  // Per-run seen-sets: a setup re-emitted at every step is written to the DB only
+  // once, collapsing millions of re-emissions into unique upserts.
+  const seenE = new Set(), seenT = new Set(), seenS = new Set();
   return {
     async saveEvent(e) {
+      if (seenE.has(e.eventKey)) return { created: false };
+      seenE.add(e.eventKey);
       const ev = e.event || {};
       const row = {
         event_key: e.eventKey, pair: e.pair, failed_side: ev.failedSide, direction: ev.direction,
@@ -74,6 +79,8 @@ function createDbStore(sb, cfg) {
     },
     async appendTransition(t) {
       const key = t.idempotencyKey || transitionIdempotencyKey(t.signalKey, t.toState, t.occurredAt);
+      if (seenT.has(key)) return { created: false };
+      seenT.add(key);
       const row = {
         signal_key: t.signalKey, from_state: t.fromState || null, to_state: t.toState, reason: t.reason || null,
         occurred_at: t.occurredAt, evaluation_time: t.evaluationTime || t.occurredAt,
@@ -85,18 +92,21 @@ function createDbStore(sb, cfg) {
       return { created: true };
     },
     async upsertSignal(s) {
+      const key = s.signalKey || s.eventKey;
+      if (seenS.has(key)) return { created: false };
+      seenS.add(key);
       const row = {
-        signal_key: s.signalKey || s.eventKey, pair: s.pair, direction: s.direction, setup_type: s.setupType,
+        signal_key: key, pair: s.pair, direction: s.direction, setup_type: s.setupType,
         score: s.score, state: s.state, first_seen_at: iso(s.firstSeenMs), updated_at: new Date().toISOString(),
         config_version: version, payload: s.payload || s,
       };
       const { error } = await sb.from('liquidity_failure_signals')
-        .upsert(row, { onConflict: 'signal_key' });
+        .upsert(row, { onConflict: 'signal_key', ignoreDuplicates: true });
       if (error) throw error;
       return { created: true };
     },
     async saveLevel() { return { created: true }; }, // levels persisted by the scan path
-    counts() { return {}; },
+    counts() { return { events: seenE.size, transitions: seenT.size, signals: seenS.size }; },
   };
 }
 

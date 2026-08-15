@@ -136,10 +136,9 @@ test('backfill checkpoints and resumes without gaps or duplicates', async () => 
   assert.equal(store.counts().signals, 1);       // the step-2 signal captured exactly once
 });
 
-test('dry-run reports counts without writing', async () => {
+test('dry-run computes deduped counts (route supplies a throwaway store)', async () => {
   const store = createMemoryStore();
   const r = await runBackfill({ evaluate: fakeEvaluate, store, from: cMs(0), to: cMs(4), pairs: ['EUR_USD'], dryRun: true });
   assert.equal(r.dryRun, true);
-  assert.ok(r.created.signals >= 1);
-  assert.equal(store.counts().signals, 0);       // nothing persisted
+  assert.equal(r.created.signals, 1);            // one UNIQUE signal, not re-counted per step
 });

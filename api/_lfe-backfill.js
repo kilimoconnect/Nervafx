@@ -70,26 +70,21 @@ function chunk(arr, n) {
   return out;
 }
 
-/** Persist every record a bucket set produced, counting new vs duplicate. */
-function persistBuckets(store, buckets, evalMs, cfg, dryRun, tally) {
-  const signals = [].concat(buckets.confirmed || [], buckets.watch || [], buckets.pendingM15 || []);
-  const eventsOnly = [].concat(buckets.pendingDelayed || [], buckets.accepted || [], buckets.expiredInvalidated || []);
-
-  const bump = (kind, res) => { if (res.created) tally.created[kind] += 1; else tally.dupes[kind] += 1; };
+/**
+ * Persist the M15-confirmed setups a bucket set produced, deduped by key so each
+ * unique setup is written once across the whole run. Pending/accepted/expired
+ * events are transient and re-derivable via replay, so they are NOT stored here.
+ * The store's per-run seen-set makes re-emissions across steps cheap no-ops.
+ */
+async function persistBuckets(store, buckets, evalMs, cfg, tally) {
+  const signals = [].concat(buckets.confirmed || [], buckets.watch || []);
+  const bump = (kind, res) => { if (res && res.created) tally.created[kind] += 1; else tally.dupes[kind] += 1; };
 
   for (const sig of signals) {
     const ev = sig.event || {};
-    if (!dryRun) {
-      bump('events', store.saveEvent({ eventKey: sig.eventKey, pair: sig.pair, configVersion: cfg.version, firstSeenMs: evalMs, event: ev }));
-      for (const t of (ev.transitions || [])) bump('transitions', store.appendTransition(t));
-      bump('signals', store.upsertSignal({ signalKey: sig.signalKey || sig.eventKey, pair: sig.pair, direction: sig.direction, setupType: sig.setupType, score: sig.score ? sig.score.total : null, state: ev.state, configVersion: cfg.version, firstSeenMs: evalMs, payload: sig }));
-    } else { tally.created.events += 1; tally.created.signals += 1; }
-  }
-  for (const ev of eventsOnly) {
-    if (!dryRun) {
-      bump('events', store.saveEvent({ eventKey: ev.eventKey, pair: ev.pair, configVersion: cfg.version, firstSeenMs: evalMs, event: ev }));
-      for (const t of (ev.transitions || [])) bump('transitions', store.appendTransition(t));
-    } else { tally.created.events += 1; }
+    bump('events', await store.saveEvent({ eventKey: sig.eventKey, pair: sig.pair, configVersion: cfg.version, firstSeenMs: evalMs, event: ev }));
+    for (const t of (ev.transitions || [])) bump('transitions', await store.appendTransition(t));
+    bump('signals', await store.upsertSignal({ signalKey: sig.signalKey || sig.eventKey, pair: sig.pair, direction: sig.direction, setupType: sig.setupType, score: sig.score ? sig.score.total : null, state: ev.state, configVersion: cfg.version, firstSeenMs: evalMs, payload: sig }));
   }
 }
 
@@ -129,7 +124,8 @@ async function runBackfill(opts) {
       }));
       for (const r of results) {
         if (r.error) { errors.push({ pair: r.pair, ms, error: r.error }); continue; }
-        persistBuckets(store, r.buckets, ms, cfg, dryRun, tally);
+        // eslint-disable-next-line no-await-in-loop
+        await persistBuckets(store, r.buckets, ms, cfg, tally);
       }
     }
     ms += step;
