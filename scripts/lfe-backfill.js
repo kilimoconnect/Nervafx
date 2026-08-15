@@ -29,20 +29,38 @@ function arg(name, def) {
 const BASE = String(arg('base', 'https://www.nervafx.com')).replace(/\/$/, '');
 const KEY = arg('key', process.env.LFE_ADMIN_KEY);
 const DRY = !!arg('dry', false);
-const CHUNK_DAYS = arg('chunkDays', '14');
+const CHUNK_DAYS = arg('chunkDays', '3');
+const STEP_MIN = arg('stepMinutes', '60');
 
 if (!KEY) { console.error('Missing --key (or LFE_ADMIN_KEY env).'); process.exit(1); }
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 async function post(path) {
-  const res = await fetch(BASE + path, { method: 'POST', headers: { 'x-lfe-admin': KEY } });
-  const text = await res.text();
-  let json; try { json = JSON.parse(text); } catch (_) { json = { raw: text }; }
-  if (!res.ok) throw new Error(`${res.status} ${path} :: ${text.slice(0, 300)}`);
-  return json;
+  let lastErr;
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    try {
+      const res = await fetch(BASE + path, { method: 'POST', headers: { 'x-lfe-admin': KEY } });
+      const text = await res.text();
+      let json; try { json = JSON.parse(text); } catch (_) { json = { raw: text }; }
+      if (!res.ok) throw new Error(`${res.status} ${path} :: ${text.slice(0, 300)}`);
+      return json;
+    } catch (e) {
+      lastErr = e;
+      // Retry transient network drops (often a chunk that ran long server-side).
+      if (attempt < 4 && /fetch failed|ECONNRESET|ETIMEDOUT|socket hang up|502|503|504/i.test(e.message)) {
+        console.log(`    (retry ${attempt}/3 after transient error: ${e.message.slice(0, 60)})`);
+        await sleep(4000 * attempt);
+        continue;
+      }
+      throw e;
+    }
+  }
+  throw lastErr;
 }
 
 function qs(extra) {
-  const p = new URLSearchParams({ action: 'backfill', chunkDays: String(CHUNK_DAYS) });
+  const p = new URLSearchParams({ action: 'backfill', chunkDays: String(CHUNK_DAYS), stepMinutes: String(STEP_MIN) });
   if (DRY) p.set('dryRun', '1');
   if (arg('from')) p.set('from', arg('from'));
   if (arg('to')) p.set('to', arg('to'));

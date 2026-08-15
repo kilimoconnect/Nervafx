@@ -151,6 +151,9 @@ async function backfill(req, res, sb) {
   const pairs = q.pair ? [q.pair] : PAIRS;
   const chunkFrom = q.checkpoint ? parseInt(q.checkpoint, 10) : rangeFrom;
   const chunkTo = Math.min(chunkFrom + chunkMs, rangeTo);
+  // Backfill steps hourly by default (4x cheaper than M15); signals persist
+  // across steps and dedupe by key, so hourly still captures them.
+  const stepMs = Math.max(1, q.stepMinutes ? parseInt(q.stepMinutes, 10) : 60) * 60 * 1000;
   if (chunkFrom > rangeTo) return res.json({ rangeDone: true, message: 'checkpoint past range end' });
 
   const histories = {};
@@ -162,15 +165,16 @@ async function backfill(req, res, sb) {
   const store = dryRun ? createMemoryStore() : createDbStore(sb, CONFIG);
   const evaluate = makeMemoryEvaluate(histories, CONFIG);
   const result = await runBackfill({
-    evaluate, store, from: chunkFrom, to: chunkTo, dryRun, pairs, cfg: CONFIG,
+    evaluate, store, from: chunkFrom, to: chunkTo, dryRun, pairs, cfg: CONFIG, stepMs,
     batchPairs: q.batchPairs ? parseInt(q.batchPairs, 10) : CONFIG.backtest.batchPairs,
   });
   const rangeDone = chunkTo >= rangeTo;
   return res.json({
     chunk: { fromMs: chunkFrom, toMs: chunkTo, from: new Date(chunkFrom).toISOString(), to: new Date(chunkTo).toISOString() },
     rangeDone,
-    checkpoint: rangeDone ? null : { nextMs: chunkTo + M15_MS },
+    checkpoint: rangeDone ? null : { nextMs: chunkTo + stepMs },
     rangeProgressPct: rangeTo > rangeFrom ? Math.round(((chunkTo - rangeFrom) / (rangeTo - rangeFrom)) * 1000) / 1000 : 1,
+    stepMinutes: stepMs / 60000, chunkDays: chunkMs / DAY,
     created: result.created, dupes: result.dupes, steps: result.progress.steps,
     evalErrors: result.errors, fetchErrors, dryRun, configVersion: CONFIG.version,
   });
