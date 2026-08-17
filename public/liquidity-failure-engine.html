@@ -425,7 +425,7 @@
       if(av<bv) return -1*HIST_SORT.dir; if(av>bv) return 1*HIST_SORT.dir; return 0;
     });
     var tb=document.querySelector('#lf-histtable tbody');
-    if(!rows.length){ tb.innerHTML='<tr><td colspan="7" style="color:var(--text-dim)">No persisted signals in range. Run the historical backfill to populate.</td></tr>'; return; }
+    if(!rows.length){ tb.innerHTML='<tr><td colspan="7" style="color:var(--text-dim)">No signals in this date range — widen the dates above.</td></tr>'; return; }
     tb.innerHTML=rows.map(function(r){
       return '<tr><td>'+fmtLocal(new Date(r.first_seen_at).getTime())+'</td><td>'+r.pair+'</td><td>'+r.direction+'</td><td>'+((r.payload||{}).failedSide||'—')+'</td><td>'+r.setup_type+'</td><td>'+r.state+'</td><td>'+(r.score!=null?r.score:'—')+'</td></tr>';
     }).join('');
@@ -443,13 +443,32 @@
   document.getElementById('sel-tz').onchange=function(){ try{localStorage.setItem('nfx_tz',document.getElementById('sel-tz').value);}catch(_){} if(COV) loadSnapshot(); if(MODE==='historical') syncSelectorInputs(); };
   document.getElementById('h-apply').onclick=loadHistory;
 
+  // Fast default landing: recent signals from the DB (History); the heavy live
+  // 28-pair snapshot is opt-in via a button or the mode tabs.
+  function defaultView(){
+    MODE='latest';
+    document.getElementById('mode-latest').classList.add('active');
+    document.getElementById('mode-hist').classList.remove('active');
+    document.getElementById('lf-selector').classList.remove('show');
+    var to=new Date(); var from=new Date(to.getTime()-7*24*3600*1000);
+    document.getElementById('h-from').value=from.toISOString().slice(0,10);
+    document.getElementById('h-to').value=to.toISOString().slice(0,10);
+    loadHistory();
+    document.getElementById('lf-heading').innerHTML='';
+    document.getElementById('lf-summary').innerHTML='';
+    document.getElementById('lf-body').innerHTML='<div class="lf-empty">Recent signals are listed in <b>History</b> below.'
+      +'<div style="margin-top:12px"><button class="lf-btn" id="run-latest">Load latest live snapshot →</button>'
+      +'<div style="margin-top:6px;font-size:11px;color:var(--text-dim)">Scans all 28 pairs live — takes a few seconds. Or use <b>Historical Replay</b> to evaluate a past date/time.</div></div></div>';
+    var b=document.getElementById('run-latest'); if(b) b.onclick=function(){ SELECTED_MS=null; setMode('latest'); };
+  }
+
   (async function(){
     try { if(TOKEN){ var r=await fetch('/api/profile', auth()); if(r.ok){ var p=await r.json(); if(p.timezone){ USER_TZ=p.timezone; try{localStorage.setItem('nfx_tz',USER_TZ);}catch(_){}}}} } catch(_){}
     try { await loadCoverage(); } catch(e){ document.getElementById('lf-coverage').innerHTML='<span style="color:#f87171">Coverage error: '+(e.message||e)+'</span>'; return; }
     // Restore a shared/refreshed historical selection from the URL — never auto-jump to Latest.
     var atParam=new URL(window.location.href).searchParams.get('at');
     if(atParam){ var ms=new Date(atParam).getTime(); if(!isNaN(ms)){ SELECTED_MS=clampMs(snap15(ms)); setMode('historical'); loadHistory(); return; } }
-    setMode('latest'); loadHistory();
+    defaultView();
   })();
 </script>
 </body>

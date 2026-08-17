@@ -177,10 +177,12 @@ async function scanSnapshot(sb, ctx, coverage, opts) {
   opts = opts || {};
   const cfg = opts.cfg || CONFIG;
   const evalMs = ctx.evaluationMs;
-  const isHistorical = evalMs < coverage.latestAvailable;
   const cacheKey = snapKey(evalMs, cfg.version);
 
-  if (isHistorical && _snapCache.has(cacheKey)) return _snapCache.get(cacheKey);
+  // Cache every snapshot by (evalMs, version). Historical moments are immutable;
+  // the latest-available evalMs is stable until coverage advances (hourly), so
+  // caching it makes repeated loads instant without serving stale data.
+  if (_snapCache.has(cacheKey)) return _snapCache.get(cacheKey);
 
   const pairs = opts.pairs && opts.pairs.length ? opts.pairs : PAIRS;
   const perPair = [];
@@ -239,10 +241,8 @@ async function scanSnapshot(sb, ctx, coverage, opts) {
   body.confirmedSignals = applyCorrelationFilter(body.confirmedSignals)
     .sort((a, b) => ((b.score ? b.score.total : 0) - (a.score ? a.score.total : 0)));
 
-  if (isHistorical) {
-    if (_snapCache.size >= SNAP_CACHE_MAX) _snapCache.delete(_snapCache.keys().next().value);
-    _snapCache.set(cacheKey, body);
-  }
+  if (_snapCache.size >= SNAP_CACHE_MAX) _snapCache.delete(_snapCache.keys().next().value);
+  _snapCache.set(cacheKey, body);
   return body;
 }
 
