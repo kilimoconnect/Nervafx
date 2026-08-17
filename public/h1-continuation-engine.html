@@ -20,15 +20,27 @@
   .hc-sub b { color: #94a3b8; }
   .hc-meta { text-align: center; padding: 0 20px 6px; font-size: 10px; color: var(--text-dim); }
   .hc-badge-h1 { display:inline-block; padding:1px 7px; border-radius:4px; background:rgba(167,139,250,0.14); color:#a78bfa; font-weight:700; font-size:10px; }
+  /* history toolbar */
+  .hc-histbar { display:flex; align-items:center; justify-content:center; gap:6px; padding:8px 16px; flex-wrap:wrap; border-bottom:1px solid var(--border); }
   .hc-filters { display:flex; align-items:center; justify-content:center; gap:8px; padding:8px 16px; flex-wrap:wrap; }
   .hc-input { padding:5px 10px; border-radius:7px; font-size:11px; background:rgba(255,255,255,0.04); border:1px solid var(--border); color:var(--text-muted); color-scheme:dark; }
   .hc-btn { padding:5px 12px; border-radius:7px; font-size:11px; font-weight:700; background:rgba(167,139,250,0.2); border:1px solid rgba(167,139,250,0.4); color:#a78bfa; cursor:pointer; }
+  .hc-btn.ghost { background:rgba(255,255,255,0.04); border-color:var(--border); color:var(--text-muted); }
+  .hc-btn.live { background:rgba(34,197,94,0.18); border-color:rgba(34,197,94,0.45); color:#4ade80; }
+  .hc-btn:disabled { opacity:0.35; cursor:not-allowed; }
+  /* historical banner */
+  .hc-banner { display:none; max-width:1120px; margin:10px auto 0; padding:10px 14px; border-radius:10px; background:rgba(251,191,36,0.10); border:1px solid rgba(251,191,36,0.35); }
+  .hc-banner.show { display:block; }
+  .hc-banner .tag { font-size:11px; font-weight:800; letter-spacing:0.8px; color:#fbbf24; }
+  .hc-banner .lines { margin-top:4px; font-size:12px; color:#e2e8f0; }
+  .hc-banner .lines b { color:#fbbf24; }
   .hc-wrap { max-width: 1120px; margin: 0 auto; padding: 8px 14px 60px; }
   .hc-group { margin: 18px 0 6px; }
   .hc-group-hd { display:flex; align-items:center; gap:10px; font-size:12px; font-weight:800; letter-spacing:0.4px; text-transform:uppercase; padding:6px 2px; border-bottom:1px solid var(--border); }
   .hc-group-count { font-size:11px; color:var(--text-dim); font-weight:600; }
   .hc-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:12px; margin-top:10px; }
   .hc-card { background:#0b0f18; border:1px solid var(--border); border-left-width:4px; border-radius:10px; padding:12px 14px; }
+  .hc-card.flash { outline:2px solid #a78bfa; }
   .hc-card-hd { display:flex; align-items:center; justify-content:space-between; gap:8px; }
   .hc-pair { font-size:16px; font-weight:800; color:#fff; }
   .hc-dir { font-size:11px; font-weight:800; letter-spacing:0.4px; padding:2px 8px; border-radius:5px; }
@@ -38,9 +50,9 @@
   .hc-score { font-family:monospace; font-weight:800; font-size:15px; }
   .hc-grade { font-size:10px; font-weight:700; color:var(--text-dim); }
   .hc-rows { margin-top:10px; display:grid; grid-template-columns:1fr 1fr; gap:2px 14px; }
-  .hc-kv { display:flex; justify-content:space-between; font-size:11px; padding:1px 0; }
+  .hc-kv { display:flex; justify-content:space-between; font-size:11px; padding:1px 0; gap:8px; }
   .hc-k { color:var(--text-dim); }
-  .hc-v { color:#e2e8f0; font-weight:600; }
+  .hc-v { color:#e2e8f0; font-weight:600; text-align:right; }
   .hc-reasons { margin-top:8px; font-size:10px; color:var(--text-dim); }
   .hc-warn { margin-top:6px; font-size:10px; color:#fbbf24; }
   .hc-foot { margin-top:8px; display:flex; align-items:center; justify-content:space-between; font-size:10px; color:var(--text-dim); }
@@ -50,6 +62,14 @@
   .hc-empty, .hc-loading { text-align:center; color:var(--text-muted); padding:36px; }
   .hc-spin { display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,0.2);border-top-color:#a78bfa;border-radius:50%;animation:hcspin 0.7s linear infinite;vertical-align:middle; }
   @keyframes hcspin { to { transform: rotate(360deg); } }
+  /* timeline */
+  .hc-tl { max-width:1120px; margin:0 auto; }
+  .hc-tl-row { display:flex; align-items:center; gap:10px; padding:7px 10px; border-bottom:1px solid rgba(255,255,255,0.05); font-size:12px; cursor:pointer; }
+  .hc-tl-row:hover { background:rgba(255,255,255,0.03); }
+  .hc-tl-time { font-family:monospace; color:#94a3b8; min-width:120px; }
+  .hc-tl-pair { font-weight:800; color:#fff; min-width:90px; }
+  .hc-tl-state { font-weight:700; }
+  .hc-tl-score { margin-left:auto; font-family:monospace; color:var(--text-dim); }
   @media (max-width:640px){ .hc-cards{grid-template-columns:1fr;} .hc-rows{grid-template-columns:1fr;} }
 </style>
 </head>
@@ -68,14 +88,30 @@
   <b>Impulse → pullback → two-candle failure → continuation</b>, on <b>completed H1 candles only</b>.
   States are analytical classifications — <b>not entries or trade signals</b>. No stops, targets, sizing or execution.
 </div>
-<div class="hc-meta" id="hc-meta"></div>
 
-<div class="hc-filters">
+<!-- History toolbar -->
+<div class="hc-histbar">
+  <input type="date" id="h-date" class="hc-input" aria-label="Snapshot date" />
+  <select id="h-time" class="hc-input" aria-label="Snapshot time (H1)"></select>
+  <select id="h-tz" class="hc-input" aria-label="Timezone"></select>
+  <button id="h-prev" class="hc-btn ghost" title="Previous H1">‹ Prev H1</button>
+  <button id="h-next" class="hc-btn ghost" title="Next H1">Next H1 ›</button>
+  <button id="h-apply" class="hc-btn">Snapshot</button>
+  <button id="h-day" class="hc-btn ghost" title="Full-day transition timeline">View Full Day</button>
+  <button id="h-live" class="hc-btn live" title="Return to live mode">● Go Live</button>
+</div>
+
+<div class="hc-meta" id="hc-meta"></div>
+<div class="hc-banner" id="hc-banner"></div>
+
+<!-- live/snapshot filters -->
+<div class="hc-filters" id="hc-filters">
   <select id="f-dir" class="hc-input"><option value="">All directions</option><option value="BUY">BUY only</option><option value="SELL">SELL only</option></select>
   <select id="f-state" class="hc-input"><option value="">All states</option></select>
   <input id="f-score" type="number" class="hc-input" style="width:110px" placeholder="Min score" min="0" max="100" />
   <input id="f-pair" type="text" class="hc-input" style="width:110px" placeholder="Pair search" />
   <select id="f-sort" class="hc-input"><option value="state">Sort: State</option><option value="score">Sort: Score ↓</option><option value="recent">Sort: Recent</option></select>
+  <label style="font-size:11px;color:var(--text-dim)"><input type="checkbox" id="f-transonly" /> Transitions only</label>
   <button id="f-refresh" class="hc-btn">Refresh</button>
 </div>
 
@@ -84,50 +120,149 @@
 <script>
   var TOKEN = localStorage.getItem('nfx_token') || '';
   var _userTz = localStorage.getItem('nfx_tz') || 'auto';
-  function _tz() { return (_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC'); }
-  function fmt(iso) { if (!iso) return '—'; return new Date(iso).toLocaleString('en-GB', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit', timeZone:_tz() }); }
-  function fmtT(iso) { if (!iso) return '—'; return new Date(iso).toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit', timeZone:_tz() }); }
+  var H1 = 3600000;
+  var DEFAULT_TZ = 'Africa/Dar_es_Salaam';
+
+  // HIST: { active, atMs } ; DAYDATA holds a loaded full-day replay (for state-entered lookups).
+  var HIST = { active: false, atMs: null };
+  var DAYDATA = null;
+  var VIEW = 'snapshot'; // 'snapshot' | 'day'
+  var _data = null;
+  var BOUNDS = { fromMs: null, toMs: null };
+  var _liveTimer = null;
+
+  function histTz() { var e = document.getElementById('h-tz'); return (e && e.value) || DEFAULT_TZ; }
+  function dispTz() { return HIST.active ? histTz() : ((_userTz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : (_userTz || 'UTC')); }
+  function auth() { return { headers: { Authorization: 'Bearer ' + TOKEN }, cache: 'no-store' }; }
+  function fmt(iso) { if (!iso) return '—'; return new Date(iso).toLocaleString('en-GB', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit', timeZone:dispTz() }); }
+  function fmtT(iso) { if (!iso) return '—'; return new Date(iso).toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit', timeZone:dispTz() }); }
   function px(v) { return v == null ? '—' : (+v).toFixed(5); }
 
-  var STATES = ['CONTINUATION_CONFIRMED','SECOND_PUSH_STARTED','CONTINUATION_READY','PULLBACK_VALID','PULLBACK_FORMING','INVALIDATED','EXPIRED'];
+  // DST-safe wall→UTC (mirrors api/_h1c-time.js) + H1 snap.
+  function zonedWallToUtcMs(y,mo,d,h,mi,tz){ var a=Date.UTC(y,mo-1,d,h,mi,0); var dtf=new Intl.DateTimeFormat('en-US',{timeZone:tz,hour12:false,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'}); var p={}; dtf.formatToParts(new Date(a)).forEach(function(x){if(x.type!=='literal')p[x.type]=x.value;}); var hh=(+p.hour)%24; var seen=Date.UTC(+p.year,+p.month-1,+p.day,hh,+p.minute,+p.second); return a+(a-seen); }
+  function snapH1(ms){ return Math.floor(ms/H1)*H1; }
+  function partsInTz(ms, tz){ var dtf=new Intl.DateTimeFormat('en-GB',{timeZone:tz,hour12:false,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}); var o={}; dtf.formatToParts(new Date(ms)).forEach(function(x){if(x.type!=='literal')o[x.type]=x.value;}); return o; }
+
+  var STATES = ['CONTINUATION_CONFIRMED','SECOND_PUSH_STARTED','CONTINUATION_READY','PULLBACK_VALID','PULLBACK_FORMING','IMPULSE_LOCKED','INVALIDATED','EXPIRED'];
   var GROUPS = [
     { key:'CONTINUATION_CONFIRMED', label:'Continuation Confirmed', states:['CONTINUATION_CONFIRMED'] },
     { key:'SECOND_PUSH_STARTED',    label:'Second Push Started',    states:['SECOND_PUSH_STARTED'] },
     { key:'CONTINUATION_READY',     label:'Continuation Ready',     states:['CONTINUATION_READY'] },
     { key:'PULLBACK_VALID',         label:'Pullback Valid',         states:['PULLBACK_VALID'] },
     { key:'PULLBACK_FORMING',       label:'Pullback Forming',       states:['PULLBACK_FORMING'] },
+    { key:'IMPULSE_LOCKED',         label:'Impulse Locked',         states:['IMPULSE_LOCKED'] },
     { key:'HISTORY',                label:'Recent History',         states:['INVALIDATED','EXPIRED'] },
   ];
-  var COLOR = {
-    PULLBACK_FORMING:'#64748b', PULLBACK_VALID:'#3b82f6', CONTINUATION_READY:'#f59e0b',
-    SECOND_PUSH_STARTED:'#a855f7', CONTINUATION_CONFIRMED:'#22c55e', INVALIDATED:'#ef4444', EXPIRED:'#6b7280',
+  var COLOR = { PULLBACK_FORMING:'#64748b', PULLBACK_VALID:'#3b82f6', CONTINUATION_READY:'#f59e0b', SECOND_PUSH_STARTED:'#a855f7', CONTINUATION_CONFIRMED:'#22c55e', IMPULSE_LOCKED:'#818cf8', INVALIDATED:'#ef4444', EXPIRED:'#6b7280' };
+  var STATE_LABEL = { CONTINUATION_CONFIRMED:'Confirmed', SECOND_PUSH_STARTED:'Second Push', CONTINUATION_READY:'Ready', PULLBACK_VALID:'Pullback Valid', PULLBACK_FORMING:'Pullback Forming', IMPULSE_LOCKED:'Impulse Locked', INVALIDATED:'Invalidated', EXPIRED:'Expired' };
+  var STATE_PRIORITY = { CONTINUATION_CONFIRMED:6, SECOND_PUSH_STARTED:5, CONTINUATION_READY:4, PULLBACK_VALID:3, PULLBACK_FORMING:2, IMPULSE_LOCKED:1, INVALIDATED:-1, EXPIRED:-2 };
+  // Factual next lifecycle step (describes the state machine, not a trade call).
+  var NEXT_COND = {
+    IMPULSE_LOCKED:'Awaiting a valid pullback (6–12 H1 candles).',
+    PULLBACK_FORMING:'Pullback must reach 6 valid candles without invalidating.',
+    PULLBACK_VALID:'Awaiting a two-candle failure at the pullback extreme.',
+    CONTINUATION_READY:'Awaiting a second push / break of the confirmation level.',
+    SECOND_PUSH_STARTED:'Awaiting a confirmed close beyond the confirmation level.',
+    CONTINUATION_CONFIRMED:'Continuation confirmed.', INVALIDATED:'Setup invalidated.', EXPIRED:'Setup expired.'
   };
-  var STATE_LABEL = {
-    CONTINUATION_CONFIRMED:'Confirmed', SECOND_PUSH_STARTED:'Second Push', CONTINUATION_READY:'Ready',
-    PULLBACK_VALID:'Pullback Valid', PULLBACK_FORMING:'Pullback Forming', INVALIDATED:'Invalidated', EXPIRED:'Expired',
-  };
-  var STATE_PRIORITY = { CONTINUATION_CONFIRMED:6, SECOND_PUSH_STARTED:5, CONTINUATION_READY:4, PULLBACK_VALID:3, PULLBACK_FORMING:2, INVALIDATED:-1, EXPIRED:-2 };
-
-  var _data = null;
 
   (function initStateFilter() {
     var sel = document.getElementById('f-state');
     STATES.forEach(function (s) { var o = document.createElement('option'); o.value = s; o.textContent = STATE_LABEL[s] || s; sel.appendChild(o); });
   })();
+  (function initHistControls() {
+    var t = document.getElementById('h-time');
+    for (var h = 0; h < 24; h++) { var v = ('0'+h).slice(-2)+':00'; var o=document.createElement('option'); o.value=v; o.textContent=v; t.appendChild(o); }
+    var tzs = ['Africa/Dar_es_Salaam','UTC','Europe/London','America/New_York','Asia/Tokyo','Australia/Sydney'];
+    var ts = document.getElementById('h-tz');
+    tzs.forEach(function (z) { var o=document.createElement('option'); o.value=z; o.textContent=z; ts.appendChild(o); });
+    ts.value = DEFAULT_TZ;
+  })();
+
+  // ── URL sync + history navigation ──────────────────────────────────────────
+  function syncUrl(push) {
+    var u = new URL(window.location.href);
+    if (HIST.active && HIST.atMs != null) { u.searchParams.set('at', new Date(HIST.atMs).toISOString()); u.searchParams.set('timezone', histTz()); }
+    else { u.searchParams.delete('at'); u.searchParams.delete('timezone'); }
+    if (push) history.pushState({ at: HIST.atMs, tz: histTz(), view: VIEW }, '', u.toString());
+    else history.replaceState({ at: HIST.atMs, tz: histTz(), view: VIEW }, '', u.toString());
+  }
+  window.addEventListener('popstate', function () {
+    var u = new URL(window.location.href);
+    var at = u.searchParams.get('at');
+    if (at) { var ms = new Date(at).getTime(); if (!isNaN(ms)) { enterHistorical(snapH1(ms), false); return; } }
+    goLive(false);
+  });
+
+  function stopLiveTimer() { if (_liveTimer) { clearInterval(_liveTimer); _liveTimer = null; } }
+  function startLiveTimer() { stopLiveTimer(); _liveTimer = setInterval(function () { if (!HIST.active) load(true); }, 60 * 60 * 1000); }
+
+  function updateNextDisabled() {
+    var next = document.getElementById('h-next');
+    if (!HIST.active || HIST.atMs == null || BOUNDS.toMs == null) { next.disabled = false; return; }
+    next.disabled = (snapH1(HIST.atMs) + H1) > BOUNDS.toMs;  // never move past the latest completed candle
+  }
+  function syncHistInputs() {
+    if (HIST.atMs == null) return;
+    var p = partsInTz(HIST.atMs, histTz());
+    document.getElementById('h-date').value = p.year+'-'+p.month+'-'+p.day;
+    document.getElementById('h-time').value = p.hour+':00';
+  }
+
+  function enterHistorical(atMs, push) {
+    HIST.active = true; HIST.atMs = snapH1(atMs); VIEW = 'snapshot';
+    stopLiveTimer(); syncHistInputs(); updateNextDisabled(); syncUrl(push !== false);
+    load();
+  }
+  function goLive(push) {
+    HIST.active = false; HIST.atMs = null; DAYDATA = null; VIEW = 'snapshot';
+    syncUrl(push !== false); startLiveTimer(); load();
+  }
+
+  // ── data load ───────────────────────────────────────────────────────────────
+  function apiUrl() {
+    if (HIST.active && HIST.atMs != null) return '/api/h1-continuation-engine?at=' + encodeURIComponent(new Date(HIST.atMs).toISOString()) + '&timezone=' + encodeURIComponent(histTz());
+    return '/api/h1-continuation-engine';
+  }
 
   async function load(silent) {
+    if (VIEW === 'day') return loadDay();
     var body = document.getElementById('hc-body');
     if (!silent) body.innerHTML = '<div class="hc-loading"><span class="hc-spin"></span> Loading…</div>';
     try {
-      var res = await fetch('/api/h1-continuation-engine', { headers: { Authorization: 'Bearer ' + TOKEN }, cache: 'no-store' });
+      var res = await fetch(apiUrl(), auth());
       if (!res.ok) throw new Error(await res.text());
       _data = await res.json();
+      if (_data.dataAvailableFrom) BOUNDS.fromMs = new Date(_data.dataAvailableFrom).getTime();
+      if (_data.dataAvailableTo) BOUNDS.toMs = new Date(_data.dataAvailableTo).getTime();
+      updateNextDisabled();
+      renderBanner();
+      if (_data.dataStatus === 'NO_DATA') { renderUnavailable(); return; }
       render();
     } catch (e) {
       body.innerHTML = '<div class="hc-empty" style="color:#f87171">Error: ' + (e.message || e) + '</div>';
     }
   }
 
+  function renderUnavailable() {
+    var f = BOUNDS.fromMs != null ? fmt(new Date(BOUNDS.fromMs).toISOString()) : '—';
+    var t = BOUNDS.toMs != null ? fmt(new Date(BOUNDS.toMs).toISOString()) : '—';
+    document.getElementById('hc-body').innerHTML = '<div class="hc-empty">Historical data is unavailable for this date and time.'
+      + '<div style="margin-top:8px;font-size:12px">Available data: <b>' + f + '</b> to <b>' + t + '</b></div></div>';
+  }
+
+  function renderBanner() {
+    var b = document.getElementById('hc-banner');
+    if (HIST.active && _data && _data.historicalMode) {
+      b.classList.add('show');
+      b.innerHTML = '<span class="tag">HISTORICAL MODE — read-only reconstruction</span>'
+        + '<div class="lines">Snapshot: <b>' + (_data.evaluatedAtLocal || fmt(_data.evaluatedAtUtc)) + ' ' + (_data.timezone||histTz()) + '</b>'
+        + ' &nbsp;·&nbsp; Data used through: <b>' + (_data.lastCompletedCandleLocal || fmt(_data.lastCompletedCandleUtc)) + '</b>'
+        + ' &nbsp;·&nbsp; Market time: <b>' + (_data.evaluatedAtUtc ? new Date(_data.evaluatedAtUtc).toISOString().slice(11,16) + ' UTC' : '—') + '</b></div>';
+    } else { b.classList.remove('show'); b.innerHTML = ''; }
+  }
+
+  // ── filters / rendering (unchanged detector-agnostic logic) ─────────────────
   function passesFilters(s) {
     var dir = document.getElementById('f-dir').value;
     var st = document.getElementById('f-state').value;
@@ -139,47 +274,63 @@
     if (q && s.pair.replace('/', '').indexOf(q.replace('/', '')) === -1) return false;
     return true;
   }
-
   function sortSetups(arr) {
     var mode = document.getElementById('f-sort').value;
     return arr.slice().sort(function (a, b) {
       if (mode === 'score') return (b.setupScore || 0) - (a.setupScore || 0);
-      if (mode === 'recent') return String(b.timestamps.evaluatedAt).localeCompare(String(a.timestamps.evaluatedAt)) || String(b.timestamps.impulseEnd).localeCompare(String(a.timestamps.impulseEnd));
+      if (mode === 'recent') return String(b.timestamps && b.timestamps.evaluatedAt).localeCompare(String(a.timestamps && a.timestamps.evaluatedAt)) || String(b.timestamps && b.timestamps.impulseEnd).localeCompare(String(a.timestamps && a.timestamps.impulseEnd));
       return (STATE_PRIORITY[b.state] || 0) - (STATE_PRIORITY[a.state] || 0) || (b.setupScore || 0) - (a.setupScore || 0);
     });
   }
-
   function kv(k, v) { return '<div class="hc-kv"><span class="hc-k">' + k + '</span><span class="hc-v">' + v + '</span></div>'; }
+
+  // Lookup state-entered / previous state from a loaded full-day replay (when available).
+  function stateContext(inst, atMs, curState) {
+    if (!DAYDATA || !DAYDATA.transitions) return null;
+    var mine = DAYDATA.transitions.filter(function (t) { return t.instrument === inst && new Date(t.evaluatedAtUtc).getTime() <= atMs; });
+    if (!mine.length) return null;
+    var last = mine[mine.length - 1];
+    if (last.toState !== curState) return null;
+    return { enteredUtc: last.evaluatedAtUtc, fromState: last.fromState };
+  }
 
   function card(s) {
     var col = COLOR[s.state] || '#64748b';
-    var imp = s.impulse || {};
-    var pb = s.pullback || {};
-    var fail = s.failure || null;
+    var imp = s.impulse || {}; var pb = s.pullback || {}; var fail = s.failure || null;
     var scoreHtml = s.setupScore != null ? ('<span class="hc-score" style="color:' + col + '">' + s.setupScore + '</span> <span class="hc-grade">' + (s.grade || '') + '</span>') : '';
-    var h = '<div class="hc-card" style="border-left-color:' + col + '">';
+    var h = '<div class="hc-card" id="card-' + (s.instrument||'') + '" style="border-left-color:' + col + '">';
     h += '<div class="hc-card-hd"><div><span class="hc-pair">' + s.pair + '</span> <span class="hc-dir ' + s.direction + '">' + s.direction + ' CONTINUATION</span></div><div style="text-align:right"><div class="hc-state" style="color:' + col + '">' + (STATE_LABEL[s.state] || s.state) + '</div>' + scoreHtml + '</div></div>';
-
     h += '<div class="hc-rows">';
     h += kv('Impulse', (imp.candleCount || '—') + ' H1 · ' + (imp.sizeAtr != null ? imp.sizeAtr + ' ATR' : '—'));
     h += kv('Impulse quality', imp.quality != null ? imp.quality : '—');
-    h += kv('Prev aligned', s.previousAlignedImpulseCount != null ? s.previousAlignedImpulseCount : 0);
     h += kv('Impulse span', fmtT(imp.startTime) + '–' + fmtT(imp.endTime));
     h += kv('Ref high/low', px(s.referenceHigh) + ' / ' + px(s.referenceLow));
     if (pb.count != null) {
       h += kv('Pullback', pb.count + ' H1 · ' + (pb.type || '—'));
       h += kv('Retrace / speed', (pb.retracePct != null ? pb.retracePct + '%' : '—') + ' · ' + (pb.speedRatio != null ? pb.speedRatio : '—'));
     }
-    if (fail) {
-      h += kv('Failure', (fail.type || '—') + ' · Q' + (fail.quality != null ? fail.quality : '—'));
-      h += kv('Failure box', px(s.failureBoxHigh) + ' / ' + px(s.failureBoxLow));
-    }
+    if (fail) { h += kv('Failure', (fail.type || '—') + ' · Q' + (fail.quality != null ? fail.quality : '—')); h += kv('Failure box', px(s.failureBoxHigh) + ' / ' + px(s.failureBoxLow)); }
     if (s.secondPushLevel != null) h += kv('Second-push level', px(s.secondPushLevel));
     h += kv('Confirmation level', px(s.confirmationLevel));
-    h += '</div>';
 
+    // Historical extras
+    if (HIST.active && _data) {
+      h += kv('Evaluated at', (_data.evaluatedAtLocal || fmt(_data.evaluatedAtUtc)));
+      var ctx = stateContext(s.instrument, HIST.atMs, s.state);
+      if (ctx) {
+        h += kv('State entered', fmt(ctx.enteredUtc));
+        var mins = Math.round((HIST.atMs - new Date(ctx.enteredUtc).getTime()) / 60000);
+        h += kv('Time in state', (mins >= 60 ? Math.floor(mins/60)+'h ' : '') + (mins%60) + 'm');
+        if (ctx.fromState) h += kv('Previous state', STATE_LABEL[ctx.fromState] || ctx.fromState);
+      }
+      h += kv('Invalidation level', px(s.referenceLow != null && s.direction==='BUY' ? s.referenceLow : s.referenceHigh));
+      var fresh = _data.lastCompletedCandleUtc ? fmtT(_data.lastCompletedCandleUtc) : '—';
+      h += kv('Data freshness', 'through ' + fresh);
+    }
+    h += '</div>';
+    if (HIST.active) h += '<div class="hc-reasons">Next: ' + (NEXT_COND[s.state] || '—') + '</div>';
     if (s.reasons && s.reasons.length) h += '<div class="hc-reasons">Reasons: ' + s.reasons.join(' · ') + '</div>';
-    h += '<div class="hc-foot"><span class="hc-badge-h1">Completed H1 data only</span><span>Evaluated ' + fmt(s.timestamps.evaluatedAt) + '</span></div>';
+    h += '<div class="hc-foot"><span class="hc-badge-h1">Completed H1 data only</span><span>Evaluated ' + fmt(s.timestamps ? s.timestamps.evaluatedAt : (_data && _data.evaluatedAtUtc)) + '</span></div>';
     h += '<details class="hc-details"><summary>Technical details</summary><pre>' + JSON.stringify(s, null, 1) + '</pre></details>';
     h += '</div>';
     return h;
@@ -189,43 +340,105 @@
     var body = document.getElementById('hc-body');
     var meta = document.getElementById('hc-meta');
     if (!_data) return;
-    var sum = _data.summary || {};
-    meta.innerHTML = '<span class="hc-badge-h1">H1</span> · ' + _data.evaluated + '/' + _data.pairsRequested + ' pairs evaluated · '
-      + _data.dataErrors + ' data errors · generated ' + fmt(_data.generatedAt)
-      + (_data.persistence && !_data.persistence.ok ? ' · <span style="color:#fbbf24">persistence off</span>' : '');
+    meta.innerHTML = '<span class="hc-badge-h1">H1</span> · ' + (_data.evaluated||0) + '/' + (_data.pairsRequested||28) + ' pairs evaluated · '
+      + (_data.dataErrors||0) + ' data errors · ' + (HIST.active ? 'historical' : 'generated ' + fmt(_data.generatedAt))
+      + ' · v' + (_data.engineVersion||'') + (HIST.active ? ' · <span style="color:#fbbf24">read-only</span>' : (_data.persistence && !_data.persistence.ok ? ' · <span style="color:#fbbf24">persistence off</span>' : ''));
 
     var setups = (_data.setups || []).filter(passesFilters);
-    var any = false;
-    var html = '';
+    var any = false, html = '';
     GROUPS.forEach(function (g) {
       var group = sortSetups(setups.filter(function (s) { return g.states.indexOf(s.state) !== -1; }));
-      if (!group.length) return;
-      any = true;
+      if (!group.length) return; any = true;
       html += '<div class="hc-group"><div class="hc-group-hd"><span>' + g.label + '</span><span class="hc-group-count">' + group.length + '</span></div>';
       html += '<div class="hc-cards">' + group.map(card).join('') + '</div></div>';
     });
-
-    // data-quality warnings
-    var errs = (_data.pairs || []).filter(function (p) { return !p.dataQuality.ok; });
+    var errs = (_data.pairs || []).filter(function (p) { return p.dataQuality && !p.dataQuality.ok; });
     if (errs.length) {
       html += '<div class="hc-group"><div class="hc-group-hd"><span>Data-quality warnings</span><span class="hc-group-count">' + errs.length + '</span></div><div class="hc-warn" style="padding:8px 2px">'
         + errs.map(function (p) { return p.pair + ': ' + (p.dataQuality.reason || 'error'); }).join(' · ') + '</div></div>';
     }
-
-    body.innerHTML = any ? html : '<div class="hc-empty">No continuation setups match the current filters.</div>';
+    body.innerHTML = any ? html : '<div class="hc-empty">' + (HIST.active ? 'No setups existed at this historical time (data valid).' : 'No continuation setups match the current filters.') + '</div>';
   }
 
+  // ── Full-day timeline ───────────────────────────────────────────────────────
+  async function loadDay() {
+    var body = document.getElementById('hc-body');
+    body.innerHTML = '<div class="hc-loading"><span class="hc-spin"></span> Replaying full day…</div>';
+    var p = partsInTz(HIST.atMs != null ? HIST.atMs : Date.now(), histTz());
+    var date = p.year+'-'+p.month+'-'+p.day;
+    try {
+      var res = await fetch('/api/h1-continuation-history?date=' + date + '&timezone=' + encodeURIComponent(histTz()), auth());
+      if (!res.ok) throw new Error(await res.text());
+      DAYDATA = await res.json();
+      renderDay();
+    } catch (e) { body.innerHTML = '<div class="hc-empty" style="color:#f87171">Error: ' + (e.message || e) + '</div>'; }
+  }
+  function dayPasses(t) {
+    var dir = document.getElementById('f-dir').value, st = document.getElementById('f-state').value;
+    var minScore = parseInt(document.getElementById('f-score').value, 10);
+    var q = document.getElementById('f-pair').value.trim().toUpperCase();
+    if (dir && t.direction !== dir) return false;
+    if (st && t.toState !== st) return false;
+    if (!isNaN(minScore) && (t.score || 0) < minScore) return false;
+    if (q && t.pair.replace('/', '').indexOf(q.replace('/', '')) === -1) return false;
+    return true;
+  }
+  function renderDay() {
+    document.getElementById('hc-banner').classList.remove('show');
+    var meta = document.getElementById('hc-meta');
+    meta.innerHTML = '<span class="hc-badge-h1">FULL DAY</span> · ' + DAYDATA.date + ' · ' + DAYDATA.timezone + ' · ' + (DAYDATA.transitions||[]).length + ' transitions · ' + (DAYDATA.hoursEvaluated||0) + ' hours · <span style="color:#fbbf24">read-only</span>';
+    var rows = (DAYDATA.transitions || []).filter(dayPasses);
+    var html = '<div class="hc-group-hd" style="max-width:1120px;margin:8px auto"><span>Transition timeline — click any row to open that snapshot</span><span class="hc-group-count">' + rows.length + '</span></div>';
+    html += '<div class="hc-tl">';
+    if (!rows.length) html += '<div class="hc-empty">No transitions match the filters for this day.</div>';
+    rows.forEach(function (t) {
+      var col = COLOR[t.toState] || '#94a3b8';
+      html += '<div class="hc-tl-row" data-at="' + t.evaluatedAtUtc + '" data-inst="' + t.instrument + '">'
+        + '<span class="hc-tl-time">' + (t.evaluatedAtLocal || fmt(t.evaluatedAtUtc)) + '</span>'
+        + '<span class="hc-tl-pair">' + t.pair + '</span>'
+        + '<span class="hc-dir ' + (t.direction||'') + '">' + (t.direction||'') + '</span>'
+        + '<span class="hc-tl-state" style="color:' + col + '">' + (STATE_LABEL[t.toState] || t.toState) + '</span>'
+        + '<span class="hc-tl-score">' + (t.score != null ? t.score : '') + (t.invalidationCode ? ' · ' + t.invalidationCode : '') + '</span></div>';
+    });
+    html += '</div>';
+    if (DAYDATA.pairErrors && DAYDATA.pairErrors.length) html += '<div class="hc-warn" style="max-width:1120px;margin:10px auto">Pair errors: ' + DAYDATA.pairErrors.slice(0,10).map(function(e){return e.pair;}).join(', ') + '</div>';
+    document.getElementById('hc-body').innerHTML = html;
+    [].slice.call(document.querySelectorAll('.hc-tl-row')).forEach(function (r) {
+      r.onclick = function () { var at = new Date(r.getAttribute('data-at')).getTime(); var inst = r.getAttribute('data-inst'); VIEW = 'snapshot'; HIST._flash = inst; enterHistorical(at, true); };
+    });
+  }
+
+  // ── wiring ──────────────────────────────────────────────────────────────────
   ['f-dir', 'f-state', 'f-score', 'f-pair', 'f-sort'].forEach(function (id) {
-    document.getElementById(id).addEventListener('input', function () { if (_data) render(); });
+    document.getElementById(id).addEventListener('input', function () { if (VIEW === 'day' && DAYDATA) renderDay(); else if (_data) render(); });
   });
   document.getElementById('f-refresh').addEventListener('click', function () { load(); });
+  document.getElementById('h-apply').addEventListener('click', function () {
+    var dv = document.getElementById('h-date').value, tv = document.getElementById('h-time').value;
+    if (!dv || !tv) return;
+    var dp = dv.split('-'), tp = tv.split(':');
+    var ms = snapH1(zonedWallToUtcMs(+dp[0], +dp[1], +dp[2], +tp[0], +tp[1], histTz()));
+    VIEW = 'snapshot'; enterHistorical(ms, true);
+  });
+  document.getElementById('h-prev').addEventListener('click', function () { if (!HIST.active) enterHistorical(BOUNDS.toMs || Date.now(), true); else enterHistorical(snapH1(HIST.atMs) - H1, true); });
+  document.getElementById('h-next').addEventListener('click', function () { if (!HIST.active) return; var n = snapH1(HIST.atMs) + H1; if (BOUNDS.toMs != null && n > BOUNDS.toMs) return; enterHistorical(n, true); });
+  document.getElementById('h-day').addEventListener('click', function () { if (!HIST.active) enterHistorical(BOUNDS.toMs || Date.now(), true); VIEW = 'day'; syncUrl(true); loadDay(); });
+  document.getElementById('h-live').addEventListener('click', function () { goLive(true); });
+  document.getElementById('h-tz').addEventListener('change', function () { if (HIST.active) { syncHistInputs(); syncUrl(false); load(); } });
 
   (async function () {
-    try { if (TOKEN) { var r = await fetch('/api/profile', { headers: { Authorization: 'Bearer ' + TOKEN } }); if (r.ok) { var p = await r.json(); if (p.timezone) { _userTz = p.timezone; try { localStorage.setItem('nfx_tz', _userTz); } catch (_) {} } } } } catch (_) {}
-    load();
+    try { if (TOKEN) { var r = await fetch('/api/profile', auth()); if (r.ok) { var p = await r.json(); if (p.timezone) { _userTz = p.timezone; try { localStorage.setItem('nfx_tz', _userTz); } catch (_) {} } } } } catch (_) {}
+    // default the history date/time controls to "now" in EAT
+    var np = partsInTz(Date.now(), DEFAULT_TZ);
+    document.getElementById('h-date').value = np.year+'-'+np.month+'-'+np.day;
+    document.getElementById('h-time').value = np.hour+':00';
+    // Restore a shared/refreshed historical selection from the URL; else live.
+    var at = new URL(window.location.href).searchParams.get('at');
+    var tzp = new URL(window.location.href).searchParams.get('timezone');
+    if (tzp) { var ts = document.getElementById('h-tz'); if ([].slice.call(ts.options).some(function(o){return o.value===tzp;})) ts.value = tzp; }
+    if (at) { var ms = new Date(at).getTime(); if (!isNaN(ms)) { enterHistorical(snapH1(ms), false); return; } }
+    goLive(false);
   })();
-  // Hourly refresh aligned with completed H1 candles.
-  setInterval(function () { load(true); }, 60 * 60 * 1000);
 </script>
 </body>
 </html>

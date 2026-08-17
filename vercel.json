@@ -39,6 +39,7 @@
     "api/pullback-tri-h4-engine.js": { "maxDuration": 60 },
     "api/sharp-reversal-engine.js": { "maxDuration": 60 },
     "api/h1-continuation-engine.js": { "maxDuration": 60 },
+    "api/h1-continuation-history.js": { "maxDuration": 60 },
     "api/currency-strength-m5-ema.js": { "maxDuration": 30 },
     "api/backfill-m5.js": { "maxDuration": 300 },
     "api/currency-stability.js": { "maxDuration": 30 },

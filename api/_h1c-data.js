@@ -10,10 +10,11 @@
  * Original timestamps are preserved exactly.
  */
 
-const { getClient } = require('./_db');
 const {
   HOUR_MS, FETCH_LIMIT, MIN_CLOSED_CANDLES, DATA_REJECTIONS,
 } = require('./_h1c-constants');
+// _db (and its @supabase dep) is required lazily so the pure sanitizer here can
+// be unit-tested without the Supabase client installed.
 
 /**
  * Pure sanitizer: given raw H1 rows (any order) and an evaluation time, return
@@ -92,7 +93,7 @@ function sanitizeH1(rows, evalMs, opts = {}) {
  * @returns {Promise<{ok:boolean, reason:(string|null), candles:Array, meta:Object}>}
  */
 async function fetchClosedH1(sb, inst, opts = {}) {
-  const client = sb || getClient();
+  const client = sb || require("./_db").getClient();
   const evalMs = opts.evalMs != null ? opts.evalMs : Date.now();
   const limit = opts.limit != null ? opts.limit : FETCH_LIMIT;
   const untilISO = new Date(evalMs - HOUR_MS).toISOString();   // open <= evalMs - H1
@@ -109,4 +110,28 @@ async function fetchClosedH1(sb, inst, opts = {}) {
   return sanitizeH1(data || [], evalMs, opts);
 }
 
-module.exports = { sanitizeH1, fetchClosedH1 };
+/**
+ * Global availability of completed H1 data across all pairs (two order+limit
+ * probes — aggregates are blocked on this project). Returns the earliest/latest
+ * completed-candle CLOSE times in epoch-ms, for history metadata and future/past
+ * bounds. Best-effort: returns nulls if the table is empty.
+ */
+async function h1DataBounds(sb) {
+  const client = sb || require("./_db").getClient();
+  const [a, b] = await Promise.all([
+    client.from('backtest_candles').select('time').eq('timeframe', 'H1').eq('complete', true).order('time', { ascending: true }).limit(1),
+    client.from('backtest_candles').select('time').eq('timeframe', 'H1').eq('complete', true).order('time', { ascending: false }).limit(1),
+  ]);
+  if (a.error) throw a.error;
+  if (b.error) throw b.error;
+  const earliestOpen = a.data && a.data[0] ? a.data[0].time : null;
+  const latestOpen = b.data && b.data[0] ? b.data[0].time : null;
+  return {
+    earliestOpen,
+    latestOpen,
+    earliestCloseMs: earliestOpen ? new Date(earliestOpen).getTime() + HOUR_MS : null,
+    latestCloseMs: latestOpen ? new Date(latestOpen).getTime() + HOUR_MS : null,
+  };
+}
+
+module.exports = { sanitizeH1, fetchClosedH1, h1DataBounds };

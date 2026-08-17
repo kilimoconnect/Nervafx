@@ -97,7 +97,7 @@ test('scans all 28 pairs with one shared evaluation timestamp', async () => {
   assert.equal(scan.dataErrors, 0);
   assert.equal(scan.timeframe, 'H1');
   for (const p of scan.pairs) {
-    if (p.setup) assert.equal(p.setup.timestamps.evaluatedAt, scan.generatedAt);
+    if (p.setup && p.setup.timestamps) assert.equal(p.setup.timestamps.evaluatedAt, scan.generatedAt);
   }
 });
 

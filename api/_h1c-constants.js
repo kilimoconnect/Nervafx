@@ -72,6 +72,11 @@ const DATA_REJECTIONS = Object.freeze({
   INSUFFICIENT_HISTORY: 'INSUFFICIENT_HISTORY',
 });
 
+// Engine identity (for historical response metadata). These describe the build,
+// NOT the detector maths — changing them never changes any rule/threshold.
+const ENGINE_VERSION = 'h1c-1.0.0';
+const CONFIGURATION_VERSION = 'h1c-config-1'; // ATR20 · pullback 6–12 · score 35/40/25 · grades 85/75/65
+
 // Data / warm-up sizing.
 const ATR_PERIOD = 20;            // ATR(20) per the Portion 2 spec.
 const FETCH_LIMIT = 300;          // headroom above the 150 minimum.
@@ -86,6 +91,7 @@ const SPEED_MAX = 0.85;           // above this invalidates (possible reversal).
 
 module.exports = {
   HOUR_MS,
+  ENGINE_VERSION, CONFIGURATION_VERSION,
   PAIRS,
   STATES, STATE_LIST,
   REASONS, INVALIDATION, OUTCOME, DATA_REJECTIONS,
