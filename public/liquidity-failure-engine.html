@@ -359,6 +359,7 @@
 
   // ── Mode + navigation ─────────────────────────────────────────────────────
   function setMode(m){
+    if(m==='historical' && !COV){ document.getElementById('lf-body').innerHTML='<div class="lf-empty">Coverage still loading — one moment…</div>'; return; }
     MODE=m;
     document.getElementById('mode-latest').classList.toggle('active', m==='latest');
     document.getElementById('mode-hist').classList.toggle('active', m==='historical');
@@ -462,13 +463,16 @@
     var b=document.getElementById('run-latest'); if(b) b.onclick=function(){ SELECTED_MS=null; setMode('latest'); };
   }
 
-  (async function(){
-    try { if(TOKEN){ var r=await fetch('/api/profile', auth()); if(r.ok){ var p=await r.json(); if(p.timezone){ USER_TZ=p.timezone; try{localStorage.setItem('nfx_tz',USER_TZ);}catch(_){}}}} } catch(_){}
-    try { await loadCoverage(); } catch(e){ document.getElementById('lf-coverage').innerHTML='<span style="color:#f87171">Coverage error: '+(e.message||e)+'</span>'; return; }
-    // Restore a shared/refreshed historical selection from the URL — never auto-jump to Latest.
-    var atParam=new URL(window.location.href).searchParams.get('at');
-    if(atParam){ var ms=new Date(atParam).getTime(); if(!isNaN(ms)){ SELECTED_MS=clampMs(snap15(ms)); setMode('historical'); loadHistory(); return; } }
+  (function(){
+    // Render the fast default immediately — never block the page on coverage.
     defaultView();
+    var atParam=new URL(window.location.href).searchParams.get('at');
+    // Background: timezone profile + coverage; then honour a shared ?at= link.
+    (async function(){
+      try { if(TOKEN){ var r=await fetch('/api/profile', auth()); if(r.ok){ var p=await r.json(); if(p.timezone){ USER_TZ=p.timezone; try{localStorage.setItem('nfx_tz',USER_TZ);}catch(_){}}}} } catch(_){}
+      try { await loadCoverage(); } catch(e){ document.getElementById('lf-coverage').innerHTML='<span style="color:#f87171">Coverage error: '+(e.message||e)+'</span>'; return; }
+      if(atParam){ var ms=new Date(atParam).getTime(); if(!isNaN(ms)){ SELECTED_MS=clampMs(snap15(ms)); setMode('historical'); } }
+    })();
   })();
 </script>
 </body>

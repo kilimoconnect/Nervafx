@@ -159,7 +159,7 @@ function resolveSnapshotTime(input, coverage) {
 
 // ── Caches ──────────────────────────────────────────────────────────────────
 let _covCache = null; // { value, ts }
-const COV_TTL_MS = 60 * 1000;
+const COV_TTL_MS = 10 * 60 * 1000; // coverage changes only as new candles arrive (hourly)
 const _snapCache = new Map(); // key `${evalMs}:${version}` → body (immutable historical only)
 const SNAP_CACHE_MAX = 200;
 
