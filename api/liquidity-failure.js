@@ -186,11 +186,13 @@ async function outcomes(req, res, sb) {
   if (!adminOk(req)) return res.status(403).json({ error: 'forbidden' });
   const q = req.query;
   const limit = Math.min(parseInt(q.limit, 10) || 200, 500);
+  const offset = Math.max(parseInt(q.offset, 10) || 0, 0);
   const { data: signals, error } = await sb.from('liquidity_failure_signals')
     .select('signal_key, pair, direction, config_version, payload')
     .eq('config_version', CONFIG.version)
     .order('first_seen_at', { ascending: true })
-    .limit(limit);
+    .order('signal_key', { ascending: true })
+    .range(offset, offset + limit - 1);
   if (error) throw error;
   const spread = CONFIG.backtest.spread, slippage = CONFIG.backtest.slippage;
   let processed = 0, skipped = 0;
@@ -219,7 +221,7 @@ async function outcomes(req, res, sb) {
     if (up.error) throw up.error;
     processed += 1;
   }
-  return res.json({ engineVersion: CONFIG.version, processed, skipped, considered: (signals || []).length });
+  return res.json({ engineVersion: CONFIG.version, processed, skipped, considered: (signals || []).length, offset, nextOffset: offset + (signals || []).length });
 }
 
 // ── backtest ─────────────────────────────────────────────────────────────────

@@ -31,6 +31,7 @@ const KEY = arg('key', process.env.LFE_ADMIN_KEY);
 const DRY = !!arg('dry', false);
 const CHUNK_DAYS = arg('chunkDays', '3');
 const STEP_MIN = arg('stepMinutes', '60');
+const OUTCOMES_ONLY = !!arg('outcomes-only', false);
 
 if (!KEY) { console.error('Missing --key (or LFE_ADMIN_KEY env).'); process.exit(1); }
 
@@ -68,30 +69,39 @@ function qs(extra) {
   return p.toString();
 }
 
-(async function main() {
-  console.log(`Backfill → ${BASE}  (chunkDays=${CHUNK_DAYS}${DRY ? ', DRY-RUN' : ''})`);
-  let checkpoint = null;
-  let totals = { events: 0, signals: 0, transitions: 0 };
-  for (let i = 1; ; i++) {
-    const extra = checkpoint ? { checkpoint: String(checkpoint) } : {};
-    const r = await post('/api/liquidity-failure?' + qs(extra));
-    const c = r.created || {};
-    totals.events += c.events || 0; totals.signals += c.signals || 0; totals.transitions += c.transitions || 0;
-    console.log(`  chunk ${i}: ${r.chunk ? r.chunk.from + ' → ' + r.chunk.to : ''}  ` +
-      `+signals=${c.signals || 0} +events=${c.events || 0}  ${Math.round((r.rangeProgressPct || 0) * 100)}%` +
-      (r.fetchErrors && r.fetchErrors.length ? `  fetchErrors=${r.fetchErrors.length}` : ''));
-    if (r.rangeDone || !r.checkpoint) break;
-    checkpoint = r.checkpoint.nextMs;
+async function runOutcomes() {
+  console.log('Running outcome processor…');
+  let offset = 0, pass = 0, total = 0;
+  for (;;) {
+    pass += 1;
+    const r = await post('/api/liquidity-failure?action=outcomes&limit=500&offset=' + offset);
+    total += r.processed || 0;
+    console.log(`  pass ${pass}: processed=${r.processed} skipped=${r.skipped} considered=${r.considered} offset=${offset}`);
+    const got = r.considered || 0;
+    offset += got;                 // advance through all signals — no re-processing loop
+    if (got < 500) break;
   }
-  console.log(`Backfill complete. Totals: signals=${totals.signals} events=${totals.events} transitions=${totals.transitions}`);
+  console.log(`Outcomes complete. processed total ≈ ${total}`);
+}
 
-  if (arg('outcomes', false) && !DRY) {
-    console.log('Running outcome processor…');
+(async function main() {
+  if (!OUTCOMES_ONLY) {
+    console.log(`Backfill → ${BASE}  (chunkDays=${CHUNK_DAYS}${DRY ? ', DRY-RUN' : ''})`);
+    let checkpoint = null;
+    const totals = { events: 0, signals: 0, transitions: 0 };
     for (let i = 1; ; i++) {
-      const r = await post('/api/liquidity-failure?action=outcomes&limit=500');
-      console.log(`  pass ${i}: processed=${r.processed} skipped=${r.skipped} considered=${r.considered}`);
-      if ((r.considered || 0) < 500) break;
+      const extra = checkpoint ? { checkpoint: String(checkpoint) } : {};
+      const r = await post('/api/liquidity-failure?' + qs(extra));
+      const c = r.created || {};
+      totals.events += c.events || 0; totals.signals += c.signals || 0; totals.transitions += c.transitions || 0;
+      console.log(`  chunk ${i}: ${r.chunk ? r.chunk.from + ' → ' + r.chunk.to : ''}  ` +
+        `+signals=${c.signals || 0} +events=${c.events || 0}  ${Math.round((r.rangeProgressPct || 0) * 100)}%` +
+        (r.fetchErrors && r.fetchErrors.length ? `  fetchErrors=${r.fetchErrors.length}` : ''));
+      if (r.rangeDone || !r.checkpoint) break;
+      checkpoint = r.checkpoint.nextMs;
     }
-    console.log('Outcomes complete.');
+    console.log(`Backfill complete. Totals: signals=${totals.signals} events=${totals.events} transitions=${totals.transitions}`);
   }
+
+  if ((OUTCOMES_ONLY || arg('outcomes', false)) && !DRY) await runOutcomes();
 })().catch((e) => { console.error('FAILED:', e.message); process.exit(1); });
