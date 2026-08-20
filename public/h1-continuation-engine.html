@@ -53,9 +53,10 @@
   .hc-score { font-family:monospace; font-weight:800; font-size:15px; }
   .hc-grade { font-size:10px; font-weight:700; color:var(--text-dim); }
   .hc-rows { margin-top:10px; display:grid; grid-template-columns:1fr 1fr; gap:2px 14px; }
-  .hc-kv { display:flex; justify-content:space-between; font-size:11px; padding:1px 0; gap:8px; }
-  .hc-k { color:var(--text-dim); }
-  .hc-v { color:#e2e8f0; font-weight:600; text-align:right; }
+  .hc-rows.one { grid-template-columns:1fr; }  /* session cards: long values need full width */
+  .hc-kv { display:flex; justify-content:space-between; align-items:baseline; font-size:11px; padding:1px 0; gap:10px; min-width:0; }
+  .hc-k { color:var(--text-dim); flex-shrink:0; white-space:nowrap; }
+  .hc-v { color:#e2e8f0; font-weight:600; text-align:right; min-width:0; word-break:break-word; }
   .hc-reasons { margin-top:8px; font-size:10px; color:var(--text-dim); }
   .hc-warn { margin-top:6px; font-size:10px; color:#fbbf24; }
   .hc-foot { margin-top:8px; display:flex; align-items:center; justify-content:space-between; font-size:10px; color:var(--text-dim); }
@@ -209,7 +210,7 @@
     h += '<div class="hc-card-hd"><div><span class="hc-pair">' + s.pair + '</span> <span class="hc-dir ' + s.direction + '">' + s.direction + ' SESSION</span></div><div style="text-align:right"><div class="hc-state" style="color:' + col + '">' + (SESSION_LABEL[s.state] || s.state) + '</div>' + scoreHtml + '</div></div>';
     var badges = sessionBadges(s);
     if (badges.length) h += '<div style="margin-top:4px">' + badges.map(function (x) { return '<span class="hc-badge-h1" style="margin-right:4px">' + x + '</span>'; }).join('') + '</div>';
-    h += '<div class="hc-rows">';
+    h += '<div class="hc-rows one">';
     h += kv('Ref session', (ref.date || '—') + ' · 17:00–23:00 EAT');
     h += kv('Ref move', ref.sessionMoveATR != null ? ref.sessionMoveATR + ' ATR' : '—');
     h += kv('Efficiency', ref.sessionEfficiency != null ? ref.sessionEfficiency : '—');
