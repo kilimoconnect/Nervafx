@@ -92,8 +92,7 @@ function evaluateSessionSetup(candles, opts) {
 
   const act = S.activeReferenceSessionDate(evalMs);
   if (act.forming) { res.reasonCodes.push('SESSION_FORMING'); return res; }
-  const dateStr = act.date;
-  if (S.weekdayOf(dateStr) === 5) { res.reasonCodes.push(REJECTIONS.FRIDAY_NO_CONTINUATION); return res; }
+  const dateStr = act.date; // already stepped back over weekends (Monday uses Friday)
 
   const { startUtc, endUtc } = S.sessionWindowUtc(dateStr);
   if (endUtc > evalMs) { res.reasonCodes.push('SESSION_NOT_CLOSED'); return res; }
@@ -122,7 +121,7 @@ function evaluateSessionSetup(candles, opts) {
   res.setupId = MODE + ':' + (opts.instrument || '') + ':' + res.direction + ':' + refObj.endUtc;
   res.state = STATES.REFERENCE_SESSION_LOCKED;
 
-  const expiryUtc = startUtc + 24 * HOUR_MS; // 17:00 EAT the following day
+  const expiryUtc = S.sessionWindowUtc(S.nextTradingDay(dateStr)).startUtc; // 17:00 EAT the next TRADING day (Fri → Mon)
   res.expiresAt = new Date(expiryUtc).toISOString();
   if (evalMs >= expiryUtc) { res.state = STATES.EXPIRED; res.invalidationCode = INVALIDATION.EXPIRED_NO_CONTINUATION; return res; }
 

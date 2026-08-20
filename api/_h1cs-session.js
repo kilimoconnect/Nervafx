@@ -32,6 +32,19 @@ function addDays(dateStr, n) {
 }
 /** Weekday (0=Sun..6=Sat) of an EAT calendar date. */
 function weekdayOf(dateStr) { return new Date(dateStr + 'T12:00:00Z').getUTCDay(); }
+const isTradingDay = (dateStr) => { const w = weekdayOf(dateStr); return w >= 1 && w <= 5; };
+/** Walk back to the most recent trading day (Mon–Fri) with a 17:00–23:00 session. */
+function mostRecentSessionDate(dateStr) {
+  let d = dateStr;
+  for (let i = 0; i < 7 && !isTradingDay(d); i++) d = addDays(d, -1);
+  return d;
+}
+/** Next trading day (skips Sat/Sun) — the day a session's continuation window closes. */
+function nextTradingDay(dateStr) {
+  let d = addDays(dateStr, 1);
+  for (let i = 0; i < 7 && !isTradingDay(d); i++) d = addDays(d, 1);
+  return d;
+}
 
 /** UTC [start,end] of the 17:00–23:00 EAT window for an EAT date. */
 function sessionWindowUtc(dateStr) {
@@ -50,10 +63,13 @@ function sessionWindowUtc(dateStr) {
 function activeReferenceSessionDate(evalMs) {
   const e = partsInTz(evalMs, EAT_TZ);
   const h = Number(e.hour);
-  const dateStr = e.year + '-' + e.month + '-' + e.day;
-  if (h >= SESSION_START_HOUR && h < SESSION_END_HOUR) return { forming: true, date: dateStr };
-  if (h >= SESSION_END_HOUR) return { forming: false, date: dateStr };
-  return { forming: false, date: addDays(dateStr, -1) };
+  const today = e.year + '-' + e.month + '-' + e.day;
+  // A weekday session still forming (17:00–23:00) → no active setup yet.
+  if (h >= SESSION_START_HOUR && h < SESSION_END_HOUR && isTradingDay(today)) return { forming: true, date: today };
+  // Otherwise the active reference is today's completed session (if ≥23:00) or the
+  // previous one — stepping back over the weekend so Monday uses Friday's session.
+  const candidate = h >= SESSION_END_HOUR ? today : addDays(today, -1);
+  return { forming: false, date: mostRecentSessionDate(candidate) };
 }
 
 /** 08:00 Europe/London of the morning that falls inside this post-session cycle. */
@@ -135,6 +151,7 @@ function qualifyReference(six, synthetic, atr20) {
 }
 
 module.exports = {
-  partsInTz, addDays, weekdayOf, sessionWindowUtc, activeReferenceSessionDate,
+  partsInTz, addDays, weekdayOf, isTradingDay, mostRecentSessionDate, nextTradingDay,
+  sessionWindowUtc, activeReferenceSessionDate,
   londonOpenForCycle, buildReferenceSession, sessionAtr, qualifyReference,
 };

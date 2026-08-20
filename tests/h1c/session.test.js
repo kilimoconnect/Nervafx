@@ -84,14 +84,23 @@ test('rejects a missing reference candle', () => {
   const r = evaluateSessionSetup(build(missing, []), { evalMs: SS + 6 * H });
   assert.equal(r.reasonCodes[0], REJECTIONS.MISSING_CANDLES);
 });
-test('rejects a Friday reference session (no next-day continuation)', () => {
+test('Monday steps back over the weekend to Friday (does not use Sunday)', () => {
+  const MON_0200 = zonedWallToUtcMs(2026, 8, 10, 2, 0, 'Africa/Dar_es_Salaam'); // Mon 02:00 EAT
+  const act = S.activeReferenceSessionDate(MON_0200);
+  assert.equal(act.forming, false);
+  assert.equal(act.date, '2026-08-07');       // Friday, not Sunday 2026-08-09
+  assert.equal(S.weekdayOf(act.date), 5);
+});
+test('a Friday reference session is valid and expires the following Monday 17:00 EAT', () => {
   const FRI = '2026-08-14'; // Friday
   const fss = S.sessionWindowUtc(FRI).startUtc;
   const shift = fss - SS;
-  const friBase = base(25).map((c) => Object.assign({}, c, { ms: c.ms + shift, time: iso(c.ms + shift) }));
-  const friSess = BUY_SESSION.map((c) => Object.assign({}, c, { ms: c.ms + shift, time: iso(c.ms + shift) }));
-  const r = evaluateSessionSetup(friBase.concat(friSess), { evalMs: fss + 6 * H });
-  assert.ok(r.reasonCodes.includes(REJECTIONS.FRIDAY_NO_CONTINUATION));
+  const remap = (c) => ({ ms: c.ms + shift, time: iso(c.ms + shift), open: c.open, high: c.high, low: c.low, close: c.close });
+  const rows = base(25).map(remap).concat(BUY_SESSION.map(remap));
+  const r = evaluateSessionSetup(rows, { evalMs: fss + 6 * H }); // just after Friday 23:00 EAT
+  assert.equal(r.reference.date, FRI);
+  assert.notEqual(r.state, STATES.SEARCHING_REFERENCE_SESSION); // Friday is a valid reference
+  assert.equal(r.expiresAt, iso(S.sessionWindowUtc('2026-08-17').startUtc)); // Monday 17:00 EAT
 });
 
 // ── pause / pullback classification (7,8,9,10) ──────────────────────────────
