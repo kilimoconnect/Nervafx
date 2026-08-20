@@ -20,6 +20,9 @@
   .hc-sub b { color: #94a3b8; }
   .hc-meta { text-align: center; padding: 0 20px 6px; font-size: 10px; color: var(--text-dim); }
   .hc-badge-h1 { display:inline-block; padding:1px 7px; border-radius:4px; background:rgba(167,139,250,0.14); color:#a78bfa; font-weight:700; font-size:10px; }
+  .hc-tabs { display:flex; gap:8px; justify-content:center; padding:10px 16px 2px; }
+  .hc-tab { padding:7px 16px; border-radius:9px; font-size:12px; font-weight:800; background:rgba(255,255,255,0.04); border:1px solid var(--border); color:var(--text-muted); cursor:pointer; }
+  .hc-tab.active { background:rgba(167,139,250,0.2); border-color:rgba(167,139,250,0.45); color:#a78bfa; }
   /* history toolbar */
   .hc-histbar { display:flex; align-items:center; justify-content:center; gap:6px; padding:8px 16px; flex-wrap:wrap; border-bottom:1px solid var(--border); }
   .hc-filters { display:flex; align-items:center; justify-content:center; gap:8px; padding:8px 16px; flex-wrap:wrap; }
@@ -89,6 +92,12 @@
   States are analytical classifications — <b>not entries or trade signals</b>. No stops, targets, sizing or execution.
 </div>
 
+<!-- Mode tabs -->
+<div class="hc-tabs">
+  <button class="hc-tab active" id="tab-generic">Generic H1 Continuation</button>
+  <button class="hc-tab" id="tab-session">Session H1 Continuation</button>
+</div>
+
 <!-- History toolbar -->
 <div class="hc-histbar">
   <input type="date" id="h-date" class="hc-input" aria-label="Snapshot date" />
@@ -127,6 +136,7 @@
   var HIST = { active: false, atMs: null };
   var DAYDATA = null;
   var VIEW = 'snapshot'; // 'snapshot' | 'day'
+  var MODE_TAB = 'generic'; // 'generic' | 'session'
   var _data = null;
   var BOUNDS = { fromMs: null, toMs: null };
   var _liveTimer = null;
@@ -166,6 +176,78 @@
     CONTINUATION_CONFIRMED:'Continuation confirmed.', INVALIDATED:'Setup invalidated.', EXPIRED:'Setup expired.'
   };
 
+  // ── Session mode ────────────────────────────────────────────────────────────
+  var SESSION_GROUPS = [
+    { label:'Continuation Confirmed', states:['SESSION_CONTINUATION_CONFIRMED'] },
+    { label:'Second Push Started',    states:['SECOND_PUSH_STARTED'] },
+    { label:'Second Push Ready',      states:['SECOND_PUSH_READY'] },
+    { label:'Post-Session Pullback',  states:['POST_SESSION_PULLBACK','POST_SESSION_PAUSE'] },
+    { label:'Reference Locked',       states:['REFERENCE_SESSION_LOCKED'] },
+    { label:'Recent History',         states:['INVALIDATED','EXPIRED'] },
+  ];
+  var SESSION_COLOR = { SESSION_CONTINUATION_CONFIRMED:'#22c55e', SECOND_PUSH_STARTED:'#a855f7', SECOND_PUSH_READY:'#f59e0b', POST_SESSION_PULLBACK:'#3b82f6', POST_SESSION_PAUSE:'#64748b', REFERENCE_SESSION_LOCKED:'#818cf8', INVALIDATED:'#ef4444', EXPIRED:'#6b7280' };
+  var SESSION_LABEL = { SESSION_CONTINUATION_CONFIRMED:'Continuation Confirmed', SECOND_PUSH_STARTED:'Second Push Started', SECOND_PUSH_READY:'Second Push Ready', POST_SESSION_PULLBACK:'Post-Session Pullback', POST_SESSION_PAUSE:'Post-Session Pause', REFERENCE_SESSION_LOCKED:'Reference Locked', INVALIDATED:'Invalidated', EXPIRED:'Expired' };
+  var SESSION_NEXT = { REFERENCE_SESSION_LOCKED:'Awaiting a post-session pause/pullback.', POST_SESSION_PAUSE:'Awaiting the opposing side to fail near the pullback extreme.', POST_SESSION_PULLBACK:'Awaiting the opposing side to fail near the pullback extreme.', SECOND_PUSH_READY:'Awaiting an energetic close beyond the failure level.', SECOND_PUSH_STARTED:'Awaiting a close beyond the 17:00–23:00 reference extreme.', SESSION_CONTINUATION_CONFIRMED:'Continuation confirmed.', INVALIDATED:'Setup invalidated.', EXPIRED:'Setup expired.' };
+
+  function sessionBadges(s) {
+    var b = [];
+    if (s.state === 'SECOND_PUSH_STARTED') b.push('SECOND PUSH STARTED');
+    if (s.state === 'SECOND_PUSH_READY') b.push('SECOND PUSH READY');
+    if (s.pausePullbackType === 'PAUSE') b.push('POST-SESSION PAUSE');
+    if (s.pausePullbackType === 'CONTROLLED_PULLBACK') b.push('CONTROLLED PULLBACK');
+    if (s.secondPushStartPhase === 'ASIA' && s.confirmationPhase === 'ASIA') b.push('ASIA CONTINUATION');
+    else if (s.secondPushStartPhase === 'ASIA' && s.confirmationPhase === 'LONDON') b.push('ASIA STARTED · LONDON CONFIRMED');
+    else if (s.secondPushStartPhase === 'LONDON') b.push('LONDON CONTINUATION');
+    else if (s.secondPushStartPhase === 'ASIA') b.push('ASIA CONTINUATION');
+    return b;
+  }
+  function sessionCard(s) {
+    var col = SESSION_COLOR[s.state] || '#64748b';
+    var ref = s.reference || {};
+    var scoreHtml = s.score != null ? ('<span class="hc-score" style="color:' + col + '">' + s.score + '</span> <span class="hc-grade">' + (s.grade || '') + '</span>') : '';
+    var h = '<div class="hc-card" id="card-' + (s.instrument || '') + '" style="border-left-color:' + col + '">';
+    h += '<div class="hc-card-hd"><div><span class="hc-pair">' + s.pair + '</span> <span class="hc-dir ' + s.direction + '">' + s.direction + ' SESSION</span></div><div style="text-align:right"><div class="hc-state" style="color:' + col + '">' + (SESSION_LABEL[s.state] || s.state) + '</div>' + scoreHtml + '</div></div>';
+    var badges = sessionBadges(s);
+    if (badges.length) h += '<div style="margin-top:4px">' + badges.map(function (x) { return '<span class="hc-badge-h1" style="margin-right:4px">' + x + '</span>'; }).join('') + '</div>';
+    h += '<div class="hc-rows">';
+    h += kv('Ref session', (ref.date || '—') + ' · 17:00–23:00 EAT');
+    h += kv('Ref move', ref.sessionMoveATR != null ? ref.sessionMoveATR + ' ATR' : '—');
+    h += kv('Efficiency', ref.sessionEfficiency != null ? ref.sessionEfficiency : '—');
+    h += kv('Directional', ref.directionalCandleCount != null ? ref.directionalCandleCount + '/6' : '—');
+    h += kv('Close quality', ref.sessionCloseQuality != null ? ref.sessionCloseQuality : '—');
+    h += kv('Pause/pullback', (s.pausePullbackType || '—') + (s.retracementPct != null ? ' · ' + s.retracementPct + '%' : ''));
+    h += kv('Post-session', s.postSessionCandleCount != null ? s.postSessionCandleCount + ' H1' : '—');
+    h += kv('Failure', (s.failureStatus || '—') + (s.failureQuality != null ? ' · Q' + s.failureQuality : ''));
+    h += kv('2nd push', s.secondPushStartedAt ? (fmtT(s.secondPushStartedAt) + ' · ' + (s.secondPushStartPhase || '')) : '—');
+    h += kv('Confirmed', s.continuationConfirmedAt ? (fmtT(s.continuationConfirmedAt) + ' · ' + (s.confirmationPhase || '')) : '—');
+    h += kv('Invalidation lvl', px(s.invalidationLevel));
+    if (HIST.active && _data) h += kv('Data freshness', 'through ' + (_data.lastCompletedCandleUtc ? fmtT(_data.lastCompletedCandleUtc) : fmtT(_data.evaluatedAtUtc)));
+    h += '</div>';
+    h += '<div class="hc-reasons">Next: ' + (SESSION_NEXT[s.state] || '—') + '</div>';
+    if (s.invalidationCode) h += '<div class="hc-warn">Invalidation: ' + s.invalidationCode + '</div>';
+    if (s.reasonCodes && s.reasonCodes.length) h += '<div class="hc-reasons">Reasons: ' + s.reasonCodes.join(' · ') + '</div>';
+    h += '<div class="hc-foot"><span class="hc-badge-h1">Session · Completed H1 only</span><span>Evaluated ' + fmt(s.evaluatedAt || (_data && _data.evaluatedAtUtc)) + '</span></div>';
+    h += '<details class="hc-details"><summary>Technical details</summary><pre>' + JSON.stringify(s, null, 1) + '</pre></details>';
+    h += '</div>';
+    return h;
+  }
+  function renderSession() {
+    var body = document.getElementById('hc-body'), meta = document.getElementById('hc-meta');
+    if (!_data) return;
+    meta.innerHTML = '<span class="hc-badge-h1">SESSION · H1</span> · ' + (_data.evaluated || 0) + '/' + (_data.pairsRequested || 28) + ' pairs · ' + (_data.dataErrors || 0) + ' data errors · '
+      + (HIST.active ? 'historical' : 'generated ' + fmt(_data.generatedAt)) + ' · v' + (_data.engineVersion || '') + (HIST.active ? ' · <span style="color:#fbbf24">read-only</span>' : '');
+    var setups = (_data.setups || []).filter(passesFilters);
+    var any = false, html = '';
+    SESSION_GROUPS.forEach(function (g) {
+      var group = setups.filter(function (s) { return g.states.indexOf(s.state) !== -1; }).sort(function (a, b) { return (b.score || 0) - (a.score || 0); });
+      if (!group.length) return; any = true;
+      html += '<div class="hc-group"><div class="hc-group-hd"><span>' + g.label + '</span><span class="hc-group-count">' + group.length + '</span></div><div class="hc-cards">' + group.map(sessionCard).join('') + '</div></div>';
+    });
+    var errs = (_data.pairs || []).filter(function (p) { return p.dataQuality && !p.dataQuality.ok; });
+    if (errs.length) html += '<div class="hc-group"><div class="hc-group-hd"><span>Data-quality warnings</span><span class="hc-group-count">' + errs.length + '</span></div><div class="hc-warn" style="padding:8px 2px">' + errs.map(function (p) { return p.pair + ': ' + (p.dataQuality.reason || 'error'); }).join(' · ') + '</div></div>';
+    body.innerHTML = any ? html : '<div class="hc-empty">' + (HIST.active ? 'No session setups existed at this historical time.' : 'No session continuation setups match the current filters.') + '</div>';
+  }
+
   (function initStateFilter() {
     var sel = document.getElementById('f-state');
     STATES.forEach(function (s) { var o = document.createElement('option'); o.value = s; o.textContent = STATE_LABEL[s] || s; sel.appendChild(o); });
@@ -184,11 +266,16 @@
     var u = new URL(window.location.href);
     if (HIST.active && HIST.atMs != null) { u.searchParams.set('at', new Date(HIST.atMs).toISOString()); u.searchParams.set('timezone', histTz()); }
     else { u.searchParams.delete('at'); u.searchParams.delete('timezone'); }
+    if (MODE_TAB === 'session') u.searchParams.set('mode', 'session'); else u.searchParams.delete('mode');
     if (push) history.pushState({ at: HIST.atMs, tz: histTz(), view: VIEW }, '', u.toString());
     else history.replaceState({ at: HIST.atMs, tz: histTz(), view: VIEW }, '', u.toString());
   }
   window.addEventListener('popstate', function () {
     var u = new URL(window.location.href);
+    var m = u.searchParams.get('mode') === 'session' ? 'session' : 'generic';
+    MODE_TAB = m;
+    document.getElementById('tab-generic').classList.toggle('active', m === 'generic');
+    document.getElementById('tab-session').classList.toggle('active', m === 'session');
     var at = u.searchParams.get('at');
     if (at) { var ms = new Date(at).getTime(); if (!isNaN(ms)) { enterHistorical(snapH1(ms), false); return; } }
     goLive(false);
@@ -221,8 +308,9 @@
 
   // ── data load ───────────────────────────────────────────────────────────────
   function apiUrl() {
-    if (HIST.active && HIST.atMs != null) return '/api/h1-continuation-engine?at=' + encodeURIComponent(new Date(HIST.atMs).toISOString()) + '&timezone=' + encodeURIComponent(histTz());
-    return '/api/h1-continuation-engine';
+    var m = MODE_TAB === 'session' ? '&mode=session' : '';
+    if (HIST.active && HIST.atMs != null) return '/api/h1-continuation-engine?at=' + encodeURIComponent(new Date(HIST.atMs).toISOString()) + '&timezone=' + encodeURIComponent(histTz()) + m;
+    return '/api/h1-continuation-engine' + (m ? '?mode=session' : '');
   }
 
   async function load(silent) {
@@ -268,9 +356,10 @@
     var st = document.getElementById('f-state').value;
     var minScore = parseInt(document.getElementById('f-score').value, 10);
     var q = document.getElementById('f-pair').value.trim().toUpperCase();
+    var sc = s.setupScore != null ? s.setupScore : (s.score || 0);
     if (dir && s.direction !== dir) return false;
     if (st && s.state !== st) return false;
-    if (!isNaN(minScore) && (s.setupScore || 0) < minScore) return false;
+    if (!isNaN(minScore) && sc < minScore) return false;
     if (q && s.pair.replace('/', '').indexOf(q.replace('/', '')) === -1) return false;
     return true;
   }
@@ -337,6 +426,7 @@
   }
 
   function render() {
+    if (MODE_TAB === 'session') return renderSession();
     var body = document.getElementById('hc-body');
     var meta = document.getElementById('hc-meta');
     if (!_data) return;
@@ -424,6 +514,9 @@
   document.getElementById('h-next').addEventListener('click', function () { if (!HIST.active) return; var n = snapH1(HIST.atMs) + H1; if (BOUNDS.toMs != null && n > BOUNDS.toMs) return; enterHistorical(n, true); });
   document.getElementById('h-day').addEventListener('click', function () { if (!HIST.active) enterHistorical(BOUNDS.toMs || Date.now(), true); VIEW = 'day'; syncUrl(true); loadDay(); });
   document.getElementById('h-live').addEventListener('click', function () { goLive(true); });
+  function setTab(m) { if (MODE_TAB === m) return; MODE_TAB = m; document.getElementById('tab-generic').classList.toggle('active', m === 'generic'); document.getElementById('tab-session').classList.toggle('active', m === 'session'); VIEW = 'snapshot'; syncUrl(true); load(); }
+  document.getElementById('tab-generic').addEventListener('click', function () { setTab('generic'); });
+  document.getElementById('tab-session').addEventListener('click', function () { setTab('session'); });
   document.getElementById('h-tz').addEventListener('change', function () { if (HIST.active) { syncHistInputs(); syncUrl(false); load(); } });
 
   (async function () {
@@ -435,6 +528,8 @@
     // Restore a shared/refreshed historical selection from the URL; else live.
     var at = new URL(window.location.href).searchParams.get('at');
     var tzp = new URL(window.location.href).searchParams.get('timezone');
+    var modep = new URL(window.location.href).searchParams.get('mode');
+    if (modep === 'session') { MODE_TAB = 'session'; document.getElementById('tab-session').classList.add('active'); document.getElementById('tab-generic').classList.remove('active'); }
     if (tzp) { var ts = document.getElementById('h-tz'); if ([].slice.call(ts.options).some(function(o){return o.value===tzp;})) ts.value = tzp; }
     if (at) { var ms = new Date(at).getTime(); if (!isNaN(ms)) { enterHistorical(snapH1(ms), false); return; } }
     goLive(false);

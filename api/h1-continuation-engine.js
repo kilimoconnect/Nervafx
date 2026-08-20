@@ -23,6 +23,9 @@ const { persistScan } = require('./_h1c-persist');
 const { h1DataBounds } = require('./_h1c-data');
 const { snapToH1, isHistoricalRequest, localStr } = require('./_h1c-time');
 const { HOUR_MS, ENGINE_VERSION, CONFIGURATION_VERSION } = require('./_h1c-constants');
+const { scanAllSession } = require('./_h1cs-scan');
+const { persistSessionScan } = require('./_h1cs-persist');
+const H1CS = require('./_h1cs-constants');
 
 const DEFAULT_TZ = 'Africa/Dar_es_Salaam';
 
@@ -64,6 +67,34 @@ module.exports = async function handler(req, res) {
       }
     } else {
       evalMs = Date.now();
+    }
+
+    // ── SESSION mode (isolated; Generic path below is untouched) ─────────────
+    if (q.mode === 'session') {
+      const sscan = await scanAllSession(sb, { evalMs });
+      if (historical) {
+        sscan.persistence = { ok: false, skipped: true, reason: 'historical read-only — persistence disabled' };
+      } else {
+        const p = await persistSessionScan(sb, sscan);
+        sscan.persistence = { ok: p.persisted, transitionsAppended: p.transitionsAppended, error: p.error || null };
+      }
+      sscan.engineVersion = H1CS.ENGINE_VERSION;
+      sscan.configurationVersion = H1CS.CONFIGURATION_VERSION;
+      sscan.dataAvailableFrom = bounds && bounds.earliestCloseMs != null ? new Date(bounds.earliestCloseMs).toISOString() : null;
+      sscan.dataAvailableTo = bounds && bounds.latestCloseMs != null ? new Date(bounds.latestCloseMs).toISOString() : null;
+      if (historical) {
+        sscan.historicalMode = true;
+        sscan.requestedAtUtc = new Date(requestedAtMs).toISOString();
+        sscan.evaluatedAtUtc = new Date(evalMs).toISOString();
+        sscan.evaluatedAtLocal = localStr(evalMs, tz);
+        sscan.timezone = tz;
+        sscan.lastCompletedCandleUtc = new Date(evalMs).toISOString();
+        sscan.lastCompletedCandleLocal = localStr(evalMs, tz);
+        res.setHeader('Cache-Control', 's-maxage=86400, stale-while-revalidate=86400');
+      } else {
+        sscan.historicalMode = false;
+      }
+      return res.json(sscan);
     }
 
     const scan = await scanAll(sb, { evalMs, debug });
