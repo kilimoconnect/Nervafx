@@ -54,14 +54,25 @@ async function fetchClosed(sb, inst, timeframe, evalMs, tfMs, limit) {
   return filterClosed(data || [], evalMs, tfMs);
 }
 
-/** Fetch H1 + M15 for one pair (both completed-only), isolating failures at the caller. */
+/**
+ * Fetch H1 + M15 for one pair (both completed-only), isolating failures at the
+ * caller. Returns candle ARRAYS on `h1`/`m15` (what the evaluator consumes) plus
+ * per-timeframe `meta` (counts, rejected, gaps).
+ */
 async function fetchPair(sb, pair, evalMs, opts) {
   opts = opts || {};
-  const [h1, m15] = await Promise.all([
+  const [h1r, m15r] = await Promise.all([
     fetchClosed(sb, pair, 'H1', evalMs, HOUR_MS, opts.h1Limit || 120),
     fetchClosed(sb, pair, 'M15', evalMs, M15_MS, opts.m15Limit || 400),
   ]);
-  return { h1, m15 };
+  return {
+    h1: h1r.candles,
+    m15: m15r.candles,
+    meta: {
+      h1: { count: h1r.candles.length, rejected: h1r.rejected, gaps: h1r.gaps },
+      m15: { count: m15r.candles.length, rejected: m15r.rejected, gaps: m15r.gaps },
+    },
+  };
 }
 
 module.exports = { validOHLC, filterClosed, fetchClosed, fetchPair };

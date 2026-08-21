@@ -17,7 +17,7 @@ const { microFeatures } = require('./_cme-15m-features');
 const { windowBounds } = require('./_cme-windows');
 const { atr } = require('./_h1c-math');
 
-function toMap(cands) { return new Map((cands || []).map((c) => [c.openMs, c])); }
+function toMap(cands) { return new Map((Array.isArray(cands) ? cands : []).map((c) => [c.openMs, c])); }
 const inPairs = (pair, cur) => { const p = pair.split('_'); return p[0] === cur || p[1] === cur; };
 
 /** Evaluate one H1-bounded window (raw decomposition + per-hour dynamics + 15M refine). */
@@ -162,7 +162,8 @@ async function scanAll(sb, opts) {
       pairData[r.pair] = r.data;
       const w = [];
       if ((r.data.h1 || []).length < 24) w.push('h1_short');
-      if (r.data.h1 && r.data.h1.rejected) w.push('h1_malformed');
+      if (r.data.meta && r.data.meta.h1 && r.data.meta.h1.rejected) w.push('h1_malformed');
+      if (r.data.meta && r.data.meta.h1 && r.data.meta.h1.gaps) w.push('h1_gaps');
       if (w.length) warnings.push({ pair: r.pair, warnings: w });
     }
   }
