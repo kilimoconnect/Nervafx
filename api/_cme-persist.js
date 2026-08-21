@@ -18,7 +18,7 @@ async function persistCme(sb, scan) {
       rows.push({
         engine_version: version,
         evaluated_at: at,
-        window: win,
+        window_name: win,
         currency: cur,
         raw_movement: m.rawMovement,
         movement_score: m.movementScore,
@@ -42,7 +42,7 @@ async function persistCme(sb, scan) {
   if (!rows.length) return { persisted: true, rows: 0, error: null };
   try {
     const { error } = await sb.from('cme_currency_movement_values')
-      .upsert(rows, { onConflict: 'evaluated_at,window,currency,engine_version' });
+      .upsert(rows, { onConflict: 'evaluated_at,window_name,currency,engine_version' });
     if (error) throw error;
     return { persisted: true, rows: rows.length, error: null };
   } catch (e) {

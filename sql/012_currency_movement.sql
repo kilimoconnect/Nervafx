@@ -6,7 +6,7 @@ create table if not exists cme_currency_movement_values (
   id                            bigserial primary key,
   engine_version                text not null default 'v1',
   evaluated_at                  timestamptz not null,
-  window                        text not null,     -- H1 | M15 | REFERENCE_SESSION | ASIA_TO_DATE | LONDON_TO_DATE | DAY_TO_DATE
+  window_name                   text not null,     -- H1 | M15 | REFERENCE_SESSION | ASIA_TO_DATE | LONDON_TO_DATE | DAY_TO_DATE  ("window" is a reserved word)
   currency                      text not null,     -- USD | EUR | GBP | JPY | CHF | CAD | AUD | NZD
   raw_movement                  double precision,
   movement_score                double precision,  -- signed, -100..+100
@@ -26,8 +26,8 @@ create table if not exists cme_currency_movement_values (
   micro_state                   text,
   metrics                       jsonb,
   created_at                    timestamptz not null default now(),
-  unique (evaluated_at, window, currency, engine_version)
+  unique (evaluated_at, window_name, currency, engine_version)
 );
 
-create index if not exists idx_cme_eval_window on cme_currency_movement_values (evaluated_at, window);
-create index if not exists idx_cme_currency on cme_currency_movement_values (currency, window);
+create index if not exists idx_cme_eval_window on cme_currency_movement_values (evaluated_at, window_name);
+create index if not exists idx_cme_currency on cme_currency_movement_values (currency, window_name);
