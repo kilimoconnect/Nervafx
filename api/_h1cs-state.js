@@ -148,8 +148,14 @@ function evaluateSessionSetup(candles, opts) {
     const c = post[i];
     pullbackExtreme = dir > 0 ? Math.min(pullbackExtreme, c.low) : Math.max(pullbackExtreme, c.high);
 
+    // Breakout gate: the starting/confirming candle must close beyond the previous
+    // up-to-5 post-session candles' high (BUY) / low (SELL), in the trade direction.
+    let p5hi = -Infinity, p5lo = Infinity;
+    for (let k = Math.max(0, i - 5); k < i; k++) { p5hi = Math.max(p5hi, post[k].high); p5lo = Math.min(p5lo, post[k].low); }
+    const breaksPrev5 = i >= 1 && (dir > 0 ? c.close > p5hi : c.close < p5lo);
+
     // Continuation confirmed — close beyond the reference-session extreme (terminal, monotonic).
-    const brokeExtreme = dir > 0 ? c.close > refObj.high : c.close < refObj.low;
+    const brokeExtreme = (dir > 0 ? c.close > refObj.high : c.close < refObj.low) && breaksPrev5;
     if (brokeExtreme) {
       if (!secondPushStartedAt) { secondPushStartedAt = c.time; secondPushPhase = phaseOfC(c); }
       confirmationAt = c.time; confirmationPhase = phaseOfC(c); state = STATES.SESSION_CONTINUATION_CONFIRMED;
@@ -174,7 +180,8 @@ function evaluateSessionSetup(candles, opts) {
         // Second push = an energetic close beyond the FROZEN failure level (may be this candle or a later one).
         const breaks = dir > 0 ? c.close > failureLevel : c.close < failureLevel;
         const force = candleBody(c) >= CONTINUATION_FORCE_ATR * atr20 && (dir > 0 ? candleDirection(c) > 0 : candleDirection(c) < 0);
-        if (breaks && force) { secondPushStartedAt = c.time; secondPushPhase = phaseOfC(c); state = STATES.SECOND_PUSH_STARTED; }
+        // The push candle must also be a breakout of the previous up-to-5 post-session candles.
+        if (breaks && force && breaksPrev5) { secondPushStartedAt = c.time; secondPushPhase = phaseOfC(c); state = STATES.SECOND_PUSH_STARTED; }
         else { state = STATES.SECOND_PUSH_READY; }
       } else if (failureLevel == null && !secondPushStartedAt) {
         const rp = retracement(post.slice(0, i + 1));

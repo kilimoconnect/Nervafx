@@ -41,13 +41,17 @@ const SELL_SESSION = [
 function build(session, post) { return base(25).concat(session).concat(post); }
 const evalAfter = (post) => SS + 6 * H + post.length * H;
 
-// golden BUY post: pullback → failure(01:00) → second push(02:00–03:00) → high break later
+// golden BUY post: multi-candle pullback → failure → 5-bar-breakout second push
+// (below the reference high) → later high break confirms.
 const GOLDEN_POST = [
-  cndl(SS + 6 * H, 1.10600, 1.10610, 1.10520, 1.10540),  // 23:00 EAT pullback 1
-  cndl(SS + 7 * H, 1.10540, 1.10550, 1.10500, 1.10520),  // 00:00 EAT pullback 2
-  cndl(SS + 8 * H, 1.10520, 1.10560, 1.10505, 1.10555),  // 01:00 EAT failure → READY
-  cndl(SS + 9 * H, 1.10555, 1.10615, 1.10550, 1.10600),  // 02:00–03:00 EAT second push STARTED
-  cndl(SS + 10 * H, 1.10600, 1.10700, 1.10595, 1.10680), // 03:00 EAT breaks refHigh → CONFIRMED
+  cndl(SS + 6 * H, 1.10600, 1.10605, 1.10460, 1.10480),   // 23:00 EAT pullback
+  cndl(SS + 7 * H, 1.10480, 1.10490, 1.10420, 1.10440),   // 00:00 EAT
+  cndl(SS + 8 * H, 1.10440, 1.10450, 1.10390, 1.10410),   // 01:00 EAT
+  cndl(SS + 9 * H, 1.10410, 1.10430, 1.10375, 1.10400),   // 02:00 EAT pullback extreme
+  cndl(SS + 10 * H, 1.10400, 1.10440, 1.10380, 1.10435),  // 03:00 EAT failure CONFIRMED → READY
+  cndl(SS + 11 * H, 1.10435, 1.10460, 1.10425, 1.10450),  // 04:00 EAT still ready (no breakout)
+  cndl(SS + 12 * H, 1.10450, 1.10540, 1.10445, 1.10530),  // 05:00–06:00 EAT 5-bar breakout → SECOND_PUSH_STARTED
+  cndl(SS + 13 * H, 1.10530, 1.10700, 1.10520, 1.10680),  // 06:00 EAT breaks refHigh → CONFIRMED
 ];
 
 // ── reference-session extraction & conversion (1,2,3) ───────────────────────
@@ -137,11 +141,11 @@ test('second push after only two completed post-session candles (same evaluation
   assert.equal(r.state, STATES.SECOND_PUSH_STARTED);           // no stored FAILURE_CONFIRMED needed
   assert.equal(r.failureStatus, FAILURE_STATUS.CONFIRMED);
 });
-test('golden: failure inside pullback, push at 02:00–03:00, confirmed available at 03:00, no high break yet', () => {
-  const partial = GOLDEN_POST.slice(0, 4); // through the 02:00–03:00 push candle
+test('golden: failure inside pullback, 5-bar-breakout push below the reference high (no high break yet)', () => {
+  const partial = GOLDEN_POST.slice(0, 7); // through the breakout push candle
   const r = evaluateSessionSetup(build(BUY_SESSION, partial), { evalMs: evalAfter(partial) });
   assert.equal(r.state, STATES.SECOND_PUSH_STARTED);
-  assert.equal(r.secondPushStartedAt, iso(SS + 9 * H));       // 02:00–03:00 EAT candle
+  assert.equal(r.secondPushStartedAt, iso(SS + 12 * H));      // the breakout candle
   assert.equal(r.secondPushStartPhase, PHASE.ASIA);
   assert.equal(r.continuationConfirmedAt, null);              // reference high NOT yet broken
 });
@@ -150,14 +154,13 @@ test('later confirmation once the reference-session high breaks; Asia→Asia', (
   assert.equal(r.state, STATES.SESSION_CONTINUATION_CONFIRMED);
   assert.equal(r.secondPushStartPhase, PHASE.ASIA);
   assert.equal(r.confirmationPhase, PHASE.ASIA);
-  assert.ok(r.postSessionCandleCount < 6);                    // no 6-candle minimum needed
 });
 
 // ── phase combinations (19,20,21) ───────────────────────────────────────────
 test('ASIA start → LONDON confirmation', () => {
-  const post = GOLDEN_POST.slice(0, 4).concat([ // push in Asia (p3), hold, then break high in London
-    cndl(SS + 11 * H, 1.10600, 1.10610, 1.10560, 1.10590),
-    cndl(SS + 17 * H, 1.10590, 1.10700, 1.10580, 1.10680),   // 07:00 UTC 14 Aug = London → high break
+  const post = GOLDEN_POST.slice(0, 7).concat([ // Asia breakout push (SS+12H), hold, then high break in London
+    cndl(SS + 13 * H, 1.10530, 1.10560, 1.10520, 1.10550),   // holds below the reference high
+    cndl(SS + 17 * H, 1.10550, 1.10700, 1.10540, 1.10680),   // 07:00 UTC = London → breaks reference high
   ]);
   const r = evaluateSessionSetup(build(BUY_SESSION, post), { evalMs: SS + 18 * H });
   assert.equal(r.secondPushStartPhase, PHASE.ASIA);
@@ -195,11 +198,11 @@ test('setup expires at 17:00 EAT the following day (a new session then forms)', 
 
 // ── closed-candle / no-lookahead (26,27) & determinism ──────────────────────
 test('no candle after evalMs influences the result (closed-candle enforcement)', () => {
-  const partial = GOLDEN_POST.slice(0, 4);
-  const withFuture = build(BUY_SESSION, GOLDEN_POST); // includes the later high-break candle
-  const evalMs = evalAfter(partial); // before the high break closes
+  const partial = GOLDEN_POST.slice(0, 7);                    // through the breakout push
+  const withFuture = build(BUY_SESSION, GOLDEN_POST);          // includes the later high-break candle
+  const evalMs = evalAfter(partial);                           // before the high break closes
   const a = evaluateSessionSetup(build(BUY_SESSION, partial), { evalMs });
-  const b = evaluateSessionSetup(withFuture, { evalMs });        // future candle present but must be ignored
+  const b = evaluateSessionSetup(withFuture, { evalMs });      // future candle present but must be ignored
   assert.equal(a.state, b.state);
   assert.equal(b.state, STATES.SECOND_PUSH_STARTED);
   assert.equal(b.continuationConfirmedAt, null);
