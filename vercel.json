@@ -40,6 +40,7 @@
     "api/sharp-reversal-engine.js": { "maxDuration": 60 },
     "api/h1-continuation-engine.js": { "maxDuration": 60 },
     "api/h1-continuation-history.js": { "maxDuration": 60 },
+    "api/currency-movement-engine.js": { "maxDuration": 60 },
     "api/currency-strength-m5-ema.js": { "maxDuration": 30 },
     "api/backfill-m5.js": { "maxDuration": 300 },
     "api/currency-stability.js": { "maxDuration": 30 },
@@ -89,6 +90,7 @@
     { "source": "/pullback-tri-h4-engine", "destination": "/pullback-tri-h4-engine.html" },
     { "source": "/sharp-reversal-engine", "destination": "/sharp-reversal-engine.html" },
     { "source": "/h1-continuation-engine", "destination": "/h1-continuation-engine.html" },
+    { "source": "/currency-movement-engine", "destination": "/currency-movement-engine.html" },
     { "source": "/acceleration-v4-m15", "destination": "/acceleration-v4-m15.html" },
     { "source": "/currency-stability", "destination": "/currency-stability.html" },
     { "source": "/mtre", "destination": "/mtre.html" }
