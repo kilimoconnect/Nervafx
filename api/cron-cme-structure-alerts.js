@@ -16,6 +16,7 @@ const { sendBulk, cmeStructureAlertEmail } = require('../src/emailService');
 const cmeHandler = require('./currency-movement-engine.js');
 
 const MIN_CONFIRMED_EDGE = 40;          // only alert on strong confirmed edges
+const ALERT_GRADES = ['VERY_STRONG', 'EXPLOSIVE']; // only the strongest BOS grades
 const COOLDOWN_MS = 6 * 3600000;        // one email per pair+direction per 6h
 const HREF = 'https://www.nervafx.com/currency-movement-engine';
 
@@ -75,7 +76,10 @@ module.exports = async function handler(req, res) {
     const generatedAt = (r.data && r.data.generatedAt) || new Date().toISOString();
 
     const signals = edges
-      .filter((e) => e.opportunity === 'STRUCTURE_CONFIRMED_MOVEMENT' && Math.abs(e.pairConfirmedEdge || 0) >= MIN_CONFIRMED_EDGE && e.bosDirection && e.bosDirection !== 'NONE')
+      .filter((e) => e.opportunity === 'STRUCTURE_CONFIRMED_MOVEMENT'
+        && ALERT_GRADES.indexOf(e.bosGrade) !== -1
+        && Math.abs(e.pairConfirmedEdge || 0) >= MIN_CONFIRMED_EDGE
+        && e.bosDirection && e.bosDirection !== 'NONE')
       .map((e) => ({
         pair: e.pair.replace('_', '/'), instrument: e.pair, bosDirection: e.bosDirection, bosGrade: e.bosGrade,
         breakDistanceATR: e.breakDistanceATR, closeQuality: e.closeQuality,
