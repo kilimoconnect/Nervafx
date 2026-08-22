@@ -62,8 +62,8 @@ test('mixed-timeframe no-lookahead: later 15M/H1 candles do not affect the snaps
   const evalMs = startMs + 2 * HOUR_MS;            // third hour (and its 15M) not completed
   // The evaluator only reads candles ≤ evalMs; the maps are pre-built, but window
   // bounds cap at the last completed hour, so the third-hour data is never used.
-  const a = evaluateWindows(data, evalMs, { enhance15m: true });
-  const b = evaluateWindows(data, evalMs, { enhance15m: true });
+  const a = evaluateWindows(data, evalMs, { enhance15m: true }).windows;
+  const b = evaluateWindows(data, evalMs, { enhance15m: true }).windows;
   assert.deepEqual(a.H1, b.H1);
   assert.equal(a.H1.endCloseUtc, new Date(startMs + 2 * HOUR_MS).toISOString()); // latest completed close
 });

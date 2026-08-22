@@ -79,10 +79,37 @@ test('evaluateWindows H1 window is deterministic and additive-safe (no future ca
   const startMs = Date.UTC(2026, 7, 13, 8, 0, 0);
   const data = buildPairData(startMs, [zeroSum({ GBP: 0.002, JPY: -0.002 }), zeroSum({ GBP: 0.001, JPY: -0.001 })]);
   const evalMs = startMs + 2 * H; // only the first two hours are completed
-  const a = evaluateWindows(data, evalMs, { enhance15m: true });
-  const b = evaluateWindows(data, evalMs, { enhance15m: true });
+  const a = evaluateWindows(data, evalMs, { enhance15m: true }).windows;
+  const b = evaluateWindows(data, evalMs, { enhance15m: true }).windows;
   assert.deepEqual(a.H1, b.H1);
   // H1 window = the latest completed hour (startMs+H). GBP up that hour.
   assert.equal(a.H1.status, 'OK');
   assert.ok(a.H1.currencies.GBP.rawMovement > 0);
+});
+
+test('BOS structure integrates: latest-candle break → structure + confirmed score + pair edges', () => {
+  const startMs = Date.UTC(2026, 7, 13, 8, 0, 0);
+  const data = buildPairData(startMs, [zeroSum({ USD: 0.002, JPY: -0.002 }), zeroSum({ USD: 0.003, JPY: -0.003 })]);
+  const ev = evaluateWindows(data, startMs + 2 * H, { enhance15m: true });
+  assert.equal(ev.configurationVersion, 'structure_v1');
+  assert.ok(Array.isArray(ev.pairEdges) && ev.pairEdges.length > 0);
+  const usd = ev.windows.H1.currencies.USD;
+  assert.ok(usd.structure && typeof usd.structure.structureScore === 'number');
+  assert.equal(usd.structure.structureDirection, 'BULLISH');
+  assert.ok(usd.structureScore > 0 && usd.confirmedMovementScore > 0);
+  assert.ok(usd.microStructure);
+  const uj = ev.pairEdges.find((e) => e.pair === 'USD_JPY');
+  assert.ok(uj && uj.h1BreakOfStructure);
+  assert.equal(uj.bosDirection, 'BULLISH');
+  assert.ok(ev.windows.H1.bosStats && typeof ev.windows.H1.bosStats.bullishBreakCount === 'number');
+});
+
+test('structure snapshot is strictly no-lookahead: a later reversal candle does not change it', () => {
+  const startMs = Date.UTC(2026, 7, 13, 8, 0, 0);
+  const evalMs = startMs + 2 * H; // 3rd hour not completed
+  const withFuture = buildPairData(startMs, [zeroSum({ USD: 0.002, JPY: -0.002 }), zeroSum({ USD: 0.003, JPY: -0.003 }), zeroSum({ USD: -0.006, JPY: 0.006 })]);
+  const twoHours = buildPairData(startMs, [zeroSum({ USD: 0.002, JPY: -0.002 }), zeroSum({ USD: 0.003, JPY: -0.003 })]);
+  const a = evaluateWindows(withFuture, evalMs, { enhance15m: true }).windows.H1.currencies.USD.structure;
+  const b = evaluateWindows(twoHours, evalMs, { enhance15m: true }).windows.H1.currencies.USD.structure;
+  assert.deepEqual(a, b); // the future reversal candle is never used
 });

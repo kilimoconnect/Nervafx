@@ -10,6 +10,26 @@
 
 const ENGINE_KEY = 'currency_movement_engine';
 const ENGINE_VERSION = 'v1';
+// Bumped when the output schema changes (BOS layer added). Existing v1 records
+// stay readable; new BOS snapshots carry this configuration version.
+const CONFIGURATION_VERSION = 'structure_v1';
+
+// ── Break-of-Structure (BOS) thresholds — versioned so they can be calibrated ──
+const BOS = Object.freeze({
+  // strength grades by break distance in ATR
+  WEAK_ATR: 0.10, STRONG_ATR: 0.30, VERY_STRONG_ATR: 0.70, EXPLOSIVE_ATR: 1.20,
+  DECISIVE_ATR: 0.30,            // a break must be ≥ this ATR to be "decisive"
+  DECISIVE_CLOSE_QUALITY: 0.70,  // and close near its extreme
+  DISTANCE_CAP_ATR: 1.20,        // distanceComponent → 100% at this ATR
+  BODY_CAP_ATR: 1.50,            // bodyComponent → 100% at this ATR
+  // pair structure score weights
+  PAIR_W: Object.freeze({ distance: 0.60, closeQuality: 0.25, body: 0.15 }),
+  // currency structure score weights
+  CURRENCY_W: Object.freeze({ weighted: 0.60, breadth: 0.40 }),
+  // confirmed movement score blend
+  CONFIRMED_W: Object.freeze({ movement: 0.70, structure: 0.30 }),
+  STRONG_MOVEMENT: 40,           // |movementScore| ≥ this counts as a "strong" move
+});
 
 const HOUR_MS = 60 * 60 * 1000;
 const M15_MS = 15 * 60 * 1000;
@@ -62,7 +82,7 @@ const ACCEL_BLEND = Object.freeze({ h1: 0.7, m15: 0.3 });
 const MAGNITUDE_FULL_SCALE = 0.0040;   // ~40 bps of net currency movement
 
 module.exports = {
-  ENGINE_KEY, ENGINE_VERSION, HOUR_MS, M15_MS, CURRENCIES, PAIRS,
+  ENGINE_KEY, ENGINE_VERSION, CONFIGURATION_VERSION, BOS, HOUR_MS, M15_MS, CURRENCIES, PAIRS,
   ATR_PERIOD, M15_PER_H1, MIN_H1_HISTORY, MIN_15M_HISTORY,
   EAT_TZ, LONDON_TZ, SESSION_START_HOUR, SESSION_END_HOUR, LONDON_OPEN_HOUR,
   WINDOWS, STATES, stateForScore, WEIGHTS, ACCEL_BLEND, MAGNITUDE_FULL_SCALE,
