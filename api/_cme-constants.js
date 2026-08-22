@@ -16,6 +16,9 @@ const CONFIGURATION_VERSION = 'structure_v1';
 
 // ── Break-of-Structure (BOS) thresholds — versioned so they can be calibrated ──
 const BOS = Object.freeze({
+  // A Break of Structure is a decisive close beyond the high/low of the previous
+  // N completed candles (the "structure window"), not just the single prior candle.
+  STRUCTURE_LOOKBACK: 5,
   // strength grades by break distance in ATR
   WEAK_ATR: 0.10, STRONG_ATR: 0.30, VERY_STRONG_ATR: 0.70, EXPLOSIVE_ATR: 1.20,
   DECISIVE_ATR: 0.30,            // a break must be ≥ this ATR to be "decisive"

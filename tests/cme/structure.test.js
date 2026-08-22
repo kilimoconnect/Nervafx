@@ -12,6 +12,35 @@ const ATR = 0.0010;
 const c = (o, h, l, cl) => ({ open: o, high: h, low: l, close: cl });
 const prev = c(1.09950, 1.10000, 1.09900, 1.09960); // prevHigh 1.10000, prevLow 1.09900
 
+// 0 — structure reference is the high/low of the PREVIOUS 5 candles
+test('5-candle BOS: breaking only the immediate prior high is NOT a break', () => {
+  // window highs peak at 1.10100 two bars back; immediate prior high is 1.10000
+  const win = [
+    c(1.09900, 1.10100, 1.09850, 1.10050), // highest high of the window
+    c(1.10000, 1.10080, 1.09950, 1.10000),
+    c(1.09980, 1.10020, 1.09940, 1.09990),
+    c(1.09950, 1.10010, 1.09930, 1.09970),
+    c(1.09950, 1.10000, 1.09900, 1.09960), // immediate prior (high 1.10000)
+  ];
+  const b = detectH1BreakOfStructure(c(1.09990, 1.10040, 1.09985, 1.10030), win, ATR); // close 1.10030 > 1.10000 but < 1.10100
+  assert.equal(b.direction, 'NONE');
+  assert.equal(b.previousHigh, 1.10100);
+  assert.equal(b.lookback, 5);
+});
+test('5-candle BOS: closing above the window high IS a bullish break', () => {
+  const win = [
+    c(1.09900, 1.10100, 1.09850, 1.10050),
+    c(1.10000, 1.10080, 1.09950, 1.10000),
+    c(1.09980, 1.10020, 1.09940, 1.09990),
+    c(1.09950, 1.10010, 1.09930, 1.09970),
+    c(1.09950, 1.10000, 1.09900, 1.09960),
+  ];
+  const b = detectH1BreakOfStructure(c(1.10090, 1.10160, 1.10080, 1.10150), win, ATR); // close 1.10150 > window high 1.10100
+  assert.equal(b.direction, 'BULLISH');
+  assert.equal(b.brokenLevel, 1.10100);
+  assert.equal(b.previousLow, 1.09850); // lowest low of the window
+});
+
 // 1–6 direction / wick / equality
 test('bullish BOS: close above previous high', () => {
   const b = detectH1BreakOfStructure(c(1.09990, 1.10040, 1.09985, 1.10030), prev, ATR);

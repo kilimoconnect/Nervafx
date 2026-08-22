@@ -186,7 +186,7 @@
     var rows=edges.map(function(e){
       var col=e.bosDirection==='BULLISH'?'#4ade80':e.bosDirection==='BEARISH'?'#f87171':'#64748b';
       var bos=e.h1BreakOfStructure||{};
-      return '<tr title="prev H '+px(bos.previousHigh)+' / L '+px(bos.previousLow)+' · ATR20 '+(bos.atr20!=null?bos.atr20.toExponential(1):'—')+' · body '+(bos.bodyATR!=null?bos.bodyATR:'—')+' ATR">'
+      return '<tr title="5-bar H '+px(bos.previousHigh)+' / L '+px(bos.previousLow)+' · ATR20 '+(bos.atr20!=null?bos.atr20.toExponential(1):'—')+' · body '+(bos.bodyATR!=null?bos.bodyATR:'—')+' ATR">'
         +'<td style="font-weight:700;color:#fff">'+e.pair.replace('_','/')+'</td>'
         +'<td>'+(e.pairMovementEdge>0?'+':'')+e.pairMovementEdge+'</td>'
         +'<td>'+(e.pairConfirmedEdge>0?'+':'')+e.pairConfirmedEdge+'</td>'
@@ -197,7 +197,7 @@
         +'<td>'+e.structureAgreement+'</td>'
         +'<td style="color:#38bdf8">'+(e.opportunity||'').replace(/_/g,' ')+'</td></tr>';
     }).join('');
-    return '<div class="cm-edges"><h3>Pair edges &amp; Break of Structure <span style="font-size:10px;color:var(--text-dim)">(current H1 structure)</span></h3>'+fb
+    return '<div class="cm-edges"><h3>Pair edges &amp; Break of Structure <span style="font-size:10px;color:var(--text-dim)">(current H1 structure · BOS = close beyond prior 5-candle high/low)</span></h3>'+fb
       +'<div class="cm-tablewrap"><table class="cm-etable"><thead><tr><th>Pair</th><th>Move edge</th><th>Confirmed</th><th>BOS</th><th>Grade</th><th>Dist ATR</th><th>Close Q</th><th>Agree</th><th>Opportunity</th></tr></thead><tbody>'
       +(rows||'<tr><td colspan="9" style="color:var(--text-dim)">No pairs match this filter.</td></tr>')+'</tbody></table></div></div>';
   }

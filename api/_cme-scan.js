@@ -36,6 +36,7 @@ function rollingAtr(candles, period) {
  * completed candle vs its immediate predecessor), and per-currency aggregation.
  */
 function computeStructureSnapshot(h1arr, m15arr, evalMs) {
+  const LB = BOS.STRUCTURE_LOOKBACK;
   const latestH1Open = Math.floor(evalMs / HOUR_MS) * HOUR_MS - HOUR_MS;
   const latestM15Open = Math.floor(evalMs / M15_MS) * M15_MS - M15_MS;
   const pairBos = {};
@@ -43,23 +44,25 @@ function computeStructureSnapshot(h1arr, m15arr, evalMs) {
     const h1 = h1arr[pair] || [];
     const m15 = m15arr[pair] || [];
     const h1Idx = new Map(h1.map((c, i) => [c.openMs, i]));
-    const cur = h1[h1Idx.get(latestH1Open)];
-    const prev = h1[h1Idx.get(latestH1Open) - 1];
+    const curI = h1Idx.get(latestH1Open);
+    const cur = h1[curI];
+    const prevWin = curI != null ? h1.slice(Math.max(0, curI - LB), curI) : [];
     const atr20 = atr(h1, 20);
-    const h1BOS = detectH1BreakOfStructure(cur, prev, atr20);
+    const h1BOS = detectH1BreakOfStructure(cur, prevWin, atr20);
     const pairScore = calculatePairStructureScore(h1BOS);
 
     // 15M micro BOS on the latest completed 15M + counts over the last 4 (this H1).
     const m15Idx = new Map(m15.map((c, i) => [c.openMs, i]));
     const atr15 = atr(m15, 20);
-    const mcur = m15[m15Idx.get(latestM15Open)];
-    const mprev = m15[m15Idx.get(latestM15Open) - 1];
-    const microBOS = detect15MBreakOfStructure(mcur, mprev, atr15);
+    const mcurI = m15Idx.get(latestM15Open);
+    const mprevWin = mcurI != null ? m15.slice(Math.max(0, mcurI - LB), mcurI) : [];
+    const microBOS = detect15MBreakOfStructure(m15[mcurI], mprevWin, atr15);
     let microBull = 0, microBear = 0, microDec = 0;
     for (let k = 0; k < M15_PER_H1; k++) {
       const t = latestH1Open + k * M15_MS;
-      const cc = m15[m15Idx.get(t)]; const pp = m15[m15Idx.get(t) - 1];
-      const bb = detect15MBreakOfStructure(cc, pp, atr15);
+      const ccI = m15Idx.get(t);
+      const ppWin = ccI != null ? m15.slice(Math.max(0, ccI - LB), ccI) : [];
+      const bb = detect15MBreakOfStructure(m15[ccI], ppWin, atr15);
       if (bb.direction === 'BULLISH') microBull += 1; else if (bb.direction === 'BEARISH') microBear += 1;
       if (bb.decisiveBreak) microDec += 1;
     }
@@ -119,7 +122,7 @@ function windowBosStats(wb, h1map) {
     for (let h = wb.startOpenMs + HOUR_MS; h <= wb.endOpenMs; h += HOUR_MS) {
       const i = idx.get(h); if (i == null || i < 1) continue;
       const a = rAtr[i]; if (!(a > 0)) continue;
-      const b = detectH1BreakOfStructure(arr[i], arr[i - 1], a);
+      const b = detectH1BreakOfStructure(arr[i], arr.slice(Math.max(0, i - BOS.STRUCTURE_LOOKBACK), i), a);
       if (b.direction === 'NONE') continue;
       if (b.direction === 'BULLISH') bull += 1; else bear += 1;
       if (b.decisiveBreak) dec += 1;

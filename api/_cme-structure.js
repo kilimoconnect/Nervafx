@@ -32,27 +32,50 @@ function closeQualityOf(c, dir) {
 }
 
 /**
- * Detect a Break of Structure on the latest completed candle vs the immediately
- * previous completed candle. `atr20` must be computed from candles ≤ current.
+ * Reduce the previous-N completed candles into a structure reference level:
+ * the highest high and lowest low of the window. Accepts either an array of
+ * candles (the structure window) or a single candle (legacy 1-bar reference).
+ */
+function structureRef(prev) {
+  if (Array.isArray(prev)) {
+    let high = -Infinity, low = Infinity, n = 0;
+    for (const c of prev) {
+      if (!c || !isFinite(c.high) || !isFinite(c.low)) continue;
+      if (c.high > high) high = c.high;
+      if (c.low < low) low = c.low;
+      n += 1;
+    }
+    return n ? { high, low, count: n } : null;
+  }
+  return prev ? { high: prev.high, low: prev.low, count: 1 } : null;
+}
+
+/**
+ * Detect a Break of Structure on the latest completed candle vs the high/low of
+ * the previous N completed candles (BOS.STRUCTURE_LOOKBACK). Pass `prev` as the
+ * array of prior candles (the structure window); a single candle still works as
+ * a 1-bar reference. `atr20` must be computed from candles ≤ current.
  * Timeframe-agnostic (used for both H1 and 15M).
  */
 function detectBreak(cur, prev, atr20) {
+  const ref = structureRef(prev);
   const res = {
     direction: 'NONE', breakType: 'NO_BREAK',
-    previousHigh: prev ? prev.high : null, previousLow: prev ? prev.low : null, brokenLevel: null,
+    previousHigh: ref ? ref.high : null, previousLow: ref ? ref.low : null, brokenLevel: null,
+    lookback: ref ? ref.count : 0,
     closePrice: cur ? cur.close : null, breakDistancePrice: 0, breakDistanceATR: 0,
     closeQuality: 0, bodyATR: 0, atr20: atr20 || 0,
     strengthGrade: 'NO_BREAK', decisiveBreak: false, decisiveCloseQuality: false,
   };
-  if (!cur || !prev || !(atr20 > 0)) return res;
+  if (!cur || !ref || !(atr20 > 0)) return res;
 
-  const bull = cur.close > prev.high;            // strict — equality is NO_BREAK
-  const bear = cur.close < prev.low;
-  const wickUp = cur.high > prev.high && cur.close <= prev.high;
-  const wickDown = cur.low < prev.low && cur.close >= prev.low;
+  const bull = cur.close > ref.high;            // strict — equality is NO_BREAK
+  const bear = cur.close < ref.low;
+  const wickUp = cur.high > ref.high && cur.close <= ref.high;
+  const wickDown = cur.low < ref.low && cur.close >= ref.low;
 
-  if (bull) { res.direction = 'BULLISH'; res.breakType = 'CLOSE_BREAK'; res.brokenLevel = prev.high; res.breakDistancePrice = cur.close - prev.high; }
-  else if (bear) { res.direction = 'BEARISH'; res.breakType = 'CLOSE_BREAK'; res.brokenLevel = prev.low; res.breakDistancePrice = prev.low - cur.close; }
+  if (bull) { res.direction = 'BULLISH'; res.breakType = 'CLOSE_BREAK'; res.brokenLevel = ref.high; res.breakDistancePrice = cur.close - ref.high; }
+  else if (bear) { res.direction = 'BEARISH'; res.breakType = 'CLOSE_BREAK'; res.brokenLevel = ref.low; res.breakDistancePrice = ref.low - cur.close; }
   else if (wickUp || wickDown) { res.breakType = 'WICK_REJECTION'; }
 
   res.breakDistanceATR = res.breakDistancePrice > 0 ? round(res.breakDistancePrice / atr20) : 0;
@@ -177,7 +200,7 @@ function classifyMicroAgreement(h1Dir, microDir, microDecisiveCount) {
 }
 
 module.exports = {
-  strengthGrade, closeQualityOf, detectBreak, detectH1BreakOfStructure, detect15MBreakOfStructure,
+  strengthGrade, closeQualityOf, structureRef, detectBreak, detectH1BreakOfStructure, detect15MBreakOfStructure,
   calculatePairStructureScore, currencyDirFromPair, aggregateCurrencyStructure, currencyStructureScore,
   classifyStructureAgreement, confirmedMovementScore, classifyMicroAgreement,
 };
