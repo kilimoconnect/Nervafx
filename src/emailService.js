@@ -1475,6 +1475,65 @@ function sharpReversalAlertEmail(signal, tz) {
   };
 }
 
+// Currency Movement Engine — Structure-Confirmed Movement (BOS) alert.
+function cmeStructureAlertEmail(signal, tz) {
+  if (!signal) return null;
+  const isBull = signal.bosDirection === 'BULLISH';
+  const dirColor = isBull ? '#22c55e' : '#ef4444';
+  const dirBg = isBull ? 'rgba(34,197,94,0.14)' : 'rgba(239,68,68,0.14)';
+  const arrow = isBull ? '▲' : '▼';
+  const dirWord = isBull ? 'BULLISH' : 'BEARISH';
+  const gradeLabel = (signal.bosGrade || '').replace(/_/g, ' ');
+  const sigTime = _fmtTimeInTz(signal.generatedAt, tz);
+  const rowsHtml = (label, value, color) => `
+    <tr>
+      <td style="color:#64748b;font-size:11px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;padding:2px 0">${label}</td>
+      <td align="right" style="color:${color || '#f1f5f9'};font-size:13px;font-weight:700;padding:2px 0">${value}</td>
+    </tr>`;
+
+  const html = baseLayout(`
+    <h2>${arrow} ${signal.pair} — Structure-Confirmed ${dirWord}</h2>
+    <p class="sub">Currency Movement Engine · Break of Structure · ${sigTime}</p>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0">
+      <tr>
+        <td style="background:#0f172a;border-left:4px solid ${dirColor};border-radius:8px;padding:18px 20px">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="vertical-align:middle">
+                <span style="display:inline-block;background:${dirBg};color:${dirColor};font-weight:800;font-size:13px;padding:5px 12px;border-radius:5px;letter-spacing:0.6px">${dirWord}</span>
+                <span style="color:#f1f5f9;font-weight:800;font-size:22px;margin-left:12px;letter-spacing:-0.3px">${signal.pair}</span>
+              </td>
+              <td align="right" style="vertical-align:middle;white-space:nowrap">
+                <div style="color:#64748b;font-size:10px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase">BOS Grade</div>
+                <div style="color:${dirColor};font-weight:800;font-size:18px">${gradeLabel}</div>
+              </td>
+            </tr>
+          </table>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:14px;border-top:1px solid #1e293b;padding-top:12px">
+            ${rowsHtml('Break distance', (signal.breakDistanceATR != null ? signal.breakDistanceATR : '—') + ' ATR', '#38bdf8')}
+            ${rowsHtml('Close quality', Math.round((signal.closeQuality || 0) * 100) + '%')}
+            ${rowsHtml('Pair move edge', (signal.pairMovementEdge > 0 ? '+' : '') + signal.pairMovementEdge)}
+            ${rowsHtml('Confirmed edge', (signal.pairConfirmedEdge > 0 ? '+' : '') + signal.pairConfirmedEdge, dirColor)}
+            ${rowsHtml('Base / quote', signal.baseCurrency + ' / ' + signal.quoteCurrency)}
+            ${rowsHtml('Snapshot', sigTime)}
+          </table>
+        </td>
+      </tr>
+    </table>
+
+    <div style="text-align:center;margin-top:24px">
+      <a href="${signal.href || 'https://www.nervafx.com/currency-movement-engine'}" class="cta" style="display:inline-block;padding:12px 28px;background:${dirColor};color:#fff;font-weight:700;text-decoration:none;border-radius:6px;font-size:14px;letter-spacing:0.2px">Open Currency Movement Engine →</a>
+    </div>
+    <p class="sm" style="text-align:center;margin-top:16px">Analytical observation — a decisive H1 close beyond the previous candle's ${isBull ? 'high' : 'low'} confirming the currency movement. Not a trade recommendation.</p>
+  `);
+
+  return {
+    subject: `${arrow} ${signal.pair} — Structure-Confirmed ${dirWord} (${gradeLabel} BOS)`,
+    html,
+  };
+}
+
 module.exports = {
   sendEmail,
   sendBulk,
@@ -1490,4 +1549,5 @@ module.exports = {
   continuationAlertsEmail,
   continuationPairAlertEmail,
   sharpReversalAlertEmail,
+  cmeStructureAlertEmail,
 };
