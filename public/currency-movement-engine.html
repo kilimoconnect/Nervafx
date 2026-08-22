@@ -180,8 +180,9 @@
       default: return true;
     }
   }
+  var MIN_MOVE_EDGE=90; // only show pairs whose |move edge| is at least this
   function renderEdgesHtml(){
-    var edges=(DATA.pairEdges||[]).filter(edgePasses);
+    var edges=(DATA.pairEdges||[]).filter(function(e){return Math.abs(e.pairMovementEdge||0)>=MIN_MOVE_EDGE;}).filter(edgePasses);
     var fb='<div class="cm-efilter">'+EDGE_FILTERS.map(function(f){return '<button class="cm-etab'+(f===EFILTER?' active':'')+'" data-f="'+f+'">'+f+'</button>';}).join('')+'</div>';
     var rows=edges.map(function(e){
       var col=e.bosDirection==='BULLISH'?'#4ade80':e.bosDirection==='BEARISH'?'#f87171':'#64748b';
@@ -197,7 +198,7 @@
         +'<td>'+e.structureAgreement+'</td>'
         +'<td style="color:#38bdf8">'+(e.opportunity||'').replace(/_/g,' ')+'</td></tr>';
     }).join('');
-    return '<div class="cm-edges"><h3>Pair edges &amp; Break of Structure <span style="font-size:10px;color:var(--text-dim)">(current H1 structure · BOS = close beyond prior 5-candle high/low)</span></h3>'+fb
+    return '<div class="cm-edges"><h3>Pair edges &amp; Break of Structure <span style="font-size:10px;color:var(--text-dim)">(current H1 structure · BOS = close beyond prior 5-candle high/low · |move edge| &ge; 90 only)</span></h3>'+fb
       +'<div class="cm-tablewrap"><table class="cm-etable"><thead><tr><th>Pair</th><th>Move edge</th><th>Confirmed</th><th>BOS</th><th>Grade</th><th>Dist ATR</th><th>Close Q</th><th>Agree</th><th>Opportunity</th></tr></thead><tbody>'
       +(rows||'<tr><td colspan="9" style="color:var(--text-dim)">No pairs match this filter.</td></tr>')+'</tbody></table></div></div>';
   }
