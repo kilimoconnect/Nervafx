@@ -1405,75 +1405,6 @@ function continuationPairAlertEmail(signal, tz) {
   };
 }
 
-// ── Sharp Reversal pair alert ─────────────────────────────────────────────────
-// Event-driven: fired the moment a pair qualifies on /sharp-reversal-engine
-// (prior-5 break, Energy >= 90, and 15m HA + M15 + M5 all aligned with dir).
-function sharpReversalAlertEmail(signal, tz) {
-  if (!signal) return null;
-  const isBuy = signal.direction === 'BUY';
-  const dirColor = isBuy ? '#22c55e' : '#ef4444';
-  const dirBg    = isBuy ? 'rgba(34,197,94,0.14)' : 'rgba(239,68,68,0.14)';
-  const arrow    = isBuy ? '▲' : '▼';
-  const enColor  = (signal.energy ?? 0) >= 90 ? '#f43f5e'
-                 : (signal.energy ?? 0) >= 75 ? '#22c55e' : '#84cc16';
-  const scColor  = (signal.score ?? 0) >= 70 ? '#4ade80'
-                 : (signal.score ?? 0) >= 50 ? '#fbbf24' : '#f87171';
-  const stateLabel = { SHARP_REVERSAL: 'Sharp Reversal', NEW_TREND: 'New Trend', EXHAUSTION: 'Exhaustion' }[signal.state] || signal.state || '—';
-  const sigTime  = _fmtTimeInTz(signal.generatedAt, tz);
-
-  const html = baseLayout(`
-    <h2>${arrow} ${signal.pair} ${signal.direction} — Sharp Reversal</h2>
-    <p class="sub">${signal.modeLabel || 'Standard'} · ${signal.tfLabel || ''} · ${sigTime}</p>
-
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0">
-      <tr>
-        <td style="background:#0f172a;border-left:4px solid ${dirColor};border-radius:8px;padding:18px 20px">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-            <tr>
-              <td style="vertical-align:middle">
-                <span style="display:inline-block;background:${dirBg};color:${dirColor};font-weight:800;font-size:13px;padding:5px 12px;border-radius:5px;letter-spacing:0.6px">${signal.direction}</span>
-                <span style="color:#f1f5f9;font-weight:800;font-size:22px;margin-left:12px;letter-spacing:-0.3px">${signal.pair}</span>
-              </td>
-              <td align="right" style="vertical-align:middle;white-space:nowrap">
-                <div style="color:#64748b;font-size:10px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase">Energy</div>
-                <div style="color:${enColor};font-weight:800;font-size:22px;font-family:'SF Mono','Cascadia Code','Fira Code',Menlo,Consolas,monospace">${signal.energy ?? '—'}</div>
-              </td>
-            </tr>
-          </table>
-
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:14px;border-top:1px solid #1e293b;padding-top:12px">
-            <tr>
-              <td style="color:#64748b;font-size:11px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;padding:2px 0">State</td>
-              <td align="right" style="color:#f1f5f9;font-size:13px;font-weight:700;padding:2px 0">${stateLabel}</td>
-            </tr>
-            <tr>
-              <td style="color:#64748b;font-size:11px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;padding:2px 0">Score</td>
-              <td align="right" style="color:${scColor};font-size:13px;font-weight:700;padding:2px 0">${signal.score ?? '—'}</td>
-            </tr>
-            <tr>
-              <td style="color:#64748b;font-size:11px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;padding:2px 0">Timeframes</td>
-              <td align="right" style="color:#38bdf8;font-size:13px;font-weight:700;padding:2px 0">${signal.tfLabel || '—'}</td>
-            </tr>
-            <tr>
-              <td style="color:#64748b;font-size:11px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;padding:2px 0">Signal time</td>
-              <td align="right" style="color:#f1f5f9;font-size:13px;font-weight:600;padding:2px 0">${sigTime}</td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-
-    <div style="text-align:center;margin-top:24px">
-      <a href="${signal.href || 'https://www.nervafx.com/sharp-reversal-engine'}" class="cta" style="display:inline-block;padding:12px 28px;background:${dirColor};color:#fff;font-weight:700;text-decoration:none;border-radius:6px;font-size:14px;letter-spacing:0.2px">Open Sharp Reversal Engine →</a>
-    </div>
-    <p class="sm" style="text-align:center;margin-top:16px">Market observation — not a trade recommendation. Always apply your own risk management.</p>
-  `);
-
-  return {
-    subject: `${arrow} ${signal.pair} ${signal.direction} — Sharp Reversal (${signal.modeLabel || 'Standard'})`,
-    html,
-  };
-}
 
 // Currency Movement Engine — Structure-Confirmed Movement (BOS) alert.
 function cmeStructureAlertEmail(signal, tz) {
@@ -1548,6 +1479,5 @@ module.exports = {
   m15ImpulseEmail,
   continuationAlertsEmail,
   continuationPairAlertEmail,
-  sharpReversalAlertEmail,
   cmeStructureAlertEmail,
 };

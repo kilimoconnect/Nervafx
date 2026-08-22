@@ -3,7 +3,6 @@
   "crons": [
     { "path": "/api/cron-backtest-sync", "schedule": "1 * * * *" },
     { "path": "/api/run-pipeline?force=1", "schedule": "3 * * * *" },
-    { "path": "/api/cron-sharp-reversal-alerts?force=1", "schedule": "*/5 * * * *" },
     { "path": "/api/cron-cme-structure-alerts?force=1", "schedule": "5 * * * *" }
   ],
   "functions": {
@@ -28,7 +27,6 @@
     "api/top-down-analysis-m15.js": { "maxDuration": 120 },
     "api/m15-impulse.js": { "maxDuration": 60 },
     "api/cron-continuation-alerts.js": { "maxDuration": 45 },
-    "api/cron-sharp-reversal-alerts.js": { "maxDuration": 60 },
     "api/backtest-engine.js": { "maxDuration": 300 },
     "api/acceleration-v4.js": { "maxDuration": 60 },
     "api/currency-strength-h1-ema.js": { "maxDuration": 30 },
