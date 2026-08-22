@@ -103,6 +103,7 @@
   function tz(){ var e=document.getElementById('h-tz'); return (e&&e.value)||DEFAULT_TZ; }
   function auth(){ return { headers:{Authorization:'Bearer '+TOKEN}, cache:'no-store' }; }
   function fmtLocal(ms){ if(ms==null) return '—'; return new Date(ms).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',timeZone:tz()}); }
+  function px(v){ return v==null?'—':(+v).toFixed(5); }
   function zonedWallToUtcMs(y,mo,d,h,mi,zone){ var a=Date.UTC(y,mo-1,d,h,mi,0); var dtf=new Intl.DateTimeFormat('en-US',{timeZone:zone,hour12:false,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'}); var p={}; dtf.formatToParts(new Date(a)).forEach(function(x){if(x.type!=='literal')p[x.type]=x.value;}); var hh=(+p.hour)%24; var seen=Date.UTC(+p.year,+p.month-1,+p.day,hh,+p.minute,+p.second); return a+(a-seen); }
   function snapH1(ms){ return Math.floor(ms/H1)*H1; }
   function partsInTz(ms,zone){ var dtf=new Intl.DateTimeFormat('en-GB',{timeZone:zone,hour12:false,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}); var o={}; dtf.formatToParts(new Date(ms)).forEach(function(x){if(x.type!=='literal')o[x.type]=x.value;}); return o; }
