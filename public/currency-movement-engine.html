@@ -222,7 +222,7 @@
     var bs=w.bosStats;
     var info='<div class="cm-sub" style="padding-top:0">Window: <b>'+WLABEL[WINDOW]+'</b> · '+(w.startOpenUtc?w.startOpenUtc.slice(11,16):'')+'→'+(w.endCloseUtc?w.endCloseUtc.slice(11,16):'')+' UTC · '+(w.hours||0)+'h · '+(w.pairsUsed||0)+' pairs · residual '+(w.ssr!=null?w.ssr.toExponential(1):'—')
       +(bs?(' · BOS: '+bs.bullishBreakCount+'▲ '+bs.bearishBreakCount+'▼ · '+bs.decisiveBreakCount+' decisive'):'')+'</div>';
-    body.innerHTML=info+'<div class="cm-cards">'+curs.map(function(x){return card(x.c,x.m);}).join('')+'</div>'+renderEdgesHtml();
+    body.innerHTML=renderEdgesHtml()+info+'<div class="cm-cards">'+curs.map(function(x){return card(x.c,x.m);}).join('')+'</div>';
     [].forEach.call(document.querySelectorAll('.cm-etab'),function(b){ b.onclick=function(){ EFILTER=b.getAttribute('data-f'); render(); }; });
   }
 
