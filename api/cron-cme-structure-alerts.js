@@ -15,8 +15,11 @@ const { sendBulk, cmeStructureAlertEmail } = require('../src/emailService');
 
 const cmeHandler = require('./currency-movement-engine.js');
 
-const MIN_CONFIRMED_EDGE = 40;          // only alert on strong confirmed edges
-const ALERT_GRADES = ['VERY_STRONG', 'EXPLOSIVE']; // only the strongest BOS grades
+// Alert only on fully-qualified structure-confirmed movements (matches the
+// pair-edges table filter on the CME page).
+const MIN_MOVE_EDGE = 100;              // |pairMovementEdge| ≥ this
+const MIN_CONFIRMED_EDGE = 100;         // |pairConfirmedEdge| ≥ this
+const MIN_CLOSE_QUALITY = 0.80;         // BOS close quality ≥ this (80%)
 const COOLDOWN_MS = 6 * 3600000;        // one email per pair+direction per 6h
 const HREF = 'https://www.nervafx.com/currency-movement-engine';
 
@@ -77,8 +80,9 @@ module.exports = async function handler(req, res) {
 
     const signals = edges
       .filter((e) => e.opportunity === 'STRUCTURE_CONFIRMED_MOVEMENT'
-        && ALERT_GRADES.indexOf(e.bosGrade) !== -1
+        && Math.abs(e.pairMovementEdge || 0) >= MIN_MOVE_EDGE
         && Math.abs(e.pairConfirmedEdge || 0) >= MIN_CONFIRMED_EDGE
+        && (e.closeQuality || 0) >= MIN_CLOSE_QUALITY
         && e.bosDirection && e.bosDirection !== 'NONE')
       .map((e) => ({
         pair: e.pair.replace('_', '/'), instrument: e.pair, bosDirection: e.bosDirection, bosGrade: e.bosGrade,
@@ -93,7 +97,7 @@ module.exports = async function handler(req, res) {
         env: { cronSecretSet: !!process.env.CRON_SECRET, brevoKeySet: !!process.env.BREVO_API_KEY },
         engineError: (r.data && r.data.error) || null,
         totalEdges: edges.length,
-        candidates: signals.map((s) => ({ pair: s.pair, dir: s.bosDirection, grade: s.bosGrade, edge: s.pairConfirmedEdge })),
+        candidates: signals.map((s) => ({ pair: s.pair, dir: s.bosDirection, grade: s.bosGrade, moveEdge: s.pairMovementEdge, confirmed: s.pairConfirmedEdge, closeQ: s.closeQuality })),
       });
     }
 
