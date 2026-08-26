@@ -17,9 +17,9 @@ const cmeHandler = require('./currency-movement-engine.js');
 
 // Alert only on fully-qualified structure-confirmed movements (matches the
 // pair-edges table filter on the CME page).
-const MIN_MOVE_EDGE = 100;              // |pairMovementEdge| ≥ this
-const MIN_CONFIRMED_EDGE = 100;         // |pairConfirmedEdge| ≥ this
-const MIN_CLOSE_QUALITY = 0.80;         // BOS close quality ≥ this (80%)
+const MIN_MOVE_EDGE = 90;               // |pairMovementEdge| ≥ this
+const MIN_CONFIRMED_EDGE = 90;          // |pairConfirmedEdge| ≥ this
+const MIN_CLOSE_QUALITY = 0.70;         // BOS close quality ≥ this (70%)
 const COOLDOWN_MS = 6 * 3600000;        // one email per pair+direction per 6h
 const HREF = 'https://www.nervafx.com/currency-movement-engine';
 
