@@ -26,9 +26,9 @@ function getDB() {
 }
 
 /** Invoke the 15M Currency Movement Engine internally and capture its JSON. */
-function invokeEngine() {
+function invokeEngine(extraQuery) {
   return new Promise((resolve) => {
-    const req = { method: 'GET', query: {}, headers: {}, _internal: true };
+    const req = { method: 'GET', query: extraQuery || {}, headers: {}, _internal: true };
     let payload = null; let statusCode = 200;
     const res = {
       setHeader() {}, status(code) { statusCode = code; return this; },
@@ -72,7 +72,9 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const r = await invokeEngine();
+    const q = req.query || {};
+    const engineQuery = q.at ? { at: q.at, timezone: q.timezone } : {};
+    const r = await invokeEngine(engineQuery);
     const edges = (r.data && r.data.pairEdges) || [];
     const generatedAt = (r.data && r.data.generatedAt) || new Date().toISOString();
 
@@ -90,11 +92,20 @@ module.exports = async function handler(req, res) {
       }));
 
     if (isDebug) {
+      const topEdges = edges.slice()
+        .sort((a, b) => Math.abs(b.pairMovementEdge || 0) - Math.abs(a.pairMovementEdge || 0))
+        .slice(0, 10)
+        .map((e) => ({ pair: e.pair.replace('_', '/'), move: e.pairMovementEdge, confirmed: e.pairConfirmedEdge, closeQ: e.closeQuality, grade: e.bosGrade, dir: e.bosDirection, opp: e.opportunity }));
       return res.json({
         debug: true,
+        thresholds: { MIN_MOVE_EDGE, MIN_CONFIRMED_EDGE, MIN_CLOSE_QUALITY },
+        generatedAt: (r.data && r.data.generatedAt) || null,
+        evaluatedAtUtc: (r.data && r.data.evaluatedAtUtc) || null,
         env: { cronSecretSet: !!process.env.CRON_SECRET, brevoKeySet: !!process.env.BREVO_API_KEY },
         engineError: (r.data && r.data.error) || null,
         totalEdges: edges.length,
+        qualifying: signals.length,
+        topEdges,
         candidates: signals.map((s) => ({ pair: s.pair, dir: s.bosDirection, grade: s.bosGrade, moveEdge: s.pairMovementEdge, confirmed: s.pairConfirmedEdge, closeQ: s.closeQuality })),
       });
     }
