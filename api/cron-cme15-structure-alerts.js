@@ -92,6 +92,17 @@ module.exports = async function handler(req, res) {
       }));
 
     if (isDebug) {
+      // Alert-log summary for both engines (has the 15M cron ever delivered?).
+      let alertLog = null;
+      try {
+        const sb = getDB();
+        const since = new Date(Date.now() - 72 * 3600000).toISOString();
+        const { data: rows } = await sb.from('email_alert_log')
+          .select('alert_type, sent_at').in('alert_type', ['cme15_structure', 'cme_structure']).gte('sent_at', since).order('sent_at', { ascending: false });
+        const summ = { cme15_structure: { count: 0, latest: null }, cme_structure: { count: 0, latest: null } };
+        for (const row of rows || []) { const s = summ[row.alert_type]; if (!s) continue; s.count += 1; if (!s.latest) s.latest = row.sent_at; }
+        alertLog = { windowHours: 72, ...summ };
+      } catch (e) { alertLog = { error: e.message }; }
       const topEdges = edges.slice()
         .sort((a, b) => Math.abs(b.pairMovementEdge || 0) - Math.abs(a.pairMovementEdge || 0))
         .slice(0, 10)
@@ -103,6 +114,7 @@ module.exports = async function handler(req, res) {
         evaluatedAtUtc: (r.data && r.data.evaluatedAtUtc) || null,
         env: { cronSecretSet: !!process.env.CRON_SECRET, brevoKeySet: !!process.env.BREVO_API_KEY },
         engineError: (r.data && r.data.error) || null,
+        alertLog,
         totalEdges: edges.length,
         qualifying: signals.length,
         topEdges,
