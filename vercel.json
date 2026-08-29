@@ -3,8 +3,9 @@
   "crons": [
     { "path": "/api/cron-backtest-sync", "schedule": "1 * * * *" },
     { "path": "/api/run-pipeline?force=1", "schedule": "3 * * * *" },
-    { "path": "/api/cron-cme-structure-alerts?force=1", "schedule": "5 * * * *" },
-    { "path": "/api/cron-cme15-structure-alerts?force=1", "schedule": "*/15 * * * *" }
+    { "path": "/api/cron-cme-structure-alerts?force=1", "schedule": "*/30 * * * *" },
+    { "path": "/api/cron-cme15-structure-alerts?force=1", "schedule": "*/15 * * * *" },
+    { "path": "/api/cron-cme05-structure-alerts?force=1", "schedule": "*/5 * * * *" }
   ],
   "functions": {
     "api/news-parse.js":          { "maxDuration": 30 },
@@ -41,9 +42,9 @@
     "api/h1-continuation-engine.js": { "maxDuration": 60 },
     "api/h1-continuation-history.js": { "maxDuration": 60 },
     "api/currency-movement-engine.js": { "maxDuration": 60 },
-    "api/cron-cme-structure-alerts.js": { "maxDuration": 60 },
     "api/currency-movement-15m-engine.js": { "maxDuration": 60 },
-    "api/cron-cme15-structure-alerts.js": { "maxDuration": 60 },
+    "api/currency-movement-5m-engine.js": { "maxDuration": 60 },
+    "api/cron-cme*-structure-alerts.js": { "maxDuration": 60 },
     "api/currency-strength-m5-ema.js": { "maxDuration": 30 },
     "api/backfill-m5.js": { "maxDuration": 300 },
     "api/currency-stability.js": { "maxDuration": 30 },
@@ -95,6 +96,7 @@
     { "source": "/h1-continuation-engine", "destination": "/h1-continuation-engine.html" },
     { "source": "/currency-movement-engine", "destination": "/currency-movement-engine.html" },
     { "source": "/currency-movement-15m-engine", "destination": "/currency-movement-15m-engine.html" },
+    { "source": "/currency-movement-5m-engine", "destination": "/currency-movement-5m-engine.html" },
     { "source": "/acceleration-v4-m15", "destination": "/acceleration-v4-m15.html" },
     { "source": "/currency-stability", "destination": "/currency-stability.html" },
     { "source": "/mtre", "destination": "/mtre.html" }

@@ -1,44 +1,39 @@
 'use strict';
 
 /**
- * Currency Movement Engine — Structure-Confirmed Movement (BOS) alerts.
+ * Currency Movement Engine (5M) — Structure-Confirmed Movement alerts.
  *
- * Emails a pair the moment the Currency Movement Engine classifies it as
- * STRUCTURE_CONFIRMED_MOVEMENT — i.e. a decisive M30 Break of Structure (STRONG+
- * grade, ≥0.30 ATR, close quality ≥0.70) whose direction agrees with a clear
- * pair movement edge. Runs every 30 min (just after the M30 candle closes); the
- * state persists for several candles so we dedup per (pair|direction) with a
- * cooldown. (The engine at /api/currency-movement-engine is now M30-based.)
+ * Emails a pair the moment the 5M engine classifies it as
+ * STRUCTURE_CONFIRMED_MOVEMENT with |move edge| ≥ 90, |confirmed| ≥ 90 and BOS
+ * close quality ≥ 70% (same gate as the 5M page's pair-edges table). Runs every
+ * 5 minutes; deduped per (pair|direction) with a cooldown. Isolated.
  */
 
 const { createClient } = require('@supabase/supabase-js');
 const { sendBulk, cmeStructureAlertEmail } = require('../src/emailService');
 
-const cmeHandler = require('./currency-movement-engine.js');
+const cme05Handler = require('./currency-movement-5m-engine.js');
 
-// Alert only on fully-qualified structure-confirmed movements (matches the
-// pair-edges table filter on the CME page).
 const MIN_MOVE_EDGE = 90;               // |pairMovementEdge| ≥ this
 const MIN_CONFIRMED_EDGE = 90;          // |pairConfirmedEdge| ≥ this
 const MIN_CLOSE_QUALITY = 0.70;         // BOS close quality ≥ this (70%)
 const COOLDOWN_MS = 6 * 3600000;        // one email per pair+direction per 6h
-const HREF = 'https://www.nervafx.com/currency-movement-engine';
+const HREF = 'https://www.nervafx.com/currency-movement-5m-engine';
 
 function getDB() {
   return createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 }
 
-/** Invoke the Currency Movement Engine internally and capture its JSON. */
-function invokeEngine() {
+function invokeEngine(extraQuery) {
   return new Promise((resolve) => {
-    const req = { method: 'GET', query: {}, headers: {}, _internal: true };
+    const req = { method: 'GET', query: extraQuery || {}, headers: {}, _internal: true };
     let payload = null; let statusCode = 200;
     const res = {
       setHeader() {}, status(code) { statusCode = code; return this; },
       json(data) { payload = data; resolve({ status: statusCode, data }); return this; },
       end() { resolve({ status: statusCode, data: payload }); },
     };
-    Promise.resolve(cmeHandler(req, res)).catch((e) => resolve({ status: 500, data: { error: e.message } }));
+    Promise.resolve(cme05Handler(req, res)).catch((e) => resolve({ status: 500, data: { error: e.message } }));
   });
 }
 
@@ -75,7 +70,9 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const r = await invokeEngine();
+    const q = req.query || {};
+    const engineQuery = q.at ? { at: q.at, timezone: q.timezone } : {};
+    const r = await invokeEngine(engineQuery);
     const edges = (r.data && r.data.pairEdges) || [];
     const generatedAt = (r.data && r.data.generatedAt) || new Date().toISOString();
 
@@ -89,15 +86,20 @@ module.exports = async function handler(req, res) {
         pair: e.pair.replace('_', '/'), instrument: e.pair, bosDirection: e.bosDirection, bosGrade: e.bosGrade,
         breakDistanceATR: e.breakDistanceATR, closeQuality: e.closeQuality,
         pairMovementEdge: e.pairMovementEdge, pairConfirmedEdge: e.pairConfirmedEdge,
-        baseCurrency: e.baseCurrency, quoteCurrency: e.quoteCurrency, generatedAt, href: HREF,
+        baseCurrency: e.baseCurrency, quoteCurrency: e.quoteCurrency, timeframe: '5M', generatedAt, href: HREF,
       }));
 
     if (isDebug) {
+      const topEdges = edges.slice()
+        .sort((a, b) => Math.abs(b.pairMovementEdge || 0) - Math.abs(a.pairMovementEdge || 0))
+        .slice(0, 10)
+        .map((e) => ({ pair: e.pair.replace('_', '/'), move: e.pairMovementEdge, confirmed: e.pairConfirmedEdge, closeQ: e.closeQuality, grade: e.bosGrade, dir: e.bosDirection, opp: e.opportunity }));
       return res.json({
         debug: true,
-        env: { cronSecretSet: !!process.env.CRON_SECRET, brevoKeySet: !!process.env.BREVO_API_KEY },
+        thresholds: { MIN_MOVE_EDGE, MIN_CONFIRMED_EDGE, MIN_CLOSE_QUALITY },
+        generatedAt: (r.data && r.data.generatedAt) || null,
         engineError: (r.data && r.data.error) || null,
-        totalEdges: edges.length,
+        totalEdges: edges.length, qualifying: signals.length, topEdges,
         candidates: signals.map((s) => ({ pair: s.pair, dir: s.bosDirection, grade: s.bosGrade, moveEdge: s.pairMovementEdge, confirmed: s.pairConfirmedEdge, closeQ: s.closeQuality })),
       });
     }
@@ -108,11 +110,10 @@ module.exports = async function handler(req, res) {
     const users = await getSubscribedUsers(sb);
     if (!users.length) return res.json({ ok: true, sent: 0, reason: 'no subscribed users' });
 
-    // Per (pair|direction) cooldown from the alert log.
     const nowMs = Date.now();
     const cutoff = new Date(nowMs - 24 * 3600000).toISOString();
     const { data: sentRows } = await sb.from('email_alert_log')
-      .select('details, sent_at').eq('alert_type', 'cme_structure').gte('sent_at', cutoff);
+      .select('details, sent_at').eq('alert_type', 'cme05_structure').gte('sent_at', cutoff);
     const lastSentAt = new Map();
     for (const row of sentRows || []) {
       const d = row.details || {};
@@ -141,14 +142,14 @@ module.exports = async function handler(req, res) {
         try {
           await sendBulk(tzUsers.map((u) => ({ email: u.email, name: u.firstName })), template, { force: true });
           recipientCount += tzUsers.length;
-        } catch (e) { sendError = e.message; console.error('[cron-cme-structure-alerts] send failed', signal.pair, tz, e.message); }
+        } catch (e) { sendError = e.message; console.error('[cron-cme05-structure-alerts] send failed', signal.pair, tz, e.message); }
       }
       if (recipientCount > 0) {
         const { error: logErr } = await sb.from('email_alert_log').insert({
-          alert_type: 'cme_structure',
+          alert_type: 'cme05_structure',
           details: { instrument: signal.instrument, pair: signal.pair, direction: signal.bosDirection, grade: signal.bosGrade, breakDistanceATR: signal.breakDistanceATR, confirmedEdge: signal.pairConfirmedEdge, generatedAt: signal.generatedAt, recipients: recipientCount },
         });
-        if (logErr) console.error('[cron-cme-structure-alerts] log insert failed', logErr.message);
+        if (logErr) console.error('[cron-cme05-structure-alerts] log insert failed', logErr.message);
       }
       out.push({ key, recipientCount, error: sendError });
     }
@@ -156,7 +157,7 @@ module.exports = async function handler(req, res) {
     const dispatched = out.filter((o) => o.recipientCount > 0).length;
     return res.json({ ok: true, users: users.length, signals: signals.length, dispatched, skipped: out.filter((o) => o.skipped).length });
   } catch (e) {
-    console.error('[cron-cme-structure-alerts]', e);
+    console.error('[cron-cme05-structure-alerts]', e);
     return res.status(500).json({ error: e.message });
   }
 };
