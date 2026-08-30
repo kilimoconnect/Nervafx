@@ -95,9 +95,14 @@
     <a href="/archive" class="dash-tab" style="text-decoration:none">Archive</a>
     <a href="/autotrader" class="dash-tab" style="text-decoration:none">AutoTrader</a>
     <a href="/sharp-reversal-engine" target="_blank" class="dash-tab" style="text-decoration:none;color:#fb7185" title="Sharp Reversal Engine — finds markets changing direction (Trend→Exhaustion→Reversal Candidate→Sharp Reversal→New Trend). Standard H1/M15/M5 or Swing H4/H1/M15.">Sharp Reversal ↗</a>
-    <a href="/currency-movement-engine" target="_blank" class="dash-tab" style="text-decoration:none;color:#38bdf8" title="Currency Movement Engine (30M) — decomposes the 8 currencies' movement from all 28 pairs via pair log returns (constrained least squares) on the 30M timeframe, Break of Structure over the previous 10 M30 candles, refined by M15 micro-structure. Historical replay. Analytical only.">Currency Movement 30M ↗</a>
-    <a href="/currency-movement-15m-engine" target="_blank" class="dash-tab" style="text-decoration:none;color:#38bdf8" title="Currency Movement Engine (15M) — same decomposition on the 15M timeframe, Break of Structure over the previous 20 M15 candles, refined by M5 micro-structure. Historical replay. Analytical only.">Currency Movement 15M ↗</a>
-    <a href="/currency-movement-h1-engine" target="_blank" class="dash-tab" style="text-decoration:none;color:#38bdf8" title="Currency Movement Engine (H1) — same decomposition on the H1 timeframe, Break of Structure over the previous 5 H1 candles, refined by M15 micro-structure. Historical replay. Analytical only.">Currency Movement H1 ↗</a>
+    <div class="dash-dd">
+      <button type="button" class="dash-tab dash-dd-btn" style="color:#38bdf8">Currency Movement ▾</button>
+      <div class="dash-dd-menu">
+        <a href="/currency-movement-h1-engine" target="_blank" title="Currency Movement Engine (H1) — 8-currency decomposition on the H1 timeframe, Break of Structure over the previous 5 H1 candles, refined by M15 micro-structure. Historical replay. Analytical only.">H1 ↗</a>
+        <a href="/currency-movement-engine" target="_blank" title="Currency Movement Engine (30M) — 8-currency decomposition on the 30M timeframe, Break of Structure over the previous 10 M30 candles, refined by M15 micro-structure. Historical replay. Analytical only.">30M ↗</a>
+        <a href="/currency-movement-15m-engine" target="_blank" title="Currency Movement Engine (15M) — 8-currency decomposition on the 15M timeframe, Break of Structure over the previous 20 M15 candles, refined by M5 micro-structure. Historical replay. Analytical only.">15M ↗</a>
+      </div>
+    </div>
     <div class="dash-dd">
       <button type="button" class="dash-tab dash-dd-btn">Pair Strength ▾</button>
       <div class="dash-dd-menu">
