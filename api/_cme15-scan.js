@@ -1,17 +1,19 @@
 'use strict';
 
 /**
- * NervaFX Currency Movement Engine (30M) — scan orchestration.
+ * NervaFX Currency Movement Engine (15M twin) — scan orchestration.
  *
- * Timeframe-shifted mirror of _cme30-scan.js: the primary/structural timeframe
- * is H4 (BOS over the previous 10 completed H4 candles) and the micro layer is
- * H1. Reuses all pure maths from the H1 engine's modules.
+ * A faithful timeframe-shifted mirror of _cme-scan.js: the primary/structural
+ * timeframe is M15 (BOS over the previous 20 completed M15 candles) and the
+ * micro-confirmation layer is M5. All pure maths (decomposition, movement
+ * components, BOS detection, windows) is reused from the H1 engine's modules —
+ * only the candle timeframe, the BOS lookback, and the spot windows differ.
  */
 
 const {
-  HOUR_MS, BASE_MS, MICRO_MS, MICRO_PER_BASE, CURRENCIES, PAIRS, WINDOWS,
+  HOUR_MS, M15_MS, M5_MS, MICRO_PER_BASE, CURRENCIES, PAIRS, WINDOWS,
   ENGINE_KEY, ENGINE_VERSION, CONFIGURATION_VERSION, BOS,
-} = require('./_cmeh4-constants');
+} = require('./_cme15-constants');
 const { pairLogReturn, pairMoveATR, solveCurrencySystem, signedContribution } = require('./_cme-math');
 const { computeCurrencyComponents, assignRanks } = require('./_cme-features');
 const { microFeatures } = require('./_cme-15m-features');
@@ -25,42 +27,50 @@ const { atr } = require('./_h1c-math');
 const round = (v) => Math.round(v * 100000) / 100000;
 const r1 = (v) => Math.round(v * 10) / 10;
 
-const detectBaseBOS = detectH1BreakOfStructure;   // H4 primary
-const detectMicroBOS = detect15MBreakOfStructure; // H1 micro
+// Primary-timeframe BOS detector = generic detector with the M15 candle stream.
+const detectBaseBOS = detectH1BreakOfStructure;   // M15 primary
+const detectMicroBOS = detect15MBreakOfStructure; // M5 micro
 
+/** ATR ending at each candle index (no-lookahead) — atr[i] uses candles[0..i]. */
 function rollingAtr(candles, period) {
   const out = new Array(candles.length).fill(null);
   for (let i = period; i < candles.length; i++) out[i] = atr(candles.slice(0, i + 1), period);
   return out;
 }
 
-function computeStructureSnapshot(baseArr, microArr, evalMs) {
+/**
+ * Current structural snapshot as of evalMs: per-pair M15 (primary) + M5 (micro)
+ * BOS, each vs the previous BOS.STRUCTURE_LOOKBACK (20) candles, plus per-pair
+ * micro counts over the M5 candles inside the latest M15.
+ */
+function computeStructureSnapshot(m15arr, m5arr, evalMs) {
   const LB = BOS.STRUCTURE_LOOKBACK;
-  const latestBaseOpen = Math.floor(evalMs / BASE_MS) * BASE_MS - BASE_MS;
-  const latestMicroOpen = Math.floor(evalMs / MICRO_MS) * MICRO_MS - MICRO_MS;
+  const latestBaseOpen = Math.floor(evalMs / M15_MS) * M15_MS - M15_MS;
+  const latestMicroOpen = Math.floor(evalMs / M5_MS) * M5_MS - M5_MS;
   const pairBos = {};
   for (const pair of PAIRS) {
-    const b30 = baseArr[pair] || [];
-    const h1 = microArr[pair] || [];
-    const bIdx = new Map(b30.map((c, i) => [c.openMs, i]));
-    const curI = bIdx.get(latestBaseOpen);
-    const cur = b30[curI];
-    const prevWin = curI != null ? b30.slice(Math.max(0, curI - LB), curI) : [];
-    const atr20 = atr(b30, 20);
+    const m15 = m15arr[pair] || [];
+    const m5 = m5arr[pair] || [];
+    const m15Idx = new Map(m15.map((c, i) => [c.openMs, i]));
+    const curI = m15Idx.get(latestBaseOpen);
+    const cur = m15[curI];
+    const prevWin = curI != null ? m15.slice(Math.max(0, curI - LB), curI) : [];
+    const atr20 = atr(m15, 20);
     const h1BOS = detectBaseBOS(cur, prevWin, atr20);
     const pairScore = calculatePairStructureScore(h1BOS);
 
-    const mIdx = new Map(h1.map((c, i) => [c.openMs, i]));
-    const atrM = atr(h1, 20);
-    const mcurI = mIdx.get(latestMicroOpen);
-    const mprevWin = mcurI != null ? h1.slice(Math.max(0, mcurI - LB), mcurI) : [];
-    const microBOS = detectMicroBOS(h1[mcurI], mprevWin, atrM);
+    // M5 micro BOS on the latest completed M5 + counts over the last 3 (this M15).
+    const m5Idx = new Map(m5.map((c, i) => [c.openMs, i]));
+    const atr5 = atr(m5, 20);
+    const mcurI = m5Idx.get(latestMicroOpen);
+    const mprevWin = mcurI != null ? m5.slice(Math.max(0, mcurI - LB), mcurI) : [];
+    const microBOS = detectMicroBOS(m5[mcurI], mprevWin, atr5);
     let microBull = 0, microBear = 0, microDec = 0;
     for (let k = 0; k < MICRO_PER_BASE; k++) {
-      const t = latestBaseOpen + k * MICRO_MS;
-      const ccI = mIdx.get(t);
-      const ppWin = ccI != null ? h1.slice(Math.max(0, ccI - LB), ccI) : [];
-      const bb = detectMicroBOS(h1[ccI], ppWin, atrM);
+      const t = latestBaseOpen + k * M5_MS;
+      const ccI = m5Idx.get(t);
+      const ppWin = ccI != null ? m5.slice(Math.max(0, ccI - LB), ccI) : [];
+      const bb = detectMicroBOS(m5[ccI], ppWin, atr5);
       if (bb.direction === 'BULLISH') microBull += 1; else if (bb.direction === 'BEARISH') microBear += 1;
       if (bb.decisiveBreak) microDec += 1;
     }
@@ -69,6 +79,7 @@ function computeStructureSnapshot(baseArr, microArr, evalMs) {
   return { pairBos, latestBaseOpen };
 }
 
+/** Per-currency M15 structure aggregation from the current per-pair BOS. */
 function aggregateStructureByCurrency(pairBos) {
   const aggByCur = {};
   for (const cur of CURRENCIES) {
@@ -76,7 +87,7 @@ function aggregateStructureByCurrency(pairBos) {
     for (const pair of PAIRS) {
       if (pair.split('_')[0] !== cur && pair.split('_')[1] !== cur) continue;
       const pb = pairBos[pair];
-      if (!pb || pb.h1BOS.atr20 <= 0) continue;
+      if (!pb || pb.h1BOS.atr20 <= 0) continue;   // no data → excluded from coverage
       entries.push({ pair, bos: pb.h1BOS, score: pb.pairScore });
     }
     aggByCur[cur] = aggregateCurrencyStructure(cur, entries);
@@ -84,6 +95,7 @@ function aggregateStructureByCurrency(pairBos) {
   return aggByCur;
 }
 
+/** Per-currency micro structure from the current per-pair M5 BOS, oriented by M15 dir. */
 function microStructureByCurrency(pairBos, currency, baseDir) {
   let bull = 0, bear = 0, dec = 0, avail = 0;
   for (const pair of PAIRS) {
@@ -108,13 +120,14 @@ function microStructureByCurrency(pairBos, currency, baseDir) {
 function toMap(cands) { return new Map((Array.isArray(cands) ? cands : []).map((c) => [c.openMs, c])); }
 const inPairs = (pair, cur) => { const p = pair.split('_'); return p[0] === cur || p[1] === cur; };
 
-function windowBosStats(firstOpenMs, lastOpenMs, basemap) {
+/** Per-window candle-by-candle M15 BOS stats (no-lookahead: ATR per candle). */
+function windowBosStats(firstOpenMs, lastOpenMs, m15map) {
   let bull = 0, bear = 0, dec = 0, first = null, last = null, largest = 0, sumDist = 0, cnt = 0, latestDir = 'NONE';
   for (const pair of PAIRS) {
-    const arr = [...basemap[pair].values()].sort((a, b) => a.openMs - b.openMs);
+    const arr = [...m15map[pair].values()].sort((a, b) => a.openMs - b.openMs);
     const idx = new Map(arr.map((c, i) => [c.openMs, i]));
     const rAtr = rollingAtr(arr, 20);
-    for (let h = firstOpenMs + BASE_MS; h <= lastOpenMs; h += BASE_MS) {
+    for (let h = firstOpenMs + M15_MS; h <= lastOpenMs; h += M15_MS) {
       const i = idx.get(h); if (i == null || i < 1) continue;
       const a = rAtr[i]; if (!(a > 0)) continue;
       const b = detectBaseBOS(arr[i], arr.slice(Math.max(0, i - BOS.STRUCTURE_LOOKBACK), i), a);
@@ -132,16 +145,21 @@ function windowBosStats(firstOpenMs, lastOpenMs, basemap) {
   };
 }
 
-function evalBaseWindow(firstOpenMs, lastOpenMs, meta, basemap, micromap, atrMap, enhanceMicro, structSnap) {
+/**
+ * Evaluate one M15-stepped window [firstOpenMs, lastOpenMs] (both M15 opens):
+ * raw decomposition + per-M15 dynamics + M5 micro refine + BOS layer.
+ */
+function evalBaseWindow(firstOpenMs, lastOpenMs, meta, m15map, m5map, atrMap, enhanceMicro, structSnap) {
   const steps = [];
-  for (let t = firstOpenMs; t <= lastOpenMs; t += BASE_MS) steps.push(t);
-  const lastMicroOpen = lastOpenMs + BASE_MS - MICRO_MS;
+  for (let t = firstOpenMs; t <= lastOpenMs; t += M15_MS) steps.push(t);
+  const lastMicroOpen = lastOpenMs + M15_MS - M5_MS;
 
+  // Window-level pair returns (first M15 open → last M15 close).
   const pairReturns = {};
   const pairInfo = [];
   for (const pair of PAIRS) {
-    const startC = basemap[pair].get(firstOpenMs);
-    const endC = basemap[pair].get(lastOpenMs);
+    const startC = m15map[pair].get(firstOpenMs);
+    const endC = m15map[pair].get(lastOpenMs);
     if (!startC || !endC) continue;
     const lr = pairLogReturn(startC.open, endC.close);
     if (lr == null) continue;
@@ -150,28 +168,30 @@ function evalBaseWindow(firstOpenMs, lastOpenMs, meta, basemap, micromap, atrMap
   }
   const sol = solveCurrencySystem(pairReturns);
 
+  // Per-M15 movement sequence (for efficiency / persistence / acceleration).
   const stepByCur = {}; CURRENCIES.forEach((c) => { stepByCur[c] = []; });
   for (const t of steps) {
     const hr = {};
-    for (const pair of PAIRS) { const c = basemap[pair].get(t); if (!c) continue; const lr = pairLogReturn(c.open, c.close); if (lr != null) hr[pair] = lr; }
+    for (const pair of PAIRS) { const c = m15map[pair].get(t); if (!c) continue; const lr = pairLogReturn(c.open, c.close); if (lr != null) hr[pair] = lr; }
     if (!Object.keys(hr).length) continue;
     const hs = solveCurrencySystem(hr);
     CURRENCIES.forEach((c) => stepByCur[c].push(hs.movement[c]));
   }
 
+  // M5 micro sequence (per M5 step) + M5 window returns (for micro breadth).
   const microByCur = {}; CURRENCIES.forEach((c) => { microByCur[c] = []; });
   const microContrib = {}; CURRENCIES.forEach((c) => { microContrib[c] = []; });
   if (enhanceMicro) {
-    for (let t = firstOpenMs; t <= lastMicroOpen; t += MICRO_MS) {
+    for (let t = firstOpenMs; t <= lastMicroOpen; t += M5_MS) {
       const mr = {};
-      for (const pair of PAIRS) { const c = micromap[pair].get(t); if (!c) continue; const lr = pairLogReturn(c.open, c.close); if (lr != null) mr[pair] = lr; }
+      for (const pair of PAIRS) { const c = m5map[pair].get(t); if (!c) continue; const lr = pairLogReturn(c.open, c.close); if (lr != null) mr[pair] = lr; }
       if (!Object.keys(mr).length) continue;
       const ms = solveCurrencySystem(mr);
       CURRENCIES.forEach((c) => microByCur[c].push(ms.movement[c]));
     }
     for (const pair of PAIRS) {
-      const s = micromap[pair].get(firstOpenMs);
-      const e = micromap[pair].get(lastMicroOpen);
+      const s = m5map[pair].get(firstOpenMs);
+      const e = m5map[pair].get(lastMicroOpen);
       if (!s || !e) continue;
       const lr = pairLogReturn(s.open, e.close);
       if (lr == null) continue;
@@ -196,6 +216,7 @@ function evalBaseWindow(firstOpenMs, lastOpenMs, meta, basemap, micromap, atrMap
   }
   assignRanks(currencies);
 
+  // ── BOS structure layer (additive) ──────────────────────────────────────────
   if (structSnap) {
     for (const cur of CURRENCIES) {
       const comp = currencies[cur];
@@ -212,20 +233,20 @@ function evalBaseWindow(firstOpenMs, lastOpenMs, meta, basemap, micromap, atrMap
   return {
     status: 'OK',
     startOpenUtc: new Date(firstOpenMs).toISOString(),
-    endCloseUtc: new Date(lastOpenMs + BASE_MS).toISOString(),
-    steps: steps.length, stepMinutes: BASE_MS / 60000, pairsUsed: sol.pairsUsed, ssr: sol.ssr,
+    endCloseUtc: new Date(lastOpenMs + M15_MS).toISOString(),
+    steps: steps.length, stepMinutes: 15, pairsUsed: sol.pairsUsed, ssr: sol.ssr,
     currencies, meta: meta || null,
-    bosStats: windowBosStats(firstOpenMs, lastOpenMs, basemap),
+    bosStats: windowBosStats(firstOpenMs, lastOpenMs, m15map),
   };
 }
 
-/** The H1 window: the latest completed H1 candle only (intra-H4 snapshot). */
-function evalMicroSpotWindow(micromap, evalMs) {
-  const lastClose = Math.floor(evalMs / MICRO_MS) * MICRO_MS;
-  const open = lastClose - MICRO_MS;
+/** The M5 window: the latest completed M5 candle only (intra-15m snapshot). */
+function evalMicroSpotWindow(m5map, evalMs) {
+  const lastClose = Math.floor(evalMs / M5_MS) * M5_MS;
+  const open = lastClose - M5_MS;
   const returns = {};
   const pairInfo = [];
-  for (const pair of PAIRS) { const c = micromap[pair].get(open); if (!c) continue; const lr = pairLogReturn(c.open, c.close); if (lr == null) continue; returns[pair] = lr; pairInfo.push({ pair, logReturn: lr }); }
+  for (const pair of PAIRS) { const c = m5map[pair].get(open); if (!c) continue; const lr = pairLogReturn(c.open, c.close); if (lr == null) continue; returns[pair] = lr; pairInfo.push({ pair, logReturn: lr }); }
   if (!pairInfo.length) return { status: 'NOT_ACTIVE' };
   const sol = solveCurrencySystem(returns);
   const currencies = {};
@@ -235,9 +256,10 @@ function evalMicroSpotWindow(micromap, evalMs) {
     currencies[cur] = computeCurrencyComponents({ rawMovement: raw, hourlySeq: [raw], contribsH1: contribs, micro: null });
   }
   assignRanks(currencies);
-  return { status: 'OK', startOpenUtc: new Date(open).toISOString(), endCloseUtc: new Date(lastClose).toISOString(), steps: 1, stepMinutes: MICRO_MS / 60000, pairsUsed: sol.pairsUsed, ssr: sol.ssr, currencies };
+  return { status: 'OK', startOpenUtc: new Date(open).toISOString(), endCloseUtc: new Date(lastClose).toISOString(), steps: 1, stepMinutes: 5, pairsUsed: sol.pairsUsed, ssr: sol.ssr, currencies };
 }
 
+/** Pair movement/structure edges + BOS opportunity classification (from the primary M15 window). */
 function buildPairEdges(primaryW, pairBos) {
   if (!primaryW || primaryW.status !== 'OK') return [];
   const cur = primaryW.currencies;
@@ -271,39 +293,44 @@ function buildPairEdges(primaryW, pairBos) {
   return edges;
 }
 
+/**
+ * @param {Object} pairData { pair: { m15:[], m5:[] } } (completed candles)
+ * @param {number} evalMs
+ * @param {{enhanceMicro?:boolean}} [opts]
+ */
 function evaluateWindows(pairData, evalMs, opts) {
   opts = opts || {};
   const enhanceMicro = opts.enhanceMicro !== false;
-  const baseArr = {}, microArr = {}, basemap = {}, micromap = {}, atrMap = {};
+  const m15arr = {}, m5arr = {}, m15map = {}, m5map = {}, atrMap = {};
   for (const pair of PAIRS) {
     const pd = pairData[pair] || {};
-    baseArr[pair] = Array.isArray(pd.h4) ? pd.h4 : [];
-    microArr[pair] = Array.isArray(pd.h1) ? pd.h1 : [];
-    basemap[pair] = toMap(baseArr[pair]);
-    micromap[pair] = toMap(microArr[pair]);
-    atrMap[pair] = atr(baseArr[pair], 20);
+    m15arr[pair] = Array.isArray(pd.m15) ? pd.m15 : [];
+    m5arr[pair] = Array.isArray(pd.m5) ? pd.m5 : [];
+    m15map[pair] = toMap(m15arr[pair]);
+    m5map[pair] = toMap(m5arr[pair]);
+    atrMap[pair] = atr(m15arr[pair], 20);
   }
-  const snap = computeStructureSnapshot(baseArr, microArr, evalMs);
+  const snap = computeStructureSnapshot(m15arr, m5arr, evalMs);
   snap.aggByCur = aggregateStructureByCurrency(snap.pairBos);
 
   const windowsOut = {};
   for (const name of WINDOWS) {
-    if (opts.primaryOnly && name !== 'H4') continue;   // sweep: primary window + edges only
-    if (name === 'H4') {
-      const lastBaseOpen = Math.floor(evalMs / BASE_MS) * BASE_MS - BASE_MS;
+    if (opts.primaryOnly && name !== 'M15') continue;   // sweep: primary window + edges only
+    if (name === 'M15') {
+      const lastBaseOpen = Math.floor(evalMs / M15_MS) * M15_MS - M15_MS;
       windowsOut[name] = lastBaseOpen < 0 ? { status: 'NOT_ACTIVE' }
-        : evalBaseWindow(lastBaseOpen, lastBaseOpen, null, basemap, micromap, atrMap, enhanceMicro, snap);
+        : evalBaseWindow(lastBaseOpen, lastBaseOpen, null, m15map, m5map, atrMap, enhanceMicro, snap);
       continue;
     }
-    if (name === 'H1') { windowsOut[name] = evalMicroSpotWindow(micromap, evalMs); continue; }
+    if (name === 'M5') { windowsOut[name] = evalMicroSpotWindow(m5map, evalMs); continue; }
     const wb = windowBounds(name, evalMs);
     if (!wb.ok) { windowsOut[name] = { status: wb.status }; continue; }
-    windowsOut[name] = evalBaseWindow(wb.startOpenMs, wb.endOpenMs + HOUR_MS - BASE_MS, wb.meta, basemap, micromap, atrMap, enhanceMicro, snap);
+    windowsOut[name] = evalBaseWindow(wb.startOpenMs, wb.endOpenMs + HOUR_MS - M15_MS, wb.meta, m15map, m5map, atrMap, enhanceMicro, snap);
   }
   return {
     windows: windowsOut,
-    pairEdges: buildPairEdges(windowsOut.H4, snap.pairBos),
-    structureSnapshotAt: new Date(snap.latestBaseOpen + BASE_MS).toISOString(),
+    pairEdges: buildPairEdges(windowsOut.M15, snap.pairBos),
+    structureSnapshotAt: new Date(snap.latestBaseOpen + M15_MS).toISOString(),
     configurationVersion: CONFIGURATION_VERSION,
   };
 }
@@ -312,7 +339,7 @@ async function scanAll(sb, opts) {
   opts = opts || {};
   const evalMs = opts.evalMs != null ? opts.evalMs : Date.now();
   const enhanceMicro = opts.enhanceMicro !== false;
-  const { fetchPairH4 } = require('./_cmeh4-data');
+  const { fetchPair15 } = require('./_cme15-data');
 
   const pairData = {};
   const pairErrors = [];
@@ -321,15 +348,16 @@ async function scanAll(sb, opts) {
     const batch = PAIRS.slice(i, i + 7);
     // eslint-disable-next-line no-await-in-loop
     const results = await Promise.all(batch.map(async (pair) => {
-      try { return { pair, data: await fetchPairH4(sb, pair, evalMs, {}) }; }
+      try { return { pair, data: await fetchPair15(sb, pair, evalMs, {}) }; }
       catch (e) { return { pair, error: e.message }; }
     }));
     for (const r of results) {
       if (r.error) { pairErrors.push({ pair: r.pair, error: r.error }); continue; }
       pairData[r.pair] = r.data;
       const w = [];
-      if ((r.data.h4 || []).length < 24) w.push('h4_short');
-      if (r.data.meta && r.data.meta.h1 && r.data.meta.h1.gaps) w.push('h1_gaps');
+      if ((r.data.m15 || []).length < 24) w.push('m15_short');
+      if (r.data.meta && r.data.meta.m15 && r.data.meta.m15.rejected) w.push('m15_malformed');
+      if (r.data.meta && r.data.meta.m15 && r.data.meta.m15.gaps) w.push('m15_gaps');
       if (w.length) warnings.push({ pair: r.pair, warnings: w });
     }
   }

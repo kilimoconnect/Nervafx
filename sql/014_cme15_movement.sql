@@ -1,14 +1,14 @@
--- NervaFX Currency Movement Engine — H4 variant persistence (isolated, additive).
+-- NervaFX Currency Movement Engine — 15M twin persistence (isolated, additive).
 -- Apply in the Supabase SQL editor. Idempotent (IF NOT EXISTS). Its OWN tables —
 -- does NOT touch the H1 engine's cme_* tables or any currency-strength tables.
--- Primary timeframe H4, micro H1, BOS lookback 5. All timestamps UTC.
+-- Primary timeframe M15, micro M5, BOS lookback 20. All timestamps UTC.
 
-create table if not exists cmeh4_currency_movement_values (
+create table if not exists cme15_currency_movement_values (
   id                            bigserial primary key,
   engine_version                text not null default 'v1',
   configuration_version         text,
   evaluated_at                  timestamptz not null,
-  window_name                   text not null,     -- H4 | H1 | REFERENCE_SESSION | ASIA_TO_DATE | LONDON_TO_DATE | DAY_TO_DATE
+  window_name                   text not null,     -- M15 | M5 | REFERENCE_SESSION | ASIA_TO_DATE | LONDON_TO_DATE | DAY_TO_DATE
   currency                      text not null,     -- USD | EUR | GBP | JPY | CHF | CAD | AUD | NZD
   raw_movement                  double precision,
   movement_score                double precision,  -- signed, -100..+100
@@ -24,7 +24,7 @@ create table if not exists cmeh4_currency_movement_values (
   micro_persistence             double precision,
   micro_breadth                 double precision,
   micro_state                   text,
-  -- BOS structure layer (structure_h4_v1)
+  -- BOS structure layer (structure_15m_v1)
   structure_score               double precision,
   structure_direction           text,
   structure_classification      text,
@@ -38,14 +38,14 @@ create table if not exists cmeh4_currency_movement_values (
   unique (evaluated_at, window_name, currency, engine_version)
 );
 
-create index if not exists idx_cmeh4_eval_window on cmeh4_currency_movement_values (evaluated_at, window_name);
-create index if not exists idx_cmeh4_currency on cmeh4_currency_movement_values (currency, window_name);
+create index if not exists idx_cme15_eval_window on cme15_currency_movement_values (evaluated_at, window_name);
+create index if not exists idx_cme15_currency on cme15_currency_movement_values (currency, window_name);
 
 -- Pair-level Break of Structure (M15 primary).
-create table if not exists cmeh4_pair_structure (
+create table if not exists cme15_pair_structure (
   id                    bigserial primary key,
   engine_version        text not null default 'v1',
-  configuration_version text not null default 'structure_h4_v1',
+  configuration_version text not null default 'structure_15m_v1',
   evaluated_at          timestamptz not null,
   pair                  text not null,
   base_currency         text,
@@ -72,5 +72,5 @@ create table if not exists cmeh4_pair_structure (
   created_at            timestamptz not null default now(),
   unique (evaluated_at, pair, configuration_version)
 );
-create index if not exists idx_cmeh4_pair_struct_eval on cmeh4_pair_structure (evaluated_at);
-create index if not exists idx_cmeh4_pair_struct_pair on cmeh4_pair_structure (pair);
+create index if not exists idx_cme15_pair_struct_eval on cme15_pair_structure (evaluated_at);
+create index if not exists idx_cme15_pair_struct_pair on cme15_pair_structure (pair);

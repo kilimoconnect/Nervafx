@@ -1,26 +1,26 @@
 'use strict';
 
 /**
- * GET /api/currency-movement-h4-engine
+ * GET /api/currency-movement-15m-engine
  *
- * NervaFX Currency Movement Engine — H4 variant. Same eight-currency
- * decomposition, primary/structural timeframe H4 (synthesized from H1; BOS over
- * the previous 5 H4 candles) refined by H1 micro-structure. Analytical only.
+ * NervaFX Currency Movement Engine — 15M twin. Same eight-currency decomposition
+ * as /currency-movement-engine, but the primary/structural timeframe is M15
+ * (BOS over the previous 20 M15 candles) with M5 as the micro layer. Analytical.
  *
  *   Live       (no ?at): evaluates as of now; persistence ENABLED.
- *   Historical (?at=ISO): reconstructs a past H4 close, read-only (no persistence).
- *   ?enhance15m=0 disables the H1 micro refinement layer.
+ *   Historical (?at=ISO): reconstructs a past M15 close, read-only (no persistence).
+ *   ?enhance15m=0 disables the M5 micro refinement layer.
  */
 
 const { cors, getClient } = require('./_db');
 const { requirePlan } = require('./_plan');
-const { scanAll } = require('./_cmeh4-scan');
-const { persistCmeH4 } = require('./_cmeh4-persist');
+const { scanAll } = require('./_cme15-scan');
+const { persistCme15 } = require('./_cme15-persist');
 const { isHistoricalRequest, localStr } = require('./_h1c-time');
-const { ENGINE_KEY, ENGINE_VERSION, BASE_MS } = require('./_cmeh4-constants');
+const { ENGINE_KEY, ENGINE_VERSION, M15_MS } = require('./_cme15-constants');
 
 const DEFAULT_TZ = 'Africa/Dar_es_Salaam';
-const snapToH4 = (ms) => Math.floor(ms / BASE_MS) * BASE_MS;
+const snapToM15 = (ms) => Math.floor(ms / M15_MS) * M15_MS;
 
 module.exports = async function handler(req, res) {
   cors(res);
@@ -43,7 +43,7 @@ module.exports = async function handler(req, res) {
     if (historical) {
       requestedAtMs = new Date(q.at).getTime();
       if (isNaN(requestedAtMs)) return res.status(400).json({ error: 'invalid ?at timestamp' });
-      evalMs = snapToH4(requestedAtMs);
+      evalMs = snapToM15(requestedAtMs);
     } else {
       evalMs = Date.now();
     }
@@ -59,7 +59,7 @@ module.exports = async function handler(req, res) {
       scan.timezone = tz;
       res.setHeader('Cache-Control', 's-maxage=86400, stale-while-revalidate=86400');
     } else {
-      const p = await persistCmeH4(sb, scan);
+      const p = await persistCme15(sb, scan);
       scan.persistence = { ok: p.persisted, rows: p.rows, error: p.error || null };
       scan.historicalMode = false;
     }
@@ -67,7 +67,7 @@ module.exports = async function handler(req, res) {
     scan.engineVersion = ENGINE_VERSION;
     res.json(scan);
   } catch (e) {
-    console.error('[currency-movement-h4-engine]', e.message);
+    console.error('[currency-movement-15m-engine]', e.message);
     res.status(500).json({ error: e.message });
   }
 };

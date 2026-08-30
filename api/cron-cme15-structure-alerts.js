@@ -1,30 +1,31 @@
 'use strict';
 
 /**
- * Currency Movement Engine (H4) — Structure-Confirmed Movement alerts.
+ * Currency Movement Engine (15M twin) — Structure-Confirmed Movement alerts.
  *
- * Emails a pair the moment the H4 engine classifies it as
- * STRUCTURE_CONFIRMED_MOVEMENT with |move edge| ≥ 90, |confirmed| ≥ 90 and BOS
- * close quality ≥ 70% (same gate as the H4 page's pair-edges table). Runs every
- * 4 hours (just after the H4 candle closes); deduped per (pair|direction) with a
- * cooldown. Isolated.
+ * Emails a pair the moment the 15M engine classifies it as
+ * STRUCTURE_CONFIRMED_MOVEMENT with |move edge| ≥ 100, |confirmed| ≥ 100 and
+ * BOS close quality ≥ 80% (same gate as the 15M page's pair-edges table). Runs
+ * every 15 minutes (just after each M15 candle closes); deduped per
+ * (pair|direction) with a cooldown. Fully separate from the H1 alert.
  */
 
 const { createClient } = require('@supabase/supabase-js');
 const { sendBulk, cmeStructureAlertEmail } = require('../src/emailService');
 
-const cmeh4Handler = require('./currency-movement-h4-engine.js');
+const cme15Handler = require('./currency-movement-15m-engine.js');
 
 const MIN_MOVE_EDGE = 90;               // |pairMovementEdge| ≥ this
 const MIN_CONFIRMED_EDGE = 90;          // |pairConfirmedEdge| ≥ this
 const MIN_CLOSE_QUALITY = 0.70;         // BOS close quality ≥ this (70%)
 const COOLDOWN_MS = 6 * 3600000;        // one email per pair+direction per 6h
-const HREF = 'https://www.nervafx.com/currency-movement-h4-engine';
+const HREF = 'https://www.nervafx.com/currency-movement-15m-engine';
 
 function getDB() {
   return createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 }
 
+/** Invoke the 15M Currency Movement Engine internally and capture its JSON. */
 function invokeEngine(extraQuery) {
   return new Promise((resolve) => {
     const req = { method: 'GET', query: extraQuery || {}, headers: {}, _internal: true };
@@ -34,7 +35,7 @@ function invokeEngine(extraQuery) {
       json(data) { payload = data; resolve({ status: statusCode, data }); return this; },
       end() { resolve({ status: statusCode, data: payload }); },
     };
-    Promise.resolve(cmeh4Handler(req, res)).catch((e) => resolve({ status: 500, data: { error: e.message } }));
+    Promise.resolve(cme15Handler(req, res)).catch((e) => resolve({ status: 500, data: { error: e.message } }));
   });
 }
 
@@ -87,10 +88,21 @@ module.exports = async function handler(req, res) {
         pair: e.pair.replace('_', '/'), instrument: e.pair, bosDirection: e.bosDirection, bosGrade: e.bosGrade,
         breakDistanceATR: e.breakDistanceATR, closeQuality: e.closeQuality,
         pairMovementEdge: e.pairMovementEdge, pairConfirmedEdge: e.pairConfirmedEdge,
-        baseCurrency: e.baseCurrency, quoteCurrency: e.quoteCurrency, timeframe: 'H4', generatedAt, href: HREF,
+        baseCurrency: e.baseCurrency, quoteCurrency: e.quoteCurrency, timeframe: '15M', generatedAt, href: HREF,
       }));
 
     if (isDebug) {
+      // Alert-log summary for both engines (has the 15M cron ever delivered?).
+      let alertLog = null;
+      try {
+        const sb = getDB();
+        const since = new Date(Date.now() - 72 * 3600000).toISOString();
+        const { data: rows } = await sb.from('email_alert_log')
+          .select('alert_type, sent_at').in('alert_type', ['cme15_structure', 'cme_structure']).gte('sent_at', since).order('sent_at', { ascending: false });
+        const summ = { cme15_structure: { count: 0, latest: null }, cme_structure: { count: 0, latest: null } };
+        for (const row of rows || []) { const s = summ[row.alert_type]; if (!s) continue; s.count += 1; if (!s.latest) s.latest = row.sent_at; }
+        alertLog = { windowHours: 72, ...summ };
+      } catch (e) { alertLog = { error: e.message }; }
       const topEdges = edges.slice()
         .sort((a, b) => Math.abs(b.pairMovementEdge || 0) - Math.abs(a.pairMovementEdge || 0))
         .slice(0, 10)
@@ -99,8 +111,13 @@ module.exports = async function handler(req, res) {
         debug: true,
         thresholds: { MIN_MOVE_EDGE, MIN_CONFIRMED_EDGE, MIN_CLOSE_QUALITY },
         generatedAt: (r.data && r.data.generatedAt) || null,
+        evaluatedAtUtc: (r.data && r.data.evaluatedAtUtc) || null,
+        env: { cronSecretSet: !!process.env.CRON_SECRET, brevoKeySet: !!process.env.BREVO_API_KEY },
         engineError: (r.data && r.data.error) || null,
-        totalEdges: edges.length, qualifying: signals.length, topEdges,
+        alertLog,
+        totalEdges: edges.length,
+        qualifying: signals.length,
+        topEdges,
         candidates: signals.map((s) => ({ pair: s.pair, dir: s.bosDirection, grade: s.bosGrade, moveEdge: s.pairMovementEdge, confirmed: s.pairConfirmedEdge, closeQ: s.closeQuality })),
       });
     }
@@ -111,10 +128,11 @@ module.exports = async function handler(req, res) {
     const users = await getSubscribedUsers(sb);
     if (!users.length) return res.json({ ok: true, sent: 0, reason: 'no subscribed users' });
 
+    // Per (pair|direction) cooldown from the alert log.
     const nowMs = Date.now();
     const cutoff = new Date(nowMs - 24 * 3600000).toISOString();
     const { data: sentRows } = await sb.from('email_alert_log')
-      .select('details, sent_at').eq('alert_type', 'cmeh4_structure').gte('sent_at', cutoff);
+      .select('details, sent_at').eq('alert_type', 'cme15_structure').gte('sent_at', cutoff);
     const lastSentAt = new Map();
     for (const row of sentRows || []) {
       const d = row.details || {};
@@ -143,14 +161,14 @@ module.exports = async function handler(req, res) {
         try {
           await sendBulk(tzUsers.map((u) => ({ email: u.email, name: u.firstName })), template, { force: true });
           recipientCount += tzUsers.length;
-        } catch (e) { sendError = e.message; console.error('[cron-cmeh4-structure-alerts] send failed', signal.pair, tz, e.message); }
+        } catch (e) { sendError = e.message; console.error('[cron-cme15-structure-alerts] send failed', signal.pair, tz, e.message); }
       }
       if (recipientCount > 0) {
         const { error: logErr } = await sb.from('email_alert_log').insert({
-          alert_type: 'cmeh4_structure',
+          alert_type: 'cme15_structure',
           details: { instrument: signal.instrument, pair: signal.pair, direction: signal.bosDirection, grade: signal.bosGrade, breakDistanceATR: signal.breakDistanceATR, confirmedEdge: signal.pairConfirmedEdge, generatedAt: signal.generatedAt, recipients: recipientCount },
         });
-        if (logErr) console.error('[cron-cmeh4-structure-alerts] log insert failed', logErr.message);
+        if (logErr) console.error('[cron-cme15-structure-alerts] log insert failed', logErr.message);
       }
       out.push({ key, recipientCount, error: sendError });
     }
@@ -158,7 +176,7 @@ module.exports = async function handler(req, res) {
     const dispatched = out.filter((o) => o.recipientCount > 0).length;
     return res.json({ ok: true, users: users.length, signals: signals.length, dispatched, skipped: out.filter((o) => o.skipped).length });
   } catch (e) {
-    console.error('[cron-cmeh4-structure-alerts]', e);
+    console.error('[cron-cme15-structure-alerts]', e);
     return res.status(500).json({ error: e.message });
   }
 };
