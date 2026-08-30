@@ -65,7 +65,7 @@ function detectBreak(cur, prev, atr20) {
     lookback: ref ? ref.count : 0,
     closePrice: cur ? cur.close : null, breakDistancePrice: 0, breakDistanceATR: 0,
     closeQuality: 0, bodyATR: 0, atr20: atr20 || 0,
-    strengthGrade: 'NO_BREAK', decisiveBreak: false, decisiveCloseQuality: false,
+    strengthGrade: 'NO_BREAK', decisiveBreak: false, decisiveCloseQuality: false, priorBreak: false,
   };
   if (!cur || !ref || !(atr20 > 0)) return res;
 
@@ -77,6 +77,17 @@ function detectBreak(cur, prev, atr20) {
   if (bull) { res.direction = 'BULLISH'; res.breakType = 'CLOSE_BREAK'; res.brokenLevel = ref.high; res.breakDistancePrice = cur.close - ref.high; }
   else if (bear) { res.direction = 'BEARISH'; res.breakType = 'CLOSE_BREAK'; res.brokenLevel = ref.low; res.breakDistancePrice = ref.low - cur.close; }
   else if (wickUp || wickDown) { res.breakType = 'WICK_REJECTION'; }
+
+  // Prior-candle momentum: the candle immediately before the signal candle must
+  // itself have closed beyond its OWN predecessor's high (bullish) / low (bearish),
+  // i.e. two consecutive directional breaks into the structure break.
+  if (Array.isArray(prev) && prev.length >= 2 && res.direction !== 'NONE') {
+    const P = prev[prev.length - 1];    // candle immediately before the signal candle
+    const PP = prev[prev.length - 2];   // the candle before that
+    if (P && PP && isFinite(P.close) && isFinite(PP.high) && isFinite(PP.low)) {
+      res.priorBreak = res.direction === 'BULLISH' ? P.close > PP.high : P.close < PP.low;
+    }
+  }
 
   res.breakDistanceATR = res.breakDistancePrice > 0 ? round(res.breakDistancePrice / atr20) : 0;
   const dir = res.direction === 'BULLISH' ? 1 : res.direction === 'BEARISH' ? -1 : 0;

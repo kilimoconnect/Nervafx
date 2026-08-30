@@ -18,7 +18,7 @@ function h1series(pair, n, breakout) {
     const o = base + drift, c = o + 0.0006 * ((i % 3) - 1);
     arr.push({ openMs, time: new Date(openMs).toISOString(), open: o, high: Math.max(o, c) + 0.0008, low: Math.min(o, c) - 0.0008, close: c });
   }
-  if (breakout) { for (let k = 1; k <= 4; k++) { const last = arr[arr.length - k]; last.close = last.high + 0.006; last.high = last.close + 0.0004; } }
+  if (breakout) { const n = arr.length, K = 12; let lvl = arr[n - K - 1].high; for (let j = n - K; j < n; j++) { lvl += 0.006; arr[j].open = arr[j - 1].close; arr[j].close = lvl; arr[j].high = lvl + 0.0004; arr[j].low = arr[j].open - 0.0004; } }
   return arr;
 }
 function build(breakout) {

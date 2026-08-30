@@ -41,6 +41,20 @@ test('5-candle BOS: closing above the window high IS a bullish break', () => {
   assert.equal(b.previousLow, 1.09850); // lowest low of the window
 });
 
+// prior-candle momentum: the candle before the signal must also break its predecessor
+test('priorBreak true only when the pre-signal candle broke its own predecessor (bullish)', () => {
+  const PP = c(1.09900, 1.09950, 1.09850, 1.09920);
+  const P = c(1.09920, 1.09990, 1.09910, 1.09980);   // close 1.09980 > PP.high 1.09950 → prior break up
+  const sig = c(1.09980, 1.10100, 1.09970, 1.10080);  // close breaks window high 1.09990
+  const b = detectH1BreakOfStructure(sig, [PP, P], ATR);
+  assert.equal(b.direction, 'BULLISH');
+  assert.equal(b.priorBreak, true);
+  const Pflat = c(1.09920, 1.09940, 1.09910, 1.09930); // close 1.09930 < PP.high 1.09950 → no prior break
+  const b2 = detectH1BreakOfStructure(sig, [PP, Pflat], ATR);
+  assert.equal(b2.direction, 'BULLISH');
+  assert.equal(b2.priorBreak, false);
+});
+
 // 1–6 direction / wick / equality
 test('bullish BOS: close above previous high', () => {
   const b = detectH1BreakOfStructure(c(1.09990, 1.10040, 1.09985, 1.10030), prev, ATR);

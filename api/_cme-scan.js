@@ -267,7 +267,7 @@ function buildPairEdges(h1w, pairBos) {
     const grade = bos ? bos.strengthGrade : 'NO_BREAK';
     const strongBreak = grade === 'STRONG' || grade === 'VERY_STRONG' || grade === 'EXPLOSIVE';
     let opportunity = 'NO_MEANINGFUL_EDGE';
-    if (edgeDir !== 0 && bosDir === edgeDir && strongBreak && bos.breakDistanceATR >= BOS.DECISIVE_ATR && bos.closeQuality >= BOS.DECISIVE_CLOSE_QUALITY) opportunity = 'STRUCTURE_CONFIRMED_MOVEMENT';
+    if (edgeDir !== 0 && bosDir === edgeDir && strongBreak && bos.breakDistanceATR >= BOS.DECISIVE_ATR && bos.closeQuality >= BOS.DECISIVE_CLOSE_QUALITY && bos.priorBreak) opportunity = 'STRUCTURE_CONFIRMED_MOVEMENT';
     else if (edgeDir !== 0 && bosDir !== 0 && bosDir !== edgeDir) opportunity = 'STRUCTURE_CONFLICT';
     else if (Math.abs(pairMovementEdge) >= BOS.STRONG_MOVEMENT) opportunity = 'MOVEMENT_WATCH';
     edges.push({

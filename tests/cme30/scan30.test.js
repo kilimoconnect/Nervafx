@@ -18,7 +18,7 @@ function m15series(pair, n, breakout) {
     const o = base + drift, c = o + 0.0003 * ((i % 3) - 1);
     arr.push({ openMs, time: new Date(openMs).toISOString(), open: o, high: Math.max(o, c) + 0.0004, low: Math.min(o, c) - 0.0004, close: c });
   }
-  if (breakout) { const last = arr[arr.length - 1]; last.close = last.high + 0.0030; last.high = last.close + 0.0002; }
+  if (breakout) { const n = arr.length, K = 12; let lvl = arr[n - K - 1].high; for (let j = n - K; j < n; j++) { lvl += 0.0025; arr[j].open = arr[j - 1].close; arr[j].close = lvl; arr[j].high = lvl + 0.0002; arr[j].low = arr[j].open - 0.0002; } }
   return arr;
 }
 function build(breakout) {
