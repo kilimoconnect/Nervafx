@@ -84,6 +84,10 @@
   <button id="h-apply" class="cm-btn">Snapshot</button>
   <button id="h-live" class="cm-btn live">● Go Live</button>
   <button id="h-scan" class="cm-btn ghost">⟲ Scan 24h signals</button>
+  <span style="font-size:10px;color:var(--text-dim)">·&nbsp;Range</span>
+  <input type="datetime-local" id="r-from" class="cm-input" title="From" />
+  <input type="datetime-local" id="r-to" class="cm-input" title="To" />
+  <button id="h-scanrange" class="cm-btn ghost">🔍 Search range</button>
 </div>
 
 <div class="cm-meta" id="cm-meta"></div>
@@ -228,8 +232,9 @@
 
   var SCAN_ENGINE='5m';
   function renderScan(d){
-    var h='<div class="cm-edges"><h3>24h signal history <span style="font-size:10px;color:var(--text-dim)">('+(d.stepMinutes)+'m steps · '+(d.windowStartLocal||'')+' → '+(d.windowEndLocal||'')+' '+(d.timezone||'')+' · '+(d.stepsEvaluated||0)+' candles · '+(d.signalCount||0)+' signals)</span> <button id="cm-scanclose" class="cm-etab" style="float:right">✕ close</button></h3>';
-    if(!d.signals||!d.signals.length){ h+='<div class="cm-empty">No structure-confirmed signals in the last 24h (weekday).</div></div>'; return h; }
+    var note=(d.mode==='range'?'range':'last 24h')+(d.clamped?' · capped to '+(d.maxSteps||500)+' candles — narrow the range':'');
+    var h='<div class="cm-edges"><h3>Signal history <span style="font-size:10px;color:var(--text-dim)">('+note+' · '+(d.stepMinutes)+'m steps · '+(d.windowStartLocal||'')+' → '+(d.windowEndLocal||'')+' '+(d.timezone||'')+' · '+(d.stepsEvaluated||0)+' candles · '+(d.signalCount||0)+' signals)</span> <button id="cm-scanclose" class="cm-etab" style="float:right">✕ close</button></h3>';
+    if(!d.signals||!d.signals.length){ h+='<div class="cm-empty">No structure-confirmed signals in this window (weekday).</div></div>'; return h; }
     h+='<div class="cm-tablewrap"><table class="cm-etable"><thead><tr><th>Time ('+(d.timezone||'')+')</th><th>Signals (pair · move/confirmed/closeQ)</th></tr></thead><tbody>';
     h+=d.signals.map(function(s){
       var pairs=s.pairs.map(function(p){ var col=p.dir==='BULLISH'?'#4ade80':'#f87171'; return '<span style="color:'+col+'">'+p.pair+' '+(p.dir==='BULLISH'?'▲':'▼')+'</span> <span style="color:var(--text-dim)">'+p.move+'/'+p.confirmed+'/'+Math.round((p.closeQ||0)*100)+'%</span>'; }).join(' &nbsp; · &nbsp; ');
@@ -238,20 +243,28 @@
     h+='</tbody></table></div></div>';
     return h;
   }
-  document.getElementById('h-scan').onclick=async function(){
+  async function runScan(qs, label){
     var panel=document.getElementById('cm-scanwrap'); panel.style.display='block'; panel.scrollIntoView({behavior:'smooth',block:'start'});
-    panel.innerHTML='<div class="cm-loading"><span class="cm-spin"></span> Scanning last 24h of trading ('+SCAN_ENGINE+', weekdays)…</div>';
+    panel.innerHTML='<div class="cm-loading"><span class="cm-spin"></span> '+label+'…</div>';
     try{
-      var url='/api/cme-signal-scan?engine='+SCAN_ENGINE+'&timezone='+encodeURIComponent(tz())+(HIST.active&&HIST.atMs!=null?'&at='+encodeURIComponent(new Date(HIST.atMs).toISOString()):'');
-      var res=await fetch(url,auth()); if(!res.ok) throw new Error(await res.text());
+      var res=await fetch('/api/cme-signal-scan?engine='+SCAN_ENGINE+'&timezone='+encodeURIComponent(tz())+qs, auth());
+      if(!res.ok) throw new Error(await res.text());
       var d=await res.json(); panel.innerHTML=renderScan(d);
       var cb=document.getElementById('cm-scanclose'); if(cb) cb.onclick=function(){ panel.style.display='none'; };
     }catch(e){ panel.innerHTML='<div class="cm-empty" style="color:#f87171">Scan error: '+(e.message||e)+'</div>'; }
+  }
+  document.getElementById('h-scan').onclick=function(){ runScan(HIST.active&&HIST.atMs!=null?'&at='+encodeURIComponent(new Date(HIST.atMs).toISOString()):'', 'Scanning last 24h of trading ('+SCAN_ENGINE+', weekdays)'); };
+  document.getElementById('h-scanrange').onclick=function(){
+    var f=document.getElementById('r-from').value, t=document.getElementById('r-to').value;
+    if(!f||!t){ alert('Pick both From and To dates'); return; }
+    function toIso(v){ var a=v.split('T'), d=a[0].split('-'), tm=a[1].split(':'); return new Date(zonedWallToUtcMs(+d[0],+d[1],+d[2],+tm[0],+tm[1],tz())).toISOString(); }
+    runScan('&from='+encodeURIComponent(toIso(f))+'&to='+encodeURIComponent(toIso(t)), 'Searching '+f+' → '+t+' ('+SCAN_ENGINE+')');
   };
 
   (async function(){
     try{ if(TOKEN){ var r=await fetch('/api/profile',auth()); if(r.ok){ var p=await r.json(); if(p.timezone){ var ts=document.getElementById('h-tz'); if([].slice.call(ts.options).some(function(o){return o.value===p.timezone;})) ts.value=p.timezone; } } } }catch(_){}
     var np=partsInTz(Date.now(),DEFAULT_TZ); var mm=Math.floor((+np.minute)/5)*5; document.getElementById('h-date').value=np.year+'-'+np.month+'-'+np.day; document.getElementById('h-time').value=np.hour+':'+('0'+mm).slice(-2);
+    (function(){ var e=document.getElementById('r-to'), s=document.getElementById('r-from'); if(e&&s){ var pn=partsInTz(Date.now(),tz()); e.value=pn.year+'-'+pn.month+'-'+pn.day+'T'+pn.hour+':'+pn.minute; var pa=partsInTz(Date.now()-24*3600000,tz()); s.value=pa.year+'-'+pa.month+'-'+pa.day+'T'+pa.hour+':'+pa.minute; } })();
     var at=new URL(window.location.href).searchParams.get('at');
     if(at){ var ms=new Date(at).getTime(); if(!isNaN(ms)){ HIST.active=true; HIST.atMs=snapM5(ms); syncInputs(); } }
     load();

@@ -32,8 +32,14 @@ const ENGINES = {
   '5m': { base: M5_MS, primary: 'M5', scan: require('./_cme05-scan'), enhanceMicro: false },
 };
 
-/** Fetch each pair's raw candles once (≤ anchorMs), in parallel batches of 7. */
-async function fetchRaw(sb, engine, anchorMs) {
+const cap = (n) => Math.min(6000, Math.max(120, Math.ceil(n)));
+
+/**
+ * Fetch each pair's raw candles once (≤ anchorMs), in parallel batches of 7.
+ * `bars` = number of primary candles the sweep needs (window span + history);
+ * per-timeframe limits are sized from it so a multi-day range still has data.
+ */
+async function fetchRaw(sb, engine, anchorMs, bars) {
   const raw = {};
   for (let i = 0; i < PAIRS.length; i += 7) {
     const batch = PAIRS.slice(i, i + 7);
@@ -41,16 +47,16 @@ async function fetchRaw(sb, engine, anchorMs) {
     await Promise.all(batch.map(async (pair) => {
       try {
         if (engine === '30m') {
-          const m15 = (await fetchClosed(sb, pair, 'M15', anchorMs, M15_MS, 320)).candles;
+          const m15 = (await fetchClosed(sb, pair, 'M15', anchorMs, M15_MS, cap(bars * 2 + 60))).candles;
           raw[pair] = { m15, m30: synthM30(m15, anchorMs) };
         } else if (engine === '15m') {
           const [m15, m5] = await Promise.all([
-            fetchClosed(sb, pair, 'M15', anchorMs, M15_MS, 260),
-            fetchClosed(sb, pair, 'M5', anchorMs, M5_MS, 460),
+            fetchClosed(sb, pair, 'M15', anchorMs, M15_MS, cap(bars + 60)),
+            fetchClosed(sb, pair, 'M5', anchorMs, M5_MS, cap(bars * 3 + 120)),
           ]);
           raw[pair] = { m15: m15.candles, m5: m5.candles };
         } else {
-          raw[pair] = { m5: (await fetchClosed(sb, pair, 'M5', anchorMs, M5_MS, 700)).candles };
+          raw[pair] = { m5: (await fetchClosed(sb, pair, 'M5', anchorMs, M5_MS, cap(bars + 120))).candles };
         }
       } catch (e) { raw[pair] = { error: e.message }; }
     }));
@@ -99,16 +105,31 @@ module.exports = async function handler(req, res) {
     const cfg = ENGINES[engine];
     if (!cfg) return res.status(400).json({ error: 'engine must be 30m | 15m | 5m' });
     const tz = q.timezone || DEFAULT_TZ;
-    const anchorMs = q.at ? new Date(q.at).getTime() : Date.now();
-    if (isNaN(anchorMs)) return res.status(400).json({ error: 'invalid ?at timestamp' });
-
-    const raw = await fetchRaw(sb, engine, anchorMs);
-    const endOpen = latestPrimaryOpen(raw, engine);
-    if (endOpen == null) return res.json({ engine, signals: [], reason: 'no candle data' });
-
     const base = cfg.base;
-    const N = Math.round(DAY_MS / base);
-    const firstOpen = endOpen - (N - 1) * base;
+    const MAX_STEPS = 500;
+
+    // Range mode: ?from & ?to (ISO). Otherwise the last 24h ending at ?at / now.
+    const toMs = q.to ? new Date(q.to).getTime() : (q.at ? new Date(q.at).getTime() : Date.now());
+    if (isNaN(toMs)) return res.status(400).json({ error: 'invalid ?to timestamp' });
+    let fromMs = q.from ? new Date(q.from).getTime() : null;
+    if (q.from && isNaN(fromMs)) return res.status(400).json({ error: 'invalid ?from timestamp' });
+    if (fromMs != null && fromMs >= toMs) return res.status(400).json({ error: 'from must be before to' });
+    const rangeMode = fromMs != null;
+
+    // Estimate window (candle opens) to size the one-time fetch; clamp to MAX_STEPS.
+    const endEst = Math.floor(toMs / base) * base - base;
+    let firstEst = rangeMode ? Math.floor(fromMs / base) * base : endEst - (Math.round(DAY_MS / base) - 1) * base;
+    let clamped = false;
+    if ((endEst - firstEst) / base + 1 > MAX_STEPS) { firstEst = endEst - (MAX_STEPS - 1) * base; clamped = true; }
+    const bars = Math.round((endEst - firstEst) / base) + 1 + 80;   // + BOS lookback/ATR history
+
+    const raw = await fetchRaw(sb, engine, toMs, bars);
+    const endOpen = latestPrimaryOpen(raw, engine);       // last ACTUAL candle ≤ to (weekend-safe → Friday)
+    if (endOpen == null) return res.json({ engine, signals: [], reason: 'no candle data in range' });
+
+    let firstOpen = rangeMode ? Math.floor(fromMs / base) * base : endOpen - (Math.round(DAY_MS / base) - 1) * base;
+    if (firstOpen < endOpen - (MAX_STEPS - 1) * base) { firstOpen = endOpen - (MAX_STEPS - 1) * base; clamped = true; }
+    if (firstOpen > endOpen) firstOpen = endOpen;
 
     const signals = [];
     let evaluated = 0;
@@ -140,7 +161,8 @@ module.exports = async function handler(req, res) {
 
     res.setHeader('Cache-Control', 'no-store');
     return res.json({
-      engine, timezone: tz, stepMinutes: base / 60000,
+      engine, timezone: tz, mode: rangeMode ? 'range' : '24h', clamped, maxSteps: MAX_STEPS,
+      stepMinutes: base / 60000,
       windowStartUtc: new Date(firstOpen + base).toISOString(),
       windowEndUtc: new Date(endOpen + base).toISOString(),
       windowStartLocal: localStr(firstOpen + base, tz),
