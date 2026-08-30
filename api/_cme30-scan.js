@@ -3,7 +3,7 @@
 /**
  * NervaFX Currency Movement Engine (30M) — scan orchestration.
  *
- * Timeframe-shifted mirror of _cme15-scan.js: the primary/structural timeframe
+ * Timeframe-shifted mirror of _cme-scan.js: the primary/structural timeframe
  * is M30 (BOS over the previous 10 completed M30 candles) and the micro layer is
  * M15. Reuses all pure maths from the H1 engine's modules.
  */
