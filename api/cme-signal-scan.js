@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * GET /api/cme-signal-scan?engine=30m|15m|5m
+ * GET /api/cme-signal-scan?engine=30m|15m|h1
  *
  * Replays the last 24 hours of TRADING (weekday) data for a Currency Movement
  * Engine and returns every timestamp at which a fully-qualified
@@ -22,14 +22,14 @@ const { synthM30 } = require('./_cme30-data');
 const { PAIRS } = require('./_cme-constants');
 const { localStr } = require('./_h1c-time');
 
-const M5_MS = 300000, M15_MS = 900000, M30_MS = 1800000, DAY_MS = 24 * 3600000;
+const M5_MS = 300000, M15_MS = 900000, M30_MS = 1800000, HOUR_MS = 3600000, DAY_MS = 24 * 3600000;
 const DEFAULT_TZ = 'Africa/Dar_es_Salaam';
 const MIN_MOVE_EDGE = 90, MIN_CONFIRMED = 90, MIN_CLOSE_Q = 0.70;
 
 const ENGINES = {
   '30m': { base: M30_MS, primary: 'M30', scan: require('./_cme30-scan'), enhanceMicro: true },
   '15m': { base: M15_MS, primary: 'M15', scan: require('./_cme15-scan'), enhanceMicro: true },
-  '5m': { base: M5_MS, primary: 'M5', scan: require('./_cme05-scan'), enhanceMicro: false },
+  h1: { base: HOUR_MS, primary: 'H1', scan: require('./_cme-scan'), enhanceMicro: true },
 };
 
 const cap = (n) => Math.min(6000, Math.max(120, Math.ceil(n)));
@@ -55,8 +55,12 @@ async function fetchRaw(sb, engine, anchorMs, bars) {
             fetchClosed(sb, pair, 'M5', anchorMs, M5_MS, cap(bars * 3 + 120)),
           ]);
           raw[pair] = { m15: m15.candles, m5: m5.candles };
-        } else {
-          raw[pair] = { m5: (await fetchClosed(sb, pair, 'M5', anchorMs, M5_MS, cap(bars + 120))).candles };
+        } else { // h1
+          const [h1, m15] = await Promise.all([
+            fetchClosed(sb, pair, 'H1', anchorMs, HOUR_MS, cap(bars + 40)),
+            fetchClosed(sb, pair, 'M15', anchorMs, M15_MS, cap(bars * 4 + 80)),
+          ]);
+          raw[pair] = { h1: h1.candles, m15: m15.candles };
         }
       } catch (e) { raw[pair] = { error: e.message }; }
     }));
@@ -66,7 +70,7 @@ async function fetchRaw(sb, engine, anchorMs, bars) {
 
 /** Latest completed primary-candle open present in the data (weekend-safe). */
 function latestPrimaryOpen(raw, engine) {
-  const key = engine === '30m' ? 'm30' : engine === '15m' ? 'm15' : 'm5';
+  const key = engine === '30m' ? 'm30' : engine === '15m' ? 'm15' : 'h1';
   let mx = -Infinity;
   for (const pair of PAIRS) {
     const arr = raw[pair] && raw[pair][key];
@@ -77,7 +81,7 @@ function latestPrimaryOpen(raw, engine) {
 
 /** Build the pairData the engine expects, sliced to candles with openMs ≤ t. */
 function sliceAt(raw, engine, t) {
-  const keys = engine === '30m' ? ['m30', 'm15'] : engine === '15m' ? ['m15', 'm5'] : ['m5'];
+  const keys = engine === '30m' ? ['m30', 'm15'] : engine === '15m' ? ['m15', 'm5'] : ['h1', 'm15'];
   const out = {};
   for (const pair of PAIRS) {
     const r = raw[pair]; if (!r || r.error) continue;
@@ -103,7 +107,7 @@ module.exports = async function handler(req, res) {
     const q = req.query || {};
     const engine = String(q.engine || '').toLowerCase();
     const cfg = ENGINES[engine];
-    if (!cfg) return res.status(400).json({ error: 'engine must be 30m | 15m | 5m' });
+    if (!cfg) return res.status(400).json({ error: 'engine must be 30m | 15m | h1' });
     const tz = q.timezone || DEFAULT_TZ;
     const base = cfg.base;
     const MAX_STEPS = 500;
@@ -136,11 +140,11 @@ module.exports = async function handler(req, res) {
     for (let t = firstOpen; t <= endOpen; t += base) {
       const pd = sliceAt(raw, engine, t);
       // Skip steps where the primary candle at t doesn't actually exist (gaps/weekend).
-      const key = engine === '30m' ? 'm30' : engine === '15m' ? 'm15' : 'm5';
+      const key = engine === '30m' ? 'm30' : engine === '15m' ? 'm15' : 'h1';
       const ref = (pd.EUR_USD && pd.EUR_USD[key]) || [];
       if (!ref.length || ref[ref.length - 1].openMs !== t) continue;
       evaluated += 1;
-      const ev = cfg.scan.evaluateWindows(pd, t + base, { primaryOnly: true, enhanceMicro: cfg.enhanceMicro });
+      const ev = cfg.scan.evaluateWindows(pd, t + base, { primaryOnly: true, enhanceMicro: cfg.enhanceMicro, enhance15m: cfg.enhanceMicro });
       const hits = (ev.pairEdges || []).filter((e) => e.opportunity === 'STRUCTURE_CONFIRMED_MOVEMENT'
         && Math.abs(e.pairMovementEdge || 0) >= MIN_MOVE_EDGE
         && Math.abs(e.pairConfirmedEdge || 0) >= MIN_CONFIRMED

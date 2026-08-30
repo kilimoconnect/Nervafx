@@ -306,6 +306,7 @@ function evaluateWindows(pairData, evalMs, opts) {
 
   const windowsOut = {};
   for (const name of WINDOWS) {
+    if (opts.primaryOnly && name !== 'H1') continue;   // sweep: primary window + edges only
     if (name === 'M15') { windowsOut[name] = evalM15Window(m15map, evalMs); continue; }
     const wb = windowBounds(name, evalMs);
     if (!wb.ok) { windowsOut[name] = { status: wb.status }; continue; }

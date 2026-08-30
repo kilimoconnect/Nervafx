@@ -1,24 +1,25 @@
 'use strict';
 
 /**
- * Currency Movement Engine (5M) — Structure-Confirmed Movement alerts.
+ * Currency Movement Engine (H1) — Structure-Confirmed Movement alerts.
  *
- * Emails a pair the moment the 5M engine classifies it as
+ * Emails a pair the moment the H1 engine classifies it as
  * STRUCTURE_CONFIRMED_MOVEMENT with |move edge| ≥ 90, |confirmed| ≥ 90 and BOS
- * close quality ≥ 70% (same gate as the 5M page's pair-edges table). Runs every
- * 5 minutes; deduped per (pair|direction) with a cooldown. Isolated.
+ * close quality ≥ 70% (same gate as the H1 page's pair-edges table). Runs
+ * hourly (just after the H1 candle closes); deduped per (pair|direction) with a
+ * cooldown. Isolated.
  */
 
 const { createClient } = require('@supabase/supabase-js');
 const { sendBulk, cmeStructureAlertEmail } = require('../src/emailService');
 
-const cme05Handler = require('./currency-movement-5m-engine.js');
+const cmeh1Handler = require('./currency-movement-h1-engine.js');
 
 const MIN_MOVE_EDGE = 90;               // |pairMovementEdge| ≥ this
 const MIN_CONFIRMED_EDGE = 90;          // |pairConfirmedEdge| ≥ this
 const MIN_CLOSE_QUALITY = 0.70;         // BOS close quality ≥ this (70%)
 const COOLDOWN_MS = 6 * 3600000;        // one email per pair+direction per 6h
-const HREF = 'https://www.nervafx.com/currency-movement-5m-engine';
+const HREF = 'https://www.nervafx.com/currency-movement-h1-engine';
 
 function getDB() {
   return createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
@@ -33,7 +34,7 @@ function invokeEngine(extraQuery) {
       json(data) { payload = data; resolve({ status: statusCode, data }); return this; },
       end() { resolve({ status: statusCode, data: payload }); },
     };
-    Promise.resolve(cme05Handler(req, res)).catch((e) => resolve({ status: 500, data: { error: e.message } }));
+    Promise.resolve(cmeh1Handler(req, res)).catch((e) => resolve({ status: 500, data: { error: e.message } }));
   });
 }
 
@@ -86,7 +87,7 @@ module.exports = async function handler(req, res) {
         pair: e.pair.replace('_', '/'), instrument: e.pair, bosDirection: e.bosDirection, bosGrade: e.bosGrade,
         breakDistanceATR: e.breakDistanceATR, closeQuality: e.closeQuality,
         pairMovementEdge: e.pairMovementEdge, pairConfirmedEdge: e.pairConfirmedEdge,
-        baseCurrency: e.baseCurrency, quoteCurrency: e.quoteCurrency, timeframe: '5M', generatedAt, href: HREF,
+        baseCurrency: e.baseCurrency, quoteCurrency: e.quoteCurrency, timeframe: 'H1', generatedAt, href: HREF,
       }));
 
     if (isDebug) {
@@ -113,7 +114,7 @@ module.exports = async function handler(req, res) {
     const nowMs = Date.now();
     const cutoff = new Date(nowMs - 24 * 3600000).toISOString();
     const { data: sentRows } = await sb.from('email_alert_log')
-      .select('details, sent_at').eq('alert_type', 'cme05_structure').gte('sent_at', cutoff);
+      .select('details, sent_at').eq('alert_type', 'cmeh1_structure').gte('sent_at', cutoff);
     const lastSentAt = new Map();
     for (const row of sentRows || []) {
       const d = row.details || {};
@@ -142,14 +143,14 @@ module.exports = async function handler(req, res) {
         try {
           await sendBulk(tzUsers.map((u) => ({ email: u.email, name: u.firstName })), template, { force: true });
           recipientCount += tzUsers.length;
-        } catch (e) { sendError = e.message; console.error('[cron-cme05-structure-alerts] send failed', signal.pair, tz, e.message); }
+        } catch (e) { sendError = e.message; console.error('[cron-cmeh1-structure-alerts] send failed', signal.pair, tz, e.message); }
       }
       if (recipientCount > 0) {
         const { error: logErr } = await sb.from('email_alert_log').insert({
-          alert_type: 'cme05_structure',
+          alert_type: 'cmeh1_structure',
           details: { instrument: signal.instrument, pair: signal.pair, direction: signal.bosDirection, grade: signal.bosGrade, breakDistanceATR: signal.breakDistanceATR, confirmedEdge: signal.pairConfirmedEdge, generatedAt: signal.generatedAt, recipients: recipientCount },
         });
-        if (logErr) console.error('[cron-cme05-structure-alerts] log insert failed', logErr.message);
+        if (logErr) console.error('[cron-cmeh1-structure-alerts] log insert failed', logErr.message);
       }
       out.push({ key, recipientCount, error: sendError });
     }
@@ -157,7 +158,7 @@ module.exports = async function handler(req, res) {
     const dispatched = out.filter((o) => o.recipientCount > 0).length;
     return res.json({ ok: true, users: users.length, signals: signals.length, dispatched, skipped: out.filter((o) => o.skipped).length });
   } catch (e) {
-    console.error('[cron-cme05-structure-alerts]', e);
+    console.error('[cron-cmeh1-structure-alerts]', e);
     return res.status(500).json({ error: e.message });
   }
 };

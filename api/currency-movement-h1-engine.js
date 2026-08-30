@@ -1,25 +1,25 @@
 'use strict';
 
 /**
- * GET /api/currency-movement-5m-engine
+ * GET /api/currency-movement-h1-engine
  *
- * NervaFX Currency Movement Engine — 5M variant. Same eight-currency
- * decomposition, but the primary/structural timeframe is M5 (BOS over the
- * previous 60 M5 candles). No micro layer. Analytical only.
+ * NervaFX Currency Movement Engine — H1 variant. Same eight-currency
+ * decomposition, primary/structural timeframe H1 (BOS over the previous 5 H1
+ * candles) refined by M15 micro-structure. Analytical only.
  *
- *   Live       (no ?at): evaluates as of now; persistence ENABLED.
- *   Historical (?at=ISO): reconstructs a past M5 close, read-only (no persistence).
+ *   Live       (no ?at): evaluates as of now; persistence ENABLED (cme_* tables).
+ *   Historical (?at=ISO): reconstructs a past H1 close, read-only (no persistence).
+ *   ?enhance15m=0 disables the M15 micro refinement layer.
  */
 
 const { cors, getClient } = require('./_db');
 const { requirePlan } = require('./_plan');
-const { scanAll } = require('./_cme05-scan');
-const { persistCme05 } = require('./_cme05-persist');
-const { isHistoricalRequest, localStr } = require('./_h1c-time');
-const { ENGINE_KEY, ENGINE_VERSION, BASE_MS } = require('./_cme05-constants');
+const { scanAll } = require('./_cme-scan');
+const { persistCme } = require('./_cme-persist');
+const { snapToH1, isHistoricalRequest, localStr } = require('./_h1c-time');
+const { ENGINE_KEY, ENGINE_VERSION } = require('./_cme-constants');
 
 const DEFAULT_TZ = 'Africa/Dar_es_Salaam';
-const snapToM5 = (ms) => Math.floor(ms / BASE_MS) * BASE_MS;
 
 module.exports = async function handler(req, res) {
   cors(res);
@@ -36,17 +36,18 @@ module.exports = async function handler(req, res) {
     const q = req.query || {};
     const historical = isHistoricalRequest(q);
     const tz = q.timezone || DEFAULT_TZ;
+    const enhance15m = q.enhance15m !== '0';
 
     let evalMs, requestedAtMs = null;
     if (historical) {
       requestedAtMs = new Date(q.at).getTime();
       if (isNaN(requestedAtMs)) return res.status(400).json({ error: 'invalid ?at timestamp' });
-      evalMs = snapToM5(requestedAtMs);
+      evalMs = snapToH1(requestedAtMs);
     } else {
       evalMs = Date.now();
     }
 
-    const scan = await scanAll(sb, { evalMs });
+    const scan = await scanAll(sb, { evalMs, enhance15m });
 
     if (historical) {
       scan.persistence = { ok: false, skipped: true, reason: 'historical read-only — persistence disabled' };
@@ -57,7 +58,7 @@ module.exports = async function handler(req, res) {
       scan.timezone = tz;
       res.setHeader('Cache-Control', 's-maxage=86400, stale-while-revalidate=86400');
     } else {
-      const p = await persistCme05(sb, scan);
+      const p = await persistCme(sb, scan);
       scan.persistence = { ok: p.persisted, rows: p.rows, error: p.error || null };
       scan.historicalMode = false;
     }
@@ -65,7 +66,7 @@ module.exports = async function handler(req, res) {
     scan.engineVersion = ENGINE_VERSION;
     res.json(scan);
   } catch (e) {
-    console.error('[currency-movement-5m-engine]', e.message);
+    console.error('[currency-movement-h1-engine]', e.message);
     res.status(500).json({ error: e.message });
   }
 };
