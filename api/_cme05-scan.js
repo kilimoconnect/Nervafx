@@ -181,7 +181,8 @@ function buildPairEdges(primaryW, pairBos) {
   return edges;
 }
 
-function evaluateWindows(pairData, evalMs) {
+function evaluateWindows(pairData, evalMs, opts) {
+  opts = opts || {};
   const baseArr = {}, basemap = {}, atrMap = {};
   for (const pair of PAIRS) {
     const pd = pairData[pair] || {};
@@ -194,6 +195,7 @@ function evaluateWindows(pairData, evalMs) {
 
   const windowsOut = {};
   for (const name of WINDOWS) {
+    if (opts.primaryOnly && name !== 'M5') continue;   // sweep: primary window + edges only
     if (name === 'M5') {
       const lastBaseOpen = Math.floor(evalMs / BASE_MS) * BASE_MS - BASE_MS;
       windowsOut[name] = lastBaseOpen < 0 ? { status: 'NOT_ACTIVE' }

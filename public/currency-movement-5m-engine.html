@@ -83,10 +83,12 @@
   <button id="h-next" class="cm-btn ghost">Next 5m ›</button>
   <button id="h-apply" class="cm-btn">Snapshot</button>
   <button id="h-live" class="cm-btn live">● Go Live</button>
+  <button id="h-scan" class="cm-btn ghost">⟲ Scan 24h signals</button>
 </div>
 
 <div class="cm-meta" id="cm-meta"></div>
 <div class="cm-banner" id="cm-banner"></div>
+<div class="cm-wrap" id="cm-scanwrap" style="display:none;padding-top:4px"></div>
 <div class="cm-wrap" id="cm-body"><div class="cm-loading"><span class="cm-spin"></span> Loading…</div></div>
 
 <script>
@@ -223,6 +225,29 @@
   document.getElementById('h-live').onclick=function(){ HIST.active=false; HIST.atMs=null; load(); };
   document.getElementById('h-tz').onchange=function(){ if(HIST.active){syncInputs();} load(); };
   function syncInputs(){ if(HIST.atMs==null) return; var p=partsInTz(HIST.atMs,tz()); document.getElementById('h-date').value=p.year+'-'+p.month+'-'+p.day; document.getElementById('h-time').value=p.hour+':'+p.minute; }
+
+  var SCAN_ENGINE='5m';
+  function renderScan(d){
+    var h='<div class="cm-edges"><h3>24h signal history <span style="font-size:10px;color:var(--text-dim)">('+(d.stepMinutes)+'m steps · '+(d.windowStartLocal||'')+' → '+(d.windowEndLocal||'')+' '+(d.timezone||'')+' · '+(d.stepsEvaluated||0)+' candles · '+(d.signalCount||0)+' signals)</span> <button id="cm-scanclose" class="cm-etab" style="float:right">✕ close</button></h3>';
+    if(!d.signals||!d.signals.length){ h+='<div class="cm-empty">No structure-confirmed signals in the last 24h (weekday).</div></div>'; return h; }
+    h+='<div class="cm-tablewrap"><table class="cm-etable"><thead><tr><th>Time ('+(d.timezone||'')+')</th><th>Signals (pair · move/confirmed/closeQ)</th></tr></thead><tbody>';
+    h+=d.signals.map(function(s){
+      var pairs=s.pairs.map(function(p){ var col=p.dir==='BULLISH'?'#4ade80':'#f87171'; return '<span style="color:'+col+'">'+p.pair+' '+(p.dir==='BULLISH'?'▲':'▼')+'</span> <span style="color:var(--text-dim)">'+p.move+'/'+p.confirmed+'/'+Math.round((p.closeQ||0)*100)+'%</span>'; }).join(' &nbsp; · &nbsp; ');
+      return '<tr><td style="font-weight:700;color:#fff;white-space:nowrap">'+(s.atLocal||s.atUtc)+'</td><td>'+pairs+'</td></tr>';
+    }).join('');
+    h+='</tbody></table></div></div>';
+    return h;
+  }
+  document.getElementById('h-scan').onclick=async function(){
+    var panel=document.getElementById('cm-scanwrap'); panel.style.display='block'; panel.scrollIntoView({behavior:'smooth',block:'start'});
+    panel.innerHTML='<div class="cm-loading"><span class="cm-spin"></span> Scanning last 24h of trading ('+SCAN_ENGINE+', weekdays)…</div>';
+    try{
+      var url='/api/cme-signal-scan?engine='+SCAN_ENGINE+'&timezone='+encodeURIComponent(tz())+(HIST.active&&HIST.atMs!=null?'&at='+encodeURIComponent(new Date(HIST.atMs).toISOString()):'');
+      var res=await fetch(url,auth()); if(!res.ok) throw new Error(await res.text());
+      var d=await res.json(); panel.innerHTML=renderScan(d);
+      var cb=document.getElementById('cm-scanclose'); if(cb) cb.onclick=function(){ panel.style.display='none'; };
+    }catch(e){ panel.innerHTML='<div class="cm-empty" style="color:#f87171">Scan error: '+(e.message||e)+'</div>'; }
+  };
 
   (async function(){
     try{ if(TOKEN){ var r=await fetch('/api/profile',auth()); if(r.ok){ var p=await r.json(); if(p.timezone){ var ts=document.getElementById('h-tz'); if([].slice.call(ts.options).some(function(o){return o.value===p.timezone;})) ts.value=p.timezone; } } } }catch(_){}

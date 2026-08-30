@@ -315,6 +315,7 @@ function evaluateWindows(pairData, evalMs, opts) {
 
   const windowsOut = {};
   for (const name of WINDOWS) {
+    if (opts.primaryOnly && name !== 'M15') continue;   // sweep: primary window + edges only
     if (name === 'M15') {
       const lastBaseOpen = Math.floor(evalMs / M15_MS) * M15_MS - M15_MS;
       windowsOut[name] = lastBaseOpen < 0 ? { status: 'NOT_ACTIVE' }

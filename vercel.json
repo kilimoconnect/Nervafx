@@ -44,6 +44,7 @@
     "api/currency-movement-engine.js": { "maxDuration": 60 },
     "api/currency-movement-15m-engine.js": { "maxDuration": 60 },
     "api/currency-movement-5m-engine.js": { "maxDuration": 60 },
+    "api/cme-signal-scan.js": { "maxDuration": 120 },
     "api/cron-cme*-structure-alerts.js": { "maxDuration": 60 },
     "api/currency-strength-m5-ema.js": { "maxDuration": 30 },
     "api/backfill-m5.js": { "maxDuration": 300 },
