@@ -29,6 +29,20 @@ test('end-to-end replay: stepping H1 never reveals future candles and stays in l
   }
 });
 
+test('Friday → weekend → Monday replay transitions correctly', () => {
+  const wk1 = week(START, 120);                        // Sun 07-19 21:00 → Fri 07-24 21:00
+  const wk2 = week(Date.UTC(2026, 6, 26, 21, 0), 6);   // following Monday session reopen
+  const h1 = [...wk1, ...wk2];
+  const friday = buildHistoryView({ h1raw: h1, pair: 'EUR_USD', at: Date.UTC(2026, 6, 24, 20, 0) });   // final 4h before Fri close
+  assert.equal(friday.marketState, 'FRIDAY_CUTOFF');
+  const sat = buildHistoryView({ h1raw: h1, pair: 'EUR_USD', at: Date.UTC(2026, 6, 25, 12, 0) });        // Saturday
+  assert.equal(sat.marketState, 'WEEKEND_FROZEN');
+  assert.match(sat.weekend.message, /MARKET CLOSED/);
+  const mon = buildHistoryView({ h1raw: h1, pair: 'EUR_USD', at: Date.UTC(2026, 6, 26, 22, 0) });        // first completed Monday H1
+  assert.equal(mon.marketState, 'MONDAY_REVALIDATION');
+  assert.equal(mon.ordersDisabled, true);
+});
+
 test('backtest parity: a replay step and a backtest over that instant see identical structure', () => {
   const at = Date.UTC(2026, 6, 22, 12, 0);
   const evalMs = snapToCompletedH1(at);
