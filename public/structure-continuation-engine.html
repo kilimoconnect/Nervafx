@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<title>NervaFX — Structure Continuation History</title>
+<link rel="icon" type="image/png" href="/nervafx-icon.png">
+<script src="/auth-guard.js"></script>
+<link rel="stylesheet" href="style.css" />
+<style>
+  .grid { display:block !important; }
+  .sc-topbar { position:sticky; top:0; z-index:100; display:flex; align-items:center; justify-content:space-between; padding:0 20px; height:56px; background:rgba(8,11,18,0.92); backdrop-filter:blur(20px); border-bottom:1px solid var(--border); }
+  .sc-left { display:flex; align-items:center; gap:12px; }
+  .sc-logo img { height:24px; display:block; }
+  .sc-sep { color:rgba(255,255,255,0.1); font-size:20px; }
+  .sc-title { font-size:13px; font-weight:600; color:var(--text-muted); }
+  .sc-live { padding:6px 12px; border-radius:8px; background:rgba(34,197,94,0.16); border:1px solid rgba(34,197,94,0.45); color:#4ade80; font-size:12px; text-decoration:none; font-weight:700; }
+  .sc-lock { background:rgba(239,68,68,0.14); border-top:1px solid rgba(239,68,68,0.4); border-bottom:1px solid rgba(239,68,68,0.4); color:#fca5a5; text-align:center; font-weight:800; letter-spacing:1px; font-size:12px; padding:7px; }
+  .sc-controls { display:flex; align-items:center; justify-content:center; gap:6px; flex-wrap:wrap; padding:8px 14px; border-bottom:1px solid var(--border); }
+  .sc-input { padding:5px 9px; border-radius:7px; font-size:11px; background:rgba(255,255,255,0.04); border:1px solid var(--border); color:var(--text-muted); color-scheme:dark; }
+  .sc-btn { padding:5px 11px; border-radius:7px; font-size:11px; font-weight:700; background:rgba(56,189,248,0.18); border:1px solid rgba(56,189,248,0.4); color:#38bdf8; cursor:pointer; }
+  .sc-btn.ghost { background:rgba(255,255,255,0.04); border-color:var(--border); color:var(--text-muted); }
+  .sc-btn.active { background:rgba(167,139,250,0.22); border-color:rgba(167,139,250,0.5); color:#c4b5fd; }
+  .sc-banner { max-width:1200px; margin:10px auto 0; padding:9px 14px; border-radius:10px; font-size:12px; font-weight:700; text-align:center; }
+  .sc-weekend { background:rgba(251,191,36,0.12); border:1px solid rgba(251,191,36,0.4); color:#fcd34d; }
+  .sc-carry { background:rgba(167,139,250,0.14); border:1px solid rgba(167,139,250,0.45); color:#c4b5fd; }
+  .sc-wrap { max-width:1200px; margin:0 auto; padding:10px 14px 60px; }
+  .sc-charts { display:grid; grid-template-columns:1fr; gap:10px; }
+  .sc-panel { background:#0b0f18; border:1px solid var(--border); border-radius:10px; padding:10px 12px; }
+  .sc-panel h3 { font-size:11px; font-weight:800; color:#e2e8f0; margin:0 0 6px; display:flex; justify-content:space-between; align-items:center; }
+  .sc-legend { font-size:9px; color:var(--text-dim); font-weight:600; }
+  canvas.sc-canvas { width:100%; height:200px; display:block; }
+  .sc-cols { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px; }
+  .sc-kv { display:flex; justify-content:space-between; font-size:11px; padding:2px 0; border-bottom:1px solid rgba(255,255,255,0.04); }
+  .sc-k { color:var(--text-dim); } .sc-v { color:#e2e8f0; font-weight:700; }
+  .sc-tl { max-height:200px; overflow:auto; }
+  .sc-tl-row { display:flex; gap:8px; font-size:10px; padding:3px 0; border-bottom:1px solid rgba(255,255,255,0.04); }
+  .sc-tl-tf { font-weight:800; width:28px; color:#38bdf8; }
+  .sc-why { font-size:13px; font-weight:700; color:#fca5a5; }
+  .sc-why small { display:block; color:var(--text-dim); font-weight:500; margin-top:3px; }
+  .sc-etable { width:100%; border-collapse:collapse; font-size:10px; }
+  .sc-etable th { text-align:left; padding:4px 6px; color:var(--text-dim); border-bottom:1px solid var(--border); white-space:nowrap; }
+  .sc-etable td { padding:4px 6px; border-bottom:1px solid rgba(255,255,255,0.04); color:#cbd5e1; white-space:nowrap; }
+  .sc-tablewrap { overflow-x:auto; }
+  .sc-loading, .sc-empty { text-align:center; color:var(--text-muted); padding:26px; }
+  .sc-spin { display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,0.2);border-top-color:#38bdf8;border-radius:50%;animation:scspin 0.7s linear infinite;vertical-align:middle; }
+  @keyframes scspin { to { transform:rotate(360deg); } }
+  .sc-dir-BULLISH { color:#4ade80; } .sc-dir-BEARISH { color:#f87171; } .sc-dir-NEUTRAL { color:#94a3b8; }
+  @media (max-width:760px){ .sc-cols{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+<div class="sc-topbar">
+  <div class="sc-left"><a href="/app" class="sc-logo"><img src="/nervafx-logo.png" alt="NervaFX" /></a><span class="sc-sep">|</span><span class="sc-title">Structure Continuation · History &amp; Replay</span></div>
+  <a href="/app" class="sc-live" id="sc-return">● Return to Live</a>
+</div>
+<div class="sc-lock">HISTORY MODE — ORDERS DISABLED</div>
+
+<div class="sc-controls">
+  <select id="c-pair" class="sc-input"></select>
+  <input type="date" id="c-date" class="sc-input" />
+  <select id="c-time" class="sc-input"></select>
+  <select id="c-tz" class="sc-input"></select>
+  <button id="c-prev" class="sc-btn ghost">‹ Prev H1</button>
+  <button id="c-next" class="sc-btn ghost">Next H1 ›</button>
+  <button id="c-play" class="sc-btn">▶ Play</button>
+  <button class="sc-btn ghost sc-speed" data-s="1">1×</button>
+  <button class="sc-btn ghost sc-speed active" data-s="2">2×</button>
+  <button class="sc-btn ghost sc-speed" data-s="4">4×</button>
+  <button id="c-bt" class="sc-btn ghost">⛬ Backtest</button>
+</div>
+
+<div class="sc-banner sc-weekend" id="sc-weekend" style="display:none"></div>
+<div class="sc-banner sc-carry" id="sc-carry" style="display:none">FRIDAY IMPULSE CARRIED FORWARD</div>
+
+<div class="sc-wrap" id="sc-body"><div class="sc-loading"><span class="sc-spin"></span> Loading…</div></div>
+
+<script>
+  var TOKEN = localStorage.getItem('nfx_token') || '';
+  var H1 = 3600000;
+  var PAIRS = ['EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD','EUR_GBP','EUR_JPY','EUR_CHF','EUR_CAD','EUR_AUD','EUR_NZD','GBP_JPY','GBP_CHF','GBP_CAD','GBP_AUD','GBP_NZD','AUD_JPY','AUD_CHF','AUD_CAD','AUD_NZD','NZD_JPY','NZD_CHF','NZD_CAD','CAD_JPY','CAD_CHF','CHF_JPY'];
+  var MODE = 'HISTORY';           // this page is always History Mode → orders disabled
+  var atMs = Math.floor(Date.now() / H1) * H1;
+  var playing = false, speed = 2, timer = null, DATA = null;
+
+  function tz(){ var e=document.getElementById('c-tz'); return (e&&e.value)||'Africa/Dar_es_Salaam'; }
+  function auth(){ return { headers:{Authorization:'Bearer '+TOKEN}, cache:'no-store' }; }
+  function ordersDisabled(mode){ return mode==='HISTORY'; }         // shared with _scs-ui.js
+  function snapH1(ms){ return Math.floor(ms/H1)*H1; }
+  function playbackIntervalMs(s){ s=[1,2,4].indexOf(+s)!==-1?+s:1; return Math.round(1000/s); }
+  function partsInTz(ms,zone){ var dtf=new Intl.DateTimeFormat('en-GB',{timeZone:zone,hour12:false,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}); var o={}; dtf.formatToParts(new Date(ms)).forEach(function(x){if(x.type!=='literal')o[x.type]=x.value;}); if(o.hour==='24')o.hour='00'; return o; }
+  function zonedWallToUtcMs(y,mo,d,h,mi,zone){ var a=Date.UTC(y,mo-1,d,h,mi,0); var p=partsInTz(a,zone); var seen=Date.UTC(+p.year,+p.month-1,+p.day,+p.hour,+p.minute,0); return a+(a-seen); }
+  function replayUrl(){ return '/api/structure-continuation-engine?pair='+encodeURIComponent(document.getElementById('c-pair').value)+'&at='+encodeURIComponent(new Date(atMs).toISOString())+'&timezone='+encodeURIComponent(tz()); }
+
+  (function init(){
+    var ps=document.getElementById('c-pair'); PAIRS.forEach(function(p){var o=document.createElement('option');o.value=p;o.textContent=p.replace('_','/');ps.appendChild(o);});
+    var t=document.getElementById('c-time'); for(var h=0;h<24;h++){var v=('0'+h).slice(-2)+':00';var o=document.createElement('option');o.value=v;o.textContent=v;t.appendChild(o);}
+    var tzs=['Africa/Dar_es_Salaam','UTC','America/New_York']; var ts=document.getElementById('c-tz'); tzs.forEach(function(z){var o=document.createElement('option');o.value=z;o.textContent=z==='Africa/Dar_es_Salaam'?'EAT':z;ts.appendChild(o);}); ts.value='Africa/Dar_es_Salaam';
+    syncInputs();
+    document.getElementById('c-pair').onchange=load;
+    document.getElementById('c-tz').onchange=function(){ syncInputs(); load(); };
+    document.getElementById('c-date').onchange=applyDateTime;
+    document.getElementById('c-time').onchange=applyDateTime;
+    document.getElementById('c-prev').onclick=function(){ atMs=snapH1(atMs)-H1; syncInputs(); load(); };
+    document.getElementById('c-next').onclick=function(){ atMs=snapH1(atMs)+H1; syncInputs(); load(); };
+    document.getElementById('c-play').onclick=togglePlay;
+    [].forEach.call(document.querySelectorAll('.sc-speed'),function(b){ b.onclick=function(){ speed=+b.getAttribute('data-s'); [].forEach.call(document.querySelectorAll('.sc-speed'),function(x){x.classList.remove('active');}); b.classList.add('active'); if(playing){stopPlay();startPlay();} }; });
+    document.getElementById('c-bt').onclick=runBacktest;
+    load();
+  })();
+
+  function applyDateTime(){ var dv=document.getElementById('c-date').value, tv=document.getElementById('c-time').value; if(!dv||!tv) return; var dp=dv.split('-'),tp=tv.split(':'); atMs=snapH1(zonedWallToUtcMs(+dp[0],+dp[1],+dp[2],+tp[0],+tp[1],tz())); load(); }
+  function syncInputs(){ var p=partsInTz(atMs,tz()); document.getElementById('c-date').value=p.year+'-'+p.month+'-'+p.day; document.getElementById('c-time').value=p.hour+':00'; }
+  function togglePlay(){ playing?stopPlay():startPlay(); }
+  function startPlay(){ playing=true; document.getElementById('c-play').textContent='⏸ Pause'; document.getElementById('c-play').classList.add('active'); timer=setInterval(function(){ atMs=snapH1(atMs)+H1; if(atMs>snapH1(Date.now())){ stopPlay(); atMs=snapH1(Date.now()); } syncInputs(); load(); }, playbackIntervalMs(speed)); }
+  function stopPlay(){ playing=false; document.getElementById('c-play').textContent='▶ Play'; document.getElementById('c-play').classList.remove('active'); if(timer)clearInterval(timer); timer=null; }
+
+  async function load(){
+    var body=document.getElementById('sc-body'); body.innerHTML='<div class="sc-loading"><span class="sc-spin"></span> Loading replay…</div>';
+    try{ var res=await fetch(replayUrl(),auth()); if(!res.ok) throw new Error(await res.text()); DATA=await res.json(); render(DATA); }
+    catch(e){ body.innerHTML='<div class="sc-empty" style="color:#f87171">Error loading history: '+(e.message||e)+'</div>'; }
+  }
+
+  function px(v){ return v==null?'—':(+v).toFixed(5); }
+  function dirClass(d){ return 'sc-dir-'+(d||'NEUTRAL'); }
+
+  // ── custom candlestick + overlay renderer (keeps app's Chart.js for other pages) ──
+  function drawChart(cv, candles, overlays){
+    var dpr=window.devicePixelRatio||1, W=cv.clientWidth, Hh=cv.clientHeight; cv.width=W*dpr; cv.height=Hh*dpr;
+    var ctx=cv.getContext('2d'); ctx.scale(dpr,dpr); ctx.clearRect(0,0,W,Hh);
+    if(!candles||!candles.length){ ctx.fillStyle='#64748b'; ctx.font='11px sans-serif'; ctx.fillText('No candles',10,20); return; }
+    var pad=6, plotW=W-70, plotH=Hh-16;
+    var lo=Infinity,hi=-Infinity; candles.forEach(function(c){ lo=Math.min(lo,c.low); hi=Math.max(hi,c.high); });
+    (overlays.lines||[]).forEach(function(l){ if(l.price!=null){ lo=Math.min(lo,l.price); hi=Math.max(hi,l.price); } });
+    var rng=(hi-lo)||1; var n=candles.length; var cw=Math.max(1.5,plotW/n);
+    function y(p){ return pad+(hi-p)/rng*plotH; }
+    function x(i){ return pad+i*cw; }
+    // horizontal overlay lines
+    (overlays.lines||[]).forEach(function(l){ if(l.price==null)return; var yy=y(l.price); ctx.strokeStyle=l.color; ctx.setLineDash(l.dash||[4,3]); ctx.beginPath(); ctx.moveTo(pad,yy); ctx.lineTo(pad+plotW,yy); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle=l.color; ctx.font='9px sans-serif'; ctx.fillText(l.label,pad+plotW+2,yy+3); });
+    // candles
+    candles.forEach(function(c,i){ var up=c.close>=c.open; ctx.strokeStyle=up?'#22c55e':'#ef4444'; ctx.fillStyle=up?'rgba(34,197,94,0.6)':'rgba(239,68,68,0.6)'; var cx=x(i)+cw/2; ctx.beginPath(); ctx.moveTo(cx,y(c.high)); ctx.lineTo(cx,y(c.low)); ctx.stroke(); var bt=y(Math.max(c.open,c.close)), bb=y(Math.min(c.open,c.close)); ctx.fillRect(x(i)+cw*0.15, bt, Math.max(1,cw*0.7), Math.max(1,bb-bt)); });
+    // swing markers
+    (overlays.swings||[]).forEach(function(s){ var i=candles.findIndex(function(c){return c.openMs===s.openMs;}); if(i<0)return; ctx.fillStyle=s.type==='HIGH'?'#38bdf8':'#f59e0b'; var yy=y(s.price); ctx.beginPath(); ctx.arc(x(i)+cw/2,yy,2.5,0,7); ctx.fill(); });
+    // markers (sweep/entry etc by time → vertical tick)
+    (overlays.marks||[]).forEach(function(m){ var i=candles.findIndex(function(c){return c.openMs===m.openMs;}); if(i<0)return; ctx.strokeStyle=m.color; ctx.setLineDash([2,2]); ctx.beginPath(); ctx.moveTo(x(i)+cw/2,pad); ctx.lineTo(x(i)+cw/2,pad+plotH); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle=m.color; ctx.font='8px sans-serif'; ctx.fillText(m.label,x(i)+cw/2+2,pad+10); });
+  }
+
+  function chartPanel(id,title,legend){ return '<div class="sc-panel"><h3>'+title+' <span class="sc-legend">'+legend+'</span></h3><canvas id="'+id+'" class="sc-canvas"></canvas></div>'; }
+
+  function render(v){
+    var body=document.getElementById('sc-body');
+    if(v.empty){ body.innerHTML='<div class="sc-empty">No candle data for this pair/time.</div>'; return; }
+    // banners
+    var wk=document.getElementById('sc-weekend'); if(v.weekend&&v.weekend.closed){ wk.style.display='block'; wk.innerHTML=v.weekend.message+' &nbsp; <button class="sc-btn ghost" id="wk-fri">Go to Friday Close</button> <button class="sc-btn ghost" id="wk-mon">Go to Monday Reopen</button>'; } else wk.style.display='none';
+    document.getElementById('sc-carry').style.display=v.fridayCarry?'block':'none';
+
+    var sp=v.statePanel||{};
+    var h1=v.h1||{}, sig=v.signal;
+    var html='';
+    // charts
+    html+='<div class="sc-charts">';
+    html+=chartPanel('cv-d1','D1 · <span class="'+dirClass(v.d1.direction)+'">'+v.d1.direction+'</span>','swings ● · protected —— · BOS —');
+    html+=chartPanel('cv-h4','H4 · '+(v.h4.state||'')+(v.h4.impulse?(' · '+v.h4.impulse.origin):''),'impulse/protected/pullback');
+    html+=chartPanel('cv-h1','H1 · '+(h1.state||'')+(h1.status?(' ('+h1.status+')'):''),'sweep ¦ · entry/stop/target ——');
+    html+='</div>';
+    // panels
+    html+='<div class="sc-cols">';
+    // state + signal
+    html+='<div class="sc-panel"><h3>Strategy State</h3>'
+      +kv('Market state',sp.marketState)+kv('D1 direction','<span class="'+dirClass(sp.d1Direction)+'">'+sp.d1Direction+'</span>')
+      +kv('H4 state',sp.h4State)+kv('H4 impulse origin',v.h4.impulse?v.h4.impulse.origin:'—')
+      +kv('H4 pullback',v.h4.impulse?((v.h4.impulse.pullbackDepthAtr||0).toFixed(2)+' ATR · age '+v.h4.impulse.ageCandles):'—')
+      +kv('H1 state',sp.h1State)+'</div>';
+    // why no trade OR signal
+    if(sig){ html+='<div class="sc-panel"><h3>Simulated Trade (paper)</h3>'
+      +kv('Direction',sig.direction)+kv('Status',sig.status)+kv('Entry',px(sig.entry))+kv('Stop',px(sig.stop))+kv('Target (2R)',px(sig.target))+kv('R',(sig.r||0).toFixed(5))+kv('Entry type',sig.entryType)+'</div>'; }
+    else { var w=v.whyNoTrade||{}; html+='<div class="sc-panel"><h3>Why No Trade</h3><div class="sc-why">'+(w.code||'—')+'<small>'+(w.text||'')+(w.state?(' · state '+w.state):'')+'</small></div></div>'; }
+    html+='</div>';
+    // timeline
+    html+='<div class="sc-cols"><div class="sc-panel"><h3>Event Timeline</h3><div class="sc-tl">'+((v.timeline&&v.timeline.length)?v.timeline.map(function(e){return '<div class="sc-tl-row"><span class="sc-tl-tf">'+e.tf+'</span><span style="color:var(--text-dim);width:120px">'+e.tsIso.slice(5,16).replace('T',' ')+'</span><span>'+e.label+'</span></div>';}).join(''):'<div class="sc-empty">No structural events yet.</div>')+'</div></div>'
+      +'<div class="sc-panel"><h3>Snapshot</h3>'+kv('Pair',v.pair)+kv('Evaluated (UTC)',v.evalIso.slice(0,16).replace('T',' '))+kv('Orders','<span style="color:#fca5a5">DISABLED</span>')+kv('Auto-corrected',v.autoCorrected?'yes → completed H1':'no')+'</div></div>';
+    // backtest mount
+    html+='<div id="sc-bt-out"></div>';
+    body.innerHTML=html;
+
+    drawChart(document.getElementById('cv-d1'), v.d1.candles, { swings:v.d1.swings, lines:[
+      {price:v.d1.protectedLevel,color:'#f59e0b',label:'D1 protected'},{price:v.d1.bosLevel,color:'#38bdf8',label:'D1 BOS',dash:[6,3]} ] });
+    var h4o={ swings:v.h4.swings, lines:[] }; if(v.h4.impulse){ h4o.lines=[ {price:v.h4.impulse.protectedLevel,color:'#f59e0b',label:'H4 protected'},{price:v.h4.impulse.bosLevel,color:'#38bdf8',label:'H4 BOS',dash:[6,3]},{price:v.h4.impulse.extreme,color:'#a78bfa',label:'impulse extreme'} ]; }
+    drawChart(document.getElementById('cv-h4'), v.h4.candles, h4o);
+    var h1o={ swings:h1.swings, lines:[], marks:[] }; var ev=h1.evidence||{};
+    if(sig){ h1o.lines=[ {price:sig.entry,color:'#22d3ee',label:'entry'},{price:sig.stop,color:'#ef4444',label:'stop'},{price:sig.target,color:'#22c55e',label:'target 2R'} ]; }
+    if(ev.sweepTime!=null) h1o.marks.push({openMs:ev.sweepTime,color:'#f59e0b',label:'sweep'});
+    if(ev.bosTime!=null) h1o.marks.push({openMs:ev.bosTime,color:'#38bdf8',label:'BOS'});
+    drawChart(document.getElementById('cv-h1'), h1.candles, h1o);
+
+    // weekend nav
+    if(v.weekend&&v.weekend.closed){ var f=document.getElementById('wk-fri'), m=document.getElementById('wk-mon'); if(f)f.onclick=function(){ atMs=snapH1(new Date(v.weekend.fridayCloseUtc).getTime()-H1); syncInputs(); load(); }; if(m)m.onclick=function(){ atMs=snapH1(new Date(v.weekend.mondayReopenUtc).getTime()+H1); syncInputs(); load(); }; }
+  }
+  function kv(k,val){ return '<div class="sc-kv"><span class="sc-k">'+k+'</span><span class="sc-v">'+(val==null?'—':val)+'</span></div>'; }
+
+  // ── backtest + performance + filters ──
+  var FILTERS = { direction:'', origin:'', d1Direction:'', entry:'', target:'', stop:'', rejected:'', rejectionReason:'' };
+  async function runBacktest(){
+    var out=document.getElementById('sc-bt-out'); if(!out){ out=document.createElement('div'); out.id='sc-bt-out'; document.getElementById('sc-body').appendChild(out); }
+    out.innerHTML='<div class="sc-panel"><div class="sc-loading"><span class="sc-spin"></span> Running backtest (last ~120 days)…</div></div>';
+    var to=snapH1(atMs), from=to-120*24*H1;
+    var params=new URLSearchParams({mode:'backtest',pair:document.getElementById('c-pair').value,from:new Date(from).toISOString(),to:new Date(to).toISOString()});
+    Object.keys(FILTERS).forEach(function(k){ if(FILTERS[k]) params.set(k==='target'?'target':k, FILTERS[k]); });
+    try{ var res=await fetch('/api/structure-continuation-engine?'+params.toString(),auth()); if(!res.ok) throw new Error(await res.text()); var d=await res.json(); renderBacktest(out,d); }
+    catch(e){ out.innerHTML='<div class="sc-panel"><div class="sc-empty" style="color:#f87171">Backtest error: '+(e.message||e)+'</div></div>'; }
+  }
+  function statRow(label,s){ return '<tr><td style="color:#fff;font-weight:700">'+label+'</td><td>'+s.trades+'</td><td>'+(s.winRate*100).toFixed(0)+'%</td><td>'+s.avgR+'</td><td>'+s.profitFactor+'</td><td>'+s.maxDrawdownR+'</td></tr>'; }
+  function renderBacktest(out,d){
+    var isS=d.inSample||{}, perf=isS.performance||{};
+    var byPair=perf.byPair||{}, byYear=perf.byYear||{}, bySess=perf.bySession||{}, byOrig=perf.byOrigin||{};
+    var h='<div class="sc-panel"><h3>Backtest &amp; Performance <span class="sc-legend">config '+(d.config||'')+' · '+(perf.totalSignals||0)+' signals · '+(perf.totalTrades||0)+' trades</span></h3>';
+    h+='<div class="sc-kv"><span class="sc-k">Win rate</span><span class="sc-v">'+(((perf.winRate||0)*100).toFixed(1))+'%</span></div>';
+    h+='<div class="sc-kv"><span class="sc-k">Expectancy (R) · avg R</span><span class="sc-v">'+(perf.expectancyR||0)+' · '+(perf.avgR||0)+'</span></div>';
+    h+='<div class="sc-kv"><span class="sc-k">Profit factor · Max DD (R)</span><span class="sc-v">'+(perf.profitFactor||0)+' · '+(perf.maxDrawdownR||0)+'</span></div>';
+    h+='<div class="sc-kv"><span class="sc-k">Longest losing streak</span><span class="sc-v">'+(perf.longestLosingStreak||0)+'</span></div>';
+    if(perf.afterCosts) h+='<div class="sc-kv"><span class="sc-k">Avg R before / after costs</span><span class="sc-v">'+(perf.beforeCosts.avgR)+' / '+(perf.afterCosts.avgR)+'</span></div>';
+    function block(title,g){ var ks=Object.keys(g); if(!ks.length) return ''; return '<h3 style="margin-top:8px">'+title+'</h3><div class="sc-tablewrap"><table class="sc-etable"><thead><tr><th>'+title.split(' ')[2]+'</th><th>Trades</th><th>Win%</th><th>Avg R</th><th>PF</th><th>Max DD</th></tr></thead><tbody>'+ks.map(function(k){return statRow(k,g[k]);}).join('')+'</tbody></table></div>'; }
+    h+=block('Results by pair',byPair)+block('Results by year',byYear)+block('Results by session',bySess)+block('Results by origin',byOrig);
+    if(d.outSample) h+='<div class="sc-kv" style="margin-top:8px"><span class="sc-k">Out-of-sample trades · avg R</span><span class="sc-v">'+(d.outSample.performance.totalTrades)+' · '+(d.outSample.performance.avgR)+'</span></div>';
+    h+='<div style="font-size:10px;color:var(--text-dim);margin-top:8px">Outcomes are from stored simulated results only — never inferred. This does not assert profitability.</div>';
+    h+='</div>';
+    out.innerHTML=h;
+  }
+</script>
+</body>
+</html>
