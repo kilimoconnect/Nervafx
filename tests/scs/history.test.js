@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
-const { buildHistoryView, snapToCompletedH1 } = require('../../api/_scs-history');
+const { buildHistoryView, buildScanCard, snapToCompletedH1 } = require('../../api/_scs-history');
 const { runCoordinator } = require('../../api/_scs-coordinator');
 
 const H1 = 3600000;
@@ -44,6 +44,19 @@ test('weekend selection shows Friday final state banner', () => {
   assert.ok(v.weekend && v.weekend.closed);
   assert.match(v.weekend.message, /MARKET CLOSED/);
   assert.ok(v.weekend.mondayReopenUtc);
+});
+
+test('scan card summarizes a pair with stage/rank and never leaks future data', () => {
+  const at = Date.UTC(2026, 6, 22, 12, 30);
+  const c = buildScanCard({ h1raw, pair: 'EUR_USD', at });
+  assert.equal(c.pair, 'EUR_USD');
+  assert.equal(c.evalMs, snapToCompletedH1(at));
+  assert.ok(['SIGNAL', 'H4_PULLBACK', 'H4_IMPULSE', 'D1_ALIGNED', 'NEUTRAL'].includes(c.stage));
+  assert.equal(typeof c.qualifies, 'boolean');
+  // flat data → neutral, not qualifying, with a why-no-trade reason
+  assert.equal(c.stage, 'NEUTRAL');
+  assert.equal(c.qualifies, false);
+  assert.ok(c.whyNoTrade && c.whyNoTrade.code);
 });
 
 test('live / history parity: same candle input → identical coordinator state', () => {

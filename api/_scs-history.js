@@ -117,6 +117,37 @@ function buildHistoryView(input) {
   };
 }
 
+/**
+ * Compact per-pair scan card (for the live/history multi-pair grid). Runs the
+ * exact coordinator and summarizes the D1→H4→H1 stage without building charts.
+ */
+function buildScanCard(input) {
+  const evalMs = snapToCompletedH1(input.at);
+  const co = runCoordinator({ h1raw: input.h1raw, evalMs, pair: input.pair, spread: input.spread });
+  const d1 = co.d1, h4 = co.h4, h1 = co.h1;
+  const hasSignal = h1 && h1.candidate && (h1.state === H1_STATE.ENTRY_PENDING || h1.state === H1_STATE.ACTIVE);
+  const signal = hasSignal ? { direction: h1.candidate.direction, entry: h1.candidate.entry, stop: h1.candidate.stop, target: h1.candidate.target, r: h1.candidate.r, entryType: h1.candidate.entryType, status: h1.status } : null;
+
+  // Stage / ranking so qualifying pairs surface first.
+  let stage = 'NEUTRAL', rank = 0;
+  if (d1.direction !== D1_DIRECTION.NEUTRAL) { stage = 'D1_ALIGNED'; rank = 1; }
+  if (h4.state === H4_STATE.IMPULSE_ACTIVE) { stage = 'H4_IMPULSE'; rank = 2; }
+  if (h4.state === H4_STATE.PULLBACK_ACTIVE) { stage = 'H4_PULLBACK'; rank = 3; }
+  if (signal) { stage = 'SIGNAL'; rank = h1.state === H1_STATE.ACTIVE ? 5 : 4; }
+
+  return {
+    pair: input.pair, evalMs, evalIso: new Date(evalMs).toISOString(), marketState: co.marketState,
+    d1Direction: d1.direction, d1Protected: d1.protectedLevel,
+    h4State: h4.state, h4Origin: h4.impulse ? h4.impulse.origin : null,
+    h4PullbackAtr: h4.impulse ? +(h4.impulse.pullbackDepthAtr || 0).toFixed(2) : null, h4Age: h4.impulse ? h4.impulse.ageCandles : null,
+    fridayCarry: !!(h4.impulse && h4.impulse.origin === ORIGIN.FRIDAY_CARRY),
+    h1State: h1 ? h1.state : null, h1Status: h1 ? h1.status : null,
+    stage, rank, qualifies: rank >= 3,
+    signal,
+    whyNoTrade: signal ? null : { code: h1 ? h1.rejection : 'NONE', text: rejectionText(h1 ? h1.rejection : 'NONE') },
+  };
+}
+
 /** Monday session reopen (Sunday 17:00 NY) for the week following `ms`. */
 function mondayReopenUtc(ms) {
   // walk forward to the next Sunday-17:00-NY session start
@@ -133,4 +164,4 @@ function mondayReopenUtc(ms) {
   return t;
 }
 
-module.exports = { buildHistoryView, snapToCompletedH1, swingsAsOf, buildTimeline, mondayReopenUtc };
+module.exports = { buildHistoryView, buildScanCard, snapToCompletedH1, swingsAsOf, buildTimeline, mondayReopenUtc };

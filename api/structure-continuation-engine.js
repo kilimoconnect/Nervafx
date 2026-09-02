@@ -14,8 +14,9 @@
 const { cors, getClient } = require('./_db');
 const { requirePlan } = require('./_plan');
 const { fetchClosed } = require('./_cme-data');
-const { buildHistoryView, snapToCompletedH1 } = require('./_scs-history');
+const { buildHistoryView, buildScanCard, snapToCompletedH1 } = require('./_scs-history');
 const { runBacktest } = require('./_scs-backtest');
+const { PAIRS } = require('./_cme-constants');
 const { applyFilters } = require('./_scs-filters');
 const { computePerformance } = require('./_scs-performance');
 const { CONFIG } = require('./_scs-config');
@@ -60,6 +61,29 @@ module.exports = async function handler(req, res) {
       };
       const filtered = applyFilters(bt.inSample.signals, f);
       return res.json({ ok: true, pair, config: bt.config, inSample: { ...bt.inSample, filtered: filtered.signals, performance: computePerformance(filtered.signals, {}) }, outSample: bt.outSample || null, versionsAvailable: filtered.versionsAvailable });
+    }
+
+    // Multi-pair scan (live = now, history = ?at): one card per pair.
+    if (q.mode === 'scan') {
+      const at = q.at ? new Date(q.at).getTime() : Date.now();
+      if (isNaN(at)) return res.status(400).json({ error: 'invalid ?at timestamp' });
+      const evalMs = snapToCompletedH1(at);
+      const cards = [];
+      const errors = [];
+      for (let i = 0; i < PAIRS.length; i += 7) {
+        const batch = PAIRS.slice(i, i + 7);
+        // eslint-disable-next-line no-await-in-loop
+        await Promise.all(batch.map(async (p) => {
+          try {
+            const h1raw = await h1For(sb, p, evalMs, 700);
+            if (!h1raw.length) { cards.push({ pair: p, empty: true, stage: 'NEUTRAL', rank: -1, qualifies: false }); return; }
+            cards.push(buildScanCard({ h1raw, pair: p, at, spread: q.spread ? +q.spread : undefined }));
+          } catch (e) { errors.push({ pair: p, error: e.message }); }
+        }));
+      }
+      cards.sort((a, b) => (b.rank - a.rank) || a.pair.localeCompare(b.pair));
+      res.setHeader('Cache-Control', q.at ? 's-maxage=86400, stale-while-revalidate=86400' : 'no-store');
+      return res.json({ ok: true, mode: 'scan', live: !q.at, evalIso: new Date(evalMs).toISOString(), evalMs, cards, errors, pairs: PAIRS.length });
     }
 
     // Default: point-in-time historical replay view.
