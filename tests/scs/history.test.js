@@ -51,7 +51,9 @@ test('scan card summarizes a pair with stage/rank and never leaks future data', 
   const c = buildScanCard({ h1raw, pair: 'EUR_USD', at });
   assert.equal(c.pair, 'EUR_USD');
   assert.equal(c.evalMs, snapToCompletedH1(at));
-  assert.ok(['SIGNAL', 'H4_PULLBACK', 'H4_IMPULSE', 'D1_ALIGNED', 'NEUTRAL'].includes(c.stage));
+  assert.ok(['SIGNAL', 'H1_REJECTION', 'H4_PULLBACK', 'H4_IMPULSE', 'D1_ALIGNED', 'NEUTRAL'].includes(c.stage));
+  // qualifying requires a confirmed H1 BOS signal, never a rejection/pullback alone
+  assert.equal(c.qualifies, c.stage === 'SIGNAL');
   assert.equal(typeof c.qualifies, 'boolean');
   // flat data → neutral, not qualifying, with a why-no-trade reason
   assert.equal(c.stage, 'NEUTRAL');

@@ -128,12 +128,17 @@ function buildScanCard(input) {
   const hasSignal = h1 && h1.candidate && (h1.state === H1_STATE.ENTRY_PENDING || h1.state === H1_STATE.ACTIVE);
   const signal = hasSignal ? { direction: h1.candidate.direction, entry: h1.candidate.entry, stop: h1.candidate.stop, target: h1.candidate.target, r: h1.candidate.r, entryType: h1.candidate.entryType, status: h1.status } : null;
 
-  // Stage / ranking so qualifying pairs surface first.
+  // Stage / ranking so real signals surface first. A signal requires the H1 BOS
+  // of the previous high/low in the trend direction AFTER the sweep/rejection —
+  // a sweep+reclaim alone (WAITING_BOS) is only a "rejection, awaiting BOS".
   let stage = 'NEUTRAL', rank = 0;
   if (d1.direction !== D1_DIRECTION.NEUTRAL) { stage = 'D1_ALIGNED'; rank = 1; }
   if (h4.state === H4_STATE.IMPULSE_ACTIVE) { stage = 'H4_IMPULSE'; rank = 2; }
-  if (h4.state === H4_STATE.PULLBACK_ACTIVE) { stage = 'H4_PULLBACK'; rank = 3; }
-  if (signal) { stage = 'SIGNAL'; rank = h1.state === H1_STATE.ACTIVE ? 5 : 4; }
+  if (h4.state === H4_STATE.PULLBACK_ACTIVE) {
+    stage = 'H4_PULLBACK'; rank = 3;                                            // waiting for the H1 sweep
+    if (h1 && h1.state === H1_STATE.WAITING_BOS) { stage = 'H1_REJECTION'; rank = 4; } // rejection done, H1 BOS still required
+  }
+  if (signal) { stage = 'SIGNAL'; rank = h1.state === H1_STATE.ACTIVE ? 6 : 5; }   // sweep/rejection + confirmed H1 BOS
 
   return {
     pair: input.pair, evalMs, evalIso: new Date(evalMs).toISOString(), marketState: co.marketState,
@@ -142,7 +147,7 @@ function buildScanCard(input) {
     h4PullbackAtr: h4.impulse ? +(h4.impulse.pullbackDepthAtr || 0).toFixed(2) : null, h4Age: h4.impulse ? h4.impulse.ageCandles : null,
     fridayCarry: !!(h4.impulse && h4.impulse.origin === ORIGIN.FRIDAY_CARRY),
     h1State: h1 ? h1.state : null, h1Status: h1 ? h1.status : null,
-    stage, rank, qualifies: rank >= 3,
+    stage, rank, qualifies: !!signal,   // qualifying = confirmed H1 BOS + trade candidate, not rejection alone
     signal,
     whyNoTrade: signal ? null : { code: h1 ? h1.rejection : 'NONE', text: rejectionText(h1 ? h1.rejection : 'NONE') },
   };
