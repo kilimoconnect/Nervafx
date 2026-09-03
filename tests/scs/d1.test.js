@@ -7,61 +7,57 @@ const { evaluateD1 } = require('../../api/_scs-d1');
 const DAY = 86400000;
 let idx = 0;
 const mk = (o, h, l, c) => ({ openMs: (idx++) * DAY, open: o, high: h, low: l, close: c });
-const doji = () => mk(1.0990, 1.0995, 1.0985, 1.0990);
+const inside = () => mk(1.1000, 1.1010, 1.0990, 1.1000);   // stays within the band
 
-// 14 warm-up dojis → ATR≈0.0010, no swings (equal highs/lows never qualify)
-function base() {
+test('close above the previous day high → BULLISH; previous day low protected', () => {
   idx = 0;
-  const a = [];
-  for (let i = 0; i < 14; i++) a.push(doji());
-  a.push(mk(1.0990, 1.0995, 1.0980, 1.0990)); // 14: swing low @1.0980
-  a.push(doji()); a.push(doji());             // 15,16
-  a.push(mk(1.0990, 1.1000, 1.0985, 1.0990)); // 17: swing high @1.1000
-  a.push(doji()); a.push(doji());             // 18,19
-  a.push(mk(1.10000, 1.10130, 1.09995, 1.10120)); // 20: valid bullish D1 BOS above 1.1000
-  return a;
-}
-
-test('valid bullish D1 BOS → BULLISH with the responsible swing low protected', () => {
-  const st = evaluateD1(base());
+  const a = [inside(), inside(),
+    mk(1.1000, 1.1030, 1.0995, 1.1025)]; // day 2 closes 1.1025 > day1 high 1.1010
+  const st = evaluateD1(a);
   assert.equal(st.direction, 'BULLISH');
-  assert.equal(st.protectedLevel, 1.0980);
-  assert.ok(st.protectedSwingId.startsWith('SL-'));
-  assert.equal(st.bosLevel, 1.1000);
+  assert.equal(st.bosLevel, 1.1010);       // previous day's high (the broken level)
+  assert.equal(st.protectedLevel, 1.0990); // previous day's low
   assert.equal(st.invalidationReason, 'NONE');
 });
 
-test('completed close below protected low (no opposite BOS) → NEUTRAL', () => {
-  const a = base();
-  a.push(mk(1.0979, 1.0982, 1.0977, 1.0978)); // 21: closes below 1.0980, weak body → no bearish BOS
-  const st = evaluateD1(a);
-  assert.equal(st.direction, 'NEUTRAL');
-  assert.equal(st.invalidationReason, 'D1_PROTECTED_BROKEN');
-});
-
-test('wick below protected but close above → stays BULLISH (wicks never invalidate)', () => {
-  const a = base();
-  a.push(mk(1.0985, 1.0990, 1.0975, 1.0985)); // 21: low pierces 1.0980 but closes above
-  const st = evaluateD1(a);
-  assert.equal(st.direction, 'BULLISH');
-  assert.equal(st.protectedLevel, 1.0980);
-});
-
-test('strong large-range breakout day still confirms D1 direction (not range-rejected)', () => {
-  const a = base();
-  // replace the BOS candle with a very strong momentum day: closes far above 1.1000,
-  // range ~6 ATR (would be RANGE_TOO_LARGE under the entry gate).
-  a[a.length - 1] = mk(1.09900, 1.10600, 1.09850, 1.10550);
-  a[a.length - 1].openMs = 20 * DAY;
-  const st = evaluateD1(a);
-  assert.equal(st.direction, 'BULLISH');   // structural break counts despite the large range
-  assert.equal(st.protectedLevel, 1.0980);
-});
-
-test('no directional BOS → NEUTRAL (D1_NEUTRAL)', () => {
+test('close below the previous day low → BEARISH; previous day high protected', () => {
   idx = 0;
-  const flat = []; for (let i = 0; i < 20; i++) flat.push(doji());
-  const st = evaluateD1(flat);
+  const a = [inside(), inside(),
+    mk(1.1000, 1.1005, 1.0970, 1.0975)]; // day 2 closes 1.0975 < day1 low 1.0990
+  const st = evaluateD1(a);
+  assert.equal(st.direction, 'BEARISH');
+  assert.equal(st.bosLevel, 1.0990);       // previous day's low (the broken level)
+  assert.equal(st.protectedLevel, 1.1010); // previous day's high
+});
+
+test('strong large-range breakout still confirms direction (no range gate on D1)', () => {
+  idx = 0;
+  const a = [inside(), inside(),
+    mk(1.0990, 1.1100, 1.0980, 1.1080)]; // range ~120 pips, closes far above prev high
+  assert.equal(evaluateD1(a).direction, 'BULLISH');
+});
+
+test('wick above previous high but close back inside → not a break', () => {
+  idx = 0;
+  const a = [inside(), inside(),
+    mk(1.1000, 1.1030, 1.0995, 1.1005)]; // high 1.1030 pierces, close 1.1005 < prev high 1.1010
+  assert.equal(evaluateD1(a).direction, 'NEUTRAL');
+});
+
+test('bullish then a close below the previous day low flips to BEARISH (stop & reverse)', () => {
+  idx = 0;
+  const a = [inside(), inside(),
+    mk(1.1000, 1.1030, 1.0995, 1.1025),   // BULLISH
+    mk(1.1025, 1.1035, 1.0990, 1.1030),   // higher, still bullish (protected raised to 1.0995)
+    mk(1.1030, 1.1032, 1.0980, 1.0985)];  // closes below prev day low 1.0990 → BEARISH
+  const st = evaluateD1(a);
+  assert.equal(st.direction, 'BEARISH');
+});
+
+test('no break of a previous day high/low → NEUTRAL', () => {
+  idx = 0;
+  const a = [inside(), inside(), inside(), inside()];
+  const st = evaluateD1(a);
   assert.equal(st.direction, 'NEUTRAL');
   assert.equal(st.invalidationReason, 'D1_NEUTRAL');
 });
