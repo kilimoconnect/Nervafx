@@ -70,8 +70,14 @@ function swingLows(candles, left = CONFIG.swingLeft, right = CONFIG.swingRight) 
 /**
  * Evaluate one candle breaking one confirmed swing in `dir` (+1 bullish above a
  * swing high, -1 bearish below a swing low). Returns full evidence.
+ *
+ * `structureOnly` (used for the D1 directional bias and the H4 impulse) requires
+ * only a confirmed close beyond the swing by the minimum penetration — it does
+ * NOT apply the body / close-location / max-range entry-quality gates, so strong
+ * momentum breaks (whose range legitimately exceeds 2 ATR) still count as a
+ * structural break. The H1 ENTRY keeps the full gate.
  */
-function detectBOS(candle, swing, atr, dir, cfg = CONFIG) {
+function detectBOS(candle, swing, atr, dir, cfg = CONFIG, structureOnly = false) {
   const range = candle.high - candle.low;
   const body = Math.abs(candle.close - candle.open);
   const closeLoc = range > 0 ? (dir > 0 ? (candle.close - candle.low) / range : (candle.high - candle.close) / range) : 0;
@@ -95,9 +101,11 @@ function detectBOS(candle, swing, atr, dir, cfg = CONFIG) {
     return ev;
   }
   if (ev.penetrationAtr < cfg.bosPenetrationAtr) { ev.rejection = REJECTION.PENETRATION_TOO_SMALL; return ev; }
-  if (ev.bodyAtr < cfg.bosMinBodyAtr) { ev.rejection = REJECTION.BODY_TOO_SMALL; return ev; }
-  if (ev.closeLocation < (1 - cfg.bosCloseLocation)) { ev.rejection = REJECTION.CLOSE_LOCATION_WEAK; return ev; }
-  if (ev.rangeAtr > cfg.bosMaxRangeAtr) { ev.rejection = REJECTION.RANGE_TOO_LARGE; return ev; }
+  if (!structureOnly) {
+    if (ev.bodyAtr < cfg.bosMinBodyAtr) { ev.rejection = REJECTION.BODY_TOO_SMALL; return ev; }
+    if (ev.closeLocation < (1 - cfg.bosCloseLocation)) { ev.rejection = REJECTION.CLOSE_LOCATION_WEAK; return ev; }
+    if (ev.rangeAtr > cfg.bosMaxRangeAtr) { ev.rejection = REJECTION.RANGE_TOO_LARGE; return ev; }
+  }
   ev.bos = true;
   return ev;
 }

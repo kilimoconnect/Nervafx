@@ -47,6 +47,17 @@ test('wick below protected but close above → stays BULLISH (wicks never invali
   assert.equal(st.protectedLevel, 1.0980);
 });
 
+test('strong large-range breakout day still confirms D1 direction (not range-rejected)', () => {
+  const a = base();
+  // replace the BOS candle with a very strong momentum day: closes far above 1.1000,
+  // range ~6 ATR (would be RANGE_TOO_LARGE under the entry gate).
+  a[a.length - 1] = mk(1.09900, 1.10600, 1.09850, 1.10550);
+  a[a.length - 1].openMs = 20 * DAY;
+  const st = evaluateD1(a);
+  assert.equal(st.direction, 'BULLISH');   // structural break counts despite the large range
+  assert.equal(st.protectedLevel, 1.0980);
+});
+
 test('no directional BOS → NEUTRAL (D1_NEUTRAL)', () => {
   idx = 0;
   const flat = []; for (let i = 0; i < 20; i++) flat.push(doji());

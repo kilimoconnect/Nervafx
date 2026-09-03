@@ -37,8 +37,8 @@ function evaluateD1(d1) {
     // 2. new BOS on this completed candle
     const swHi = latestSwingBefore(highs, i);
     const swLo = latestSwingBefore(lows, i);
-    const bull = swHi ? detectBOS(candle, swHi, a, 1) : null;
-    const bear = swLo ? detectBOS(candle, swLo, a, -1) : null;
+    const bull = swHi ? detectBOS(candle, swHi, a, 1, undefined, true) : null;   // structural break (no entry gates)
+    const bear = swLo ? detectBOS(candle, swLo, a, -1, undefined, true) : null;
 
     if (bull && bull.bos && bear && bear.bos) { st = neutralState(REJECTION.D1_CONFLICT); continue; }
 
