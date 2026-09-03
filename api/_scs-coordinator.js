@@ -82,7 +82,7 @@ function runCoordinator(input) {
   // Weekend: structure is still computed but no signal evaluation occurs.
   let h1res, admission = null;
   if (ms === MARKET_STATE.WEEKEND_FROZEN) {
-    h1res = { triggered: false, state: H1_STATE.WAITING_SWEEP, status: SIGNAL_STATUS.FROZEN, rejection: REJECTION.WEEKEND_FROZEN, candidate: null, evidence: {} };
+    h1res = { triggered: false, state: H1_STATE.WAITING_BOS, status: SIGNAL_STATUS.FROZEN, rejection: REJECTION.WEEKEND_FROZEN, candidate: null, evidence: {}, bosConfirmed: false };
   } else {
     // 3) H1 third.
     const opposing = d1.direction === D1_DIRECTION.NEUTRAL ? [] : opposingLevels(d1, h4candles, d1.direction);

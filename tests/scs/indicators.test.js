@@ -45,7 +45,7 @@ const swingLo = { id: 'SL-1', time: 't', price: 1.1000 };
 
 test('bullish BOS: valid close beyond swing high', () => {
   const b = I.detectBOS(c(1.0998, 1.10130, 1.0997, 1.10120), swingHi, ATR, 1);
-  assert.equal(b.bos, true); assert.equal(b.sweep, false); assert.equal(b.rejection, 'NONE');
+  assert.equal(b.bos, true); assert.equal(b.wickOnly, false); assert.equal(b.rejection, 'NONE');
   assert.ok(b.penetrationAtr >= 0.10 && b.bodyAtr >= 0.60 && b.closeLocation >= 0.75 && b.rangeAtr <= 2.0);
 });
 
@@ -54,9 +54,9 @@ test('bearish BOS: valid close beyond swing low', () => {
   assert.equal(b.bos, true); assert.equal(b.rejection, 'NONE');
 });
 
-test('sweep, not BOS: wick beyond swing but close back inside', () => {
+test('wick beyond swing but close back inside → not a BOS', () => {
   const b = I.detectBOS(c(1.1001, 1.1005, 1.0998, 1.0999), swingHi, ATR, 1);
-  assert.equal(b.bos, false); assert.equal(b.sweep, true); assert.equal(b.rejection, 'WICK_SWEEP_ONLY');
+  assert.equal(b.bos, false); assert.equal(b.wickOnly, true); assert.equal(b.rejection, 'WICK_ONLY_NO_CLOSE');
 });
 
 test('rejections: penetration / body / close-location / range', () => {

@@ -82,7 +82,7 @@
   var TOKEN = localStorage.getItem('nfx_token') || '';
   var H1 = 3600000;
   var PAIRS = ['EUR_USD','GBP_USD','AUD_USD','NZD_USD','USD_JPY','USD_CHF','USD_CAD','EUR_GBP','EUR_JPY','EUR_CHF','EUR_CAD','EUR_AUD','EUR_NZD','GBP_JPY','GBP_CHF','GBP_CAD','GBP_AUD','GBP_NZD','AUD_JPY','AUD_CHF','AUD_CAD','AUD_NZD','NZD_JPY','NZD_CHF','NZD_CAD','CAD_JPY','CAD_CHF','CHF_JPY'];
-  var STAGE = { SIGNAL:{c:'#22c55e',bg:'rgba(34,197,94,0.18)'}, H1_REJECTION:{c:'#fb923c',bg:'rgba(251,146,60,0.16)'}, H4_PULLBACK:{c:'#f59e0b',bg:'rgba(245,158,11,0.14)'}, H4_IMPULSE:{c:'#38bdf8',bg:'rgba(56,189,248,0.16)'}, D1_ALIGNED:{c:'#94a3b8',bg:'rgba(148,163,184,0.14)'}, NEUTRAL:{c:'#64748b',bg:'rgba(100,116,139,0.12)'} };
+  var STAGE = { SIGNAL:{c:'#22c55e',bg:'rgba(34,197,94,0.18)'}, RETEST_PENDING:{c:'#22d3ee',bg:'rgba(34,211,238,0.16)'}, H1_BOS:{c:'#fb923c',bg:'rgba(251,146,60,0.16)'}, H4_PULLBACK:{c:'#f59e0b',bg:'rgba(245,158,11,0.14)'}, H4_IMPULSE:{c:'#38bdf8',bg:'rgba(56,189,248,0.16)'}, D1_ALIGNED:{c:'#94a3b8',bg:'rgba(148,163,184,0.14)'}, NEUTRAL:{c:'#64748b',bg:'rgba(100,116,139,0.12)'}, MISSED_ENTRY:{c:'#a78bfa',bg:'rgba(167,139,250,0.14)'}, INVALIDATED:{c:'#f87171',bg:'rgba(248,113,113,0.14)'} };
   var VIEW='SCAN', live=true, atMs=Math.floor(Date.now()/H1)*H1, curPair='EUR_USD', onlyQual=false, DATA=null;
 
   function tz(){ var e=document.getElementById('c-tz'); return (e&&e.value)||'Africa/Dar_es_Salaam'; }
@@ -129,9 +129,10 @@
   function renderScan(d){
     var meta=document.getElementById('sc-meta');
     var cards=(d.cards||[]).filter(function(c){ return !c.empty; });
-    var qcount=cards.filter(function(c){return c.qualifies;}).length;
-    var rej=cards.filter(function(c){return c.stage==='H1_REJECTION';}).length;
-    meta.innerHTML='<b>'+(d.live?'LIVE':'HISTORY')+'</b> · '+(d.evalIso||'').slice(0,16).replace('T',' ')+' UTC · '+cards.length+' pairs · <b style="color:#22c55e">'+qcount+' signal(s)</b> (sweep + H1 BOS) · <b style="color:#fb923c">'+rej+' rejection(s) awaiting BOS</b> · click a card for the full replay';
+    var nBos=cards.filter(function(c){return c.bosConfirmed;}).length;
+    var mWait=cards.filter(function(c){return c.stage==='H4_PULLBACK';}).length;
+    var xRetest=cards.filter(function(c){return c.stage==='RETEST_PENDING';}).length;
+    meta.innerHTML='<b>'+(d.live?'LIVE':'HISTORY')+'</b> · '+(d.evalIso||'').slice(0,16).replace('T',' ')+' UTC · '+cards.length+' pairs · <b style="color:#22c55e">'+nBos+' confirmed H1 BOS signals</b> · <b style="color:#f59e0b">'+mWait+' setups waiting for H1 BOS</b> · <b style="color:#22d3ee">'+xRetest+' waiting for retracement</b> · click a card for the full replay';
     var shown=onlyQual?cards.filter(function(c){return c.qualifies;}):cards;
     if(!shown.length){ document.getElementById('sc-body').innerHTML='<div class="sc-empty">'+(onlyQual?'No qualifying pairs at this time.':'No data.')+'</div>'; return; }
     var html='<div class="sc-cards">'+shown.map(cardHtml).join('')+'</div>';
@@ -177,7 +178,7 @@
     if(v.weekend&&v.weekend.closed) html+='<div class="sc-banner sc-weekend">'+v.weekend.message+'</div>';
     html+=chartPanel('cv-d1','D1 · <span class="'+dirClass(v.d1.direction)+'">'+v.d1.direction+'</span>','swings ● · protected/BOS ——');
     html+=chartPanel('cv-h4','H4 · '+(v.h4.state||'')+(v.h4.impulse?(' · '+v.h4.impulse.origin):''),'protected/BOS/extreme');
-    html+=chartPanel('cv-h1','H1 · '+(h1.state||'')+(h1.status&&h1.status!=='PENDING'?(' ('+h1.status+')'):''),'sweep/BOS ¦ · entry/stop/target ——');
+    html+=chartPanel('cv-h1','H1 · '+(h1.state||'')+(h1.status&&h1.status!=='PENDING'?(' ('+h1.status+')'):''),'BOS ¦ · entry/stop/target ——');
     html+='<div class="sc-cols">';
     html+='<div class="sc-panel"><h3>Strategy State</h3>'+kv('Market',sp.marketState)+kv('D1','<span class="'+dirClass(sp.d1Direction)+'">'+sp.d1Direction+'</span>')+kv('H4',sp.h4State)+kv('H4 origin',v.h4.impulse?v.h4.impulse.origin:'—')+kv('H4 pullback',v.h4.impulse?((v.h4.impulse.pullbackDepthAtr||0).toFixed(2)+' ATR · age '+v.h4.impulse.ageCandles):'—')+kv('H1',sp.h1State)+kv('Orders','<span style="color:#fca5a5">DISABLED</span>')+'</div>';
     if(sig){ html+='<div class="sc-panel"><h3>Simulated Trade (paper)</h3>'+kv('Direction','<span class="'+(sig.direction==='BUY'?'sc-buy':'sc-sell')+'">'+sig.direction+'</span>')+kv('Status',sig.status)+kv('Entry',px(sig.entry))+kv('Stop',px(sig.stop))+kv('Target (2R)',px(sig.target))+kv('R',(sig.r||0).toFixed(5))+'</div>'; }
@@ -191,7 +192,6 @@
     drawChart(document.getElementById('cv-h4'), v.h4.candles, h4o);
     var h1o={swings:h1.swings,lines:[],marks:[]}, ev=h1.evidence||{};
     if(sig){ h1o.lines=[{price:sig.entry,color:'#22d3ee',label:'entry'},{price:sig.stop,color:'#ef4444',label:'stop'},{price:sig.target,color:'#22c55e',label:'target 2R'}]; }
-    if(ev.sweepTime!=null) h1o.marks.push({openMs:ev.sweepTime,color:'#f59e0b',label:'sweep'});
     if(ev.bosTime!=null) h1o.marks.push({openMs:ev.bosTime,color:'#38bdf8',label:'BOS'});
     drawChart(document.getElementById('cv-h1'), h1.candles, h1o);
   }

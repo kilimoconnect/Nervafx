@@ -18,7 +18,7 @@ const H4_STATE = Object.freeze({
 });
 
 const H1_STATE = Object.freeze({
-  WAITING_SWEEP: 'WAITING_SWEEP', WAITING_BOS: 'WAITING_BOS', ENTRY_PENDING: 'ENTRY_PENDING',
+  WAITING_BOS: 'WAITING_BOS', ENTRY_PENDING: 'ENTRY_PENDING',
   ACTIVE: 'ACTIVE', COMPLETED: 'COMPLETED', REJECTED: 'REJECTED',
 });
 
@@ -47,7 +47,7 @@ const REJECTION = Object.freeze({
   BODY_TOO_SMALL: 'BODY_TOO_SMALL',
   CLOSE_LOCATION_WEAK: 'CLOSE_LOCATION_WEAK',
   RANGE_TOO_LARGE: 'RANGE_TOO_LARGE',
-  WICK_SWEEP_ONLY: 'WICK_SWEEP_ONLY',
+  WICK_ONLY_NO_CLOSE: 'WICK_ONLY_NO_CLOSE',
   // D1
   D1_NEUTRAL: 'D1_NEUTRAL',
   D1_PROTECTED_BROKEN: 'D1_PROTECTED_BROKEN',
@@ -61,15 +61,12 @@ const REJECTION = Object.freeze({
   H4_PULLBACK_SHALLOW: 'H4_PULLBACK_SHALLOW',
   H4_MOVE_COMPLETED: 'H4_MOVE_COMPLETED',
   // H1 trigger / candidate
-  H1_NO_SWEEP: 'H1_NO_SWEEP',
-  H1_NO_FAILED_SIDE: 'H1_NO_FAILED_SIDE',
-  H1_BOS_WINDOW_EXPIRED: 'H1_BOS_WINDOW_EXPIRED',
   H1_NO_BOS: 'H1_NO_BOS',
   INSUFFICIENT_TARGET_ROOM: 'INSUFFICIENT_TARGET_ROOM',
   STOP_TOO_WIDE: 'STOP_TOO_WIDE',
   STOP_TOO_TIGHT_VS_SPREAD: 'STOP_TOO_TIGHT_VS_SPREAD',
   PENDING_EXPIRED: 'PENDING_EXPIRED',
-  TARGET_BEFORE_ENTRY: 'TARGET_BEFORE_ENTRY',
+  ENTRY_MISSED: 'ENTRY_MISSED',
   DUPLICATE_PER_IMPULSE: 'DUPLICATE_PER_IMPULSE',
   // risk / session
   SPREAD_TOO_WIDE: 'SPREAD_TOO_WIDE',
@@ -92,7 +89,7 @@ const REJECTION_TEXT = Object.freeze({
   BODY_TOO_SMALL: 'Candle body is below the minimum ATR threshold.',
   CLOSE_LOCATION_WEAK: 'Close is not within the required end of the candle range.',
   RANGE_TOO_LARGE: 'Candle range exceeds the maximum ATR threshold.',
-  WICK_SWEEP_ONLY: 'Price wicked beyond the swing but did not close beyond it (liquidity sweep).',
+  WICK_ONLY_NO_CLOSE: 'Price wicked beyond the swing but did not close beyond it — not a BOS.',
   D1_NEUTRAL: 'D1 direction is neutral (no confirmed directional BOS).',
   D1_PROTECTED_BROKEN: 'A completed D1 candle closed beyond the protected level.',
   D1_CONFLICT: 'D1 structure is conflicting or unresolved.',
@@ -103,15 +100,12 @@ const REJECTION_TEXT = Object.freeze({
   H4_OPPOSITE_STRUCTURE: 'Opposite H4 structure invalidated the impulse.',
   H4_PULLBACK_SHALLOW: 'H4 pullback did not retrace the minimum ATR from the impulse extreme.',
   H4_MOVE_COMPLETED: 'The continuation move completed before an entry formed.',
-  H1_NO_SWEEP: 'No H1 liquidity sweep of a confirmed swing occurred.',
-  H1_NO_FAILED_SIDE: 'H1 did not close back beyond the swept level (no failed buyers/sellers).',
-  H1_BOS_WINDOW_EXPIRED: 'No H1 BOS within three completed candles of the sweep.',
-  H1_NO_BOS: 'No valid H1 displacement BOS after the failed side.',
+  H1_NO_BOS: 'No valid H1 BOS beyond the most recent confirmed H1 pullback swing.',
   INSUFFICIENT_TARGET_ROOM: 'Less than 2R of room before the nearest opposing D1/H4 swing.',
   STOP_TOO_WIDE: 'Stop distance exceeds 1.50 H1 ATR.',
   STOP_TOO_TIGHT_VS_SPREAD: 'Stop distance is less than three times the current spread.',
-  PENDING_EXPIRED: 'Pending entry expired after three completed H1 candles.',
-  TARGET_BEFORE_ENTRY: 'Target was reached before entry filled.',
+  PENDING_EXPIRED: 'Retracement entry expired after three completed H1 candles.',
+  ENTRY_MISSED: 'Price reached the 2R target before retracing to the entry.',
   DUPLICATE_PER_IMPULSE: 'A trade candidate already exists for this H4 impulse.',
   SPREAD_TOO_WIDE: 'Spread exceeds twice its normal value for this pair and hour.',
   MAX_POSITIONS: 'Maximum simultaneous positions reached.',
@@ -142,11 +136,10 @@ const CONFIG = Object.freeze({
   h4ImpulseLifeCandles: 12,    // completed H4 trading candles the impulse stays eligible
 
   // H1
-  h1SweepToBosWindow: 3,       // completed H1 candles from sweep to BOS (inclusive of same candle)
-  h1PendingLifeCandles: 3,     // completed H1 candles a pending entry survives
+  h1PendingLifeCandles: 3,     // completed H1 candles a retracement entry survives
   h1MaxStopAtr: 1.50,          // reject if stop distance exceeds this H1 ATR
   h1MinStopSpreadMult: 3,      // reject if stop distance < this * current spread
-  h1StopBufferAtr: 0.10,       // extra buffer beyond the sweep extreme, in H1 ATR
+  h1StopBufferAtr: 0.10,       // extra buffer beyond the pullback swing, in H1 ATR
 
   // target
   targetR: 2,                  // fixed 2R

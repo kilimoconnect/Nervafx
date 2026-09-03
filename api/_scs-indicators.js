@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * SCS — Section 3: ATR, swings, sweeps and Break of Structure (pure, no-repaint).
+ * SCS — Section 3: ATR, swings and Break of Structure (pure, no-repaint).
  *
  * Reusable by live evaluation, history and backtesting. All functions take
  * completed candles ({openMs, open, high, low, close}) and never look ahead.
@@ -66,7 +66,7 @@ function swingLows(candles, left = CONFIG.swingLeft, right = CONFIG.swingRight) 
   return out;
 }
 
-// ── sweep vs BOS ─────────────────────────────────────────────────────────────
+// ── wick-vs-close (BOS validity) ─────────────────────────────────────────────────────────────
 /**
  * Evaluate one candle breaking one confirmed swing in `dir` (+1 bullish above a
  * swing high, -1 bearish below a swing low). Returns full evidence.
@@ -84,14 +84,14 @@ function detectBOS(candle, swing, atr, dir, cfg = CONFIG) {
     penetrationAtr: atr > 0 ? round(Math.max(0, beyondClose) / atr) : 0,
     body: round(body), bodyAtr: atr > 0 ? round(body / atr) : 0,
     range: round(range), rangeAtr: atr > 0 ? round(range / atr) : 0,
-    closeLocation: round(closeLoc), sweep: false, bos: false, rejection: REJECTION.NONE,
+    closeLocation: round(closeLoc), wickOnly: false, bos: false, rejection: REJECTION.NONE,
   };
   if (!(atr > 0)) { ev.rejection = REJECTION.NO_SWING; return ev; }
 
-  const closedBeyond = beyondClose > 0;              // strict — equality does not qualify
+  const closedBeyond = beyondClose > 0;              // strict — a close (not a wick) is required
   if (!closedBeyond) {
-    ev.sweep = beyondWick > 0;                        // pierced but did not close beyond → liquidity sweep
-    ev.rejection = ev.sweep ? REJECTION.WICK_SWEEP_ONLY : REJECTION.NO_CLOSE_BEYOND_SWING;
+    ev.wickOnly = beyondWick > 0;                     // wicked beyond but did not close beyond → not a BOS
+    ev.rejection = ev.wickOnly ? REJECTION.WICK_ONLY_NO_CLOSE : REJECTION.NO_CLOSE_BEYOND_SWING;
     return ev;
   }
   if (ev.penetrationAtr < cfg.bosPenetrationAtr) { ev.rejection = REJECTION.PENETRATION_TOO_SMALL; return ev; }

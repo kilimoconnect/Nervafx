@@ -3,25 +3,30 @@
 /**
  * SCS — Section 6: H1 trigger & trade candidate (pure, deterministic, paper-only).
  *
- * During an active aligned H4 pullback: a confirmed H1 swing is swept and reclaimed
- * (failed sellers/buyers); within the same or next 3 completed H1 candles a valid
- * displacement BOS forms; entry / stop / 2R target are derived and gated. A light
- * paper simulation walks completed candles for fill, expiry, target-before-entry,
- * target-hit and stop-hit. No live orders — data only.
+ * During an active aligned H4 pullback:
+ *   BUY  — H1 closes ABOVE the most recent confirmed H1 swing high (formed during
+ *          the pullback) by the required BOS distance; entry is a retracement back
+ *          to that broken high; stop is below the most recent H1 pullback swing low;
+ *          target is fixed 2R.
+ *   SELL — the inverse.
+ * There is NO sweep / failed-buyers-sellers / rejection-candle step — a confirmed
+ * H1 close-break (BOS) is the only trigger. A light paper simulation walks
+ * completed candles for the retracement fill, expiry, entry-missed, target-hit and
+ * stop-hit. No live orders — data only.
  */
 
 const { D1_DIRECTION, H4_STATE, H1_STATE, DIRECTION, SIGNAL_STATUS, REJECTION, CONFIG } = require('./_scs-config');
 const { atrSeries, swingHighs, swingLows, detectBOS, latestSwingBefore, round } = require('./_scs-indicators');
 
-function result(state, status, rejection, candidate, evidence) {
-  return { triggered: !!candidate, state, status, rejection, candidate: candidate || null, evidence: evidence || {} };
+function result(state, status, rejection, candidate, evidence, bosConfirmed) {
+  return { triggered: !!candidate, state, status, rejection, candidate: candidate || null, evidence: evidence || {}, bosConfirmed: !!bosConfirmed };
 }
 
 function evaluateH1(h1, d1, h4res, evalMs, opts = {}) {
   const cfg = opts.config || CONFIG;
   const dir = d1.direction;
-  if (dir === D1_DIRECTION.NEUTRAL) return result(H1_STATE.WAITING_SWEEP, SIGNAL_STATUS.REJECTED, REJECTION.D1_NEUTRAL, null);
-  if (!h4res || h4res.state !== H4_STATE.PULLBACK_ACTIVE) return result(H1_STATE.WAITING_SWEEP, SIGNAL_STATUS.REJECTED, REJECTION.H4_NO_IMPULSE, null);
+  if (dir === D1_DIRECTION.NEUTRAL) return result(H1_STATE.WAITING_BOS, SIGNAL_STATUS.REJECTED, REJECTION.D1_NEUTRAL, null, null, false);
+  if (!h4res || h4res.state !== H4_STATE.PULLBACK_ACTIVE) return result(H1_STATE.WAITING_BOS, SIGNAL_STATUS.REJECTED, REJECTION.H4_NO_IMPULSE, null, null, false);
 
   const sign = dir === D1_DIRECTION.BULLISH ? 1 : -1;
   const atr = atrSeries(h1);
@@ -30,66 +35,51 @@ function evaluateH1(h1, d1, h4res, evalMs, opts = {}) {
   const last = h1.length - 1;
   const aH1 = atr[last];
 
-  // 1–3: sweep + reclaim, then displacement BOS within the window.
-  let sweepIdx = -1, bosIdx = -1, brokenHigh = null, sweptSwing = null, sawSweep = false;
-  outer:
-  for (let s = 0; s <= last; s++) {
-    if (!(atr[s] > 0)) continue;
-    const swept = sign > 0 ? latestSwingBefore(lows, s) : latestSwingBefore(highs, s);
-    if (!swept) continue;
-    const failed = sign > 0
-      ? (h1[s].low < swept.price && h1[s].close > swept.price)      // swept low, closed back above → failed sellers
-      : (h1[s].high > swept.price && h1[s].close < swept.price);    // swept high, closed back below → failed buyers
-    if (!failed) continue;
-    sawSweep = true;
-    for (let b = s; b <= Math.min(last, s + cfg.h1SweepToBosWindow); b++) {
-      if (!(atr[b] > 0)) continue;
-      const brk = sign > 0 ? latestSwingBefore(highs, b) : latestSwingBefore(lows, b);
-      if (!brk) continue;
-      const ev = detectBOS(h1[b], brk, atr[b], sign);
-      if (ev.bos) { sweepIdx = s; bosIdx = b; brokenHigh = brk; sweptSwing = swept; break outer; }
-    }
+  // Find the most recent valid H1 BOS beyond the latest confirmed swing (high for
+  // bull, low for bear). A close-break only — wicks never qualify.
+  let bosIdx = -1, brokenSwing = null;
+  for (let b = 0; b <= last; b++) {
+    if (!(atr[b] > 0)) continue;
+    const brk = sign > 0 ? latestSwingBefore(highs, b) : latestSwingBefore(lows, b);
+    if (!brk) continue;
+    const ev = detectBOS(h1[b], brk, atr[b], sign);
+    if (ev.bos) { bosIdx = b; brokenSwing = brk; }
   }
-  if (bosIdx === -1) {
-    return sawSweep
-      ? result(H1_STATE.WAITING_BOS, SIGNAL_STATUS.REJECTED, REJECTION.H1_BOS_WINDOW_EXPIRED, null)
-      : result(H1_STATE.WAITING_SWEEP, SIGNAL_STATUS.REJECTED, REJECTION.H1_NO_SWEEP, null);
-  }
+  if (bosIdx === -1) return result(H1_STATE.WAITING_BOS, SIGNAL_STATUS.REJECTED, REJECTION.H1_NO_BOS, null, null, false);
 
-  // sweep→BOS extreme
-  let sweepExt = sign > 0 ? Infinity : -Infinity;
-  for (let j = sweepIdx; j <= bosIdx; j++) sweepExt = sign > 0 ? Math.min(sweepExt, h1[j].low) : Math.max(sweepExt, h1[j].high);
+  // Stop reference = most recent confirmed H1 pullback swing (low for bull, high
+  // for bear) BEFORE the BOS candle.
+  const pullbackSwing = sign > 0 ? latestSwingBefore(lows, bosIdx) : latestSwingBefore(highs, bosIdx);
+  if (!pullbackSwing) return result(H1_STATE.WAITING_BOS, SIGNAL_STATUS.REJECTED, REJECTION.H1_NO_BOS, null, null, false);
 
-  const bodyMid = (h1[bosIdx].open + h1[bosIdx].close) / 2;
-  const entry = sign > 0 ? Math.max(brokenHigh.price, bodyMid) : Math.min(brokenHigh.price, bodyMid);
-  const entryType = entry === brokenHigh.price ? 'SWING_LEVEL' : 'BODY_MIDPOINT';
-  const stop = sign > 0 ? sweepExt - cfg.h1StopBufferAtr * aH1 : sweepExt + cfg.h1StopBufferAtr * aH1;
+  // Entry = retracement to the broken H1 swing; stop = beyond the pullback swing.
+  const entry = brokenSwing.price;
+  const stop = sign > 0 ? pullbackSwing.price - cfg.h1StopBufferAtr * aH1 : pullbackSwing.price + cfg.h1StopBufferAtr * aH1;
   const R = sign > 0 ? entry - stop : stop - entry;
   const target = sign > 0 ? entry + cfg.targetR * R : entry - cfg.targetR * R;
 
   const candidate = {
     direction: sign > 0 ? DIRECTION.BUY : DIRECTION.SELL,
     entry: round(entry), stop: round(stop), target: round(target), r: round(R),
-    rAtr: aH1 > 0 ? round(R / aH1) : 0, entryType, impulseId: h4res.impulse ? h4res.impulse.id : null,
-    sweepExtreme: round(sweepExt), brokenSwingId: brokenHigh.id, bosCandleTime: h1[bosIdx].openMs,
+    rAtr: aH1 > 0 ? round(R / aH1) : 0, entryType: 'BOS_RETEST', impulseId: h4res.impulse ? h4res.impulse.id : null,
+    brokenSwingId: brokenSwing.id, pullbackSwingId: pullbackSwing.id, bosCandleTime: h1[bosIdx].openMs,
   };
-  const evidence = { sweepTime: h1[sweepIdx].openMs, sweptSwingId: sweptSwing.id, bosTime: h1[bosIdx].openMs, atrH1: aH1 };
+  const evidence = { bosTime: h1[bosIdx].openMs, brokenSwingId: brokenSwing.id, pullbackSwingId: pullbackSwing.id, atrH1: aH1 };
 
-  // Rejections that invalidate the candidate outright.
-  if (!(R > 0)) return result(H1_STATE.REJECTED, SIGNAL_STATUS.REJECTED, REJECTION.STOP_TOO_TIGHT_VS_SPREAD, candidate, evidence);
-  if (R > cfg.h1MaxStopAtr * aH1) return result(H1_STATE.REJECTED, SIGNAL_STATUS.REJECTED, REJECTION.STOP_TOO_WIDE, candidate, evidence);
-  if (opts.spread > 0 && R < cfg.h1MinStopSpreadMult * opts.spread) return result(H1_STATE.REJECTED, SIGNAL_STATUS.REJECTED, REJECTION.STOP_TOO_TIGHT_VS_SPREAD, candidate, evidence);
+  // A BOS is confirmed from here on (bosConfirmed=true) even if the candidate is rejected.
+  if (!(R > 0)) return result(H1_STATE.REJECTED, SIGNAL_STATUS.REJECTED, REJECTION.STOP_TOO_TIGHT_VS_SPREAD, candidate, evidence, true);
+  if (R > cfg.h1MaxStopAtr * aH1) return result(H1_STATE.REJECTED, SIGNAL_STATUS.REJECTED, REJECTION.STOP_TOO_WIDE, candidate, evidence, true);
+  if (opts.spread > 0 && R < cfg.h1MinStopSpreadMult * opts.spread) return result(H1_STATE.REJECTED, SIGNAL_STATUS.REJECTED, REJECTION.STOP_TOO_TIGHT_VS_SPREAD, candidate, evidence, true);
 
-  // Target room before the nearest opposing confirmed D1/H4 swing.
   if (Array.isArray(opts.opposingLevels) && opts.opposingLevels.length) {
     const beyond = opts.opposingLevels.filter((p) => (sign > 0 ? p > entry : p < entry));
     if (beyond.length) {
       const nearest = sign > 0 ? Math.min(...beyond) : Math.max(...beyond);
-      if (Math.abs(nearest - entry) < cfg.targetR * R) return result(H1_STATE.REJECTED, SIGNAL_STATUS.REJECTED, REJECTION.INSUFFICIENT_TARGET_ROOM, candidate, evidence);
+      if (Math.abs(nearest - entry) < cfg.targetR * R) return result(H1_STATE.REJECTED, SIGNAL_STATUS.REJECTED, REJECTION.INSUFFICIENT_TARGET_ROOM, candidate, evidence, true);
     }
   }
 
-  // Paper simulation from the candle after the BOS.
+  // Paper simulation of the retracement fill from the candle after the BOS.
   let state = H1_STATE.ENTRY_PENDING, status = SIGNAL_STATUS.PENDING, rejection = REJECTION.NONE;
   let filled = false, pendingAge = 0, fillTime = null;
   for (let j = bosIdx + 1; j <= last; j++) {
@@ -97,7 +87,7 @@ function evaluateH1(h1, d1, h4res, evalMs, opts = {}) {
       pendingAge += 1;
       const reachedEntry = sign > 0 ? h1[j].low <= entry : h1[j].high >= entry;
       const reachedTarget = sign > 0 ? h1[j].high >= target : h1[j].low <= target;
-      if (reachedTarget && !reachedEntry) { state = H1_STATE.REJECTED; status = SIGNAL_STATUS.CANCELLED; rejection = REJECTION.TARGET_BEFORE_ENTRY; break; }
+      if (reachedTarget && !reachedEntry) { state = H1_STATE.REJECTED; status = SIGNAL_STATUS.CANCELLED; rejection = REJECTION.ENTRY_MISSED; break; }
       if (reachedEntry) {
         filled = true; fillTime = h1[j].openMs; state = H1_STATE.ACTIVE; status = SIGNAL_STATUS.ACTIVE;
         if (sign > 0 ? h1[j].high >= target : h1[j].low <= target) { state = H1_STATE.COMPLETED; status = SIGNAL_STATUS.TARGET_HIT; break; }
@@ -111,7 +101,7 @@ function evaluateH1(h1, d1, h4res, evalMs, opts = {}) {
     }
   }
 
-  return { triggered: true, state, status, rejection, candidate, evidence: { ...evidence, fillTime, pendingAge } };
+  return { triggered: true, state, status, rejection, candidate, bosConfirmed: true, evidence: { ...evidence, fillTime, pendingAge } };
 }
 
 module.exports = { evaluateH1 };
