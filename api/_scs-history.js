@@ -92,6 +92,7 @@ function buildHistoryView(input) {
     d1: {
       direction: d1.direction, protectedLevel: d1.protectedLevel, protectedSwingId: d1.protectedSwingId,
       bosLevel: d1.bosLevel, bosTime: d1.bosTimeIso, invalidationReason: d1.invalidationReason,
+      referenceDay: d1.referenceDay, previousDay: d1.previousDay,
       candles: d1c, swings: swingsAsOf(d1c),
     },
     h4: {
@@ -146,7 +147,7 @@ function buildScanCard(input) {
 
   return {
     pair: input.pair, evalMs, evalIso: new Date(evalMs).toISOString(), marketState: co.marketState,
-    d1Direction: d1.direction, d1Protected: d1.protectedLevel,
+    d1Direction: d1.direction, d1Protected: d1.protectedLevel, d1ReferenceDay: d1.referenceDay,
     h4State: h4.state, h4Origin: h4.impulse ? h4.impulse.origin : null,
     h4PullbackAtr: h4.impulse ? +(h4.impulse.pullbackDepthAtr || 0).toFixed(2) : null, h4Age: h4.impulse ? h4.impulse.ageCandles : null,
     fridayCarry: !!(h4.impulse && h4.impulse.origin === ORIGIN.FRIDAY_CARRY),
