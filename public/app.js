@@ -1427,8 +1427,10 @@ function buildChart(data, tf) {
   const colors       = values.map(v => v >= 0 ? 'rgba(22,163,74,0.85)' : 'rgba(220,38,38,0.85)');
   const borderColors = values.map(v => v >= 0 ? '#16a34a' : '#dc2626');
 
+  const _strengthCanvas = document.getElementById('strengthChart');
+  if (!_strengthCanvas) return;
   if (strengthChart) strengthChart.destroy();
-  const ctx = document.getElementById('strengthChart').getContext('2d');
+  const ctx = _strengthCanvas.getContext('2d');
   strengthChart = new Chart(ctx, {
     type: 'bar',
     data: { labels, datasets: [{ data: values, backgroundColor: colors, borderColor: borderColors, borderWidth: 1, borderRadius: 4 }] },
@@ -1487,8 +1489,10 @@ function _renderH1EmaChart(data) {
   const colors       = values.map(v => v >= 0 ? 'rgba(22,163,74,0.85)' : 'rgba(220,38,38,0.85)');
   const borderColors = values.map(v => v >= 0 ? '#16a34a' : '#dc2626');
 
+  const _strengthCanvas = document.getElementById('strengthChart');
+  if (!_strengthCanvas) return;
   if (strengthChart) strengthChart.destroy();
-  const ctx = document.getElementById('strengthChart').getContext('2d');
+  const ctx = _strengthCanvas.getContext('2d');
   strengthChart = new Chart(ctx, {
     type: 'bar',
     data: { labels, datasets: [{ data: values, backgroundColor: colors, borderColor: borderColors, borderWidth: 1, borderRadius: 4 }] },
@@ -2897,6 +2901,7 @@ function renderRisk(data) {
 
 function renderActions(actions) {
   const el = document.getElementById('actions-list');
+  if (!el) return;
   if (!actions?.length) { el.innerHTML = '<p class="empty-state">No actions yet</p>'; return; }
   el.innerHTML = actions.map(a => `
     <div class="action-row">
@@ -7151,6 +7156,7 @@ function _renderJrnMomentumSignal() {
 
 function renderQuality(q) {
   const el = document.getElementById('quality-info');
+  if (!el) return;
   if (!q?.status) { el.innerHTML = '<p class="empty-state">No quality data</p>'; return; }
   const cls = q.status === 'CLEAN' ? 'ok' : 'bad';
   el.innerHTML = `

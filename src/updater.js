@@ -17,7 +17,6 @@ const { generateMarketNarrative }        = require('./narrativeEngine');
 const { calculateFlowPerformance }       = require('./flowPerformance');
 const { calculateLatestVolumeAnalysis }  = require('./volumeAnalysis');
 const { calculateM15Energy }           = require('./m15Energy');
-const { evaluateAutoTrader }           = require('../api/autotrader-evaluate');
 const { checkAudNzdAlerts }             = require('./audnzdAlerts');
 const { storeStructureSnapshots }      = require('./structureSnapshot');
 
@@ -156,7 +155,6 @@ async function hourlyUpdate() {
   await step('actions',       () => processLatestActions());
   await step('flow_perf',          () => calculateFlowPerformance());
   await step('session_activity',    () => backfillSessionActivity());
-  await step('autotrader',          () => evaluateAutoTrader(supabase));
   await step('m15_energy',          () => calculateM15Energy());
   await step('market_narrative',    () => generateMarketNarrative());
   await step('journal',             () => writeJournalEntry());
@@ -192,7 +190,6 @@ async function m15Update() {
   await step('strength',          () => calculateLatestStrength());
   await step('smooth',            () => smoothLatest());
   await step('spreads',           () => calculateLatestSpreads());
-  await step('autotrader',          () => evaluateAutoTrader(supabase));
   await step('m15_energy',        () => calculateM15Energy());
   await step('flow_perf',         () => calculateFlowPerformance());
   await step('audnzd_alerts',     () => checkAudNzdAlerts(supabase));
