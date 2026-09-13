@@ -83,6 +83,7 @@
       <span class="orders">HISTORY / ANALYTICAL · ORDERS DISABLED</span>
     </div>
     <div class="controls">
+      <span class="tag">History (EAT):</span>
       <input type="date" id="h-date"><input type="time" id="h-time" step="900">
       <button class="btn" id="btn-load">Replay</button>
       <button class="btn primary" id="btn-live">Live</button>
@@ -137,6 +138,12 @@
 <script>
 const API = '/api/m15-intelligence';
 const $ = (id)=>document.getElementById(id);
+// All displayed times are East Africa Time (EAT, UTC+3, no DST). M15 boundaries
+// align on whole-hour offsets, so quarter-hour candle times are unchanged.
+function fmtEAT(ms){
+  const p = new Date(ms).toLocaleString('en-GB',{timeZone:'Africa/Nairobi',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
+  return p.replace(',', '') + ' EAT';
+}
 function tok(){ try{return localStorage.getItem('nfx_token')}catch(_){return null} }
 if(!tok()){ location.href='/login'; }
 
@@ -165,7 +172,7 @@ async function load(at){
     $('scan-body').innerHTML='<tr><td colspan="13" class="loading">Error: '+(e.message||e)+'</td></tr>';
     return;
   }
-  $('eval-time').textContent = (at?'Replay ':'Live ') + new Date(data.evalMs).toISOString().replace('T',' ').slice(0,16)+'Z';
+  $('eval-time').textContent = (at?'Replay ':'Live ') + fmtEAT(data.evalMs);
   $('sync-note').textContent = data.sync && data.sync.state!=='ALIGNED' ? ('· sync '+data.sync.state) : '';
   renderCcy(data.currencies);
   renderScan(data.scan);
@@ -281,7 +288,9 @@ async function loadSessionNews(){
 $('btn-logout').onclick=()=>{ try{localStorage.removeItem('nfx_token');localStorage.removeItem('nfx_user')}catch(_){}; location.href='/login'; };
 $('btn-live').onclick=()=>{ $('h-date').value='';$('h-time').value=''; load(null); };
 $('btn-refresh').onclick=()=>load(currentAt);
-$('btn-load').onclick=()=>{ const dt=$('h-date').value, tm=$('h-time').value||'00:00'; if(!dt){alert('Pick a date');return;} load(dt+'T'+tm+':00Z'); };
+$('btn-load').onclick=()=>{ const dt=$('h-date').value, tm=$('h-time').value||'00:00'; if(!dt){alert('Pick a date');return;}
+  // The picker is EAT wall-time; convert to a UTC instant for the server (?at).
+  const utcIso = new Date(dt+'T'+tm+':00+03:00').toISOString(); load(utcIso); };
 $('d-close').onclick=()=>$('overlay').classList.remove('open');
 $('overlay').onclick=(e)=>{ if(e.target===$('overlay')) $('overlay').classList.remove('open'); };
 window.detail=detail;

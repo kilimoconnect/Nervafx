@@ -89,11 +89,49 @@
 
   <!-- TAB BAR -->
   <nav class="dash-tabs" id="dash-tabs">
-    <button class="dash-tab active" data-tab="overview">Overview</button>
+    <button class="dash-tab active" data-tab="m15">M15 Intelligence</button>
+    <button class="dash-tab" data-tab="overview">Overview</button>
   </nav>
 
+  <!-- ═══ TAB: M15 MARKET INTELLIGENCE ═══ -->
+  <main class="tab-panel active" id="tab-m15" data-tab="m15">
+    <div class="m15-toolbar">
+      <span class="m15-eval" id="m15-eval-time">—</span>
+      <span class="m15-orders">ANALYTICAL · ORDERS DISABLED</span>
+      <span class="m15-spacer"></span>
+      <span class="m15-hint">History (EAT):</span>
+      <input type="date" id="m15-h-date"><input type="time" id="m15-h-time" step="900">
+      <button class="btn m15-btn" id="m15-btn-load">Replay</button>
+      <button class="btn m15-btn m15-primary" id="m15-btn-live">Live</button>
+      <button class="btn m15-btn" id="m15-btn-refresh">↻</button>
+    </div>
+    <div class="m15-banner" id="m15-history-banner">HISTORY MODE — reconstructing only what was known at the selected M15 close (EAT). Live trigger monitoring disabled.</div>
+
+    <div class="m15-sectitle">Currency dashboard <span class="muted" id="m15-sync-note"></span></div>
+    <div class="m15-ccy-grid" id="m15-ccy-dash"><div class="m15-loading">Loading…</div></div>
+
+    <div class="m15-sectitle">All-pairs scanner — ranked by opportunity quality</div>
+    <div class="m15-scan-wrap">
+      <table class="m15-table">
+        <thead><tr>
+          <th>#</th><th>Pair</th><th>Decision</th><th>State</th><th>Dir</th><th>Stage</th>
+          <th>Energy</th><th>EMA</th><th>Comp</th><th>Expan</th><th>Fresh</th><th>Agreement</th><th>ΔStr</th>
+        </tr></thead>
+        <tbody id="m15-scan-body"><tr><td colspan="13" class="m15-loading">Running M15 network…</td></tr></tbody>
+      </table>
+    </div>
+  </main>
+
+  <!-- M15 DETAIL -->
+  <div class="m15-overlay" id="m15-overlay">
+    <div class="m15-modal">
+      <div class="m15-modal-head"><div><b id="m15-d-pair"></b> <span class="muted" id="m15-d-state"></span></div><button class="btn m15-btn" id="m15-d-close">×</button></div>
+      <div class="m15-modal-body" id="m15-d-body"></div>
+    </div>
+  </div>
+
   <!-- ═══ TAB 1: OVERVIEW ═══ -->
-  <main class="grid tab-panel active" id="tab-overview" data-tab="overview">
+  <main class="grid tab-panel" id="tab-overview" data-tab="overview">
 
     <section class="card span-3" id="section-session">
       <h2 class="card-title"><i data-lucide="timer"></i> Trading Session</h2>
@@ -144,6 +182,148 @@
   </div>
 
   <script src="app.js?v=99"></script>
+
+  <!-- ═══ M15 MARKET INTELLIGENCE — embedded tab ═══ -->
+  <style>
+    #tab-m15{--m-up:#16c784;--m-down:#f6465d;--m-neu:#7f8ea3;--m-acc:#7c9cff;--m-acc2:#c4b5fd;--m-panel:#111826;--m-panel2:#0e1521;--m-border:#1e2a3d;--m-muted:#8aa0b8;--m-chip:#16233a;--m-warn:#f5b849}
+    #tab-m15{display:block}
+    .m15-toolbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:6px}
+    .m15-eval{color:var(--m-acc2);font-size:12px;font-weight:600}
+    .m15-orders{font-size:10.5px;color:var(--m-muted);border:1px dashed var(--m-border);border-radius:6px;padding:2px 8px}
+    .m15-spacer{flex:1}
+    .m15-hint{color:var(--m-muted);font-size:11px}
+    #tab-m15 input[type=date],#tab-m15 input[type=time]{background:var(--m-panel2);border:1px solid var(--m-border);color:#e6edf6;border-radius:8px;padding:5px 8px;font-size:12px}
+    .m15-btn{background:var(--m-chip);border:1px solid var(--m-border);color:#e6edf6;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:12px}
+    .m15-btn:hover{border-color:var(--m-acc)}
+    .m15-primary{background:linear-gradient(135deg,#3b5bdb,#7048e8);border-color:transparent}
+    .m15-banner{display:none;margin:8px 0;padding:8px 12px;border-radius:8px;font-size:12px;font-weight:600;background:rgba(245,184,73,.12);border:1px solid rgba(245,184,73,.4);color:var(--m-warn)}
+    .m15-banner.on{display:block}
+    .m15-sectitle{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--m-muted);margin:12px 2px 6px}
+    .m15-ccy-grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+    .m15-ccy{background:var(--m-panel);border:1px solid var(--m-border);border-radius:10px;padding:10px}
+    .m15-ccy .r1{display:flex;justify-content:space-between;align-items:baseline}
+    .m15-ccy .sym{font-weight:700;font-size:15px}
+    .m15-ccy .rk{font-size:10px;color:var(--m-muted)}
+    .m15-bar{height:6px;border-radius:3px;background:#1b2740;margin:7px 0;position:relative;overflow:hidden}
+    .m15-bar>i{position:absolute;top:0;bottom:0;border-radius:3px}
+    .m15-ccy .m{display:flex;justify-content:space-between;font-size:10.5px;color:var(--m-muted);margin-top:3px;gap:6px}
+    .m15-pill{display:inline-block;padding:1px 6px;border-radius:20px;font-size:10px;border:1px solid var(--m-border)}
+    .m15-scan-wrap{overflow-x:auto;border:1px solid var(--m-border);border-radius:10px;background:var(--m-panel)}
+    .m15-table{width:100%;border-collapse:collapse;font-size:12px}
+    .m15-table th,.m15-table td{padding:7px 8px;text-align:left;border-bottom:1px solid var(--m-border);white-space:nowrap}
+    .m15-table th{color:var(--m-muted);font-weight:600;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em}
+    .m15-table tbody tr{cursor:pointer}
+    .m15-table tbody tr:hover{background:#0f1826}
+    .m15-up{color:var(--m-up)}.m15-down{color:var(--m-down)}.m15-neu{color:var(--m-neu)}
+    .m15-badge{padding:2px 7px;border-radius:6px;font-size:10.5px;font-weight:600;border:1px solid transparent}
+    .m15-b-armed{background:rgba(22,199,132,.16);color:var(--m-up);border-color:rgba(22,199,132,.4)}
+    .m15-b-watch{background:rgba(124,156,255,.14);color:var(--m-acc);border-color:rgba(124,156,255,.35)}
+    .m15-b-no{background:rgba(127,142,163,.12);color:var(--m-muted);border-color:var(--m-border)}
+    .m15-b-opp{background:rgba(196,181,253,.16);color:var(--m-acc2);border-color:rgba(196,181,253,.4)}
+    .m15-loading{padding:24px;text-align:center;color:var(--m-muted)}
+    #tab-m15 .muted,.m15-modal-body .muted{color:var(--m-muted)}
+    .m15-overlay{position:fixed;inset:0;background:rgba(3,6,12,.72);display:none;z-index:400;overflow-y:auto}
+    .m15-overlay.on{display:block}
+    .m15-modal{max-width:960px;margin:24px auto;background:var(--m-panel);border:1px solid var(--m-border);border-radius:14px}
+    .m15-modal-head{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--m-border)}
+    .m15-modal-body{padding:14px 16px}
+    #tab-m15 canvas,.m15-modal-body canvas{width:100%;max-width:100%;background:var(--m-panel2);border:1px solid var(--m-border);border-radius:8px}
+    .m15-cols{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+    @media(max-width:720px){.m15-cols{grid-template-columns:1fr}}
+    .m15-kv{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px dashed var(--m-border);font-size:12px}
+    .m15-comp{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:12px}
+    .m15-comp .dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+    .m15-reasons{margin:6px 0 0;padding-left:16px}.m15-reasons li{margin:2px 0;color:var(--m-muted)}
+  </style>
+  <script>
+  (function(){
+    var API='/api/m15-intelligence';
+    var $=function(id){return document.getElementById(id)};
+    var tok=function(){try{return localStorage.getItem('nfx_token')}catch(_){return ''}};
+    var currentAt=null, loaded=false;
+    function fmtEAT(ms){var p=new Date(ms).toLocaleString('en-GB',{timeZone:'Africa/Nairobi',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});return p.replace(',','')+' EAT';}
+    function dcls(d){if(/MANUAL_(BUY|SELL)_OPPORTUNITY/.test(d))return 'm15-b-opp';if(/^ARMED_/.test(d))return 'm15-b-armed';if(/^WATCH_/.test(d))return 'm15-b-watch';return 'm15-b-no';}
+    function dirc(x){return x==='BULLISH'?'m15-up':x==='BEARISH'?'m15-down':'m15-neu';}
+    function num(n,dp){return (n==null||isNaN(n))?'—':(+n).toFixed(dp==null?2:dp);}
+    async function loadM15(at){
+      currentAt=at||null; loaded=true;
+      $('m15-history-banner').classList.toggle('on',!!at);
+      $('m15-ccy-dash').innerHTML='<div class="m15-loading">Loading…</div>';
+      $('m15-scan-body').innerHTML='<tr><td colspan="13" class="m15-loading">Running M15 network…</td></tr>';
+      var url=API+(at?('?at='+encodeURIComponent(at)):''); var data;
+      try{var r=await fetch(url,{headers:{Authorization:'Bearer '+tok()}}); data=await r.json(); if(!data.ok)throw new Error(data.error||'failed');}
+      catch(e){$('m15-scan-body').innerHTML='<tr><td colspan="13" class="m15-loading">Error: '+(e.message||e)+'</td></tr>'; return;}
+      $('m15-eval-time').textContent=(at?'Replay ':'Live ')+fmtEAT(data.evalMs);
+      $('m15-sync-note').textContent=(data.sync&&data.sync.state!=='ALIGNED')?('· sync '+data.sync.state):'';
+      renderCcy(data.currencies); renderScan(data.scan);
+    }
+    function renderCcy(list){
+      $('m15-ccy-dash').innerHTML=list.map(function(c){
+        var s=c.strength,w=Math.min(100,Math.abs(s)),col=s>=0?'var(--m-up)':'var(--m-down)',side=s>=0?'left:50%':'right:50%';
+        return '<div class="m15-ccy"><div class="r1"><span class="sym '+dirc(c.strengthDirection)+'">'+c.currency+'</span><span class="rk">#'+c.strengthRank+'</span></div>'+
+          '<div class="m15-bar"><i style="'+side+';width:'+(w/2)+'%;background:'+col+'"></i></div>'+
+          '<div class="m"><span>Str '+num(s,1)+'</span><span>Acc '+num(c.strengthAcceleration,1)+'</span></div>'+
+          '<div class="m"><span>Pwr '+num(c.power,0)+'</span><span class="m15-pill">'+c.powerState+'</span></div>'+
+          '<div class="m"><span>'+c.structure.replace('BROAD_','')+'</span><span>'+c.participation+'</span></div></div>';
+      }).join('');
+    }
+    function renderScan(scan){
+      $('m15-scan-body').innerHTML=scan.map(function(r){
+        return '<tr onclick="__m15detail(\''+r.pair+'\')"><td>'+r.rank+'</td><td><b>'+r.pair.replace('_','/')+'</b></td>'+
+          '<td><span class="m15-badge '+dcls(r.decision)+'">'+r.decision.replace(/_/g,' ')+'</span></td>'+
+          '<td>'+r.marketState.replace(/_/g,' ')+'</td><td class="'+dirc(r.direction)+'">'+r.direction[0]+'</td><td>'+(r.movementStage||'—')+'</td>'+
+          '<td>'+r.energyLevel+' '+(r.energyAcceleration==='RISING'?'↑':r.energyAcceleration==='FALLING'?'↓':'')+'</td>'+
+          '<td>'+(r.emaState||'').replace(/_/g,' ')+'</td><td>'+r.compression+'</td><td>'+r.expansion+'</td><td>'+r.freshness+'</td>'+
+          '<td>'+r.agreement.replace(/_/g,' ')+'</td><td class="'+(r.strengthDiff>0?'m15-up':r.strengthDiff<0?'m15-down':'')+'">'+(r.strengthDiff>0?'+':'')+r.strengthDiff+'</td></tr>';
+      }).join('');
+    }
+    async function detail(pair){
+      $('m15-overlay').classList.add('on'); $('m15-d-pair').textContent=pair.replace('_','/'); $('m15-d-state').textContent='loading…'; $('m15-d-body').innerHTML='<div class="m15-loading">Loading…</div>';
+      var url=API+'?pair='+pair+(currentAt?('&at='+encodeURIComponent(currentAt)):'');
+      var r=await fetch(url,{headers:{Authorization:'Bearer '+tok()}}); var data=await r.json(); var d=data.detail;
+      if(!d){$('m15-d-body').innerHTML='<div class="m15-loading">No detail.</div>';return;}
+      $('m15-d-state').textContent=d.marketState.replace(/_/g,' ')+' · '+d.decision.replace(/_/g,' ');
+      var a=d.agreement||{},s=d.setup;
+      $('m15-d-body').innerHTML='<canvas id="m15-chart" height="260"></canvas><div class="m15-cols"><div>'+
+        '<div class="m15-sectitle">Agreement — '+(a.state||'').replace(/_/g,' ')+'</div>'+
+        (a.components||[]).map(function(c){return '<div class="m15-comp"><span class="dot" style="background:'+(c.dir>0?'var(--m-up)':c.dir<0?'var(--m-down)':'var(--m-neu)')+'"></span><b>'+c.name+'</b><span class="muted">'+c.reason+'</span></div>'}).join('')+
+        '<ul class="m15-reasons">'+(a.reasons||[]).map(function(x){return '<li>'+x+'</li>'}).join('')+'</ul></div><div>'+
+        '<div class="m15-sectitle">Setup '+(s?('· '+s.strategy.replace(/_/g,' ')):'')+'</div>'+
+        (s?('<div class="m15-kv"><span>Direction</span><b class="'+dirc(s.direction)+'">'+s.direction+'</b></div>'+
+          '<div class="m15-kv"><span>Trigger</span><b>'+s.triggerPrice+'</b></div>'+
+          '<div class="m15-kv"><span>Entry zone</span><b>'+s.entryZoneLow+' – '+s.entryZoneHigh+'</b></div>'+
+          '<div class="m15-kv"><span>Invalidation</span><b>'+s.invalidationPrice+'</b></div>'+
+          '<div class="m15-kv"><span>Stop</span><b>'+s.stopPrice+' ('+s.stopPips+'p)</b></div>'+
+          '<div class="m15-kv"><span>Target 1 / 2</span><b>'+s.target1+' / '+s.target2+'</b></div>'+
+          '<div class="m15-kv"><span>R:R</span><b>1:'+s.rr+'</b></div><div class="m15-kv"><span>Freshness</span><b>'+s.freshness+'</b></div>'+
+          '<p class="muted" style="margin-top:8px">Manual entry only — a plan, not an order. A trigger notification never places a trade.</p>')
+          :'<p class="muted">No actionable setup at this frame. '+d.decision.replace(/_/g,' ')+'.</p>')+
+        '<div class="m15-sectitle" style="margin-top:12px">Snapshot</div>'+
+        Object.keys(d.snapshot||{}).map(function(k){return '<div class="m15-kv"><span>'+k+'</span><b>'+d.snapshot[k]+'</b></div>'}).join('')+'</div></div>';
+      drawChart(d.candles||[],s);
+    }
+    function drawChart(candles,setup){
+      var cv=$('m15-chart'); if(!cv||!candles.length)return;
+      var dpr=window.devicePixelRatio||1,W=cv.clientWidth,H=260; cv.width=W*dpr; cv.height=H*dpr;
+      var ctx=cv.getContext('2d'); ctx.scale(dpr,dpr);
+      var pad={l:6,r:64,t:8,b:8}, lo=Math.min.apply(null,candles.map(function(c){return c.low})), hi=Math.max.apply(null,candles.map(function(c){return c.high}));
+      var yr=hi-lo||1, px=H-pad.t-pad.b, y=function(p){return pad.t+(hi-p)/yr*px}, n=candles.length, cw=(W-pad.l-pad.r)/n;
+      candles.forEach(function(c,i){var x=pad.l+i*cw+cw/2,up=c.close>=c.open; ctx.strokeStyle=up?'#16c784':'#f6465d'; ctx.fillStyle=up?'#16c784':'#f6465d';
+        ctx.beginPath();ctx.moveTo(x,y(c.high));ctx.lineTo(x,y(c.low));ctx.stroke(); var bw=Math.max(1,cw*0.6); ctx.fillRect(x-bw/2,y(Math.max(c.open,c.close)),bw,Math.max(1,Math.abs(y(c.open)-y(c.close))));});
+      var line=function(p,col,lbl){if(p==null)return;var yy=y(p);ctx.strokeStyle=col;ctx.setLineDash([4,3]);ctx.beginPath();ctx.moveTo(pad.l,yy);ctx.lineTo(W-pad.r,yy);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle=col;ctx.font='10px sans-serif';ctx.fillText(lbl,W-pad.r+2,yy+3);};
+      if(setup){line(setup.triggerPrice,'#7c9cff','trig');line(setup.stopPrice,'#f6465d','stop');line(setup.target1,'#16c784','T1');line(setup.target2,'#16c784','T2');}
+    }
+    window.__m15detail=detail;
+    // wiring
+    var lb=$('m15-btn-load'); if(lb) lb.onclick=function(){var dt=$('m15-h-date').value,tm=$('m15-h-time').value||'00:00'; if(!dt){alert('Pick a date');return;} loadM15(new Date(dt+'T'+tm+':00+03:00').toISOString());};
+    var lv=$('m15-btn-live'); if(lv) lv.onclick=function(){$('m15-h-date').value='';$('m15-h-time').value='';loadM15(null);};
+    var rf=$('m15-btn-refresh'); if(rf) rf.onclick=function(){loadM15(currentAt);};
+    var dc=$('m15-d-close'); if(dc) dc.onclick=function(){$('m15-overlay').classList.remove('on');};
+    var ov=$('m15-overlay'); if(ov) ov.onclick=function(e){if(e.target===ov) ov.classList.remove('on');};
+    // load when the M15 tab is present/active (it is the default active tab)
+    if($('m15-scan-body')) loadM15(null);
+  })();
+  </script>
 
   <script>
     // Show Admin button only for the admin user (checked via JWT sub claim)
