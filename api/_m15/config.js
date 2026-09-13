@@ -102,21 +102,21 @@ const CONFIG = Object.freeze({
     formingNet: 0.15, buildingNet: 0.35, dominantNet: 0.6, // net pressure 0..1
   },
 
-  // Expansion (§20).
+  // Expansion (§20). Distance bands in volatility units from equilibrium.
   expansion: {
     escapeVolMult: 1.0,             // displacement beyond acceptance by ≥ 1× vol
-    earlyDistVolMult: 1.5,
-    developedDistVolMult: 2.5,
-    overextendedDistVolMult: 3.5,
+    earlyDistVolMult: 2.2,          // EARLY below this; CONFIRMED above (once efficient)
+    developedDistVolMult: 3.0,
+    overextendedDistVolMult: 3.8,
     minEfficiency: 0.45,
   },
 
   // Freshness / late-entry rejection (§22).
   freshness: {
-    freshMaxDistVolMult: 1.5,
-    tradeableMaxDistVolMult: 2.2,
-    lateDistVolMult: 3.0,
-    exhaustedDistVolMult: 3.8,
+    freshMaxDistVolMult: 1.8,
+    tradeableMaxDistVolMult: 2.8,
+    lateDistVolMult: 3.2,
+    exhaustedDistVolMult: 4.0,
     requireRisingEnergyForFresh: true,
   },
 
@@ -128,6 +128,7 @@ const CONFIG = Object.freeze({
   // Available space to the next structural obstacle (§20, §26) as a vol multiple.
   space: {
     minSpaceVolMult: 1.5,
+    openCapVol: 6,                 // no obstacle ahead ⇒ treat space as ample (capped)
   },
 
   // Sessions (UTC hours) — for session-relative normalization (§7, §16). Not gates.

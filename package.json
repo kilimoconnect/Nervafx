@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test:m15": "node --test tests/m15/config.test.js tests/m15/data.test.js tests/m15/structure.test.js tests/m15/equilibrium.test.js tests/m15/movement.test.js tests/m15/strength.test.js tests/m15/power.test.js tests/m15/energy.test.js tests/m15/ema.test.js tests/m15/compression.test.js tests/m15/pressure.test.js",
+    "test:m15": "node --test tests/m15/config.test.js tests/m15/data.test.js tests/m15/structure.test.js tests/m15/equilibrium.test.js tests/m15/movement.test.js tests/m15/strength.test.js tests/m15/power.test.js tests/m15/energy.test.js tests/m15/ema.test.js tests/m15/compression.test.js tests/m15/pressure.test.js tests/m15/expansion_freshness.test.js",
     "start": "node src/index.js",
     "load": "node src/index.js load",
     "check": "node src/index.js check",
