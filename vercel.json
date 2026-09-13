@@ -32,7 +32,9 @@
   "rewrites": [
     { "source": "/",       "destination": "/login.html" },
     { "source": "/home",   "destination": "/login.html" },
-    { "source": "/app",    "destination": "/index.html"   },
+    { "source": "/app",    "destination": "/m15-intelligence.html" },
+    { "source": "/m15-intelligence", "destination": "/m15-intelligence.html" },
+    { "source": "/classic", "destination": "/index.html" },
     { "source": "/login",  "destination": "/login.html"   },
     { "source": "/setup",  "destination": "/setup.html"   },
     { "source": "/profile","destination": "/profile.html" },
