@@ -271,7 +271,7 @@
       $('m15-scan-body').innerHTML=scan.map(function(r){
         return '<tr onclick="__m15detail(\''+r.pair+'\')"><td>'+r.rank+'</td><td><b>'+r.pair.replace('_','/')+'</b></td>'+
           '<td><span class="m15-badge '+dcls(r.decision)+'">'+r.decision.replace(/_/g,' ')+'</span></td>'+
-          '<td>'+r.marketState.replace(/_/g,' ')+'</td><td class="'+dirc(r.direction)+'">'+r.direction[0]+'</td><td>'+(r.movementStage||'—')+'</td>'+
+          '<td>'+r.marketState.replace(/_/g,' ')+'</td><td class="'+dirc(r.direction)+'">'+(r.direction==='BULLISH'?'▲':r.direction==='BEARISH'?'▼':'•')+'</td><td>'+(r.movementStage||'—')+'</td>'+
           '<td>'+r.energyLevel+' '+(r.energyAcceleration==='RISING'?'↑':r.energyAcceleration==='FALLING'?'↓':'')+'</td>'+
           '<td>'+(r.emaState||'').replace(/_/g,' ')+'</td><td>'+r.compression+'</td><td>'+r.expansion+'</td><td>'+r.freshness+'</td>'+
           '<td>'+r.agreement.replace(/_/g,' ')+'</td><td class="'+(r.strengthDiff>0?'m15-up':r.strengthDiff<0?'m15-down':'')+'">'+(r.strengthDiff>0?'+':'')+r.strengthDiff+'</td></tr>';

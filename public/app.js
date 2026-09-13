@@ -7659,29 +7659,32 @@ async function refresh() {
     // Today's news — called after _userTz is set so date is in user's timezone
     fetchTodayNews();
 
-    updateHeader(risk);
-    renderSession(sessionData);
-    fetchInlineM15EnergyBars(); // non-blocking — M15 energy bars below session
-    fetchQualityPreview(); // non-blocking — H1 + M15 quality snapshot cards
-    fetchContinuationPreview(); // non-blocking — Daily/Session/H4 continuation top 3
-    // Set caches BEFORE fetchMarketActivity so ME cards can read energy signal pairs
+    // Each render targets an Overview widget; some widgets were removed when the
+    // dashboard was merged with M15 Intelligence, so run them independently and
+    // never let one missing-element render fail the whole cycle (no error banner).
+    const _safe = (fn) => { try { fn(); } catch (e) { console.warn('[refresh] skipped:', e && e.message); } };
+    _safe(() => updateHeader(risk));
+    _safe(() => renderSession(sessionData));
+    _safe(() => fetchInlineM15EnergyBars());
+    _safe(() => fetchQualityPreview());
+    _safe(() => fetchContinuationPreview());
     _m15DataCache = m15Data;   // Cache for ME card flow ranking + scanner
     _volDataCache = _buildVolMap(volData);  // Cache volume analysis: instrument → latest row
     _fpPrecomputed = [];    // Flow performance replaced by Candle Quality
-    applyV2Gate(); // Gate sections before render — will update once fetchMarketActivity resolves
-    fetchMarketActivity(); // non-blocking — separate fetch, renders independently + updates V2 gate
-    buildChart(strength, activeTF);
-    renderCurrencySignals(strength);
-    renderSignals({ signals: [] }, states.states || [], journalData?.entries || []);
-    renderStates(states, m15Data);
-    renderSpreads(spreads);
-    renderRanking12H(spreads, strength);
-    renderM15Spreads(m15Data);
-    updateM15Bar();
-    renderRisk(risk);
-    renderActions(actions);
-    renderQuality(quality);
-    renderJournal(journalData);
+    _safe(() => applyV2Gate());
+    _safe(() => fetchMarketActivity());
+    _safe(() => buildChart(strength, activeTF));
+    _safe(() => renderCurrencySignals(strength));
+    _safe(() => renderSignals({ signals: [] }, states.states || [], journalData?.entries || []));
+    _safe(() => renderStates(states, m15Data));
+    _safe(() => renderSpreads(spreads));
+    _safe(() => renderRanking12H(spreads, strength));
+    _safe(() => renderM15Spreads(m15Data));
+    _safe(() => updateM15Bar());
+    _safe(() => renderRisk(risk));
+    _safe(() => renderActions(actions));
+    _safe(() => renderQuality(quality));
+    _safe(() => renderJournal(journalData));
 
     document.getElementById('status-dot').className = 'status-dot online';
 

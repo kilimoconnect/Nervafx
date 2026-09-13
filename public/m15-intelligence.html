@@ -201,7 +201,7 @@ function renderScan(scan){
       <td><b>${r.pair.replace('_','/')}</b></td>
       <td><span class="badge ${decisionClass(r.decision)}">${r.decision.replace(/_/g,' ')}</span></td>
       <td>${r.marketState.replace(/_/g,' ')}</td>
-      <td class="dir-${r.direction}">${r.direction[0]}</td>
+      <td class="dir-${r.direction}">${r.direction==='BULLISH'?'▲':r.direction==='BEARISH'?'▼':'•'}</td>
       <td>${r.movementStage||'—'}</td>
       <td>${r.energyLevel} ${r.energyAcceleration==='RISING'?'↑':r.energyAcceleration==='FALLING'?'↓':''}</td>
       <td>${(r.emaState||'').replace(/_/g,' ')}</td>
