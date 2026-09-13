@@ -19,6 +19,7 @@ const { loadSynchronized } = require('./_m15/load');
 const { runNetwork } = require('./_m15/coordinator');
 const { CONFIG_1_1_0A } = require('./_m15/config-1_1_0');
 const { isArmed } = require('./_m15/diagnostics');
+const { isPaused, applyOperatorPause } = require('./_m15/notify');
 const { closeOf, freshness } = require('./_m15/snapshot');
 const { M15_MS } = require('./_m15/data');
 
@@ -75,6 +76,10 @@ module.exports = async function handler(req, res) {
       };
     });
 
+    // Operator incident pause (§P5): suppress Actionable + notices, keep history.
+    const paused = isPaused();
+    const pausedView = applyOperatorPause(scan, counts, paused);
+
     const detailPair = req.query.pair;
     const detail = detailPair && run.pairs[detailPair]
       ? buildDetail(run, detailPair, candlesByPair[detailPair])
@@ -93,10 +98,11 @@ module.exports = async function handler(req, res) {
       ordersDisabled: true, analyticalManualOnly: true,
       completeness: { pairsProcessed: Object.values(candlesByPair).filter((a) => a && a.length > 0).length, pairsExpected: 28, syncState: sync.reason, missing, complete: sync.reason === 'ALIGNED' && missing.length === 0 },
       freshness: fresh,                          // { ageSeconds, ageCandles, stale }
-      counts,                                    // ACTIONABLE / DEVELOPING / BLOCKED / UNAVAILABLE
+      paused, pauseReason: paused ? 'PAUSED_BY_OPERATOR' : null,
+      counts: pausedView.counts,                 // ACTIONABLE / DEVELOPING / BLOCKED / UNAVAILABLE
       sync: { state: sync.reason, laggards: sync.laggards || [], missing },
       calculationVersion: run.run.calculationVersion,
-      currencies, scan, detail,
+      currencies, scan: pausedView.scan, detail,
     });
   } catch (e) {
     res.status(500).json({ error: e.message });

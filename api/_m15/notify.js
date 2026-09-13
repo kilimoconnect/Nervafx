@@ -11,12 +11,36 @@
  * instruction or a broker order. No external (email/push) delivery here.
  */
 
+/**
+ * Owner-controlled incident pause (§3): set env M15_PAUSE=1 to suppress NEW
+ * notices and downgrade Actionable to a paused state, WITHOUT erasing any history
+ * (snapshots and journal are untouched). Reversible — unset the variable.
+ */
+function isPaused() { return /^(1|true|on|yes)$/i.test(process.env.M15_PAUSE || ''); }
+
 /** Gate: may this snapshot emit notifications at all? */
 function notifiable(ctx) {
+  if (ctx.paused === true) return { ok: false, reason: 'PAUSED' };        // operator pause
   if (ctx.historyMode) return { ok: false, reason: 'REPLAY' };            // replay never alerts
   if (ctx.complete !== true) return { ok: false, reason: 'INCOMPLETE' };  // partial calc ≠ snapshot
   if (ctx.stale === true) return { ok: false, reason: 'STALE' };          // stale ≠ current
   return { ok: true, reason: 'LIVE_COMPLETE_FRESH' };
+}
+
+/**
+ * Apply an operator pause to a scanner payload: every ACTIONABLE row is downgraded
+ * (shown BLOCKED with reason PAUSED_BY_OPERATOR) and the Actionable count zeroed.
+ * Pure; history is never touched — only what the screen presents right now.
+ */
+function applyOperatorPause(scan, counts, paused) {
+  if (!paused) return { scan, counts };
+  const outCounts = { ...counts };
+  const moved = scan.filter((r) => r.category === 'ACTIONABLE').length;
+  const outScan = scan.map((r) => r.category === 'ACTIONABLE'
+    ? { ...r, category: 'BLOCKED', primaryReason: 'PAUSED_BY_OPERATOR' } : r);
+  outCounts.ACTIONABLE = 0;
+  outCounts.BLOCKED = (outCounts.BLOCKED || 0) + moved;
+  return { scan: outScan, counts: outCounts };
 }
 
 /**
@@ -41,4 +65,4 @@ function selectNewNotifications(ctx, actionableEpisodes, alreadyNotified = new S
   return { emit, suppressed: null };
 }
 
-module.exports = { notifiable, selectNewNotifications };
+module.exports = { notifiable, selectNewNotifications, isPaused, applyOperatorPause };

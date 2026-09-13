@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { episodeId, tagIndependence, independentCount, inForwardWindow, FORWARD } = require('../../api/_m15/forward');
-const { notifiable, selectNewNotifications } = require('../../api/_m15/notify');
+const { notifiable, selectNewNotifications, isPaused, applyOperatorPause } = require('../../api/_m15/notify');
 
 const M15 = 15 * 60 * 1000;
 const T = Date.UTC(2026, 8, 10, 12, 0, 0);
@@ -57,6 +57,34 @@ test('replay / incomplete / stale never emit notifications', () => {
   assert.equal(selectNewNotifications({ historyMode: true, complete: true, stale: false }, eps).suppressed, 'REPLAY');
   assert.deepEqual(selectNewNotifications({ historyMode: false, complete: false, stale: false }, eps).emit, []);
   assert.deepEqual(selectNewNotifications({ historyMode: false, complete: true, stale: true }, eps).emit, []);
+});
+
+test('operator pause suppresses notices and downgrades Actionable, keeping rows', () => {
+  // pause gate on notifications
+  assert.equal(notifiable({ paused: true, historyMode: false, complete: true, stale: false }).reason, 'PAUSED');
+  assert.deepEqual(selectNewNotifications({ paused: true, historyMode: false, complete: true, stale: false }, [{ episodeId: 'x' }]).emit, []);
+  // pause applied to the scanner view
+  const scan = [
+    { pair: 'EUR_USD', category: 'ACTIONABLE', primaryReason: 'ARMED_BULLISH' },
+    { pair: 'GBP_JPY', category: 'BLOCKED', primaryReason: 'NO_TRADE_CHAOTIC' },
+  ];
+  const counts = { ACTIONABLE: 1, DEVELOPING: 0, BLOCKED: 1, UNAVAILABLE: 0 };
+  const paused = applyOperatorPause(scan, counts, true);
+  assert.equal(paused.counts.ACTIONABLE, 0);
+  assert.equal(paused.counts.BLOCKED, 2);
+  assert.equal(paused.scan[0].category, 'BLOCKED');
+  assert.equal(paused.scan[0].primaryReason, 'PAUSED_BY_OPERATOR');
+  assert.equal(paused.scan.length, 2);                    // no row erased — history kept
+  // not paused ⇒ unchanged
+  assert.equal(applyOperatorPause(scan, counts, false).counts.ACTIONABLE, 1);
+});
+
+test('isPaused reads the env flag', () => {
+  const prev = process.env.M15_PAUSE;
+  process.env.M15_PAUSE = '1'; assert.equal(isPaused(), true);
+  process.env.M15_PAUSE = 'off'; assert.equal(isPaused(), false);
+  delete process.env.M15_PAUSE; assert.equal(isPaused(), false);
+  if (prev !== undefined) process.env.M15_PAUSE = prev;
 });
 
 test('new actionable episodes emit once; already-notified are deduped', () => {

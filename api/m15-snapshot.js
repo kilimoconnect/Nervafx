@@ -23,12 +23,15 @@ const { loadSynchronized } = require('./_m15/load');
 const { runNetwork } = require('./_m15/coordinator');
 const { gateWaterfall, isArmed } = require('./_m15/diagnostics');
 const { episodeId } = require('./_m15/forward');
+const { isPaused } = require('./_m15/notify');
 const { PAIRS, CURRENCIES } = require('./_m15/pairs');
 const { M15_MS } = require('./_m15/data');
 const { plannedCloses, closeOf, snapshotStatus, snapshotKey } = require('./_m15/snapshot');
 
 const CFG = CONFIG_1_1_0A;
-const VERSION = CFG.version;
+// Full version string (with config hash) — identical to run.run.calculationVersion,
+// so run rows, detail rows and notifications all carry the same version.
+const VERSION = `${CFG.version}+${configHash(CFG)}`;
 
 function authorized(req) {
   const auth = (req.headers.authorization || '').replace('Bearer ', '');
@@ -66,6 +69,12 @@ async function writeOne(sb, frameOpenMs, nowMs) {
   const srcIso = new Date(frameOpenMs).toISOString();
   try {
     const { evalMs, candlesByPair, sync } = await loadSynchronized(sb, { atMs: closeMs, cfg: CFG });
+    // Freshness guard: if the data's last completed candle is not this exact frame
+    // (weekend/market gap, or a lagging pair), there is NO snapshot to publish for
+    // this close — skip rather than write a mislabelled or stale-as-complete row.
+    if (evalMs !== frameOpenMs) {
+      return { close: new Date(closeMs).toISOString(), frameOpen: srcIso, status: 'SKIPPED_NO_DATA', evalIso: new Date(evalMs).toISOString() };
+    }
     const run = runNetwork(candlesByPair, { evalMs, cfg: CFG, diagnostics: true, syncState: sync.reason });
     const pairsProcessed = PAIRS.filter((p) => (candlesByPair[p] || []).length > 0).length;
     const missingPairs = sync.missing || PAIRS.filter((p) => (candlesByPair[p] || []).length === 0);
@@ -120,6 +129,9 @@ async function writeOne(sb, frameOpenMs, nowMs) {
         // stamp the stable episode_key (first close) on this setup row
         await sb.from('m15i_setups').update({ episode_key: `${r.pair}|${dir}|${firstIso}` })
           .eq('instrument', r.pair).eq('calculation_version', VERSION).eq('source_candle_time', srcIso).then(() => {}, () => {});
+        // operator pause: keep computing/persisting analysis + episode ids, but do
+        // NOT surface new notices during an incident (history is untouched).
+        if (isPaused()) continue;
         // dedup: unique(episode_id, engine_version) makes this a no-op if already sent
         await sb.from('m15i_notifications').upsert({
           episode_id: epId, pair: r.pair, direction: dir, engine_version: run.run.calculationVersion,
@@ -128,12 +140,17 @@ async function writeOne(sb, frameOpenMs, nowMs) {
       }
     }
 
-    // 3) flip status (idempotent: same row by unique key)
-    await upsert(sb, 'm15i_analysis_runs', { source_candle_time: srcIso, calculation_version: VERSION, status, updated_at: new Date().toISOString() }, 'source_candle_time,calculation_version');
+    // 3) flip status — a plain UPDATE of the existing (src, version) run row
+    // (never a re-insert, so the idempotency_key unique constraint can't trip).
+    { const { error: fErr } = await sb.from('m15i_analysis_runs').update({ status, updated_at: new Date().toISOString() })
+        .eq('source_candle_time', srcIso).eq('calculation_version', VERSION);
+      if (fErr) throw new Error(`status flip: ${fErr.message}`); }
     return { close: new Date(closeMs).toISOString(), frameOpen: srcIso, status, pairsProcessed, missing: missingPairs };
 
-    function row(o) { return { source_candle_time: srcIso, analysis_time: new Date(nowMs).toISOString(), calculation_version: VERSION, input_data_hash: run.run.inputDataHash, ...o }; }
-    function rowC(o) { return { source_candle_time: srcIso, analysis_time: new Date(nowMs).toISOString(), calculation_version: VERSION, input_data_hash: run.run.inputDataHash, ...o }; }
+    // NB: analysis_time is omitted — the tables that have it default it (now()),
+    // and m15i_pair_rankings / m15i_setups do not have the column (sql/022).
+    function row(o) { return { source_candle_time: srcIso, calculation_version: VERSION, input_data_hash: run.run.inputDataHash, ...o }; }
+    function rowC(o) { return { source_candle_time: srcIso, calculation_version: VERSION, input_data_hash: run.run.inputDataHash, ...o }; }
   } catch (e) {
     // record the failure against the run and bump retry_count (best-effort)
     await sb.from('m15i_analysis_runs').update({ status: 'INCOMPLETE', error: e.message, retry_count: (await retryCount(sb, srcIso)) + 1, updated_at: new Date().toISOString() })
@@ -152,3 +169,6 @@ async function retryCount(sb, srcIso) {
 }
 
 module.exports.maxDuration = 120;
+// Exported for the reversible integrity test (scripts/m15/verify-snapshot.js).
+module.exports.writeOne = writeOne;
+module.exports.VERSION = VERSION;
