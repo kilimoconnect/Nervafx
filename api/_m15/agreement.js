@@ -55,7 +55,12 @@ function evaluateAgreement(ctx, opts = {}) {
 
   const overextended = ctx.expansion && (ctx.expansion.state === 'OVEREXTENDED' || ctx.expansion.state === 'DEVELOPED');
   const late = ctx.freshness && (ctx.freshness.state === 'LATE' || ctx.freshness.state === 'EXHAUSTED');
-  const spaceOk = !ctx.expansion || ctx.expansion.spaceSufficient !== false;
+  // Phase 2 C1: `space.deferAgreement` moves the space check OUT of the agreement
+  // gate (deferred to the setup stage). This is the signal-ADMITTING half of the
+  // change and is separated from the correctness half (decide-level per_trade) so
+  // each can be accepted or rejected on its own evidence. Legacy keeps the gate.
+  const deferSpace = cfg && cfg.space && cfg.space.deferAgreement === true;
+  const spaceOk = deferSpace ? true : (!ctx.expansion || ctx.expansion.spaceSufficient !== false);
   const earlyOrPullback = ctx.expansion && (ctx.expansion.focus === true || ctx.pullbackDeveloping === true);
 
   // ── COMPONENT VOTES (stored separately, §21) ─────────────────────────────

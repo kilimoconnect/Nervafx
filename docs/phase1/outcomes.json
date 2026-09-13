@@ -1,0 +1,686 @@
+{
+  "assumptions": {
+    "prices": "MID (no bid/ask)",
+    "fill": "from the candle AFTER arm (manual delay)",
+    "intrabar": "stop+target same candle ⇒ AMBIGUOUS",
+    "target": "2R",
+    "spread": "not applied (mid) — post-spread requires bid/ask",
+    "extrapolation": "none — small sample"
+  },
+  "note": "ESTIMATED / post-hoc; do not extrapolate win rate from small n.",
+  "outcomes": [
+    {
+      "pair": "CAD_JPY",
+      "direction": "BEARISH",
+      "strategy": "FIRST_CONTROLLED_PULLBACK",
+      "firstMs": 1782887400000,
+      "firstIso": "2026-07-01T06:30:00.000Z",
+      "lastMs": 1782887400000,
+      "lastIso": "2026-07-01T06:30:00.000Z",
+      "ageCandles": 1,
+      "lastDecision": "ARMED_BEARISH",
+      "endReason": "cooled_to_watch",
+      "hasSetup": true,
+      "outcome": {
+        "label": "T2",
+        "rMultiple": 2,
+        "mfe": 2.13,
+        "mae": 0.37
+      }
+    },
+    {
+      "pair": "AUD_NZD",
+      "direction": "BEARISH",
+      "strategy": "FIRST_CONTROLLED_PULLBACK",
+      "firstMs": 1782928800000,
+      "firstIso": "2026-07-01T18:00:00.000Z",
+      "lastMs": 1782928800000,
+      "lastIso": "2026-07-01T18:00:00.000Z",
+      "ageCandles": 1,
+      "lastDecision": "ARMED_BEARISH",
+      "endReason": "invalidated:NO_TRADE_INSUFFICIENT_SPACE",
+      "hasSetup": true,
+      "outcome": {
+        "label": "T2",
+        "rMultiple": 2,
+        "mfe": 2.25,
+        "mae": 0.65
+      }
+    },
+    {
+      "pair": "CAD_JPY",
+      "direction": "BEARISH",
+      "strategy": "EARLY_EXPANSION",
+      "firstMs": 1782968400000,
+      "firstIso": "2026-07-02T05:00:00.000Z",
+      "lastMs": 1782968400000,
+      "lastIso": "2026-07-02T05:00:00.000Z",
+      "ageCandles": 1,
+      "lastDecision": "ARMED_BEARISH",
+      "endReason": "invalidated:NO_TRADE_INSUFFICIENT_SPACE",
+      "hasSetup": true,
+      "outcome": {
+        "label": "T2",
+        "rMultiple": 2,
+        "mfe": 6.3,
+        "mae": 0.22
+      }
+    },
+    {
+      "pair": "NZD_CAD",
+      "direction": "BULLISH",
+      "strategy": "FIRST_CONTROLLED_PULLBACK",
+      "firstMs": 1782996300000,
+      "firstIso": "2026-07-02T12:45:00.000Z",
+      "lastMs": 1782996300000,
+      "lastIso": "2026-07-02T12:45:00.000Z",
+      "ageCandles": 1,
+      "lastDecision": "ARMED_BULLISH",
+      "endReason": "invalidated:NO_TRADE_LATE",
+      "hasSetup": true,
+      "outcome": {
+        "label": "OPEN_AT_WINDOW_END",
+        "mfe": 1.85,
+        "mae": 0.34
+      }
+    },
+    {
+      "pair": "USD_CHF",
+      "direction": "BULLISH",
+      "strategy": "FIRST_CONTROLLED_PULLBACK",
+      "firstMs": 1783080900000,
+      "firstIso": "2026-07-03T12:15:00.000Z",
+      "lastMs": 1783080900000,
+      "lastIso": "2026-07-03T12:15:00.000Z",
+      "ageCandles": 1,
+      "lastDecision": "ARMED_BULLISH",
+      "endReason": "invalidated:NO_TRADE_INSUFFICIENT_SPACE",
+      "hasSetup": true,
+      "outcome": {
+        "label": "T2",
+        "rMultiple": 2,
+        "mfe": 2.09,
+        "mae": 0.26
+      }
+    },
+    {
+      "pair": "EUR_USD",
+      "direction": "BEARISH",
+      "strategy": "EARLY_EXPANSION",
+      "firstMs": 1783305000000,
+      "firstIso": "2026-07-06T02:30:00.000Z",
+      "lastMs": 1783305000000,
+      "lastIso": "2026-07-06T02:30:00.000Z",
+      "ageCandles": 1,
+      "lastDecision": "ARMED_BEARISH",
+      "endReason": "invalidated:NO_TRADE_INSUFFICIENT_SPACE",
+      "hasSetup": true,
+      "outcome": {
+        "label": "NO_FILL",
+        "reason": "expired_unfilled",
+        "barsWaited": 9
+      }
+    },
+    {
+      "pair": "AUD_CAD",
+      "direction": "BULLISH",
+      "strategy": "FIRST_CONTROLLED_PULLBACK",
+      "firstMs": 1783663200000,
+      "firstIso": "2026-07-10T06:00:00.000Z",
+      "lastMs": 1783663200000,
+      "lastIso": "2026-07-10T06:00:00.000Z",
+      "ageCandles": 1,
+      "lastDecision": "ARMED_BULLISH",
+      "endReason": "invalidated:NO_TRADE_CONFLICTED",
+      "hasSetup": true,
+      "outcome": {
+        "label": "STOP",
+        "rMultiple": -1,
+        "mfe": 0.27,
+        "mae": 1.03
+      }
+    },
+    {
+      "pair": "GBP_CHF",
+      "direction": "BULLISH",
+      "strategy": "FIRST_CONTROLLED_PULLBACK",
+      "firstMs": 1784503800000,
+      "firstIso": "2026-07-19T23:30:00.000Z",
+      "lastMs": 1784503800000,
+      "lastIso": "2026-07-19T23:30:00.000Z",
+      "ageCandles": 1,
+      "lastDecision": "ARMED_BULLISH",
+      "endReason": "invalidated:NO_TRADE_INSUFFICIENT_SPACE",
+      "hasSetup": true,
+      "outcome": {
+        "label": "STOP",
+        "rMultiple": -1,
+        "mfe": 1.69,
+        "mae": 1.24
+      }
+    },
+    {
+      "pair": "EUR_AUD",
+      "direction": "BULLISH",
+      "strategy": "EARLY_EXPANSION",
+      "firstMs": 1784699100000,
+      "firstIso": "2026-07-22T05:45:00.000Z",
+      "lastMs": 1784699100000,
+      "lastIso": "2026-07-22T05:45:00.000Z",
+      "ageCandles": 1,
+      "lastDecision": "ARMED_BULLISH",
+      "endReason": "invalidated:NO_TRADE_INSUFFICIENT_SPACE",
+      "hasSetup": true,
+      "outcome": {
+        "label": "STOP",
+        "rMultiple": -1,
+        "mfe": 0.87,
+        "mae": 1.5
+      }
+    },
+    {
+      "pair": "AUD_USD",
+      "direction": "BEARISH",
+      "strategy": "FIRST_CONTROLLED_PULLBACK",
+      "firstMs": 1785277800000,
+      "firstIso": "2026-07-28T22:30:00.000Z",
+      "lastMs": 1785277800000,
+      "lastIso": "2026-07-28T22:30:00.000Z",
+      "ageCandles": 1,
+      "lastDecision": "ARMED_BEARISH",
+      "endReason": "invalidated:NO_TRADE_INSUFFICIENT_SPACE",
+      "hasSetup": true,
+      "outcome": {
+        "label": "T2",
+        "rMultiple": 2,
+        "mfe": 2.11,
+        "mae": 0.38
+      }
+    },
+    {
+      "pair": "GBP_USD",
+      "direction": "BULLISH",
+      "strategy": "EARLY_EXPANSION",
+      "firstMs": 1785899700000,
+      "firstIso": "2026-08-05T03:15:00.000Z",
+      "lastMs": 1785899700000,
+      "lastIso": "2026-08-05T03:15:00.000Z",
+      "ageCandles": 1,
+      "lastDecision": "ARMED_BULLISH",
+      "endReason": "invalidated:NO_TRADE_INSUFFICIENT_SPACE",
+      "hasSetup": true,
+      "outcome": {
+        "label": "NO_FILL",
+        "reason": "expired_unfilled",
+        "barsWaited": 9
+      }
+    },
+    {
+      "pair": "GBP_USD",
+      "direction": "BULLISH",
+      "strategy": "EARLY_EXPANSION",
+      "firstMs": 1785904200000,
+      "firstIso": "2026-08-05T04:30:00.000Z",
+      "lastMs": 1785904200000,
+      "lastIso": "2026-08-05T04:30:00.000Z",
+      "ageCandles": 1,
+      "lastDecision": "ARMED_BULLISH",
+      "endReason": "invalidated:NO_TRADE_INSUFFICIENT_SPACE",
+      "hasSetup": true,
+      "outcome": {
+        "label": "OPEN_AT_WINDOW_END",
+        "mfe": 1.35,
+        "mae": 0.85
+      }
+    },
+    {
+      "pair": "AUD_CAD",
+      "direction": "BEARISH",
+      "strategy": "EARLY_EXPANSION",
+      "firstMs": 1785942900000,
+      "firstIso": "2026-08-05T15:15:00.000Z",
+      "lastMs": 1785943800000,
+      "lastIso": "2026-08-05T15:30:00.000Z",
+      "ageCandles": 2,
+      "lastDecision": "ARMED_BEARISH",
+      "endReason": "invalidated:NO_TRADE_CONFLICTED",
+      "hasSetup": true,
+      "outcome": {
+        "label": "T2",
+        "rMultiple": 2,
+        "mfe": 2.02,
+        "mae": 0.3
+      }
+    },
+    {
+      "pair": "AUD_CAD",
+      "direction": "BEARISH",
+      "strategy": "EARLY_EXPANSION",
+      "firstMs": 1785946500000,
+      "firstIso": "2026-08-05T16:15:00.000Z",
+      "lastMs": 1785946500000,
+      "lastIso": "2026-08-05T16:15:00.000Z",
+      "ageCandles": 1,
+      "lastDecision": "ARMED_BEARISH",
+      "endReason": "invalidated:NO_TRADE_INSUFFICIENT_SPACE",
+      "hasSetup": true,
+      "outcome": {
+        "label": "NO_FILL",
+        "reason": "expired_unfilled",
+        "barsWaited": 9
+      }
+    },
+    {
+      "pair": "AUD_CAD",
+      "direction": "BEARISH",
+      "strategy": "FIRST_CONTROLLED_PULLBACK",
+      "firstMs": 1785961800000,
+      "firstIso": "2026-08-05T20:30:00.000Z",
+      "lastMs": 1785962700000,
+      "lastIso": "2026-08-05T20:45:00.000Z",
+      "ageCandles": 2,
+      "lastDecision": "ARMED_BEARISH",
+      "endReason": "invalidated:NO_TRADE_CONFLICTED",
+      "hasSetup": true,
+      "outcome": {
+        "label": "T2",
+        "rMultiple": 2,
+        "mfe": 2.14,
+        "mae": 0.43
+      }
+    },
+    {
+      "pair": "USD_CHF",
+      "direction": "BEARISH",
+      "strategy": "FIRST_CONTROLLED_PULLBACK",
+      "firstMs": 1785966300000,
+      "firstIso": "2026-08-05T21:45:00.000Z",
+      "lastMs": 1785966300000,
+      "lastIso": "2026-08-05T21:45:00.000Z",
+      "ageCandles": 1,
+      "lastDecision": "ARMED_BEARISH",
+      "endReason": "invalidated:NO_TRADE_INSUFFICIENT_SPACE",
+      "hasSetup": true,
+      "outcome": {
+        "label": "T2",
+        "rMultiple": 2,
+        "mfe": 2.04,
+        "mae": 0.03
+      }
+    },
+    {
+      "pair": "USD_CHF",
+      "direction": "BULLISH",
+      "strategy": "FIRST_CONTROLLED_PULLBACK",
+      "firstMs": 1785990600000,
+      "firstIso": "2026-08-06T04:30:00.000Z",
+      "lastMs": 1785990600000,
+      "lastIso": "2026-08-06T04:30:00.000Z",
+      "ageCandles": 1,
+      "lastDecision": "ARMED_BULLISH",
+      "endReason": "cooled_to_watch",
+      "hasSetup": true,
+      "outcome": {
+        "label": "T2",
+        "rMultiple": 2,
+        "mfe": 2.51,
+        "mae": 0.14
+      }
+    },
+    {
+      "pair": "EUR_AUD",
+      "direction": "BULLISH",
+      "strategy": "EARLY_EXPANSION",
+      "firstMs": 1785996900000,
+      "firstIso": "2026-08-06T06:15:00.000Z",
+      "lastMs": 1785996900000,
+      "lastIso": "2026-08-06T06:15:00.000Z",
+      "ageCandles": 1,
+      "lastDecision": "ARMED_BULLISH",
+      "endReason": "cooled_to_watch",
+      "hasSetup": true,
+      "outcome": {
+        "label": "STOP",
+        "rMultiple": -1,
+        "mfe": 0.28,
+        "mae": 1.22
+      }
+    },
+    {
+      "pair": "EUR_CAD",
+      "direction": "BULLISH",
+      "strategy": "FIRST_CONTROLLED_PULLBACK",
+      "firstMs": 1786079700000,
+      "firstIso": "2026-08-07T05:15:00.000Z",
+      "lastMs": 1786079700000,
+      "lastIso": "2026-08-07T05:15:00.000Z",
+      "ageCandles": 1,
+      "lastDecision": "ARMED_BULLISH",
+      "endReason": "cooled_to_watch",
+      "hasSetup": true,
+      "outcome": {
+        "label": "AMBIGUOUS",
+        "note": "stop+1R same candle",
+        "mfe": 1.27,
+        "mae": 1.28
+      }
+    },
+    {
+      "pair": "EUR_USD",
+      "direction": "BEARISH",
+      "strategy": "EARLY_EXPANSION",
+      "firstMs": 1786404600000,
+      "firstIso": "2026-08-10T23:30:00.000Z",
+      "lastMs": 1786404600000,
+      "lastIso": "2026-08-10T23:30:00.000Z",
+      "ageCandles": 1,
+      "lastDecision": "ARMED_BEARISH",
+      "endReason": "invalidated:NO_TRADE_INSUFFICIENT_SPACE",
+      "hasSetup": true,
+      "outcome": {
+        "label": "NO_FILL",
+        "reason": "expired_unfilled",
+        "barsWaited": 9
+      }
+    },
+    {
+      "pair": "AUD_USD",
+      "direction": "BEARISH",
+      "strategy": "EARLY_EXPANSION",
+      "firstMs": 1786433400000,
+      "firstIso": "2026-08-11T07:30:00.000Z",
+      "lastMs": 1786433400000,
+      "lastIso": "2026-08-11T07:30:00.000Z",
+      "ageCandles": 1,
+      "lastDecision": "ARMED_BEARISH",
+      "endReason": "invalidated:NO_TRADE_INSUFFICIENT_SPACE",
+      "hasSetup": true,
+      "outcome": {
+        "label": "STOP",
+        "rMultiple": -1,
+        "mfe": 0.14,
+        "mae": 1.02
+      }
+    },
+    {
+      "pair": "AUD_NZD",
+      "direction": "BULLISH",
+      "strategy": "EARLY_EXPANSION",
+      "firstMs": 1786446000000,
+      "firstIso": "2026-08-11T11:00:00.000Z",
+      "lastMs": 1786446000000,
+      "lastIso": "2026-08-11T11:00:00.000Z",
+      "ageCandles": 1,
+      "lastDecision": "ARMED_BULLISH",
+      "endReason": "invalidated:NO_TRADE_LATE",
+      "hasSetup": true,
+      "outcome": {
+        "label": "T2",
+        "rMultiple": 2,
+        "mfe": 2.06,
+        "mae": 0.56
+      }
+    },
+    {
+      "pair": "AUD_NZD",
+      "direction": "BULLISH",
+      "strategy": "FIRST_CONTROLLED_PULLBACK",
+      "firstMs": 1786479300000,
+      "firstIso": "2026-08-11T20:15:00.000Z",
+      "lastMs": 1786481100000,
+      "lastIso": "2026-08-11T20:45:00.000Z",
+      "ageCandles": 3,
+      "lastDecision": "ARMED_BULLISH",
+      "endReason": "invalidated:NO_TRADE_INSUFFICIENT_SPACE",
+      "hasSetup": true,
+      "outcome": {
+        "label": "AMBIGUOUS",
+        "note": "stop+1R same candle",
+        "mfe": 1.16,
+        "mae": 1.03
+      }
+    },
+    {
+      "pair": "AUD_NZD",
+      "direction": "BULLISH",
+      "strategy": "FIRST_CONTROLLED_PULLBACK",
+      "firstMs": 1786626900000,
+      "firstIso": "2026-08-13T13:15:00.000Z",
+      "lastMs": 1786626900000,
+      "lastIso": "2026-08-13T13:15:00.000Z",
+      "ageCandles": 1,
+      "lastDecision": "ARMED_BULLISH",
+      "endReason": "invalidated:NO_TRADE_LATE",
+      "hasSetup": true,
+      "outcome": {
+        "label": "STOP",
+        "rMultiple": -1,
+        "mfe": 0.26,
+        "mae": 1.15
+      }
+    },
+    {
+      "pair": "AUD_NZD",
+      "direction": "BEARISH",
+      "strategy": "EARLY_EXPANSION",
+      "firstMs": 1787094000000,
+      "firstIso": "2026-08-18T23:00:00.000Z",
+      "lastMs": 1787094000000,
+      "lastIso": "2026-08-18T23:00:00.000Z",
+      "ageCandles": 1,
+      "lastDecision": "ARMED_BEARISH",
+      "endReason": "invalidated:NO_TRADE_INSUFFICIENT_SPACE",
+      "hasSetup": true,
+      "outcome": {
+        "label": "NO_FILL",
+        "reason": "expired_unfilled",
+        "barsWaited": 9
+      }
+    },
+    {
+      "pair": "EUR_CHF",
+      "direction": "BULLISH",
+      "strategy": "FIRST_CONTROLLED_PULLBACK",
+      "firstMs": 1787296500000,
+      "firstIso": "2026-08-21T07:15:00.000Z",
+      "lastMs": 1787296500000,
+      "lastIso": "2026-08-21T07:15:00.000Z",
+      "ageCandles": 1,
+      "lastDecision": "ARMED_BULLISH",
+      "endReason": "invalidated:NO_TRADE_INSUFFICIENT_SPACE",
+      "hasSetup": true,
+      "outcome": {
+        "label": "STOP",
+        "rMultiple": -1,
+        "mfe": 1.2,
+        "mae": 1.09
+      }
+    },
+    {
+      "pair": "AUD_NZD",
+      "direction": "BULLISH",
+      "strategy": "EARLY_EXPANSION",
+      "firstMs": 1787298300000,
+      "firstIso": "2026-08-21T07:45:00.000Z",
+      "lastMs": 1787298300000,
+      "lastIso": "2026-08-21T07:45:00.000Z",
+      "ageCandles": 1,
+      "lastDecision": "ARMED_BULLISH",
+      "endReason": "invalidated:NO_TRADE_INSUFFICIENT_SPACE",
+      "hasSetup": true,
+      "outcome": {
+        "label": "OPEN_AT_WINDOW_END",
+        "mfe": 1.76,
+        "mae": 0.67
+      }
+    },
+    {
+      "pair": "AUD_NZD",
+      "direction": "BULLISH",
+      "strategy": "EARLY_EXPANSION",
+      "firstMs": 1787300100000,
+      "firstIso": "2026-08-21T08:15:00.000Z",
+      "lastMs": 1787300100000,
+      "lastIso": "2026-08-21T08:15:00.000Z",
+      "ageCandles": 1,
+      "lastDecision": "ARMED_BULLISH",
+      "endReason": "invalidated:NO_TRADE_CONFLICTED",
+      "hasSetup": true,
+      "outcome": {
+        "label": "NO_FILL",
+        "reason": "expired_unfilled",
+        "barsWaited": 9
+      }
+    },
+    {
+      "pair": "AUD_JPY",
+      "direction": "BEARISH",
+      "strategy": "FIRST_CONTROLLED_PULLBACK",
+      "firstMs": 1787609700000,
+      "firstIso": "2026-08-24T22:15:00.000Z",
+      "lastMs": 1787609700000,
+      "lastIso": "2026-08-24T22:15:00.000Z",
+      "ageCandles": 1,
+      "lastDecision": "ARMED_BEARISH",
+      "endReason": "invalidated:NO_TRADE_INSUFFICIENT_SPACE",
+      "hasSetup": true,
+      "outcome": {
+        "label": "STOP",
+        "rMultiple": -1,
+        "mfe": 0.75,
+        "mae": 1.41
+      }
+    },
+    {
+      "pair": "EUR_USD",
+      "direction": "BEARISH",
+      "strategy": "FIRST_CONTROLLED_PULLBACK",
+      "firstMs": 1787629500000,
+      "firstIso": "2026-08-25T03:45:00.000Z",
+      "lastMs": 1787629500000,
+      "lastIso": "2026-08-25T03:45:00.000Z",
+      "ageCandles": 1,
+      "lastDecision": "ARMED_BEARISH",
+      "endReason": "invalidated:NO_TRADE_LATE",
+      "hasSetup": true,
+      "outcome": {
+        "label": "STOP",
+        "rMultiple": -1,
+        "mfe": 0.74,
+        "mae": 1.07
+      }
+    },
+    {
+      "pair": "NZD_CHF",
+      "direction": "BULLISH",
+      "strategy": "EARLY_EXPANSION",
+      "firstMs": 1788398100000,
+      "firstIso": "2026-09-03T01:15:00.000Z",
+      "lastMs": 1788398100000,
+      "lastIso": "2026-09-03T01:15:00.000Z",
+      "ageCandles": 1,
+      "lastDecision": "ARMED_BULLISH",
+      "endReason": "invalidated:NO_TRADE_INSUFFICIENT_SPACE",
+      "hasSetup": true,
+      "outcome": {
+        "label": "STOP",
+        "rMultiple": -1,
+        "mfe": 0.02,
+        "mae": 1.04
+      }
+    },
+    {
+      "pair": "NZD_USD",
+      "direction": "BULLISH",
+      "strategy": "EARLY_EXPANSION",
+      "firstMs": 1788408900000,
+      "firstIso": "2026-09-03T04:15:00.000Z",
+      "lastMs": 1788408900000,
+      "lastIso": "2026-09-03T04:15:00.000Z",
+      "ageCandles": 1,
+      "lastDecision": "ARMED_BULLISH",
+      "endReason": "invalidated:NO_TRADE_CONFLICTED",
+      "hasSetup": true,
+      "outcome": {
+        "label": "STOP",
+        "rMultiple": -1,
+        "mfe": 0.13,
+        "mae": 1.44
+      }
+    },
+    {
+      "pair": "NZD_USD",
+      "direction": "BULLISH",
+      "strategy": "EARLY_EXPANSION",
+      "firstMs": 1788435000000,
+      "firstIso": "2026-09-03T11:30:00.000Z",
+      "lastMs": 1788435000000,
+      "lastIso": "2026-09-03T11:30:00.000Z",
+      "ageCandles": 1,
+      "lastDecision": "ARMED_BULLISH",
+      "endReason": "invalidated:NO_TRADE_CONFLICTED",
+      "hasSetup": true,
+      "outcome": {
+        "label": "OPEN_AT_WINDOW_END",
+        "mfe": 1.56,
+        "mae": 0.89
+      }
+    },
+    {
+      "pair": "NZD_USD",
+      "direction": "BULLISH",
+      "strategy": "EARLY_EXPANSION",
+      "firstMs": 1788436800000,
+      "firstIso": "2026-09-03T12:00:00.000Z",
+      "lastMs": 1788436800000,
+      "lastIso": "2026-09-03T12:00:00.000Z",
+      "ageCandles": 1,
+      "lastDecision": "ARMED_BULLISH",
+      "endReason": "invalidated:NO_TRADE_CONFLICTED",
+      "hasSetup": true,
+      "outcome": {
+        "label": "OPEN_AT_WINDOW_END",
+        "mfe": 1.56,
+        "mae": 0.89
+      }
+    },
+    {
+      "pair": "EUR_CHF",
+      "direction": "BULLISH",
+      "strategy": "FIRST_CONTROLLED_PULLBACK",
+      "firstMs": 1788742800000,
+      "firstIso": "2026-09-07T01:00:00.000Z",
+      "lastMs": 1788742800000,
+      "lastIso": "2026-09-07T01:00:00.000Z",
+      "ageCandles": 1,
+      "lastDecision": "ARMED_BULLISH",
+      "endReason": "invalidated:NO_TRADE_DEAD",
+      "hasSetup": true,
+      "outcome": {
+        "label": "STOP",
+        "rMultiple": -1,
+        "mfe": 0.97,
+        "mae": 1.03
+      }
+    },
+    {
+      "pair": "EUR_CAD",
+      "direction": "BULLISH",
+      "strategy": "EARLY_EXPANSION",
+      "firstMs": 1788955200000,
+      "firstIso": "2026-09-09T12:00:00.000Z",
+      "lastMs": 1788955200000,
+      "lastIso": "2026-09-09T12:00:00.000Z",
+      "ageCandles": 1,
+      "lastDecision": "ARMED_BULLISH",
+      "endReason": "invalidated:NO_TRADE_INSUFFICIENT_SPACE",
+      "hasSetup": true,
+      "outcome": {
+        "label": "STOP",
+        "rMultiple": -1,
+        "mfe": 1.99,
+        "mae": 1.04
+      }
+    }
+  ]
+}

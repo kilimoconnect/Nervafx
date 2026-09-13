@@ -1,0 +1,41 @@
+{
+  "denominators": {
+    "evaluations": 196224,
+    "closes": 7008,
+    "pairs": 28,
+    "episodes": 36
+  },
+  "primaryDecision": {
+    "NO_TRADE_CHAOTIC": 69068,
+    "NO_TRADE_INSUFFICIENT_SPACE": 66324,
+    "NO_TRADE_LATE": 55252,
+    "NO_TRADE_DEAD": 3771,
+    "NO_TRADE_CONFLICTED": 1613,
+    "WATCH_PRESSURE": 95,
+    "WATCH_COMPRESSION": 61,
+    "ARMED_BULLISH": 24,
+    "ARMED_BEARISH": 16
+  },
+  "independentGateFail": {
+    "INSUFFICIENT_SPACE": 177672,
+    "NO_AGREEMENT": 139368,
+    "LATE": 86243,
+    "CHAOTIC": 69068,
+    "OVEREXTENDED": 61491,
+    "DEAD": 3771,
+    "CONFLICTED": 1453
+  },
+  "overlapMatrix": {
+    "INSUFFICIENT_SPACE": 177672,
+    "NO_AGREEMENT": 139368,
+    "INSUFFICIENT_SPACE|NO_AGREEMENT": 133099,
+    "LATE": 86243,
+    "CHAOTIC": 69068,
+    "CHAOTIC|NO_AGREEMENT": 69068,
+    "INSUFFICIENT_SPACE|LATE": 68447,
+    "CHAOTIC|INSUFFICIENT_SPACE": 63276,
+    "LATE|NO_AGREEMENT": 30991,
+    "CHAOTIC|LATE": 29761
+  },
+  "note": "independentGateFail counts each gate that WOULD reject, ignoring priority; primaryDecision is the single displayed outcome (priority order DEAD>CHAOTIC>CONFLICTED>LATE>OVEREXTENDED>INSUFFICIENT_SPACE>SPREAD>agreement)."
+}

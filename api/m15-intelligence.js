@@ -17,6 +17,21 @@
 const { cors, getClient } = require('./_db');
 const { loadSynchronized } = require('./_m15/load');
 const { runNetwork } = require('./_m15/coordinator');
+const { CONFIG_1_1_0A } = require('./_m15/config-1_1_0');
+const { isArmed } = require('./_m15/diagnostics');
+const { closeOf, freshness } = require('./_m15/snapshot');
+const { M15_MS } = require('./_m15/data');
+
+// Published engine: Phase 2 accepted version (space is a per-trade test).
+const CFG = CONFIG_1_1_0A;
+
+/** Actionable / Developing / Blocked / Unavailable per the Phase-2 state contract. */
+function categoryOf(rec, hasData, stale) {
+  if (!hasData) return 'UNAVAILABLE';
+  if (isArmed(rec.decision) && rec.setup && !stale) return 'ACTIONABLE';
+  if (/^WATCH_/.test(rec.decision)) return 'DEVELOPING';
+  return 'BLOCKED';
+}
 
 module.exports = async function handler(req, res) {
   cors(res);
@@ -29,23 +44,33 @@ module.exports = async function handler(req, res) {
     if (req.query.at && Number.isNaN(atMs)) return res.status(400).json({ error: 'invalid ?at (use ISO time)' });
     const nowMs = Date.now();
 
-    const { evalMs, candlesByPair, sync } = await loadSynchronized(sb, { atMs, nowMs });
-    const run = runNetwork(candlesByPair, { evalMs, nowMs, syncState: sync.reason, noCriticalNews: true });
+    const { evalMs, candlesByPair, sync } = await loadSynchronized(sb, { atMs, nowMs, cfg: CFG });
+    const run = runNetwork(candlesByPair, { evalMs, nowMs, cfg: CFG, syncState: sync.reason, noCriticalNews: true });
+    const closeMs = closeOf(evalMs);
+    const fresh = freshness(closeMs, nowMs, CFG);
+    const missing = sync.missing || [];
 
     // Currency dashboard (8 currencies): strength + power + structure merged.
     const currencies = mergeCurrencies(run);
 
-    // All-pairs scanner, ranked.
+    // All-pairs scanner, ranked, with the Actionable/Developing/Blocked/Unavailable
+    // category and available room in R (only when a valid setup defines it).
+    const counts = { ACTIONABLE: 0, DEVELOPING: 0, BLOCKED: 0, UNAVAILABLE: 0 };
     const scan = run.ranking.map((r) => {
       const p = run.pairs[r.pair];
+      const hasData = (candlesByPair[r.pair] || []).length > 0;
+      const category = categoryOf(p, hasData, fresh.stale);
+      counts[category]++;
+      const roomR = p.setup && p.setup.availableSpaceVol != null ? p.setup.availableSpaceVol : null;
       return {
-        rank: r.rank, pair: r.pair, decision: p.decision, strategy: p.strategy,
+        rank: r.rank, pair: r.pair, decision: p.decision, strategy: p.strategy, category,
         marketState: p.marketState.state, direction: p.snapshot.direction,
         movementStage: p.snapshot.movementStage,
         energyLevel: p.snapshot.energyLevel, energyDirection: p.snapshot.energyDirection, energyAcceleration: p.snapshot.energyAcceleration,
         emaState: p.snapshot.emaState, compression: p.snapshot.compression, expansion: p.snapshot.expansion,
         freshness: p.snapshot.freshness, pressure: p.snapshot.pressure,
         agreement: p.agreement.state, strengthDiff: Math.round(p.strengthDiff || 0),
+        availableRoomR: roomR, primaryReason: p.decision,
         score: r.score, qualifies: r.qualifies,
       };
     });
@@ -58,10 +83,18 @@ module.exports = async function handler(req, res) {
     res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=30');
     res.json({
       ok: true,
-      evalMs, evalIso: new Date(evalMs).toISOString(),
+      // ── disclosure contract (Phase 3) ──────────────────────────────────────
+      source: 'recompute',                       // read route recomputes; stored snapshots come from /api/m15-snapshot
+      engineVersion: run.run.calculationVersion, // published: m15-cfg-1.1.0a
+      evalMs, evalIso: new Date(evalMs).toISOString(),        // frame open
+      closeIso: new Date(closeMs).toISOString(), // EXACT UTC M15 close (frame + 15m)
       historyMode: atMs != null,
-      ordersDisabled: true,
-      sync: { state: sync.reason, laggards: sync.laggards || [], missing: sync.missing || [] },
+      liveTriggerMonitoring: atMs == null,       // replay never monitors live triggers
+      ordersDisabled: true, analyticalManualOnly: true,
+      completeness: { pairsProcessed: Object.values(candlesByPair).filter((a) => a && a.length > 0).length, pairsExpected: 28, syncState: sync.reason, missing, complete: sync.reason === 'ALIGNED' && missing.length === 0 },
+      freshness: fresh,                          // { ageSeconds, ageCandles, stale }
+      counts,                                    // ACTIONABLE / DEVELOPING / BLOCKED / UNAVAILABLE
+      sync: { state: sync.reason, laggards: sync.laggards || [], missing },
       calculationVersion: run.run.calculationVersion,
       currencies, scan, detail,
     });

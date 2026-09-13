@@ -45,7 +45,10 @@ function runNetwork(candlesByPair, opts = {}) {
   const prevStates = opts.prevStates || {};    // pair -> previous market state
   const quotes = opts.quotes || {};            // pair -> { bid, ask } (live only)
   const noCriticalNews = opts.noCriticalNews !== false;
-  const version = `${CONFIG_VERSION}+${configHash(cfg)}`;
+  // Reflect the ACTUAL config passed (cfg.version), not the baseline constant, so
+  // the published version string is truthful. Baseline cfg.version === CONFIG_VERSION,
+  // so the 1.0.0 string (and its idempotency key) is unchanged — Phase 1 reproduces.
+  const version = `${cfg.version || CONFIG_VERSION}+${configHash(cfg)}`;
 
   // ── Pass 1: per-pair engines + strength signals ──────────────────────────
   const perPair = {};
@@ -117,6 +120,12 @@ function runNetwork(candlesByPair, opts = {}) {
         freshness: pp.freshness.state, pressure: pp.pressure.pressureState,
       },
     };
+    // Diagnostics (§Phase-1): attach the already-computed engine objects for the
+    // gate waterfall. Purely ADDITIVE — never read back into any decision, so a
+    // run with diagnostics on is byte-identical in decisions to one with it off.
+    if (opts.diagnostics) {
+      pairs[pair].diag = { marketState, agreement, expansion: pp.expansion, freshness: pp.freshness, energy: pp.energy, movement: pp.movement, compression: pp.compression, pressure: pp.pressure, eq: pp.eq };
+    }
     rankingInput.push({
       pair, agreement, freshness: pp.freshness, expansion: pp.expansion, energy: pp.energy,
       strengthDiff: agreementCtx.strengthDiff, basePower: power.byCurrency[base], quotePower: power.byCurrency[quote],

@@ -1,0 +1,5433 @@
+{
+  "correct": {
+    "requestedIso": "2026-09-10T12:00:00.000Z",
+    "frameOpenIso": "2026-09-10T11:45:00.000Z",
+    "pairs": [
+      {
+        "pair": "AUD_CAD",
+        "decision": "NO_TRADE_LATE",
+        "marketState": "BEARISH_EXHAUSTION",
+        "agreement": "LATE",
+        "direction": "BEARISH",
+        "failingGates": [
+          "LATE",
+          "OVEREXTENDED"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 41.35,
+              "energyLevel": "BUILDING"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "PASS",
+            "measurement": {
+              "volatilityLevel": 0.249,
+              "efficiency": 0.331,
+              "energyDirection": "BALANCED"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0,
+              "bearMass": 0.489,
+              "score": -0.489
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "FAIL",
+            "measurement": {
+              "freshness": "EXHAUSTED",
+              "distanceVol": 6.452,
+              "decelerating": false,
+              "completedCycles": 84
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "FAIL",
+            "measurement": {
+              "expansion": "OVEREXTENDED",
+              "distanceVol": -6.452
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "PASS",
+            "measurement": {
+              "availableSpaceVol": 6,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": []
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "PASS",
+            "measurement": {
+              "agreement": "LATE",
+              "reasons": [
+                "first tradeable opportunity has passed"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T11:45:00.000Z"
+      },
+      {
+        "pair": "AUD_CHF",
+        "decision": "NO_TRADE_INSUFFICIENT_SPACE",
+        "marketState": "BEARISH_EXPANSION",
+        "agreement": "NO_AGREEMENT",
+        "direction": "BEARISH",
+        "failingGates": [
+          "INSUFFICIENT_SPACE",
+          "NO_AGREEMENT"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 26.09,
+              "energyLevel": "LOW"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "PASS",
+            "measurement": {
+              "volatilityLevel": 0.17,
+              "efficiency": 0.074,
+              "energyDirection": "BALANCED"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0,
+              "bearMass": 0.33,
+              "score": -0.33
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "PASS",
+            "measurement": {
+              "freshness": "FRESH",
+              "distanceVol": 1.616,
+              "decelerating": false,
+              "completedCycles": 80
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "PASS",
+            "measurement": {
+              "expansion": "EARLY",
+              "distanceVol": -1.616
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.035,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": []
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "FAIL",
+            "measurement": {
+              "agreement": "NO_AGREEMENT",
+              "reasons": [
+                "insufficient room to the next obstacle"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T11:45:00.000Z"
+      },
+      {
+        "pair": "AUD_JPY",
+        "decision": "NO_TRADE_CHAOTIC",
+        "marketState": "CHAOTIC",
+        "agreement": "NO_AGREEMENT",
+        "direction": "BEARISH",
+        "failingGates": [
+          "CHAOTIC",
+          "INSUFFICIENT_SPACE",
+          "NO_AGREEMENT"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 44.46,
+              "energyLevel": "BUILDING"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "FAIL",
+            "measurement": {
+              "volatilityLevel": 0.659,
+              "efficiency": 0.023,
+              "energyDirection": "CHAOTIC"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.078,
+              "bearMass": 0.195,
+              "score": -0.118
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "PASS",
+            "measurement": {
+              "freshness": "PREPARING",
+              "distanceVol": 0.041,
+              "decelerating": false,
+              "completedCycles": 80
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "PASS",
+            "measurement": {
+              "expansion": "NONE",
+              "distanceVol": -0.041
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.036,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "FAIL",
+            "measurement": {
+              "agreement": "NO_AGREEMENT",
+              "reasons": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T11:45:00.000Z"
+      },
+      {
+        "pair": "AUD_NZD",
+        "decision": "NO_TRADE_INSUFFICIENT_SPACE",
+        "marketState": "BEARISH_PULLBACK",
+        "agreement": "NO_AGREEMENT",
+        "direction": "BULLISH",
+        "failingGates": [
+          "INSUFFICIENT_SPACE",
+          "NO_AGREEMENT"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 32.3,
+              "energyLevel": "BUILDING"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "PASS",
+            "measurement": {
+              "volatilityLevel": 0.386,
+              "efficiency": 0.07,
+              "energyDirection": "BALANCED"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.111,
+              "bearMass": 0.193,
+              "score": -0.082
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "PASS",
+            "measurement": {
+              "freshness": "PREPARING",
+              "distanceVol": 1.12,
+              "decelerating": true,
+              "completedCycles": 81
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "PASS",
+            "measurement": {
+              "expansion": "ATTEMPTING",
+              "distanceVol": -1.12
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.076,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": []
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "FAIL",
+            "measurement": {
+              "agreement": "NO_AGREEMENT",
+              "reasons": [
+                "insufficient room to the next obstacle"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T11:45:00.000Z"
+      },
+      {
+        "pair": "AUD_USD",
+        "decision": "NO_TRADE_LATE",
+        "marketState": "BEARISH_EXHAUSTION",
+        "agreement": "LATE",
+        "direction": "BEARISH",
+        "failingGates": [
+          "LATE",
+          "OVEREXTENDED"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 43.02,
+              "energyLevel": "BUILDING"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "PASS",
+            "measurement": {
+              "volatilityLevel": 0.227,
+              "efficiency": 0.313,
+              "energyDirection": "BALANCED"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0,
+              "bearMass": 0.515,
+              "score": -0.515
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "FAIL",
+            "measurement": {
+              "freshness": "EXHAUSTED",
+              "distanceVol": 7.209,
+              "decelerating": false,
+              "completedCycles": 83
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "FAIL",
+            "measurement": {
+              "expansion": "OVEREXTENDED",
+              "distanceVol": -7.209
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "PASS",
+            "measurement": {
+              "availableSpaceVol": 6,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": []
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "PASS",
+            "measurement": {
+              "agreement": "LATE",
+              "reasons": [
+                "first tradeable opportunity has passed"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T11:45:00.000Z"
+      },
+      {
+        "pair": "CAD_CHF",
+        "decision": "NO_TRADE_LATE",
+        "marketState": "BULLISH_EXPANSION",
+        "agreement": "LATE",
+        "direction": "BULLISH",
+        "failingGates": [
+          "LATE",
+          "INSUFFICIENT_SPACE"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 28.56,
+              "energyLevel": "LOW"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "PASS",
+            "measurement": {
+              "volatilityLevel": 0.137,
+              "efficiency": 0.194,
+              "energyDirection": "BALANCED"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.406,
+              "bearMass": 0,
+              "score": 0.406
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "FAIL",
+            "measurement": {
+              "freshness": "LATE",
+              "distanceVol": 3.707,
+              "decelerating": false,
+              "completedCycles": 90
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "PASS",
+            "measurement": {
+              "expansion": "DEVELOPED",
+              "distanceVol": 3.707
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.119,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": []
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "PASS",
+            "measurement": {
+              "agreement": "LATE",
+              "reasons": [
+                "first tradeable opportunity has passed"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T11:45:00.000Z"
+      },
+      {
+        "pair": "CAD_JPY",
+        "decision": "NO_TRADE_CHAOTIC",
+        "marketState": "CHAOTIC",
+        "agreement": "NO_AGREEMENT",
+        "direction": "BULLISH",
+        "failingGates": [
+          "CHAOTIC",
+          "LATE",
+          "INSUFFICIENT_SPACE",
+          "NO_AGREEMENT"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 35.26,
+              "energyLevel": "BUILDING"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "FAIL",
+            "measurement": {
+              "volatilityLevel": 0.629,
+              "efficiency": 0.193,
+              "energyDirection": "CHAOTIC"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.507,
+              "bearMass": 0,
+              "score": 0.507
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "FAIL",
+            "measurement": {
+              "freshness": "LATE",
+              "distanceVol": 3.353,
+              "decelerating": false,
+              "completedCycles": 84
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "PASS",
+            "measurement": {
+              "expansion": "DEVELOPED",
+              "distanceVol": 3.353
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.303,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "FAIL",
+            "measurement": {
+              "agreement": "NO_AGREEMENT",
+              "reasons": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T11:45:00.000Z"
+      },
+      {
+        "pair": "CHF_JPY",
+        "decision": "NO_TRADE_CHAOTIC",
+        "marketState": "CHAOTIC",
+        "agreement": "NO_AGREEMENT",
+        "direction": "BULLISH",
+        "failingGates": [
+          "CHAOTIC",
+          "INSUFFICIENT_SPACE",
+          "NO_AGREEMENT"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 49.3,
+              "energyLevel": "ACTIVE"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "FAIL",
+            "measurement": {
+              "volatilityLevel": 0.989,
+              "efficiency": 0.092,
+              "energyDirection": "CHAOTIC"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.39,
+              "bearMass": 0,
+              "score": 0.39
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "PASS",
+            "measurement": {
+              "freshness": "PREPARING",
+              "distanceVol": 1.221,
+              "decelerating": false,
+              "completedCycles": 86
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "PASS",
+            "measurement": {
+              "expansion": "ATTEMPTING",
+              "distanceVol": 1.221
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.067,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "FAIL",
+            "measurement": {
+              "agreement": "NO_AGREEMENT",
+              "reasons": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T11:45:00.000Z"
+      },
+      {
+        "pair": "EUR_AUD",
+        "decision": "NO_TRADE_CHAOTIC",
+        "marketState": "CHAOTIC",
+        "agreement": "NO_AGREEMENT",
+        "direction": "BULLISH",
+        "failingGates": [
+          "CHAOTIC",
+          "LATE",
+          "OVEREXTENDED",
+          "INSUFFICIENT_SPACE",
+          "NO_AGREEMENT"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 44.49,
+              "energyLevel": "BUILDING"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "FAIL",
+            "measurement": {
+              "volatilityLevel": 0.456,
+              "efficiency": 0.26,
+              "energyDirection": "CHAOTIC"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.576,
+              "bearMass": 0,
+              "score": 0.576
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "FAIL",
+            "measurement": {
+              "freshness": "EXHAUSTED",
+              "distanceVol": 5.537,
+              "decelerating": false,
+              "completedCycles": 83
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "FAIL",
+            "measurement": {
+              "expansion": "OVEREXTENDED",
+              "distanceVol": 5.537
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.747,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "FAIL",
+            "measurement": {
+              "agreement": "NO_AGREEMENT",
+              "reasons": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T11:45:00.000Z"
+      },
+      {
+        "pair": "EUR_CAD",
+        "decision": "NO_TRADE_INSUFFICIENT_SPACE",
+        "marketState": "BEARISH_PULLBACK",
+        "agreement": "NO_AGREEMENT",
+        "direction": "BULLISH",
+        "failingGates": [
+          "INSUFFICIENT_SPACE",
+          "NO_AGREEMENT"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 45.24,
+              "energyLevel": "ACTIVE"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "PASS",
+            "measurement": {
+              "volatilityLevel": 0.291,
+              "efficiency": 0.16,
+              "energyDirection": "BALANCED"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.127,
+              "bearMass": 0.253,
+              "score": -0.126
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "PASS",
+            "measurement": {
+              "freshness": "TRADEABLE",
+              "distanceVol": 1.254,
+              "decelerating": false,
+              "completedCycles": 87
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "PASS",
+            "measurement": {
+              "expansion": "EARLY",
+              "distanceVol": -1.254
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.047,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": []
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "FAIL",
+            "measurement": {
+              "agreement": "NO_AGREEMENT",
+              "reasons": [
+                "insufficient room to the next obstacle"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T11:45:00.000Z"
+      },
+      {
+        "pair": "EUR_CHF",
+        "decision": "NO_TRADE_LATE",
+        "marketState": "BEARISH_PULLBACK",
+        "agreement": "LATE",
+        "direction": "BULLISH",
+        "failingGates": [
+          "LATE",
+          "INSUFFICIENT_SPACE"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 31.25,
+              "energyLevel": "BUILDING"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "PASS",
+            "measurement": {
+              "volatilityLevel": 0.197,
+              "efficiency": 0.151,
+              "energyDirection": "BALANCED"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.435,
+              "bearMass": 0.067,
+              "score": 0.368
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "FAIL",
+            "measurement": {
+              "freshness": "LATE",
+              "distanceVol": 3.769,
+              "decelerating": true,
+              "completedCycles": 86
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "PASS",
+            "measurement": {
+              "expansion": "DEVELOPED",
+              "distanceVol": 3.769
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.439,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": []
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "PASS",
+            "measurement": {
+              "agreement": "LATE",
+              "reasons": [
+                "first tradeable opportunity has passed"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T11:45:00.000Z"
+      },
+      {
+        "pair": "EUR_GBP",
+        "decision": "NO_TRADE_INSUFFICIENT_SPACE",
+        "marketState": "COMPRESSION",
+        "agreement": "NO_AGREEMENT",
+        "direction": "BULLISH",
+        "failingGates": [
+          "INSUFFICIENT_SPACE",
+          "NO_AGREEMENT"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 34.15,
+              "energyLevel": "BUILDING"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "PASS",
+            "measurement": {
+              "volatilityLevel": 0.09,
+              "efficiency": 0.001,
+              "energyDirection": "BALANCED"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.205,
+              "bearMass": 0.073,
+              "score": 0.132
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "PASS",
+            "measurement": {
+              "freshness": "PREPARING",
+              "distanceVol": 0.196,
+              "decelerating": true,
+              "completedCycles": 78
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "PASS",
+            "measurement": {
+              "expansion": "NONE",
+              "distanceVol": 0.196
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.1,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": []
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "FAIL",
+            "measurement": {
+              "agreement": "NO_AGREEMENT",
+              "reasons": [
+                "insufficient room to the next obstacle"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T11:45:00.000Z"
+      },
+      {
+        "pair": "EUR_JPY",
+        "decision": "NO_TRADE_CHAOTIC",
+        "marketState": "CHAOTIC",
+        "agreement": "NO_AGREEMENT",
+        "direction": "BULLISH",
+        "failingGates": [
+          "CHAOTIC",
+          "LATE",
+          "INSUFFICIENT_SPACE",
+          "NO_AGREEMENT"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 54.31,
+              "energyLevel": "ACTIVE"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "FAIL",
+            "measurement": {
+              "volatilityLevel": 0.972,
+              "efficiency": 0.157,
+              "energyDirection": "CHAOTIC"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.458,
+              "bearMass": 0.067,
+              "score": 0.391
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "FAIL",
+            "measurement": {
+              "freshness": "LATE",
+              "distanceVol": 3.113,
+              "decelerating": false,
+              "completedCycles": 80
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "PASS",
+            "measurement": {
+              "expansion": "DEVELOPED",
+              "distanceVol": 3.113
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.214,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "FAIL",
+            "measurement": {
+              "agreement": "NO_AGREEMENT",
+              "reasons": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T11:45:00.000Z"
+      },
+      {
+        "pair": "EUR_NZD",
+        "decision": "NO_TRADE_CHAOTIC",
+        "marketState": "CHAOTIC",
+        "agreement": "NO_AGREEMENT",
+        "direction": "BULLISH",
+        "failingGates": [
+          "CHAOTIC",
+          "LATE",
+          "INSUFFICIENT_SPACE",
+          "NO_AGREEMENT"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 52.87,
+              "energyLevel": "ACTIVE"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "FAIL",
+            "measurement": {
+              "volatilityLevel": 0.783,
+              "efficiency": 0.124,
+              "energyDirection": "CHAOTIC"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.494,
+              "bearMass": 0,
+              "score": 0.494
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "FAIL",
+            "measurement": {
+              "freshness": "LATE",
+              "distanceVol": 3.275,
+              "decelerating": false,
+              "completedCycles": 89
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "PASS",
+            "measurement": {
+              "expansion": "DEVELOPED",
+              "distanceVol": 3.275
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.01,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "FAIL",
+            "measurement": {
+              "agreement": "NO_AGREEMENT",
+              "reasons": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T11:45:00.000Z"
+      },
+      {
+        "pair": "EUR_USD",
+        "decision": "NO_TRADE_LATE",
+        "marketState": "BEARISH_EXHAUSTION",
+        "agreement": "LATE",
+        "direction": "BULLISH",
+        "failingGates": [
+          "LATE",
+          "OVEREXTENDED",
+          "INSUFFICIENT_SPACE"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 46.55,
+              "energyLevel": "ACTIVE"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "PASS",
+            "measurement": {
+              "volatilityLevel": 0.273,
+              "efficiency": 0.2,
+              "energyDirection": "BALANCED"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.135,
+              "bearMass": 0.141,
+              "score": -0.006
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "FAIL",
+            "measurement": {
+              "freshness": "EXHAUSTED",
+              "distanceVol": 4.092,
+              "decelerating": false,
+              "completedCycles": 88
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "FAIL",
+            "measurement": {
+              "expansion": "OVEREXTENDED",
+              "distanceVol": -4.092
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.025,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": []
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "PASS",
+            "measurement": {
+              "agreement": "LATE",
+              "reasons": [
+                "first tradeable opportunity has passed"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T11:45:00.000Z"
+      },
+      {
+        "pair": "GBP_AUD",
+        "decision": "NO_TRADE_CHAOTIC",
+        "marketState": "CHAOTIC",
+        "agreement": "NO_AGREEMENT",
+        "direction": "BULLISH",
+        "failingGates": [
+          "CHAOTIC",
+          "LATE",
+          "OVEREXTENDED",
+          "NO_AGREEMENT"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 50.03,
+              "energyLevel": "ACTIVE"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "FAIL",
+            "measurement": {
+              "volatilityLevel": 0.579,
+              "efficiency": 0.228,
+              "energyDirection": "CHAOTIC"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.566,
+              "bearMass": 0,
+              "score": 0.566
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "FAIL",
+            "measurement": {
+              "freshness": "EXHAUSTED",
+              "distanceVol": 5.199,
+              "decelerating": false,
+              "completedCycles": 81
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "FAIL",
+            "measurement": {
+              "expansion": "OVEREXTENDED",
+              "distanceVol": 5.199
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "PASS",
+            "measurement": {
+              "availableSpaceVol": 6,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "FAIL",
+            "measurement": {
+              "agreement": "NO_AGREEMENT",
+              "reasons": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T11:45:00.000Z"
+      },
+      {
+        "pair": "GBP_CAD",
+        "decision": "NO_TRADE_INSUFFICIENT_SPACE",
+        "marketState": "BEARISH_MOVEMENT",
+        "agreement": "NO_AGREEMENT",
+        "direction": "BEARISH",
+        "failingGates": [
+          "INSUFFICIENT_SPACE",
+          "NO_AGREEMENT"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 29.91,
+              "energyLevel": "LOW"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "PASS",
+            "measurement": {
+              "volatilityLevel": 0.397,
+              "efficiency": 0.166,
+              "energyDirection": "BALANCED"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0,
+              "bearMass": 0.403,
+              "score": -0.403
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "PASS",
+            "measurement": {
+              "freshness": "PREPARING",
+              "distanceVol": 1.24,
+              "decelerating": false,
+              "completedCycles": 88
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "PASS",
+            "measurement": {
+              "expansion": "ATTEMPTING",
+              "distanceVol": -1.24
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.056,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": []
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "FAIL",
+            "measurement": {
+              "agreement": "NO_AGREEMENT",
+              "reasons": [
+                "insufficient room to the next obstacle"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T11:45:00.000Z"
+      },
+      {
+        "pair": "GBP_CHF",
+        "decision": "NO_TRADE_LATE",
+        "marketState": "BEARISH_PULLBACK",
+        "agreement": "LATE",
+        "direction": "BULLISH",
+        "failingGates": [
+          "LATE",
+          "INSUFFICIENT_SPACE"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 32.73,
+              "energyLevel": "BUILDING"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "PASS",
+            "measurement": {
+              "volatilityLevel": 0.282,
+              "efficiency": 0.126,
+              "energyDirection": "BALANCED"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.492,
+              "bearMass": 0,
+              "score": 0.492
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "FAIL",
+            "measurement": {
+              "freshness": "LATE",
+              "distanceVol": 3.251,
+              "decelerating": false,
+              "completedCycles": 81
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "PASS",
+            "measurement": {
+              "expansion": "DEVELOPED",
+              "distanceVol": 3.251
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.097,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": []
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "PASS",
+            "measurement": {
+              "agreement": "LATE",
+              "reasons": [
+                "first tradeable opportunity has passed"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T11:45:00.000Z"
+      },
+      {
+        "pair": "GBP_JPY",
+        "decision": "NO_TRADE_CHAOTIC",
+        "marketState": "CHAOTIC",
+        "agreement": "NO_AGREEMENT",
+        "direction": "BULLISH",
+        "failingGates": [
+          "CHAOTIC",
+          "INSUFFICIENT_SPACE",
+          "NO_AGREEMENT"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 54.78,
+              "energyLevel": "ACTIVE"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "FAIL",
+            "measurement": {
+              "volatilityLevel": 1,
+              "efficiency": 0.149,
+              "energyDirection": "CHAOTIC"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.515,
+              "bearMass": 0,
+              "score": 0.515
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "PASS",
+            "measurement": {
+              "freshness": "DEVELOPING",
+              "distanceVol": 2.946,
+              "decelerating": false,
+              "completedCycles": 84
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "PASS",
+            "measurement": {
+              "expansion": "CONFIRMED",
+              "distanceVol": 2.946
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.071,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "FAIL",
+            "measurement": {
+              "agreement": "NO_AGREEMENT",
+              "reasons": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T11:45:00.000Z"
+      },
+      {
+        "pair": "GBP_NZD",
+        "decision": "NO_TRADE_CHAOTIC",
+        "marketState": "CHAOTIC",
+        "agreement": "NO_AGREEMENT",
+        "direction": "BULLISH",
+        "failingGates": [
+          "CHAOTIC",
+          "LATE",
+          "INSUFFICIENT_SPACE",
+          "NO_AGREEMENT"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 62.88,
+              "energyLevel": "STRONG"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "FAIL",
+            "measurement": {
+              "volatilityLevel": 0.934,
+              "efficiency": 0.124,
+              "energyDirection": "CHAOTIC"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.484,
+              "bearMass": 0,
+              "score": 0.484
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "FAIL",
+            "measurement": {
+              "freshness": "LATE",
+              "distanceVol": 3.168,
+              "decelerating": false,
+              "completedCycles": 87
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "PASS",
+            "measurement": {
+              "expansion": "DEVELOPED",
+              "distanceVol": 3.168
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.16,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "FAIL",
+            "measurement": {
+              "agreement": "NO_AGREEMENT",
+              "reasons": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T11:45:00.000Z"
+      },
+      {
+        "pair": "GBP_USD",
+        "decision": "NO_TRADE_LATE",
+        "marketState": "BEARISH_EXHAUSTION",
+        "agreement": "LATE",
+        "direction": "BULLISH",
+        "failingGates": [
+          "LATE",
+          "OVEREXTENDED",
+          "INSUFFICIENT_SPACE"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 40.4,
+              "energyLevel": "BUILDING"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "PASS",
+            "measurement": {
+              "volatilityLevel": 0.379,
+              "efficiency": 0.218,
+              "energyDirection": "BALANCED"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.119,
+              "bearMass": 0.179,
+              "score": -0.06
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "FAIL",
+            "measurement": {
+              "freshness": "EXHAUSTED",
+              "distanceVol": 3.828,
+              "decelerating": false,
+              "completedCycles": 94
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "FAIL",
+            "measurement": {
+              "expansion": "OVEREXTENDED",
+              "distanceVol": -3.828
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.479,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": []
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "PASS",
+            "measurement": {
+              "agreement": "LATE",
+              "reasons": [
+                "first tradeable opportunity has passed"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T11:45:00.000Z"
+      },
+      {
+        "pair": "NZD_CAD",
+        "decision": "NO_TRADE_LATE",
+        "marketState": "BEARISH_PULLBACK",
+        "agreement": "LATE",
+        "direction": "BULLISH",
+        "failingGates": [
+          "LATE",
+          "INSUFFICIENT_SPACE"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 40.27,
+              "energyLevel": "BUILDING"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "PASS",
+            "measurement": {
+              "volatilityLevel": 0.287,
+              "efficiency": 0.192,
+              "energyDirection": "BALANCED"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.111,
+              "bearMass": 0.365,
+              "score": -0.254
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "FAIL",
+            "measurement": {
+              "freshness": "LATE",
+              "distanceVol": 3.774,
+              "decelerating": false,
+              "completedCycles": 85
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "PASS",
+            "measurement": {
+              "expansion": "DEVELOPED",
+              "distanceVol": -3.774
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.24,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": []
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "PASS",
+            "measurement": {
+              "agreement": "LATE",
+              "reasons": [
+                "first tradeable opportunity has passed"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T11:45:00.000Z"
+      },
+      {
+        "pair": "NZD_CHF",
+        "decision": "NO_TRADE_INSUFFICIENT_SPACE",
+        "marketState": "BEARISH_MOVEMENT",
+        "agreement": "NO_AGREEMENT",
+        "direction": "BEARISH",
+        "failingGates": [
+          "INSUFFICIENT_SPACE",
+          "NO_AGREEMENT"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 23.66,
+              "energyLevel": "LOW"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "PASS",
+            "measurement": {
+              "volatilityLevel": 0.125,
+              "efficiency": 0.016,
+              "energyDirection": "BALANCED"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0,
+              "bearMass": 0.204,
+              "score": -0.204
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "PASS",
+            "measurement": {
+              "freshness": "PREPARING",
+              "distanceVol": 0.614,
+              "decelerating": false,
+              "completedCycles": 81
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "PASS",
+            "measurement": {
+              "expansion": "NONE",
+              "distanceVol": -0.614
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.042,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": []
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "FAIL",
+            "measurement": {
+              "agreement": "NO_AGREEMENT",
+              "reasons": [
+                "insufficient room to the next obstacle"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T11:45:00.000Z"
+      },
+      {
+        "pair": "NZD_JPY",
+        "decision": "NO_TRADE_CHAOTIC",
+        "marketState": "CHAOTIC",
+        "agreement": "NO_AGREEMENT",
+        "direction": "BEARISH",
+        "failingGates": [
+          "CHAOTIC",
+          "INSUFFICIENT_SPACE",
+          "NO_AGREEMENT"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 40.17,
+              "energyLevel": "BUILDING"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "FAIL",
+            "measurement": {
+              "volatilityLevel": 0.517,
+              "efficiency": 0.058,
+              "energyDirection": "CHAOTIC"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.083,
+              "bearMass": 0.186,
+              "score": -0.103
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "PASS",
+            "measurement": {
+              "freshness": "PREPARING",
+              "distanceVol": 0.601,
+              "decelerating": true,
+              "completedCycles": 83
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "PASS",
+            "measurement": {
+              "expansion": "NONE",
+              "distanceVol": 0.601
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.149,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "FAIL",
+            "measurement": {
+              "agreement": "NO_AGREEMENT",
+              "reasons": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T11:45:00.000Z"
+      },
+      {
+        "pair": "NZD_USD",
+        "decision": "NO_TRADE_LATE",
+        "marketState": "BEARISH_EXHAUSTION",
+        "agreement": "LATE",
+        "direction": "BEARISH",
+        "failingGates": [
+          "LATE",
+          "OVEREXTENDED",
+          "INSUFFICIENT_SPACE"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 42.43,
+              "energyLevel": "BUILDING"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "PASS",
+            "measurement": {
+              "volatilityLevel": 0.257,
+              "efficiency": 0.199,
+              "energyDirection": "BALANCED"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0,
+              "bearMass": 0.467,
+              "score": -0.467
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "FAIL",
+            "measurement": {
+              "freshness": "EXHAUSTED",
+              "distanceVol": 4.595,
+              "decelerating": false,
+              "completedCycles": 85
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "FAIL",
+            "measurement": {
+              "expansion": "OVEREXTENDED",
+              "distanceVol": -4.595
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.052,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": []
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "PASS",
+            "measurement": {
+              "agreement": "LATE",
+              "reasons": [
+                "first tradeable opportunity has passed"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T11:45:00.000Z"
+      },
+      {
+        "pair": "USD_CAD",
+        "decision": "NO_TRADE_LATE",
+        "marketState": "BULLISH_PULLBACK",
+        "agreement": "LATE",
+        "direction": "BEARISH",
+        "failingGates": [
+          "LATE",
+          "INSUFFICIENT_SPACE"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 30.45,
+              "energyLevel": "BUILDING"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "PASS",
+            "measurement": {
+              "volatilityLevel": 0.292,
+              "efficiency": 0.139,
+              "energyDirection": "BALANCED"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.16,
+              "bearMass": 0.191,
+              "score": -0.032
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "FAIL",
+            "measurement": {
+              "freshness": "LATE",
+              "distanceVol": 3.703,
+              "decelerating": false,
+              "completedCycles": 94
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "PASS",
+            "measurement": {
+              "expansion": "DEVELOPED",
+              "distanceVol": 3.703
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.473,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": []
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "PASS",
+            "measurement": {
+              "agreement": "LATE",
+              "reasons": [
+                "first tradeable opportunity has passed"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T11:45:00.000Z"
+      },
+      {
+        "pair": "USD_CHF",
+        "decision": "NO_TRADE_LATE",
+        "marketState": "BULLISH_EXHAUSTION",
+        "agreement": "LATE",
+        "direction": "BULLISH",
+        "failingGates": [
+          "LATE",
+          "OVEREXTENDED",
+          "INSUFFICIENT_SPACE"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 42.15,
+              "energyLevel": "BUILDING"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "PASS",
+            "measurement": {
+              "volatilityLevel": 0.319,
+              "efficiency": 0.202,
+              "energyDirection": "BALANCED"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.441,
+              "bearMass": 0,
+              "score": 0.441
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "FAIL",
+            "measurement": {
+              "freshness": "EXHAUSTED",
+              "distanceVol": 4.831,
+              "decelerating": false,
+              "completedCycles": 99
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "FAIL",
+            "measurement": {
+              "expansion": "OVEREXTENDED",
+              "distanceVol": 4.831
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.351,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": []
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "PASS",
+            "measurement": {
+              "agreement": "LATE",
+              "reasons": [
+                "first tradeable opportunity has passed"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T11:45:00.000Z"
+      },
+      {
+        "pair": "USD_JPY",
+        "decision": "NO_TRADE_CHAOTIC",
+        "marketState": "CHAOTIC",
+        "agreement": "NO_AGREEMENT",
+        "direction": "BULLISH",
+        "failingGates": [
+          "CHAOTIC",
+          "LATE",
+          "OVEREXTENDED",
+          "INSUFFICIENT_SPACE",
+          "NO_AGREEMENT"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 59.89,
+              "energyLevel": "ACTIVE"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "FAIL",
+            "measurement": {
+              "volatilityLevel": 1,
+              "efficiency": 0.21,
+              "energyDirection": "CHAOTIC"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.464,
+              "bearMass": 0,
+              "score": 0.464
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "FAIL",
+            "measurement": {
+              "freshness": "EXHAUSTED",
+              "distanceVol": 4.262,
+              "decelerating": false,
+              "completedCycles": 78
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "FAIL",
+            "measurement": {
+              "expansion": "OVEREXTENDED",
+              "distanceVol": 4.262
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.136,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "FAIL",
+            "measurement": {
+              "agreement": "NO_AGREEMENT",
+              "reasons": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T11:45:00.000Z"
+      }
+    ]
+  },
+  "legacy": {
+    "requestedIso": "2026-09-10T12:00:00.000Z",
+    "frameOpenIso": "2026-09-10T12:00:00.000Z",
+    "pairs": [
+      {
+        "pair": "AUD_CAD",
+        "decision": "NO_TRADE_LATE",
+        "marketState": "BEARISH_EXHAUSTION",
+        "agreement": "LATE",
+        "direction": "BULLISH",
+        "failingGates": [
+          "LATE",
+          "OVEREXTENDED",
+          "INSUFFICIENT_SPACE"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 43.22,
+              "energyLevel": "BUILDING"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "PASS",
+            "measurement": {
+              "volatilityLevel": 0.27,
+              "efficiency": 0.403,
+              "energyDirection": "BEARISH"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.175,
+              "bearMass": 0.372,
+              "score": -0.197
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "FAIL",
+            "measurement": {
+              "freshness": "EXHAUSTED",
+              "distanceVol": 8.135,
+              "decelerating": false,
+              "completedCycles": 87
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "FAIL",
+            "measurement": {
+              "expansion": "OVEREXTENDED",
+              "distanceVol": -8.135
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.352,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": []
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "PASS",
+            "measurement": {
+              "agreement": "LATE",
+              "reasons": [
+                "first tradeable opportunity has passed"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T12:00:00.000Z"
+      },
+      {
+        "pair": "AUD_CHF",
+        "decision": "NO_TRADE_INSUFFICIENT_SPACE",
+        "marketState": "BEARISH_PULLBACK",
+        "agreement": "NO_AGREEMENT",
+        "direction": "BULLISH",
+        "failingGates": [
+          "INSUFFICIENT_SPACE",
+          "NO_AGREEMENT"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 33.98,
+              "energyLevel": "BUILDING"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "PASS",
+            "measurement": {
+              "volatilityLevel": 0.177,
+              "efficiency": 0.105,
+              "energyDirection": "BALANCED"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.175,
+              "bearMass": 0.244,
+              "score": -0.07
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "PASS",
+            "measurement": {
+              "freshness": "TRADEABLE",
+              "distanceVol": 2.144,
+              "decelerating": false,
+              "completedCycles": 79
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "PASS",
+            "measurement": {
+              "expansion": "EARLY",
+              "distanceVol": -2.144
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.034,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": []
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "FAIL",
+            "measurement": {
+              "agreement": "NO_AGREEMENT",
+              "reasons": [
+                "insufficient room to the next obstacle"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T12:00:00.000Z"
+      },
+      {
+        "pair": "AUD_JPY",
+        "decision": "NO_TRADE_CHAOTIC",
+        "marketState": "CHAOTIC",
+        "agreement": "NO_AGREEMENT",
+        "direction": "BEARISH",
+        "failingGates": [
+          "CHAOTIC",
+          "INSUFFICIENT_SPACE",
+          "NO_AGREEMENT"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 50.18,
+              "energyLevel": "ACTIVE"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "FAIL",
+            "measurement": {
+              "volatilityLevel": 0.67,
+              "efficiency": 0.036,
+              "energyDirection": "CHAOTIC"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.078,
+              "bearMass": 0.185,
+              "score": -0.107
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "PASS",
+            "measurement": {
+              "freshness": "PREPARING",
+              "distanceVol": 0.224,
+              "decelerating": false,
+              "completedCycles": 77
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "PASS",
+            "measurement": {
+              "expansion": "NONE",
+              "distanceVol": 0.224
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.119,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "FAIL",
+            "measurement": {
+              "agreement": "NO_AGREEMENT",
+              "reasons": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T12:00:00.000Z"
+      },
+      {
+        "pair": "AUD_NZD",
+        "decision": "NO_TRADE_INSUFFICIENT_SPACE",
+        "marketState": "BEARISH_MOVEMENT",
+        "agreement": "NO_AGREEMENT",
+        "direction": "BEARISH",
+        "failingGates": [
+          "INSUFFICIENT_SPACE",
+          "NO_AGREEMENT"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 31.37,
+              "energyLevel": "BUILDING"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "PASS",
+            "measurement": {
+              "volatilityLevel": 0.388,
+              "efficiency": 0.07,
+              "energyDirection": "BALANCED"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0,
+              "bearMass": 0.343,
+              "score": -0.343
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "PASS",
+            "measurement": {
+              "freshness": "PREPARING",
+              "distanceVol": 1.105,
+              "decelerating": true,
+              "completedCycles": 78
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "PASS",
+            "measurement": {
+              "expansion": "ATTEMPTING",
+              "distanceVol": -1.105
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.076,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": []
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "FAIL",
+            "measurement": {
+              "agreement": "NO_AGREEMENT",
+              "reasons": [
+                "insufficient room to the next obstacle"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T12:00:00.000Z"
+      },
+      {
+        "pair": "AUD_USD",
+        "decision": "NO_TRADE_LATE",
+        "marketState": "BEARISH_EXHAUSTION",
+        "agreement": "LATE",
+        "direction": "BULLISH",
+        "failingGates": [
+          "LATE",
+          "OVEREXTENDED",
+          "INSUFFICIENT_SPACE"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 44.17,
+              "energyLevel": "BUILDING"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "PASS",
+            "measurement": {
+              "volatilityLevel": 0.242,
+              "efficiency": 0.359,
+              "energyDirection": "BEARISH"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.111,
+              "bearMass": 0.411,
+              "score": -0.3
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "FAIL",
+            "measurement": {
+              "freshness": "EXHAUSTED",
+              "distanceVol": 8.144,
+              "decelerating": false,
+              "completedCycles": 90
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "FAIL",
+            "measurement": {
+              "expansion": "OVEREXTENDED",
+              "distanceVol": -8.144
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.489,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": []
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "PASS",
+            "measurement": {
+              "agreement": "LATE",
+              "reasons": [
+                "first tradeable opportunity has passed"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T12:00:00.000Z"
+      },
+      {
+        "pair": "CAD_CHF",
+        "decision": "NO_TRADE_LATE",
+        "marketState": "BULLISH_EXHAUSTION",
+        "agreement": "LATE",
+        "direction": "BEARISH",
+        "failingGates": [
+          "LATE",
+          "OVEREXTENDED",
+          "INSUFFICIENT_SPACE"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 33.6,
+              "energyLevel": "BUILDING"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "PASS",
+            "measurement": {
+              "volatilityLevel": 0.143,
+              "efficiency": 0.25,
+              "energyDirection": "BALANCED"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.272,
+              "bearMass": 0.111,
+              "score": 0.16
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "FAIL",
+            "measurement": {
+              "freshness": "EXHAUSTED",
+              "distanceVol": 4.945,
+              "decelerating": false,
+              "completedCycles": 91
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "FAIL",
+            "measurement": {
+              "expansion": "OVEREXTENDED",
+              "distanceVol": 4.945
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.039,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": []
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "PASS",
+            "measurement": {
+              "agreement": "LATE",
+              "reasons": [
+                "first tradeable opportunity has passed"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T12:00:00.000Z"
+      },
+      {
+        "pair": "CAD_JPY",
+        "decision": "NO_TRADE_CHAOTIC",
+        "marketState": "CHAOTIC",
+        "agreement": "NO_AGREEMENT",
+        "direction": "BEARISH",
+        "failingGates": [
+          "CHAOTIC",
+          "LATE",
+          "OVEREXTENDED",
+          "INSUFFICIENT_SPACE",
+          "NO_AGREEMENT"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 47.77,
+              "energyLevel": "ACTIVE"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "FAIL",
+            "measurement": {
+              "volatilityLevel": 0.648,
+              "efficiency": 0.252,
+              "energyDirection": "CHAOTIC"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.287,
+              "bearMass": 0.175,
+              "score": 0.112
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "FAIL",
+            "measurement": {
+              "freshness": "EXHAUSTED",
+              "distanceVol": 4.68,
+              "decelerating": false,
+              "completedCycles": 73
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "FAIL",
+            "measurement": {
+              "expansion": "OVEREXTENDED",
+              "distanceVol": 4.68
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.148,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "FAIL",
+            "measurement": {
+              "agreement": "NO_AGREEMENT",
+              "reasons": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T12:00:00.000Z"
+      },
+      {
+        "pair": "CHF_JPY",
+        "decision": "NO_TRADE_CHAOTIC",
+        "marketState": "CHAOTIC",
+        "agreement": "NO_AGREEMENT",
+        "direction": "BULLISH",
+        "failingGates": [
+          "CHAOTIC",
+          "INSUFFICIENT_SPACE",
+          "NO_AGREEMENT"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 55.96,
+              "energyLevel": "ACTIVE"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "FAIL",
+            "measurement": {
+              "volatilityLevel": 1,
+              "efficiency": 0.133,
+              "energyDirection": "CHAOTIC"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.382,
+              "bearMass": 0.063,
+              "score": 0.318
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "PASS",
+            "measurement": {
+              "freshness": "TRADEABLE",
+              "distanceVol": 1.982,
+              "decelerating": false,
+              "completedCycles": 88
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "PASS",
+            "measurement": {
+              "expansion": "EARLY",
+              "distanceVol": 1.982
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.191,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "FAIL",
+            "measurement": {
+              "agreement": "NO_AGREEMENT",
+              "reasons": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T12:00:00.000Z"
+      },
+      {
+        "pair": "EUR_AUD",
+        "decision": "NO_TRADE_CHAOTIC",
+        "marketState": "CHAOTIC",
+        "agreement": "NO_AGREEMENT",
+        "direction": "BEARISH",
+        "failingGates": [
+          "CHAOTIC",
+          "LATE",
+          "OVEREXTENDED",
+          "INSUFFICIENT_SPACE",
+          "NO_AGREEMENT"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 51.18,
+              "energyLevel": "ACTIVE"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "FAIL",
+            "measurement": {
+              "volatilityLevel": 0.478,
+              "efficiency": 0.325,
+              "energyDirection": "CHAOTIC"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.287,
+              "bearMass": 0.19,
+              "score": 0.096
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "FAIL",
+            "measurement": {
+              "freshness": "EXHAUSTED",
+              "distanceVol": 6.747,
+              "decelerating": false,
+              "completedCycles": 99
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "FAIL",
+            "measurement": {
+              "expansion": "OVEREXTENDED",
+              "distanceVol": 6.747
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.495,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "FAIL",
+            "measurement": {
+              "agreement": "NO_AGREEMENT",
+              "reasons": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T12:00:00.000Z"
+      },
+      {
+        "pair": "EUR_CAD",
+        "decision": "NO_TRADE_INSUFFICIENT_SPACE",
+        "marketState": "BEARISH_EXPANSION",
+        "agreement": "NO_AGREEMENT",
+        "direction": "BEARISH",
+        "failingGates": [
+          "INSUFFICIENT_SPACE",
+          "NO_AGREEMENT"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 44.19,
+              "energyLevel": "BUILDING"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "PASS",
+            "measurement": {
+              "volatilityLevel": 0.305,
+              "efficiency": 0.211,
+              "energyDirection": "BALANCED"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0,
+              "bearMass": 0.268,
+              "score": -0.268
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "PASS",
+            "measurement": {
+              "freshness": "TRADEABLE",
+              "distanceVol": 2.26,
+              "decelerating": false,
+              "completedCycles": 84
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "PASS",
+            "measurement": {
+              "expansion": "CONFIRMED",
+              "distanceVol": -2.26
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.619,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": []
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "FAIL",
+            "measurement": {
+              "agreement": "NO_AGREEMENT",
+              "reasons": [
+                "insufficient room to the next obstacle"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T12:00:00.000Z"
+      },
+      {
+        "pair": "EUR_CHF",
+        "decision": "NO_TRADE_LATE",
+        "marketState": "BULLISH_EXHAUSTION",
+        "agreement": "LATE",
+        "direction": "BEARISH",
+        "failingGates": [
+          "LATE",
+          "OVEREXTENDED",
+          "INSUFFICIENT_SPACE"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 32.46,
+              "energyLevel": "BUILDING"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "PASS",
+            "measurement": {
+              "volatilityLevel": 0.202,
+              "efficiency": 0.197,
+              "energyDirection": "BALANCED"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.309,
+              "bearMass": 0.127,
+              "score": 0.182
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "FAIL",
+            "measurement": {
+              "freshness": "EXHAUSTED",
+              "distanceVol": 4.601,
+              "decelerating": false,
+              "completedCycles": 91
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "FAIL",
+            "measurement": {
+              "expansion": "OVEREXTENDED",
+              "distanceVol": 4.601
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.185,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": []
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "PASS",
+            "measurement": {
+              "agreement": "LATE",
+              "reasons": [
+                "first tradeable opportunity has passed"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T12:00:00.000Z"
+      },
+      {
+        "pair": "EUR_GBP",
+        "decision": "NO_TRADE_INSUFFICIENT_SPACE",
+        "marketState": "BULLISH_EXPANSION",
+        "agreement": "NO_AGREEMENT",
+        "direction": "BEARISH",
+        "failingGates": [
+          "INSUFFICIENT_SPACE",
+          "NO_AGREEMENT"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 36.25,
+              "energyLevel": "BUILDING"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "PASS",
+            "measurement": {
+              "volatilityLevel": 0.099,
+              "efficiency": 0.099,
+              "energyDirection": "BALANCED"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.371,
+              "bearMass": 0.198,
+              "score": 0.172
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "PASS",
+            "measurement": {
+              "freshness": "TRADEABLE",
+              "distanceVol": 1.975,
+              "decelerating": false,
+              "completedCycles": 79
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "PASS",
+            "measurement": {
+              "expansion": "EARLY",
+              "distanceVol": 1.975
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.048,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": []
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "FAIL",
+            "measurement": {
+              "agreement": "NO_AGREEMENT",
+              "reasons": [
+                "insufficient room to the next obstacle"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T12:00:00.000Z"
+      },
+      {
+        "pair": "EUR_JPY",
+        "decision": "NO_TRADE_CHAOTIC",
+        "marketState": "CHAOTIC",
+        "agreement": "NO_AGREEMENT",
+        "direction": "BULLISH",
+        "failingGates": [
+          "CHAOTIC",
+          "LATE",
+          "OVEREXTENDED",
+          "INSUFFICIENT_SPACE",
+          "NO_AGREEMENT"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 62.37,
+              "energyLevel": "STRONG"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "FAIL",
+            "measurement": {
+              "volatilityLevel": 0.985,
+              "efficiency": 0.206,
+              "energyDirection": "CHAOTIC"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.435,
+              "bearMass": 0.079,
+              "score": 0.356
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "FAIL",
+            "measurement": {
+              "freshness": "EXHAUSTED",
+              "distanceVol": 4.147,
+              "decelerating": false,
+              "completedCycles": 70
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "FAIL",
+            "measurement": {
+              "expansion": "OVEREXTENDED",
+              "distanceVol": 4.147
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.54,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "FAIL",
+            "measurement": {
+              "agreement": "NO_AGREEMENT",
+              "reasons": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T12:00:00.000Z"
+      },
+      {
+        "pair": "EUR_NZD",
+        "decision": "NO_TRADE_CHAOTIC",
+        "marketState": "CHAOTIC",
+        "agreement": "NO_AGREEMENT",
+        "direction": "BEARISH",
+        "failingGates": [
+          "CHAOTIC",
+          "LATE",
+          "OVEREXTENDED",
+          "INSUFFICIENT_SPACE",
+          "NO_AGREEMENT"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 58.16,
+              "energyLevel": "ACTIVE"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "FAIL",
+            "measurement": {
+              "volatilityLevel": 0.802,
+              "efficiency": 0.183,
+              "energyDirection": "CHAOTIC"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.321,
+              "bearMass": 0.19,
+              "score": 0.13
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "FAIL",
+            "measurement": {
+              "freshness": "EXHAUSTED",
+              "distanceVol": 4.39,
+              "decelerating": false,
+              "completedCycles": 88
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "FAIL",
+            "measurement": {
+              "expansion": "OVEREXTENDED",
+              "distanceVol": 4.39
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.244,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "FAIL",
+            "measurement": {
+              "agreement": "NO_AGREEMENT",
+              "reasons": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T12:00:00.000Z"
+      },
+      {
+        "pair": "EUR_USD",
+        "decision": "NO_TRADE_LATE",
+        "marketState": "BEARISH_EXHAUSTION",
+        "agreement": "LATE",
+        "direction": "BEARISH",
+        "failingGates": [
+          "LATE",
+          "OVEREXTENDED",
+          "INSUFFICIENT_SPACE"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 39.12,
+              "energyLevel": "BUILDING"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "PASS",
+            "measurement": {
+              "volatilityLevel": 0.279,
+              "efficiency": 0.21,
+              "energyDirection": "BALANCED"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0,
+              "bearMass": 0.338,
+              "score": -0.338
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "FAIL",
+            "measurement": {
+              "freshness": "EXHAUSTED",
+              "distanceVol": 4.24,
+              "decelerating": false,
+              "completedCycles": 91
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "FAIL",
+            "measurement": {
+              "expansion": "OVEREXTENDED",
+              "distanceVol": -4.24
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.195,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": []
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "PASS",
+            "measurement": {
+              "agreement": "LATE",
+              "reasons": [
+                "first tradeable opportunity has passed"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T12:00:00.000Z"
+      },
+      {
+        "pair": "GBP_AUD",
+        "decision": "NO_TRADE_CHAOTIC",
+        "marketState": "CHAOTIC",
+        "agreement": "NO_AGREEMENT",
+        "direction": "BULLISH",
+        "failingGates": [
+          "CHAOTIC",
+          "LATE",
+          "OVEREXTENDED",
+          "NO_AGREEMENT"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 47.64,
+              "energyLevel": "ACTIVE"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "FAIL",
+            "measurement": {
+              "volatilityLevel": 0.591,
+              "efficiency": 0.241,
+              "energyDirection": "CHAOTIC"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.413,
+              "bearMass": 0,
+              "score": 0.413
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "FAIL",
+            "measurement": {
+              "freshness": "EXHAUSTED",
+              "distanceVol": 5.312,
+              "decelerating": false,
+              "completedCycles": 87
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "FAIL",
+            "measurement": {
+              "expansion": "OVEREXTENDED",
+              "distanceVol": 5.312
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "PASS",
+            "measurement": {
+              "availableSpaceVol": 6,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "FAIL",
+            "measurement": {
+              "agreement": "NO_AGREEMENT",
+              "reasons": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T12:00:00.000Z"
+      },
+      {
+        "pair": "GBP_CAD",
+        "decision": "NO_TRADE_LATE",
+        "marketState": "BEARISH_PULLBACK",
+        "agreement": "LATE",
+        "direction": "BULLISH",
+        "failingGates": [
+          "LATE",
+          "INSUFFICIENT_SPACE"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 42.41,
+              "energyLevel": "BUILDING"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "PASS",
+            "measurement": {
+              "volatilityLevel": 0.43,
+              "efficiency": 0.298,
+              "energyDirection": "BALANCED"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.182,
+              "bearMass": 0.211,
+              "score": -0.029
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "FAIL",
+            "measurement": {
+              "freshness": "LATE",
+              "distanceVol": 3.736,
+              "decelerating": false,
+              "completedCycles": 89
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "PASS",
+            "measurement": {
+              "expansion": "DEVELOPED",
+              "distanceVol": -3.736
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.209,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": []
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "PASS",
+            "measurement": {
+              "agreement": "LATE",
+              "reasons": [
+                "first tradeable opportunity has passed"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T12:00:00.000Z"
+      },
+      {
+        "pair": "GBP_CHF",
+        "decision": "NO_TRADE_INSUFFICIENT_SPACE",
+        "marketState": "BEARISH_PULLBACK",
+        "agreement": "NO_AGREEMENT",
+        "direction": "BULLISH",
+        "failingGates": [
+          "INSUFFICIENT_SPACE",
+          "NO_AGREEMENT"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 31.48,
+              "energyLevel": "BUILDING"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "PASS",
+            "measurement": {
+              "volatilityLevel": 0.288,
+              "efficiency": 0.096,
+              "energyDirection": "BALANCED"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.354,
+              "bearMass": 0.067,
+              "score": 0.287
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "PASS",
+            "measurement": {
+              "freshness": "DEVELOPING",
+              "distanceVol": 2.691,
+              "decelerating": true,
+              "completedCycles": 89
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "PASS",
+            "measurement": {
+              "expansion": "CONFIRMED",
+              "distanceVol": 2.691
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.382,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": []
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "FAIL",
+            "measurement": {
+              "agreement": "NO_AGREEMENT",
+              "reasons": [
+                "insufficient room to the next obstacle"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T12:00:00.000Z"
+      },
+      {
+        "pair": "GBP_JPY",
+        "decision": "NO_TRADE_CHAOTIC",
+        "marketState": "CHAOTIC",
+        "agreement": "NO_AGREEMENT",
+        "direction": "BEARISH",
+        "failingGates": [
+          "CHAOTIC",
+          "LATE",
+          "INSUFFICIENT_SPACE",
+          "NO_AGREEMENT"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 60.8,
+              "energyLevel": "ACTIVE"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "FAIL",
+            "measurement": {
+              "volatilityLevel": 1,
+              "efficiency": 0.17,
+              "energyDirection": "CHAOTIC"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.261,
+              "bearMass": 0.111,
+              "score": 0.15
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "FAIL",
+            "measurement": {
+              "freshness": "LATE",
+              "distanceVol": 3.318,
+              "decelerating": false,
+              "completedCycles": 75
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "PASS",
+            "measurement": {
+              "expansion": "DEVELOPED",
+              "distanceVol": 3.318
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.315,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "FAIL",
+            "measurement": {
+              "agreement": "NO_AGREEMENT",
+              "reasons": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T12:00:00.000Z"
+      },
+      {
+        "pair": "GBP_NZD",
+        "decision": "NO_TRADE_CHAOTIC",
+        "marketState": "CHAOTIC",
+        "agreement": "NO_AGREEMENT",
+        "direction": "BULLISH",
+        "failingGates": [
+          "CHAOTIC",
+          "LATE",
+          "INSUFFICIENT_SPACE",
+          "NO_AGREEMENT"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 54.09,
+              "energyLevel": "ACTIVE"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "FAIL",
+            "measurement": {
+              "volatilityLevel": 0.938,
+              "efficiency": 0.133,
+              "energyDirection": "CHAOTIC"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.336,
+              "bearMass": 0,
+              "score": 0.336
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "FAIL",
+            "measurement": {
+              "freshness": "LATE",
+              "distanceVol": 3.301,
+              "decelerating": false,
+              "completedCycles": 87
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "PASS",
+            "measurement": {
+              "expansion": "DEVELOPED",
+              "distanceVol": 3.301
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.15,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "FAIL",
+            "measurement": {
+              "agreement": "NO_AGREEMENT",
+              "reasons": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T12:00:00.000Z"
+      },
+      {
+        "pair": "GBP_USD",
+        "decision": "NO_TRADE_LATE",
+        "marketState": "BEARISH_EXHAUSTION",
+        "agreement": "LATE",
+        "direction": "BEARISH",
+        "failingGates": [
+          "LATE",
+          "OVEREXTENDED"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 47.69,
+              "energyLevel": "ACTIVE"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "PASS",
+            "measurement": {
+              "volatilityLevel": 0.396,
+              "efficiency": 0.28,
+              "energyDirection": "BALANCED"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.008,
+              "bearMass": 0.373,
+              "score": -0.365
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "FAIL",
+            "measurement": {
+              "freshness": "EXHAUSTED",
+              "distanceVol": 5.129,
+              "decelerating": false,
+              "completedCycles": 93
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "FAIL",
+            "measurement": {
+              "expansion": "OVEREXTENDED",
+              "distanceVol": -5.129
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "PASS",
+            "measurement": {
+              "availableSpaceVol": 6,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": []
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "PASS",
+            "measurement": {
+              "agreement": "LATE",
+              "reasons": [
+                "first tradeable opportunity has passed"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T12:00:00.000Z"
+      },
+      {
+        "pair": "NZD_CAD",
+        "decision": "NO_TRADE_LATE",
+        "marketState": "BEARISH_EXHAUSTION",
+        "agreement": "LATE",
+        "direction": "BEARISH",
+        "failingGates": [
+          "LATE",
+          "OVEREXTENDED",
+          "INSUFFICIENT_SPACE"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 41.83,
+              "energyLevel": "BUILDING"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "PASS",
+            "measurement": {
+              "volatilityLevel": 0.299,
+              "efficiency": 0.258,
+              "energyDirection": "BALANCED"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.063,
+              "bearMass": 0.395,
+              "score": -0.331
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "FAIL",
+            "measurement": {
+              "freshness": "EXHAUSTED",
+              "distanceVol": 5.181,
+              "decelerating": false,
+              "completedCycles": 84
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "FAIL",
+            "measurement": {
+              "expansion": "OVEREXTENDED",
+              "distanceVol": -5.181
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.093,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": []
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "PASS",
+            "measurement": {
+              "agreement": "LATE",
+              "reasons": [
+                "first tradeable opportunity has passed"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T12:00:00.000Z"
+      },
+      {
+        "pair": "NZD_CHF",
+        "decision": "NO_TRADE_INSUFFICIENT_SPACE",
+        "marketState": "BEARISH_PULLBACK",
+        "agreement": "NO_AGREEMENT",
+        "direction": "BULLISH",
+        "failingGates": [
+          "INSUFFICIENT_SPACE",
+          "NO_AGREEMENT"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 26.83,
+              "energyLevel": "LOW"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "PASS",
+            "measurement": {
+              "volatilityLevel": 0.13,
+              "efficiency": 0.048,
+              "energyDirection": "BALANCED"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.175,
+              "bearMass": 0.19,
+              "score": -0.015
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "PASS",
+            "measurement": {
+              "freshness": "PREPARING",
+              "distanceVol": 1.156,
+              "decelerating": false,
+              "completedCycles": 86
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "PASS",
+            "measurement": {
+              "expansion": "ATTEMPTING",
+              "distanceVol": -1.156
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.165,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": []
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "FAIL",
+            "measurement": {
+              "agreement": "NO_AGREEMENT",
+              "reasons": [
+                "insufficient room to the next obstacle"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T12:00:00.000Z"
+      },
+      {
+        "pair": "NZD_JPY",
+        "decision": "NO_TRADE_CHAOTIC",
+        "marketState": "CHAOTIC",
+        "agreement": "NO_AGREEMENT",
+        "direction": "BEARISH",
+        "failingGates": [
+          "CHAOTIC",
+          "INSUFFICIENT_SPACE",
+          "NO_AGREEMENT"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 42.54,
+              "energyLevel": "BUILDING"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "FAIL",
+            "measurement": {
+              "volatilityLevel": 0.525,
+              "efficiency": 0.07,
+              "energyDirection": "CHAOTIC"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.082,
+              "bearMass": 0.179,
+              "score": -0.097
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "PASS",
+            "measurement": {
+              "freshness": "PREPARING",
+              "distanceVol": 0.852,
+              "decelerating": true,
+              "completedCycles": 77
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "PASS",
+            "measurement": {
+              "expansion": "NONE",
+              "distanceVol": 0.852
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.118,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "FAIL",
+            "measurement": {
+              "agreement": "NO_AGREEMENT",
+              "reasons": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T12:00:00.000Z"
+      },
+      {
+        "pair": "NZD_USD",
+        "decision": "NO_TRADE_LATE",
+        "marketState": "BEARISH_EXHAUSTION",
+        "agreement": "LATE",
+        "direction": "BULLISH",
+        "failingGates": [
+          "LATE",
+          "OVEREXTENDED",
+          "INSUFFICIENT_SPACE"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 37.57,
+              "energyLevel": "BUILDING"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "PASS",
+            "measurement": {
+              "volatilityLevel": 0.264,
+              "efficiency": 0.242,
+              "energyDirection": "BALANCED"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.111,
+              "bearMass": 0.29,
+              "score": -0.179
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "FAIL",
+            "measurement": {
+              "freshness": "EXHAUSTED",
+              "distanceVol": 5.5,
+              "decelerating": false,
+              "completedCycles": 86
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "FAIL",
+            "measurement": {
+              "expansion": "OVEREXTENDED",
+              "distanceVol": -5.5
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.204,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": []
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "PASS",
+            "measurement": {
+              "agreement": "LATE",
+              "reasons": [
+                "first tradeable opportunity has passed"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T12:00:00.000Z"
+      },
+      {
+        "pair": "USD_CAD",
+        "decision": "NO_TRADE_LATE",
+        "marketState": "BULLISH_PULLBACK",
+        "agreement": "LATE",
+        "direction": "BEARISH",
+        "failingGates": [
+          "LATE",
+          "INSUFFICIENT_SPACE"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 30.54,
+              "energyLevel": "BUILDING"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "PASS",
+            "measurement": {
+              "volatilityLevel": 0.295,
+              "efficiency": 0.106,
+              "energyDirection": "BALANCED"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.226,
+              "bearMass": 0.178,
+              "score": 0.048
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "FAIL",
+            "measurement": {
+              "freshness": "LATE",
+              "distanceVol": 3.109,
+              "decelerating": true,
+              "completedCycles": 90
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "PASS",
+            "measurement": {
+              "expansion": "DEVELOPED",
+              "distanceVol": 3.109
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.141,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": []
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "PASS",
+            "measurement": {
+              "agreement": "LATE",
+              "reasons": [
+                "first tradeable opportunity has passed"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T12:00:00.000Z"
+      },
+      {
+        "pair": "USD_CHF",
+        "decision": "NO_TRADE_LATE",
+        "marketState": "BULLISH_EXHAUSTION",
+        "agreement": "LATE",
+        "direction": "BULLISH",
+        "failingGates": [
+          "LATE",
+          "OVEREXTENDED"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 38.26,
+              "energyLevel": "BUILDING"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "PASS",
+            "measurement": {
+              "volatilityLevel": 0.323,
+              "efficiency": 0.23,
+              "energyDirection": "BALANCED"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.453,
+              "bearMass": 0,
+              "score": 0.453
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "FAIL",
+            "measurement": {
+              "freshness": "EXHAUSTED",
+              "distanceVol": 5.421,
+              "decelerating": false,
+              "completedCycles": 99
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "FAIL",
+            "measurement": {
+              "expansion": "OVEREXTENDED",
+              "distanceVol": 5.421
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "PASS",
+            "measurement": {
+              "availableSpaceVol": 6,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": []
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "PASS",
+            "measurement": {
+              "agreement": "LATE",
+              "reasons": [
+                "first tradeable opportunity has passed"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T12:00:00.000Z"
+      },
+      {
+        "pair": "USD_JPY",
+        "decision": "NO_TRADE_CHAOTIC",
+        "marketState": "CHAOTIC",
+        "agreement": "NO_AGREEMENT",
+        "direction": "BULLISH",
+        "failingGates": [
+          "CHAOTIC",
+          "LATE",
+          "OVEREXTENDED",
+          "INSUFFICIENT_SPACE",
+          "NO_AGREEMENT"
+        ],
+        "gates": [
+          {
+            "name": "DEAD",
+            "status": "PASS",
+            "measurement": {
+              "energyScore": 65.86,
+              "energyLevel": "STRONG"
+            },
+            "threshold": "energyScore < 12"
+          },
+          {
+            "name": "CHAOTIC",
+            "status": "FAIL",
+            "measurement": {
+              "volatilityLevel": 1,
+              "efficiency": 0.252,
+              "energyDirection": "CHAOTIC"
+            },
+            "threshold": "volatilityLevel > 0.45 AND efficiency < 0.35"
+          },
+          {
+            "name": "CONFLICTED",
+            "status": "PASS",
+            "measurement": {
+              "bullMass": 0.404,
+              "bearMass": 0,
+              "score": 0.404
+            },
+            "threshold": "bullMass > 0.25 AND bearMass > 0.25 AND |score| < 0.15"
+          },
+          {
+            "name": "LATE",
+            "status": "FAIL",
+            "measurement": {
+              "freshness": "EXHAUSTED",
+              "distanceVol": 5.227,
+              "decelerating": false,
+              "completedCycles": 75
+            },
+            "threshold": "distanceVol >= 3.2 (EXHAUSTED >= 4)"
+          },
+          {
+            "name": "OVEREXTENDED",
+            "status": "FAIL",
+            "measurement": {
+              "expansion": "OVEREXTENDED",
+              "distanceVol": 5.227
+            },
+            "threshold": "|distanceVol| >= 3.8"
+          },
+          {
+            "name": "INSUFFICIENT_SPACE",
+            "status": "FAIL",
+            "measurement": {
+              "availableSpaceVol": 0.016,
+              "basis": "price→nearest prior leg extreme"
+            },
+            "threshold": "spaceVol >= 1.5",
+            "tradeApplicable": false,
+            "naForTrade": true
+          },
+          {
+            "name": "SPREAD",
+            "status": "PASS",
+            "measurement": {
+              "gateFailures": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "spreadPips <= cap",
+            "naInReplay": true
+          },
+          {
+            "name": "NO_AGREEMENT",
+            "status": "FAIL",
+            "measurement": {
+              "agreement": "NO_AGREEMENT",
+              "reasons": [
+                "energy chaotic — no clean direction"
+              ]
+            },
+            "threshold": "all mandatory gates pass AND a directional grade is reached",
+            "terminalNotPriority": true
+          }
+        ],
+        "lastCandleIso": "2026-09-10T12:00:00.000Z"
+      }
+    ]
+  }
+}

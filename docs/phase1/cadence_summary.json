@@ -1,0 +1,291 @@
+{
+  "window": {
+    "from": "2026-07-01",
+    "to": "2026-09-11",
+    "stride": 1,
+    "warmupCandles": 260,
+    "firstEligibleFrameOpen": "2026-06-30T23:45:00.000Z",
+    "evaluatedCloses": 7008
+  },
+  "correct": {
+    "evals": 196224,
+    "closes": 7008,
+    "armedFrames": 40,
+    "missingExcluded": 0,
+    "decision": {
+      "NO_TRADE_CHAOTIC": {
+        "n": 69068,
+        "pct": 35.2
+      },
+      "NO_TRADE_INSUFFICIENT_SPACE": {
+        "n": 66324,
+        "pct": 33.8
+      },
+      "NO_TRADE_LATE": {
+        "n": 55252,
+        "pct": 28.16
+      },
+      "NO_TRADE_DEAD": {
+        "n": 3771,
+        "pct": 1.92
+      },
+      "NO_TRADE_CONFLICTED": {
+        "n": 1613,
+        "pct": 0.82
+      },
+      "WATCH_PRESSURE": {
+        "n": 95,
+        "pct": 0.05
+      },
+      "WATCH_COMPRESSION": {
+        "n": 61,
+        "pct": 0.03
+      },
+      "ARMED_BULLISH": {
+        "n": 24,
+        "pct": 0.01
+      },
+      "ARMED_BEARISH": {
+        "n": 16,
+        "pct": 0.01
+      }
+    },
+    "state": {
+      "CHAOTIC": {
+        "n": 69068,
+        "pct": 35.2
+      },
+      "BULLISH_EXHAUSTION": {
+        "n": 26186,
+        "pct": 13.34
+      },
+      "BEARISH_PULLBACK": {
+        "n": 20236,
+        "pct": 10.31
+      },
+      "BULLISH_PULLBACK": {
+        "n": 19967,
+        "pct": 10.18
+      },
+      "BULLISH_EXPANSION": {
+        "n": 15627,
+        "pct": 7.96
+      },
+      "BEARISH_EXHAUSTION": {
+        "n": 13721,
+        "pct": 6.99
+      },
+      "COMPRESSION": {
+        "n": 11501,
+        "pct": 5.86
+      },
+      "BEARISH_EXPANSION": {
+        "n": 10775,
+        "pct": 5.49
+      },
+      "DEAD": {
+        "n": 3771,
+        "pct": 1.92
+      },
+      "BEARISH_MOVEMENT": {
+        "n": 2310,
+        "pct": 1.18
+      },
+      "BULLISH_MOVEMENT": {
+        "n": 1993,
+        "pct": 1.02
+      },
+      "TRANSITION": {
+        "n": 739,
+        "pct": 0.38
+      },
+      "BALANCE": {
+        "n": 330,
+        "pct": 0.17
+      }
+    },
+    "agreement": {
+      "NO_AGREEMENT": {
+        "n": 139368,
+        "pct": 71.02
+      },
+      "LATE": {
+        "n": 55252,
+        "pct": 28.16
+      },
+      "CONFLICTED": {
+        "n": 1453,
+        "pct": 0.74
+      },
+      "WEAK_BEARISH": {
+        "n": 56,
+        "pct": 0.03
+      },
+      "WEAK_BULLISH": {
+        "n": 42,
+        "pct": 0.02
+      },
+      "BULLISH_BUILDING": {
+        "n": 23,
+        "pct": 0.01
+      },
+      "STRONG_BULLISH": {
+        "n": 14,
+        "pct": 0.01
+      },
+      "BEARISH_BUILDING": {
+        "n": 11,
+        "pct": 0.01
+      },
+      "STRONG_BEARISH": {
+        "n": 5,
+        "pct": 0
+      }
+    }
+  },
+  "legacy": {
+    "evals": 196224,
+    "closes": 7008,
+    "armedFrames": 40,
+    "missingExcluded": 0,
+    "decision": {
+      "NO_TRADE_CHAOTIC": {
+        "n": 69071,
+        "pct": 35.2
+      },
+      "NO_TRADE_INSUFFICIENT_SPACE": {
+        "n": 66323,
+        "pct": 33.8
+      },
+      "NO_TRADE_LATE": {
+        "n": 55251,
+        "pct": 28.16
+      },
+      "NO_TRADE_DEAD": {
+        "n": 3770,
+        "pct": 1.92
+      },
+      "NO_TRADE_CONFLICTED": {
+        "n": 1613,
+        "pct": 0.82
+      },
+      "WATCH_PRESSURE": {
+        "n": 95,
+        "pct": 0.05
+      },
+      "WATCH_COMPRESSION": {
+        "n": 61,
+        "pct": 0.03
+      },
+      "ARMED_BULLISH": {
+        "n": 24,
+        "pct": 0.01
+      },
+      "ARMED_BEARISH": {
+        "n": 16,
+        "pct": 0.01
+      }
+    },
+    "state": {
+      "CHAOTIC": {
+        "n": 69071,
+        "pct": 35.2
+      },
+      "BULLISH_EXHAUSTION": {
+        "n": 26184,
+        "pct": 13.34
+      },
+      "BEARISH_PULLBACK": {
+        "n": 20237,
+        "pct": 10.31
+      },
+      "BULLISH_PULLBACK": {
+        "n": 19963,
+        "pct": 10.17
+      },
+      "BULLISH_EXPANSION": {
+        "n": 15629,
+        "pct": 7.96
+      },
+      "BEARISH_EXHAUSTION": {
+        "n": 13722,
+        "pct": 6.99
+      },
+      "COMPRESSION": {
+        "n": 11498,
+        "pct": 5.86
+      },
+      "BEARISH_EXPANSION": {
+        "n": 10778,
+        "pct": 5.49
+      },
+      "DEAD": {
+        "n": 3770,
+        "pct": 1.92
+      },
+      "BEARISH_MOVEMENT": {
+        "n": 2310,
+        "pct": 1.18
+      },
+      "BULLISH_MOVEMENT": {
+        "n": 1993,
+        "pct": 1.02
+      },
+      "TRANSITION": {
+        "n": 739,
+        "pct": 0.38
+      },
+      "BALANCE": {
+        "n": 330,
+        "pct": 0.17
+      }
+    },
+    "agreement": {
+      "NO_AGREEMENT": {
+        "n": 139369,
+        "pct": 71.03
+      },
+      "LATE": {
+        "n": 55251,
+        "pct": 28.16
+      },
+      "CONFLICTED": {
+        "n": 1453,
+        "pct": 0.74
+      },
+      "WEAK_BEARISH": {
+        "n": 56,
+        "pct": 0.03
+      },
+      "WEAK_BULLISH": {
+        "n": 42,
+        "pct": 0.02
+      },
+      "BULLISH_BUILDING": {
+        "n": 23,
+        "pct": 0.01
+      },
+      "STRONG_BULLISH": {
+        "n": 14,
+        "pct": 0.01
+      },
+      "BEARISH_BUILDING": {
+        "n": 11,
+        "pct": 0.01
+      },
+      "STRONG_BEARISH": {
+        "n": 5,
+        "pct": 0
+      }
+    }
+  },
+  "legacyVsCorrect": {
+    "comparedCloses": 7007,
+    "diffPairFrames": 0,
+    "diffPct": 0,
+    "armedOnlyLegacy": 0,
+    "armedOnlyCorrect": 0
+  },
+  "episodesCorrect": 36,
+  "armedFramesCorrect": 40
+}

@@ -25,11 +25,14 @@ const STRATEGY = {
 };
 
 /** Choose the single controlling strategy, or null. Order encodes precedence. */
-function routeStrategy(ctx) {
+function routeStrategy(ctx, cfg = CONFIG) {
   const { marketState, compression, pressure, expansion, energy, movement, freshness } = ctx;
   const ms = marketState ? marketState.state : 'TRANSITION';
   const notLate = !freshness || (freshness.state !== 'LATE' && freshness.state !== 'EXHAUSTED');
   const notOver = !expansion || (expansion.state !== 'OVEREXTENDED' && expansion.state !== 'DEVELOPED');
+  // per_trade: defer the space check to the setup stage (see decide); don't let a
+  // pre-candidate space reading veto strategy routing.
+  const perTradeSpace = cfg && cfg.space && cfg.space.mode === 'per_trade';
 
   // D — Failed Expansion Reversal.
   if (/^FAILED_(BULLISH|BEARISH)_EXPANSION$/.test(ms) && notOver) return STRATEGY.D;
@@ -44,7 +47,7 @@ function routeStrategy(ctx) {
 
   // B — Early Expansion.
   if (/_(EXPANSION)$/.test(ms) && expansion && (expansion.state === 'EARLY' || expansion.state === 'ATTEMPTING' || expansion.state === 'CONFIRMED')
-      && expansion.spaceSufficient !== false && notLate && notOver) return STRATEGY.B;
+      && (perTradeSpace || expansion.spaceSufficient !== false) && notLate && notOver) return STRATEGY.B;
 
   return null;
 }
@@ -57,6 +60,7 @@ function decide(ctx, opts = {}) {
   const cfg = opts.cfg || CONFIG;
   const { agreement, marketState, energy, freshness, expansion } = ctx;
   const ms = marketState ? marketState.state : 'TRANSITION';
+  const perTradeSpace = cfg && cfg.space && cfg.space.mode === 'per_trade';
 
   // Hard NO-TRADE states first (§25).
   if (ms === 'DEAD') return no('NO_TRADE_DEAD');
@@ -65,10 +69,13 @@ function decide(ctx, opts = {}) {
   if (freshness && (freshness.state === 'LATE')) return no('NO_TRADE_LATE');
   if (freshness && (freshness.state === 'EXHAUSTED')) return no('NO_TRADE_LATE');
   if (expansion && expansion.state === 'OVEREXTENDED') return no('NO_TRADE_OVEREXTENDED');
-  if (expansion && expansion.spaceSufficient === false) return no('NO_TRADE_INSUFFICIENT_SPACE');
+  // Space (legacy): a pre-candidate hard gate. Phase 2 evidence shows ~49% of
+  // these rejections have no candidate at all, so per_trade defers space to the
+  // setup stage (below), where a real entry/stop/barrier exist.
+  if (!perTradeSpace && expansion && expansion.spaceSufficient === false) return no('NO_TRADE_INSUFFICIENT_SPACE');
   if (agreement && agreement.gateFailures && agreement.gateFailures.some((x) => /spread/.test(x))) return no('NO_TRADE_SPREAD');
 
-  const strategy = routeStrategy(ctx);
+  const strategy = routeStrategy(ctx, cfg);
   const agreeDir = agreement && /BULLISH/.test(agreement.state) ? 'BULLISH' : agreement && /BEARISH/.test(agreement.state) ? 'BEARISH' : null;
   const strong = agreement && /^STRONG_/.test(agreement.state);
   const building = agreement && /_BUILDING$/.test(agreement.state);
@@ -83,7 +90,14 @@ function decide(ctx, opts = {}) {
   // Armed (or opportunity when a strategy + strong/building agreement align).
   if (strong || building) {
     const setup = buildSetup(strategy, agreeDir, ctx, cfg);
-    if (!setup) return watch(agreeDir === 'BULLISH' ? 'ARMED_BULLISH' : 'ARMED_BEARISH', strategy);
+    // Undefined-risk candidate must NOT be shown as armed (per_trade invariant): a
+    // developing condition with no valid entry/stop stays a WATCH, never ARMED.
+    if (!setup) return perTradeSpace ? watch('WATCH_PRESSURE', strategy) : watch(agreeDir === 'BULLISH' ? 'ARMED_BULLISH' : 'ARMED_BEARISH', strategy);
+    // per_trade space: now that entry/stop/barrier exist, test USABLE ROOM in R.
+    if (perTradeSpace) {
+      const roomR = setupRoomR(setup, ctx, cfg);            // null ⇒ N/A (undefined), Infinity ⇒ no barrier
+      if (roomR != null && roomR < (cfg.space.minRoomR || 1)) return no('NO_TRADE_INSUFFICIENT_SPACE', strategy);
+    }
     return {
       decision: agreeDir === 'BULLISH' ? 'ARMED_BULLISH' : 'ARMED_BEARISH',
       strategy, setup,
@@ -144,4 +158,21 @@ function buildSetup(strategy, dir, ctx, cfg) {
 
 function expansionSpace(ctx) { return ctx.expansion ? ctx.expansion.availableSpaceVol : null; }
 
-module.exports = { routeStrategy, decide, buildSetup, STRATEGY };
+/**
+ * Usable room to the opposing barrier in R, for a concrete setup (§Phase-2 C1).
+ *   null      — space not applicable (no barrier reading or undefined risk)
+ *   Infinity  — no barrier ahead (open space, capped in the space engine)
+ *   number    — |barrier − price| / stopRisk, i.e. room measured against risk
+ * Reading the barrier in R (not in raw vol) ties "enough room" to the trade's own
+ * stop, which is what a manual trader actually needs.
+ */
+function setupRoomR(setup, ctx, cfg) {
+  const ex = ctx.expansion, eq = ctx.eq;
+  if (!ex || !eq || ex.availableSpaceVol == null || eq.volNow == null) return null;
+  if (ex.availableSpaceVol >= (cfg.space.openCapVol || 6)) return Infinity;   // no obstacle ahead
+  const risk = Math.abs(setup.triggerPrice - setup.stopPrice);
+  if (!(risk > 0)) return null;                                               // undefined risk ⇒ N/A
+  return (ex.availableSpaceVol * eq.volNow) / risk;
+}
+
+module.exports = { routeStrategy, decide, buildSetup, setupRoomR, STRATEGY };

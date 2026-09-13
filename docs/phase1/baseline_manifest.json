@@ -1,0 +1,170 @@
+{
+  "generatedAt": "2026-09-13T11:55:58.672Z",
+  "revision": "ff67138086d2d7fb45987ef38f9a74d595469fea",
+  "configVersion": "m15-cfg-1.0.0",
+  "configHash": "be69b3c4af041e9d",
+  "thresholds": {
+    "version": "m15-cfg-1.0.0",
+    "processing": {
+      "graceSecondsAfterClose": 20,
+      "maxCandleAgeSeconds": 1080,
+      "m15Ms": 900000
+    },
+    "volatility": {
+      "trHalfLifeCandles": 24,
+      "fastHalfLifeCandles": 6,
+      "sessionHalfLifeCandles": 96,
+      "minSamples": 8
+    },
+    "directionalChange": {
+      "volMultiplier": 1.6,
+      "spreadNoiseMultiplier": 2,
+      "extendMultiplier": 0.5
+    },
+    "equilibrium": {
+      "eqHalfLifeCandles": 48,
+      "acceptanceVolMultiplier": 1.25,
+      "migrationNormDivisorCandles": 20
+    },
+    "energy": {
+      "weights": {
+        "volatilityLevel": 0.5,
+        "range": 0.2,
+        "tick": 0.15,
+        "body": 0.15
+      },
+      "levelPipsLow": 1,
+      "levelPipsHigh": 12,
+      "wickPenaltyWeight": 0.5,
+      "spreadPenaltyWeight": 0.5,
+      "chaosLevelThreshold": 0.45,
+      "deadBelow": 12,
+      "lowBelow": 30,
+      "buildingBelow": 45,
+      "activeBelow": 62,
+      "strongBelow": 80
+    },
+    "strength": {
+      "scale": 100,
+      "contribHalfLifeCandles": 12,
+      "accelHalfLifeCandles": 6
+    },
+    "power": {
+      "weights": {
+        "magnitude": 1,
+        "breadth": 1,
+        "efficiency": 1,
+        "persistence": 1,
+        "acceleration": 1,
+        "liquidity": 1
+      },
+      "correlationDamp": 0.5,
+      "buildingBelow": 35,
+      "activeBelow": 55,
+      "strongBelow": 78
+    },
+    "ema": {
+      "fast": 20,
+      "slow": 50,
+      "compressedSepVolMult": 0.35,
+      "overextendedDistVolMult": 2.5,
+      "slopeEpsilonVolMult": 0.04
+    },
+    "compression": {
+      "volContractRatio": 0.75,
+      "tightRatio": 0.55,
+      "effDeclineRatio": 0.9,
+      "releaseVolExpandRatio": 1.15
+    },
+    "pressure": {
+      "formingNet": 0.15,
+      "buildingNet": 0.35,
+      "dominantNet": 0.6
+    },
+    "expansion": {
+      "escapeVolMult": 1,
+      "earlyDistVolMult": 2.2,
+      "developedDistVolMult": 3,
+      "overextendedDistVolMult": 3.8,
+      "minEfficiency": 0.45
+    },
+    "freshness": {
+      "freshMaxDistVolMult": 1.8,
+      "tradeableMaxDistVolMult": 2.8,
+      "lateDistVolMult": 3.2,
+      "exhaustedDistVolMult": 4,
+      "requireRisingEnergyForFresh": true
+    },
+    "spread": {
+      "maxSpreadPips": {
+        "default": 2.5,
+        "JPY": 3,
+        "GBP_NZD": 6,
+        "GBP_AUD": 5,
+        "EUR_NZD": 5
+      }
+    },
+    "space": {
+      "minSpaceVolMult": 1.5,
+      "openCapVol": 6
+    },
+    "session": {
+      "tokyo": [
+        0,
+        8
+      ],
+      "london": [
+        7,
+        16
+      ],
+      "newYork": [
+        12,
+        21
+      ]
+    },
+    "trigger": {
+      "entryOffsetVolMult": 0.1,
+      "stopBufferVolMult": 0.6,
+      "target1R": 1,
+      "target2R": 2,
+      "expiryCandles": 8
+    },
+    "strategy": {
+      "enabled": [
+        "COMPRESSION_RELEASE",
+        "EARLY_EXPANSION",
+        "FIRST_CONTROLLED_PULLBACK",
+        "FAILED_EXPANSION_REVERSAL"
+      ]
+    }
+  },
+  "candleConvention": {
+    "timeIs": "START (OANDA)",
+    "completeColumn": "always true (only complete candles ingested)",
+    "priceType": "MID (OANDA price=M)",
+    "timeframe": "M15 only",
+    "source": "OANDA fxpractice"
+  },
+  "replayFilter": {
+    "rule": "frameOpen = floor(T/M15)*M15 − M15 ; include open ≤ frameOpen (close ≤ T)",
+    "offGridPolicy": "snap down to last completed close",
+    "legacyBug": "floor(T/M15)*M15 included the candle opening at T (closes T+15) — lookahead"
+  },
+  "outcomeAssumptions": {
+    "prices": "MID (no bid/ask)",
+    "fill": "from the candle AFTER arm (manual delay)",
+    "intrabar": "stop+target same candle ⇒ AMBIGUOUS",
+    "target": "2R",
+    "spread": "not applied (mid) — post-spread requires bid/ask",
+    "extrapolation": "none — small sample"
+  },
+  "window": {
+    "from": "2026-07-01",
+    "to": "2026-09-11",
+    "stride": 1,
+    "warmupCandles": 260,
+    "firstEligibleFrameOpen": "2026-06-30T23:45:00.000Z",
+    "evaluatedCloses": 7008
+  },
+  "runCommand": "NODE_PATH=<@supabase dir> node scripts/m15/replay-cadence.js --from 2026-07-01 --to 2026-09-11 --stride 1 --warmup 260"
+}
