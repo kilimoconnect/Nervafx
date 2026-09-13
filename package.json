@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test:m15": "node --test tests/m15/config.test.js tests/m15/data.test.js tests/m15/structure.test.js tests/m15/equilibrium.test.js",
+    "test:m15": "node --test tests/m15/config.test.js tests/m15/data.test.js tests/m15/structure.test.js tests/m15/equilibrium.test.js tests/m15/movement.test.js",
     "start": "node src/index.js",
     "load": "node src/index.js load",
     "check": "node src/index.js check",
