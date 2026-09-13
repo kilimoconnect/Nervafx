@@ -53,11 +53,15 @@ const CONFIG = Object.freeze({
     migrationNormDivisorCandles: 20,// normalizer for migration velocity
   },
 
-  // Market energy (§16) — component weights; direction stays separate.
+  // Market energy (§16) — LEVEL measures capacity to move (direction-agnostic),
+  // so it is dominated by absolute volatility LEVEL (in pips), not by directional
+  // velocity; a whipsaw is high energy + CHAOTIC direction, not low energy.
   energy: {
-    weights: { volatility: 0.30, velocity: 0.20, efficiency: 0.25, body: 0.15, tick: 0.10 },
+    weights: { volatilityLevel: 0.50, range: 0.20, tick: 0.15, body: 0.15 },
+    levelPipsLow: 1, levelPipsHigh: 12,   // ramp: vol(pips) → 0..1 volatility-level
     wickPenaltyWeight: 0.5,
     spreadPenaltyWeight: 0.5,
+    chaosLevelThreshold: 0.45,            // volatility-level above which low efficiency ⇒ CHAOTIC
     deadBelow: 12, lowBelow: 30, buildingBelow: 45, activeBelow: 62, strongBelow: 80, // 0..100
   },
 
