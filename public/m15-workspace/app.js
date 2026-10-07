@@ -238,6 +238,7 @@
 
     // replay bar position
     if (p) { var sc = $('scrub'); sc.max = p.frames.length - 1; sc.value = S.frameIdx; $('pos').textContent = 'frame ' + (S.frameIdx + 1) + ' / ' + p.frames.length; }
+    var psel2 = $('pairsel'); if (psel2 && psel2.value !== S.pairId) psel2.value = S.pairId;   // keep in sync with ↑↓ / clicks
 
     var host = $('viewhost');
     if (S.error) { host.innerHTML = '<div class="card">Nothing is shown while the adapter is in an error state (no fabricated fallback). Toggle the error off to continue.</div>'; }
@@ -276,6 +277,9 @@
     catch (e) { S.error = e.message; render(); return; }
     S.pairId = S.ws.watchlist[0].pair; var p = curPair(); S.frameIdx = p.frames.length - 1;
     $('metaver').textContent = S.ws.meta.version + ' · ' + S.ws.meta.classifier;
+    // pair selector (always visible; works from any view)
+    var psel = $('pairsel');
+    if (psel) { psel.innerHTML = S.ws.watchlist.map(function (w) { return '<option value="' + w.pair + '">' + w.pair.replace('_', '/') + '</option>'; }).join(''); psel.value = S.pairId; psel.onchange = function () { selectPair(psel.value); }; }
     // tabs
     Array.prototype.forEach.call(document.querySelectorAll('nav.tabs button'), function (b) { b.onclick = function () { setView(b.getAttribute('data-view')); }; });
     // replay controls

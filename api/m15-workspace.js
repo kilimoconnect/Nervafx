@@ -21,7 +21,7 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'GET') return res.status(405).json({ ok: false, error: 'GET only' });
   try {
-    const frames = Math.max(8, Math.min(96, parseInt((req.query && req.query.frames) || '40', 10) || 40));
+    const frames = Math.max(1, Math.min(96, parseInt((req.query && req.query.frames) || '12', 10) || 12));
     const sb = getClient();
     // ~5 days covers 48h context + swing calibration + ATR warm-up + the replay window.
     const fromIso = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();

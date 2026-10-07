@@ -103,8 +103,8 @@ function integrityReport(historiesByPair, pairs = PAIRS) {
 async function loadAllPairsFromDb(sb, opts = {}) {
   const pairs = opts.pairs || PAIRS;
   const fromIso = opts.fromIso, toIso = opts.toIso;
-  const out = {};
-  for (const p of pairs) {
+  // Load every pair in PARALLEL (28 sequential round-trips was the main latency).
+  const loadOne = async (p) => {
     const all = []; let off = 0;
     for (;;) {
       let q = sb.from('backtest_candles').select('time,open,high,low,close,volume,complete,source')
@@ -117,8 +117,11 @@ async function loadAllPairsFromDb(sb, opts = {}) {
       if (data.length < 1000) break;
       off += 1000;
     }
-    out[p] = all;
-  }
+    return [p, all];
+  };
+  const entries = await Promise.all(pairs.map(loadOne));
+  const out = {};
+  for (const [p, all] of entries) out[p] = all;
   return out;
 }
 

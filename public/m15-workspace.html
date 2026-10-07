@@ -28,6 +28,8 @@
   <div class="datahdr" id="datahdr" aria-live="polite">Loading latest completed M15 close…</div>
 
   <div class="replaybar" role="group" aria-label="Replay controls">
+    <label class="sr-only" for="pairsel">Select pair</label>
+    <select id="pairsel" class="btn" aria-label="Select pair" style="padding:6px 8px;min-width:96px"></select>
     <button class="btn" id="first" aria-label="First close">⏮</button>
     <button class="btn" id="prev" aria-label="Previous close">◀</button>
     <button class="btn" id="next" aria-label="Next close">▶</button>
@@ -62,19 +64,25 @@
   if (!tok()) { location.href = '/login'; return; }
   var lb = document.getElementById('logoutBtn');
   lb.onclick = function () { try { localStorage.removeItem('nfx_token'); localStorage.removeItem('nfx_user'); } catch (e) {} location.href = '/login'; };
+  // Wire Refresh HERE (not in app.js) so it works even while data is still loading.
+  var rb = document.getElementById('refreshBtn'); if (rb) rb.onclick = function () { location.reload(); };
 
   function showBanner(cls, html) { document.getElementById('banners').innerHTML = '<div class="state-banner ' + cls + '" role="alert">' + html + '</div>'; document.getElementById('viewhost').innerHTML = ''; document.getElementById('datahdr').textContent = '—'; }
   function loadScript(src) { return new Promise(function (res, rej) { var s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = function () { rej(new Error('failed to load ' + src)); }; document.body.appendChild(s); }); }
 
-  fetch('/api/m15-workspace', { headers: { Authorization: 'Bearer ' + tok() } })
-    .then(function (r) { return r.json().then(function (j) { return { status: r.status, j: j }; }); })
+  document.getElementById('datahdr').textContent = 'Loading M15 data from the server… (first load builds the recent window, a few seconds)';
+  var ctrl = new AbortController();
+  var timer = setTimeout(function () { ctrl.abort(); }, 55000);
+  fetch('/api/m15-workspace', { headers: { Authorization: 'Bearer ' + tok() }, signal: ctrl.signal })
+    .then(function (r) { clearTimeout(timer); return r.text().then(function (t) { var j; try { j = JSON.parse(t); } catch (e) { j = null; } return { status: r.status, j: j, raw: t }; }); })
     .then(function (o) {
-      if (!o.j || o.j.ok === false) throw new Error((o.j && o.j.error) || ('HTTP ' + o.status));
-      if (!o.j.available || !o.j.watchlist || !o.j.watchlist.length) { showBanner('sb-unavail', 'UNAVAILABLE — ' + ((o.j && o.j.reason) || 'no synchronized M15 data') + '. Nothing is shown; no data is fabricated.'); return null; }
+      if (!o.j) throw new Error('HTTP ' + o.status + ' — ' + (o.raw || '').slice(0, 140));
+      if (o.j.ok === false) throw new Error(o.j.error || ('HTTP ' + o.status));
+      if (!o.j.available || !o.j.watchlist || !o.j.watchlist.length) { showBanner('sb-unavail', 'UNAVAILABLE — ' + (o.j.reason || 'no synchronized M15 data') + '. Nothing is shown; no data is fabricated. Use Refresh to retry.'); return null; }
       window.NFX_FIXTURES = o.j;               // real payload in the same contract as the fixtures
       return loadScript('/m15-workspace/adapters.js').then(function () { return loadScript('/m15-workspace/app.js'); });
     })
-    .catch(function (e) { showBanner('sb-error', 'ERROR loading M15 data — ' + (e.message || e) + '. No fabricated fallback is shown.'); });
+    .catch(function (e) { clearTimeout(timer); var msg = e && e.name === 'AbortError' ? 'request timed out (server took too long)' : (e.message || e); showBanner('sb-error', 'ERROR loading M15 data — ' + msg + '. No fabricated fallback is shown. Use Refresh to retry.'); });
 })();
 </script>
 </body></html>
