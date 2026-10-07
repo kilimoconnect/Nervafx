@@ -5,6 +5,7 @@
     { "path": "/api/run-pipeline?force=1", "schedule": "3 * * * *" }
   ],
   "functions": {
+    "api/m15-workspace.js":       { "maxDuration": 60 },
     "api/m15-intelligence.js":    { "maxDuration": 60 },
     "api/news-parse.js":          { "maxDuration": 30 },
     "api/run-pipeline.js":        { "maxDuration": 120 },
@@ -33,7 +34,8 @@
   "rewrites": [
     { "source": "/",       "destination": "/login.html" },
     { "source": "/home",   "destination": "/login.html" },
-    { "source": "/app",    "destination": "/m15-intelligence.html" },
+    { "source": "/app",    "destination": "/m15-workspace.html" },
+    { "source": "/workspace", "destination": "/m15-workspace.html" },
     { "source": "/m15-intelligence", "destination": "/m15-intelligence.html" },
     { "source": "/login",  "destination": "/login.html"   },
     { "source": "/setup",  "destination": "/setup.html"   },

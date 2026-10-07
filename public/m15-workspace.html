@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NervaFX — M15 Workspace</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/m15-workspace/styles.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="demobar" role="note" style="background:rgba(202,138,4,.12)">RESEARCH CLASSIFICATION — NOT A TRADE SIGNAL
+    <small>Model UNVALIDATED (no demonstrated edge). Mid-only candles. Read-only, no order path, no broker, no alerts.</small>
+  </div>
+
+  <header class="app">
+    <span class="logo">Nerva<b>FX</b> · M15 Workspace</span>
+    <span class="pill" id="metaver">—</span>
+    <span class="pill warn">MODEL: UNVALIDATED</span>
+    <span class="pill">READ-ONLY</span>
+    <span class="spacer"></span>
+    <button class="btn sm" id="refreshBtn">↻ Refresh</button>
+    <a class="pill" href="/profile">Account</a>
+    <button class="btn sm" id="logoutBtn">Log out</button>
+  </header>
+
+  <div class="datahdr" id="datahdr" aria-live="polite">Loading latest completed M15 close…</div>
+
+  <div class="replaybar" role="group" aria-label="Replay controls">
+    <button class="btn" id="first" aria-label="First close">⏮</button>
+    <button class="btn" id="prev" aria-label="Previous close">◀</button>
+    <button class="btn" id="next" aria-label="Next close">▶</button>
+    <button class="btn" id="last" aria-label="Latest close">⏭</button>
+    <input type="range" id="scrub" min="0" value="0" aria-label="Replay position">
+    <span class="pill" id="pos">frame —</span>
+    <span class="mut" style="font-size:11.5px">← → step · ↑ ↓ pair · 1–6 views</span>
+  </div>
+
+  <nav class="tabs" role="tablist" aria-label="Workspace views">
+    <button role="tab" data-view="market" aria-selected="true">1 · Market review</button>
+    <button role="tab" data-view="detail" aria-selected="false">2 · Pair detail</button>
+    <button role="tab" data-view="replay" aria-selected="false">3 · Replay</button>
+    <button role="tab" data-view="journal" aria-selected="false">4 · Journal</button>
+    <button role="tab" data-view="health" aria-selected="false">5 · Model &amp; health</button>
+    <button role="tab" data-view="plan" aria-selected="false">6 · Plan &amp; risk</button>
+  </nav>
+
+  <div id="banners" aria-live="polite"></div>
+  <main id="viewhost"><div class="card mut">Loading real M15 data…</div></main>
+
+  <div class="foot">
+    M15 prices and 12/24/36/48-hour context only — no conventional indicators, no volume, no broker/order path.
+    Leave-one-pair-out is other-pair confirmation, not statistical independence. On any data error this page
+    shows an explicit error state and never fabricates or fills data forward.
+  </div>
+</div>
+
+<script>
+(function () {
+  function tok() { try { return localStorage.getItem('nfx_token'); } catch (e) { return null; } }
+  if (!tok()) { location.href = '/login'; return; }
+  var lb = document.getElementById('logoutBtn');
+  lb.onclick = function () { try { localStorage.removeItem('nfx_token'); localStorage.removeItem('nfx_user'); } catch (e) {} location.href = '/login'; };
+
+  function showBanner(cls, html) { document.getElementById('banners').innerHTML = '<div class="state-banner ' + cls + '" role="alert">' + html + '</div>'; document.getElementById('viewhost').innerHTML = ''; document.getElementById('datahdr').textContent = '—'; }
+  function loadScript(src) { return new Promise(function (res, rej) { var s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = function () { rej(new Error('failed to load ' + src)); }; document.body.appendChild(s); }); }
+
+  fetch('/api/m15-workspace', { headers: { Authorization: 'Bearer ' + tok() } })
+    .then(function (r) { return r.json().then(function (j) { return { status: r.status, j: j }; }); })
+    .then(function (o) {
+      if (!o.j || o.j.ok === false) throw new Error((o.j && o.j.error) || ('HTTP ' + o.status));
+      if (!o.j.available || !o.j.watchlist || !o.j.watchlist.length) { showBanner('sb-unavail', 'UNAVAILABLE — ' + ((o.j && o.j.reason) || 'no synchronized M15 data') + '. Nothing is shown; no data is fabricated.'); return null; }
+      window.NFX_FIXTURES = o.j;               // real payload in the same contract as the fixtures
+      return loadScript('/m15-workspace/adapters.js').then(function () { return loadScript('/m15-workspace/app.js'); });
+    })
+    .catch(function (e) { showBanner('sb-error', 'ERROR loading M15 data — ' + (e.message || e) + '. No fabricated fallback is shown.'); });
+})();
+</script>
+</body></html>

@@ -63,3 +63,20 @@ test('model health preserves NONE PASSED and shows no profitability/confidence f
 test('nextCondition/invalidation present for available frames', () => {
   for (const f of allFrames) if (f.dataHealth.available) assert.ok(typeof f.nextCondition === 'string' && f.nextCondition.length > 0);
 });
+
+test('live payload builder (shared with /api/m15-workspace) returns the same contract', () => {
+  const { buildWorkspacePayload } = require('../../research/m15/workspaceFrame');
+  const rep = require('../../scripts/research/build-replay');
+  const M15 = 15 * 60 * 1000;
+  const T = Date.UTC(2026, 8, 11, 0, 0, 0);
+  const H = rep.network(T, 192, { GBP: 0.03, EUR: -0.03 }, 'EUR_GBP', rep.eurgbpDescent(T));
+  const p = buildWorkspacePayload(H, { frames: 12, now: T + M15, provenance: 'LIVE' });
+  assert.equal(p.available, true);
+  assert.equal(p.meta.provenance, 'LIVE');
+  assert.equal(p.modelHealth.stage5.decision, 'NONE PASSED');          // preserved
+  assert.equal(p.watchlist.length, 28);
+  const eurgbp = p.watchlist.find((w) => w.pair === 'EUR_GBP');
+  assert.ok(eurgbp.frames.length === 12 && eurgbp.candles.length > 0);
+  for (const f of eurgbp.frames) for (const e of (f.events || [])) assert.ok(e.ms <= f.asOfCloseMs);  // causal
+  assert.equal(eurgbp.frames[eurgbp.frames.length - 1].primaryState, 'ACCEPTED_TREND_DOWN');
+});
