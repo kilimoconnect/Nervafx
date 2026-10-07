@@ -1,0 +1,867 @@
+{
+  "generatedAt": "2026-09-27T09:11:45.005Z",
+  "window": {
+    "from": "2026-08-25",
+    "to": "2026-09-25"
+  },
+  "engine": {
+    "engineVersion": "m15-cfg-1.1.0a",
+    "researchVersion": "m15-research-3.0.0",
+    "featureVersion": "m15-feat-1.0.0",
+    "runVersion": "stage4-run-1.1-timeaxis-fixed"
+  },
+  "reference": {
+    "entry": "open of next candle (delay 1)",
+    "stop": "ATR14·1.0",
+    "hold": "4 M15 (1h)",
+    "spreadScenarios": {
+      "mid0": 0,
+      "typical": 1.2,
+      "stress2x": 2.4
+    },
+    "note": "MID-only ⇒ ALL economics ESTIMATED; intrabar stop resolved conservatively; parity vs stored snapshots UNTESTED (none recorded)."
+  },
+  "denominators": {
+    "pairAtCloseEvaluations": 64036,
+    "closesEvaluated": 2287,
+    "pairs": 28,
+    "note": "unique episodes per candidate below; correlated same-currency pairs are NOT independent successes."
+  },
+  "results": [
+    {
+      "id": "A0_baseline_dir10",
+      "family": "A_baseline",
+      "ruleHash": "a05de052b8d993d5",
+      "variant": {
+        "deadbandZ": 0
+      },
+      "episodes": 10994,
+      "filled": 10971,
+      "staleExcluded": 22,
+      "noData": 1,
+      "ambiguousShare": 0.41,
+      "directionAccuracy": {
+        "4": 0.473,
+        "6": 0.479,
+        "8": 0.477,
+        "10": 0.473
+      },
+      "forwardMeanPips": {
+        "4": -0.14,
+        "6": -0.25,
+        "8": -0.18,
+        "10": -0.2
+      },
+      "economics_estimated": {
+        "avgNetR_mid0": -0.04,
+        "avgNetR_typical1p2": -0.327,
+        "avgNetR_stress2p4": -0.614,
+        "avgNetR_delay2": -0.311,
+        "winRate_typical": 0.331,
+        "avgGrossPips": -0.14,
+        "breakEvenSpreadPips": -0.14,
+        "avgMAE_R": 0.906,
+        "avgMFE_R": 0.983
+      },
+      "bySession": {
+        "OFF": 1600,
+        "TOKYO": 3063,
+        "LONDON": 2270,
+        "LONDON_NY": 1768,
+        "NEWYORK": 2270
+      },
+      "byBaseCurrency": {
+        "AUD": 1958,
+        "CAD": 776,
+        "CHF": 390,
+        "EUR": 2749,
+        "GBP": 2346,
+        "NZD": 1585,
+        "USD": 1167
+      },
+      "byQuoteCurrency": {
+        "CAD": 1937,
+        "CHF": 2381,
+        "JPY": 2704,
+        "NZD": 1149,
+        "USD": 1590,
+        "AUD": 803,
+        "GBP": 407
+      }
+    },
+    {
+      "id": "A0_baseline_dir10",
+      "family": "A_baseline",
+      "ruleHash": "a05de052b8d993d5",
+      "variant": {
+        "deadbandZ": 0.5
+      },
+      "episodes": 6386,
+      "filled": 6371,
+      "staleExcluded": 14,
+      "noData": 1,
+      "ambiguousShare": 0.417,
+      "directionAccuracy": {
+        "4": 0.463,
+        "6": 0.477,
+        "8": 0.469,
+        "10": 0.463
+      },
+      "forwardMeanPips": {
+        "4": -0.19,
+        "6": -0.29,
+        "8": -0.46,
+        "10": -0.42
+      },
+      "economics_estimated": {
+        "avgNetR_mid0": -0.05,
+        "avgNetR_typical1p2": -0.317,
+        "avgNetR_stress2p4": -0.583,
+        "avgNetR_delay2": -0.301,
+        "winRate_typical": 0.337,
+        "avgGrossPips": -0.19,
+        "breakEvenSpreadPips": -0.19,
+        "avgMAE_R": 0.909,
+        "avgMFE_R": 0.972
+      },
+      "bySession": {
+        "OFF": 700,
+        "TOKYO": 1840,
+        "LONDON": 1468,
+        "LONDON_NY": 1211,
+        "NEWYORK": 1152
+      },
+      "byBaseCurrency": {
+        "AUD": 1124,
+        "CAD": 460,
+        "CHF": 222,
+        "EUR": 1617,
+        "GBP": 1380,
+        "NZD": 919,
+        "USD": 649
+      },
+      "byQuoteCurrency": {
+        "CHF": 1392,
+        "JPY": 1584,
+        "NZD": 682,
+        "USD": 925,
+        "CAD": 1100,
+        "AUD": 451,
+        "GBP": 237
+      }
+    },
+    {
+      "id": "A1_dir10_plus_consistency",
+      "family": "A_baseline",
+      "ruleHash": "41788d12f6687215",
+      "variant": {
+        "consistMin": 40
+      },
+      "episodes": 4572,
+      "filled": 4558,
+      "staleExcluded": 13,
+      "noData": 1,
+      "ambiguousShare": 0.414,
+      "directionAccuracy": {
+        "4": 0.474,
+        "6": 0.47,
+        "8": 0.469,
+        "10": 0.466
+      },
+      "forwardMeanPips": {
+        "4": -0.18,
+        "6": -0.33,
+        "8": -0.54,
+        "10": -0.87
+      },
+      "economics_estimated": {
+        "avgNetR_mid0": -0.025,
+        "avgNetR_typical1p2": -0.304,
+        "avgNetR_stress2p4": -0.582,
+        "avgNetR_delay2": -0.314,
+        "winRate_typical": 0.342,
+        "avgGrossPips": 0.07,
+        "breakEvenSpreadPips": 0.07,
+        "avgMAE_R": 0.91,
+        "avgMFE_R": 1.016
+      },
+      "bySession": {
+        "OFF": 454,
+        "TOKYO": 1449,
+        "LONDON": 989,
+        "LONDON_NY": 730,
+        "NEWYORK": 936
+      },
+      "byBaseCurrency": {
+        "AUD": 807,
+        "CAD": 332,
+        "CHF": 168,
+        "EUR": 1137,
+        "GBP": 952,
+        "NZD": 668,
+        "USD": 494
+      },
+      "byQuoteCurrency": {
+        "JPY": 1180,
+        "NZD": 500,
+        "CHF": 963,
+        "USD": 630,
+        "CAD": 817,
+        "AUD": 317,
+        "GBP": 151
+      }
+    },
+    {
+      "id": "A1_dir10_plus_consistency",
+      "family": "A_baseline",
+      "ruleHash": "41788d12f6687215",
+      "variant": {
+        "consistMin": 60
+      },
+      "episodes": 2382,
+      "filled": 2378,
+      "staleExcluded": 4,
+      "noData": 0,
+      "ambiguousShare": 0.448,
+      "directionAccuracy": {
+        "4": 0.456,
+        "6": 0.455,
+        "8": 0.444,
+        "10": 0.443
+      },
+      "forwardMeanPips": {
+        "4": -0.34,
+        "6": -0.27,
+        "8": -0.75,
+        "10": -1.33
+      },
+      "economics_estimated": {
+        "avgNetR_mid0": -0.065,
+        "avgNetR_typical1p2": -0.338,
+        "avgNetR_stress2p4": -0.61,
+        "avgNetR_delay2": -0.359,
+        "winRate_typical": 0.321,
+        "avgGrossPips": -0.38,
+        "breakEvenSpreadPips": -0.38,
+        "avgMAE_R": 0.974,
+        "avgMFE_R": 1.012
+      },
+      "bySession": {
+        "OFF": 194,
+        "TOKYO": 855,
+        "LONDON": 489,
+        "LONDON_NY": 377,
+        "NEWYORK": 463
+      },
+      "byBaseCurrency": {
+        "EUR": 582,
+        "GBP": 504,
+        "NZD": 348,
+        "AUD": 428,
+        "CHF": 94,
+        "USD": 252,
+        "CAD": 170
+      },
+      "byQuoteCurrency": {
+        "NZD": 277,
+        "JPY": 624,
+        "CAD": 434,
+        "CHF": 483,
+        "USD": 325,
+        "AUD": 161,
+        "GBP": 74
+      }
+    },
+    {
+      "id": "A2_plus_breadth",
+      "family": "A_baseline",
+      "ruleHash": "edfe1394c96dc603",
+      "variant": {
+        "breadthMin": 1
+      },
+      "episodes": 3401,
+      "filled": 3390,
+      "staleExcluded": 11,
+      "noData": 0,
+      "ambiguousShare": 0.426,
+      "directionAccuracy": {
+        "4": 0.474,
+        "6": 0.471,
+        "8": 0.466,
+        "10": 0.462
+      },
+      "forwardMeanPips": {
+        "4": -0.21,
+        "6": -0.39,
+        "8": -0.61,
+        "10": -0.87
+      },
+      "economics_estimated": {
+        "avgNetR_mid0": -0.041,
+        "avgNetR_typical1p2": -0.316,
+        "avgNetR_stress2p4": -0.591,
+        "avgNetR_delay2": -0.298,
+        "winRate_typical": 0.33,
+        "avgGrossPips": -0.07,
+        "breakEvenSpreadPips": -0.07,
+        "avgMAE_R": 0.931,
+        "avgMFE_R": 1.013
+      },
+      "bySession": {
+        "OFF": 285,
+        "TOKYO": 1161,
+        "LONDON": 708,
+        "LONDON_NY": 550,
+        "NEWYORK": 686
+      },
+      "byBaseCurrency": {
+        "CAD": 251,
+        "EUR": 835,
+        "GBP": 720,
+        "NZD": 486,
+        "AUD": 605,
+        "CHF": 129,
+        "USD": 364
+      },
+      "byQuoteCurrency": {
+        "JPY": 878,
+        "NZD": 378,
+        "CAD": 617,
+        "CHF": 704,
+        "USD": 473,
+        "AUD": 232,
+        "GBP": 108
+      }
+    },
+    {
+      "id": "A2_plus_breadth",
+      "family": "A_baseline",
+      "ruleHash": "edfe1394c96dc603",
+      "variant": {
+        "breadthMin": 2
+      },
+      "episodes": 3390,
+      "filled": 3379,
+      "staleExcluded": 11,
+      "noData": 0,
+      "ambiguousShare": 0.429,
+      "directionAccuracy": {
+        "4": 0.472,
+        "6": 0.468,
+        "8": 0.465,
+        "10": 0.461
+      },
+      "forwardMeanPips": {
+        "4": -0.21,
+        "6": -0.39,
+        "8": -0.61,
+        "10": -0.87
+      },
+      "economics_estimated": {
+        "avgNetR_mid0": -0.046,
+        "avgNetR_typical1p2": -0.32,
+        "avgNetR_stress2p4": -0.594,
+        "avgNetR_delay2": -0.306,
+        "winRate_typical": 0.33,
+        "avgGrossPips": -0.08,
+        "breakEvenSpreadPips": -0.08,
+        "avgMAE_R": 0.933,
+        "avgMFE_R": 1.009
+      },
+      "bySession": {
+        "OFF": 279,
+        "TOKYO": 1158,
+        "LONDON": 709,
+        "LONDON_NY": 550,
+        "NEWYORK": 683
+      },
+      "byBaseCurrency": {
+        "CAD": 251,
+        "EUR": 827,
+        "GBP": 717,
+        "NZD": 486,
+        "AUD": 605,
+        "CHF": 129,
+        "USD": 364
+      },
+      "byQuoteCurrency": {
+        "JPY": 878,
+        "NZD": 378,
+        "CAD": 615,
+        "CHF": 701,
+        "USD": 471,
+        "AUD": 231,
+        "GBP": 105
+      }
+    },
+    {
+      "id": "A3_plus_structure_energy",
+      "family": "A_baseline",
+      "ruleHash": "4fbcb43b0511470c",
+      "variant": {},
+      "episodes": 298,
+      "filled": 298,
+      "staleExcluded": 0,
+      "noData": 0,
+      "ambiguousShare": 0.503,
+      "directionAccuracy": {
+        "4": 0.463,
+        "6": 0.49,
+        "8": 0.477,
+        "10": 0.47
+      },
+      "forwardMeanPips": {
+        "4": -2.5,
+        "6": -3.17,
+        "8": -4.31,
+        "10": -6.05
+      },
+      "economics_estimated": {
+        "avgNetR_mid0": -0.118,
+        "avgNetR_typical1p2": -0.266,
+        "avgNetR_stress2p4": -0.414,
+        "avgNetR_delay2": -0.17,
+        "winRate_typical": 0.329,
+        "avgGrossPips": -0.45,
+        "breakEvenSpreadPips": -0.45,
+        "avgMAE_R": 0.928,
+        "avgMFE_R": 1.1
+      },
+      "bySession": {
+        "LONDON": 85,
+        "TOKYO": 101,
+        "LONDON_NY": 81,
+        "NEWYORK": 28,
+        "OFF": 3
+      },
+      "byBaseCurrency": {
+        "GBP": 63,
+        "AUD": 53,
+        "EUR": 60,
+        "CHF": 26,
+        "CAD": 22,
+        "NZD": 38,
+        "USD": 36
+      },
+      "byQuoteCurrency": {
+        "CAD": 43,
+        "CHF": 35,
+        "AUD": 18,
+        "NZD": 30,
+        "JPY": 133,
+        "USD": 34,
+        "GBP": 5
+      }
+    },
+    {
+      "id": "B_continuation_4after10",
+      "family": "B_continuation",
+      "ruleHash": "7b36a2b5a83d701e",
+      "variant": {
+        "pressMin": 50
+      },
+      "episodes": 3258,
+      "filled": 3254,
+      "staleExcluded": 4,
+      "noData": 0,
+      "ambiguousShare": 0.442,
+      "directionAccuracy": {
+        "4": 0.464,
+        "6": 0.474,
+        "8": 0.478,
+        "10": 0.46
+      },
+      "forwardMeanPips": {
+        "4": -0.26,
+        "6": -0.41,
+        "8": -0.66,
+        "10": -1.19
+      },
+      "economics_estimated": {
+        "avgNetR_mid0": -0.035,
+        "avgNetR_typical1p2": -0.276,
+        "avgNetR_stress2p4": -0.516,
+        "avgNetR_delay2": -0.297,
+        "winRate_typical": 0.342,
+        "avgGrossPips": -0.02,
+        "breakEvenSpreadPips": -0.02,
+        "avgMAE_R": 0.951,
+        "avgMFE_R": 1.042
+      },
+      "bySession": {
+        "OFF": 198,
+        "TOKYO": 978,
+        "LONDON": 842,
+        "LONDON_NY": 748,
+        "NEWYORK": 488
+      },
+      "byBaseCurrency": {
+        "AUD": 573,
+        "EUR": 820,
+        "GBP": 682,
+        "NZD": 475,
+        "CHF": 131,
+        "USD": 326,
+        "CAD": 247
+      },
+      "byQuoteCurrency": {
+        "JPY": 875,
+        "NZD": 329,
+        "CAD": 538,
+        "CHF": 713,
+        "USD": 467,
+        "AUD": 215,
+        "GBP": 117
+      }
+    },
+    {
+      "id": "B_continuation_4after10",
+      "family": "B_continuation",
+      "ruleHash": "7b36a2b5a83d701e",
+      "variant": {
+        "pressMin": 70
+      },
+      "episodes": 2711,
+      "filled": 2707,
+      "staleExcluded": 4,
+      "noData": 0,
+      "ambiguousShare": 0.444,
+      "directionAccuracy": {
+        "4": 0.461,
+        "6": 0.474,
+        "8": 0.471,
+        "10": 0.455
+      },
+      "forwardMeanPips": {
+        "4": 0.03,
+        "6": -0.1,
+        "8": -0.39,
+        "10": -1.01
+      },
+      "economics_estimated": {
+        "avgNetR_mid0": -0.053,
+        "avgNetR_typical1p2": -0.294,
+        "avgNetR_stress2p4": -0.535,
+        "avgNetR_delay2": -0.314,
+        "winRate_typical": 0.341,
+        "avgGrossPips": -0.16,
+        "breakEvenSpreadPips": -0.16,
+        "avgMAE_R": 0.947,
+        "avgMFE_R": 1.031
+      },
+      "bySession": {
+        "OFF": 157,
+        "TOKYO": 836,
+        "LONDON": 695,
+        "LONDON_NY": 618,
+        "NEWYORK": 401
+      },
+      "byBaseCurrency": {
+        "NZD": 398,
+        "AUD": 496,
+        "EUR": 685,
+        "GBP": 565,
+        "CHF": 103,
+        "USD": 262,
+        "CAD": 198
+      },
+      "byQuoteCurrency": {
+        "CAD": 446,
+        "CHF": 584,
+        "JPY": 727,
+        "USD": 377,
+        "AUD": 182,
+        "NZD": 289,
+        "GBP": 102
+      }
+    },
+    {
+      "id": "C_early_expansion",
+      "family": "C_early_expansion",
+      "ruleHash": "8c17afc242a22ae8",
+      "variant": {},
+      "episodes": 1984,
+      "filled": 1981,
+      "staleExcluded": 3,
+      "noData": 0,
+      "ambiguousShare": 0.426,
+      "directionAccuracy": {
+        "4": 0.491,
+        "6": 0.497,
+        "8": 0.48,
+        "10": 0.484
+      },
+      "forwardMeanPips": {
+        "4": 0.17,
+        "6": 0.1,
+        "8": 0.06,
+        "10": 0.02
+      },
+      "economics_estimated": {
+        "avgNetR_mid0": -0.026,
+        "avgNetR_typical1p2": -0.371,
+        "avgNetR_stress2p4": -0.717,
+        "avgNetR_delay2": -0.382,
+        "winRate_typical": 0.33,
+        "avgGrossPips": 0.02,
+        "breakEvenSpreadPips": 0.02,
+        "avgMAE_R": 0.911,
+        "avgMFE_R": 1.031
+      },
+      "bySession": {
+        "OFF": 208,
+        "TOKYO": 629,
+        "LONDON": 486,
+        "LONDON_NY": 374,
+        "NEWYORK": 284
+      },
+      "byBaseCurrency": {
+        "AUD": 471,
+        "EUR": 490,
+        "GBP": 248,
+        "NZD": 407,
+        "CAD": 163,
+        "USD": 201,
+        "CHF": 1
+      },
+      "byQuoteCurrency": {
+        "NZD": 83,
+        "CAD": 455,
+        "CHF": 674,
+        "JPY": 192,
+        "GBP": 103,
+        "AUD": 52,
+        "USD": 422
+      }
+    },
+    {
+      "id": "D_first_pullback",
+      "family": "D_first_pullback",
+      "ruleHash": "4024eb17bd1428bf",
+      "variant": {},
+      "episodes": 2860,
+      "filled": 2851,
+      "staleExcluded": 7,
+      "noData": 2,
+      "ambiguousShare": 0.436,
+      "directionAccuracy": {
+        "4": 0.501,
+        "6": 0.514,
+        "8": 0.504,
+        "10": 0.501
+      },
+      "forwardMeanPips": {
+        "4": 0.09,
+        "6": 0.14,
+        "8": 0.07,
+        "10": -0.06
+      },
+      "economics_estimated": {
+        "avgNetR_mid0": 0.001,
+        "avgNetR_typical1p2": -0.363,
+        "avgNetR_stress2p4": -0.727,
+        "avgNetR_delay2": -0.34,
+        "winRate_typical": 0.332,
+        "avgGrossPips": 0.09,
+        "breakEvenSpreadPips": 0.09,
+        "avgMAE_R": 0.952,
+        "avgMFE_R": 1.085
+      },
+      "bySession": {
+        "OFF": 448,
+        "TOKYO": 821,
+        "LONDON": 624,
+        "LONDON_NY": 541,
+        "NEWYORK": 417
+      },
+      "byBaseCurrency": {
+        "EUR": 708,
+        "USD": 290,
+        "AUD": 683,
+        "NZD": 605,
+        "CAD": 239,
+        "GBP": 325,
+        "CHF": 1
+      },
+      "byQuoteCurrency": {
+        "CHF": 977,
+        "USD": 612,
+        "CAD": 631,
+        "GBP": 159,
+        "NZD": 130,
+        "JPY": 266,
+        "AUD": 76
+      }
+    },
+    {
+      "id": "E_compression_release",
+      "family": "E_compression_release",
+      "ruleHash": "cfacf921d353e185",
+      "variant": {},
+      "episodes": 0,
+      "filled": 0,
+      "staleExcluded": 0,
+      "noData": 0,
+      "ambiguousShare": null,
+      "directionAccuracy": {
+        "4": null,
+        "6": null,
+        "8": null,
+        "10": null
+      },
+      "forwardMeanPips": {
+        "4": null,
+        "6": null,
+        "8": null,
+        "10": null
+      },
+      "economics_estimated": {
+        "avgNetR_mid0": null,
+        "avgNetR_typical1p2": null,
+        "avgNetR_stress2p4": null,
+        "avgNetR_delay2": null,
+        "winRate_typical": null,
+        "avgGrossPips": null,
+        "breakEvenSpreadPips": null,
+        "avgMAE_R": null,
+        "avgMFE_R": null
+      },
+      "bySession": {},
+      "byBaseCurrency": {},
+      "byQuoteCurrency": {}
+    },
+    {
+      "id": "F_failed_extension",
+      "family": "F_failed_extension",
+      "ruleHash": "c8b378c38cadd862",
+      "variant": {},
+      "episodes": 0,
+      "filled": 0,
+      "staleExcluded": 0,
+      "noData": 0,
+      "ambiguousShare": null,
+      "directionAccuracy": {
+        "4": null,
+        "6": null,
+        "8": null,
+        "10": null
+      },
+      "forwardMeanPips": {
+        "4": null,
+        "6": null,
+        "8": null,
+        "10": null
+      },
+      "economics_estimated": {
+        "avgNetR_mid0": null,
+        "avgNetR_typical1p2": null,
+        "avgNetR_stress2p4": null,
+        "avgNetR_delay2": null,
+        "winRate_typical": null,
+        "avgGrossPips": null,
+        "breakEvenSpreadPips": null,
+        "avgMAE_R": null,
+        "avgMFE_R": null
+      },
+      "bySession": {},
+      "byBaseCurrency": {},
+      "byQuoteCurrency": {}
+    },
+    {
+      "id": "CTRL_pseudo_random",
+      "family": "control",
+      "ruleHash": "68f0af25c1c7e2ec",
+      "variant": {},
+      "episodes": 14667,
+      "filled": 14634,
+      "staleExcluded": 27,
+      "noData": 6,
+      "ambiguousShare": 0.4,
+      "directionAccuracy": {
+        "4": 0.493,
+        "6": 0.495,
+        "8": 0.491,
+        "10": 0.495
+      },
+      "forwardMeanPips": {
+        "4": -0.18,
+        "6": -0.32,
+        "8": -0.43,
+        "10": -0.5
+      },
+      "economics_estimated": {
+        "avgNetR_mid0": -0.015,
+        "avgNetR_typical1p2": -0.3,
+        "avgNetR_stress2p4": -0.585,
+        "avgNetR_delay2": -0.295,
+        "winRate_typical": 0.344,
+        "avgGrossPips": 0.04,
+        "breakEvenSpreadPips": 0.04,
+        "avgMAE_R": 0.885,
+        "avgMFE_R": 1
+      },
+      "bySession": {
+        "OFF": 1777,
+        "TOKYO": 4341,
+        "LONDON": 3045,
+        "LONDON_NY": 2435,
+        "NEWYORK": 3036
+      },
+      "byBaseCurrency": {
+        "AUD": 2572,
+        "CAD": 1034,
+        "EUR": 3712,
+        "GBP": 3146,
+        "NZD": 2102,
+        "USD": 1559,
+        "CHF": 509
+      },
+      "byQuoteCurrency": {
+        "CAD": 2600,
+        "CHF": 3146,
+        "JPY": 3630,
+        "NZD": 1539,
+        "GBP": 555,
+        "USD": 2104,
+        "AUD": 1060
+      }
+    },
+    {
+      "id": "NULL_no_signal",
+      "family": "control",
+      "ruleHash": "3606e76eb767da70",
+      "variant": {},
+      "episodes": 0,
+      "filled": 0,
+      "staleExcluded": 0,
+      "noData": 0,
+      "ambiguousShare": null,
+      "directionAccuracy": {
+        "4": null,
+        "6": null,
+        "8": null,
+        "10": null
+      },
+      "forwardMeanPips": {
+        "4": null,
+        "6": null,
+        "8": null,
+        "10": null
+      },
+      "economics_estimated": {
+        "avgNetR_mid0": null,
+        "avgNetR_typical1p2": null,
+        "avgNetR_stress2p4": null,
+        "avgNetR_delay2": null,
+        "winRate_typical": null,
+        "avgGrossPips": null,
+        "breakEvenSpreadPips": null,
+        "avgMAE_R": null,
+        "avgMFE_R": null
+      },
+      "bySession": {},
+      "byBaseCurrency": {},
+      "byQuoteCurrency": {}
+    }
+  ]
+}

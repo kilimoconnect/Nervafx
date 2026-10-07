@@ -1,0 +1,330 @@
+{
+  "researchVersion": "m15-research-3.0.0",
+  "note": "Pre-registered research hypotheses. Not actionable production signals. No winner claimed.",
+  "variantBudget": {
+    "candidates": 11,
+    "totalParameterVariants": 15
+  },
+  "candidates": [
+    {
+      "id": "A0_baseline_dir10",
+      "family": "A_baseline",
+      "direction": "WITH",
+      "hypothesis": "Direction of the last 10 M15 candles (sign of R10) predicts the next move — a naive baseline.",
+      "entry": "At the close, take R10 direction.",
+      "exit": "Fixed 2R target.",
+      "invalidation": "Fixed stop.",
+      "timeout": "8 M15 closes.",
+      "eligibility": "Complete, aligned 28-pair snapshot; pair present.",
+      "costAssumptions": "Deferred to Stage 4: candle store is MID-only (no spread). No cost applied at signal time; spread/slippage/human-delay modelled later from an external source.",
+      "params": {
+        "deadbandZ": 0
+      },
+      "paramBounds": {
+        "deadbandZ": [
+          0,
+          1
+        ]
+      },
+      "variants": [
+        {
+          "deadbandZ": 0
+        },
+        {
+          "deadbandZ": 0.5
+        }
+      ],
+      "readsFeatures": [
+        "horizons[10].R",
+        "horizons[10].z"
+      ],
+      "ruleHash": "a05de052b8d993d5",
+      "registeredAt": "2026-09-27"
+    },
+    {
+      "id": "A1_dir10_plus_consistency",
+      "family": "A_baseline",
+      "direction": "WITH",
+      "hypothesis": "Baseline direction is more reliable when the 10-candle path is directionally consistent (|P10| high).",
+      "entry": "R10 direction, only if |P10| ≥ consistMin.",
+      "exit": "2R.",
+      "invalidation": "stop.",
+      "timeout": "8 closes.",
+      "eligibility": "as A0",
+      "costAssumptions": "Deferred to Stage 4: candle store is MID-only (no spread). No cost applied at signal time; spread/slippage/human-delay modelled later from an external source.",
+      "params": {
+        "deadbandZ": 0.5,
+        "consistMin": 50
+      },
+      "paramBounds": {
+        "consistMin": [
+          30,
+          80
+        ]
+      },
+      "variants": [
+        {
+          "consistMin": 40
+        },
+        {
+          "consistMin": 60
+        }
+      ],
+      "readsFeatures": [
+        "horizons[10].R",
+        "horizons[10].P",
+        "horizons[10].z"
+      ],
+      "ruleHash": "41788d12f6687215",
+      "registeredAt": "2026-09-27"
+    },
+    {
+      "id": "A2_plus_breadth",
+      "family": "A_baseline",
+      "direction": "WITH",
+      "hypothesis": "Consistent baseline direction supported by broad currency-network breadth (base vs quote) is stronger evidence.",
+      "entry": "as A1, AND (breadth[base].net − breadth[quote].net) supports the direction by ≥ breadthMin.",
+      "exit": "2R.",
+      "invalidation": "stop.",
+      "timeout": "8 closes.",
+      "eligibility": "as A1",
+      "costAssumptions": "Deferred to Stage 4: candle store is MID-only (no spread). No cost applied at signal time; spread/slippage/human-delay modelled later from an external source.",
+      "params": {
+        "deadbandZ": 0.5,
+        "consistMin": 50,
+        "breadthMin": 1
+      },
+      "paramBounds": {
+        "breadthMin": [
+          1,
+          4
+        ]
+      },
+      "variants": [
+        {
+          "breadthMin": 1
+        },
+        {
+          "breadthMin": 2
+        }
+      ],
+      "readsFeatures": [
+        "horizons[10].R",
+        "horizons[10].P",
+        "net.breadth[base|quote].net",
+        "net.gap"
+      ],
+      "ruleHash": "edfe1394c96dc603",
+      "registeredAt": "2026-09-27"
+    },
+    {
+      "id": "A3_plus_structure_energy",
+      "family": "A_baseline",
+      "direction": "WITH",
+      "hypothesis": "Add production energy-direction alignment and exclude chaotic/dead energy.",
+      "entry": "as A2, AND prod energyDirection matches and is not CHAOTIC/DEAD.",
+      "exit": "2R.",
+      "invalidation": "energy flips or dies.",
+      "timeout": "8 closes.",
+      "eligibility": "as A2",
+      "costAssumptions": "Deferred to Stage 4: candle store is MID-only (no spread). No cost applied at signal time; spread/slippage/human-delay modelled later from an external source.",
+      "params": {
+        "deadbandZ": 0.5,
+        "consistMin": 50,
+        "breadthMin": 1
+      },
+      "paramBounds": {},
+      "variants": [
+        {}
+      ],
+      "readsFeatures": [
+        "horizons[10].*",
+        "net.breadth",
+        "prod.energy.energyDirection",
+        "prod.energy.energyLevel"
+      ],
+      "ruleHash": "4fbcb43b0511470c",
+      "registeredAt": "2026-09-27"
+    },
+    {
+      "id": "B_continuation_4after10",
+      "family": "B_continuation",
+      "direction": "WITH",
+      "hypothesis": "After a meaningful 10-candle move, a fresh consistent 4-candle push in the same direction continues.",
+      "entry": "|z10| ≥ meaningfulZ AND sign(R4)=sign(R10) AND |P4| ≥ pressMin.",
+      "exit": "2R.",
+      "invalidation": "R4 flips against R10.",
+      "timeout": "6 closes.",
+      "eligibility": "complete snapshot; ≥10 candles",
+      "costAssumptions": "Deferred to Stage 4: candle store is MID-only (no spread). No cost applied at signal time; spread/slippage/human-delay modelled later from an external source.",
+      "params": {
+        "meaningfulZ": 1,
+        "pressMin": 60
+      },
+      "paramBounds": {
+        "meaningfulZ": [
+          0.5,
+          2
+        ],
+        "pressMin": [
+          40,
+          80
+        ]
+      },
+      "variants": [
+        {
+          "pressMin": 50
+        },
+        {
+          "pressMin": 70
+        }
+      ],
+      "readsFeatures": [
+        "horizons[10].z",
+        "horizons[10].R",
+        "horizons[4].R",
+        "horizons[4].P"
+      ],
+      "ruleHash": "7b36a2b5a83d701e",
+      "registeredAt": "2026-09-27"
+    },
+    {
+      "id": "C_early_expansion",
+      "family": "C_early_expansion",
+      "direction": "WITH",
+      "hypothesis": "Early adaptive expansion out of accepted balance (production EARLY/ATTEMPTING, not late/overextended) resumes.",
+      "entry": "marketState *_EXPANSION AND expansion∈{EARLY,ATTEMPTING} AND freshness∉{LATE,EXHAUSTED}.",
+      "exit": "2R.",
+      "invalidation": "freshness LATE or expansion OVEREXTENDED/DEVELOPED.",
+      "timeout": "8 closes.",
+      "eligibility": "production per-pair engines available",
+      "costAssumptions": "Deferred to Stage 4: candle store is MID-only (no spread). No cost applied at signal time; spread/slippage/human-delay modelled later from an external source.",
+      "params": {},
+      "paramBounds": {},
+      "variants": [
+        {}
+      ],
+      "readsFeatures": [
+        "prod.marketState.state",
+        "prod.expansion.state",
+        "prod.freshness.state"
+      ],
+      "ruleHash": "8c17afc242a22ae8",
+      "registeredAt": "2026-09-27"
+    },
+    {
+      "id": "D_first_pullback",
+      "family": "D_first_pullback",
+      "direction": "WITH",
+      "hypothesis": "A first controlled pullback within a fresh impulse resumes in the impulse direction.",
+      "entry": "marketState *_PULLBACK AND pullback.isPullback AND not late.",
+      "exit": "2R.",
+      "invalidation": "not late lost / structure invalidated.",
+      "timeout": "8 closes.",
+      "eligibility": "production engines",
+      "costAssumptions": "Deferred to Stage 4: candle store is MID-only (no spread). No cost applied at signal time; spread/slippage/human-delay modelled later from an external source.",
+      "params": {},
+      "paramBounds": {},
+      "variants": [
+        {}
+      ],
+      "readsFeatures": [
+        "prod.marketState.state",
+        "prod.marketState.pullback.isPullback",
+        "prod.freshness.state"
+      ],
+      "ruleHash": "4024eb17bd1428bf",
+      "registeredAt": "2026-09-27"
+    },
+    {
+      "id": "E_compression_release",
+      "family": "E_compression_release",
+      "direction": "WITH",
+      "hypothesis": "A valid compression that begins releasing with building directional pressure expands in the pressure direction.",
+      "entry": "marketState COMPRESSION AND compression∈{ACTIVE,TIGHT,RELEASING} AND pressure building/dominant.",
+      "exit": "2R.",
+      "invalidation": "pressure balances or compression fails.",
+      "timeout": "8 closes.",
+      "eligibility": "production engines",
+      "costAssumptions": "Deferred to Stage 4: candle store is MID-only (no spread). No cost applied at signal time; spread/slippage/human-delay modelled later from an external source.",
+      "params": {},
+      "paramBounds": {},
+      "variants": [
+        {}
+      ],
+      "readsFeatures": [
+        "prod.marketState.state",
+        "prod.compression.state",
+        "prod.pressure.pressureState"
+      ],
+      "ruleHash": "cfacf921d353e185",
+      "registeredAt": "2026-09-27"
+    },
+    {
+      "id": "F_failed_extension",
+      "family": "F_failed_extension",
+      "direction": "AGAINST",
+      "hypothesis": "A failed extension (production FAILED_*_EXPANSION) rotates in the OPPOSING direction.",
+      "entry": "marketState FAILED_BULLISH_EXPANSION ⇒ SHORT (and mirror), while not already overextended against.",
+      "exit": "2R.",
+      "invalidation": "the failed state resolves back with-trend.",
+      "timeout": "8 closes.",
+      "eligibility": "production engines",
+      "costAssumptions": "Deferred to Stage 4: candle store is MID-only (no spread). No cost applied at signal time; spread/slippage/human-delay modelled later from an external source.",
+      "params": {},
+      "paramBounds": {},
+      "variants": [
+        {}
+      ],
+      "readsFeatures": [
+        "prod.marketState.state"
+      ],
+      "ruleHash": "c8b378c38cadd862",
+      "registeredAt": "2026-09-27"
+    },
+    {
+      "id": "CTRL_pseudo_random",
+      "family": "control",
+      "direction": "NEUTRAL",
+      "hypothesis": "Deterministic pseudo-random direction — a NULL benchmark to bound spurious performance.",
+      "entry": "hash(pair, close) → LONG/SHORT/NONE (~1/3 each).",
+      "exit": "2R.",
+      "invalidation": "none.",
+      "timeout": "8 closes.",
+      "eligibility": "complete snapshot",
+      "costAssumptions": "Deferred to Stage 4: candle store is MID-only (no spread). No cost applied at signal time; spread/slippage/human-delay modelled later from an external source.",
+      "params": {
+        "seed": "stage3"
+      },
+      "paramBounds": {},
+      "variants": [
+        {}
+      ],
+      "readsFeatures": [
+        "none (uses close timestamp only)"
+      ],
+      "ruleHash": "68f0af25c1c7e2ec",
+      "registeredAt": "2026-09-27"
+    },
+    {
+      "id": "NULL_no_signal",
+      "family": "control",
+      "direction": "NEUTRAL",
+      "hypothesis": "Never signal — the do-nothing option; the lower bound on activity.",
+      "entry": "never.",
+      "exit": "n/a",
+      "invalidation": "n/a",
+      "timeout": "n/a",
+      "eligibility": "n/a",
+      "costAssumptions": "none",
+      "params": {},
+      "paramBounds": {},
+      "variants": [
+        {}
+      ],
+      "readsFeatures": [],
+      "ruleHash": "3606e76eb767da70",
+      "registeredAt": "2026-09-27"
+    }
+  ]
+}

@@ -1,0 +1,134 @@
+{
+  "savedAt": "2026-09-27T09:08:20.454Z",
+  "note": "IMMUTABLE pre-audit baseline (Stage 5, research v3.0.0). Preserved before the time-axis fix.",
+  "hashes": {
+    "stage5_scorecard": "f8fd8451ce511b8f",
+    "stage4_episodes": "5b622f1f2f9ee7fb",
+    "stage4_backtest": "ccd3c015359297c3"
+  },
+  "reported": {
+    "window": {
+      "from": "2026-08-25",
+      "to": "2026-09-25"
+    },
+    "conclusion": "NONE PASSED — no candidate meets the standard; continue observation (post-freeze shadow).",
+    "baselineEvalMeanNetR": -0.319,
+    "controlEvalMeanNetR": -0.289,
+    "closesEvaluated_reported": 3056,
+    "distinctFrames_measured": 2287,
+    "staleReEvals_measured": 769,
+    "maxOneFrameEvaluated": 193,
+    "scorecard": [
+      {
+        "id": "A0_baseline_dir10",
+        "evalN": 5467,
+        "evalMeanNetR": -0.319,
+        "ci": [
+          -0.355,
+          -0.289
+        ],
+        "verdict": "REJECT"
+      },
+      {
+        "id": "A1_dir10_plus_consistency",
+        "evalN": 2098,
+        "evalMeanNetR": -0.262,
+        "ci": [
+          -0.333,
+          -0.246
+        ],
+        "verdict": "REJECT"
+      },
+      {
+        "id": "A2_plus_breadth",
+        "evalN": 1604,
+        "evalMeanNetR": -0.25,
+        "ci": [
+          -0.333,
+          -0.223
+        ],
+        "verdict": "REJECT"
+      },
+      {
+        "id": "A3_plus_structure_energy",
+        "evalN": 148,
+        "evalMeanNetR": -0.515,
+        "ci": [
+          -0.633,
+          -0.31
+        ],
+        "verdict": "REJECT"
+      },
+      {
+        "id": "B_continuation_4after10",
+        "evalN": 1579,
+        "evalMeanNetR": -0.27,
+        "ci": [
+          -0.406,
+          -0.218
+        ],
+        "verdict": "REJECT"
+      },
+      {
+        "id": "C_early_expansion",
+        "evalN": 932,
+        "evalMeanNetR": -0.293,
+        "ci": [
+          -0.385,
+          -0.25
+        ],
+        "verdict": "REJECT"
+      },
+      {
+        "id": "D_first_pullback",
+        "evalN": 1460,
+        "evalMeanNetR": -0.359,
+        "ci": [
+          -0.421,
+          -0.249
+        ],
+        "verdict": "REJECT"
+      },
+      {
+        "id": "E_compression_release",
+        "evalN": 0,
+        "evalMeanNetR": null,
+        "ci": [
+          null,
+          null
+        ],
+        "verdict": "INSUFFICIENT_EVIDENCE"
+      },
+      {
+        "id": "F_failed_extension",
+        "evalN": 0,
+        "evalMeanNetR": null,
+        "ci": [
+          null,
+          null
+        ],
+        "verdict": "INSUFFICIENT_EVIDENCE"
+      },
+      {
+        "id": "CTRL_pseudo_random",
+        "evalN": 7283,
+        "evalMeanNetR": -0.289,
+        "ci": [
+          -0.314,
+          -0.264
+        ],
+        "verdict": "REJECT"
+      },
+      {
+        "id": "NULL_no_signal",
+        "evalN": 0,
+        "evalMeanNetR": null,
+        "ci": [
+          null,
+          null
+        ],
+        "verdict": "INSUFFICIENT_EVIDENCE"
+      }
+    ]
+  }
+}

@@ -1,0 +1,289 @@
+{
+  "generatedAt": "2026-09-27T09:12:24.070Z",
+  "window": {
+    "from": "2026-08-25",
+    "to": "2026-09-25"
+  },
+  "researchVersion": "m15-research-3.0.0",
+  "decisionStandard": "positive OOS net economics (CI>0), gain over simpler baseline, beats control, fold-stable (≥60% positive weeks), not one-currency (≤50%), ≥30 OOS episodes. Verdicts: SELECT_FOR_SHADOW | REJECT | INSUFFICIENT_EVIDENCE. Never PROVEN_PROFITABLE.",
+  "baselineEvalMeanNetR": -0.302,
+  "controlEvalMeanNetR": -0.287,
+  "trialRegistry": {
+    "candidates": 11,
+    "totalVariants": 15
+  },
+  "scorecard": [
+    {
+      "id": "A0_baseline_dir10",
+      "selectedVariant": "{\"deadbandZ\":0.5}",
+      "totalEpisodes": 17380,
+      "trainMeanNetR": -0.331,
+      "evalMeanNetR": -0.302,
+      "evalCI": {
+        "n": 3160,
+        "weeks": 4,
+        "mean": -0.302,
+        "ciLow": -0.334,
+        "ciHigh": -0.281
+      },
+      "positiveFoldShare": 0,
+      "folds": 4,
+      "clusterConcentration": 0.258,
+      "baselineEvalMeanNetR": -0.302,
+      "controlEvalMeanNetR": -0.287,
+      "verdict": "REJECT",
+      "reasons": [
+        "OOS net R CI entirely below 0 [-0.334, -0.281]"
+      ]
+    },
+    {
+      "id": "A1_dir10_plus_consistency",
+      "selectedVariant": "{\"consistMin\":40}",
+      "totalEpisodes": 6954,
+      "trainMeanNetR": -0.346,
+      "evalMeanNetR": -0.263,
+      "evalCI": {
+        "n": 2273,
+        "weeks": 4,
+        "mean": -0.263,
+        "ciLow": -0.346,
+        "ciHigh": -0.249
+      },
+      "positiveFoldShare": 0,
+      "folds": 4,
+      "clusterConcentration": 0.26,
+      "baselineEvalMeanNetR": -0.302,
+      "controlEvalMeanNetR": -0.287,
+      "verdict": "REJECT",
+      "reasons": [
+        "OOS net R CI entirely below 0 [-0.346, -0.249]"
+      ]
+    },
+    {
+      "id": "A2_plus_breadth",
+      "selectedVariant": "{\"breadthMin\":1}",
+      "totalEpisodes": 6791,
+      "trainMeanNetR": -0.381,
+      "evalMeanNetR": -0.25,
+      "evalCI": {
+        "n": 1688,
+        "weeks": 4,
+        "mean": -0.25,
+        "ciLow": -0.346,
+        "ciHigh": -0.227
+      },
+      "positiveFoldShare": 0,
+      "folds": 4,
+      "clusterConcentration": 0.257,
+      "baselineEvalMeanNetR": -0.302,
+      "controlEvalMeanNetR": -0.287,
+      "verdict": "REJECT",
+      "reasons": [
+        "OOS net R CI entirely below 0 [-0.346, -0.227]"
+      ]
+    },
+    {
+      "id": "A3_plus_structure_energy",
+      "selectedVariant": "{}",
+      "totalEpisodes": 298,
+      "trainMeanNetR": -0.089,
+      "evalMeanNetR": -0.515,
+      "evalCI": {
+        "n": 148,
+        "weeks": 4,
+        "mean": -0.515,
+        "ciLow": -0.633,
+        "ciHigh": -0.31
+      },
+      "positiveFoldShare": 0,
+      "folds": 4,
+      "clusterConcentration": 0.284,
+      "baselineEvalMeanNetR": -0.302,
+      "controlEvalMeanNetR": -0.287,
+      "verdict": "REJECT",
+      "reasons": [
+        "OOS net R CI entirely below 0 [-0.633, -0.31]"
+      ]
+    },
+    {
+      "id": "B_continuation_4after10",
+      "selectedVariant": "{\"pressMin\":50}",
+      "totalEpisodes": 5969,
+      "trainMeanNetR": -0.28,
+      "evalMeanNetR": -0.273,
+      "evalCI": {
+        "n": 1619,
+        "weeks": 4,
+        "mean": -0.273,
+        "ciLow": -0.404,
+        "ciHigh": -0.218
+      },
+      "positiveFoldShare": 0,
+      "folds": 4,
+      "clusterConcentration": 0.27,
+      "baselineEvalMeanNetR": -0.302,
+      "controlEvalMeanNetR": -0.287,
+      "verdict": "REJECT",
+      "reasons": [
+        "OOS net R CI entirely below 0 [-0.404, -0.218]"
+      ]
+    },
+    {
+      "id": "C_early_expansion",
+      "selectedVariant": "{}",
+      "totalEpisodes": 1984,
+      "trainMeanNetR": -0.444,
+      "evalMeanNetR": -0.294,
+      "evalCI": {
+        "n": 987,
+        "weeks": 4,
+        "mean": -0.294,
+        "ciLow": -0.365,
+        "ciHigh": -0.25
+      },
+      "positiveFoldShare": 0,
+      "folds": 4,
+      "clusterConcentration": 0.364,
+      "baselineEvalMeanNetR": -0.302,
+      "controlEvalMeanNetR": -0.287,
+      "verdict": "REJECT",
+      "reasons": [
+        "OOS net R CI entirely below 0 [-0.365, -0.25]"
+      ]
+    },
+    {
+      "id": "D_first_pullback",
+      "selectedVariant": "{}",
+      "totalEpisodes": 2860,
+      "trainMeanNetR": -0.359,
+      "evalMeanNetR": -0.366,
+      "evalCI": {
+        "n": 1417,
+        "weeks": 4,
+        "mean": -0.366,
+        "ciLow": -0.421,
+        "ciHigh": -0.262
+      },
+      "positiveFoldShare": 0,
+      "folds": 4,
+      "clusterConcentration": 0.366,
+      "baselineEvalMeanNetR": -0.302,
+      "controlEvalMeanNetR": -0.287,
+      "verdict": "REJECT",
+      "reasons": [
+        "OOS net R CI entirely below 0 [-0.421, -0.262]"
+      ]
+    },
+    {
+      "id": "E_compression_release",
+      "totalEpisodes": 0,
+      "evalMeanNetR": null,
+      "evalCI": {
+        "n": 0,
+        "ciLow": null,
+        "ciHigh": null
+      },
+      "positiveFoldShare": null,
+      "clusterConcentration": null,
+      "verdict": "INSUFFICIENT_EVIDENCE",
+      "reasons": [
+        "no episodes in window"
+      ]
+    },
+    {
+      "id": "F_failed_extension",
+      "totalEpisodes": 0,
+      "evalMeanNetR": null,
+      "evalCI": {
+        "n": 0,
+        "ciLow": null,
+        "ciHigh": null
+      },
+      "positiveFoldShare": null,
+      "clusterConcentration": null,
+      "verdict": "INSUFFICIENT_EVIDENCE",
+      "reasons": [
+        "no episodes in window"
+      ]
+    },
+    {
+      "id": "CTRL_pseudo_random",
+      "selectedVariant": "{}",
+      "totalEpisodes": 14667,
+      "trainMeanNetR": -0.307,
+      "evalMeanNetR": -0.287,
+      "evalCI": {
+        "n": 7287,
+        "weeks": 4,
+        "mean": -0.287,
+        "ciLow": -0.312,
+        "ciHigh": -0.264
+      },
+      "positiveFoldShare": 0,
+      "folds": 4,
+      "clusterConcentration": 0.253,
+      "baselineEvalMeanNetR": -0.302,
+      "controlEvalMeanNetR": -0.287,
+      "verdict": "REJECT",
+      "reasons": [
+        "OOS net R CI entirely below 0 [-0.312, -0.264]"
+      ]
+    },
+    {
+      "id": "NULL_no_signal",
+      "totalEpisodes": 0,
+      "evalMeanNetR": null,
+      "evalCI": {
+        "n": 0,
+        "ciLow": null,
+        "ciHigh": null
+      },
+      "positiveFoldShare": null,
+      "clusterConcentration": null,
+      "verdict": "INSUFFICIENT_EVIDENCE",
+      "reasons": [
+        "no episodes in window"
+      ]
+    }
+  ],
+  "incrementalLadder": [
+    {
+      "from": "A0_baseline_dir10",
+      "to": "A1_dir10_plus_consistency",
+      "baselineEpisodes": 6386,
+      "addEpisodes": 4572,
+      "sharedFilled": 1573,
+      "removed": 4806,
+      "added": 2992,
+      "baselineMeanNetR": -0.317,
+      "addMeanNetR": -0.304,
+      "meanNetR_onShared_add": -0.287
+    },
+    {
+      "from": "A1_dir10_plus_consistency",
+      "to": "A2_plus_breadth",
+      "baselineEpisodes": 4572,
+      "addEpisodes": 3401,
+      "sharedFilled": 1754,
+      "removed": 2814,
+      "added": 1643,
+      "baselineMeanNetR": -0.304,
+      "addMeanNetR": -0.316,
+      "meanNetR_onShared_add": -0.316
+    },
+    {
+      "from": "A2_plus_breadth",
+      "to": "A3_plus_structure_energy",
+      "baselineEpisodes": 3401,
+      "addEpisodes": 298,
+      "sharedFilled": 79,
+      "removed": 3322,
+      "added": 219,
+      "baselineMeanNetR": -0.316,
+      "addMeanNetR": -0.266,
+      "meanNetR_onShared_add": -0.056
+    }
+  ],
+  "shadowCandidate": null,
+  "conclusion": "NONE PASSED — no candidate meets the standard; continue observation (post-freeze shadow)."
+}

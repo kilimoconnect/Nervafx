@@ -1,0 +1,30 @@
+{
+  "window": {
+    "days": 40,
+    "candlesPerPairMin": 2865,
+    "candlesPerPairMax": 2867
+  },
+  "timings": {
+    "dbLoadMs": 93819,
+    "oneSnapshotMs": 66.7,
+    "oneSnapshotWithDescriptorsMs": 421.8,
+    "replayCloses": 200,
+    "replayTotalMs": 5725,
+    "replayPerCloseMs": 28.63
+  },
+  "sampleSnapshot": {
+    "close": "2026-09-25T20:45:00.000Z",
+    "session": "NEWYORK",
+    "aligned": true,
+    "featureVersion": "m15-feat-1.0.0",
+    "inputHash": "79f02b177e633f45",
+    "EUR_USD_R": {
+      "4": -0.000377,
+      "10": 0.000088
+    },
+    "EUR_USD_P10": 6,
+    "EUR_USD_z10": 0.10312721614140508,
+    "network10_zeroSum": true,
+    "gap_EUR_USD_10": 0.000094
+  }
+}

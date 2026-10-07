@@ -1,0 +1,127 @@
+{
+  "version": "m15-infocontent-1.0.0",
+  "registrationHash": "c5a26dd1582726d5267694e75397c9dea28c1d36f2df5265cf1698408e4dd6b6",
+  "provenance": "SYNTHETIC_EXPLORATORY",
+  "economics": "ESTIMATED",
+  "stage5Preserved": {
+    "decision": "NONE PASSED",
+    "immutable": true,
+    "note": "Stage 5/5A unchanged; a gate pass only permits owner review for a FUTURE prospective shadow cohort."
+  },
+  "horizon": 8,
+  "scenario": {
+    "spread": 0.0001,
+    "delay": 0
+  },
+  "seed": 20261007,
+  "hypotheses": {
+    "H1": {
+      "hypothesis": "H1",
+      "metric": "accepted same-dir netR",
+      "n": 2,
+      "weeks": 1,
+      "mean": 2.1816,
+      "ciLow": null,
+      "ciHigh": null,
+      "posWeekShare": null,
+      "pOneSided": null,
+      "controlMatchedOppMean": 0.8333,
+      "concentrationPair": {
+        "maxShare": 0.5,
+        "key": "EUR_GBP",
+        "groups": 2
+      },
+      "concentrationCurrency": {
+        "maxShare": 1,
+        "key": "EUR",
+        "groups": 1
+      },
+      "tail": {
+        "worst": 1.0061,
+        "p05": 1.0061,
+        "mean": 2.1816
+      },
+      "holmReject": false,
+      "verdict": "INSUFFICIENT_EVIDENCE",
+      "reasons": [
+        "data provenance SYNTHETIC_EXPLORATORY is EXPLORATORY/SYNTHETIC"
+      ]
+    },
+    "H2": {
+      "hypothesis": "H2",
+      "metric": "accepted − rejected continuation rate",
+      "n": 0,
+      "weeks": 0,
+      "mean": 0,
+      "ciLow": null,
+      "ciHigh": null,
+      "posWeekShare": null,
+      "pOneSided": null,
+      "nAccepted": 0,
+      "nRejected": 0,
+      "holmReject": false,
+      "verdict": "INSUFFICIENT_EVIDENCE",
+      "reasons": [
+        "data provenance SYNTHETIC_EXPLORATORY is EXPLORATORY/SYNTHETIC"
+      ]
+    },
+    "H3": {
+      "hypothesis": "H3",
+      "metric": "confirmed − price-only netR (same episodes)",
+      "n": 2,
+      "weeks": 1,
+      "mean": 0,
+      "ciLow": null,
+      "ciHigh": null,
+      "posWeekShare": null,
+      "pOneSided": null,
+      "confirmedEpisodes": 2,
+      "holmReject": false,
+      "verdict": "INSUFFICIENT_EVIDENCE",
+      "reasons": [
+        "data provenance SYNTHETIC_EXPLORATORY is EXPLORATORY/SYNTHETIC"
+      ]
+    }
+  },
+  "trials": [
+    {
+      "hypothesis": "H1",
+      "metric": "accepted same-dir netR",
+      "n": 2,
+      "weeks": 1,
+      "mean": 2.1816,
+      "ciLow": null,
+      "ciHigh": null,
+      "posWeekShare": null,
+      "pOneSided": null,
+      "controlMatchedOppMean": 0.8333
+    },
+    {
+      "hypothesis": "H2",
+      "metric": "accepted − rejected continuation rate",
+      "n": 0,
+      "weeks": 0,
+      "mean": 0,
+      "ciLow": null,
+      "ciHigh": null,
+      "posWeekShare": null,
+      "pOneSided": null,
+      "nAccepted": 0,
+      "nRejected": 0
+    },
+    {
+      "hypothesis": "H3",
+      "metric": "confirmed − price-only netR (same episodes)",
+      "n": 2,
+      "weeks": 1,
+      "mean": 0,
+      "ciLow": null,
+      "ciHigh": null,
+      "posWeekShare": null,
+      "pOneSided": null,
+      "confirmedEpisodes": 2
+    }
+  ],
+  "disclaimer": "Historical fit is NOT proof of live profitability. Economics ESTIMATED (mid-only). No live signals/scheduler/broker/deploy/push.",
+  "dataHash": "d58aabcd3e2a0792"
+}

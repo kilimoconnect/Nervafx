@@ -1,0 +1,57 @@
+{
+  "stage": 1,
+  "generatedAt": "2026-09-27T08:02:48.741Z",
+  "gitRevision": "c9d540992ae07fcf1c343662dcdd53957ce8c46a",
+  "productionEngineReference": {
+    "note": "The research layer is SEPARATE and does NOT use these production configs/decisions.",
+    "baselineVersion": "m15-cfg-1.0.0",
+    "baselineHash": "be69b3c4af041e9d",
+    "acceptedVersion": "m15-cfg-1.1.0a",
+    "acceptedHash": "7c1a0ef93808702e"
+  },
+  "data": {
+    "source": "OANDA",
+    "priceType": "MID (OANDA price=M) — no bid/ask, so no candle-store spread",
+    "spread": "NOT in candle store (mid only, no bid/ask)",
+    "volumeType": "OANDA tick/price-count (NOT trading volume)",
+    "timestamp": "time = candle START (UTC, timestamptz); close = time + 15m; complete-only ingested",
+    "uniqueKey": "UNIQUE(instrument,timeframe,time) — structural dedup",
+    "instruments": 28,
+    "pairsCovered": 28,
+    "totalM15Rows": 946934,
+    "earliest": "2025-05-19T13:15:00+00:00",
+    "latest": "2026-09-25T20:30:00+00:00",
+    "targetEndReported": "2026-09-25",
+    "pairsReachingTarget": 28,
+    "laggards": [],
+    "integrityTotals": {
+      "duplicates": 0,
+      "incomplete": 0,
+      "badOHLC": 0,
+      "volNull": 0,
+      "volZero": 0,
+      "nonOanda": 0,
+      "intradayMissingCandles": 5448,
+      "rangeOutliers": 533
+    },
+    "dataHash": "84405f31dc880be4"
+  },
+  "replayContract": {
+    "timestampSemantics": "OANDA time = candle START (UTC); close = time+15m; complete-only ingested",
+    "eligibility": "a candle is eligible at close T iff open + 15m <= T",
+    "boundaryTest": "T=2026-09-10T12:00:00Z (15:00 EAT) -> include 11:45Z (14:45 EAT), exclude 12:00Z (15:00 EAT)",
+    "cadence": "full-cadence: every completed M15 close",
+    "asOf": "one synchronized 28-pair view drives every feature, cross-pair calc, chart and decision"
+  },
+  "costsAssumed": "NONE in Stage 1 (no strategies). Spread/slippage MUST be modelled from an external source later — the candle store is mid-only.",
+  "existingReports": {
+    "phase1FullCadence": "COMPLETED (docs/phase1) — full-cadence stride-1 replay, ~7,008 closes / 196,224 pair-evals",
+    "oldValidationHourlySample": "docs/M15_VALIDATION.md is an every-4th-close HOURLY SAMPLE; its ~10-13 fills are NOT a full-cadence baseline and NOT a profitability basis"
+  },
+  "episodeDefinition": "N/A in Stage 1 — no strategies created",
+  "testCommands": [
+    "node --test tests/research/loader.test.js",
+    "node scripts/research/audit-m15.js"
+  ],
+  "researchInterface": "research/m15/loader.js: syncAsOf(historiesByPair, evaluationCloseUtc) | replay(histories,{fromCloseMs,toCloseMs,onClose,warmupCandles,startAtCloseMs}) | integrityReport | loadAllPairsFromDb (SELECT-only, batched, chronological)"
+}

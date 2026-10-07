@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NervaFX — Strategy Research</title>
+<!-- LOCAL RESEARCH VIEW — NOT published/deployed in this task. When served it must be
+     behind the same authentication as the app. It is read-only, has no order path,
+     and never sends notices. It reads docs/research/stage5_scorecard.json + research_health.json. -->
+<style>
+  :root{--bg:#0b0f17;--panel:#111826;--panel2:#0e1521;--bd:#1e2a3d;--tx:#e6edf6;--mut:#8aa0b8;--up:#16c784;--dn:#f6465d;--warn:#f5b849;--acc:#7c9cff;--acc2:#c4b5fd}
+  *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.5 system-ui,Segoe UI,Roboto,sans-serif}
+  .wrap{max-width:1100px;margin:0 auto;padding:16px}
+  .top{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:10px}
+  .logo{font-weight:800;letter-spacing:-.3px}.logo b{color:var(--dn)}
+  .pill{font-size:11px;border:1px solid var(--bd);border-radius:20px;padding:2px 9px;color:var(--mut)}
+  .banner{background:rgba(245,184,73,.12);border:1px solid rgba(245,184,73,.45);color:var(--warn);border-radius:10px;padding:9px 12px;font-weight:600;margin:8px 0}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media(max-width:760px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--bd);border-radius:12px;padding:12px 14px;margin-bottom:12px}
+  .card h2{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--mut);margin:0 0 8px}
+  .kv{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px dashed var(--bd);font-size:13px}
+  .badge{padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;border:1px solid transparent}
+  .b-stale{background:rgba(246,70,93,.16);color:var(--dn);border-color:rgba(246,70,93,.4)}
+  .b-ok{background:rgba(22,199,132,.16);color:var(--up);border-color:rgba(22,199,132,.4)}
+  .b-rej{background:rgba(246,70,93,.14);color:var(--dn);border-color:rgba(246,70,93,.35)}
+  .b-insuf{background:rgba(127,142,163,.14);color:var(--mut);border-color:var(--bd)}
+  .verdict{font-size:26px;font-weight:800}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}th,td{padding:6px 8px;text-align:left;border-bottom:1px solid var(--bd);white-space:nowrap}
+  th{color:var(--mut);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em}
+  .neg{color:var(--dn)}.mut{color:var(--mut)}.scroll{overflow-x:auto}
+  .cols3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}@media(max-width:760px){.cols3{grid-template-columns:1fr}}
+  .empty{color:var(--mut);font-size:12.5px;padding:6px 0}
+  .foot{color:var(--mut);font-size:11.5px;margin-top:14px;line-height:1.6}
+</style></head>
+<body><div class="wrap">
+  <div class="top">
+    <span class="logo">Nerva<b>FX</b> · Strategy Research</span>
+    <span class="pill" id="ver">—</span>
+    <span class="pill">ANALYTICAL · READ-ONLY</span>
+    <span class="pill">NO ORDER PATH</span>
+  </div>
+  <div class="banner">ANALYTICAL RESEARCH — NOT A TRADING SIGNAL. No live evidence exists yet; nothing here can place or manage an order.</div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Research health — latest verified M15 close</h2>
+      <div class="kv"><span>Close (UTC)</span><b id="h-utc">—</b></div>
+      <div class="kv"><span>Close (EAT)</span><b id="h-eat">—</b></div>
+      <div class="kv"><span>28-pair completeness</span><b id="h-complete">—</b></div>
+      <div class="kv"><span>Data freshness</span><b id="h-fresh">—</b></div>
+      <div class="kv"><span>Engine / feature / research</span><b id="h-vers">—</b></div>
+    </div>
+    <div class="card" style="display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center">
+      <h2>Shadow-candidate state</h2>
+      <div class="verdict" id="s-verdict">—</div>
+      <div class="mut" id="s-note" style="margin-top:6px">—</div>
+    </div>
+  </div>
+
+  <div class="cols3">
+    <div class="card"><h2>① Historical simulation (backtest)</h2><div class="empty" id="hist-note">—</div></div>
+    <div class="card"><h2>② Prospective shadow (live, post-freeze)</h2><div class="empty">0 live observations. The scheduler is <b>not activated</b> and there is <b>no selected candidate</b> to observe. When (and only if) a candidate qualifies under a new version, a post-freeze cohort would begin here.</div></div>
+    <div class="card"><h2>③ Manual journal (self-reported)</h2><div class="empty">Optional. Empty. Self-reported entries are <b>never mixed</b> with simulated fills and never infer a fill.</div></div>
+  </div>
+
+  <div class="card"><h2>A/B/C… fold comparison — out-of-sample (later split), net R @ typical spread, block-bootstrap 95% CI</h2>
+    <div class="scroll"><table id="score"><thead><tr><th>Candidate</th><th>OOS eps</th><th>Net R</th><th>95% CI</th><th>+weeks</th><th>Verdict</th><th>Why</th></tr></thead><tbody></tbody></table></div>
+    <div class="mut" style="margin-top:8px" id="incr"></div>
+  </div>
+
+  <div class="grid">
+    <div class="card"><h2>Currency strength (descriptor · network x, N=10)</h2><div class="scroll"><table id="strength"><thead><tr><th>Currency</th><th>x₁₀</th></tr></thead><tbody></tbody></table></div>
+      <div class="mut" style="margin-top:6px">Explanation only — not a signal.</div></div>
+    <div class="card"><h2>Pressure horizons (descriptor · R over 4/6/8/10)</h2><div class="scroll"><table id="horizons"><thead><tr><th>Pair</th><th>R4</th><th>R6</th><th>R8</th><th>R10</th></tr></thead><tbody></tbody></table></div>
+      <div class="mut" style="margin-top:6px">Nested/overlapping windows — explanatory, not four confirmations.</div></div>
+  </div>
+
+  <div class="foot" id="foot">Read-only research view. Historical simulation ≠ live evidence. Missing/stale data is shown explicitly and never presented as a current opportunity. As-of-close replay uses <code>research/m15/loader.js</code> (no lookahead). No external messaging, no broker connection.</div>
+</div>
+<script>
+(async function(){
+  const $=id=>document.getElementById(id);
+  const g=async p=>{try{const r=await fetch(p);return await r.json();}catch(e){return null;}};
+  const sc=await g('/docs/research/stage5_scorecard.json');
+  const h=await g('/docs/research/research_health.json');
+  if(h&&h.health){const H=h.health;
+    $('h-utc').textContent=H.latestCloseUtc; $('h-eat').textContent=H.latestCloseEat;
+    $('h-complete').innerHTML=H.complete?('<span class="badge b-ok">'+H.pairsPresent+'/28 COMPLETE</span>'):('<span class="badge b-rej">'+H.pairsPresent+'/28 · missing '+(H.missing||[]).join(',')+'</span>');
+    $('h-fresh').innerHTML=H.stale?('<span class="badge b-stale">STALE · '+Math.round(H.dataAgeSeconds/3600)+'h old</span>'):('<span class="badge b-ok">FRESH</span>');
+    $('h-vers').textContent=[h.engineVersion,h.featureVersion,h.researchVersion].join(' · ');
+  }
+  if(sc){
+    const passed=sc.scorecard.filter(x=>x.verdict==='SELECT_FOR_SHADOW');
+    $('s-verdict').textContent = passed.length? passed[0].id : 'NONE PASSED';
+    $('s-verdict').className='verdict '+(passed.length?'':'neg');
+    $('s-note').textContent = passed.length? 'shadow candidate selected' : 'Stage 5: no candidate meets the standard — no actionable strategy, no “best trade” rank.';
+    $('hist-note').innerHTML='Window '+sc.window.from+' → '+sc.window.to+'. Baseline OOS net R '+sc.baselineEvalMeanNetR+', control '+sc.controlEvalMeanNetR+'. '+sc.trialRegistry.totalVariants+' variants tried. <b>Labelled backtest — not live.</b>';
+    const tb=$('score').querySelector('tbody');
+    tb.innerHTML=sc.scorecard.map(s=>{
+      const cls=s.verdict==='REJECT'?'b-rej':(s.verdict==='SELECT_FOR_SHADOW'?'b-ok':'b-insuf');
+      const ci=s.evalCI&&s.evalCI.ciLow!=null?('['+s.evalCI.ciLow+', '+s.evalCI.ciHigh+']'):'—';
+      return '<tr><td>'+s.id.replace(/_/g,' ')+'</td><td>'+(s.evalCI?s.evalCI.n:0)+'</td><td class="neg">'+(s.evalMeanNetR==null?'—':s.evalMeanNetR)+'</td><td>'+ci+'</td><td>'+(s.positiveFoldShare==null?'—':(s.positiveFoldShare*100).toFixed(0)+'%')+'</td><td><span class="badge '+cls+'">'+s.verdict+'</span></td><td class="mut">'+(s.reasons||[]).slice(0,1).join('')+'</td></tr>';
+    }).join('');
+    $('incr').innerHTML='<b>Incremental A-ladder:</b> '+sc.incrementalLadder.map(l=>l.from.split('_')[0]+'→'+l.to.split('_')[0]+' (removed '+l.removed+', added '+l.added+', netR '+l.baselineMeanNetR+'→'+l.addMeanNetR+')').join(' · ')+' — each gate reduces activity without positive economics.';
+  }
+  if(h&&h.explanations){
+    $('strength').querySelector('tbody').innerHTML=h.explanations.currencyStrength.map(c=>'<tr><td>'+c.currency+'</td><td class="'+(c.x10>=0?'':'neg')+'">'+c.x10+'</td></tr>').join('');
+    $('horizons').querySelector('tbody').innerHTML=h.explanations.pressureHorizons.map(p=>'<tr><td>'+p.pair.replace('_','/')+'</td><td>'+p.R[4]+'</td><td>'+p.R[6]+'</td><td>'+p.R[8]+'</td><td>'+p.R[10]+'</td></tr>').join('');
+  }
+  $('ver').textContent = (sc&&sc.researchVersion)||'research';
+})();
+</script>
+</body></html>

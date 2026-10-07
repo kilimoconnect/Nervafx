@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NervaFX — M15 Research Replay</title>
+<!-- LOCAL RESEARCH VIEW — NOT published/deployed, NOT a production route. Reads the
+     pre-frozen, immutable dataset in replay-data.js (generated offline by
+     scripts/research/build-replay.js). Each frame is computed as-of its candle close,
+     so the view cannot display later candles, later swing confirmations, or
+     future-adjusted thresholds. No order path, no broker, no alert, no live data. -->
+<style>
+  :root{--bg:#0b0f17;--panel:#111826;--panel2:#0e1521;--bd:#1e2a3d;--tx:#e6edf6;--mut:#8aa0b8;--up:#16c784;--dn:#f6465d;--warn:#f5b849;--acc:#7c9cff}
+  *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:13px/1.5 system-ui,Segoe UI,Roboto,sans-serif}
+  .wrap{max-width:1280px;margin:0 auto;padding:14px}
+  .top{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:8px}
+  .logo{font-weight:800;letter-spacing:-.3px}.logo b{color:var(--dn)}
+  .pill{font-size:11px;border:1px solid var(--bd);border-radius:20px;padding:2px 9px;color:var(--mut)}
+  .warnpill{border-color:rgba(245,184,73,.5);color:var(--warn)}
+  .banner{background:rgba(245,184,73,.12);border:1px solid rgba(245,184,73,.45);color:var(--warn);border-radius:10px;padding:8px 12px;font-weight:700;margin:6px 0 12px;text-transform:uppercase;letter-spacing:.04em;font-size:12px}
+  .ctrls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px}
+  button,select{background:var(--panel);color:var(--tx);border:1px solid var(--bd);border-radius:8px;padding:6px 12px;font-size:13px;cursor:pointer}
+  button:hover{border-color:var(--acc)}
+  input[type=range]{width:360px;max-width:52vw}
+  .cols2{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media(max-width:900px){.cols2{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--bd);border-radius:12px;padding:10px 12px;margin-bottom:10px}
+  .card h2{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--mut);margin:0 0 6px}
+  .kv{display:flex;justify-content:space-between;gap:8px;padding:2px 0;border-bottom:1px dashed var(--bd)}
+  .verdict{font-size:20px;font-weight:800}
+  .b{padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;border:1px solid transparent;display:inline-block}
+  .b-up{background:rgba(22,199,132,.16);color:var(--up);border-color:rgba(22,199,132,.4)}
+  .b-dn{background:rgba(246,70,93,.16);color:var(--dn);border-color:rgba(246,70,93,.4)}
+  .b-mut{background:rgba(127,142,163,.14);color:var(--mut);border-color:var(--bd)}
+  .b-warn{background:rgba(245,184,73,.16);color:var(--warn);border-color:rgba(245,184,73,.4)}
+  table{width:100%;border-collapse:collapse;font-size:12px}th,td{padding:3px 6px;text-align:left;border-bottom:1px solid var(--bd);white-space:nowrap}
+  th{color:var(--mut);font-size:10px;text-transform:uppercase}
+  .neg{color:var(--dn)}.pos{color:var(--up)}.mut{color:var(--mut)}
+  .evF{color:var(--up)}.evA{color:var(--dn)}
+  .ev{font-size:11.5px;padding:1px 0}
+  .expl{font-size:12.5px;color:var(--tx);background:var(--panel2);border:1px solid var(--bd);border-radius:8px;padding:8px}
+  .foot{color:var(--mut);font-size:11px;margin-top:12px;line-height:1.6}
+  .hd{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  .sm{font-size:11px;color:var(--mut)}
+</style></head>
+<body><div class="wrap">
+  <div class="top">
+    <span class="logo">Nerva<b>FX</b> · M15 Research Replay</span>
+    <span class="pill" id="ver">—</span>
+    <span class="pill">READ-ONLY</span><span class="pill">NO ORDER PATH</span><span class="pill warnpill">OFFLINE REPLAY</span>
+  </div>
+  <div class="banner">research classification — not a trade signal</div>
+
+  <div class="ctrls">
+    <label class="sm">Left dataset
+      <select id="selL"></select></label>
+    <label class="sm">Right dataset
+      <select id="selR"></select></label>
+    <button id="first">⏮ first</button>
+    <button id="prev">◀ step back</button>
+    <button id="next">step forward ▶</button>
+    <button id="last">last ⏭</button>
+    <input type="range" id="scrub" min="0" value="0">
+    <span class="pill" id="pos">frame —</span>
+  </div>
+
+  <div class="cols2">
+    <div id="paneL"></div>
+    <div id="paneR"></div>
+  </div>
+
+  <div class="foot">
+    Historical replay of pre-frozen, immutable per-close classifications. Every panel shows
+    only evidence available at the selected completed M15 close — no later candle, no later
+    swing confirmation, and no future-adjusted threshold (calibration is a fixed version).
+    This view is local and is <b>not</b> a production route. It has no buy/sell control, no
+    broker connection, no alerts, and does not imply live performance.
+  </div>
+</div>
+
+<script src="replay-data.js"></script>
+<script>
+(function(){
+  var DATA = window.REPLAY_DATASETS || { meta:{}, datasets:{} };
+  var keys = Object.keys(DATA.datasets||{});
+  var $ = function(id){ return document.getElementById(id); };
+  $('ver').textContent = (DATA.meta&&DATA.meta.version)||'replay';
+
+  function opt(sel, k){ var o=document.createElement('option'); o.value=k; o.textContent=DATA.datasets[k].label; sel.appendChild(o); }
+  keys.forEach(function(k){ opt($('selL'),k); opt($('selR'),k); });
+  $('selL').value = keys[0]; $('selR').value = keys[1]||keys[0];
+
+  var idx = 0;
+  function maxLen(){ return Math.max(DATA.datasets[$('selL').value].frames.length, DATA.datasets[$('selR').value].frames.length); }
+
+  function dirBadge(d){ var c=d==='UP'?'b-up':d==='DOWN'?'b-dn':'b-mut'; return '<span class="b '+c+'">'+d+'</span>'; }
+  function stateBadge(s){ var c='b-mut'; if(/_UP$/.test(s))c='b-up'; else if(/_DOWN$/.test(s))c='b-dn'; else if(s==='UNAVAILABLE'||s==='CONFLICT')c='b-warn'; return '<span class="b '+c+'" style="font-size:13px">'+s.replace(/_/g,' ')+'</span>'; }
+  function num(x){ return x==null?'—':(typeof x==='number'?(Math.abs(x)<1e-6?'0':x.toFixed(x>=1||x<=-1?2:5)):x); }
+  function story(s){ if(!s) return '<td class="mut">—</td><td>—</td><td>—</td><td>—</td>'; var c=s.efficiency<0?'neg':(s.efficiency>0?'pos':''); return '<td>'+s.coveragePct+'% ('+s.actual+')</td><td class="'+c+'">'+num(s.efficiency)+'</td><td>'+s.direction+'</td><td>'+num(s.range)+'</td>'; }
+
+  function render(key, frame){
+    if(!frame) return '<div class="card"><div class="mut">no frame</div></div>';
+    var q = frame.quality, ds = DATA.datasets[key];
+    var unavailable = frame.displayState==='UNAVAILABLE';
+    var h = '';
+    h += '<div class="card"><div class="hd"><div><b>'+ds.label+'</b> · <span class="mut">'+ds.pair.replace('_','/')+'</span></div>'+stateBadge(frame.displayState)+'</div>';
+    h += '<div class="sm" style="margin-top:4px">'+ds.note+'</div></div>';
+
+    h += '<div class="card"><h2>Latest completed close & freshness</h2>';
+    h += '<div class="kv"><span>UTC</span><b>'+frame.asOfCloseUtc+'</b></div>';
+    h += '<div class="kv"><span>EAT</span><b>'+frame.asOfCloseEat+'</b></div>';
+    h += '<div class="kv"><span>Freshness</span>'+(q.fresh?'<span class="b b-up">FRESH</span>':'<span class="b b-warn">STALE / GAP</span>')+'</div>';
+    h += '<div class="kv"><span>28-pair sync</span>'+(q.synchronized?'<span class="b b-up">'+q.pairsUsed+'/'+q.expected+'</span>':'<span class="b b-warn">'+q.pairsUsed+'/'+q.expected+'</span>')+'</div>';
+    if(unavailable) h += '<div class="kv"><span>Availability</span><span class="b b-warn">UNAVAILABLE · '+(frame.displayReason||'')+'</span></div>';
+    h += '</div>';
+
+    if(unavailable){
+      h += '<div class="card"><h2>State</h2><div class="verdict" style="color:var(--warn)">UNAVAILABLE</div><div class="mut" style="margin-top:4px">Reason: '+(frame.displayReason||'')+'. Classification is withheld on incomplete, stale, or unsynchronized data.</div></div>';
+      h += '<div class="expl">'+frame.explanation+'</div>';
+      return '<div>'+h+'</div>';
+    }
+
+    h += '<div class="card"><h2>State & transition</h2>';
+    h += '<div class="kv"><span>Primary</span>'+stateBadge(frame.primaryState)+'</div>';
+    h += '<div class="kv"><span>Previous</span><span class="mut">'+(frame.previousState||'—')+'</span></div>';
+    h += '<div class="kv"><span>Transition</span><b>'+(frame.transition&&frame.transition.changed?(frame.transition.from+' → '+frame.transition.to+' ('+frame.transition.kind+')'):'none')+'</b></div></div>';
+
+    h += '<div class="card"><h2>Price stories — 12/24/36/48h (coverage · efficiency · dir · range)</h2><table><thead><tr><th>Win</th><th>Coverage</th><th>Eff</th><th>Dir</th><th>Range</th></tr></thead><tbody>';
+    [['12h',frame.priceStories.h12],['24h',frame.priceStories.h24],['36h',frame.priceStories.h36],['48h',frame.priceStories.h48]].forEach(function(r){ h += '<tr><td>'+r[0]+'</td>'+story(r[1])+'</tr>'; });
+    h += '</tbody></table>';
+    if(frame.compare12) h += '<div class="sm" style="margin-top:6px">Latest-12h vs preceding-12h: '+dirBadge(frame.compare12.latestDir)+' eff '+num(frame.compare12.latestEff)+' vs '+dirBadge(frame.compare12.previousDir)+' eff '+num(frame.compare12.previousEff)+' (Δ '+num(frame.compare12.deltaEff)+')</div>';
+    h += '</div>';
+
+    h += '<div class="card"><h2>Eight-currency strength board (24h network · relative, zero-sum)</h2>';
+    if(frame.strengthBoard){ h += '<table><thead><tr><th>#</th><th>Ccy</th><th>x</th><th>Breadth</th></tr></thead><tbody>';
+      frame.strengthBoard.forEach(function(c,i){ var cl=c.x>0?'pos':(c.x<0?'neg':''); h += '<tr><td>'+(i+1)+'</td><td>'+c.currency+'</td><td class="'+cl+'">'+num(c.x)+'</td><td>'+(c.breadth*100).toFixed(0)+'%</td></tr>'; });
+      h += '</tbody></table>'; } else h += '<div class="mut">strength unavailable</div>';
+    h += '</div>';
+
+    h += '<div class="card"><h2>Full-network vs leave-one-pair-out confirmation</h2>';
+    if(frame.confirmation){ h += '<div class="kv"><span>Full-network gap (base−quote)</span><b>'+num(frame.confirmation.full)+'</b></div>';
+      h += '<div class="kv"><span>Leave-one-pair-out gap</span><b>'+num(frame.confirmation.leaveOut)+'</b></div>';
+      h += '<div class="kv"><span>Independently confirmed</span>'+(frame.confirmation.independentlyConfirmed?'<span class="b b-up">YES</span>':'<span class="b b-mut">NO</span>')+'</div>'; }
+    else h += '<div class="mut">no confirmation (pair absent / network unavailable)</div>';
+    h += '</div>';
+
+    h += '<div class="card"><h2>Event sequence (as-of this close)</h2>';
+    if(frame.events&&frame.events.length){ h += '<div style="max-height:150px;overflow:auto">'; frame.events.forEach(function(e){ h += '<div class="ev"><span class="mut">'+e.utc.slice(5,16).replace('T',' ')+'</span> · <b>'+e.type+'</b> — '+e.evidence+'</div>'; }); h += '</div>'; }
+    else h += '<div class="mut">no events</div>';
+    h += '</div>';
+
+    h += '<div class="card"><h2>Reasons</h2>';
+    h += '<div><b class="evF">For</b><br>'+(frame.evidenceFor||[]).map(function(e){return '<div class="ev evF">+ '+e.text+'</div>';}).join('')+'</div>';
+    h += '<div style="margin-top:6px"><b class="evA">Against</b><br>'+((frame.evidenceAgainst&&frame.evidenceAgainst.length)?frame.evidenceAgainst.map(function(e){return '<div class="ev evA">− '+e.text+'</div>';}).join(''):'<div class="mut ev">none</div>')+'</div></div>';
+
+    h += '<div class="expl">'+frame.explanation+'</div>';
+    return '<div>'+h+'</div>';
+  }
+
+  function frameAt(key, i){ var f=DATA.datasets[key].frames; return f[Math.min(i,f.length-1)]; }
+  function draw(){
+    var m = maxLen(); $('scrub').max = m-1; if(idx>m-1) idx=m-1; if(idx<0) idx=0; $('scrub').value = idx;
+    $('pos').textContent = 'frame '+(idx+1)+' / '+m;
+    $('paneL').innerHTML = render($('selL').value, frameAt($('selL').value, idx));
+    $('paneR').innerHTML = render($('selR').value, frameAt($('selR').value, idx));
+  }
+  $('next').onclick=function(){ idx++; draw(); };
+  $('prev').onclick=function(){ idx--; draw(); };
+  $('first').onclick=function(){ idx=0; draw(); };
+  $('last').onclick=function(){ idx=maxLen()-1; draw(); };
+  $('scrub').oninput=function(){ idx=+this.value; draw(); };
+  $('selL').onchange=$('selR').onchange=function(){ idx=0; draw(); };
+  draw();
+})();
+</script>
+</body></html>

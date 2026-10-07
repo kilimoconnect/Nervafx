@@ -1,0 +1,85 @@
+{
+  "generatedAt": "2026-09-27T08:52:02.266Z",
+  "engineVersion": "m15-cfg-1.1.0a",
+  "featureVersion": "m15-feat-1.0.0",
+  "researchVersion": "m15-research-3.0.0",
+  "health": {
+    "ok": true,
+    "latestCloseUtc": "2026-09-25T20:45:00.000Z",
+    "latestCloseEat": "25/09/2026 23:45 EAT",
+    "frameOpenUtc": "2026-09-25T20:30:00.000Z",
+    "pairsExpected": 28,
+    "pairsPresent": 28,
+    "missing": [],
+    "laggards": [],
+    "complete": true,
+    "dataAgeSeconds": 130022,
+    "stale": true
+  },
+  "explanations": {
+    "note": "Currency strength (network x, N=10) and the 4 pressure horizons are DESCRIPTORS shown to explain state — NOT tradable signals. No candidate is selected.",
+    "currencyStrength": [
+      {
+        "currency": "CAD",
+        "x10": 0.000347
+      },
+      {
+        "currency": "CHF",
+        "x10": 0.000276
+      },
+      {
+        "currency": "NZD",
+        "x10": 0.000202
+      },
+      {
+        "currency": "EUR",
+        "x10": -0.000095
+      },
+      {
+        "currency": "JPY",
+        "x10": -0.000122
+      },
+      {
+        "currency": "GBP",
+        "x10": -0.000127
+      },
+      {
+        "currency": "USD",
+        "x10": -0.000189
+      },
+      {
+        "currency": "AUD",
+        "x10": -0.000293
+      }
+    ],
+    "pressureHorizons": [
+      {
+        "pair": "EUR_USD",
+        "R": {
+          "4": -0.000377,
+          "6": -0.000597,
+          "8": -0.000474,
+          "10": 0.000088
+        }
+      },
+      {
+        "pair": "GBP_JPY",
+        "R": {
+          "4": -0.000115,
+          "6": 0.000355,
+          "8": 0.000442,
+          "10": 0
+        }
+      },
+      {
+        "pair": "AUD_USD",
+        "R": {
+          "4": -0.000341,
+          "6": -0.000427,
+          "8": -0.000427,
+          "10": -0.000085
+        }
+      }
+    ]
+  }
+}

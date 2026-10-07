@@ -1,0 +1,12 @@
+{
+  "verdicts": {
+    "H1": "INSUFFICIENT_EVIDENCE",
+    "H2": "INSUFFICIENT_EVIDENCE",
+    "H3": "INSUFFICIENT_EVIDENCE"
+  },
+  "registrationHash": "c5a26dd1582726d5267694e75397c9dea28c1d36f2df5265cf1698408e4dd6b6",
+  "dataHash": "d58aabcd3e2a0792",
+  "provenance": "SYNTHETIC_EXPLORATORY",
+  "economics": "ESTIMATED",
+  "stage5": "NONE PASSED"
+}
