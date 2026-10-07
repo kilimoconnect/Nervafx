@@ -1,145 +1,84 @@
 'use strict';
 
 /**
- * GET /api/m15-intelligence  — M15 Market Intelligence (read-only, analytical).
+ * GET /api/m15-intelligence — NEW M15 research classifier (read-only, analytical).
  *
- * Live:     no query           → latest completed M15 frame.
- * Replay:   ?at=ISO            → reconstructs exactly what was known at that M15
- *                                close (no future data, §28). HISTORY MODE.
- * Detail:   ?pair=EUR_USD      → adds the full per-pair record + candles to chart.
+ * Replaces the retired M15 Intelligence engine (api/_m15/*). Loads real completed M15
+ * candles for the 28 pairs from backtest_candles (mid, OANDA), finds the latest
+ * SYNCHRONIZED close, runs the pure research classifier (price action + zero-sum
+ * currency-strength network) for every pair as-of that close, and returns the board.
  *
- * Runs the deterministic coordinator on completed M15 candles only. This route
- * never writes to the DB and never places, manages, or suggests a broker order.
- * Manual triggers require live bid/ask which this read route does not fetch, so
- * setups are shown as plans; live-trigger firing is handled by the cron layer.
+ * This is a DESCRIPTION, not a trade signal. It never writes to the DB and never places,
+ * manages, or suggests a broker order. No look-ahead: only candles that closed by the
+ * synchronized close are used (see research/m15/loader.syncAsOf).
  */
 
-const { cors, getClient } = require('./_db');
-const { loadSynchronized } = require('./_m15/load');
-const { runNetwork } = require('./_m15/coordinator');
-const { CONFIG_1_1_0A } = require('./_m15/config-1_1_0');
-const { isArmed } = require('./_m15/diagnostics');
-const { isPaused, applyOperatorPause } = require('./_m15/notify');
-const { closeOf, freshness } = require('./_m15/snapshot');
-const { M15_MS } = require('./_m15/data');
+const { getClient, cors } = require('./_db');
+const { loadAllPairsFromDb, syncAsOf, PAIRS, M15 } = require('../research/m15/loader');
+const { describeNetwork } = require('../research/m15/strengthnet');
+const { classify, CLASSIFIER_VERSION } = require('../research/m15/classifier');
 
-// Published engine: Phase 2 accepted version (space is a per-trade test).
-const CFG = CONFIG_1_1_0A;
-
-/** Actionable / Developing / Blocked / Unavailable per the Phase-2 state contract. */
-function categoryOf(rec, hasData, stale) {
-  if (!hasData) return 'UNAVAILABLE';
-  if (isArmed(rec.decision) && rec.setup && !stale) return 'ACTIONABLE';
-  if (/^WATCH_/.test(rec.decision)) return 'DEVELOPING';
-  return 'BLOCKED';
-}
+const toEat = (ms) => new Date(ms + 3 * 60 * 60 * 1000).toISOString().replace('Z', '+03:00');
 
 module.exports = async function handler(req, res) {
   cors(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'GET') return res.status(405).json({ error: 'GET only' });
+  if (req.method !== 'GET') return res.status(405).json({ ok: false, error: 'GET only' });
 
   try {
     const sb = getClient();
-    const atMs = req.query.at ? Date.parse(req.query.at) : null;
-    if (req.query.at && Number.isNaN(atMs)) return res.status(400).json({ error: 'invalid ?at (use ISO time)' });
-    const nowMs = Date.now();
+    // ~5 days of M15 covers the 48h context + swing calibration + ATR warm-up.
+    const fromIso = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
+    const histories = await loadAllPairsFromDb(sb, { pairs: PAIRS, fromIso });
 
-    const { evalMs, candlesByPair, sync } = await loadSynchronized(sb, { atMs, nowMs, cfg: CFG });
-    const run = runNetwork(candlesByPair, { evalMs, nowMs, cfg: CFG, syncState: sync.reason, noCriticalNews: true });
-    const closeMs = closeOf(evalMs);
-    const fresh = freshness(closeMs, nowMs, CFG);
-    const missing = sync.missing || [];
+    // Latest SYNCHRONIZED completed close across the 28 pairs (no look-ahead).
+    const probe = syncAsOf(histories, Date.now());
+    if (probe.frameOpenMs == null) {
+      return res.json({ ok: true, available: false, reason: 'NO_DATA', missing: probe.missing, version: CLASSIFIER_VERSION });
+    }
+    const T = probe.frameOpenMs + M15;
+    const ageSec = Math.round((Date.now() - T) / 1000);
+    const stale = ageSec > 20 * 60;                 // older than ~1 interval + grace
 
-    // Currency dashboard (8 currencies): strength + power + structure merged.
-    const currencies = mergeCurrencies(run);
+    const net = describeNetwork(histories, { asOfCloseMs: T });
+    const h24 = net.windows ? net.windows.h24 : null;
 
-    // All-pairs scanner, ranked, with the Actionable/Developing/Blocked/Unavailable
-    // category and available room in R (only when a valid setup defines it).
-    const counts = { ACTIONABLE: 0, DEVELOPING: 0, BLOCKED: 0, UNAVAILABLE: 0 };
-    const scan = run.ranking.map((r) => {
-      const p = run.pairs[r.pair];
-      const hasData = (candlesByPair[r.pair] || []).length > 0;
-      const category = categoryOf(p, hasData, fresh.stale);
-      counts[category]++;
-      const roomR = p.setup && p.setup.availableSpaceVol != null ? p.setup.availableSpaceVol : null;
+    const pairs = PAIRS.map((pair) => {
+      const c = classify(pair, histories, { asOfCloseMs: T, network: net });
       return {
-        rank: r.rank, pair: r.pair, decision: p.decision, strategy: p.strategy, category,
-        marketState: p.marketState.state, direction: p.snapshot.direction,
-        movementStage: p.snapshot.movementStage,
-        energyLevel: p.snapshot.energyLevel, energyDirection: p.snapshot.energyDirection, energyAcceleration: p.snapshot.energyAcceleration,
-        emaState: p.snapshot.emaState, compression: p.snapshot.compression, expansion: p.snapshot.expansion,
-        freshness: p.snapshot.freshness, pressure: p.snapshot.pressure,
-        agreement: p.agreement.state, strengthDiff: Math.round(p.strengthDiff || 0),
-        availableRoomR: roomR, primaryReason: p.decision,
-        score: r.score, qualifies: r.qualifies,
+        pair,
+        state: c.primaryState,
+        direction: c.progress ? c.progress.transitionDir : null,
+        explanation: c.explanation,
+        strength: c.strength && c.strength.available ? { gap: c.strength.gap, dir: c.strength.strengthDir, confirmed: c.strength.independentlyConfirmed, breadth: c.strength.leadingBreadth } : null,
+        windows: c.windows,
+        structure: { acceptedHold: c.structure.acceptedHold, confirmedPivots: c.structure.confirmedPivots, rejection: c.structure.rejection },
+        evidenceFor: (c.evidenceFor || []).map((e) => e.text),
+        evidenceAgainst: (c.evidenceAgainst || []).map((e) => e.text),
+        qualityFlags: c.qualityFlags,
       };
     });
 
-    // Operator incident pause (§P5): suppress Actionable + notices, keep history.
-    const paused = isPaused();
-    const pausedView = applyOperatorPause(scan, counts, paused);
-
-    const detailPair = req.query.pair;
-    const detail = detailPair && run.pairs[detailPair]
-      ? buildDetail(run, detailPair, candlesByPair[detailPair])
+    const board = h24 && h24.available
+      ? h24.effects.ranked.map((ccy) => ({ currency: ccy, x: h24.effects.byCurrency[ccy], breadth: h24.breadth[ccy] ? h24.breadth[ccy].fraction : 0 }))
       : null;
 
-    res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=30');
     res.json({
-      ok: true,
-      // ── disclosure contract (Phase 3) ──────────────────────────────────────
-      source: 'recompute',                       // read route recomputes; stored snapshots come from /api/m15-snapshot
-      engineVersion: run.run.calculationVersion, // published: m15-cfg-1.1.0a
-      evalMs, evalIso: new Date(evalMs).toISOString(),        // frame open
-      closeIso: new Date(closeMs).toISOString(), // EXACT UTC M15 close (frame + 15m)
-      historyMode: atMs != null,
-      liveTriggerMonitoring: atMs == null,       // replay never monitors live triggers
-      ordersDisabled: true, analyticalManualOnly: true,
-      completeness: { pairsProcessed: Object.values(candlesByPair).filter((a) => a && a.length > 0).length, pairsExpected: 28, syncState: sync.reason, missing, complete: sync.reason === 'ALIGNED' && missing.length === 0 },
-      freshness: fresh,                          // { ageSeconds, ageCandles, stale }
-      paused, pauseReason: paused ? 'PAUSED_BY_OPERATOR' : null,
-      counts: pausedView.counts,                 // ACTIONABLE / DEVELOPING / BLOCKED / UNAVAILABLE
-      sync: { state: sync.reason, laggards: sync.laggards || [], missing },
-      calculationVersion: run.run.calculationVersion,
-      currencies, scan: pausedView.scan, detail,
+      ok: true, available: true,
+      version: CLASSIFIER_VERSION,
+      disclaimer: 'research classification — not a trade signal',
+      asOfCloseUtc: new Date(T).toISOString(),
+      asOfCloseEat: toEat(T),
+      ageSeconds: ageSec, stale,
+      aligned: probe.aligned, missing: probe.missing, laggards: probe.laggards,
+      pairsPresent: PAIRS.length - probe.missing.length,
+      board,
+      networkAvailable: !!(h24 && h24.available),
+      pairs,
     });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ ok: false, error: String((e && e.message) || e) });
   }
 };
-
-function mergeCurrencies(run) {
-  const { strength, power, structure } = run.currencies;
-  return strength.ranked.map((ccy) => ({
-    currency: ccy,
-    strength: strength.byCurrency[ccy].strengthScore,
-    strengthRank: strength.byCurrency[ccy].strengthRank,
-    strengthDirection: strength.byCurrency[ccy].strengthDirection,
-    strengthAcceleration: strength.byCurrency[ccy].strengthAcceleration,
-    breadth: strength.byCurrency[ccy].breadth,
-    power: power.byCurrency[ccy].powerScore,
-    powerState: power.byCurrency[ccy].powerState,
-    powerDirection: power.byCurrency[ccy].powerDirection,
-    structure: structure.byCurrency[ccy].state,
-    participation: structure.byCurrency[ccy].participation,
-    supportingPairs: structure.byCurrency[ccy].supportingPairs,
-    conflictingPairs: structure.byCurrency[ccy].conflictingPairs,
-  }));
-}
-
-function buildDetail(run, pair, candles) {
-  const p = run.pairs[pair];
-  return {
-    pair,
-    marketState: p.marketState.state,
-    stateEvidence: p.marketState.evidence,
-    decision: p.decision, strategy: p.strategy,
-    agreement: p.agreement,               // full component breakdown + reasons (§30)
-    setup: p.setup,
-    snapshot: p.snapshot,
-    candles: (candles || []).slice(-140), // last 140 M15 for the chart
-  };
-}
 
 module.exports.maxDuration = 60;

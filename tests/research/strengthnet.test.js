@@ -169,14 +169,13 @@ test('deterministic output and version surfaced', () => {
   assert.equal(a.version, STRENGTHNET_VERSION);
 });
 
-// ── 12. Compare existing production strength WITHOUT replacing it ─────────────
-test('production evaluateCurrencyStrength still runs unchanged (comparison only)', () => {
-  const prod = require('../../api/_m15/strength');
-  // production consumes per-pair movement signals, not returns — different contract.
-  const signals = Object.fromEntries(PAIRS.map((p) => [p, { strength: 0.1, acceleration: 0 }]));
-  const out = prod.evaluateCurrencyStrength(signals);
-  assert.ok(out.byCurrency && Object.keys(out.byCurrency).length === 8);
-  // our research module is a SEPARATE namespace/version; it does not touch production.
+// ── 12. The research module is self-contained (the old api/_m15 engine is retired) ─
+test('research strengthnet is self-contained and does not depend on the retired engine', () => {
+  // The old api/_m15 engine was removed when the new system went live; the research
+  // network estimator stands alone with its own version and a distinct contract
+  // (it consumes pair log-returns, not movement signals).
   assert.notEqual(STRENGTHNET_VERSION, undefined);
-  assert.ok(!('evaluateCurrencyStrength' in require('../../research/m15/strengthnet')));
+  const mod = require('../../research/m15/strengthnet');
+  assert.ok(typeof mod.estimateWindow === 'function' && typeof mod.describeNetwork === 'function');
+  assert.ok(!('evaluateCurrencyStrength' in mod));
 });
