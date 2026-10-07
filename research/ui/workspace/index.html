@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NervaFX — Manual Decision Workspace (DEMO)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<!-- ISOLATED research UI. DEMO/SYNTHETIC fixtures only. No backend, no DB, no orders,
+     no deployment. Separate from production signals. Preview locally via a static server. -->
+</head>
+<body>
+<div class="wrap">
+  <div class="demobar" role="note">DEMO / SYNTHETIC — designed fixtures run through the real research modules.
+    <small>Not live, not market data, not a trading system, and not validated for profitability. No buy/sell, no broker, no alerts.</small>
+  </div>
+
+  <header class="app">
+    <span class="logo">Nerva<b>FX</b> · Manual Decision Workspace</span>
+    <span class="pill" id="metaver">—</span>
+    <span class="pill warn">MODEL: UNVALIDATED</span>
+    <span class="pill">READ-ONLY</span>
+    <span class="spacer"></span>
+    <button class="btn sm" id="errtoggle" aria-pressed="false" title="Toggle a simulated adapter error to see the error state">Simulate error</button>
+  </header>
+
+  <div class="datahdr" id="datahdr" aria-live="polite">—</div>
+
+  <div class="replaybar" role="group" aria-label="Replay controls">
+    <button class="btn" id="first" aria-label="First close">⏮</button>
+    <button class="btn" id="prev" aria-label="Previous close">◀</button>
+    <button class="btn" id="next" aria-label="Next close">▶</button>
+    <button class="btn" id="last" aria-label="Latest close">⏭</button>
+    <input type="range" id="scrub" min="0" value="0" aria-label="Replay position">
+    <span class="pill" id="pos">frame —</span>
+    <span class="mut" style="font-size:11.5px">← → step · ↑ ↓ pair · 1–6 views</span>
+  </div>
+
+  <nav class="tabs" role="tablist" aria-label="Workspace views">
+    <button role="tab" data-view="market" aria-selected="true">1 · Market review</button>
+    <button role="tab" data-view="detail" aria-selected="false">2 · Pair detail</button>
+    <button role="tab" data-view="replay" aria-selected="false">3 · Replay</button>
+    <button role="tab" data-view="journal" aria-selected="false">4 · Journal</button>
+    <button role="tab" data-view="health" aria-selected="false">5 · Model &amp; health</button>
+    <button role="tab" data-view="plan" aria-selected="false">6 · Plan &amp; risk</button>
+  </nav>
+
+  <div id="banners" aria-live="polite"></div>
+  <main id="viewhost"><div class="card mut">Loading…</div></main>
+
+  <div class="foot">
+    Isolated research workspace. M15 prices and 12/24/36/48-hour context only — no conventional
+    indicators, no volume, no broker/order path. Leave-one-pair-out is other-pair confirmation,
+    not statistical independence. On any adapter error the UI shows an explicit error state and
+    never fabricates or fills data forward.
+  </div>
+</div>
+<script src="fixtures.js"></script>
+<script src="adapters.js"></script>
+<script src="app.js"></script>
+</body></html>
