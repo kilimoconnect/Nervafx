@@ -242,17 +242,34 @@
       '</div></div>';
   }
 
+  function observedHint(e) {
+    if (!e.dir || !S.ws) return null;
+    var w = A.getPair(S.ws, e.pair); if (!w) return null; var cs = w.candles, M = 15 * 60 * 1000;
+    var ei = -1; for (var i = 0; i < cs.length; i++) { if (cs[i].openMs + M === e.closeMs) { ei = i; break; } }
+    if (ei < 0 || ei + 4 >= cs.length) return null;
+    var mv = (cs[ei + 4].close - cs[ei].close) * (e.dir === 'UP' ? 1 : -1);
+    return mv > 0 ? 'continued' : (mv < 0 ? 'reversed' : 'ranged');
+  }
+  function sel(id, val, opts) { return '<select id="' + id + '" class="btn sm">' + opts.map(function (o) { return '<option value="' + o[0] + '"' + (val === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>'; }
   function viewJournal() {
     var items = readJournal();
     var list = items.length ? items.map(function (e, i) {
-      return '<div class="card"><div class="kv"><span><b>' + esc(e.pair) + '</b> · ' + esc(e.state) + '</span><button class="btn sm" data-del="' + i + '">Delete</button></div>' +
-        '<div class="mut" style="font-size:12px">Close ' + esc(e.closeUtc) + ' · classifier ' + esc(e.version) + ' · saved ' + esc(e.savedAt) + '</div>' +
-        '<div style="margin-top:6px"><b>Bias note:</b> ' + (esc(e.note) || '<span class="mut">(none)</span>') + '</div>' +
-        '<div class="mut" style="font-size:12px;margin-top:4px">Next: ' + esc(e.nextCondition) + '<br>Invalidation: ' + esc(e.invalidationReference || '—') + (e.invalidationLevel != null ? ' (ref ' + num(e.invalidationLevel) + ')' : '') + '</div>' +
-        '<div style="margin-top:4px;font-size:12px"><b>Evidence snapshot (pre-outcome):</b><br>' + (e.evidenceFor || []).map(function (t) { return '<span class="evF">+ ' + esc(t) + '</span>'; }).join('<br>') + '</div>' +
+      var hint = observedHint(e);
+      var trade = e.decisionType === 'position'
+        ? '<div class="kv"><span>Trade outcome (label only)</span>' + sel('jt' + i, e.tradeOutcome || '', [['', '—'], ['win', 'win'], ['loss', 'loss'], ['scratch', 'scratch']]) + '</div>'
+        : '<div class="kv mut"><span>Trade outcome</span><span class="mut">n/a (watch/wait — no P&L)</span></div>';
+      return '<div class="card"><div class="kv"><span><b>' + esc(e.pair.replace('_', '/')) + '</b> · ' + esc(e.state) + (e.dir ? ' ' + e.dir.toLowerCase() : '') + ' · <span class="mut">' + esc(e.decisionType || 'watch') + '</span></span><button class="btn sm" data-del="' + i + '">Delete</button></div>' +
+        '<div class="mut" style="font-size:12px">Close ' + esc(e.closeUtc) + ' · saved ' + esc((e.savedAt || '').slice(0, 16)) + ' · digest ' + esc((e.reproduce && e.reproduce.inputDigest) || '—') + ' · ' + esc((e.reproduce && e.reproduce.codeVersion) || '') + '</div>' +
+        (e.note ? '<div style="margin-top:6px"><b>Note:</b> ' + esc(e.note) + '</div>' : '') +
+        '<div class="mut" style="font-size:12px;margin-top:4px">Next: ' + esc(e.nextCondition || '—') + '</div>' +
+        '<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px"><b style="font-size:12px">Outcomes (added after the fact)</b>' +
+        '<div class="kv"><span>Observed market</span>' + sel('jo' + i, e.observedOutcome || (hint || ''), [['', hint ? 'pending (hint: ' + hint + ')' : 'pending'], ['continued', 'continued'], ['reversed', 'reversed'], ['ranged', 'ranged']]) + '</div>' +
+        trade +
+        '<div class="kv"><span>Rule adherence</span>' + sel('jr' + i, e.ruleAdherence || '', [['', '—'], ['followed', 'followed my plan'], ['partial', 'partial'], ['deviated', 'deviated']]) + '</div>' +
+        '<div style="margin-top:6px"><button class="btn sm" data-save="' + i + '">Save outcomes</button> <span class="mut" id="jmsg' + i + '" style="font-size:11px"></span></div></div>' +
         '</div>';
-    }).join('') : '<div class="card mut">No saved decisions yet. Record one from Market Review.</div>';
-    return '<div class="card"><h2>Decision journal</h2><div class="mut" style="font-size:12px">Each entry is a snapshot of the evidence <b>before any outcome</b> — no outcome or P&L is tracked or implied.</div>' + persistenceStatus() + '</div>' + list;
+    }).join('') : '<div class="card mut">No saved decisions yet. Record one from Market review.</div>';
+    return '<div class="card"><h2>Decision journal</h2><div class="mut" style="font-size:12px">Pre-outcome snapshots (close, versions, input digest, evidence). Add the <b>observed market outcome</b>, your <b>manual trade outcome</b> (only if you took a position — label only, no P&L), and <b>rule adherence</b> later. These stay separate.</div>' + persistenceStatus() + '</div>' + list;
   }
 
   function viewHealth(f) {
@@ -275,6 +292,7 @@
         '<div class="kv"><span>Calibration</span><b class="num">' + esc(f.reproduce.calibrationVersion) + '</b></div>' +
         '<div class="kv"><span>Code</span><b class="num">' + esc(f.reproduce.codeVersion) + '</b></div>' +
         '<div class="mut" style="margin-top:6px;font-size:11px">A journal entry pins these so revised candles or thresholds cannot silently rewrite an old interpretation.</div></div>') : '') +
+      prospectiveHealthHtml() +
       '<div class="card"><h2>Data health (selected pair / close)</h2>' + (dh ? (
         '<div class="kv"><span>Availability</span>' + (dh.available ? '<span class="badge b-up">AVAILABLE</span>' : '<span class="badge b-warn">UNAVAILABLE · ' + esc(dh.reason) + '</span>') + '</div>' +
         '<div class="kv"><span>28-pair coverage</span><b>' + dh.pairsPresent + '/' + dh.pairsExpected + (dh.aligned ? ' (aligned)' : '') + '</b></div>' +
@@ -294,9 +312,10 @@
   // ---- decision form + journal persistence ----
   function decisionFormHtml() {
     return '<div class="card"><h2>Record decision (pre-outcome snapshot)</h2>' +
+      '<label class="sr-only" for="dtype">Decision type</label><select id="dtype" class="btn" style="margin-bottom:6px;width:100%"><option value="watch">Watching (no action)</option><option value="wait">Waiting for a condition</option><option value="position">Took a position (my own account)</option></select>' +
       '<label class="sr-only" for="dnote">Bias note</label><textarea id="dnote" rows="2" placeholder="Your read / bias note (optional)"></textarea>' +
       '<div style="margin-top:8px"><button class="btn" id="recordBtn">Record decision to journal</button> <span class="mut" id="recordMsg" style="font-size:12px"></span></div>' +
-      '<div class="mut" style="margin-top:6px;font-size:11.5px">Saves the current close timestamp, classifier version, state and evidence snapshot — before any outcome. No buy/sell is implied.</div></div>';
+      '<div class="mut" style="margin-top:6px;font-size:11.5px">Saves the close, classifier/calibration/code versions, input digest, state and evidence — <b>before</b> any outcome. Outcomes are added later in the Journal tab.</div></div>';
   }
   function readJournal() { try { return JSON.parse(localStorage.getItem('nfx_ws_journal') || '[]'); } catch (e) { return []; } }
   function writeJournal(items) { try { localStorage.setItem('nfx_ws_journal', JSON.stringify(items)); return true; } catch (e) { return false; } }
@@ -304,10 +323,49 @@
     var ok = false; try { localStorage.setItem('__t', '1'); localStorage.removeItem('__t'); ok = true; } catch (e) { ok = false; }
     return '<div class="mut" style="font-size:12px;margin-top:4px">Persistence: ' + (ok ? 'saved in <b>this browser only</b> (localStorage) — not synced to any server; cleared if you clear site data.' : '<span class="neg">localStorage unavailable — entries will NOT persist.</span>') + '</div>';
   }
+
+  // ---- prospective evaluation (client-side; records classifications before outcomes) ----
+  var PKEY = 'nfx_ws_prospective';
+  function readProsp() { try { return JSON.parse(localStorage.getItem(PKEY) || '{}'); } catch (e) { return {}; } }
+  function writeProsp(o) { try { localStorage.setItem(PKEY, JSON.stringify(o)); } catch (e) {} }
+  function prospectiveStep(ws) {
+    if (!ws || !ws.watchlist) return; var M = 15 * 60 * 1000; var log = readProsp(); var changed = false;
+    ws.watchlist.forEach(function (w) { var lf = w.frames[w.frames.length - 1]; if (!lf || !lf.dataHealth.available || !lf.simpleState) return; var key = w.pair + '@' + lf.asOfCloseMs; if (!log[key]) { log[key] = { pair: w.pair, closeMs: lf.asOfCloseMs, state: lf.simpleState.label, dir: lf.simpleState.dir, engine: lf.primaryState, confirmed: !!(lf.otherPairConfirmation && lf.otherPairConfirmation.agrees), digest: lf.reproduce ? lf.reproduce.inputDigest : null, recordedAt: new Date().toISOString(), outcome: null }; changed = true; } });
+    var cand = {}; ws.watchlist.forEach(function (w) { cand[w.pair] = w.candles; });
+    Object.keys(log).forEach(function (k) { var r = log[k]; if (r.outcome) return; if (!r.dir) { r.outcome = 'no-direction'; changed = true; return; } var cs = cand[r.pair]; if (!cs) return; var ei = -1; for (var i = 0; i < cs.length; i++) { if (cs[i].openMs + M === r.closeMs) { ei = i; break; } } if (ei < 0 || ei + 4 >= cs.length) return; var mv = (cs[ei + 4].close - cs[ei].close) * (r.dir === 'UP' ? 1 : -1); r.outcome = mv > 0 ? 'continued' : (mv < 0 ? 'reversed' : 'flat'); r.resolvedAt = new Date().toISOString(); changed = true; });
+    var keys = Object.keys(log); if (keys.length > 2000) { keys.sort(function (a, b) { return log[a].closeMs - log[b].closeMs; }); keys.slice(0, keys.length - 2000).forEach(function (k) { delete log[k]; }); changed = true; }
+    if (changed) writeProsp(log);
+  }
+  function prospectiveSummary() {
+    var log = readProsp(); var all = Object.keys(log).map(function (k) { return log[k]; });
+    var res = all.filter(function (r) { return r.outcome === 'continued' || r.outcome === 'reversed' || r.outcome === 'flat'; });
+    var cont = res.filter(function (r) { return r.outcome === 'continued'; }).length;
+    var cRes = res.filter(function (r) { return r.confirmed; }), cCont = cRes.filter(function (r) { return r.outcome === 'continued'; }).length;
+    var uRes = res.filter(function (r) { return !r.confirmed; }), uCont = uRes.filter(function (r) { return r.outcome === 'continued'; }).length;
+    var pct = function (n, d) { return d ? Math.round(100 * n / d) + '% (' + d + ')' : '—'; };
+    return { recorded: all.length, resolved: res.length, pending: all.length - res.length, continuation: pct(cont, res.length), withSupport: pct(cCont, cRes.length), withoutSupport: pct(uCont, uRes.length) };
+  }
+  function prospectiveHealthHtml() {
+    var s = prospectiveSummary();
+    return '<div class="card"><h2>Prospective evaluation (your live record)</h2>' +
+      '<div class="kv"><span>Classifications recorded</span><b>' + s.recorded + '</b></div>' +
+      '<div class="kv"><span>Resolved / pending</span><b>' + s.resolved + ' / ' + s.pending + '</b></div>' +
+      '<div class="kv"><span>Continuation rate (next 4 closes)</span><b>' + s.continuation + '</b></div>' +
+      '<div class="kv"><span>… with other-pair support</span><b>' + s.withSupport + '</b></div>' +
+      '<div class="kv"><span>… without support</span><b>' + s.withoutSupport + '</b></div>' +
+      '<div class="mut" style="margin-top:6px;font-size:11.5px">Each close is recorded before its outcome; "continuation" = price moved in the stated direction over the next 4 closes — a directional check, <b>not</b> profitability. The with/without-support split shows whether other-pair support adds information. Accrues across sessions; early numbers are noisy.</div></div>';
+  }
   function recordDecision() {
     var f = curFrame(); if (!f) return;
     var note = (($('dnote') || {}).value || '').trim();
-    var entry = { pair: S.pairId, closeUtc: f.asOfCloseUtc, closeMs: f.asOfCloseMs, version: f.calibrationVersion || (S.ws.meta.classifier), state: f.primaryState, evidenceFor: f.evidenceFor, evidenceAgainst: f.evidenceAgainst, nextCondition: f.nextCondition, invalidationReference: f.invalidationReference, invalidationLevel: f.invalidationLevel, note: note, savedAt: new Date().toISOString(), provenance: 'SYNTHETIC' };
+    var dtype = (($('dtype') || {}).value) || 'watch';
+    var entry = {
+      pair: S.pairId, closeUtc: f.asOfCloseUtc, closeMs: f.asOfCloseMs,
+      state: (f.simpleState && f.simpleState.label) || f.primaryState, engine: f.primaryState, dir: f.simpleState ? f.simpleState.dir : null,
+      evidenceFor: f.evidenceFor, evidenceAgainst: f.evidenceAgainst, nextCondition: f.nextCondition, invalidationReference: f.invalidationReference, invalidationLevel: f.invalidationLevel,
+      reproduce: f.reproduce || { calibrationVersion: f.calibrationVersion }, decisionType: dtype, note: note, savedAt: new Date().toISOString(),
+      observedOutcome: null, tradeOutcome: null, ruleAdherence: null   // filled in LATER, in the Journal tab
+    };
     var items = readJournal(); items.unshift(entry); var ok = writeJournal(items);
     var msg = $('recordMsg'); if (msg) msg.textContent = ok ? 'Saved locally ✓' : 'Could not save (storage unavailable)';
   }
@@ -370,6 +428,10 @@
     });
     Array.prototype.forEach.call(document.querySelectorAll('[data-lb]'), function (b) { b.onclick = function () { S.lookback = +b.getAttribute('data-lb'); render(); }; });
     Array.prototype.forEach.call(document.querySelectorAll('[data-del]'), function (b) { b.onclick = function () { var it = readJournal(); it.splice(+b.getAttribute('data-del'), 1); writeJournal(it); render(); }; });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-save]'), function (b) {
+      b.onclick = function () { var i = +b.getAttribute('data-save'); var it = readJournal(); if (!it[i]) return; var g = function (id) { var e = $(id); return e ? (e.value || null) : null; };
+        it[i].observedOutcome = g('jo' + i); if ($('jt' + i)) it[i].tradeOutcome = g('jt' + i); it[i].ruleAdherence = g('jr' + i); writeJournal(it); var m = $('jmsg' + i); if (m) m.textContent = 'Saved ✓'; };
+    });
     var rec = $('recordBtn'); if (rec) rec.onclick = recordDecision;
   }
 
@@ -384,6 +446,7 @@
     S.pairId = S.ws.watchlist[0].pair;
     try { var sp = localStorage.getItem('nfx_ws_pair'); if (sp && A.getPair(S.ws, sp)) S.pairId = sp; var sv = localStorage.getItem('nfx_ws_view'); if (sv) S.view = sv; } catch (e) {}
     var p = curPair(); S.frameIdx = p.frames.length - 1;
+    try { prospectiveStep(S.ws); } catch (e) {}       // record classifications + resolve past outcomes
     $('metaver').textContent = S.ws.meta.version + ' · ' + S.ws.meta.classifier;
     // pair selector (always visible; works from any view)
     var psel = $('pairsel');
