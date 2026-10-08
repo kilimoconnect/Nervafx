@@ -64,6 +64,8 @@
   var rb = document.getElementById('refreshBtn'); if (rb) rb.onclick = function () { location.reload(); };
 
   function showBanner(cls, html) { document.getElementById('banners').innerHTML = '<div class="state-banner ' + cls + '" role="alert">' + html + '</div>'; document.getElementById('viewhost').innerHTML = ''; document.getElementById('datahdr').textContent = '—'; }
+  // Auto-refresh shortly after each completed M15 close so the screen stays current.
+  function scheduleRefresh() { var M = 15 * 60 * 1000; var now = Date.now(); var next = Math.ceil(now / M) * M + 75000; setTimeout(function () { location.reload(); }, Math.max(60000, next - now)); }
   function loadScript(src) { return new Promise(function (res, rej) { var s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = function () { rej(new Error('failed to load ' + src)); }; document.body.appendChild(s); }); }
 
   document.getElementById('datahdr').textContent = 'Loading M15 data from the server… (first load builds the recent window, a few seconds)';
@@ -76,7 +78,7 @@
       if (o.j.ok === false) throw new Error(o.j.error || ('HTTP ' + o.status));
       if (!o.j.available || !o.j.watchlist || !o.j.watchlist.length) { showBanner('sb-unavail', 'UNAVAILABLE — ' + (o.j.reason || 'no synchronized M15 data') + '. Nothing is shown; no data is fabricated. Use Refresh to retry.'); return null; }
       window.NFX_FIXTURES = o.j;               // real payload in the same contract as the fixtures
-      return loadScript('/m15-workspace/adapters.js').then(function () { return loadScript('/m15-workspace/app.js'); });
+      return loadScript('/m15-workspace/adapters.js').then(function () { return loadScript('/m15-workspace/app.js'); }).then(scheduleRefresh);
     })
     .catch(function (e) { clearTimeout(timer); var msg = e && e.name === 'AbortError' ? 'request timed out (server took too long)' : (e.message || e); showBanner('sb-error', 'ERROR loading M15 data — ' + msg + '. No fabricated fallback is shown. Use Refresh to retry.'); });
 })();

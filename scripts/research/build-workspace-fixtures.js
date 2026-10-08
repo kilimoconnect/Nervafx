@@ -50,8 +50,9 @@ function build() {
   ];
 
   return {
-    meta: { version: 'm15-workspace-1.0.0', classifier: CLASSIFIER_VERSION, provenance: 'SYNTHETIC', generatedFixtureCloseUtc: new Date(T).toISOString(), disclaimer: 'DEMO / SYNTHETIC — designed fixtures run through the real research modules. Not live, not market data, not a trading system and not validated for profitability.' },
+    meta: { version: 'm15-workspace-1.1.0', classifier: CLASSIFIER_VERSION, provenance: 'SYNTHETIC', generatedFixtureCloseUtc: new Date(T).toISOString(), disclaimer: 'DEMO / SYNTHETIC — designed fixtures run through the real research modules. Not live, not market data, not a trading system and not validated for profitability.' },
     modelHealth: MODEL_HEALTH,
+    freshness: { lastClosedCandleUtc: new Date(T).toISOString(), lastIngestionUtc: new Date(T).toISOString(), analysisCompletedUtc: new Date(T + 70000).toISOString(), missingClosedCandles: 0, marketClosed: false, delayed: false, demo: true },
     watchlist,
   };
 }

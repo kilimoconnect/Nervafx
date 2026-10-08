@@ -117,12 +117,46 @@
     if (!order.length) return '<div class="mut">network unavailable</div>';
     var breadth = {}; (f.strengthBoard || []).forEach(function (c) { breadth[c.currency] = c.breadth; });
     var cell = function (k, c) { var v = sw[k] ? sw[k][c] : null; if (v == null) return '<td class="mut">—</td>'; var cl = v > 0 ? 'pos' : (v < 0 ? 'neg' : ''); return '<td class="num ' + cl + '">' + num(v) + '</td>'; };
+    var dev = f.strengthDevelopment || {};
+    var devCell = function (c) { var d = dev[c]; if (!d) return '<td class="mut">—</td>'; var a = d.trend === 'gaining' ? '<span class="pos">▲ gaining</span>' : d.trend === 'losing' ? '<span class="neg">▼ losing</span>' : '<span class="mut">▬ holding</span>'; return '<td>' + a + '</td>'; };
     var rows = order.map(function (c) {
-      return '<tr><td><b>' + c + '</b></td>' + cell('h12', c) + cell('h24', c) + cell('h36', c) + cell('h48', c) +
+      return '<tr><td><b>' + c + '</b></td>' + cell('h12', c) + cell('h24', c) + cell('h36', c) + cell('h48', c) + devCell(c) +
         '<td>' + (breadth[c] != null ? Math.round(breadth[c] * 100) + '%' : '—') + '</td></tr>';
     }).join('');
-    return '<table class="matrix"><thead><tr><th>Ccy</th><th>12h</th><th>24h</th><th>36h</th><th>48h</th><th>Breadth</th></tr></thead><tbody>' + rows + '</tbody></table>' +
-      '<div class="mut" style="margin-top:4px;font-size:11px">x = relative, zero-sum currency strength per window (ranked by 24h). Breadth = share of the currency’s pairs agreeing (24h).</div>';
+    return '<table class="matrix"><thead><tr><th>Ccy</th><th>12h</th><th>24h</th><th>36h</th><th>48h</th><th>Developing</th><th>Breadth</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+      '<div class="mut" style="margin-top:4px;font-size:11px">x = relative, zero-sum strength per window (ranked by 24h). <b>Developing</b> = recent (12h) vs longer (48h): a currency can rank strong yet already be losing ground. Breadth = share of the currency’s pairs agreeing (24h).</div>';
+  }
+
+  function fmtT(iso) { return iso ? fmtEatTime(Date.parse(iso)) : '—'; }
+  function simpleBadge(f) {
+    var s = f.simpleState || { label: f.primaryState, dir: null, qualifiers: [] };
+    var c = s.dir === 'UP' ? 'b-up' : (s.dir === 'DOWN' ? 'b-dn' : (s.label === 'Conflict' || s.label === 'Unavailable' ? 'b-warn' : 'b-mut'));
+    var q = (s.qualifiers || []).map(function (x) { return '<span class="badge b-mut" style="margin-left:4px">' + x + '</span>'; }).join('');
+    return '<span class="badge ' + c + '" style="font-size:15px">' + s.label + (s.dir ? ' ' + s.dir.toLowerCase() : '') + '</span>' + q;
+  }
+  function directionTimingHtml(f) {
+    var d = f.directionTiming; if (!d) return '<div class="mut">—</div>';
+    var kv = function (k, v, mut) { return '<div class="kv"><span>' + k + '</span><b class="' + (mut ? 'mut' : '') + '" style="text-align:right;max-width:66%">' + esc(v) + '</b></div>'; };
+    return kv('Direction', d.direction) + kv('Location', d.location) + kv('Next observation', d.nextObservation) + kv('Entry eligibility', d.entryEligibility, true) +
+      '<div class="mut" style="margin-top:6px;font-size:11px">Direction (structure) and timing (location/entry) are separate — a clear trend can be a poor place to enter.</div>';
+  }
+  function alternativeHtml(f) {
+    var a = f.alternative; if (!a) return '<div class="mut">—</div>';
+    return '<div style="font-size:13px">' + esc(a.interpretation) + '</div><div class="kv" style="margin-top:6px"><span>What would distinguish it</span><b style="text-align:right;max-width:66%">' + esc(a.distinguisher) + '</b></div>';
+  }
+  function freshnessHtml(fr) {
+    if (!fr) return '';
+    var badge = fr.marketClosed ? '<span class="badge b-mut">MARKET CLOSED</span>'
+      : (fr.delayed ? '<span class="badge b-warn">DELAYED · ' + fr.missingClosedCandles + ' candle' + (fr.missingClosedCandles === 1 ? '' : 's') + ' behind</span>' : '<span class="badge b-up">UP TO DATE</span>');
+    return 'Freshness: ' + badge + ' · last close <b>' + fmtT(fr.lastClosedCandleUtc) + '</b> · ingested <b>' + fmtT(fr.lastIngestionUtc) + '</b> · analysed <b>' + fmtT(fr.analysisCompletedUtc) + '</b> (EAT)';
+  }
+  function gapTrend(p, idx) {
+    var cur = p.frames[idx]; if (!cur || !cur.otherPairConfirmation || cur.otherPairConfirmation.full == null) return null;
+    var g0 = cur.otherPairConfirmation.full; var k = Math.min(4, idx); var prev = p.frames[idx - k];
+    if (!prev || !prev.otherPairConfirmation || prev.otherPairConfirmation.full == null) return { g: g0, trend: 'n/a', dir: g0 > 0 ? 'base stronger' : (g0 < 0 ? 'quote stronger' : 'level') };
+    var g1 = prev.otherPairConfirmation.full; var widening = Math.abs(g0) - Math.abs(g1);
+    var trend = Math.abs(widening) < 0.0003 ? 'stable' : (widening > 0 ? 'widening' : 'narrowing');
+    return { g: g0, trend: trend, dir: g0 > 0 ? 'base stronger' : (g0 < 0 ? 'quote stronger' : 'level') };
   }
 
   function evidenceHtml(f) {
@@ -149,8 +183,7 @@
     if (!f.dataHealth.available) out += '<div class="state-banner sb-unavail" role="alert">UNAVAILABLE — ' + esc(f.dataHealth.reason) + '. No classification is shown; nothing is filled forward.</div>';
     if (f.dataHealth.closedMarket) out += '<div class="state-banner sb-closed">CLOSED MARKET — this close falls in the weekend window (Fri 21:00 → Sun 21:00 UTC). Not a current opportunity.</div>';
     if (f.dataHealth.stale) out += '<div class="state-banner sb-stale">STALE — a data gap precedes this close. Treat readings with caution.</div>';
-    if (f.primaryState === 'CONFLICT') out += '<div class="state-banner sb-conflict">CONFLICT — price direction and other-pair strength disagree. No single read.</div>';
-    if (f.extendedMove) out += '<div class="state-banner sb-extended">EXTENDED MOVE — a long one-way run; later entries carry more adverse-excursion risk (descriptive only).</div>';
+    if (f.primaryState === 'CONFLICT') out += '<div class="state-banner sb-conflict">CONFLICT — price direction and other-pair support disagree. No single read.</div>';
     return out;
   }
 
@@ -158,24 +191,30 @@
   function viewMarket(f) {
     var rows = S.ws.watchlist.map(function (w) {
       var lf = w.frames[w.frames.length - 1];
+      var ss = lf.simpleState || { label: lf.primaryState, dir: null };
+      var cc = ss.dir === 'UP' ? 'b-up' : (ss.dir === 'DOWN' ? 'b-dn' : (ss.label === 'Conflict' || ss.label === 'Unavailable' ? 'b-warn' : 'b-mut'));
       var gap = lf.otherPairConfirmation ? num(lf.otherPairConfirmation.full) : '—';
       var sel = w.pair === S.pairId;
-      return '<tr class="rowbtn" role="row" tabindex="0" aria-selected="' + sel + '" data-pair="' + w.pair + '"><td><b>' + w.pair.replace('_', '/') + '</b><div class="mut" style="font-size:11px">' + esc(w.label) + '</div></td><td>' + stateBadge(lf.primaryState) + '</td><td class="num">' + gap + '</td><td>' + (lf.dataHealth.available ? (lf.otherPairConfirmation && lf.otherPairConfirmation.agrees ? '<span class="badge b-up">conf</span>' : '<span class="badge b-mut">—</span>') : '<span class="badge b-warn">' + (lf.dataHealth.reason || 'n/a').split(' ')[0] + '</span>') + '</td></tr>';
+      return '<tr class="rowbtn" role="row" tabindex="0" aria-selected="' + sel + '" data-pair="' + w.pair + '"><td><b>' + w.pair.replace('_', '/') + '</b></td><td><span class="badge ' + cc + '">' + ss.label + (ss.dir ? ' ' + ss.dir.toLowerCase() : '') + '</span></td><td class="num">' + gap + '</td><td>' + (lf.dataHealth.available ? (lf.otherPairConfirmation && lf.otherPairConfirmation.agrees ? '<span class="badge b-up">support</span>' : '<span class="badge b-mut">—</span>') : '<span class="badge b-warn">' + (lf.dataHealth.reason || 'n/a').split(' ')[0] + '</span>') + '</td></tr>';
     }).join('');
     var watch = '<div class="card"><h2>Watchlist (click a pair)</h2><table role="grid"><thead><tr><th>Pair</th><th>State</th><th>Strength gap</th><th>Other-pair</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
     if (!f) return watch;
-    var mid = '<div class="card"><h2>' + S.pairId.replace('_', '/') + ' — M15 (as of ' + f.asOfCloseUtc + ')</h2>' +
-      '<div class="chartwrap"><canvas id="chart" aria-label="M15 candlestick chart for ' + S.pairId + '"></canvas></div>' +
-      lookbackHtml() +
-      '<div class="mut" style="font-size:11.5px">Markers: ▲ reversal (pivot), ▮ accepted departure, ▮ rejection. Chart lookback is visual only; window readings below are unaffected.</div></div>' +
-      '<div class="card"><h2>Four-window price / strength matrix</h2>' + windowMatrix(f) + '</div>';
-    var right = '<div class="card"><h2>State & next condition</h2><div class="verdict">' + stateBadge(f.primaryState) + '</div>' +
-      '<div class="explain" style="margin:8px 0">' + esc(f.explanation) + '</div>' + nextCondHtml(f) + '</div>' +
-      '<div class="card"><h2>Supporting / opposing evidence</h2>' + evidenceHtml(f) + '</div>' +
-      '<div class="card"><h2>Currency strength by window (12/24/36/48h · 8-ccy network)</h2>' + strengthBoardHtml(f) +
-      '<div class="mut" style="margin-top:6px;font-size:11.5px">Leave-one-pair-out is OTHER-PAIR confirmation (this pair excluded) — <b>not</b> statistical independence.</div></div>' +
+    var gt = gapTrend(curPair(), Math.min(S.frameIdx, curPair().frames.length - 1));
+    var left = '<div class="card"><h2>' + S.pairId.replace('_', '/') + ' — M15 (as of ' + f.asOfCloseUtc + ')</h2>' +
+      '<div class="chartwrap"><canvas id="chart" aria-label="M15 candlestick chart for ' + S.pairId + '"></canvas></div>' + lookbackHtml() +
+      '<div class="mut" style="font-size:11.5px">▲ reversal · ▮ accepted departure · ▮ rejection. Chart lookback is visual only.</div></div>' +
+      '<div class="card"><h2>Price story — four windows</h2>' + windowMatrix(f) + '</div>' +
+      '<div class="card"><h2>Currency support by window (12/24/36/48h)</h2>' + strengthBoardHtml(f) +
+      (gt ? '<div class="mut" style="margin-top:6px;font-size:12px">Selected pair gap <b class="' + (gt.g < 0 ? 'neg' : 'pos') + '">' + num(gt.g) + '</b> (' + esc(gt.dir) + ') — <b>' + gt.trend + '</b> vs ~1h ago.</div>' : '') + '</div>';
+    var right = '<div class="card"><h2>Decision</h2><div style="margin-bottom:8px">' + simpleBadge(f) + '</div>' +
+      '<div class="explain">' + esc(f.explanation) + '</div>' +
+      (f.otherPairConfirmation ? '<div class="kv" style="margin-top:8px"><span>Other-pair support</span>' + (f.otherPairConfirmation.agrees ? '<span class="badge b-up">agrees</span>' : '<span class="badge b-mut">no</span>') + '</div>' : '') + '</div>' +
+      '<div class="card"><h2>Direction vs timing</h2>' + directionTimingHtml(f) + '</div>' +
+      '<div class="card"><h2>Strongest alternative view</h2>' + alternativeHtml(f) + '</div>' +
+      '<div class="card"><h2>Supporting / opposing evidence</h2>' + evidenceHtml(f) +
+      '<div class="mut" style="margin-top:6px;font-size:11px">Engine state: ' + esc((f.simpleState && f.simpleState.engineState) || f.primaryState) + '</div></div>' +
       decisionFormHtml();
-    return watch + '<div class="grid-main"><div>' + mid + '</div><div>' + right + '</div></div>';
+    return watch + '<div class="grid-main"><div>' + left + '</div><div>' + right + '</div></div>';
   }
 
   function viewDetail(f) {
@@ -228,6 +267,14 @@
       '<div class="kv"><span>Economics</span><b>' + ic.economics + '</b></div>' +
       '<div class="kv"><span>Pre-registration hash</span><b class="num" style="font-size:11px">' + ic.registrationHash.slice(0, 24) + '…</b></div>' +
       '<div class="mut" style="margin-top:6px;font-size:12px">' + esc(ic.note) + '</div></div>' +
+      '<div class="card"><h2>Why INSUFFICIENT_EVIDENCE</h2>' + ((ic.insufficientBecause || []).map(function (r) { return '<div class="ev mut">• ' + esc(r) + '</div>'; }).join('') || '<div class="mut">—</div>') +
+      (ic.whatWouldResolve ? '<div style="margin-top:6px;font-size:12.5px"><b>What would resolve it:</b> ' + esc(ic.whatWouldResolve) + '</div>' : '') + '</div>' +
+      (f && f.reproduce ? ('<div class="card"><h2>Reproducibility (selected close)</h2>' +
+        '<div class="kv"><span>Input digest</span><b class="num">' + esc(f.reproduce.inputDigest) + '</b></div>' +
+        '<div class="kv"><span>Classifier</span><b class="num" style="font-size:11px">' + esc(f.reproduce.classifierVersion || '—') + '</b></div>' +
+        '<div class="kv"><span>Calibration</span><b class="num">' + esc(f.reproduce.calibrationVersion) + '</b></div>' +
+        '<div class="kv"><span>Code</span><b class="num">' + esc(f.reproduce.codeVersion) + '</b></div>' +
+        '<div class="mut" style="margin-top:6px;font-size:11px">A journal entry pins these so revised candles or thresholds cannot silently rewrite an old interpretation.</div></div>') : '') +
       '<div class="card"><h2>Data health (selected pair / close)</h2>' + (dh ? (
         '<div class="kv"><span>Availability</span>' + (dh.available ? '<span class="badge b-up">AVAILABLE</span>' : '<span class="badge b-warn">UNAVAILABLE · ' + esc(dh.reason) + '</span>') + '</div>' +
         '<div class="kv"><span>28-pair coverage</span><b>' + dh.pairsPresent + '/' + dh.pairsExpected + (dh.aligned ? ' (aligned)' : '') + '</b></div>' +
@@ -279,9 +326,10 @@
     else if (f) {
       var fresh = f.dataHealth.stale ? '<span class="badge b-warn">STALE</span>' : (f.dataHealth.closedMarket ? '<span class="badge b-mut">CLOSED</span>' : '<span class="badge b-up">OK</span>');
       hdr.innerHTML = 'Pair: <b>' + S.pairId.replace('_', '/') + '</b>' +
-        ' · Close UTC: <b>' + f.asOfCloseUtc + '</b> · EAT: <b>' + f.asOfCloseEat + '</b>' +
-        ' · Data: ' + fresh + ' · Coverage: <b>' + f.dataHealth.pairsPresent + '/' + f.dataHealth.pairsExpected + '</b>' +
-        (S.frameIdx >= p.frames.length - 1 ? ' · <span class="pill">latest</span>' : ' · <span class="pill warn">replay</span>');
+        ' · Close EAT: <b>' + f.asOfCloseEat + '</b>' +
+        ' · Coverage: <b>' + f.dataHealth.pairsPresent + '/' + f.dataHealth.pairsExpected + '</b>' +
+        (S.frameIdx >= p.frames.length - 1 ? ' · <span class="pill">latest</span>' : ' · <span class="pill warn">replay</span>') +
+        (S.ws && S.ws.freshness ? '<br>' + freshnessHtml(S.ws.freshness) : '');
     } else hdr.innerHTML = '<span class="mut">no data</span>';
 
     $('banners').innerHTML = banners(f);
@@ -325,15 +373,17 @@
     var rec = $('recordBtn'); if (rec) rec.onclick = recordDecision;
   }
 
-  function selectPair(id) { S.pairId = id; var p = curPair(); S.frameIdx = p ? p.frames.length - 1 : 0; render(); }
-  function setView(v) { S.view = v; render(); }
+  function selectPair(id) { S.pairId = id; var p = curPair(); S.frameIdx = p ? p.frames.length - 1 : 0; try { localStorage.setItem('nfx_ws_pair', id); } catch (e) {} render(); }
+  function setView(v) { S.view = v; try { localStorage.setItem('nfx_ws_view', v); } catch (e) {} render(); }
   function step(d) { var p = curPair(); if (!p) return; S.frameIdx = Math.max(0, Math.min(p.frames.length - 1, S.frameIdx + d)); render(); }
 
   // ---- init ----
   function init() {
     try { S.ws = A.getWorkspace(); }
     catch (e) { S.error = e.message; render(); return; }
-    S.pairId = S.ws.watchlist[0].pair; var p = curPair(); S.frameIdx = p.frames.length - 1;
+    S.pairId = S.ws.watchlist[0].pair;
+    try { var sp = localStorage.getItem('nfx_ws_pair'); if (sp && A.getPair(S.ws, sp)) S.pairId = sp; var sv = localStorage.getItem('nfx_ws_view'); if (sv) S.view = sv; } catch (e) {}
+    var p = curPair(); S.frameIdx = p.frames.length - 1;
     $('metaver').textContent = S.ws.meta.version + ' · ' + S.ws.meta.classifier;
     // pair selector (always visible; works from any view)
     var psel = $('pairsel');

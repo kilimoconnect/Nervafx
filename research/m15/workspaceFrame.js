@@ -1,5 +1,8 @@
 'use strict';
 
+const crypto = require('crypto');
+const CODE_VERSION = 'm15-workspace-1.1.0';
+
 /**
  * Shared frame/payload builder for the manual-decision workspace.
  *
@@ -47,6 +50,85 @@ function extendedMoveFlag(pa) {
   return Math.abs(h48.directionalEfficiency) >= 0.7 && Math.abs(h24.directionalEfficiency) >= 0.6 && h48.actual >= 160;
 }
 
+// ── simplified decision labels (detailed engine state → plain label + qualifiers) ──
+function simpleStateOf(state, extendedMove) {
+  const q = [];
+  let label = state;
+  if (state === 'UNAVAILABLE') label = 'Unavailable';
+  else if (state === 'CONFLICT') label = 'Conflict';
+  else if (/^REVERSAL/.test(state)) label = 'Reversal';
+  else if (/^BALANCED_RANGE/.test(state)) label = 'Range';
+  else if (/^EMERGING_MOVE/.test(state)) label = 'Developing trend';
+  else if (/^ACCEPTED_TREND|^ACCELERATING_TREND|^EXHAUSTION_RISK/.test(state)) label = 'Established trend';
+  if (/^ACCELERATING/.test(state)) q.push('Accelerating');
+  if (/^EXHAUSTION_RISK/.test(state)) q.push('Exhaustion risk');
+  if (extendedMove) q.push('Extended');
+  const dir = /_UP$/.test(state) ? 'UP' : (/_DOWN$/.test(state) ? 'DOWN' : null);
+  return { label: label, dir: dir, qualifiers: q, engineState: state };
+}
+
+const dirWord = (dir, up, down, flat) => (dir === 'UP' ? up : dir === 'DOWN' ? down : flat);
+
+// ── direction (structure) vs timing (location/entry) — kept separate on purpose ──
+function directionTimingOf(simple, pa, structure, nc, extendedMove) {
+  const posObj = pa.windows && pa.windows.h24 && pa.windows.h24.descriptors;
+  const pos = posObj ? posObj.positionInRange : 0.5;
+  const dir = simple.dir;
+  let direction;
+  if (simple.label === 'Established trend') direction = dirWord(dir, 'Established bullish structure', 'Established bearish structure', 'Established (direction unclear)');
+  else if (simple.label === 'Developing trend') direction = dirWord(dir, 'Developing bullish move', 'Developing bearish move', 'Developing move');
+  else if (simple.label === 'Reversal') direction = dirWord(dir, 'Turning bullish (reversal of prior context)', 'Turning bearish (reversal of prior context)', 'Reversal');
+  else if (simple.label === 'Range') direction = 'No established direction (range/balance)';
+  else if (simple.label === 'Conflict') direction = 'Price and other-pair support disagree';
+  else direction = 'Unavailable';
+
+  let location;
+  if (simple.label === 'Unavailable') location = 'No reliable location';
+  else if (extendedMove) location = dirWord(dir, 'Extended above the recent accepted area', 'Extended below the recent accepted area', 'Extended from value');
+  else if (structure.acceptedHold) location = dirWord(dir, 'Beyond an accepted area (held higher)', 'Beyond an accepted area (held lower)', 'Beyond an accepted area');
+  else if (pos <= 0.2) location = 'Near the low of the 24h range';
+  else if (pos >= 0.8) location = 'Near the high of the 24h range';
+  else location = 'Mid 24h range';
+
+  const nextObservation = nc.invalidationReference || nc.nextCondition || '—';
+  return { direction: direction, location: location, nextObservation: nextObservation, entryEligibility: 'No validated entry rule available (model UNVALIDATED)' };
+}
+
+// ── strongest competing interpretation + what would distinguish it ──
+function alternativeOf(simple, pa) {
+  const dir = simple.dir;
+  const overlap = pa.windows && pa.windows.h24 && pa.windows.h24.descriptors ? pa.windows.h24.descriptors.overlapFraction : 0;
+  const L = simple.label;
+  if (L === 'Developing trend') return { interpretation: dirWord(dir, 'Possible new bullish departure, but the broader range may reject the advance.', 'Possible new bearish departure, but the broader range has repeatedly rejected declines.', 'Possible new move, but the range may absorb it.'), distinguisher: 'A decisive close beyond the range edge vs a close back inside.' };
+  if (L === 'Established trend') return { interpretation: 'Direction is clear but may be late/extended; a move against it could be a pullback, not a turn.', distinguisher: dirWord(dir, 'A higher low that holds vs a failure back below support.', 'A lower high that holds vs a reclaim of the last broken area.', 'Continuation vs a failed break.') };
+  if (L === 'Reversal') return { interpretation: 'Could be a genuine turn, or just a counter-move within the prior trend.', distinguisher: dirWord(dir, 'Acceptance above the broken level vs rejection back below.', 'Acceptance below the broken level vs rejection back above.', 'Acceptance vs rejection of the pivot.') };
+  if (L === 'Range') return { interpretation: overlap >= 0.7 ? 'Tight balance; may resolve either way with little warning.' : 'Rotational; no edge in control yet.', distinguisher: 'The first accepted break of the balance zone.' };
+  if (L === 'Conflict') return { interpretation: 'Price points one way while other-pair support points the other.', distinguisher: 'Which side the next few closes confirm.' };
+  return { interpretation: '—', distinguisher: '—' };
+}
+
+// ── per-currency strength development across windows (gaining/holding/losing) ──
+function strengthDevelopmentOf(sw) {
+  if (!sw || !sw.h24) return null;
+  const out = {};
+  Object.keys(sw.h24).forEach((c) => {
+    const x24 = sw.h24[c], x12 = sw.h12 ? sw.h12[c] : x24, x48 = sw.h48 ? sw.h48[c] : x24;
+    const sign = Math.sign(x24) || 1;
+    const dev = (x12 - x48) * sign;                 // recent minus longer, in the currency's direction
+    const trend = Math.abs(dev) < 0.0003 ? 'holding' : (dev > 0 ? 'gaining' : 'losing');
+    out[c] = { x24: +(+x24).toFixed(6), dev: +dev.toFixed(6), trend: trend };
+  });
+  return out;
+}
+
+function inputDigest(cands, t) {
+  const cs = (cands || []).filter((c) => c.openMs + 15 * 60 * 1000 <= t);
+  let sum = 0; for (const c of cs) sum += c.close;
+  const last = cs[cs.length - 1], first = cs[0];
+  const payload = cs.length + '|' + (first ? first.openMs : '') + '|' + (last ? last.openMs + ':' + last.close : '') + '|' + sum.toFixed(6);
+  return crypto.createHash('sha256').update(payload).digest('hex').slice(0, 12);
+}
+
 /** Build one immutable frame for `pair` as-of close `t`. `net` may be precomputed. */
 function buildFrame(pair, H, t, prev, candleIdx, net) {
   net = net || describeNetwork(H, { asOfCloseMs: t });
@@ -70,6 +152,11 @@ function buildFrame(pair, H, t, prev, candleIdx, net) {
   for (const k of ['h12', 'h24', 'h36', 'h48']) { const w = net.windows ? net.windows[k] : null; strengthByWindow[k] = (w && w.available) ? w.effects.byCurrency : null; }
   const conf = (net.leaveOnePairOut && net.leaveOnePairOut.confirmations && net.leaveOnePairOut.confirmations[pair]) || null;
   const nc = nextConditionFor(c.primaryState, c.structure);
+  const extended = extendedMoveFlag(pa);
+  const simple = simpleStateOf(c.primaryState, extended);
+  const directionTiming = directionTimingOf(simple, pa, c.structure, nc, extended);
+  const alternative = alternativeOf(simple, pa);
+  const strengthDevelopment = strengthDevelopmentOf(strengthByWindow);
 
   return {
     candleIdx, asOfCloseMs: t, asOfCloseUtc: c.asOfCloseUtc, asOfCloseEat: c.asOfCloseEat,
@@ -77,17 +164,23 @@ function buildFrame(pair, H, t, prev, candleIdx, net) {
     windows: c.windows,
     priceStories: { h12: story(pa.windows && pa.windows.h12), h24: story(pa.windows && pa.windows.h24), h36: story(pa.windows && pa.windows.h36), h48: story(pa.windows && pa.windows.h48) },
     compare12: pa.comparison ? { latestEff: pa.comparison.latest12.directionalEfficiency, previousEff: pa.comparison.previous12.directionalEfficiency, deltaEff: pa.comparison.deltaEfficiency, latestDir: pa.comparison.latest12.direction, previousDir: pa.comparison.previous12.direction } : null,
+    simpleState: simple,
+    directionTiming: directionTiming,
+    alternative: alternative,
     strengthBoard: board,
     strengthByWindow: strengthByWindow,
-    otherPairConfirmation: conf ? { full: conf.full ? conf.full.baseMinusQuote : null, leaveOut: conf.leaveOut ? conf.leaveOut.baseMinusQuote : null, agrees: conf.independentlyConfirmed, note: 'leave-one-pair-out = OTHER-PAIR confirmation (this pair excluded); not statistical independence.' } : null,
+    strengthDevelopment: strengthDevelopment,
+    otherPairConfirmation: conf ? { full: conf.full ? conf.full.baseMinusQuote : null, leaveOut: conf.leaveOut ? conf.leaveOut.baseMinusQuote : null, agrees: conf.independentlyConfirmed, note: 'Other-pair support (this pair excluded). Currencies are correlated, so this is OTHER-PAIR support, not statistical independence.' } : null,
     events: (pa.events || []).map((e) => ({ ms: e.ms, utc: new Date(e.ms).toISOString(), type: e.type, evidence: e.evidence })),
     structure: { acceptedHold: c.structure.acceptedHold, acceptedHoldDir: c.structure.acceptedHoldDir, confirmedPivots: c.structure.confirmedPivots, lastPivot: c.structure.lastPivot, provisionalLeg: c.structure.provisionalLeg, rejection: c.structure.rejection },
     evidenceFor: (c.evidenceFor || []).map((e) => e.text),
     evidenceAgainst: (c.evidenceAgainst || []).map((e) => e.text),
     explanation: c.explanation,
     nextCondition: nc.nextCondition, invalidationReference: nc.invalidationReference, invalidationLevel: nc.invalidationLevel,
-    extendedMove: extendedMoveFlag(pa),
+    extendedMove: extended,
     dataHealth: { available, reason: availReason, stale: staleBefore, closedMarket: closedMarket(t), aligned: !!(h24 && h24.available && cov.pairsUsed === cov.pairsExpected), pairsPresent: cov.pairsUsed, pairsExpected: cov.pairsExpected },
+    // versioned reproducibility: the inputs + code/config that produced this frame
+    reproduce: { inputDigest: inputDigest(H[pair], t), classifierVersion: c.version || null, calibrationVersion: c.calibration.version, codeVersion: CODE_VERSION },
     calibrationVersion: c.calibration.version,
   };
 }
@@ -95,7 +188,19 @@ function buildFrame(pair, H, t, prev, candleIdx, net) {
 const MODEL_HEALTH = Object.freeze({
   status: 'UNVALIDATED',
   stage5: { decision: 'NONE PASSED', immutable: true, artifact: 'docs/research/audit/stage5_scorecard_CORRECTED.json' },
-  infocontent: { verdicts: { H1: 'INSUFFICIENT_EVIDENCE', H2: 'INSUFFICIENT_EVIDENCE', H3: 'INSUFFICIENT_EVIDENCE' }, registrationHash: 'c5a26dd1582726d5267694e75397c9dea28c1d36f2df5265cf1698408e4dd6b6', economics: 'ESTIMATED (mid-only)', note: 'No tradable edge demonstrated. No profitability or confidence probability is shown anywhere.' },
+  infocontent: {
+    verdicts: { H1: 'INSUFFICIENT_EVIDENCE', H2: 'INSUFFICIENT_EVIDENCE', H3: 'INSUFFICIENT_EVIDENCE' },
+    registrationHash: 'c5a26dd1582726d5267694e75397c9dea28c1d36f2df5265cf1698408e4dd6b6',
+    economics: 'ESTIMATED (mid-only)',
+    // WHY insufficient — tells you what further work could resolve it:
+    insufficientBecause: [
+      'No real held-out data was evaluated (synthetic/exploratory provenance).',
+      'Too few independent episodes and ISO-week blocks to bound uncertainty.',
+      'Costs are ESTIMATED only (mid-only candles; no bid/ask).',
+    ],
+    whatWouldResolve: 'Run the frozen pre-registration on real held-out candles with actual bid/ask, across many weeks, to get enough independent episodes.',
+    note: 'No tradable edge demonstrated. No profitability or confidence probability is shown anywhere.',
+  },
 });
 
 /**
@@ -110,7 +215,7 @@ function buildWorkspacePayload(H, opts = {}) {
   const provenance = opts.provenance || 'LIVE';
 
   const probe = syncAsOf(H, now);
-  const meta = { version: 'm15-workspace-1.0.0', classifier: CLASSIFIER_VERSION, calibration: CALIBRATION.version, provenance, generatedAtUtc: new Date().toISOString(), disclaimer: provenance === 'LIVE' ? 'Research classification — not a trade signal. Model UNVALIDATED (no demonstrated edge). Mid-only candles; no order path.' : 'DEMO / SYNTHETIC — not live, not a trading system, not validated for profitability.' };
+  const meta = { version: CODE_VERSION, classifier: CLASSIFIER_VERSION, calibration: CALIBRATION.version, provenance, generatedAtUtc: new Date().toISOString(), disclaimer: provenance === 'LIVE' ? 'Research classification — not a trade signal. Model UNVALIDATED (no demonstrated edge). Mid-only candles; no order path.' : 'DEMO / SYNTHETIC — not live, not a trading system, not validated for profitability.' };
   if (probe.frameOpenMs == null) return { meta, modelHealth: MODEL_HEALTH, watchlist: [], available: false, reason: 'NO_DATA', missing: probe.missing };
   const T = probe.frameOpenMs + M15;
 
@@ -140,7 +245,22 @@ function buildWorkspacePayload(H, opts = {}) {
   }
 
   const watchlist = pairs.map((p) => ({ pair: p, label: p.replace('_', '/'), candles: candlesByPair[p], frames: framesByPair[p] }));
-  return { meta, modelHealth: MODEL_HEALTH, watchlist, available: true, asOfCloseUtc: new Date(T).toISOString() };
+
+  // ── Freshness contract: three distinct timestamps + missing closed candles ──
+  let newestIngestMs = 0;
+  for (const p of pairs) for (const c of (H[p] || [])) { const cm = c.openMs + M15; if (cm > newestIngestMs) newestIngestMs = cm; }
+  // completed M15 closes expected between the analysed close T and now, during open market
+  let missing = 0;
+  for (let tt = T + M15; tt <= now && (tt - T) <= 14 * 24 * 60 * 60 * 1000; tt += M15) { if (!closedMarket(tt - M15)) missing++; }
+  const freshness = {
+    lastClosedCandleUtc: new Date(T).toISOString(),        // the close the analysis is as-of
+    lastIngestionUtc: newestIngestMs ? new Date(newestIngestMs).toISOString() : null,  // newest candle we hold
+    analysisCompletedUtc: new Date().toISOString(),         // when this response was built
+    missingClosedCandles: missing,
+    marketClosed: closedMarket(now),
+    delayed: missing >= 1,
+  };
+  return { meta, modelHealth: MODEL_HEALTH, watchlist, available: true, asOfCloseUtc: new Date(T).toISOString(), freshness };
 }
 
 module.exports = { M15, closedMarket, nextConditionFor, extendedMoveFlag, buildFrame, buildWorkspacePayload, MODEL_HEALTH };
