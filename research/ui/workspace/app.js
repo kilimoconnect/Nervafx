@@ -46,15 +46,15 @@
     ctx.strokeStyle = '#1e2536'; ctx.font = '10px monospace'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
     for (var g = 0; g <= 4; g++) { var gv = hi - rng * g / 4, gy = y(gv); ctx.strokeStyle = '#1e2536'; ctx.beginPath(); ctx.moveTo(padL, gy); ctx.lineTo(cssW - padR, gy); ctx.stroke(); ctx.fillStyle = '#94a3b8'; ctx.fillText(gv.toFixed(prec), 4, gy); }
     // x-axis time ticks (EAT)
-    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-    var nTicks = Math.min(6, vis.length);
+    ctx.textBaseline = 'top'; ctx.fillStyle = '#94a3b8';
+    var nTicks = Math.min(5, vis.length);
     for (var k = 0; k < nTicks; k++) {
       var ti = nTicks === 1 ? 0 : Math.round(k * (vis.length - 1) / (nTicks - 1));
       var tx = x(ti);
       ctx.strokeStyle = '#1e2536'; ctx.beginPath(); ctx.moveTo(tx, padT + h); ctx.lineTo(tx, padT + h + 3); ctx.stroke();
-      ctx.fillStyle = '#94a3b8'; ctx.fillText(fmtEatTime(vis[ti].openMs), tx, padT + h + 6);
+      ctx.textAlign = k === 0 ? 'left' : (k === nTicks - 1 ? 'right' : 'center');   // anchor edges so labels never clip
+      ctx.fillText(fmtEatTime(vis[ti].openMs) + (k === nTicks - 1 ? ' EAT' : ''), tx, padT + h + 6);
     }
-    ctx.textAlign = 'right'; ctx.fillStyle = '#64748b'; ctx.fillText('EAT', cssW - padR, padT + h + 6);
     // candles
     var cw = Math.max(1, Math.min(10, w / vis.length * 0.65));
     vis.forEach(function (c, i) {
@@ -468,6 +468,8 @@
       else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { var ws = S.ws.watchlist, i = ws.findIndex(function (w) { return w.pair === S.pairId; }); i = (i + (e.key === 'ArrowUp' ? -1 : 1) + ws.length) % ws.length; selectPair(ws[i].pair); e.preventDefault(); }
       else if (/^[1-6]$/.test(e.key)) { setView(['market', 'detail', 'replay', 'journal', 'health', 'plan'][+e.key - 1]); }
     });
+    // redraw on resize / orientation change so the canvas matches the new width
+    var rzt; window.addEventListener('resize', function () { clearTimeout(rzt); rzt = setTimeout(render, 150); });
     render();
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
