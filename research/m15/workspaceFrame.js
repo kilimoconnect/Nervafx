@@ -65,6 +65,9 @@ function buildFrame(pair, H, t, prev, candleIdx, net) {
 
   const story = (w) => (w && w.descriptors ? { coveragePct: w.coveragePct, actual: w.actualCandles, nominal: w.nominalCandles, efficiency: w.descriptors.directionalEfficiency, direction: w.descriptors.direction, range: w.descriptors.range, positionInRange: w.descriptors.positionInRange } : null);
   const board = (h24 && h24.available) ? h24.effects.ranked.map((ccy) => ({ currency: ccy, x: h24.effects.byCurrency[ccy], breadth: h24.breadth[ccy] ? h24.breadth[ccy].fraction : 0 })) : null;
+  // Per-currency strength across ALL four windows (12/24/36/48h).
+  const strengthByWindow = {};
+  for (const k of ['h12', 'h24', 'h36', 'h48']) { const w = net.windows ? net.windows[k] : null; strengthByWindow[k] = (w && w.available) ? w.effects.byCurrency : null; }
   const conf = (net.leaveOnePairOut && net.leaveOnePairOut.confirmations && net.leaveOnePairOut.confirmations[pair]) || null;
   const nc = nextConditionFor(c.primaryState, c.structure);
 
@@ -75,6 +78,7 @@ function buildFrame(pair, H, t, prev, candleIdx, net) {
     priceStories: { h12: story(pa.windows && pa.windows.h12), h24: story(pa.windows && pa.windows.h24), h36: story(pa.windows && pa.windows.h36), h48: story(pa.windows && pa.windows.h48) },
     compare12: pa.comparison ? { latestEff: pa.comparison.latest12.directionalEfficiency, previousEff: pa.comparison.previous12.directionalEfficiency, deltaEff: pa.comparison.deltaEfficiency, latestDir: pa.comparison.latest12.direction, previousDir: pa.comparison.previous12.direction } : null,
     strengthBoard: board,
+    strengthByWindow: strengthByWindow,
     otherPairConfirmation: conf ? { full: conf.full ? conf.full.baseMinusQuote : null, leaveOut: conf.leaveOut ? conf.leaveOut.baseMinusQuote : null, agrees: conf.independentlyConfirmed, note: 'leave-one-pair-out = OTHER-PAIR confirmation (this pair excluded); not statistical independence.' } : null,
     events: (pa.events || []).map((e) => ({ ms: e.ms, utc: new Date(e.ms).toISOString(), type: e.type, evidence: e.evidence })),
     structure: { acceptedHold: c.structure.acceptedHold, acceptedHoldDir: c.structure.acceptedHoldDir, confirmedPivots: c.structure.confirmedPivots, lastPivot: c.structure.lastPivot, provisionalLeg: c.structure.provisionalLeg, rejection: c.structure.rejection },

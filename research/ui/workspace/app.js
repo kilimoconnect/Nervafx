@@ -111,8 +111,18 @@
   }
 
   function strengthBoardHtml(f) {
-    if (!f.strengthBoard) return '<div class="mut">network unavailable</div>';
-    return '<table><thead><tr><th>#</th><th>Ccy</th><th>x</th><th>Breadth</th></tr></thead><tbody>' + f.strengthBoard.map(function (c, i) { var cl = c.x > 0 ? 'pos' : (c.x < 0 ? 'neg' : ''); return '<tr><td>' + (i + 1) + '</td><td><b>' + c.currency + '</b></td><td class="num ' + cl + '">' + num(c.x) + '</td><td>' + Math.round((c.breadth || 0) * 100) + '%</td></tr>'; }).join('') + '</tbody></table>';
+    var sw = f.strengthByWindow || {};
+    var order = f.strengthBoard ? f.strengthBoard.map(function (c) { return c.currency; })
+      : (sw.h24 ? Object.keys(sw.h24) : (sw.h48 ? Object.keys(sw.h48) : (sw.h12 ? Object.keys(sw.h12) : [])));
+    if (!order.length) return '<div class="mut">network unavailable</div>';
+    var breadth = {}; (f.strengthBoard || []).forEach(function (c) { breadth[c.currency] = c.breadth; });
+    var cell = function (k, c) { var v = sw[k] ? sw[k][c] : null; if (v == null) return '<td class="mut">—</td>'; var cl = v > 0 ? 'pos' : (v < 0 ? 'neg' : ''); return '<td class="num ' + cl + '">' + num(v) + '</td>'; };
+    var rows = order.map(function (c) {
+      return '<tr><td><b>' + c + '</b></td>' + cell('h12', c) + cell('h24', c) + cell('h36', c) + cell('h48', c) +
+        '<td>' + (breadth[c] != null ? Math.round(breadth[c] * 100) + '%' : '—') + '</td></tr>';
+    }).join('');
+    return '<table class="matrix"><thead><tr><th>Ccy</th><th>12h</th><th>24h</th><th>36h</th><th>48h</th><th>Breadth</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+      '<div class="mut" style="margin-top:4px;font-size:11px">x = relative, zero-sum currency strength per window (ranked by 24h). Breadth = share of the currency’s pairs agreeing (24h).</div>';
   }
 
   function evidenceHtml(f) {
@@ -162,7 +172,7 @@
     var right = '<div class="card"><h2>State & next condition</h2><div class="verdict">' + stateBadge(f.primaryState) + '</div>' +
       '<div class="explain" style="margin:8px 0">' + esc(f.explanation) + '</div>' + nextCondHtml(f) + '</div>' +
       '<div class="card"><h2>Supporting / opposing evidence</h2>' + evidenceHtml(f) + '</div>' +
-      '<div class="card"><h2>Other-pair currency context (8-ccy network, 24h)</h2>' + strengthBoardHtml(f) +
+      '<div class="card"><h2>Currency strength by window (12/24/36/48h · 8-ccy network)</h2>' + strengthBoardHtml(f) +
       '<div class="mut" style="margin-top:6px;font-size:11.5px">Leave-one-pair-out is OTHER-PAIR confirmation (this pair excluded) — <b>not</b> statistical independence.</div></div>' +
       decisionFormHtml();
     return watch + '<div class="grid-main"><div>' + mid + '</div><div>' + right + '</div></div>';
@@ -176,6 +186,7 @@
       '<div class="card"><h2>Four-window matrix (unaffected by chart lookback)</h2>' + windowMatrix(f) + '</div>' +
       '</div><div>' +
       '<div class="card"><h2>Latest vs preceding 12h</h2>' + cmp + '</div>' +
+      '<div class="card"><h2>Currency strength by window (12/24/36/48h)</h2>' + strengthBoardHtml(f) + '</div>' +
       '<div class="card"><h2>Causal price-event chronology (as of ' + f.asOfCloseUtc + ')</h2>' + eventSeqHtml(f) + '</div>' +
       '</div></div>';
   }
