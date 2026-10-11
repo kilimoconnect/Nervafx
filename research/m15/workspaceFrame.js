@@ -228,7 +228,7 @@ function buildWorkspacePayload(H, opts = {}) {
   const candlesByPair = {}, idxByPair = {};
   for (const p of pairs) {
     const cs = (H[p] || []).filter((c) => c.openMs + M15 <= T).sort((a, b) => a.openMs - b.openMs);
-    candlesByPair[p] = cs.map((c) => ({ openMs: c.openMs, open: c.open, high: c.high, low: c.low, close: c.close }));
+    candlesByPair[p] = cs.map((c) => ({ openMs: c.openMs, open: c.open, high: c.high, low: c.low, close: c.close, v: c.volume == null ? null : c.volume }));
     const m = new Map(); cs.forEach((c, i) => m.set(c.openMs + M15, i)); idxByPair[p] = { map: m, closes: cs.map((c) => c.openMs + M15) };
   }
   const lastIdxAtOrBefore = (p, t) => { const arr = idxByPair[p].closes; let lo = 0, hi = arr.length - 1, ans = -1; while (lo <= hi) { const mid = (lo + hi) >> 1; if (arr[mid] <= t) { ans = mid; lo = mid + 1; } else hi = mid - 1; } return ans; };

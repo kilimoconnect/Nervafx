@@ -28,12 +28,12 @@ const toEat = (ms) => new Date(ms + 3 * 3600 * 1000).toISOString().replace('Z', 
 // ── fixture builders ──────────────────────────────────────────────────────────
 function mkPair(tEnd, n, rTotal) {
   const d = n > 1 ? rTotal / (n - 1) : 0, s = tEnd - n * M15, out = [];
-  for (let i = 0; i < n; i++) { const c = Math.exp(i * d), o = Math.exp((i === 0 ? 0 : i - 1) * d); out.push({ openMs: s + i * M15, open: o, high: Math.max(o, c) * 1.0002, low: Math.min(o, c) * 0.9998, close: c, volume: 100, complete: true, source: 'OANDA' }); }
+  for (let i = 0; i < n; i++) { const c = Math.exp(i * d), o = Math.exp((i === 0 ? 0 : i - 1) * d); out.push({ openMs: s + i * M15, open: o, high: Math.max(o, c) * 1.0002, low: Math.min(o, c) * 0.9998, close: c, volume: Math.round(90 + 50 * Math.sin(i / 3) + 30 * (i % 5)), complete: true, source: 'OANDA' }); }
   return out;
 }
 function seriesEndingAt(tEnd, closes, pad = 0.0004) {
   const n = closes.length, s = tEnd - n * M15, out = []; let pv = closes[0];
-  for (let i = 0; i < n; i++) { const c = closes[i], o = i === 0 ? c : pv; out.push({ openMs: s + i * M15, open: o, high: +(Math.max(o, c) + pad).toFixed(6), low: +(Math.min(o, c) - pad).toFixed(6), close: +c.toFixed(6), volume: 100, complete: true, source: 'OANDA' }); pv = c; }
+  for (let i = 0; i < n; i++) { const c = closes[i], o = i === 0 ? c : pv; out.push({ openMs: s + i * M15, open: o, high: +(Math.max(o, c) + pad).toFixed(6), low: +(Math.min(o, c) - pad).toFixed(6), close: +c.toFixed(6), volume: Math.round(90 + 50 * Math.sin(i / 3) + 30 * (i % 5)), complete: true, source: 'OANDA' }); pv = c; }
   return out;
 }
 const zs = (x) => { const m = CURRENCIES.reduce((s, c) => s + (x[c] || 0), 0) / 8, o = {}; for (const c of CURRENCIES) o[c] = (x[c] || 0) - m; return o; };

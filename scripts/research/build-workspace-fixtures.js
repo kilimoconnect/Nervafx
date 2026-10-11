@@ -24,7 +24,7 @@ const M15 = 15 * 60 * 1000;
 function framesFor(pair, H, step = 2) {
   const candles = H[pair]; const frames = []; let prev = null;
   for (let i = 0; i < candles.length; i += step) { const t = candles[i].openMs + M15; const f = buildFrame(pair, H, t, prev, i); frames.push(f); prev = f.primaryState; }
-  return { pair, candles: candles.map((c) => ({ openMs: c.openMs, open: c.open, high: c.high, low: c.low, close: c.close })), frames };
+  return { pair, candles: candles.map((c) => ({ openMs: c.openMs, open: c.open, high: c.high, low: c.low, close: c.close, v: c.volume == null ? null : c.volume })), frames };
 }
 
 function uptrend(tEnd, n, perStep) { const cl = []; let p = 150.00; for (let i = 0; i < n; i++) { p += perStep; if (i % 7 === 6) p -= perStep * 0.4; cl.push(p); } return gen.seriesEndingAt(tEnd, cl, 0.03); }
@@ -46,7 +46,7 @@ function build() {
     { ...framesFor('EUR_USD', dsConflict), label: 'Price vs strength conflict', scenario: 'conflict' },
     { ...framesFor('AUD_JPY', dsExtended), label: 'Extended trend (up)', scenario: 'extended' },
     { ...framesFor('GBP_NZD', dsClosed), label: 'Closed-market (weekend)', scenario: 'closed' },
-    { pair: 'NZD_CAD', label: 'Unavailable (insufficient data)', scenario: 'unavailable', candles: nzdCadFew.map((c) => ({ openMs: c.openMs, open: c.open, high: c.high, low: c.low, close: c.close })), frames: [buildFrame('NZD_CAD', { NZD_CAD: nzdCadFew }, nzdCadFew[nzdCadFew.length - 1].openMs + M15, null, nzdCadFew.length - 1)] },
+    { pair: 'NZD_CAD', label: 'Unavailable (insufficient data)', scenario: 'unavailable', candles: nzdCadFew.map((c) => ({ openMs: c.openMs, open: c.open, high: c.high, low: c.low, close: c.close, v: c.volume == null ? null : c.volume })), frames: [buildFrame('NZD_CAD', { NZD_CAD: nzdCadFew }, nzdCadFew[nzdCadFew.length - 1].openMs + M15, null, nzdCadFew.length - 1)] },
   ];
 
   return {

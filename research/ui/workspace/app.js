@@ -36,12 +36,16 @@
     if (!vis.length) { ctx.fillStyle = '#94a3b8'; ctx.fillText('no candles', 10, 20); return; }
     var padL = 54, padR = 10, padT = 10, padB = 30;
     var w = cssW - padL - padR, h = cssH - padT - padB;
+    var hasVol = vis.some(function (c) { return c.v != null && c.v > 0; });
+    var volH = hasVol ? Math.min(46, Math.round(h * 0.24)) : 0, gapV = hasVol ? 6 : 0;
+    var priceH = h - volH - gapV, volTop = padT + priceH + gapV, maxV = 1;
+    if (hasVol) vis.forEach(function (c) { if (c.v > maxV) maxV = c.v; });
     var hi = -Infinity, lo = Infinity;
     vis.forEach(function (c) { hi = Math.max(hi, c.high); lo = Math.min(lo, c.low); });
     var rng = (hi - lo) || 1; hi += rng * 0.05; lo -= rng * 0.05; rng = hi - lo;
     var prec = vis[0].close < 20 ? 5 : 3;
     var x = function (i) { return padL + (vis.length === 1 ? w / 2 : i * w / (vis.length - 1)); };
-    var y = function (v) { return padT + (hi - v) / rng * h; };
+    var y = function (v) { return padT + (hi - v) / rng * priceH; };
     // horizontal grid + price axis
     ctx.strokeStyle = '#1e2536'; ctx.font = '10px monospace'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
     for (var g = 0; g <= 4; g++) { var gv = hi - rng * g / 4, gy = y(gv); ctx.strokeStyle = '#1e2536'; ctx.beginPath(); ctx.moveTo(padL, gy); ctx.lineTo(cssW - padR, gy); ctx.stroke(); ctx.fillStyle = '#94a3b8'; ctx.fillText(gv.toFixed(prec), 4, gy); }
@@ -65,6 +69,12 @@
       var oy = y(c.open), cyy = y(c.close); var top = Math.min(oy, cyy), bh = Math.max(1, Math.abs(cyy - oy));
       ctx.fillRect(cx - cw / 2, top, cw, bh);
     });
+    // volume sub-panel (OANDA tick volume — FX has no true traded volume)
+    if (hasVol) {
+      ctx.strokeStyle = '#1e2536'; ctx.beginPath(); ctx.moveTo(padL, volTop); ctx.lineTo(cssW - padR, volTop); ctx.stroke();
+      vis.forEach(function (c, i) { if (c.v == null) return; var up = c.close >= c.open; ctx.fillStyle = up ? 'rgba(22,199,132,0.5)' : 'rgba(246,70,93,0.5)'; var bh = Math.max(1, (c.v / maxV) * (volH - 2)); ctx.fillRect(x(i) - cw / 2, volTop + volH - bh, cw, bh); });
+      ctx.fillStyle = '#64748b'; ctx.font = '9px monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText('vol (ticks)', padL + 2, volTop + 1);
+    }
     // event markers — small glyphs at the TOP edge only (no full-height lines)
     (events || []).forEach(function (ev) {
       var idx = Math.round((ev.ms - M15 - candles[0].openMs) / M15);
@@ -77,18 +87,19 @@
     // crosshair + readout
     if (cross) {
       var hx = Math.max(padL, Math.min(padL + w, cross.x));
-      var hy = Math.max(padT, Math.min(padT + h, cross.y));
+      var hy = Math.max(padT, Math.min(padT + priceH, cross.y));
       var rel = w ? (hx - padL) / w : 0; var ci = Math.max(0, Math.min(vis.length - 1, Math.round(rel * (vis.length - 1))));
       var c2 = vis[ci]; var gx = x(ci);
       ctx.save();
       ctx.strokeStyle = 'rgba(148,163,184,0.55)'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(gx, padT); ctx.lineTo(gx, padT + h); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(padL, hy); ctx.lineTo(padL + w, hy); ctx.stroke(); ctx.setLineDash([]);
-      var price = hi - (hy - padT) / h * rng;
+      var price = hi - (hy - padT) / priceH * rng;
       ctx.fillStyle = '#3b82f6'; ctx.fillRect(0, hy - 8, padL - 2, 16); ctx.fillStyle = '#fff'; ctx.font = '10px monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(price.toFixed(prec), 3, hy);
       var tl = fmtEatTime(c2.openMs); ctx.textAlign = 'center'; var tw = ctx.measureText(tl).width + 8;
       ctx.fillStyle = '#3b82f6'; ctx.fillRect(gx - tw / 2, padT + h + 1, tw, 13); ctx.fillStyle = '#fff'; ctx.textBaseline = 'top'; ctx.fillText(tl, gx, padT + h + 3);
       var lines = [fmtEatFull(c2.openMs) + ' EAT', 'O ' + c2.open.toFixed(prec) + '  H ' + c2.high.toFixed(prec), 'L ' + c2.low.toFixed(prec) + '  C ' + c2.close.toFixed(prec)];
+      if (c2.v != null) lines.push('Vol ' + Math.round(c2.v) + ' ticks');
       ctx.font = '11px system-ui'; var bw = 0; lines.forEach(function (l) { bw = Math.max(bw, ctx.measureText(l).width); }); bw += 12; var bhh = lines.length * 14 + 8;
       var bx = (gx + 12 + bw > cssW - padR) ? gx - 12 - bw : gx + 12; if (bx < padL) bx = padL; var by = padT + 4;
       ctx.fillStyle = 'rgba(13,17,23,0.95)'; ctx.strokeStyle = '#2a3148'; ctx.fillRect(bx, by, bw, bhh); ctx.strokeRect(bx, by, bw, bhh);
@@ -213,7 +224,7 @@
     var gt = gapTrend(curPair(), Math.min(S.frameIdx, curPair().frames.length - 1));
     var left = '<div class="card"><h2>' + S.pairId.replace('_', '/') + ' — M15 (as of ' + f.asOfCloseUtc + ')</h2>' +
       '<div class="chartwrap"><canvas id="chart" aria-label="M15 candlestick chart for ' + S.pairId + '"></canvas></div>' + lookbackHtml() +
-      '<div class="mut" style="font-size:11.5px">▲ reversal · ▮ accepted departure · ▮ rejection. Chart lookback is visual only.</div></div>' +
+      '<div class="mut" style="font-size:11.5px">▲ reversal · ▮ accepted departure · ▮ rejection. Lower bars = tick volume (OANDA tick count, not true FX volume). Chart lookback is visual only.</div></div>' +
       '<div class="card"><h2>Price story — four windows</h2>' + windowMatrix(f) + '</div>' +
       '<div class="card"><h2>Currency support by window (12/24/36/48h)</h2>' + strengthBoardHtml(f) +
       (gt ? '<div class="mut" style="margin-top:6px;font-size:12px">Selected pair gap <b class="' + (gt.g < 0 ? 'neg' : 'pos') + '">' + num(gt.g) + '</b> (' + esc(gt.dir) + ') — <b>' + gt.trend + '</b> vs ~1h ago.</div>' : '') + '</div>';
