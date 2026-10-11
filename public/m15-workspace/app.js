@@ -386,6 +386,7 @@
       hdr.innerHTML = 'Pair: <b>' + S.pairId.replace('_', '/') + '</b>' +
         ' · Close EAT: <b>' + f.asOfCloseEat + '</b>' +
         ' · Coverage: <b>' + f.dataHealth.pairsPresent + '/' + f.dataHealth.pairsExpected + '</b>' +
+        (S.ws.meta && S.ws.meta.mode === 'historical' ? ' · <span class="pill warn">HISTORICAL</span>' : '') +
         (S.frameIdx >= p.frames.length - 1 ? ' · <span class="pill">latest</span>' : ' · <span class="pill warn">replay</span>') +
         (S.ws && S.ws.freshness ? '<br>' + freshnessHtml(S.ws.freshness) : '');
     } else hdr.innerHTML = '<span class="mut">no data</span>';

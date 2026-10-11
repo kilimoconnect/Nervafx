@@ -33,6 +33,11 @@
     <input type="range" id="scrub" min="0" value="0" aria-label="Replay position">
     <span class="pill" id="pos">frame —</span>
     <span class="mut" style="font-size:11.5px">← → step · ↑ ↓ pair · 1–6 views</span>
+    <span class="mut" style="font-size:11.5px;margin-left:auto">History (EAT):</span>
+    <label class="sr-only" for="histDt">Historical date and time (EAT)</label>
+    <input type="datetime-local" id="histDt" class="btn" style="padding:4px 6px" step="900">
+    <button class="btn sm" id="histGo">Go</button>
+    <button class="btn sm" id="histLive" title="Back to the latest data">● Live</button>
   </div>
 
   <nav class="tabs" role="tablist" aria-label="Workspace views">
@@ -63,15 +68,24 @@
   // Wire Refresh HERE (not in app.js) so it works even while data is still loading.
   var rb = document.getElementById('refreshBtn'); if (rb) rb.onclick = function () { location.reload(); };
 
+  // Historical selection (times are EAT = UTC+3). Reload with ?asOf=<ms> to view a past close.
+  function eatNaiveFromMs(ms) { var d = new Date(ms + 3 * 3600000), p = function (n) { return (n < 10 ? '0' : '') + n; }; return d.getUTCFullYear() + '-' + p(d.getUTCMonth() + 1) + '-' + p(d.getUTCDate()) + 'T' + p(d.getUTCHours()) + ':' + p(d.getUTCMinutes()); }
+  function msFromEatNaive(v) { if (!v) return NaN; var t = Date.parse(v + ':00Z'); return isNaN(t) ? NaN : t - 3 * 3600000; }
+  var histDt = document.getElementById('histDt'), histGo = document.getElementById('histGo'), histLive = document.getElementById('histLive');
+  var curAsOf = (location.search.match(/[?&]asOf=(\d+)/) || [])[1];
+  if (histDt) histDt.value = curAsOf ? eatNaiveFromMs(+curAsOf) : eatNaiveFromMs(Date.now());
+  if (histGo) histGo.onclick = function () { var ms = msFromEatNaive(histDt.value); if (isNaN(ms) || ms >= Date.now()) { histDt.focus(); return; } location.href = location.pathname + '?asOf=' + ms; };
+  if (histLive) histLive.onclick = function () { location.href = location.pathname; };
+
   function showBanner(cls, html) { document.getElementById('banners').innerHTML = '<div class="state-banner ' + cls + '" role="alert">' + html + '</div>'; document.getElementById('viewhost').innerHTML = ''; document.getElementById('datahdr').textContent = '—'; }
   // Auto-refresh shortly after each completed M15 close so the screen stays current.
-  function scheduleRefresh() { var M = 15 * 60 * 1000; var now = Date.now(); var next = Math.ceil(now / M) * M + 75000; setTimeout(function () { location.reload(); }, Math.max(60000, next - now)); }
+  function scheduleRefresh() { if (/[?&]asOf=/.test(location.search)) return; var M = 15 * 60 * 1000; var now = Date.now(); var next = Math.ceil(now / M) * M + 75000; setTimeout(function () { location.reload(); }, Math.max(60000, next - now)); }
   function loadScript(src) { return new Promise(function (res, rej) { var s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = function () { rej(new Error('failed to load ' + src)); }; document.body.appendChild(s); }); }
 
   document.getElementById('datahdr').textContent = 'Loading M15 data from the server… (first load builds the recent window, a few seconds)';
   var ctrl = new AbortController();
   var timer = setTimeout(function () { ctrl.abort(); }, 55000);
-  fetch('/api/m15-workspace', { headers: { Authorization: 'Bearer ' + tok() }, signal: ctrl.signal })
+  fetch('/api/m15-workspace' + (location.search || ''), { headers: { Authorization: 'Bearer ' + tok() }, signal: ctrl.signal })
     .then(function (r) { clearTimeout(timer); return r.text().then(function (t) { var j; try { j = JSON.parse(t); } catch (e) { j = null; } return { status: r.status, j: j, raw: t }; }); })
     .then(function (o) {
       if (!o.j) throw new Error('HTTP ' + o.status + ' — ' + (o.raw || '').slice(0, 140));

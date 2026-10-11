@@ -22,11 +22,20 @@ module.exports = async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ ok: false, error: 'GET only' });
   try {
     const frames = Math.max(1, Math.min(96, parseInt((req.query && req.query.frames) || '12', 10) || 12));
+    // Optional ?asOf=<ms|ISO> → build the workspace AS OF a historical close (causal: no
+    // candles after asOf are loaded). Future/invalid values fall back to live.
+    const asOfRaw = req.query && req.query.asOf;
+    let nowMs = Date.now(), mode = 'live';
+    if (asOfRaw != null && asOfRaw !== '') { const t = /^\d+$/.test('' + asOfRaw) ? parseInt(asOfRaw, 10) : Date.parse(asOfRaw); if (!isNaN(t) && t < Date.now()) { nowMs = t; mode = 'historical'; } }
+
     const sb = getClient();
-    // ~5 days covers 48h context + swing calibration + ATR warm-up + the replay window.
-    const fromIso = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
-    const histories = await loadAllPairsFromDb(sb, { pairs: PAIRS, fromIso });
-    const payload = buildWorkspacePayload(histories, { pairs: PAIRS, frames, provenance: 'LIVE' });
+    // ~6 days covers 48h context + swing calibration + ATR warm-up + the replay window.
+    const fromIso = new Date(nowMs - 6 * 24 * 60 * 60 * 1000).toISOString();
+    const loadOpts = { pairs: PAIRS, fromIso };
+    if (mode === 'historical') loadOpts.toIso = new Date(nowMs).toISOString();
+    const histories = await loadAllPairsFromDb(sb, loadOpts);
+    const payload = buildWorkspacePayload(histories, { pairs: PAIRS, frames, provenance: 'LIVE', now: nowMs });
+    payload.meta.mode = mode; payload.meta.asOf = new Date(nowMs).toISOString();
     res.json({ ok: true, ...payload });
   } catch (e) {
     res.status(500).json({ ok: false, error: String((e && e.message) || e) });
