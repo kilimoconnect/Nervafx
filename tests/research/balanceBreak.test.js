@@ -39,7 +39,7 @@ test('A — genuine accepted break: CONFIRMED only at the acceptance candle, nev
   const atAcc = detect(cands, { asOfCloseMs: accT });
   assert.equal(atAcc.state, 'CONFIRMED'); assert.equal(atAcc.confirmation.ms, accT); assert.equal(atAcc.confirmation.kind, 'consecutive');
   assert.equal(atAcc.confirmation.price, 100.43); assert.equal(atAcc.knowableAtMs, accT);
-  assert.ok(atAcc.invalidation.price === atAcc.zone.high, 'invalidation reference = breached upper edge');
+  assert.equal(atAcc.invalidation.price, 100.03, 'invalidation reference = breached upper edge, anchored at the provisional close');
 });
 
 test('B — break still forming: provisional only ⇒ FORMING (not CONFIRMED)', () => {
@@ -60,17 +60,25 @@ test('C — immediate re-entry before acceptance ⇒ INVALIDATED', () => {
   assert.match(last.invalidation.how, /returned into balance/);
 });
 
-test('D — missing candle: timestamp is a real candle, gap stays visible, no early event', () => {
+test('D — missing candle: acceptance is NOT confirmed across a gap; FORMING, gap stays visible', () => {
   const full = mk(BAL.concat([100.40, 100.42, 100.43]));
   const cands = full.slice(0, 13).concat(full.slice(14));    // drop index 13 (the 100.42 candle) → a one-candle gap
-  const accT = closeMs(full[14]);                            // acceptance must land on the real present candle
+  const accT = closeMs(full[14]);                            // the two beyond closes (idx12, idx14) are NOT contiguous
   const p = detect(cands, { asOfCloseMs: accT });
-  assert.equal(p.state, 'CONFIRMED');
-  assert.equal(p.confirmation.ms, accT);                     // not the missing slot (full[13])
+  assert.equal(p.state, 'FORMING');                          // confirmation withheld — no contiguous acceptance
+  assert.equal(p.confirmation, null);
+  assert.equal(p.confirmationPending, 'DATA_GAP');
   assert.ok(p.dataHealth.gaps.length >= 1, 'the gap is reported, not hidden');
   assert.equal(p.dataHealth.staleBeforeClose, true);
-  // no replayed state is ever stamped in its own future, and none lands on the missing slot
-  for (const s of replay(cands)) { assert.ok(s.knowable <= s.t); assert.notEqual(s.knowable, closeMs(full[13])); }
+  for (const s of replay(cands)) { assert.ok(s.knowable <= s.t); assert.notEqual(s.state, 'CONFIRMED'); assert.notEqual(s.knowable, closeMs(full[13])); }
+});
+
+test('D2 — a contiguous hold AFTER the gap does confirm (recovery), stamped on a real candle', () => {
+  const full = mk(BAL.concat([100.40, 100.42, 100.43, 100.45]));
+  const cands = full.slice(0, 13).concat(full.slice(14));    // gap at idx13; idx14=100.43, idx15=100.45 are contiguous & beyond
+  const p = detect(cands, { asOfCloseMs: closeMs(full[15]) });
+  assert.equal(p.state, 'CONFIRMED');
+  assert.equal(p.confirmation.ms, closeMs(full[15]));        // first contiguous pair ends at idx15
 });
 
 test('E — confirmation delay via held retest: FORMING through the retest, CONFIRMED (retest) only on the re-break', () => {
@@ -89,7 +97,24 @@ test('downward accepted break works symmetrically', () => {
   const cands = mk(BAL.concat([99.60, 99.57]));
   const p = detect(cands, { asOfCloseMs: closeMs(cands[cands.length - 1]) });
   assert.equal(p.state, 'CONFIRMED'); assert.equal(p.direction, 'DOWN');
-  assert.equal(p.invalidation.price, p.zone.low);
+  assert.equal(p.invalidation.price, 99.97);   // breached lower edge, anchored at the provisional close
+  assert.ok(p.swingContext && 'supportsBreak' in p.swingContext);   // (#4) descriptive swing context present
+});
+
+test('#1 — a single close back inside does NOT invalidate a CONFIRMED break; two consecutive do', () => {
+  const one = mk(BAL.concat([100.40, 100.43, 100.00]));              // confirm, then ONE close back inside
+  assert.equal(detect(one, { asOfCloseMs: closeMs(one[one.length - 1]) }).state, 'CONFIRMED');
+  const two = mk(BAL.concat([100.40, 100.43, 100.00, 100.00]));      // two consecutive closes back inside
+  const p = detect(two, { asOfCloseMs: closeMs(two[two.length - 1]) });
+  assert.equal(p.state, 'INVALIDATED'); assert.match(p.invalidation.how, /reclaimed/);
+});
+
+test('#6 — a prior resolved episode is listed in recentEpisodes', () => {
+  // break up (confirm), reclaim (2 inside), then break down (confirm) → the up episode is "recent"
+  const cands = mk(BAL.concat([100.40, 100.43, 100.00, 100.00, 99.60, 99.57]));
+  const p = detect(cands, { asOfCloseMs: closeMs(cands[cands.length - 1]) });
+  assert.equal(p.direction, 'DOWN');
+  assert.ok(p.recentEpisodes.length >= 1 && p.recentEpisodes.some((e) => e.direction === 'UP'));
 });
 
 test('price context (12/24/36/48h) and strength are separate fields; disagreement stays visible', () => {

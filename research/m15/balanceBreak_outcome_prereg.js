@@ -15,20 +15,20 @@ const M15 = 15 * 60 * 1000;
 
 const SPEC = Object.freeze({
   id: 'accepted-balance-break-outcome-study',
-  specVersion: '1.0.0',
+  specVersion: '1.1.0',   // 1.1.0: tightened group/horizon definitions before any evaluation (no results yet)
   registeredUtc: '2026-10-12T00:00:00.000Z',
   detectorVersion: 'accepted-balance-break-1.0.0',
   classifierVersion: 'm15-classifier-1.0.0',
-  unit: 'one CONFIRMED accepted-balance-break instance, deduped by patternId; the clock starts at its confirmation close',
-  horizonsCandles: [4, 16],                     // completed M15 candles forward from confirmation
-  outcomeMetric: 'continuation(h) = ( sign(close[T+h] - close[T]) === breakDirection ), measured on MID closes only',
-  excursionMetrics: ['maxFavorableExcursion', 'maxAdverseExcursion — both expressed in units of the zone tol at confirmation'],
+  unit: 'one CONFIRMED accepted-balance-break instance, deduped by patternId; the clock starts at its confirmation close (knowableAtMs)',
+  horizonsCandles: [4, 16],                     // completed M15 candles forward (4 = 1h, 16 = 4h), skipping no gaps: index +h in the eligible contiguous series
+  outcomeMetric: 'continuation(h) = ( sign(close[T+h] - close[T]) === breakDirection ), on MID closes only; UNRESOLVED until candle T+h exists',
+  excursionMetrics: ['maxFavorableExcursion', 'maxAdverseExcursion — both in units of the zone tol at confirmation'],
   comparisonGroups: [
-    'pattern — CONFIRMED accepted-balance-break instances',
-    'classifier — the existing classifier Established-trend (ACCEPTED/ACCELERATING) states at the same closes',
-    'baseline — unconditional: every completed close at the same horizons (the reference rate)',
+    'pattern — CONFIRMED accepted-balance-break instances (one per patternId), direction = break direction',
+    'classifier — every close whose simplified state is "Established trend" (engine ACCEPTED_TREND / ACCELERATING_TREND / EXHAUSTION_RISK), direction = that state\'s direction',
+    'baseline — unconditional: EVERY completed close, direction = the break/state direction being tested (both signs reported), as the reference continuation rate',
   ],
-  evaluationProtocol: 'walk-forward on LATER, UNSEEN periods only. Nothing is fit or chosen on the test window. Block by ISO week to bound serial dependence.',
+  evaluationProtocol: 'walk-forward on LATER, UNSEEN periods only. Nothing is fit or chosen on the test window; detector + classifier + thresholds are frozen. Group instances by ISO week; report per-week and pooled to bound serial dependence.',
   reporting: Object.freeze({
     beforeCalibration: 'report ONLY counts, raw continuation fractions with an interval width, and excursions. Do NOT report a predictive probability or any edge claim.',
     predictiveProbability: 'UNAVAILABLE until evaluated on unseen data AND calibrated (reliability check).',

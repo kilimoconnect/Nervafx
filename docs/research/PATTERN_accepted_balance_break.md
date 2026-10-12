@@ -17,10 +17,13 @@ instance. The model remains **UNVALIDATED**; this pattern is descriptive, never 
 
 ## 2. What confirms acceptance of the departure
 A departure is accepted (`DEPARTURE_ACCEPTED`) when **either**:
-- **acceptN (2) consecutive completed closes beyond** the band (kind = `consecutive`); or
+- **acceptN (2) CONTIGUOUS completed closes beyond** the band (kind = `consecutive`); or
 - a **held retest**: price closes back toward the breached edge (within `tol` of it — a `TEST`,
   not a full return), then closes beyond the band again (kind = `retest`).
-Acceptance is the pattern's **CONFIRMED** trigger.
+Acceptance is the pattern's **CONFIRMED** trigger. **Contiguity is required** (ambiguity #2): a data
+gap at the confirming candle withholds confirmation — the pattern stays **FORMING** with
+`confirmationPending: "DATA_GAP"` until contiguous closes beyond occur (a later contiguous hold does
+confirm, stamped on the real candle).
 
 ## 3. FORMING vs CONFIRMED vs INVALIDATED vs UNAVAILABLE
 - **FORMING** — a provisional departure exists; not yet accepted and not returned.
@@ -42,9 +45,23 @@ Acceptance is the pattern's **CONFIRMED** trigger.
 Replay tests assert no state or timestamp appears before its causal candle.
 
 ## 5. Structural invalidation reference
-The **breached edge**: `zone.high` for an UP break, `zone.low` for a DOWN break (`invalidation.price`).
-Rule: *a completed M15 close back inside the balance zone (reclaiming the breached edge)*.
-`invalidation.hitMs` is set once it actually occurs.
+The **breached edge** — `zone.high` (UP) / `zone.low` (DOWN) — **anchored to the zone as of the
+provisional close** so the level does not drift as the adaptive 48h zone is recomputed (ambiguity #3).
+Rule: a CONFIRMED break is invalidated by **acceptN (2) consecutive completed closes back inside the
+zone** (symmetric with acceptance — a single reclaim close is noise, ambiguity #1); a FORMING break is
+invalidated by a pre-acceptance `RETURN`. `invalidation.hitMs` is set once it occurs.
+
+## Resolved design decisions (the seven ambiguities)
+1. **Post-confirmation invalidation** needs **2 consecutive closes back inside** (not one).
+2. **Acceptance must be contiguous** — no gap at the confirming candle (see §2).
+3. **Invalidation edge anchored** at the provisional close (see §5).
+4. **"Confirmation delay"** = the acceptance lag itself (held-retest / contiguous hold), consistent with
+   the causal swing-pivot philosophy. Confirmed swing pivots are **not** required; `swingContext`
+   reports the last confirmed pivot and whether it supports the break (descriptive only).
+5. **Strength agreement** = `sign(baseMinusQuote)` vs break direction (UP agrees when gap > 0).
+6. **History** — `recentEpisodes` lists up to 3 prior resolved episodes (direction + CONFIRMED/INVALIDATED).
+7. **Outcome study** — horizons are **candles** (4 = 1h, 16 = 4h); groups = pattern vs classifier
+   "Established trend" closes vs unconditional baseline; walk-forward on unseen periods, ISO-week blocked.
 
 ## Separate evidence fields (strength disagreement stays visible)
 - `priceContext` — 12/24/36/48h efficiency, direction, range, position-in-range (separate field).

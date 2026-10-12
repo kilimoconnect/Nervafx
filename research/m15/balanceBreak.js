@@ -35,6 +35,8 @@ function priceContext(pa) {
 }
 
 // Other-pair currency strength for the break direction — kept visible even when it disagrees.
+// Mapping (#5): for BASE_QUOTE, gap = strength(base) − strength(quote). gap>0 ⇒ base stronger ⇒
+// price tends UP, so an UP break AGREES when gap>0 and a DOWN break AGREES when gap<0.
 function strengthEvidence(pair, dir, network) {
   const out = { available: false, gap: null, strengthDir: null, agrees: null, otherPairConfirmed: null, disagreement: null };
   if (!pair || !network || !network.windows || !network.windows.h24 || !network.windows.h24.available) return out;
@@ -72,50 +74,83 @@ function detect(cands, opts = {}) {
   if (pa.state.label === 'INSUFFICIENT_DATA') return unavailable('INSUFFICIENT_DATA');
   if (!pa.balance || !pa.balance.zone) return unavailable('NO_ZONE');
 
-  const zone = pa.balance.zone, C = pa.integrity.candles;
-  // Reconstruct the CURRENT departure episode from the causal events only.
-  let ep = null;
+  const zone = pa.balance.zone, C = pa.integrity.candles, acceptN = DEFAULTS.acceptN;
+  const closeSet = new Set(C.map((c) => c.openMs + M15));
+  // Reconstruct ALL departure episodes from the causal events (one per DEPARTURE_PROVISIONAL).
+  const episodes = []; let curEp = null;
   for (const e of pa.balance.events) {
-    if (e.type === 'DEPARTURE_PROVISIONAL') ep = { provisionalMs: e.ms, acceptedMs: null, acceptedKind: null, failedMs: null };
-    else if (e.type === 'DEPARTURE_ACCEPTED' && ep) { ep.acceptedMs = e.ms; ep.acceptedKind = /retest/i.test(e.evidence) ? 'retest' : 'consecutive'; }
-    else if (e.type === 'RETURN' && ep && !ep.acceptedMs) ep.failedMs = e.ms;
+    if (e.type === 'DEPARTURE_PROVISIONAL') { curEp = { provisionalMs: e.ms, acceptedMs: null, acceptedKind: null, failedMs: null }; episodes.push(curEp); }
+    else if (e.type === 'DEPARTURE_ACCEPTED' && curEp) { curEp.acceptedMs = e.ms; curEp.acceptedKind = /retest/i.test(e.evidence) ? 'retest' : 'consecutive'; }
+    else if (e.type === 'RETURN' && curEp && !curEp.acceptedMs) curEp.failedMs = e.ms;
   }
+  const ep = episodes[episodes.length - 1];
   if (!ep) return unavailable('NO_ACTIVE_BREAK');
 
-  const provCandle = candleAtCloseMs(C, ep.provisionalMs);
-  const dir = provCandle ? (provCandle.close > zone.high ? 'UP' : provCandle.close < zone.low ? 'DOWN' : null) : null;
+  const dirOf = (ms) => { const c = candleAtCloseMs(C, ms); return c ? (c.close > zone.high ? 'UP' : c.close < zone.low ? 'DOWN' : null) : null; };
+  const dir = dirOf(ep.provisionalMs);
   if (!dir) return unavailable('AMBIGUOUS_DIRECTION');
-  const breachedEdge = dir === 'UP' ? zone.high : zone.low;
-  const invRule = `A completed M15 close back inside the balance zone (reclaiming the breached ${dir === 'UP' ? 'upper' : 'lower'} edge ${breachedEdge}).`;
+
+  // (#3) Anchor the structural reference to the breached edge of the zone AS OF the provisional
+  // close, so the invalidation level does not drift as the adaptive 48h zone is recomputed.
+  let anchoredEdge = dir === 'UP' ? zone.high : zone.low;
+  if (ep.provisionalMs !== T) { try { const pp = describePriceAction(cands, { pair, asOfCloseMs: ep.provisionalMs }); if (pp.balance && pp.balance.zone) anchoredEdge = dir === 'UP' ? pp.balance.zone.high : pp.balance.zone.low; } catch (e) {} }
+  const invRule = `Accepted reclaim: ${acceptN} consecutive completed closes back ${dir === 'UP' ? 'below' : 'above'} the breached edge ${anchoredEdge} (i.e. back inside the zone).`;
   const departure = { provisionalMs: ep.provisionalMs, provisionalUtc: toUtc(ep.provisionalMs), direction: dir };
   const staleBeforeClose = (pa.integrity.gaps || []).some((g) => g.toMs === T - M15);
 
-  let state, knowableAtMs, confirmation = null, invalidation;
+  // (#2) Acceptance must be CONTIGUOUS — no data gap at the confirming candle. A 'retest'
+  // acceptance counts only if its re-break follows a present candle; otherwise require acceptN
+  // contiguous completed closes beyond the zone (which also recovers a hold after a gap).
+  const firstContiguousBeyondMs = () => {
+    let run = 0, prevMs = null, prevBeyond = false;
+    for (const c of C) { const cm = c.openMs + M15, beyond = dir === 'UP' ? c.close > zone.high : c.close < zone.low;
+      if (cm < ep.provisionalMs) { prevMs = cm; prevBeyond = beyond; continue; }
+      if (beyond) { run = (prevBeyond && cm === prevMs + M15) ? run + 1 : 1; if (run >= acceptN) return cm; } else run = 0;
+      prevMs = cm; prevBeyond = beyond; }
+    return null;
+  };
+  let confMs = null, confKind = null;
+  if (ep.acceptedMs) {
+    if (ep.acceptedKind === 'retest' && closeSet.has(ep.acceptedMs - M15)) { confMs = ep.acceptedMs; confKind = 'retest'; }
+    else { const cm = firstContiguousBeyondMs(); if (cm != null) { confMs = cm; confKind = 'consecutive'; } }
+  }
+  // (#1) Post-confirmation invalidation = acceptN consecutive completed closes back INSIDE the zone.
+  const reclaimAfter = (ms) => { let run = 0; for (const c of C) { const cm = c.openMs + M15; if (cm <= ms) continue; if (c.close >= zone.low && c.close <= zone.high) { run++; if (run >= acceptN) return cm; } else run = 0; } return null; };
+
+  let state, knowableAtMs, confirmation = null, invalidation, confirmationPending = null;
   if (ep.failedMs) {
     state = 'INVALIDATED'; knowableAtMs = ep.failedMs;
-    invalidation = { price: breachedEdge, rule: invRule, hitMs: ep.failedMs, hitUtc: toUtc(ep.failedMs), how: 'provisional break returned into balance before acceptance' };
-  } else if (ep.acceptedMs) {
-    const accCandle = candleAtCloseMs(C, ep.acceptedMs);
-    confirmation = { ms: ep.acceptedMs, utc: toUtc(ep.acceptedMs), eat: toEat(ep.acceptedMs), price: accCandle ? accCandle.close : null, kind: ep.acceptedKind };
-    // post-confirmation structural invalidation: first completed close back inside the zone AFTER acceptance
-    let invMs = null;
-    for (const c of C) { const cm = c.openMs + M15; if (cm <= ep.acceptedMs) continue; if (c.close >= zone.low && c.close <= zone.high) { invMs = cm; break; } }
-    if (invMs) { state = 'INVALIDATED'; knowableAtMs = invMs; invalidation = { price: breachedEdge, rule: invRule, hitMs: invMs, hitUtc: toUtc(invMs), how: 'accepted break reclaimed — close back inside the zone' }; }
-    else { state = 'CONFIRMED'; knowableAtMs = ep.acceptedMs; invalidation = { price: breachedEdge, rule: invRule, hitMs: null }; }
+    invalidation = { price: anchoredEdge, rule: invRule, hitMs: ep.failedMs, hitUtc: toUtc(ep.failedMs), how: 'provisional break returned into balance before acceptance' };
+  } else if (confMs != null) {
+    const accCandle = candleAtCloseMs(C, confMs);
+    confirmation = { ms: confMs, utc: toUtc(confMs), eat: toEat(confMs), price: accCandle ? accCandle.close : null, kind: confKind };
+    const invMs = reclaimAfter(confMs);
+    if (invMs) { state = 'INVALIDATED'; knowableAtMs = invMs; invalidation = { price: anchoredEdge, rule: invRule, hitMs: invMs, hitUtc: toUtc(invMs), how: `accepted break reclaimed — ${acceptN} consecutive closes back inside the zone` }; }
+    else { state = 'CONFIRMED'; knowableAtMs = confMs; invalidation = { price: anchoredEdge, rule: invRule, hitMs: null }; }
   } else {
-    state = 'FORMING'; knowableAtMs = ep.provisionalMs; invalidation = { price: breachedEdge, rule: invRule, hitMs: null };
+    state = 'FORMING'; knowableAtMs = ep.provisionalMs; invalidation = { price: anchoredEdge, rule: invRule, hitMs: null };
+    if (ep.acceptedMs) confirmationPending = 'DATA_GAP';   // the lifecycle accepted across a gap; confirmation withheld
   }
+
+  // (#4) descriptive swing context (NOT a gate on confirmation)
+  const sw = pa.swings || {}; const lastPivot = sw.pivots && sw.pivots.length ? sw.pivots[sw.pivots.length - 1] : null;
+  const swingContext = { lastConfirmedPivot: lastPivot ? { type: lastPivot.type, price: lastPivot.price, confirmedAtMs: lastPivot.confirmedAtMs } : null, provisionalLegDirection: sw.provisional ? sw.provisional.direction : null, supportsBreak: lastPivot ? (dir === 'UP' ? lastPivot.type === 'LOW' : lastPivot.type === 'HIGH') : null };
+  // (#6) recent RESOLVED episodes before the current one (newest last, max 3)
+  const recentEpisodes = episodes.slice(0, -1).filter((e) => e.acceptedMs || e.failedMs).slice(-3).map((e) => ({ provisionalMs: e.provisionalMs, direction: dirOf(e.provisionalMs), result: e.acceptedMs ? 'CONFIRMED' : 'INVALIDATED', atMs: e.acceptedMs || e.failedMs }));
 
   const strength = strengthEvidence(pair, dir, network);
   const expl = state === 'CONFIRMED'
-    ? `Accepted balance break ${dir}: price left the zone [${zone.low}, ${zone.high}] and ${confirmation.kind === 'retest' ? 'retested the breached edge then closed beyond again' : 'closed beyond for consecutive M15 candles'} — knowable at ${confirmation.utc}. ${invRule}`
+    ? `Accepted balance break ${dir}: price left the zone [${zone.low}, ${zone.high}] and ${confirmation.kind === 'retest' ? 'retested the breached edge then closed beyond again' : 'held ' + acceptN + ' contiguous closes beyond'} — knowable at ${confirmation.utc}. Invalidation: ${invRule.toLowerCase()}`
     : state === 'FORMING'
-      ? `Balance break ${dir} FORMING: first close beyond the zone [${zone.low}, ${zone.high}] at ${departure.provisionalUtc}; not yet accepted. Confirms on acceptance (consecutive closes beyond, or a held retest); fails if ${invRule.toLowerCase()}`
+      ? (confirmationPending === 'DATA_GAP'
+        ? `Balance break ${dir} FORMING: a close beyond the zone [${zone.low}, ${zone.high}] at ${departure.provisionalUtc}, but acceptance would span a data gap — confirmation withheld until contiguous closes beyond.`
+        : `Balance break ${dir} FORMING: first close beyond the zone [${zone.low}, ${zone.high}] at ${departure.provisionalUtc}; not yet accepted. Confirms on ${acceptN} contiguous closes beyond, or a held retest; fails on ${invRule.toLowerCase()}`)
       : `Balance break ${dir} INVALIDATED: ${invalidation.how} at ${invalidation.hitUtc}.`;
 
   return {
-    ...base, state, direction: dir, zone, departure, confirmation, invalidation, knowableAtMs,
-    strength, dataHealth: { eligible: pa.integrity.eligible, gaps: pa.integrity.gaps, staleBeforeClose },
+    ...base, state, direction: dir, zone, departure, confirmation, confirmationPending, invalidation, knowableAtMs,
+    strength, swingContext, recentEpisodes,
+    dataHealth: { eligible: pa.integrity.eligible, gaps: pa.integrity.gaps, staleBeforeClose },
     patternId: (pair || 'PAIR') + '@' + ep.provisionalMs, explanation: expl,
   };
 }

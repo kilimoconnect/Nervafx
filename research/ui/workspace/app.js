@@ -195,14 +195,16 @@
   function patternCardHtml(f) {
     var p = f.pattern; if (!p) return '';
     var cls = p.state === 'CONFIRMED' ? 'b-up' : p.state === 'FORMING' ? 'b-warn' : 'b-dn';
-    var conf = p.confirmation ? ('Confirmed by ' + p.confirmation.kind + ' at ' + fmtEatTime(p.confirmation.ms) + ' EAT, price ' + num(p.confirmation.price)) : (p.state === 'FORMING' ? 'Not yet accepted (needs consecutive closes beyond, or a held retest)' : '—');
+    var conf = p.confirmation ? ('Confirmed by ' + p.confirmation.kind + ' at ' + fmtEatTime(p.confirmation.ms) + ' EAT, price ' + num(p.confirmation.price)) : (p.confirmationPending === 'DATA_GAP' ? 'Withheld — acceptance would span a data gap' : (p.state === 'FORMING' ? 'Not yet accepted (needs 2 contiguous closes beyond, or a held retest)' : '—'));
     var str = p.strength && p.strength.disagreement ? '<div class="evA" style="font-size:12px;margin-top:4px">⚠ ' + esc(p.strength.disagreement) + '</div>' : (p.strength && p.strength.agrees === true ? '<div class="evF" style="font-size:12px;margin-top:4px">Other-pair strength agrees with the break.</div>' : '');
+    var swing = p.swingSupports === true ? '<div class="mut" style="font-size:11px;margin-top:2px">Last confirmed swing pivot supports the break direction.</div>' : (p.swingSupports === false ? '<div class="mut" style="font-size:11px;margin-top:2px">Last confirmed swing pivot is against the break direction.</div>' : '');
+    var recent = (p.recentEpisodes && p.recentEpisodes.length) ? '<div class="mut" style="font-size:11px;margin-top:4px">Recent breaks: ' + p.recentEpisodes.map(function (e) { return (e.direction || '?').toLowerCase() + ' ' + (e.result === 'CONFIRMED' ? '✓' : '✗'); }).join(' · ') + '</div>' : '';
     return '<div class="card"><h2>Accepted balance break</h2>' +
       '<div><span class="badge ' + cls + '" style="font-size:14px">' + p.state + (p.direction ? ' ' + p.direction.toLowerCase() : '') + '</span></div>' +
       '<div class="explain" style="margin:8px 0">' + esc(p.explanation) + '</div>' +
       '<div class="kv"><span>Confirmation</span><b style="text-align:right;max-width:66%">' + esc(conf) + '</b></div>' +
-      '<div class="kv"><span>Invalidation</span><b style="text-align:right;max-width:66%">' + (p.invalidation ? num(p.invalidation.price) + ' — close back inside the zone' : '—') + '</b></div>' +
-      str +
+      '<div class="kv"><span>Invalidation</span><b style="text-align:right;max-width:66%">' + (p.invalidation ? num(p.invalidation.price) + ' — 2 closes back inside the zone' : '—') + '</b></div>' +
+      str + swing + recent +
       '<div class="mut" style="margin-top:6px;font-size:11px">Descriptive structure only — not a buy/sell signal. Model UNVALIDATED.</div></div>';
   }
   function evidenceHtml(f) {

@@ -157,8 +157,10 @@ function buildFrame(pair, H, t, prev, candleIdx, net) {
   const bb = detectBalanceBreak(H[pair] || [], { pair, asOfCloseMs: t, network: net, pa });
   const pattern = (bb.state === 'FORMING' || bb.state === 'CONFIRMED' || bb.state === 'INVALIDATED') ? {
     version: bb.version, state: bb.state, direction: bb.direction, zone: bb.zone,
-    departure: bb.departure, confirmation: bb.confirmation, invalidation: bb.invalidation,
+    departure: bb.departure, confirmation: bb.confirmation, confirmationPending: bb.confirmationPending, invalidation: bb.invalidation,
     knowableAtMs: bb.knowableAtMs, strength: { agrees: bb.strength.agrees, gap: bb.strength.gap, disagreement: bb.strength.disagreement },
+    swingSupports: bb.swingContext ? bb.swingContext.supportsBreak : null,
+    recentEpisodes: (bb.recentEpisodes || []).map(function (e) { return { direction: e.direction, result: e.result, atMs: e.atMs }; }),
     explanation: bb.explanation, patternId: bb.patternId,
   } : null;
 
