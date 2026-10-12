@@ -24,7 +24,7 @@
   function fmtEatFull(ms) { var e = eatParts(ms); return pad2(e.mo) + '-' + pad2(e.da) + ' ' + pad2(e.hh) + ':' + pad2(e.mm); }
 
   // ---- canvas candlestick chart (price axis + EAT time axis + crosshair) ----
-  function drawChart(canvas, candles, uptoIdx, lookback, events, cross, pat) {
+  function drawChart(canvas, candles, uptoIdx, lookback, events, cross, pat, fpat) {
     var dpr = window.devicePixelRatio || 1;
     var cssW = canvas.clientWidth || 600, cssH = canvas.clientHeight || 320;
     canvas.width = cssW * dpr; canvas.height = cssH * dpr;
@@ -103,6 +103,23 @@
           ctx.font = '10px system-ui'; ctx.textBaseline = 'bottom'; var lw = ctx.measureText(lbl).width + 8;
           var lx = Math.min(mcx + 6, cssW - padR - lw); if (lx < padL) lx = padL;
           ctx.fillStyle = 'rgba(13,17,23,0.9)'; ctx.fillRect(lx, mcy - 16, lw, 14); ctx.fillStyle = pcol; ctx.textAlign = 'left'; ctx.fillText(lbl, lx + 4, mcy - 3); ctx.restore();
+        }
+      }
+    }
+    // failed balance break: diamond at the reclaim (confirmation) candle (NOT a reversal arrow)
+    if (fpat && (fpat.state === 'CONFIRMED' || fpat.state === 'FORMING')) {
+      var fmkMs = fpat.confirmation ? fpat.confirmation.ms : fpat.knowableAtMs;
+      var fmkPrice = fpat.confirmation ? fpat.confirmation.price : (fpat.invalidation ? fpat.invalidation.price : null);
+      if (fmkMs != null && fmkPrice != null) {
+        var fi = Math.round((fmkMs - M15 - candles[0].openMs) / M15);
+        if (fi >= start && fi <= uptoIdx) {
+          var fcx = x(fi - start), fcy = y(fmkPrice), fcol = fpat.state === 'CONFIRMED' ? '#f6465d' : '#ca8a04';
+          ctx.save(); ctx.fillStyle = fcol; ctx.strokeStyle = fcol; ctx.lineWidth = 1.5;
+          ctx.beginPath(); ctx.moveTo(fcx, fcy - 5); ctx.lineTo(fcx + 5, fcy); ctx.lineTo(fcx, fcy + 5); ctx.lineTo(fcx - 5, fcy); ctx.closePath(); if (fpat.state === 'CONFIRMED') ctx.fill(); else ctx.stroke();
+          var flbl = (fpat.state === 'CONFIRMED' ? 'Failed break (' : 'Break failing (') + (fpat.direction || '').toLowerCase() + ' attempt)';
+          ctx.font = '10px system-ui'; ctx.textBaseline = 'top'; var flw = ctx.measureText(flbl).width + 8;
+          var flx = Math.min(fcx + 6, cssW - padR - flw); if (flx < padL) flx = padL;
+          ctx.fillStyle = 'rgba(13,17,23,0.9)'; ctx.fillRect(flx, fcy + 4, flw, 14); ctx.fillStyle = fcol; ctx.textAlign = 'left'; ctx.fillText(flbl, flx + 4, fcy + 6); ctx.restore();
         }
       }
     }
@@ -207,6 +224,20 @@
       str + swing + recent +
       '<div class="mut" style="margin-top:6px;font-size:11px">Descriptive structure only — not a buy/sell signal. Model UNVALIDATED.</div></div>';
   }
+  function failedPatternCardHtml(f) {
+    var p = f.failedPattern; if (!p) return '';
+    var cls = p.state === 'CONFIRMED' ? 'b-dn' : p.state === 'FORMING' ? 'b-warn' : 'b-mut';
+    var conf = p.confirmation ? ('Confirmed (' + p.confirmation.failureType + ') at ' + fmtEatTime(p.confirmation.ms) + ' EAT, price ' + num(p.confirmation.price)) : (p.confirmationPending === 'DATA_GAP' ? 'Withheld — reclaim spans a data gap' : (p.state === 'FORMING' ? 'Re-entering; needs 2 contiguous closes inside' : '—'));
+    var trans = p.transition ? '<div class="mut" style="font-size:11px;margin-top:4px">Transition: ' + esc(p.transition.note) + '</div>' : '';
+    var str = p.strength && p.strength.disagreement ? '<div class="evA" style="font-size:12px;margin-top:4px">⚠ ' + esc(p.strength.disagreement) + '</div>' : '';
+    return '<div class="card"><h2>Failed balance break</h2>' +
+      '<div><span class="badge ' + cls + '" style="font-size:14px">' + p.state + (p.direction ? ' ' + p.direction.toLowerCase() + ' attempt' : '') + '</span></div>' +
+      '<div class="explain" style="margin:8px 0">' + esc(p.explanation) + '</div>' +
+      '<div class="kv"><span>Confirmation</span><b style="text-align:right;max-width:66%">' + esc(conf) + '</b></div>' +
+      '<div class="kv"><span>Invalidation</span><b style="text-align:right;max-width:66%">' + (p.invalidation ? num(p.invalidation.price) + ' — a fresh accepted break beyond again' : '—') + '</b></div>' +
+      trans + str +
+      '<div class="mut" style="margin-top:6px;font-size:11px">A loss of the breakout — <b>not</b> a reversal or opposite-trade signal. Model UNVALIDATED.</div></div>';
+  }
   function evidenceHtml(f) {
     var ff = (f.evidenceFor || []).map(function (t) { return '<div class="ev evF">+ ' + esc(t) + '</div>'; }).join('') || '<div class="mut ev">none</div>';
     var aa = (f.evidenceAgainst || []).map(function (t) { return '<div class="ev evA">− ' + esc(t) + '</div>'; }).join('') || '<div class="mut ev">none</div>';
@@ -269,6 +300,7 @@
       '<div class="explain">' + esc(f.explanation) + '</div>' +
       (f.otherPairConfirmation ? '<div class="kv" style="margin-top:8px"><span>Other-pair support</span>' + (f.otherPairConfirmation.agrees ? '<span class="badge b-up">agrees</span>' : '<span class="badge b-mut">no</span>') + '</div>' : '') + '</div>' +
       patternCardHtml(f) +
+      failedPatternCardHtml(f) +
       '<div class="card"><h2>Direction vs timing</h2>' + directionTimingHtml(f) + '</div>' +
       '<div class="card"><h2>Strongest alternative view</h2>' + alternativeHtml(f) + '</div>' +
       '<div class="card"><h2>Supporting / opposing evidence</h2>' + evidenceHtml(f) +
@@ -469,7 +501,7 @@
     // post-render wiring
     var canvas = $('chart');
     if (canvas && p && f) {
-      var redraw = function (cross) { drawChart(canvas, p.candles, f.candleIdx, S.lookback, f.events, cross, f.pattern); };
+      var redraw = function (cross) { drawChart(canvas, p.candles, f.candleIdx, S.lookback, f.events, cross, f.pattern, f.failedPattern); };
       redraw();
       var at = function (e) { var r = canvas.getBoundingClientRect(); var pt = (e.touches && e.touches[0]) || e; return { x: pt.clientX - r.left, y: pt.clientY - r.top }; };
       canvas.onmousemove = function (e) { redraw(at(e)); };

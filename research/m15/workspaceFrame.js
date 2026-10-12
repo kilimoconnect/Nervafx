@@ -16,6 +16,7 @@ const { classify, CLASSIFIER_VERSION, CALIBRATION } = require('./classifier');
 const { describeNetwork } = require('./strengthnet');
 const { describePriceAction } = require('./priceaction');
 const { detect: detectBalanceBreak } = require('./balanceBreak');
+const { detect: detectFailedBreak } = require('./failedBreak');
 const { syncAsOf, PAIRS } = require('./loader');
 
 const M15 = 15 * 60 * 1000;
@@ -164,6 +165,16 @@ function buildFrame(pair, H, t, prev, candleIdx, net) {
     explanation: bb.explanation, patternId: bb.patternId,
   } : null;
 
+  // Failed balance break (built on the accepted-break; consistent by construction).
+  const fbk = detectFailedBreak(H[pair] || [], { pair, asOfCloseMs: t, network: net, pa, ab: bb });
+  const failedPattern = (fbk.state === 'FORMING' || fbk.state === 'CONFIRMED' || fbk.state === 'INVALIDATED') ? {
+    version: fbk.version, state: fbk.state, direction: fbk.direction, zone: fbk.zone,
+    attempt: fbk.attempt, confirmation: fbk.confirmation, confirmationPending: fbk.confirmationPending,
+    invalidation: fbk.invalidation, transition: fbk.transition, knowableAtMs: fbk.knowableAtMs,
+    strength: { agrees: fbk.strength.agrees, disagreement: fbk.strength.disagreement },
+    explanation: fbk.explanation, patternId: fbk.patternId,
+  } : null;
+
   const extended = extendedMoveFlag(pa);
   const simple = simpleStateOf(c.primaryState, extended);
   const directionTiming = directionTimingOf(simple, pa, c.structure, nc, extended);
@@ -180,6 +191,7 @@ function buildFrame(pair, H, t, prev, candleIdx, net) {
     directionTiming: directionTiming,
     alternative: alternative,
     pattern: pattern,
+    failedPattern: failedPattern,
     strengthBoard: board,
     strengthByWindow: strengthByWindow,
     strengthDevelopment: strengthDevelopment,
