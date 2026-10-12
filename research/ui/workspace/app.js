@@ -24,7 +24,7 @@
   function fmtEatFull(ms) { var e = eatParts(ms); return pad2(e.mo) + '-' + pad2(e.da) + ' ' + pad2(e.hh) + ':' + pad2(e.mm); }
 
   // ---- canvas candlestick chart (price axis + EAT time axis + crosshair) ----
-  function drawChart(canvas, candles, uptoIdx, lookback, events, cross, pat, fpat) {
+  function drawChart(canvas, candles, uptoIdx, lookback, events, cross, pat, fpat, ppat) {
     var dpr = window.devicePixelRatio || 1;
     var cssW = canvas.clientWidth || 600, cssH = canvas.clientHeight || 320;
     canvas.width = cssW * dpr; canvas.height = cssH * dpr;
@@ -121,6 +121,23 @@
           var flx = Math.min(fcx + 6, cssW - padR - flw); if (flx < padL) flx = padL;
           ctx.fillStyle = 'rgba(13,17,23,0.9)'; ctx.fillRect(flx, fcy + 4, flw, 14); ctx.fillStyle = fcol; ctx.textAlign = 'left'; ctx.fillText(flbl, flx + 4, fcy + 6); ctx.restore();
         }
+      }
+    }
+    // trend pullback continuation: labelled marker at the resumption candle + structural-level line
+    if (ppat && ppat.state === 'CONFIRMED' && ppat.confirmation) {
+      if (ppat.structure && ppat.structure.structuralLevel) {
+        var ly = y(ppat.structure.structuralLevel.price);
+        if (ly > padT && ly < padT + priceH) { ctx.save(); ctx.strokeStyle = 'rgba(16,199,132,0.4)'; ctx.setLineDash([1, 3]); ctx.beginPath(); ctx.moveTo(padL, ly); ctx.lineTo(cssW - padR, ly); ctx.stroke(); ctx.setLineDash([]); ctx.restore(); }
+      }
+      var pmi = Math.round((ppat.confirmation.ms - M15 - candles[0].openMs) / M15);
+      if (pmi >= start && pmi <= uptoIdx && ppat.confirmation.price != null) {
+        var pcx = x(pmi - start), pcy = y(ppat.confirmation.price), tcol = '#2dd4bf';
+        ctx.save(); ctx.fillStyle = tcol; ctx.strokeStyle = tcol; ctx.lineWidth = 1.5;
+        ctx.strokeRect(pcx - 4, pcy - 4, 8, 8);
+        var plbl = 'Pullback continuation (' + (ppat.direction || '').toLowerCase() + ')';
+        ctx.font = '10px system-ui'; ctx.textBaseline = 'bottom'; var plw = ctx.measureText(plbl).width + 8;
+        var plx = Math.min(pcx + 6, cssW - padR - plw); if (plx < padL) plx = padL;
+        ctx.fillStyle = 'rgba(13,17,23,0.9)'; ctx.fillRect(plx, pcy - 16, plw, 14); ctx.fillStyle = tcol; ctx.textAlign = 'left'; ctx.fillText(plbl, plx + 4, pcy - 3); ctx.restore();
       }
     }
     // crosshair + readout
@@ -238,6 +255,20 @@
       trans + str +
       '<div class="mut" style="margin-top:6px;font-size:11px">A loss of the breakout — <b>not</b> a reversal or opposite-trade signal. Model UNVALIDATED.</div></div>';
   }
+  function pullbackCardHtml(f) {
+    var p = f.pullbackPattern; if (!p) return '';
+    var cls = p.state === 'CONFIRMED' ? (p.direction === 'UP' ? 'b-up' : 'b-dn') : p.state === 'FORMING' ? 'b-warn' : 'b-mut';
+    var conf = p.confirmation ? ('Resumed at ' + fmtEatTime(p.confirmation.ms) + ' EAT, price ' + num(p.confirmation.price)) : (p.state === 'FORMING' ? (p.stalled ? 'Pullback stalled — momentum unclear' : 'Pullback holding; awaiting resumption') : '—');
+    var ef = (p.evidenceFor || []).slice(0, 3).map(function (t) { return '<div class="ev evF">+ ' + esc(t) + '</div>'; }).join('');
+    var ea = (p.evidenceAgainst || []).map(function (t) { return '<div class="ev evA">− ' + esc(t) + '</div>'; }).join('');
+    return '<div class="card"><h2>Trend pullback continuation</h2>' +
+      '<div><span class="badge ' + cls + '" style="font-size:14px">' + p.state + (p.direction ? ' ' + p.direction.toLowerCase() : '') + '</span>' + (p.stalled ? ' <span class="badge b-mut">stalled</span>' : '') + '</div>' +
+      '<div class="explain" style="margin:8px 0">' + esc(p.explanation) + '</div>' +
+      '<div class="kv"><span>Confirmation</span><b style="text-align:right;max-width:66%">' + esc(conf) + '</b></div>' +
+      '<div class="kv"><span>Structural level</span><b style="text-align:right;max-width:66%">' + (p.structure ? num(p.structure.structuralLevel.price) + ' — must hold' : '—') + '</b></div>' +
+      '<div style="margin-top:6px">' + ef + ea + '</div>' +
+      '<div class="mut" style="margin-top:6px;font-size:11px">Descriptive structure only — not a buy/sell signal. Model UNVALIDATED.</div></div>';
+  }
   function evidenceHtml(f) {
     var ff = (f.evidenceFor || []).map(function (t) { return '<div class="ev evF">+ ' + esc(t) + '</div>'; }).join('') || '<div class="mut ev">none</div>';
     var aa = (f.evidenceAgainst || []).map(function (t) { return '<div class="ev evA">− ' + esc(t) + '</div>'; }).join('') || '<div class="mut ev">none</div>';
@@ -299,8 +330,10 @@
     var right = '<div class="card"><h2>Decision</h2><div style="margin-bottom:8px">' + simpleBadge(f) + '</div>' +
       '<div class="explain">' + esc(f.explanation) + '</div>' +
       (f.otherPairConfirmation ? '<div class="kv" style="margin-top:8px"><span>Other-pair support</span>' + (f.otherPairConfirmation.agrees ? '<span class="badge b-up">agrees</span>' : '<span class="badge b-mut">no</span>') + '</div>' : '') + '</div>' +
+      ((f.pattern || f.failedPattern || f.pullbackPattern) ? '<div class="mut" style="font-size:11px;margin:2px 2px 6px">Patterns below are <b>descriptive structure</b> only — no forecasting display is enabled (no out-of-sample calibrated evaluation). See Model &amp; health.</div>' : '') +
       patternCardHtml(f) +
       failedPatternCardHtml(f) +
+      pullbackCardHtml(f) +
       '<div class="card"><h2>Direction vs timing</h2>' + directionTimingHtml(f) + '</div>' +
       '<div class="card"><h2>Strongest alternative view</h2>' + alternativeHtml(f) + '</div>' +
       '<div class="card"><h2>Supporting / opposing evidence</h2>' + evidenceHtml(f) +
@@ -370,6 +403,8 @@
     var dh = f ? f.dataHealth : null;
     return '<div class="card"><h2>Model status</h2><div class="verdict" style="color:var(--yellow)">' + m.status + '</div>' +
       '<div class="mut" style="margin-top:6px">This classifier is a <b>description</b>, not a validated edge. No profitability, win-rate, or confidence probability is shown anywhere in this UI.</div></div>' +
+      '<div class="card"><h2>Pattern forecasting</h2><div class="verdict" style="color:var(--yellow);font-size:16px">NO RELIABLE FORECAST — display not enabled</div>' +
+      '<div class="mut" style="margin-top:6px;font-size:12px">The three patterns (accepted break, failed break, trend pullback continuation) are shown as <b>descriptive structure only</b>. No pattern has earned a forecasting display: no chronological out-of-sample, overlap-controlled, calibrated evaluation has been run (see the frozen outcome studies). No probabilities are produced.</div></div>' +
       '<div class="card"><h2>Preserved research verdicts (immutable)</h2>' +
       '<div class="kv"><span>Stage 5 / 5A</span><b>' + m.stage5.decision + '</b></div>' +
       '<div class="kv"><span>Info-content H1 / H2 / H3</span><b>' + ic.verdicts.H1 + ' / ' + ic.verdicts.H2 + ' / ' + ic.verdicts.H3 + '</b></div>' +
@@ -501,7 +536,7 @@
     // post-render wiring
     var canvas = $('chart');
     if (canvas && p && f) {
-      var redraw = function (cross) { drawChart(canvas, p.candles, f.candleIdx, S.lookback, f.events, cross, f.pattern, f.failedPattern); };
+      var redraw = function (cross) { drawChart(canvas, p.candles, f.candleIdx, S.lookback, f.events, cross, f.pattern, f.failedPattern, f.pullbackPattern); };
       redraw();
       var at = function (e) { var r = canvas.getBoundingClientRect(); var pt = (e.touches && e.touches[0]) || e; return { x: pt.clientX - r.left, y: pt.clientY - r.top }; };
       canvas.onmousemove = function (e) { redraw(at(e)); };

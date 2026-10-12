@@ -17,6 +17,7 @@ const { describeNetwork } = require('./strengthnet');
 const { describePriceAction } = require('./priceaction');
 const { detect: detectBalanceBreak } = require('./balanceBreak');
 const { detect: detectFailedBreak } = require('./failedBreak');
+const { detect: detectPullback } = require('./pullback');
 const { syncAsOf, PAIRS } = require('./loader');
 
 const M15 = 15 * 60 * 1000;
@@ -175,6 +176,17 @@ function buildFrame(pair, H, t, prev, candleIdx, net) {
     explanation: fbk.explanation, patternId: fbk.patternId,
   } : null;
 
+  // Trend pullback continuation (reuses pa's swing pivots).
+  const pbk = detectPullback(H[pair] || [], { pair, asOfCloseMs: t, network: net, pa });
+  const pullbackPattern = (pbk.state === 'FORMING' || pbk.state === 'CONFIRMED' || pbk.state === 'INVALIDATED') ? {
+    version: pbk.version, state: pbk.state, direction: pbk.direction,
+    structure: { structuralLevel: pbk.structure.structuralLevel, swingExtreme: pbk.structure.swingExtreme },
+    confirmation: pbk.confirmation, invalidation: pbk.invalidation, knowableAtMs: pbk.knowableAtMs, stalled: pbk.stalled,
+    strength: { agrees: pbk.strength.agrees, disagreement: pbk.strength.disagreement },
+    evidenceFor: pbk.evidenceFor, evidenceAgainst: pbk.evidenceAgainst,
+    explanation: pbk.explanation, patternId: pbk.patternId,
+  } : null;
+
   const extended = extendedMoveFlag(pa);
   const simple = simpleStateOf(c.primaryState, extended);
   const directionTiming = directionTimingOf(simple, pa, c.structure, nc, extended);
@@ -192,6 +204,7 @@ function buildFrame(pair, H, t, prev, candleIdx, net) {
     alternative: alternative,
     pattern: pattern,
     failedPattern: failedPattern,
+    pullbackPattern: pullbackPattern,
     strengthBoard: board,
     strengthByWindow: strengthByWindow,
     strengthDevelopment: strengthDevelopment,
