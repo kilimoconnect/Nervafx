@@ -24,7 +24,7 @@
   function fmtEatFull(ms) { var e = eatParts(ms); return pad2(e.mo) + '-' + pad2(e.da) + ' ' + pad2(e.hh) + ':' + pad2(e.mm); }
 
   // ---- canvas candlestick chart (price axis + EAT time axis + crosshair) ----
-  function drawChart(canvas, candles, uptoIdx, lookback, events, cross) {
+  function drawChart(canvas, candles, uptoIdx, lookback, events, cross, pat) {
     var dpr = window.devicePixelRatio || 1;
     var cssW = canvas.clientWidth || 600, cssH = canvas.clientHeight || 320;
     canvas.width = cssW * dpr; canvas.height = cssH * dpr;
@@ -84,6 +84,28 @@
       var mx = x(idx - start);
       ctx.fillStyle = mcol; ctx.beginPath(); ctx.moveTo(mx, padT + 7); ctx.lineTo(mx - 3, padT + 1); ctx.lineTo(mx + 3, padT + 1); ctx.closePath(); ctx.fill();
     });
+    // accepted balance-break: named marker + invalidation reference line (NOT a buy/sell arrow)
+    if (pat) {
+      var pcol = pat.state === 'CONFIRMED' ? '#3b82f6' : pat.state === 'FORMING' ? '#ca8a04' : '#f6465d';
+      if (pat.invalidation && pat.invalidation.price != null) {
+        var iy = y(pat.invalidation.price);
+        if (iy > padT && iy < padT + priceH) { ctx.save(); ctx.strokeStyle = 'rgba(148,163,184,0.55)'; ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo(padL, iy); ctx.lineTo(cssW - padR, iy); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = '#94a3b8'; ctx.font = '9px monospace'; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom'; ctx.fillText('invalidation', cssW - padR, iy - 1); ctx.restore(); }
+      }
+      var mkMs = pat.state === 'CONFIRMED' && pat.confirmation ? pat.confirmation.ms : (pat.state === 'INVALIDATED' && pat.invalidation ? pat.invalidation.hitMs : (pat.departure ? pat.departure.provisionalMs : null));
+      var mkPrice = pat.state === 'CONFIRMED' && pat.confirmation ? pat.confirmation.price : (pat.invalidation ? pat.invalidation.price : null);
+      if (mkMs != null && mkPrice != null) {
+        var mi = Math.round((mkMs - M15 - candles[0].openMs) / M15);
+        if (mi >= start && mi <= uptoIdx) {
+          var mcx = x(mi - start), mcy = y(mkPrice);
+          ctx.save(); ctx.fillStyle = pcol; ctx.strokeStyle = pcol; ctx.lineWidth = 1.5;
+          ctx.beginPath(); ctx.arc(mcx, mcy, 4, 0, 2 * Math.PI); if (pat.state === 'CONFIRMED') ctx.fill(); else ctx.stroke();
+          var lbl = pat.state === 'CONFIRMED' ? 'Accepted break (' + (pat.direction || '').toLowerCase() + ')' : pat.state === 'FORMING' ? 'Break forming (' + (pat.direction || '').toLowerCase() + ')' : 'Break invalidated';
+          ctx.font = '10px system-ui'; ctx.textBaseline = 'bottom'; var lw = ctx.measureText(lbl).width + 8;
+          var lx = Math.min(mcx + 6, cssW - padR - lw); if (lx < padL) lx = padL;
+          ctx.fillStyle = 'rgba(13,17,23,0.9)'; ctx.fillRect(lx, mcy - 16, lw, 14); ctx.fillStyle = pcol; ctx.textAlign = 'left'; ctx.fillText(lbl, lx + 4, mcy - 3); ctx.restore();
+        }
+      }
+    }
     // crosshair + readout
     if (cross) {
       var hx = Math.max(padL, Math.min(padL + w, cross.x));
@@ -170,6 +192,19 @@
     return { g: g0, trend: trend, dir: g0 > 0 ? 'base stronger' : (g0 < 0 ? 'quote stronger' : 'level') };
   }
 
+  function patternCardHtml(f) {
+    var p = f.pattern; if (!p) return '';
+    var cls = p.state === 'CONFIRMED' ? 'b-up' : p.state === 'FORMING' ? 'b-warn' : 'b-dn';
+    var conf = p.confirmation ? ('Confirmed by ' + p.confirmation.kind + ' at ' + fmtEatTime(p.confirmation.ms) + ' EAT, price ' + num(p.confirmation.price)) : (p.state === 'FORMING' ? 'Not yet accepted (needs consecutive closes beyond, or a held retest)' : '—');
+    var str = p.strength && p.strength.disagreement ? '<div class="evA" style="font-size:12px;margin-top:4px">⚠ ' + esc(p.strength.disagreement) + '</div>' : (p.strength && p.strength.agrees === true ? '<div class="evF" style="font-size:12px;margin-top:4px">Other-pair strength agrees with the break.</div>' : '');
+    return '<div class="card"><h2>Accepted balance break</h2>' +
+      '<div><span class="badge ' + cls + '" style="font-size:14px">' + p.state + (p.direction ? ' ' + p.direction.toLowerCase() : '') + '</span></div>' +
+      '<div class="explain" style="margin:8px 0">' + esc(p.explanation) + '</div>' +
+      '<div class="kv"><span>Confirmation</span><b style="text-align:right;max-width:66%">' + esc(conf) + '</b></div>' +
+      '<div class="kv"><span>Invalidation</span><b style="text-align:right;max-width:66%">' + (p.invalidation ? num(p.invalidation.price) + ' — close back inside the zone' : '—') + '</b></div>' +
+      str +
+      '<div class="mut" style="margin-top:6px;font-size:11px">Descriptive structure only — not a buy/sell signal. Model UNVALIDATED.</div></div>';
+  }
   function evidenceHtml(f) {
     var ff = (f.evidenceFor || []).map(function (t) { return '<div class="ev evF">+ ' + esc(t) + '</div>'; }).join('') || '<div class="mut ev">none</div>';
     var aa = (f.evidenceAgainst || []).map(function (t) { return '<div class="ev evA">− ' + esc(t) + '</div>'; }).join('') || '<div class="mut ev">none</div>';
@@ -231,6 +266,7 @@
     var right = '<div class="card"><h2>Decision</h2><div style="margin-bottom:8px">' + simpleBadge(f) + '</div>' +
       '<div class="explain">' + esc(f.explanation) + '</div>' +
       (f.otherPairConfirmation ? '<div class="kv" style="margin-top:8px"><span>Other-pair support</span>' + (f.otherPairConfirmation.agrees ? '<span class="badge b-up">agrees</span>' : '<span class="badge b-mut">no</span>') + '</div>' : '') + '</div>' +
+      patternCardHtml(f) +
       '<div class="card"><h2>Direction vs timing</h2>' + directionTimingHtml(f) + '</div>' +
       '<div class="card"><h2>Strongest alternative view</h2>' + alternativeHtml(f) + '</div>' +
       '<div class="card"><h2>Supporting / opposing evidence</h2>' + evidenceHtml(f) +
@@ -431,7 +467,7 @@
     // post-render wiring
     var canvas = $('chart');
     if (canvas && p && f) {
-      var redraw = function (cross) { drawChart(canvas, p.candles, f.candleIdx, S.lookback, f.events, cross); };
+      var redraw = function (cross) { drawChart(canvas, p.candles, f.candleIdx, S.lookback, f.events, cross, f.pattern); };
       redraw();
       var at = function (e) { var r = canvas.getBoundingClientRect(); var pt = (e.touches && e.touches[0]) || e; return { x: pt.clientX - r.left, y: pt.clientY - r.top }; };
       canvas.onmousemove = function (e) { redraw(at(e)); };

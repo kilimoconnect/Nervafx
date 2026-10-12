@@ -15,6 +15,7 @@ const CODE_VERSION = 'm15-workspace-1.1.0';
 const { classify, CLASSIFIER_VERSION, CALIBRATION } = require('./classifier');
 const { describeNetwork } = require('./strengthnet');
 const { describePriceAction } = require('./priceaction');
+const { detect: detectBalanceBreak } = require('./balanceBreak');
 const { syncAsOf, PAIRS } = require('./loader');
 
 const M15 = 15 * 60 * 1000;
@@ -152,6 +153,15 @@ function buildFrame(pair, H, t, prev, candleIdx, net) {
   for (const k of ['h12', 'h24', 'h36', 'h48']) { const w = net.windows ? net.windows[k] : null; strengthByWindow[k] = (w && w.available) ? w.effects.byCurrency : null; }
   const conf = (net.leaveOnePairOut && net.leaveOnePairOut.confirmations && net.leaveOnePairOut.confirmations[pair]) || null;
   const nc = nextConditionFor(c.primaryState, c.structure);
+  // Accepted balance-break pattern (reuses pa's causal balance events; may be null when no episode).
+  const bb = detectBalanceBreak(H[pair] || [], { pair, asOfCloseMs: t, network: net, pa });
+  const pattern = (bb.state === 'FORMING' || bb.state === 'CONFIRMED' || bb.state === 'INVALIDATED') ? {
+    version: bb.version, state: bb.state, direction: bb.direction, zone: bb.zone,
+    departure: bb.departure, confirmation: bb.confirmation, invalidation: bb.invalidation,
+    knowableAtMs: bb.knowableAtMs, strength: { agrees: bb.strength.agrees, gap: bb.strength.gap, disagreement: bb.strength.disagreement },
+    explanation: bb.explanation, patternId: bb.patternId,
+  } : null;
+
   const extended = extendedMoveFlag(pa);
   const simple = simpleStateOf(c.primaryState, extended);
   const directionTiming = directionTimingOf(simple, pa, c.structure, nc, extended);
@@ -167,6 +177,7 @@ function buildFrame(pair, H, t, prev, candleIdx, net) {
     simpleState: simple,
     directionTiming: directionTiming,
     alternative: alternative,
+    pattern: pattern,
     strengthBoard: board,
     strengthByWindow: strengthByWindow,
     strengthDevelopment: strengthDevelopment,
