@@ -298,13 +298,23 @@
   }
 
   // ---- views ----
+  function activePatterns(lf) { return [lf.pattern, lf.failedPattern, lf.pullbackPattern].filter(Boolean); }
+  function patternTags(lf) {
+    var tag = function (label, st) { var c = st === 'CONFIRMED' ? 'b-up' : st === 'FORMING' ? 'b-warn' : 'b-mut'; return '<span class="badge ' + c + '" style="margin-right:3px">' + label + '</span>'; };
+    var out = '';
+    if (lf.pattern) out += tag('break', lf.pattern.state);
+    if (lf.failedPattern) out += tag('failed', lf.failedPattern.state);
+    if (lf.pullbackPattern) out += tag('pullback', lf.pullbackPattern.state);
+    return out || '<span class="mut">—</span>';
+  }
   function moveScore(lf) {
     if (!lf || !lf.dataHealth || !lf.dataHealth.available) return -1e9;   // unavailable sinks to the bottom
     var ps = lf.priceStories && lf.priceStories.h24, eff = ps ? Math.abs(ps.efficiency || 0) : 0;
     var gap = lf.otherPairConfirmation && lf.otherPairConfirmation.full != null ? Math.abs(lf.otherPairConfirmation.full) : 0;
     var L = lf.simpleState ? lf.simpleState.label : '';
     var tier = L === 'Established trend' ? 4 : L === 'Reversal' ? 3 : L === 'Developing trend' ? 2 : L === 'Range' ? 1 : L === 'Conflict' ? 0.5 : 0;
-    return tier * 10 + eff * 3 + gap * 50;   // clear, strong, well-supported moves rank highest
+    var ap = activePatterns(lf), patBonus = ap.length ? (ap.some(function (p) { return p.state === 'CONFIRMED'; }) ? 100 : ap.some(function (p) { return p.state === 'FORMING'; }) ? 50 : 20) : 0;
+    return tier * 10 + eff * 3 + gap * 50 + patBonus;   // pairs with an active pattern float to the top
   }
   function viewMarket(f) {
     var sorted = S.ws.watchlist.slice().sort(function (a, b) { return moveScore(b.frames[b.frames.length - 1]) - moveScore(a.frames[a.frames.length - 1]); });
@@ -316,9 +326,9 @@
       var effCell = eff == null ? '<td class="mut">—</td>' : '<td class="num ' + (eff < 0 ? 'neg' : eff > 0 ? 'pos' : '') + '">' + num(eff, 2) + '</td>';
       var gap = lf.otherPairConfirmation ? num(lf.otherPairConfirmation.full) : '—';
       var sel = w.pair === S.pairId;
-      return '<tr class="rowbtn" role="row" tabindex="0" aria-selected="' + sel + '" data-pair="' + w.pair + '"><td><b>' + w.pair.replace('_', '/') + '</b></td><td><span class="badge ' + cc + '">' + ss.label + (ss.dir ? ' ' + ss.dir.toLowerCase() : '') + '</span></td>' + effCell + '<td class="num">' + gap + '</td><td>' + (lf.dataHealth.available ? (lf.otherPairConfirmation && lf.otherPairConfirmation.agrees ? '<span class="badge b-up">support</span>' : '<span class="badge b-mut">—</span>') : '<span class="badge b-warn">' + (lf.dataHealth.reason || 'n/a').split(' ')[0] + '</span>') + '</td></tr>';
+      return '<tr class="rowbtn" role="row" tabindex="0" aria-selected="' + sel + '" data-pair="' + w.pair + '"><td><b>' + w.pair.replace('_', '/') + '</b></td><td><span class="badge ' + cc + '">' + ss.label + (ss.dir ? ' ' + ss.dir.toLowerCase() : '') + '</span></td>' + effCell + '<td class="num">' + gap + '</td><td>' + patternTags(lf) + '</td><td>' + (lf.dataHealth.available ? (lf.otherPairConfirmation && lf.otherPairConfirmation.agrees ? '<span class="badge b-up">support</span>' : '<span class="badge b-mut">—</span>') : '<span class="badge b-warn">' + (lf.dataHealth.reason || 'n/a').split(' ')[0] + '</span>') + '</td></tr>';
     }).join('');
-    var watch = '<div class="card"><h2>Watchlist — strongest moves first (click a pair)</h2><table role="grid"><thead><tr><th>Pair</th><th>State</th><th>24h move</th><th>Strength gap</th><th>Other-pair</th></tr></thead><tbody>' + rows + '</tbody></table><div class="mut" style="margin-top:4px;font-size:11px">Ranked by move strength: established trends first, then developing/reversal, then range; unavailable last. "24h move" = directional efficiency (−1 clean down … +1 clean up).</div></div>';
+    var watch = '<div class="card"><h2>Watchlist — strongest moves first (click a pair)</h2><table role="grid"><thead><tr><th>Pair</th><th>State</th><th>24h move</th><th>Strength gap</th><th>Pattern</th><th>Other-pair</th></tr></thead><tbody>' + rows + '</tbody></table><div class="mut" style="margin-top:4px;font-size:11px">Ranked by move strength (pairs with an active pattern float to the top). "Pattern" flags an active accepted break / failed break / pullback — click the pair to see it. "24h move" = directional efficiency.</div></div>';
     if (!f) return watch;
     var gt = gapTrend(curPair(), Math.min(S.frameIdx, curPair().frames.length - 1));
     var left = '<div class="card"><h2>' + S.pairId.replace('_', '/') + ' — M15 (as of ' + f.asOfCloseUtc + ')</h2>' +
