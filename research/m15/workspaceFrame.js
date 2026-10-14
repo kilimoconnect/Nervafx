@@ -13,8 +13,9 @@ const CODE_VERSION = 'm15-workspace-1.1.0';
  */
 
 const { classify, CLASSIFIER_VERSION, CALIBRATION } = require('./classifier');
-const { describeNetwork } = require('./strengthnet');
+const { describeNetwork, estimateWindow } = require('./strengthnet');
 const { describePriceAction } = require('./priceaction');
+const { analyze } = require('./analysis');
 const { detect: detectBalanceBreak } = require('./balanceBreak');
 const { detect: detectFailedBreak } = require('./failedBreak');
 const { detect: detectPullback } = require('./pullback');
@@ -132,9 +133,20 @@ function inputDigest(cands, t) {
   return crypto.createHash('sha256').update(payload).digest('hex').slice(0, 12);
 }
 
-/** Build one immutable frame for `pair` as-of close `t`. `net` may be precomputed. */
-function buildFrame(pair, H, t, prev, candleIdx, net) {
+// Per-block (non-overlapping 12h) strength for the analysis layer: block0 = the 12h window as of
+// the close, blocks 1–3 = the 12h windows ending 12/24/36h earlier. Network-wide ⇒ compute ONCE
+// per close and reuse across pairs.
+function buildBlockStrength(H, t, net) {
+  const h = 60 * 60 * 1000;
+  const b0 = net && net.windows ? net.windows.h12 : null;
+  const est = (back) => { try { return estimateWindow(H, { windowHours: 12, asOfCloseMs: t - back * h }); } catch (e) { return null; } };
+  return [b0 || est(0), est(12), est(24), est(36)];
+}
+
+/** Build one immutable frame for `pair` as-of close `t`. `net`/`blockStrength` may be precomputed. */
+function buildFrame(pair, H, t, prev, candleIdx, net, blockStrength) {
   net = net || describeNetwork(H, { asOfCloseMs: t });
+  blockStrength = blockStrength || buildBlockStrength(H, t, net);
   const pa = describePriceAction(H[pair] || [], { pair, asOfCloseMs: t });
   const c = classify(pair, H, { asOfCloseMs: t, network: net, prevState: prev });
   const h24 = net.windows ? net.windows.h24 : null;
@@ -187,6 +199,19 @@ function buildFrame(pair, H, t, prev, candleIdx, net) {
     explanation: pbk.explanation, patternId: pbk.patternId,
   } : null;
 
+  // Versioned analysis layer (additive; reuses pa + the per-block strength).
+  const an = analyze(H[pair] || [], { pair, asOfCloseMs: t, network: net, pa, blockStrength });
+  const analysisCompact = an.available ? {
+    version: an.version, summary: an.summary,
+    blocks: an.blocks.map(function (b) { return { label: b.label, coveragePct: b.coveragePct, openCoveragePct: b.openCoveragePct, actualCandles: b.actualCandles, available: b.available, metrics: b.metrics }; }),
+    recentVsEarlier: { verdict: an.recentVsEarlier.verdict, detail: an.recentVsEarlier.detail },
+    progressQuality: an.progressQuality,
+    structuralLocation: { scaleAvailable: an.structuralLocation.scaleAvailable, references: an.structuralLocation.references },
+    pace: { perBlock: an.pace.perBlock, sinceEvent: an.pace.sinceEvent, deterioration: an.pace.deterioration },
+    currencySupport: an.currencySupport,
+    reproduce: an.reproduce,
+  } : { version: an.version, available: false, reason: an.reason };
+
   const extended = extendedMoveFlag(pa);
   const simple = simpleStateOf(c.primaryState, extended);
   const directionTiming = directionTimingOf(simple, pa, c.structure, nc, extended);
@@ -205,6 +230,7 @@ function buildFrame(pair, H, t, prev, candleIdx, net) {
     pattern: pattern,
     failedPattern: failedPattern,
     pullbackPattern: pullbackPattern,
+    analysis: analysisCompact,
     strengthBoard: board,
     strengthByWindow: strengthByWindow,
     strengthDevelopment: strengthDevelopment,
@@ -275,9 +301,10 @@ function buildWorkspacePayload(H, opts = {}) {
   for (const p of pairs) framesByPair[p] = [];
   for (const t of closes) {
     const net = describeNetwork(H, { asOfCloseMs: t });
+    const bs = buildBlockStrength(H, t, net);
     for (const p of pairs) {
       const ci = idxByPair[p].map.has(t) ? idxByPair[p].map.get(t) : lastIdxAtOrBefore(p, t);
-      const f = buildFrame(p, H, t, prev[p] != null ? prev[p] : null, ci < 0 ? 0 : ci, net);
+      const f = buildFrame(p, H, t, prev[p] != null ? prev[p] : null, ci < 0 ? 0 : ci, net, bs);
       framesByPair[p].push(f); prev[p] = f.primaryState;
     }
   }

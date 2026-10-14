@@ -269,6 +269,33 @@
       '<div style="margin-top:6px">' + ef + ea + '</div>' +
       '<div class="mut" style="margin-top:6px;font-size:11px">Descriptive structure only — not a buy/sell signal. Model UNVALIDATED.</div></div>';
   }
+  function analysisCardsHtml(f) {
+    var a = f.analysis; if (!a || a.available === false) return '';
+    var s = a.summary;
+    var assess = '<div class="card"><h2>Assessment <span class="mut" style="font-weight:400;text-transform:none;letter-spacing:0">' + esc(a.version) + '</span></h2>' +
+      '<div class="explain" style="margin-bottom:6px">' + esc(s.structureDirection) + ' ' + esc(s.recentChange) + '</div>' +
+      '<div class="kv"><span>Progress</span><b style="text-align:right;max-width:66%">' + esc(s.progressQuality) + '</b></div>' +
+      '<div class="kv"><span>Location</span><b style="text-align:right;max-width:66%">' + esc(s.location) + '</b></div>' +
+      '<div class="kv"><span>Currency support</span><b style="text-align:right;max-width:66%">' + esc(s.currencySupport) + '</b></div>' +
+      '<div class="mut" style="margin-top:6px;font-size:12px"><b>Strongest alternative:</b> ' + esc(s.alternative) + '</div>' +
+      '<div class="mut" style="margin-top:4px;font-size:12px"><b>Would change the read:</b> ' + esc(s.invalidationCondition) + '</div>' +
+      '<div class="mut" style="margin-top:6px;font-size:11px">Descriptive analysis — not a forecast or trade signal. Model UNVALIDATED.</div></div>';
+    var rows = a.blocks.map(function (b) { var m = b.metrics; return '<tr><td>' + b.label + '</td><td>' + b.coveragePct + '%' + (b.openCoveragePct != null && b.openCoveragePct !== b.coveragePct ? ' <span class="mut">(' + b.openCoveragePct + '% open)</span>' : '') + '</td><td class="num">' + (m ? num(m.displacement) : '—') + '</td><td class="num">' + (m ? num(m.travel) : '—') + '</td><td class="num ' + (m && m.efficiency < 0 ? 'neg' : m && m.efficiency > 0 ? 'pos' : '') + '">' + (m ? num(m.efficiency, 2) : '—') + '</td><td>' + (m ? m.direction : '—') + '</td><td class="num">' + (m ? num(m.overlap, 2) : '—') + '</td></tr>'; }).join('');
+    var blocks = '<details class="card"><summary style="cursor:pointer;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.07em">Recent vs earlier — four 12h blocks (' + esc(a.recentVsEarlier.verdict) + ')</summary>' +
+      '<table class="matrix" style="margin-top:8px"><thead><tr><th>Block (ago)</th><th>Coverage</th><th>Displ.</th><th>Travel</th><th>Eff</th><th>Dir</th><th>Overlap</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+      '<div class="mut" style="margin-top:4px;font-size:11px">' + esc(a.recentVsEarlier.detail) + '. Consecutive non-overlapping 12h intervals, each computed directly from its own candles (not subtracted from overlapping windows). Coverage shows missing/closed candles.' + (a.pace && a.pace.sinceEvent ? ' Since ' + esc(a.pace.sinceEvent.event) + ' (' + a.pace.sinceEvent.elapsedHours + 'h): net ' + num(a.pace.sinceEvent.netProgress) + ', travel ' + num(a.pace.sinceEvent.travel) + ', eff ' + num(a.pace.sinceEvent.efficiency, 2) + '.' : '') + '</div></details>';
+    var cs = a.currencySupport, csHtml = '';
+    if (cs && cs.available) {
+      csHtml = '<div class="card"><h2>Currency support breakdown</h2>' +
+        '<div class="kv"><span>' + esc(cs.base) + ' (base)</span><b>' + esc(cs.baseBehavior.trend) + ' · breadth ' + esc(cs.baseBehavior.breadthTrend) + '</b></div>' +
+        '<div class="kv"><span>' + esc(cs.quote) + ' (quote)</span><b>' + esc(cs.quoteBehavior.trend) + ' · breadth ' + esc(cs.quoteBehavior.breadthTrend) + '</b></div>' +
+        '<div class="kv"><span>Support change</span><b>' + esc(cs.change) + '</b></div>' +
+        (cs.netDirectionUnclear ? '<div class="evA" style="font-size:12px;margin-top:4px">⚠ Both currencies active but little net pair direction — two-way activity, not directional strength.</div>' : '') +
+        (cs.otherPairConfirmation ? '<div class="kv"><span>Other-pair support</span>' + (cs.otherPairConfirmation.agrees ? '<span class="badge b-up">agrees</span>' : '<span class="badge b-mut">no</span>') + '</div>' : '') +
+        '<div class="mut" style="margin-top:4px;font-size:11px">gap by block (0→48h): ' + cs.gapByBlock.map(function (g) { return g == null ? '—' : num(g); }).join(' · ') + '</div></div>';
+    }
+    return assess + blocks + csHtml;
+  }
   function evidenceHtml(f) {
     var ff = (f.evidenceFor || []).map(function (t) { return '<div class="ev evF">+ ' + esc(t) + '</div>'; }).join('') || '<div class="mut ev">none</div>';
     var aa = (f.evidenceAgainst || []).map(function (t) { return '<div class="ev evA">− ' + esc(t) + '</div>'; }).join('') || '<div class="mut ev">none</div>';
@@ -340,6 +367,7 @@
     var right = '<div class="card"><h2>Decision</h2><div style="margin-bottom:8px">' + simpleBadge(f) + '</div>' +
       '<div class="explain">' + esc(f.explanation) + '</div>' +
       (f.otherPairConfirmation ? '<div class="kv" style="margin-top:8px"><span>Other-pair support</span>' + (f.otherPairConfirmation.agrees ? '<span class="badge b-up">agrees</span>' : '<span class="badge b-mut">no</span>') + '</div>' : '') + '</div>' +
+      analysisCardsHtml(f) +
       ((f.pattern || f.failedPattern || f.pullbackPattern) ? '<div class="mut" style="font-size:11px;margin:2px 2px 6px">Patterns below are <b>descriptive structure</b> only — no forecasting display is enabled (no out-of-sample calibrated evaluation). See Model &amp; health.</div>' : '') +
       patternCardHtml(f) +
       failedPatternCardHtml(f) +
