@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { detect, patternSeries, PATTERN_VERSION } = require('../../research/m15/balanceBreak');
 
-const M15 = 15 * 60 * 1000;
+const M15 = require('../../research/m15/timeframe').INTERVAL_MS;
 const START = Date.UTC(2026, 0, 5, 0, 0, 0);   // a Monday, well clear of weekends
 
 // Build contiguous M15 candles from a close series (open = previous close; no wicks).

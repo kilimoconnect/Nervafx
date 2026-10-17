@@ -25,7 +25,7 @@ const { describePriceAction } = require('./priceaction');
 const { describeNetwork } = require('./strengthnet');
 
 const CLASSIFIER_VERSION = 'm15-classifier-1.0.0';
-const HOUR = 60 * 60 * 1000, M15 = 15 * 60 * 1000;
+const HOUR = 60 * 60 * 1000, M15 = require('./timeframe').INTERVAL_MS;
 
 /**
  * Declared calibration. Boundaries are chosen from descriptor DISTRIBUTIONS and

@@ -19,7 +19,7 @@
  *  - spread cost: one full round-trip `spreadPips` subtracted from the mid P&L.
  */
 
-const M15 = 15 * 60 * 1000;
+const M15 = require('./timeframe').INTERVAL_MS;
 
 function pipOf(pair) { return pair.endsWith('_JPY') ? 0.01 : 0.0001; }
 function trueRange(c, p) { const hl = c.high - c.low; return p ? Math.max(hl, Math.abs(c.high - p.close), Math.abs(c.low - p.close)) : hl; }

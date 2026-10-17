@@ -6,7 +6,7 @@ const { defineCandidate } = require('../../research/m15/registry');
 const { REGISTRY, A0, A2, C } = require('../../research/m15/candidates');
 const { runCandidate } = require('../../research/m15/experiment');
 
-const M15 = 15 * 60 * 1000, T0 = Date.UTC(2026, 8, 20, 0, 0, 0);
+const M15 = require('../../research/m15/timeframe').INTERVAL_MS, T0 = Date.UTC(2026, 8, 20, 0, 0, 0);
 function frame(i, pairs, ok = true) { const closeMs = T0 + i * M15; const P = {}; for (const p of Object.keys(pairs)) P[p] = { ...pairs[p], pair: p, closeMs }; return { closeMs, ok, pairs: P }; }
 function feat(R10, P10 = 100, z10 = 1, R4 = 0, P4 = 0) { return { horizons: { 10: { R: R10, P: P10, z: z10 }, 4: { R: R4, P: P4 } } }; }
 const eurusd = (o) => ({ EUR_USD: o });

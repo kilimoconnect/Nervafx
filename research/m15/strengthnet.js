@@ -107,7 +107,7 @@ function pairWindowReturn(cands, t, H) {
     .sort((a, b) => a.openMs - b.openMs)
     .filter((c) => (seen.has(c.openMs) ? false : (seen.add(c.openMs), true)));  // drop dup openMs
   const atT = w.length > 0 && (w[w.length - 1].openMs + M15 === t);             // last close == synced t
-  const nominal = 4 * H;
+  const nominal = Math.round(HOUR / M15) * H;
   if (w.length < 2 || !atT) return { ok: false, n: w.length, atT, nominal };
   const first = w[0].close, last = w[w.length - 1].close;
   if (!(first > 0) || !(last > 0)) return { ok: false, n: w.length, atT, nominal, badPrice: true };

@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { analyze, ANALYSIS_VERSION } = require('../../research/m15/analysis');
 
-const M15 = 15 * 60 * 1000;
+const M15 = require('../../research/m15/timeframe').INTERVAL_MS;
 const START = Date.UTC(2026, 0, 5, 0, 0, 0);       // Monday
 function mk(closes, startMs) { return closes.map((cl, i) => { const o = i === 0 ? cl : closes[i - 1]; return { openMs: (startMs || START) + i * M15, open: o, high: Math.max(o, cl), low: Math.min(o, cl), close: cl, complete: true, source: 'OANDA' }; }); }
 const closeMs = (c) => c.openMs + M15;
@@ -16,9 +16,9 @@ test('versioned, additive', () => { assert.equal(ANALYSIS_VERSION, 'm15-analysis
 
 test('old decline then recent recovery ⇒ latest block conflicts with the earlier structure', () => {
   let p = 100, cl = [];
-  for (let i = 0; i < 144; i++) { p -= 0.01; cl.push(+p.toFixed(4)); }     // blocks 1–3 down
-  for (let i = 0; i < 48; i++) { p += 0.02; cl.push(+p.toFixed(4)); }      // block 0 up
-  const a = analyze(mk(cl), { asOfCloseMs: closeMs(mk(cl)[191]) });
+  for (let i = 0; i < 36; i++) { p -= 0.01; cl.push(+p.toFixed(4)); }     // blocks 1–3 down
+  for (let i = 0; i < 12; i++) { p += 0.02; cl.push(+p.toFixed(4)); }      // block 0 up
+  const cc = mk(cl); const a = analyze(cc, { asOfCloseMs: closeMs(cc[cc.length - 1]) });
   assert.equal(a.blocks[0].metrics.direction, 'UP');
   assert.equal(a.blocks[3].metrics.direction, 'DOWN');
   assert.equal(a.recentVsEarlier.verdict, 'conflicts');
@@ -28,7 +28,7 @@ test('high price travel with little net progress ⇒ back-and-forth / congestion
   let p = 100, cl = [];
   for (let i = 0; i < 144; i++) { p += 0.01; cl.push(+p.toFixed(4)); }
   for (let i = 0; i < 48; i++) cl.push(+((i % 2 ? p + 0.08 : p)).toFixed(4));  // oscillate: big travel, ~0 net
-  const a = analyze(mk(cl), { asOfCloseMs: closeMs(mk(cl)[191]) });
+  const cc = mk(cl); const a = analyze(cc, { asOfCloseMs: closeMs(cc[cc.length - 1]) });
   assert.ok(Math.abs(a.blocks[0].metrics.efficiency) < 0.5);
   assert.ok(['back_and_forth', 'congestion'].includes(a.progressQuality.label));
 });

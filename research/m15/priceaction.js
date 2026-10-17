@@ -24,7 +24,7 @@
  *        or treated as continuous observations.
  */
 
-const M15 = 15 * 60 * 1000;
+const M15 = require('./timeframe').INTERVAL_MS;
 const HOUR = 60 * 60 * 1000;
 
 const PRICEACTION_VERSION = 'm15-pa-1.0.0';
@@ -165,7 +165,7 @@ function describeWindow(w) {
 
 function windowBlock(cands, T, hours) {
   const w = inWindow(cands, T, hours);
-  const nominal = hours * 4;
+  const nominal = hours * Math.round(HOUR / M15);
   // gaps strictly inside this window
   let gapCount = 0;
   for (let i = 1; i < w.length; i++) if (w[i].openMs - w[i - 1].openMs > M15) gapCount++;

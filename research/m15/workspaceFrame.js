@@ -21,7 +21,7 @@ const { detect: detectFailedBreak } = require('./failedBreak');
 const { detect: detectPullback } = require('./pullback');
 const { syncAsOf, PAIRS } = require('./loader');
 
-const M15 = 15 * 60 * 1000;
+const M15 = require('./timeframe').INTERVAL_MS;
 
 /** Forex market closed: Fri 21:00 UTC → Sun 21:00 UTC. */
 function closedMarket(ms) { const d = new Date(ms), day = d.getUTCDay(), h = d.getUTCHours(); if (day === 6) return true; if (day === 0 && h < 21) return true; if (day === 5 && h >= 21) return true; return false; }
@@ -51,7 +51,7 @@ function extendedMoveFlag(pa) {
   const h48 = pa.windows && pa.windows.h48 && pa.windows.h48.descriptors;
   const h24 = pa.windows && pa.windows.h24 && pa.windows.h24.descriptors;
   if (!h48 || !h24) return false;
-  return Math.abs(h48.directionalEfficiency) >= 0.7 && Math.abs(h24.directionalEfficiency) >= 0.6 && h48.actual >= 160;
+  return Math.abs(h48.directionalEfficiency) >= 0.7 && Math.abs(h24.directionalEfficiency) >= 0.6 && h48.actual >= 40 * Math.round(60 * 60 * 1000 / M15);
 }
 
 // ── simplified decision labels (detailed engine state → plain label + qualifiers) ──
@@ -126,7 +126,7 @@ function strengthDevelopmentOf(sw) {
 }
 
 function inputDigest(cands, t) {
-  const cs = (cands || []).filter((c) => c.openMs + 15 * 60 * 1000 <= t);
+  const cs = (cands || []).filter((c) => c.openMs + M15 <= t);
   let sum = 0; for (const c of cs) sum += c.close;
   const last = cs[cs.length - 1], first = cs[0];
   const payload = cs.length + '|' + (first ? first.openMs : '') + '|' + (last ? last.openMs + ':' + last.close : '') + '|' + sum.toFixed(6);

@@ -19,7 +19,7 @@ const { CLASSIFIER_VERSION } = require('../../research/m15/classifier');
 const { buildFrame, MODEL_HEALTH } = require('../../research/m15/workspaceFrame');
 const gen = require('./build-replay');
 
-const M15 = 15 * 60 * 1000;
+const M15 = require('../../research/m15/timeframe').INTERVAL_MS;
 
 function framesFor(pair, H, step = 2) {
   const candles = H[pair]; const frames = []; let prev = null;

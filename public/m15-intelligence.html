@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>NervaFX — M15 Classifier</title>
+<title>NervaFX — H1 Classifier</title>
 <style>
   :root{--bg:#0b0f17;--panel:#111826;--panel2:#0e1521;--bd:#1e2a3d;--tx:#e6edf6;--mut:#8aa0b8;--up:#16c784;--dn:#f6465d;--warn:#f5b849;--acc:#7c9cff}
   *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.55 system-ui,Segoe UI,Roboto,sans-serif}
@@ -38,7 +38,7 @@
 <body><div class="wrap">
   <div class="top">
     <img src="/nervafx-logo.png" alt="NervaFX" style="height:26px;display:block">
-    <span class="logo" style="font-size:13px;font-weight:600;color:var(--mut)">M15 Classifier</span>
+    <span class="logo" style="font-size:13px;font-weight:600;color:var(--mut)">H1 Classifier</span>
     <span class="pill" id="ver">—</span>
     <span class="pill">READ-ONLY</span><span class="pill">NO ORDER PATH</span>
     <span class="sp"></span>
@@ -59,14 +59,14 @@
     <div>
       <div class="card"><h2>Pair states — click a row for evidence</h2>
         <table id="pairs"><thead><tr><th data-k="pair">Pair</th><th data-k="state">State</th><th data-k="dir">Dir</th><th data-k="gap">Strength gap</th><th>Confirmed</th></tr></thead>
-        <tbody><tr><td colspan="5" class="loading">Running M15 classifier…</td></tr></tbody></table>
+        <tbody><tr><td colspan="5" class="loading">Running H1 classifier…</td></tr></tbody></table>
       </div>
     </div>
   </div>
 
   <div class="foot">
     Analytical research view. States are a description of recent price action and the
-    independent 28-pair currency-strength network, computed only from completed M15 candles
+    independent 28-pair currency-strength network, computed only from completed H1 candles
     as of the latest synchronized close (no look-ahead). This is <b>not</b> a trading signal,
     has no buy/sell control or broker connection, and does not imply live performance.
     Raw candles: mid-only (OANDA); economics are not modelled here.
@@ -124,7 +124,7 @@
   }
 
   function load(){
-    $('pairs').querySelector('tbody').innerHTML='<tr><td colspan="5" class="loading">Running M15 classifier…</td></tr>';
+    $('pairs').querySelector('tbody').innerHTML='<tr><td colspan="5" class="loading">Running H1 classifier…</td></tr>';
     fetch('/api/m15-intelligence',{headers:{Authorization:'Bearer '+tok()}}).then(function(r){return r.json();}).then(function(d){DATA=d;render();}).catch(function(e){$('meta').innerHTML='<span class="b b-warn">Error: '+e+'</span>';});
   }
   Array.prototype.forEach.call(document.querySelectorAll('#pairs th[data-k]'),function(th){th.onclick=function(){var k=th.getAttribute('data-k');if(sortK===k)sortDir=-sortDir;else{sortK=k;sortDir=1;}render();};});

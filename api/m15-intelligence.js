@@ -28,7 +28,7 @@ module.exports = async function handler(req, res) {
   try {
     const sb = getClient();
     // ~5 days of M15 covers the 48h context + swing calibration + ATR warm-up.
-    const fromIso = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
+    const fromIso = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString();
     const histories = await loadAllPairsFromDb(sb, { pairs: PAIRS, fromIso });
 
     // Latest SYNCHRONIZED completed close across the 28 pairs (no look-ahead).

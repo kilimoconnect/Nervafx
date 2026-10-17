@@ -17,7 +17,7 @@
  *   the SAME as-of view returned here.
  */
 
-const M15 = 15 * 60 * 1000;
+const M15 = require('./timeframe').INTERVAL_MS;
 
 const PAIRS = ['AUD_CAD','AUD_CHF','AUD_JPY','AUD_NZD','AUD_USD','CAD_CHF','CAD_JPY','CHF_JPY','EUR_AUD','EUR_CAD','EUR_CHF','EUR_GBP','EUR_JPY','EUR_NZD','EUR_USD','GBP_AUD','GBP_CAD','GBP_CHF','GBP_JPY','GBP_NZD','GBP_USD','NZD_CAD','NZD_CHF','NZD_JPY','NZD_USD','USD_CAD','USD_CHF','USD_JPY'];
 
@@ -108,7 +108,7 @@ async function loadAllPairsFromDb(sb, opts = {}) {
     const all = []; let off = 0;
     for (;;) {
       let q = sb.from('backtest_candles').select('time,open,high,low,close,volume,complete,source')
-        .eq('instrument', p).eq('timeframe', 'M15').eq('complete', true).order('time', { ascending: true }).range(off, off + 999);
+        .eq('instrument', p).eq('timeframe', require('./timeframe').DB).eq('complete', true).order('time', { ascending: true }).range(off, off + 999);
       if (fromIso) q = q.gte('time', fromIso);
       if (toIso) q = q.lte('time', toIso);
       const { data, error } = await q;

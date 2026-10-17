@@ -10,7 +10,7 @@
  * as a current opportunity. No order path anywhere.
  */
 
-const M15 = 15 * 60 * 1000;
+const M15 = require('./timeframe').INTERVAL_MS;
 
 function eat(ms) { return new Date(ms).toLocaleString('en-GB', { timeZone: 'Africa/Nairobi', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).replace(',', '') + ' EAT'; }
 

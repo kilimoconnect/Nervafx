@@ -47,7 +47,7 @@ function buildBlocks(C, T) {
   return labels.map((label, k) => {
     const toMs = T - k * 12 * HOUR, fromMs = toMs - 12 * HOUR;
     const w = inBand(C, fromMs, toMs);                  // candles whose close ∈ (fromMs, toMs]
-    const nominal = 48;
+    const nominal = 12 * Math.round(HOUR / M15);
     let openSlots = 0; for (let t = fromMs + M15; t <= toMs; t += M15) if (!closedMarket(t - M15)) openSlots++;
     const dw = w.length ? describeWindow(w) : null;
     const scale = w.length ? medAbsDelta(w.map((c) => c.close)) : 0;

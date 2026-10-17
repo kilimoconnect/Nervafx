@@ -4,7 +4,7 @@
 (function () {
   'use strict';
   var A = window.NFXAdapter;
-  var M15 = 15 * 60 * 1000;
+  var M15 = 60 * 60 * 1000;
   var S = { ws: null, pairId: null, frameIdx: 0, lookback: 96, view: 'market', error: null };
   var $ = function (id) { return document.getElementById(id); };
   var el = function (sel, root) { return (root || document).querySelector(sel); };
@@ -358,8 +358,8 @@
     var watch = '<div class="card"><h2>Watchlist — strongest moves first (click a pair)</h2><table role="grid"><thead><tr><th>Pair</th><th>State</th><th>24h move</th><th>Strength gap</th><th>Pattern</th></tr></thead><tbody>' + rows + '</tbody></table><div class="mut" style="margin-top:4px;font-size:11px">Ranked by move strength (pairs with an active pattern float to the top). "Pattern" flags an active accepted break / failed break / pullback — click the pair to see it. "24h move" = directional efficiency.</div></div>';
     if (!f) return watch;
     var gt = gapTrend(curPair(), Math.min(S.frameIdx, curPair().frames.length - 1));
-    var left = '<div class="card"><h2>' + S.pairId.replace('_', '/') + ' — M15 (as of ' + f.asOfCloseUtc + ')</h2>' +
-      '<div class="chartwrap"><canvas id="chart" aria-label="M15 candlestick chart for ' + S.pairId + '"></canvas></div>' + lookbackHtml() +
+    var left = '<div class="card"><h2>' + S.pairId.replace('_', '/') + ' — H1 (as of ' + f.asOfCloseUtc + ')</h2>' +
+      '<div class="chartwrap"><canvas id="chart" aria-label="H1 candlestick chart for ' + S.pairId + '"></canvas></div>' + lookbackHtml() +
       '<div class="mut" style="font-size:11.5px">▲ reversal · ▮ accepted departure · ▮ rejection. Lower bars = tick volume (OANDA tick count, not true FX volume). Chart lookback is visual only.</div></div>' +
       '<div class="card"><h2>Price story — four windows</h2>' + windowMatrix(f) + '</div>' +
       '<div class="card"><h2>Currency support by window (12/24/36/48h)</h2>' + strengthBoardHtml(f) +
@@ -384,7 +384,7 @@
     if (!f) return '<div class="card mut">Select a pair.</div>';
     var cmp = f.compare12 ? ('<div class="kv"><span>Latest 12h</span>' + dirBadge(f.compare12.latestDir) + ' <span class="num">eff ' + num(f.compare12.latestEff, 2) + '</span></div><div class="kv"><span>Preceding 12h</span>' + dirBadge(f.compare12.previousDir) + ' <span class="num">eff ' + num(f.compare12.previousEff, 2) + '</span></div><div class="kv"><span>Δ efficiency</span><b class="num">' + num(f.compare12.deltaEff, 2) + '</b></div>') : '<span class="mut">—</span>';
     return '<div class="grid-main"><div>' +
-      '<div class="card"><h2>' + S.pairId.replace('_', '/') + ' — M15 chart</h2><div class="chartwrap"><canvas id="chart" aria-label="M15 chart"></canvas></div>' + lookbackHtml() + '<div class="mut" style="font-size:11.5px">Changing the chart lookback does not change any window reading below.</div></div>' +
+      '<div class="card"><h2>' + S.pairId.replace('_', '/') + ' — H1 chart</h2><div class="chartwrap"><canvas id="chart" aria-label="H1 chart"></canvas></div>' + lookbackHtml() + '<div class="mut" style="font-size:11.5px">Changing the chart lookback does not change any window reading below.</div></div>' +
       '<div class="card"><h2>Four-window matrix (unaffected by chart lookback)</h2>' + windowMatrix(f) + '</div>' +
       '</div><div>' +
       '<div class="card"><h2>Latest vs preceding 12h</h2>' + cmp + '</div>' +
@@ -397,7 +397,7 @@
     if (!f) return '<div class="card mut">Select a pair.</div>';
     return '<div class="card"><h2>Replay — stepping one completed candle at a time</h2><div class="mut" style="font-size:12px">All views below are synchronized to the selected close; events and swing confirmations after it are hidden. Use ◀ ▶ (or arrow keys) to step.</div></div>' +
       '<div class="grid-main"><div>' +
-      '<div class="card"><h2>M15 (as of ' + f.asOfCloseUtc + ' · ' + f.asOfCloseEat + ')</h2><div class="chartwrap"><canvas id="chart" aria-label="M15 replay chart"></canvas></div>' + lookbackHtml() + '</div>' +
+      '<div class="card"><h2>H1 (as of ' + f.asOfCloseUtc + ' · ' + f.asOfCloseEat + ')</h2><div class="chartwrap"><canvas id="chart" aria-label="H1 replay chart"></canvas></div>' + lookbackHtml() + '</div>' +
       '<div class="card"><h2>Four-window matrix</h2>' + windowMatrix(f) + '</div>' +
       '</div><div>' +
       '<div class="card"><h2>State</h2><div class="verdict">' + stateBadge(f.primaryState) + '</div><div class="mut" style="margin-top:4px">prev: ' + (f.previousState || '—') + ' · transition: ' + (f.transition && f.transition.changed ? f.transition.kind : 'none') + '</div><div class="explain" style="margin-top:8px">' + esc(f.explanation) + '</div></div>' +
@@ -407,7 +407,7 @@
 
   function observedHint(e) {
     if (!e.dir || !S.ws) return null;
-    var w = A.getPair(S.ws, e.pair); if (!w) return null; var cs = w.candles, M = 15 * 60 * 1000;
+    var w = A.getPair(S.ws, e.pair); if (!w) return null; var cs = w.candles, M = 60 * 60 * 1000;
     var ei = -1; for (var i = 0; i < cs.length; i++) { if (cs[i].openMs + M === e.closeMs) { ei = i; break; } }
     if (ei < 0 || ei + 4 >= cs.length) return null;
     var mv = (cs[ei + 4].close - cs[ei].close) * (e.dir === 'UP' ? 1 : -1);
@@ -494,7 +494,7 @@
   function readProsp() { try { return JSON.parse(localStorage.getItem(PKEY) || '{}'); } catch (e) { return {}; } }
   function writeProsp(o) { try { localStorage.setItem(PKEY, JSON.stringify(o)); } catch (e) {} }
   function prospectiveStep(ws) {
-    if (!ws || !ws.watchlist) return; var M = 15 * 60 * 1000; var log = readProsp(); var changed = false;
+    if (!ws || !ws.watchlist) return; var M = 60 * 60 * 1000; var log = readProsp(); var changed = false;
     ws.watchlist.forEach(function (w) { var lf = w.frames[w.frames.length - 1]; if (!lf || !lf.dataHealth.available || !lf.simpleState) return; var key = w.pair + '@' + lf.asOfCloseMs; if (!log[key]) { log[key] = { pair: w.pair, closeMs: lf.asOfCloseMs, state: lf.simpleState.label, dir: lf.simpleState.dir, engine: lf.primaryState, confirmed: !!(lf.otherPairConfirmation && lf.otherPairConfirmation.agrees), digest: lf.reproduce ? lf.reproduce.inputDigest : null, recordedAt: new Date().toISOString(), outcome: null }; changed = true; } });
     var cand = {}; ws.watchlist.forEach(function (w) { cand[w.pair] = w.candles; });
     Object.keys(log).forEach(function (k) { var r = log[k]; if (r.outcome) return; if (!r.dir) { r.outcome = 'no-direction'; changed = true; return; } var cs = cand[r.pair]; if (!cs) return; var ei = -1; for (var i = 0; i < cs.length; i++) { if (cs[i].openMs + M === r.closeMs) { ei = i; break; } } if (ei < 0 || ei + 4 >= cs.length) return; var mv = (cs[ei + 4].close - cs[ei].close) * (r.dir === 'UP' ? 1 : -1); r.outcome = mv > 0 ? 'continued' : (mv < 0 ? 'reversed' : 'flat'); r.resolvedAt = new Date().toISOString(); changed = true; });

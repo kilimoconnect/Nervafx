@@ -21,7 +21,7 @@ function splitTrainEval(records, opts = {}) {
   const times = records.map((r) => r.signalMs).sort((a, b) => a - b);
   if (!times.length) return { boundaryMs: null, train: [], evalR: [] };
   const boundaryMs = times[Math.floor(times.length * frac)];
-  const embargo = opts.embargoMs || 4 * 15 * 60 * 1000;         // 1h embargo across the boundary
+  const embargo = opts.embargoMs || 60 * 60 * 1000;         // 1h embargo across the boundary
   const train = records.filter((r) => r.signalMs < boundaryMs - embargo);
   const evalR = records.filter((r) => r.signalMs >= boundaryMs + embargo);
   return { boundaryMs, train, evalR };

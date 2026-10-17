@@ -11,7 +11,7 @@
  */
 
 const crypto = require('crypto');
-const M15 = 15 * 60 * 1000;
+const M15 = require('./timeframe').INTERVAL_MS;
 
 const SPEC = Object.freeze({
   id: 'accepted-balance-break-outcome-study',

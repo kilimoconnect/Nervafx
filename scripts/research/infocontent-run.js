@@ -20,7 +20,7 @@ const { describePriceAction } = require('../../research/m15/priceaction');
 const { evaluate, registrationHash } = require('../../research/m15/infocontent');
 const gen = require('./build-replay');
 
-const M15 = 15 * 60 * 1000;
+const M15 = require('../../research/m15/timeframe').INTERVAL_MS;
 
 function framesFor(pair, H, step = 3) {
   const candles = H[pair]; const frames = []; let prevCloseMs = 0;

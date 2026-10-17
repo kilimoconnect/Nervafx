@@ -22,7 +22,7 @@ const { describeNetwork } = require('../../research/m15/strengthnet');
 const { describePriceAction } = require('../../research/m15/priceaction');
 const { PAIRS, CURRENCIES } = require('../../research/m15/strengthnet');
 
-const M15 = 15 * 60 * 1000;
+const M15 = require('../../research/m15/timeframe').INTERVAL_MS;
 const toEat = (ms) => new Date(ms + 3 * 3600 * 1000).toISOString().replace('Z', '+03:00');
 
 // ── fixture builders ──────────────────────────────────────────────────────────

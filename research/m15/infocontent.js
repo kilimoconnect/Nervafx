@@ -13,7 +13,7 @@
 const crypto = require('crypto');
 const { PREREGISTRATION, registrationHash, stableStringify } = require('./infocontent_prereg');
 
-const M15 = 15 * 60 * 1000;
+const M15 = require('./timeframe').INTERVAL_MS;
 
 // ── primitives ─────────────────────────────────────────────────────────────────
 const mean = (a) => (a.length ? a.reduce((s, x) => s + x, 0) / a.length : 0);

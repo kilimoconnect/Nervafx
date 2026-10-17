@@ -43,8 +43,8 @@ test('persistent descent with shallow recoveries ⇒ DOWN, negative efficiency, 
 
 // ── 2. GBP/AUD-like sharp fall then full recovery + two-way swings ───────────
 test('sharp fall then full recovery ⇒ net displacement ~0, large path, low efficiency, multiple swings', () => {
-  const down = []; let p = 1.9000; for (let i = 0; i < 48; i++) { p -= 0.0015; down.push(p); }
-  const up = [];   for (let i = 0; i < 48; i++) { p += 0.0015; up.push(p); }
+  const down = []; let p = 1.9000; for (let i = 0; i < 12; i++) { p -= 0.006; down.push(p); }
+  const up = [];   for (let i = 0; i < 12; i++) { p += 0.006; up.push(p); }
   const cands = seriesFromCloses(T0, [...down, ...up]);
   const d = describePriceAction(cands, { pair: 'GBP_AUD', asOfCloseMs: lastClose(cands) });
   const h24 = d.windows.h24.descriptors;
@@ -56,8 +56,8 @@ test('sharp fall then full recovery ⇒ net displacement ~0, large path, low eff
 
 // ── 3. Late new decline inside a broader range ───────────────────────────────
 test('late new decline ⇒ latest-12h efficiency more negative than preceding 12h', () => {
-  const flat = []; let p = 1.1000; for (let i = 0; i < 72; i++) { p += (i % 2 ? -0.0002 : 0.0002); flat.push(p); } // choppy range
-  const drop = []; for (let i = 0; i < 48; i++) { p -= 0.0008; drop.push(p); }                                   // fresh decline (last 12h)
+  const flat = []; let p = 1.1000; for (let i = 0; i < 24; i++) { p += (i % 2 ? -0.0002 : 0.0002); flat.push(p); } // choppy range
+  const drop = []; for (let i = 0; i < 12; i++) { p -= 0.003; drop.push(p); }                                   // fresh decline (last 12h)
   const cands = seriesFromCloses(T0, [...flat, ...drop]);
   const d = describePriceAction(cands, { pair: 'EUR_USD', asOfCloseMs: lastClose(cands) });
   assert.ok(d.comparison.latest12.directionalEfficiency < d.comparison.previous12.directionalEfficiency);

@@ -5,7 +5,7 @@ const assert = require('node:assert');
 const { classify, STATES, CLASSIFIER_VERSION } = require('../../research/m15/classifier');
 const { PAIRS, CURRENCIES } = require('../../research/m15/strengthnet');
 
-const M15 = 15 * 60 * 1000;
+const M15 = require('../../research/m15/timeframe').INTERVAL_MS;
 const T = Date.UTC(2026, 8, 11, 0, 0, 0);     // synchronized close (end of fixtures)
 
 // ── builders ────────────────────────────────────────────────────────────────

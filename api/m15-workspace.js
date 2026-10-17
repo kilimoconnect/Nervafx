@@ -30,7 +30,7 @@ module.exports = async function handler(req, res) {
 
     const sb = getClient();
     // ~6 days covers 48h context + swing calibration + ATR warm-up + the replay window.
-    const fromIso = new Date(nowMs - 6 * 24 * 60 * 60 * 1000).toISOString();
+    const fromIso = new Date(nowMs - 14 * 24 * 60 * 60 * 1000).toISOString();   // ~14 days (H1 ⇒ ~240+ candles for 48h windows + calibration across the replay frames)
     const loadOpts = { pairs: PAIRS, fromIso };
     if (mode === 'historical') loadOpts.toIso = new Date(nowMs).toISOString();
     const histories = await loadAllPairsFromDb(sb, loadOpts);

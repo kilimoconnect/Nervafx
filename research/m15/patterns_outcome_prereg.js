@@ -14,7 +14,7 @@
 
 const crypto = require('crypto');
 const base = require('./balanceBreak_outcome_prereg');   // reuse continuationAt / excursionAt
-const M15 = 15 * 60 * 1000;
+const M15 = require('./timeframe').INTERVAL_MS;
 
 const SPEC = Object.freeze({
   id: 'm15-structure-patterns-integrated-outcome-study',

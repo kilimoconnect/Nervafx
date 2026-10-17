@@ -5,7 +5,7 @@ const assert = require('node:assert');
 const fb = require('../../research/m15/failedBreak');
 const ab = require('../../research/m15/balanceBreak');
 
-const M15 = 15 * 60 * 1000;
+const M15 = require('../../research/m15/timeframe').INTERVAL_MS;
 const START = Date.UTC(2026, 0, 5, 0, 0, 0);
 function mk(closes, startMs) { return closes.map((cl, i) => { const o = i === 0 ? cl : closes[i - 1]; return { openMs: (startMs || START) + i * M15, open: o, high: Math.max(o, cl), low: Math.min(o, cl), close: cl, complete: true, source: 'OANDA' }; }); }
 const closeMs = (c) => c.openMs + M15;

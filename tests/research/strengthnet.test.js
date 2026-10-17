@@ -12,7 +12,7 @@ const split = (p) => p.split('_');
 /** Build an ascending candle series for ONE pair-key so its log return over the
  *  last `hoursBack` is exactly rTarget (log-linear path; last close lands on t). */
 function mkPair(t, hoursBack, rTarget) {
-  const n = hoursBack * 4;
+  const CPH = require('../../research/m15/timeframe').CANDLES_PER_HOUR; const n = hoursBack * CPH;
   const d = n > 1 ? rTarget / (n - 1) : 0;
   const startOpen = t - n * M15;
   const out = [];

@@ -5,7 +5,7 @@ const assert = require('node:assert');
 const gen = require('../../scripts/research/build-replay');
 const { STATES } = require('../../research/m15/classifier');
 
-const M15 = 15 * 60 * 1000;
+const M15 = require('../../research/m15/timeframe').INTERVAL_MS;
 const payload = gen.build();
 const allFrames = Object.values(payload.datasets).flatMap((d) => d.frames);
 
