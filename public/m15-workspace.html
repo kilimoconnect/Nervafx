@@ -35,7 +35,7 @@
     <span class="mut" style="font-size:11.5px">← → step · ↑ ↓ pair · 1–6 views</span>
     <span class="mut" style="font-size:11.5px;margin-left:auto">History (EAT):</span>
     <label class="sr-only" for="histDt">Historical date and time (EAT)</label>
-    <input type="datetime-local" id="histDt" class="btn" style="padding:4px 6px" step="900">
+    <input type="datetime-local" id="histDt" class="btn" style="padding:4px 6px" step="3600">
     <button class="btn sm" id="histGo">Go</button>
     <button class="btn sm" id="histLive" title="Back to the latest data">● Live</button>
   </div>
@@ -69,7 +69,7 @@
   var rb = document.getElementById('refreshBtn'); if (rb) rb.onclick = function () { location.reload(); };
 
   // Historical selection (times are EAT = UTC+3). Reload with ?asOf=<ms> to view a past close.
-  function eatNaiveFromMs(ms) { var d = new Date(ms + 3 * 3600000), p = function (n) { return (n < 10 ? '0' : '') + n; }; return d.getUTCFullYear() + '-' + p(d.getUTCMonth() + 1) + '-' + p(d.getUTCDate()) + 'T' + p(d.getUTCHours()) + ':' + p(d.getUTCMinutes()); }
+  function eatNaiveFromMs(ms) { var d = new Date(ms + 3 * 3600000), p = function (n) { return (n < 10 ? '0' : '') + n; }; return d.getUTCFullYear() + '-' + p(d.getUTCMonth() + 1) + '-' + p(d.getUTCDate()) + 'T' + p(d.getUTCHours()) + ':00'; }   // H1: snap to the hour, no minutes
   function msFromEatNaive(v) { if (!v) return NaN; var t = Date.parse(v + ':00Z'); return isNaN(t) ? NaN : t - 3 * 3600000; }
   var histDt = document.getElementById('histDt'), histGo = document.getElementById('histGo'), histLive = document.getElementById('histLive');
   var curAsOf = (location.search.match(/[?&]asOf=(\d+)/) || [])[1];
