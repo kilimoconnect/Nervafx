@@ -35,7 +35,9 @@ const HOUR = 60 * 60 * 1000;
 
 const STRENGTHNET_VERSION = 'm15-strengthnet-1.0.0';
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
-const WINDOWS_H = [12, 24, 36, 48];
+const { WINDOW_HOURS, PRIMARY_HOURS } = require('./timeframe');
+const SLOT_KEYS = ['h12', 'h24', 'h36', 'h48'];   // stable slot names; the HOURS they hold scale with the timeframe
+const WINDOWS_H = WINDOW_HOURS;
 
 // ── small linear algebra (dense, deterministic) ───────────────────────────────
 function zeros(n, m) { return Array.from({ length: n }, () => new Array(m).fill(0)); }
@@ -278,11 +280,12 @@ function describeNetwork(historiesByPair, opts = {}) {
   if (t == null) throw new Error('describeNetwork: asOfCloseMs (t) required');
 
   const windows = {};
-  for (const H of WINDOWS_H) windows[`h${H}`] = estimateWindow(historiesByPair, { ...opts, windowHours: H, asOfCloseMs: t });
+  SLOT_KEYS.forEach((k, i) => { windows[k] = estimateWindow(historiesByPair, { ...opts, windowHours: WINDOW_HOURS[i], asOfCloseMs: t }); });
 
-  // Strength PATHS: latest 12h (t−12h→t) vs the immediately preceding 12h.
-  const latest12 = estimateWindow(historiesByPair, { ...opts, windowHours: 12, asOfCloseMs: t });
-  const prev12 = estimateWindow(historiesByPair, { ...opts, windowHours: 12, asOfCloseMs: t - 12 * HOUR });
+  // Strength PATHS: latest smallest-window vs the immediately preceding one of equal length.
+  const baseH = WINDOW_HOURS[0];
+  const latest12 = estimateWindow(historiesByPair, { ...opts, windowHours: baseH, asOfCloseMs: t });
+  const prev12 = estimateWindow(historiesByPair, { ...opts, windowHours: baseH, asOfCloseMs: t - baseH * HOUR });
   let leadershipChanges = null;
   if (latest12.available && prev12.available) {
     const rankMap = (e) => Object.fromEntries(e.effects.ranked.map((c, i) => [c, i + 1]));
@@ -292,11 +295,11 @@ function describeNetwork(historiesByPair, opts = {}) {
     leadershipChanges = { previousLeader: prev12.effects.ranked[0], latestLeader: latest12.effects.ranked[0], changed: prev12.effects.ranked[0] !== latest12.effects.ranked[0], rankChanges: changes };
   }
 
-  // Leave-one-pair-out confirmation on the primary (24h) window.
+  // Leave-one-pair-out confirmation on the primary window (the 2nd slot).
   const primary = windows.h24;
   const lopo = {};
   if (primary.available) {
-    const { edges } = buildEdges(historiesByPair, t, 24, opts);
+    const { edges } = buildEdges(historiesByPair, t, PRIMARY_HOURS, opts);
     for (const e of edges) lopo[e.canon] = leaveOnePairOut(edges, e.canon, primary.gaps[e.canon].baseMinusQuote, opts);
   }
 
@@ -305,7 +308,7 @@ function describeNetwork(historiesByPair, opts = {}) {
     note: 'Network DESCRIPTION of RELATIVE, zero-sum currency effects — not a trade indicator and not absolute returns.',
     windows,
     paths12h: { latest: latest12.available ? latest12.effects.byCurrency : null, previous: prev12.available ? prev12.effects.byCurrency : null, leadershipChanges },
-    leaveOnePairOut: { window: '24h', confirmations: lopo },
+    leaveOnePairOut: { window: PRIMARY_HOURS + 'h', confirmations: lopo },
   };
 }
 

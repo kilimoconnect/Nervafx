@@ -5,6 +5,9 @@ const assert = require('node:assert');
 const {
   describePriceAction, detectSwings, M15, PRICEACTION_VERSION,
 } = require('../../research/m15/priceaction');
+const { WINDOW_HOURS, CANDLES_PER_HOUR } = require('../../research/m15/timeframe');
+const BASE_H = WINDOW_HOURS[0];                 // base comparison window (hours)
+const BASE_C = BASE_H * CANDLES_PER_HOUR;       // candles in one base/block window
 
 // ── fixture helpers ────────────────────────────────────────────────────────
 const T0 = Date.UTC(2026, 8, 7, 0, 0, 0);                 // Mon 2026-09-07 00:00 UTC
@@ -41,6 +44,25 @@ test('persistent descent with shallow recoveries ⇒ DOWN, negative efficiency, 
   assert.ok(d.swings.pivots.length >= 0);                   // shallow bounces may not confirm pivots
 });
 
+// ── 1b. Candle cleanness: body-dominant vs wick-dominant ─────────────────────
+test('clean marubozu-style up candles ⇒ bodyRatio≈1 and directionalConviction≈1', () => {
+  const n = 2 * BASE_C; const cands = [];
+  let o = 1.1000;
+  for (let i = 0; i < n; i++) { const c = +(o + 0.0010).toFixed(6); cands.push(bar(T0 + i * M15, o, c, o, c)); o = c; } // full-body up: high=close, low=open
+  const h = describePriceAction(cands, { pair: 'EUR_USD', asOfCloseMs: lastClose(cands) }).windows.h24.descriptors;
+  assert.ok(h.bodyRatio > 0.98, `bodyRatio ${h.bodyRatio}`);
+  assert.ok(h.directionalConviction > 0.98, `conviction ${h.directionalConviction}`);
+});
+
+test('wick-heavy indecision candles ⇒ low bodyRatio and weak conviction despite same net drift', () => {
+  const n = 2 * BASE_C; const cands = [];
+  let o = 1.1000;
+  for (let i = 0; i < n; i++) { const c = +(o + 0.0010).toFixed(6); cands.push(bar(T0 + i * M15, o, +(Math.max(o, c) + 0.0090).toFixed(6), +(Math.min(o, c) - 0.0090).toFixed(6), c)); o = c; } // tiny body, long wicks both sides
+  const h = describePriceAction(cands, { pair: 'EUR_USD', asOfCloseMs: lastClose(cands) }).windows.h24.descriptors;
+  assert.ok(h.bodyRatio < 0.1, `bodyRatio ${h.bodyRatio}`);
+  assert.ok(h.directionalConviction < 0.1, `conviction ${h.directionalConviction}`);
+});
+
 // ── 2. GBP/AUD-like sharp fall then full recovery + two-way swings ───────────
 test('sharp fall then full recovery ⇒ net displacement ~0, large path, low efficiency, multiple swings', () => {
   const down = []; let p = 1.9000; for (let i = 0; i < 12; i++) { p -= 0.006; down.push(p); }
@@ -56,8 +78,8 @@ test('sharp fall then full recovery ⇒ net displacement ~0, large path, low eff
 
 // ── 3. Late new decline inside a broader range ───────────────────────────────
 test('late new decline ⇒ latest-12h efficiency more negative than preceding 12h', () => {
-  const flat = []; let p = 1.1000; for (let i = 0; i < 24; i++) { p += (i % 2 ? -0.0002 : 0.0002); flat.push(p); } // choppy range
-  const drop = []; for (let i = 0; i < 12; i++) { p -= 0.003; drop.push(p); }                                   // fresh decline (last 12h)
+  const flat = []; let p = 1.1000; for (let i = 0; i < BASE_C; i++) { p += (i % 2 ? -0.0002 : 0.0002); flat.push(p); } // choppy range (preceding base window)
+  const drop = []; for (let i = 0; i < BASE_C; i++) { p -= 0.003; drop.push(p); }                                     // fresh decline (latest base window)
   const cands = seriesFromCloses(T0, [...flat, ...drop]);
   const d = describePriceAction(cands, { pair: 'EUR_USD', asOfCloseMs: lastClose(cands) });
   assert.ok(d.comparison.latest12.directionalEfficiency < d.comparison.previous12.directionalEfficiency);
@@ -78,7 +100,8 @@ test('weekend gap ⇒ actual < nominal, gapCount>=1, no fabricated candles', () 
   assert.ok(d.windows.h48.coveragePct < 100);
   assert.ok(d.integrity.gaps.length >= 1 || d.windows.h48.gapCount >= 1);
   // the reported actual equals the real eligible count — no interpolation
-  assert.equal(d.windows.h48.actualCandles, cands.filter((c) => c.openMs + M15 > T - 48 * 3600000 && c.openMs + M15 <= T).length);
+  const h48h = WINDOW_HOURS[3];                 // widest slot's window length (hours)
+  assert.equal(d.windows.h48.actualCandles, cands.filter((c) => c.openMs + M15 > T - h48h * 3600000 && c.openMs + M15 <= T).length);
 });
 
 // ── 5. Duplicate / missing candle ────────────────────────────────────────────

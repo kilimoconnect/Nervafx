@@ -168,14 +168,17 @@
   }
 
   // ---- window matrix (always shows ALL four windows, independent of chart lookback) ----
+  // Config-derived window labels (H1 → 2d/4d/6d/8d), slot order h12,h24,h36,h48.
+  function winLabels() { return (S.ws && S.ws.meta && S.ws.meta.windowLabels) || ['12h', '24h', '36h', '48h']; }
   function windowMatrix(f) {
+    var WL = winLabels();
     var str = f.strengthBoard ? '' : null;
-    var rows = [['12h', f.priceStories.h12], ['24h', f.priceStories.h24], ['36h', f.priceStories.h36], ['48h', f.priceStories.h48]].map(function (r) {
+    var rows = [[WL[0], f.priceStories.h12], [WL[1], f.priceStories.h24], [WL[2], f.priceStories.h36], [WL[3], f.priceStories.h48]].map(function (r) {
       var s = r[1]; if (!s) return '<tr><td>' + r[0] + '</td><td class="mut">—</td><td>—</td><td>—</td><td>—</td></tr>';
       var cls = s.efficiency < 0 ? 'neg' : (s.efficiency > 0 ? 'pos' : '');
       return '<tr><td>' + r[0] + '</td><td>' + s.coveragePct + '% (' + s.actual + '/' + s.nominal + ')</td><td class="num ' + cls + '">' + num(s.efficiency, 2) + '</td><td>' + s.direction + '</td><td class="num">' + num(s.range) + '</td></tr>';
     }).join('');
-    var sg = f.strengthBoard && f.otherPairConfirmation ? ('Strength (24h network): gap <b class="num">' + num(f.otherPairConfirmation.full) + '</b>, other-pair confirmation ' + (f.otherPairConfirmation.agrees ? '<span class="badge b-up">AGREES</span>' : '<span class="badge b-mut">no</span>')) : '<span class="mut">strength unavailable</span>';
+    var sg = f.strengthBoard && f.otherPairConfirmation ? ('Strength (' + winLabels()[1] + ' network): gap <b class="num">' + num(f.otherPairConfirmation.full) + '</b>, other-pair confirmation ' + (f.otherPairConfirmation.agrees ? '<span class="badge b-up">AGREES</span>' : '<span class="badge b-mut">no</span>')) : '<span class="mut">strength unavailable</span>';
     return '<table class="matrix"><thead><tr><th>Window</th><th>Coverage</th><th>Price eff</th><th>Dir</th><th>Range</th></tr></thead><tbody>' + rows + '</tbody></table><div class="mut" style="margin-top:6px;font-size:12px">' + sg + '</div>';
   }
 
@@ -192,8 +195,9 @@
       return '<tr><td><b>' + c + '</b></td>' + cell('h12', c) + cell('h24', c) + cell('h36', c) + cell('h48', c) + devCell(c) +
         '<td>' + (breadth[c] != null ? Math.round(breadth[c] * 100) + '%' : '—') + '</td></tr>';
     }).join('');
-    return '<table class="matrix"><thead><tr><th>Ccy</th><th>12h</th><th>24h</th><th>36h</th><th>48h</th><th>Developing</th><th>Breadth</th></tr></thead><tbody>' + rows + '</tbody></table>' +
-      '<div class="mut" style="margin-top:4px;font-size:11px">x = relative, zero-sum strength per window (ranked by 24h). <b>Developing</b> = recent (12h) vs longer (48h): a currency can rank strong yet already be losing ground. Breadth = share of the currency’s pairs agreeing (24h).</div>';
+    var WL = winLabels();
+    return '<table class="matrix"><thead><tr><th>Ccy</th><th>' + WL[0] + '</th><th>' + WL[1] + '</th><th>' + WL[2] + '</th><th>' + WL[3] + '</th><th>Developing</th><th>Breadth</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+      '<div class="mut" style="margin-top:4px;font-size:11px">x = relative, zero-sum strength per window (ranked by ' + WL[1] + '). <b>Developing</b> = recent (' + WL[0] + ') vs longer (' + WL[3] + '): a currency can rank strong yet already be losing ground. Breadth = share of the currency’s pairs agreeing (' + WL[1] + ').</div>';
   }
 
   function fmtT(iso) { return iso ? fmtEatTime(Date.parse(iso)) : '—'; }
@@ -283,7 +287,8 @@
       stmt('Would change the read', esc(s.invalidationCondition), true) +
       '<div class="mut" style="margin-top:6px;font-size:11px">Descriptive analysis — not a forecast or trade signal. Model UNVALIDATED.</div></div>';
     var rows = a.blocks.map(function (b) { var m = b.metrics; return '<tr><td>' + b.label + '</td><td>' + b.coveragePct + '%' + (b.openCoveragePct != null && b.openCoveragePct !== b.coveragePct ? ' <span class="mut">(' + b.openCoveragePct + '% open)</span>' : '') + '</td><td class="num">' + (m ? num(m.displacement) : '—') + '</td><td class="num">' + (m ? num(m.travel) : '—') + '</td><td class="num ' + (m && m.efficiency < 0 ? 'neg' : m && m.efficiency > 0 ? 'pos' : '') + '">' + (m ? num(m.efficiency, 2) : '—') + '</td><td>' + (m ? m.direction : '—') + '</td><td class="num">' + (m ? num(m.overlap, 2) : '—') + '</td></tr>'; }).join('');
-    var blocks = '<details class="card"><summary style="cursor:pointer;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.07em">Recent vs earlier — four 12h blocks (' + esc(a.recentVsEarlier.verdict) + ')</summary>' +
+    var bh = (S.ws && S.ws.meta && S.ws.meta.blockHours) || 12; var bl = bh % 24 === 0 ? (bh / 24 + 'd') : (bh + 'h');
+    var blocks = '<details class="card"><summary style="cursor:pointer;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.07em">Recent vs earlier — four ' + bl + ' blocks (' + esc(a.recentVsEarlier.verdict) + ')</summary>' +
       '<table class="matrix" style="margin-top:8px"><thead><tr><th>Block (ago)</th><th>Coverage</th><th>Displ.</th><th>Travel</th><th>Eff</th><th>Dir</th><th>Overlap</th></tr></thead><tbody>' + rows + '</tbody></table>' +
       '<div class="mut" style="margin-top:4px;font-size:11px">' + esc(a.recentVsEarlier.detail) + '. Consecutive non-overlapping 12h intervals, each computed directly from its own candles (not subtracted from overlapping windows). Coverage shows missing/closed candles.' + (a.pace && a.pace.sinceEvent ? ' Since ' + esc(a.pace.sinceEvent.event) + ' (' + a.pace.sinceEvent.elapsedHours + 'h): net ' + num(a.pace.sinceEvent.netProgress) + ', travel ' + num(a.pace.sinceEvent.travel) + ', eff ' + num(a.pace.sinceEvent.efficiency, 2) + '.' : '') + '</div></details>';
     var cs = a.currencySupport, csHtml = '';
@@ -336,6 +341,14 @@
     if (lf.pullbackPattern) out += tag('pullback', lf.pullbackPattern.state);
     return out || '<span class="mut">—</span>';
   }
+  // Candle "cleanness": clean, big-body candles pushing the net direction (small
+  // wicks) rank above wick-heavy / indecisive charts. Uses priceStories body metrics.
+  function cleanScore(lf) {
+    var ps = lf && lf.priceStories && lf.priceStories.h24; if (!ps) return 0;
+    var conv = typeof ps.directionalConviction === 'number' ? ps.directionalConviction : 0; // [-1,1]
+    var body = typeof ps.bodyRatio === 'number' ? ps.bodyRatio : 0;                         // [0,1]
+    return conv * 18 + body * 6;   // clean directional charts gain, wick-heavy ones don't
+  }
   function moveScore(lf) {
     if (!lf || !lf.dataHealth || !lf.dataHealth.available) return -1e9;   // unavailable sinks to the bottom
     var ps = lf.priceStories && lf.priceStories.h24, eff = ps ? Math.abs(ps.efficiency || 0) : 0;
@@ -343,7 +356,7 @@
     var L = lf.simpleState ? lf.simpleState.label : '';
     var tier = L === 'Established trend' ? 4 : L === 'Reversal' ? 3 : L === 'Developing trend' ? 2 : L === 'Range' ? 1 : L === 'Conflict' ? 0.5 : 0;
     var ap = activePatterns(lf), patBonus = ap.length ? (ap.some(function (p) { return p.state === 'CONFIRMED'; }) ? 100 : ap.some(function (p) { return p.state === 'FORMING'; }) ? 50 : 20) : 0;
-    return tier * 10 + eff * 3 + gap * 50 + patBonus;   // pairs with an active pattern float to the top
+    return tier * 10 + eff * 3 + gap * 50 + patBonus + cleanScore(lf);   // pattern + clean candles float to the top
   }
   function viewMarket(f) {
     var sorted = S.ws.watchlist.slice().sort(function (a, b) { return moveScore(b.frames[b.frames.length - 1]) - moveScore(a.frames[a.frames.length - 1]); });
@@ -354,17 +367,22 @@
       var eff = lf.priceStories && lf.priceStories.h24 ? lf.priceStories.h24.efficiency : null;
       var effCell = eff == null ? '<td class="mut">—</td>' : '<td class="num ' + (eff < 0 ? 'neg' : eff > 0 ? 'pos' : '') + '">' + num(eff, 2) + '</td>';
       var gap = lf.otherPairConfirmation ? num(lf.otherPairConfirmation.full) : '—';
+      var ps = lf.priceStories && lf.priceStories.h24;
+      var cleanCell;
+      if (!ps || ps.bodyRatio == null) cleanCell = '<td class="mut">—</td>';
+      else { var cv = ps.directionalConviction || 0; var cc2 = cv > 0.15 ? 'pos' : cv < -0.15 ? 'neg' : ''; cleanCell = '<td class="num ' + cc2 + '" title="body/range ' + Math.round(ps.bodyRatio * 100) + '% · directional conviction ' + num(cv, 2) + '">' + Math.round(ps.bodyRatio * 100) + '%</td>'; }
       var sel = w.pair === S.pairId;
-      return '<tr class="rowbtn" role="row" tabindex="0" aria-selected="' + sel + '" data-pair="' + w.pair + '"><td><b>' + w.pair.replace('_', '/') + '</b></td><td><span class="badge ' + cc + '">' + ss.label + (ss.dir ? ' ' + ss.dir.toLowerCase() : '') + '</span></td>' + effCell + '<td class="num">' + gap + '</td><td>' + patternTags(lf) + '</td></tr>';
+      return '<tr class="rowbtn" role="row" tabindex="0" aria-selected="' + sel + '" data-pair="' + w.pair + '"><td><b>' + w.pair.replace('_', '/') + '</b></td><td><span class="badge ' + cc + '">' + ss.label + (ss.dir ? ' ' + ss.dir.toLowerCase() : '') + '</span></td>' + effCell + '<td class="num">' + gap + '</td>' + cleanCell + '<td>' + patternTags(lf) + '</td></tr>';
     }).join('');
-    var watch = '<div class="card"><h2>Watchlist — strongest moves first (click a pair)</h2><table role="grid"><thead><tr><th>Pair</th><th>State</th><th>24h move</th><th>Strength gap</th><th>Pattern</th></tr></thead><tbody>' + rows + '</tbody></table><div class="mut" style="margin-top:4px;font-size:11px">Ranked by move strength (pairs with an active pattern float to the top). "Pattern" flags an active accepted break / failed break / pullback — click the pair to see it. "24h move" = directional efficiency.</div></div>';
+    var wl = (S.ws.meta && S.ws.meta.windowLabels) || ['12h', '24h', '36h', '48h'];
+    var watch = '<div class="card"><h2>Watchlist — strongest, cleanest moves first (click a pair)</h2><table role="grid"><thead><tr><th>Pair</th><th>State</th><th>' + wl[1] + ' move</th><th>Strength gap</th><th>Cleanness</th><th>Pattern</th></tr></thead><tbody>' + rows + '</tbody></table><div class="mut" style="margin-top:4px;font-size:11px">Ranked by move strength <b>and candle cleanness</b> (active-pattern pairs float to the top). "' + wl[1] + ' move" = directional efficiency. "Cleanness" = body/range of recent candles — high % with a direction tint means big, same-way bodies and little wick (decisive); low % / grey means wick-heavy, indecisive.</div></div>';
     if (!f) return watch;
     var gt = gapTrend(curPair(), Math.min(S.frameIdx, curPair().frames.length - 1));
     var left = '<div class="card"><h2>' + S.pairId.replace('_', '/') + ' — H1 (as of ' + f.asOfCloseUtc + ')</h2>' +
       '<div class="chartwrap"><canvas id="chart" aria-label="H1 candlestick chart for ' + S.pairId + '"></canvas></div>' + lookbackHtml() +
       '<div class="mut" style="font-size:11.5px">▲ reversal · ▮ accepted departure · ▮ rejection. Lower bars = tick volume (OANDA tick count, not true FX volume). Chart lookback is visual only.</div></div>' +
       '<div class="card"><h2>Price story — four windows</h2>' + windowMatrix(f) + '</div>' +
-      '<div class="card"><h2>Currency support by window (12/24/36/48h)</h2>' + strengthBoardHtml(f) +
+      '<div class="card"><h2>Currency support by window (' + winLabels().join('/') + ')</h2>' + strengthBoardHtml(f) +
       (gt ? '<div class="mut" style="margin-top:6px;font-size:12px">Selected pair gap <b class="' + (gt.g < 0 ? 'neg' : 'pos') + '">' + num(gt.g) + '</b> (' + esc(gt.dir) + ') — <b>' + gt.trend + '</b> vs ~1h ago.</div>' : '') + '</div>';
     var right = '<div class="card"><h2>Decision</h2><div style="margin-bottom:8px">' + simpleBadge(f) + '</div>' +
       '<div class="explain">' + esc(f.explanation) + '</div>' +
@@ -384,13 +402,14 @@
 
   function viewDetail(f) {
     if (!f) return '<div class="card mut">Select a pair.</div>';
-    var cmp = f.compare12 ? ('<div class="kv"><span>Latest 12h</span>' + dirBadge(f.compare12.latestDir) + ' <span class="num">eff ' + num(f.compare12.latestEff, 2) + '</span></div><div class="kv"><span>Preceding 12h</span>' + dirBadge(f.compare12.previousDir) + ' <span class="num">eff ' + num(f.compare12.previousEff, 2) + '</span></div><div class="kv"><span>Δ efficiency</span><b class="num">' + num(f.compare12.deltaEff, 2) + '</b></div>') : '<span class="mut">—</span>';
+    var b0 = winLabels()[0];
+    var cmp = f.compare12 ? ('<div class="kv"><span>Latest ' + b0 + '</span>' + dirBadge(f.compare12.latestDir) + ' <span class="num">eff ' + num(f.compare12.latestEff, 2) + '</span></div><div class="kv"><span>Preceding ' + b0 + '</span>' + dirBadge(f.compare12.previousDir) + ' <span class="num">eff ' + num(f.compare12.previousEff, 2) + '</span></div><div class="kv"><span>Δ efficiency</span><b class="num">' + num(f.compare12.deltaEff, 2) + '</b></div>') : '<span class="mut">—</span>';
     return '<div class="grid-main"><div>' +
       '<div class="card"><h2>' + S.pairId.replace('_', '/') + ' — H1 chart</h2><div class="chartwrap"><canvas id="chart" aria-label="H1 chart"></canvas></div>' + lookbackHtml() + '<div class="mut" style="font-size:11.5px">Changing the chart lookback does not change any window reading below.</div></div>' +
       '<div class="card"><h2>Four-window matrix (unaffected by chart lookback)</h2>' + windowMatrix(f) + '</div>' +
       '</div><div>' +
-      '<div class="card"><h2>Latest vs preceding 12h</h2>' + cmp + '</div>' +
-      '<div class="card"><h2>Currency strength by window (12/24/36/48h)</h2>' + strengthBoardHtml(f) + '</div>' +
+      '<div class="card"><h2>Latest vs preceding ' + b0 + '</h2>' + cmp + '</div>' +
+      '<div class="card"><h2>Currency strength by window (' + winLabels().join('/') + ')</h2>' + strengthBoardHtml(f) + '</div>' +
       '<div class="card"><h2>Causal price-event chronology (as of ' + f.asOfCloseUtc + ')</h2>' + eventSeqHtml(f) + '</div>' +
       '</div></div>';
   }

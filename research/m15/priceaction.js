@@ -146,6 +146,21 @@ function describeWindow(w) {
     }
   }
 
+  // Candle cleanness (C-series: open/high/low/close only, no look-ahead):
+  // "fine" candles have large bodies and small wicks. bodyRatio = total body /
+  // total bar range ∈ [0,1] (1 = marubozu-clean, 0 = all wick / indecision).
+  // directionalConviction signs each candle's body by the window's net direction
+  // and divides by that bar's range, so clean candles *pushing the net move*
+  // score near +1 while wick-heavy / counter bars pull it toward 0 or negative.
+  let bodySum = 0, rangeSum = 0, convSum = 0, convN = 0;
+  for (const c of w) {
+    const body = Math.abs(c.close - c.open), barRange = c.high - c.low;
+    bodySum += body; rangeSum += barRange;
+    if (barRange > 0 && dir !== 0) { convSum += ((c.close - c.open) * dir) / barRange; convN++; }
+  }
+  const bodyRatio = rangeSum > 0 ? bodySum / rangeSum : 0;
+  const directionalConviction = convN > 0 ? convSum / convN : 0;
+
   return {
     actual: n,
     firstCloseMs: closeMsOf(w[0]), lastCloseMs: closeMsOf(w[n - 1]),
@@ -160,6 +175,8 @@ function describeWindow(w) {
     overlapFraction: +overlapFraction.toFixed(4),
     counterMove: +maxCounter.toFixed(8),
     impulseRetracedProportion: +retracedProp.toFixed(4),
+    bodyRatio: +bodyRatio.toFixed(4),
+    directionalConviction: +directionalConviction.toFixed(4),
   };
 }
 
@@ -355,13 +372,14 @@ function describePriceAction(cands, opts = {}) {
   }
 
   const C = integrity.candles;
+  const WH = require('./timeframe').WINDOW_HOURS;   // [12,24,36,48] on M15 ; [48,96,144,192] on H1
   const windows = {
-    h12: windowBlock(C, T, 12), h24: windowBlock(C, T, 24),
-    h36: windowBlock(C, T, 36), h48: windowBlock(C, T, 48),
+    h12: windowBlock(C, T, WH[0]), h24: windowBlock(C, T, WH[1]),
+    h36: windowBlock(C, T, WH[2]), h48: windowBlock(C, T, WH[3]),
   };
 
-  // latest 12h vs immediately preceding 12h, plus nested-window efficiency trail
-  const prev12 = describeWindow(inBand(C, T, 12, 12));
+  // latest smallest-window vs the immediately preceding one of equal length, + nested efficiency trail
+  const prev12 = describeWindow(inBand(C, T, WH[0], WH[0]));
   const comparison = {
     latest12: windows.h12.descriptors, previous12: prev12,
     deltaEfficiency: +((windows.h12.descriptors.directionalEfficiency || 0) - (prev12.directionalEfficiency || 0)).toFixed(4),

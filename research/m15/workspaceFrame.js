@@ -22,6 +22,7 @@ const { detect: detectPullback } = require('./pullback');
 const { syncAsOf, PAIRS } = require('./loader');
 
 const M15 = require('./timeframe').INTERVAL_MS;
+const { WINDOW_HOURS, WINDOW_LABELS, BLOCK_HOURS, hoursLabel } = require('./timeframe');
 
 /** Forex market closed: Fri 21:00 UTC → Sun 21:00 UTC. */
 function closedMarket(ms) { const d = new Date(ms), day = d.getUTCDay(), h = d.getUTCHours(); if (day === 6) return true; if (day === 0 && h < 21) return true; if (day === 5 && h >= 21) return true; return false; }
@@ -137,10 +138,10 @@ function inputDigest(cands, t) {
 // the close, blocks 1–3 = the 12h windows ending 12/24/36h earlier. Network-wide ⇒ compute ONCE
 // per close and reuse across pairs.
 function buildBlockStrength(H, t, net) {
-  const h = 60 * 60 * 1000;
-  const b0 = net && net.windows ? net.windows.h12 : null;
-  const est = (back) => { try { return estimateWindow(H, { windowHours: 12, asOfCloseMs: t - back * h }); } catch (e) { return null; } };
-  return [b0 || est(0), est(12), est(24), est(36)];
+  const h = 60 * 60 * 1000, B = require('./timeframe').BLOCK_HOURS;
+  const b0 = net && net.windows ? net.windows.h12 : null;   // smallest window as-of t = the 0..B block
+  const est = (back) => { try { return estimateWindow(H, { windowHours: B, asOfCloseMs: t - back * B * h }); } catch (e) { return null; } };
+  return [b0 || est(0), est(1), est(2), est(3)];
 }
 
 /** Build one immutable frame for `pair` as-of close `t`. `net`/`blockStrength` may be precomputed. */
@@ -160,7 +161,7 @@ function buildFrame(pair, H, t, prev, candleIdx, net, blockStrength) {
   else if (!h24 || !h24.available) { available = false; availReason = `UNSYNCHRONIZED (${h24 ? h24.reason : 'NO_NETWORK'})`; }
   else if (cov.pairsUsed < cov.pairsExpected) { available = false; availReason = `INCOMPLETE_COVERAGE (${cov.pairsUsed}/${cov.pairsExpected})`; }
 
-  const story = (w) => (w && w.descriptors ? { coveragePct: w.coveragePct, actual: w.actualCandles, nominal: w.nominalCandles, efficiency: w.descriptors.directionalEfficiency, direction: w.descriptors.direction, range: w.descriptors.range, positionInRange: w.descriptors.positionInRange } : null);
+  const story = (w) => (w && w.descriptors ? { coveragePct: w.coveragePct, actual: w.actualCandles, nominal: w.nominalCandles, efficiency: w.descriptors.directionalEfficiency, direction: w.descriptors.direction, range: w.descriptors.range, positionInRange: w.descriptors.positionInRange, bodyRatio: w.descriptors.bodyRatio, directionalConviction: w.descriptors.directionalConviction } : null);
   const board = (h24 && h24.available) ? h24.effects.ranked.map((ccy) => ({ currency: ccy, x: h24.effects.byCurrency[ccy], breadth: h24.breadth[ccy] ? h24.breadth[ccy].fraction : 0 })) : null;
   // Per-currency strength across ALL four windows (12/24/36/48h).
   const strengthByWindow = {};
@@ -279,7 +280,7 @@ function buildWorkspacePayload(H, opts = {}) {
   const provenance = opts.provenance || 'LIVE';
 
   const probe = syncAsOf(H, now);
-  const meta = { version: CODE_VERSION, classifier: CLASSIFIER_VERSION, calibration: CALIBRATION.version, provenance, generatedAtUtc: new Date().toISOString(), disclaimer: provenance === 'LIVE' ? 'Research classification — not a trade signal. Model UNVALIDATED (no demonstrated edge). Mid-only candles; no order path.' : 'DEMO / SYNTHETIC — not live, not a trading system, not validated for profitability.' };
+  const meta = { version: CODE_VERSION, classifier: CLASSIFIER_VERSION, calibration: CALIBRATION.version, provenance, generatedAtUtc: new Date().toISOString(), timeframe: require('./timeframe').LABEL, windowHours: WINDOW_HOURS, windowLabels: WINDOW_LABELS, blockHours: BLOCK_HOURS, blockLabels: [0, 1, 2, 3].map((k) => hoursLabel(k * BLOCK_HOURS) + '–' + hoursLabel((k + 1) * BLOCK_HOURS)), disclaimer: provenance === 'LIVE' ? 'Research classification — not a trade signal. Model UNVALIDATED (no demonstrated edge). Mid-only candles; no order path.' : 'DEMO / SYNTHETIC — not live, not a trading system, not validated for profitability.' };
   if (probe.frameOpenMs == null) return { meta, modelHealth: MODEL_HEALTH, watchlist: [], available: false, reason: 'NO_DATA', missing: probe.missing };
   const T = probe.frameOpenMs + M15;
 

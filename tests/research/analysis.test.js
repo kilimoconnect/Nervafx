@@ -5,6 +5,8 @@ const assert = require('node:assert');
 const { analyze, ANALYSIS_VERSION } = require('../../research/m15/analysis');
 
 const M15 = require('../../research/m15/timeframe').INTERVAL_MS;
+const { BLOCK_HOURS, CANDLES_PER_HOUR } = require('../../research/m15/timeframe');
+const BLOCK_C = BLOCK_HOURS * CANDLES_PER_HOUR;   // candles per non-overlapping block
 const START = Date.UTC(2026, 0, 5, 0, 0, 0);       // Monday
 function mk(closes, startMs) { return closes.map((cl, i) => { const o = i === 0 ? cl : closes[i - 1]; return { openMs: (startMs || START) + i * M15, open: o, high: Math.max(o, cl), low: Math.min(o, cl), close: cl, complete: true, source: 'OANDA' }; }); }
 const closeMs = (c) => c.openMs + M15;
@@ -16,8 +18,8 @@ test('versioned, additive', () => { assert.equal(ANALYSIS_VERSION, 'm15-analysis
 
 test('old decline then recent recovery ⇒ latest block conflicts with the earlier structure', () => {
   let p = 100, cl = [];
-  for (let i = 0; i < 36; i++) { p -= 0.01; cl.push(+p.toFixed(4)); }     // blocks 1–3 down
-  for (let i = 0; i < 12; i++) { p += 0.02; cl.push(+p.toFixed(4)); }      // block 0 up
+  for (let i = 0; i < 3 * BLOCK_C; i++) { p -= 0.01; cl.push(+p.toFixed(4)); }   // blocks 3–1 (oldest) down
+  for (let i = 0; i < BLOCK_C; i++) { p += 0.02; cl.push(+p.toFixed(4)); }        // block 0 (newest) up
   const cc = mk(cl); const a = analyze(cc, { asOfCloseMs: closeMs(cc[cc.length - 1]) });
   assert.equal(a.blocks[0].metrics.direction, 'UP');
   assert.equal(a.blocks[3].metrics.direction, 'DOWN');

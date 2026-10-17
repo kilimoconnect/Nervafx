@@ -40,14 +40,16 @@ const THRESHOLDS = Object.freeze({
 const sgn = (x) => (x > 0 ? 1 : x < 0 ? -1 : 0);
 const digest = (s) => require('crypto').createHash('sha256').update(String(s)).digest('hex').slice(0, 12);
 
-// ── 1. four CONSECUTIVE non-overlapping 12h blocks (computed directly from each block) ──
+// ── 1. four CONSECUTIVE non-overlapping blocks of BLOCK_HOURS each (computed directly) ──
+const { BLOCK_HOURS, hoursLabel } = require('./timeframe');
 function buildBlocks(C, T) {
-  const labels = ['0–12h', '12–24h', '24–36h', '36–48h'];
+  const B = BLOCK_HOURS;
+  const labels = [0, 1, 2, 3].map((k) => hoursLabel(k * B) + '–' + hoursLabel((k + 1) * B));
   const closedMarket = (ms) => { const d = new Date(ms), day = d.getUTCDay(), h = d.getUTCHours(); if (day === 6) return true; if (day === 0 && h < 21) return true; if (day === 5 && h >= 21) return true; return false; };
   return labels.map((label, k) => {
-    const toMs = T - k * 12 * HOUR, fromMs = toMs - 12 * HOUR;
+    const toMs = T - k * B * HOUR, fromMs = toMs - B * HOUR;
     const w = inBand(C, fromMs, toMs);                  // candles whose close ∈ (fromMs, toMs]
-    const nominal = 12 * Math.round(HOUR / M15);
+    const nominal = B * Math.round(HOUR / M15);
     let openSlots = 0; for (let t = fromMs + M15; t <= toMs; t += M15) if (!closedMarket(t - M15)) openSlots++;
     const dw = w.length ? describeWindow(w) : null;
     const scale = w.length ? medAbsDelta(w.map((c) => c.close)) : 0;

@@ -136,7 +136,10 @@ test('a genuine broad move is independently confirmed when the pair is excluded'
 // ── 9. Breadth + leadership paths + relative/absolute separation ──────────────
 test('breadth, leadership paths, and relative-vs-absolute labelling', () => {
   const xTrue = zeroSum({ GBP: 0.006, AUD: -0.006, USD: 0.002, EUR: 0.001, JPY: 0.0, CHF: 0.0, CAD: -0.001, NZD: -0.002 });
-  const net = describeNetwork(genHistories(T, 24, xTrue), { asOfCloseMs: T });
+  // paths12h compares the base window now vs one base window earlier, so it needs
+  // two base windows of history (config-derived: 2 × WINDOW_HOURS[0]).
+  const baseH = require('../../research/m15/timeframe').WINDOW_HOURS[0];
+  const net = describeNetwork(genHistories(T, 2 * baseH, xTrue), { asOfCloseMs: T });
   const h24 = net.windows.h24;
   assert.equal(h24.breadth.GBP.degree, 7);
   assert.equal(h24.breadth.GBP.fraction, 1);            // every GBP pair agrees with GBP-up
