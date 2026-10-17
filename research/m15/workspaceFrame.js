@@ -280,7 +280,7 @@ function buildWorkspacePayload(H, opts = {}) {
   const provenance = opts.provenance || 'LIVE';
 
   const probe = syncAsOf(H, now);
-  const meta = { version: CODE_VERSION, classifier: CLASSIFIER_VERSION, calibration: CALIBRATION.version, provenance, generatedAtUtc: new Date().toISOString(), timeframe: require('./timeframe').LABEL, windowHours: WINDOW_HOURS, windowLabels: WINDOW_LABELS, blockHours: BLOCK_HOURS, blockLabels: [0, 1, 2, 3].map((k) => hoursLabel(k * BLOCK_HOURS) + '–' + hoursLabel((k + 1) * BLOCK_HOURS)), disclaimer: provenance === 'LIVE' ? 'Research classification — not a trade signal. Model UNVALIDATED (no demonstrated edge). Mid-only candles; no order path.' : 'DEMO / SYNTHETIC — not live, not a trading system, not validated for profitability.' };
+  const meta = { version: CODE_VERSION, classifier: CLASSIFIER_VERSION, calibration: CALIBRATION.version, provenance, generatedAtUtc: new Date().toISOString(), timeframe: require('./timeframe').LABEL, candlesPerHour: require('./timeframe').CANDLES_PER_HOUR, windowHours: WINDOW_HOURS, windowLabels: WINDOW_LABELS, blockHours: BLOCK_HOURS, blockLabels: [0, 1, 2, 3].map((k) => hoursLabel(k * BLOCK_HOURS) + '–' + hoursLabel((k + 1) * BLOCK_HOURS)), disclaimer: provenance === 'LIVE' ? 'Research classification — not a trade signal. Model UNVALIDATED (no demonstrated edge). Mid-only candles; no order path.' : 'DEMO / SYNTHETIC — not live, not a trading system, not validated for profitability.' };
   if (probe.frameOpenMs == null) return { meta, modelHealth: MODEL_HEALTH, watchlist: [], available: false, reason: 'NO_DATA', missing: probe.missing };
   const T = probe.frameOpenMs + M15;
 

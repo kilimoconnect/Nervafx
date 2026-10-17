@@ -558,7 +558,8 @@
 
   // ---- replay / lookback controls ----
   function lookbackHtml() {
-    return '<div class="lookback"><span>Chart lookback:</span>' + [48, 96, 144, 192].map(function (n) { return '<button class="btn sm" data-lb="' + n + '" aria-pressed="' + (S.lookback === n) + '">' + (n / 4) + 'h</button>'; }).join('') + '</div>';
+    var cph = (S.ws && S.ws.meta && S.ws.meta.candlesPerHour) || 1;   // candles per hour of this timeframe
+    return '<div class="lookback"><span>Chart lookback:</span>' + [12, 24, 36, 48].map(function (h) { var n = h * cph; return '<button class="btn sm" data-lb="' + n + '" aria-pressed="' + (S.lookback === n) + '">' + h + 'h</button>'; }).join('') + '</div>';
   }
 
   // ---- render ----
@@ -633,6 +634,9 @@
     try { S.ws = A.getWorkspace(); }
     catch (e) { S.error = e.message; render(); return; }
     S.pairId = S.ws.watchlist[0].pair;
+    // Default chart lookback = 24h worth of candles for this timeframe (keep it on a real button).
+    var cph0 = (S.ws.meta && S.ws.meta.candlesPerHour) || 1;
+    if ([12, 24, 36, 48].map(function (h) { return h * cph0; }).indexOf(S.lookback) < 0) S.lookback = 24 * cph0;
     try { var sp = localStorage.getItem('nfx_ws_pair'); if (sp && A.getPair(S.ws, sp)) S.pairId = sp; var sv = localStorage.getItem('nfx_ws_view'); if (sv) S.view = sv; } catch (e) {}
     var p = curPair(); S.frameIdx = p.frames.length - 1;
     try { prospectiveStep(S.ws); } catch (e) {}       // record classifications + resolve past outcomes
