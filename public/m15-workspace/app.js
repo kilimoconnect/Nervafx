@@ -366,8 +366,33 @@
     var score = function (w) { var p = parts[w.pair]; if (!p) return -1; var gapN = maxGap > 0 ? p.gap / maxGap : 0; return RANK_W.move * p.move + RANK_W.gap * gapN + RANK_W.clean * p.clean + RANK_W.pat * p.pat; };
     return watchlist.slice().sort(function (a, b) { return score(b) - score(a); });
   }
+  // Strong-vs-weak filter on the 36h strength board (the primary window). The board is
+  // the 8-currency network ranked strongest-first and is the same for every pair, so we
+  // read it from any available frame. Strong = top SW_TIER, weak = bottom SW_TIER.
+  var SW_TIER = 3;
+  function strongWeakSets(frame) {
+    var b = frame && frame.strengthBoard;
+    if (!b || b.length < SW_TIER * 2) return null;                 // board unavailable → don't hide anything
+    var strong = {}, weak = {};
+    b.slice(0, SW_TIER).forEach(function (c) { strong[c.currency] = true; });
+    b.slice(b.length - SW_TIER).forEach(function (c) { weak[c.currency] = true; });
+    return { strong: strong, weak: weak, strongList: b.slice(0, SW_TIER).map(function (c) { return c.currency; }), weakList: b.slice(b.length - SW_TIER).map(function (c) { return c.currency; }) };
+  }
+  function pairStrongWeak(pair, sw) {
+    if (!sw) return null;
+    var p = pair.split('_'), base = p[0], quote = p[1];
+    if (sw.strong[base] && sw.weak[quote]) return { strong: base, weak: quote };
+    if (sw.weak[base] && sw.strong[quote]) return { strong: quote, weak: base };
+    return null;                                                   // same tier / mid → not a clean strong-vs-weak pair
+  }
+  function refBoardFrame() {
+    for (var i = 0; i < S.ws.watchlist.length; i++) { var lf = S.ws.watchlist[i].frames[S.ws.watchlist[i].frames.length - 1]; if (lf && lf.strengthBoard && lf.strengthBoard.length) return lf; }
+    return null;
+  }
   function viewMarket(f) {
-    var sorted = rankWatchlist(S.ws.watchlist);
+    var sw = strongWeakSets(refBoardFrame());
+    var ranked = rankWatchlist(S.ws.watchlist);
+    var sorted = sw ? ranked.filter(function (w) { return pairStrongWeak(w.pair, sw); }) : ranked;
     var rows = sorted.map(function (w) {
       var lf = w.frames[w.frames.length - 1];
       var ss = lf.simpleState || { label: lf.primaryState, dir: null };
@@ -380,10 +405,14 @@
       if (!ps || ps.bodyRatio == null) cleanCell = '<td class="mut">—</td>';
       else { var cv = ps.directionalConviction || 0; var cc2 = cv > 0.15 ? 'pos' : cv < -0.15 ? 'neg' : ''; cleanCell = '<td class="num ' + cc2 + '" title="body/range ' + Math.round(ps.bodyRatio * 100) + '% · directional conviction ' + num(cv, 2) + '">' + Math.round(ps.bodyRatio * 100) + '%</td>'; }
       var sel = w.pair === S.pairId;
-      return '<tr class="rowbtn" role="row" tabindex="0" aria-selected="' + sel + '" data-pair="' + w.pair + '"><td><b>' + w.pair.replace('_', '/') + '</b></td><td><span class="badge ' + cc + '">' + ss.label + (ss.dir ? ' ' + ss.dir.toLowerCase() : '') + '</span></td>' + effCell + '<td class="num">' + gap + '</td>' + cleanCell + '<td>' + patternTags(lf) + '</td></tr>';
+      var psw = pairStrongWeak(w.pair, sw);
+      var swTag = psw ? ' <span class="mut" style="font-size:10.5px;white-space:nowrap"><span class="pos">' + psw.strong + '▲</span> <span class="neg">' + psw.weak + '▼</span></span>' : '';
+      return '<tr class="rowbtn" role="row" tabindex="0" aria-selected="' + sel + '" data-pair="' + w.pair + '"><td><b>' + w.pair.replace('_', '/') + '</b>' + swTag + '</td><td><span class="badge ' + cc + '">' + ss.label + (ss.dir ? ' ' + ss.dir.toLowerCase() : '') + '</span></td>' + effCell + '<td class="num">' + gap + '</td>' + cleanCell + '<td>' + patternTags(lf) + '</td></tr>';
     }).join('');
     var wl = (S.ws.meta && S.ws.meta.windowLabels) || ['24h', '36h', '48h', '72h'];
-    var watch = '<div class="card"><h2>Watchlist — strongest, cleanest moves first (click a pair)</h2><table role="grid"><thead><tr><th>Pair</th><th>State</th><th>' + wl[1] + ' move</th><th>Strength gap</th><th>Cleanness</th><th>Pattern</th></tr></thead><tbody>' + rows + '</tbody></table><div class="mut" style="margin-top:4px;font-size:11px">Ranked by an equal-weight blend of four factors: <b>' + wl[1] + ' move</b> (directional efficiency), <b>strength gap</b> (other-pair confirmation, normalized across the board), <b>cleanness</b> (big same-way candle bodies with little wick), and <b>pattern</b> (an active accepted-break / failed-break / pullback, confirmed &gt; forming &gt; detected). "Cleanness" high % with a direction tint = decisive; low % / grey = wick-heavy, indecisive.</div></div>';
+    if (!rows) rows = '<tr><td colspan="6" class="mut">No pair currently has a clearly strong vs clearly weak currency on the ' + wl[1] + ' board.</td></tr>';
+    var swLine = sw ? '<div class="mut" style="margin-top:4px;font-size:11px"><b>Shown:</b> only pairs pitting a top-' + SW_TIER + ' strong currency against a bottom-' + SW_TIER + ' weak one on the ' + wl[1] + ' strength board. Strong (' + wl[1] + '): <span class="pos">' + sw.strongList.join(', ') + '</span> · Weak: <span class="neg">' + sw.weakList.join(', ') + '</span>.</div>' : '';
+    var watch = '<div class="card"><h2>Watchlist — ' + wl[1] + ' strong vs weak (click a pair)</h2><table role="grid"><thead><tr><th>Pair</th><th>State</th><th>' + wl[1] + ' move</th><th>Strength gap</th><th>Cleanness</th><th>Pattern</th></tr></thead><tbody>' + rows + '</tbody></table>' + swLine + '<div class="mut" style="margin-top:4px;font-size:11px">Within that set, ranked by an equal-weight blend of four factors: <b>' + wl[1] + ' move</b> (directional efficiency), <b>strength gap</b> (other-pair confirmation, normalized across the board), <b>cleanness</b> (big same-way candle bodies with little wick), and <b>pattern</b> (an active accepted-break / failed-break / pullback, confirmed &gt; forming &gt; detected). "Cleanness" high % with a direction tint = decisive; low % / grey = wick-heavy, indecisive.</div></div>';
     if (!f) return watch;
     var gt = gapTrend(curPair(), Math.min(S.frameIdx, curPair().frames.length - 1));
     var left = '<div class="card"><h2>' + S.pairId.replace('_', '/') + ' — H1 (as of ' + f.asOfCloseUtc + ')</h2>' +
