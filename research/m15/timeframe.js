@@ -15,10 +15,10 @@ const CANDLES_PER_HOUR = 1;                    // H1
 const INTERVAL_MS = Math.round(60 / CANDLES_PER_HOUR) * 60 * 1000;   // 3,600,000 ms for H1
 
 // The four nested context windows are a CONSTANT span of TIME across timeframes
-// (12 / 24 / 36 / 48 hours), so the labels always read the real window length. The
+// (24 / 36 / 48 / 72 hours), so the labels always read the real window length. The
 // candle count per window then follows the timeframe:
-//   M15 (4/h) → 48/96/144/192 candles ;  H1 (1/h) → 12/24/36/48 candles.
-const WINDOW_HOURS = [12, 24, 36, 48];
+//   M15 (4/h) → 96/144/192/288 candles ;  H1 (1/h) → 24/36/48/72 candles.
+const WINDOW_HOURS = [24, 36, 48, 72];
 const WINDOW_CANDLES = WINDOW_HOURS.map((h) => h * CANDLES_PER_HOUR);
 const BLOCK_HOURS = WINDOW_HOURS[0];           // non-overlapping block size (= smallest window)
 const PRIMARY_HOURS = WINDOW_HOURS[1];         // the "primary" window used for leave-one-pair-out

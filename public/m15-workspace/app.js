@@ -169,7 +169,7 @@
 
   // ---- window matrix (always shows ALL four windows, independent of chart lookback) ----
   // Config-derived window labels (H1 → 2d/4d/6d/8d), slot order h12,h24,h36,h48.
-  function winLabels() { return (S.ws && S.ws.meta && S.ws.meta.windowLabels) || ['12h', '24h', '36h', '48h']; }
+  function winLabels() { return (S.ws && S.ws.meta && S.ws.meta.windowLabels) || ['24h', '36h', '48h', '72h']; }
   function windowMatrix(f) {
     var WL = winLabels();
     var str = f.strengthBoard ? '' : null;
@@ -382,7 +382,7 @@
       var sel = w.pair === S.pairId;
       return '<tr class="rowbtn" role="row" tabindex="0" aria-selected="' + sel + '" data-pair="' + w.pair + '"><td><b>' + w.pair.replace('_', '/') + '</b></td><td><span class="badge ' + cc + '">' + ss.label + (ss.dir ? ' ' + ss.dir.toLowerCase() : '') + '</span></td>' + effCell + '<td class="num">' + gap + '</td>' + cleanCell + '<td>' + patternTags(lf) + '</td></tr>';
     }).join('');
-    var wl = (S.ws.meta && S.ws.meta.windowLabels) || ['12h', '24h', '36h', '48h'];
+    var wl = (S.ws.meta && S.ws.meta.windowLabels) || ['24h', '36h', '48h', '72h'];
     var watch = '<div class="card"><h2>Watchlist — strongest, cleanest moves first (click a pair)</h2><table role="grid"><thead><tr><th>Pair</th><th>State</th><th>' + wl[1] + ' move</th><th>Strength gap</th><th>Cleanness</th><th>Pattern</th></tr></thead><tbody>' + rows + '</tbody></table><div class="mut" style="margin-top:4px;font-size:11px">Ranked by an equal-weight blend of four factors: <b>' + wl[1] + ' move</b> (directional efficiency), <b>strength gap</b> (other-pair confirmation, normalized across the board), <b>cleanness</b> (big same-way candle bodies with little wick), and <b>pattern</b> (an active accepted-break / failed-break / pullback, confirmed &gt; forming &gt; detected). "Cleanness" high % with a direction tint = decisive; low % / grey = wick-heavy, indecisive.</div></div>';
     if (!f) return watch;
     var gt = gapTrend(curPair(), Math.min(S.frameIdx, curPair().frames.length - 1));
@@ -567,7 +567,8 @@
   // ---- replay / lookback controls ----
   function lookbackHtml() {
     var cph = (S.ws && S.ws.meta && S.ws.meta.candlesPerHour) || 1;   // candles per hour of this timeframe
-    return '<div class="lookback"><span>Chart lookback:</span>' + [12, 24, 36, 48].map(function (h) { var n = h * cph; return '<button class="btn sm" data-lb="' + n + '" aria-pressed="' + (S.lookback === n) + '">' + h + 'h</button>'; }).join('') + '</div>';
+    var hrs = (S.ws && S.ws.meta && S.ws.meta.windowHours) || [24, 36, 48, 72];
+    return '<div class="lookback"><span>Chart lookback:</span>' + hrs.map(function (h) { var n = h * cph; return '<button class="btn sm" data-lb="' + n + '" aria-pressed="' + (S.lookback === n) + '">' + h + 'h</button>'; }).join('') + '</div>';
   }
 
   // ---- render ----
@@ -642,9 +643,10 @@
     try { S.ws = A.getWorkspace(); }
     catch (e) { S.error = e.message; render(); return; }
     S.pairId = S.ws.watchlist[0].pair;
-    // Default chart lookback = 24h worth of candles for this timeframe (keep it on a real button).
+    // Default chart lookback = the smallest window's worth of candles (keep it on a real button).
     var cph0 = (S.ws.meta && S.ws.meta.candlesPerHour) || 1;
-    if ([12, 24, 36, 48].map(function (h) { return h * cph0; }).indexOf(S.lookback) < 0) S.lookback = 24 * cph0;
+    var hrs0 = (S.ws.meta && S.ws.meta.windowHours) || [24, 36, 48, 72];
+    if (hrs0.map(function (h) { return h * cph0; }).indexOf(S.lookback) < 0) S.lookback = hrs0[0] * cph0;
     try { var sp = localStorage.getItem('nfx_ws_pair'); if (sp && A.getPair(S.ws, sp)) S.pairId = sp; var sv = localStorage.getItem('nfx_ws_view'); if (sv) S.view = sv; } catch (e) {}
     var p = curPair(); S.frameIdx = p.frames.length - 1;
     try { prospectiveStep(S.ws); } catch (e) {}       // record classifications + resolve past outcomes
