@@ -14,6 +14,8 @@
   function dirBadge(d) { var c = d === 'UP' ? 'b-up' : d === 'DOWN' ? 'b-dn' : 'b-mut'; return '<span class="badge ' + c + '">' + (d || '—') + '</span>'; }
   function num(x, p) { if (x == null) return '—'; if (Math.abs(x) < 1e-9) return '0'; return (+x).toFixed(p == null ? 5 : p); }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }
+  // labelled statement for prose values (readable, left-aligned — replaces right-aligned wrapping)
+  function stmt(label, valHtml, mut) { return '<div class="stmt"><span class="lbl">' + label + '</span><span class="val' + (mut ? ' mut' : '') + '">' + valHtml + '</span></div>'; }
   function curPair() { return A.getPair(S.ws, S.pairId); }
   function curFrame() { var p = curPair(); if (!p || !p.frames.length) return null; return p.frames[Math.min(S.frameIdx, p.frames.length - 1)]; }
 
@@ -203,13 +205,13 @@
   }
   function directionTimingHtml(f) {
     var d = f.directionTiming; if (!d) return '<div class="mut">—</div>';
-    var kv = function (k, v, mut) { return '<div class="kv"><span>' + k + '</span><b class="' + (mut ? 'mut' : '') + '" style="text-align:right;max-width:66%">' + esc(v) + '</b></div>'; };
+    var kv = function (k, v, mut) { return stmt(k, esc(v), mut); };
     return kv('Direction', d.direction) + kv('Location', d.location) + kv('Next observation', d.nextObservation) + kv('Entry eligibility', d.entryEligibility, true) +
       '<div class="mut" style="margin-top:6px;font-size:11px">Direction (structure) and timing (location/entry) are separate — a clear trend can be a poor place to enter.</div>';
   }
   function alternativeHtml(f) {
     var a = f.alternative; if (!a) return '<div class="mut">—</div>';
-    return '<div style="font-size:13px">' + esc(a.interpretation) + '</div><div class="kv" style="margin-top:6px"><span>What would distinguish it</span><b style="text-align:right;max-width:66%">' + esc(a.distinguisher) + '</b></div>';
+    return '<div style="font-size:13px;margin-bottom:4px">' + esc(a.interpretation) + '</div>' + stmt('What would distinguish it', esc(a.distinguisher));
   }
   function freshnessHtml(fr) {
     if (!fr) return '';
@@ -236,8 +238,8 @@
     return '<div class="card"><h2>Accepted balance break</h2>' +
       '<div><span class="badge ' + cls + '" style="font-size:14px">' + p.state + (p.direction ? ' ' + p.direction.toLowerCase() : '') + '</span></div>' +
       '<div class="explain" style="margin:8px 0">' + esc(p.explanation) + '</div>' +
-      '<div class="kv"><span>Confirmation</span><b style="text-align:right;max-width:66%">' + esc(conf) + '</b></div>' +
-      '<div class="kv"><span>Invalidation</span><b style="text-align:right;max-width:66%">' + (p.invalidation ? num(p.invalidation.price) + ' — 2 closes back inside the zone' : '—') + '</b></div>' +
+      stmt('Confirmation', esc(conf)) +
+      stmt('Invalidation', (p.invalidation ? num(p.invalidation.price) + ' — 2 closes back inside the zone' : '—')) +
       str + swing + recent +
       '<div class="mut" style="margin-top:6px;font-size:11px">Descriptive structure only — not a buy/sell signal. Model UNVALIDATED.</div></div>';
   }
@@ -250,8 +252,8 @@
     return '<div class="card"><h2>Failed balance break</h2>' +
       '<div><span class="badge ' + cls + '" style="font-size:14px">' + p.state + (p.direction ? ' ' + p.direction.toLowerCase() + ' attempt' : '') + '</span></div>' +
       '<div class="explain" style="margin:8px 0">' + esc(p.explanation) + '</div>' +
-      '<div class="kv"><span>Confirmation</span><b style="text-align:right;max-width:66%">' + esc(conf) + '</b></div>' +
-      '<div class="kv"><span>Invalidation</span><b style="text-align:right;max-width:66%">' + (p.invalidation ? num(p.invalidation.price) + ' — a fresh accepted break beyond again' : '—') + '</b></div>' +
+      stmt('Confirmation', esc(conf)) +
+      stmt('Invalidation', (p.invalidation ? num(p.invalidation.price) + ' — a fresh accepted break beyond again' : '—')) +
       trans + str +
       '<div class="mut" style="margin-top:6px;font-size:11px">A loss of the breakout — <b>not</b> a reversal or opposite-trade signal. Model UNVALIDATED.</div></div>';
   }
@@ -264,8 +266,8 @@
     return '<div class="card"><h2>Trend pullback continuation</h2>' +
       '<div><span class="badge ' + cls + '" style="font-size:14px">' + p.state + (p.direction ? ' ' + p.direction.toLowerCase() : '') + '</span>' + (p.stalled ? ' <span class="badge b-mut">stalled</span>' : '') + '</div>' +
       '<div class="explain" style="margin:8px 0">' + esc(p.explanation) + '</div>' +
-      '<div class="kv"><span>Confirmation</span><b style="text-align:right;max-width:66%">' + esc(conf) + '</b></div>' +
-      '<div class="kv"><span>Structural level</span><b style="text-align:right;max-width:66%">' + (p.structure ? num(p.structure.structuralLevel.price) + ' — must hold' : '—') + '</b></div>' +
+      stmt('Confirmation', esc(conf)) +
+      stmt('Structural level', (p.structure ? num(p.structure.structuralLevel.price) + ' — must hold' : '—')) +
       '<div style="margin-top:6px">' + ef + ea + '</div>' +
       '<div class="mut" style="margin-top:6px;font-size:11px">Descriptive structure only — not a buy/sell signal. Model UNVALIDATED.</div></div>';
   }
@@ -274,11 +276,11 @@
     var s = a.summary;
     var assess = '<div class="card"><h2>Assessment <span class="mut" style="font-weight:400;text-transform:none;letter-spacing:0">' + esc(a.version) + '</span></h2>' +
       '<div class="explain" style="margin-bottom:6px">' + esc(s.structureDirection) + ' ' + esc(s.recentChange) + '</div>' +
-      '<div class="kv"><span>Progress</span><b style="text-align:right;max-width:66%">' + esc(s.progressQuality) + '</b></div>' +
-      '<div class="kv"><span>Location</span><b style="text-align:right;max-width:66%">' + esc(s.location) + '</b></div>' +
-      '<div class="kv"><span>Currency support</span><b style="text-align:right;max-width:66%">' + esc(s.currencySupport) + '</b></div>' +
-      '<div class="mut" style="margin-top:6px;font-size:12px"><b>Strongest alternative:</b> ' + esc(s.alternative) + '</div>' +
-      '<div class="mut" style="margin-top:4px;font-size:12px"><b>Would change the read:</b> ' + esc(s.invalidationCondition) + '</div>' +
+      stmt('Progress', esc(s.progressQuality)) +
+      stmt('Location', esc(s.location)) +
+      stmt('Currency support', esc(s.currencySupport)) +
+      stmt('Strongest alternative', esc(s.alternative), true) +
+      stmt('Would change the read', esc(s.invalidationCondition), true) +
       '<div class="mut" style="margin-top:6px;font-size:11px">Descriptive analysis — not a forecast or trade signal. Model UNVALIDATED.</div></div>';
     var rows = a.blocks.map(function (b) { var m = b.metrics; return '<tr><td>' + b.label + '</td><td>' + b.coveragePct + '%' + (b.openCoveragePct != null && b.openCoveragePct !== b.coveragePct ? ' <span class="mut">(' + b.openCoveragePct + '% open)</span>' : '') + '</td><td class="num">' + (m ? num(m.displacement) : '—') + '</td><td class="num">' + (m ? num(m.travel) : '—') + '</td><td class="num ' + (m && m.efficiency < 0 ? 'neg' : m && m.efficiency > 0 ? 'pos' : '') + '">' + (m ? num(m.efficiency, 2) : '—') + '</td><td>' + (m ? m.direction : '—') + '</td><td class="num">' + (m ? num(m.overlap, 2) : '—') + '</td></tr>'; }).join('');
     var blocks = '<details class="card"><summary style="cursor:pointer;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.07em">Recent vs earlier — four 12h blocks (' + esc(a.recentVsEarlier.verdict) + ')</summary>' +
@@ -309,7 +311,7 @@
 
   function nextCondHtml(f) {
     var inval = f.invalidationReference ? (esc(f.invalidationReference) + (f.invalidationLevel != null ? ' <span class="mut">(ref level ' + num(f.invalidationLevel) + ')</span>' : '')) : '<span class="mut">—</span>';
-    return '<div class="kv"><span>Next condition</span><b style="text-align:right;max-width:70%">' + esc(f.nextCondition) + '</b></div><div class="kv"><span>Invalidation reference</span><b style="text-align:right;max-width:70%">' + inval + '</b></div><div class="mut" style="margin-top:6px;font-size:11.5px">Structure clarity is not an entry trigger. Entry eligibility (sizing, costs, timing) is a separate, currently UNAVAILABLE contract — never read this as "trade now".</div>';
+    return stmt('Next condition', esc(f.nextCondition)) + stmt('Invalidation reference', inval) + '<div class="mut" style="margin-top:6px;font-size:11.5px">Structure clarity is not an entry trigger. Entry eligibility (sizing, costs, timing) is a separate, currently UNAVAILABLE contract — never read this as "trade now".</div>';
   }
 
   // ---- state banners ----
@@ -547,13 +549,15 @@
     var hdr = $('datahdr');
     if (S.error) hdr.innerHTML = '<span class="neg">Adapter error — see banner.</span>';
     else if (f) {
-      var fresh = f.dataHealth.stale ? '<span class="badge b-warn">STALE</span>' : (f.dataHealth.closedMarket ? '<span class="badge b-mut">CLOSED</span>' : '<span class="badge b-up">OK</span>');
-      hdr.innerHTML = 'Pair: <b>' + S.pairId.replace('_', '/') + '</b>' +
-        ' · Close EAT: <b>' + f.asOfCloseEat + '</b>' +
-        ' · Coverage: <b>' + f.dataHealth.pairsPresent + '/' + f.dataHealth.pairsExpected + '</b>' +
-        (S.ws.meta && S.ws.meta.mode === 'historical' ? ' · <span class="pill warn">HISTORICAL</span>' : '') +
-        (S.frameIdx >= p.frames.length - 1 ? ' · <span class="pill">latest</span>' : ' · <span class="pill warn">replay</span>') +
-        (S.ws && S.ws.freshness ? '<br>' + freshnessHtml(S.ws.freshness) : '');
+      var sep = '<span class="sep"></span>', brk = '<span style="flex-basis:100%;height:0"></span>';
+      var cov = f.dataHealth.pairsPresent + '/' + f.dataHealth.pairsExpected;
+      hdr.innerHTML =
+        '<span><b style="font-size:13px">' + S.pairId.replace('_', '/') + '</b></span>' + sep +
+        '<span>Close <b>' + fmtEatFull(f.asOfCloseMs) + ' EAT</b></span>' + sep +
+        '<span>Coverage <b class="' + (f.dataHealth.pairsPresent === f.dataHealth.pairsExpected ? 'pos' : 'neg') + '">' + cov + '</b></span>' +
+        (S.ws.meta && S.ws.meta.mode === 'historical' ? sep + '<span class="pill warn">HISTORICAL</span>' : '') +
+        sep + (S.frameIdx >= p.frames.length - 1 ? '<span class="pill ok">latest</span>' : '<span class="pill warn">replay</span>') +
+        (S.ws && S.ws.freshness ? brk + '<span style="color:var(--text-muted)">' + freshnessHtml(S.ws.freshness) + '</span>' : '');
     } else hdr.innerHTML = '<span class="mut">no data</span>';
 
     $('banners').innerHTML = banners(f);
