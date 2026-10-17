@@ -341,25 +341,33 @@
     if (lf.pullbackPattern) out += tag('pullback', lf.pullbackPattern.state);
     return out || '<span class="mut">—</span>';
   }
-  // Candle "cleanness": clean, big-body candles pushing the net direction (small
-  // wicks) rank above wick-heavy / indecisive charts. Uses priceStories body metrics.
-  function cleanScore(lf) {
-    var ps = lf && lf.priceStories && lf.priceStories.h24; if (!ps) return 0;
-    var conv = typeof ps.directionalConviction === 'number' ? ps.directionalConviction : 0; // [-1,1]
-    var body = typeof ps.bodyRatio === 'number' ? ps.bodyRatio : 0;                         // [0,1]
-    return conv * 18 + body * 6;   // clean directional charts gain, wick-heavy ones don't
+  // Watchlist ranking = a balanced composite of FOUR factors, each mapped to [0,1]
+  // and weighted equally, so no single factor drowns the others:
+  //   • 24h move   — |directional efficiency| of the 24h window
+  //   • strength gap — |other-pair strength gap|, normalized across the current board
+  //   • cleanness  — big-body candles pushing the net direction (conviction + body/range)
+  //   • patterns   — an active accepted-break / failed-break / pullback structure
+  var RANK_W = { move: 0.25, gap: 0.25, clean: 0.25, pat: 0.25 };
+  function scoreParts(lf) {
+    if (!lf || !lf.dataHealth || !lf.dataHealth.available) return null;   // unavailable → sinks to the bottom
+    var ps = lf.priceStories && lf.priceStories.h24;
+    var move = ps ? Math.min(1, Math.abs(ps.efficiency || 0)) : 0;
+    var gap = lf.otherPairConfirmation && lf.otherPairConfirmation.full != null ? Math.abs(lf.otherPairConfirmation.full) : 0; // raw; normalized per-board
+    var conv = ps && typeof ps.directionalConviction === 'number' ? ps.directionalConviction : 0; // [-1,1]
+    var body = ps && typeof ps.bodyRatio === 'number' ? ps.bodyRatio : 0;                          // [0,1]
+    var clean = Math.max(0, Math.min(1, 0.65 * Math.max(0, conv) + 0.35 * body));
+    var ap = activePatterns(lf);
+    var pat = ap.some(function (p) { return p.state === 'CONFIRMED'; }) ? 1 : ap.some(function (p) { return p.state === 'FORMING'; }) ? 0.6 : ap.length ? 0.3 : 0;
+    return { move: move, gap: gap, clean: clean, pat: pat };
   }
-  function moveScore(lf) {
-    if (!lf || !lf.dataHealth || !lf.dataHealth.available) return -1e9;   // unavailable sinks to the bottom
-    var ps = lf.priceStories && lf.priceStories.h24, eff = ps ? Math.abs(ps.efficiency || 0) : 0;
-    var gap = lf.otherPairConfirmation && lf.otherPairConfirmation.full != null ? Math.abs(lf.otherPairConfirmation.full) : 0;
-    var L = lf.simpleState ? lf.simpleState.label : '';
-    var tier = L === 'Established trend' ? 4 : L === 'Reversal' ? 3 : L === 'Developing trend' ? 2 : L === 'Range' ? 1 : L === 'Conflict' ? 0.5 : 0;
-    var ap = activePatterns(lf), patBonus = ap.length ? (ap.some(function (p) { return p.state === 'CONFIRMED'; }) ? 100 : ap.some(function (p) { return p.state === 'FORMING'; }) ? 50 : 20) : 0;
-    return tier * 10 + eff * 3 + gap * 50 + patBonus + cleanScore(lf);   // pattern + clean candles float to the top
+  function rankWatchlist(watchlist) {
+    var parts = {}, maxGap = 0;
+    watchlist.forEach(function (w) { var p = scoreParts(w.frames[w.frames.length - 1]); parts[w.pair] = p; if (p && p.gap > maxGap) maxGap = p.gap; });
+    var score = function (w) { var p = parts[w.pair]; if (!p) return -1; var gapN = maxGap > 0 ? p.gap / maxGap : 0; return RANK_W.move * p.move + RANK_W.gap * gapN + RANK_W.clean * p.clean + RANK_W.pat * p.pat; };
+    return watchlist.slice().sort(function (a, b) { return score(b) - score(a); });
   }
   function viewMarket(f) {
-    var sorted = S.ws.watchlist.slice().sort(function (a, b) { return moveScore(b.frames[b.frames.length - 1]) - moveScore(a.frames[a.frames.length - 1]); });
+    var sorted = rankWatchlist(S.ws.watchlist);
     var rows = sorted.map(function (w) {
       var lf = w.frames[w.frames.length - 1];
       var ss = lf.simpleState || { label: lf.primaryState, dir: null };
@@ -375,7 +383,7 @@
       return '<tr class="rowbtn" role="row" tabindex="0" aria-selected="' + sel + '" data-pair="' + w.pair + '"><td><b>' + w.pair.replace('_', '/') + '</b></td><td><span class="badge ' + cc + '">' + ss.label + (ss.dir ? ' ' + ss.dir.toLowerCase() : '') + '</span></td>' + effCell + '<td class="num">' + gap + '</td>' + cleanCell + '<td>' + patternTags(lf) + '</td></tr>';
     }).join('');
     var wl = (S.ws.meta && S.ws.meta.windowLabels) || ['12h', '24h', '36h', '48h'];
-    var watch = '<div class="card"><h2>Watchlist — strongest, cleanest moves first (click a pair)</h2><table role="grid"><thead><tr><th>Pair</th><th>State</th><th>' + wl[1] + ' move</th><th>Strength gap</th><th>Cleanness</th><th>Pattern</th></tr></thead><tbody>' + rows + '</tbody></table><div class="mut" style="margin-top:4px;font-size:11px">Ranked by move strength <b>and candle cleanness</b> (active-pattern pairs float to the top). "' + wl[1] + ' move" = directional efficiency. "Cleanness" = body/range of recent candles — high % with a direction tint means big, same-way bodies and little wick (decisive); low % / grey means wick-heavy, indecisive.</div></div>';
+    var watch = '<div class="card"><h2>Watchlist — strongest, cleanest moves first (click a pair)</h2><table role="grid"><thead><tr><th>Pair</th><th>State</th><th>' + wl[1] + ' move</th><th>Strength gap</th><th>Cleanness</th><th>Pattern</th></tr></thead><tbody>' + rows + '</tbody></table><div class="mut" style="margin-top:4px;font-size:11px">Ranked by an equal-weight blend of four factors: <b>' + wl[1] + ' move</b> (directional efficiency), <b>strength gap</b> (other-pair confirmation, normalized across the board), <b>cleanness</b> (big same-way candle bodies with little wick), and <b>pattern</b> (an active accepted-break / failed-break / pullback, confirmed &gt; forming &gt; detected). "Cleanness" high % with a direction tint = decisive; low % / grey = wick-heavy, indecisive.</div></div>';
     if (!f) return watch;
     var gt = gapTrend(curPair(), Math.min(S.frameIdx, curPair().frames.length - 1));
     var left = '<div class="card"><h2>' + S.pairId.replace('_', '/') + ' — H1 (as of ' + f.asOfCloseUtc + ')</h2>' +
