@@ -107,12 +107,18 @@ function runEngine(h4cands, weekly, cfg) {
 
     // ── (3) Progression ────────────────────────────────────────────────────────
     if (st.state === 'WAITING_FOR_PULLBACK') {
-      // Precondition: the most recent completed trend-TF candle must be a trend-direction
-      // break of structure (W1 for H4, D1 for H1). Default true if the context lacks it.
-      const bosOk = weekly.bosConfirmAt ? weekly.bosConfirmAt(closeMs).ok : true;
-      // Two against-trend "descending" highs AND lows (pullback). Newest two of each.
-      if (bosOk && highs.length >= 2 && lows.length >= 2) {
-        const h = highs.slice(-2), l = lows.slice(-2);
+      // Precondition: the most recent COMPLETED trend-TF candle (last week / last day) must
+      // be a trend-direction break of structure (W1 for H4, D1 for H1). The pullback is then
+      // monitored in the CURRENT forming period — its swings must occur AFTER that last
+      // closed trend candle (i.e. this week / today). Default open if context lacks it.
+      const bos = weekly.bosConfirmAt ? weekly.bosConfirmAt(closeMs) : { ok: true, candleCloseMs: -Infinity };
+      const periodStart = (bos.candleCloseMs != null && isFinite(bos.candleCloseMs)) ? bos.candleCloseMs : -Infinity;
+      const pbStart = Math.max(st.windowStart == null ? -Infinity : st.windowStart, periodStart);
+      const pbHighs = highs.filter((p) => p.extremeTimeMs > pbStart);
+      const pbLows = lows.filter((p) => p.extremeTimeMs > pbStart);
+      // Two against-trend "descending" highs AND lows (pullback) within the current period.
+      if (bos.ok && pbHighs.length >= 2 && pbLows.length >= 2) {
+        const h = pbHighs.slice(-2), l = pbLows.slice(-2);
         const descH = s * (h[1].price - h[0].price) < 0;   // newer high adverse vs older
         const descL = s * (l[1].price - l[0].price) < 0;
         if (descH && descL) {

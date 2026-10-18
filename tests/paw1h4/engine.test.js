@@ -118,3 +118,12 @@ test('no-backdate: a close above the trigger ON the arming bar does not enter; w
   assert.equal(opportunities.length, 1);
   assert.equal(opportunities[0].signalBarIdx, 17, 'entry waits for a fresh close after confirmation');
 });
+
+test('pullback is anchored to the current period (after the last closed trend candle)', () => {
+  // BOS confirmed but the last closed trend candle is AFTER the pullback pivots → ignored.
+  var late = { biasAt: function () { return { bias: 'BULLISH', eligibilityStartMs: START - 1 }; }, levelsAsOf: function () { return { highs: [], lows: [] }; }, bosConfirmAt: function () { return { ok: true, candleCloseMs: START + 9 * H4_MS }; } };
+  assert.equal(runEngine(bars(BUY_ROWS), late, cfg).opportunities.length, 0);
+  // Last closed trend candle before the pullback → recognized normally.
+  var early = { biasAt: function () { return { bias: 'BULLISH', eligibilityStartMs: START - 1 }; }, levelsAsOf: function () { return { highs: [], lows: [] }; }, bosConfirmAt: function () { return { ok: true, candleCloseMs: START - 1 }; } };
+  assert.equal(runEngine(bars(BUY_ROWS), early, cfg).opportunities.length, 1);
+});

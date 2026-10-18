@@ -60,12 +60,16 @@ latest confirmed daily **higher low**; a completed daily close below it cancels 
 (latest defining high AND low both confirmed after the invalidation) — no reactivation from
 unchanged pivots.
 
-**Recent-candle break-of-structure precondition (v1.1):** a pullback setup is only *sought* when
-the **most recent completed D1 candle** closes **in the trend direction** (bullish body in a
-bullish trend) **and** **breaks structure** — its close is beyond the latest confirmed daily swing
-in the trend direction (bullish: close > prior swing high; bearish: close < prior swing low). This
-gates `WAITING_FOR_PULLBACK → PULLBACK_ACTIVE`. (Shared with Weekly→H4, which uses the recent W1
-candle.) The pullback itself remains on the entry timeframe (H1 here / H4 there).
+**Recent-candle break-of-structure precondition + current-period anchor (v1.1):** a pullback setup
+is only *sought* when the **most recent completed D1 candle** (yesterday / last day) closes **in the
+trend direction** (bullish body in a bullish trend) **and** **breaks structure** — its close is
+beyond the latest confirmed daily swing in the trend direction (bullish: close > prior swing high;
+bearish: close < prior swing low). Furthermore the H1 pullback is **anchored to the current forming
+period**: its swings must occur **after that last closed D1 candle** — i.e. the pullback is monitored
+**today** (for Weekly→H4, last week's W1 candle sets it and the H4 pullback is monitored **this
+week**). This gates `WAITING_FOR_PULLBACK → PULLBACK_ACTIVE`; once a pullback is recognized the
+continuation may complete in a later period. Shared with Weekly→H4. The pullback itself remains on
+the entry timeframe (H1 here / H4 there).
 
 **H1 buy sequence (sell mirrored):** A) daily BULLISH *and the recent-D1-candle BOS precondition
 holds* → B) a new H1 pullback of two descending
@@ -109,7 +113,9 @@ Economics **mid-only, estimated** (spread 1.2p, slippage 0.5p, 2p buffer; 2× se
 Report: `docs/research/pad1h1_backtest.json`. Run: `node scripts/research/pad1h1-backtest.js`.
 
 Figures below are **v1.1 — with the recent-candle break-of-structure precondition** (§3). It makes
-both strategies much more selective (far fewer setups than v1.0).
+both strategies much more selective (far fewer setups than v1.0). *(The current-period pullback
+anchor, also §3, tightens this further; the table is refreshed on each full backtest run — regenerate
+with the runner below for the latest.)*
 
 | Variant | n | Expectancy | Profit factor | Win | Max DD | Loss streak |
 |---|---:|---:|---:|---:|---:|---:|
