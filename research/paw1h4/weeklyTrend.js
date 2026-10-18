@@ -120,6 +120,27 @@ function buildWeeklyContext(w1cands, swingCfg) {
     return active;
   }
 
+  // Recent-candle break-of-structure confirmation (required before a pullback setup):
+  // the MOST RECENT completed trend-TF candle must close IN the trend direction AND
+  // break structure — close beyond the latest confirmed trend swing in that direction
+  // (bullish: close > prior swing high; bearish: close < prior swing low). Causal.
+  function bosConfirmAt(t) {
+    const b = biasAt(t);
+    if (b.bias !== 'BULLISH' && b.bias !== 'BEARISH') return { ok: false, bias: b.bias, reason: 'no_trend' };
+    let rc = null;
+    for (const c of w1cands) { if (c.closeMs <= t) rc = c; else break; }   // latest completed trend candle ≤ t
+    if (!rc) return { ok: false, bias: b.bias, reason: 'no_candle' };
+    const dir = b.bias === 'BULLISH' ? 1 : -1;
+    const bodyOk = dir > 0 ? rc.close > rc.open : rc.close < rc.open;        // candle in the trend direction
+    const conf = confirmedAsOf(pivots, t)
+      .filter((p) => p.type === (dir > 0 ? 'HIGH' : 'LOW') && p.extremeTimeMs < rc.openMs)
+      .sort((a, z) => a.extremeTimeMs - z.extremeTimeMs);
+    if (!conf.length) return { ok: false, bias: b.bias, bodyOk, reason: 'no_prior_swing' };
+    const level = conf[conf.length - 1].price;                              // latest prior structural swing
+    const bosOk = dir > 0 ? rc.close > level : rc.close < level;            // break of structure
+    return { ok: bodyOk && bosOk, bias: b.bias, bodyOk, bosOk, brokenLevel: level, candleOpenMs: rc.openMs, candleCloseMs: rc.closeMs, dir: dir > 0 ? 'UP' : 'DOWN' };
+  }
+
   // Confirmed weekly swing levels knowable as-of t (for target selection).
   function levelsAsOf(t) {
     const conf = confirmedAsOf(pivots, t);
@@ -129,7 +150,7 @@ function buildWeeklyContext(w1cands, swingCfg) {
     };
   }
 
-  return { pivots, episodes, biasAt, levelsAsOf };
+  return { pivots, episodes, biasAt, levelsAsOf, bosConfirmAt };
 }
 
 module.exports = { buildWeeklyContext, computeBias };

@@ -46,6 +46,7 @@ function buildFrame(h1, pair, asOfMs, cfg, tf) {
       bias: wk.bias,
       eligibilityStartUtc: iso(wk.eligibilityStartMs), eligibilityStartEat: wk.eligibilityStartMs && isFinite(wk.eligibilityStartMs) ? EAT(wk.eligibilityStartMs) : null,
       invalidationLevel: wk.invalidationLevel,
+      recentBos: (function () { const b = weekly.bosConfirmAt(asOfMs); return { ok: b.ok, bodyOk: b.bodyOk, bosOk: b.bosOk, brokenLevel: b.brokenLevel, dir: b.dir, candleCloseUtc: iso(b.candleCloseMs), reason: b.reason || null }; })(),
       lastHighs: (wk.highs || []).map((p) => ({ price: p.price, extremeUtc: iso(p.extremeTimeMs), confirmedUtc: iso(p.confirmedAtMs) })),
       lastLows: (wk.lows || []).map((p) => ({ price: p.price, extremeUtc: iso(p.extremeTimeMs), confirmedUtc: iso(p.confirmedAtMs) })),
     },

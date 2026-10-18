@@ -60,7 +60,15 @@ latest confirmed daily **higher low**; a completed daily close below it cancels 
 (latest defining high AND low both confirmed after the invalidation) — no reactivation from
 unchanged pivots.
 
-**H1 buy sequence (sell mirrored):** A) daily BULLISH → B) a new H1 pullback of two descending
+**Recent-candle break-of-structure precondition (v1.1):** a pullback setup is only *sought* when
+the **most recent completed D1 candle** closes **in the trend direction** (bullish body in a
+bullish trend) **and** **breaks structure** — its close is beyond the latest confirmed daily swing
+in the trend direction (bullish: close > prior swing high; bearish: close < prior swing low). This
+gates `WAITING_FOR_PULLBACK → PULLBACK_ACTIVE`. (Shared with Weekly→H4, which uses the recent W1
+candle.) The pullback itself remains on the entry timeframe (H1 here / H4 there).
+
+**H1 buy sequence (sell mirrored):** A) daily BULLISH *and the recent-D1-candle BOS precondition
+holds* → B) a new H1 pullback of two descending
 confirmed highs + two descending confirmed lows, its initial extreme after eligibility began →
 C) freeze the latest H1 lower high; a completed H1 close above it = **FIRST_BREAK**; freeze the
 lowest low of the pullback → D) after the break, a new confirmed H1 swing high, then a confirmed
@@ -100,34 +108,38 @@ Data: stored **H1** for the 28 majors, **2025-05-19 → 2026-10-16 (~17 months)*
 Economics **mid-only, estimated** (spread 1.2p, slippage 0.5p, 2p buffer; 2× sensitivity run).
 Report: `docs/research/pad1h1_backtest.json`. Run: `node scripts/research/pad1h1-backtest.js`.
 
+Figures below are **v1.1 — with the recent-candle break-of-structure precondition** (§3). It makes
+both strategies much more selective (far fewer setups than v1.0).
+
 | Variant | n | Expectancy | Profit factor | Win | Max DD | Loss streak |
 |---|---:|---:|---:|---:|---:|---:|
-| **D1→H1 (daily-filtered)** | 21 | **+0.117R** | 1.17 | 33% | 7.30R | 7 |
+| **D1→H1 (daily-filtered)** | 7 | **+0.196R** | 1.27 | 29% | 5.18R | 5 |
 | Comparison: H1-only (no daily filter) | 27 | **−0.636R** | 0.26 | 11% | 17.17R | 11 |
 | Comparison: daily-structure baseline | 0 | — | — | — | — | — |
-| **OOS (last 40% of signals)** | 8 | **−0.029R** | 0.96 | 25% | 3.09R | 3 |
-| D1→H1 @ **doubled costs** | 20 | **−0.020R** | 0.97 | 35% | 7.11R | 6 |
-| Weekly→H4 (same period) | 14 | +0.202R | 1.36 | 43% | 4.74R | 5 |
-| **Combined, naïve pooled** (not independent) | 35 | +0.151R | 1.24 | 37% | 8.11R | 8 |
+| **OOS (last 40% of signals)** | 4 | +1.117R | 3.14 | 50% | 2.09R | 2 |
+| D1→H1 @ **doubled costs** | 7 | +0.088R | 1.11 | 29% | 5.35R | 5 |
+| Weekly→H4 (same period) | 2 | −0.209R | 0.59 | 50% | 1.01R | 1 |
+| **Combined, naïve pooled** (not independent) | 9 | +0.107R | 1.15 | 33% | 5.18R | 5 |
 
-Rejections (daily): `rr_below_min` 257, `no_target` 71 — the 2:1 gate against the *nearest*
-opposing daily level is the dominant filter, so very few setups qualify.
+Rejections (daily): `rr_below_min` 63, `no_target` 40 — the BOS precondition removes most pullbacks
+up front, and the 2:1 gate against the *nearest* opposing daily level filters most of the rest.
 
 **Honest read:**
 - The **daily filter clearly helps**: unfiltered H1 continuation is sharply negative
-  (−0.64R, PF 0.26) while the daily-filtered version is marginally positive **in-sample**.
-- But the in-sample edge **does not survive out-of-sample** (−0.03R, PF 0.96) and **evaporates
-  under doubled costs** (−0.02R). Win rate is low (33%); the method relies on a few large R wins.
-- **Sample is far too small** (21 trades / 17 months / 28 pairs) to conclude anything. Treat all
-  of it as **exploratory**. No profitability is claimed; nothing here earns a forecasting display.
+  (−0.64R, PF 0.26) while the daily-filtered version is positive in-sample (+0.20R).
+- The **recent-candle BOS precondition** (v1.1) cut trades from 21 → **7** and lifted per-trade
+  expectancy — fewer, cleaner setups — but it leaves **almost no sample**. The OOS slice is nominally
+  strong (**+1.12R**) but is only **4 trades**, so it is noise, not evidence.
+- **Sample is far too small** (7 trades / 17 months / 28 pairs) to conclude anything. Treat all of it
+  as **exploratory**. No profitability is claimed; nothing here earns a forecasting display.
 
 ## 6. Combined-portfolio caveat
 
 The two models read the **same price data** and overlap in time and currencies, so concurrent
 signals are **not independent confirmation** and must not be pooled as if uncorrelated. In this
-sample: **0** overlapping same-pair opportunities; shared-currency max concurrent exposure up to
-**2** (USD, CHF, AUD). Keep per-strategy results separate; the pooled row above is illustrative,
-not a portfolio claim.
+sample: **0** overlapping same-pair opportunities; shared-currency max concurrent exposure **1** per
+currency. Keep per-strategy results separate; the pooled row above is illustrative, not a portfolio
+claim.
 
 ## 7. UI
 

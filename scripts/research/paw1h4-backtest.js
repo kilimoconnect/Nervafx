@@ -15,7 +15,7 @@ const fs = require('fs');
 const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
 const { CONFIG, PAIRS } = require('../../research/paw1h4/config');
-const { loadH1 } = require('../../research/paw1h4/dbload');
+const { loadH1Parallel } = require('../../research/paw1h4/dbload');
 const { aggregates, runStrategy, runWeeklyBaseline } = require('../../research/paw1h4/pipeline');
 const { computeMetrics } = require('../../research/paw1h4/metrics');
 
@@ -48,7 +48,7 @@ async function main() {
   const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
   const pairs = process.argv[2] ? process.argv[2].split(',') : PAIRS;
   console.error(`Loading H1 for ${pairs.length} pairs…`);
-  const h1byPair = await loadH1(sb, pairs);
+  const h1byPair = await loadH1Parallel(sb, pairs, {}, 8);
 
   const audit = dataAudit(h1byPair);
   const strat = [], h4self = [], baseline = [], stratHighCost = [];

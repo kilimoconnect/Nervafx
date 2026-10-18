@@ -107,8 +107,11 @@ function runEngine(h4cands, weekly, cfg) {
 
     // ── (3) Progression ────────────────────────────────────────────────────────
     if (st.state === 'WAITING_FOR_PULLBACK') {
+      // Precondition: the most recent completed trend-TF candle must be a trend-direction
+      // break of structure (W1 for H4, D1 for H1). Default true if the context lacks it.
+      const bosOk = weekly.bosConfirmAt ? weekly.bosConfirmAt(closeMs).ok : true;
       // Two against-trend "descending" highs AND lows (pullback). Newest two of each.
-      if (highs.length >= 2 && lows.length >= 2) {
+      if (bosOk && highs.length >= 2 && lows.length >= 2) {
         const h = highs.slice(-2), l = lows.slice(-2);
         const descH = s * (h[1].price - h[0].price) < 0;   // newer high adverse vs older
         const descL = s * (l[1].price - l[0].price) < 0;

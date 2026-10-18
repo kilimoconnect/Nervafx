@@ -5,6 +5,8 @@
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }
   function n(x, d) { return x == null || !isFinite(x) ? '—' : Number(x).toFixed(d == null ? 5 : d); }
   function fmt(iso) { return iso ? String(iso).replace('T', ' ').replace('.000Z', 'Z') : '—'; }
+  // Human-readable label for state codes / reasons: "WAITING_FOR_PULLBACK" → "Waiting for pullback".
+  function pretty(s) { return String(s == null ? '' : s).toLowerCase().replace(/_/g, ' ').replace(/^./, function (c) { return c.toUpperCase(); }); }
 
   // timeframe labels (W1/H4 or D1/H1) — one renderer serves both strategies
   var TL = J.trendLabel || 'W1', EL = J.entryLabel || 'H4';
@@ -37,7 +39,7 @@
   // Side-by-side with the other strategy (if the page supplied window.NFX_CMP for the same pair).
   function renderComparison() {
     var C = window.NFX_CMP; if (!C || C.available === false || !C.weekly) return '';
-    var sttf = function (f) { return (f.h4.state || '—') + (f.h4.dir ? ' ' + f.h4.dir : ''); };
+    var sttf = function (f) { return (f.h4.state ? pretty(f.h4.state) : '—') + (f.h4.dir ? ' ' + f.h4.dir : ''); };
     var trf = function (f) { return f.suggestedTrade ? (f.suggestedTrade.dir + ' · R:R ' + f.suggestedTrade.rewardRisk + ':1') : (f.rejection ? ('no trade — ' + f.rejection.reason) : '—'); };
     return '<div class="card"><h2>Strategy comparison — same pair, same close</h2>' +
       '<table><thead><tr><th>Strategy</th><th>Trend bias</th><th>State</th><th>Suggested</th></tr></thead><tbody>' +
@@ -52,14 +54,16 @@
     '<div style="margin-bottom:8px"><span class="badge ' + (biasBadge[wk.bias] || 'b-mut') + '">' + wk.bias + '</span></div>' +
     '<div class="kv"><span>Eligibility began</span><span>' + fmt(wk.eligibilityStartUtc) + (wk.eligibilityStartEat ? ' <span class="mut">(' + esc(wk.eligibilityStartEat) + ')</span>' : '') + '</span></div>' +
     '<div class="kv"><span>Invalidation level</span><b class="num">' + n(wk.invalidationLevel) + '</b></div>' +
+    (function () { var r = wk.recentBos || {}; var ok = !!r.ok; return '<div class="kv"><span>Recent ' + TL + ' candle — trend BOS</span><span>' + (ok ? '<span class="badge b-up">✓ ' + (r.dir || '') + ' break</span>' : '<span class="badge b-warn">✗ ' + ((r.bodyOk === false) ? 'wrong-way candle' : (r.bosOk === false ? 'no break' : esc(pretty(r.reason) || 'n/a'))) + '</span>') + (r.brokenLevel != null ? ' <span class="mut num">@ ' + n(r.brokenLevel) + '</span>' : '') + '</span></div>'; })() +
+    '<div class="mut" style="font-size:11px;margin:2px 0 6px">A pullback is only sought when the most recent completed ' + TL + ' candle closes in the trend direction AND breaks structure.</div>' +
     '<div class="stmt"><div class="lbl">Last confirmed ' + TL + ' highs</div><table><thead><tr><th>Price</th><th>Extreme</th><th>Confirmed</th></tr></thead><tbody>' + levelRows(wk.lastHighs) + '</tbody></table></div>' +
     '<div class="stmt"><div class="lbl">Last confirmed ' + TL + ' lows</div><table><thead><tr><th>Price</th><th>Extreme</th><th>Confirmed</th></tr></thead><tbody>' + levelRows(wk.lastLows) + '</tbody></table></div>' +
     '</div>';
 
   var dirBadge = h4.dir === 'BUY' ? '<span class="badge b-up">BUY</span>' : h4.dir === 'SELL' ? '<span class="badge b-dn">SELL</span>' : '';
   var h4Card = '<div class="card"><h2>' + EL + ' continuation state</h2>' +
-    '<div style="margin-bottom:8px"><span class="badge b-mut">' + h4.state + '</span> ' + dirBadge + '</div>' +
-    '<div class="mut" style="font-size:12px;margin-bottom:8px">' + esc(STATE_TXT[h4.state] || '') + (h4.cancelReason ? ' <span class="neg">(' + esc(h4.cancelReason) + ')</span>' : '') + '</div>' +
+    '<div style="margin-bottom:8px"><span class="badge b-mut">' + esc(pretty(h4.state)) + '</span> ' + dirBadge + '</div>' +
+    '<div class="mut" style="font-size:12px;margin-bottom:8px">' + esc(STATE_TXT[h4.state] || '') + (h4.cancelReason ? ' <span class="neg">(' + esc(pretty(h4.cancelReason)) + ')</span>' : '') + '</div>' +
     '<div class="kv"><span>Break level (frozen LH/HL)</span><b class="num">' + n(h4.breakLevel) + '</b></div>' +
     '<div class="kv"><span>Pullback extreme (frozen)</span><b class="num">' + n(h4.pullbackExtreme) + '</b></div>' +
     '<div class="kv"><span>First break</span><span>' + fmt(h4.firstBreakUtc) + '</span></div>' +
@@ -79,7 +83,7 @@
       '<div class="kv"><span>Reward : Risk</span><b class="num">' + tr.rewardRisk + ' : 1</b></div>' +
       '<div class="kv"><span>Simulated exit</span><span>' + (tr.exit ? esc(tr.exit.reason) + ' @ ' + fmt(tr.exit.utc) : '—') + (tr.ambiguous ? ' <span class="neg">(stop-first, ambiguous bar)</span>' : '') + '</span></div>' +
       '<div class="kv"><span>Result</span><b class="num ' + (tr.R > 0 ? 'pos' : 'neg') + '">' + n(tr.R, 2) + 'R</b></div>'
-    ) : rej ? ('<div class="mut">No qualifying trade — <b>' + esc(rej.reason) + '</b>' + (rej.rewardRisk != null ? ' (R:R ' + rej.rewardRisk + ':1, below ' + 2 + ':1)' : '') + '.</div>')
+    ) : rej ? ('<div class="mut">No qualifying trade — <b>' + esc(pretty(rej.reason)) + '</b>' + (rej.rewardRisk != null ? ' (R:R ' + rej.rewardRisk + ':1, below ' + 2 + ':1)' : '') + '.</div>')
       : '<div class="mut">No continuation opportunity at this close.</div>') +
     '<div class="mut" style="margin-top:8px;font-size:11px">Hypothetical, mid-only economics with modelled spread/slippage; no order path; UNVALIDATED — no profitability claim.</div></div>';
 
@@ -141,10 +145,10 @@
       var badge = { BULLISH: 'b-up', BEARISH: 'b-dn' }[s.bias] || 'b-mut';
       var armed = s.prospect && s.prospect.ok;
       var rr = armed ? '<b class="pos">' + s.prospect.rr + ' : 1</b>' : (s.state === 'ARMED' ? '<span class="mut">no target</span>' : '—');
-      var recent = s.last ? (s.last.accepted ? ('<span class="' + ((s.last.R || 0) > 0 ? 'pos' : 'neg') + '">' + (s.last.R != null ? s.last.R.toFixed(2) + 'R' : (s.last.rr + ':1')) + '</span>') : ('<span class="mut">' + esc(s.last.reason || '—') + '</span>')) : '—';
+      var recent = s.last ? (s.last.accepted ? ('<span class="' + ((s.last.R || 0) > 0 ? 'pos' : 'neg') + '">' + (s.last.R != null ? s.last.R.toFixed(2) + 'R' : (s.last.rr + ':1')) + '</span>') : ('<span class="mut">' + esc(pretty(s.last.reason) || '—') + '</span>')) : '—';
       var dirB = s.dir === 'BUY' ? '<span class="badge b-up">BUY</span>' : s.dir === 'SELL' ? '<span class="badge b-dn">SELL</span>' : '';
       var sel = s.pair === cur ? ' style="background:rgba(59,130,246,.12);cursor:pointer" ' : ' style="cursor:pointer" ';
-      return '<tr class="scanrow" data-pair="' + s.pair + '"' + sel + '><td><b>' + s.pair.replace('_', '/') + '</b></td><td><span class="badge ' + badge + '">' + s.bias + '</span></td><td>' + esc(s.state) + (armed ? ' <span class="pos">★</span>' : '') + '</td><td>' + dirB + '</td><td class="num">' + rr + '</td><td class="num">' + recent + '</td></tr>';
+      return '<tr class="scanrow" data-pair="' + s.pair + '"' + sel + '><td><b>' + s.pair.replace('_', '/') + '</b></td><td><span class="badge ' + badge + '">' + s.bias + '</span></td><td>' + esc(pretty(s.state)) + (armed ? ' <span class="pos">★</span>' : '') + '</td><td>' + dirB + '</td><td class="num">' + rr + '</td><td class="num">' + recent + '</td></tr>';
     }).join('');
     var nArmed = scan.filter(function (s) { return s.prospect && s.prospect.ok; }).length;
     host.innerHTML = '<div class="card"><h2>Scan — all ' + scan.length + ' pairs · best setups first' + (nArmed ? ' · <span class="pos">' + nArmed + ' ready</span>' : '') + '</h2>' +

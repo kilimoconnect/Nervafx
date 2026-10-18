@@ -16,7 +16,7 @@ require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
-const { loadH1 } = require('../../research/paw1h4/dbload');
+const { loadH1Parallel } = require('../../research/paw1h4/dbload');
 const agg = require('../../research/paw1h4/aggregate');
 const { computeMetrics } = require('../../research/paw1h4/metrics');
 const d1h1 = require('../../research/pad1h1');
@@ -62,7 +62,7 @@ async function main() {
   const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
   const pairs = process.argv[2] ? process.argv[2].split(',') : PAIRS;
   console.error(`Loading H1 for ${pairs.length} pairs…`);
-  const h1byPair = await loadH1(sb, pairs);
+  const h1byPair = await loadH1Parallel(sb, pairs, {}, 8);
 
   const d1Strat = [], d1Self = [], d1Base = [], w4Strat = [], d1HighCost = [];
   const highCost = Object.assign({}, CONFIG, { execution: Object.assign({}, CONFIG.execution, { spreadPips: CONFIG.execution.spreadPips * 2, slippagePips: CONFIG.execution.slippagePips * 2 }) });

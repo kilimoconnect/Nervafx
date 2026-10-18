@@ -57,3 +57,24 @@ test('UNAVAILABLE with insufficient confirmed structure', () => {
   const wk = buildWeeklyContext(weeks(BULL.slice(0, 6)), cfg);
   assert.equal(wk.biasAt(closeOf(5)).bias === 'BULLISH', false);
 });
+
+test('recent-candle BOS: bullish trend + up candle breaking the prior swing high confirms', () => {
+  // BULL fixture is bullish; append a strong bullish week closing above the last swing high.
+  const wk0 = buildWeeklyContext(weeks(BULL), cfg);
+  const lastHigh = wk0.biasAt(closeOf(10)).highs ? null : null;
+  const rows = BULL.concat([[15.2, 13.0, 15.0]]);   // week11: bullish body, closes 15.0 > last high 14.5 (BOS up)
+  const wk = buildWeeklyContext(weeks(rows), cfg);
+  const b = wk.bosConfirmAt(closeOf(12));
+  assert.equal(b.bias, 'BULLISH');
+  assert.equal(b.bodyOk, true);
+  assert.equal(b.bosOk, true);
+  assert.equal(b.ok, true);
+});
+
+test('recent-candle BOS fails when the latest candle closes against the trend', () => {
+  const rows = BULL.concat([[14.9, 12.0, 12.2]]);   // bearish body in a bullish trend
+  const wk = buildWeeklyContext(weeks(rows), cfg);
+  const b = wk.bosConfirmAt(closeOf(12));
+  assert.equal(b.bodyOk, false);
+  assert.equal(b.ok, false);
+});

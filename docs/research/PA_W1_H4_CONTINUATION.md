@@ -12,7 +12,10 @@ they are identical except Weekly replaces Daily and H4 replaces H1).
 - Config: `PA_W1_H4_CONTINUATION` / `paw1h4-1.0.0` (`research/paw1h4/config.js`).
 
 ## Rules
-Identical to PA_D1_H1_CONTINUATION §3 with Weekly/H4 substituted: strict 2-2 fractal swings;
+Identical to PA_D1_H1_CONTINUATION §3 with Weekly/H4 substituted, **including the recent-candle
+break-of-structure precondition** (the most recent completed **W1** candle must close in the trend
+direction and break the prior weekly structural swing before an H4 pullback is sought): strict 2-2
+fractal swings;
 weekly structural trend + higher-low/lower-high invalidation with no-reactivation-from-old-pivots;
 H4 pullback → first break → retest structure → continuation trigger; 10-state lifecycle with
 cancellation-priority, 30-H4-bar expiry, one-per-episode, no-backdate; trade entry/stop, nearest
@@ -29,18 +32,21 @@ incl. invalidation & no-reactivation, trade sim, metrics, as-of causality). M15 
 Report: `docs/research/paw1h4_backtest.json`; run `node scripts/research/paw1h4-backtest.js`.
 Economics mid-only estimated.
 
+Figures are **v1.1 — with the recent-W1-candle break-of-structure precondition**.
+
 | Variant | n | Expectancy | PF | Win | Max DD | Streak |
 |---|---:|---:|---:|---:|---:|---:|
-| **Weekly-filtered** | 14 | +0.202R | 1.36 | 43% | 4.74R | 5 |
+| **Weekly-filtered** | 2 | −0.209R | 0.59 | 50% | 1.01R | 1 |
 | H4-only (no weekly filter) | 11 | +0.545R | 2.17 | 55% | 2.05R | 2 |
 | Weekly-structure baseline | 0 | — | — | — | — | — |
-| OOS (last 40%) | 5 | +0.237R | 1.57 | 60% | 1.05R | 1 |
-| @ doubled costs | 14 | +0.150R | 1.26 | 43% | 4.91R | 5 |
+| OOS (last 40%) | 2 | −0.209R | 0.59 | 50% | 1.01R | 1 |
+| @ doubled costs | 2 | −0.243R | 0.52 | 50% | 1.02R | 1 |
 
-**Honest read:** marginally positive in-sample and holds its (tiny) OOS slice, but with only
-**14 trades** it is not remotely significant. Notably the **unfiltered H4** variant scored better
-here — i.e. the weekly filter did not add measurable value on this sample (opposite of the D1→H1
-result). `rr_below_min` dominates rejections. Exploratory only; no profitability claimed.
+**Honest read:** the recent-W1-candle BOS precondition is extremely restrictive on the weekly
+timeframe — it leaves just **2 trades** in 17 months (negative). That is **no sample at all**; nothing
+can be concluded. The unfiltered H4 variant (11 trades, +0.55R) only shows that most of the activity
+lives below the weekly structure. Exploratory only; no profitability claimed. (The gate is more
+productive on D1→H1 — see that doc — but still far too few trades.)
 
 ## UI
 `/weekly-h4` (`public/paw1h4.html`, API `/api/paw1h4`): W1 + H4 charts with swing markers and
