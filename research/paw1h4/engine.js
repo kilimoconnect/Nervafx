@@ -123,8 +123,9 @@ function runEngine(h4cands, weekly, cfg) {
       }
     }
     if (st.state === 'PULLBACK_ACTIVE') {
-      // keep extending the pullback extreme with completed candles
-      st.pullbackExtreme = extremeSince(h4cands, st.pullbackStartMs, closeMs, st.s);
+      // keep extending the pullback extreme with this completed candle (O(1))
+      const v = candleAdverse(s, c);
+      if (st.pullbackExtreme == null || s * (v - st.pullbackExtreme) < 0) st.pullbackExtreme = v;
       if (fav(s, c.close, st.breakLevel)) {               // completed close breaks the level
         st.state = 'FIRST_BREAK'; st.firstBreakMs = closeMs; st.firstBreakIdx = j;
         // freeze the pullback extreme at the break

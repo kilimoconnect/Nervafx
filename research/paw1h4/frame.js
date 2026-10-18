@@ -17,9 +17,12 @@ const { pipSize } = require('./config');
 const EAT = (ms) => new Date(ms + 3 * 3600000).toISOString().replace('.000Z', ' EAT').replace('T', ' ');
 const iso = (ms) => (ms == null || !isFinite(ms) ? null : new Date(ms).toISOString());
 
-function buildFrame(h1, pair, asOfMs, cfg) {
-  const h4 = agg.h4(h1, asOfMs);
-  const w1 = agg.w1(h1, asOfMs);
+const TF_W1H4 = { entry: (h1, a) => agg.h4(h1, a), trend: (h1, a) => agg.w1(h1, a), entryLabel: 'H4', trendLabel: 'W1' };
+
+function buildFrame(h1, pair, asOfMs, cfg, tf) {
+  tf = tf || TF_W1H4;
+  const h4 = tf.entry(h1, asOfMs);       // entry-TF candles (H4 or H1)
+  const w1 = tf.trend(h1, asOfMs);       // trend-TF candles (W1 or D1)
   const weekly = buildWeeklyContext(w1, cfg.swing);
   const wk = weekly.biasAt(asOfMs);
   const eng = runEngine(h4, weekly, Object.assign({}, cfg, { pair }));
@@ -37,6 +40,7 @@ function buildFrame(h1, pair, asOfMs, cfg) {
 
   return {
     strategyId: cfg.strategyId, version: cfg.version, pair,
+    trendLabel: tf.trendLabel, entryLabel: tf.entryLabel,
     asOfUtc: iso(asOfMs), asOfEat: EAT(asOfMs),
     weekly: {
       bias: wk.bias,
@@ -81,4 +85,4 @@ function buildFrame(h1, pair, asOfMs, cfg) {
   };
 }
 
-module.exports = { buildFrame };
+module.exports = { buildFrame, TF_W1H4 };

@@ -13,9 +13,12 @@ const { H1_MS, H4_MS, DAY_MS, WEEK_MS } = require('./config');
 /** Start of the H4 bucket (00,04,08,12,16,20 UTC) containing ms. */
 function h4Start(ms) { return Math.floor(ms / H4_MS) * H4_MS; }
 
+/** Start of the UTC day (00:00 UTC) containing ms. */
+function dayStart(ms) { return Math.floor(ms / DAY_MS) * DAY_MS; }
+
 /** Start of the UTC week (Monday 00:00 UTC) containing ms. */
 function weekStart(ms) {
-  const dayMidnight = Math.floor(ms / DAY_MS) * DAY_MS;     // exact UTC midnight (epoch is UTC)
+  const dayMidnight = dayStart(ms);                          // exact UTC midnight (epoch is UTC)
   const dow = new Date(dayMidnight).getUTCDay();            // 0=Sun … 6=Sat
   const daysSinceMon = (dow + 6) % 7;                       // Mon=0 … Sun=6
   return dayMidnight - daysSinceMon * DAY_MS;
@@ -73,4 +76,10 @@ function h4(h1, asOfMs) { return aggregate(h1, h4Start, H4_MS, 4, asOfMs); }
 /** Completed W1 candles as-of asOfMs (nominal ~120 trading H1 per week). */
 function w1(h1, asOfMs) { return aggregate(h1, weekStart, WEEK_MS, 120, asOfMs); }
 
-module.exports = { h4Start, weekStart, aggregate, h4, w1, H4_MS, WEEK_MS };
+/** Completed D1 candles as-of asOfMs (nominal ~24 H1 per UTC day; weekends → partial/absent). */
+function d1(h1, asOfMs) { return aggregate(h1, dayStart, DAY_MS, 24, asOfMs); }
+
+/** Completed H1 candles as-of asOfMs (stored directly; just filter to closed ≤ t). */
+function h1AsOf(h1, asOfMs) { const t = asOfMs == null ? Infinity : asOfMs; return h1.filter((c) => (c.closeMs != null ? c.closeMs : c.openMs + H1_MS) <= t).map((c) => ({ openMs: c.openMs, closeMs: c.closeMs != null ? c.closeMs : c.openMs + H1_MS, open: +c.open, high: +c.high, low: +c.low, close: +c.close, h1Count: 1, nominalH1: 1, coveragePct: 100, partial: false, complete: true })); }
+
+module.exports = { h4Start, weekStart, dayStart, aggregate, h4, w1, d1, h1AsOf, H4_MS, WEEK_MS, DAY_MS };

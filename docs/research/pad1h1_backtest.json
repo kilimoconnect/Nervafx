@@ -1,0 +1,966 @@
+{
+  "strategyId": "PA_D1_H1_CONTINUATION",
+  "version": "pad1h1-1.0.0",
+  "generatedAt": "2026-10-18T04:36:14.748Z",
+  "economics": "MID-ONLY ESTIMATED — spread/slippage/commission from config, not broker fills",
+  "sampleNote": "Rules frozen a priori (price action only, not tuned on returns). History is short for a daily-trend strategy; EXPLORATORY. OOS slice = last 40% of signals by date.",
+  "config": {
+    "strategyId": "PA_D1_H1_CONTINUATION",
+    "version": "pad1h1-1.0.0",
+    "baseTimeframe": "H1",
+    "baseIntervalMs": 3600000,
+    "swing": {
+      "left": 2,
+      "right": 2
+    },
+    "expiryH4Bars": 30,
+    "exitH4Bars": 30,
+    "oneOpportunityPerEpisode": true,
+    "minRewardRisk": 2,
+    "equityRiskPct": 0.25,
+    "maxPortfolioRiskPct": 2,
+    "execution": {
+      "bufferPips": 2,
+      "spreadPips": 1.2,
+      "commissionPips": 0,
+      "slippagePips": 0.5,
+      "financingPipsPerBar": 0,
+      "stopFirstOnAmbiguity": true
+    },
+    "requireFullBuckets": false,
+    "trendTimeframe": "D1",
+    "entryTimeframe": "H1"
+  },
+  "dataAudit": {
+    "AUD_CAD": {
+      "h1": 8815,
+      "d1": 443,
+      "d1partial": 152,
+      "firstH1": "2025-05-19T13:00:00.000Z",
+      "lastH1": "2026-10-16T19:00:00.000Z"
+    },
+    "AUD_CHF": {
+      "h1": 8815,
+      "d1": 443,
+      "d1partial": 152,
+      "firstH1": "2025-05-19T13:00:00.000Z",
+      "lastH1": "2026-10-16T19:00:00.000Z"
+    },
+    "AUD_JPY": {
+      "h1": 8815,
+      "d1": 443,
+      "d1partial": 152,
+      "firstH1": "2025-05-19T13:00:00.000Z",
+      "lastH1": "2026-10-16T19:00:00.000Z"
+    },
+    "AUD_NZD": {
+      "h1": 8815,
+      "d1": 443,
+      "d1partial": 152,
+      "firstH1": "2025-05-19T13:00:00.000Z",
+      "lastH1": "2026-10-16T19:00:00.000Z"
+    },
+    "AUD_USD": {
+      "h1": 8815,
+      "d1": 443,
+      "d1partial": 152,
+      "firstH1": "2025-05-19T13:00:00.000Z",
+      "lastH1": "2026-10-16T19:00:00.000Z"
+    },
+    "CAD_CHF": {
+      "h1": 8815,
+      "d1": 443,
+      "d1partial": 152,
+      "firstH1": "2025-05-19T13:00:00.000Z",
+      "lastH1": "2026-10-16T19:00:00.000Z"
+    },
+    "CAD_JPY": {
+      "h1": 8815,
+      "d1": 443,
+      "d1partial": 152,
+      "firstH1": "2025-05-19T13:00:00.000Z",
+      "lastH1": "2026-10-16T19:00:00.000Z"
+    },
+    "CHF_JPY": {
+      "h1": 8815,
+      "d1": 443,
+      "d1partial": 152,
+      "firstH1": "2025-05-19T13:00:00.000Z",
+      "lastH1": "2026-10-16T19:00:00.000Z"
+    },
+    "EUR_AUD": {
+      "h1": 8815,
+      "d1": 443,
+      "d1partial": 152,
+      "firstH1": "2025-05-19T13:00:00.000Z",
+      "lastH1": "2026-10-16T19:00:00.000Z"
+    },
+    "EUR_CAD": {
+      "h1": 8815,
+      "d1": 443,
+      "d1partial": 152,
+      "firstH1": "2025-05-19T13:00:00.000Z",
+      "lastH1": "2026-10-16T19:00:00.000Z"
+    },
+    "EUR_CHF": {
+      "h1": 8815,
+      "d1": 443,
+      "d1partial": 152,
+      "firstH1": "2025-05-19T13:00:00.000Z",
+      "lastH1": "2026-10-16T19:00:00.000Z"
+    },
+    "EUR_GBP": {
+      "h1": 8815,
+      "d1": 443,
+      "d1partial": 152,
+      "firstH1": "2025-05-19T13:00:00.000Z",
+      "lastH1": "2026-10-16T19:00:00.000Z"
+    },
+    "EUR_JPY": {
+      "h1": 8815,
+      "d1": 443,
+      "d1partial": 152,
+      "firstH1": "2025-05-19T13:00:00.000Z",
+      "lastH1": "2026-10-16T19:00:00.000Z"
+    },
+    "EUR_NZD": {
+      "h1": 8815,
+      "d1": 443,
+      "d1partial": 152,
+      "firstH1": "2025-05-19T13:00:00.000Z",
+      "lastH1": "2026-10-16T19:00:00.000Z"
+    },
+    "EUR_USD": {
+      "h1": 8815,
+      "d1": 443,
+      "d1partial": 152,
+      "firstH1": "2025-05-19T13:00:00.000Z",
+      "lastH1": "2026-10-16T19:00:00.000Z"
+    },
+    "GBP_AUD": {
+      "h1": 8815,
+      "d1": 443,
+      "d1partial": 152,
+      "firstH1": "2025-05-19T13:00:00.000Z",
+      "lastH1": "2026-10-16T19:00:00.000Z"
+    },
+    "GBP_CAD": {
+      "h1": 8815,
+      "d1": 443,
+      "d1partial": 152,
+      "firstH1": "2025-05-19T13:00:00.000Z",
+      "lastH1": "2026-10-16T19:00:00.000Z"
+    },
+    "GBP_CHF": {
+      "h1": 8815,
+      "d1": 443,
+      "d1partial": 152,
+      "firstH1": "2025-05-19T13:00:00.000Z",
+      "lastH1": "2026-10-16T19:00:00.000Z"
+    },
+    "GBP_JPY": {
+      "h1": 8815,
+      "d1": 443,
+      "d1partial": 152,
+      "firstH1": "2025-05-19T13:00:00.000Z",
+      "lastH1": "2026-10-16T19:00:00.000Z"
+    },
+    "GBP_NZD": {
+      "h1": 8815,
+      "d1": 443,
+      "d1partial": 152,
+      "firstH1": "2025-05-19T13:00:00.000Z",
+      "lastH1": "2026-10-16T19:00:00.000Z"
+    },
+    "GBP_USD": {
+      "h1": 8815,
+      "d1": 443,
+      "d1partial": 152,
+      "firstH1": "2025-05-19T13:00:00.000Z",
+      "lastH1": "2026-10-16T19:00:00.000Z"
+    },
+    "NZD_CAD": {
+      "h1": 8815,
+      "d1": 443,
+      "d1partial": 152,
+      "firstH1": "2025-05-19T13:00:00.000Z",
+      "lastH1": "2026-10-16T19:00:00.000Z"
+    },
+    "NZD_CHF": {
+      "h1": 8815,
+      "d1": 443,
+      "d1partial": 152,
+      "firstH1": "2025-05-19T13:00:00.000Z",
+      "lastH1": "2026-10-16T19:00:00.000Z"
+    },
+    "NZD_JPY": {
+      "h1": 8815,
+      "d1": 443,
+      "d1partial": 152,
+      "firstH1": "2025-05-19T13:00:00.000Z",
+      "lastH1": "2026-10-16T19:00:00.000Z"
+    },
+    "NZD_USD": {
+      "h1": 8815,
+      "d1": 443,
+      "d1partial": 152,
+      "firstH1": "2025-05-19T13:00:00.000Z",
+      "lastH1": "2026-10-16T19:00:00.000Z"
+    },
+    "USD_CAD": {
+      "h1": 8815,
+      "d1": 443,
+      "d1partial": 152,
+      "firstH1": "2025-05-19T13:00:00.000Z",
+      "lastH1": "2026-10-16T19:00:00.000Z"
+    },
+    "USD_CHF": {
+      "h1": 8815,
+      "d1": 443,
+      "d1partial": 152,
+      "firstH1": "2025-05-19T13:00:00.000Z",
+      "lastH1": "2026-10-16T19:00:00.000Z"
+    },
+    "USD_JPY": {
+      "h1": 8815,
+      "d1": 443,
+      "d1partial": 152,
+      "firstH1": "2025-05-19T13:00:00.000Z",
+      "lastH1": "2026-10-16T19:00:00.000Z"
+    }
+  },
+  "results": {
+    "strategy_daily": {
+      "opportunities": 349,
+      "accepted": 21,
+      "rejected": 328,
+      "rejectByReason": {
+        "rr_below_min": 257,
+        "no_target": 71
+      },
+      "wins": 7,
+      "losses": 14,
+      "winRate": 0.3333,
+      "expectancyR": 0.1167,
+      "totalR": 2.4509,
+      "profitFactor": 1.1685,
+      "maxDrawdownR": 7.3048,
+      "maxLosingStreak": 7,
+      "avgHoldBars": 12.81,
+      "ambiguousExits": 0,
+      "maxConcurrentExposure": 2,
+      "concentrationByPair": {
+        "AUD_CHF": {
+          "n": 1,
+          "R": -1.0764
+        },
+        "AUD_JPY": {
+          "n": 1,
+          "R": -1.0238
+        },
+        "AUD_USD": {
+          "n": 2,
+          "R": -2.0882
+        },
+        "EUR_AUD": {
+          "n": 3,
+          "R": -3.0950999999999995
+        },
+        "EUR_USD": {
+          "n": 3,
+          "R": 3.6078
+        },
+        "GBP_AUD": {
+          "n": 1,
+          "R": -1.0286
+        },
+        "GBP_CAD": {
+          "n": 1,
+          "R": 2.1466
+        },
+        "GBP_CHF": {
+          "n": 1,
+          "R": 2.1333
+        },
+        "GBP_JPY": {
+          "n": 1,
+          "R": -1.028
+        },
+        "GBP_NZD": {
+          "n": 2,
+          "R": -2.0393999999999997
+        },
+        "NZD_CAD": {
+          "n": 1,
+          "R": -1.084
+        },
+        "USD_CAD": {
+          "n": 2,
+          "R": 1.597
+        },
+        "USD_CHF": {
+          "n": 2,
+          "R": 5.4297
+        }
+      },
+      "concentrationByMonth": {
+        "2026-10": {
+          "n": 2,
+          "R": 2.7593
+        },
+        "2026-01": {
+          "n": 1,
+          "R": -1.0238
+        },
+        "2025-12": {
+          "n": 2,
+          "R": -2.1043000000000003
+        },
+        "2026-02": {
+          "n": 4,
+          "R": 1.9234
+        },
+        "2025-09": {
+          "n": 2,
+          "R": -2.0509
+        },
+        "2026-04": {
+          "n": 2,
+          "R": -2.0609
+        },
+        "2026-09": {
+          "n": 1,
+          "R": -1.0236
+        },
+        "2026-07": {
+          "n": 2,
+          "R": 1.1179999999999999
+        },
+        "2026-03": {
+          "n": 1,
+          "R": 2.1333
+        },
+        "2026-06": {
+          "n": 1,
+          "R": -1.028
+        },
+        "2025-10": {
+          "n": 1,
+          "R": -1.084
+        },
+        "2025-06": {
+          "n": 2,
+          "R": 4.8924
+        }
+      }
+    },
+    "comparison_h1_only_no_daily_filter": {
+      "opportunities": 501,
+      "accepted": 27,
+      "rejected": 474,
+      "rejectByReason": {
+        "rr_below_min": 268,
+        "no_target": 206
+      },
+      "wins": 3,
+      "losses": 24,
+      "winRate": 0.1111,
+      "expectancyR": -0.636,
+      "totalR": -17.1729,
+      "profitFactor": 0.2632,
+      "maxDrawdownR": 17.1729,
+      "maxLosingStreak": 11,
+      "avgHoldBars": 15.89,
+      "ambiguousExits": 0,
+      "maxConcurrentExposure": 2,
+      "concentrationByPair": {
+        "AUD_CHF": {
+          "n": 2,
+          "R": -2.1069
+        },
+        "AUD_JPY": {
+          "n": 1,
+          "R": -1.0238
+        },
+        "AUD_NZD": {
+          "n": 1,
+          "R": -1.088
+        },
+        "AUD_USD": {
+          "n": 1,
+          "R": -0.1663
+        },
+        "CAD_JPY": {
+          "n": 4,
+          "R": -0.7446999999999999
+        },
+        "CHF_JPY": {
+          "n": 2,
+          "R": -2.0425000000000004
+        },
+        "EUR_CHF": {
+          "n": 1,
+          "R": -1.1833
+        },
+        "EUR_GBP": {
+          "n": 2,
+          "R": 0.006299999999999972
+        },
+        "EUR_JPY": {
+          "n": 2,
+          "R": -2.0645
+        },
+        "EUR_NZD": {
+          "n": 1,
+          "R": -1.0327
+        },
+        "GBP_AUD": {
+          "n": 2,
+          "R": 1.5169999999999997
+        },
+        "GBP_JPY": {
+          "n": 4,
+          "R": -4.082800000000001
+        },
+        "GBP_USD": {
+          "n": 1,
+          "R": -0.3129
+        },
+        "USD_CAD": {
+          "n": 1,
+          "R": -1.0489
+        },
+        "USD_CHF": {
+          "n": 1,
+          "R": -1.0462
+        },
+        "USD_JPY": {
+          "n": 1,
+          "R": -0.7527
+        }
+      },
+      "concentrationByMonth": {
+        "2025-06": {
+          "n": 4,
+          "R": -3.9138
+        },
+        "2026-01": {
+          "n": 4,
+          "R": -0.6157999999999999
+        },
+        "2025-12": {
+          "n": 1,
+          "R": -1.088
+        },
+        "2025-07": {
+          "n": 5,
+          "R": -0.01110000000000011
+        },
+        "2026-05": {
+          "n": 2,
+          "R": -2.0759
+        },
+        "2026-07": {
+          "n": 1,
+          "R": -1.1048
+        },
+        "2025-08": {
+          "n": 2,
+          "R": -2.1561000000000003
+        },
+        "2026-02": {
+          "n": 2,
+          "R": -2.2295
+        },
+        "2025-11": {
+          "n": 3,
+          "R": -0.915
+        },
+        "2025-05": {
+          "n": 3,
+          "R": -3.0629
+        }
+      }
+    },
+    "comparison_daily_structure_baseline": {
+      "opportunities": 124,
+      "accepted": 0,
+      "rejected": 124,
+      "rejectByReason": {
+        "no_target": 122,
+        "rr_below_min": 2
+      },
+      "wins": 0,
+      "losses": 0,
+      "winRate": 0,
+      "expectancyR": 0,
+      "totalR": 0,
+      "profitFactor": 0,
+      "maxDrawdownR": 0,
+      "maxLosingStreak": 0,
+      "avgHoldBars": 0,
+      "ambiguousExits": 0,
+      "maxConcurrentExposure": 0,
+      "concentrationByPair": {},
+      "concentrationByMonth": {}
+    },
+    "strategy_daily_OOS_last40pct": {
+      "oosSplitAt": "2026-03-31T04:00:00.000Z",
+      "opportunities": 140,
+      "accepted": 8,
+      "rejected": 132,
+      "rejectByReason": {
+        "rr_below_min": 126,
+        "no_target": 6
+      },
+      "wins": 2,
+      "losses": 6,
+      "winRate": 0.25,
+      "expectancyR": -0.0294,
+      "totalR": -0.2352,
+      "profitFactor": 0.9622,
+      "maxDrawdownR": 3.0889,
+      "maxLosingStreak": 3,
+      "avgHoldBars": 13,
+      "ambiguousExits": 0,
+      "maxConcurrentExposure": 1,
+      "concentrationByPair": {
+        "AUD_CHF": {
+          "n": 1,
+          "R": -1.0764
+        },
+        "EUR_AUD": {
+          "n": 2,
+          "R": -2.0609
+        },
+        "EUR_USD": {
+          "n": 2,
+          "R": 2.8121
+        },
+        "GBP_AUD": {
+          "n": 1,
+          "R": -1.0286
+        },
+        "GBP_CAD": {
+          "n": 1,
+          "R": 2.1466
+        },
+        "GBP_JPY": {
+          "n": 1,
+          "R": -1.028
+        }
+      },
+      "concentrationByMonth": {
+        "2026-10": {
+          "n": 2,
+          "R": 2.7593
+        },
+        "2026-04": {
+          "n": 2,
+          "R": -2.0609
+        },
+        "2026-09": {
+          "n": 1,
+          "R": -1.0236
+        },
+        "2026-07": {
+          "n": 2,
+          "R": 1.1179999999999999
+        },
+        "2026-06": {
+          "n": 1,
+          "R": -1.028
+        }
+      }
+    },
+    "cost_sensitivity_doubled_costs": {
+      "opportunities": 349,
+      "accepted": 20,
+      "rejected": 329,
+      "rejectByReason": {
+        "rr_below_min": 256,
+        "no_target": 73
+      },
+      "wins": 7,
+      "losses": 13,
+      "winRate": 0.35,
+      "expectancyR": -0.0204,
+      "totalR": -0.4088,
+      "profitFactor": 0.9707,
+      "maxDrawdownR": 7.1097,
+      "maxLosingStreak": 6,
+      "avgHoldBars": 13.55,
+      "ambiguousExits": 0,
+      "maxConcurrentExposure": 2,
+      "concentrationByPair": {
+        "AUD_CHF": {
+          "n": 1,
+          "R": -1.1419
+        },
+        "AUD_JPY": {
+          "n": 1,
+          "R": -1.0465
+        },
+        "AUD_USD": {
+          "n": 1,
+          "R": -1.0887
+        },
+        "EUR_AUD": {
+          "n": 3,
+          "R": -3.184
+        },
+        "EUR_USD": {
+          "n": 3,
+          "R": 3.1427
+        },
+        "GBP_AUD": {
+          "n": 1,
+          "R": -1.0557
+        },
+        "GBP_CHF": {
+          "n": 1,
+          "R": 2
+        },
+        "GBP_JPY": {
+          "n": 1,
+          "R": -1.0545
+        },
+        "GBP_NZD": {
+          "n": 2,
+          "R": -2.0772
+        },
+        "NZD_CAD": {
+          "n": 1,
+          "R": -1.1549
+        },
+        "USD_CAD": {
+          "n": 3,
+          "R": 1.2227
+        },
+        "USD_CHF": {
+          "n": 2,
+          "R": 5.0291999999999994
+        }
+      },
+      "concentrationByMonth": {
+        "2026-10": {
+          "n": 2,
+          "R": 2.4072000000000005
+        },
+        "2026-01": {
+          "n": 1,
+          "R": -1.0465
+        },
+        "2025-12": {
+          "n": 2,
+          "R": -2.1982
+        },
+        "2025-09": {
+          "n": 2,
+          "R": -2.0989
+        },
+        "2026-04": {
+          "n": 2,
+          "R": -2.1178999999999997
+        },
+        "2026-02": {
+          "n": 3,
+          "R": 2.5725999999999996
+        },
+        "2026-09": {
+          "n": 1,
+          "R": -1.046
+        },
+        "2026-07": {
+          "n": 2,
+          "R": -0.9654
+        },
+        "2026-03": {
+          "n": 1,
+          "R": 2
+        },
+        "2026-06": {
+          "n": 1,
+          "R": -1.0545
+        },
+        "2025-10": {
+          "n": 1,
+          "R": -1.1549
+        },
+        "2025-06": {
+          "n": 2,
+          "R": 4.293699999999999
+        }
+      }
+    }
+  },
+  "comparison_with_weekly_h4_same_period": {
+    "opportunities": 99,
+    "accepted": 14,
+    "rejected": 85,
+    "rejectByReason": {
+      "no_target": 38,
+      "rr_below_min": 47
+    },
+    "wins": 6,
+    "losses": 8,
+    "winRate": 0.4286,
+    "expectancyR": 0.2023,
+    "totalR": 2.8326,
+    "profitFactor": 1.361,
+    "maxDrawdownR": 4.7405,
+    "maxLosingStreak": 5,
+    "avgHoldBars": 17.93,
+    "ambiguousExits": 0,
+    "maxConcurrentExposure": 2,
+    "concentrationByPair": {
+      "AUD_CAD": {
+        "n": 1,
+        "R": -0.6105
+      },
+      "AUD_CHF": {
+        "n": 1,
+        "R": -1.0455
+      },
+      "AUD_NZD": {
+        "n": 1,
+        "R": 2.3707
+      },
+      "AUD_USD": {
+        "n": 1,
+        "R": -1.0349
+      },
+      "EUR_CAD": {
+        "n": 1,
+        "R": 0.5909
+      },
+      "EUR_CHF": {
+        "n": 1,
+        "R": -1.0423
+      },
+      "EUR_GBP": {
+        "n": 1,
+        "R": -1.0435
+      },
+      "EUR_JPY": {
+        "n": 1,
+        "R": 0.9754
+      },
+      "GBP_AUD": {
+        "n": 2,
+        "R": -2.0362
+      },
+      "GBP_JPY": {
+        "n": 1,
+        "R": 3.1679
+      },
+      "GBP_NZD": {
+        "n": 1,
+        "R": 1.8678
+      },
+      "NZD_CAD": {
+        "n": 1,
+        "R": -1.0334
+      },
+      "USD_CHF": {
+        "n": 1,
+        "R": 1.7062
+      }
+    },
+    "concentrationByMonth": {
+      "2025-12": {
+        "n": 5,
+        "R": -1.3349000000000004
+      },
+      "2026-10": {
+        "n": 2,
+        "R": -0.4546000000000001
+      },
+      "2025-11": {
+        "n": 1,
+        "R": -1.0349
+      },
+      "2026-05": {
+        "n": 3,
+        "R": 1.6393
+      },
+      "2026-04": {
+        "n": 2,
+        "R": 2.1498999999999997
+      },
+      "2025-09": {
+        "n": 1,
+        "R": 1.8678
+      }
+    }
+  },
+  "combined_portfolio": {
+    "note": "The two models share the same price data and overlap in time/currencies — do NOT treat concurrent signals as independent confirmation.",
+    "metrics_naive_pooled": {
+      "opportunities": 35,
+      "accepted": 35,
+      "rejected": 0,
+      "rejectByReason": {},
+      "wins": 13,
+      "losses": 22,
+      "winRate": 0.3714,
+      "expectancyR": 0.151,
+      "totalR": 5.2835,
+      "profitFactor": 1.236,
+      "maxDrawdownR": 8.1119,
+      "maxLosingStreak": 8,
+      "avgHoldBars": 14.86,
+      "ambiguousExits": 0,
+      "maxConcurrentExposure": 2,
+      "concentrationByPair": {
+        "AUD_CHF": {
+          "n": 2,
+          "R": -2.1219
+        },
+        "AUD_JPY": {
+          "n": 1,
+          "R": -1.0238
+        },
+        "AUD_USD": {
+          "n": 3,
+          "R": -3.1231
+        },
+        "EUR_AUD": {
+          "n": 3,
+          "R": -3.0950999999999995
+        },
+        "EUR_USD": {
+          "n": 3,
+          "R": 3.6078
+        },
+        "GBP_AUD": {
+          "n": 3,
+          "R": -3.0648
+        },
+        "GBP_CAD": {
+          "n": 1,
+          "R": 2.1466
+        },
+        "GBP_CHF": {
+          "n": 1,
+          "R": 2.1333
+        },
+        "GBP_JPY": {
+          "n": 2,
+          "R": 2.1399
+        },
+        "GBP_NZD": {
+          "n": 3,
+          "R": -0.17159999999999975
+        },
+        "NZD_CAD": {
+          "n": 2,
+          "R": -2.1174
+        },
+        "USD_CAD": {
+          "n": 2,
+          "R": 1.597
+        },
+        "USD_CHF": {
+          "n": 3,
+          "R": 7.1359
+        },
+        "AUD_CAD": {
+          "n": 1,
+          "R": -0.6105
+        },
+        "AUD_NZD": {
+          "n": 1,
+          "R": 2.3707
+        },
+        "EUR_CAD": {
+          "n": 1,
+          "R": 0.5909
+        },
+        "EUR_CHF": {
+          "n": 1,
+          "R": -1.0423
+        },
+        "EUR_GBP": {
+          "n": 1,
+          "R": -1.0435
+        },
+        "EUR_JPY": {
+          "n": 1,
+          "R": 0.9754
+        }
+      },
+      "concentrationByMonth": {
+        "2026-10": {
+          "n": 4,
+          "R": 2.3047
+        },
+        "2026-01": {
+          "n": 1,
+          "R": -1.0238
+        },
+        "2025-12": {
+          "n": 7,
+          "R": -3.4392000000000005
+        },
+        "2026-02": {
+          "n": 4,
+          "R": 1.9234
+        },
+        "2025-09": {
+          "n": 3,
+          "R": -0.18310000000000004
+        },
+        "2026-04": {
+          "n": 4,
+          "R": 0.08899999999999997
+        },
+        "2026-09": {
+          "n": 1,
+          "R": -1.0236
+        },
+        "2026-07": {
+          "n": 2,
+          "R": 1.1179999999999999
+        },
+        "2026-03": {
+          "n": 1,
+          "R": 2.1333
+        },
+        "2026-06": {
+          "n": 1,
+          "R": -1.028
+        },
+        "2025-10": {
+          "n": 1,
+          "R": -1.084
+        },
+        "2025-06": {
+          "n": 2,
+          "R": 4.8924
+        },
+        "2025-11": {
+          "n": 1,
+          "R": -1.0349
+        },
+        "2026-05": {
+          "n": 3,
+          "R": 1.6393
+        }
+      }
+    },
+    "exposure": {
+      "samePairOverlaps": 0,
+      "maxConcurrentByCurrency": {
+        "USD": 2,
+        "EUR": 1,
+        "GBP": 1,
+        "JPY": 1,
+        "CHF": 2,
+        "CAD": 1,
+        "AUD": 2,
+        "NZD": 1
+      }
+    }
+  }
+}

@@ -1,7 +1,7 @@
 {
   "strategyId": "PA_W1_H4_CONTINUATION",
   "version": "paw1h4-1.0.0",
-  "generatedAt": "2026-10-17T22:21:52.795Z",
+  "generatedAt": "2026-10-18T04:56:48.962Z",
   "economics": "MID-ONLY ESTIMATED — spreads/slippage/commission modelled from config, not broker fills",
   "sampleNote": "Rules frozen a priori (price-action only, not tuned on returns). History is short for a weekly-trend strategy; treat as EXPLORATORY. OOS slice = last 40% of signals by date.",
   "config": {

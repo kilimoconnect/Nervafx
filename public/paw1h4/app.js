@@ -6,6 +6,8 @@
   function n(x, d) { return x == null || !isFinite(x) ? '—' : Number(x).toFixed(d == null ? 5 : d); }
   function fmt(iso) { return iso ? String(iso).replace('T', ' ').replace('.000Z', 'Z') : '—'; }
 
+  // timeframe labels (W1/H4 or D1/H1) — one renderer serves both strategies
+  var TL = J.trendLabel || 'W1', EL = J.entryLabel || 'H4';
   // ---- header / selector ----
   $('ver').textContent = J.version;
   var psel = $('pairsel');
@@ -13,36 +15,49 @@
   psel.value = J.pair;
   psel.onchange = function () { var a = (location.search.match(/[?&]asOf=(\d+)/) || [])[1]; location.href = location.pathname + '?pair=' + psel.value + (a ? '&asOf=' + a : ''); };
   $('datahdr').innerHTML = '<b>' + J.pair.replace('_', '/') + '</b> · as of <b>' + fmt(J.asOfUtc) + '</b> (' + esc(J.asOfEat) + ') · mode ' + esc(J.mode) +
-    ' · H4 ' + J.dataQuality.h4Count + ' · W1 ' + J.dataQuality.w1Count + ' (confirmed pivots ' + J.dataQuality.w1Confirmed + ')' +
+    ' · ' + EL + ' ' + J.dataQuality.h4Count + ' · ' + TL + ' ' + J.dataQuality.w1Count + ' (confirmed pivots ' + J.dataQuality.w1Confirmed + ')' +
     (J.dataQuality.warning ? ' · <span class="neg">⚠ ' + esc(J.dataQuality.warning) + '</span>' : '');
 
   var biasBadge = { BULLISH: 'b-up', BEARISH: 'b-dn', NEUTRAL: 'b-mut', UNAVAILABLE: 'b-warn' };
   var STATE_TXT = {
-    UNAVAILABLE: 'Not enough confirmed weekly structure.',
-    NEUTRAL: 'Weekly structure is conflicting — no directional eligibility.',
-    WAITING_FOR_PULLBACK: 'Weekly trend eligible; waiting for an H4 counter-trend pullback (two lower highs + lower lows, or the mirror).',
-    PULLBACK_ACTIVE: 'H4 pullback formed; waiting for a completed H4 close back through the frozen break level.',
+    UNAVAILABLE: 'Not enough confirmed ' + TL + ' structure.',
+    NEUTRAL: TL + ' structure is conflicting — no directional eligibility.',
+    WAITING_FOR_PULLBACK: TL + ' trend eligible; waiting for an ' + EL + ' counter-trend pullback (two lower highs + lower lows, or the mirror).',
+    PULLBACK_ACTIVE: EL + ' pullback formed; waiting for a completed ' + EL + ' close back through the frozen break level.',
     FIRST_BREAK: 'First break confirmed; waiting for retest structure.',
     WAITING_FOR_RETEST_STRUCTURE: 'After the break: waiting for a new swing in the trend direction, then a higher-low / lower-high above/below the pullback extreme.',
-    ARMED: 'Trigger and stop frozen; waiting for a completed H4 close beyond the trigger to signal entry.',
-    TRIGGERED: 'Continuation close confirmed — a manual opportunity was emitted; entry simulated at the next H4 open.',
+    ARMED: 'Trigger and stop frozen; waiting for a completed ' + EL + ' close beyond the trigger to signal entry.',
+    TRIGGERED: 'Continuation close confirmed — a manual opportunity was emitted; entry simulated at the next ' + EL + ' open.',
     CANCELLED: 'Setup cancelled before entry.',
-    EXPIRED: 'Setup expired (30 completed H4 bars after the first break).',
+    EXPIRED: 'Setup expired (' + (J.expiryH4Bars || 30) + ' completed ' + EL + ' bars after the first break).',
   };
 
   function levelRows(arr) { return (arr || []).map(function (p) { return '<tr><td class="num">' + n(p.price) + '</td><td class="mut">' + fmt(p.extremeUtc) + '</td><td class="mut">' + fmt(p.confirmedUtc) + '</td></tr>'; }).join('') || '<tr><td class="mut" colspan="3">none confirmed</td></tr>'; }
 
+  // Side-by-side with the other strategy (if the page supplied window.NFX_CMP for the same pair).
+  function renderComparison() {
+    var C = window.NFX_CMP; if (!C || C.available === false || !C.weekly) return '';
+    var sttf = function (f) { return (f.h4.state || '—') + (f.h4.dir ? ' ' + f.h4.dir : ''); };
+    var trf = function (f) { return f.suggestedTrade ? (f.suggestedTrade.dir + ' · R:R ' + f.suggestedTrade.rewardRisk + ':1') : (f.rejection ? ('no trade — ' + f.rejection.reason) : '—'); };
+    return '<div class="card"><h2>Strategy comparison — same pair, same close</h2>' +
+      '<table><thead><tr><th>Strategy</th><th>Trend bias</th><th>State</th><th>Suggested</th></tr></thead><tbody>' +
+      '<tr><td><b>' + esc(J.strategyId) + '</b> <span class="mut">(' + TL + '→' + EL + ')</span></td><td>' + J.weekly.bias + '</td><td>' + esc(sttf(J)) + '</td><td>' + esc(trf(J)) + '</td></tr>' +
+      '<tr><td><b>' + esc(C.strategyId) + '</b> <span class="mut">(' + (C.trendLabel || 'W1') + '→' + (C.entryLabel || 'H4') + ')</span></td><td>' + C.weekly.bias + '</td><td>' + esc(sttf(C)) + '</td><td>' + esc(trf(C)) + '</td></tr>' +
+      '</tbody></table>' +
+      '<div class="mut" style="margin-top:8px;font-size:11px">Both read the SAME ' + esc(J.pair.replace('_', '/')) + ' price (shared currencies ' + esc(J.pair.replace('_', ' & ')) + '), so concurrent signals are <b>not independent confirmation</b> and must not be pooled as if uncorrelated. Compare on the same period and cost assumptions — see the backtest report for separate vs naive-pooled results and overlapping exposure.</div></div>';
+  }
+
   var wk = J.weekly, h4 = J.h4, tr = J.suggestedTrade, rej = J.rejection;
-  var weeklyCard = '<div class="card"><h2>Weekly structural trend</h2>' +
+  var weeklyCard = '<div class="card"><h2>' + TL + ' structural trend</h2>' +
     '<div style="margin-bottom:8px"><span class="badge ' + (biasBadge[wk.bias] || 'b-mut') + '">' + wk.bias + '</span></div>' +
     '<div class="kv"><span>Eligibility began</span><span>' + fmt(wk.eligibilityStartUtc) + (wk.eligibilityStartEat ? ' <span class="mut">(' + esc(wk.eligibilityStartEat) + ')</span>' : '') + '</span></div>' +
     '<div class="kv"><span>Invalidation level</span><b class="num">' + n(wk.invalidationLevel) + '</b></div>' +
-    '<div class="stmt"><div class="lbl">Last confirmed weekly highs</div><table><thead><tr><th>Price</th><th>Extreme</th><th>Confirmed</th></tr></thead><tbody>' + levelRows(wk.lastHighs) + '</tbody></table></div>' +
-    '<div class="stmt"><div class="lbl">Last confirmed weekly lows</div><table><thead><tr><th>Price</th><th>Extreme</th><th>Confirmed</th></tr></thead><tbody>' + levelRows(wk.lastLows) + '</tbody></table></div>' +
+    '<div class="stmt"><div class="lbl">Last confirmed ' + TL + ' highs</div><table><thead><tr><th>Price</th><th>Extreme</th><th>Confirmed</th></tr></thead><tbody>' + levelRows(wk.lastHighs) + '</tbody></table></div>' +
+    '<div class="stmt"><div class="lbl">Last confirmed ' + TL + ' lows</div><table><thead><tr><th>Price</th><th>Extreme</th><th>Confirmed</th></tr></thead><tbody>' + levelRows(wk.lastLows) + '</tbody></table></div>' +
     '</div>';
 
   var dirBadge = h4.dir === 'BUY' ? '<span class="badge b-up">BUY</span>' : h4.dir === 'SELL' ? '<span class="badge b-dn">SELL</span>' : '';
-  var h4Card = '<div class="card"><h2>H4 continuation state</h2>' +
+  var h4Card = '<div class="card"><h2>' + EL + ' continuation state</h2>' +
     '<div style="margin-bottom:8px"><span class="badge b-mut">' + h4.state + '</span> ' + dirBadge + '</div>' +
     '<div class="mut" style="font-size:12px;margin-bottom:8px">' + esc(STATE_TXT[h4.state] || '') + (h4.cancelReason ? ' <span class="neg">(' + esc(h4.cancelReason) + ')</span>' : '') + '</div>' +
     '<div class="kv"><span>Break level (frozen LH/HL)</span><b class="num">' + n(h4.breakLevel) + '</b></div>' +
@@ -51,7 +66,7 @@
     '<div class="kv"><span>Continuation trigger</span><b class="num">' + n(h4.trigger) + '</b></div>' +
     '<div class="kv"><span>Stop reference</span><b class="num">' + n(h4.stopRef) + '</b></div>' +
     '<div class="kv"><span>Armed</span><span>' + fmt(h4.armedUtc) + '</span></div>' +
-    '<div class="kv"><span>Expiry</span><span>' + J.expiryH4Bars + ' H4 bars after first break</span></div>' +
+    '<div class="kv"><span>Expiry</span><span>' + J.expiryH4Bars + ' ' + EL + ' bars after first break</span></div>' +
     '</div>';
 
   var tradeCard = '<div class="card"><h2>Suggested trade (hypothetical, mid-only)</h2>' +
@@ -68,10 +83,11 @@
       : '<div class="mut">No continuation opportunity at this close.</div>') +
     '<div class="mut" style="margin-top:8px;font-size:11px">Hypothetical, mid-only economics with modelled spread/slippage; no order path; UNVALIDATED — no profitability claim.</div></div>';
 
+  var cmpCard = renderComparison();
   $('viewhost').innerHTML =
-    '<div class="card"><h2>Weekly (W1) — UTC weeks</h2><div class="chartwrap"><canvas id="cw"></canvas></div></div>' +
-    '<div class="card"><h2>H4 — UTC 4h buckets (last ' + (J.h4candles || []).length + ')</h2><div class="chartwrap"><canvas id="ch"></canvas></div></div>' +
-    '<div class="grid">' + weeklyCard + h4Card + '</div>' + tradeCard;
+    '<div class="card"><h2>' + TL + ' — trend timeframe (UTC-anchored)</h2><div class="chartwrap"><canvas id="cw"></canvas></div></div>' +
+    '<div class="card"><h2>' + EL + ' — entry timeframe · last ' + (J.h4candles || []).length + '</h2><div class="chartwrap"><canvas id="ch"></canvas></div></div>' +
+    '<div class="grid">' + weeklyCard + h4Card + '</div>' + tradeCard + cmpCard;
 
   // ---- charts ----
   function draw(canvasId, candles, levels, pivots) {
