@@ -15,6 +15,10 @@ header.app{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-botto
 .btn.sm{padding:4px 8px}
 .btn:hover{border-color:var(--accent)}
 .mut{color:var(--text-muted)}
+.navtabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.navtabs a{font-size:12px;font-weight:600;color:var(--text-muted);text-decoration:none;border:1px solid var(--border);border-radius:8px;padding:6px 12px;background:var(--bg-card)}
+.navtabs a:hover{border-color:var(--accent);color:var(--text)}
+.navtabs a.active{color:var(--text);border-color:var(--accent);background:rgba(59,130,246,.14)}
 .datahdr{font-size:12px;color:var(--text-muted);background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;margin-bottom:12px}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media(max-width:860px){.grid{grid-template-columns:1fr}}

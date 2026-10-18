@@ -16,7 +16,6 @@
     <span class="pill warn">RESEARCH · UNVALIDATED</span>
     <span class="pill">PRICE-ACTION ONLY</span>
     <span class="spacer"></span>
-    <a class="pill" href="/weekly-h4" title="Weekly → H4 strategy">↗ Weekly→H4</a>
     <label class="sr-only" for="pairsel">Pair</label>
     <select id="pairsel" class="btn"></select>
     <span class="mut" style="font-size:11px">History (EAT):</span>
@@ -24,6 +23,12 @@
     <button class="btn sm" id="histGo">Go</button>
     <button class="btn sm" id="histLive">● Live</button>
   </header>
+
+  <nav class="navtabs" aria-label="Research views">
+    <a href="/app">H1 Workspace</a>
+    <a href="/weekly-h4">Weekly → H4</a>
+    <a href="/daily-h1" class="active" aria-current="page">Daily → H1</a>
+  </nav>
 
   <div class="datahdr" id="datahdr" aria-live="polite">Loading…</div>
   <div id="banners" aria-live="polite"></div>

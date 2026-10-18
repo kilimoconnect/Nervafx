@@ -31,6 +31,10 @@ header.app img{height:26px;display:block}
 .pill.ok{border-color:rgba(22,163,74,.5);color:var(--up)}
 .spacer{flex:1}
 
+.navtabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.navtabs a{font-size:12px;font-weight:600;color:var(--text-muted);text-decoration:none;border:1px solid var(--border);border-radius:8px;padding:6px 12px;background:var(--bg-card)}
+.navtabs a:hover{border-color:var(--accent);color:var(--text)}
+.navtabs a.active{color:var(--text);border-color:var(--accent);background:rgba(59,130,246,.14)}
 .datahdr{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;background:var(--bg-card);border:1px solid var(--border);
   border-radius:var(--radius);padding:9px 13px;margin-bottom:10px;font-size:12px;color:var(--text-muted);box-shadow:var(--shadow-card)}
 .datahdr b{color:var(--text);font-weight:600}
