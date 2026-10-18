@@ -68,7 +68,11 @@
     if (j.available === false) { showBanner('sb-unavail', 'UNAVAILABLE — ' + (j.reason || 'no data') + ' for ' + pair + '.'); return; }
     window.NFX_PAW = j;
     window.NFX_CMP = (a[1] && a[1].ok !== false && a[1].available !== false) ? a[1] : null;
-    return loadScript('/paw1h4/app.js');
+    return loadScript('/paw1h4/app.js').then(function () {
+      fetch('/api/pad1h1?scan=1' + (curAsOf ? '&asOf=' + curAsOf : '')).then(function (r) { return r.json(); })
+        .then(function (s) { if (s && s.scan && window.NFX_RENDER_SCAN) window.NFX_RENDER_SCAN(s.scan); })
+        .catch(function () { if (window.NFX_RENDER_SCAN) window.NFX_RENDER_SCAN(null); });
+    });
   }).catch(function (e) { showBanner('sb-error', 'ERROR — ' + (e.message || e) + '. No fabricated fallback is shown.'); });
 })();
 </script>

@@ -13,8 +13,10 @@
  */
 
 const { getClient, cors } = require('./_db');
-const { loadH1 } = require('../research/paw1h4/dbload');
+const { loadH1, loadH1Parallel } = require('../research/paw1h4/dbload');
 const { buildFrame } = require('../research/paw1h4/frame');
+const { scanAll } = require('../research/paw1h4/scan');
+const { TF_W1H4 } = require('../research/paw1h4/pipeline');
 const { CONFIG, PAIRS } = require('../research/paw1h4/config');
 
 module.exports = async function handler(req, res) {
@@ -33,6 +35,14 @@ module.exports = async function handler(req, res) {
     const fromIso = new Date(nowMs - 500 * 24 * 60 * 60 * 1000).toISOString();   // ~70 weeks → enough W1 structure
     const opts = { fromIso };
     if (mode === 'historical') opts.toIso = new Date(nowMs).toISOString();
+
+    // Multi-pair scan: rank all 28 pairs by current tradeability.
+    if (req.query && (req.query.scan === '1' || req.query.scan === 'true')) {
+      const all = await loadH1Parallel(sb, PAIRS, opts, 8);
+      const scan = scanAll(all, PAIRS, CONFIG, TF_W1H4, nowMs);
+      return res.json({ ok: true, scan, strategyId: CONFIG.strategyId, trendLabel: 'W1', entryLabel: 'H4', asOfUtc: new Date(nowMs).toISOString(), mode, pairs: PAIRS });
+    }
+
     const h1byPair = await loadH1(sb, [pair], opts);
     const h1 = h1byPair[pair] || [];
     if (!h1.length) return res.json({ ok: true, available: false, reason: 'NO_H1_DATA', pair, mode });

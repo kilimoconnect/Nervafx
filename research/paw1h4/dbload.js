@@ -30,4 +30,15 @@ async function loadH1(sb, pairs, opts = {}) {
   return out;
 }
 
-module.exports = { loadH1 };
+/** Parallel variant: fetch several instruments concurrently (default 8 at a time). */
+async function loadH1Parallel(sb, pairs, opts = {}, concurrency = 8) {
+  const out = {};
+  for (let i = 0; i < pairs.length; i += concurrency) {
+    const batch = pairs.slice(i, i + concurrency);
+    const res = await Promise.all(batch.map((p) => loadH1(sb, [p], opts).then((r) => [p, r[p]])));
+    for (const [p, rows] of res) out[p] = rows;
+  }
+  return out;
+}
+
+module.exports = { loadH1, loadH1Parallel };

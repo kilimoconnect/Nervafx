@@ -85,6 +85,7 @@
 
   var cmpCard = renderComparison();
   $('viewhost').innerHTML =
+    '<div id="scanhost"><div class="card mut">Scanning all 28 pairs for the best setups…</div></div>' +
     '<div class="card"><h2>' + TL + ' — trend timeframe (UTC-anchored)</h2><div class="chartwrap"><canvas id="cw"></canvas></div></div>' +
     '<div class="card"><h2>' + EL + ' — entry timeframe · last ' + (J.h4candles || []).length + '</h2><div class="chartwrap"><canvas id="ch"></canvas></div></div>' +
     '<div class="grid">' + weeklyCard + h4Card + '</div>' + tradeCard + cmpCard;
@@ -129,6 +130,29 @@
       g.fillStyle = L.color; g.fillText(L.label, w - padR - 70, y - 3);
     });
   }
+
+  // ---- multi-pair scan watchlist (filled asynchronously by the page) ----
+  function renderScan(scan) {
+    var host = $('scanhost'); if (!host) return;
+    if (!scan || !scan.length) { host.innerHTML = '<div class="card mut">Scan unavailable.</div>'; return; }
+    var cur = (location.search.match(/[?&]pair=([^&]+)/) || [])[1] || J.pair;
+    var aArg = (location.search.match(/[?&]asOf=(\d+)/) || [])[1];
+    var rows = scan.map(function (s) {
+      var badge = { BULLISH: 'b-up', BEARISH: 'b-dn' }[s.bias] || 'b-mut';
+      var armed = s.prospect && s.prospect.ok;
+      var rr = armed ? '<b class="pos">' + s.prospect.rr + ' : 1</b>' : (s.state === 'ARMED' ? '<span class="mut">no target</span>' : '—');
+      var recent = s.last ? (s.last.accepted ? ('<span class="' + ((s.last.R || 0) > 0 ? 'pos' : 'neg') + '">' + (s.last.R != null ? s.last.R.toFixed(2) + 'R' : (s.last.rr + ':1')) + '</span>') : ('<span class="mut">' + esc(s.last.reason || '—') + '</span>')) : '—';
+      var dirB = s.dir === 'BUY' ? '<span class="badge b-up">BUY</span>' : s.dir === 'SELL' ? '<span class="badge b-dn">SELL</span>' : '';
+      var sel = s.pair === cur ? ' style="background:rgba(59,130,246,.12);cursor:pointer" ' : ' style="cursor:pointer" ';
+      return '<tr class="scanrow" data-pair="' + s.pair + '"' + sel + '><td><b>' + s.pair.replace('_', '/') + '</b></td><td><span class="badge ' + badge + '">' + s.bias + '</span></td><td>' + esc(s.state) + (armed ? ' <span class="pos">★</span>' : '') + '</td><td>' + dirB + '</td><td class="num">' + rr + '</td><td class="num">' + recent + '</td></tr>';
+    }).join('');
+    var nArmed = scan.filter(function (s) { return s.prospect && s.prospect.ok; }).length;
+    host.innerHTML = '<div class="card"><h2>Scan — all ' + scan.length + ' pairs · best setups first' + (nArmed ? ' · <span class="pos">' + nArmed + ' ready</span>' : '') + '</h2>' +
+      '<table><thead><tr><th>Pair</th><th>' + TL + ' bias</th><th>State</th><th>Dir</th><th>Setup R:R</th><th>Recent</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+      '<div class="mut" style="margin-top:6px;font-size:11px"><span class="pos">★</span> = ARMED with a valid ≥2:1 forward trade (ranked highest). "Setup R:R" is the prospective trigger→target vs trigger→stop for ARMED pairs. "Recent" = the last emitted opportunity\'s result (R) or why it was rejected. Click a pair to open its detail below. UNVALIDATED — no profitability claim.</div></div>';
+    Array.prototype.forEach.call(host.querySelectorAll('.scanrow'), function (tr) { tr.onclick = function () { location.href = location.pathname + '?pair=' + tr.getAttribute('data-pair') + (aArg ? '&asOf=' + aArg : ''); }; });
+  }
+  window.NFX_RENDER_SCAN = renderScan;
 
   draw('cw', J.w1candles, [{ price: wk.invalidationLevel, color: '#ca8a04', label: 'invalidation' }], J.w1pivots);
   draw('ch', J.h4candles, [

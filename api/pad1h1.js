@@ -13,7 +13,8 @@
  */
 
 const { getClient, cors } = require('./_db');
-const { loadH1 } = require('../research/paw1h4/dbload');
+const { loadH1, loadH1Parallel } = require('../research/paw1h4/dbload');
+const { scanAll } = require('../research/paw1h4/scan');
 const d1h1 = require('../research/pad1h1');
 
 module.exports = async function handler(req, res) {
@@ -32,6 +33,14 @@ module.exports = async function handler(req, res) {
     const fromIso = new Date(nowMs - 200 * 24 * 60 * 60 * 1000).toISOString();   // ~140 trading days → enough D1 structure
     const opts = { fromIso };
     if (mode === 'historical') opts.toIso = new Date(nowMs).toISOString();
+
+    // Multi-pair scan: rank all 28 pairs by current tradeability.
+    if (req.query && (req.query.scan === '1' || req.query.scan === 'true')) {
+      const all = await loadH1Parallel(sb, d1h1.PAIRS, opts, 8);
+      const scan = scanAll(all, d1h1.PAIRS, d1h1.CONFIG, d1h1.TF_D1H1, nowMs);
+      return res.json({ ok: true, scan, strategyId: d1h1.CONFIG.strategyId, trendLabel: 'D1', entryLabel: 'H1', asOfUtc: new Date(nowMs).toISOString(), mode, pairs: d1h1.PAIRS });
+    }
+
     const h1 = (await loadH1(sb, [pair], opts))[pair] || [];
     if (!h1.length) return res.json({ ok: true, available: false, reason: 'NO_H1_DATA', pair, mode });
 
