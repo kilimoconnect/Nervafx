@@ -27,6 +27,7 @@
     "api/market-pressure.js": { "maxDuration": 120 },
     "api/pullback-tri-engine.js": { "maxDuration": 60 },
     "api/pullback-tri-h4-engine.js": { "maxDuration": 60 },
+    "api/paw1h4.js": { "maxDuration": 60 },
     "api/backfill-m5.js": { "maxDuration": 300 },
     "api/currency-stability.js": { "maxDuration": 30 },
     "api/*-history.js": { "maxDuration": 300 }
@@ -38,6 +39,8 @@
     { "source": "/workspace", "destination": "/m15-workspace.html" },
     { "source": "/m15-intelligence", "destination": "/m15-workspace.html" },
     { "source": "/m15-board", "destination": "/m15-intelligence.html" },
+    { "source": "/paw1h4", "destination": "/paw1h4.html" },
+    { "source": "/weekly-h4", "destination": "/paw1h4.html" },
     { "source": "/login",  "destination": "/login.html"   },
     { "source": "/setup",  "destination": "/setup.html"   },
     { "source": "/profile","destination": "/profile.html" },
