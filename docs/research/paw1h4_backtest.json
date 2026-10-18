@@ -1,7 +1,7 @@
 {
   "strategyId": "PA_W1_H4_CONTINUATION",
   "version": "paw1h4-1.0.0",
-  "generatedAt": "2026-10-18T07:52:30.369Z",
+  "generatedAt": "2026-10-18T08:04:56.684Z",
   "economics": "MID-ONLY ESTIMATED — spreads/slippage/commission modelled from config, not broker fills",
   "sampleNote": "Rules frozen a priori (price-action only, not tuned on returns). History is short for a weekly-trend strategy; treat as EXPLORATORY. OOS slice = last 40% of signals by date.",
   "config": {
@@ -257,38 +257,34 @@
   },
   "results": {
     "strategy_weekly": {
-      "opportunities": 24,
-      "accepted": 2,
-      "rejected": 22,
+      "opportunities": 17,
+      "accepted": 1,
+      "rejected": 16,
       "rejectByReason": {
-        "no_target": 19,
-        "rr_below_min": 3
+        "no_target": 10,
+        "rr_below_min": 6
       },
       "wins": 1,
-      "losses": 1,
-      "winRate": 0.5,
-      "expectancyR": -0.2085,
-      "totalR": -0.417,
-      "profitFactor": 0.5863,
-      "maxDrawdownR": 1.0079,
-      "maxLosingStreak": 1,
-      "avgHoldBars": 13,
+      "losses": 0,
+      "winRate": 1,
+      "expectancyR": 2.3707,
+      "totalR": 2.3707,
+      "profitFactor": "inf",
+      "maxDrawdownR": 0,
+      "maxLosingStreak": 0,
+      "avgHoldBars": 27,
       "ambiguousExits": 0,
       "maxConcurrentExposure": 1,
       "concentrationByPair": {
-        "EUR_CAD": {
+        "AUD_NZD": {
           "n": 1,
-          "R": 0.5909
-        },
-        "EUR_JPY": {
-          "n": 1,
-          "R": -1.0079
+          "R": 2.3707
         }
       },
       "concentrationByMonth": {
-        "2026-10": {
-          "n": 2,
-          "R": -0.41700000000000004
+        "2025-12": {
+          "n": 1,
+          "R": 2.3707
         }
       }
     },
@@ -398,75 +394,57 @@
       "concentrationByMonth": {}
     },
     "strategy_weekly_OOS_last40pct": {
-      "oosSplitAt": "2026-05-20T01:36:00.000Z",
-      "opportunities": 8,
-      "accepted": 2,
-      "rejected": 6,
+      "oosSplitAt": "2026-05-12T11:12:00.000Z",
+      "opportunities": 5,
+      "accepted": 0,
+      "rejected": 5,
       "rejectByReason": {
-        "rr_below_min": 2,
-        "no_target": 4
-      },
-      "wins": 1,
-      "losses": 1,
-      "winRate": 0.5,
-      "expectancyR": -0.2085,
-      "totalR": -0.417,
-      "profitFactor": 0.5863,
-      "maxDrawdownR": 1.0079,
-      "maxLosingStreak": 1,
-      "avgHoldBars": 13,
-      "ambiguousExits": 0,
-      "maxConcurrentExposure": 1,
-      "concentrationByPair": {
-        "EUR_CAD": {
-          "n": 1,
-          "R": 0.5909
-        },
-        "EUR_JPY": {
-          "n": 1,
-          "R": -1.0079
-        }
-      },
-      "concentrationByMonth": {
-        "2026-10": {
-          "n": 2,
-          "R": -0.41700000000000004
-        }
-      }
-    },
-    "cost_sensitivity_doubled_costs": {
-      "opportunities": 24,
-      "accepted": 2,
-      "rejected": 22,
-      "rejectByReason": {
-        "no_target": 19,
+        "no_target": 2,
         "rr_below_min": 3
       },
+      "wins": 0,
+      "losses": 0,
+      "winRate": 0,
+      "expectancyR": 0,
+      "totalR": 0,
+      "profitFactor": 0,
+      "maxDrawdownR": 0,
+      "maxLosingStreak": 0,
+      "avgHoldBars": 0,
+      "ambiguousExits": 0,
+      "maxConcurrentExposure": 0,
+      "concentrationByPair": {},
+      "concentrationByMonth": {}
+    },
+    "cost_sensitivity_doubled_costs": {
+      "opportunities": 17,
+      "accepted": 1,
+      "rejected": 16,
+      "rejectByReason": {
+        "no_target": 10,
+        "rr_below_min": 6
+      },
       "wins": 1,
-      "losses": 1,
-      "winRate": 0.5,
-      "expectancyR": -0.2426,
-      "totalR": -0.4851,
-      "profitFactor": 0.5224,
-      "maxDrawdownR": 1.0158,
-      "maxLosingStreak": 1,
-      "avgHoldBars": 13,
+      "losses": 0,
+      "winRate": 1,
+      "expectancyR": 2.2368,
+      "totalR": 2.2368,
+      "profitFactor": "inf",
+      "maxDrawdownR": 0,
+      "maxLosingStreak": 0,
+      "avgHoldBars": 27,
       "ambiguousExits": 0,
       "maxConcurrentExposure": 1,
       "concentrationByPair": {
-        "EUR_CAD": {
+        "AUD_NZD": {
           "n": 1,
-          "R": 0.5307
-        },
-        "EUR_JPY": {
-          "n": 1,
-          "R": -1.0158
+          "R": 2.2368
         }
       },
       "concentrationByMonth": {
-        "2026-10": {
-          "n": 2,
-          "R": -0.4851000000000001
+        "2025-12": {
+          "n": 1,
+          "R": 2.2368
         }
       }
     }

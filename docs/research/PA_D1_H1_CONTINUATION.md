@@ -112,32 +112,33 @@ Data: stored **H1** for the 28 majors, **2025-05-19 → 2026-10-16 (~17 months)*
 Economics **mid-only, estimated** (spread 1.2p, slippage 0.5p, 2p buffer; 2× sensitivity run).
 Report: `docs/research/pad1h1_backtest.json`. Run: `node scripts/research/pad1h1-backtest.js`.
 
-Figures below are **v1.1 — with the recent-candle break-of-structure precondition** (§3). It makes
-both strategies much more selective (far fewer setups than v1.0). *(The current-period pullback
-anchor, also §3, tightens this further; the table is refreshed on each full backtest run — regenerate
-with the runner below for the latest.)*
+Figures below are **v1.1 — recent-candle BOS precondition + current-period pullback anchor** (§3).
+Both make the strategies drastically more selective (a pullback must form within one day / one week,
+after a trend-direction BOS), so almost nothing qualifies in 17 months.
 
 | Variant | n | Expectancy | Profit factor | Win | Max DD | Loss streak |
 |---|---:|---:|---:|---:|---:|---:|
-| **D1→H1 (daily-filtered)** | 7 | **+0.196R** | 1.27 | 29% | 5.18R | 5 |
+| **D1→H1 (daily-filtered)** | 5 | +0.683R | 2.09 | 40% | 3.14R | 3 |
 | Comparison: H1-only (no daily filter) | 27 | **−0.636R** | 0.26 | 11% | 17.17R | 11 |
 | Comparison: daily-structure baseline | 0 | — | — | — | — | — |
-| **OOS (last 40% of signals)** | 4 | +1.117R | 3.14 | 50% | 2.09R | 2 |
-| D1→H1 @ **doubled costs** | 7 | +0.088R | 1.11 | 29% | 5.35R | 5 |
-| Weekly→H4 (same period) | 2 | −0.209R | 0.59 | 50% | 1.01R | 1 |
-| **Combined, naïve pooled** (not independent) | 9 | +0.107R | 1.15 | 33% | 5.18R | 5 |
+| OOS (last 40% of signals) | 2 | +3.28R | ∞ | 100% | 0 | 0 |
+| D1→H1 @ doubled costs | 5 | +0.539R | 1.83 | 40% | 3.27R | 3 |
+| Weekly→H4 (same period) | 1 | +2.37R | ∞ | 100% | 0 | 0 |
+| Combined, naïve pooled (not independent) | 6 | +0.965R | 2.84 | 50% | 2.09R | 2 |
 
-Rejections (daily): `rr_below_min` 63, `no_target` 40 — the BOS precondition removes most pullbacks
-up front, and the 2:1 gate against the *nearest* opposing daily level filters most of the rest.
+Rejections (daily): `rr_below_min` 39, `no_target` 27.
 
 **Honest read:**
-- The **daily filter clearly helps**: unfiltered H1 continuation is sharply negative
-  (−0.64R, PF 0.26) while the daily-filtered version is positive in-sample (+0.20R).
-- The **recent-candle BOS precondition** (v1.1) cut trades from 21 → **7** and lifted per-trade
-  expectancy — fewer, cleaner setups — but it leaves **almost no sample**. The OOS slice is nominally
-  strong (**+1.12R**) but is only **4 trades**, so it is noise, not evidence.
-- **Sample is far too small** (7 trades / 17 months / 28 pairs) to conclude anything. Treat all of it
-  as **exploratory**. No profitability is claimed; nothing here earns a forecasting display.
+- The only robust signal here is the **comparison**: unfiltered H1 continuation is sharply negative
+  (−0.64R, PF 0.26, 27 trades), so trading H1 continuations *without* a higher-timeframe filter is a
+  losing proposition on this data.
+- The filtered strategy is positive in the handful of trades it takes, but at **5 trades over 17
+  months across 28 pairs it is NOT a result** — the positive expectancy, the 2:1+ profit factor and
+  the "100% OOS" are all artefacts of a near-empty sample. One or two trades decide everything.
+- The v1.1 rules (BOS precondition + current-period anchor) trade **selectivity for sample size** to
+  the point of self-defeat here: there is not enough history to evaluate them. **Exploratory only;
+  no profitability is claimed; nothing earns a forecasting display.** A real test needs years more
+  data (or a lower timeframe pair, e.g. H4→M15) to accumulate trades.
 
 ## 6. Combined-portfolio caveat
 
@@ -145,7 +146,7 @@ The two models read the **same price data** and overlap in time and currencies, 
 signals are **not independent confirmation** and must not be pooled as if uncorrelated. In this
 sample: **0** overlapping same-pair opportunities; shared-currency max concurrent exposure **1** per
 currency. Keep per-strategy results separate; the pooled row above is illustrative, not a portfolio
-claim.
+claim — and with 5 + 1 trades it is doubly meaningless.
 
 ## 7. UI
 

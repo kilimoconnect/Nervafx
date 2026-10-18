@@ -32,21 +32,22 @@ incl. invalidation & no-reactivation, trade sim, metrics, as-of causality). M15 
 Report: `docs/research/paw1h4_backtest.json`; run `node scripts/research/paw1h4-backtest.js`.
 Economics mid-only estimated.
 
-Figures are **v1.1 — with the recent-W1-candle break-of-structure precondition**.
+Figures are **v1.1 — recent-W1-candle BOS precondition + current-week pullback anchor**.
 
 | Variant | n | Expectancy | PF | Win | Max DD | Streak |
 |---|---:|---:|---:|---:|---:|---:|
-| **Weekly-filtered** | 2 | −0.209R | 0.59 | 50% | 1.01R | 1 |
+| **Weekly-filtered** | 1 | +2.37R | ∞ | 100% | 0 | 0 |
 | H4-only (no weekly filter) | 11 | +0.545R | 2.17 | 55% | 2.05R | 2 |
 | Weekly-structure baseline | 0 | — | — | — | — | — |
-| OOS (last 40%) | 2 | −0.209R | 0.59 | 50% | 1.01R | 1 |
-| @ doubled costs | 2 | −0.243R | 0.52 | 50% | 1.02R | 1 |
+| OOS (last 40%) | 0 | — | — | — | — | — |
+| @ doubled costs | 1 | +2.24R | ∞ | 100% | 0 | 0 |
 
-**Honest read:** the recent-W1-candle BOS precondition is extremely restrictive on the weekly
-timeframe — it leaves just **2 trades** in 17 months (negative). That is **no sample at all**; nothing
-can be concluded. The unfiltered H4 variant (11 trades, +0.55R) only shows that most of the activity
-lives below the weekly structure. Exploratory only; no profitability claimed. (The gate is more
-productive on D1→H1 — see that doc — but still far too few trades.)
+**Honest read:** the v1.1 rules leave exactly **1 qualifying trade** in 17 months on the weekly
+timeframe — it won, but **one trade is not evidence of anything**. Requiring the H4 pullback to fit
+inside the current week, after a trend-direction W1 break of structure, is essentially never
+satisfied in this short history. The unfiltered H4 variant (11 trades, +0.55R) just shows most
+activity lives below the weekly structure. **Exploratory only; no profitability claimed.** The weekly
+timeframe needs many years of data to produce a testable sample.
 
 ## UI
 `/weekly-h4` (`public/paw1h4.html`, API `/api/paw1h4`): W1 + H4 charts with swing markers and
