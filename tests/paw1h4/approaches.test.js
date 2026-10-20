@@ -99,3 +99,17 @@ test('buildApproachFrame is causal: appending future H1 does not change the as-o
   assert.equal(JSON.stringify(a.candidates), JSON.stringify(b.candidates));
   assert.equal(a.markers.length, b.markers.length);
 });
+
+test('location gate: when price is INSIDE the range, balance-relative approaches are NO_SETUP', () => {
+  const bal = { confirmed: true, lower: 1.1000, upper: 1.2000, mid: 1.1500, widthPips: 1000, establishedUtc: established };
+  // a valid lower-rejection exists in the H4 history …
+  const h4 = bars([[1.1050, 1.1010, 1.1020], [1.1030, 1.0990, 1.1010], [1.1060, 1.1020, 1.1040], [1.1080, 1.1030, 1.1060]]);
+  // … but the CURRENT location is INSIDE (deep in the range)
+  const ctx = ctxStub(h4, bal); ctx.location = { zone: 'INSIDE' };
+  assert.equal(pick(detectRangeRejection(ctx, CONFIG), 'BUY').state, 'NO_SETUP');
+  assert.equal(pick(detectAcceptedBreakout(ctx, CONFIG), 'BUY').state, 'NO_SETUP');
+  assert.equal(pick(detectFailedBreakout(ctx, CONFIG), 'BUY').state, 'NO_SETUP');
+  // at the boundary it is NOT gated out
+  const ctx2 = ctxStub(h4, bal); ctx2.location = { zone: 'AT_LOWER' };
+  assert.notEqual(pick(detectRangeRejection(ctx2, CONFIG), 'BUY').state, 'NO_SETUP');
+});

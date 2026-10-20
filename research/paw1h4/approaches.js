@@ -78,6 +78,9 @@ function detectRangeRejection(ctx, cfg) {
     const c = base('RANGE_REJECTION', dir, cfg);
     const boundary = dir === 'BUY' ? 'lower' : 'upper';
     if (!ctx.balance || !ctx.balance.confirmed) { c.state = 'CONTEXT_MISSING'; c.rejectionReasons.push(`no established ${TN} balance`); out.push(c); continue; }
+    // A rejection is only a CURRENT setup while price is still at the boundary; once price
+    // has moved back INSIDE the range it is stale (not a live boundary interaction).
+    if (ctx.location && ctx.location.zone === 'INSIDE') { c.state = 'NO_SETUP'; c.rejectionReasons.push('price is inside the range — no current boundary interaction'); out.push(c); continue; }
     const h4 = ctx._internal.h4, bal = ctx.balance, buffer = ctx._internal.buffer, pip = ctx._internal.pip;
     const walk = balanceWalk(h4, bal, { acceptN: CONTRACTS.acceptN, fromMs: Date.parse(bal.establishedUtc) });
     const ep = latestEpisode(walk, (e) => e.boundary === boundary && e.kind === 'REJECTION');
@@ -115,6 +118,9 @@ function detectAcceptedBreakout(ctx, cfg) {
       if (arr.length) { refPrice = arr[arr.length - 1].price; refKind = `confirmed ${TN} swing level`; fromMs = Date.parse(arr[arr.length - 1].knownUtc); }
     }
     if (refPrice == null) { c.state = 'CONTEXT_MISSING'; c.rejectionReasons.push(`no ${TN} reference (balance boundary or confirmed swing) to depart from`); out.push(c); continue; }
+    // An accepted breakout needs price to have DEPARTED the reference; if price is inside
+    // the balance there is no current departure to accept.
+    if (ctx.location && ctx.location.zone === 'INSIDE') { c.state = 'NO_SETUP'; c.rejectionReasons.push('price is inside the range — no current departure'); out.push(c); continue; }
     const h4 = ctx._internal.h4, buffer = ctx._internal.buffer;
     const band = { upper: dir === 'BUY' ? refPrice : Infinity, lower: dir === 'BUY' ? -Infinity : refPrice };
     const walk = balanceWalk(h4, band, { acceptN: CONTRACTS.acceptN, fromMs });
@@ -156,6 +162,9 @@ function detectFailedBreakout(ctx, cfg) {
     // Long = a DOWNWARD departure fails (reclaim up); short = an upward departure fails.
     const boundary = dir === 'BUY' ? 'lower' : 'upper';
     if (!ctx.balance || !ctx.balance.confirmed) { c.state = 'CONTEXT_MISSING'; c.rejectionReasons.push(`no established ${TN} balance`); out.push(c); continue; }
+    // A failed breakout is actionable just as price reclaims the boundary; once it has
+    // travelled back INSIDE the range the return move is spent (not a current setup).
+    if (ctx.location && ctx.location.zone === 'INSIDE') { c.state = 'NO_SETUP'; c.rejectionReasons.push('price is inside the range — the return move is already spent'); out.push(c); continue; }
     const h4 = ctx._internal.h4, bal = ctx.balance, buffer = ctx._internal.buffer;
     const walk = balanceWalk(h4, bal, { acceptN: CONTRACTS.acceptN, fromMs: Date.parse(bal.establishedUtc) });
     const ep = latestEpisode(walk, (e) => e.boundary === boundary && e.kind === 'FAILED');
