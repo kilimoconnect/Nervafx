@@ -15,8 +15,7 @@
 const { getClient, cors } = require('./_db');
 const { loadH1, loadH1Parallel } = require('../research/paw1h4/dbload');
 const { buildFrame } = require('../research/paw1h4/frame');
-const { scanAll } = require('../research/paw1h4/scan');
-const { TF_W1H4 } = require('../research/paw1h4/pipeline');
+const { buildApproachFrame, scanApproaches } = require('../research/paw1h4/approaches');
 const { CONFIG, PAIRS } = require('../research/paw1h4/config');
 
 module.exports = async function handler(req, res) {
@@ -36,16 +35,24 @@ module.exports = async function handler(req, res) {
     const opts = { fromIso };
     if (mode === 'historical') opts.toIso = new Date(nowMs).toISOString();
 
-    // Multi-pair scan: rank all 28 pairs by current tradeability.
+    // Multi-approach scan: all 28 pairs with weekly context + best candidate.
     if (req.query && (req.query.scan === '1' || req.query.scan === 'true')) {
       const all = await loadH1Parallel(sb, PAIRS, opts, 8);
-      const scan = scanAll(all, PAIRS, CONFIG, TF_W1H4, nowMs);
-      return res.json({ ok: true, scan, strategyId: CONFIG.strategyId, trendLabel: 'W1', entryLabel: 'H4', asOfUtc: new Date(nowMs).toISOString(), mode, pairs: PAIRS });
+      const scan = PAIRS.map((p) => { try { return scanApproaches(all[p] || [], p, nowMs, CONFIG); } catch (e) { return { pair: p, bias: 'UNAVAILABLE', balance: null, location: 'ERROR', best: null, score: -1 }; } });
+      scan.sort((a, b) => (b.score - a.score) || a.pair.localeCompare(b.pair));
+      return res.json({ ok: true, scan, strategyId: 'PA_W1_H4_MULTI', asOfUtc: new Date(nowMs).toISOString(), mode, pairs: PAIRS });
     }
 
-    const h1byPair = await loadH1(sb, [pair], opts);
-    const h1 = h1byPair[pair] || [];
+    const h1 = (await loadH1(sb, [pair], opts))[pair] || [];
     if (!h1.length) return res.json({ ok: true, available: false, reason: 'NO_H1_DATA', pair, mode });
+
+    // Multi-approach frame for /weekly-h4; default stays the legacy frame so the
+    // Daily→H1 comparison card (which fetches this endpoint) keeps working.
+    if (req.query && (req.query.approaches === '1' || req.query.approaches === 'true')) {
+      const frame = buildApproachFrame(h1, pair, nowMs, CONFIG);
+      frame.mode = mode; frame.pairs = PAIRS;
+      return res.json({ ok: true, available: true, ...frame });
+    }
 
     const frame = buildFrame(h1, pair, nowMs, CONFIG);
     frame.mode = mode; frame.pairs = PAIRS;

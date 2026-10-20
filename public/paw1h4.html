@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>NervaFX — Weekly → H4 Continuation (research)</title>
+<title>NervaFX — Weekly → H4 market context & approaches (research)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="icon" type="image/png" href="/nervafx-icon.png">
@@ -11,7 +11,7 @@
 <div class="wrap">
   <header class="app">
     <img src="/nervafx-logo.png" alt="NervaFX" style="height:26px;display:block" onerror="this.style.display='none'">
-    <span class="logo">Weekly → H4 Continuation</span>
+    <span class="logo">Weekly → H4 · context &amp; approaches</span>
     <span class="pill" id="ver">—</span>
     <span class="pill warn">RESEARCH · UNVALIDATED</span>
     <span class="pill">PRICE-ACTION ONLY</span>
@@ -32,14 +32,16 @@
 
   <div class="datahdr" id="datahdr" aria-live="polite">Loading…</div>
   <div id="banners" aria-live="polite"></div>
-  <main id="viewhost"><div class="card mut">Loading research frame…</div></main>
+  <main id="viewhost"><div class="card mut">Loading market context…</div></main>
 
   <div class="foot">
-    W1 and H4 are UTC-anchored aggregates of completed H1 candles (DST-invariant; weeks open Monday 00:00 UTC,
-    H4 at 00/04/08/12/16/20 UTC). Price action only — confirmed 2-2 fractal swings, weekly structural trend,
-    H4 pullback → first break → retest → continuation. No EMA/RSI/MACD/ATR/volume/strength filters, no broker
-    or order path. Replay shows only what was knowable at the selected close. UNVALIDATED research — no
-    profitability is claimed.
+    Four research approaches over the completed weekly structure: <b>pullback continuation</b> (legacy),
+    <b>range-boundary rejection</b>, <b>accepted breakout</b> and <b>failed breakout</b>. Weekly references
+    (balance boundaries, confirmed swing levels) derive ONLY from completed weekly candles knowable at the
+    H4 assessment time; current-week H4 candles may interact with them but never change the completed weekly
+    assessment and are never called a completed weekly breakout. Price action only — no indicators, smoothed
+    candles, currency-strength filters, LLM signals or order execution. A ranked candidate is NOT a
+    demonstrated profitable trade. UTC + EAT; causal <code>?asOf=</code> replay.
   </div>
 </div>
 
@@ -57,13 +59,13 @@
   function showBanner(cls, html) { document.getElementById('banners').innerHTML = '<div class="state-banner ' + cls + '">' + html + '</div>'; document.getElementById('viewhost').innerHTML = ''; }
 
   var pair = qp('pair') || 'EUR_USD';
-  var url = '/api/paw1h4?pair=' + encodeURIComponent(pair) + (curAsOf ? '&asOf=' + curAsOf : '');
-  document.getElementById('datahdr').textContent = 'Loading ' + pair + ' research frame… (first load builds weekly structure, a few seconds)';
-  fetch(url).then(function (r) { return r.json(); }).then(function (j) {
+  var q = '?pair=' + encodeURIComponent(pair) + (curAsOf ? '&asOf=' + curAsOf : '');
+  document.getElementById('datahdr').textContent = 'Loading ' + pair + ' weekly context + approaches…';
+  fetch('/api/paw1h4?approaches=1' + q).then(function (r) { return r.json(); }).then(function (j) {
     if (!j || j.ok === false) throw new Error((j && j.error) || 'request failed');
     if (j.available === false) { showBanner('sb-unavail', 'UNAVAILABLE — ' + (j.reason || 'no data') + ' for ' + pair + '.'); return; }
-    window.NFX_PAW = j;
-    return loadScript('/paw1h4/app.js').then(function () {
+    window.NFX_W1H4 = j;
+    return loadScript('/paw1h4/approaches-app.js').then(function () {
       fetch('/api/paw1h4?scan=1' + (curAsOf ? '&asOf=' + curAsOf : '')).then(function (r) { return r.json(); })
         .then(function (s) { if (s && s.scan && window.NFX_RENDER_SCAN) window.NFX_RENDER_SCAN(s.scan); })
         .catch(function () { if (window.NFX_RENDER_SCAN) window.NFX_RENDER_SCAN(null); });
