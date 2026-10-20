@@ -1,0 +1,364 @@
+{
+  "strategyId": "PA_D1_H1_MULTI",
+  "version": "d1h1-multi-1.0.0",
+  "generatedAt": "2026-10-20T10:44:02.755Z",
+  "inspectedData": {
+    "pairs": 28,
+    "h1Span": {
+      "from": "2025-12-24T11:00:00.000Z",
+      "to": "2026-10-20T09:00:00.000Z"
+    },
+    "note": "Current-snapshot (latest completed H4 close per pair). EXPLORATORY — a later evaluation on UNSEEN data is required. Economics are mid-only estimated; the 2:1 gate is a research eligibility rule, not a profitability claim."
+  },
+  "candidateCountsByApproachState": {
+    "ACCEPTED_BREAKOUT": {
+      "NO_SETUP": 45,
+      "CONFIRMED": 7,
+      "OBJECTIVE_UNAVAILABLE": 1,
+      "INELIGIBLE_ECONOMICS": 3
+    },
+    "PULLBACK": {
+      "CONTEXT_MISSING": 19,
+      "NO_SETUP": 9
+    },
+    "RANGE_REJECTION": {
+      "CONTEXT_MISSING": 36,
+      "NO_SETUP": 19,
+      "FORMING": 1
+    },
+    "FAILED_BREAKOUT": {
+      "CONTEXT_MISSING": 36,
+      "NO_SETUP": 19,
+      "FORMING": 1
+    }
+  },
+  "confirmedCandidates": [
+    {
+      "pair": "CAD_JPY",
+      "approach": "ACCEPTED_BREAKOUT",
+      "dir": "BUY",
+      "rewardRisk": 15.36,
+      "objective": 112.594,
+      "invalidation": 111.487
+    },
+    {
+      "pair": "EUR_CAD",
+      "approach": "ACCEPTED_BREAKOUT",
+      "dir": "SELL",
+      "rewardRisk": 20.85,
+      "objective": 1.5621,
+      "invalidation": 1.58668
+    },
+    {
+      "pair": "EUR_CHF",
+      "approach": "ACCEPTED_BREAKOUT",
+      "dir": "SELL",
+      "rewardRisk": 6.96,
+      "objective": 0.92212,
+      "invalidation": 0.92629
+    },
+    {
+      "pair": "GBP_JPY",
+      "approach": "ACCEPTED_BREAKOUT",
+      "dir": "BUY",
+      "rewardRisk": 5.88,
+      "objective": 211.284,
+      "invalidation": 210.151
+    },
+    {
+      "pair": "GBP_NZD",
+      "approach": "ACCEPTED_BREAKOUT",
+      "dir": "SELL",
+      "rewardRisk": 20.57,
+      "objective": 2.33174,
+      "invalidation": 2.35493
+    },
+    {
+      "pair": "NZD_JPY",
+      "approach": "ACCEPTED_BREAKOUT",
+      "dir": "BUY",
+      "rewardRisk": 3.73,
+      "objective": 90.371,
+      "invalidation": 89.051
+    },
+    {
+      "pair": "NZD_USD",
+      "approach": "ACCEPTED_BREAKOUT",
+      "dir": "BUY",
+      "rewardRisk": 18.52,
+      "objective": 0.57272,
+      "invalidation": 0.56734
+    }
+  ],
+  "firstRejectionFunnel": {
+    "no H4 accepted departure beyond the weekly balance boundary": 45,
+    "none": 16,
+    "no established weekly balance": 72,
+    "no_target": 11,
+    "no lower-boundary rejection (wick test) in the current balance": 10,
+    "no upper-boundary rejection (wick test) in the current balance": 9,
+    "no attempted lower departure that reclaimed the range": 9,
+    "no attempted upper departure that reclaimed the range": 10,
+    "rr_below_min": 8,
+    "no eligible objective beyond entry": 1,
+    "R:R 1.54 below 2:1 after costs": 1,
+    "reclaim seen; awaiting a completed H4 close confirming the failure (progress back into range)": 1,
+    "rejection seen; awaiting a completed H4 close progressing away from the boundary": 1,
+    "R:R 1.48 below 2:1 after costs": 1,
+    "R:R 1.34 below 2:1 after costs": 1
+  },
+  "byPair": {
+    "AUD_CAD": {
+      "ACCEPTED_BREAKOUT:BUY": "NO_SETUP",
+      "ACCEPTED_BREAKOUT:SELL": "NO_SETUP",
+      "PULLBACK:-": "CONTEXT_MISSING",
+      "RANGE_REJECTION:BUY": "CONTEXT_MISSING",
+      "RANGE_REJECTION:SELL": "CONTEXT_MISSING",
+      "FAILED_BREAKOUT:BUY": "CONTEXT_MISSING",
+      "FAILED_BREAKOUT:SELL": "CONTEXT_MISSING"
+    },
+    "AUD_CHF": {
+      "ACCEPTED_BREAKOUT:BUY": "NO_SETUP",
+      "ACCEPTED_BREAKOUT:SELL": "NO_SETUP",
+      "PULLBACK:-": "CONTEXT_MISSING",
+      "RANGE_REJECTION:BUY": "CONTEXT_MISSING",
+      "RANGE_REJECTION:SELL": "CONTEXT_MISSING",
+      "FAILED_BREAKOUT:BUY": "CONTEXT_MISSING",
+      "FAILED_BREAKOUT:SELL": "CONTEXT_MISSING"
+    },
+    "AUD_JPY": {
+      "RANGE_REJECTION:BUY": "NO_SETUP",
+      "RANGE_REJECTION:SELL": "NO_SETUP",
+      "ACCEPTED_BREAKOUT:BUY": "NO_SETUP",
+      "ACCEPTED_BREAKOUT:SELL": "NO_SETUP",
+      "FAILED_BREAKOUT:BUY": "NO_SETUP",
+      "FAILED_BREAKOUT:SELL": "NO_SETUP",
+      "PULLBACK:-": "CONTEXT_MISSING"
+    },
+    "AUD_NZD": {
+      "ACCEPTED_BREAKOUT:BUY": "NO_SETUP",
+      "ACCEPTED_BREAKOUT:SELL": "NO_SETUP",
+      "PULLBACK:-": "CONTEXT_MISSING",
+      "RANGE_REJECTION:BUY": "CONTEXT_MISSING",
+      "RANGE_REJECTION:SELL": "CONTEXT_MISSING",
+      "FAILED_BREAKOUT:BUY": "CONTEXT_MISSING",
+      "FAILED_BREAKOUT:SELL": "CONTEXT_MISSING"
+    },
+    "AUD_USD": {
+      "RANGE_REJECTION:BUY": "NO_SETUP",
+      "RANGE_REJECTION:SELL": "NO_SETUP",
+      "ACCEPTED_BREAKOUT:BUY": "NO_SETUP",
+      "ACCEPTED_BREAKOUT:SELL": "NO_SETUP",
+      "FAILED_BREAKOUT:BUY": "NO_SETUP",
+      "FAILED_BREAKOUT:SELL": "NO_SETUP",
+      "PULLBACK:-": "CONTEXT_MISSING"
+    },
+    "CAD_CHF": {
+      "RANGE_REJECTION:BUY": "NO_SETUP",
+      "RANGE_REJECTION:SELL": "NO_SETUP",
+      "ACCEPTED_BREAKOUT:BUY": "NO_SETUP",
+      "ACCEPTED_BREAKOUT:SELL": "NO_SETUP",
+      "FAILED_BREAKOUT:BUY": "NO_SETUP",
+      "FAILED_BREAKOUT:SELL": "NO_SETUP",
+      "PULLBACK:-": "CONTEXT_MISSING"
+    },
+    "CAD_JPY": {
+      "ACCEPTED_BREAKOUT:BUY": "CONFIRMED",
+      "PULLBACK:BUY": "NO_SETUP",
+      "RANGE_REJECTION:BUY": "NO_SETUP",
+      "RANGE_REJECTION:SELL": "NO_SETUP",
+      "ACCEPTED_BREAKOUT:SELL": "NO_SETUP",
+      "FAILED_BREAKOUT:BUY": "NO_SETUP",
+      "FAILED_BREAKOUT:SELL": "NO_SETUP"
+    },
+    "CHF_JPY": {
+      "ACCEPTED_BREAKOUT:BUY": "NO_SETUP",
+      "ACCEPTED_BREAKOUT:SELL": "NO_SETUP",
+      "PULLBACK:-": "CONTEXT_MISSING",
+      "RANGE_REJECTION:BUY": "CONTEXT_MISSING",
+      "RANGE_REJECTION:SELL": "CONTEXT_MISSING",
+      "FAILED_BREAKOUT:BUY": "CONTEXT_MISSING",
+      "FAILED_BREAKOUT:SELL": "CONTEXT_MISSING"
+    },
+    "EUR_AUD": {
+      "PULLBACK:SELL": "NO_SETUP",
+      "RANGE_REJECTION:BUY": "NO_SETUP",
+      "RANGE_REJECTION:SELL": "NO_SETUP",
+      "ACCEPTED_BREAKOUT:BUY": "NO_SETUP",
+      "ACCEPTED_BREAKOUT:SELL": "NO_SETUP",
+      "FAILED_BREAKOUT:BUY": "NO_SETUP",
+      "FAILED_BREAKOUT:SELL": "NO_SETUP"
+    },
+    "EUR_CAD": {
+      "ACCEPTED_BREAKOUT:SELL": "CONFIRMED",
+      "PULLBACK:SELL": "NO_SETUP",
+      "ACCEPTED_BREAKOUT:BUY": "NO_SETUP",
+      "RANGE_REJECTION:BUY": "CONTEXT_MISSING",
+      "RANGE_REJECTION:SELL": "CONTEXT_MISSING",
+      "FAILED_BREAKOUT:BUY": "CONTEXT_MISSING",
+      "FAILED_BREAKOUT:SELL": "CONTEXT_MISSING"
+    },
+    "EUR_CHF": {
+      "ACCEPTED_BREAKOUT:SELL": "CONFIRMED",
+      "PULLBACK:SELL": "NO_SETUP",
+      "ACCEPTED_BREAKOUT:BUY": "NO_SETUP",
+      "RANGE_REJECTION:BUY": "CONTEXT_MISSING",
+      "RANGE_REJECTION:SELL": "CONTEXT_MISSING",
+      "FAILED_BREAKOUT:BUY": "CONTEXT_MISSING",
+      "FAILED_BREAKOUT:SELL": "CONTEXT_MISSING"
+    },
+    "EUR_GBP": {
+      "ACCEPTED_BREAKOUT:SELL": "OBJECTIVE_UNAVAILABLE",
+      "PULLBACK:SELL": "NO_SETUP",
+      "ACCEPTED_BREAKOUT:BUY": "NO_SETUP",
+      "RANGE_REJECTION:BUY": "CONTEXT_MISSING",
+      "RANGE_REJECTION:SELL": "CONTEXT_MISSING",
+      "FAILED_BREAKOUT:BUY": "CONTEXT_MISSING",
+      "FAILED_BREAKOUT:SELL": "CONTEXT_MISSING"
+    },
+    "EUR_JPY": {
+      "PULLBACK:SELL": "NO_SETUP",
+      "ACCEPTED_BREAKOUT:BUY": "NO_SETUP",
+      "ACCEPTED_BREAKOUT:SELL": "NO_SETUP",
+      "RANGE_REJECTION:BUY": "CONTEXT_MISSING",
+      "RANGE_REJECTION:SELL": "CONTEXT_MISSING",
+      "FAILED_BREAKOUT:BUY": "CONTEXT_MISSING",
+      "FAILED_BREAKOUT:SELL": "CONTEXT_MISSING"
+    },
+    "EUR_NZD": {
+      "ACCEPTED_BREAKOUT:SELL": "INELIGIBLE_ECONOMICS",
+      "ACCEPTED_BREAKOUT:BUY": "NO_SETUP",
+      "PULLBACK:-": "CONTEXT_MISSING",
+      "RANGE_REJECTION:BUY": "CONTEXT_MISSING",
+      "RANGE_REJECTION:SELL": "CONTEXT_MISSING",
+      "FAILED_BREAKOUT:BUY": "CONTEXT_MISSING",
+      "FAILED_BREAKOUT:SELL": "CONTEXT_MISSING"
+    },
+    "EUR_USD": {
+      "PULLBACK:SELL": "NO_SETUP",
+      "ACCEPTED_BREAKOUT:BUY": "NO_SETUP",
+      "ACCEPTED_BREAKOUT:SELL": "NO_SETUP",
+      "RANGE_REJECTION:BUY": "CONTEXT_MISSING",
+      "RANGE_REJECTION:SELL": "CONTEXT_MISSING",
+      "FAILED_BREAKOUT:BUY": "CONTEXT_MISSING",
+      "FAILED_BREAKOUT:SELL": "CONTEXT_MISSING"
+    },
+    "GBP_AUD": {
+      "ACCEPTED_BREAKOUT:BUY": "NO_SETUP",
+      "ACCEPTED_BREAKOUT:SELL": "NO_SETUP",
+      "PULLBACK:-": "CONTEXT_MISSING",
+      "RANGE_REJECTION:BUY": "CONTEXT_MISSING",
+      "RANGE_REJECTION:SELL": "CONTEXT_MISSING",
+      "FAILED_BREAKOUT:BUY": "CONTEXT_MISSING",
+      "FAILED_BREAKOUT:SELL": "CONTEXT_MISSING"
+    },
+    "GBP_CAD": {
+      "ACCEPTED_BREAKOUT:BUY": "NO_SETUP",
+      "ACCEPTED_BREAKOUT:SELL": "NO_SETUP",
+      "PULLBACK:-": "CONTEXT_MISSING",
+      "RANGE_REJECTION:BUY": "CONTEXT_MISSING",
+      "RANGE_REJECTION:SELL": "CONTEXT_MISSING",
+      "FAILED_BREAKOUT:BUY": "CONTEXT_MISSING",
+      "FAILED_BREAKOUT:SELL": "CONTEXT_MISSING"
+    },
+    "GBP_CHF": {
+      "ACCEPTED_BREAKOUT:BUY": "NO_SETUP",
+      "ACCEPTED_BREAKOUT:SELL": "NO_SETUP",
+      "PULLBACK:-": "CONTEXT_MISSING",
+      "RANGE_REJECTION:BUY": "CONTEXT_MISSING",
+      "RANGE_REJECTION:SELL": "CONTEXT_MISSING",
+      "FAILED_BREAKOUT:BUY": "CONTEXT_MISSING",
+      "FAILED_BREAKOUT:SELL": "CONTEXT_MISSING"
+    },
+    "GBP_JPY": {
+      "ACCEPTED_BREAKOUT:BUY": "CONFIRMED",
+      "PULLBACK:BUY": "NO_SETUP",
+      "RANGE_REJECTION:BUY": "NO_SETUP",
+      "RANGE_REJECTION:SELL": "NO_SETUP",
+      "ACCEPTED_BREAKOUT:SELL": "NO_SETUP",
+      "FAILED_BREAKOUT:BUY": "NO_SETUP",
+      "FAILED_BREAKOUT:SELL": "NO_SETUP"
+    },
+    "GBP_NZD": {
+      "ACCEPTED_BREAKOUT:SELL": "CONFIRMED",
+      "FAILED_BREAKOUT:BUY": "FORMING",
+      "RANGE_REJECTION:BUY": "NO_SETUP",
+      "RANGE_REJECTION:SELL": "NO_SETUP",
+      "ACCEPTED_BREAKOUT:BUY": "NO_SETUP",
+      "FAILED_BREAKOUT:SELL": "NO_SETUP",
+      "PULLBACK:-": "CONTEXT_MISSING"
+    },
+    "GBP_USD": {
+      "ACCEPTED_BREAKOUT:BUY": "NO_SETUP",
+      "ACCEPTED_BREAKOUT:SELL": "NO_SETUP",
+      "PULLBACK:-": "CONTEXT_MISSING",
+      "RANGE_REJECTION:BUY": "CONTEXT_MISSING",
+      "RANGE_REJECTION:SELL": "CONTEXT_MISSING",
+      "FAILED_BREAKOUT:BUY": "CONTEXT_MISSING",
+      "FAILED_BREAKOUT:SELL": "CONTEXT_MISSING"
+    },
+    "NZD_CAD": {
+      "ACCEPTED_BREAKOUT:BUY": "NO_SETUP",
+      "ACCEPTED_BREAKOUT:SELL": "NO_SETUP",
+      "PULLBACK:-": "CONTEXT_MISSING",
+      "RANGE_REJECTION:BUY": "CONTEXT_MISSING",
+      "RANGE_REJECTION:SELL": "CONTEXT_MISSING",
+      "FAILED_BREAKOUT:BUY": "CONTEXT_MISSING",
+      "FAILED_BREAKOUT:SELL": "CONTEXT_MISSING"
+    },
+    "NZD_CHF": {
+      "RANGE_REJECTION:SELL": "FORMING",
+      "ACCEPTED_BREAKOUT:BUY": "INELIGIBLE_ECONOMICS",
+      "RANGE_REJECTION:BUY": "NO_SETUP",
+      "ACCEPTED_BREAKOUT:SELL": "NO_SETUP",
+      "FAILED_BREAKOUT:BUY": "NO_SETUP",
+      "FAILED_BREAKOUT:SELL": "NO_SETUP",
+      "PULLBACK:-": "CONTEXT_MISSING"
+    },
+    "NZD_JPY": {
+      "ACCEPTED_BREAKOUT:BUY": "CONFIRMED",
+      "RANGE_REJECTION:BUY": "NO_SETUP",
+      "RANGE_REJECTION:SELL": "NO_SETUP",
+      "ACCEPTED_BREAKOUT:SELL": "NO_SETUP",
+      "FAILED_BREAKOUT:BUY": "NO_SETUP",
+      "FAILED_BREAKOUT:SELL": "NO_SETUP",
+      "PULLBACK:-": "CONTEXT_MISSING"
+    },
+    "NZD_USD": {
+      "ACCEPTED_BREAKOUT:BUY": "CONFIRMED",
+      "ACCEPTED_BREAKOUT:SELL": "NO_SETUP",
+      "PULLBACK:-": "CONTEXT_MISSING",
+      "RANGE_REJECTION:BUY": "CONTEXT_MISSING",
+      "RANGE_REJECTION:SELL": "CONTEXT_MISSING",
+      "FAILED_BREAKOUT:BUY": "CONTEXT_MISSING",
+      "FAILED_BREAKOUT:SELL": "CONTEXT_MISSING"
+    },
+    "USD_CAD": {
+      "ACCEPTED_BREAKOUT:SELL": "INELIGIBLE_ECONOMICS",
+      "RANGE_REJECTION:BUY": "NO_SETUP",
+      "RANGE_REJECTION:SELL": "NO_SETUP",
+      "ACCEPTED_BREAKOUT:BUY": "NO_SETUP",
+      "FAILED_BREAKOUT:BUY": "NO_SETUP",
+      "FAILED_BREAKOUT:SELL": "NO_SETUP",
+      "PULLBACK:-": "CONTEXT_MISSING"
+    },
+    "USD_CHF": {
+      "ACCEPTED_BREAKOUT:BUY": "NO_SETUP",
+      "ACCEPTED_BREAKOUT:SELL": "NO_SETUP",
+      "PULLBACK:-": "CONTEXT_MISSING",
+      "RANGE_REJECTION:BUY": "CONTEXT_MISSING",
+      "RANGE_REJECTION:SELL": "CONTEXT_MISSING",
+      "FAILED_BREAKOUT:BUY": "CONTEXT_MISSING",
+      "FAILED_BREAKOUT:SELL": "CONTEXT_MISSING"
+    },
+    "USD_JPY": {
+      "PULLBACK:BUY": "NO_SETUP",
+      "ACCEPTED_BREAKOUT:BUY": "NO_SETUP",
+      "ACCEPTED_BREAKOUT:SELL": "NO_SETUP",
+      "RANGE_REJECTION:BUY": "CONTEXT_MISSING",
+      "RANGE_REJECTION:SELL": "CONTEXT_MISSING",
+      "FAILED_BREAKOUT:BUY": "CONTEXT_MISSING",
+      "FAILED_BREAKOUT:SELL": "CONTEXT_MISSING"
+    }
+  }
+}

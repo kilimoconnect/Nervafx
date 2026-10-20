@@ -78,3 +78,40 @@ test('D1→H1 frame is causal and timeframe-labelled', () => {
   const f2 = frame(h1.concat(genH1(START + 1500 * H1_MS, 100)), 'EUR_USD', asOf);
   assert.equal(JSON.stringify(f.h4), JSON.stringify(f2.h4));
 });
+
+// ── Daily → H1 MULTI-APPROACH (PA_D1_H1_MULTI) ─────────────────────────────────
+const { buildApproachFrame, evaluateApproaches, MTF_D1H1 } = require('../../research/paw1h4/approaches');
+function h1Daily(days, fn) {
+  const out = []; const S = Date.UTC(2025, 0, 6, 0, 0, 0);
+  for (let d = 0; d < days; d++) for (let h = 0; h < 24; h++) { const c = fn(d, h); const i = d * 24 + h; out.push({ openMs: S + i * H1_MS, closeMs: S + (i + 1) * H1_MS, open: c, high: c + 0.0003, low: c - 0.0003, close: c }); }
+  return out;
+}
+
+test('D1→H1 multi: oscillating daily market yields an established daily balance + D1/H1 labels', () => {
+  const h1 = h1Daily(60, function (d, h) { return 1.1000 + 0.004 * Math.sin(d * Math.PI / 4) + 0.0008 * Math.sin((h / 24) * 2 * Math.PI); });
+  const asOf = h1[55 * 24].closeMs;
+  const r = evaluateApproaches(h1, 'EUR_USD', asOf, CONFIG, MTF_D1H1);
+  assert.equal(r.context.trendLabel, 'D1');
+  assert.equal(r.context.entryLabel, 'H1');
+  assert.ok(r.context.balance && r.context.balance.confirmed, 'daily balance confirmed from oscillation');
+  // all four approaches represented
+  var apps = {}; r.candidates.forEach(function (c) { apps[c.approach] = true; });
+  ['PULLBACK', 'RANGE_REJECTION', 'ACCEPTED_BREAKOUT', 'FAILED_BREAKOUT'].forEach(function (a) { assert.ok(apps[a], a + ' present'); });
+});
+
+test('D1→H1 multi frame is causal and uses the archived-legacy pullback engine for that approach', () => {
+  const h1 = h1Daily(80, function (d, h) { return 1.1000 + 0.00006 * (d * 24 + h) + 0.0006 * Math.sin((h / 24) * 2 * Math.PI) + 0.0015 * Math.sin(d * Math.PI / 5); });
+  const asOf = h1[Math.floor(h1.length * 0.8)].closeMs;
+  const a = buildApproachFrame(h1, 'EUR_USD', asOf, CONFIG, MTF_D1H1);
+  assert.equal(a.strategyId, 'PA_D1_H1_MULTI');
+  assert.equal(a.entryLabel, 'H1');
+  for (const c of a.h4candles) assert.ok(c.t < asOf, 'entry candles are completed as-of t');
+  const pull = a.candidates.find(function (c) { return c.approach === 'PULLBACK'; });
+  assert.ok(pull && /pullback/i.test(pull.version), 'pullback approach present');
+  // appending future H1 does not change the as-of frame
+  const future = []; const last = h1[h1.length - 1];
+  for (let i = 0; i < 200; i++) { const c = 1.5 + 0.001 * i; future.push({ openMs: last.closeMs + i * H1_MS, closeMs: last.closeMs + (i + 1) * H1_MS, open: c, high: c + 0.0003, low: c - 0.0003, close: c }); }
+  const b = buildApproachFrame(h1.concat(future), 'EUR_USD', asOf, CONFIG, MTF_D1H1);
+  assert.equal(JSON.stringify(a.context.balance), JSON.stringify(b.context.balance));
+  assert.equal(JSON.stringify(a.candidates), JSON.stringify(b.candidates));
+});

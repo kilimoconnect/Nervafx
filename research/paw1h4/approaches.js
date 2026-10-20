@@ -16,10 +16,15 @@
  *   INELIGIBLE_ECONOMICS · INVALIDATED
  */
 
-const { buildMarketContext } = require('./weeklyContext');
+const { buildMarketContext, MTF_W1H4: CTX_W1H4, MTF_D1H1: CTX_D1H1 } = require('./weeklyContext');
 const { balanceWalk, latestEpisode } = require('./balanceWalk');
 const { buildFrame } = require('./frame');
+const { TF_D1H1 } = require('./pipeline');
 const { pipSize } = require('./config');
+
+// Multi-approach timeframe descriptors (context TF names + legacy pullback engine TF + ids).
+const MTF_W1H4 = Object.assign({}, CTX_W1H4, { legacyTf: undefined, strategyId: 'PA_W1_H4_MULTI', version: 'w1h4-multi-1.0.0' });
+const MTF_D1H1 = Object.assign({}, CTX_D1H1, { legacyTf: TF_D1H1, strategyId: 'PA_D1_H1_MULTI', version: 'd1h1-multi-1.0.0' });
 
 const CONTRACTS = {
   RANGE_REJECTION: 'range-rejection-1.0.0',
@@ -68,11 +73,11 @@ function base(approach, dir, cfg) {
 
 // ── 2. RANGE-BOUNDARY REJECTION ────────────────────────────────────────────────
 function detectRangeRejection(ctx, cfg) {
-  const out = [];
+  const out = []; const TN = ctx._internal.trendName, EN = ctx._internal.entryName;
   for (const dir of ['BUY', 'SELL']) {
     const c = base('RANGE_REJECTION', dir, cfg);
     const boundary = dir === 'BUY' ? 'lower' : 'upper';
-    if (!ctx.balance || !ctx.balance.confirmed) { c.state = 'CONTEXT_MISSING'; c.rejectionReasons.push('no established weekly balance'); out.push(c); continue; }
+    if (!ctx.balance || !ctx.balance.confirmed) { c.state = 'CONTEXT_MISSING'; c.rejectionReasons.push(`no established ${TN} balance`); out.push(c); continue; }
     const h4 = ctx._internal.h4, bal = ctx.balance, buffer = ctx._internal.buffer, pip = ctx._internal.pip;
     const walk = balanceWalk(h4, bal, { acceptN: CONTRACTS.acceptN, fromMs: Date.parse(bal.establishedUtc) });
     const ep = latestEpisode(walk, (e) => e.boundary === boundary && e.kind === 'REJECTION');
@@ -84,7 +89,7 @@ function detectRangeRejection(ctx, cfg) {
     c.objective = bal.mid; c.objectiveReason = 'frozen balance midpoint (v1)';
     c.timestamps = { rejectionUtc: iso(ep.startMs) };
     const conf = confirmProgress(h4, ep.startIdx, h4[ep.startIdx], dir);
-    if (!conf) { c.state = 'FORMING'; c.rejectionReasons.push('rejection seen; awaiting a completed H4 close progressing away from the boundary'); out.push(c); continue; }
+    if (!conf) { c.state = 'FORMING'; c.rejectionReasons.push(`rejection seen; awaiting a completed ${EN} close progressing away from the boundary`); out.push(c); continue; }
     Object.assign(c.timestamps, { confirmedUtc: iso(conf.confirmedMs), entryOpenUtc: iso(conf.entryOpenMs) });
     c.entryBarIdx = conf.entryBarIdx; c.entryPrice = conf.entryPrice;
     const econ = economics(dir, conf.entryPrice, c.invalidation, c.objective, ctx.pair, cfg);
@@ -98,37 +103,37 @@ function detectRangeRejection(ctx, cfg) {
 
 // ── 3. ACCEPTED BREAKOUT ───────────────────────────────────────────────────────
 function detectAcceptedBreakout(ctx, cfg) {
-  const out = [];
+  const out = []; const TN = ctx._internal.trendName, EN = ctx._internal.entryName;
   for (const dir of ['BUY', 'SELL']) {
     const c = base('ACCEPTED_BREAKOUT', dir, cfg);
     const boundary = dir === 'BUY' ? 'upper' : 'lower';
-    // Reference: a balance boundary when a balance exists, else the latest confirmed weekly swing in that direction.
+    // Reference: a balance boundary when a balance exists, else the latest confirmed swing in that direction.
     let refPrice = null, refKind = null, fromMs = -Infinity;
-    if (ctx.balance) { refPrice = dir === 'BUY' ? ctx.balance.upper : ctx.balance.lower; refKind = 'weekly balance boundary'; fromMs = Date.parse(ctx.balance.establishedUtc); }
+    if (ctx.balance) { refPrice = dir === 'BUY' ? ctx.balance.upper : ctx.balance.lower; refKind = `${TN} balance boundary`; fromMs = Date.parse(ctx.balance.establishedUtc); }
     else {
       const arr = dir === 'BUY' ? ctx.references.structuralHighs : ctx.references.structuralLows;
-      if (arr.length) { refPrice = arr[arr.length - 1].price; refKind = 'confirmed weekly swing level'; fromMs = Date.parse(arr[arr.length - 1].knownUtc); }
+      if (arr.length) { refPrice = arr[arr.length - 1].price; refKind = `confirmed ${TN} swing level`; fromMs = Date.parse(arr[arr.length - 1].knownUtc); }
     }
-    if (refPrice == null) { c.state = 'CONTEXT_MISSING'; c.rejectionReasons.push('no weekly reference (balance boundary or confirmed swing) to depart from'); out.push(c); continue; }
+    if (refPrice == null) { c.state = 'CONTEXT_MISSING'; c.rejectionReasons.push(`no ${TN} reference (balance boundary or confirmed swing) to depart from`); out.push(c); continue; }
     const h4 = ctx._internal.h4, buffer = ctx._internal.buffer;
     const band = { upper: dir === 'BUY' ? refPrice : Infinity, lower: dir === 'BUY' ? -Infinity : refPrice };
     const walk = balanceWalk(h4, band, { acceptN: CONTRACTS.acceptN, fromMs });
     const ep = latestEpisode(walk, (e) => e.boundary === boundary && e.kind === 'ACCEPTED');
     c.reference = { price: refPrice, kind: refKind };
-    if (!ep) { c.state = 'NO_SETUP'; c.rejectionReasons.push(`no H4 accepted departure beyond the ${refKind}`); out.push(c); continue; }
+    if (!ep) { c.state = 'NO_SETUP'; c.rejectionReasons.push(`no ${EN} accepted departure beyond the ${refKind}`); out.push(c); continue; }
     // "Accepted" also requires progress (not two closes alone): the extreme beyond must
     // extend past the first close beyond, in the departure direction.
     const d = dir === 'BUY' ? 1 : -1;
     const progressed = d > 0 ? ep.extreme > refPrice + buffer : ep.extreme < refPrice - buffer;
     if (!progressed) { c.state = 'FORMING'; c.rejectionReasons.push('closes beyond the reference but acceptance not yet demonstrated by progress'); out.push(c); continue; }
     c.eventId = `ACC:${boundary}:${ep.startMs}`;
-    c.label = 'H4 accepted departure from a weekly reference (NOT a completed weekly breakout)';
+    c.label = `${EN} accepted departure from a ${TN} reference (NOT a completed ${TN} breakout)`;
     c.frozenExtreme = ep.extreme;
     c.invalidation = dir === 'BUY' ? +(refPrice - buffer).toFixed(8) : +(refPrice + buffer).toFixed(8);   // back inside past the reference
     // Objective: next confirmed weekly structural level beyond the current extreme.
     const levels = dir === 'BUY' ? ctx.references.structuralHighs.map((h) => h.price).filter((p) => p > ep.extreme) : ctx.references.structuralLows.map((l) => l.price).filter((p) => p < ep.extreme);
     c.objective = levels.length ? (dir === 'BUY' ? Math.min.apply(null, levels) : Math.max.apply(null, levels)) : null;
-    c.objectiveReason = c.objective != null ? 'next confirmed weekly structural level beyond' : 'no structural level beyond — trade evaluation unavailable, structural observation retained';
+    c.objectiveReason = c.objective != null ? `next confirmed ${TN} structural level beyond` : 'no structural level beyond — trade evaluation unavailable, structural observation retained';
     c.timestamps = { acceptedUtc: iso(ep.acceptedMs || ep.startMs) };
     const entryBar = h4[(ep.acceptedIdx != null ? ep.acceptedIdx : ep.startIdx) + 1] || null;
     c.entryBarIdx = entryBar ? (ep.acceptedIdx != null ? ep.acceptedIdx : ep.startIdx) + 1 : null;
@@ -145,12 +150,12 @@ function detectAcceptedBreakout(ctx, cfg) {
 
 // ── 4. FAILED BREAKOUT ─────────────────────────────────────────────────────────
 function detectFailedBreakout(ctx, cfg) {
-  const out = [];
+  const out = []; const TN = ctx._internal.trendName, EN = ctx._internal.entryName;
   for (const dir of ['BUY', 'SELL']) {
     const c = base('FAILED_BREAKOUT', dir, cfg);
     // Long = a DOWNWARD departure fails (reclaim up); short = an upward departure fails.
     const boundary = dir === 'BUY' ? 'lower' : 'upper';
-    if (!ctx.balance || !ctx.balance.confirmed) { c.state = 'CONTEXT_MISSING'; c.rejectionReasons.push('no established weekly balance'); out.push(c); continue; }
+    if (!ctx.balance || !ctx.balance.confirmed) { c.state = 'CONTEXT_MISSING'; c.rejectionReasons.push(`no established ${TN} balance`); out.push(c); continue; }
     const h4 = ctx._internal.h4, bal = ctx.balance, buffer = ctx._internal.buffer;
     const walk = balanceWalk(h4, bal, { acceptN: CONTRACTS.acceptN, fromMs: Date.parse(bal.establishedUtc) });
     const ep = latestEpisode(walk, (e) => e.boundary === boundary && e.kind === 'FAILED');
@@ -160,10 +165,10 @@ function detectFailedBreakout(ctx, cfg) {
     c.reference = { boundary, price: dir === 'BUY' ? bal.lower : bal.upper };
     c.frozenExtreme = ep.extreme;
     c.invalidation = dir === 'BUY' ? +(ep.extreme - buffer).toFixed(8) : +(ep.extreme + buffer).toFixed(8);
-    c.objective = bal.mid; c.objectiveReason = 'frozen balance midpoint (v1) — return-into-range (NOT a weekly trend reversal)';
+    c.objective = bal.mid; c.objectiveReason = `frozen balance midpoint (v1) — return-into-range (NOT a ${TN} trend reversal)`;
     c.timestamps = { departedUtc: iso(ep.startMs), reclaimedUtc: iso(ep.reclaimMs) };
     const conf = confirmProgress(h4, ep.reclaimIdx, h4[ep.reclaimIdx], dir);
-    if (!conf) { c.state = 'FORMING'; c.rejectionReasons.push('reclaim seen; awaiting a completed H4 close confirming the failure (progress back into range)'); out.push(c); continue; }
+    if (!conf) { c.state = 'FORMING'; c.rejectionReasons.push(`reclaim seen; awaiting a completed ${EN} close confirming the failure (progress back into range)`); out.push(c); continue; }
     Object.assign(c.timestamps, { confirmedUtc: iso(conf.confirmedMs), entryOpenUtc: iso(conf.entryOpenMs) });
     c.entryBarIdx = conf.entryBarIdx; c.entryPrice = conf.entryPrice;
     const econ = economics(dir, conf.entryPrice, c.invalidation, c.objective, ctx.pair, cfg);
@@ -176,8 +181,8 @@ function detectFailedBreakout(ctx, cfg) {
 }
 
 // ── 1. PULLBACK (legacy) ───────────────────────────────────────────────────────
-function detectPullback(h1, pair, asOfMs, cfg) {
-  const f = buildFrame(h1, pair, asOfMs, cfg);   // legacy W1→H4 engine frame
+function detectPullback(h1, pair, asOfMs, cfg, mtf) {
+  const f = buildFrame(h1, pair, asOfMs, cfg, mtf && mtf.legacyTf);   // legacy pullback engine frame (W1→H4 or D1→H1)
   const dir = f.h4.dir || (f.weekly.bias === 'BULLISH' ? 'BUY' : f.weekly.bias === 'BEARISH' ? 'SELL' : null);
   const c = base('PULLBACK', dir, cfg);
   c.legacy = true;
@@ -194,10 +199,11 @@ function detectPullback(h1, pair, asOfMs, cfg) {
 // ── Combined evaluation + ranking ──────────────────────────────────────────────
 const GROUP = { CONFIRMED: 0, FORMING: 1, OBJECTIVE_UNAVAILABLE: 2, INELIGIBLE_ECONOMICS: 3, NO_SETUP: 4, CONTEXT_MISSING: 5, INVALIDATED: 6 };
 
-function evaluateApproaches(h1, pair, asOfMs, cfg) {
-  const ctx = buildMarketContext(h1, asOfMs, cfg, pair);
+function evaluateApproaches(h1, pair, asOfMs, cfg, mtf) {
+  mtf = mtf || MTF_W1H4;
+  const ctx = buildMarketContext(h1, asOfMs, cfg, pair, mtf);
   const candidates = []
-    .concat([detectPullback(h1, pair, asOfMs, cfg)])
+    .concat([detectPullback(h1, pair, asOfMs, cfg, mtf)])
     .concat(detectRangeRejection(ctx, cfg))
     .concat(detectAcceptedBreakout(ctx, cfg))
     .concat(detectFailedBreakout(ctx, cfg));
@@ -213,9 +219,10 @@ function evaluateApproaches(h1, pair, asOfMs, cfg) {
 
 // ── Serializable frame for the /weekly-h4 page (charts + references + markers) ──
 const agg = require('./aggregate');
-function buildApproachFrame(h1, pair, asOfMs, cfg) {
-  const ev = evaluateApproaches(h1, pair, asOfMs, cfg);
-  const h4 = agg.h4(h1, asOfMs), w1 = agg.w1(h1, asOfMs);
+function buildApproachFrame(h1, pair, asOfMs, cfg, mtf) {
+  mtf = mtf || MTF_W1H4;
+  const ev = evaluateApproaches(h1, pair, asOfMs, cfg, mtf);
+  const h4 = mtf.entry(h1, asOfMs), w1 = mtf.trend(h1, asOfMs);
   const bal = ev.context.balance;
   // H4 interaction markers against the balance band (observable event times).
   let markers = [];
@@ -225,7 +232,8 @@ function buildApproachFrame(h1, pair, asOfMs, cfg) {
   }
   const EAT = (ms) => new Date(ms + 3 * 3600000).toISOString().replace('.000Z', ' EAT').replace('T', ' ');
   return {
-    strategyId: 'PA_W1_H4_MULTI', version: 'w1h4-multi-1.0.0', pair,
+    strategyId: mtf.strategyId, version: mtf.version, pair,
+    trendLabel: mtf.trendLabel, entryLabel: mtf.entryLabel,
     asOfUtc: new Date(asOfMs).toISOString(), asOfEat: EAT(asOfMs),
     context: ev.context, candidates: ev.candidates, funnel: ev.funnel,
     references: {
@@ -240,8 +248,8 @@ function buildApproachFrame(h1, pair, asOfMs, cfg) {
 }
 
 // ── Light per-pair scan summary for the 28-pair scanner ────────────────────────
-function scanApproaches(h1, pair, asOfMs, cfg) {
-  const ev = evaluateApproaches(h1, pair, asOfMs, cfg);
+function scanApproaches(h1, pair, asOfMs, cfg, mtf) {
+  const ev = evaluateApproaches(h1, pair, asOfMs, cfg, mtf);
   const best = ev.candidates[0] || null;
   const b = ev.context.balance;
   const freshness = best && best.timestamps ? Math.max.apply(null, [0].concat(Object.values(best.timestamps).map((v) => (v ? Date.parse(v) : 0)))) : 0;
@@ -256,4 +264,4 @@ function scanApproaches(h1, pair, asOfMs, cfg) {
   };
 }
 
-module.exports = { evaluateApproaches, buildApproachFrame, scanApproaches, detectRangeRejection, detectAcceptedBreakout, detectFailedBreakout, detectPullback, economics, CONTRACTS };
+module.exports = { evaluateApproaches, buildApproachFrame, scanApproaches, detectRangeRejection, detectAcceptedBreakout, detectFailedBreakout, detectPullback, economics, CONTRACTS, MTF_W1H4, MTF_D1H1 };

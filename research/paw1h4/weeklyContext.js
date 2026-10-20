@@ -37,16 +37,23 @@ function median(xs) { if (!xs.length) return 0; const a = xs.slice().sort((x, y)
 function medAbsDelta(closes) { const d = []; for (let i = 1; i < closes.length; i++) d.push(Math.abs(closes[i] - closes[i - 1])); return median(d); }
 const iso = (ms) => (ms == null || !isFinite(ms) ? null : new Date(ms).toISOString());
 
+// Timeframe descriptor: trend TF (W1 or D1) + entry TF (H4 or H1) + display names.
+const MTF_W1H4 = { trend: (h1, a) => agg.w1(h1, a), entry: (h1, a) => agg.h4(h1, a), trendName: 'weekly', entryName: 'H4', trendLabel: 'W1', entryLabel: 'H4' };
+const MTF_D1H1 = { trend: (h1, a) => agg.d1(h1, a), entry: (h1, a) => agg.h1AsOf(h1, a), trendName: 'daily', entryName: 'H1', trendLabel: 'D1', entryLabel: 'H1' };
+
 /**
  * @param h1      raw H1 candles for one pair
  * @param asOfMs  assessment time (causal)
  * @param cfg     strategy config (uses cfg.swing, cfg.execution)
  * @param pair    instrument (for pip size)
+ * @param mtf     timeframe descriptor (trend/entry aggregators + names); default W1→H4
  */
-function buildMarketContext(h1, asOfMs, cfg, pair) {
+function buildMarketContext(h1, asOfMs, cfg, pair, mtf) {
+  mtf = mtf || MTF_W1H4;
+  const TN = mtf.trendName, EN = mtf.entryName;
   const pip = pipSize(pair || cfg.pair || 'EUR_USD');
-  const w1 = agg.w1(h1, asOfMs);
-  const h4 = agg.h4(h1, asOfMs);
+  const w1 = mtf.trend(h1, asOfMs);   // trend-TF candles (W1 or D1)
+  const h4 = mtf.entry(h1, asOfMs);   // entry-TF candles (H4 or H1)
   const trend = buildWeeklyContext(w1, cfg.swing);
   const bias = trend.biasAt(asOfMs);
   const conf = confirmedAsOf(trend.pivots, asOfMs);
@@ -119,16 +126,18 @@ function buildMarketContext(h1, asOfMs, cfg, pair) {
   }
 
   // ── Evidence ────────────────────────────────────────────────────────────────
+  const cap = TN.charAt(0).toUpperCase() + TN.slice(1);
   const supporting = [], conflicting = [], missing = [];
-  if (bias.bias === 'BULLISH' || bias.bias === 'BEARISH') supporting.push(`Weekly trend ${bias.bias} (confirmed structure).`);
-  if (balance && balance.confirmed) supporting.push(`Established weekly balance ${balance.lower}–${balance.upper} (${balance.closesInside} contained closes).`);
-  if (bias.bias === 'NEUTRAL' && !(balance && balance.confirmed)) conflicting.push('Weekly structure NEUTRAL but no established balance — range is NOT demonstrated.');
+  if (bias.bias === 'BULLISH' || bias.bias === 'BEARISH') supporting.push(`${cap} trend ${bias.bias} (confirmed structure).`);
+  if (balance && balance.confirmed) supporting.push(`Established ${TN} balance ${balance.lower}–${balance.upper} (${balance.closesInside} contained closes).`);
+  if (bias.bias === 'NEUTRAL' && !(balance && balance.confirmed)) conflicting.push(`${cap} structure NEUTRAL but no established balance — range is NOT demonstrated.`);
   if ((bias.bias === 'BULLISH' || bias.bias === 'BEARISH') && balance && balance.confirmed) supporting.push('Trend and a local balance coexist — treat the balance as a staging area within the trend.');
-  if (!highs.length || !lows.length) missing.push('Insufficient confirmed weekly swings for boundaries.');
-  if (!lastH4) missing.push('No completed H4 candle at the assessment time.');
+  if (!highs.length || !lows.length) missing.push(`Insufficient confirmed ${TN} swings for boundaries.`);
+  if (!lastH4) missing.push(`No completed ${EN} candle at the assessment time.`);
 
   return {
     version: CONTEXT_VERSION, pair: pair || cfg.pair || null, asOfUtc: iso(asOfMs),
+    trendLabel: mtf.trendLabel, entryLabel: mtf.entryLabel,
     trend: { bias: bias.bias, eligibilityStartUtc: iso(bias.eligibilityStartMs), invalidationLevel: bias.invalidationLevel },
     balance, location,
     references: {
@@ -137,8 +146,8 @@ function buildMarketContext(h1, asOfMs, cfg, pair) {
     },
     evidence: { supporting, conflicting, missing },
     // handles for the approach detectors (not serialized to the client directly)
-    _internal: { w1, h4, trend, conf, highs, lows, bias, pip, buffer },
+    _internal: { w1, h4, trend, conf, highs, lows, bias, pip, buffer, trendName: TN, entryName: EN },
   };
 }
 
-module.exports = { buildMarketContext, CONTEXT_VERSION, BALANCE };
+module.exports = { buildMarketContext, CONTEXT_VERSION, BALANCE, MTF_W1H4, MTF_D1H1 };

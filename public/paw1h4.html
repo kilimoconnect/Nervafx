@@ -64,7 +64,7 @@
   fetch('/api/paw1h4?approaches=1' + q).then(function (r) { return r.json(); }).then(function (j) {
     if (!j || j.ok === false) throw new Error((j && j.error) || 'request failed');
     if (j.available === false) { showBanner('sb-unavail', 'UNAVAILABLE — ' + (j.reason || 'no data') + ' for ' + pair + '.'); return; }
-    window.NFX_W1H4 = j;
+    window.NFX_MULTI = j;
     return loadScript('/paw1h4/approaches-app.js').then(function () {
       fetch('/api/paw1h4?scan=1' + (curAsOf ? '&asOf=' + curAsOf : '')).then(function (r) { return r.json(); })
         .then(function (s) { if (s && s.scan && window.NFX_RENDER_SCAN) window.NFX_RENDER_SCAN(s.scan); })

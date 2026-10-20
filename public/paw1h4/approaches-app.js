@@ -1,6 +1,7 @@
 (function () {
   'use strict';
-  var J = window.NFX_W1H4;
+  var J = window.NFX_MULTI || window.NFX_W1H4;
+  var TL = J.trendLabel || 'W1', EL = J.entryLabel || 'H4';
   var $ = function (id) { return document.getElementById(id); };
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }
   function pretty(s) { return String(s == null ? '' : s).toLowerCase().replace(/_/g, ' ').replace(/^./, function (c) { return c.toUpperCase(); }); }
@@ -17,7 +18,7 @@
   var ctx = J.context, bal = ctx.balance, loc = ctx.location, tr = ctx.trend;
   var biasBadge = { BULLISH: 'b-up', BEARISH: 'b-dn', NEUTRAL: 'b-mut', UNAVAILABLE: 'b-warn' };
   $('datahdr').innerHTML = '<b>' + J.pair.replace('_', '/') + '</b> · as of <b>' + fmt(J.asOfUtc) + '</b> (' + esc(J.asOfEat) + ') · mode ' + esc(J.mode) +
-    ' · weekly <span class="badge ' + (biasBadge[tr.bias] || 'b-mut') + '">' + tr.bias + '</span>' +
+    ' · ' + TL + ' <span class="badge ' + (biasBadge[tr.bias] || 'b-mut') + '">' + tr.bias + '</span>' +
     ' · ' + (bal && bal.confirmed ? 'balance ' + num(bal.lower) + '–' + num(bal.upper) : 'no established balance') +
     ' · location <b>' + esc(pretty(loc.zone)) + '</b>';
 
@@ -58,11 +59,11 @@
   // ---- context + evidence card ----
   var ev = ctx.evidence || { supporting: [], conflicting: [], missing: [] };
   var evList = function (arr, cls) { return arr.length ? '<ul style="margin:4px 0 0;padding-left:18px">' + arr.map(function (x) { return '<li class="' + cls + '" style="font-size:12px">' + esc(x) + '</li>'; }).join('') + '</ul>' : '<span class="mut">—</span>'; };
-  var locRows = '<div class="kv"><span>Weekly trend</span><span class="badge ' + (biasBadge[tr.bias] || 'b-mut') + '">' + tr.bias + '</span></div>';
-  if (bal) locRows += '<div class="kv"><span>Weekly balance</span><span>' + (bal.confirmed ? '<span class="pos">established</span> ' : '<span class="mut">unconfirmed</span> ') + num(bal.lower) + '–' + num(bal.upper) + ' <span class="mut">(mid ' + num(bal.mid) + ', ' + bal.widthPips + 'p)</span></span></div>';
-  else locRows += '<div class="kv"><span>Weekly balance</span><span class="mut">none (needs two confirmed swings oscillating)</span></div>';
-  locRows += '<div class="kv"><span>H4 location</span><b>' + esc(pretty(loc.zone)) + '</b>' + (loc.distToUpperPips != null ? ' <span class="mut">↑' + loc.distToUpperPips + 'p / ↓' + loc.distToLowerPips + 'p</span>' : '') + '</div>';
-  var contextCard = '<div class="card"><h2>Weekly market context</h2>' + locRows +
+  var locRows = '<div class="kv"><span>' + TL + ' trend</span><span class="badge ' + (biasBadge[tr.bias] || 'b-mut') + '">' + tr.bias + '</span></div>';
+  if (bal) locRows += '<div class="kv"><span>' + TL + ' balance</span><span>' + (bal.confirmed ? '<span class="pos">established</span> ' : '<span class="mut">unconfirmed</span> ') + num(bal.lower) + '–' + num(bal.upper) + ' <span class="mut">(mid ' + num(bal.mid) + ', ' + bal.widthPips + 'p)</span></span></div>';
+  else locRows += '<div class="kv"><span>' + TL + ' balance</span><span class="mut">none (needs two confirmed swings oscillating)</span></div>';
+  locRows += '<div class="kv"><span>' + EL + ' location</span><b>' + esc(pretty(loc.zone)) + '</b>' + (loc.distToUpperPips != null ? ' <span class="mut">↑' + loc.distToUpperPips + 'p / ↓' + loc.distToLowerPips + 'p</span>' : '') + '</div>';
+  var contextCard = '<div class="card"><h2>' + TL + ' market context</h2>' + locRows +
     '<div class="stmt"><div class="lbl">Supporting evidence</div>' + evList(ev.supporting, 'pos') + '</div>' +
     '<div class="stmt"><div class="lbl">Conflicting evidence</div>' + evList(ev.conflicting, 'neg') + '</div>' +
     '<div class="stmt"><div class="lbl">Missing information</div>' + evList(ev.missing, 'mut') + '</div></div>';
@@ -77,8 +78,8 @@
   // ---- charts ----
   $('viewhost').innerHTML =
     '<div id="scanhost"><div class="card mut">Scanning all 28 pairs…</div></div>' +
-    '<div class="card"><h2>Weekly (W1) — references</h2><div class="chartwrap"><canvas id="cw"></canvas></div></div>' +
-    '<div class="card"><h2>H4 — interaction with weekly references</h2><div class="chartwrap"><canvas id="ch"></canvas></div></div>' +
+    '<div class="card"><h2>' + TL + ' — references</h2><div class="chartwrap"><canvas id="cw"></canvas></div></div>' +
+    '<div class="card"><h2>' + EL + ' — interaction with ' + TL + ' references</h2><div class="chartwrap"><canvas id="ch"></canvas></div></div>' +
     '<div class="grid">' + contextCard + rankCard + '</div>' +
     '<div class="grid">' + order.map(function (a) { return bestByApproach[a] ? candidateCard(bestByApproach[a]) : ''; }).join('') + '</div>';
 
