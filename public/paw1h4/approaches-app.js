@@ -121,7 +121,7 @@
     }).join('');
     var nConf = scan.filter(function (s) { return s.best && s.best.state === 'CONFIRMED'; }).length;
     host.innerHTML = '<div class="card"><h2>Scanner — all ' + scan.length + ' pairs' + (nConf ? ' · <span class="pos">' + nConf + ' confirmed</span>' : '') + '</h2>' +
-      '<table><thead><tr><th>Pair</th><th>Weekly context</th><th>Location</th><th>Opportunity</th><th>Stage</th><th>Economics</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+      '<table><thead><tr><th>Pair</th><th>' + TL + ' context</th><th>Location</th><th>Opportunity</th><th>Stage</th><th>Economics</th></tr></thead><tbody>' + rows + '</tbody></table>' +
       '<div class="mut" style="margin-top:6px;font-size:11px">Grouped by lifecycle stage then recency. Not "best trades"; no win probabilities; related candidates are not independent confirmation. Click a pair for its context and all four approach cards. UNVALIDATED.</div></div>';
     Array.prototype.forEach.call(host.querySelectorAll('.scanrow'), function (tr) { tr.onclick = function () { location.href = location.pathname + '?pair=' + tr.getAttribute('data-pair') + (aArg ? '&asOf=' + aArg : ''); }; });
   };

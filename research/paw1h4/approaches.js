@@ -211,8 +211,14 @@ const GROUP = { CONFIRMED: 0, FORMING: 1, OBJECTIVE_UNAVAILABLE: 2, INELIGIBLE_E
 function evaluateApproaches(h1, pair, asOfMs, cfg, mtf) {
   mtf = mtf || MTF_W1H4;
   const ctx = buildMarketContext(h1, asOfMs, cfg, pair, mtf);
+  const pull = detectPullback(h1, pair, asOfMs, cfg, mtf);
+  // When price is INSIDE an established balance, withhold ALL approaches (including the
+  // trend pullback) — there is no current decision point at a boundary.
+  if (ctx.location && ctx.location.zone === 'INSIDE' && (pull.state === 'FORMING' || pull.state === 'CONFIRMED' || pull.state === 'INELIGIBLE_ECONOMICS')) {
+    pull.state = 'NO_SETUP'; pull.rejectionReasons.unshift('price is inside the range — no current boundary interaction');
+  }
   const candidates = []
-    .concat([detectPullback(h1, pair, asOfMs, cfg, mtf)])
+    .concat([pull])
     .concat(detectRangeRejection(ctx, cfg))
     .concat(detectAcceptedBreakout(ctx, cfg))
     .concat(detectFailedBreakout(ctx, cfg));
