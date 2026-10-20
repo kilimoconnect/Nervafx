@@ -59,7 +59,7 @@
   function showBanner(cls, html) { document.getElementById('banners').innerHTML = '<div class="state-banner ' + cls + '">' + html + '</div>'; document.getElementById('viewhost').innerHTML = ''; }
 
   var pair = qp('pair') || 'EUR_USD';
-  var q = '?pair=' + encodeURIComponent(pair) + (curAsOf ? '&asOf=' + curAsOf : '');
+  var q = '&pair=' + encodeURIComponent(pair) + (curAsOf ? '&asOf=' + curAsOf : '');
   document.getElementById('datahdr').textContent = 'Loading ' + pair + ' weekly context + approaches…';
   fetch('/api/paw1h4?approaches=1' + q).then(function (r) { return r.json(); }).then(function (j) {
     if (!j || j.ok === false) throw new Error((j && j.error) || 'request failed');
