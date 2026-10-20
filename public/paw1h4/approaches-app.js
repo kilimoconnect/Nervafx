@@ -7,6 +7,8 @@
   function pretty(s) { return String(s == null ? '' : s).toLowerCase().replace(/_/g, ' ').replace(/^./, function (c) { return c.toUpperCase(); }); }
   function num(x, d) { return x == null || !isFinite(x) ? '—' : Number(x).toFixed(d == null ? 5 : d); }
   function fmt(iso) { return iso ? String(iso).replace('T', ' ').replace('.000Z', 'Z') : '—'; }
+  // EAT = UTC+3 (the timezone the history picker uses). Display times in EAT.
+  function fmtEat(iso) { if (!iso) return '—'; var ms = Date.parse(iso); if (isNaN(ms)) return '—'; var d = new Date(ms + 3 * 3600000), p = function (n) { return (n < 10 ? '0' : '') + n; }; return d.getUTCFullYear() + '-' + p(d.getUTCMonth() + 1) + '-' + p(d.getUTCDate()) + ' ' + p(d.getUTCHours()) + ':' + p(d.getUTCMinutes()); }
 
   // ---- header / selector ----
   $('ver').textContent = J.version;
@@ -17,7 +19,7 @@
 
   var ctx = J.context, bal = ctx.balance, loc = ctx.location, tr = ctx.trend;
   var biasBadge = { BULLISH: 'b-up', BEARISH: 'b-dn', NEUTRAL: 'b-mut', UNAVAILABLE: 'b-warn' };
-  $('datahdr').innerHTML = '<b>' + J.pair.replace('_', '/') + '</b> · as of <b>' + fmt(J.asOfUtc) + '</b> (' + esc(J.asOfEat) + ') · mode ' + esc(J.mode) +
+  $('datahdr').innerHTML = '<b>' + J.pair.replace('_', '/') + '</b> · as of <b>' + fmtEat(J.asOfUtc) + ' EAT</b> <span class="mut">(' + fmt(J.asOfUtc) + ' UTC)</span> · mode ' + esc(J.mode) +
     ' · ' + TL + ' <span class="badge ' + (biasBadge[tr.bias] || 'b-mut') + '">' + tr.bias + '</span>' +
     ' · ' + (bal && bal.confirmed ? 'balance ' + num(bal.lower) + '–' + num(bal.upper) : 'no established balance') +
     ' · location <b>' + esc(pretty(loc.zone)) + '</b>';
@@ -45,7 +47,7 @@
     if (c.engineState) rows += '<div class="mut" style="font-size:11px">Engine state: ' + esc(pretty(c.engineState)) + '</div>';
     if (c.priorAccepted) rows += '<div class="mut" style="font-size:11px;color:var(--yellow)">Note: this departure was previously ACCEPTED, then failed (chronological transition).</div>';
     var reasons = (c.rejectionReasons || []).length ? '<div class="mut" style="font-size:11px;margin-top:4px">Why not further: ' + c.rejectionReasons.map(esc).join('; ') + '.</div>' : '';
-    var ts = Object.keys(c.timestamps || {}).filter(function (k) { return c.timestamps[k]; }).map(function (k) { return k.replace('Utc', '') + ' ' + fmt(c.timestamps[k]); }).join(' · ');
+    var ts = Object.keys(c.timestamps || {}).filter(function (k) { return c.timestamps[k]; }).map(function (k) { return k.replace('Utc', '') + ' ' + fmtEat(c.timestamps[k]) + ' EAT'; }).join(' · ');
     return '<div class="card"><h2>' + esc(APPROACH_NAME[c.approach] || c.approach) + '</h2>' +
       '<div style="margin-bottom:8px">' + dirB + ' <span class="badge ' + (STATE_BADGE[c.state] || 'b-mut') + '">' + esc(pretty(c.state)) + '</span> <span class="mut" style="font-size:10.5px">' + esc(c.version) + '</span></div>' +
       rows + reasons + (ts ? '<div class="mut" style="font-size:10.5px;margin-top:4px">' + esc(ts) + '</div>' : '') + '</div>';
