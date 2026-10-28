@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NervaFX — Currency Movement Dashboard (research)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" href="/nervafx-icon.png">
+<link rel="stylesheet" href="/paw1h4/styles.css">
+<style>
+  .hm{border-collapse:separate;border-spacing:2px}
+  .hm td,.hm th{text-align:center;padding:6px 8px;border-radius:6px;font-size:12px}
+  .hm th{color:var(--text-muted)}
+  .cell{cursor:default}
+  .drawer{position:fixed;top:0;right:0;height:100%;width:min(520px,94vw);background:var(--bg-card);border-left:1px solid var(--border);box-shadow:-8px 0 24px rgba(0,0,0,.4);overflow:auto;transform:translateX(100%);transition:transform .18s ease;z-index:40;padding:16px}
+  .drawer.open{transform:translateX(0)}
+  .drawer .x{position:absolute;top:12px;right:14px;cursor:pointer;color:var(--text-muted)}
+  .rowbtn{cursor:pointer}
+  .rowbtn:hover td{background:rgba(59,130,246,.08)}
+  .sparkwrap{height:120px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="app">
+    <img src="/nervafx-logo.png" alt="NervaFX" style="height:26px;display:block" onerror="this.style.display='none'">
+    <span class="logo">Currency Movement Dashboard</span>
+    <span class="pill" id="ver">—</span>
+    <span class="pill warn">RESEARCH · UNVALIDATED</span>
+    <span class="pill">PRICE-ACTION ONLY</span>
+    <span class="spacer"></span>
+    <label class="sr-only" for="winsel">Window</label>
+    <select id="winsel" class="btn"></select>
+    <span class="mut" style="font-size:11px">Replay (EAT):</span>
+    <input type="datetime-local" id="histDt" class="btn" step="900">
+    <button class="btn sm" id="histGo">Go</button>
+    <button class="btn sm" id="histLive">● Live</button>
+  </header>
+
+  <div class="datahdr" id="datahdr" aria-live="polite">Loading…</div>
+  <div id="banners" aria-live="polite"></div>
+  <main id="viewhost"><div class="card mut">Loading currency movement…</div></main>
+  <div class="drawer" id="drawer"><span class="x" id="drawerX">✕ close</span><div id="drawerBody"></div></div>
+
+  <div class="foot">
+    Per-currency MOVEMENT from completed M15 candles: each pair's log return is signed (+base / −quote),
+    normalized by the rolling std of non-overlapping same-horizon history (before the window), then the 7
+    contributions are averaged with equal weights → the <b>normalized movement score</b>. Breadth, persistence
+    and onset use overlapping windows and are <b>not</b> independent confirmations. Extension places magnitude in
+    historical context; it does not imply reversal or continuation. This is decision support — <b>not</b> a trade
+    signal, probability, or evidence of profitability. Times in EAT (Africa/Dar_es_Salaam) with UTC alongside.
+    News/expectations layer is scaffolded but not yet populated — fundamental confirmation shows unavailable.
+  </div>
+</div>
+
+<script>
+(function () {
+  function qp(k) { return (location.search.match(new RegExp('[?&]' + k + '=([^&]+)')) || [])[1]; }
+  function eatNaiveFromMs(ms) { var d = new Date(ms + 3 * 3600000), p = function (n) { return (n < 10 ? '0' : '') + n; }; return d.getUTCFullYear() + '-' + p(d.getUTCMonth() + 1) + '-' + p(d.getUTCDate()) + 'T' + p(d.getUTCHours()) + ':' + p(Math.floor(d.getUTCMinutes() / 15) * 15); }
+  function msFromEatNaive(v) { if (!v) return NaN; var t = Date.parse(v + ':00Z'); return isNaN(t) ? NaN : t - 3 * 3600000; }
+  var histDt = document.getElementById('histDt'), curAsOf = qp('asOf'), win = qp('window') || '4h';
+  if (histDt) histDt.value = curAsOf ? eatNaiveFromMs(+curAsOf) : eatNaiveFromMs(Date.now());
+  document.getElementById('histGo').onclick = function () { var ms = msFromEatNaive(histDt.value); if (isNaN(ms) || ms >= Date.now()) { histDt.focus(); return; } location.href = location.pathname + '?window=' + (document.getElementById('winsel').value || win) + '&asOf=' + ms; };
+  document.getElementById('histLive').onclick = function () { location.href = location.pathname + '?window=' + (document.getElementById('winsel').value || win); };
+  document.getElementById('drawerX').onclick = function () { document.getElementById('drawer').classList.remove('open'); };
+
+  function loadScript(src) { return new Promise(function (res, rej) { var s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = function () { rej(new Error('load ' + src)); }; document.body.appendChild(s); }); }
+  function showBanner(cls, html) { document.getElementById('banners').innerHTML = '<div class="state-banner ' + cls + '">' + html + '</div>'; document.getElementById('viewhost').innerHTML = ''; }
+
+  var q = '?window=' + encodeURIComponent(win) + (curAsOf ? '&asOf=' + curAsOf : '');
+  document.getElementById('datahdr').textContent = 'Loading currency movement (' + win + ')… (M15 history load, a few seconds)';
+  fetch('/api/currency-movement' + q).then(function (r) { return r.json(); }).then(function (j) {
+    if (!j || j.ok === false) throw new Error((j && j.error) || 'request failed');
+    if (j.available === false) { showBanner('sb-unavail', 'UNAVAILABLE — ' + (j.reason || 'no data') + '.'); return; }
+    window.NFX_CM = j;
+    return loadScript('/currency-movement/app.js');
+  }).catch(function (e) { showBanner('sb-error', 'ERROR — ' + (e.message || e) + '. No fabricated fallback is shown.'); });
+})();
+</script>
+</body></html>

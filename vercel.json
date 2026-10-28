@@ -29,6 +29,7 @@
     "api/pullback-tri-h4-engine.js": { "maxDuration": 60 },
     "api/paw1h4.js": { "maxDuration": 60 },
     "api/pad1h1.js": { "maxDuration": 60 },
+    "api/currency-movement.js": { "maxDuration": 60 },
     "api/backfill-m5.js": { "maxDuration": 300 },
     "api/currency-stability.js": { "maxDuration": 30 },
     "api/*-history.js": { "maxDuration": 300 }
@@ -44,6 +45,8 @@
     { "source": "/weekly-h4", "destination": "/paw1h4.html" },
     { "source": "/pad1h1", "destination": "/pad1h1.html" },
     { "source": "/daily-h1", "destination": "/pad1h1.html" },
+    { "source": "/currency-movement", "destination": "/currency-movement.html" },
+    { "source": "/movement", "destination": "/currency-movement.html" },
     { "source": "/login",  "destination": "/login.html"   },
     { "source": "/setup",  "destination": "/setup.html"   },
     { "source": "/profile","destination": "/profile.html" },
