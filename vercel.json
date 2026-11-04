@@ -5,49 +5,18 @@
     { "path": "/api/run-pipeline?force=1", "schedule": "3 * * * *" }
   ],
   "functions": {
-    "api/m15-workspace.js":       { "maxDuration": 60 },
-    "api/m15-intelligence.js":    { "maxDuration": 60 },
     "api/news-parse.js":          { "maxDuration": 30 },
     "api/run-pipeline.js":        { "maxDuration": 120 },
     "api/cron-backtest-sync.js":  { "maxDuration": 300 },
-    "api/session-continuity.js":  { "maxDuration": 300 },
-    "api/session-continuity-evolution.js": { "maxDuration": 60 },
-    "api/currency-continuity.js": { "maxDuration": 60 },
-    "api/structure-break.js":     { "maxDuration": 60 },
-    "api/m15-quality.js":         { "maxDuration": 60 },
-    "api/m15-energy.js":          { "maxDuration": 60 },
-    "api/structure-engine.js":    { "maxDuration": 90 },
-    "api/m15-strength-10c.js":    { "maxDuration": 60 },
-    "api/h1-pair-moves.js":       { "maxDuration": 60 },
-    "api/daily-raw-strength.js":  { "maxDuration": 120 },
-    "api/m15-impulse.js": { "maxDuration": 60 },
-    "api/currency-strength-*-ema.js": { "maxDuration": 30 },
-    "api/currency-strength-m15-45m.js": { "maxDuration": 60 },
-    "api/currency-state.js": { "maxDuration": 60 },
-    "api/market-pressure.js": { "maxDuration": 120 },
-    "api/pullback-tri-engine.js": { "maxDuration": 60 },
-    "api/pullback-tri-h4-engine.js": { "maxDuration": 60 },
-    "api/paw1h4.js": { "maxDuration": 60 },
-    "api/pad1h1.js": { "maxDuration": 60 },
-    "api/currency-movement.js": { "maxDuration": 60 },
     "api/currency-comparison.js": { "maxDuration": 60 },
-    "api/backfill-m5.js": { "maxDuration": 300 },
-    "api/currency-stability.js": { "maxDuration": 30 },
-    "api/*-history.js": { "maxDuration": 300 }
+    "api/backfill-m5.js":         { "maxDuration": 300 },
+    "api/*-history.js":           { "maxDuration": 300 }
   },
   "rewrites": [
     { "source": "/",       "destination": "/login.html" },
     { "source": "/home",   "destination": "/login.html" },
-    { "source": "/app",    "destination": "/m15-workspace.html" },
-    { "source": "/workspace", "destination": "/m15-workspace.html" },
-    { "source": "/m15-intelligence", "destination": "/m15-workspace.html" },
-    { "source": "/m15-board", "destination": "/m15-intelligence.html" },
-    { "source": "/paw1h4", "destination": "/paw1h4.html" },
-    { "source": "/weekly-h4", "destination": "/paw1h4.html" },
-    { "source": "/pad1h1", "destination": "/pad1h1.html" },
-    { "source": "/daily-h1", "destination": "/pad1h1.html" },
-    { "source": "/currency-movement", "destination": "/currency-movement.html" },
-    { "source": "/movement", "destination": "/currency-movement.html" },
+    { "source": "/app",    "destination": "/currency-comparison.html" },
+    { "source": "/workspace", "destination": "/currency-comparison.html" },
     { "source": "/currency-comparison", "destination": "/currency-comparison.html" },
     { "source": "/comparison", "destination": "/currency-comparison.html" },
     { "source": "/login",  "destination": "/login.html"   },
@@ -55,20 +24,7 @@
     { "source": "/profile","destination": "/profile.html" },
     { "source": "/admin",   "destination": "/admin.html"   },
     { "source": "/journal",          "destination": "/journal.html" },
-    { "source": "/payment-callback", "destination": "/payment-callback.html" },
-    { "source": "/session-continuity", "destination": "/session-continuity.html" },
-    { "source": "/currency-continuity", "destination": "/currency-continuity.html" },
-    { "source": "/structure-break", "destination": "/structure-break.html" },
-    { "source": "/m15-quality", "destination": "/m15-quality.html" },
-    { "source": "/daily-strength", "destination": "/daily-strength.html" },
-    { "source": "/m15-impulse", "destination": "/m15-impulse.html" },
-    { "source": "/currency-strength-m15", "destination": "/currency-strength-m15.html" },
-    { "source": "/currency-state", "destination": "/currency-state.html" },
-    { "source": "/market-pressure", "destination": "/market-pressure.html" },
-    { "source": "/pullback-tri-engine", "destination": "/pullback-tri-engine.html" },
-    { "source": "/pullback-tri-h4-engine", "destination": "/pullback-tri-h4-engine.html" },
-    { "source": "/currency-stability", "destination": "/currency-stability.html" },
-    { "source": "/mtre", "destination": "/mtre.html" }
+    { "source": "/payment-callback", "destination": "/payment-callback.html" }
   ],
   "headers": [
     {
@@ -84,7 +40,7 @@
       ]
     },
     {
-      "source": "/(app|m15-intelligence)",
+      "source": "/(app|workspace)",
       "headers": [
         { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate" }
       ]

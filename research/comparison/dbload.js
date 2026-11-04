@@ -1,6 +1,9 @@
 'use strict';
 
-/** Read-only M15 loader for the movement engine (backtest_candles, completed only). */
+/** Read-only M15 loader for the Currency Comparison engine (backtest_candles,
+ * completed candles only). Self-contained so the comparison system shares no code with
+ * the retired analytical engines — only the raw market-candle table and its ingestion. */
+
 const { M15_MS } = require('./config');
 
 async function loadM15(sb, pairs, opts = {}) {

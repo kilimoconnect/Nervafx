@@ -15,7 +15,7 @@
  */
 
 const { getClient, cors } = require('./_db');
-const { loadM15Parallel } = require('../research/movement/dbload');
+const { loadM15Parallel } = require('../research/comparison/dbload');
 const { buildComparison } = require('../research/comparison/payload');
 const { CONFIG, PAIRS } = require('../research/comparison/config');
 

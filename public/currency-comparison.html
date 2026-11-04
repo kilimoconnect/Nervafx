@@ -5,7 +5,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="icon" type="image/png" href="/nervafx-icon.png">
-<link rel="stylesheet" href="/paw1h4/styles.css">
+<link rel="stylesheet" href="/shared/styles.css">
 <style>
   .viewtabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
   .viewtabs button{font-size:12px;font-weight:600;color:var(--text-muted);border:1px solid var(--border);border-radius:8px;padding:6px 12px;background:var(--bg-card);cursor:pointer}
@@ -54,14 +54,6 @@
     <button class="btn sm" id="histGo">Go</button>
     <button class="btn sm" id="histLive">● Live</button>
   </header>
-
-  <nav class="navtabs" aria-label="Research views">
-    <a href="/app">H1 Workspace</a>
-    <a href="/weekly-h4">Weekly → H4</a>
-    <a href="/daily-h1">Daily → H1</a>
-    <a href="/currency-movement">Currency Movement</a>
-    <a href="/currency-comparison" class="active" aria-current="page">Currency Comparison</a>
-  </nav>
 
   <div class="viewtabs" role="tablist" aria-label="Comparison period">
     <button data-view="previousDay" role="tab">Previous day</button>
