@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NervaFX — Currency Comparison (research)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" href="/nervafx-icon.png">
+<link rel="stylesheet" href="/paw1h4/styles.css">
+<style>
+  .viewtabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+  .viewtabs button{font-size:12px;font-weight:600;color:var(--text-muted);border:1px solid var(--border);border-radius:8px;padding:6px 12px;background:var(--bg-card);cursor:pointer}
+  .viewtabs button.active{color:var(--text);border-color:var(--accent);background:rgba(59,130,246,.14)}
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  @media(max-width:860px){.grid{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:520px){.grid{grid-template-columns:1fr}}
+  .ccard{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:12px;cursor:pointer;position:relative}
+  .ccard:hover{border-color:var(--accent)}
+  .ccard .rk{position:absolute;top:10px;right:12px;font-size:11px;color:var(--text-muted)}
+  .ccard .ccy{font-size:16px;font-weight:800;letter-spacing:.02em}
+  .ccard .ret{font-size:20px;font-weight:800;margin:2px 0 6px}
+  .ccard .ret.up{color:var(--up)}.ccard .ret.dn{color:var(--dn)}.ccard .ret.fl{color:var(--text-muted)}
+  .ccard .mini{width:100%;height:46px;display:block;margin:4px 0}
+  .ccard .meta{font-size:11px;color:var(--text-muted);line-height:1.5}
+  .ccard .brd b{color:var(--up)}.ccard .brd i{color:var(--dn);font-style:normal}
+  .ccard.na{opacity:.55}
+  .bars{display:flex;gap:2px;align-items:flex-end;height:14px;margin-top:3px}
+  .bars span{flex:1;border-radius:1px}
+  .drawer{position:fixed;top:0;right:0;height:100%;width:min(560px,96vw);background:var(--bg-card);border-left:1px solid var(--border);box-shadow:-8px 0 24px rgba(0,0,0,.4);overflow:auto;transform:translateX(100%);transition:transform .18s ease;z-index:40;padding:16px}
+  .drawer.open{transform:translateX(0)}
+  .drawer .x{position:absolute;top:12px;right:14px;cursor:pointer;color:var(--text-muted)}
+  table.leg{width:100%;border-collapse:collapse;font-size:12px}
+  table.leg th,table.leg td{text-align:right;padding:5px 7px;border-bottom:1px solid var(--border)}
+  table.leg th:first-child,table.leg td:first-child{text-align:left}
+  .ctx{display:flex;gap:8px;margin-top:8px}
+  .ctx .mc{flex:1;border:1px solid var(--border);border-radius:8px;padding:8px;font-size:11px;color:var(--text-muted)}
+  .ctx .mc.hl{border-color:var(--accent)}
+  .sessel{display:none;gap:6px}
+  .sessel.show{display:inline-flex}
+  .sessel button{font-size:11px;padding:4px 9px}
+  .sessel button.on{border-color:var(--accent);color:var(--text)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="app">
+    <img src="/nervafx-logo.png" alt="NervaFX" style="height:26px;display:block" onerror="this.style.display='none'">
+    <span class="logo">Currency Comparison</span>
+    <span class="pill" id="ver">—</span>
+    <span class="pill warn">RESEARCH · UNVALIDATED</span>
+    <span class="pill">PAIR-SELECTION ONLY</span>
+    <span class="spacer"></span>
+    <span class="mut" style="font-size:11px">Replay (EAT):</span>
+    <input type="datetime-local" id="histDt" class="btn" step="900">
+    <button class="btn sm" id="histGo">Go</button>
+    <button class="btn sm" id="histLive">● Live</button>
+  </header>
+
+  <nav class="navtabs" aria-label="Research views">
+    <a href="/app">H1 Workspace</a>
+    <a href="/weekly-h4">Weekly → H4</a>
+    <a href="/daily-h1">Daily → H1</a>
+    <a href="/currency-movement">Currency Movement</a>
+    <a href="/currency-comparison" class="active" aria-current="page">Currency Comparison</a>
+  </nav>
+
+  <div class="viewtabs" role="tablist" aria-label="Comparison period">
+    <button data-view="previousDay" role="tab">Previous day</button>
+    <button data-view="todaySoFar" role="tab">Today so far</button>
+    <button data-view="sessions" role="tab">Sessions</button>
+    <span class="sessel" id="sessel" aria-label="Session">
+      <button data-session="asia">Asia</button>
+      <button data-session="london">London</button>
+      <button data-session="newyork">New York</button>
+    </span>
+  </div>
+
+  <div class="datahdr" id="datahdr" aria-live="polite">Loading…</div>
+  <div id="banners" aria-live="polite"></div>
+  <main id="viewhost"><div class="card mut">Loading currency comparison…</div></main>
+  <div class="drawer" id="drawer"><span class="x" id="drawerX">✕ close</span><div id="drawerBody"></div></div>
+
+  <div class="foot">
+    Each currency is an <b>index</b> built from the 7 pairs it shares with the other majors: every pair's M15 log
+    return is signed (+base / −quote) and averaged with weight <b>1/8</b> (the eight-currency zero-sum construction),
+    then accumulated from a common base of 100. Candles are the index path over the selected period; highs/lows are
+    sampled at <b>M15</b> resolution (intrabar synthetic extremes are not claimed). Breadth counts the actual
+    oriented pair returns and is <b>not</b> 7 independent confirmations. Relative measure only — no absolute value, no
+    combined strength score. This is a <b>research / pair-selection</b> tool — <b>not</b> a trade signal, probability,
+    or evidence of profitability, and it places no orders. Trading day = UTC calendar day; sessions use named,
+    DST-aware timezones. Times shown in EAT (UTC+3) with UTC alongside.
+  </div>
+</div>
+
+<script>
+(function () {
+  function qp(k) { return (location.search.match(new RegExp('[?&]' + k + '=([^&]+)')) || [])[1]; }
+  function eatNaive(ms) { var d = new Date(ms + 3 * 3600000), p = function (n) { return (n < 10 ? '0' : '') + n; }; return d.getUTCFullYear() + '-' + p(d.getUTCMonth() + 1) + '-' + p(d.getUTCDate()) + 'T' + p(d.getUTCHours()) + ':' + p(Math.floor(d.getUTCMinutes() / 15) * 15); }
+  function msFromEat(v) { if (!v) return NaN; var t = Date.parse(v + ':00Z'); return isNaN(t) ? NaN : t - 3 * 3600000; }
+
+  var view = qp('view') || 'previousDay', session = qp('session') || 'london', asOf = qp('asOf');
+  var histDt = document.getElementById('histDt');
+  histDt.value = asOf ? eatNaive(+asOf) : eatNaive(Date.now());
+
+  function go(params) {
+    var p = Object.assign({ view: view, session: session }, params);
+    if (asOf) p.asOf = asOf;
+    var qs = Object.keys(p).filter(function (k) { return p[k] != null && p[k] !== ''; }).map(function (k) { return k + '=' + encodeURIComponent(p[k]); }).join('&');
+    location.href = location.pathname + '?' + qs;
+  }
+  document.getElementById('histGo').onclick = function () { var ms = msFromEat(histDt.value); if (isNaN(ms) || ms >= Date.now()) { histDt.focus(); return; } asOf = ms; go({}); };
+  document.getElementById('histLive').onclick = function () { asOf = null; go({}); };
+  document.getElementById('drawerX').onclick = function () { document.getElementById('drawer').classList.remove('open'); };
+
+  Array.prototype.forEach.call(document.querySelectorAll('.viewtabs [data-view]'), function (b) {
+    if (b.getAttribute('data-view') === view) b.classList.add('active');
+    b.onclick = function () { view = b.getAttribute('data-view'); go({ view: view }); };
+  });
+  var sessel = document.getElementById('sessel');
+  if (view === 'sessions') sessel.classList.add('show');
+  Array.prototype.forEach.call(sessel.querySelectorAll('[data-session]'), function (b) {
+    if (b.getAttribute('data-session') === session) b.classList.add('on');
+    b.onclick = function () { go({ view: 'sessions', session: b.getAttribute('data-session') }); };
+  });
+
+  function loadScript(src) { return new Promise(function (res, rej) { var s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = function () { rej(new Error('load ' + src)); }; document.body.appendChild(s); }); }
+  function showBanner(cls, html) { document.getElementById('banners').innerHTML = '<div class="state-banner ' + cls + '">' + html + '</div>'; document.getElementById('viewhost').innerHTML = ''; }
+
+  var q = '?view=' + encodeURIComponent(view) + '&session=' + encodeURIComponent(session) + (asOf ? '&asOf=' + asOf : '');
+  document.getElementById('datahdr').textContent = 'Loading currency comparison… (M15 history load, a few seconds)';
+  fetch('/api/currency-comparison' + q).then(function (r) { return r.json(); }).then(function (j) {
+    if (!j || j.ok === false) throw new Error((j && j.error) || 'request failed');
+    if (j.available === false) { showBanner('sb-unavail', 'UNAVAILABLE — ' + (j.reason || 'no completed period yet') + '. No zero or fabricated data is shown.'); return; }
+    window.NFX_CC = j;
+    return loadScript('/currency-comparison/app.js');
+  }).catch(function (e) { showBanner('sb-error', 'ERROR — ' + (e.message || e) + '. No fabricated fallback is shown.'); });
+})();
+</script>
+</body></html>
