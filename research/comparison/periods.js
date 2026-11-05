@@ -48,6 +48,45 @@ function todaySoFar(asOfMs, lastDataMs, extra) {
   return periods;
 }
 
+const WEEK_MS = 7 * DAY_MS;
+/** Monday 00:00 UTC of the week containing ms (trading week starts Monday, UTC). */
+function weekStart(ms) {
+  const d = dayStart(ms);
+  const back = (new Date(d).getUTCDay() + 6) % 7;   // 0=Sun..6=Sat → days since Monday
+  return d - back * DAY_MS;
+}
+/** 1st 00:00 UTC of the month containing ms. */
+function monthStart(ms) { const dt = new Date(ms); return Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), 1); }
+/** Start of the month `k` months before the month that starts at ms0. */
+function monthStartBack(ms0, k) { const dt = new Date(ms0); return Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth() - k, 1); }
+
+/** Week-so-far (developing) + the previous `extra` weeks through the SAME elapsed cutoff. */
+function weekSoFar(asOfMs, lastDataMs, extra) {
+  const cutoff = Math.min(asOfMs, lastDataMs == null ? asOfMs : lastDataMs);
+  const ws = weekStart(cutoff);
+  const elapsed = cutoff - ws;             // elapsed into the trading week
+  const periods = [];
+  for (let k = extra; k >= 1; k--) { const s = ws - k * WEEK_MS; periods.push({ startMs: s, endMs: s + elapsed, label: 'wk ' + new Date(s).toISOString().slice(0, 10) + ' (+' + Math.round(elapsed / DAY_MS) + 'd)', status: 'elapsed-week' }); }
+  periods.push({ startMs: ws, endMs: cutoff, label: 'Week so far', status: 'developing', cutoffMs: cutoff, elapsedMs: elapsed });
+  return periods;
+}
+
+/** Month-so-far (developing) + the previous `extra` months through the SAME elapsed cutoff
+ *  (capped at each prior month's length so it never spills into the next month). */
+function monthSoFar(asOfMs, lastDataMs, extra) {
+  const cutoff = Math.min(asOfMs, lastDataMs == null ? asOfMs : lastDataMs);
+  const ms0 = monthStart(cutoff);
+  const elapsed = cutoff - ms0;            // elapsed into the trading month
+  const periods = [];
+  for (let k = extra; k >= 1; k--) {
+    const pm = monthStartBack(ms0, k);
+    const pmLen = monthStartBack(ms0, k - 1) - pm;   // this prior month's full length
+    periods.push({ startMs: pm, endMs: pm + Math.min(elapsed, pmLen), label: 'mo ' + new Date(pm).toISOString().slice(0, 7) + ' (+' + Math.round(Math.min(elapsed, pmLen) / DAY_MS) + 'd)', status: 'elapsed-month' });
+  }
+  periods.push({ startMs: ms0, endMs: cutoff, label: 'Month so far', status: 'developing', cutoffMs: cutoff, elapsedMs: elapsed });
+  return periods;
+}
+
 /** Latest completed occurrences of a session + previous 2 (DST-aware). */
 function completedSessions(sessionName, asOfMs, lastDataMs, count) {
   const sess = sessionByName(sessionName);
@@ -66,4 +105,4 @@ function completedSessions(sessionName, asOfMs, lastDataMs, count) {
   return out.reverse();
 }
 
-module.exports = { dayStart, zparts, zonedToUtc, completedDays, todaySoFar, completedSessions };
+module.exports = { dayStart, weekStart, monthStart, zparts, zonedToUtc, completedDays, todaySoFar, weekSoFar, monthSoFar, completedSessions };

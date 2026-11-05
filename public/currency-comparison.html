@@ -34,10 +34,6 @@
   .ctx{display:flex;gap:8px;margin-top:8px}
   .ctx .mc{flex:1;border:1px solid var(--border);border-radius:8px;padding:8px;font-size:11px;color:var(--text-muted)}
   .ctx .mc.hl{border-color:var(--accent)}
-  .sessel{display:none;gap:6px}
-  .sessel.show{display:inline-flex}
-  .sessel button{font-size:11px;padding:4px 9px}
-  .sessel button.on{border-color:var(--accent);color:var(--text)}
 </style>
 </head>
 <body>
@@ -56,14 +52,9 @@
   </header>
 
   <div class="viewtabs" role="tablist" aria-label="Comparison period">
-    <button data-view="previousDay" role="tab">Previous day</button>
     <button data-view="todaySoFar" role="tab">Today so far</button>
-    <button data-view="sessions" role="tab">Sessions</button>
-    <span class="sessel" id="sessel" aria-label="Session">
-      <button data-session="asia">Asia</button>
-      <button data-session="london">London</button>
-      <button data-session="newyork">New York</button>
-    </span>
+    <button data-view="weekSoFar" role="tab">Week so far</button>
+    <button data-view="monthSoFar" role="tab">Month so far</button>
   </div>
 
   <div class="datahdr" id="datahdr" aria-live="polite">Loading…</div>
@@ -78,8 +69,9 @@
     sampled at <b>M15</b> resolution (intrabar synthetic extremes are not claimed). Breadth counts the actual
     oriented pair returns and is <b>not</b> 7 independent confirmations. Relative measure only — no absolute value, no
     combined strength score. This is a <b>research / pair-selection</b> tool — <b>not</b> a trade signal, probability,
-    or evidence of profitability, and it places no orders. Trading day = UTC calendar day; sessions use named,
-    DST-aware timezones. Times shown in EAT (UTC+3) with UTC alongside.
+    or evidence of profitability, and it places no orders. Developing views: day = UTC calendar day from 00:00,
+    week from Monday 00:00 UTC, month from the 1st 00:00 UTC — each through the latest completed M15 (forming
+    candle excluded). Times shown in EAT (UTC+3) with UTC alongside.
   </div>
 </div>
 
@@ -89,12 +81,12 @@
   function eatNaive(ms) { var d = new Date(ms + 3 * 3600000), p = function (n) { return (n < 10 ? '0' : '') + n; }; return d.getUTCFullYear() + '-' + p(d.getUTCMonth() + 1) + '-' + p(d.getUTCDate()) + 'T' + p(d.getUTCHours()) + ':' + p(Math.floor(d.getUTCMinutes() / 15) * 15); }
   function msFromEat(v) { if (!v) return NaN; var t = Date.parse(v + ':00Z'); return isNaN(t) ? NaN : t - 3 * 3600000; }
 
-  var view = qp('view') || 'previousDay', session = qp('session') || 'london', asOf = qp('asOf');
+  var view = qp('view') || 'todaySoFar', asOf = qp('asOf');
   var histDt = document.getElementById('histDt');
   histDt.value = asOf ? eatNaive(+asOf) : eatNaive(Date.now());
 
   function go(params) {
-    var p = Object.assign({ view: view, session: session }, params);
+    var p = Object.assign({ view: view }, params);
     if (asOf) p.asOf = asOf;
     var qs = Object.keys(p).filter(function (k) { return p[k] != null && p[k] !== ''; }).map(function (k) { return k + '=' + encodeURIComponent(p[k]); }).join('&');
     location.href = location.pathname + '?' + qs;
@@ -107,17 +99,11 @@
     if (b.getAttribute('data-view') === view) b.classList.add('active');
     b.onclick = function () { view = b.getAttribute('data-view'); go({ view: view }); };
   });
-  var sessel = document.getElementById('sessel');
-  if (view === 'sessions') sessel.classList.add('show');
-  Array.prototype.forEach.call(sessel.querySelectorAll('[data-session]'), function (b) {
-    if (b.getAttribute('data-session') === session) b.classList.add('on');
-    b.onclick = function () { go({ view: 'sessions', session: b.getAttribute('data-session') }); };
-  });
 
   function loadScript(src) { return new Promise(function (res, rej) { var s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = function () { rej(new Error('load ' + src)); }; document.body.appendChild(s); }); }
   function showBanner(cls, html) { document.getElementById('banners').innerHTML = '<div class="state-banner ' + cls + '">' + html + '</div>'; document.getElementById('viewhost').innerHTML = ''; }
 
-  var q = '?view=' + encodeURIComponent(view) + '&session=' + encodeURIComponent(session) + (asOf ? '&asOf=' + asOf : '');
+  var q = '?view=' + encodeURIComponent(view) + (asOf ? '&asOf=' + asOf : '');
   document.getElementById('datahdr').textContent = 'Loading currency comparison… (M15 history load, a few seconds)';
   fetch('/api/currency-comparison' + q).then(function (r) { return r.json(); }).then(function (j) {
     if (!j || j.ok === false) throw new Error((j && j.error) || 'request failed');

@@ -5,7 +5,7 @@ const assert = require('node:assert');
 const { buildComparison } = require('../../research/comparison/payload');
 const { CURRENCIES, PAIRS, M15_MS, DAY_MS, CONFIG } = require('../../research/comparison/config');
 
-const START = Date.UTC(2025, 4, 1, 0, 0, 0);   // 2025-05-01 00:00 UTC
+const START = Date.UTC(2025, 4, 1, 0, 0, 0);   // 2025-05-01 00:00 UTC (a Thursday)
 // Self-consistent network: stored pair close = V_base / V_quote.
 function network(nSteps, valueFns) {
   const by = {};
@@ -16,62 +16,68 @@ function network(nSteps, valueFns) {
   return by;
 }
 
-const STEPS = Math.round(4 * DAY_MS / M15_MS);     // 4 UTC days of M15
+const STEPS = Math.round(95 * DAY_MS / M15_MS);    // ~95 UTC days of M15 (covers month-so-far + 2 prior months)
+const ASOF = START + 93 * DAY_MS + 7 * M15_MS;
 
-test('previousDay: assembles, ranks by signed return, no zero-substitution', () => {
+test('weekSoFar: assembles, ranks by signed return, context weeks present, no zero-substitution', () => {
   const g = 0.0004;
   const fns = {}; for (const c of CURRENCIES) fns[c] = () => 1.0;
-  fns.AUD = (i) => Math.exp(g * i);                 // AUD strongest
+  fns.AUD = (i) => Math.exp(g * i);                 // AUD strongest overall
   fns.JPY = (i) => Math.exp(-g * i);                // JPY weakest
   const by = network(STEPS, fns);
-  const asOf = START + 3 * DAY_MS + 5 * M15_MS;     // mid-day 4 → previous completed day = day 3
-  const r = buildComparison(by, { asOfMs: asOf, view: 'previousDay', currency: 'AUD' }, CONFIG);
+  const r = buildComparison(by, { asOfMs: ASOF, view: 'weekSoFar', currency: 'AUD' }, CONFIG);
   assert.ok(r.ok && r.available);
+  assert.equal(r.view, 'weekSoFar');
   assert.equal(r.cards.length, 8);
-  assert.equal(r.cards[0].currency, 'AUD');                 // top of the ranking
-  assert.equal(r.cards[r.cards.length - 1].currency, 'JPY'); // bottom
+  assert.equal(r.cards[0].currency, 'AUD');
+  assert.equal(r.cards[r.cards.length - 1].currency, 'JPY');
   assert.equal(r.cards[0].rank, 1);
   assert.ok(r.cards[0].returnPct > 0 && r.cards[r.cards.length - 1].returnPct < 0);
-  // highlight candle carries real OHLC + context (previous 2 days)
-  assert.ok(r.cards[0].highlight.ok);
-  assert.equal(r.contextPeriods.length, 2);
-  // detail exposes the 7 underlying legs for the selected currency
+  assert.equal(r.periodInfo.status, 'developing');
+  assert.ok(/Week so far/.test(r.periodInfo.title));
+  assert.ok(/Developing week/.test(r.periodInfo.sublabel));
+  assert.equal(r.contextPeriods.length, 2);          // previous 2 weeks
   assert.equal(r.detail.pairs.length, 7);
-  assert.equal(r.detail.currency, 'AUD');
+  // views list no longer offers previousDay / sessions
+  assert.deepEqual(r.views.map((v) => v.name), ['todaySoFar', 'weekSoFar', 'monthSoFar']);
+});
+
+test('monthSoFar: developing month labelled, context months at same elapsed offset', () => {
+  const fns = {}; for (const c of CURRENCIES) fns[c] = () => 1.0; fns.EUR = (i) => Math.exp(0.0003 * i);
+  const by = network(STEPS, fns);
+  const r = buildComparison(by, { asOfMs: ASOF, view: 'monthSoFar' }, CONFIG);
+  assert.ok(r.ok && r.available);
+  assert.equal(r.view, 'monthSoFar');
+  assert.equal(r.periodInfo.status, 'developing');
+  assert.ok(/Month so far/.test(r.periodInfo.title));
+  assert.ok(/Developing month/.test(r.periodInfo.sublabel));
+  // developing month starts on the 1st 00:00 UTC
+  assert.equal(new Date(r.periodInfo.startUtc).getUTCDate(), 1);
 });
 
 test('todaySoFar: developing day labelled, forming candle excluded (end = cutoff)', () => {
-  const fns = {}; for (const c of CURRENCIES) fns[c] = () => 1.0; fns.EUR = (i) => Math.exp(0.0003 * i);
+  const fns = {}; for (const c of CURRENCIES) fns[c] = () => 1.0; fns.GBP = (i) => Math.exp(0.0003 * i);
   const by = network(STEPS, fns);
-  const asOf = START + 3 * DAY_MS + 20 * M15_MS;
-  const r = buildComparison(by, { asOfMs: asOf, view: 'todaySoFar' }, CONFIG);
+  const r = buildComparison(by, { asOfMs: ASOF, view: 'todaySoFar' }, CONFIG);
   assert.ok(r.ok && r.available);
   assert.equal(r.periodInfo.status, 'developing');
   assert.ok(/Today so far/.test(r.periodInfo.title));
-  assert.ok(/Developing/.test(r.periodInfo.sublabel));
+  assert.equal(Date.parse(r.periodInfo.endUtc), ASOF);
 });
 
-test('missing pairs → provisional breadth, currency still available (never zero)', () => {
-  const fns = {}; for (const c of CURRENCIES) fns[c] = () => 1.0; fns.GBP = (i) => Math.exp(0.0002 * i);
+test('removed views return no period (previousDay / sessions are gone)', () => {
+  const fns = {}; for (const c of CURRENCIES) fns[c] = () => 1.0;
   const by = network(STEPS, fns);
-  // drop one leg entirely for part of the range — breadth coverage drops, index still builds
-  // (remove a pair NOT needed for the synchronized timeline would break indices, so instead
-  //  corrupt the breadth read by shrinking one pair's series tail)
-  by['EUR_GBP'] = by['EUR_GBP'].slice(0, STEPS - 400);
-  const asOf = START + 3 * DAY_MS + 5 * M15_MS;
-  const r = buildComparison(by, { asOfMs: asOf, view: 'previousDay', currency: 'GBP' }, CONFIG);
-  // index build intersects timelines, so the whole series truncates; still assembles a period
-  assert.ok(r.ok);
-  if (r.available) for (const c of r.cards) assert.ok(c.returnPct === null || typeof c.returnPct === 'number');
+  const r = buildComparison(by, { asOfMs: ASOF, view: 'previousDay' }, CONFIG);
+  assert.equal(r.available, false);
 });
 
 test('historical replay is causal: asOf in the past never uses later data', () => {
   const fns = {}; for (const c of CURRENCIES) fns[c] = () => 1.0; fns.CAD = (i) => Math.exp(0.0003 * i);
   const by = network(STEPS, fns);
-  const asOf = START + 2 * DAY_MS + 5 * M15_MS;
-  const r = buildComparison(by, { asOfMs: asOf, view: 'previousDay' }, CONFIG);
+  const asOf = START + 40 * DAY_MS + 5 * M15_MS;
+  const r = buildComparison(by, { asOfMs: asOf, view: 'weekSoFar' }, CONFIG);
   assert.ok(r.ok && r.available);
-  // every period end is ≤ asOf
   assert.ok(Date.parse(r.periodInfo.endUtc) <= asOf);
   for (const cp of r.contextPeriods) assert.ok(Date.parse(cp.endUtc) <= asOf);
 });

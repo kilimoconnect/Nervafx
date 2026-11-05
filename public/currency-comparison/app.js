@@ -85,7 +85,7 @@
   function openDetail(ccy) {
     var drawer = document.getElementById('drawer'), body = document.getElementById('drawerBody');
     body.innerHTML = '<div class="mut">Loading ' + esc(ccy) + '…</div>'; drawer.classList.add('open');
-    var q = '?view=' + encodeURIComponent(j.view) + '&session=' + encodeURIComponent(j.session || 'london') +
+    var q = '?view=' + encodeURIComponent(j.view) +
       (j.mode === 'historical' && j.asOfUtc ? '&asOf=' + Date.parse(j.asOfUtc) : '') + '&currency=' + encodeURIComponent(ccy);
     fetch('/api/currency-comparison' + q).then(function (r) { return r.json(); }).then(function (d) {
       if (!d || !d.detail) { body.innerHTML = '<div class="state-banner sb-unavail">No detail available for ' + esc(ccy) + '.</div>'; return; }

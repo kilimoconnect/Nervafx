@@ -1,8 +1,8 @@
 'use strict';
 
 /**
- * Assemble the Currency Comparison payload for one view (previousDay | todaySoFar |
- * sessions). For each of the 8 currencies it returns the HIGHLIGHTED index candle plus
+ * Assemble the Currency Comparison payload for one developing view (todaySoFar |
+ * weekSoFar | monthSoFar). For each of the 8 currencies it returns the HIGHLIGHTED index candle plus
  * two faded context candles, candle metrics, breadth from actual oriented pair returns,
  * and an open-relative mini-chart path on a shared % scale. Research / pair-selection
  * only — NO execution, buy/sell signal, probability, or opaque combined score.
@@ -13,8 +13,8 @@
 
 const { buildIndices } = require('./index-build');
 const { periodCandle, candleMetrics, periodPath, breadth } = require('./candles');
-const { completedDays, todaySoFar, completedSessions } = require('./periods');
-const { CURRENCIES, sessionByName, DAY_MS, M15_MS } = require('./config');
+const { todaySoFar, weekSoFar, monthSoFar } = require('./periods');
+const { CURRENCIES, DAY_MS, M15_MS } = require('./config');
 
 const iso = (ms) => (ms == null ? null : new Date(ms).toISOString());
 /** HH:MM wall-clock in a named timezone (EAT display = Africa/Nairobi, UTC+3, DST-free). */
@@ -24,37 +24,28 @@ function hhmm(ms, tz) {
 }
 const EAT = 'Africa/Nairobi';
 
-function periodsForView(view, session, asOfMs, lastDataMs) {
-  if (view === 'previousDay') return { periods: completedDays(asOfMs, lastDataMs, 3), kind: 'day' };
-  if (view === 'todaySoFar') return { periods: todaySoFar(asOfMs, lastDataMs, 2), kind: 'developing' };
-  if (view === 'sessions') return { periods: completedSessions(session || 'london', asOfMs, lastDataMs, 3), kind: 'session' };
+const VIEW_META = {
+  todaySoFar: { noun: 'day', title: 'Today so far', kind: 'developing-day', starts: 'UTC calendar day 00:00.' },
+  weekSoFar: { noun: 'week', title: 'Week so far', kind: 'developing-week', starts: 'Week starts Monday 00:00 UTC.' },
+  monthSoFar: { noun: 'month', title: 'Month so far', kind: 'developing-month', starts: 'Month starts on the 1st, 00:00 UTC.' },
+};
+
+function periodsForView(view, asOfMs, lastDataMs) {
+  if (view === 'todaySoFar') return { periods: todaySoFar(asOfMs, lastDataMs, 2), kind: VIEW_META.todaySoFar.kind };
+  if (view === 'weekSoFar') return { periods: weekSoFar(asOfMs, lastDataMs, 2), kind: VIEW_META.weekSoFar.kind };
+  if (view === 'monthSoFar') return { periods: monthSoFar(asOfMs, lastDataMs, 2), kind: VIEW_META.monthSoFar.kind };
   return { periods: [], kind: null };
 }
 
-function periodInfo(view, session, highlight, kind) {
+function periodInfo(view, highlight) {
+  const m = VIEW_META[view] || VIEW_META.todaySoFar;
   const endEat = hhmm(highlight.endMs, EAT), endUtc = hhmm(highlight.endMs, 'UTC');
-  const dateIso = new Date(highlight.startMs).toISOString().slice(0, 10);
-  if (view === 'todaySoFar') {
-    return {
-      title: 'Today so far — through ' + endEat + ' EAT (' + endUtc + ' UTC)',
-      sublabel: 'Closed inputs · Developing day', status: 'developing',
-      startUtc: iso(highlight.startMs), endUtc: iso(highlight.endMs),
-      note: 'Developing UTC day through the latest COMPLETED M15 close; the forming candle is excluded.',
-    };
-  }
-  if (view === 'sessions') {
-    const s = sessionByName(session || 'london');
-    return {
-      title: s.label + ' session — ' + dateIso,
-      sublabel: 'Latest completed occurrence · ' + s.tz + ' (DST-aware)', status: 'completed',
-      startUtc: iso(highlight.startMs), endUtc: iso(highlight.endMs),
-      note: 'Local ' + s.startHour + ':00–' + s.endHour + ':00 ' + s.tz + ', converted to UTC per-instant (DST-aware).',
-    };
-  }
+  const dateIso = new Date(highlight.endMs).toISOString().slice(0, 10);
   return {
-    title: 'Previous day — ' + dateIso, sublabel: 'Closed UTC trading day', status: 'completed',
+    title: m.title + ' — through ' + dateIso + ' ' + endEat + ' EAT (' + endUtc + ' UTC)',
+    sublabel: 'Closed inputs · Developing ' + m.noun, status: 'developing',
     startUtc: iso(highlight.startMs), endUtc: iso(highlight.endMs),
-    note: 'Completed UTC calendar day 00:00→00:00.',
+    note: 'Developing ' + m.noun + ' through the latest COMPLETED M15 close; the forming candle is excluded. ' + m.starts,
   };
 }
 
@@ -67,12 +58,12 @@ function candleSet(built, ccy, periods, cfg) {
 }
 
 function buildComparison(candlesByPair, args, cfg) {
-  const asOfMs = args.asOfMs, view = args.view || 'previousDay', session = args.session || null, selected = args.currency || null;
+  const asOfMs = args.asOfMs, view = args.view || 'todaySoFar', selected = args.currency || null;
   const built = buildIndices(candlesByPair);
   if (!built.ok) return { ok: false, available: false, reason: built.reason || 'insufficient synchronized candles' };
 
   const lastDataMs = built.lastMs;
-  const { periods, kind } = periodsForView(view, session, Math.min(asOfMs, lastDataMs), lastDataMs);
+  const { periods, kind } = periodsForView(view, Math.min(asOfMs, lastDataMs), lastDataMs);
   if (!periods.length) return { ok: false, available: false, reason: 'no completed period for this view yet', firstDataUtc: iso(built.firstMs), lastDataUtc: iso(lastDataMs) };
 
   const hi = periods[periods.length - 1];            // highlighted period
@@ -115,12 +106,12 @@ function buildComparison(candlesByPair, args, cfg) {
 
   const out = {
     ok: true, available: availN > 0, demo: false, version: cfg.version,
-    view, kind, session: view === 'sessions' ? sessionByName(session || 'london').name : null,
-    sessionsAvailable: require('./config').SESSIONS.map((s) => ({ name: s.name, label: s.label, tz: s.tz })),
+    view, kind,
+    views: [{ name: 'todaySoFar', label: 'Today so far' }, { name: 'weekSoFar', label: 'Week so far' }, { name: 'monthSoFar', label: 'Month so far' }],
     asOfUtc: iso(asOfMs), firstDataUtc: iso(built.firstMs), lastDataUtc: iso(lastDataMs),
     resolution: built.resolution, resolutionNote: 'Index OHLC sampled at M15 construction resolution — intrabar synthetic highs/lows are not claimed.',
     tradingDay: cfg.tradingDay,
-    periodInfo: periodInfo(view, session, hi, kind),
+    periodInfo: periodInfo(view, hi),
     contextPeriods: ctx.map((p) => ({ startUtc: iso(p.startMs), endUtc: iso(p.endMs), label: p.label, status: p.status })),
     currencies: CURRENCIES,
     cards: ranked,

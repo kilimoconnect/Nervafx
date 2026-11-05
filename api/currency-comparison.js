@@ -8,8 +8,7 @@
  * candles, metrics, breadth, and an open-relative mini-chart. Research / pair-selection
  * only — NO execution, buy/sell signal, probability, or profitability claim.
  *
- *   ?view=previousDay|todaySoFar|sessions   (default previousDay)
- *   ?session=asia|london|newyork            (sessions view; default london)
+ *   ?view=todaySoFar|weekSoFar|monthSoFar   (default todaySoFar)
  *   ?currency=AUD                           include the selected-currency detail
  *   ?asOf=<ms|ISO>                          causal historical replay (no look-ahead)
  */
@@ -19,7 +18,7 @@ const { loadM15Parallel } = require('../research/comparison/dbload');
 const { buildComparison } = require('../research/comparison/payload');
 const { CONFIG, PAIRS } = require('../research/comparison/config');
 
-const VIEWS = ['previousDay', 'todaySoFar', 'sessions'];
+const VIEWS = ['todaySoFar', 'weekSoFar', 'monthSoFar'];
 const DAY = 24 * 60 * 60 * 1000;
 
 module.exports = async function handler(req, res) {
@@ -28,8 +27,7 @@ module.exports = async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ ok: false, error: 'GET only' });
   try {
     const q = req.query || {};
-    const view = VIEWS.indexOf(q.view) >= 0 ? q.view : 'previousDay';
-    const session = q.session || null;
+    const view = VIEWS.indexOf(q.view) >= 0 ? q.view : 'todaySoFar';
     const currency = q.currency || null;
 
     let asOfMs = Date.now(), mode = 'live';
@@ -39,12 +37,12 @@ module.exports = async function handler(req, res) {
     }
 
     const sb = getClient();
-    // Sessions walk back up to 20 days to find 3 completed occurrences — load a safe window.
-    const fromIso = new Date(asOfMs - 28 * DAY).toISOString();
+    // Month-so-far shows 2 prior months at the same elapsed offset → load ~100 days back.
+    const fromIso = new Date(asOfMs - 100 * DAY).toISOString();
     const opts = { fromIso }; if (mode === 'historical') opts.toIso = new Date(asOfMs).toISOString();
     const by = await loadM15Parallel(sb, PAIRS, opts, 8);
 
-    const payload = buildComparison(by, { asOfMs, view, session, currency }, CONFIG);
+    const payload = buildComparison(by, { asOfMs, view, currency }, CONFIG);
     payload.mode = mode;
     if (!payload.ok) return res.json({ ok: true, available: false, mode, reason: payload.reason, firstDataUtc: payload.firstDataUtc, lastDataUtc: payload.lastDataUtc });
     res.json(payload);
