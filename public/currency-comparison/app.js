@@ -74,22 +74,76 @@
     'Ranked by signed return of the ' + esc(pi.title.toLowerCase()) + ' index candle. Mini-charts are open-relative ' +
     '(each starts at 0%) on a shared scale of ' + sign(sc.minPct) + '% … ' + sign(sc.maxPct) + '%. ' +
     (j.contextPeriods.length ? 'Two prior periods are available in each currency’s detail. ' : '') +
-    'Click a currency for its 7 underlying pairs and candle history.</div></div>';
+    'Click a currency to open its candlestick chart (M15 → Monthly), 7 underlying pairs (click to chart each) and candle history.</div></div>';
 
   html += '<div class="card"><h2>Limitations</h2><ul class="mut" style="margin:0;padding-left:18px;font-size:12px;line-height:1.6">' +
     j.limitations.map(function (l) { return '<li>' + esc(l) + '</li>'; }).join('') + '</ul></div>';
 
   host.innerHTML = html;
 
-  // ---- Detail drawer: 7 underlying legs + candle history -------------------
+  // ---- Chart window (candles + timeframe selector) -------------------------
+  var TFS = ['M15', 'M30', 'H1', 'H4', 'D1', 'W1', 'MN'];
+  var asOfParam = (j.mode === 'historical' && j.asOfUtc) ? ('&asOf=' + Date.parse(j.asOfUtc)) : '';
+  var CHART = { chart: null, series: null, inst: null, tf: 'H1', label: '' };
+
+  function tfBarHtml() { return TFS.map(function (t) { return '<button class="tfb' + (t === CHART.tf ? ' on' : '') + '" data-tf="' + t + '">' + t + '</button>'; }).join(''); }
+  function syncTfBar() { Array.prototype.forEach.call(document.querySelectorAll('#tfbar .tfb'), function (b) { b.classList.toggle('on', b.getAttribute('data-tf') === CHART.tf); }); }
+
+  function buildChartShell() {
+    var body = document.getElementById('drawerBody');
+    body.innerHTML =
+      '<div class="charthdr"><span id="chTitle" class="chTitle">—</span><span class="spacer"></span><span class="tfbar" id="tfbar">' + tfBarHtml() + '</span></div>' +
+      '<div id="chartbox" class="chartbox"></div>' +
+      '<div id="chartnote" class="mut chartnote">—</div>' +
+      '<div id="detailbox"></div>';
+    Array.prototype.forEach.call(document.querySelectorAll('#tfbar .tfb'), function (b) {
+      b.onclick = function () { CHART.tf = b.getAttribute('data-tf'); syncTfBar(); loadChart(); };
+    });
+    if (CHART.chart) { try { CHART.chart.remove(); } catch (e) {} CHART.chart = null; }
+    if (!window.LightweightCharts) { document.getElementById('chartnote').textContent = 'Chart library unavailable.'; return; }
+    var el = document.getElementById('chartbox');
+    CHART.chart = LightweightCharts.createChart(el, {
+      width: el.clientWidth, height: 260,
+      layout: { background: { color: 'transparent' }, textColor: '#94a3b8', fontFamily: 'Inter, sans-serif' },
+      grid: { vertLines: { color: 'rgba(42,49,72,.5)' }, horzLines: { color: 'rgba(42,49,72,.5)' } },
+      rightPriceScale: { borderColor: '#2a3148' }, timeScale: { borderColor: '#2a3148', timeVisible: true, secondsVisible: false },
+      crosshair: { mode: 0 },
+    });
+    CHART.series = CHART.chart.addCandlestickSeries({ upColor: '#16c784', downColor: '#f6465d', borderVisible: false, wickUpColor: '#16c784', wickDownColor: '#f6465d' });
+    if (!CHART._resize) { CHART._resize = function () { if (CHART.chart) { var e2 = document.getElementById('chartbox'); if (e2) CHART.chart.applyOptions({ width: e2.clientWidth }); } }; window.addEventListener('resize', CHART._resize); }
+  }
+
+  function loadChart() {
+    var note = document.getElementById('chartnote'); document.getElementById('chTitle').textContent = CHART.label + ' · ' + CHART.tf;
+    note.textContent = 'Loading ' + CHART.label + ' ' + CHART.tf + '… (aggregated from stored candles)';
+    fetch('/api/currency-chart?instrument=' + encodeURIComponent(CHART.inst) + '&tf=' + CHART.tf + asOfParam)
+      .then(function (r) { return r.json(); }).then(function (d) {
+        if (!d || d.ok === false) throw new Error((d && d.error) || 'request failed');
+        if (d.available === false || !d.candles || !d.candles.length) { if (CHART.series) CHART.series.setData([]); note.textContent = 'UNAVAILABLE — ' + (d.reason || 'no candles') + '. No fabricated data shown.'; return; }
+        if (CHART.series) {
+          CHART.series.applyOptions({ priceFormat: { type: 'price', precision: d.precision, minMove: Math.pow(10, -d.precision) } });
+          CHART.series.setData(d.candles);
+          CHART.chart.timeScale().fitContent();
+        }
+        note.textContent = d.count + ' ' + d.tf + ' bars · ' + (d.firstUtc || '').slice(0, 10) + ' → ' + (d.lastUtc || '').slice(0, 16) + 'Z · ' + d.resolutionNote;
+      }).catch(function (e) { note.textContent = 'ERROR — ' + (e.message || e); });
+  }
+
+  function setInstrument(inst, label) { CHART.inst = inst; CHART.label = label; document.getElementById('chTitle').textContent = label + ' · ' + CHART.tf; loadChart(); }
+
+  // ---- Detail drawer: chart + 7 underlying legs + candle history -----------
   function openDetail(ccy) {
-    var drawer = document.getElementById('drawer'), body = document.getElementById('drawerBody');
-    body.innerHTML = '<div class="mut">Loading ' + esc(ccy) + '…</div>'; drawer.classList.add('open');
+    var drawer = document.getElementById('drawer');
+    drawer.classList.add('open');
+    buildChartShell();
+    setInstrument('IDX:' + ccy, ccy + ' index');
+    var detailbox = document.getElementById('detailbox');
+    detailbox.innerHTML = '<div class="mut">Loading ' + esc(ccy) + '…</div>';
     var q = '?view=' + encodeURIComponent(j.view) +
       (j.mode === 'historical' && j.asOfUtc ? '&asOf=' + Date.parse(j.asOfUtc) : '') + '&currency=' + encodeURIComponent(ccy);
     fetch('/api/currency-comparison' + q).then(function (r) { return r.json(); }).then(function (d) {
-      if (!d || !d.detail) { body.innerHTML = '<div class="state-banner sb-unavail">No detail available for ' + esc(ccy) + '.</div>'; return; }
-      var det = d.detail, h = '<h2 style="margin-top:0">' + esc(ccy) + ' — underlying & history</h2>';
+      if (!d || !d.detail) { detailbox.innerHTML = '<div class="state-banner sb-unavail">No detail available for ' + esc(ccy) + '.</div>'; return; }
+      var det = d.detail, h = '<h2>' + esc(ccy) + ' — underlying & history <span class="mut" style="font-size:11px;text-transform:none;letter-spacing:0">(click a pair to chart it)</span></h2>';
       if (!det.available) h += '<div class="state-banner sb-unavail">No index candle for this period.</div>';
 
       // candle history: context (faded) + highlight
@@ -105,17 +159,23 @@
       });
       h += '</div>';
 
-      // 7 underlying legs
+      // 7 underlying legs (clickable → chart that pair)
       h += '<h2>Underlying 7 pairs</h2><table class="leg"><thead><tr><th>Pair</th><th>Role</th><th>' + esc(ccy) + ' return</th><th>Class</th></tr></thead><tbody>';
       det.pairs.forEach(function (lg) {
         var cl = lg.classification, c2 = cl === 'appreciated' ? 'var(--up)' : (cl === 'depreciated' ? 'var(--dn)' : 'var(--text-muted)');
-        h += '<tr><td>' + esc(lg.pair) + '</td><td>' + esc(lg.role || '—') + '</td>' +
+        h += '<tr class="legrow" data-pair="' + esc(lg.pair) + '"><td class="lp">' + esc(lg.pair) + '</td><td>' + esc(lg.role || '—') + '</td>' +
           '<td style="color:' + c2 + '">' + (lg.orientedReturnPct == null ? 'N/A' : sign(lg.orientedReturnPct) + '%') + '</td>' +
           '<td style="color:' + c2 + '">' + esc(cl) + '</td></tr>';
       });
       h += '</tbody></table><div class="mut" style="font-size:11px;margin-top:8px">' + esc(det.note) +
         ' Coverage ' + det.coverage.valid + '/7' + (det.coverage.missing.length ? ' (missing: ' + esc(det.coverage.missing.join(', ')) + ')' : '') + '.</div>';
-      body.innerHTML = h;
+      detailbox.innerHTML = h;
+      Array.prototype.forEach.call(detailbox.querySelectorAll('.legrow'), function (tr) {
+        tr.onclick = function () { var p = tr.getAttribute('data-pair'); setInstrument(p, p); document.getElementById('chartbox').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); };
+      });
+      var backRow = document.createElement('div'); backRow.className = 'mut backidx'; backRow.innerHTML = '↩ <a href="#" id="backIdx">chart ' + esc(ccy) + ' index</a>';
+      detailbox.appendChild(backRow);
+      document.getElementById('backIdx').onclick = function (ev) { ev.preventDefault(); setInstrument('IDX:' + ccy, ccy + ' index'); };
     }).catch(function (e) { body.innerHTML = '<div class="state-banner sb-error">ERROR — ' + esc(e.message || e) + '</div>'; });
   }
 

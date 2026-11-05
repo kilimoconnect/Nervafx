@@ -6,6 +6,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="icon" type="image/png" href="/nervafx-icon.png">
 <link rel="stylesheet" href="/shared/styles.css">
+<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <style>
   .viewtabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
   .viewtabs button{font-size:12px;font-weight:600;color:var(--text-muted);border:1px solid var(--border);border-radius:8px;padding:6px 12px;background:var(--bg-card);cursor:pointer}
@@ -34,6 +35,18 @@
   .ctx{display:flex;gap:8px;margin-top:8px}
   .ctx .mc{flex:1;border:1px solid var(--border);border-radius:8px;padding:8px;font-size:11px;color:var(--text-muted)}
   .ctx .mc.hl{border-color:var(--accent)}
+  .charthdr{display:flex;align-items:center;gap:8px;margin:2px 0 8px}
+  .chTitle{font-weight:700;font-size:13px}
+  .tfbar{display:inline-flex;gap:3px;flex-wrap:wrap}
+  .tfb{font-size:11px;padding:3px 7px;background:var(--bg-card);color:var(--text-muted);border:1px solid var(--border);border-radius:6px;cursor:pointer}
+  .tfb.on{color:var(--text);border-color:var(--accent);background:rgba(59,130,246,.14)}
+  .chartbox{width:100%;height:260px}
+  .chartnote{font-size:11px;margin:6px 0 10px;line-height:1.5}
+  .legrow{cursor:pointer}
+  .legrow:hover td{background:rgba(59,130,246,.10)}
+  .legrow .lp{color:var(--accent)}
+  .backidx{font-size:11px;margin-top:8px}
+  .backidx a{color:var(--accent);text-decoration:none}
 </style>
 </head>
 <body>

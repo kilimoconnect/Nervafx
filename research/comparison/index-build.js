@@ -12,11 +12,12 @@ const { M15_MS, CURRENCIES, PAIRS, legsFor, BASE_VALUE } = require('./config');
 
 function buildIndices(candlesByPair, opts) {
   const base = (opts && opts.baseValue) || BASE_VALUE;
+  const baseMs = (opts && opts.baseMs) || M15_MS;   // candle interval of the inputs (M15 or H1)
   // close-time → { pair: close } ; keep only times present for ALL pairs.
   const byTime = new Map();
   for (const p of PAIRS) {
     const cs = (candlesByPair[p] || []);
-    for (const c of cs) { const t = (c.openMs != null ? c.openMs : Date.parse(c.time)) + M15_MS; let m = byTime.get(t); if (!m) { m = {}; byTime.set(t, m); } m[p] = +c.close; }
+    for (const c of cs) { const t = (c.openMs != null ? c.openMs : Date.parse(c.time)) + baseMs; let m = byTime.get(t); if (!m) { m = {}; byTime.set(t, m); } m[p] = +c.close; }
   }
   const timeline = [];
   for (const [t, m] of byTime) { let ok = true; for (const p of PAIRS) { if (m[p] == null) { ok = false; break; } } if (ok) timeline.push(t); }
@@ -40,11 +41,12 @@ function buildIndices(candlesByPair, opts) {
     }
   }
 
-  // gaps: consecutive timeline steps longer than 1 M15 (scheduled closure vs missing).
+  // gaps: consecutive timeline steps longer than 1 base interval (scheduled closure vs missing).
   const gaps = [];
-  for (let i = 1; i < timeline.length; i++) { const d = timeline[i] - timeline[i - 1]; if (d > M15_MS) gaps.push({ fromMs: timeline[i - 1], toMs: timeline[i], ms: d }); }
+  for (let i = 1; i < timeline.length; i++) { const d = timeline[i] - timeline[i - 1]; if (d > baseMs) gaps.push({ fromMs: timeline[i - 1], toMs: timeline[i], ms: d }); }
 
-  return { ok: true, timeline, index, firstMs: timeline[0], lastMs: timeline[timeline.length - 1], resolution: 'M15', nSteps: timeline.length, gaps, baseValue: base };
+  const resolution = baseMs === M15_MS ? 'M15' : (baseMs === 3600000 ? 'H1' : 'custom');
+  return { ok: true, timeline, index, firstMs: timeline[0], lastMs: timeline[timeline.length - 1], resolution, baseMs, nSteps: timeline.length, gaps, baseValue: base };
 }
 
 /** Index value for a currency at the last timeline point ≤ t (carry at a boundary). */
