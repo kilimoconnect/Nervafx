@@ -17,7 +17,7 @@ const { getClient, cors } = require('./_db');
 const { loadTf, loadParallel } = require('../research/comparison/dbload');
 const { buildIndices } = require('../research/comparison/index-build');
 const { TIMEFRAMES, baseForTf, lookbackDaysForTf, aggregatePairs, aggregateIndexPath } = require('../research/comparison/aggregate');
-const { CURRENCIES, PAIRS, BASE_VALUE } = require('../research/comparison/config');
+const { CURRENCIES, PAIRS, BASE_VALUE, legsFor } = require('../research/comparison/config');
 
 const DAY = 24 * 60 * 60 * 1000, MAX_BARS = 1500;
 const sec = (ms) => Math.floor(ms / 1000);
@@ -55,22 +55,27 @@ module.exports = async function handler(req, res) {
       candles = aggregatePairs(base, tf);
       resolutionNote = tf === baseTf ? ('Stored ' + baseTf + ' candles.') : ('Aggregated from stored ' + baseTf + ' candles.');
     } else {
-      const by = await loadParallel(sb, PAIRS, baseTf, opts, 8);
+      const by = await loadParallel(sb, PAIRS, baseTf, Object.assign({ withVolume: true }, opts), 8);
       const built = buildIndices(by, { baseMs: baseTf === 'M15' ? 15 * 60 * 1000 : 60 * 60 * 1000 });
       if (!built.ok) return res.json({ ok: true, available: false, instrument, tf, mode, reason: built.reason || 'insufficient synchronized candles' });
       candles = aggregateIndexPath(built, ccy, tf);
+      // Basket volume PROXY: sum the tick volume of the currency's 7 pairs per bucket.
+      const volByTime = new Map();
+      for (const leg of legsFor(ccy)) { for (const c of aggregatePairs(by[leg.pair] || [], tf)) { if (c.volume != null) volByTime.set(c.time, (volByTime.get(c.time) || 0) + c.volume); } }
+      for (const c of candles) { const v = volByTime.get(c.time); c.volume = (v == null ? null : v); }
       resolutionNote = 'Relative zero-sum index (base ' + BASE_VALUE + '), built from ' + built.resolution +
         ' pair log-returns then aggregated to ' + tf + '. Highs/lows sampled at ' + built.resolution + ' — not intrabar synthetic extremes.';
     }
 
     if (candles.length > MAX_BARS) candles = candles.slice(candles.length - MAX_BARS);
-    const hasVolume = !isIndex && candles.some((c) => c.volume != null);
+    const hasVolume = candles.some((c) => c.volume != null);
+    const volumeKind = isIndex ? 'basket proxy (Σ tick volume of the 7 pairs)' : 'tick volume';
     const data = candles.map((c) => { const d = { time: sec(c.time), open: c.open, high: c.high, low: c.low, close: c.close }; if (hasVolume) d.volume = c.volume == null ? 0 : c.volume; return d; });
 
     res.json({
       ok: true, available: data.length > 0, mode,
       instrument, kind: isIndex ? 'index' : 'pair', tf, base: baseTf,
-      hasVolume, count: data.length,
+      hasVolume, volumeKind: hasVolume ? volumeKind : null, count: data.length,
       firstUtc: data.length ? new Date(data[0].time * 1000).toISOString() : null,
       lastUtc: data.length ? new Date(data[data.length - 1].time * 1000).toISOString() : null,
       resolutionNote,

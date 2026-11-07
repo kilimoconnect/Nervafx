@@ -45,9 +45,11 @@
   .tfbar{display:inline-flex;gap:3px;flex-wrap:wrap}
   .tfb{font-size:11px;padding:4px 9px;background:var(--bg-card);color:var(--text-muted);border:1px solid var(--border);border-radius:6px;cursor:pointer}
   .tfb.on{color:var(--text);border-color:var(--accent);background:rgba(59,130,246,.14)}
-  .indbar{display:inline-flex;gap:10px;align-items:center;font-size:11px;color:var(--text-muted)}
-  .indbar label{display:inline-flex;gap:4px;align-items:center;cursor:pointer;white-space:nowrap}
-  .indbar .sw{display:inline-block;width:14px;height:2px;border-radius:1px;vertical-align:middle}
+  .inddd{position:relative;display:inline-block}
+  .inddrop{display:none;position:absolute;top:calc(100% + 4px);right:0;z-index:5;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:8px;min-width:180px;box-shadow:0 6px 18px rgba(0,0,0,.45)}
+  .inddrop.open{display:block}
+  .inddrop label{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--text);padding:3px 2px;cursor:pointer;white-space:nowrap}
+  .inddrop .sw{display:inline-block;width:14px;height:2px;border-radius:1px}
   .chartbox{width:100%;height:440px}
   .chartnote{font-size:11px;margin:6px 0 10px;line-height:1.5}
   .legrow{cursor:pointer}

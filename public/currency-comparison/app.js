@@ -81,22 +81,34 @@
 
   host.innerHTML = html;
 
-  // ---- Chart window (candles + timeframe + volume + MA indicators) ---------
+  // ---- Chart window (candles + timeframe + selectable indicators) ----------
   var TFS = ['M15', 'M30', 'H1', 'H4', 'D1', 'W1', 'MN'];
-  var INTRADAY = { M15: 1, M30: 1, H1: 1, H4: 1 };     // show HH:MM; D1/W1/MN show the date
   var asOfParam = (j.mode === 'historical' && j.asOfUtc) ? ('&asOf=' + Date.parse(j.asOfUtc)) : '';
-  var CHART = { chart: null, series: null, vol: null, ma1: null, ma2: null, inst: null, tf: 'H1', label: '', showVol: true, showMa: true };
-  var MA1 = 20, MA2 = 50, MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  var CHART = { chart: null, series: null, inst: null, tf: 'H1', label: '', candles: [], hasVolume: false, prec: 5, indSeries: {}, on: { volume: 1 } };
+  var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   var p2 = function (n) { return (n < 10 ? '0' : '') + n; };
   // EAT = UTC+3 (no DST). Shift the UTC seconds into EAT wall-clock for display.
   var eatD = function (ts) { return new Date(ts * 1000 + 3 * 3600000); };
   function eatTick(ts, type) { var d = eatD(ts); return (type <= 2) ? (d.getUTCDate() + ' ' + MONTHS[d.getUTCMonth()]) : (p2(d.getUTCHours()) + ':' + p2(d.getUTCMinutes())); }
   function eatFull(ts) { var d = eatD(ts); return d.getUTCFullYear() + '-' + p2(d.getUTCMonth() + 1) + '-' + p2(d.getUTCDate()) + ' ' + p2(d.getUTCHours()) + ':' + p2(d.getUTCMinutes()) + ' EAT'; }
 
+  // ---- indicator math (client-side, from the fetched candles) ----
   function sma(c, n) { var out = [], s = 0; for (var i = 0; i < c.length; i++) { s += c[i].close; if (i >= n) s -= c[i - n].close; if (i >= n - 1) out.push({ time: c[i].time, value: s / n }); } return out; }
+  function ema(c, n) { if (c.length < n) return []; var k = 2 / (n + 1), out = [], prev; for (var i = 0; i < c.length; i++) { prev = (i === 0) ? c[0].close : (c[i].close * k + prev * (1 - k)); if (i >= n - 1) out.push({ time: c[i].time, value: prev }); } return out; }
+  function bollinger(c, n, k) { var up = [], mid = [], lo = []; for (var i = n - 1; i < c.length; i++) { var m = 0, j; for (j = i - n + 1; j <= i; j++) m += c[j].close; m /= n; var v = 0; for (j = i - n + 1; j <= i; j++) { var dd = c[j].close - m; v += dd * dd; } var sd = Math.sqrt(v / n); mid.push({ time: c[i].time, value: m }); up.push({ time: c[i].time, value: m + k * sd }); lo.push({ time: c[i].time, value: m - k * sd }); } return { up: up, mid: mid, lo: lo }; }
+  function rsiCalc(c, n) { if (c.length <= n) return []; var out = [], g = 0, l = 0, i; for (i = 1; i <= n; i++) { var d = c[i].close - c[i - 1].close; if (d >= 0) g += d; else l -= d; } g /= n; l /= n; out.push({ time: c[n].time, value: l === 0 ? 100 : 100 - 100 / (1 + g / l) }); for (i = n + 1; i < c.length; i++) { var d2 = c[i].close - c[i - 1].close, gg = d2 > 0 ? d2 : 0, ll = d2 < 0 ? -d2 : 0; g = (g * (n - 1) + gg) / n; l = (l * (n - 1) + ll) / n; out.push({ time: c[i].time, value: l === 0 ? 100 : 100 - 100 / (1 + g / l) }); } return out; }
+
+  var INDICATORS = [
+    { key: 'ema20', label: 'EMA 20', color: '#3b82f6' }, { key: 'ema50', label: 'EMA 50', color: '#eab308' },
+    { key: 'ema200', label: 'EMA 200', color: '#a855f7' }, { key: 'sma20', label: 'SMA 20', color: '#22d3ee' },
+    { key: 'sma50', label: 'SMA 50', color: '#f97316' }, { key: 'bb', label: 'Bollinger (20,2)', color: '#64748b' },
+    { key: 'rsi', label: 'RSI (14)', color: '#e879f9' }, { key: 'volume', label: 'Volume', color: '' },
+  ];
 
   function tfBarHtml() { return TFS.map(function (t) { return '<button class="tfb' + (t === CHART.tf ? ' on' : '') + '" data-tf="' + t + '">' + t + '</button>'; }).join(''); }
   function syncTfBar() { Array.prototype.forEach.call(document.querySelectorAll('#tfbar .tfb'), function (b) { b.classList.toggle('on', b.getAttribute('data-tf') === CHART.tf); }); }
+  function indDropHtml() { return INDICATORS.map(function (d) { return '<label><input type="checkbox" data-ind="' + d.key + '"' + (CHART.on[d.key] ? ' checked' : '') + '>' + (d.color ? '<span class="sw" style="background:' + d.color + '"></span>' : '') + d.label + '</label>'; }).join(''); }
+  function indCount() { var n = 0; for (var k in CHART.on) if (CHART.on[k]) n++; return n; }
 
   function buildChartShell() {
     var body = document.getElementById('drawerBody');
@@ -104,8 +116,8 @@
       '<div class="charthdr">' +
         '<div class="chrow"><span id="chTitle" class="chTitle">—</span><span id="chStats" class="chStats mut"></span></div>' +
         '<div class="ctrls"><span class="tfbar" id="tfbar">' + tfBarHtml() + '</span>' +
-          '<span class="indbar"><label><input type="checkbox" id="maTgl"' + (CHART.showMa ? ' checked' : '') + '><span class="sw" style="background:#3b82f6"></span>MA' + MA1 + '<span class="sw" style="background:#eab308"></span>MA' + MA2 + '</label>' +
-          '<label><input type="checkbox" id="volTgl"' + (CHART.showVol ? ' checked' : '') + '>Volume</label></span>' +
+          '<span class="inddd"><button class="tfb" id="indBtn">Indicators (<span id="indN">' + indCount() + '</span>) ▾</button>' +
+          '<div class="inddrop" id="indDrop">' + indDropHtml() + '</div></span>' +
         '</div>' +
       '</div>' +
       '<div id="chartbox" class="chartbox"></div>' +
@@ -114,10 +126,15 @@
     Array.prototype.forEach.call(document.querySelectorAll('#tfbar .tfb'), function (b) {
       b.onclick = function () { CHART.tf = b.getAttribute('data-tf'); syncTfBar(); loadChart(); };
     });
-    document.getElementById('maTgl').onchange = function () { CHART.showMa = this.checked; applyMa(); };
-    document.getElementById('volTgl').onchange = function () { CHART.showVol = this.checked; applyVol(); };
+    var indBtn = document.getElementById('indBtn'), indDrop = document.getElementById('indDrop');
+    indBtn.onclick = function (e) { e.stopPropagation(); indDrop.classList.toggle('open'); };
+    indDrop.onclick = function (e) { e.stopPropagation(); };
+    document.addEventListener('click', function () { indDrop.classList.remove('open'); });
+    Array.prototype.forEach.call(indDrop.querySelectorAll('input[data-ind]'), function (cb) {
+      cb.onchange = function () { CHART.on[cb.getAttribute('data-ind')] = cb.checked ? 1 : 0; document.getElementById('indN').textContent = indCount(); applyIndicators(); };
+    });
 
-    if (CHART.chart) { try { CHART.chart.remove(); } catch (e) {} CHART.chart = null; CHART.series = CHART.vol = CHART.ma1 = CHART.ma2 = null; }
+    if (CHART.chart) { try { CHART.chart.remove(); } catch (e) {} CHART.chart = null; CHART.series = null; CHART.indSeries = {}; }
     if (!window.LightweightCharts) { document.getElementById('chartnote').textContent = 'Chart library unavailable.'; return; }
     var el = document.getElementById('chartbox');
     CHART.chart = LightweightCharts.createChart(el, {
@@ -130,19 +147,39 @@
       crosshair: { mode: 0 },
     });
     CHART.series = CHART.chart.addCandlestickSeries({ upColor: '#16c784', downColor: '#f6465d', borderVisible: false, wickUpColor: '#16c784', wickDownColor: '#f6465d' });
-    CHART.ma1 = CHART.chart.addLineSeries({ color: '#3b82f6', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
-    CHART.ma2 = CHART.chart.addLineSeries({ color: '#eab308', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
-    CHART.vol = CHART.chart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol', lastValueVisible: false });
-    CHART.chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
     if (!CHART._resize) { CHART._resize = function () { if (CHART.chart) { var e2 = document.getElementById('chartbox'); if (e2) CHART.chart.applyOptions({ width: e2.clientWidth }); } }; window.addEventListener('resize', CHART._resize); }
   }
 
-  function applyMa() { if (!CHART.series) return; var c = CHART.candles || []; CHART.ma1.setData(CHART.showMa && c.length ? sma(c, MA1) : []); CHART.ma2.setData(CHART.showMa && c.length ? sma(c, MA2) : []); }
-  function applyVol() {
-    if (!CHART.vol) return; var c = CHART.candles || [];
-    var hasVol = CHART.hasVolume && c.length;
-    CHART.vol.setData((CHART.showVol && hasVol) ? c.map(function (b) { return { time: b.time, value: b.volume, color: b.close >= b.open ? 'rgba(22,199,132,.45)' : 'rgba(246,70,93,.45)' }; }) : []);
+  function removeIndSeries() { for (var k in CHART.indSeries) { var s = CHART.indSeries[k]; (Array.isArray(s) ? s : [s]).forEach(function (x) { try { CHART.chart.removeSeries(x); } catch (e) {} }); } CHART.indSeries = {}; }
+  function addLine(color, data, scaleId) { var o = { color: color, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false }; if (scaleId) o.priceScaleId = scaleId; var s = CHART.chart.addLineSeries(o); s.setData(data); return s; }
+
+  function applyIndicators() {
+    if (!CHART.chart || !CHART.series) return;
+    removeIndSeries();
+    var c = CHART.candles || [], on = CHART.on;
+    var rsiOn = !!on.rsi, volOn = !!on.volume && CHART.hasVolume && c.length;
+    CHART.series.priceScale().applyOptions({ scaleMargins: { top: 0.06, bottom: rsiOn ? 0.40 : (volOn ? 0.20 : 0.06) } });
+    if (!c.length) return;
+    if (on.ema20) CHART.indSeries.ema20 = addLine('#3b82f6', ema(c, 20));
+    if (on.ema50) CHART.indSeries.ema50 = addLine('#eab308', ema(c, 50));
+    if (on.ema200) CHART.indSeries.ema200 = addLine('#a855f7', ema(c, 200));
+    if (on.sma20) CHART.indSeries.sma20 = addLine('#22d3ee', sma(c, 20));
+    if (on.sma50) CHART.indSeries.sma50 = addLine('#f97316', sma(c, 50));
+    if (on.bb) { var bb = bollinger(c, 20, 2); CHART.indSeries.bb = [addLine('#64748b', bb.up), addLine('rgba(100,116,139,.6)', bb.mid), addLine('#64748b', bb.lo)]; }
+    if (rsiOn) {
+      var rs = addLine('#e879f9', rsiCalc(c, 14), 'rsi');
+      CHART.chart.priceScale('rsi').applyOptions({ scaleMargins: { top: 0.62, bottom: volOn ? 0.18 : 0.02 } });
+      try { rs.createPriceLine({ price: 70, color: 'rgba(148,163,184,.4)', lineWidth: 1, lineStyle: 2, axisLabelVisible: false }); rs.createPriceLine({ price: 30, color: 'rgba(148,163,184,.4)', lineWidth: 1, lineStyle: 2, axisLabelVisible: false }); } catch (e) {}
+      CHART.indSeries.rsi = rs;
+    }
+    if (volOn) {
+      var vs = CHART.chart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol', lastValueVisible: false });
+      vs.setData(c.map(function (b) { return { time: b.time, value: b.volume == null ? 0 : b.volume, color: b.close >= b.open ? 'rgba(22,199,132,.45)' : 'rgba(246,70,93,.45)' }; }));
+      CHART.chart.priceScale('vol').applyOptions({ scaleMargins: { top: rsiOn ? 0.84 : 0.82, bottom: 0 } });
+      CHART.indSeries.volume = vs;
+    }
   }
+
   function statsHtml(c, prec) {
     if (!c.length) return '';
     var first = c[0], last = c[c.length - 1], chg = 100 * (last.close / first.open - 1);
@@ -159,16 +196,16 @@
     fetch('/api/currency-chart?instrument=' + encodeURIComponent(CHART.inst) + '&tf=' + CHART.tf + asOfParam)
       .then(function (r) { return r.json(); }).then(function (d) {
         if (!d || d.ok === false) throw new Error((d && d.error) || 'request failed');
-        if (d.available === false || !d.candles || !d.candles.length) { CHART.candles = []; if (CHART.series) { CHART.series.setData([]); applyMa(); applyVol(); } note.textContent = 'UNAVAILABLE — ' + (d.reason || 'no candles') + '. No fabricated data shown.'; return; }
+        if (d.available === false || !d.candles || !d.candles.length) { CHART.candles = []; CHART.hasVolume = false; if (CHART.series) { CHART.series.setData([]); applyIndicators(); } note.textContent = 'UNAVAILABLE — ' + (d.reason || 'no candles') + '. No fabricated data shown.'; return; }
         CHART.candles = d.candles; CHART.hasVolume = !!d.hasVolume; CHART.prec = d.precision;
         if (CHART.series) {
           CHART.series.applyOptions({ priceFormat: { type: 'price', precision: d.precision, minMove: Math.pow(10, -d.precision) } });
           CHART.series.setData(d.candles);
-          applyMa(); applyVol();
+          applyIndicators();
           CHART.chart.timeScale().fitContent();
         }
         document.getElementById('chStats').innerHTML = statsHtml(d.candles, d.precision);
-        note.textContent = (d.hasVolume ? '' : (d.kind === 'index' ? 'Volume N/A for indices. ' : '')) +
+        note.textContent = (d.volumeKind ? ('Volume: ' + d.volumeKind + '. ') : (d.kind === 'index' ? 'Volume N/A. ' : '')) +
           (d.firstUtc ? eatFull(Date.parse(d.firstUtc) / 1000).slice(0, 10) : '') + ' → ' + (d.lastUtc ? eatFull(Date.parse(d.lastUtc) / 1000) : '') + ' · ' + d.resolutionNote + ' Times in EAT (UTC+3).';
       }).catch(function (e) { note.textContent = 'ERROR — ' + (e.message || e); });
   }
