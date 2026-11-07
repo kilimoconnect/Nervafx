@@ -50,7 +50,7 @@ module.exports = async function handler(req, res) {
 
     let candles, resolutionNote;
     if (!isIndex) {
-      const base = await loadTf(sb, instrument, baseTf, opts);
+      const base = await loadTf(sb, instrument, baseTf, Object.assign({ withVolume: true }, opts));
       if (!base.length) return res.json({ ok: true, available: false, instrument, tf, mode, reason: 'no candles for this instrument/window' });
       candles = aggregatePairs(base, tf);
       resolutionNote = tf === baseTf ? ('Stored ' + baseTf + ' candles.') : ('Aggregated from stored ' + baseTf + ' candles.');
@@ -64,12 +64,13 @@ module.exports = async function handler(req, res) {
     }
 
     if (candles.length > MAX_BARS) candles = candles.slice(candles.length - MAX_BARS);
-    const data = candles.map((c) => ({ time: sec(c.time), open: c.open, high: c.high, low: c.low, close: c.close }));
+    const hasVolume = !isIndex && candles.some((c) => c.volume != null);
+    const data = candles.map((c) => { const d = { time: sec(c.time), open: c.open, high: c.high, low: c.low, close: c.close }; if (hasVolume) d.volume = c.volume == null ? 0 : c.volume; return d; });
 
     res.json({
       ok: true, available: data.length > 0, mode,
       instrument, kind: isIndex ? 'index' : 'pair', tf, base: baseTf,
-      count: data.length,
+      hasVolume, count: data.length,
       firstUtc: data.length ? new Date(data[0].time * 1000).toISOString() : null,
       lastUtc: data.length ? new Date(data[data.length - 1].time * 1000).toISOString() : null,
       resolutionNote,

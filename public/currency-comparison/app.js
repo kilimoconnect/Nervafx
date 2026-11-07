@@ -81,10 +81,19 @@
 
   host.innerHTML = html;
 
-  // ---- Chart window (candles + timeframe selector) -------------------------
+  // ---- Chart window (candles + timeframe + volume + MA indicators) ---------
   var TFS = ['M15', 'M30', 'H1', 'H4', 'D1', 'W1', 'MN'];
+  var INTRADAY = { M15: 1, M30: 1, H1: 1, H4: 1 };     // show HH:MM; D1/W1/MN show the date
   var asOfParam = (j.mode === 'historical' && j.asOfUtc) ? ('&asOf=' + Date.parse(j.asOfUtc)) : '';
-  var CHART = { chart: null, series: null, inst: null, tf: 'H1', label: '' };
+  var CHART = { chart: null, series: null, vol: null, ma1: null, ma2: null, inst: null, tf: 'H1', label: '', showVol: true, showMa: true };
+  var MA1 = 20, MA2 = 50, MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  var p2 = function (n) { return (n < 10 ? '0' : '') + n; };
+  // EAT = UTC+3 (no DST). Shift the UTC seconds into EAT wall-clock for display.
+  var eatD = function (ts) { return new Date(ts * 1000 + 3 * 3600000); };
+  function eatTick(ts, type) { var d = eatD(ts); return (type <= 2) ? (d.getUTCDate() + ' ' + MONTHS[d.getUTCMonth()]) : (p2(d.getUTCHours()) + ':' + p2(d.getUTCMinutes())); }
+  function eatFull(ts) { var d = eatD(ts); return d.getUTCFullYear() + '-' + p2(d.getUTCMonth() + 1) + '-' + p2(d.getUTCDate()) + ' ' + p2(d.getUTCHours()) + ':' + p2(d.getUTCMinutes()) + ' EAT'; }
+
+  function sma(c, n) { var out = [], s = 0; for (var i = 0; i < c.length; i++) { s += c[i].close; if (i >= n) s -= c[i - n].close; if (i >= n - 1) out.push({ time: c[i].time, value: s / n }); } return out; }
 
   function tfBarHtml() { return TFS.map(function (t) { return '<button class="tfb' + (t === CHART.tf ? ' on' : '') + '" data-tf="' + t + '">' + t + '</button>'; }).join(''); }
   function syncTfBar() { Array.prototype.forEach.call(document.querySelectorAll('#tfbar .tfb'), function (b) { b.classList.toggle('on', b.getAttribute('data-tf') === CHART.tf); }); }
@@ -92,40 +101,75 @@
   function buildChartShell() {
     var body = document.getElementById('drawerBody');
     body.innerHTML =
-      '<div class="charthdr"><span id="chTitle" class="chTitle">—</span><span class="spacer"></span><span class="tfbar" id="tfbar">' + tfBarHtml() + '</span></div>' +
+      '<div class="charthdr">' +
+        '<div class="chrow"><span id="chTitle" class="chTitle">—</span><span id="chStats" class="chStats mut"></span></div>' +
+        '<div class="ctrls"><span class="tfbar" id="tfbar">' + tfBarHtml() + '</span>' +
+          '<span class="indbar"><label><input type="checkbox" id="maTgl"' + (CHART.showMa ? ' checked' : '') + '><span class="sw" style="background:#3b82f6"></span>MA' + MA1 + '<span class="sw" style="background:#eab308"></span>MA' + MA2 + '</label>' +
+          '<label><input type="checkbox" id="volTgl"' + (CHART.showVol ? ' checked' : '') + '>Volume</label></span>' +
+        '</div>' +
+      '</div>' +
       '<div id="chartbox" class="chartbox"></div>' +
       '<div id="chartnote" class="mut chartnote">—</div>' +
       '<div id="detailbox"></div>';
     Array.prototype.forEach.call(document.querySelectorAll('#tfbar .tfb'), function (b) {
       b.onclick = function () { CHART.tf = b.getAttribute('data-tf'); syncTfBar(); loadChart(); };
     });
-    if (CHART.chart) { try { CHART.chart.remove(); } catch (e) {} CHART.chart = null; }
+    document.getElementById('maTgl').onchange = function () { CHART.showMa = this.checked; applyMa(); };
+    document.getElementById('volTgl').onchange = function () { CHART.showVol = this.checked; applyVol(); };
+
+    if (CHART.chart) { try { CHART.chart.remove(); } catch (e) {} CHART.chart = null; CHART.series = CHART.vol = CHART.ma1 = CHART.ma2 = null; }
     if (!window.LightweightCharts) { document.getElementById('chartnote').textContent = 'Chart library unavailable.'; return; }
     var el = document.getElementById('chartbox');
     CHART.chart = LightweightCharts.createChart(el, {
-      width: el.clientWidth, height: 260,
+      width: el.clientWidth, height: el.clientHeight || 440,
       layout: { background: { color: 'transparent' }, textColor: '#94a3b8', fontFamily: 'Inter, sans-serif' },
       grid: { vertLines: { color: 'rgba(42,49,72,.5)' }, horzLines: { color: 'rgba(42,49,72,.5)' } },
-      rightPriceScale: { borderColor: '#2a3148' }, timeScale: { borderColor: '#2a3148', timeVisible: true, secondsVisible: false },
+      rightPriceScale: { borderColor: '#2a3148', scaleMargins: { top: 0.08, bottom: 0.26 } },
+      timeScale: { borderColor: '#2a3148', timeVisible: true, secondsVisible: false, tickMarkFormatter: eatTick },
+      localization: { timeFormatter: eatFull },
       crosshair: { mode: 0 },
     });
     CHART.series = CHART.chart.addCandlestickSeries({ upColor: '#16c784', downColor: '#f6465d', borderVisible: false, wickUpColor: '#16c784', wickDownColor: '#f6465d' });
+    CHART.ma1 = CHART.chart.addLineSeries({ color: '#3b82f6', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+    CHART.ma2 = CHART.chart.addLineSeries({ color: '#eab308', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+    CHART.vol = CHART.chart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol', lastValueVisible: false });
+    CHART.chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
     if (!CHART._resize) { CHART._resize = function () { if (CHART.chart) { var e2 = document.getElementById('chartbox'); if (e2) CHART.chart.applyOptions({ width: e2.clientWidth }); } }; window.addEventListener('resize', CHART._resize); }
+  }
+
+  function applyMa() { if (!CHART.series) return; var c = CHART.candles || []; CHART.ma1.setData(CHART.showMa && c.length ? sma(c, MA1) : []); CHART.ma2.setData(CHART.showMa && c.length ? sma(c, MA2) : []); }
+  function applyVol() {
+    if (!CHART.vol) return; var c = CHART.candles || [];
+    var hasVol = CHART.hasVolume && c.length;
+    CHART.vol.setData((CHART.showVol && hasVol) ? c.map(function (b) { return { time: b.time, value: b.volume, color: b.close >= b.open ? 'rgba(22,199,132,.45)' : 'rgba(246,70,93,.45)' }; }) : []);
+  }
+  function statsHtml(c, prec) {
+    if (!c.length) return '';
+    var first = c[0], last = c[c.length - 1], chg = 100 * (last.close / first.open - 1);
+    var hi = -Infinity, lo = Infinity; for (var i = 0; i < c.length; i++) { if (c[i].high > hi) hi = c[i].high; if (c[i].low < lo) lo = c[i].low; }
+    var col = chg > 0 ? 'var(--up)' : (chg < 0 ? 'var(--dn)' : 'var(--text-muted)');
+    return '<b style="color:' + col + '">' + last.close.toFixed(prec) + '</b> <span style="color:' + col + '">' + (chg > 0 ? '+' : '') + chg.toFixed(2) + '%</span>' +
+      ' <span class="mut">· H ' + hi.toFixed(prec) + ' · L ' + lo.toFixed(prec) + ' · ' + c.length + ' ' + CHART.tf + '</span>';
   }
 
   function loadChart() {
     var note = document.getElementById('chartnote'); document.getElementById('chTitle').textContent = CHART.label + ' · ' + CHART.tf;
+    document.getElementById('chStats').innerHTML = '';
     note.textContent = 'Loading ' + CHART.label + ' ' + CHART.tf + '… (aggregated from stored candles)';
     fetch('/api/currency-chart?instrument=' + encodeURIComponent(CHART.inst) + '&tf=' + CHART.tf + asOfParam)
       .then(function (r) { return r.json(); }).then(function (d) {
         if (!d || d.ok === false) throw new Error((d && d.error) || 'request failed');
-        if (d.available === false || !d.candles || !d.candles.length) { if (CHART.series) CHART.series.setData([]); note.textContent = 'UNAVAILABLE — ' + (d.reason || 'no candles') + '. No fabricated data shown.'; return; }
+        if (d.available === false || !d.candles || !d.candles.length) { CHART.candles = []; if (CHART.series) { CHART.series.setData([]); applyMa(); applyVol(); } note.textContent = 'UNAVAILABLE — ' + (d.reason || 'no candles') + '. No fabricated data shown.'; return; }
+        CHART.candles = d.candles; CHART.hasVolume = !!d.hasVolume; CHART.prec = d.precision;
         if (CHART.series) {
           CHART.series.applyOptions({ priceFormat: { type: 'price', precision: d.precision, minMove: Math.pow(10, -d.precision) } });
           CHART.series.setData(d.candles);
+          applyMa(); applyVol();
           CHART.chart.timeScale().fitContent();
         }
-        note.textContent = d.count + ' ' + d.tf + ' bars · ' + (d.firstUtc || '').slice(0, 10) + ' → ' + (d.lastUtc || '').slice(0, 16) + 'Z · ' + d.resolutionNote;
+        document.getElementById('chStats').innerHTML = statsHtml(d.candles, d.precision);
+        note.textContent = (d.hasVolume ? '' : (d.kind === 'index' ? 'Volume N/A for indices. ' : '')) +
+          (d.firstUtc ? eatFull(Date.parse(d.firstUtc) / 1000).slice(0, 10) : '') + ' → ' + (d.lastUtc ? eatFull(Date.parse(d.lastUtc) / 1000) : '') + ' · ' + d.resolutionNote + ' Times in EAT (UTC+3).';
       }).catch(function (e) { note.textContent = 'ERROR — ' + (e.message || e); });
   }
 

@@ -6,11 +6,13 @@
 
 const { M15_MS } = require('./config');
 
-/** Load one timeframe (M15 or H1) for one instrument, completed candles only, ascending. */
+/** Load one timeframe (M15 or H1) for one instrument, completed candles only, ascending.
+ *  Pass opts.withVolume to also select the volume column. */
 async function loadTf(sb, instrument, timeframe, opts = {}) {
+  const cols = opts.withVolume ? 'time,open,high,low,close,volume' : 'time,open,high,low,close';
   const rows = [];
   for (let off = 0; ; off += 1000) {
-    let q = sb.from('backtest_candles').select('time,open,high,low,close')
+    let q = sb.from('backtest_candles').select(cols)
       .eq('instrument', instrument).eq('timeframe', timeframe).eq('complete', true)
       .order('time', { ascending: true }).range(off, off + 999);
     if (opts.fromIso) q = q.gte('time', opts.fromIso);
@@ -18,7 +20,7 @@ async function loadTf(sb, instrument, timeframe, opts = {}) {
     const { data, error } = await q;
     if (error) throw new Error(`${instrument} ${timeframe}: ${error.message}`);
     if (!data || !data.length) break;
-    for (const r of data) rows.push({ openMs: Date.parse(r.time), open: +r.open, high: +r.high, low: +r.low, close: +r.close });
+    for (const r of data) { const row = { openMs: Date.parse(r.time), open: +r.open, high: +r.high, low: +r.low, close: +r.close }; if (opts.withVolume) row.volume = (r.volume == null ? null : +r.volume); rows.push(row); }
     if (data.length < 1000) break;
   }
   return rows;

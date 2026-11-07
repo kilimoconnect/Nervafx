@@ -23,13 +23,14 @@ test('aggregatePairs rolls up OHLC (open=first, high=max, low=min, close=last)',
   const START = Date.UTC(2025, 4, 1, 0, 0, 0);
   // 8 M15 bars (2 hours) with distinctive highs/lows
   const base = [];
-  for (let i = 0; i < 8; i++) base.push({ openMs: START + i * M15_MS, open: 100 + i, high: 100 + i + 2, low: 100 + i - 3, close: 100 + i + 0.5 });
+  for (let i = 0; i < 8; i++) base.push({ openMs: START + i * M15_MS, open: 100 + i, high: 100 + i + 2, low: 100 + i - 3, close: 100 + i + 0.5, volume: 10 + i });
   const m30 = aggregatePairs(base, 'M30');
   assert.equal(m30.length, 4);                 // 8 M15 → 4 M30
   assert.equal(m30[0].open, base[0].open);     // first
   assert.equal(m30[0].close, base[1].close);   // last in bucket
   assert.equal(m30[0].high, Math.max(base[0].high, base[1].high));
   assert.equal(m30[0].low, Math.min(base[0].low, base[1].low));
+  assert.equal(m30[0].volume, base[0].volume + base[1].volume);   // volume summed
   assert.equal(m30[0].time, START);
   // H1 roll-up: 8 M15 → 2 H1
   const h1 = aggregatePairs(base, 'H1');

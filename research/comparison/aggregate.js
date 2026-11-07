@@ -41,15 +41,17 @@ function bucketStart(openMs, tf) {
   const w = TF_MS[tf]; return Math.floor(openMs / w) * w;
 }
 
-/** Aggregate real OHLC pair candles ({openMs,open,high,low,close}) into timeframe tf. */
+/** Aggregate real OHLC pair candles ({openMs,open,high,low,close,volume?}) into timeframe tf.
+ *  Volume (if present on the base candles) is summed within each bucket. */
 function aggregatePairs(base, tf) {
   const buckets = new Map();   // bucketStart -> candle
   const order = [];
   for (const c of base) {
     const b = bucketStart(c.openMs, tf);
+    const vol = (c.volume == null ? null : +c.volume);
     let m = buckets.get(b);
-    if (!m) { m = { time: b, open: +c.open, high: +c.high, low: +c.low, close: +c.close }; buckets.set(b, m); order.push(b); }
-    else { if (+c.high > m.high) m.high = +c.high; if (+c.low < m.low) m.low = +c.low; m.close = +c.close; }
+    if (!m) { m = { time: b, open: +c.open, high: +c.high, low: +c.low, close: +c.close, volume: vol }; buckets.set(b, m); order.push(b); }
+    else { if (+c.high > m.high) m.high = +c.high; if (+c.low < m.low) m.low = +c.low; m.close = +c.close; if (vol != null) m.volume = (m.volume == null ? 0 : m.volume) + vol; }
   }
   order.sort((a, b) => a - b);
   return order.map((b) => buckets.get(b));
