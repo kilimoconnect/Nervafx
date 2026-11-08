@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NervaFX — Trade Signals (research)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" href="/nervafx-icon.png">
+<link rel="stylesheet" href="/shared/styles.css">
+<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+  .subtabs{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
+  .subtabs button{font-size:12px;font-weight:600;color:var(--text-muted);border:1px solid var(--border);border-radius:8px;padding:6px 12px;background:var(--bg-card);cursor:pointer}
+  .subtabs button.active{color:var(--text);border-color:var(--accent);background:rgba(59,130,246,.14)}
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:10px 0}
+  .tile{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:12px}
+  .tile .lab{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em}
+  .tile .val{font-size:22px;font-weight:800;margin-top:3px}
+  .tile .val.up{color:var(--up)}.tile .val.dn{color:var(--dn)}.tile .sub{font-size:11px;color:var(--text-muted);margin-top:2px}
+  .slgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  @media(max-width:760px){.slgrid{grid-template-columns:1fr}}
+  .slcard{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:12px;position:relative;cursor:pointer}
+  .slcard:hover{border-color:var(--accent)}
+  .slcard .rk{position:absolute;top:10px;right:12px;font-size:11px;color:var(--text-muted)}
+  .slcard .pr{font-size:16px;font-weight:800}
+  .bias{font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;display:inline-block;margin-top:3px}
+  .bias.BUY{color:var(--up);background:rgba(22,199,132,.12)}.bias.SELL{color:var(--dn);background:rgba(246,70,93,.12)}
+  .bias.none{color:var(--text-muted);background:rgba(148,163,184,.12)}
+  .st{font-size:11px;padding:2px 7px;border-radius:5px;display:inline-block;margin-top:6px;border:1px solid var(--border);color:var(--text-muted)}
+  .st.pub{color:var(--accent);border-color:var(--accent)}
+  .st.open{color:var(--up);border-color:var(--up)}
+  .st.wait{color:#eab308;border-color:#6b5e1a}
+  .slmeta{font-size:11px;color:var(--text-muted);line-height:1.6;margin-top:7px}
+  table.tbl{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
+  table.tbl th,table.tbl td{text-align:right;padding:6px 8px;border-bottom:1px solid var(--border);white-space:nowrap}
+  table.tbl th:first-child,table.tbl td:first-child{text-align:left}
+  table.tbl th{color:var(--text-muted);font-weight:600;cursor:default}
+  table.tbl tr.clk{cursor:pointer}table.tbl tr.clk:hover td{background:rgba(59,130,246,.08)}
+  .up{color:var(--up)}.dn{color:var(--dn)}.mut{color:var(--text-muted)}
+  .filters{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+  .filters select,.filters input{font-size:12px;background:var(--bg-card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 8px}
+  .btn2{font-size:12px;background:var(--bg-card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 10px;cursor:pointer}
+  .btn2:hover{border-color:var(--accent)}
+  .toggle{display:inline-flex;gap:0;border:1px solid var(--border);border-radius:7px;overflow:hidden}
+  .toggle button{font-size:12px;padding:5px 12px;background:var(--bg-card);color:var(--text-muted);border:none;cursor:pointer}
+  .toggle button.on{background:rgba(59,130,246,.16);color:var(--text)}
+  .sec{margin:16px 0}
+  .sec h3{font-size:13px;font-weight:700;margin:0 0 4px}
+  .sec .note{font-size:11px;color:var(--text-muted);margin-bottom:6px}
+  .eqwrap{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:10px}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media(max-width:760px){.cols{grid-template-columns:1fr}}
+  .drawer{position:fixed;top:0;right:0;height:100%;width:min(900px,97vw);background:var(--bg-card);border-left:1px solid var(--border);box-shadow:-8px 0 24px rgba(0,0,0,.4);overflow:auto;transform:translateX(100%);transition:transform .18s ease;z-index:40;padding:16px}
+  .drawer.open{transform:translateX(0)}
+  .drawer .x{position:absolute;top:12px;right:14px;cursor:pointer;color:var(--text-muted);background:var(--bg-card);border:1px solid var(--border);border-radius:7px;padding:4px 10px;font-size:12px;z-index:2}
+  .drawer .x:hover{border-color:var(--accent);color:var(--text)}
+  .dchart{width:100%;height:360px;margin:8px 0}
+  .tl{list-style:none;padding:0;margin:8px 0;font-size:12px}
+  .tl li{padding:4px 0 4px 14px;border-left:2px solid var(--border);position:relative}
+  .tl li:before{content:'';position:absolute;left:-5px;top:9px;width:8px;height:8px;border-radius:50%;background:var(--accent)}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:12px}
+  .kv .k{color:var(--text-muted)}
+  .banner-strong{background:rgba(246,70,93,.10);border:1px solid rgba(246,70,93,.4);color:#fecdd3;border-radius:8px;padding:8px 10px;font-size:11.5px;margin:8px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="app">
+    <img src="/nervafx-logo.png" alt="NervaFX" style="height:26px;display:block" onerror="this.style.display='none'">
+    <span class="logo">Trade Signals</span>
+    <span class="pill warn">RESEARCH · UNVALIDATED</span>
+    <span class="pill">ESTIMATED EXECUTION</span>
+    <span class="pill">MODELLED — NOT REAL RESULTS</span>
+    <span class="spacer"></span>
+    <a class="btn sm" href="/currency-comparison">Comparison →</a>
+  </header>
+
+  <div class="banner-strong" id="toprisk">
+    These are <b>modelled research signals</b>, not advice and not a record of real trades. Execution is
+    <b>estimated</b> from mid-price history (no bid/ask); win rates and returns are simulated and <b>unvalidated</b>.
+    The system places <b>no orders</b>. A large differential is observed relative movement, not a probability of success.
+  </div>
+
+  <div class="viewtabs" role="tablist" aria-label="Strategy">
+    <button data-strat="today"  role="tab">Today — H1 / M15</button>
+    <button data-strat="week"   role="tab">Week — H4 / H1</button>
+    <button data-strat="month"  role="tab">Month — D1 / H4</button>
+  </div>
+
+  <div class="subtabs" role="tablist" aria-label="Section">
+    <button data-sec="shortlist" role="tab">Top-3 shortlist</button>
+    <button data-sec="current"   role="tab">Current signals</button>
+    <button data-sec="history"   role="tab">Historical</button>
+    <button data-sec="performance" role="tab">Performance</button>
+  </div>
+
+  <div class="datahdr" id="datahdr" aria-live="polite">Loading trade signals…</div>
+  <div id="banners" aria-live="polite"></div>
+  <main id="host"><div class="card mut">Loading… the first computation reconstructs the window from candles and can take up to a minute.</div></main>
+  <div class="drawer" id="drawer"><span class="x" id="drawerX">✕ close</span><div id="drawerBody"></div></div>
+
+  <div class="foot">
+    Three independently-tracked strategies share one configurable engine: <b>period comparison → top-3 pairs →
+    confirm direction → entry trigger → publish → track outcome → performance</b>. Pair selection ranks all 28 pairs by
+    the absolute difference of the two currencies' period log returns (from the zero-sum 1/8 index). Confirmation uses
+    the latest completed H1/H4/D1 candle (return + 5-of-7 breadth). Entry is a 3-candle pattern on M15/H1/H4 with a
+    Wilder-ATR(14) stop; target 2R; max hold 16 entry candles. Execution is <b>estimated</b> (mid-price only, no
+    bid/ask): spread, slippage and financing are modelled costs; intrabar stops/targets are monitored on M5 where
+    available (≈2026-04 onward) else M15, stop-first on an ambiguous bar. Account return = marked-to-market equity, risk
+    0.5%/trade. All figures are <b>MODELLED and UNVALIDATED</b> — not trade signals, probabilities, or real results.
+  </div>
+</div>
+
+<script>
+(function () {
+  function qp(k){ return (location.search.match(new RegExp('[?&]'+k+'=([^&]+)'))||[])[1]; }
+  window.NFX_TS = { strat: qp('strat')||'today', sec: qp('sec')||'shortlist', days: +(qp('days')||90) };
+  var s=document.createElement('script'); s.src='/trade-signals/app.js'; document.body.appendChild(s);
+})();
+</script>
+</body></html>

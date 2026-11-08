@@ -43,14 +43,16 @@ function sliceBars(bars, fromMs, toMs) {
 }
 
 /**
- * Run one strategy over a loaded dataset. Pure w.r.t. the DB (all candles passed in).
+ * Run one strategy over a loaded dataset. Pure w.r.t. the DB for the engine; monitoring data
+ * is fetched lazily per trade (trades are sparse, so we never preload every M5 bar).
  *   baseByPair: base candles at def.entryBaseTf (engine)      { pair: [{openMs,...}] }
- *   monByPair:  { pair: { m5:[bars], m15:[bars] } }           (monitoring, finest-first)
+ *   getFine(pair, fromMs, toMs) -> { bars:[{openMs,open,high,low,close}], tf } (sync or async),
+ *               finest reliable monitoring data (M5 preferred, else M15).
  *   lastDataMs: latest candle close in the dataset (open-at-end detection)
- *   store:      { has(key), put(trade) }                      (persistence or accumulator)
+ *   store:      { has(key), put(trade) }
  *   origin:     'historical' | 'forward'
  */
-function runStrategy(def, baseByPair, monByPair, lastDataMs, store, origin, opts = {}) {
+async function runStrategy(def, baseByPair, getFine, lastDataMs, store, origin, opts = {}) {
   const ctx = buildContext(def, baseByPair);
   if (!ctx.built.ok) return { ok: false, reason: ctx.built.reason, trades: [] };
 
@@ -68,7 +70,6 @@ function runStrategy(def, baseByPair, monByPair, lastDataMs, store, origin, opts
       if (busyUntil[sig.pair] != null && sig.publishedAtMs < busyUntil[sig.pair]) continue; // one open/pending per pair
       sig.origin = origin;
 
-      // Entry: next entry candle opening at entryCloseMs.
       const ec = ctx.entryByPair[sig.pair];
       const next = candleAtOpen(ec, sig.entryCloseMs);
       const entry = decideEntry(sig, next ? next.open : undefined, next ? next.time : undefined, def);
@@ -76,15 +77,11 @@ function runStrategy(def, baseByPair, monByPair, lastDataMs, store, origin, opts
       let outcome = null, openAtEnd = false;
       if (entry.status === 'OPEN') {
         const holdEndMs = entry.fillMs + def.params.maxHoldCandles * entryMs;
-        // monitoring bars: prefer M5, else M15.
-        const mon = monByPair[sig.pair] || { m5: [], m15: [] };
-        let fine = sliceBars(mon.m5, entry.fillMs, holdEndMs), fineTf = 'M5';
-        if (!fine.length) { fine = sliceBars(mon.m15, entry.fillMs, holdEndMs); fineTf = 'M15'; }
-        // hold-limit quote = the 16th entry candle close.
+        const { bars, tf } = await getFine(sig.pair, entry.fillMs, holdEndMs);
         const holdCandle = candleAtOpen(ec, holdEndMs - entryMs);
         let holdExit = holdCandle ? { mid: holdCandle.close, ms: holdEndMs } : null;
         if (!holdExit && holdEndMs > lastDataMs) openAtEnd = true;
-        outcome = resolveOutcome(entry, fine, holdEndMs, holdExit, fineTf);
+        outcome = resolveOutcome(entry, bars, holdEndMs, holdExit, tf);
         busyUntil[sig.pair] = (outcome && outcome.exitMs) ? outcome.exitMs : holdEndMs;
       } else {
         busyUntil[sig.pair] = sig.entryExpiryMs;                 // pending until expiry
@@ -96,20 +93,35 @@ function runStrategy(def, baseByPair, monByPair, lastDataMs, store, origin, opts
       if (store.put) store.put(key, sig, trade);
     }
   }
-  return { ok: true, trades, grid: grid.length };
+  return { ok: true, trades, grid: grid.length, ctx, lastDataMs, lastAsOf: grid.length ? grid[grid.length - 1] : null };
+}
+
+/** In-memory getFine from a { pair: { m5, m15 } } map (used by unit tests). */
+function memFine(monByPair) {
+  return (pair, fromMs, toMs) => {
+    const mon = monByPair[pair] || { m5: [], m15: [] };
+    let bars = sliceBars(mon.m5, fromMs, toMs), tf = 'M5';
+    if (!bars.length) { bars = sliceBars(mon.m15, fromMs, toMs); tf = 'M15'; }
+    return { bars, tf };
+  };
+}
+
+/** DB-backed lazy getFine: M5 for the window, else M15 (fallback for pre-M5 history). */
+function makeDbFine(sb, opts = {}) {
+  const base = {}; if (opts.fromIso) base.fromIso = opts.fromIso; if (opts.toIso) base.toIso = opts.toIso;
+  return async (pair, fromMs, toMs) => {
+    const win = { fromIso: new Date(fromMs - 1).toISOString(), toIso: new Date(toMs + 1).toISOString() };
+    let rows = await loadTf(sb, pair, 'M5', win);
+    if (rows.length) return { bars: toBars(rows), tf: 'M5' };
+    rows = await loadTf(sb, pair, 'M15', win);
+    return { bars: toBars(rows), tf: 'M15' };
+  };
 }
 
 // ── dataset loading ────────────────────────────────────────────────────────────
 async function loadDataset(sb, baseTf, opts) {
   const by = await loadParallel(sb, PAIRS, baseTf, Object.assign({ withVolume: true }, opts), 8);
   return by;
-}
-async function loadMonitoring(sb, opts) {
-  const m5 = await loadParallel(sb, PAIRS, 'M5', opts, 8);
-  const m15 = await loadParallel(sb, PAIRS, 'M15', opts, 8);
-  const out = {};
-  for (const p of PAIRS) out[p] = { m5: toBars(m5[p] || []), m15: toBars(m15[p] || []) };
-  return out;
 }
 function lastClose(by, baseMs) {
   let last = 0;
@@ -129,7 +141,7 @@ function memStore() {
  */
 async function backfill(sb, { strategies = STRATEGY_KEYS, fromIso, toIso, store } = {}) {
   const opts = {}; if (fromIso) opts.fromIso = fromIso; if (toIso) opts.toIso = toIso;
-  const mon = await loadMonitoring(sb, opts);
+  const getFine = makeDbFine(sb, opts);
   const results = {};
   const baseCache = {};
   for (const key of strategies) {
@@ -139,7 +151,8 @@ async function backfill(sb, { strategies = STRATEGY_KEYS, fromIso, toIso, store 
     const baseByPair = baseCache[baseTf];
     const lastDataMs = lastClose(baseByPair, TF_MS[baseTf]);
     const s = store || memStore();
-    const r = runStrategy(def, baseByPair, mon, lastDataMs, s, 'historical', { fromMs: opts.fromMs });
+    const r = await runStrategy(def, baseByPair, getFine, lastDataMs, s, 'historical', { fromMs: opts.fromMs });
+    r.def = def;
     results[key] = r;
   }
   return results;
@@ -173,4 +186,4 @@ function summarize(trades) {
   return s;
 }
 
-module.exports = { runStrategy, backfill, summarize, loadDataset, loadMonitoring, lastClose, memStore, candleAtOpen, sliceBars, toBars };
+module.exports = { runStrategy, backfill, summarize, loadDataset, makeDbFine, memFine, lastClose, memStore, candleAtOpen, sliceBars, toBars };

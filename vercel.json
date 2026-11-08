@@ -10,6 +10,7 @@
     "api/cron-backtest-sync.js":  { "maxDuration": 300 },
     "api/currency-comparison.js": { "maxDuration": 60 },
     "api/currency-chart.js":      { "maxDuration": 60 },
+    "api/trade-signals.js":       { "maxDuration": 300 },
     "api/backfill-m5.js":         { "maxDuration": 300 },
     "api/*-history.js":           { "maxDuration": 300 }
   },
@@ -20,6 +21,8 @@
     { "source": "/workspace", "destination": "/currency-comparison.html" },
     { "source": "/currency-comparison", "destination": "/currency-comparison.html" },
     { "source": "/comparison", "destination": "/currency-comparison.html" },
+    { "source": "/trade-signals", "destination": "/trade-signals.html" },
+    { "source": "/signals", "destination": "/trade-signals.html" },
     { "source": "/login",  "destination": "/login.html"   },
     { "source": "/setup",  "destination": "/setup.html"   },
     { "source": "/profile","destination": "/profile.html" },
