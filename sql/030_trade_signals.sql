@@ -13,7 +13,9 @@
 -- ============================================================================
 
 -- ── Versioned strategy configurations (immutable per version) ────────────────
-CREATE TABLE IF NOT EXISTS strategy_versions (
+-- NOTE: named `signal_strategy_versions` (not `strategy_versions`) because the m15-
+-- intelligence subsystem already owns a differently-shaped `strategy_versions` table.
+CREATE TABLE IF NOT EXISTS signal_strategy_versions (
   id            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   strategy_key  TEXT        NOT NULL,            -- 'today' | 'week' | 'month'
   version       TEXT        NOT NULL,            -- e.g. 'tsf-1.0.0'
@@ -114,7 +116,7 @@ CREATE TABLE IF NOT EXISTS signal_engine_cursor (
 DO $$
 DECLARE t TEXT;
 BEGIN
-  FOREACH t IN ARRAY ARRAY['strategy_versions','signal_rankings','signals','signal_events','trade_outcomes','signal_engine_cursor']
+  FOREACH t IN ARRAY ARRAY['signal_strategy_versions','signal_rankings','signals','signal_events','trade_outcomes','signal_engine_cursor']
   LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
     EXECUTE format($p$DROP POLICY IF EXISTS "service_full_access" ON %I$p$, t);

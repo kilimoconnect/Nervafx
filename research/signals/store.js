@@ -157,10 +157,10 @@ async function loadTerminal(sb, strategyKeys) {
 
 /** Upsert the frozen params for a strategy version (idempotent; immutable per version). */
 async function ensureVersion(sb, def) {
-  const { error } = await sb.from('strategy_versions')
+  const { error } = await sb.from('signal_strategy_versions')
     .upsert([{ strategy_key: def.key, version: def.version, params: def.params, active: true }],
       { onConflict: 'strategy_key,version', ignoreDuplicates: true });
-  if (error) throw new Error('strategy_versions upsert: ' + error.message);
+  if (error) throw new Error('signal_strategy_versions upsert: ' + error.message);
 }
 
 /** Persist one ranking snapshot (all 28) for an evaluation decision point. */

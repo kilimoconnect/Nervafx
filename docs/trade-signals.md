@@ -83,7 +83,8 @@ never rewritten.
 
 ## 6. Data model (`sql/030_trade_signals.sql`)
 
-`strategy_versions`, `signal_rankings` (one snapshot per decision), `signals` (immutable, unique on
+`signal_strategy_versions` (named to avoid the m15-intelligence subsystem's own
+`strategy_versions`), `signal_rankings` (one snapshot per decision), `signals` (immutable, unique on
 `strategy_key,version,pair,entry_close_ms`), `signal_events` (append-only), `trade_outcomes`
 (mutable projection), `signal_engine_cursor` (idempotent advance). RLS: service role full access,
 authenticated users read-only.
