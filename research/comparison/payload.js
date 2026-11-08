@@ -13,10 +13,12 @@
 
 const { buildIndices } = require('./index-build');
 const { periodCandle, candleMetrics, periodPath, breadth } = require('./candles');
-const { todaySoFar, weekSoFar, monthSoFar } = require('./periods');
+const { todaySoFar, weekSoFar, monthSoFar, EAT_OFFSET_MS } = require('./periods');
 const { CURRENCIES, DAY_MS, M15_MS } = require('./config');
 
 const iso = (ms) => (ms == null ? null : new Date(ms).toISOString());
+/** EAT-local calendar date (YYYY-MM-DD) for a UTC instant. */
+const eatDateStr = (ms) => new Date(ms + EAT_OFFSET_MS).toISOString().slice(0, 10);
 /** HH:MM wall-clock in a named timezone (EAT display = Africa/Nairobi, UTC+3, DST-free). */
 function hhmm(ms, tz) {
   const f = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour12: false, hour: '2-digit', minute: '2-digit' });
@@ -25,9 +27,9 @@ function hhmm(ms, tz) {
 const EAT = 'Africa/Nairobi';
 
 const VIEW_META = {
-  todaySoFar: { noun: 'day', title: 'Today so far', kind: 'developing-day', starts: 'UTC calendar day 00:00.' },
-  weekSoFar: { noun: 'week', title: 'Week so far', kind: 'developing-week', starts: 'Week starts Monday 00:00 UTC.' },
-  monthSoFar: { noun: 'month', title: 'Month so far', kind: 'developing-month', starts: 'Month starts on the 1st, 00:00 UTC.' },
+  todaySoFar: { noun: 'day', title: 'Today so far', kind: 'developing-day', starts: 'Day starts at 00:00 EAT (UTC+3).' },
+  weekSoFar: { noun: 'week', title: 'Week so far', kind: 'developing-week', starts: 'Week starts Monday 00:00 EAT (UTC+3).' },
+  monthSoFar: { noun: 'month', title: 'Month so far', kind: 'developing-month', starts: 'Month starts on the 1st, 00:00 EAT (UTC+3).' },
 };
 
 function periodsForView(view, asOfMs, lastDataMs) {
@@ -40,7 +42,7 @@ function periodsForView(view, asOfMs, lastDataMs) {
 function periodInfo(view, highlight) {
   const m = VIEW_META[view] || VIEW_META.todaySoFar;
   const endEat = hhmm(highlight.endMs, EAT), endUtc = hhmm(highlight.endMs, 'UTC');
-  const dateIso = new Date(highlight.endMs).toISOString().slice(0, 10);
+  const dateIso = eatDateStr(highlight.endMs);   // EAT calendar date of the end instant
   return {
     title: m.title + ' — through ' + dateIso + ' ' + endEat + ' EAT (' + endUtc + ' UTC)',
     sublabel: 'Closed inputs · Developing ' + m.noun, status: 'developing',
