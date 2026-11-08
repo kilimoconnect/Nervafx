@@ -23,6 +23,7 @@ const { buildContext, evaluateAt } = require('../research/signals/evaluate');
 const { decideEntry } = require('../research/signals/execution');
 const { resolveOutcome } = require('../research/signals/monitor');
 const { buildTrade, dedupKey } = require('../research/signals/lifecycle');
+const { supabaseStore, loadTerminal, ensureVersion, putRanking, getCursor, setCursor } = require('../research/signals/store');
 
 // ── small helpers ────────────────────────────────────────────────────────────
 function toBars(rows) { return rows.map((r) => ({ openMs: r.openMs, open: r.open, high: r.high, low: r.low, close: r.close })); }
@@ -158,6 +159,53 @@ async function backfill(sb, { strategies = STRATEGY_KEYS, fromIso, toIso, store 
   return results;
 }
 
+// ── persisted run (live forward + historical backfill share this path) ───────────
+// Lookback window (days) loaded per strategy — enough to cover the period baseline,
+// confirmation/ATR warm-up, and any still-open trade (bounded by maxHold entry candles).
+const LOOKBACK_DAYS = { today: 10, week: 24, month: 75 };
+
+/**
+ * Run ONE strategy and persist to Supabase (idempotent). Used by the live cron and the
+ * historical backfill endpoint — identical engine, differing only in `origin` and window.
+ *   opts.fromIso / opts.toIso  — explicit window (backfill); else a rolling lookback for `key`.
+ *   opts.origin                — 'forward' (live) | 'historical' (backfill).
+ */
+async function runPersist(sb, key, opts = {}) {
+  const def = strategyDef(key);
+  await ensureVersion(sb, def);
+
+  const win = {};
+  if (opts.fromIso) win.fromIso = opts.fromIso;
+  else win.fromIso = new Date(Date.now() - (LOOKBACK_DAYS[key] || 30) * 24 * 3600 * 1000).toISOString();
+  if (opts.toIso) win.toIso = opts.toIso;
+
+  const baseByPair = await loadDataset(sb, def.entryBaseTf, win);
+  const lastDataMs = lastClose(baseByPair, TF_MS[def.entryBaseTf]);
+
+  const terminalIds = await loadTerminal(sb, [key]);       // skip already-resolved trades
+  const store = supabaseStore(sb, { terminalIds });
+  const getFine = makeDbFine(sb, win);
+  const origin = opts.origin || 'forward';
+
+  const r = await runStrategy(def, baseByPair, getFine, lastDataMs, store, origin, {});
+  if (!r.ok) return { ok: false, key, reason: r.reason };
+
+  const persisted = await store.flush();
+
+  // Persist the latest ranking snapshot for this decision point (audit trail).
+  if (r.lastAsOf != null) {
+    const ev = evaluateAt(def, r.lastAsOf, r.ctx);
+    if (ev.ok) await putRanking(sb, def, { origin, infoCutoffMs: r.lastAsOf, baselineMs: ev.baselineMs, ranking: ev.ranking });
+  }
+  if (r.lastAsOf != null) {
+    const prev = await getCursor(sb, key);
+    if (r.lastAsOf > prev) await setCursor(sb, key, r.lastAsOf);
+  }
+
+  return { ok: true, key, origin, window: win, grid: r.grid, lastAsOf: r.lastAsOf,
+    summary: summarize(r.trades), persisted };
+}
+
 /** Summary stats over a strategy's trades (research; modelled, estimated execution). */
 function summarize(trades) {
   const s = { published: trades.length, entered: 0, open: 0, closed: 0, expired: 0, cancelled: 0, unresolved: 0,
@@ -186,4 +234,4 @@ function summarize(trades) {
   return s;
 }
 
-module.exports = { runStrategy, backfill, summarize, loadDataset, makeDbFine, memFine, lastClose, memStore, candleAtOpen, sliceBars, toBars };
+module.exports = { runStrategy, runPersist, backfill, summarize, loadDataset, makeDbFine, memFine, lastClose, memStore, candleAtOpen, sliceBars, toBars, LOOKBACK_DAYS };

@@ -100,7 +100,8 @@
   <div class="foot">
     Three independently-tracked strategies share one configurable engine: <b>period comparison → top-3 pairs →
     confirm direction → entry trigger → publish → track outcome → performance</b>. Pair selection ranks all 28 pairs by
-    the absolute difference of the two currencies' period log returns (from the zero-sum 1/8 index). Confirmation uses
+    the absolute difference of the two currencies' period log returns (from the zero-sum 1/8 index). The day, week and
+    month baselines start at <b>00:00 EAT</b> (UTC+3). Confirmation uses
     the latest completed H1/H4/D1 candle (return + 5-of-7 breadth). Entry is a 3-candle pattern on M15/H1/H4 with a
     Wilder-ATR(14) stop; target 2R; max hold 16 entry candles. Execution is <b>estimated</b> (mid-price only, no
     bid/ask): spread, slippage and financing are modelled costs; intrabar stops/targets are monitored on M5 where

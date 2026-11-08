@@ -5,6 +5,7 @@ const assert = require('node:assert');
 
 const { evaluateStrategy, STATUS } = require('../../research/signals/evaluate');
 const { strategyDef, TF_MS } = require('../../research/signals/config');
+const { EAT_OFFSET_MS } = require('../../research/comparison/periods');
 const { genBase, scaledGrowth } = require('./fixtures');
 
 const M15 = TF_MS.M15, DAY = TF_MS.D1;
@@ -60,10 +61,10 @@ test('monotone fixture: confirmation passes but flat entry candles leave status 
 test('replay cut: evaluating earlier hides later candles (baseline + ranking shift)', () => {
   const nFull = Math.ceil((ASOF - START) / M15) + 10;
   const full = genBase(scaledGrowth(0.0003), START, nFull, M15);
-  const earlier = Date.UTC(2025, 4, 1, 12, 0, 0);           // day 1 noon
+  const earlier = Date.UTC(2025, 4, 1, 12, 0, 0);           // day 1 noon UTC (15:00 EAT)
   const r = evaluateStrategy(def, earlier, full);
   assert.ok(r.ok);
-  assert.equal(r.baselineMs, Date.UTC(2025, 4, 1, 0, 0, 0), 'baseline = day-1 start');
+  assert.equal(r.baselineMs, Date.UTC(2025, 4, 1, 0, 0, 0) - EAT_OFFSET_MS, 'baseline = day-1 start (00:00 EAT)');
   // confirmation interval end never exceeds asOf
   assert.ok(r.confirmInterval.endMs <= earlier);
 });

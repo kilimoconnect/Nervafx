@@ -1,15 +1,23 @@
 'use strict';
 
 /**
- * Period definitions for the three views. Trading day = UTC calendar day. Sessions use
- * named, DST-aware timezones (offsets computed per-instant via Intl). Only FULLY
- * completed days/sessions (end ≤ asOf and ≤ latest data) are "completed"; the
- * developing day is explicitly labelled and excludes the forming M15 candle.
+ * Period definitions for the three views. Trading day/week/month boundaries are anchored to
+ * 00:00 EAT (East Africa Time, UTC+3, no DST) — the app's display timezone — so "today",
+ * "this week" and "this month" begin at local midnight in Nairobi, not at 00:00 UTC. Sessions
+ * use named, DST-aware timezones (offsets computed per-instant via Intl). Only FULLY completed
+ * days/sessions (end ≤ asOf and ≤ latest data) are "completed"; the developing day is
+ * explicitly labelled and excludes the forming M15 candle.
  */
 
 const { DAY_MS, M15_MS, sessionByName } = require('./config');
 
-const dayStart = (ms) => Math.floor(ms / DAY_MS) * DAY_MS;
+// EAT is a fixed UTC+3 (no daylight saving) → a constant offset is exact.
+const EAT_OFFSET_MS = 3 * 60 * 60 * 1000;
+/** EAT-local date (YYYY-MM-DD / YYYY-MM) label for a UTC instant. */
+const eatDate = (ms) => new Date(ms + EAT_OFFSET_MS).toISOString();
+
+/** Start of the EAT calendar day containing ms (00:00 EAT, expressed in UTC ms). */
+const dayStart = (ms) => Math.floor((ms + EAT_OFFSET_MS) / DAY_MS) * DAY_MS - EAT_OFFSET_MS;
 
 /** Wall-clock parts of a UTC instant in a named timezone. */
 function zparts(tz, utcMs) {
@@ -31,7 +39,7 @@ function completedDays(asOfMs, lastDataMs, count) {
   const out = [];
   while (out.length < count && end > 0) {
     const start = end - DAY_MS;
-    out.push({ startMs: start, endMs: end, label: new Date(start).toISOString().slice(0, 10), status: 'completed' });
+    out.push({ startMs: start, endMs: end, label: eatDate(start).slice(0, 10), status: 'completed' });
     end -= DAY_MS;
   }
   return out.reverse();   // oldest → newest
@@ -43,22 +51,22 @@ function todaySoFar(asOfMs, lastDataMs, extra) {
   const todayStart = dayStart(cutoff);
   const elapsed = cutoff - todayStart;     // elapsed into the trading day
   const periods = [];
-  for (let k = extra; k >= 1; k--) { const ds = todayStart - k * DAY_MS; periods.push({ startMs: ds, endMs: ds + elapsed, label: new Date(ds).toISOString().slice(0, 10) + ' (through +' + Math.round(elapsed / 3600000) + 'h)', status: 'elapsed-day' }); }
+  for (let k = extra; k >= 1; k--) { const ds = todayStart - k * DAY_MS; periods.push({ startMs: ds, endMs: ds + elapsed, label: eatDate(ds).slice(0, 10) + ' (through +' + Math.round(elapsed / 3600000) + 'h)', status: 'elapsed-day' }); }
   periods.push({ startMs: todayStart, endMs: cutoff, label: 'Today so far', status: 'developing', cutoffMs: cutoff, elapsedMs: elapsed });
   return periods;
 }
 
 const WEEK_MS = 7 * DAY_MS;
-/** Monday 00:00 UTC of the week containing ms (trading week starts Monday, UTC). */
+/** Monday 00:00 EAT of the week containing ms (trading week starts Monday, EAT). */
 function weekStart(ms) {
   const d = dayStart(ms);
-  const back = (new Date(d).getUTCDay() + 6) % 7;   // 0=Sun..6=Sat → days since Monday
+  const back = (new Date(d + EAT_OFFSET_MS).getUTCDay() + 6) % 7;   // EAT weekday → days since Monday
   return d - back * DAY_MS;
 }
-/** 1st 00:00 UTC of the month containing ms. */
-function monthStart(ms) { const dt = new Date(ms); return Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), 1); }
-/** Start of the month `k` months before the month that starts at ms0. */
-function monthStartBack(ms0, k) { const dt = new Date(ms0); return Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth() - k, 1); }
+/** 1st 00:00 EAT of the month containing ms (expressed in UTC ms). */
+function monthStart(ms) { const dt = new Date(ms + EAT_OFFSET_MS); return Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), 1) - EAT_OFFSET_MS; }
+/** Start of the EAT month `k` months before the month that starts at ms0. */
+function monthStartBack(ms0, k) { const dt = new Date(ms0 + EAT_OFFSET_MS); return Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth() - k, 1) - EAT_OFFSET_MS; }
 
 /** Week-so-far (developing) + the previous `extra` weeks through the SAME elapsed cutoff. */
 function weekSoFar(asOfMs, lastDataMs, extra) {
@@ -66,7 +74,7 @@ function weekSoFar(asOfMs, lastDataMs, extra) {
   const ws = weekStart(cutoff);
   const elapsed = cutoff - ws;             // elapsed into the trading week
   const periods = [];
-  for (let k = extra; k >= 1; k--) { const s = ws - k * WEEK_MS; periods.push({ startMs: s, endMs: s + elapsed, label: 'wk ' + new Date(s).toISOString().slice(0, 10) + ' (+' + Math.round(elapsed / DAY_MS) + 'd)', status: 'elapsed-week' }); }
+  for (let k = extra; k >= 1; k--) { const s = ws - k * WEEK_MS; periods.push({ startMs: s, endMs: s + elapsed, label: 'wk ' + eatDate(s).slice(0, 10) + ' (+' + Math.round(elapsed / DAY_MS) + 'd)', status: 'elapsed-week' }); }
   periods.push({ startMs: ws, endMs: cutoff, label: 'Week so far', status: 'developing', cutoffMs: cutoff, elapsedMs: elapsed });
   return periods;
 }
@@ -81,7 +89,7 @@ function monthSoFar(asOfMs, lastDataMs, extra) {
   for (let k = extra; k >= 1; k--) {
     const pm = monthStartBack(ms0, k);
     const pmLen = monthStartBack(ms0, k - 1) - pm;   // this prior month's full length
-    periods.push({ startMs: pm, endMs: pm + Math.min(elapsed, pmLen), label: 'mo ' + new Date(pm).toISOString().slice(0, 7) + ' (+' + Math.round(Math.min(elapsed, pmLen) / DAY_MS) + 'd)', status: 'elapsed-month' });
+    periods.push({ startMs: pm, endMs: pm + Math.min(elapsed, pmLen), label: 'mo ' + eatDate(pm).slice(0, 7) + ' (+' + Math.round(Math.min(elapsed, pmLen) / DAY_MS) + 'd)', status: 'elapsed-month' });
   }
   periods.push({ startMs: ms0, endMs: cutoff, label: 'Month so far', status: 'developing', cutoffMs: cutoff, elapsedMs: elapsed });
   return periods;
@@ -105,4 +113,4 @@ function completedSessions(sessionName, asOfMs, lastDataMs, count) {
   return out.reverse();
 }
 
-module.exports = { dayStart, weekStart, monthStart, zparts, zonedToUtc, completedDays, todaySoFar, weekSoFar, monthSoFar, completedSessions };
+module.exports = { dayStart, weekStart, monthStart, zparts, zonedToUtc, completedDays, todaySoFar, weekSoFar, monthSoFar, completedSessions, EAT_OFFSET_MS };

@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { buildComparison } = require('../../research/comparison/payload');
 const { CURRENCIES, PAIRS, M15_MS, DAY_MS, CONFIG } = require('../../research/comparison/config');
+const { EAT_OFFSET_MS } = require('../../research/comparison/periods');
 
 const START = Date.UTC(2025, 4, 1, 0, 0, 0);   // 2025-05-01 00:00 UTC (a Thursday)
 // Self-consistent network: stored pair close = V_base / V_quote.
@@ -51,8 +52,8 @@ test('monthSoFar: developing month labelled, context months at same elapsed offs
   assert.equal(r.periodInfo.status, 'developing');
   assert.ok(/Month so far/.test(r.periodInfo.title));
   assert.ok(/Developing month/.test(r.periodInfo.sublabel));
-  // developing month starts on the 1st 00:00 UTC
-  assert.equal(new Date(r.periodInfo.startUtc).getUTCDate(), 1);
+  // developing month starts on the 1st 00:00 EAT (00:00 EAT = 21:00 UTC the prior day)
+  assert.equal(new Date(Date.parse(r.periodInfo.startUtc) + EAT_OFFSET_MS).getUTCDate(), 1);
 });
 
 test('todaySoFar: developing day labelled, forming candle excluded (end = cutoff)', () => {

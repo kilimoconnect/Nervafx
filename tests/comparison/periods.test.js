@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { candleMetrics, breadth } = require('../../research/comparison/candles');
-const { completedDays, todaySoFar, completedSessions, zonedToUtc, dayStart, weekStart, monthStart, weekSoFar, monthSoFar } = require('../../research/comparison/periods');
+const { completedDays, todaySoFar, completedSessions, zonedToUtc, dayStart, weekStart, monthStart, weekSoFar, monthSoFar, EAT_OFFSET_MS } = require('../../research/comparison/periods');
 const { CONFIG, DAY_MS, M15_MS } = require('../../research/comparison/config');
 
 test('candle metrics: body/wick/close-location and signed return', () => {
@@ -59,12 +59,12 @@ test('todaySoFar: developing day + prior days at the SAME elapsed cutoff', () =>
   assert.equal(ps[0].endMs - ps[0].startMs, dev.elapsedMs);
 });
 
-test('weekStart is Monday 00:00 UTC; weekSoFar is developing + prior weeks at same elapsed', () => {
-  // 2026-01-07 is a Wednesday 10:00 UTC
+test('weekStart is Monday 00:00 EAT; weekSoFar is developing + prior weeks at same elapsed', () => {
+  // 2026-01-07 is a Wednesday 10:00 UTC (13:15 EAT)
   const asOf = Date.UTC(2026, 0, 7, 10, 15, 0);
   const ws = weekStart(asOf);
-  assert.equal(new Date(ws).getUTCDay(), 1);         // Monday
-  assert.equal(ws, Date.UTC(2026, 0, 5));            // Mon 2026-01-05 00:00
+  assert.equal(new Date(ws + EAT_OFFSET_MS).getUTCDay(), 1);   // Monday in EAT
+  assert.equal(ws, Date.UTC(2026, 0, 5) - EAT_OFFSET_MS);      // Mon 2026-01-05 00:00 EAT
   const ps = weekSoFar(asOf, asOf, 2);
   const dev = ps[ps.length - 1];
   assert.equal(dev.status, 'developing');
@@ -76,16 +76,16 @@ test('weekStart is Monday 00:00 UTC; weekSoFar is developing + prior weeks at sa
   assert.equal(ps[0].endMs - ps[0].startMs, dev.elapsedMs);
 });
 
-test('monthStart is the 1st 00:00 UTC; monthSoFar developing + prior months (elapsed capped)', () => {
+test('monthStart is the 1st 00:00 EAT; monthSoFar developing + prior months (elapsed capped)', () => {
   const asOf = Date.UTC(2026, 2, 10, 12, 0, 0);      // 2026-03-10 12:00
   const ms = monthStart(asOf);
-  assert.equal(ms, Date.UTC(2026, 2, 1));
+  assert.equal(ms, Date.UTC(2026, 2, 1) - EAT_OFFSET_MS);
   const ps = monthSoFar(asOf, asOf, 2);
   const dev = ps[ps.length - 1];
   assert.equal(dev.status, 'developing');
-  assert.equal(dev.startMs, Date.UTC(2026, 2, 1));
-  assert.equal(ps[1].startMs, Date.UTC(2026, 1, 1)); // Feb
-  assert.equal(ps[0].startMs, Date.UTC(2026, 0, 1)); // Jan
+  assert.equal(dev.startMs, Date.UTC(2026, 2, 1) - EAT_OFFSET_MS);
+  assert.equal(ps[1].startMs, Date.UTC(2026, 1, 1) - EAT_OFFSET_MS); // Feb
+  assert.equal(ps[0].startMs, Date.UTC(2026, 0, 1) - EAT_OFFSET_MS); // Jan
   // Feb is short: a 10-day elapsed fits, so the context ends mid-Feb, never spilling into March
   for (const p of ps) assert.ok(p.endMs <= asOf);
   assert.ok(ps[1].endMs <= Date.UTC(2026, 2, 1));    // Feb context ends within Feb
@@ -95,8 +95,8 @@ test('monthSoFar caps elapsed at a short prior month (no spill into next month)'
   const asOf = Date.UTC(2026, 2, 31, 0, 0, 0);       // 2026-03-31: 30 days elapsed into March
   const ps = monthSoFar(asOf, asOf, 1);
   const feb = ps[0];
-  assert.equal(feb.startMs, Date.UTC(2026, 1, 1));
-  assert.ok(feb.endMs <= Date.UTC(2026, 2, 1));      // capped at Feb length, not Feb 1 + 30d
+  assert.equal(feb.startMs, Date.UTC(2026, 1, 1) - EAT_OFFSET_MS);
+  assert.ok(feb.endMs <= Date.UTC(2026, 2, 1) - EAT_OFFSET_MS); // capped at Feb length, not Feb 1 + 30d
 });
 
 test('sessions are DST-aware: London 08:00 local = 07:00 UTC (BST) / 08:00 UTC (GMT)', () => {
