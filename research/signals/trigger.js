@@ -37,7 +37,17 @@ function evaluateTrigger(entryCandles, direction, params) {
   if (reasons.length) return { pass: false, reasons };
 
   const { last: atr } = wilderATR(entryCandles, params.atrPeriod);
-  if (!(atr > 0)) return { pass: false, reasons: ['ATR unavailable or nonpositive'] };
+  return buildPlan(t2, t1, t, atr, direction, params, intervalOf(entryCandles));
+}
+
+/**
+ * Core trigger + plan from the three candles and a PRE-COMPUTED ATR (Wilder, through t).
+ * Pure and allocation-light so the backfill can call it per entry candle without
+ * recomputing ATR over the whole series each time.
+ */
+function buildPlan(t2, t1, t, atr, direction, params, entryMs) {
+  const reasons = [];
+  if (!(atr > 0)) return { pass: false, reasons: ['ATR unavailable or nonpositive'], atr };
 
   const range = t.high - t.low;
   if (range > params.maxRangeAtrMult * atr) reasons.push('candle-t range ' + range.toFixed(6) + ' exceeds ' + params.maxRangeAtrMult + '*ATR');
@@ -83,7 +93,7 @@ function evaluateTrigger(entryCandles, direction, params) {
       maxDeviation: params.entryDevAtrMult * atr,
       fixedStop: stop,
       indicativeTarget: target,
-      entryCloseMs: t.time + intervalOf(entryCandles),       // close time of candle t
+      entryCloseMs: t.time + entryMs,                        // close time of candle t
       triggerCandles: {
         t2: pick(t2), t1: pick(t1), t: pick(t),
         closesBeyond: direction === 'BUY' ? t1.high : t1.low,
@@ -97,4 +107,4 @@ function pick(c) { return { time: c.time, open: c.open, high: c.high, low: c.low
 /** Infer the candle interval from the last two candle open times (fallback 0). */
 function intervalOf(cs) { return cs.length >= 2 ? (cs[cs.length - 1].time - cs[cs.length - 2].time) : 0; }
 
-module.exports = { evaluateTrigger, isBull, isBear };
+module.exports = { evaluateTrigger, buildPlan, isBull, isBear };

@@ -2,27 +2,31 @@
 
 /**
  * Shared, strictly-causal strategy evaluator (spec §4, §9). The SAME function drives
- * historical backfill and live forward processing. Given a strategy definition, an
- * information cutoff `asOfMs` (an entry-TF candle close), and the base candles, it:
+ * historical backfill and live forward processing.
  *
- *   1. reconstructs the period comparison through asOf (only data with close <= asOf),
+ * Causality: the zero-sum index accumulates multiplicatively from the first observation,
+ * and Wilder ATR depends only on past true ranges — both are functions of data at or
+ * before each point. So a context built ONCE over the full history can be read at any
+ * `asOfMs` with no look-ahead (idxAtOrBefore / pairCloseAtOrBefore / a binary-searched
+ * entry-candle prefix all ignore anything after asOf). This keeps a full 18-month
+ * backfill O(n log n) instead of rebuilding the index every candle.
+ *
+ * At each asOf (an entry-TF candle close) it:
+ *   1. reconstructs the period comparison through asOf,
  *   2. recomputes the top-3 ranking,
- *   3. applies confirmation using the latest FULLY COMPLETED confirmation candle,
+ *   3. confirms using the latest FULLY COMPLETED confirmation candle,
  *   4. evaluates the completed entry candle t for the 3-candle trigger + ATR,
  *   5. returns a ranking snapshot, per-shortlist status, and any publishable signals.
- *
- * It never reads a candle whose close is after asOf (no look-ahead). Because log returns
- * telescope, one base series per strategy (M15 for today; H1 for week/month) supplies
- * selection, confirmation-boundary returns, breadth, and (aggregated) entry candles.
  */
 
 const { CURRENCIES, PAIRS, TF_MS } = require('./config');
 const { buildIndices } = require('../comparison/index-build');
 const { aggregatePairs } = require('../comparison/aggregate');
 const { dayStart, weekStart, monthStart } = require('../comparison/periods');
+const { wilderATR } = require('./atr');
 const { currencyReturns, rankPairs, topN } = require('./selection');
 const { evaluateCandidate } = require('./confirm');
-const { evaluateTrigger } = require('./trigger');
+const { buildPlan } = require('./trigger');
 
 const STATUS = {
   INCOMPLETE: 'incomplete-data',
@@ -32,7 +36,6 @@ const STATUS = {
   PUBLISHED: 'signal-published',
 };
 
-/** Period baseline for a strategy's selection mode. */
 function baselineMs(select, asOfMs) {
   if (select === 'day') return dayStart(asOfMs);
   if (select === 'week') return weekStart(asOfMs);
@@ -42,9 +45,8 @@ function baselineMs(select, asOfMs) {
 
 /** Latest COMPLETED fixed-width candle interval (H1/H4/D1) as of asOfMs. */
 function latestCompletedInterval(tfMs, asOfMs) {
-  const end = Math.floor(asOfMs / tfMs) * tfMs;          // boundary at/just below asOf
-  const confEnd = end === asOfMs ? asOfMs : end;          // completed candle ends here
-  return { startMs: confEnd - tfMs, endMs: confEnd };
+  const end = Math.floor(asOfMs / tfMs) * tfMs;
+  return { startMs: end - tfMs, endMs: end };
 }
 
 /** Keep only base candles whose CLOSE (openMs+baseMs) <= asOf (defensive causal cut). */
@@ -59,23 +61,41 @@ function causalCut(baseByPair, baseMs, asOfMs) {
   return out;
 }
 
-/** Entry candles at the entry TF, aggregated from the base, trimmed to completed ones <= asOf. */
 function entryCandlesFor(baseCandles, entryTf, entryMs, asOfMs) {
-  const agg = aggregatePairs(baseCandles, entryTf);     // {time(open),open,high,low,close,volume}
+  const agg = aggregatePairs(baseCandles, entryTf);
   const out = [];
   for (const c of agg) { if (c.time + entryMs <= asOfMs) out.push(c); else break; }
   return out;
 }
 
+/** Last index i where candle close (cands[i].time+entryMs) <= asOf, via binary search. */
+function lastClosedIdx(cands, entryMs, asOfMs) {
+  let lo = 0, hi = cands.length - 1, ans = -1;
+  while (lo <= hi) { const m = (lo + hi) >> 1; if (cands[m].time + entryMs <= asOfMs) { ans = m; lo = m + 1; } else hi = m - 1; }
+  return ans;
+}
+
 /**
- * Evaluate one strategy at asOfMs.
- *   def: strategyDef(...)  ; baseByPair: { pair: base candles (entryBaseTf) } ascending.
- * Returns { ok, asOfMs, baselineMs, resolution, ranking, shortlist[], signals[], reason? }.
+ * Precompute everything that is causal-safe to share across all asOf evaluations:
+ *   - global zero-sum index built at the entry base resolution,
+ *   - aggregated entry candles per pair (+ their Wilder ATR array through each candle).
+ * baseByPair: { pair: base candles at def.entryBaseTf } ascending.
  */
-function evaluateStrategy(def, asOfMs, baseByPair) {
+function buildContext(def, baseByPair) {
   const baseMs = TF_MS[def.entryBaseTf];
-  const cut = causalCut(baseByPair, baseMs, asOfMs);
-  const built = buildIndices(cut, { baseMs });
+  const built = buildIndices(baseByPair, { baseMs });
+  const entryByPair = {}, atrByPair = {};
+  for (const p of PAIRS) {
+    const agg = aggregatePairs(baseByPair[p] || [], def.entryTf);
+    entryByPair[p] = agg;
+    atrByPair[p] = wilderATR(agg, def.params.atrPeriod).atr;
+  }
+  return { def, baseMs, built, baseByPair, entryByPair, atrByPair };
+}
+
+/** Evaluate one strategy at asOfMs against a prebuilt context. */
+function evaluateAt(def, asOfMs, ctx) {
+  const built = ctx.built;
   if (!built.ok) return { ok: false, asOfMs, reason: built.reason || 'insufficient synchronized candles', ranking: [], shortlist: [], signals: [] };
 
   const base = baselineMs(def.select, asOfMs);
@@ -85,8 +105,7 @@ function evaluateStrategy(def, asOfMs, baseByPair) {
 
   const confInt = latestCompletedInterval(def.confirmMs, asOfMs);
   const prevInt = { startMs: confInt.startMs - def.confirmMs, endMs: confInt.startMs };
-  const signals = [];
-  const rows = [];
+  const signals = [], rows = [];
 
   for (const cand of shortlist) {
     const row = {
@@ -95,8 +114,8 @@ function evaluateStrategy(def, asOfMs, baseByPair) {
     };
     if (cand.bias === 'none' || cand.differential == null) { row.status = cand.differential == null ? STATUS.INCOMPLETE : STATUS.NO_BIAS; rows.push(row); continue; }
 
-    const conf = evaluateCandidate(cand, built, cut, baseMs, confInt, def.params);
-    const confPrev = evaluateCandidate(cand, built, cut, baseMs, prevInt, def.params);
+    const conf = evaluateCandidate(cand, built, ctx.baseByPair, ctx.baseMs, confInt, def.params);
+    const confPrev = evaluateCandidate(cand, built, ctx.baseByPair, ctx.baseMs, prevInt, def.params);
     row.confirmation = {
       interval: confInt, pass: conf.pass, reasons: conf.reasons,
       readings: conf.readings, breadth: conf.breadth,
@@ -104,9 +123,11 @@ function evaluateStrategy(def, asOfMs, baseByPair) {
     };
     if (!conf.pass) { row.status = STATUS.WAIT_CONFIRM; row.reasons = conf.reasons; rows.push(row); continue; }
 
-    // Entry trigger on the pair's actual entry candles.
-    const entryCandles = entryCandlesFor(cut[cand.pair] || [], def.entryTf, def.entryMs, asOfMs);
-    const trig = evaluateTrigger(entryCandles, cand.bias, def.params);
+    const ec = ctx.entryByPair[cand.pair] || [];
+    const idxT = lastClosedIdx(ec, def.entryMs, asOfMs);
+    if (idxT < Math.max(2, def.params.atrPeriod)) { row.status = STATUS.WAIT_TRIGGER; row.reasons = ['insufficient entry candles']; rows.push(row); continue; }
+    const t = ec[idxT], t1 = ec[idxT - 1], t2 = ec[idxT - 2], atr = ctx.atrByPair[cand.pair][idxT];
+    const trig = buildPlan(t2, t1, t, atr, cand.bias, def.params, def.entryMs);
     row.trigger = { pass: trig.pass, reasons: trig.reasons, atr: trig.atr };
     if (!trig.pass) { row.status = STATUS.WAIT_TRIGGER; row.reasons = trig.reasons; rows.push(row); continue; }
 
@@ -126,17 +147,21 @@ function evaluateStrategy(def, asOfMs, baseByPair) {
       maxDeviation: plan.maxDeviation,
       fixedStop: plan.fixedStop,
       indicativeTarget: plan.indicativeTarget,
-      entryExpiryMs: plan.entryCloseMs + def.entryMs,       // one entry interval after close of t
+      entryExpiryMs: plan.entryCloseMs + def.entryMs,
       rangeAtrRatio: plan.rangeAtrRatio,
     });
     rows.push(row);
   }
 
-  return {
-    ok: true, asOfMs, baselineMs: base, resolution: built.resolution,
-    ranking, shortlist: rows, signals,
-    confirmInterval: confInt,
-  };
+  return { ok: true, asOfMs, baselineMs: base, resolution: built.resolution, ranking, shortlist: rows, signals, confirmInterval: confInt };
 }
 
-module.exports = { evaluateStrategy, baselineMs, latestCompletedInterval, entryCandlesFor, causalCut, STATUS };
+/** Convenience: build context from baseByPair then evaluate (used by unit tests). */
+function evaluateStrategy(def, asOfMs, baseByPair) {
+  return evaluateAt(def, asOfMs, buildContext(def, baseByPair));
+}
+
+module.exports = {
+  evaluateStrategy, evaluateAt, buildContext,
+  baselineMs, latestCompletedInterval, entryCandlesFor, causalCut, lastClosedIdx, STATUS,
+};
