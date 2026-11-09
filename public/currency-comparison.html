@@ -79,6 +79,7 @@
     <button data-view="todaySoFar" role="tab">Today so far</button>
     <button data-view="weekSoFar" role="tab">Week so far</button>
     <button data-view="monthSoFar" role="tab">Month so far</button>
+    <button data-view="evolution" role="tab">% Evolution</button>
   </div>
 
   <div class="datahdr" id="datahdr" aria-live="polite">Loading…</div>
@@ -126,6 +127,18 @@
 
   function loadScript(src) { return new Promise(function (res, rej) { var s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = function () { rej(new Error('load ' + src)); }; document.body.appendChild(s); }); }
   function showBanner(cls, html) { document.getElementById('banners').innerHTML = '<div class="state-banner ' + cls + '">' + html + '</div>'; document.getElementById('viewhost').innerHTML = ''; }
+
+  if (view === 'evolution') {
+    var eq = '?days=120' + (asOf ? '&asOf=' + asOf : '');
+    document.getElementById('datahdr').textContent = 'Loading % evolution… (M15 history, a few seconds)';
+    fetch('/api/currency-evolution' + eq).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j || j.ok === false) throw new Error((j && j.error) || 'request failed');
+      if (j.available === false) { showBanner('sb-unavail', 'UNAVAILABLE — ' + (j.reason || 'no data yet') + '. No fabricated data is shown.'); return; }
+      window.NFX_EVO = j;
+      return loadScript('/currency-comparison/evolution.js');
+    }).catch(function (e) { showBanner('sb-error', 'ERROR — ' + (e.message || e) + '. No fabricated fallback is shown.'); });
+    return;
+  }
 
   var q = '?view=' + encodeURIComponent(view) + (asOf ? '&asOf=' + asOf : '');
   document.getElementById('datahdr').textContent = 'Loading currency comparison… (M15 history load, a few seconds)';
