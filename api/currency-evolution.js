@@ -17,7 +17,7 @@
 const { getClient, cors } = require('./_db');
 const { loadM15Parallel } = require('../research/comparison/dbload');
 const { buildIndices } = require('../research/comparison/index-build');
-const { liveEvolution, historyScan, DEFAULT_THRESHOLD } = require('../research/comparison/evolution');
+const { liveEvolution, historyScan, DEFAULT_THRESHOLD, DEFAULT_SPREAD } = require('../research/comparison/evolution');
 const { CONFIG, PAIRS } = require('../research/comparison/config');
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -36,6 +36,7 @@ module.exports = async function handler(req, res) {
     }
     const days = Math.min(365, Math.max(2, parseInt(q.days, 10) || 120));
     const threshold = Math.min(5, Math.max(0.01, parseFloat(q.threshold) || DEFAULT_THRESHOLD));
+    const spreadThreshold = Math.min(10, Math.max(0.01, parseFloat(q.spread) || DEFAULT_SPREAD));
 
     const sb = getClient();
     const fromIso = new Date(asOfMs - days * DAY).toISOString();
@@ -45,11 +46,11 @@ module.exports = async function handler(req, res) {
     const built = buildIndices(by);
     if (!built.ok) return res.json({ ok: true, available: false, mode, reason: built.reason });
 
-    const live = liveEvolution(built, asOfMs, built.lastMs, threshold);
-    const history = historyScan(built, asOfMs, built.lastMs, { threshold });
+    const live = liveEvolution(built, asOfMs, built.lastMs, threshold, spreadThreshold);
+    const history = historyScan(built, asOfMs, built.lastMs, { threshold, spreadThreshold });
 
     res.json({
-      ok: true, available: true, mode, version: CONFIG.version, threshold,
+      ok: true, available: true, mode, version: CONFIG.version, threshold, spreadThreshold,
       asOfUtc: iso(asOfMs), firstDataUtc: iso(built.firstMs), lastDataUtc: iso(built.lastMs),
       resolution: built.resolution, windowDays: days,
       live, history,

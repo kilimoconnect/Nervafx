@@ -18,6 +18,8 @@
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
 
   var live = J.live || { rows: [] }, hist = J.history || { perCurrency: [], matrix: [] };
+  var SP = live.spread || {}, THRS = J.spreadThreshold || 0.30;
+  function minToHHMM(m) { if (m == null) return '—'; return p2(Math.floor(m / 60)) + ':' + p2(m % 60); }
 
   // ── header ──
   document.getElementById('datahdr').innerHTML =
@@ -27,6 +29,20 @@
   document.getElementById('banners').innerHTML =
     '<div class="state-banner sb-unavail" style="border-color:rgba(59,130,246,.4)">Each line is a currency\'s zero-sum 1/8 index as a % from the <b>00:00 EAT</b> day open. '
     + 'Crossing the shaded <b>±' + THR + '%</b> band is a <b>best movement</b> — a relative-movement observation, <b>not</b> a trade signal or probability.</div>';
+
+  // ── watch / dispersion state ──
+  var watchTxt = SP.watchMs ? ('⏱ Watch from <b>' + eatHM(SP.watchMs) + ' EAT</b> <span class="mut">(' + minToHHMM(SP.watchMinutes) + ' into the day)</span>') : '<span class="mut">not yet — currencies still bunched</span>';
+  var isWatch = SP.state === 'watching';
+  var wbox = el('div', 'card'); wbox.style.cssText = 'margin:10px 0;border-color:' + (isWatch ? 'var(--up)' : 'var(--border)');
+  wbox.innerHTML =
+    '<div style="display:flex;flex-wrap:wrap;gap:18px;align-items:flex-end">'
+    + '<div><div class="mut" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">Dispersion (top−bottom)</div><div style="font-size:22px;font-weight:800">' + pct(SP.current) + '</div></div>'
+    + '<div><div class="mut" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">State</div><div style="font-size:17px;font-weight:800;color:' + (isWatch ? 'var(--up)' : 'var(--text-muted)') + '">' + (isWatch ? '● WATCHING' : '○ bunched') + '</div></div>'
+    + '<div><div class="mut" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">Watch onset</div><div style="font-size:15px;font-weight:700">' + watchTxt + '</div></div>'
+    + '<div><div class="mut" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">Max spread</div><div style="font-size:15px;font-weight:700">' + pct(SP.max) + (SP.maxMs ? ' <span class="mut">@ ' + eatHM(SP.maxMs) + '</span>' : '') + '</div></div>'
+    + '</div>'
+    + '<div class="mut" style="font-size:11px;margin-top:8px">“Spreading apart” qualifies when the strongest−weakest gap reaches <b>' + THRS + '%</b> AND at least one currency is beyond <b>±' + THR + '%</b> — the point to start watching trades. Research only.</div>';
+  host.appendChild(wbox);
 
   // ── ranked chips ──
   var chips = el('div'); chips.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:10px 0';
@@ -45,8 +61,9 @@
   });
   host.appendChild(chips);
 
-  // ── evolution chart (SVG) ──
+  // ── evolution chart (SVG) + spread sub-chart ──
   host.appendChild(buildChart(live, THR, COL));
+  host.appendChild(buildSpreadChart(live, THRS));
 
   // ── history: per-currency stats + heatmap ──
   var hsec = el('div', 'card'); hsec.style.marginTop = '14px';
@@ -66,7 +83,16 @@
   });
   tbl.appendChild(tb); hsec.appendChild(tbl);
 
-  hsec.appendChild(el('div', null, '<div style="font-weight:700;margin:14px 0 6px">Recent days (↑ reached +' + THR + ', ↓ reached −' + THR + ')</div>'));
+  // spread / watch-onset summary across history
+  var ss = hist.spreadSummary || {};
+  hsec.appendChild(el('div', null,
+    '<div style="margin-top:14px;padding:10px;border:1px solid var(--border);border-radius:8px">'
+    + '<div style="font-weight:700;margin-bottom:3px">Spread onset (time to start watching)</div>'
+    + '<div class="mut" style="font-size:12px">Currencies spread apart (gap ≥ ' + THRS + '% with a leader beyond ±' + THR + '%) on <b style="color:var(--text)">' + (ss.daysSpread || 0) + '/' + (ss.daysComplete || 0) + '</b> days (' + (ss.spreadPct == null ? '—' : ss.spreadPct + '%') + '). '
+    + 'Typical onset <b style="color:var(--text)">' + minToHHMM(ss.medianOnsetMin) + ' EAT</b> (median; earliest ' + minToHHMM(ss.earliestOnsetMin) + ', latest ' + minToHHMM(ss.latestOnsetMin) + ' into the day).</div>'
+    + '</div>'));
+
+  hsec.appendChild(el('div', null, '<div style="font-weight:700;margin:14px 0 6px">Recent days (↑ reached +' + THR + ', ↓ reached −' + THR + ', ⏱ = watch onset EAT)</div>'));
   hsec.appendChild(buildHeatmap(hist, THR, COL));
   host.appendChild(hsec);
 
@@ -96,6 +122,14 @@
     });
     // x ticks (EAT) — ~6
     for (var k = 0; k <= 6; k++) { var tm = t0 + (t1 - t0) * k / 6, xx = X(tm); s += '<text x="' + xx + '" y="' + (H - 8) + '" text-anchor="middle" font-size="10" fill="var(--text-muted)">' + eatHM(tm) + '</text>'; }
+    // watch-onset marker: shade the pre-watch region + a vertical line at the onset
+    var sp = live.spread || {};
+    if (sp.watchMs && sp.watchMs > t0 && sp.watchMs <= t1) {
+      var wx = X(sp.watchMs);
+      s += '<rect x="' + mL + '" y="' + mT + '" width="' + (wx - mL) + '" height="' + (H - mT - mB) + '" fill="rgba(148,163,184,.07)"/>';
+      s += '<line x1="' + wx + '" y1="' + mT + '" x2="' + wx + '" y2="' + (H - mB) + '" stroke="#eab308" stroke-width="1.5" stroke-dasharray="5 3"/>';
+      s += '<text x="' + (wx + 4) + '" y="' + (mT + 11) + '" font-size="10" font-weight="700" fill="#eab308">⏱ watch ' + eatHM(sp.watchMs) + '</text>';
+    }
     // lines
     live.rows.forEach(function (r) {
       if (!r.ok || r.points.length < 2) return;
@@ -111,14 +145,44 @@
     return wrap;
   }
 
+  function buildSpreadChart(live, sthr) {
+    var wrap = el('div', 'card'); wrap.style.cssText = 'padding:10px;margin-top:10px';
+    var sp = live.spread || {}, pts = sp.series || [];
+    if (pts.length < 2) { wrap.innerHTML = '<div class="mut" style="font-size:12px">Spread (strongest − weakest) — not enough points yet.</div>'; return wrap; }
+    var t0 = live.startMs, t1 = live.cutoffMs;
+    var W = 920, H = 150, mL = 48, mR = 64, mT = 16, mB = 22;
+    var yMax = sthr * 1.3; pts.forEach(function (p) { if (p.spread > yMax) yMax = p.spread; });
+    yMax *= 1.08;
+    var X = function (ms) { return mL + (ms - t0) / (t1 - t0) * (W - mL - mR); };
+    var Y = function (v) { return mT + (yMax - v) / yMax * (H - mT - mB); };
+    var s = '<div style="font-weight:700;font-size:12px;margin-bottom:4px">Dispersion over the day — strongest − weakest (%)</div>';
+    s += '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" style="display:block;font-family:inherit">';
+    // qualify threshold band (≥ sthr)
+    s += '<rect x="' + mL + '" y="' + Y(yMax) + '" width="' + (W - mL - mR) + '" height="' + (Y(sthr) - Y(yMax)) + '" fill="rgba(234,179,8,.08)"/>';
+    s += '<line x1="' + mL + '" y1="' + Y(sthr) + '" x2="' + (W - mR) + '" y2="' + Y(sthr) + '" stroke="#eab308" stroke-dasharray="4 4"/>';
+    s += '<text x="' + (mL - 6) + '" y="' + (Y(sthr) + 3) + '" text-anchor="end" font-size="10" fill="#eab308">' + sthr.toFixed(2) + '%</text>';
+    s += '<text x="' + (mL - 6) + '" y="' + (Y(0) + 3) + '" text-anchor="end" font-size="10" fill="var(--text-muted)">0%</text>';
+    // area/line, bright once qualified
+    var d = pts.map(function (p, i) { return (i ? 'L' : 'M') + X(p.ms).toFixed(1) + ' ' + Y(p.spread).toFixed(1); }).join(' ');
+    s += '<path d="' + d + '" fill="none" stroke="var(--accent)" stroke-width="1.8"/>';
+    // mark qualified points
+    pts.forEach(function (p) { if (p.qual) s += '<circle cx="' + X(p.ms).toFixed(1) + '" cy="' + Y(p.spread).toFixed(1) + '" r="1.6" fill="#eab308"/>'; });
+    if (sp.watchMs && sp.watchMs > t0 && sp.watchMs <= t1) { var wx = X(sp.watchMs); s += '<line x1="' + wx + '" y1="' + mT + '" x2="' + wx + '" y2="' + (H - mB) + '" stroke="#eab308" stroke-width="1.5" stroke-dasharray="5 3"/>'; }
+    for (var k = 0; k <= 6; k++) { var tm = t0 + (t1 - t0) * k / 6; s += '<text x="' + X(tm) + '" y="' + (H - 6) + '" text-anchor="middle" font-size="10" fill="var(--text-muted)">' + eatHM(tm) + '</text>'; }
+    s += '</svg>';
+    wrap.innerHTML = s;
+    return wrap;
+  }
+
   function buildHeatmap(hist, thr, col) {
     var box = el('div'); box.style.cssText = 'overflow-x:auto';
     var ccys = hist.currencies || [];
-    var t = '<table class="leg" style="width:100%;min-width:520px"><thead><tr><th style="text-align:left">Day (EAT)</th>';
+    var t = '<table class="leg" style="width:100%;min-width:560px"><thead><tr><th style="text-align:left">Day (EAT)</th><th>⏱ watch</th>';
     ccys.forEach(function (c) { t += '<th><span style="color:' + (col[c] || '#888') + '">' + c + '</span></th>'; });
     t += '</tr></thead><tbody>';
     (hist.matrix || []).forEach(function (row) {
-      t += '<tr><td style="text-align:left">' + eatDate(row.dayMs) + '</td>';
+      var wo = (row.watchMinutes != null) ? minToHHMM(row.watchMinutes) : '—';
+      t += '<tr><td style="text-align:left">' + eatDate(row.dayMs) + '</td><td style="color:' + (row.watchMinutes != null ? '#eab308' : 'var(--text-muted)') + '">' + wo + '</td>';
       row.cells.forEach(function (cell) {
         if (!cell) { t += '<td class="mut">·</td>'; return; }
         var bg = cell.u && cell.d ? 'linear-gradient(135deg,rgba(34,197,94,.5) 50%,rgba(239,68,68,.5) 50%)'

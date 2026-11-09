@@ -15,12 +15,58 @@
  */
 
 const { periodPath } = require('./candles');
+const { idxAtOrBefore } = require('./index-build');
 const { dayStart } = require('./periods');
 const { CURRENCIES } = require('./config');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const DEFAULT_THRESHOLD = 0.25;   // percent
+const DEFAULT_THRESHOLD = 0.25;   // percent — "best movement" (single currency)
+const DEFAULT_SPREAD = 0.30;      // percent — "spreading apart" (strongest − weakest)
 const r4 = (x) => (x == null ? null : +(+x).toFixed(4));
+
+/**
+ * Dispersion series for a day: at each M15 step, the spread = strongest − weakest currency %
+ * (both open-relative to the same 00:00-EAT open). "Spreading apart" = this spread widening;
+ * the watch onset is the first step the spread reaches `spreadThreshold`.
+ */
+function spreadSeries(built, startMs, endMs) {
+  const open0 = idxAtOrBefore(built, CURRENCIES[0], startMs);
+  if (!open0) return { ok: false, points: [] };
+  const openIdx = open0.idx;
+  const O = {}; for (const c of CURRENCIES) O[c] = built.index[c][openIdx];
+  const tl = built.timeline, pts = [];
+  for (let i = openIdx + 1; i < tl.length && tl[i] <= endMs; i++) {
+    let top = -Infinity, bot = Infinity, topC = null, botC = null;
+    for (const c of CURRENCIES) { const v = 100 * (built.index[c][i] / O[c] - 1); if (v > top) { top = v; topC = c; } if (v < bot) { bot = v; botC = c; } }
+    pts.push({ ms: tl[i], spread: top - bot, top, bottom: bot, topCcy: topC, bottomCcy: botC });
+  }
+  return { ok: pts.length > 0, openMs: startMs, points: pts };
+}
+
+/**
+ * Summarise a spread series. "Spreading apart" QUALIFIES at a step only when the spread reaches
+ * `threshold` AND at least one currency is itself beyond ±`bestThreshold` (a real best movement) —
+ * a tight cluster drifting apart without a leader crossing ±0.25% does not count. The watch onset
+ * is the first qualifying step.
+ */
+function spreadInfo(series, threshold, startMs, bestThreshold = DEFAULT_THRESHOLD) {
+  const pts = series.points || [];
+  let watchMs = null, max = 0, maxMs = null, cur = 0, curQual = false;
+  const out = [];
+  for (const p of pts) {
+    const qual = p.spread >= threshold && (p.top >= bestThreshold || p.bottom <= -bestThreshold);
+    if (p.spread > max) { max = p.spread; maxMs = p.ms; }
+    if (watchMs == null && qual) watchMs = p.ms;
+    cur = p.spread; curQual = qual;
+    out.push({ ms: p.ms, spread: r4(p.spread), top: r4(p.top), bottom: r4(p.bottom), topCcy: p.topCcy, bottomCcy: p.bottomCcy, qual });
+  }
+  return {
+    threshold, bestThreshold, current: r4(cur), max: r4(max), maxMs,
+    watchMs, watchMinutes: watchMs == null ? null : Math.round((watchMs - startMs) / 60000),
+    state: curQual ? 'watching' : 'bunched',
+    series: out,
+  };
+}
 
 /** Peak / trough / current of a % path (points: [{ms,pct}], pct relative to day open = 0). */
 function pathExtremes(points) {
@@ -47,7 +93,7 @@ function firstCrossings(points, thr) {
  * Live developing-day evolution for all currencies.
  *   built: buildIndices(...) output; asOfMs: decision cutoff; lastDataMs: built.lastMs.
  */
-function liveEvolution(built, asOfMs, lastDataMs, threshold = DEFAULT_THRESHOLD) {
+function liveEvolution(built, asOfMs, lastDataMs, threshold = DEFAULT_THRESHOLD, spreadThreshold = DEFAULT_SPREAD) {
   const cutoff = Math.min(asOfMs, lastDataMs == null ? asOfMs : lastDataMs);
   const startMs = dayStart(cutoff);
   const rows = CURRENCIES.map((ccy) => {
@@ -71,20 +117,22 @@ function liveEvolution(built, asOfMs, lastDataMs, threshold = DEFAULT_THRESHOLD)
     return b.current - a.current;
   });
   ranked.forEach((rrow, i) => { rrow.rank = rrow.ok ? i + 1 : null; });
-  return { startMs, cutoffMs: cutoff, threshold, rows: ranked };
+  const spread = spreadInfo(spreadSeries(built, startMs, cutoff), spreadThreshold, startMs, threshold);
+  return { startMs, cutoffMs: cutoff, threshold, rows: ranked, spread };
 }
 
 /**
  * Historical scan across EAT days in the loaded window: per-currency frequency of reaching
  * ±threshold at any point in the day, plus a per-day matrix (most recent first, bounded).
  */
-function historyScan(built, asOfMs, lastDataMs, { threshold = DEFAULT_THRESHOLD, matrixDays = 60 } = {}) {
+function historyScan(built, asOfMs, lastDataMs, { threshold = DEFAULT_THRESHOLD, spreadThreshold = DEFAULT_SPREAD, matrixDays = 60 } = {}) {
   const cutoff = Math.min(asOfMs, lastDataMs == null ? asOfMs : lastDataMs);
   const firstDay = dayStart(built.firstMs);
   const lastDay = dayStart(cutoff);
 
   const agg = {}; for (const c of CURRENCIES) agg[c] = { currency: c, daysComplete: 0, daysUp: 0, daysDown: 0, daysEither: 0, maxUp: 0, maxDown: 0, sumPeakAbs: 0 };
-  const matrix = [];   // one row per day with data
+  const matrix = [];           // one row per day with data
+  const onsets = [];           // spread-onset minutes-into-day, for days that spread apart
 
   for (let d = firstDay; d <= lastDay; d += DAY_MS) {
     const dEnd = Math.min(d + DAY_MS, cutoff);
@@ -101,7 +149,10 @@ function historyScan(built, asOfMs, lastDataMs, { threshold = DEFAULT_THRESHOLD,
       a.sumPeakAbs += Math.max(ex.peak, -ex.trough);
       cells.push({ u: up, d: down, peak: r4(ex.peak), trough: r4(ex.trough) });
     }
-    if (anyData) matrix.push({ dayMs: d, cells });
+    if (!anyData) continue;
+    const sp = spreadInfo(spreadSeries(built, d, dEnd), spreadThreshold, d, threshold);
+    if (sp.watchMinutes != null) onsets.push(sp.watchMinutes);
+    matrix.push({ dayMs: d, cells, maxSpread: sp.max, watchMinutes: sp.watchMinutes });
   }
 
   const perCurrency = CURRENCIES.map((c) => {
@@ -115,8 +166,16 @@ function historyScan(built, asOfMs, lastDataMs, { threshold = DEFAULT_THRESHOLD,
     };
   });
 
+  const sorted = onsets.slice().sort((x, y) => x - y);
+  const median = sorted.length ? sorted[Math.floor(sorted.length / 2)] : null;
+  const spreadSummary = {
+    threshold: spreadThreshold, daysComplete: matrix.length, daysSpread: onsets.length,
+    spreadPct: matrix.length ? +(100 * onsets.length / matrix.length).toFixed(1) : null,
+    medianOnsetMin: median, earliestOnsetMin: sorted.length ? sorted[0] : null, latestOnsetMin: sorted.length ? sorted[sorted.length - 1] : null,
+  };
+
   const recent = matrix.slice(-matrixDays).reverse();   // most recent first
-  return { threshold, daysScanned: matrix.length, currencies: CURRENCIES, perCurrency, matrix: recent };
+  return { threshold, spreadThreshold, daysScanned: matrix.length, currencies: CURRENCIES, perCurrency, spreadSummary, matrix: recent };
 }
 
-module.exports = { liveEvolution, historyScan, pathExtremes, firstCrossings, DEFAULT_THRESHOLD };
+module.exports = { liveEvolution, historyScan, spreadSeries, spreadInfo, pathExtremes, firstCrossings, DEFAULT_THRESHOLD, DEFAULT_SPREAD };
