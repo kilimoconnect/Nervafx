@@ -31,17 +31,33 @@
     + 'Crossing the shaded <b>±' + THR + '%</b> band is a <b>best movement</b> — a relative-movement observation, <b>not</b> a trade signal or probability.</div>';
 
   // ── watch / dispersion state ──
-  var watchTxt = SP.watchMs ? ('⏱ Watch from <b>' + eatHM(SP.watchMs) + ' EAT</b> <span class="mut">(' + minToHHMM(SP.watchMinutes) + ' into the day)</span>') : '<span class="mut">not yet — currencies still bunched</span>';
+  var WINS = SP.windows || [];
   var isWatch = SP.state === 'watching';
+  // every spread episode across the day: start→end EAT (currencies spread apart, bunch, spread again…)
+  var winTxt;
+  if (!WINS.length) { winTxt = '<span class="mut">none yet — currencies still bunched</span>'; }
+  else {
+    winTxt = WINS.map(function (w, i) {
+      var live2 = w.ongoing;
+      return '<span style="display:inline-block;margin:2px 6px 2px 0;padding:2px 8px;border-radius:999px;'
+        + 'border:1px solid ' + (live2 ? 'var(--up)' : 'var(--border)') + ';'
+        + (live2 ? 'background:rgba(34,197,94,.10);' : '') + 'font-size:12px;font-weight:700" '
+        + 'title="peak ' + pct(w.peak) + ' @ ' + eatHM(w.peakMs) + (w.topCcy ? ' · ' + w.topCcy + ' vs ' + w.bottomCcy : '') + '">'
+        + '#' + (i + 1) + ' ' + eatHM(w.startMs) + '–' + (live2 ? 'now' : eatHM(w.endMs)) + (live2 ? ' ●' : '') + '</span>';
+    }).join('');
+  }
+  var firstTxt = SP.watchMs ? ('⏱ <b>' + eatHM(SP.watchMs) + ' EAT</b> <span class="mut">(' + minToHHMM(SP.watchMinutes) + ' in)</span>') : '<span class="mut">—</span>';
   var wbox = el('div', 'card'); wbox.style.cssText = 'margin:10px 0;border-color:' + (isWatch ? 'var(--up)' : 'var(--border)');
   wbox.innerHTML =
     '<div style="display:flex;flex-wrap:wrap;gap:18px;align-items:flex-end">'
     + '<div><div class="mut" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">Dispersion (top−bottom)</div><div style="font-size:22px;font-weight:800">' + pct(SP.current) + '</div></div>'
     + '<div><div class="mut" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">State</div><div style="font-size:17px;font-weight:800;color:' + (isWatch ? 'var(--up)' : 'var(--text-muted)') + '">' + (isWatch ? '● WATCHING' : '○ bunched') + '</div></div>'
-    + '<div><div class="mut" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">Watch onset</div><div style="font-size:15px;font-weight:700">' + watchTxt + '</div></div>'
+    + '<div><div class="mut" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">Episodes today</div><div style="font-size:17px;font-weight:800">' + (SP.episodes || 0) + '</div></div>'
+    + '<div><div class="mut" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">First onset</div><div style="font-size:15px;font-weight:700">' + firstTxt + '</div></div>'
     + '<div><div class="mut" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">Max spread</div><div style="font-size:15px;font-weight:700">' + pct(SP.max) + (SP.maxMs ? ' <span class="mut">@ ' + eatHM(SP.maxMs) + '</span>' : '') + '</div></div>'
     + '</div>'
-    + '<div class="mut" style="font-size:11px;margin-top:8px">“Spreading apart” qualifies when the strongest−weakest gap reaches <b>' + THRS + '%</b> AND at least one currency is beyond <b>±' + THR + '%</b> — the point to start watching trades. Research only.</div>';
+    + '<div style="margin-top:10px"><div class="mut" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px">Spread windows (apart → back → apart …)</div><div>' + winTxt + '</div></div>'
+    + '<div class="mut" style="font-size:11px;margin-top:8px">“Spreading apart” qualifies when the strongest−weakest gap reaches <b>' + THRS + '%</b> AND at least one currency is beyond <b>±' + THR + '%</b> — a point to start watching trades. Each window opens when the gap qualifies and closes when currencies bunch back; the day can have several. Research only.</div>';
   host.appendChild(wbox);
 
   // ── ranked chips ──
@@ -89,10 +105,11 @@
     '<div style="margin-top:14px;padding:10px;border:1px solid var(--border);border-radius:8px">'
     + '<div style="font-weight:700;margin-bottom:3px">Spread onset (time to start watching)</div>'
     + '<div class="mut" style="font-size:12px">Currencies spread apart (gap ≥ ' + THRS + '% with a leader beyond ±' + THR + '%) on <b style="color:var(--text)">' + (ss.daysSpread || 0) + '/' + (ss.daysComplete || 0) + '</b> days (' + (ss.spreadPct == null ? '—' : ss.spreadPct + '%') + '). '
-    + 'Typical onset <b style="color:var(--text)">' + minToHHMM(ss.medianOnsetMin) + ' EAT</b> (median; earliest ' + minToHHMM(ss.earliestOnsetMin) + ', latest ' + minToHHMM(ss.latestOnsetMin) + ' into the day).</div>'
+    + 'Typical first onset <b style="color:var(--text)">' + minToHHMM(ss.medianOnsetMin) + ' EAT</b> (median; earliest ' + minToHHMM(ss.earliestOnsetMin) + ', latest ' + minToHHMM(ss.latestOnsetMin) + ' into the day). '
+    + (ss.avgEpisodesPerSpreadDay != null ? 'Currencies spread apart and bunch back <b style="color:var(--text)">' + ss.avgEpisodesPerSpreadDay + '×</b> per spread day on average.' : '') + '</div>'
     + '</div>'));
 
-  hsec.appendChild(el('div', null, '<div style="font-weight:700;margin:14px 0 6px">Recent days (↑ reached +' + THR + ', ↓ reached −' + THR + ', ⏱ = watch onset EAT)</div>'));
+  hsec.appendChild(el('div', null, '<div style="font-weight:700;margin:14px 0 6px">Recent days (↑ reached +' + THR + ', ↓ reached −' + THR + ', ⏱ = first onset EAT · ×N = spread episodes)</div>'));
   hsec.appendChild(buildHeatmap(hist, THR, COL));
   host.appendChild(hsec);
 
@@ -122,14 +139,17 @@
     });
     // x ticks (EAT) — ~6
     for (var k = 0; k <= 6; k++) { var tm = t0 + (t1 - t0) * k / 6, xx = X(tm); s += '<text x="' + xx + '" y="' + (H - 8) + '" text-anchor="middle" font-size="10" fill="var(--text-muted)">' + eatHM(tm) + '</text>'; }
-    // watch-onset marker: shade the pre-watch region + a vertical line at the onset
+    // spread episodes: shade each "watching" window (apart→back→apart…) + onset lines
     var sp = live.spread || {};
-    if (sp.watchMs && sp.watchMs > t0 && sp.watchMs <= t1) {
-      var wx = X(sp.watchMs);
-      s += '<rect x="' + mL + '" y="' + mT + '" width="' + (wx - mL) + '" height="' + (H - mT - mB) + '" fill="rgba(148,163,184,.07)"/>';
-      s += '<line x1="' + wx + '" y1="' + mT + '" x2="' + wx + '" y2="' + (H - mB) + '" stroke="#eab308" stroke-width="1.5" stroke-dasharray="5 3"/>';
-      s += '<text x="' + (wx + 4) + '" y="' + (mT + 11) + '" font-size="10" font-weight="700" fill="#eab308">⏱ watch ' + eatHM(sp.watchMs) + '</text>';
-    }
+    (sp.windows || []).forEach(function (w, i) {
+      var a = Math.max(t0, w.startMs), b = Math.min(t1, w.endMs);
+      if (!(b >= a)) return;
+      var xa = X(a), xb = X(b), ww = Math.max(1.5, xb - xa);
+      s += '<rect x="' + xa + '" y="' + mT + '" width="' + ww + '" height="' + (H - mT - mB) + '" fill="rgba(234,179,8,.10)"/>';
+      s += '<line x1="' + xa + '" y1="' + mT + '" x2="' + xa + '" y2="' + (H - mB) + '" stroke="#eab308" stroke-width="1.4" stroke-dasharray="5 3"/>';
+      if (!w.ongoing) s += '<line x1="' + xb + '" y1="' + mT + '" x2="' + xb + '" y2="' + (H - mB) + '" stroke="rgba(234,179,8,.5)" stroke-width="1" stroke-dasharray="2 3"/>';
+      s += '<text x="' + (xa + 3) + '" y="' + (mT + 11) + '" font-size="10" font-weight="700" fill="#eab308">⏱' + (i + 1) + ' ' + eatHM(w.startMs) + '</text>';
+    });
     // lines
     live.rows.forEach(function (r) {
       if (!r.ok || r.points.length < 2) return;
@@ -165,9 +185,15 @@
     // area/line, bright once qualified
     var d = pts.map(function (p, i) { return (i ? 'L' : 'M') + X(p.ms).toFixed(1) + ' ' + Y(p.spread).toFixed(1); }).join(' ');
     s += '<path d="' + d + '" fill="none" stroke="var(--accent)" stroke-width="1.8"/>';
+    // shade each qualifying window (apart→back→apart…)
+    (sp.windows || []).forEach(function (w) {
+      var a = Math.max(t0, w.startMs), b = Math.min(t1, w.endMs); if (!(b >= a)) return;
+      var xa = X(a), ww = Math.max(1.5, X(b) - xa);
+      s += '<rect x="' + xa + '" y="' + mT + '" width="' + ww + '" height="' + (H - mT - mB) + '" fill="rgba(234,179,8,.10)"/>';
+      s += '<line x1="' + xa + '" y1="' + mT + '" x2="' + xa + '" y2="' + (H - mB) + '" stroke="#eab308" stroke-width="1.3" stroke-dasharray="5 3"/>';
+    });
     // mark qualified points
     pts.forEach(function (p) { if (p.qual) s += '<circle cx="' + X(p.ms).toFixed(1) + '" cy="' + Y(p.spread).toFixed(1) + '" r="1.6" fill="#eab308"/>'; });
-    if (sp.watchMs && sp.watchMs > t0 && sp.watchMs <= t1) { var wx = X(sp.watchMs); s += '<line x1="' + wx + '" y1="' + mT + '" x2="' + wx + '" y2="' + (H - mB) + '" stroke="#eab308" stroke-width="1.5" stroke-dasharray="5 3"/>'; }
     for (var k = 0; k <= 6; k++) { var tm = t0 + (t1 - t0) * k / 6; s += '<text x="' + X(tm) + '" y="' + (H - 6) + '" text-anchor="middle" font-size="10" fill="var(--text-muted)">' + eatHM(tm) + '</text>'; }
     s += '</svg>';
     wrap.innerHTML = s;
@@ -181,7 +207,7 @@
     ccys.forEach(function (c) { t += '<th><span style="color:' + (col[c] || '#888') + '">' + c + '</span></th>'; });
     t += '</tr></thead><tbody>';
     (hist.matrix || []).forEach(function (row) {
-      var wo = (row.watchMinutes != null) ? minToHHMM(row.watchMinutes) : '—';
+      var wo = (row.watchMinutes != null) ? (minToHHMM(row.watchMinutes) + (row.episodes > 1 ? ' <span style="opacity:.8">×' + row.episodes + '</span>' : '')) : '—';
       t += '<tr><td style="text-align:left">' + eatDate(row.dayMs) + '</td><td style="color:' + (row.watchMinutes != null ? '#eab308' : 'var(--text-muted)') + '">' + wo + '</td>';
       row.cells.forEach(function (cell) {
         if (!cell) { t += '<td class="mut">·</td>'; return; }

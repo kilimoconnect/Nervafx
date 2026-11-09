@@ -76,6 +76,31 @@ test('spread/watch onset: qualifies only when a leader passes ±0.25% AND the ga
   assert.ok(sp.watchMinutes >= 0);
 });
 
+test('spread windows: multiple episodes — apart, bunch back, apart again', () => {
+  // EUR spreads out, bunches back, then spreads out again within one EAT day.
+  const g = (t) => {
+    const step = Math.round((t - DATA_START) / M15_MS);  // 0-based M15 index from data start
+    const dstep = step - PRE;                             // step within the EAT day
+    if (dstep >= 4 && dstep < 16) return 0.0010;          // widen: EUR climbs
+    if (dstep >= 16 && dstep < 28) return -0.0010;        // bunch back toward the open
+    if (dstep >= 28 && dstep < 40) return 0.0010;         // widen again
+    return 0;
+  };
+  const by = network(PRE + STEPS_DAY + 1, g);
+  const built = buildIndices(by);
+  const asOf = START + (STEPS_DAY - 1) * M15_MS;
+  const sp = liveEvolution(built, asOf, built.lastMs, 0.25, 0.30).spread;
+  assert.ok(sp.episodes >= 2, 'at least two spread episodes detected, got ' + sp.episodes);
+  assert.equal(sp.windows.length, sp.episodes);
+  // windows are ordered and each has start ≤ end
+  for (let i = 0; i < sp.windows.length; i++) {
+    const w = sp.windows[i];
+    assert.ok(w.endMs >= w.startMs, 'window end ≥ start');
+    if (i > 0) assert.ok(w.startMs > sp.windows[i - 1].endMs, 'windows are disjoint and ordered');
+  }
+  assert.equal(sp.watchMs, sp.windows[0].startMs, 'watchMs is the first onset');
+});
+
 test('spread does NOT qualify on a flat day (no leader crosses ±0.25%)', () => {
   const by = network(PRE + STEPS_DAY + 1, () => 0.000001);
   const built = buildIndices(by);

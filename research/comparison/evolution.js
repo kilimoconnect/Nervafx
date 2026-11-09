@@ -46,23 +46,43 @@ function spreadSeries(built, startMs, endMs) {
 /**
  * Summarise a spread series. "Spreading apart" QUALIFIES at a step only when the spread reaches
  * `threshold` AND at least one currency is itself beyond ±`bestThreshold` (a real best movement) —
- * a tight cluster drifting apart without a leader crossing ±0.25% does not count. The watch onset
- * is the first qualifying step.
+ * a tight cluster drifting apart without a leader crossing ±0.25% does not count.
+ *
+ * Dispersion is not a one-shot: currencies spread apart, bunch back, and spread again. So we return
+ * every qualifying EPISODE as a {startMs, endMs, ongoing, peak…} window, not just the first onset.
+ * `watchMs`/`watchMinutes` keep the first onset (for the primary marker); `windows` is the full set.
  */
 function spreadInfo(series, threshold, startMs, bestThreshold = DEFAULT_THRESHOLD) {
   const pts = series.points || [];
-  let watchMs = null, max = 0, maxMs = null, cur = 0, curQual = false;
-  const out = [];
+  const minOf = (ms) => Math.round((ms - startMs) / 60000);
+  let max = 0, maxMs = null, cur = 0, curQual = false;
+  const out = [], windows = [];
+  let open = null;   // the episode currently being accumulated
   for (const p of pts) {
     const qual = p.spread >= threshold && (p.top >= bestThreshold || p.bottom <= -bestThreshold);
     if (p.spread > max) { max = p.spread; maxMs = p.ms; }
-    if (watchMs == null && qual) watchMs = p.ms;
+    if (qual) {
+      if (!open) open = { startMs: p.ms, endMs: p.ms, peak: p.spread, peakMs: p.ms, topCcy: p.topCcy, bottomCcy: p.bottomCcy };
+      open.endMs = p.ms;
+      if (p.spread > open.peak) { open.peak = p.spread; open.peakMs = p.ms; open.topCcy = p.topCcy; open.bottomCcy = p.bottomCcy; }
+    } else if (open) {
+      windows.push(open); open = null;
+    }
     cur = p.spread; curQual = qual;
     out.push({ ms: p.ms, spread: r4(p.spread), top: r4(p.top), bottom: r4(p.bottom), topCcy: p.topCcy, bottomCcy: p.bottomCcy, qual });
   }
+  if (open) { open.ongoing = true; windows.push(open); }   // still spreading apart at the cutoff
+
+  const wins = windows.map((w) => ({
+    startMs: w.startMs, endMs: w.endMs, ongoing: !!w.ongoing,
+    startMin: minOf(w.startMs), endMin: minOf(w.endMs), durationMin: minOf(w.endMs) - minOf(w.startMs),
+    peak: r4(w.peak), peakMs: w.peakMs, topCcy: w.topCcy, bottomCcy: w.bottomCcy,
+  }));
+  const watchMs = wins.length ? wins[0].startMs : null;
   return {
     threshold, bestThreshold, current: r4(cur), max: r4(max), maxMs,
-    watchMs, watchMinutes: watchMs == null ? null : Math.round((watchMs - startMs) / 60000),
+    watchMs, watchMinutes: watchMs == null ? null : minOf(watchMs),
+    episodes: wins.length, windows: wins,
     state: curQual ? 'watching' : 'bunched',
     series: out,
   };
@@ -132,7 +152,8 @@ function historyScan(built, asOfMs, lastDataMs, { threshold = DEFAULT_THRESHOLD,
 
   const agg = {}; for (const c of CURRENCIES) agg[c] = { currency: c, daysComplete: 0, daysUp: 0, daysDown: 0, daysEither: 0, maxUp: 0, maxDown: 0, sumPeakAbs: 0 };
   const matrix = [];           // one row per day with data
-  const onsets = [];           // spread-onset minutes-into-day, for days that spread apart
+  const onsets = [];           // first spread-onset minutes-into-day, for days that spread apart
+  const episodeCounts = [];    // number of qualifying episodes per day
 
   for (let d = firstDay; d <= lastDay; d += DAY_MS) {
     const dEnd = Math.min(d + DAY_MS, cutoff);
@@ -152,7 +173,8 @@ function historyScan(built, asOfMs, lastDataMs, { threshold = DEFAULT_THRESHOLD,
     if (!anyData) continue;
     const sp = spreadInfo(spreadSeries(built, d, dEnd), spreadThreshold, d, threshold);
     if (sp.watchMinutes != null) onsets.push(sp.watchMinutes);
-    matrix.push({ dayMs: d, cells, maxSpread: sp.max, watchMinutes: sp.watchMinutes });
+    episodeCounts.push(sp.episodes);
+    matrix.push({ dayMs: d, cells, maxSpread: sp.max, watchMinutes: sp.watchMinutes, episodes: sp.episodes });
   }
 
   const perCurrency = CURRENCIES.map((c) => {
@@ -168,10 +190,12 @@ function historyScan(built, asOfMs, lastDataMs, { threshold = DEFAULT_THRESHOLD,
 
   const sorted = onsets.slice().sort((x, y) => x - y);
   const median = sorted.length ? sorted[Math.floor(sorted.length / 2)] : null;
+  const totalEpisodes = episodeCounts.reduce((s, n) => s + n, 0);
   const spreadSummary = {
     threshold: spreadThreshold, daysComplete: matrix.length, daysSpread: onsets.length,
     spreadPct: matrix.length ? +(100 * onsets.length / matrix.length).toFixed(1) : null,
     medianOnsetMin: median, earliestOnsetMin: sorted.length ? sorted[0] : null, latestOnsetMin: sorted.length ? sorted[sorted.length - 1] : null,
+    totalEpisodes, avgEpisodesPerSpreadDay: onsets.length ? +(totalEpisodes / onsets.length).toFixed(2) : null,
   };
 
   const recent = matrix.slice(-matrixDays).reverse();   // most recent first
