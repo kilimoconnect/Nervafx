@@ -136,6 +136,35 @@ test('windowCandleEvolution: M15 10-EMA currency strength ranking inside each >t
   // strength is the SMOOTHED value, so its magnitude lags the raw % for a steady riser
   const eur = w.strength[0];
   assert.ok(eur.raw != null && eur.strength <= eur.raw + 1e-9, 'EMA strength ≤ raw for a riser');
+  // every currency carries peak/trough and the three 0.25% move flags
+  for (const r of w.strength) {
+    assert.ok(r.peak >= r.trough - 1e-9);
+    assert.equal(typeof r.pulledBack, 'boolean'); assert.equal(typeof r.bounced, 'boolean');
+    assert.ok(r.pullback >= 0 && r.bounce >= 0);
+  }
+  // EUR only ever rises here → reachedUp, never a 0.25% pullback off a high
+  assert.ok(eur.reachedUp && !eur.pulledBack, 'steady riser: up-from-open, no pullback');
+});
+
+test('windowCandleEvolution: a 0.25% pullback off a high is flagged (rise then retrace)', () => {
+  // EUR climbs hard for the first ~2/3 of the day, then reverses down for the last third.
+  const g = (t) => {
+    const dstep = Math.round((t - DATA_START) / M15_MS) - PRE;   // M15 step within the EAT day
+    if (dstep < 0) return 0;
+    return dstep < Math.floor(STEPS_DAY * 0.66) ? 0.0008 : -0.0012;   // up, then a sharp reversal
+  };
+  const by = network(PRE + STEPS_DAY + 1, g);
+  const built = buildIndices(by);
+  const asOf = START + (STEPS_DAY - 1) * M15_MS;
+  const ev = liveEvolution(built, asOf, built.lastMs, 0.25, 0.30);
+  const w = ev.candleWindows[0];
+  const eur = w.strength.find((r) => r.currency === 'EUR');
+  assert.ok(eur.peak >= 0.25, 'EUR peaked above +0.25%');
+  assert.ok(eur.pulledBack, 'EUR fell ≥0.25% back from its running high');
+  assert.ok(eur.pullback >= 0.25 - 1e-9 && eur.pullbackMs != null && eur.pullbackMs > eur.peakMs);
+  // USD mirrors EUR (quote side): it troughs then bounces ≥0.25% off its low
+  const usd = w.strength.find((r) => r.currency === 'USD');
+  assert.ok(usd.bounced && usd.bounce >= 0.25 - 1e-9, 'USD rose ≥0.25% off its low');
 });
 
 test('spread does NOT qualify on a flat day (no leader crosses ±0.25%)', () => {

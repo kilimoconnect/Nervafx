@@ -237,7 +237,8 @@
     wrap.appendChild(el('div', null,
       '<div style="font-weight:700;margin-bottom:2px">Currency strength over time (M15 ' + per + '-EMA) — while dispersion ≥ ' + sthr + '%</div>'
       + '<div class="mut" style="font-size:11px;margin-bottom:8px">Inside each watch window: each currency\'s strength = the ' + per
-      + '-period EMA of its % move since the <b>00:00 EAT day open</b>, on 15-minute candles, tracked across the window (lines carry their real level, not reset to 0). The ranking below is the reading at the latest close. MODELLED / UNVALIDATED.</div>'));
+      + '-period EMA of its % move since the <b>00:00 EAT day open</b>, on 15-minute candles, tracked across the window (lines carry their real level, not reset to 0). Hollow dots mark each line\'s peak/trough. '
+      + 'A <b>0.25% move</b> is flagged three ways: <b>↑/↓ open</b> (reached ±0.25% from the day open), <b>⤵ off high</b> (fell 0.25% back from a running high) and <b>⤴ off low</b> (rose 0.25% off a running low) — all within the window. The ranking is the reading at the latest close. MODELLED / UNVALIDATED.</div>'));
     if (!active.length) { wrap.appendChild(el('div', null, '<div class="mut" style="font-size:12px">No window above ' + sthr + '% with enough M15 points yet today.</div>')); return wrap; }
 
     active.forEach(function (w, wi) {
@@ -270,10 +271,17 @@
       s += '<text x="' + (mL - 6) + '" y="' + (yy + 3) + '" text-anchor="end" font-size="10" fill="var(--text-muted)">' + (lv > 0 ? '+' : '') + lv.toFixed(2) + '%</text>';
     });
     for (var k = 0; k <= 6; k++) { var tm = t0 + (t1 - t0) * k / 6; s += '<text x="' + X(tm) + '" y="' + (H - 7) + '" text-anchor="middle" font-size="10" fill="var(--text-muted)">' + eatHM(tm) + '</text>'; }
+    var strBy = {}; (w.strength || []).forEach(function (r) { strBy[r.currency] = r; });
     lines.forEach(function (ln) {
       var d = '';
       for (var i = 0; i < ln.ema.length; i++) { d += (i ? 'L' : 'M') + X(times[i]).toFixed(1) + ' ' + Y(ln.ema[i]).toFixed(1); }
       s += '<path d="' + d + '" fill="none" stroke="' + (col[ln.currency] || '#888') + '" stroke-width="2" opacity="0.95"/>';
+      // peak / trough markers (the extremes the 0.25% pullback/bounce are measured from)
+      var st = strBy[ln.currency];
+      if (st) {
+        if (st.peakMs) s += '<circle cx="' + X(st.peakMs).toFixed(1) + '" cy="' + Y(st.peak).toFixed(1) + '" r="2" fill="none" stroke="' + (col[ln.currency] || '#888') + '" stroke-width="1.2"/>';
+        if (st.troughMs) s += '<circle cx="' + X(st.troughMs).toFixed(1) + '" cy="' + Y(st.trough).toFixed(1) + '" r="2" fill="none" stroke="' + (col[ln.currency] || '#888') + '" stroke-width="1.2"/>';
+      }
       var lx = X(times[times.length - 1]), ly = Y(ln.last);
       s += '<circle cx="' + lx.toFixed(1) + '" cy="' + ly.toFixed(1) + '" r="2.6" fill="' + (col[ln.currency] || '#888') + '"/>';
       s += '<text x="' + (W - mR + 4) + '" y="' + (ly + 3).toFixed(1) + '" font-size="10" fill="' + (col[ln.currency] || '#888') + '">' + ln.currency + '</text>';
@@ -283,18 +291,25 @@
     return box;
   }
 
-  // Diverging horizontal bars: currencies ranked by their 15m 10-EMA strength at the latest close.
+  // Diverging horizontal bars: currencies ranked by their 15m 10-EMA strength at the latest close,
+  // with each currency's peak/trough and its 0.25% moves (from open, pullback off a high, bounce off a low).
   function buildStrengthBars(w, col) {
     var box = el('div', 'card'); box.style.padding = '12px';
-    var S = w.strength || [];
+    var S = w.strength || [], thr = w.moveThreshold || 0.25;
     var maxAbs = 1e-9; S.forEach(function (r) { if (Math.abs(r.strength) > maxAbs) maxAbs = Math.abs(r.strength); });
+    function badge(txt, c, tip) { return '<span title="' + esc(tip) + '" style="display:inline-block;margin-left:5px;padding:1px 6px;border-radius:999px;font-size:10px;font-weight:700;background:' + c + '22;color:' + c + ';border:1px solid ' + c + '55">' + txt + '</span>'; }
     var html = '';
     S.forEach(function (r) {
       var pos = r.strength >= 0;
-      var frac = Math.min(1, Math.abs(r.strength) / maxAbs);         // 0..1 of the half-width
-      var barW = (frac * 50).toFixed(1);
+      var barW = (Math.min(1, Math.abs(r.strength) / maxAbs) * 50).toFixed(1);
+      var moves = '';
+      if (r.reachedUp) moves += badge('↑' + thr + ' open', 'var(--up)', 'peak ' + pct(r.peak) + ' reached +' + thr + '% from the day open');
+      if (r.reachedDown) moves += badge('↓' + thr + ' open', 'var(--dn)', 'trough ' + pct(r.trough) + ' reached −' + thr + '% from the day open');
+      if (r.pulledBack) moves += badge('⤵' + r.pullback.toFixed(2) + ' off high', '#eab308', 'fell ' + r.pullback.toFixed(2) + '% from its running high (peak ' + pct(r.peak) + (r.pullbackMs ? ' → ' + eatHM(r.pullbackMs) : '') + ')');
+      if (r.bounced) moves += badge('⤴' + r.bounce.toFixed(2) + ' off low', '#eab308', 'rose ' + r.bounce.toFixed(2) + '% from its running low (trough ' + pct(r.trough) + (r.bounceMs ? ' → ' + eatHM(r.bounceMs) : '') + ')');
       html +=
-        '<div style="display:flex;align-items:center;gap:10px;margin:4px 0;font-size:13px">'
+        '<div style="margin:6px 0">'
+        + '<div style="display:flex;align-items:center;gap:10px;font-size:13px">'
         + '<div style="width:22px;text-align:right;color:var(--text-muted);font-size:11px">#' + r.rank + '</div>'
         + '<div style="width:58px;font-weight:700"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:' + (col[r.currency] || '#888') + ';margin-right:6px"></span>' + r.currency + '</div>'
         + '<div style="flex:1;position:relative;height:18px;background:var(--bg);border-radius:4px;border:1px solid var(--border)">'
@@ -303,6 +318,8 @@
         + '</div>'
         + '<div style="width:66px;text-align:right;font-weight:800;color:' + (pos ? 'var(--up)' : 'var(--dn)') + '">' + pct(r.strength) + '</div>'
         + '<div style="width:62px;text-align:right;color:var(--text-muted);font-size:11px" title="raw, unsmoothed % since 00:00 EAT day open">raw ' + pct(r.raw) + '</div>'
+        + '</div>'
+        + '<div style="margin-left:90px;font-size:10px;color:var(--text-muted);margin-top:1px">pk <b style="color:var(--up)">' + pct(r.peak) + '</b> · tr <b style="color:var(--dn)">' + pct(r.trough) + '</b>' + moves + '</div>'
         + '</div>';
     });
     box.innerHTML = html;

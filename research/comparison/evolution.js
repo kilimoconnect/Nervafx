@@ -99,37 +99,56 @@ const EMA_PERIOD = 10;   // M15 periods — smooths the currency-strength readin
  * each currency's M15 strength line, plus a snapshot ranking strongest→weakest at the latest close.
  * Relative-movement research, UNVALIDATED.
  */
-function windowCandleEvolution(built, windows, emaPeriod = EMA_PERIOD) {
+function windowCandleEvolution(built, windows, emaPeriod = EMA_PERIOD, moveThreshold = DEFAULT_THRESHOLD) {
   const alpha = 2 / (emaPeriod + 1);
   return (windows || []).map((w) => {
     const dayOpenMs = dayStart(w.startMs);
     const o = idxAtOrBefore(built, CURRENCIES[0], dayOpenMs);
     const s = idxAtOrBefore(built, CURRENCIES[0], w.startMs);
     const e = idxAtOrBefore(built, CURRENCIES[0], w.endMs);
-    const base = { startMs: w.startMs, endMs: w.endMs, ongoing: !!w.ongoing, resolution: 'M15', emaPeriod, nSteps: 0, times: [], lines: [], strength: [] };
+    const base = { startMs: w.startMs, endMs: w.endMs, ongoing: !!w.ongoing, resolution: 'M15', emaPeriod, moveThreshold, nSteps: 0, times: [], lines: [], strength: [] };
     if (!o || !s || !e || e.idx < s.idx) return base;
     const openPos = o.idx, startPos = s.idx, endPos = e.idx;
     const openV = {}; const emaPrev = {}; const series = {};
-    for (const c of CURRENCIES) { openV[c] = built.index[c][openPos]; series[c] = []; }
+    // per-currency move trackers (over the window only): peak/trough from open, and the biggest
+    // pullback from a running high and bounce from a running low — the "0.25% move off an extreme".
+    const mv = {};
+    for (const c of CURRENCIES) { openV[c] = built.index[c][openPos]; series[c] = []; mv[c] = { peak: -Infinity, trough: Infinity, peakMs: null, troughMs: null, runMax: -Infinity, runMin: Infinity, pullback: 0, pullbackMs: null, bounce: 0, bounceMs: null }; }
 
     const times = [];
     for (let i = openPos; i <= endPos; i++) {           // walk from the day open so the EMA is warmed
       const inWin = i >= startPos;
-      if (inWin) times.push(built.timeline[i]);
+      const ms = built.timeline[i];
+      if (inWin) times.push(ms);
       for (const c of CURRENCIES) {
         const pct = 100 * (built.index[c][i] / openV[c] - 1);   // % since 00:00 EAT day open
         emaPrev[c] = (emaPrev[c] == null) ? pct : emaPrev[c] + alpha * (pct - emaPrev[c]);
-        if (inWin) series[c].push(r4(emaPrev[c]));
+        if (!inWin) continue;
+        const v = emaPrev[c]; series[c].push(r4(v));
+        const m = mv[c];
+        if (v > m.peak) { m.peak = v; m.peakMs = ms; }
+        if (v < m.trough) { m.trough = v; m.troughMs = ms; }
+        if (v > m.runMax) m.runMax = v;
+        if (v < m.runMin) m.runMin = v;
+        if (m.runMax - v > m.pullback) { m.pullback = m.runMax - v; m.pullbackMs = ms; }   // move down off a high
+        if (v - m.runMin > m.bounce) { m.bounce = v - m.runMin; m.bounceMs = ms; }         // move up off a low
       }
     }
     const lines = CURRENCIES.map((c) => ({ currency: c, ema: series[c], last: series[c][series[c].length - 1] }));
-    const strength = CURRENCIES.map((c) => ({
-      currency: c,
-      strength: r4(emaPrev[c]),                                      // EMA(10) strength (vs day open) at latest close
-      raw: r4(100 * (built.index[c][endPos] / openV[c] - 1)),        // unsmoothed % vs day open, for reference
-    })).sort((a, b) => b.strength - a.strength);
+    const strength = CURRENCIES.map((c) => {
+      const m = mv[c];
+      return {
+        currency: c,
+        strength: r4(emaPrev[c]),                                      // EMA(10) strength (vs day open) at latest close
+        raw: r4(100 * (built.index[c][endPos] / openV[c] - 1)),        // unsmoothed % vs day open, for reference
+        peak: r4(m.peak), trough: r4(m.trough), peakMs: m.peakMs, troughMs: m.troughMs,
+        pullback: r4(m.pullback), pullbackMs: m.pullbackMs, bounce: r4(m.bounce), bounceMs: m.bounceMs,
+        reachedUp: m.peak >= moveThreshold, reachedDown: m.trough <= -moveThreshold,   // 0.25% from open
+        pulledBack: m.pullback >= moveThreshold, bounced: m.bounce >= moveThreshold,   // 0.25% off an extreme
+      };
+    }).sort((a, b) => b.strength - a.strength);
     strength.forEach((r, k) => { r.rank = k + 1; });
-    return { startMs: w.startMs, endMs: w.endMs, ongoing: !!w.ongoing, resolution: 'M15', emaPeriod, nSteps: times.length, times, lines, strength };
+    return { startMs: w.startMs, endMs: w.endMs, ongoing: !!w.ongoing, resolution: 'M15', emaPeriod, moveThreshold, nSteps: times.length, times, lines, strength };
   });
 }
 
@@ -183,7 +202,7 @@ function liveEvolution(built, asOfMs, lastDataMs, threshold = DEFAULT_THRESHOLD,
   });
   ranked.forEach((rrow, i) => { rrow.rank = rrow.ok ? i + 1 : null; });
   const spread = spreadInfo(spreadSeries(built, startMs, cutoff), spreadThreshold, startMs, threshold);
-  const candleWindows = windowCandleEvolution(built, spread.windows);   // M15 performance inside each >threshold window
+  const candleWindows = windowCandleEvolution(built, spread.windows, EMA_PERIOD, threshold);   // strength + 0.25% moves inside each >threshold window
   return { startMs, cutoffMs: cutoff, threshold, rows: ranked, spread, candleWindows };
 }
 
