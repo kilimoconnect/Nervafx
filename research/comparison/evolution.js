@@ -88,7 +88,8 @@ function spreadInfo(series, threshold, startMs, bestThreshold = DEFAULT_THRESHOL
   };
 }
 
-const EMA_PERIOD = 10;   // M15 periods — smooths the currency-strength reading
+const EMA_PERIOD = 10;    // M15 periods — smooths the currency-strength reading
+const SLOPE_LOOKBACK = 3; // M15 steps (~45 min) over which EMA slope is measured for momentum
 
 /**
  * CURRENCY STRENGTH OVER TIME WHILE dispersion is above threshold (inside each qualifying "watch"
@@ -137,10 +138,17 @@ function windowCandleEvolution(built, windows, emaPeriod = EMA_PERIOD, moveThres
     const lines = CURRENCIES.map((c) => ({ currency: c, ema: series[c], last: series[c][series[c].length - 1] }));
     const strength = CURRENCIES.map((c) => {
       const m = mv[c];
+      const arr = series[c], n = arr.length, v = emaPrev[c];
+      const slope = n > 1 ? v - arr[Math.max(0, n - 1 - SLOPE_LOOKBACK)] : 0;   // EMA direction over ~45 min
+      const rising = slope > 0, falling = slope < 0;
+      // a currency qualifies only when its EMA momentum confirms its side:
+      // strong (positive) AND still rising, or weak (negative) AND still falling.
+      const qualifies = (v >= 0 && rising) || (v < 0 && falling);
       return {
         currency: c,
-        strength: r4(emaPrev[c]),                                      // EMA(10) strength (vs day open) at latest close
+        strength: r4(v),                                               // EMA(10) strength (vs day open) at latest close
         raw: r4(100 * (built.index[c][endPos] / openV[c] - 1)),        // unsmoothed % vs day open, for reference
+        slope: r4(slope), rising, falling, qualifies,
         peak: r4(m.peak), trough: r4(m.trough), peakMs: m.peakMs, troughMs: m.troughMs,
         pullback: r4(m.pullback), pullbackMs: m.pullbackMs, bounce: r4(m.bounce), bounceMs: m.bounceMs,
         reachedUp: m.peak >= moveThreshold, reachedDown: m.trough <= -moveThreshold,   // 0.25% from open

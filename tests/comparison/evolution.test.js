@@ -144,6 +144,27 @@ test('windowCandleEvolution: M15 10-EMA currency strength ranking inside each >t
   }
   // EUR only ever rises here → reachedUp, never a 0.25% pullback off a high
   assert.ok(eur.reachedUp && !eur.pulledBack, 'steady riser: up-from-open, no pullback');
+  // momentum: EUR strong & still rising → qualifies; its weak mirror falling → qualifies
+  assert.ok(eur.rising && eur.strength >= 0 && eur.qualifies, 'strong + rising qualifies');
+  const weak = w.strength[w.strength.length - 1];
+  assert.ok(weak.strength < 0 && weak.falling && weak.qualifies, 'weak + falling qualifies');
+});
+
+test('qualify needs EMA momentum to confirm the side (fading leader does not qualify)', () => {
+  // EUR climbs then reverses: by the cutoff it is still positive but its EMA is turning down.
+  const g = (t) => {
+    const dstep = Math.round((t - DATA_START) / M15_MS) - PRE;
+    if (dstep < 0) return 0;
+    return dstep < Math.floor(STEPS_DAY * 0.7) ? 0.0008 : -0.0011;   // up, then reverse down at the end
+  };
+  const by = network(PRE + STEPS_DAY + 1, g);
+  const built = buildIndices(by);
+  const asOf = START + (STEPS_DAY - 1) * M15_MS;
+  const eur = liveEvolution(built, asOf, built.lastMs, 0.25, 0.30).candleWindows[0].strength.find((r) => r.currency === 'EUR');
+  // still positive strength, but EMA now falling → momentum does not confirm → does NOT qualify
+  assert.ok(eur.strength >= 0, 'EUR still net positive at cutoff');
+  assert.ok(eur.falling, 'EUR EMA is turning down');
+  assert.equal(eur.qualifies, false, 'a fading (strong but falling) currency does not qualify');
 });
 
 test('windowCandleEvolution: a 0.25% pullback off a high is flagged (rise then retrace)', () => {

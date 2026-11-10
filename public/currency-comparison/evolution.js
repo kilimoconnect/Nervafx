@@ -238,7 +238,8 @@
       '<div style="font-weight:700;margin-bottom:2px">Currency strength over time (M15 ' + per + '-EMA) — while dispersion ≥ ' + sthr + '%</div>'
       + '<div class="mut" style="font-size:11px;margin-bottom:8px">Inside each watch window: each currency\'s strength = the ' + per
       + '-period EMA of its % move since the <b>00:00 EAT day open</b>, on 15-minute candles, tracked across the window (lines carry their real level, not reset to 0). Hollow dots mark each line\'s peak/trough. '
-      + 'A <b>0.25% move</b> is flagged three ways: <b>↑/↓ open</b> (reached ±0.25% from the day open), <b>⤵ off high</b> (fell 0.25% back from a running high) and <b>⤴ off low</b> (rose 0.25% off a running low) — all within the window. The ranking is the reading at the latest close. MODELLED / UNVALIDATED.</div>'));
+      + 'A <b>0.25% move</b> is flagged three ways: <b>↑/↓ open</b> (reached ±0.25% from the day open), <b>⤵ off high</b> (fell 0.25% back from a running high) and <b>⤴ off low</b> (rose 0.25% off a running low) — all within the window. '
+      + 'A currency <b>✓ qualifies</b> only when its EMA momentum confirms its side: <b>rising while strong</b> (positive) or <b>falling while weak</b> (negative). Fading rows (strong but no longer rising, or weak but recovering) are dimmed. The ranking is the reading at the latest close. MODELLED / UNVALIDATED.</div>'));
     if (!active.length) { wrap.appendChild(el('div', null, '<div class="mut" style="font-size:12px">No window above ' + sthr + '% with enough M15 points yet today.</div>')); return wrap; }
 
     active.forEach(function (w, wi) {
@@ -302,13 +303,20 @@
     S.forEach(function (r) {
       var pos = r.strength >= 0;
       var barW = (Math.min(1, Math.abs(r.strength) / maxAbs) * 50).toFixed(1);
+      var arrow = r.rising ? '<span style="color:var(--up)" title="EMA rising (slope ' + pct(r.slope) + ' over ~45m)">▲</span>'
+        : r.falling ? '<span style="color:var(--dn)" title="EMA falling (slope ' + pct(r.slope) + ' over ~45m)">▼</span>'
+        : '<span class="mut" title="EMA flat">▬</span>';
+      // qualify pill: strong & rising, or weak & falling
+      var qual = r.qualifies
+        ? badge('✓ qualifies ' + (pos ? '↑ strong' : '↓ weak'), pos ? 'var(--up)' : 'var(--dn)', 'EMA ' + (pos ? 'rising while strong' : 'falling while weak') + ' — momentum confirms the side')
+        : badge('✗ ' + (r.rising ? 'rising' : r.falling ? 'falling' : 'flat'), 'var(--text-muted)', pos ? 'strong but not rising — fading, does not qualify' : 'weak but not falling — recovering, does not qualify');
       var moves = '';
       if (r.reachedUp) moves += badge('↑' + thr + ' open', 'var(--up)', 'peak ' + pct(r.peak) + ' reached +' + thr + '% from the day open');
       if (r.reachedDown) moves += badge('↓' + thr + ' open', 'var(--dn)', 'trough ' + pct(r.trough) + ' reached −' + thr + '% from the day open');
       if (r.pulledBack) moves += badge('⤵' + r.pullback.toFixed(2) + ' off high', '#eab308', 'fell ' + r.pullback.toFixed(2) + '% from its running high (peak ' + pct(r.peak) + (r.pullbackMs ? ' → ' + eatHM(r.pullbackMs) : '') + ')');
       if (r.bounced) moves += badge('⤴' + r.bounce.toFixed(2) + ' off low', '#eab308', 'rose ' + r.bounce.toFixed(2) + '% from its running low (trough ' + pct(r.trough) + (r.bounceMs ? ' → ' + eatHM(r.bounceMs) : '') + ')');
       html +=
-        '<div style="margin:6px 0">'
+        '<div style="margin:6px 0;opacity:' + (r.qualifies ? '1' : '.5') + '">'
         + '<div style="display:flex;align-items:center;gap:10px;font-size:13px">'
         + '<div style="width:22px;text-align:right;color:var(--text-muted);font-size:11px">#' + r.rank + '</div>'
         + '<div style="width:58px;font-weight:700"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:' + (col[r.currency] || '#888') + ';margin-right:6px"></span>' + r.currency + '</div>'
@@ -316,10 +324,10 @@
         + '<div style="position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--text-muted);opacity:.4"></div>'
         + '<div style="position:absolute;top:2px;bottom:2px;' + (pos ? 'left:50%' : 'right:50%') + ';width:' + barW + '%;background:' + (pos ? 'var(--up)' : 'var(--dn)') + ';border-radius:3px"></div>'
         + '</div>'
-        + '<div style="width:66px;text-align:right;font-weight:800;color:' + (pos ? 'var(--up)' : 'var(--dn)') + '">' + pct(r.strength) + '</div>'
+        + '<div style="width:80px;text-align:right;font-weight:800;color:' + (pos ? 'var(--up)' : 'var(--dn)') + '">' + arrow + ' ' + pct(r.strength) + '</div>'
         + '<div style="width:62px;text-align:right;color:var(--text-muted);font-size:11px" title="raw, unsmoothed % since 00:00 EAT day open">raw ' + pct(r.raw) + '</div>'
         + '</div>'
-        + '<div style="margin-left:90px;font-size:10px;color:var(--text-muted);margin-top:1px">pk <b style="color:var(--up)">' + pct(r.peak) + '</b> · tr <b style="color:var(--dn)">' + pct(r.trough) + '</b>' + moves + '</div>'
+        + '<div style="margin-left:90px;font-size:10px;color:var(--text-muted);margin-top:1px">' + qual + ' <span style="margin-left:4px">pk <b style="color:var(--up)">' + pct(r.peak) + '</b> · tr <b style="color:var(--dn)">' + pct(r.trough) + '</b></span>' + moves + '</div>'
         + '</div>';
     });
     box.innerHTML = html;
