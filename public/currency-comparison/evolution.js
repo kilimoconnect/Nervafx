@@ -227,29 +227,63 @@
     return box;
   }
 
-  // Per-window CURRENCY STRENGTH ranking: inside each dispersion window (>threshold), the 8 currencies
-  // ranked strongest→weakest by the 15m 10-EMA of their % move since the window opened, as diverging bars.
+  // Per-window CURRENCY STRENGTH OVER TIME: inside each dispersion window (>threshold), each currency's
+  // 15m 10-EMA strength (% since the window opened) plotted across the window, plus a snapshot ranking.
   function buildCandleWindows(live, sthr, col) {
     var wrap = el('div', 'card'); wrap.style.marginTop = '14px';
     var wins = live.candleWindows || [];
-    var active = wins.filter(function (w) { return w.strength && w.strength.length; });
+    var active = wins.filter(function (w) { return w.lines && w.lines.length && w.nSteps > 1; });
     var per = (active[0] && active[0].emaPeriod) || 10;
     wrap.appendChild(el('div', null,
-      '<div style="font-weight:700;margin-bottom:2px">Currency strength (M15 ' + per + '-EMA) — while dispersion ≥ ' + sthr + '%</div>'
+      '<div style="font-weight:700;margin-bottom:2px">Currency strength over time (M15 ' + per + '-EMA) — while dispersion ≥ ' + sthr + '%</div>'
       + '<div class="mut" style="font-size:11px;margin-bottom:8px">Inside each watch window: each currency\'s strength = the ' + per
-      + '-period EMA of its % move since the window opened, on 15-minute candles, read at the latest close. Ranked strongest→weakest. MODELLED / UNVALIDATED.</div>'));
-    if (!active.length) { wrap.appendChild(el('div', null, '<div class="mut" style="font-size:12px">No window above ' + sthr + '% yet today — no strength reading.</div>')); return wrap; }
+      + '-period EMA of its % move since the window opened, on 15-minute candles, tracked across the whole window. 0% = the window open; the ranking below is the reading at the latest close. MODELLED / UNVALIDATED.</div>'));
+    if (!active.length) { wrap.appendChild(el('div', null, '<div class="mut" style="font-size:12px">No window above ' + sthr + '% with enough M15 points yet today.</div>')); return wrap; }
 
     active.forEach(function (w, wi) {
       var hdr = el('div'); hdr.style.cssText = 'margin:12px 0 6px;font-weight:700;font-size:13px';
-      hdr.innerHTML = '⏱ Window #' + (wi + 1) + ' · ' + eatHM(w.startMs) + ' → ' + (w.ongoing ? '<span style="color:var(--up)">now ●</span>' : eatHM(w.endMs)) + ' · strength at ' + eatHM(w.endMs) + ' EAT';
+      hdr.innerHTML = '⏱ Window #' + (wi + 1) + ' · ' + eatHM(w.startMs) + ' → ' + (w.ongoing ? '<span style="color:var(--up)">now ●</span>' : eatHM(w.endMs)) + ' · ' + w.nSteps + ' M15 steps';
       wrap.appendChild(hdr);
+      wrap.appendChild(buildStrengthChart(w, col));
+      wrap.appendChild(el('div', null, '<div class="mut" style="font-size:11px;margin:8px 0 2px">Ranking at ' + eatHM(w.endMs) + ' EAT</div>'));
       wrap.appendChild(buildStrengthBars(w, col));
     });
     return wrap;
   }
 
-  // Diverging horizontal bars: currencies ranked by their 15m 10-EMA strength within a window.
+  // Multi-line SVG: each currency's 15m 10-EMA strength line across one window (strength over time).
+  function buildStrengthChart(w, col) {
+    var box = el('div', 'card'); box.style.padding = '10px';
+    var times = w.times || [], lines = w.lines || [];
+    var t0 = times[0], t1 = times[times.length - 1];
+    if (!(t1 > t0)) { box.innerHTML = '<div class="mut" style="font-size:12px">Not enough points to plot.</div>'; return box; }
+    var W = 920, H = 320, mL = 46, mR = 60, mT = 12, mB = 24;
+    var yMax = 0.05, yMin = -0.05;
+    lines.forEach(function (ln) { ln.ema.forEach(function (v) { if (v > yMax) yMax = v; if (v < yMin) yMin = v; }); });
+    var pad = (yMax - yMin) * 0.08; yMax += pad; yMin -= pad;
+    var X = function (ms) { return mL + (ms - t0) / (t1 - t0) * (W - mL - mR); };
+    var Y = function (v) { return mT + (yMax - v) / (yMax - yMin) * (H - mT - mB); };
+    var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" style="display:block;font-family:inherit">';
+    [yMax, (yMax) / 2, 0, yMin / 2, yMin].forEach(function (lv) {
+      var yy = Y(lv), dash = Math.abs(lv) < 1e-9 ? '' : 'stroke-dasharray="4 4"';
+      s += '<line x1="' + mL + '" y1="' + yy + '" x2="' + (W - mR) + '" y2="' + yy + '" stroke="var(--border)" ' + dash + '/>';
+      s += '<text x="' + (mL - 6) + '" y="' + (yy + 3) + '" text-anchor="end" font-size="10" fill="var(--text-muted)">' + (lv > 0 ? '+' : '') + lv.toFixed(2) + '%</text>';
+    });
+    for (var k = 0; k <= 6; k++) { var tm = t0 + (t1 - t0) * k / 6; s += '<text x="' + X(tm) + '" y="' + (H - 7) + '" text-anchor="middle" font-size="10" fill="var(--text-muted)">' + eatHM(tm) + '</text>'; }
+    lines.forEach(function (ln) {
+      var d = '';
+      for (var i = 0; i < ln.ema.length; i++) { d += (i ? 'L' : 'M') + X(times[i]).toFixed(1) + ' ' + Y(ln.ema[i]).toFixed(1); }
+      s += '<path d="' + d + '" fill="none" stroke="' + (col[ln.currency] || '#888') + '" stroke-width="2" opacity="0.95"/>';
+      var lx = X(times[times.length - 1]), ly = Y(ln.last);
+      s += '<circle cx="' + lx.toFixed(1) + '" cy="' + ly.toFixed(1) + '" r="2.6" fill="' + (col[ln.currency] || '#888') + '"/>';
+      s += '<text x="' + (W - mR + 4) + '" y="' + (ly + 3).toFixed(1) + '" font-size="10" fill="' + (col[ln.currency] || '#888') + '">' + ln.currency + '</text>';
+    });
+    s += '</svg>';
+    box.innerHTML = s;
+    return box;
+  }
+
+  // Diverging horizontal bars: currencies ranked by their 15m 10-EMA strength at the latest close.
   function buildStrengthBars(w, col) {
     var box = el('div', 'card'); box.style.padding = '12px';
     var S = w.strength || [];

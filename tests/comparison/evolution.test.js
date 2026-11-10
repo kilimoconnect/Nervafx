@@ -112,6 +112,20 @@ test('windowCandleEvolution: M15 10-EMA currency strength ranking inside each >t
   assert.equal(w.resolution, 'M15');
   assert.equal(w.emaPeriod, 10);
   assert.ok(w.nSteps > 1);
+  // strength OVER TIME: one line per currency, each an EMA array the length of the M15 timeline
+  assert.equal(w.times.length, w.nSteps);
+  assert.equal(w.times[1] - w.times[0], M15_MS, 'M15 spacing between steps');
+  assert.equal(w.lines.length, 8);
+  for (const ln of w.lines) {
+    assert.equal(ln.ema.length, w.nSteps);
+    assert.equal(ln.last, ln.ema[ln.ema.length - 1], 'last = series endpoint');
+  }
+  // the chart endpoint equals the snapshot strength (same metric)
+  const eurLine = w.lines.find((l) => l.currency === 'EUR');
+  const eurSnap = w.strength.find((r) => r.currency === 'EUR');
+  assert.equal(eurLine.last, eurSnap.strength, 'line endpoint matches ranking value');
+  // EUR rises steadily → its strength line trends up monotonically
+  for (let i = 1; i < eurLine.ema.length; i++) assert.ok(eurLine.ema[i] >= eurLine.ema[i - 1] - 1e-9, 'EUR strength non-decreasing');
   // a full 8-currency strength ranking, sorted strongest→weakest, ranks 1..8
   assert.equal(w.strength.length, 8);
   for (let i = 1; i < w.strength.length; i++) assert.ok(w.strength[i - 1].strength >= w.strength[i].strength, 'sorted desc');

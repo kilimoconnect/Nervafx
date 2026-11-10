@@ -91,35 +91,40 @@ function spreadInfo(series, threshold, startMs, bestThreshold = DEFAULT_THRESHOL
 const EMA_PERIOD = 10;   // M15 periods — smooths the currency-strength reading
 
 /**
- * CURRENCY STRENGTH WHILE dispersion is above threshold (inside each qualifying "watch" window).
- * Resolution is M15: each currency's strength is the 10-period EMA of its % move since the window
- * opened (index relative to its value at the window start), smoothed step by step and read at the
- * latest M15 close in the window. Returns, per window, the 8 currencies ranked strongest→weakest by
- * that smoothed strength (with the raw unsmoothed % alongside). Relative-movement research, UNVALIDATED.
+ * CURRENCY STRENGTH OVER TIME WHILE dispersion is above threshold (inside each qualifying "watch"
+ * window). Resolution is M15: each currency's strength is the 10-period EMA of its % move since the
+ * window opened (index relative to its value at the window start), smoothed step by step. Returns,
+ * per window, the full M15 strength line per currency (so strength can be plotted over time), plus a
+ * snapshot ranking strongest→weakest at the latest close. Relative-movement research, UNVALIDATED.
  */
 function windowCandleEvolution(built, windows, emaPeriod = EMA_PERIOD) {
   const alpha = 2 / (emaPeriod + 1);
   return (windows || []).map((w) => {
     const s = idxAtOrBefore(built, CURRENCIES[0], w.startMs);
     const e = idxAtOrBefore(built, CURRENCIES[0], w.endMs);
-    const base = { startMs: w.startMs, endMs: w.endMs, ongoing: !!w.ongoing, resolution: 'M15', emaPeriod, nSteps: 0, strength: [] };
+    const base = { startMs: w.startMs, endMs: w.endMs, ongoing: !!w.ongoing, resolution: 'M15', emaPeriod, nSteps: 0, times: [], lines: [], strength: [] };
     if (!s || !e || e.idx < s.idx) return base;
     const startPos = s.idx, endPos = e.idx;
-    const openV = {}; const emaPrev = {}; for (const c of CURRENCIES) openV[c] = built.index[c][startPos];
+    const openV = {}; const emaPrev = {}; const series = {};
+    for (const c of CURRENCIES) { openV[c] = built.index[c][startPos]; series[c] = []; }
 
+    const times = [];
     for (let i = startPos; i <= endPos; i++) {
+      times.push(built.timeline[i]);
       for (const c of CURRENCIES) {
         const pct = 100 * (built.index[c][i] / openV[c] - 1);
         emaPrev[c] = (emaPrev[c] == null) ? pct : emaPrev[c] + alpha * (pct - emaPrev[c]);
+        series[c].push(r4(emaPrev[c]));
       }
     }
+    const lines = CURRENCIES.map((c) => ({ currency: c, ema: series[c], last: series[c][series[c].length - 1] }));
     const strength = CURRENCIES.map((c) => ({
       currency: c,
-      strength: r4(emaPrev[c]),                                      // EMA(10) of % since window open
+      strength: r4(emaPrev[c]),                                      // EMA(10) strength at the latest close
       raw: r4(100 * (built.index[c][endPos] / openV[c] - 1)),        // unsmoothed, for reference
     })).sort((a, b) => b.strength - a.strength);
     strength.forEach((r, k) => { r.rank = k + 1; });
-    return { startMs: w.startMs, endMs: w.endMs, ongoing: !!w.ongoing, resolution: 'M15', emaPeriod, nSteps: endPos - startPos + 1, strength };
+    return { startMs: w.startMs, endMs: w.endMs, ongoing: !!w.ongoing, resolution: 'M15', emaPeriod, nSteps: times.length, times, lines, strength };
   });
 }
 
