@@ -101,8 +101,8 @@ test('spread windows: multiple episodes — apart, bunch back, apart again', () 
   assert.equal(sp.watchMs, sp.windows[0].startMs, 'watchMs is the first onset');
 });
 
-test('windowCandleEvolution: M15 EMA(10) smoothed lines inside each >threshold window, with leaders', () => {
-  const by = network(PRE + STEPS_DAY + 1, () => 0.0003);   // EUR up every M15 → EUR leads
+test('windowCandleEvolution: M15 10-EMA currency strength ranking inside each >threshold window', () => {
+  const by = network(PRE + STEPS_DAY + 1, () => 0.0003);   // EUR up every M15 → EUR strongest
   const built = buildIndices(by);
   const asOf = START + (STEPS_DAY - 1) * M15_MS;
   const ev = liveEvolution(built, asOf, built.lastMs, 0.25, 0.30);
@@ -111,19 +111,17 @@ test('windowCandleEvolution: M15 EMA(10) smoothed lines inside each >threshold w
   const w = cw[0];
   assert.equal(w.resolution, 'M15');
   assert.equal(w.emaPeriod, 10);
-  assert.ok(w.nSteps > 1 && w.times.length === w.nSteps);
-  // M15 spacing between steps
-  assert.equal(w.times[1] - w.times[0], M15_MS, 'M15 spacing between steps');
-  // one line per currency, each with an EMA array the length of the timeline
-  assert.equal(w.lines.length, 8);
-  for (const ln of w.lines) { assert.equal(ln.ema.length, w.nSteps); assert.equal(ln.cum.length, w.nSteps); }
-  // EUR rises steadily → tops the smoothed value most of the window and ends highest
-  assert.equal(w.leaders[0].currency, 'EUR');
-  assert.ok(w.leaders[0].totalMove > 0 && w.leaders[w.leaders.length - 1].totalMove < 0);
-  // EMA lags but trends up monotonically for a steady riser; EMA magnitude ≤ raw cumulative
-  const eur = w.lines.find((l) => l.currency === 'EUR');
-  for (let i = 1; i < eur.ema.length; i++) assert.ok(eur.ema[i] >= eur.ema[i - 1] - 1e-9, 'EUR EMA non-decreasing');
-  assert.ok(eur.ema[eur.ema.length - 1] <= eur.cum[eur.cum.length - 1] + 1e-9, 'EMA lags the raw cumulative for a riser');
+  assert.ok(w.nSteps > 1);
+  // a full 8-currency strength ranking, sorted strongest→weakest, ranks 1..8
+  assert.equal(w.strength.length, 8);
+  for (let i = 1; i < w.strength.length; i++) assert.ok(w.strength[i - 1].strength >= w.strength[i].strength, 'sorted desc');
+  assert.deepEqual(w.strength.map((r) => r.rank), [1, 2, 3, 4, 5, 6, 7, 8]);
+  // EUR strongest (rank 1, positive), its mirror weakest (rank 8, negative)
+  assert.equal(w.strength[0].currency, 'EUR');
+  assert.ok(w.strength[0].strength > 0 && w.strength[7].strength < 0);
+  // strength is the SMOOTHED value, so its magnitude lags the raw % for a steady riser
+  const eur = w.strength[0];
+  assert.ok(eur.raw != null && eur.strength <= eur.raw + 1e-9, 'EMA strength ≤ raw for a riser');
 });
 
 test('spread does NOT qualify on a flat day (no leader crosses ±0.25%)', () => {
