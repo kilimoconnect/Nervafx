@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { buildIndices } = require('../../research/comparison/index-build');
-const { liveEvolution, historyScan } = require('../../research/comparison/evolution');
+const { liveEvolution, historyScan, windowCandleEvolution } = require('../../research/comparison/evolution');
 const { dayStart } = require('../../research/comparison/periods');
 const { PAIRS, M15_MS } = require('../../research/comparison/config');
 
@@ -99,6 +99,31 @@ test('spread windows: multiple episodes — apart, bunch back, apart again', () 
     if (i > 0) assert.ok(w.startMs > sp.windows[i - 1].endMs, 'windows are disjoint and ordered');
   }
   assert.equal(sp.watchMs, sp.windows[0].startMs, 'watchMs is the first onset');
+});
+
+test('windowCandleEvolution: per-M15 candle rows inside each >threshold window, with leaders', () => {
+  const by = network(PRE + STEPS_DAY + 1, () => 0.0003);   // EUR up every candle → EUR leads
+  const built = buildIndices(by);
+  const asOf = START + (STEPS_DAY - 1) * M15_MS;
+  const ev = liveEvolution(built, asOf, built.lastMs, 0.25, 0.30);
+  const cw = ev.candleWindows;
+  assert.ok(Array.isArray(cw) && cw.length >= 1, 'at least one candle window');
+  const w = cw[0];
+  assert.ok(w.nCandles >= 1 && w.candles.length === w.nCandles);
+  // each candle ranks all 8 currencies and names one leader
+  for (const cd of w.candles) {
+    assert.equal(cd.rows.length, 8);
+    assert.ok(cd.rows.some((r) => r.rank === 1) && cd.rows.some((r) => r.rank === 8));
+    assert.ok(cd.leader != null);
+  }
+  // EUR rises every candle → it leads each candle and tops the window total move
+  assert.ok(w.candles.every((cd) => cd.leader === 'EUR'), 'EUR leads every candle');
+  assert.equal(w.leaders[0].currency, 'EUR');
+  assert.ok(w.leaders[0].totalMove > 0 && w.leaders[w.leaders.length - 1].totalMove < 0);
+  assert.equal(w.leaders[0].candlesLed, w.nCandles);
+  // cumulative grows monotonically for the steady riser
+  const eurCum = w.candles.map((cd) => cd.rows.find((r) => r.currency === 'EUR').cum);
+  for (let i = 1; i < eurCum.length; i++) assert.ok(eurCum[i] >= eurCum[i - 1] - 1e-9, 'EUR cum non-decreasing');
 });
 
 test('spread does NOT qualify on a flat day (no leader crosses ±0.25%)', () => {

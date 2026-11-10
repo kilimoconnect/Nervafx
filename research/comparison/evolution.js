@@ -88,6 +88,49 @@ function spreadInfo(series, threshold, startMs, bestThreshold = DEFAULT_THRESHOL
   };
 }
 
+/**
+ * Per-M15-candle currency performance WHILE dispersion is above threshold (inside each qualifying
+ * "watch" window). For every M15 candle in a window and each currency: the candle return (that
+ * one candle's % move of its zero-sum index) and the cumulative % since the window opened (baselined
+ * on the candle just before the gap qualified). Per candle we rank by cumulative and flag the single
+ * strongest mover of that candle; per window we tally candles-led and total move. Shows which
+ * currencies actually drive the spread, candle by candle — relative-movement research, UNVALIDATED.
+ */
+function windowCandleEvolution(built, windows) {
+  const idx = built.index;
+  return (windows || []).map((w) => {
+    const s = idxAtOrBefore(built, CURRENCIES[0], w.startMs);
+    const e = idxAtOrBefore(built, CURRENCIES[0], w.endMs);
+    if (!s || !e || e.idx < s.idx) return { ...w, candles: [], leaders: [] };
+    const startPos = s.idx, endPos = e.idx;
+    const basePos = startPos > 0 ? startPos - 1 : startPos;   // bunched state just before the window
+    const led = {}; for (const c of CURRENCIES) led[c] = 0;
+    const candles = [];
+    for (let i = startPos; i <= endPos; i++) {
+      const prev = i > 0 ? i - 1 : i;
+      let topC = null, topRet = -Infinity, cumTop = -Infinity, cumBot = Infinity;
+      const rows = CURRENCIES.map((c) => {
+        const ret = 100 * (idx[c][i] / idx[c][prev] - 1);
+        const cum = 100 * (idx[c][i] / idx[c][basePos] - 1);
+        if (ret > topRet) { topRet = ret; topC = c; }
+        if (cum > cumTop) cumTop = cum; if (cum < cumBot) cumBot = cum;
+        return { currency: c, ret: r4(ret), cum: r4(cum) };
+      });
+      rows.sort((a, b) => b.cum - a.cum).forEach((r, k) => { r.rank = k + 1; });
+      led[topC]++;
+      candles.push({ ms: built.timeline[i], leader: topC, spread: r4(cumTop - cumBot), rows });
+    }
+    const last = candles.length ? candles[candles.length - 1].rows : [];
+    const cumBy = {}; last.forEach((r) => { cumBy[r.currency] = r.cum; });
+    const leaders = CURRENCIES.map((c) => ({ currency: c, candlesLed: led[c], totalMove: cumBy[c] != null ? cumBy[c] : 0 }))
+      .sort((a, b) => b.totalMove - a.totalMove);
+    return {
+      startMs: w.startMs, endMs: w.endMs, ongoing: !!w.ongoing, nCandles: candles.length,
+      leaders, candles,
+    };
+  });
+}
+
 /** Peak / trough / current of a % path (points: [{ms,pct}], pct relative to day open = 0). */
 function pathExtremes(points) {
   let peak = 0, trough = 0, cur = 0, peakMs = null, troughMs = null, upMs = null, downMs = null;
@@ -138,7 +181,8 @@ function liveEvolution(built, asOfMs, lastDataMs, threshold = DEFAULT_THRESHOLD,
   });
   ranked.forEach((rrow, i) => { rrow.rank = rrow.ok ? i + 1 : null; });
   const spread = spreadInfo(spreadSeries(built, startMs, cutoff), spreadThreshold, startMs, threshold);
-  return { startMs, cutoffMs: cutoff, threshold, rows: ranked, spread };
+  const candleWindows = windowCandleEvolution(built, spread.windows);   // M15 performance inside each >threshold window
+  return { startMs, cutoffMs: cutoff, threshold, rows: ranked, spread, candleWindows };
 }
 
 /**
@@ -202,4 +246,4 @@ function historyScan(built, asOfMs, lastDataMs, { threshold = DEFAULT_THRESHOLD,
   return { threshold, spreadThreshold, daysScanned: matrix.length, currencies: CURRENCIES, perCurrency, spreadSummary, matrix: recent };
 }
 
-module.exports = { liveEvolution, historyScan, spreadSeries, spreadInfo, pathExtremes, firstCrossings, DEFAULT_THRESHOLD, DEFAULT_SPREAD };
+module.exports = { liveEvolution, historyScan, spreadSeries, spreadInfo, windowCandleEvolution, pathExtremes, firstCrossings, DEFAULT_THRESHOLD, DEFAULT_SPREAD };

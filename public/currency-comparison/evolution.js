@@ -81,6 +81,9 @@
   host.appendChild(buildChart(live, THR, COL));
   host.appendChild(buildSpreadChart(live, THRS));
 
+  // ── M15 candle performance while dispersion > threshold (per watch window) ──
+  host.appendChild(buildCandleWindows(live, THRS, COL));
+
   // ── history: per-currency stats + heatmap ──
   var hsec = el('div', 'card'); hsec.style.marginTop = '14px';
   hsec.appendChild(el('div', null, '<div style="font-weight:700;margin-bottom:2px">Historical best-movement frequency</div>'
@@ -222,5 +225,65 @@
     t += '</tbody></table>';
     box.innerHTML = t;
     return box;
+  }
+
+  // Per-window M15 candle evolution: for each dispersion window (>threshold), a time × currency grid
+  // where the cell shows each currency's cumulative % since the window opened, tinted by that candle's
+  // own move (green up / red down), with ★ on the candle's strongest mover.
+  function buildCandleWindows(live, sthr, col) {
+    var wrap = el('div', 'card'); wrap.style.marginTop = '14px';
+    var wins = live.candleWindows || [];
+    var active = wins.filter(function (w) { return w.candles && w.candles.length; });
+    wrap.appendChild(el('div', null,
+      '<div style="font-weight:700;margin-bottom:2px">M15 candle evolution — while dispersion ≥ ' + sthr + '%</div>'
+      + '<div class="mut" style="font-size:11px;margin-bottom:8px">Inside each watch window: every M15 candle\'s currency performance. '
+      + 'Number = cumulative % since the window opened; tint = that candle\'s move (green up / red down); ★ = the candle\'s strongest mover. MODELLED / UNVALIDATED.</div>'));
+    if (!active.length) { wrap.appendChild(el('div', null, '<div class="mut" style="font-size:12px">No window above ' + sthr + '% yet today — nothing to break down candle-by-candle.</div>')); return wrap; }
+
+    active.forEach(function (w, wi) {
+      var hdr = el('div'); hdr.style.cssText = 'margin:12px 0 6px;font-weight:700;font-size:13px';
+      hdr.innerHTML = '⏱ Window #' + (wi + 1) + ' · ' + eatHM(w.startMs) + ' → ' + (w.ongoing ? '<span style="color:var(--up)">now ●</span>' : eatHM(w.endMs)) + ' · ' + w.nCandles + ' M15 candles';
+      wrap.appendChild(hdr);
+
+      // leaders strip (top 2 / bottom 2 by total move within the window)
+      var L = w.leaders || [];
+      if (L.length) {
+        var top = L[0], bot = L[L.length - 1];
+        var strip = el('div'); strip.style.cssText = 'display:flex;flex-wrap:wrap;gap:14px;margin-bottom:6px;font-size:12px';
+        strip.innerHTML =
+          '<div><span class="mut">Strongest</span> <b style="color:' + (col[top.currency] || '#888') + '">' + top.currency + '</b> ' + pct(top.totalMove) + ' <span class="mut">(led ' + top.candlesLed + '/' + w.nCandles + ')</span></div>'
+          + '<div><span class="mut">Weakest</span> <b style="color:' + (col[bot.currency] || '#888') + '">' + bot.currency + '</b> ' + pct(bot.totalMove) + '</div>';
+        wrap.appendChild(strip);
+      }
+
+      // scale candle tints by the window's largest single-candle move
+      var maxAbs = 1e-9;
+      w.candles.forEach(function (cd) { cd.rows.forEach(function (r) { if (Math.abs(r.ret) > maxAbs) maxAbs = Math.abs(r.ret); }); });
+
+      var box = el('div'); box.style.cssText = 'overflow:auto;max-height:420px;border:1px solid var(--border);border-radius:8px';
+      var ccys = (live.rows || []).map(function (r) { return r.currency; });
+      if (!ccys.length && w.candles[0]) ccys = w.candles[0].rows.map(function (r) { return r.currency; });
+      // stable column order = alphabetical currency set from the first candle
+      ccys = w.candles[0].rows.map(function (r) { return r.currency; }).slice().sort();
+      var t = '<table class="leg" style="width:100%;min-width:620px;font-variant-numeric:tabular-nums"><thead><tr><th style="text-align:left;position:sticky;left:0;background:var(--bg)">Candle (EAT)</th>';
+      ccys.forEach(function (c) { t += '<th><span style="color:' + (col[c] || '#888') + '">' + c + '</span></th>'; });
+      t += '</tr></thead><tbody>';
+      w.candles.forEach(function (cd) {
+        var byC = {}; cd.rows.forEach(function (r) { byC[r.currency] = r; });
+        t += '<tr><td style="text-align:left;position:sticky;left:0;background:var(--bg)">' + eatHM(cd.ms) + '</td>';
+        ccys.forEach(function (c) {
+          var r = byC[c]; if (!r) { t += '<td class="mut">·</td>'; return; }
+          var a = Math.min(0.6, Math.abs(r.ret) / maxAbs * 0.6) + (r.ret !== 0 ? 0.04 : 0);
+          var bg = r.ret > 0 ? 'rgba(34,197,94,' + a.toFixed(3) + ')' : r.ret < 0 ? 'rgba(239,68,68,' + a.toFixed(3) + ')' : 'transparent';
+          var star = (cd.leader === c) ? '★' : '';
+          var tip = c + ' · candle ' + pct(r.ret) + ' · cum ' + pct(r.cum) + ' · rank #' + r.rank;
+          t += '<td title="' + esc(tip) + '" style="background:' + bg + ';font-weight:' + (star ? '800' : '500') + '">' + star + (r.cum >= 0 ? '+' : '') + r.cum.toFixed(2) + '</td>';
+        });
+        t += '</tr>';
+      });
+      t += '</tbody></table>';
+      box.innerHTML = t; wrap.appendChild(box);
+    });
+    return wrap;
   }
 })();
