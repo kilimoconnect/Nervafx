@@ -239,7 +239,7 @@
       + '<div class="mut" style="font-size:11px;margin-bottom:8px">Inside each watch window: each currency\'s strength = the ' + per
       + '-period EMA of its % move since the <b>00:00 EAT day open</b>, on 15-minute candles, tracked across the window (lines carry their real level, not reset to 0). Hollow dots mark each line\'s peak/trough. '
       + 'A <b>0.25% move</b> is flagged three ways: <b>↑/↓ open</b> (reached ±0.25% from the day open), <b>⤵ off high</b> (fell 0.25% back from a running high) and <b>⤴ off low</b> (rose 0.25% off a running low) — all within the window. '
-      + 'A currency <b>✓ qualifies</b> only when its EMA momentum confirms its side: <b>rising while strong</b> (positive) or <b>falling while weak</b> (negative). Fading rows (strong but no longer rising, or weak but recovering) are dimmed. The ranking is the reading at the latest close. MODELLED / UNVALIDATED.</div>'));
+      + 'Only currencies whose EMA momentum confirms their side are shown: <b>rising while strong</b> (positive) or <b>falling while weak</b> (negative). Fading currencies (strong but no longer rising, or weak but recovering) are hidden. The reading is at the latest close. MODELLED / UNVALIDATED.</div>'));
     if (!active.length) { wrap.appendChild(el('div', null, '<div class="mut" style="font-size:12px">No window above ' + sthr + '% with enough M15 points yet today.</div>')); return wrap; }
 
     active.forEach(function (w, wi) {
@@ -247,7 +247,7 @@
       hdr.innerHTML = '⏱ Window #' + (wi + 1) + ' · ' + eatHM(w.startMs) + ' → ' + (w.ongoing ? '<span style="color:var(--up)">now ●</span>' : eatHM(w.endMs)) + ' · ' + w.nSteps + ' M15 steps';
       wrap.appendChild(hdr);
       wrap.appendChild(buildStrengthChart(w, col));
-      wrap.appendChild(el('div', null, '<div class="mut" style="font-size:11px;margin:8px 0 2px">Ranking at ' + eatHM(w.endMs) + ' EAT</div>'));
+      wrap.appendChild(el('div', null, '<div class="mut" style="font-size:11px;margin:8px 0 2px">Qualifying currencies at ' + eatHM(w.endMs) + ' EAT (momentum-confirmed)</div>'));
       wrap.appendChild(buildStrengthBars(w, col));
     });
     return wrap;
@@ -296,7 +296,9 @@
   // with each currency's peak/trough and its 0.25% moves (from open, pullback off a high, bounce off a low).
   function buildStrengthBars(w, col) {
     var box = el('div', 'card'); box.style.padding = '12px';
-    var S = w.strength || [], thr = w.moveThreshold || 0.25;
+    var thr = w.moveThreshold || 0.25;
+    var S = (w.strength || []).filter(function (r) { return r.qualifies; });   // only momentum-confirmed currencies
+    if (!S.length) { box.innerHTML = '<div class="mut" style="font-size:12px">No currency qualifies right now — none has EMA momentum confirming its side (rising while strong, or falling while weak).</div>'; return box; }
     var maxAbs = 1e-9; S.forEach(function (r) { if (Math.abs(r.strength) > maxAbs) maxAbs = Math.abs(r.strength); });
     function badge(txt, c, tip) { return '<span title="' + esc(tip) + '" style="display:inline-block;margin-left:5px;padding:1px 6px;border-radius:999px;font-size:10px;font-weight:700;background:' + c + '22;color:' + c + ';border:1px solid ' + c + '55">' + txt + '</span>'; }
     var html = '';
@@ -304,19 +306,15 @@
       var pos = r.strength >= 0;
       var barW = (Math.min(1, Math.abs(r.strength) / maxAbs) * 50).toFixed(1);
       var arrow = r.rising ? '<span style="color:var(--up)" title="EMA rising (slope ' + pct(r.slope) + ' over ~45m)">▲</span>'
-        : r.falling ? '<span style="color:var(--dn)" title="EMA falling (slope ' + pct(r.slope) + ' over ~45m)">▼</span>'
-        : '<span class="mut" title="EMA flat">▬</span>';
-      // qualify pill: strong & rising, or weak & falling
-      var qual = r.qualifies
-        ? badge('✓ qualifies ' + (pos ? '↑ strong' : '↓ weak'), pos ? 'var(--up)' : 'var(--dn)', 'EMA ' + (pos ? 'rising while strong' : 'falling while weak') + ' — momentum confirms the side')
-        : badge('✗ ' + (r.rising ? 'rising' : r.falling ? 'falling' : 'flat'), 'var(--text-muted)', pos ? 'strong but not rising — fading, does not qualify' : 'weak but not falling — recovering, does not qualify');
+        : '<span style="color:var(--dn)" title="EMA falling (slope ' + pct(r.slope) + ' over ~45m)">▼</span>';
+      var qual = badge('✓ qualifies ' + (pos ? '↑ strong' : '↓ weak'), pos ? 'var(--up)' : 'var(--dn)', 'EMA ' + (pos ? 'rising while strong' : 'falling while weak') + ' — momentum confirms the side');
       var moves = '';
       if (r.reachedUp) moves += badge('↑' + thr + ' open', 'var(--up)', 'peak ' + pct(r.peak) + ' reached +' + thr + '% from the day open');
       if (r.reachedDown) moves += badge('↓' + thr + ' open', 'var(--dn)', 'trough ' + pct(r.trough) + ' reached −' + thr + '% from the day open');
       if (r.pulledBack) moves += badge('⤵' + r.pullback.toFixed(2) + ' off high', '#eab308', 'fell ' + r.pullback.toFixed(2) + '% from its running high (peak ' + pct(r.peak) + (r.pullbackMs ? ' → ' + eatHM(r.pullbackMs) : '') + ')');
       if (r.bounced) moves += badge('⤴' + r.bounce.toFixed(2) + ' off low', '#eab308', 'rose ' + r.bounce.toFixed(2) + '% from its running low (trough ' + pct(r.trough) + (r.bounceMs ? ' → ' + eatHM(r.bounceMs) : '') + ')');
       html +=
-        '<div style="margin:6px 0;opacity:' + (r.qualifies ? '1' : '.5') + '">'
+        '<div style="margin:6px 0">'
         + '<div style="display:flex;align-items:center;gap:10px;font-size:13px">'
         + '<div style="width:22px;text-align:right;color:var(--text-muted);font-size:11px">#' + r.rank + '</div>'
         + '<div style="width:58px;font-weight:700"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:' + (col[r.currency] || '#888') + ';margin-right:6px"></span>' + r.currency + '</div>'
