@@ -88,7 +88,7 @@ function spreadInfo(series, threshold, startMs, bestThreshold = DEFAULT_THRESHOL
   };
 }
 
-const EMA_PERIOD = 10;    // M15 periods — smooths the currency-strength reading
+const EMA_PERIOD = 5;     // M15 periods — smooths the currency-strength reading
 const SLOPE_LOOKBACK = 3; // M15 steps (~45 min) over which EMA slope is measured for momentum
 
 /**

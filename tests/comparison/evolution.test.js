@@ -110,7 +110,7 @@ test('windowCandleEvolution: M15 10-EMA currency strength ranking inside each >t
   assert.ok(Array.isArray(cw) && cw.length >= 1, 'at least one window');
   const w = cw[0];
   assert.equal(w.resolution, 'M15');
-  assert.equal(w.emaPeriod, 10);
+  assert.equal(w.emaPeriod, 5);
   assert.ok(w.nSteps > 1);
   // strength OVER TIME: one line per currency, each an EMA array the length of the M15 timeline
   assert.equal(w.times.length, w.nSteps);
