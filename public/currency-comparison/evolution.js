@@ -235,14 +235,14 @@
     var wins = live.candleWindows || [];
     var active = wins.filter(function (w) { return w.candles && w.candles.length; });
     wrap.appendChild(el('div', null,
-      '<div style="font-weight:700;margin-bottom:2px">M15 candle evolution — while dispersion ≥ ' + sthr + '%</div>'
-      + '<div class="mut" style="font-size:11px;margin-bottom:8px">Inside each watch window: every M15 candle\'s currency performance. '
-      + 'Number = cumulative % since the window opened; tint = that candle\'s move (green up / red down); ★ = the candle\'s strongest mover. MODELLED / UNVALIDATED.</div>'));
+      '<div style="font-weight:700;margin-bottom:2px">H1 candle evolution — while dispersion ≥ ' + sthr + '%</div>'
+      + '<div class="mut" style="font-size:11px;margin-bottom:8px">Inside each watch window: every H1 (hourly) candle\'s currency performance. '
+      + 'Number = cumulative % since the window opened; tint = that hour\'s move (green up / red down); ★ = the hour\'s strongest mover. First/last rows may be partial hours. MODELLED / UNVALIDATED.</div>'));
     if (!active.length) { wrap.appendChild(el('div', null, '<div class="mut" style="font-size:12px">No window above ' + sthr + '% yet today — nothing to break down candle-by-candle.</div>')); return wrap; }
 
     active.forEach(function (w, wi) {
       var hdr = el('div'); hdr.style.cssText = 'margin:12px 0 6px;font-weight:700;font-size:13px';
-      hdr.innerHTML = '⏱ Window #' + (wi + 1) + ' · ' + eatHM(w.startMs) + ' → ' + (w.ongoing ? '<span style="color:var(--up)">now ●</span>' : eatHM(w.endMs)) + ' · ' + w.nCandles + ' M15 candles';
+      hdr.innerHTML = '⏱ Window #' + (wi + 1) + ' · ' + eatHM(w.startMs) + ' → ' + (w.ongoing ? '<span style="color:var(--up)">now ●</span>' : eatHM(w.endMs)) + ' · ' + w.nCandles + ' H1 candles';
       wrap.appendChild(hdr);
 
       // leaders strip (top 2 / bottom 2 by total move within the window)

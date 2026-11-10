@@ -88,46 +88,53 @@ function spreadInfo(series, threshold, startMs, bestThreshold = DEFAULT_THRESHOL
   };
 }
 
+const H1_MS = 60 * 60 * 1000;
+
 /**
- * Per-M15-candle currency performance WHILE dispersion is above threshold (inside each qualifying
- * "watch" window). For every M15 candle in a window and each currency: the candle return (that
- * one candle's % move of its zero-sum index) and the cumulative % since the window opened (baselined
- * on the candle just before the gap qualified). Per candle we rank by cumulative and flag the single
- * strongest mover of that candle; per window we tally candles-led and total move. Shows which
- * currencies actually drive the spread, candle by candle — relative-movement research, UNVALIDATED.
+ * Per-H1-candle currency performance WHILE dispersion is above threshold (inside each qualifying
+ * "watch" window). The spread/window detection stays on the M15 index; here we sample that index at
+ * hourly boundaries to build H1 candles across the window. For every H1 candle and each currency:
+ * the candle return (that hour's % move of its zero-sum index) and the cumulative % since the window
+ * opened (baselined on the index value at the window start). Per candle we rank by cumulative and
+ * flag the single strongest mover; per window we tally candles-led and total move. The first and last
+ * candles may be partial hours (window start→first hour close, and last hour close→window end).
+ * Relative-movement research, UNVALIDATED.
  */
 function windowCandleEvolution(built, windows) {
-  const idx = built.index;
+  const sampleVal = (c, ms) => { const s = idxAtOrBefore(built, c, ms); return s ? s.value : null; };
   return (windows || []).map((w) => {
-    const s = idxAtOrBefore(built, CURRENCIES[0], w.startMs);
-    const e = idxAtOrBefore(built, CURRENCIES[0], w.endMs);
-    if (!s || !e || e.idx < s.idx) return { ...w, candles: [], leaders: [] };
-    const startPos = s.idx, endPos = e.idx;
-    const basePos = startPos > 0 ? startPos - 1 : startPos;   // bunched state just before the window
+    const empty = { startMs: w.startMs, endMs: w.endMs, ongoing: !!w.ongoing, nCandles: 0, resolution: 'H1', leaders: [], candles: [] };
+    const openVals = {}; for (const c of CURRENCIES) { const v = sampleVal(c, w.startMs); if (v == null) return empty; openVals[c] = v; }
+
+    // hour-aligned close times strictly inside (startMs, endMs], plus the final partial hour at endMs
+    const closes = [];
+    for (let t = Math.floor(w.startMs / H1_MS) * H1_MS + H1_MS; t <= w.endMs; t += H1_MS) closes.push(t);
+    if (!closes.length || closes[closes.length - 1] < w.endMs) closes.push(w.endMs);
+
     const led = {}; for (const c of CURRENCIES) led[c] = 0;
     const candles = [];
-    for (let i = startPos; i <= endPos; i++) {
-      const prev = i > 0 ? i - 1 : i;
+    let prevVals = openVals;
+    for (const tc of closes) {
       let topC = null, topRet = -Infinity, cumTop = -Infinity, cumBot = Infinity;
+      const curVals = {};
       const rows = CURRENCIES.map((c) => {
-        const ret = 100 * (idx[c][i] / idx[c][prev] - 1);
-        const cum = 100 * (idx[c][i] / idx[c][basePos] - 1);
+        const v = sampleVal(c, tc); curVals[c] = v;
+        const ret = 100 * (v / prevVals[c] - 1);
+        const cum = 100 * (v / openVals[c] - 1);
         if (ret > topRet) { topRet = ret; topC = c; }
         if (cum > cumTop) cumTop = cum; if (cum < cumBot) cumBot = cum;
         return { currency: c, ret: r4(ret), cum: r4(cum) };
       });
       rows.sort((a, b) => b.cum - a.cum).forEach((r, k) => { r.rank = k + 1; });
       led[topC]++;
-      candles.push({ ms: built.timeline[i], leader: topC, spread: r4(cumTop - cumBot), rows });
+      candles.push({ ms: tc, leader: topC, spread: r4(cumTop - cumBot), rows });
+      prevVals = curVals;
     }
     const last = candles.length ? candles[candles.length - 1].rows : [];
     const cumBy = {}; last.forEach((r) => { cumBy[r.currency] = r.cum; });
     const leaders = CURRENCIES.map((c) => ({ currency: c, candlesLed: led[c], totalMove: cumBy[c] != null ? cumBy[c] : 0 }))
       .sort((a, b) => b.totalMove - a.totalMove);
-    return {
-      startMs: w.startMs, endMs: w.endMs, ongoing: !!w.ongoing, nCandles: candles.length,
-      leaders, candles,
-    };
+    return { startMs: w.startMs, endMs: w.endMs, ongoing: !!w.ongoing, nCandles: candles.length, resolution: 'H1', leaders, candles };
   });
 }
 
