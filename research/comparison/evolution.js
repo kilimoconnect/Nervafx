@@ -93,35 +93,40 @@ const EMA_PERIOD = 10;   // M15 periods — smooths the currency-strength readin
 /**
  * CURRENCY STRENGTH OVER TIME WHILE dispersion is above threshold (inside each qualifying "watch"
  * window). Resolution is M15: each currency's strength is the 10-period EMA of its % move since the
- * window opened (index relative to its value at the window start), smoothed step by step. Returns,
- * per window, the full M15 strength line per currency (so strength can be plotted over time), plus a
- * snapshot ranking strongest→weakest at the latest close. Relative-movement research, UNVALIDATED.
+ * 00:00-EAT DAY OPEN (not the window open), so the lines are a real strength level rather than all
+ * forced to 0 at the window start. The EMA is seeded from the day open and warmed through the steps
+ * before the window; only the steps inside the window are returned for display. Returns, per window,
+ * each currency's M15 strength line, plus a snapshot ranking strongest→weakest at the latest close.
+ * Relative-movement research, UNVALIDATED.
  */
 function windowCandleEvolution(built, windows, emaPeriod = EMA_PERIOD) {
   const alpha = 2 / (emaPeriod + 1);
   return (windows || []).map((w) => {
+    const dayOpenMs = dayStart(w.startMs);
+    const o = idxAtOrBefore(built, CURRENCIES[0], dayOpenMs);
     const s = idxAtOrBefore(built, CURRENCIES[0], w.startMs);
     const e = idxAtOrBefore(built, CURRENCIES[0], w.endMs);
     const base = { startMs: w.startMs, endMs: w.endMs, ongoing: !!w.ongoing, resolution: 'M15', emaPeriod, nSteps: 0, times: [], lines: [], strength: [] };
-    if (!s || !e || e.idx < s.idx) return base;
-    const startPos = s.idx, endPos = e.idx;
+    if (!o || !s || !e || e.idx < s.idx) return base;
+    const openPos = o.idx, startPos = s.idx, endPos = e.idx;
     const openV = {}; const emaPrev = {}; const series = {};
-    for (const c of CURRENCIES) { openV[c] = built.index[c][startPos]; series[c] = []; }
+    for (const c of CURRENCIES) { openV[c] = built.index[c][openPos]; series[c] = []; }
 
     const times = [];
-    for (let i = startPos; i <= endPos; i++) {
-      times.push(built.timeline[i]);
+    for (let i = openPos; i <= endPos; i++) {           // walk from the day open so the EMA is warmed
+      const inWin = i >= startPos;
+      if (inWin) times.push(built.timeline[i]);
       for (const c of CURRENCIES) {
-        const pct = 100 * (built.index[c][i] / openV[c] - 1);
+        const pct = 100 * (built.index[c][i] / openV[c] - 1);   // % since 00:00 EAT day open
         emaPrev[c] = (emaPrev[c] == null) ? pct : emaPrev[c] + alpha * (pct - emaPrev[c]);
-        series[c].push(r4(emaPrev[c]));
+        if (inWin) series[c].push(r4(emaPrev[c]));
       }
     }
     const lines = CURRENCIES.map((c) => ({ currency: c, ema: series[c], last: series[c][series[c].length - 1] }));
     const strength = CURRENCIES.map((c) => ({
       currency: c,
-      strength: r4(emaPrev[c]),                                      // EMA(10) strength at the latest close
-      raw: r4(100 * (built.index[c][endPos] / openV[c] - 1)),        // unsmoothed, for reference
+      strength: r4(emaPrev[c]),                                      // EMA(10) strength (vs day open) at latest close
+      raw: r4(100 * (built.index[c][endPos] / openV[c] - 1)),        // unsmoothed % vs day open, for reference
     })).sort((a, b) => b.strength - a.strength);
     strength.forEach((r, k) => { r.rank = k + 1; });
     return { startMs: w.startMs, endMs: w.endMs, ongoing: !!w.ongoing, resolution: 'M15', emaPeriod, nSteps: times.length, times, lines, strength };

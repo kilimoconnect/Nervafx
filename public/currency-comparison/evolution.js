@@ -237,7 +237,7 @@
     wrap.appendChild(el('div', null,
       '<div style="font-weight:700;margin-bottom:2px">Currency strength over time (M15 ' + per + '-EMA) — while dispersion ≥ ' + sthr + '%</div>'
       + '<div class="mut" style="font-size:11px;margin-bottom:8px">Inside each watch window: each currency\'s strength = the ' + per
-      + '-period EMA of its % move since the window opened, on 15-minute candles, tracked across the whole window. 0% = the window open; the ranking below is the reading at the latest close. MODELLED / UNVALIDATED.</div>'));
+      + '-period EMA of its % move since the <b>00:00 EAT day open</b>, on 15-minute candles, tracked across the window (lines carry their real level, not reset to 0). The ranking below is the reading at the latest close. MODELLED / UNVALIDATED.</div>'));
     if (!active.length) { wrap.appendChild(el('div', null, '<div class="mut" style="font-size:12px">No window above ' + sthr + '% with enough M15 points yet today.</div>')); return wrap; }
 
     active.forEach(function (w, wi) {
@@ -302,7 +302,7 @@
         + '<div style="position:absolute;top:2px;bottom:2px;' + (pos ? 'left:50%' : 'right:50%') + ';width:' + barW + '%;background:' + (pos ? 'var(--up)' : 'var(--dn)') + ';border-radius:3px"></div>'
         + '</div>'
         + '<div style="width:66px;text-align:right;font-weight:800;color:' + (pos ? 'var(--up)' : 'var(--dn)') + '">' + pct(r.strength) + '</div>'
-        + '<div style="width:62px;text-align:right;color:var(--text-muted);font-size:11px" title="raw, unsmoothed % since window open">raw ' + pct(r.raw) + '</div>'
+        + '<div style="width:62px;text-align:right;color:var(--text-muted);font-size:11px" title="raw, unsmoothed % since 00:00 EAT day open">raw ' + pct(r.raw) + '</div>'
         + '</div>';
     });
     box.innerHTML = html;
