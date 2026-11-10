@@ -247,7 +247,7 @@
       hdr.innerHTML = '⏱ Window #' + (wi + 1) + ' · ' + eatHM(w.startMs) + ' → ' + (w.ongoing ? '<span style="color:var(--up)">now ●</span>' : eatHM(w.endMs)) + ' · ' + w.nSteps + ' M15 steps';
       wrap.appendChild(hdr);
       wrap.appendChild(buildStrengthChart(w, col));
-      wrap.appendChild(el('div', null, '<div class="mut" style="font-size:11px;margin:8px 0 2px">Qualifying currencies at ' + eatHM(w.endMs) + ' EAT (momentum-confirmed)</div>'));
+      wrap.appendChild(el('div', null, '<div class="mut" style="font-size:11px;margin:8px 0 2px">Qualifying currencies at ' + eatHM(w.endMs) + ' EAT — ranked by momentum (EMA velocity), fastest move first</div>'));
       wrap.appendChild(buildStrengthBars(w, col));
     });
     return wrap;
@@ -299,15 +299,21 @@
     var thr = w.moveThreshold || 0.25;
     var S = (w.strength || []).filter(function (r) { return r.qualifies; });   // only momentum-confirmed currencies
     if (!S.length) { box.innerHTML = '<div class="mut" style="font-size:12px">No currency qualifies right now — none has EMA momentum confirming its side (rising while strong, or falling while weak).</div>'; return box; }
+    // order by MOMENTUM, not absolute level: the fastest-moving currency (steepest EMA slope, either
+    // direction) ranks first — so a sharp, fast move outranks a slow drift to the same level.
+    S = S.slice().sort(function (a, b) { return Math.abs(b.slope) - Math.abs(a.slope); });
     var maxAbs = 1e-9; S.forEach(function (r) { if (Math.abs(r.strength) > maxAbs) maxAbs = Math.abs(r.strength); });
+    var maxSlope = 1e-9; S.forEach(function (r) { if (Math.abs(r.slope) > maxSlope) maxSlope = Math.abs(r.slope); });
     function badge(txt, c, tip) { return '<span title="' + esc(tip) + '" style="display:inline-block;margin-left:5px;padding:1px 6px;border-radius:999px;font-size:10px;font-weight:700;background:' + c + '22;color:' + c + ';border:1px solid ' + c + '55">' + txt + '</span>'; }
     var html = '';
-    S.forEach(function (r) {
+    S.forEach(function (r, mi) {
       var pos = r.strength >= 0;
       var barW = (Math.min(1, Math.abs(r.strength) / maxAbs) * 50).toFixed(1);
+      var velW = (Math.min(1, Math.abs(r.slope) / maxSlope) * 100).toFixed(0);
       var arrow = r.rising ? '<span style="color:var(--up)" title="EMA rising (slope ' + pct(r.slope) + ' over ~45m)">▲</span>'
         : '<span style="color:var(--dn)" title="EMA falling (slope ' + pct(r.slope) + ' over ~45m)">▼</span>';
       var qual = badge('✓ qualifies ' + (pos ? '↑ strong' : '↓ weak'), pos ? 'var(--up)' : 'var(--dn)', 'EMA ' + (pos ? 'rising while strong' : 'falling while weak') + ' — momentum confirms the side');
+      var vel = badge('vel ' + (r.slope >= 0 ? '+' : '') + r.slope.toFixed(3) + '%/45m', pos ? 'var(--up)' : 'var(--dn)', 'EMA velocity over ~45 min — ranking is by this (fastest move first), not by level');
       var moves = '';
       if (r.reachedUp) moves += badge('↑' + thr + ' open', 'var(--up)', 'peak ' + pct(r.peak) + ' reached +' + thr + '% from the day open');
       if (r.reachedDown) moves += badge('↓' + thr + ' open', 'var(--dn)', 'trough ' + pct(r.trough) + ' reached −' + thr + '% from the day open');
@@ -316,16 +322,17 @@
       html +=
         '<div style="margin:6px 0">'
         + '<div style="display:flex;align-items:center;gap:10px;font-size:13px">'
-        + '<div style="width:22px;text-align:right;color:var(--text-muted);font-size:11px">#' + r.rank + '</div>'
+        + '<div style="width:22px;text-align:right;color:var(--text);font-size:12px;font-weight:700" title="momentum rank (by EMA velocity); global strength rank #' + r.rank + '">' + (mi + 1) + '</div>'
         + '<div style="width:58px;font-weight:700"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:' + (col[r.currency] || '#888') + ';margin-right:6px"></span>' + r.currency + '</div>'
-        + '<div style="flex:1;position:relative;height:18px;background:var(--bg);border-radius:4px;border:1px solid var(--border)">'
+        + '<div style="flex:1;position:relative;height:18px;background:var(--bg);border-radius:4px;border:1px solid var(--border)" title="EMA velocity (~45m): ' + pct(r.slope) + '">'
+        + '<div style="position:absolute;' + (pos ? 'left:0' : 'right:0') + ';top:2px;bottom:2px;width:' + velW + '%;background:' + (pos ? 'var(--up)' : 'var(--dn)') + ';opacity:.22;border-radius:3px"></div>'
         + '<div style="position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--text-muted);opacity:.4"></div>'
         + '<div style="position:absolute;top:2px;bottom:2px;' + (pos ? 'left:50%' : 'right:50%') + ';width:' + barW + '%;background:' + (pos ? 'var(--up)' : 'var(--dn)') + ';border-radius:3px"></div>'
         + '</div>'
         + '<div style="width:80px;text-align:right;font-weight:800;color:' + (pos ? 'var(--up)' : 'var(--dn)') + '">' + arrow + ' ' + pct(r.strength) + '</div>'
         + '<div style="width:62px;text-align:right;color:var(--text-muted);font-size:11px" title="raw, unsmoothed % since 00:00 EAT day open">raw ' + pct(r.raw) + '</div>'
         + '</div>'
-        + '<div style="margin-left:90px;font-size:10px;color:var(--text-muted);margin-top:1px">' + qual + ' <span style="margin-left:4px">pk <b style="color:var(--up)">' + pct(r.peak) + '</b> · tr <b style="color:var(--dn)">' + pct(r.trough) + '</b></span>' + moves + '</div>'
+        + '<div style="margin-left:90px;font-size:10px;color:var(--text-muted);margin-top:1px">' + qual + vel + ' <span style="margin-left:4px">pk <b style="color:var(--up)">' + pct(r.peak) + '</b> · tr <b style="color:var(--dn)">' + pct(r.trough) + '</b></span>' + moves + '</div>'
         + '</div>';
     });
     box.innerHTML = html;
