@@ -88,53 +88,46 @@ function spreadInfo(series, threshold, startMs, bestThreshold = DEFAULT_THRESHOL
   };
 }
 
-const H1_MS = 60 * 60 * 1000;
+const EMA_PERIOD = 10;   // M15 periods — smooths the intra-window currency evolution
 
 /**
- * Per-H1-candle currency performance WHILE dispersion is above threshold (inside each qualifying
- * "watch" window). The spread/window detection stays on the M15 index; here we sample that index at
- * hourly boundaries to build H1 candles across the window. For every H1 candle and each currency:
- * the candle return (that hour's % move of its zero-sum index) and the cumulative % since the window
- * opened (baselined on the index value at the window start). Per candle we rank by cumulative and
- * flag the single strongest mover; per window we tally candles-led and total move. The first and last
- * candles may be partial hours (window start→first hour close, and last hour close→window end).
- * Relative-movement research, UNVALIDATED.
+ * Smoothed per-currency evolution WHILE dispersion is above threshold (inside each qualifying "watch"
+ * window). Resolution is M15: at every M15 step in the window we take each currency's cumulative %
+ * since the window opened (index relative to its value at the window start) and smooth it with a
+ * 10-period EMA, so the lines read cleanly instead of jittering candle to candle. Returns, per window,
+ * the M15 timeline and each currency's EMA line (plus the raw cumulative), the per-step leader tally
+ * by smoothed value, and the final smoothed move. Relative-movement research, UNVALIDATED.
  */
-function windowCandleEvolution(built, windows) {
-  const sampleVal = (c, ms) => { const s = idxAtOrBefore(built, c, ms); return s ? s.value : null; };
+function windowCandleEvolution(built, windows, emaPeriod = EMA_PERIOD) {
+  const alpha = 2 / (emaPeriod + 1);
   return (windows || []).map((w) => {
-    const empty = { startMs: w.startMs, endMs: w.endMs, ongoing: !!w.ongoing, nCandles: 0, resolution: 'H1', leaders: [], candles: [] };
-    const openVals = {}; for (const c of CURRENCIES) { const v = sampleVal(c, w.startMs); if (v == null) return empty; openVals[c] = v; }
+    const s = idxAtOrBefore(built, CURRENCIES[0], w.startMs);
+    const e = idxAtOrBefore(built, CURRENCIES[0], w.endMs);
+    const base = { startMs: w.startMs, endMs: w.endMs, ongoing: !!w.ongoing, resolution: 'M15', emaPeriod, nSteps: 0, times: [], lines: [], leaders: [] };
+    if (!s || !e || e.idx < s.idx) return base;
+    const startPos = s.idx, endPos = e.idx;
+    const openV = {}; for (const c of CURRENCIES) openV[c] = built.index[c][startPos];
 
-    // hour-aligned close times strictly inside (startMs, endMs], plus the final partial hour at endMs
-    const closes = [];
-    for (let t = Math.floor(w.startMs / H1_MS) * H1_MS + H1_MS; t <= w.endMs; t += H1_MS) closes.push(t);
-    if (!closes.length || closes[closes.length - 1] < w.endMs) closes.push(w.endMs);
-
-    const led = {}; for (const c of CURRENCIES) led[c] = 0;
-    const candles = [];
-    let prevVals = openVals;
-    for (const tc of closes) {
-      let topC = null, topRet = -Infinity, cumTop = -Infinity, cumBot = Infinity;
-      const curVals = {};
-      const rows = CURRENCIES.map((c) => {
-        const v = sampleVal(c, tc); curVals[c] = v;
-        const ret = 100 * (v / prevVals[c] - 1);
-        const cum = 100 * (v / openVals[c] - 1);
-        if (ret > topRet) { topRet = ret; topC = c; }
-        if (cum > cumTop) cumTop = cum; if (cum < cumBot) cumBot = cum;
-        return { currency: c, ret: r4(ret), cum: r4(cum) };
-      });
-      rows.sort((a, b) => b.cum - a.cum).forEach((r, k) => { r.rank = k + 1; });
+    const times = [];
+    const ema = {}, cum = {}; for (const c of CURRENCIES) { ema[c] = []; cum[c] = []; }
+    const emaPrev = {}; const led = {}; for (const c of CURRENCIES) led[c] = 0;
+    for (let i = startPos; i <= endPos; i++) {
+      times.push(built.timeline[i]);
+      let topC = null, topV = -Infinity;
+      for (const c of CURRENCIES) {
+        const pct = 100 * (built.index[c][i] / openV[c] - 1);
+        const prev = emaPrev[c];
+        const sm = (prev == null) ? pct : prev + alpha * (pct - prev);
+        emaPrev[c] = sm;
+        cum[c].push(r4(pct)); ema[c].push(r4(sm));
+        if (sm > topV) { topV = sm; topC = c; }
+      }
       led[topC]++;
-      candles.push({ ms: tc, leader: topC, spread: r4(cumTop - cumBot), rows });
-      prevVals = curVals;
     }
-    const last = candles.length ? candles[candles.length - 1].rows : [];
-    const cumBy = {}; last.forEach((r) => { cumBy[r.currency] = r.cum; });
-    const leaders = CURRENCIES.map((c) => ({ currency: c, candlesLed: led[c], totalMove: cumBy[c] != null ? cumBy[c] : 0 }))
+    const lines = CURRENCIES.map((c) => ({ currency: c, ema: ema[c], cum: cum[c], last: ema[c][ema[c].length - 1] }));
+    const leaders = CURRENCIES.map((c) => ({ currency: c, candlesLed: led[c], totalMove: ema[c][ema[c].length - 1] }))
       .sort((a, b) => b.totalMove - a.totalMove);
-    return { startMs: w.startMs, endMs: w.endMs, ongoing: !!w.ongoing, nCandles: candles.length, resolution: 'H1', leaders, candles };
+    return { startMs: w.startMs, endMs: w.endMs, ongoing: !!w.ongoing, resolution: 'M15', emaPeriod, nSteps: times.length, times, lines, leaders };
   });
 }
 

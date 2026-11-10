@@ -227,63 +227,71 @@
     return box;
   }
 
-  // Per-window M15 candle evolution: for each dispersion window (>threshold), a time × currency grid
-  // where the cell shows each currency's cumulative % since the window opened, tinted by that candle's
-  // own move (green up / red down), with ★ on the candle's strongest mover.
+  // Per-window currency evolution on M15, smoothed with a 10-period EMA: one multi-line chart per
+  // dispersion window (>threshold), each line a currency's EMA(10) of cumulative % since the window
+  // opened, plus a leaders strip. Smoothed so the lines read cleanly rather than jittering.
   function buildCandleWindows(live, sthr, col) {
     var wrap = el('div', 'card'); wrap.style.marginTop = '14px';
     var wins = live.candleWindows || [];
-    var active = wins.filter(function (w) { return w.candles && w.candles.length; });
+    var active = wins.filter(function (w) { return w.lines && w.lines.length && w.nSteps > 1; });
+    var per = (active[0] && active[0].emaPeriod) || 10;
     wrap.appendChild(el('div', null,
-      '<div style="font-weight:700;margin-bottom:2px">H1 candle evolution — while dispersion ≥ ' + sthr + '%</div>'
-      + '<div class="mut" style="font-size:11px;margin-bottom:8px">Inside each watch window: every H1 (hourly) candle\'s currency performance. '
-      + 'Number = cumulative % since the window opened; tint = that hour\'s move (green up / red down); ★ = the hour\'s strongest mover. First/last rows may be partial hours. MODELLED / UNVALIDATED.</div>'));
-    if (!active.length) { wrap.appendChild(el('div', null, '<div class="mut" style="font-size:12px">No window above ' + sthr + '% yet today — nothing to break down candle-by-candle.</div>')); return wrap; }
+      '<div style="font-weight:700;margin-bottom:2px">Currency evolution (M15, ' + per + '-EMA smoothed) — while dispersion ≥ ' + sthr + '%</div>'
+      + '<div class="mut" style="font-size:11px;margin-bottom:8px">Inside each watch window: each currency\'s cumulative % since the window opened, on 15-minute candles smoothed by a '
+      + per + '-period EMA. 0% = the window open; lines fanning out = currencies pulling apart. MODELLED / UNVALIDATED.</div>'));
+    if (!active.length) { wrap.appendChild(el('div', null, '<div class="mut" style="font-size:12px">No window above ' + sthr + '% with enough M15 points yet today.</div>')); return wrap; }
 
     active.forEach(function (w, wi) {
       var hdr = el('div'); hdr.style.cssText = 'margin:12px 0 6px;font-weight:700;font-size:13px';
-      hdr.innerHTML = '⏱ Window #' + (wi + 1) + ' · ' + eatHM(w.startMs) + ' → ' + (w.ongoing ? '<span style="color:var(--up)">now ●</span>' : eatHM(w.endMs)) + ' · ' + w.nCandles + ' H1 candles';
+      hdr.innerHTML = '⏱ Window #' + (wi + 1) + ' · ' + eatHM(w.startMs) + ' → ' + (w.ongoing ? '<span style="color:var(--up)">now ●</span>' : eatHM(w.endMs)) + ' · ' + w.nSteps + ' M15 steps';
       wrap.appendChild(hdr);
 
-      // leaders strip (top 2 / bottom 2 by total move within the window)
       var L = w.leaders || [];
       if (L.length) {
         var top = L[0], bot = L[L.length - 1];
         var strip = el('div'); strip.style.cssText = 'display:flex;flex-wrap:wrap;gap:14px;margin-bottom:6px;font-size:12px';
         strip.innerHTML =
-          '<div><span class="mut">Strongest</span> <b style="color:' + (col[top.currency] || '#888') + '">' + top.currency + '</b> ' + pct(top.totalMove) + ' <span class="mut">(led ' + top.candlesLed + '/' + w.nCandles + ')</span></div>'
+          '<div><span class="mut">Strongest</span> <b style="color:' + (col[top.currency] || '#888') + '">' + top.currency + '</b> ' + pct(top.totalMove) + ' <span class="mut">(top ' + top.candlesLed + '/' + w.nSteps + ' steps)</span></div>'
           + '<div><span class="mut">Weakest</span> <b style="color:' + (col[bot.currency] || '#888') + '">' + bot.currency + '</b> ' + pct(bot.totalMove) + '</div>';
         wrap.appendChild(strip);
       }
-
-      // scale candle tints by the window's largest single-candle move
-      var maxAbs = 1e-9;
-      w.candles.forEach(function (cd) { cd.rows.forEach(function (r) { if (Math.abs(r.ret) > maxAbs) maxAbs = Math.abs(r.ret); }); });
-
-      var box = el('div'); box.style.cssText = 'overflow:auto;max-height:420px;border:1px solid var(--border);border-radius:8px';
-      var ccys = (live.rows || []).map(function (r) { return r.currency; });
-      if (!ccys.length && w.candles[0]) ccys = w.candles[0].rows.map(function (r) { return r.currency; });
-      // stable column order = alphabetical currency set from the first candle
-      ccys = w.candles[0].rows.map(function (r) { return r.currency; }).slice().sort();
-      var t = '<table class="leg" style="width:100%;min-width:620px;font-variant-numeric:tabular-nums"><thead><tr><th style="text-align:left;position:sticky;left:0;background:var(--bg)">Candle (EAT)</th>';
-      ccys.forEach(function (c) { t += '<th><span style="color:' + (col[c] || '#888') + '">' + c + '</span></th>'; });
-      t += '</tr></thead><tbody>';
-      w.candles.forEach(function (cd) {
-        var byC = {}; cd.rows.forEach(function (r) { byC[r.currency] = r; });
-        t += '<tr><td style="text-align:left;position:sticky;left:0;background:var(--bg)">' + eatHM(cd.ms) + '</td>';
-        ccys.forEach(function (c) {
-          var r = byC[c]; if (!r) { t += '<td class="mut">·</td>'; return; }
-          var a = Math.min(0.6, Math.abs(r.ret) / maxAbs * 0.6) + (r.ret !== 0 ? 0.04 : 0);
-          var bg = r.ret > 0 ? 'rgba(34,197,94,' + a.toFixed(3) + ')' : r.ret < 0 ? 'rgba(239,68,68,' + a.toFixed(3) + ')' : 'transparent';
-          var star = (cd.leader === c) ? '★' : '';
-          var tip = c + ' · candle ' + pct(r.ret) + ' · cum ' + pct(r.cum) + ' · rank #' + r.rank;
-          t += '<td title="' + esc(tip) + '" style="background:' + bg + ';font-weight:' + (star ? '800' : '500') + '">' + star + (r.cum >= 0 ? '+' : '') + r.cum.toFixed(2) + '</td>';
-        });
-        t += '</tr>';
-      });
-      t += '</tbody></table>';
-      box.innerHTML = t; wrap.appendChild(box);
+      wrap.appendChild(buildEmaChart(w, col));
     });
     return wrap;
+  }
+
+  // Multi-line SVG of each currency's EMA(10) cumulative-% line across one window.
+  function buildEmaChart(w, col) {
+    var box = el('div', 'card'); box.style.padding = '10px';
+    var times = w.times || [], lines = w.lines || [];
+    var t0 = times[0], t1 = times[times.length - 1];
+    if (!(t1 > t0)) { box.innerHTML = '<div class="mut" style="font-size:12px">Not enough points to plot.</div>'; return box; }
+    var W = 920, H = 300, mL = 46, mR = 60, mT = 12, mB = 24;
+    var yMax = 0.05, yMin = -0.05;
+    lines.forEach(function (ln) { ln.ema.forEach(function (v) { if (v > yMax) yMax = v; if (v < yMin) yMin = v; }); });
+    var pad = (yMax - yMin) * 0.08; yMax += pad; yMin -= pad;
+    var X = function (ms) { return mL + (ms - t0) / (t1 - t0) * (W - mL - mR); };
+    var Y = function (v) { return mT + (yMax - v) / (yMax - yMin) * (H - mT - mB); };
+    var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" style="display:block;font-family:inherit">';
+    // zero line + a couple of gridlines
+    var ticks = [yMax, (yMax + 0) / 2, 0, yMin / 2, yMin];
+    ticks.forEach(function (lv) {
+      var yy = Y(lv), dash = Math.abs(lv) < 1e-9 ? '' : 'stroke-dasharray="4 4"';
+      s += '<line x1="' + mL + '" y1="' + yy + '" x2="' + (W - mR) + '" y2="' + yy + '" stroke="var(--border)" ' + dash + '/>';
+      s += '<text x="' + (mL - 6) + '" y="' + (yy + 3) + '" text-anchor="end" font-size="10" fill="var(--text-muted)">' + (lv > 0 ? '+' : '') + lv.toFixed(2) + '%</text>';
+    });
+    for (var k = 0; k <= 6; k++) { var tm = t0 + (t1 - t0) * k / 6; s += '<text x="' + X(tm) + '" y="' + (H - 7) + '" text-anchor="middle" font-size="10" fill="var(--text-muted)">' + eatHM(tm) + '</text>'; }
+    // one EMA line per currency
+    lines.forEach(function (ln) {
+      var d = '';
+      for (var i = 0; i < ln.ema.length; i++) { d += (i ? 'L' : 'M') + X(times[i]).toFixed(1) + ' ' + Y(ln.ema[i]).toFixed(1); }
+      s += '<path d="' + d + '" fill="none" stroke="' + (col[ln.currency] || '#888') + '" stroke-width="2" opacity="0.95"/>';
+      var lx = X(times[times.length - 1]), ly = Y(ln.last);
+      s += '<circle cx="' + lx.toFixed(1) + '" cy="' + ly.toFixed(1) + '" r="2.6" fill="' + (col[ln.currency] || '#888') + '"/>';
+      s += '<text x="' + (W - mR + 4) + '" y="' + (ly + 3).toFixed(1) + '" font-size="10" fill="' + (col[ln.currency] || '#888') + '">' + ln.currency + '</text>';
+    });
+    s += '</svg>';
+    box.innerHTML = s;
+    return box;
   }
 })();

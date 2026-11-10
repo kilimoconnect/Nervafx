@@ -101,36 +101,29 @@ test('spread windows: multiple episodes — apart, bunch back, apart again', () 
   assert.equal(sp.watchMs, sp.windows[0].startMs, 'watchMs is the first onset');
 });
 
-test('windowCandleEvolution: per-H1 candle rows inside each >threshold window, with leaders', () => {
-  const by = network(PRE + STEPS_DAY + 1, () => 0.0003);   // EUR up every candle → EUR leads
+test('windowCandleEvolution: M15 EMA(10) smoothed lines inside each >threshold window, with leaders', () => {
+  const by = network(PRE + STEPS_DAY + 1, () => 0.0003);   // EUR up every M15 → EUR leads
   const built = buildIndices(by);
   const asOf = START + (STEPS_DAY - 1) * M15_MS;
   const ev = liveEvolution(built, asOf, built.lastMs, 0.25, 0.30);
   const cw = ev.candleWindows;
-  assert.ok(Array.isArray(cw) && cw.length >= 1, 'at least one candle window');
+  assert.ok(Array.isArray(cw) && cw.length >= 1, 'at least one window');
   const w = cw[0];
-  assert.equal(w.resolution, 'H1');
-  assert.ok(w.nCandles >= 1 && w.candles.length === w.nCandles);
-  // H1 sampling: hourly spacing between candle closes (the last one may be a shorter partial hour)
-  for (let i = 1; i < w.candles.length - 1; i++) {
-    assert.equal(w.candles[i].ms - w.candles[i - 1].ms, 60 * 60 * 1000, 'full-hour spacing between interior H1 closes');
-  }
-  // far fewer H1 candles than there are M15 steps in the window
-  assert.ok(w.nCandles <= 25, 'at most ~24 hourly candles in a day-long window, got ' + w.nCandles);
-  // each candle ranks all 8 currencies and names one leader
-  for (const cd of w.candles) {
-    assert.equal(cd.rows.length, 8);
-    assert.ok(cd.rows.some((r) => r.rank === 1) && cd.rows.some((r) => r.rank === 8));
-    assert.ok(cd.leader != null);
-  }
-  // EUR rises every hour → it leads each candle and tops the window total move
-  assert.ok(w.candles.every((cd) => cd.leader === 'EUR'), 'EUR leads every H1 candle');
+  assert.equal(w.resolution, 'M15');
+  assert.equal(w.emaPeriod, 10);
+  assert.ok(w.nSteps > 1 && w.times.length === w.nSteps);
+  // M15 spacing between steps
+  assert.equal(w.times[1] - w.times[0], M15_MS, 'M15 spacing between steps');
+  // one line per currency, each with an EMA array the length of the timeline
+  assert.equal(w.lines.length, 8);
+  for (const ln of w.lines) { assert.equal(ln.ema.length, w.nSteps); assert.equal(ln.cum.length, w.nSteps); }
+  // EUR rises steadily → tops the smoothed value most of the window and ends highest
   assert.equal(w.leaders[0].currency, 'EUR');
   assert.ok(w.leaders[0].totalMove > 0 && w.leaders[w.leaders.length - 1].totalMove < 0);
-  assert.equal(w.leaders[0].candlesLed, w.nCandles);
-  // cumulative grows monotonically for the steady riser
-  const eurCum = w.candles.map((cd) => cd.rows.find((r) => r.currency === 'EUR').cum);
-  for (let i = 1; i < eurCum.length; i++) assert.ok(eurCum[i] >= eurCum[i - 1] - 1e-9, 'EUR cum non-decreasing');
+  // EMA lags but trends up monotonically for a steady riser; EMA magnitude ≤ raw cumulative
+  const eur = w.lines.find((l) => l.currency === 'EUR');
+  for (let i = 1; i < eur.ema.length; i++) assert.ok(eur.ema[i] >= eur.ema[i - 1] - 1e-9, 'EUR EMA non-decreasing');
+  assert.ok(eur.ema[eur.ema.length - 1] <= eur.cum[eur.cum.length - 1] + 1e-9, 'EMA lags the raw cumulative for a riser');
 });
 
 test('spread does NOT qualify on a flat day (no leader crosses ±0.25%)', () => {
