@@ -1,7 +1,7 @@
 'use strict';
 /* Today-so-far % EVOLUTION view (research, UNVALIDATED). Renders from window.NFX_EVO:
    - ranked current-% chips with ±threshold state,
-   - an intraday multi-line % chart (8 currencies) with ±0.25% "best movement" bands,
+   - an intraday multi-line % chart (8 currencies) with ±band "movement threshold" shading,
    - a historical scan: per-currency reach frequency + a days×currencies heatmap.
    Relative-movement only — not a signal, probability, or profitability claim. */
 (function () {
@@ -54,11 +54,11 @@
   // ── header ──
   document.getElementById('datahdr').innerHTML =
     PNAME + ' — % evolution (' + RES + ') through ' + eatHM(live.cutoffMs) + ' EAT · open ' + eatDate(live.startMs) + ' ' + eatHM(live.startMs) + ' EAT · '
-    + '<b>best movement</b> = a currency reaching <b>+' + THR + '%</b> or <b>−' + THR + '%</b> · history window ' + (J.windowDays || 120) + 'd · MODELLED / UNVALIDATED';
+    + '<b>movement threshold reached</b> = a currency crossing <b>+' + THR + '%</b> or <b>−' + THR + '%</b> from the open · history window ' + (J.windowDays || 120) + 'd · MODELLED / UNVALIDATED';
 
   document.getElementById('banners').innerHTML =
     '<div class="state-banner sb-unavail" style="border-color:rgba(59,130,246,.4)">Each line is a currency\'s zero-sum 1/8 index as a % from the <b>' + OPENLBL + '</b>. '
-    + 'Crossing the shaded <b>±' + THR + '%</b> band is a <b>best movement</b> — a relative-movement observation, <b>not</b> a trade signal or probability.</div>';
+    + 'Crossing the shaded <b>±' + THR + '%</b> band is <b>movement threshold reached</b> — a relative-movement observation, <b>not</b> a trade signal or probability.</div>';
 
   // ── watch / dispersion state ──
   var WINS = SP.windows || [];
@@ -87,7 +87,7 @@
     + '<div><div class="mut" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">Max spread</div><div style="font-size:15px;font-weight:700">' + pct(SP.max) + (SP.maxMs ? ' <span class="mut">@ ' + eatHM(SP.maxMs) + '</span>' : '') + '</div></div>'
     + '</div>'
     + '<div style="margin-top:10px"><div class="mut" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px">Spread windows (apart → back → apart …)</div><div>' + winTxt + '</div></div>'
-    + '<div class="mut" style="font-size:11px;margin-top:8px">“Spreading apart” qualifies when the strongest−weakest gap reaches <b>' + THRS + '%</b> AND at least one currency is beyond <b>±' + THR + '%</b> — a point to start watching trades. Each window opens when the gap qualifies and closes when currencies bunch back; the ' + PWORD + ' can have several. Research only.</div>';
+    + '<div class="mut" style="font-size:11px;margin-top:8px">“Spreading apart” qualifies when the strongest−weakest gap reaches <b>' + THRS + '%</b> AND at least one currency is beyond <b>±' + THR + '%</b> — a dispersion episode, <b>not</b> a trade signal. Each window opens when the gap qualifies and closes when currencies bunch back; the ' + PWORD + ' can have several. Research only.</div>';
   host.appendChild(wbox);
 
   // ── ranked chips ──
@@ -108,15 +108,19 @@
   host.appendChild(chips);
 
   // ── evolution chart (SVG) + spread sub-chart ──
-  host.appendChild(buildChart(live, THR, COL));
+  var chartWrap = buildChart(live, THR, COL);
+  host.appendChild(chartWrap);
   host.appendChild(buildSpreadChart(live, THRS));
+
+  // ── movement-quality: analysis-window selector + sortable comparison table (D1 view only) ──
+  if (J.movement) host.appendChild(buildMovementSection(J, COL, chartWrap));
 
   // ── M15 candle performance while dispersion > threshold (per watch window) ──
   host.appendChild(buildCandleWindows(live, THRS, COL));
 
   // ── history: per-currency stats + heatmap ──
   var hsec = el('div', 'card'); hsec.style.marginTop = '14px';
-  hsec.appendChild(el('div', null, '<div style="font-weight:700;margin-bottom:2px">Historical best-movement frequency</div>'
+  hsec.appendChild(el('div', null, '<div style="font-weight:700;margin-bottom:2px">Historical movement-threshold frequency</div>'
     + '<div class="mut" style="font-size:11px;margin-bottom:8px">Across ' + hist.daysScanned + ' ' + HUNIT + ': how often each currency reached ±' + THR + '% at any point in the ' + PWORD + '. MODELLED / UNVALIDATED.</div>'));
 
   var tbl = el('table', 'leg'); tbl.style.width = '100%';
@@ -164,6 +168,8 @@
     // threshold bands
     s += '<rect x="' + mL + '" y="' + Y(yMax) + '" width="' + (W - mL - mR) + '" height="' + (Y(thr) - Y(yMax)) + '" fill="rgba(34,197,94,.08)"/>';
     s += '<rect x="' + mL + '" y="' + Y(-thr) + '" width="' + (W - mL - mR) + '" height="' + (Y(yMin) - Y(-thr)) + '" fill="rgba(239,68,68,.08)"/>';
+    // analysis-window highlight band (moved by the Today/4h/1h selector; the lines are NOT rebased)
+    s += '<rect class="evoWinHi" x="0" y="' + mT + '" width="0" height="' + (H - mT - mB) + '" fill="rgba(99,102,241,.10)" stroke="rgba(99,102,241,.6)" stroke-width="1" stroke-dasharray="4 3" style="display:none"/>';
     // y gridlines/labels at 0, ±thr
     [thr, 0, -thr].forEach(function (lv) {
       var yy = Y(lv), dash = lv === 0 ? '' : 'stroke-dasharray="4 4"';
@@ -280,7 +286,137 @@
     svgEl.addEventListener('mouseleave', leave);
     svgEl.addEventListener('touchmove', function (ev) { if (ev.touches && ev.touches[0]) hover(ev.touches[0].clientX); }, { passive: true });
     svgEl.addEventListener('touchend', leave);
+
+    // analysis-window highlight: positioned by the movement-section selector (chart stays anchored)
+    var winHi = wrap.querySelector('.evoWinHi');
+    wrap._highlight = function (sMs, eMs) {
+      if (sMs == null || eMs == null) { winHi.style.display = 'none'; return; }
+      var xa = X(Math.max(t0, sMs)), xb = X(Math.min(t1, eMs));
+      winHi.setAttribute('x', xa.toFixed(1)); winHi.setAttribute('width', Math.max(1, xb - xa).toFixed(1));
+      winHi.style.display = '';
+    };
     return wrap;
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Movement-quality: Today / Last 4h / Last 1h selector + sortable comparison table.
+  // All numbers are percentage points (pp) of the zero-sum index over the selected window —
+  // descriptive close-to-close travel, NOT buy/sell volume, order flow, or a trade signal.
+  function buildMovementSection(J, col, chartWrap) {
+    var mv = J.movement, WINK = ['today', 'h4', 'h1'], W = mv.windows, disp = mv.dispersion || {};
+    var ppTol = mv.tol;
+    var sel = WINK.filter(function (k) { return W[k] && W[k].available; })[0] || 'today';
+    var sortKey = 'dailyPerf', sortDir = -1;
+
+    var ppN = function (x, d) { return x == null ? '—' : (x >= 0 ? '+' : '') + (+x).toFixed(d == null ? 2 : d); };
+    var intN = function (x) { return x == null ? '—' : x.toFixed(0); };
+    var opp = function (m) { if (!m || !m.ok) return null; return m.direction === 'strengthening' ? m.maxDrawdown : m.direction === 'weakening' ? m.maxRebound : Math.max(m.maxDrawdown, m.maxRebound); };
+    var give = function (m) { if (!m || !m.ok) return null; return m.direction === 'strengthening' ? m.currentFromHigh : m.direction === 'weakening' ? m.currentFromLow : Math.max(m.currentFromHigh, m.currentFromLow); };
+    var DPL = { 'up-pace-increasing': '↑ faster', 'up-pace-slowing': '↑ slowing', 'up-pace-steady': '↑ steady', 'down-pace-increasing': '↓ faster', 'down-pace-slowing': '↓ slowing', 'down-pace-steady': '↓ steady', 'direction-changed': '⇄ changed' };
+    var dpaceTxt = function (m) { if (!m || !m.ok || !m.paceChange) return '<span class="mut">—</span>'; var p = m.paceChange; return '<span title="' + p.recentPace + ' vs ' + p.previousPace + ' pp/h">' + (DPL[p.label] || p.label) + '</span>'; };
+    var brdTxt = function (m) { if (!m || !m.ok || !m.breadth) return '—'; var b = m.breadth, c = b.coverage; var inc = c.valid < 7 ? ' <span class="mut" title="incomplete coverage — ' + (c.missing || []).join(', ') + '">(' + c.valid + '/7)</span>' : ''; return '<span style="color:var(--up)">' + b.appreciated + '</span>/<span style="color:var(--dn)">' + b.depreciated + '</span>/' + b.unchanged + inc; };
+    var covTxt = function (m) { if (!m) return '—'; if (!m.ok) return '<span class="mut">n/a</span>'; var c = m.coverage; return c.intervals + (c.incomplete ? ' <span style="color:#eab308" title="gap in window — withheld where it matters">⚠</span>' : ''); };
+    var m0 = function (e) { return e[sel]; };   // selected-window metric object for a currency row
+
+    // columns: label, tooltip, cell(e)->html, val(e)->sortable number|string, align
+    var cols = [
+      { k: 'currency', lab: 'Ccy', tip: 'Currency index', cell: function (e) { return '<span style="color:' + (col[e.currency] || '#888') + ';font-weight:700">' + e.currency + '</span>'; }, val: function (e) { return e.currency; }, al: 'left' },
+      { k: 'dailyPerf', lab: 'Today %', tip: 'Midnight-anchored % (the chart value) — shown separately so a rolling window is never mistaken for it', cell: function (e) { return '<span style="color:' + (e.dailyPerf > 0 ? 'var(--up)' : e.dailyPerf < 0 ? 'var(--dn)' : 'var(--text-muted)') + '">' + ppN(e.dailyPerf) + '</span>'; }, val: function (e) { return e.dailyPerf == null ? -Infinity : e.dailyPerf; } },
+      { k: 'M', lab: 'Net', tip: 'Net movement M = x[n]−x[0] over the selected window (pp)', cell: function (e) { var m = m0(e); return !m || !m.ok ? '—' : '<span style="color:' + (m.M > 0 ? 'var(--up)' : m.M < 0 ? 'var(--dn)' : 'var(--text-muted)') + '">' + ppN(m.M) + '</span>'; }, val: function (e) { var m = m0(e); return m && m.ok ? m.M : -Infinity; } },
+      { k: 'efficiency', lab: 'Effic.', tip: 'Directional efficiency = 100·|M|/T (total travel). High = little opposition; a single jump then flat also reads high (close-to-close).', cell: function (e) { var m = m0(e); return !m || !m.ok ? '—' : (m.efficiency == null ? '<span class="mut">no move</span>' : m.efficiency.toFixed(0) + '%'); }, val: function (e) { var m = m0(e); return m && m.ok && m.efficiency != null ? m.efficiency : -Infinity; } },
+      { k: 'balance', lab: 'Balance', tip: 'Directional balance = 100·(U−D)/T, −100..+100. Signed twin of efficiency (not an independent confirmation).', cell: function (e) { var m = m0(e); if (!m || !m.ok || m.balance == null) return '—'; return '<span style="color:' + (m.balance > 0 ? 'var(--up)' : m.balance < 0 ? 'var(--dn)' : 'var(--text-muted)') + '">' + (m.balance >= 0 ? '+' : '') + m.balance.toFixed(0) + '</span>'; }, val: function (e) { var m = m0(e); return m && m.ok && m.balance != null ? m.balance : -Infinity; } },
+      { k: 'persist', lab: 'U/D/– %', tip: 'Persistence: share of intervals that rose / fell / were flat (frequency, not magnitude). Tolerance ' + ppTol + ' pp.', cell: function (e) { var m = m0(e); return !m || !m.ok ? '—' : '<span style="color:var(--up)">' + intN(m.upPct) + '</span>/<span style="color:var(--dn)">' + intN(m.downPct) + '</span>/' + intN(m.unchangedPct); }, val: function (e) { var m = m0(e); return m && m.ok ? m.upPct : -Infinity; } },
+      { k: 'opp', lab: 'Max opp', tip: 'Largest opposing movement: drawdown off a running high (strengthening) or rebound off a running low (weakening), in pp.', cell: function (e) { var v = opp(m0(e)); return v == null ? '—' : v.toFixed(2); }, val: function (e) { var v = opp(m0(e)); return v == null ? -Infinity : v; } },
+      { k: 'give', lab: 'Giveback', tip: 'Current give-back from the relevant extreme: distance below the high (strengthening) or above the low (weakening), in pp.', cell: function (e) { var v = give(m0(e)); return v == null ? '—' : v.toFixed(2); }, val: function (e) { var v = give(m0(e)); return v == null ? -Infinity : v; } },
+      { k: 'pace', lab: 'Pace', tip: 'Net movement per hour over the window (pp/h).', cell: function (e) { var m = m0(e); return !m || !m.ok || m.pace == null ? '—' : '<span style="color:' + (m.pace > 0 ? 'var(--up)' : m.pace < 0 ? 'var(--dn)' : 'var(--text-muted)') + '">' + ppN(m.pace, 3) + '</span>'; }, val: function (e) { var m = m0(e); return m && m.ok && m.pace != null ? m.pace : -Infinity; } },
+      { k: 'dpace', lab: 'Δ pace', tip: 'Change vs the immediately preceding equal-length window (4h/1h only). A slowdown is not a reversal.', cell: function (e) { return dpaceTxt(m0(e)); }, val: function (e) { var m = m0(e); return m && m.ok && m.paceChange ? m.paceChange.delta : -Infinity; } },
+      { k: 'brd', lab: 'Breadth ▲/▼/=', tip: 'Underlying 7 pairs over the window, oriented to this currency (base keeps sign, quote flips). Interconnected — not 7 independent confirmations.', cell: function (e) { return brdTxt(m0(e)); }, val: function (e) { var m = m0(e); return m && m.ok && m.breadth ? m.breadth.appreciated : -Infinity; } },
+      { k: 'cov', lab: 'n', tip: 'Completed M15 intervals in the window (⚠ = a gap, comparison withheld).', cell: function (e) { return covTxt(m0(e)); }, val: function (e) { var m = m0(e); return m && m.ok ? m.coverage.intervals : -Infinity; } },
+    ];
+
+    var card = el('div', 'card'); card.style.marginTop = '14px';
+    var head = el('div');
+    head.innerHTML = '<div style="font-weight:800;font-size:15px">Movement quality</div>'
+      + '<div class="mut" style="font-size:11px;margin:3px 0 8px">Distinguishes a currency that merely moved far from one making consistent, low-opposition progress. '
+      + 'Percentage points (pp) of the zero-sum index over the selected window — <b>descriptive</b> close-to-close travel, not buy/sell volume or a trade signal.</div>';
+    card.appendChild(head);
+
+    // window selector
+    var selBar = el('div'); selBar.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px';
+    var labels = { today: 'Today', h4: 'Last 4h', h1: 'Last 1h' };
+    WINK.forEach(function (k) {
+      var w = W[k], btn = el('button'); btn.type = 'button';
+      var on = k === sel;
+      btn.style.cssText = 'padding:4px 11px;border-radius:999px;border:1px solid ' + (on ? 'var(--accent,#6366f1)' : 'var(--border)') + ';background:' + (on ? 'rgba(99,102,241,.14)' : 'transparent') + ';color:var(--text);cursor:pointer;font-size:12px;font-weight:700';
+      btn.innerHTML = labels[k] + (w && w.available ? ' <span class="mut" style="font-weight:500">· ' + w.intervals + ' M15</span>' : ' <span class="mut" style="font-weight:500">· n/a</span>');
+      if (!w || !w.available) btn.disabled = false;   // still selectable → shows the insufficient-data note
+      btn.onclick = function () { sel = k; render(); };
+      btn.setAttribute('data-wk', k);
+      selBar.appendChild(btn);
+    });
+    var shortNote = el('span', 'mut'); shortNote.style.cssText = 'font-size:11px;margin-left:4px';
+    selBar.appendChild(shortNote);
+    card.appendChild(selBar);
+
+    // dispersion identity line
+    var dispLine = el('div', 'mut'); dispLine.style.cssText = 'font-size:12px;margin-bottom:8px';
+    card.appendChild(dispLine);
+
+    var note = el('div'); card.appendChild(note);
+    var tblWrap = el('div'); tblWrap.style.cssText = 'overflow-x:auto'; card.appendChild(tblWrap);
+
+    function render() {
+      // selector styling
+      Array.prototype.forEach.call(selBar.querySelectorAll('button[data-wk]'), function (b) {
+        var on = b.getAttribute('data-wk') === sel;
+        b.style.borderColor = on ? 'var(--accent,#6366f1)' : 'var(--border)';
+        b.style.background = on ? 'rgba(99,102,241,.14)' : 'transparent';
+      });
+      var w = W[sel];
+      shortNote.innerHTML = w && w.shortSample ? '⚠ short sample (4 intervals)' : '';
+      if (chartWrap && chartWrap._highlight) chartWrap._highlight(w ? w.startMs : null, w ? w.endMs : null);
+
+      // dispersion identity (strongest/weakest + change over the selected window)
+      var ch = disp.change ? disp.change[sel] : null;
+      dispLine.innerHTML = 'Dispersion now <b style="color:var(--text)">' + ppN(disp.current) + ' pp</b>'
+        + (disp.strongest ? ' · strongest <b style="color:' + (col[disp.strongest] || '#888') + '">' + disp.strongest + '</b> vs weakest <b style="color:' + (col[disp.weakest] || '#888') + '">' + disp.weakest + '</b>' : '')
+        + ' · max today ' + ppN(disp.maxToday) + ' pp' + (disp.maxMs ? ' @ ' + eatHM(disp.maxMs) : '')
+        + (ch != null ? ' · change over ' + labels[sel] + ' <b style="color:' + (ch > 0 ? 'var(--up)' : ch < 0 ? 'var(--dn)' : 'var(--text-muted)') + '">' + ppN(ch) + ' pp</b>' : '')
+        + ' <span title="Dispersion can change because the strongest or weakest currency changes identity, not only because the gap widens.">ⓘ</span>';
+
+      note.innerHTML = (!w || !w.available)
+        ? '<div class="state-banner sb-unavail" style="font-size:12px;margin:4px 0">' + labels[sel] + ' — <b>insufficient data</b> (' + ((w && w.reason) || 'needs a complete, contiguous window') + '). Today % is still shown; window metrics are withheld.</div>'
+        : '';
+
+      // sorted rows
+      var rows = mv.perCurrency.slice().sort(function (a, b) {
+        var cDef = cols.filter(function (c) { return c.k === sortKey; })[0] || cols[1];
+        var va = cDef.val(a), vb = cDef.val(b);
+        if (typeof va === 'string') return sortDir * va.localeCompare(vb);
+        return sortDir * (va - vb);
+      });
+
+      var th = cols.map(function (c) {
+        var active = c.k === sortKey;
+        return '<th data-sk="' + c.k + '" title="' + esc(c.tip) + '" style="cursor:pointer;white-space:nowrap;' + (c.al === 'left' ? 'text-align:left;' : '') + (active ? 'color:var(--text)' : '') + '">' + c.lab + (active ? (sortDir < 0 ? ' ▼' : ' ▲') : '') + '</th>';
+      }).join('');
+      var body = rows.map(function (e) {
+        return '<tr data-ccy="' + e.currency + '">' + cols.map(function (c) { return '<td style="' + (c.al === 'left' ? 'text-align:left;' : '') + 'white-space:nowrap">' + c.cell(e) + '</td>'; }).join('') + '</tr>';
+      }).join('');
+      var tbl = el('table', 'leg'); tbl.style.width = '100%';
+      tbl.innerHTML = '<thead><tr>' + th + '</tr></thead><tbody>' + body + '</tbody>';
+      Array.prototype.forEach.call(tbl.querySelectorAll('th[data-sk]'), function (h) {
+        h.onclick = function () { var k = h.getAttribute('data-sk'); if (k === sortKey) sortDir = -sortDir; else { sortKey = k; sortDir = (k === 'currency') ? 1 : -1; } render(); };
+      });
+      tblWrap.innerHTML = ''; tblWrap.appendChild(tbl);
+    }
+    render();
+
+    var foot = el('div', 'mut'); foot.style.cssText = 'font-size:11px;margin-top:8px';
+    foot.innerHTML = 'Click a column to sort (active column marked ▼/▲) — a ranking, <b>not</b> a "best trade". '
+      + 'Efficiency & balance are two views of the same travel. Breadth\'s 7 pairs are interconnected. Descriptive only — predictive value is <b>not</b> validated.';
+    card.appendChild(foot);
+    return card;
   }
 
   function buildSpreadChart(live, sthr) {
