@@ -151,6 +151,7 @@
     for (var k = 0; k <= 6; k++) { var tm = t0 + (t1 - t0) * k / 6, xx = X(tm); s += '<text x="' + xx + '" y="' + (H - 8) + '" text-anchor="middle" font-size="10" fill="var(--text-muted)">' + eatHM(tm) + '</text>'; }
     // spread episodes: shade each "watching" window (apart→back→apart…) + onset lines
     var sp = live.spread || {};
+    var lblRows = [];   // placed onset labels per stagger row: [{x1}] so nearby labels drop to a free row
     (sp.windows || []).forEach(function (w, i) {
       var a = Math.max(t0, w.startMs), b = Math.min(t1, w.endMs);
       if (!(b >= a)) return;
@@ -158,7 +159,15 @@
       s += '<rect x="' + xa + '" y="' + mT + '" width="' + ww + '" height="' + (H - mT - mB) + '" fill="rgba(234,179,8,.10)"/>';
       s += '<line x1="' + xa + '" y1="' + mT + '" x2="' + xa + '" y2="' + (H - mB) + '" stroke="#eab308" stroke-width="1.4" stroke-dasharray="5 3"/>';
       if (!w.ongoing) s += '<line x1="' + xb + '" y1="' + mT + '" x2="' + xb + '" y2="' + (H - mB) + '" stroke="rgba(234,179,8,.5)" stroke-width="1" stroke-dasharray="2 3"/>';
-      s += '<text x="' + (xa + 3) + '" y="' + (mT + 11) + '" font-size="10" font-weight="700" fill="#eab308">⏱' + (i + 1) + ' ' + eatHM(w.startMs) + '</text>';
+      // onset label — stagger down a row when it would overlap a nearby one, anchor-end near the right edge
+      var txt = '⏱' + (i + 1) + ' ' + eatHM(w.startMs), lw = txt.length * 5.6 + 4;
+      var anchor = 'start', lx = xa + 3;
+      if (lx + lw > W - mR) { anchor = 'end'; lx = xa - 2; }          // flip to the left of the line near the right edge
+      var lx0 = (anchor === 'end') ? (lx - lw) : lx;                   // left edge of the label box
+      var lx1 = lx0 + lw;                                              // right edge of the label box
+      var row = 0; while (lblRows[row] != null && lx0 < lblRows[row] + 4) row++;
+      lblRows[row] = lx1;
+      s += '<text x="' + lx + '" y="' + (mT + 11 + row * 11) + '" text-anchor="' + anchor + '" font-size="10" font-weight="700" fill="#eab308">' + txt + '</text>';
     });
     // lines
     live.rows.forEach(function (r) {
