@@ -203,7 +203,7 @@
       if (!r.ok || r.points.length < 2) return;
       var d = r.points.map(function (p, i) { return (i ? 'L' : 'M') + X(p.ms).toFixed(1) + ' ' + Y(p.pct).toFixed(1); }).join(' ');
       var strong = r.reachedEither ? 2.4 : 1.3, opa = r.reachedEither ? 1 : 0.8;
-      s += '<path d="' + d + '" fill="none" stroke="' + (col[r.currency] || '#888') + '" stroke-width="' + strong + '" opacity="' + opa + '"/>';
+      s += '<path class="evoLine" data-ccy="' + r.currency + '" d="' + d + '" fill="none" stroke="' + (col[r.currency] || '#888') + '" stroke-width="' + strong + '" opacity="' + opa + '"/>';
       var last = r.points[r.points.length - 1];
       s += '<circle cx="' + X(last.ms).toFixed(1) + '" cy="' + Y(last.pct).toFixed(1) + '" r="2.6" fill="' + (col[r.currency] || '#888') + '"/>';
       s += '<text class="evoEndLbl" data-ccy="' + r.currency + '" x="' + (W - mR + 4) + '" y="' + (Y(last.pct) + 3).toFixed(1) + '" font-size="10" font-weight="700" fill="' + (col[r.currency] || '#888') + '">' + r.currency + '</text>';
@@ -295,6 +295,16 @@
       winHi.setAttribute('x', xa.toFixed(1)); winHi.setAttribute('width', Math.max(1, xb - xa).toFixed(1));
       winHi.style.display = '';
     };
+    // emphasise one currency's line (dim the rest); null restores all.
+    wrap._emphasize = function (ccy) {
+      Array.prototype.forEach.call(wrap.querySelectorAll('.evoLine'), function (p) {
+        if (!ccy) { p.style.opacity = ''; p.style.strokeWidth = ''; }
+        else { var on = p.getAttribute('data-ccy') === ccy; p.style.opacity = on ? '1' : '0.1'; p.style.strokeWidth = on ? '3' : ''; }
+      });
+      Array.prototype.forEach.call(wrap.querySelectorAll('.evoEndLbl'), function (t) {
+        t.style.opacity = !ccy ? '' : (t.getAttribute('data-ccy') === ccy ? '1' : '0.25');
+      });
+    };
     return wrap;
   }
 
@@ -364,6 +374,81 @@
 
     var note = el('div'); card.appendChild(note);
     var tblWrap = el('div'); tblWrap.style.cssText = 'overflow-x:auto'; card.appendChild(tblWrap);
+    var detailHost = el('div'); detailHost.style.marginTop = '10px'; card.appendChild(detailHost);
+    var expanded = null;
+
+    function ageTxt(ms) { if (ms == null) return '—'; var m = Math.round(ms / 60000); return m < 60 ? m + 'm ago' : Math.floor(m / 60) + 'h ' + (m % 60) + 'm ago'; }
+    function row(lbl, val, tip) { return '<div style="display:flex;justify-content:space-between;gap:12px;padding:1px 0"><span class="mut" title="' + esc(tip || '') + '">' + lbl + '</span><span style="text-align:right">' + val + '</span></div>'; }
+
+    // Factual summary built ONLY from computed values (no confidence %, no thresholds).
+    function summaryFor(e) {
+      var parts = [], t = e.today, h4 = e.h4, h1 = e.h1;
+      if (t && t.ok) parts.push((t.direction === 'strengthening' ? 'Up' : t.direction === 'weakening' ? 'Down' : 'Flat') + ' today ' + ppN(e.dailyPerf) + ' pp'
+        + (t.efficiency == null ? '' : ' (efficiency ' + t.efficiency.toFixed(0) + '%)') + '.');
+      if (h1 && h1.ok && h1.pace != null) {
+        if (t && t.ok && t.M > 0 && h1.pace < 0) parts.push('Latest-hour pace has turned negative (' + ppN(h1.pace, 3) + ' pp/h).');
+        else if (t && t.ok && t.M < 0 && h1.pace > 0) parts.push('Latest-hour pace has turned positive (' + ppN(h1.pace, 3) + ' pp/h).');
+        else if (h1.paceChange && h1.paceChange.label === 'up-pace-slowing') parts.push('Upward pace is slowing (' + ppN(h1.pace, 3) + ' vs ' + ppN(h1.paceChange.previousPace, 3) + ' pp/h).');
+        else if (h1.paceChange && h1.paceChange.label === 'down-pace-slowing') parts.push('Downward pace is easing (' + ppN(h1.pace, 3) + ' pp/h).');
+      }
+      if (h4 && h4.ok) {
+        if (h4.direction === 'strengthening' && h4.currentFromHigh > ppTol) parts.push('Below its 4-hour high by ' + h4.currentFromHigh.toFixed(2) + ' pp.');
+        if (h4.direction === 'weakening' && h4.currentFromLow > ppTol) parts.push('Above its 4-hour low by ' + h4.currentFromLow.toFixed(2) + ' pp.');
+      }
+      return parts.join(' ') || 'Insufficient data for a summary.';
+    }
+
+    function winDetailHtml(label, m) {
+      if (!m || !m.ok) return '<div style="flex:1;min-width:190px"><div style="font-weight:700;border-bottom:1px solid var(--border);padding-bottom:3px;margin-bottom:4px">' + label + '</div><div class="mut" style="font-size:12px">Insufficient data — ' + esc((m && m.reason) || 'window unavailable') + '.</div></div>';
+      var dirC = m.direction === 'strengthening' ? 'var(--up)' : m.direction === 'weakening' ? 'var(--dn)' : 'var(--text-muted)';
+      var pc = m.paceChange;
+      var h = '<div style="flex:1;min-width:190px;font-size:12px">'
+        + '<div style="font-weight:700;border-bottom:1px solid var(--border);padding-bottom:3px;margin-bottom:4px">' + label + (m.coverage && m.coverage.incomplete ? ' <span style="color:#eab308" title="gap in window">⚠</span>' : '') + '</div>'
+        + row('Net', '<b style="color:' + (m.M > 0 ? 'var(--up)' : m.M < 0 ? 'var(--dn)' : 'var(--text-muted)') + '">' + ppN(m.M) + ' pp</b>', 'M = x[n] − x[0]')
+        + row('Direction', '<span style="color:' + dirC + '">' + m.direction + '</span>', 'Net change vs tolerance ' + ppTol + ' pp')
+        + row('Efficiency', m.efficiency == null ? 'no move' : m.efficiency.toFixed(0) + '%', '100·|M|/T — close-to-close survival of travel')
+        + row('Balance', m.balance == null ? '—' : (m.balance >= 0 ? '+' : '') + m.balance.toFixed(0), '100·(U−D)/T (signed twin of efficiency)')
+        + row('Up / Down share', (m.upwardShare == null ? '—' : m.upwardShare.toFixed(0) + '% / ' + m.downwardShare.toFixed(0) + '%'), 'Shares of observed movement magnitude (not volume)')
+        + row('Persistence', '<span style="color:var(--up)">' + m.upIntervals + '↑</span> / <span style="color:var(--dn)">' + m.downIntervals + '↓</span> / ' + m.flatIntervals + '– <span class="mut">(' + intN(m.upPct) + '/' + intN(m.downPct) + '/' + intN(m.unchangedPct) + '%)</span>', 'Interval counts (frequency, tolerance ' + ppTol + ' pp)')
+        + row('Max opposing', 'DD ' + ppN(m.maxDrawdown) + ' · RB ' + ppN(m.maxRebound) + ' pp', 'Max give-back off a running high / rally off a running low')
+        + row('Give-back now', (m.direction === 'weakening' ? ('+' + m.currentFromLow.toFixed(2) + ' off low') : (m.currentFromHigh.toFixed(2) + ' off high')) + ' pp'
+          + (m.R > 0 ? ' <span class="mut">(' + (m.direction === 'weakening' ? m.normFromLow : m.normFromHigh) + '% of range)</span>' : ''), 'Current distance from the relevant extreme; normalised to the window range')
+        + row('Range', ppN(m.R) + ' pp', 'high − low over the window')
+        + row('High / Low', ppN(m.high) + ' <span class="mut">(' + ageTxt(m.highAgeMs) + ')</span> · ' + ppN(m.low) + ' <span class="mut">(' + ageTxt(m.lowAgeMs) + ')</span>', 'Elapsed since the window high / low — not a recovery time')
+        + row('Pace', m.pace == null ? '—' : ppN(m.pace, 3) + ' pp/h', 'M / elapsed hours')
+        + (pc ? row('Δ pace', (pc.label.replace(/-/g, ' ')) + ' <span class="mut">(' + ppN(pc.recentPace, 3) + ' vs ' + ppN(pc.previousPace, 3) + ')</span>', 'vs the preceding equal window') : '')
+        + (m.breadth ? row('Breadth', '<span style="color:var(--up)">' + m.breadth.appreciated + '▲</span>/<span style="color:var(--dn)">' + m.breadth.depreciated + '▼</span>/' + m.breadth.unchanged + '=' + (m.breadth.coverage.valid < 7 ? ' <span class="mut">(' + m.breadth.coverage.valid + '/7)</span>' : ''), 'Oriented 7 underlying pairs — interconnected, not 7 independent confirmations') : '')
+        + row('Intervals', '' + m.n, 'Completed M15 intervals in the window')
+        + '</div>';
+      return h;
+    }
+
+    function methodologyHtml() {
+      return 'All values are percentage points (pp) of the zero-sum 1/8 index over the window, rebased to the window open (continuous across midnight). '
+        + '<b>M</b>=x[n]−x[0]. <b>U/D</b>=sum of up/down interval moves, <b>T</b>=U+D. <b>Efficiency</b>=100·|M|/T (close-to-close; a single jump then flat reads high). '
+        + '<b>Balance</b>=100·(U−D)/T is the signed twin of efficiency — not an independent confirmation. <b>Persistence</b> is interval frequency (tolerance ' + ppTol + ' pp), separate from magnitude. '
+        + '<b>Opposing movement</b> is the max draw-down off a running high / rally off a running low; <b>give-back</b> is the current distance from the relevant extreme, also shown as % of the window range. '
+        + '<b>Breadth</b> orients each currency\'s 7 underlying pairs (base keeps sign, quote flips) from actual pair returns. These are descriptive — not buy/sell volume, order flow, or validated predictions.';
+    }
+
+    function renderDetail(ccy) {
+      var e = mv.perCurrency.filter(function (r) { return r.currency === ccy; })[0];
+      if (!e) { detailHost.innerHTML = ''; return; }
+      var cols3 = ['today', 'h4', 'h1'].map(function (k) { return winDetailHtml(labels[k], e[k]); }).join('');
+      detailHost.innerHTML =
+        '<div style="border:1px solid var(--accent,#6366f1);border-radius:10px;padding:10px;background:rgba(99,102,241,.04)">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+        + '<div style="font-weight:800"><span style="width:11px;height:11px;border-radius:50%;background:' + (col[ccy] || '#888') + ';display:inline-block;margin-right:6px"></span>' + ccy + ' — movement detail · all three windows</div>'
+        + '<button type="button" class="mvDetClose" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text);cursor:pointer;font-size:11px;padding:2px 8px">✕ close</button>'
+        + '</div>'
+        + '<div style="font-size:12.5px;margin-bottom:8px">' + summaryFor(e) + '</div>'
+        + '<div style="display:flex;flex-wrap:wrap;gap:14px">' + cols3 + '</div>'
+        + '<details style="margin-top:8px"><summary class="mut" style="font-size:11px;cursor:pointer">Formulas &amp; units</summary>'
+        + '<div class="mut" style="font-size:11px;line-height:1.6;margin-top:4px">' + methodologyHtml() + '</div></details>'
+        + '</div>';
+      var cb = detailHost.querySelector('.mvDetClose');
+      if (cb) cb.onclick = function () { expanded = null; detailHost.innerHTML = ''; if (chartWrap && chartWrap._emphasize) chartWrap._emphasize(null); render(); };
+    }
 
     function render() {
       // selector styling
@@ -407,6 +492,17 @@
       tbl.innerHTML = '<thead><tr>' + th + '</tr></thead><tbody>' + body + '</tbody>';
       Array.prototype.forEach.call(tbl.querySelectorAll('th[data-sk]'), function (h) {
         h.onclick = function () { var k = h.getAttribute('data-sk'); if (k === sortKey) sortDir = -sortDir; else { sortKey = k; sortDir = (k === 'currency') ? 1 : -1; } render(); };
+      });
+      Array.prototype.forEach.call(tbl.querySelectorAll('tbody tr'), function (tr) {
+        tr.style.cursor = 'pointer';
+        tr.title = 'Click to highlight on the chart and open all-window detail';
+        if (tr.getAttribute('data-ccy') === expanded) tr.style.background = 'rgba(99,102,241,.08)';
+        tr.onclick = function () {
+          var ccy = tr.getAttribute('data-ccy');
+          if (expanded === ccy) { expanded = null; detailHost.innerHTML = ''; if (chartWrap && chartWrap._emphasize) chartWrap._emphasize(null); }
+          else { expanded = ccy; renderDetail(ccy); if (chartWrap && chartWrap._emphasize) chartWrap._emphasize(ccy); }
+          Array.prototype.forEach.call(tbl.querySelectorAll('tbody tr'), function (r2) { r2.style.background = r2.getAttribute('data-ccy') === expanded ? 'rgba(99,102,241,.08)' : ''; });
+        };
       });
       tblWrap.innerHTML = ''; tblWrap.appendChild(tbl);
     }
