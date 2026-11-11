@@ -28,6 +28,22 @@ function network(nSteps, gForTime) {
   return by;
 }
 
+// Divergent network: EUR grows +g and JPY falls −g each step, the other six stay put. By zero-sum
+// (mean Δln V = 0), EUR index = +g/step, JPY index = −g/step, every other currency exactly flat —
+// a genuine TWO-SIDED split that crosses +band and −band symmetrically (what the new criterion needs).
+function diverge(nSteps, gForTime) {
+  const by = {}; for (const p of PAIRS) by[p] = [];
+  let G = 0;
+  for (let i = 0; i < nSteps; i++) {
+    const t = DATA_START + i * M15_MS;
+    if (i > 0) G += gForTime(t);
+    const V = { EUR: Math.exp(G), JPY: Math.exp(-G) };
+    const val = (c) => (V[c] != null ? V[c] : 1);
+    for (const p of PAIRS) { const [b, q] = p.split('_'); const px = val(b) / val(q); by[p].push({ openMs: t, open: px, high: px, low: px, close: px }); }
+  }
+  return by;
+}
+
 test('liveEvolution: a rising currency crosses +0.25% (reachedUp, state above); mirror reaches down', () => {
   const by = network(PRE + STEPS_DAY + 1, () => 0.0003);   // steady EUR growth
   const built = buildIndices(by);
@@ -77,32 +93,47 @@ test('threshold respected: a near-flat day crosses nothing', () => {
   }
 });
 
-test('spread/watch onset: qualifies only when a leader passes ±0.25% AND the gap opens', () => {
-  const by = network(PRE + STEPS_DAY + 1, () => 0.0003);   // EUR up, others down → wide spread
+test('spread/watch onset: qualifies only when one currency is ≥ +0.25% AND another ≤ −0.25%', () => {
+  const by = diverge(PRE + STEPS_DAY + 1, () => 0.0003);   // EUR up, JPY down → genuine two-sided split
   const built = buildIndices(by);
   const asOf = START + (STEPS_DAY - 1) * M15_MS;
   const ev = liveEvolution(built, asOf, built.lastMs, 0.25, 0.30);
   const sp = ev.spread;
   assert.ok(sp.watchMs != null, 'watch onset detected');
   assert.equal(sp.state, 'watching');
-  assert.ok(sp.max >= 0.30);
+  assert.ok(sp.max >= 0.50, 'two sides each ±0.25% → gap at least ~0.50%');
   const onset = sp.series.find((p) => p.ms === sp.watchMs);
-  assert.ok(onset.spread >= 0.30 - 1e-9, 'gap at onset reaches the spread threshold');
-  assert.ok(onset.top >= 0.25 || onset.bottom <= -0.25, 'a currency is beyond ±0.25% at onset');
+  assert.ok(onset.top >= 0.25, 'a currency is at/above +0.25% at onset');
+  assert.ok(onset.bottom <= -0.25, 'another currency is at/below −0.25% at onset');
   assert.ok(sp.watchMinutes >= 0);
 });
 
+test('spread does NOT qualify when only ONE side crosses the band (single mover pulling away)', () => {
+  // Only EUR moves → its mirror weakness is spread thinly across the other seven. Early in the day
+  // EUR is well past +0.25% but no single currency has reached −0.25%, so there is no two-sided split.
+  const by = network(PRE + STEPS_DAY + 1, () => 0.0003);
+  const built = buildIndices(by);
+  const asOf = START + 30 * M15_MS;                        // ~7.5h in: EUR up, laggards still shallow
+  const sp = liveEvolution(built, asOf, built.lastMs, 0.25, 0.30).spread;
+  const last = sp.series[sp.series.length - 1];
+  assert.ok(last.top >= 0.25, 'a currency is above +0.25%');
+  assert.ok(last.bottom > -0.25, 'but no currency has reached −0.25%');
+  assert.equal(sp.state, 'bunched', 'one-sided move is not a dispersion episode');
+  assert.equal(sp.watchMs, null, 'no onset without a two-sided split');
+  assert.equal(sp.episodes, 0);
+});
+
 test('spread windows: multiple episodes — apart, bunch back, apart again', () => {
-  // EUR spreads out, bunches back, then spreads out again within one EAT day.
+  // EUR/JPY spread out, bunch back toward the open, then spread out again within one EAT day.
   const g = (t) => {
     const step = Math.round((t - DATA_START) / M15_MS);  // 0-based M15 index from data start
     const dstep = step - PRE;                             // step within the EAT day
-    if (dstep >= 4 && dstep < 16) return 0.0010;          // widen: EUR climbs
+    if (dstep >= 4 && dstep < 16) return 0.0010;          // widen: EUR climbs, JPY falls
     if (dstep >= 16 && dstep < 28) return -0.0010;        // bunch back toward the open
     if (dstep >= 28 && dstep < 40) return 0.0010;         // widen again
     return 0;
   };
-  const by = network(PRE + STEPS_DAY + 1, g);
+  const by = diverge(PRE + STEPS_DAY + 1, g);
   const built = buildIndices(by);
   const asOf = START + (STEPS_DAY - 1) * M15_MS;
   const sp = liveEvolution(built, asOf, built.lastMs, 0.25, 0.30).spread;
@@ -231,9 +262,10 @@ test('historyScan: counts per-currency days reaching ±0.25% across EAT days', (
   assert.ok(h.matrix.length >= 3);
   assert.equal(h.matrix[0].cells.length, 8);
 
-  // spread summary: the two big days spread apart, the flat middle day does not
+  // spread summary: the two big days spread apart (EUR well above +0.25% while every laggard sinks
+  // past −0.25% over the full day → two-sided split); the flat middle day does not.
   assert.ok(h.spreadSummary, 'spread summary present');
-  assert.equal(h.spreadSummary.daysSpread, 2, 'two days spread past threshold with a leader ±0.25%');
+  assert.equal(h.spreadSummary.daysSpread, 2, 'two days with a currency ≥ +0.25% AND another ≤ −0.25%');
   assert.equal(h.spreadSummary.daysComplete, 3);
   assert.ok(h.spreadSummary.medianOnsetMin != null);
 });

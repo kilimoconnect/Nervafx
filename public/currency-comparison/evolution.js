@@ -41,7 +41,7 @@
   }
 
   var live = J.live || { rows: [] }, hist = J.history || { perCurrency: [], matrix: [] };
-  var SP = live.spread || {}, THRS = J.spreadThreshold || 0.30;
+  var SP = live.spread || {};
   function minToHHMM(m) { if (m == null) return '—'; return p2(Math.floor(m / 60)) + ':' + p2(m % 60); }
 
   // period labels (day view by default; the H4/5m view supplies meta)
@@ -87,7 +87,7 @@
     + '<div><div class="mut" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">Max spread</div><div style="font-size:15px;font-weight:700">' + pct(SP.max) + (SP.maxMs ? ' <span class="mut">@ ' + eatHM(SP.maxMs) + '</span>' : '') + '</div></div>'
     + '</div>'
     + '<div style="margin-top:10px"><div class="mut" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px">Spread windows (apart → back → apart …)</div><div>' + winTxt + '</div></div>'
-    + '<div class="mut" style="font-size:11px;margin-top:8px">“Spreading apart” qualifies when the strongest−weakest gap reaches <b>' + THRS + '%</b> AND at least one currency is beyond <b>±' + THR + '%</b> — a dispersion episode, <b>not</b> a trade signal. Each window opens when the gap qualifies and closes when currencies bunch back; the ' + PWORD + ' can have several. Research only.</div>';
+    + '<div class="mut" style="font-size:11px;margin-top:8px">A <b>dispersion episode</b> is a genuine two-sided split: one currency at or above <b>+' + THR + '%</b> <b>AND</b> another at or below <b>−' + THR + '%</b> from the open — <b>not</b> a trade signal. A single currency pulling away while the others stay near the open does not count. Each window opens when both bands are crossed and closes when they aren’t; the ' + PWORD + ' can have several. Research only.</div>';
   host.appendChild(wbox);
 
   // ── ranked chips ──
@@ -110,13 +110,13 @@
   // ── evolution chart (SVG) + spread sub-chart ──
   var chartWrap = buildChart(live, THR, COL);
   host.appendChild(chartWrap);
-  host.appendChild(buildSpreadChart(live, THRS));
+  host.appendChild(buildSpreadChart(live, 2 * THR));   // reference = 2× band (min gap an episode implies)
 
   // ── movement-quality: analysis-window selector + sortable comparison table (D1 view only) ──
   if (J.movement) host.appendChild(buildMovementSection(J, COL, chartWrap));
 
   // ── M15 candle performance while dispersion > threshold (per watch window) ──
-  host.appendChild(buildCandleWindows(live, THRS, COL));
+  host.appendChild(buildCandleWindows(live, THR, COL));
 
   // ── history: per-currency stats + heatmap ──
   var hsec = el('div', 'card'); hsec.style.marginTop = '14px';
@@ -141,7 +141,7 @@
   hsec.appendChild(el('div', null,
     '<div style="margin-top:14px;padding:10px;border:1px solid var(--border);border-radius:8px">'
     + '<div style="font-weight:700;margin-bottom:3px">Spread onset (time to start watching)</div>'
-    + '<div class="mut" style="font-size:12px">Currencies spread apart (gap ≥ ' + THRS + '% with a leader beyond ±' + THR + '%) on <b style="color:var(--text)">' + (ss.daysSpread || 0) + '/' + (ss.daysComplete || 0) + '</b> days (' + (ss.spreadPct == null ? '—' : ss.spreadPct + '%') + '). '
+    + '<div class="mut" style="font-size:12px">Currencies spread apart (one ≥ +' + THR + '% <b>AND</b> another ≤ −' + THR + '%) on <b style="color:var(--text)">' + (ss.daysSpread || 0) + '/' + (ss.daysComplete || 0) + '</b> days (' + (ss.spreadPct == null ? '—' : ss.spreadPct + '%') + '). '
     + 'Typical first onset <b style="color:var(--text)">' + minToHHMM(ss.medianOnsetMin) + '</b> (median; earliest ' + minToHHMM(ss.earliestOnsetMin) + ', latest ' + minToHHMM(ss.latestOnsetMin) + ' into the ' + PWORD + '). '
     + (ss.avgEpisodesPerSpreadDay != null ? 'Currencies spread apart and bunch back <b style="color:var(--text)">' + ss.avgEpisodesPerSpreadDay + '×</b> per spread ' + PWORD + ' on average.' : '') + '</div>'
     + '</div>'));
@@ -553,7 +553,8 @@
     yMax *= 1.08;
     var X = function (ms) { return mL + (ms - t0) / (t1 - t0) * (W - mL - mR); };
     var Y = function (v) { return mT + (yMax - v) / yMax * (H - mT - mB); };
-    var s = '<div style="font-weight:700;font-size:12px;margin-bottom:4px">Dispersion over the ' + PWORD + ' — strongest − weakest (%)</div>';
+    var s = '<div style="font-weight:700;font-size:12px;margin-bottom:4px">Dispersion over the ' + PWORD + ' — strongest − weakest (%)</div>'
+      + '<div class="mut" style="font-size:10px;margin-bottom:4px">Shaded = two-sided episodes (one currency ≥ +' + (sthr / 2).toFixed(2) + '% <b>and</b> another ≤ −' + (sthr / 2).toFixed(2) + '%). Dashed line = ' + sthr.toFixed(2) + '%, the smallest gap such a split can have.</div>';
     s += '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" style="display:block;font-family:inherit">';
     // qualify threshold band (≥ sthr)
     s += '<rect x="' + mL + '" y="' + Y(yMax) + '" width="' + (W - mL - mR) + '" height="' + (Y(sthr) - Y(yMax)) + '" fill="rgba(234,179,8,.08)"/>';
@@ -610,12 +611,12 @@
     var active = wins.filter(function (w) { return w.lines && w.lines.length && w.nSteps > 1; });
     var per = (active[0] && active[0].emaPeriod) || 10;
     wrap.appendChild(el('div', null,
-      '<div style="font-weight:700;margin-bottom:2px">Currency strength over time (' + RES + ' ' + per + '-EMA) — while dispersion ≥ ' + sthr + '%</div>'
+      '<div style="font-weight:700;margin-bottom:2px">Currency strength over time (' + RES + ' ' + per + '-EMA) — while a dispersion episode is open (one ≥ +' + sthr + '%, another ≤ −' + sthr + '%)</div>'
       + '<div class="mut" style="font-size:11px;margin-bottom:8px">Inside each watch window: each currency\'s strength = the ' + per
       + '-period EMA of its % move since the <b>' + OPENLBL + '</b>, on ' + RES + ' candles, tracked across the window (lines carry their real level, not reset to 0). Hollow dots mark each line\'s peak/trough. '
       + 'A <b>0.25% move</b> is flagged three ways: <b>↑/↓ open</b> (reached ±0.25% from the open), <b>⤵ off high</b> (fell 0.25% back from a running high) and <b>⤴ off low</b> (rose 0.25% off a running low) — all within the window. '
       + 'Only currencies whose EMA momentum confirms their side are shown: <b>rising while strong</b> (positive) or <b>falling while weak</b> (negative). Fading currencies (strong but no longer rising, or weak but recovering) are hidden. The reading is at the latest close. MODELLED / UNVALIDATED.</div>'));
-    if (!active.length) { wrap.appendChild(el('div', null, '<div class="mut" style="font-size:12px">No window above ' + sthr + '% with enough ' + RES + ' points yet.</div>')); return wrap; }
+    if (!active.length) { wrap.appendChild(el('div', null, '<div class="mut" style="font-size:12px">No two-sided dispersion episode with enough ' + RES + ' points yet.</div>')); return wrap; }
 
     active.forEach(function (w, wi) {
       var hdr = el('div'); hdr.style.cssText = 'margin:12px 0 6px;font-weight:700;font-size:13px';

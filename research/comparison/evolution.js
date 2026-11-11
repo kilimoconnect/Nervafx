@@ -30,8 +30,8 @@ const r4 = (x) => (x == null ? null : +(+x).toFixed(4));
 
 /**
  * Dispersion series for a day: at each M15 step, the spread = strongest − weakest currency %
- * (both open-relative to the same 00:00-EAT open). "Spreading apart" = this spread widening;
- * the watch onset is the first step the spread reaches `spreadThreshold`.
+ * (both open-relative to the same 00:00-EAT open), with the top/bottom currency and their %.
+ * The watch onset is the first step one currency is ≥ +band AND another ≤ −band (see spreadInfo).
  */
 function spreadSeries(built, startMs, endMs) {
   const open0 = idxAtOrBefore(built, CURRENCIES[0], startMs);
@@ -48,9 +48,10 @@ function spreadSeries(built, startMs, endMs) {
 }
 
 /**
- * Summarise a spread series. "Spreading apart" QUALIFIES at a step only when the spread reaches
- * `threshold` AND at least one currency is itself beyond ±`bestThreshold` (a real best movement) —
- * a tight cluster drifting apart without a leader crossing ±0.25% does not count.
+ * Summarise a spread series. A step QUALIFIES only on a genuine TWO-SIDED split: one currency at or
+ * above +`bestThreshold` AND another at or below −`bestThreshold` (a strong leader AND a weak laggard,
+ * both beyond the band). A single mover pulling away while everyone else stays near the open does NOT
+ * count. (This implies a gap ≥ 2·band, so the older `threshold` gap gate is now informational only.)
  *
  * Dispersion is not a one-shot: currencies spread apart, bunch back, and spread again. So we return
  * every qualifying EPISODE as a {startMs, endMs, ongoing, peak…} window, not just the first onset.
@@ -63,7 +64,7 @@ function spreadInfo(series, threshold, startMs, bestThreshold = DEFAULT_THRESHOL
   const out = [], windows = [];
   let open = null;   // the episode currently being accumulated
   for (const p of pts) {
-    const qual = p.spread >= threshold && (p.top >= bestThreshold || p.bottom <= -bestThreshold);
+    const qual = p.top >= bestThreshold && p.bottom <= -bestThreshold;   // one ≥ +band AND one ≤ −band
     if (p.spread > max) { max = p.spread; maxMs = p.ms; }
     if (qual) {
       if (!open) open = { startMs: p.ms, endMs: p.ms, peak: p.spread, peakMs: p.ms, topCcy: p.topCcy, bottomCcy: p.bottomCcy };
