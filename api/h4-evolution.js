@@ -12,7 +12,7 @@
  *   ?asOf=<ms|ISO>   causal replay (no look-ahead; defaults to live)
  *   ?days=<n>        history window to load/scan in days (default 5, cap 30 — M5 is heavy)
  *   ?threshold=<p>   best-movement % threshold (default 0.25)
- *   ?spread=<p>      spreading-apart % threshold (default 0.30)
+ *   ?spread=<p>      spreading-apart % threshold (default 0.20 — 4h blocks move less than a day)
  *
  * Relative-movement research only — NO execution, buy/sell signal, probability, or profitability.
  */
@@ -41,7 +41,8 @@ module.exports = async function handler(req, res) {
     }
     const days = Math.min(30, Math.max(1, parseInt(q.days, 10) || 5));   // M5 is heavy — keep the window short
     const threshold = Math.min(5, Math.max(0.01, parseFloat(q.threshold) || DEFAULT_THRESHOLD));
-    const spreadThreshold = Math.min(10, Math.max(0.01, parseFloat(q.spread) || DEFAULT_SPREAD));
+    const H4_SPREAD = 0.20;   // 4h blocks move less than a full day — a lower spread gate than the day view's 0.30
+    const spreadThreshold = Math.min(10, Math.max(0.01, parseFloat(q.spread) || H4_SPREAD));
 
     const sb = getClient();
     const fromIso = new Date(asOfMs - days * DAY).toISOString();
