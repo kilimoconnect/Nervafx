@@ -508,6 +508,34 @@
     }
     render();
 
+    // ── optional two-currency index-spread ──
+    var spreadWrap = el('div'); spreadWrap.style.cssText = 'margin-top:12px;border-top:1px solid var(--border);padding-top:10px';
+    spreadWrap.innerHTML = '<div style="font-weight:700;font-size:13px;margin-bottom:3px">Two-currency index spread <span class="mut" style="font-weight:500">· optional</span></div>'
+      + '<div class="mut" style="font-size:11px;margin-bottom:6px">spread(t) = index A − index B (pp). Movement quality of the <b>index spread</b> — <b>not</b> a tradable pair return, and no "largest winner vs largest loser" is suggested.</div>';
+    var CURR = mv.perCurrency.map(function (e) { return e.currency; });
+    function mkSel(val) { var s = el('select', 'btn sm'); CURR.forEach(function (c) { var o = el('option', null, c); o.value = c; if (c === val) o.selected = true; s.appendChild(o); }); return s; }
+    var selElA = mkSel(disp.strongest || CURR[0]), selElB = mkSel(disp.weakest || CURR[1]);
+    var goBtn = el('button', 'btn sm'); goBtn.type = 'button'; goBtn.textContent = 'Compare';
+    var ctrl = el('div'); ctrl.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;align-items:center';
+    ctrl.appendChild(selElA); ctrl.appendChild(el('span', 'mut', '−')); ctrl.appendChild(selElB); ctrl.appendChild(goBtn);
+    spreadWrap.appendChild(ctrl);
+    var spOut = el('div'); spOut.style.marginTop = '8px'; spreadWrap.appendChild(spOut);
+    function renderSpread(cmp) {
+      if (!cmp || !cmp.ok) { spOut.innerHTML = '<div class="mut" style="font-size:12px">' + esc((cmp && cmp.reason) || 'Pick two distinct currencies.') + '</div>'; return; }
+      var cols3 = ['today', 'h4', 'h1'].map(function (k) { return winDetailHtml(labels[k], cmp.windows[k]); }).join('');
+      spOut.innerHTML = '<div style="font-weight:700;margin-bottom:4px">' + esc(cmp.label) + ' <span class="mut" style="font-weight:500">· index spread analysis</span></div>'
+        + '<div style="display:flex;flex-wrap:wrap;gap:14px">' + cols3 + '</div>';
+    }
+    goBtn.onclick = function () {
+      var A = selElA.value, B = selElB.value;
+      if (A === B) { spOut.innerHTML = '<div class="mut" style="font-size:12px">Pick two distinct currencies.</div>'; return; }
+      spOut.innerHTML = '<div class="mut" style="font-size:12px">Computing ' + A + ' − ' + B + ' spread…</div>';
+      var url = '/api/currency-evolution?days=' + (J.windowDays || 120) + (J.mode === 'historical' && J.asOfUtc ? '&asOf=' + Date.parse(J.asOfUtc) : '') + '&compare=' + A + ',' + B;
+      fetch(url).then(function (r) { return r.json(); }).then(function (j) { renderSpread(j.movement && j.movement.compare); }).catch(function (e) { spOut.innerHTML = '<div class="mut" style="font-size:12px">Error — ' + esc(e.message || e) + '</div>'; });
+    };
+    card.appendChild(spreadWrap);
+    if (mv.compare) renderSpread(mv.compare);   // initial ?compare=A,B payload
+
     var foot = el('div', 'mut'); foot.style.cssText = 'font-size:11px;margin-top:8px';
     foot.innerHTML = 'Click a column to sort (active column marked ▼/▲) — a ranking, <b>not</b> a "best trade". '
       + 'Efficiency & balance are two views of the same travel. Breadth\'s 7 pairs are interconnected. Descriptive only — predictive value is <b>not</b> validated.';
