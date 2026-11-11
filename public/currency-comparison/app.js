@@ -265,4 +265,13 @@
     el.onclick = function () { openDetail(ccy); };
     el.onkeydown = function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); openDetail(ccy); } };
   });
+
+  // deep link from the % Evolution / H4 legend: ?open=<CCY> auto-opens that currency's chart drawer
+  var openCcy = (location.search.match(/[?&]open=([^&]+)/) || [])[1];
+  if (openCcy) {
+    openCcy = decodeURIComponent(openCcy).toUpperCase();
+    if (j.cards.some(function (c) { return c.currency === openCcy; })) {
+      try { openDetail(openCcy); document.getElementById('drawer').scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {}
+    }
+  }
 })();

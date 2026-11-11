@@ -17,6 +17,29 @@
   function el(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
 
+  // canonical 28 provider pairs (each economic pair once; first symbol = base) — for the hover "top pairs"
+  var PAIRS28 = ['AUD_CAD', 'AUD_CHF', 'AUD_JPY', 'AUD_NZD', 'AUD_USD', 'CAD_CHF', 'CAD_JPY', 'CHF_JPY',
+    'EUR_AUD', 'EUR_CAD', 'EUR_CHF', 'EUR_GBP', 'EUR_JPY', 'EUR_NZD', 'EUR_USD', 'GBP_AUD', 'GBP_CAD',
+    'GBP_CHF', 'GBP_JPY', 'GBP_NZD', 'GBP_USD', 'NZD_CAD', 'NZD_CHF', 'NZD_JPY', 'NZD_USD', 'USD_CAD',
+    'USD_CHF', 'USD_JPY'];
+  // interpolate a currency's open-relative % at an arbitrary ms from its (ms-sorted) points
+  function interpAt(points, ms) {
+    if (!points || !points.length) return null;
+    var n = points.length;
+    if (ms <= points[0].ms) return points[0].pct;
+    if (ms >= points[n - 1].ms) return points[n - 1].pct;
+    var lo = 0, hi = n - 1;
+    while (hi - lo > 1) { var mid = (lo + hi) >> 1; if (points[mid].ms <= ms) lo = mid; else hi = mid; }
+    var a = points[lo], b = points[hi], f = (ms - a.ms) / ((b.ms - a.ms) || 1);
+    return a.pct + (b.pct - a.pct) * f;
+  }
+  // open a currency's candlestick chart (reuses the table view's detail drawer), carrying any replay asOf
+  function openCcyChart(ccy) {
+    var u = location.pathname + '?view=todaySoFar&open=' + encodeURIComponent(ccy);
+    if (J.mode === 'historical' && J.asOfUtc) u += '&asOf=' + Date.parse(J.asOfUtc);
+    location.href = u;
+  }
+
   var live = J.live || { rows: [] }, hist = J.history || { perCurrency: [], matrix: [] };
   var SP = live.spread || {}, THRS = J.spreadThreshold || 0.30;
   function minToHHMM(m) { if (m == null) return '—'; return p2(Math.floor(m / 60)) + ':' + p2(m % 60); }
@@ -177,10 +200,86 @@
       s += '<path d="' + d + '" fill="none" stroke="' + (col[r.currency] || '#888') + '" stroke-width="' + strong + '" opacity="' + opa + '"/>';
       var last = r.points[r.points.length - 1];
       s += '<circle cx="' + X(last.ms).toFixed(1) + '" cy="' + Y(last.pct).toFixed(1) + '" r="2.6" fill="' + (col[r.currency] || '#888') + '"/>';
-      s += '<text x="' + (W - mR + 4) + '" y="' + (Y(last.pct) + 3).toFixed(1) + '" font-size="10" fill="' + (col[r.currency] || '#888') + '">' + r.currency + '</text>';
+      s += '<text class="evoEndLbl" data-ccy="' + r.currency + '" x="' + (W - mR + 4) + '" y="' + (Y(last.pct) + 3).toFixed(1) + '" font-size="10" font-weight="700" fill="' + (col[r.currency] || '#888') + '">' + r.currency + '</text>';
+    });
+    // hover layer: crosshair + one dot per currency (hidden until mousemove)
+    s += '<line class="evoCross" x1="0" y1="' + mT + '" x2="0" y2="' + (H - mB) + '" stroke="rgba(148,163,184,.75)" stroke-width="1" stroke-dasharray="3 3" style="display:none"/>';
+    live.rows.forEach(function (r) {
+      if (!r.ok || r.points.length < 2) return;
+      s += '<circle class="evoDot" data-ccy="' + r.currency + '" r="3.4" fill="' + (col[r.currency] || '#888') + '" stroke="#0b1020" stroke-width="1" style="display:none"/>';
     });
     s += '</svg>';
     wrap.innerHTML = s;
+    wrap.style.position = 'relative';
+    var svgEl = wrap.querySelector('svg');
+
+    // clickable end-labels → open that currency's candlestick chart
+    Array.prototype.forEach.call(wrap.querySelectorAll('.evoEndLbl'), function (t) {
+      t.style.cursor = 'pointer';
+      t.onclick = function () { openCcyChart(t.getAttribute('data-ccy')); };
+    });
+
+    // clickable legend chips under the chart (ranked by current %)
+    var leg = el('div', 'evo-legend');
+    leg.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-top:9px;align-items:center';
+    leg.appendChild(el('span', 'mut', '<span style="font-size:11px">Open candlestick chart →</span>'));
+    live.rows.filter(function (r) { return r.ok && r.points.length; })
+      .slice().sort(function (a, b) { return b.points[b.points.length - 1].pct - a.points[a.points.length - 1].pct; })
+      .forEach(function (r) {
+        var chip = el('button', 'evo-chip');
+        chip.type = 'button';
+        chip.style.cssText = 'display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer;font-size:11px;font-weight:700';
+        chip.innerHTML = '<span style="width:9px;height:9px;border-radius:50%;background:' + (col[r.currency] || '#888') + ';display:inline-block"></span>' + r.currency;
+        chip.title = 'Open ' + r.currency + ' candlestick chart (M15 → Monthly) + 7 underlying pairs';
+        chip.onmouseenter = function () { chip.style.borderColor = (col[r.currency] || '#888'); };
+        chip.onmouseleave = function () { chip.style.borderColor = 'var(--border)'; };
+        chip.onclick = function () { openCcyChart(r.currency); };
+        leg.appendChild(chip);
+      });
+    wrap.appendChild(leg);
+
+    // hover tooltip: time + the 5 strongest pairs (base vs quote) at the cursor
+    var cross = wrap.querySelector('.evoCross');
+    var dotMap = {};
+    Array.prototype.forEach.call(wrap.querySelectorAll('.evoDot'), function (d) { dotMap[d.getAttribute('data-ccy')] = d; });
+    var tip = el('div');
+    tip.style.cssText = 'position:absolute;pointer-events:none;display:none;min-width:172px;max-width:210px;background:rgba(11,16,32,.97);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:11px;line-height:1.35;z-index:30;box-shadow:0 8px 22px rgba(0,0,0,.45)';
+    wrap.appendChild(tip);
+
+    function hover(clientX) {
+      var rect = svgEl.getBoundingClientRect();
+      if (!rect.width) return;
+      var sx = (clientX - rect.left) / rect.width * W;
+      sx = Math.max(mL, Math.min(W - mR, sx));
+      var ms = t0 + (sx - mL) / (W - mL - mR) * (t1 - t0);
+      var vals = {};
+      live.rows.forEach(function (r) { if (r.ok && r.points && r.points.length) { var v = interpAt(r.points, ms); if (v != null) vals[r.currency] = v; } });
+      cross.setAttribute('x1', sx.toFixed(1)); cross.setAttribute('x2', sx.toFixed(1)); cross.style.display = '';
+      for (var c in dotMap) { if (vals[c] != null) { dotMap[c].setAttribute('cx', sx.toFixed(1)); dotMap[c].setAttribute('cy', Y(vals[c]).toFixed(1)); dotMap[c].style.display = ''; } else dotMap[c].style.display = 'none'; }
+      var arr = [];
+      PAIRS28.forEach(function (p) { var ab = p.split('_'); if (vals[ab[0]] != null && vals[ab[1]] != null) arr.push({ b: ab[0], q: ab[1], d: vals[ab[0]] - vals[ab[1]] }); });
+      arr.sort(function (a, b) { return Math.abs(b.d) - Math.abs(a.d); });
+      var h = '<div style="font-weight:800;margin-bottom:2px">' + eatHM(ms) + ' EAT</div>'
+        + '<div class="mut" style="font-size:10px;margin-bottom:5px">5 strongest pairs — buyers vs sellers now</div>';
+      arr.slice(0, 5).forEach(function (o) {
+        var up = o.d >= 0, cc = up ? 'var(--up)' : 'var(--dn)', ar = up ? '▲' : '▼', side = up ? 'buyers' : 'sellers';
+        h += '<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;padding:1px 0">'
+          + '<span><b style="color:' + (col[o.b] || '#ccc') + '">' + o.b + '</b><span class="mut">/</span><b style="color:' + (col[o.q] || '#ccc') + '">' + o.q + '</b></span>'
+          + '<span style="color:' + cc + ';font-weight:700;white-space:nowrap">' + ar + ' ' + (o.d >= 0 ? '+' : '') + o.d.toFixed(2) + '% <span style="font-weight:600;font-size:10px;opacity:.85">' + side + '</span></span>'
+          + '</div>';
+      });
+      tip.innerHTML = h; tip.style.display = '';
+      var wrect = wrap.getBoundingClientRect();
+      var left = clientX - wrect.left + 14;
+      if (left + tip.offsetWidth > wrect.width - 4) left = (clientX - wrect.left) - tip.offsetWidth - 10;
+      if (left < 4) left = 4;
+      tip.style.left = left + 'px'; tip.style.top = '8px';
+    }
+    function leave() { cross.style.display = 'none'; tip.style.display = 'none'; for (var k in dotMap) dotMap[k].style.display = 'none'; }
+    svgEl.addEventListener('mousemove', function (ev) { hover(ev.clientX); });
+    svgEl.addEventListener('mouseleave', leave);
+    svgEl.addEventListener('touchmove', function (ev) { if (ev.touches && ev.touches[0]) hover(ev.touches[0].clientX); }, { passive: true });
+    svgEl.addEventListener('touchend', leave);
     return wrap;
   }
 
