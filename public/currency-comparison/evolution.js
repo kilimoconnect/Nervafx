@@ -263,10 +263,12 @@
       cross.setAttribute('x1', sx.toFixed(1)); cross.setAttribute('x2', sx.toFixed(1)); cross.style.display = '';
       for (var c in dotMap) { if (vals[c] != null) { dotMap[c].setAttribute('cx', sx.toFixed(1)); dotMap[c].setAttribute('cy', Y(vals[c]).toFixed(1)); dotMap[c].style.display = ''; } else dotMap[c].style.display = 'none'; }
       var arr = [];
+      // pair "currency %" = base currency % minus quote currency % (how far the two indices have
+      // spread apart right now). This is the MAIN ranking; the biggest gaps lead.
       PAIRS28.forEach(function (p) { var ab = p.split('_'); if (vals[ab[0]] != null && vals[ab[1]] != null) arr.push({ b: ab[0], q: ab[1], d: vals[ab[0]] - vals[ab[1]] }); });
       arr.sort(function (a, b) { return Math.abs(b.d) - Math.abs(a.d); });
       var h = '<div style="font-weight:800;margin-bottom:2px">' + eatHM(ms) + ' EAT</div>'
-        + '<div class="mut" style="font-size:10px;margin-bottom:5px">5 strongest pairs — buyers vs sellers now</div>';
+        + '<div class="mut" style="font-size:10px;margin-bottom:5px">Top 5 pairs by currency-% spread — buyers vs sellers</div>';
       arr.slice(0, 5).forEach(function (o) {
         var up = o.d >= 0, cc = up ? 'var(--up)' : 'var(--dn)', ar = up ? '▲' : '▼', side = up ? 'buyers' : 'sellers';
         h += '<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;padding:1px 0">'
@@ -274,6 +276,17 @@
           + '<span style="color:' + cc + ';font-weight:700;white-space:nowrap">' + ar + ' ' + (o.d >= 0 ? '+' : '') + o.d.toFixed(2) + '% <span style="font-weight:600;font-size:10px;opacity:.85">' + side + '</span></span>'
           + '</div>';
       });
+      // the rest — secondary tier, compact and de-emphasised
+      var rest = arr.slice(5);
+      if (rest.length) {
+        h += '<div class="mut" style="font-size:9px;text-transform:uppercase;letter-spacing:.04em;margin:5px 0 3px;padding-top:4px;border-top:1px solid var(--border)">Others</div>'
+          + '<div style="display:flex;flex-wrap:wrap;gap:2px 8px;max-width:232px">';
+        rest.forEach(function (o) {
+          var cc = o.d >= 0 ? 'var(--up)' : 'var(--dn)';
+          h += '<span style="font-size:9.5px;white-space:nowrap;opacity:.9"><b style="color:' + (col[o.b] || '#ccc') + '">' + o.b + '</b><span class="mut">/</span><b style="color:' + (col[o.q] || '#ccc') + '">' + o.q + '</b> <span style="color:' + cc + ';font-weight:700">' + (o.d >= 0 ? '+' : '') + o.d.toFixed(2) + '</span></span>';
+        });
+        h += '</div>';
+      }
       tip.innerHTML = h; tip.style.display = '';
       var wrect = wrap.getBoundingClientRect();
       var left = clientX - wrect.left + 14;
