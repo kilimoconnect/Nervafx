@@ -14,10 +14,11 @@
  * a relative-movement observation, NOT a signal, probability, or profitability claim.
  */
 
-const { periodPath } = require('./candles');
+const { periodPath, breadth } = require('./candles');
 const { idxAtOrBefore } = require('./index-build');
 const { dayStart } = require('./periods');
 const { CURRENCIES } = require('./config');
+const { movementMetrics, paceChange } = require('./movement');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_THRESHOLD = 0.25;   // percent — "best movement" (single currency)
@@ -279,4 +280,121 @@ function historyScan(built, asOfMs, lastDataMs, { threshold = DEFAULT_THRESHOLD,
   return { threshold, spreadThreshold, daysScanned: matrix.length, currencies: CURRENCIES, perCurrency, spreadSummary, matrix: recent };
 }
 
-module.exports = { liveEvolution, historyScan, spreadSeries, spreadInfo, windowCandleEvolution, pathExtremes, firstCrossings, DEFAULT_THRESHOLD, DEFAULT_SPREAD };
+// ── Movement-QUALITY table (research, descriptive) ──────────────────────────────────────────────
+// Three windows over the SAME observed index series the chart uses: Today so far (day open→cutoff),
+// Last 4 hours (16 M15 intervals), Last 1 hour (4 M15 intervals). Each window's per-currency series
+// is the CONTINUOUS index rebased to the window's first completed close (x[i]=100·(idx[i]/idx[win0]−1),
+// in pp), so rolling windows reconstruct continuously across midnight and never bridge a market gap.
+const WINDOW_INTERVALS = { h4: 16, h1: 4 };
+
+/** True iff every step from startPos+1..endPos is exactly one base interval apart (no bridged gap). */
+function contiguity(built, startPos, endPos) {
+  const tl = built.timeline; let gaps = 0, maxGapMs = 0;
+  for (let i = startPos + 1; i <= endPos; i++) { const d = tl[i] - tl[i - 1]; if (d !== built.baseMs) { gaps++; if (d > maxGapMs) maxGapMs = d; } }
+  return { contiguous: gaps === 0, gaps, maxGapMs };
+}
+
+/** Per-currency level series (pp) over [startPos, endPos], rebased to the window open. */
+function seriesFor(built, ccy, startPos, endPos) {
+  const base = built.index[ccy][startPos]; const xs = [], times = [];
+  for (let i = startPos; i <= endPos; i++) { xs.push(100 * (built.index[ccy][i] / base - 1)); times.push(built.timeline[i]); }
+  return { xs, times };
+}
+
+/** Resolve a window's start position + coverage (shared across currencies — the timeline is common). */
+function resolveWindow(built, endPos, kind, dayOpenPos) {
+  let startPos, prevStartPos = null, prevEndPos = null, shortSample = false, label;
+  if (kind === 'today') { startPos = dayOpenPos; label = 'Today so far'; }
+  else { const k = WINDOW_INTERVALS[kind]; startPos = endPos - k; prevStartPos = endPos - 2 * k; prevEndPos = endPos - k; shortSample = kind === 'h1'; label = kind === 'h4' ? 'Last 4 hours' : 'Last 1 hour'; }
+  const cov = { kind, label, shortSample, prevStartPos, prevEndPos };
+  if (startPos == null || startPos < 0 || endPos <= startPos) { cov.available = false; cov.reason = 'insufficient history'; cov.intervals = 0; cov.startPos = startPos; return cov; }
+  const ct = contiguity(built, startPos, endPos);
+  cov.startPos = startPos; cov.intervals = endPos - startPos; cov.gaps = ct.gaps; cov.maxGapMs = ct.maxGapMs;
+  cov.startMs = built.timeline[startPos]; cov.endMs = built.timeline[endPos];
+  cov.incomplete = !ct.contiguous;
+  // rolling windows REQUIRE a complete contiguous span; today is inherently variable but flags gaps.
+  cov.available = (kind === 'today') ? true : ct.contiguous;
+  if (!cov.available) cov.reason = 'incomplete coverage — market gap in window';
+  return cov;
+}
+
+/**
+ * Per-currency movement-quality across the three windows, plus a dispersion summary.
+ *   built: buildIndices output (continuous index); byPair: raw pair candles (for breadth); cutoff: ms.
+ * Returns { tol, windows, perCurrency:[{currency, dailyPerf, today, h4, h1}], dispersion }.
+ */
+function movementTable(built, byPair, cutoff, { tol = 0.005, cfg = null, periodStart = dayStart } = {}) {
+  const anchor = idxAtOrBefore(built, CURRENCIES[0], cutoff);
+  if (!anchor) return { ok: false, reason: 'no data at cutoff' };
+  const endPos = anchor.idx;
+  const dayOpenMs = periodStart(cutoff);
+  const dayOpenAt = idxAtOrBefore(built, CURRENCIES[0], dayOpenMs);
+  const dayOpenPos = dayOpenAt ? dayOpenAt.idx : null;
+  const kinds = ['today', 'h4', 'h1'];
+  const windows = {}; for (const k of kinds) windows[k] = resolveWindow(built, endPos, k, dayOpenPos);
+
+  const perCurrency = CURRENCIES.map((ccy) => {
+    const out = { currency: ccy };
+    out.dailyPerf = (dayOpenPos != null) ? r4(100 * (built.index[ccy][endPos] / built.index[ccy][dayOpenPos] - 1)) : null;
+    for (const k of kinds) {
+      const w = windows[k];
+      if (!w.available) { out[k] = { ok: false, reason: w.reason || 'unavailable', coverage: coverageOf(w) }; continue; }
+      const ser = seriesFor(built, ccy, w.startPos, endPos);
+      const m = movementMetrics(ser.xs, ser.times, tol);
+      if (byPair && cfg) m.breadth = breadth(ccy, byPair, w.startMs, w.endMs, cfg);
+      if (w.prevStartPos != null) {
+        m.paceChange = (w.prevStartPos >= 0 && contiguity(built, w.prevStartPos, w.prevEndPos).contiguous)
+          ? paceChange(m.pace, movementMetrics(seriesFor(built, ccy, w.prevStartPos, w.prevEndPos).xs, seriesFor(built, ccy, w.prevStartPos, w.prevEndPos).times, tol).pace)
+          : null;
+      }
+      m.coverage = coverageOf(w);
+      out[k] = m;
+    }
+    return out;
+  });
+
+  // dispersion summary (strongest − weakest, from the same open-relative spread series)
+  const sseries = spreadSeries(built, dayOpenMs, cutoff);
+  const spts = sseries.points || [];
+  const last = spts.length ? spts[spts.length - 1] : null;
+  let maxS = 0, maxMs = null; for (const p of spts) if (p.spread > maxS) { maxS = p.spread; maxMs = p.ms; }
+  const spreadAtPos = (pos) => { if (pos == null || pos < 0) return null; const ms = built.timeline[pos]; let best = null; for (const p of spts) { if (p.ms <= ms) best = p; else break; } return best ? best.spread : null; };
+  const change = {}; for (const k of kinds) { const w = windows[k]; const sp = w.available ? spreadAtPos(w.startPos) : null; change[k] = (last && sp != null) ? r4(last.spread - sp) : null; }
+  const dispersion = {
+    current: last ? r4(last.spread) : null, strongest: last ? last.topCcy : null, weakest: last ? last.bottomCcy : null,
+    strongestPct: last ? r4(last.top) : null, weakestPct: last ? r4(last.bottom) : null,
+    maxToday: r4(maxS), maxMs, change,
+  };
+
+  const windowsOut = {}; for (const k of kinds) windowsOut[k] = coverageOf(windows[k]);
+  return { tol, endMs: built.timeline[endPos], dayOpenMs, windows: windowsOut, perCurrency, dispersion };
+}
+
+/** Public view of a resolved window (no internal positions). */
+function coverageOf(w) {
+  return { kind: w.kind, label: w.label, shortSample: !!w.shortSample, available: !!w.available, incomplete: !!w.incomplete, reason: w.reason || null, intervals: w.intervals || 0, startMs: w.startMs || null, endMs: w.endMs || null, gaps: w.gaps || 0, maxGapMs: w.maxGapMs || 0 };
+}
+
+/**
+ * Optional two-currency INDEX-SPREAD analysis: spreadAB[t] = pctA − pctB (both rebased to the window
+ * open). Movement-quality on that spread for the three windows. This is the index spread, NOT a
+ * tradable pair return unless the methodology mathematically supports that equivalence.
+ */
+function spreadAnalysis(built, A, B, cutoff, { tol = 0.005, periodStart = dayStart } = {}) {
+  if (!CURRENCIES.includes(A) || !CURRENCIES.includes(B) || A === B) return { ok: false, reason: 'pick two distinct currencies' };
+  const anchor = idxAtOrBefore(built, A, cutoff); if (!anchor) return { ok: false, reason: 'no data at cutoff' };
+  const endPos = anchor.idx;
+  const o = idxAtOrBefore(built, A, periodStart(cutoff)); const dayOpenPos = o ? o.idx : null;
+  const kinds = ['today', 'h4', 'h1'];
+  const windows = {};
+  for (const k of kinds) {
+    const w = resolveWindow(built, endPos, k, dayOpenPos);
+    if (!w.available) { windows[k] = { ok: false, reason: w.reason || 'unavailable', coverage: coverageOf(w) }; continue; }
+    const baseA = built.index[A][w.startPos], baseB = built.index[B][w.startPos]; const xs = [], times = [];
+    for (let i = w.startPos; i <= endPos; i++) { xs.push(100 * (built.index[A][i] / baseA - 1) - 100 * (built.index[B][i] / baseB - 1)); times.push(built.timeline[i]); }
+    const m = movementMetrics(xs, times, tol); m.coverage = coverageOf(w); windows[k] = m;
+  }
+  return { ok: true, a: A, b: B, label: A + ' − ' + B + ' index spread', windows };
+}
+
+module.exports = { liveEvolution, historyScan, spreadSeries, spreadInfo, windowCandleEvolution, pathExtremes, firstCrossings, movementTable, spreadAnalysis, DEFAULT_THRESHOLD, DEFAULT_SPREAD };
