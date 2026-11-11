@@ -53,6 +53,7 @@ module.exports = async function handler(req, res) {
       ok: true, available: true, mode, version: CONFIG.version, threshold, spreadThreshold,
       asOfUtc: iso(asOfMs), firstDataUtc: iso(built.firstMs), lastDataUtc: iso(built.lastMs),
       resolution: built.resolution, windowDays: days,
+      meta: { periodName: 'Today so far', periodWord: 'day', openLabel: '00:00 EAT day open', resolution: 'M15', historyUnit: 'EAT days', subDay: false },
       live, history,
       disclaimer: 'Relative-movement research (zero-sum 1/8 index), UNVALIDATED. Not a signal, probability, or profitability claim; no orders.',
     });

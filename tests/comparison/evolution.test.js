@@ -4,8 +4,8 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { buildIndices } = require('../../research/comparison/index-build');
 const { liveEvolution, historyScan, windowCandleEvolution } = require('../../research/comparison/evolution');
-const { dayStart } = require('../../research/comparison/periods');
-const { PAIRS, M15_MS } = require('../../research/comparison/config');
+const { dayStart, h4Start } = require('../../research/comparison/periods');
+const { PAIRS, M15_MS, H4_MS } = require('../../research/comparison/config');
 
 // EAT midnight (00:00 EAT = 21:00 UTC the prior day); [START, START+DAY) is one EAT day.
 const START = Date.UTC(2025, 4, 1, 21, 0, 0);
@@ -48,6 +48,22 @@ test('liveEvolution: a rising currency crosses +0.25% (reachedUp, state above); 
   assert.ok(usd.reachedDown, 'USD (quote vs EUR) crossed −0.25%');
   assert.equal(usd.state, 'below');
   assert.ok(usd.current < 0);
+});
+
+test('H4 period: evolution baselines at the H4 block open, not the day open', () => {
+  const by = network(PRE + STEPS_DAY + 1, () => 0.0003);
+  const built = buildIndices(by);
+  const H4PERIOD = { start: h4Start, step: H4_MS };
+  // asOf inside the 3rd H4 block of the EAT day (12:00–16:00 EAT)
+  const asOf = START + (36 + 4) * M15_MS;          // 10h = 40 M15 steps into the day
+  const ev = liveEvolution(built, asOf, built.lastMs, 0.25, 0.30, H4PERIOD);
+  assert.equal(ev.startMs, h4Start(asOf), 'startMs is the H4 block open');
+  assert.notEqual(ev.startMs, dayStart(asOf), 'H4 open differs from the day open mid-day');
+  assert.equal((ev.startMs - dayStart(asOf)) % H4_MS, 0, 'H4 open is a 4h boundary off the EAT day');
+  // history scans in 4h buckets → more buckets than a day scan over the same span
+  const hDay = historyScan(built, asOf, built.lastMs, { period: { start: dayStart, step: 24 * 60 * 60 * 1000 } });
+  const hH4 = historyScan(built, asOf, built.lastMs, { period: H4PERIOD });
+  assert.ok(hH4.daysScanned >= hDay.daysScanned, 'H4 produces at least as many buckets as days');
 });
 
 test('threshold respected: a near-flat day crosses nothing', () => {

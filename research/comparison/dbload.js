@@ -36,7 +36,8 @@ async function loadParallel(sb, pairs, timeframe, opts = {}, concurrency = 8) {
   return out;
 }
 
+const loadM5Parallel = (sb, pairs, opts, concurrency) => loadParallel(sb, pairs, 'M5', opts, concurrency);
 const loadM15Parallel = (sb, pairs, opts, concurrency) => loadParallel(sb, pairs, 'M15', opts, concurrency);
 const loadH1Parallel = (sb, pairs, opts, concurrency) => loadParallel(sb, pairs, 'H1', opts, concurrency);
 
-module.exports = { loadTf, loadParallel, loadM15Parallel, loadH1Parallel, M15_MS };
+module.exports = { loadTf, loadParallel, loadM5Parallel, loadM15Parallel, loadH1Parallel, M15_MS };

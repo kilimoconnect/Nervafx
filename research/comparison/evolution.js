@@ -22,6 +22,9 @@ const { CURRENCIES } = require('./config');
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_THRESHOLD = 0.25;   // percent — "best movement" (single currency)
 const DEFAULT_SPREAD = 0.30;      // percent — "spreading apart" (strongest − weakest)
+// A period defines the developing window the evolution is measured over: start(ms) → period open,
+// step = fixed length for the history scan. Default = the EAT day; the H4 view passes h4Start/H4_MS.
+const DEFAULT_PERIOD = { start: dayStart, step: DAY_MS };
 const r4 = (x) => (x == null ? null : +(+x).toFixed(4));
 
 /**
@@ -100,10 +103,10 @@ const SLOPE_LOOKBACK = 3; // M15 steps (~45 min) over which EMA slope is measure
  * each currency's M15 strength line, plus a snapshot ranking strongest→weakest at the latest close.
  * Relative-movement research, UNVALIDATED.
  */
-function windowCandleEvolution(built, windows, emaPeriod = EMA_PERIOD, moveThreshold = DEFAULT_THRESHOLD) {
+function windowCandleEvolution(built, windows, emaPeriod = EMA_PERIOD, moveThreshold = DEFAULT_THRESHOLD, periodStart = dayStart) {
   const alpha = 2 / (emaPeriod + 1);
   return (windows || []).map((w) => {
-    const dayOpenMs = dayStart(w.startMs);
+    const dayOpenMs = periodStart(w.startMs);   // baseline strength at the PERIOD open (day or H4)
     const o = idxAtOrBefore(built, CURRENCIES[0], dayOpenMs);
     const s = idxAtOrBefore(built, CURRENCIES[0], w.startMs);
     const e = idxAtOrBefore(built, CURRENCIES[0], w.endMs);
@@ -185,9 +188,9 @@ function firstCrossings(points, thr) {
  * Live developing-day evolution for all currencies.
  *   built: buildIndices(...) output; asOfMs: decision cutoff; lastDataMs: built.lastMs.
  */
-function liveEvolution(built, asOfMs, lastDataMs, threshold = DEFAULT_THRESHOLD, spreadThreshold = DEFAULT_SPREAD) {
+function liveEvolution(built, asOfMs, lastDataMs, threshold = DEFAULT_THRESHOLD, spreadThreshold = DEFAULT_SPREAD, period = DEFAULT_PERIOD) {
   const cutoff = Math.min(asOfMs, lastDataMs == null ? asOfMs : lastDataMs);
-  const startMs = dayStart(cutoff);
+  const startMs = period.start(cutoff);
   const rows = CURRENCIES.map((ccy) => {
     const path = periodPath(built, ccy, startMs, cutoff);
     const pts = (path.points || []).map((p) => ({ ms: p.ms, pct: r4(p.pct) }));
@@ -210,7 +213,7 @@ function liveEvolution(built, asOfMs, lastDataMs, threshold = DEFAULT_THRESHOLD,
   });
   ranked.forEach((rrow, i) => { rrow.rank = rrow.ok ? i + 1 : null; });
   const spread = spreadInfo(spreadSeries(built, startMs, cutoff), spreadThreshold, startMs, threshold);
-  const candleWindows = windowCandleEvolution(built, spread.windows, EMA_PERIOD, threshold);   // strength + 0.25% moves inside each >threshold window
+  const candleWindows = windowCandleEvolution(built, spread.windows, EMA_PERIOD, threshold, period.start);   // strength + 0.25% moves inside each >threshold window
   return { startMs, cutoffMs: cutoff, threshold, rows: ranked, spread, candleWindows };
 }
 
@@ -218,18 +221,19 @@ function liveEvolution(built, asOfMs, lastDataMs, threshold = DEFAULT_THRESHOLD,
  * Historical scan across EAT days in the loaded window: per-currency frequency of reaching
  * ±threshold at any point in the day, plus a per-day matrix (most recent first, bounded).
  */
-function historyScan(built, asOfMs, lastDataMs, { threshold = DEFAULT_THRESHOLD, spreadThreshold = DEFAULT_SPREAD, matrixDays = 60 } = {}) {
+function historyScan(built, asOfMs, lastDataMs, { threshold = DEFAULT_THRESHOLD, spreadThreshold = DEFAULT_SPREAD, matrixDays = 60, period = DEFAULT_PERIOD } = {}) {
   const cutoff = Math.min(asOfMs, lastDataMs == null ? asOfMs : lastDataMs);
-  const firstDay = dayStart(built.firstMs);
-  const lastDay = dayStart(cutoff);
+  const firstDay = period.start(built.firstMs);
+  const lastDay = period.start(cutoff);
+  const step = period.step;
 
   const agg = {}; for (const c of CURRENCIES) agg[c] = { currency: c, daysComplete: 0, daysUp: 0, daysDown: 0, daysEither: 0, maxUp: 0, maxDown: 0, sumPeakAbs: 0 };
-  const matrix = [];           // one row per day with data
-  const onsets = [];           // first spread-onset minutes-into-day, for days that spread apart
-  const episodeCounts = [];    // number of qualifying episodes per day
+  const matrix = [];           // one row per period-bucket with data
+  const onsets = [];           // first spread-onset minutes into the bucket, for buckets that spread apart
+  const episodeCounts = [];    // number of qualifying episodes per bucket
 
-  for (let d = firstDay; d <= lastDay; d += DAY_MS) {
-    const dEnd = Math.min(d + DAY_MS, cutoff);
+  for (let d = firstDay; d <= lastDay; d += step) {
+    const dEnd = Math.min(d + step, cutoff);
     const cells = []; let anyData = false;
     for (const ccy of CURRENCIES) {
       const path = periodPath(built, ccy, d, dEnd);

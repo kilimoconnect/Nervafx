@@ -9,7 +9,7 @@
  * explicitly labelled and excludes the forming M15 candle.
  */
 
-const { DAY_MS, M15_MS, sessionByName } = require('./config');
+const { DAY_MS, M15_MS, H4_MS, sessionByName } = require('./config');
 
 // EAT is a fixed UTC+3 (no daylight saving) → a constant offset is exact.
 const EAT_OFFSET_MS = 3 * 60 * 60 * 1000;
@@ -18,6 +18,10 @@ const eatDate = (ms) => new Date(ms + EAT_OFFSET_MS).toISOString();
 
 /** Start of the EAT calendar day containing ms (00:00 EAT, expressed in UTC ms). */
 const dayStart = (ms) => Math.floor((ms + EAT_OFFSET_MS) / DAY_MS) * DAY_MS - EAT_OFFSET_MS;
+
+/** Start of the H4 block containing ms, anchored to the EAT day (00/04/08/12/16/20 EAT). 24h is a
+ *  multiple of 4h, so H4 boundaries line up with 00:00 EAT exactly. Expressed in UTC ms. */
+const h4Start = (ms) => Math.floor((ms + EAT_OFFSET_MS) / H4_MS) * H4_MS - EAT_OFFSET_MS;
 
 /** Wall-clock parts of a UTC instant in a named timezone. */
 function zparts(tz, utcMs) {
@@ -113,4 +117,4 @@ function completedSessions(sessionName, asOfMs, lastDataMs, count) {
   return out.reverse();
 }
 
-module.exports = { dayStart, weekStart, monthStart, zparts, zonedToUtc, completedDays, todaySoFar, weekSoFar, monthSoFar, completedSessions, EAT_OFFSET_MS };
+module.exports = { dayStart, h4Start, weekStart, monthStart, zparts, zonedToUtc, completedDays, todaySoFar, weekSoFar, monthSoFar, completedSessions, EAT_OFFSET_MS };

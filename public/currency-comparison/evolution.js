@@ -21,13 +21,20 @@
   var SP = live.spread || {}, THRS = J.spreadThreshold || 0.30;
   function minToHHMM(m) { if (m == null) return '—'; return p2(Math.floor(m / 60)) + ':' + p2(m % 60); }
 
+  // period labels (day view by default; the H4/5m view supplies meta)
+  var M = J.meta || {};
+  var PNAME = M.periodName || 'Today so far', PWORD = M.periodWord || 'day';
+  var OPENLBL = M.openLabel || '00:00 EAT day open', RES = M.resolution || 'M15';
+  var HUNIT = M.historyUnit || 'EAT days', SUBDAY = !!M.subDay;
+  function rowLabel(ms) { return SUBDAY ? eatDate(ms) + ' ' + eatHM(ms) : eatDate(ms); }
+
   // ── header ──
   document.getElementById('datahdr').innerHTML =
-    'Today so far — % evolution through ' + eatHM(live.cutoffMs) + ' EAT · day open ' + eatDate(live.startMs) + ' 00:00 EAT · '
+    PNAME + ' — % evolution (' + RES + ') through ' + eatHM(live.cutoffMs) + ' EAT · open ' + eatDate(live.startMs) + ' ' + eatHM(live.startMs) + ' EAT · '
     + '<b>best movement</b> = a currency reaching <b>+' + THR + '%</b> or <b>−' + THR + '%</b> · history window ' + (J.windowDays || 120) + 'd · MODELLED / UNVALIDATED';
 
   document.getElementById('banners').innerHTML =
-    '<div class="state-banner sb-unavail" style="border-color:rgba(59,130,246,.4)">Each line is a currency\'s zero-sum 1/8 index as a % from the <b>00:00 EAT</b> day open. '
+    '<div class="state-banner sb-unavail" style="border-color:rgba(59,130,246,.4)">Each line is a currency\'s zero-sum 1/8 index as a % from the <b>' + OPENLBL + '</b>. '
     + 'Crossing the shaded <b>±' + THR + '%</b> band is a <b>best movement</b> — a relative-movement observation, <b>not</b> a trade signal or probability.</div>';
 
   // ── watch / dispersion state ──
@@ -52,12 +59,12 @@
     '<div style="display:flex;flex-wrap:wrap;gap:18px;align-items:flex-end">'
     + '<div><div class="mut" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">Dispersion (top−bottom)</div><div style="font-size:22px;font-weight:800">' + pct(SP.current) + '</div></div>'
     + '<div><div class="mut" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">State</div><div style="font-size:17px;font-weight:800;color:' + (isWatch ? 'var(--up)' : 'var(--text-muted)') + '">' + (isWatch ? '● WATCHING' : '○ bunched') + '</div></div>'
-    + '<div><div class="mut" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">Episodes today</div><div style="font-size:17px;font-weight:800">' + (SP.episodes || 0) + '</div></div>'
+    + '<div><div class="mut" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">Episodes this ' + PWORD + '</div><div style="font-size:17px;font-weight:800">' + (SP.episodes || 0) + '</div></div>'
     + '<div><div class="mut" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">First onset</div><div style="font-size:15px;font-weight:700">' + firstTxt + '</div></div>'
     + '<div><div class="mut" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">Max spread</div><div style="font-size:15px;font-weight:700">' + pct(SP.max) + (SP.maxMs ? ' <span class="mut">@ ' + eatHM(SP.maxMs) + '</span>' : '') + '</div></div>'
     + '</div>'
     + '<div style="margin-top:10px"><div class="mut" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px">Spread windows (apart → back → apart …)</div><div>' + winTxt + '</div></div>'
-    + '<div class="mut" style="font-size:11px;margin-top:8px">“Spreading apart” qualifies when the strongest−weakest gap reaches <b>' + THRS + '%</b> AND at least one currency is beyond <b>±' + THR + '%</b> — a point to start watching trades. Each window opens when the gap qualifies and closes when currencies bunch back; the day can have several. Research only.</div>';
+    + '<div class="mut" style="font-size:11px;margin-top:8px">“Spreading apart” qualifies when the strongest−weakest gap reaches <b>' + THRS + '%</b> AND at least one currency is beyond <b>±' + THR + '%</b> — a point to start watching trades. Each window opens when the gap qualifies and closes when currencies bunch back; the ' + PWORD + ' can have several. Research only.</div>';
   host.appendChild(wbox);
 
   // ── ranked chips ──
@@ -87,7 +94,7 @@
   // ── history: per-currency stats + heatmap ──
   var hsec = el('div', 'card'); hsec.style.marginTop = '14px';
   hsec.appendChild(el('div', null, '<div style="font-weight:700;margin-bottom:2px">Historical best-movement frequency</div>'
-    + '<div class="mut" style="font-size:11px;margin-bottom:8px">Across ' + hist.daysScanned + ' EAT days: how often each currency reached ±' + THR + '% at any point in the day. MODELLED / UNVALIDATED.</div>'));
+    + '<div class="mut" style="font-size:11px;margin-bottom:8px">Across ' + hist.daysScanned + ' ' + HUNIT + ': how often each currency reached ±' + THR + '% at any point in the ' + PWORD + '. MODELLED / UNVALIDATED.</div>'));
 
   var tbl = el('table', 'leg'); tbl.style.width = '100%';
   tbl.innerHTML = '<thead><tr><th>Ccy</th><th>Days ±' + THR + '</th><th>%</th><th>↑ days</th><th>↓ days</th><th>max ↑</th><th>max ↓</th><th>avg peak |%|</th></tr></thead>';
@@ -108,11 +115,11 @@
     '<div style="margin-top:14px;padding:10px;border:1px solid var(--border);border-radius:8px">'
     + '<div style="font-weight:700;margin-bottom:3px">Spread onset (time to start watching)</div>'
     + '<div class="mut" style="font-size:12px">Currencies spread apart (gap ≥ ' + THRS + '% with a leader beyond ±' + THR + '%) on <b style="color:var(--text)">' + (ss.daysSpread || 0) + '/' + (ss.daysComplete || 0) + '</b> days (' + (ss.spreadPct == null ? '—' : ss.spreadPct + '%') + '). '
-    + 'Typical first onset <b style="color:var(--text)">' + minToHHMM(ss.medianOnsetMin) + ' EAT</b> (median; earliest ' + minToHHMM(ss.earliestOnsetMin) + ', latest ' + minToHHMM(ss.latestOnsetMin) + ' into the day). '
-    + (ss.avgEpisodesPerSpreadDay != null ? 'Currencies spread apart and bunch back <b style="color:var(--text)">' + ss.avgEpisodesPerSpreadDay + '×</b> per spread day on average.' : '') + '</div>'
+    + 'Typical first onset <b style="color:var(--text)">' + minToHHMM(ss.medianOnsetMin) + '</b> (median; earliest ' + minToHHMM(ss.earliestOnsetMin) + ', latest ' + minToHHMM(ss.latestOnsetMin) + ' into the ' + PWORD + '). '
+    + (ss.avgEpisodesPerSpreadDay != null ? 'Currencies spread apart and bunch back <b style="color:var(--text)">' + ss.avgEpisodesPerSpreadDay + '×</b> per spread ' + PWORD + ' on average.' : '') + '</div>'
     + '</div>'));
 
-  hsec.appendChild(el('div', null, '<div style="font-weight:700;margin:14px 0 6px">Recent days (↑ reached +' + THR + ', ↓ reached −' + THR + ', ⏱ = first onset EAT · ×N = spread episodes)</div>'));
+  hsec.appendChild(el('div', null, '<div style="font-weight:700;margin:14px 0 6px">Recent ' + HUNIT + ' (↑ reached +' + THR + ', ↓ reached −' + THR + ', ⏱ = first onset · ×N = spread episodes)</div>'));
   hsec.appendChild(buildHeatmap(hist, THR, COL));
   host.appendChild(hsec);
 
@@ -121,7 +128,7 @@
     var wrap = el('div', 'card'); wrap.style.padding = '10px';
     var t0 = live.startMs, t1 = live.cutoffMs;
     var any = live.rows.some(function (r) { return r.ok && r.points.length > 1; });
-    if (!any || !(t1 > t0)) { wrap.innerHTML = '<div class="mut">The developing day has just started — not enough M15 points yet to plot. Check back after the next closes.</div>'; return wrap; }
+    if (!any || !(t1 > t0)) { wrap.innerHTML = '<div class="mut">The developing ' + PWORD + ' has just started — not enough ' + RES + ' points yet to plot. Check back after the next closes.</div>'; return wrap; }
 
     var W = 920, H = 380, mL = 48, mR = 64, mT = 14, mB = 26;
     var yMax = thr * 1.2, yMin = -thr * 1.2;
@@ -178,7 +185,7 @@
     yMax *= 1.08;
     var X = function (ms) { return mL + (ms - t0) / (t1 - t0) * (W - mL - mR); };
     var Y = function (v) { return mT + (yMax - v) / yMax * (H - mT - mB); };
-    var s = '<div style="font-weight:700;font-size:12px;margin-bottom:4px">Dispersion over the day — strongest − weakest (%)</div>';
+    var s = '<div style="font-weight:700;font-size:12px;margin-bottom:4px">Dispersion over the ' + PWORD + ' — strongest − weakest (%)</div>';
     s += '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" style="display:block;font-family:inherit">';
     // qualify threshold band (≥ sthr)
     s += '<rect x="' + mL + '" y="' + Y(yMax) + '" width="' + (W - mL - mR) + '" height="' + (Y(sthr) - Y(yMax)) + '" fill="rgba(234,179,8,.08)"/>';
@@ -211,7 +218,7 @@
     t += '</tr></thead><tbody>';
     (hist.matrix || []).forEach(function (row) {
       var wo = (row.watchMinutes != null) ? (minToHHMM(row.watchMinutes) + (row.episodes > 1 ? ' <span style="opacity:.8">×' + row.episodes + '</span>' : '')) : '—';
-      t += '<tr><td style="text-align:left">' + eatDate(row.dayMs) + '</td><td style="color:' + (row.watchMinutes != null ? '#eab308' : 'var(--text-muted)') + '">' + wo + '</td>';
+      t += '<tr><td style="text-align:left">' + rowLabel(row.dayMs) + '</td><td style="color:' + (row.watchMinutes != null ? '#eab308' : 'var(--text-muted)') + '">' + wo + '</td>';
       row.cells.forEach(function (cell) {
         if (!cell) { t += '<td class="mut">·</td>'; return; }
         var bg = cell.u && cell.d ? 'linear-gradient(135deg,rgba(34,197,94,.5) 50%,rgba(239,68,68,.5) 50%)'
@@ -235,16 +242,16 @@
     var active = wins.filter(function (w) { return w.lines && w.lines.length && w.nSteps > 1; });
     var per = (active[0] && active[0].emaPeriod) || 10;
     wrap.appendChild(el('div', null,
-      '<div style="font-weight:700;margin-bottom:2px">Currency strength over time (M15 ' + per + '-EMA) — while dispersion ≥ ' + sthr + '%</div>'
+      '<div style="font-weight:700;margin-bottom:2px">Currency strength over time (' + RES + ' ' + per + '-EMA) — while dispersion ≥ ' + sthr + '%</div>'
       + '<div class="mut" style="font-size:11px;margin-bottom:8px">Inside each watch window: each currency\'s strength = the ' + per
-      + '-period EMA of its % move since the <b>00:00 EAT day open</b>, on 15-minute candles, tracked across the window (lines carry their real level, not reset to 0). Hollow dots mark each line\'s peak/trough. '
-      + 'A <b>0.25% move</b> is flagged three ways: <b>↑/↓ open</b> (reached ±0.25% from the day open), <b>⤵ off high</b> (fell 0.25% back from a running high) and <b>⤴ off low</b> (rose 0.25% off a running low) — all within the window. '
+      + '-period EMA of its % move since the <b>' + OPENLBL + '</b>, on ' + RES + ' candles, tracked across the window (lines carry their real level, not reset to 0). Hollow dots mark each line\'s peak/trough. '
+      + 'A <b>0.25% move</b> is flagged three ways: <b>↑/↓ open</b> (reached ±0.25% from the open), <b>⤵ off high</b> (fell 0.25% back from a running high) and <b>⤴ off low</b> (rose 0.25% off a running low) — all within the window. '
       + 'Only currencies whose EMA momentum confirms their side are shown: <b>rising while strong</b> (positive) or <b>falling while weak</b> (negative). Fading currencies (strong but no longer rising, or weak but recovering) are hidden. The reading is at the latest close. MODELLED / UNVALIDATED.</div>'));
-    if (!active.length) { wrap.appendChild(el('div', null, '<div class="mut" style="font-size:12px">No window above ' + sthr + '% with enough M15 points yet today.</div>')); return wrap; }
+    if (!active.length) { wrap.appendChild(el('div', null, '<div class="mut" style="font-size:12px">No window above ' + sthr + '% with enough ' + RES + ' points yet.</div>')); return wrap; }
 
     active.forEach(function (w, wi) {
       var hdr = el('div'); hdr.style.cssText = 'margin:12px 0 6px;font-weight:700;font-size:13px';
-      hdr.innerHTML = '⏱ Window #' + (wi + 1) + ' · ' + eatHM(w.startMs) + ' → ' + (w.ongoing ? '<span style="color:var(--up)">now ●</span>' : eatHM(w.endMs)) + ' · ' + w.nSteps + ' M15 steps';
+      hdr.innerHTML = '⏱ Window #' + (wi + 1) + ' · ' + eatHM(w.startMs) + ' → ' + (w.ongoing ? '<span style="color:var(--up)">now ●</span>' : eatHM(w.endMs)) + ' · ' + w.nSteps + ' ' + RES + ' steps';
       wrap.appendChild(hdr);
       wrap.appendChild(buildStrengthChart(w, col));
       wrap.appendChild(el('div', null, '<div class="mut" style="font-size:11px;margin:8px 0 2px">Qualifying currencies at ' + eatHM(w.endMs) + ' EAT — ranked by momentum (EMA velocity), fastest move first</div>'));
@@ -315,8 +322,8 @@
       var qual = badge('✓ qualifies ' + (pos ? '↑ strong' : '↓ weak'), pos ? 'var(--up)' : 'var(--dn)', 'EMA ' + (pos ? 'rising while strong' : 'falling while weak') + ' — momentum confirms the side');
       var vel = badge('vel ' + (r.slope >= 0 ? '+' : '') + r.slope.toFixed(3) + '%/45m', pos ? 'var(--up)' : 'var(--dn)', 'EMA velocity over ~45 min — ranking is by this (fastest move first), not by level');
       var moves = '';
-      if (r.reachedUp) moves += badge('↑' + thr + ' open', 'var(--up)', 'peak ' + pct(r.peak) + ' reached +' + thr + '% from the day open');
-      if (r.reachedDown) moves += badge('↓' + thr + ' open', 'var(--dn)', 'trough ' + pct(r.trough) + ' reached −' + thr + '% from the day open');
+      if (r.reachedUp) moves += badge('↑' + thr + ' open', 'var(--up)', 'peak ' + pct(r.peak) + ' reached +' + thr + '% from the open');
+      if (r.reachedDown) moves += badge('↓' + thr + ' open', 'var(--dn)', 'trough ' + pct(r.trough) + ' reached −' + thr + '% from the open');
       if (r.pulledBack) moves += badge('⤵' + r.pullback.toFixed(2) + ' off high', '#eab308', 'fell ' + r.pullback.toFixed(2) + '% from its running high (peak ' + pct(r.peak) + (r.pullbackMs ? ' → ' + eatHM(r.pullbackMs) : '') + ')');
       if (r.bounced) moves += badge('⤴' + r.bounce.toFixed(2) + ' off low', '#eab308', 'rose ' + r.bounce.toFixed(2) + '% from its running low (trough ' + pct(r.trough) + (r.bounceMs ? ' → ' + eatHM(r.bounceMs) : '') + ')');
       html +=
@@ -330,7 +337,7 @@
         + '<div style="position:absolute;top:2px;bottom:2px;' + (pos ? 'left:50%' : 'right:50%') + ';width:' + barW + '%;background:' + (pos ? 'var(--up)' : 'var(--dn)') + ';border-radius:3px"></div>'
         + '</div>'
         + '<div style="width:80px;text-align:right;font-weight:800;color:' + (pos ? 'var(--up)' : 'var(--dn)') + '">' + arrow + ' ' + pct(r.strength) + '</div>'
-        + '<div style="width:62px;text-align:right;color:var(--text-muted);font-size:11px" title="raw, unsmoothed % since 00:00 EAT day open">raw ' + pct(r.raw) + '</div>'
+        + '<div style="width:62px;text-align:right;color:var(--text-muted);font-size:11px" title="raw, unsmoothed % since the period open">raw ' + pct(r.raw) + '</div>'
         + '</div>'
         + '<div style="margin-left:90px;font-size:10px;color:var(--text-muted);margin-top:1px">' + qual + vel + ' <span style="margin-left:4px">pk <b style="color:var(--up)">' + pct(r.peak) + '</b> · tr <b style="color:var(--dn)">' + pct(r.trough) + '</b></span>' + moves + '</div>'
         + '</div>';

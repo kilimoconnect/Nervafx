@@ -11,6 +11,7 @@
     "api/cron-backtest-sync.js":  { "maxDuration": 300 },
     "api/currency-comparison.js": { "maxDuration": 60 },
     "api/currency-evolution.js":  { "maxDuration": 120 },
+    "api/h4-evolution.js":        { "maxDuration": 120 },
     "api/currency-chart.js":      { "maxDuration": 60 },
     "api/trade-signals.js":       { "maxDuration": 300 },
     "api/cron-signals.js":        { "maxDuration": 300 },
