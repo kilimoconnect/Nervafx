@@ -9,7 +9,8 @@
  *
  *   ?asOf=<ms|ISO>   causal replay (no look-ahead; defaults to live)
  *   ?days=<n>        history window to load/scan (default 120, cap 365)
- *   ?threshold=<p>   best-movement % threshold (default 0.25)
+ *   ?threshold=<p>   best-movement % threshold (default 0.20)
+ *   ?spread=<p>      dispersion (strongest−weakest) gate % (default 0.25)
  *
  * Relative-movement research only — NO execution, buy/sell signal, probability, or profitability.
  */
@@ -35,8 +36,8 @@ module.exports = async function handler(req, res) {
       if (!isNaN(t) && t < Date.now()) { asOfMs = t; mode = 'historical'; }
     }
     const days = Math.min(365, Math.max(2, parseInt(q.days, 10) || 120));
-    const threshold = Math.min(5, Math.max(0.01, parseFloat(q.threshold) || DEFAULT_THRESHOLD));
-    const spreadThreshold = Math.min(10, Math.max(0.01, parseFloat(q.spread) || 0.20));   // dispersion gate (lowered from 0.30)
+    const threshold = Math.min(5, Math.max(0.01, parseFloat(q.threshold) || 0.20));   // best-movement ± threshold (lowered from 0.25)
+    const spreadThreshold = Math.min(10, Math.max(0.01, parseFloat(q.spread) || 0.25));   // dispersion gate (lowered from 0.30)
 
     const sb = getClient();
     const fromIso = new Date(asOfMs - days * DAY).toISOString();

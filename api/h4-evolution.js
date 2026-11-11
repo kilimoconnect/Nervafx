@@ -11,8 +11,8 @@
  *
  *   ?asOf=<ms|ISO>   causal replay (no look-ahead; defaults to live)
  *   ?days=<n>        history window to load/scan in days (default 5, cap 30 — M5 is heavy)
- *   ?threshold=<p>   best-movement % threshold (default 0.25)
- *   ?spread=<p>      spreading-apart % threshold (default 0.20 — 4h blocks move less than a day)
+ *   ?threshold=<p>   best-movement % threshold (default 0.20)
+ *   ?spread=<p>      dispersion (strongest−weakest) gate % (default 0.25)
  *
  * Relative-movement research only — NO execution, buy/sell signal, probability, or profitability.
  */
@@ -40,9 +40,8 @@ module.exports = async function handler(req, res) {
       if (!isNaN(t) && t < Date.now()) { asOfMs = t; mode = 'historical'; }
     }
     const days = Math.min(30, Math.max(1, parseInt(q.days, 10) || 5));   // M5 is heavy — keep the window short
-    const threshold = Math.min(5, Math.max(0.01, parseFloat(q.threshold) || DEFAULT_THRESHOLD));
-    const H4_SPREAD = 0.20;   // 4h blocks move less than a full day — a lower spread gate than the day view's 0.30
-    const spreadThreshold = Math.min(10, Math.max(0.01, parseFloat(q.spread) || H4_SPREAD));
+    const threshold = Math.min(5, Math.max(0.01, parseFloat(q.threshold) || 0.20));   // best-movement ± threshold (lowered from 0.25)
+    const spreadThreshold = Math.min(10, Math.max(0.01, parseFloat(q.spread) || 0.25));   // dispersion gate (lowered from 0.30)
 
     const sb = getClient();
     const fromIso = new Date(asOfMs - days * DAY).toISOString();
