@@ -69,6 +69,7 @@
     <span class="pill">PAIR-SELECTION ONLY</span>
     <a class="btn sm" href="/trade-signals" style="margin-left:8px">Trade Signals →</a>
     <span class="spacer"></span>
+    <select id="h4Sel" class="btn sm" style="display:none" title="Analyse a past H4 block"></select>
     <span class="mut" style="font-size:11px">Replay (EAT):</span>
     <input type="datetime-local" id="histDt" class="btn" step="900">
     <button class="btn sm" id="histGo">Go</button>
@@ -125,6 +126,33 @@
     if (b.getAttribute('data-view') === view) b.classList.add('active');
     b.onclick = function () { view = b.getAttribute('data-view'); go({ view: view }); };
   });
+
+  // H4-block selector (only for the H4 view): snap to past H4 blocks (00/04/08/12/16/20 EAT).
+  (function () {
+    var sel = document.getElementById('h4Sel');
+    if (view !== 'h4Evolution') { sel.style.display = 'none'; return; }
+    sel.style.display = '';
+    var EAT = 3 * 3600000, H4 = 4 * 3600000, p2 = function (n) { return (n < 10 ? '0' : '') + n; };
+    var h4Open = function (ms) { return Math.floor((ms + EAT) / H4) * H4 - EAT; };
+    var eatHM = function (ms) { var d = new Date(ms + EAT); return p2(d.getUTCHours()) + ':' + p2(d.getUTCMinutes()); };
+    var eatDay = function (ms) { var d = new Date(ms + EAT); return d.getUTCFullYear() + '-' + p2(d.getUTCMonth() + 1) + '-' + p2(d.getUTCDate()); };
+    var nowOpen = h4Open(Date.now());
+    var selOpen = asOf ? h4Open(+asOf) : null;         // which block is currently shown (null = live)
+    var html = '<option value="">● Live (current block)</option>';
+    for (var k = 0; k < 90; k++) {                     // last ~15 days of H4 blocks, most recent first
+      var open = nowOpen - k * H4;
+      var val = open + H4 - 1;                          // asOf just before the block closes → snaps to this block
+      var lbl = eatDay(open) + ' ' + eatHM(open) + '–' + eatHM(open + H4) + ' EAT';
+      var pastDaysLive = k === 0 ? ' (developing)' : '';
+      var isSel = (selOpen != null && selOpen === open) ? ' selected' : '';
+      html += '<option value="' + val + '"' + isSel + '>' + lbl + pastDaysLive + '</option>';
+    }
+    sel.innerHTML = html;
+    sel.onchange = function () {
+      var v = sel.value;
+      location.href = location.pathname + '?view=h4Evolution' + (v ? '&asOf=' + v : '');
+    };
+  })();
 
   function loadScript(src) { return new Promise(function (res, rej) { var s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = function () { rej(new Error('load ' + src)); }; document.body.appendChild(s); }); }
   function showBanner(cls, html) { document.getElementById('banners').innerHTML = '<div class="state-banner ' + cls + '">' + html + '</div>'; document.getElementById('viewhost').innerHTML = ''; }
