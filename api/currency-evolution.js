@@ -9,8 +9,9 @@
  *
  *   ?asOf=<ms|ISO>   causal replay (no look-ahead; defaults to live)
  *   ?days=<n>        history window to load/scan (default 120, cap 365)
- *   ?threshold=<p>   best-movement % threshold (default 0.20)
+ *   ?threshold=<p>   movement-threshold % band (default 0.20)
  *   ?spread=<p>      dispersion (strongest−weakest) gate % (default 0.25)
+ *   ?compare=A,B     optional two-currency index-spread analysis (e.g. ?compare=USD,JPY)
  *
  * Relative-movement research only — NO execution, buy/sell signal, probability, or profitability.
  */
@@ -18,7 +19,7 @@
 const { getClient, cors } = require('./_db');
 const { loadM15Parallel } = require('../research/comparison/dbload');
 const { buildIndices } = require('../research/comparison/index-build');
-const { liveEvolution, historyScan, DEFAULT_THRESHOLD, DEFAULT_SPREAD } = require('../research/comparison/evolution');
+const { liveEvolution, historyScan, movementTable, spreadAnalysis, DEFAULT_THRESHOLD, DEFAULT_SPREAD } = require('../research/comparison/evolution');
 const { CONFIG, PAIRS } = require('../research/comparison/config');
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -50,12 +51,22 @@ module.exports = async function handler(req, res) {
     const live = liveEvolution(built, asOfMs, built.lastMs, threshold, spreadThreshold);
     const history = historyScan(built, asOfMs, built.lastMs, { threshold, spreadThreshold });
 
+    // Movement-quality table (Today / Last 4h / Last 1h) over the same observed index series.
+    const cutoff = Math.min(asOfMs, built.lastMs);
+    const TOL = 0.005;   // pp tolerance for strengthen/weaken/unchanged + up/down/flat
+    const movement = movementTable(built, by, cutoff, { tol: TOL, cfg: CONFIG });
+    // Optional two-currency index-spread, e.g. ?compare=USD,JPY
+    if (movement && q.compare) {
+      const parts = String(q.compare).toUpperCase().split(/[^A-Z]+/).filter(Boolean);
+      if (parts.length === 2) movement.compare = spreadAnalysis(built, parts[0], parts[1], cutoff, { tol: TOL });
+    }
+
     res.json({
       ok: true, available: true, mode, version: CONFIG.version, threshold, spreadThreshold,
       asOfUtc: iso(asOfMs), firstDataUtc: iso(built.firstMs), lastDataUtc: iso(built.lastMs),
       resolution: built.resolution, windowDays: days,
-      meta: { periodName: 'Today so far', periodWord: 'day', openLabel: '00:00 EAT day open', resolution: 'M15', historyUnit: 'EAT days', subDay: false },
-      live, history,
+      meta: { periodName: 'Today so far', periodWord: 'day', openLabel: '00:00 EAT day open', resolution: 'M15', historyUnit: 'EAT days', subDay: false, tol: TOL },
+      live, history, movement,
       disclaimer: 'Relative-movement research (zero-sum 1/8 index), UNVALIDATED. Not a signal, probability, or profitability claim; no orders.',
     });
   } catch (e) {

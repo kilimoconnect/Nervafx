@@ -359,7 +359,8 @@ function movementTable(built, byPair, cutoff, { tol = 0.005, cfg = null, periodS
   const last = spts.length ? spts[spts.length - 1] : null;
   let maxS = 0, maxMs = null; for (const p of spts) if (p.spread > maxS) { maxS = p.spread; maxMs = p.ms; }
   const spreadAtPos = (pos) => { if (pos == null || pos < 0) return null; const ms = built.timeline[pos]; let best = null; for (const p of spts) { if (p.ms <= ms) best = p; else break; } return best ? best.spread : null; };
-  const change = {}; for (const k of kinds) { const w = windows[k]; const sp = w.available ? spreadAtPos(w.startPos) : null; change[k] = (last && sp != null) ? r4(last.spread - sp) : null; }
+  // dispersion at a window start; the day open is definitionally 0 (all currencies at 0% there).
+  const change = {}; for (const k of kinds) { const w = windows[k]; const sp = !w.available ? null : (w.startPos === dayOpenPos ? 0 : spreadAtPos(w.startPos)); change[k] = (last && sp != null) ? r4(last.spread - sp) : null; }
   const dispersion = {
     current: last ? r4(last.spread) : null, strongest: last ? last.topCcy : null, weakest: last ? last.bottomCcy : null,
     strongestPct: last ? r4(last.top) : null, weakestPct: last ? r4(last.bottom) : null,
