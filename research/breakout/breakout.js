@@ -43,23 +43,25 @@ function breakDetail(dir, c, prev, idx, n) {
 }
 
 /**
- * The pair's current direction = the MOST RECENT qualifying break in the available
- * (completed) history. Scans backward from the latest completed candle. There is NO age
+ * The pair's current direction over the first `end` candles = the MOST RECENT qualifying
+ * break in that (completed) prefix. Scans backward from candle `end-1`. There is NO age
  * limit and NO expiry: the latest break may be one candle ago or many. Returns:
  *   { direction: +1|-1, ...breakDetail, lastEvaluatedMs }  — a break was found
  *   { direction: 0, reason: 'insufficient-history' }       — < 2 completed candles
  *   { direction: 0, reason: 'no-break-in-history' }        — no qualifying break anywhere
  *
- * `candles` must be ascending, completed candles (already cut to the evaluation cutoff).
+ * `candles` must be ascending, completed candles. `end` lets callers evaluate a causal
+ * prefix without copying the array; omit it to use the whole array.
  */
-function latestBreak(candles) {
-  const n = (candles || []).length;
-  if (n < 2) return { direction: 0, reason: 'insufficient-history', evaluated: n, lastEvaluatedMs: n ? candles[n - 1].closeMs : null };
-  const lastEvaluatedMs = candles[n - 1].closeMs;
+function latestBreakUpto(candles, end) {
+  const arr = candles || [];
+  const n = end == null ? arr.length : Math.max(0, Math.min(end, arr.length));
+  if (n < 2) return { direction: 0, reason: 'insufficient-history', evaluated: n, lastEvaluatedMs: n ? arr[n - 1].closeMs : null };
+  const lastEvaluatedMs = arr[n - 1].closeMs;
   for (let i = n - 1; i >= 1; i--) {
-    const cls = classifyBreak(candles[i], candles[i - 1]);
+    const cls = classifyBreak(arr[i], arr[i - 1]);
     if (cls.direction !== 0) {
-      const d = breakDetail(cls.direction, candles[i], candles[i - 1], i, n);
+      const d = breakDetail(cls.direction, arr[i], arr[i - 1], i, n);
       d.lastEvaluatedMs = lastEvaluatedMs;
       return d;
     }
@@ -67,4 +69,7 @@ function latestBreak(candles) {
   return { direction: 0, reason: 'no-break-in-history', evaluated: n, lastEvaluatedMs };
 }
 
-module.exports = { isBullishBreak, isBearishBreak, classifyBreak, latestBreak };
+/** Most recent qualifying break over the whole completed array. */
+function latestBreak(candles) { return latestBreakUpto(candles, (candles || []).length); }
+
+module.exports = { isBullishBreak, isBearishBreak, classifyBreak, latestBreak, latestBreakUpto };

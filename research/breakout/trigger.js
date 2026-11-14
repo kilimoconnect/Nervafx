@@ -22,13 +22,16 @@
 const { classifyBreak } = require('./breakout');
 
 /**
- * The break status of the latest completed trigger candle vs its immediate predecessor.
- * @param candles ascending completed trigger candles (already cut to the trigger close).
+ * The break status of the latest completed trigger candle (candle `end-1`) vs its
+ * immediate predecessor. `end` lets callers evaluate a causal prefix without copying;
+ * omit it to use the last two candles of the whole array.
+ * @param candles ascending completed trigger candles.
  */
-function triggerBreak(candles) {
-  const n = (candles || []).length;
+function triggerBreakUpto(candles, end) {
+  const arr = candles || [];
+  const n = end == null ? arr.length : Math.max(0, Math.min(end, arr.length));
   if (n < 2) return { break: 0, reason: 'insufficient-history' };
-  const c = candles[n - 1], prev = candles[n - 2];
+  const c = arr[n - 1], prev = arr[n - 2];
   const cls = classifyBreak(c, prev);
   return {
     break: cls.direction, boundary: cls.boundary, level: cls.level,
@@ -37,6 +40,9 @@ function triggerBreak(candles) {
     reason: cls.direction === 0 ? 'no-break' : 'break',
   };
 }
+
+/** Break status of the latest completed trigger candle in the whole array. */
+function triggerBreak(candles) { return triggerBreakUpto(candles, (candles || []).length); }
 
 /**
  * Decide the final signal for one qualified candidate.
@@ -68,4 +74,4 @@ function decideSignal(candidateDir, tb, strengthAtTriggerClose, base, quote) {
   return { signal: candidateDir, reason: 'signal', evaluable: true };
 }
 
-module.exports = { triggerBreak, decideSignal };
+module.exports = { triggerBreak, triggerBreakUpto, decideSignal };
