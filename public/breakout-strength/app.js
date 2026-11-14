@@ -407,6 +407,109 @@
     t.appendChild(tb); return t;
   }
 
+  // ── all-pairs explorer ─────────────────────────────────────────────────────
+  function dirWord(ps) { if (ps.direction > 0) return ['bullish', 'up']; if (ps.direction < 0) return ['bearish', 'dn']; if (ps.reason === 'insufficient-history') return ['insufficient', 'mut']; return ['no break', 'mut']; }
+  function renderPairs(o) {
+    var wrap = h('div', {});
+    wrap.appendChild(h('div', { class: 'note mut', html: 'Every one of the 28 pairs and its latest ' + o.meta.dirTf + ' break of structure (the direction that feeds currency strength), as of <b>' + eat(o.cutoffMs) + ' EAT</b>. There is no age limit — a break stays in force until the next one.' }));
+    var f = { q: '', dir: '' };
+    var bar = h('div', { class: 'filters' });
+    var qin = h('input', { placeholder: 'filter pair e.g. EUR', oninput: function () { f.q = qin.value.toUpperCase(); draw(); } });
+    var dsel = h('select', { onchange: function () { f.dir = dsel.value; draw(); } }, [['', 'all directions'], ['bull', 'bullish'], ['bear', 'bearish'], ['none', 'no break / insufficient']].map(function (o2) { return h('option', { value: o2[0] }, [o2[1]]); }));
+    bar.appendChild(qin); bar.appendChild(dsel); wrap.appendChild(bar);
+    var body = h('div', {}); wrap.appendChild(body);
+    function draw() {
+      body.innerHTML = '';
+      var rows = (o.pairStates || []).filter(function (ps) {
+        if (f.q && ps.pair.indexOf(f.q) < 0) return false;
+        if (f.dir === 'bull') return ps.direction > 0; if (f.dir === 'bear') return ps.direction < 0; if (f.dir === 'none') return !ps.direction; return true;
+      });
+      var t = h('table', { class: 'tbl' }, [h('thead', {}, [h('tr', {}, ['Pair', o.meta.dirTf + ' direction', 'Broken', 'Break candle (EAT)', 'Age', 'Last evaluated (EAT)'].map(function (x) { return h('th', {}, [x]); }))])]);
+      var tb = h('tbody', {});
+      rows.forEach(function (ps) {
+        var dw = dirWord(ps);
+        tb.appendChild(h('tr', { class: 'clk', onclick: function () { openPairDetail(ps.pair); } }, [
+          h('td', {}, [ps.pair]), h('td', { class: dw[1] }, [dw[0]]),
+          h('td', { class: 'mut' }, [ps.brokenBoundary ? ps.brokenBoundary + ' @ ' + px(ps.pair, ps.brokenLevel) : '—']),
+          h('td', { class: 'mut' }, [ps.breakOpenMs ? eat(ps.breakOpenMs) : '—']),
+          h('td', { class: 'mut' }, [ps.ageCandles == null ? '—' : ps.ageCandles + 'c']),
+          h('td', { class: 'mut' }, [ps.lastEvaluatedMs ? eat(ps.lastEvaluatedMs) : '—'])
+        ]));
+      });
+      t.appendChild(tb); body.appendChild(h('div', { class: 'note mut' }, [rows.length + ' of 28 pairs'])); body.appendChild(t);
+    }
+    draw();
+    return wrap;
+  }
+
+  // ── settings & operational status ──────────────────────────────────────────
+  var ADMIN_UID = '140f3854-2c85-488c-8e0a-0f965d562654';
+  function authUser() { try { return JSON.parse(localStorage.getItem('nfx_user') || '{}') || {}; } catch (e) { return {}; } }
+  function tokenHeaders() { var t = localStorage.getItem('nfx_token'); return t ? { 'Authorization': 'Bearer ' + t } : {}; }
+
+  function renderSettings(o) {
+    var wrap = h('div', {});
+    var st = o.status || {};
+    // operational status (visible to all)
+    var ops = h('div', { class: 'card' }, [h('h2', {}, ['Operational status — ' + STRAT_LABEL[S.strat]])]);
+    var kv = h('div', { class: 'kv' });
+    [
+      ['Timeframes', o.meta.dirTf + ' structure → ' + o.meta.triggerTf + ' trigger'],
+      ['Alignment', st.alignment || 'EAT (UTC+3, no DST)'],
+      ['Currencies complete', (st.currenciesComplete || 0) + ' / 8' + (st.currenciesComplete === 8 ? ' (scores sum to zero)' : '')],
+      ['Pairs with a direction', (st.pairsWithDirection || 0) + ' / 28' + (st.pairsInsufficientHistory ? ' · ' + st.pairsInsufficientHistory + ' insufficient history' : '')],
+      ['First candle', eat(st.firstDataUtc ? Date.parse(st.firstDataUtc) : null) + ' EAT'],
+      ['Last candle (cutoff)', eat(o.cutoffMs) + ' EAT'],
+      ['Active threshold', (o.meta.threshold) + ' / 7'],
+      ['Settings version', o.meta.version],
+      ['Live processing', 'Vercel cron every 15 min (forward, idempotent) + on-demand recompute; polling, not push.']
+    ].forEach(function (p) { kv.appendChild(h('span', { class: 'k' }, [p[0]])); kv.appendChild(h('span', { html: p[1] })); });
+    ops.appendChild(kv);
+    wrap.appendChild(ops);
+
+    // settings (threshold) — read for all, edit for admin
+    var panel = h('div', { class: 'card' }, [h('h2', {}, ['Strong-threshold configuration'])]);
+    panel.appendChild(h('div', { class: 'note mut', html: 'The strong/weak threshold is a <b>configurable assumption</b> (symmetric integer 4–7). Raising it demands broader agreement. Changing it <b>versions forward</b> — a new <code>' + o.meta.version.replace(/-t\d+$/, '-t·') + '</code> row — and never rewrites already-published signals.' }));
+    var hist = h('div', {}, [h('div', { class: 'mut' }, ['Loading versions…'])]);
+    panel.appendChild(hist);
+
+    var admin = authUser().id === ADMIN_UID;
+    var editRow = h('div', { class: 'filters', style: 'margin-top:10px' });
+    var thrSel = h('select', {}, [4, 5, 6, 7].map(function (n) { return h('option', { value: n }, ['threshold ' + n]); }));
+    var pubBtn = h('button', { class: 'btn2', onclick: function () { publish(); } }, ['Publish new version']);
+    var msg = h('span', { class: 'note', style: 'align-self:center' });
+    if (admin) { editRow.appendChild(thrSel); editRow.appendChild(pubBtn); editRow.appendChild(msg); panel.appendChild(editRow); }
+    else panel.appendChild(h('div', { class: 'note mut', style: 'margin-top:8px' }, ['Read-only — changing the threshold requires an admin sign-in.']));
+    wrap.appendChild(panel);
+
+    function loadHist() {
+      fetch('/api/breakout-settings?strategy=' + S.strat).then(function (r) { return r.json(); }).then(function (j) {
+        hist.innerHTML = '';
+        if (!j || j.ok === false) { hist.appendChild(h('div', { class: 'mut' }, ['Could not read settings.'])); return; }
+        thrSel.value = j.threshold || 5;
+        hist.appendChild(h('div', { class: 'note mut' }, ['Active: threshold ' + j.threshold + ' (' + j.activeVersion + ').']));
+        var rows = j.history || [];
+        if (!rows.length) { hist.appendChild(h('div', { class: 'note mut' }, ['No stored version yet — the active threshold is the default (' + j.threshold + ') until the first version is published or the cron runs.'])); return; }
+        var t = h('table', { class: 'tbl' }, [h('thead', {}, [h('tr', {}, ['Version', 'Threshold', 'Active', 'Created'].map(function (x) { return h('th', {}, [x]); }))])]);
+        var tb = h('tbody', {});
+        rows.forEach(function (r) { tb.appendChild(h('tr', {}, [h('td', {}, [r.version]), h('td', {}, ['' + (r.params && r.params.strongThreshold)]), h('td', { class: r.active ? 'up' : 'mut' }, [r.active ? 'active' : '—']), h('td', { class: 'mut' }, [r.createdAt ? eat(Date.parse(r.createdAt)) : '—'])])); });
+        t.appendChild(tb); hist.appendChild(t);
+      }).catch(function () { hist.innerHTML = ''; hist.appendChild(h('div', { class: 'mut' }, ['Settings request failed.'])); });
+    }
+    function publish() {
+      var thr = +thrSel.value; pubBtn.disabled = true; msg.textContent = 'Publishing…'; msg.className = 'note mut';
+      fetch('/api/breakout-settings', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, tokenHeaders()), body: JSON.stringify({ strategy: S.strat, strongThreshold: thr }) })
+        .then(function (r) { return r.json().then(function (j) { return { s: r.status, j: j }; }); })
+        .then(function (x) {
+          pubBtn.disabled = false;
+          if (x.j && x.j.ok) { msg.textContent = 'Published ' + x.j.activeVersion + '. Applies from the next trigger close.'; msg.className = 'note up'; delete cache[S.strat]; loadHist(); }
+          else { msg.textContent = (x.s === 403 ? 'Admin only.' : x.s === 401 ? 'Sign in required.' : (x.j && x.j.error) || 'Failed.'); msg.className = 'note dn'; }
+        }).catch(function (e) { pubBtn.disabled = false; msg.textContent = 'Failed: ' + (e.message || e); msg.className = 'note dn'; });
+    }
+    loadHist();
+    return wrap;
+  }
+
   // ── main render ────────────────────────────────────────────────────────────
   function render() {
     stopPlay();
@@ -417,6 +520,8 @@
     if (S.sec === 'strength') host.appendChild(renderStrength(OV));
     else if (S.sec === 'qualified') host.appendChild(renderQualified(OV));
     else if (S.sec === 'signals') host.appendChild(renderSignals(OV));
+    else if (S.sec === 'pairs') host.appendChild(renderPairs(OV));
+    else if (S.sec === 'settings') host.appendChild(renderSettings(OV));
   }
 
   function statusHdr(o) {

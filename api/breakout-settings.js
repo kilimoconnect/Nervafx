@@ -21,11 +21,14 @@ const { STRATEGY_KEYS, DEFAULT_PARAMS, MIN_THRESHOLD, MAX_THRESHOLD, validThresh
 const iso = (ms) => (ms == null ? null : new Date(ms).toISOString());
 
 async function versionsFor(sb, strategyKey) {
-  const { data, error } = await sb.from('breakout_settings_versions')
-    .select('version,params,active,created_at').eq('strategy_key', strategyKey)
-    .order('created_at', { ascending: false });
-  if (error) throw new Error('settings read: ' + error.message);
-  return data || [];
+  // Degrade gracefully before the migration is applied (table missing → no stored versions yet).
+  try {
+    const { data, error } = await sb.from('breakout_settings_versions')
+      .select('version,params,active,created_at').eq('strategy_key', strategyKey)
+      .order('created_at', { ascending: false });
+    if (error) return [];
+    return data || [];
+  } catch (_) { return []; }
 }
 
 function activeFrom(rows) {
