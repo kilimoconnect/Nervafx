@@ -82,6 +82,24 @@ async function compute(sb, strategyKey, asOfMs, mode, { thresholdOverride, histo
 }
 
 /**
+ * Build a replay context: load H1 from (atMs − lookback) up to NOW, so the caller can both
+ * evaluate causally AT atMs (snapshotAt cuts to T via closeMs ≤ T — no look-ahead) and STEP
+ * forward through later completed trigger closes. `cutoff` is the latest evaluable close
+ * (≈ now), the upper bound for stepping. Read-only (never writes).
+ */
+async function buildReplayContext(sb, strategyKey, atMs, { thresholdOverride } = {}) {
+  const thr = thresholdOverride != null ? validThreshold(thresholdOverride) : await activeThreshold(sb, strategyKey);
+  const def = strategyDef(strategyKey, { strongThreshold: thr });
+  const look = LOOKBACK_DAYS[strategyKey] || 220;
+  const fromMs = atMs - look * DAY;
+  const byPair = await loadH1Parallel(sb, PAIRS, { fromIso: new Date(fromMs).toISOString(), withVolume: true }, 8); // …up to now
+  const lastMs = lastDataMs(byPair), firstMs = firstDataMs(byPair);
+  if (!lastMs) return { available: false, reason: 'no-data', def };
+  const ctx = buildContext(def, byPair);
+  return { available: true, def, ctx, cutoff: lastMs, firstMs, lastMs, threshold: thr, loadedFromMs: fromMs };
+}
+
+/**
  * Persist signals/pair-states/snapshot over a range, idempotently. Shared by the live cron
  * (forward from the cursor) and the historical backfill (an explicit window). Uses the SAME
  * engine as live/replay, so persisted signals match what the dashboard shows. Deterministic
@@ -130,4 +148,4 @@ async function persistRange(sb, strategyKey, { origin = 'forward', fromMs = null
   };
 }
 
-module.exports = { compute, persistRange, activeThreshold, loadH1, lastDataMs, firstDataMs, dataStatus, strategyDef, STRATEGIES, STRATEGY_KEYS, DEFAULT_PARAMS, DAY, iso, LOOKBACK_DAYS };
+module.exports = { compute, buildReplayContext, persistRange, activeThreshold, loadH1, lastDataMs, firstDataMs, dataStatus, strategyDef, STRATEGIES, STRATEGY_KEYS, DEFAULT_PARAMS, DAY, iso, LOOKBACK_DAYS };

@@ -18,12 +18,28 @@
  */
 
 const { getClient, cors } = require('./_db');
-const { compute } = require('../research/breakout/service');
-const { replayAt, stepTriggerClose, triggerCloseTimes } = require('../research/breakout/replay');
+const { buildReplayContext, LOOKBACK_DAYS } = require('../research/breakout/service');
+const { replayAt, stepTriggerClose } = require('../research/breakout/replay');
 const { signalId } = require('../research/breakout/store');
 
 const iso = (ms) => (ms == null ? null : new Date(ms).toISOString());
 const DAY = 24 * 60 * 60 * 1000;
+
+// Warm-lambda context cache so stepping/playing reuses one build. A context loaded from
+// `loadedFromMs` up to now fully contains any later T, so forward steps never reload. Reuse
+// only when the cached window reaches back far enough for this T (else rebuild wider).
+const CTX_CACHE = new Map();
+const CTX_TTL = 4 * 60 * 1000;
+async function getReplayContext(sb, strategy, atMs, thresholdOverride) {
+  const key = strategy + '|' + (thresholdOverride == null ? 'active' : thresholdOverride);
+  const needFrom = atMs - (LOOKBACK_DAYS[strategy] || 220) * DAY;   // a fresh build would start here
+  const hit = CTX_CACHE.get(key);
+  // Reuse only when the cached window reaches back the full lookback for THIS T → identical to a fresh build.
+  if (hit && Date.now() - hit.builtAt < CTX_TTL && hit.r.available && hit.r.loadedFromMs <= needFrom) return hit.r;
+  const r = await buildReplayContext(sb, strategy, atMs, { thresholdOverride });
+  if (r.available) CTX_CACHE.set(key, { builtAt: Date.now(), r });
+  return r;
+}
 
 function shapeSignal(s) {
   return {
@@ -67,10 +83,9 @@ module.exports = async function handler(req, res) {
     let atMs = Date.now();
     if (q.at != null && q.at !== '') { const t = /^\d+$/.test('' + q.at) ? parseInt(q.at, 10) : Date.parse(q.at); if (!isNaN(t)) atMs = Math.min(t, Date.now()); }
 
-    // step?  resolve the adjacent trigger close first, then evaluate there.
+    // Build the context over data up to NOW (causal cut happens at T), so we can step forward.
     const step = String(q.step);
-    const loadMode = atMs < Date.now() - 60 * 1000 ? 'historical' : 'live';
-    const r = await compute(getClient(), strategy, atMs, loadMode, { thresholdOverride, historyDays: windowDays });
+    const r = await getReplayContext(getClient(), strategy, atMs, thresholdOverride);
     if (!r.available) return res.json({ ok: true, available: false, mode, reason: r.reason });
 
     let effectiveAt = Math.min(atMs, r.cutoff), stepped = null;

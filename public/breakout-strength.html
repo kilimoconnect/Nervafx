@@ -66,6 +66,28 @@
   .cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media(max-width:760px){.cols{grid-template-columns:1fr}}
   .banner-note{background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.4);color:#bfdbfe;border-radius:8px;padding:8px 10px;font-size:11.5px;margin:8px 0}
   .banner-warn{background:rgba(202,138,4,.10);border:1px solid rgba(202,138,4,.4);color:#fde68a;border-radius:8px;padding:8px 10px;font-size:11.5px;margin:8px 0}
+  /* replay controls */
+  .rpanel{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin:8px 0}
+  .rrow{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin:6px 0}
+  .rfield{display:flex;flex-direction:column;gap:3px}
+  .rfield label{font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em}
+  .rfield input,.rfield select{font-size:12px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 8px}
+  .rbtn{font-size:12px;font-weight:600;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 12px;cursor:pointer}
+  .rbtn:hover{border-color:var(--accent)}
+  .rbtn.primary{background:rgba(59,130,246,.16);border-color:var(--accent)}
+  .rbtn.play{background:rgba(22,199,132,.14);border-color:var(--up);color:#bbf7d0}
+  .rbtn:disabled{opacity:.4;cursor:not-allowed}
+  .rblock{border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin:10px 0;position:relative}
+  .rblock>.bl{position:absolute;top:-9px;left:12px;background:var(--bg);font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--accent);padding:0 7px}
+  .rblock.b1{border-color:rgba(59,130,246,.5)}.rblock.b1>.bl{color:#93c5fd}
+  .rblock.b2{border-color:rgba(167,139,250,.5)}.rblock.b2>.bl{color:#c4b5fd}
+  .rblock.b3{border-color:rgba(148,163,184,.4)}.rblock.b3>.bl{color:var(--text-muted)}
+  .strip{display:flex;gap:5px;flex-wrap:wrap;margin:6px 0}
+  .chip{font-size:11px;font-weight:700;padding:3px 8px;border-radius:5px;border:1px solid var(--border)}
+  .chip.s{color:var(--up);border-color:rgba(22,199,132,.5)}
+  .chip.w{color:var(--dn);border-color:rgba(246,70,93,.5)}
+  .chip.n{color:var(--text-muted)}
+  .chip.i{color:var(--yellow);border-color:rgba(202,138,4,.5)}
 </style>
 </head>
 <body>
@@ -99,6 +121,7 @@
     <button data-sec="strength"  role="tab">Currency strength</button>
     <button data-sec="qualified" role="tab">Qualified pairs</button>
     <button data-sec="signals"   role="tab">Signals</button>
+    <button data-sec="replay"    role="tab">Replay</button>
   </div>
 
   <div class="datahdr" id="datahdr" aria-live="polite">Loading breakout module…</div>

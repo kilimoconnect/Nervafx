@@ -45,6 +45,12 @@
 
   function byPair(arr) { var m = {}; (arr || []).forEach(function (r) { m[r.pair] = r; }); return m; }
 
+  // ── timezone helpers (wall-clock in an IANA zone ⇆ UTC ms) ──────────────────
+  var LOCAL_TZ = (function () { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (e) { return 'UTC'; } })();
+  function tzOffMs(utcMs, tz) { try { var m = {}; new Intl.DateTimeFormat('en-US', { timeZone: tz, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(new Date(utcMs)).forEach(function (p) { m[p.type] = p.value; }); return Date.UTC(+m.year, +m.month - 1, +m.day, +m.hour, +m.minute, +(m.second || 0)) - utcMs; } catch (e) { return 0; } }
+  function wallToUtc(y, mo, d, h, mi, tz) { var g = Date.UTC(y, mo - 1, d, h, mi); for (var i = 0; i < 2; i++) g = Date.UTC(y, mo - 1, d, h, mi) - tzOffMs(g, tz); return g; }
+  function utcToWall(ms, tz) { var m = {}; new Intl.DateTimeFormat('en-US', { timeZone: tz, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(new Date(ms)).forEach(function (p) { m[p.type] = p.value; }); return m.year + '-' + m.month + '-' + m.day + 'T' + m.hour + ':' + m.minute; }
+
   // ── currency strength ──────────────────────────────────────────────────────
   function renderStrength(o) {
     var wrap = h('div', {});
@@ -173,9 +179,9 @@
   }
 
   // ── pair detail drawer ─────────────────────────────────────────────────────
-  function openPairDetail(pair) {
+  function openPairDetail(pair, asOfMs) {
     drawer.classList.add('open'); drawerBody.innerHTML = '<div class="mut">Loading ' + pair + '…</div>';
-    api({ view: 'detail', strategy: S.strat, pair: pair, days: S.days }).then(function (j) {
+    api({ view: 'detail', strategy: S.strat, pair: pair, days: S.days, asOf: asOfMs || null }).then(function (j) {
       if (!j || j.ok === false) { drawerBody.innerHTML = '<div class="mut">Error loading ' + pair + '.</div>'; return; }
       renderPairDetail(j, pair);
     }).catch(function () { drawerBody.innerHTML = '<div class="mut">Failed to load ' + pair + '.</div>'; });
@@ -254,10 +260,159 @@
     }).catch(function () { el.innerHTML = '<div class="mut">chart failed to load</div>'; });
   }
 
+  // ── replay ─────────────────────────────────────────────────────────────────
+  var RP = { at: Date.now() - 3 * 86400000, tz: LOCAL_TZ, mode: 'historical', threshold: 5, windowDays: 7, playing: false, speed: 1, timer: null, data: null };
+  function stopPlay() { RP.playing = false; if (RP.timer) { clearTimeout(RP.timer); RP.timer = null; } }
+
+  function replayApi(extra) {
+    var p = { strategy: S.strat, at: RP.at, tz: RP.tz, mode: RP.mode, windowDays: RP.windowDays };
+    if (RP.mode === 'whatif') p.threshold = RP.threshold;
+    for (var k in (extra || {})) p[k] = extra[k];
+    var qs = Object.keys(p).filter(function (k) { return p[k] != null && p[k] !== ''; }).map(function (k) { return k + '=' + encodeURIComponent(p[k]); }).join('&');
+    return fetch('/api/breakout-replay?' + qs).then(function (r) { return r.json(); });
+  }
+
+  function renderReplay() {
+    var wrap = h('div', {});
+    var out = h('div', { id: 'rpout' }, [h('div', { class: 'card mut' }, ['Pick a past moment and load the reconstructed state, or step candle-by-candle.'])]);
+
+    // controls
+    var atIn = h('input', { type: 'datetime-local', value: utcToWall(RP.at, RP.tz) });
+    var tzSel = h('select', {}, [
+      h('option', { value: LOCAL_TZ }, ['Local (' + LOCAL_TZ + ')']),
+      h('option', { value: 'Africa/Nairobi' }, ['EAT (UTC+3)']),
+      h('option', { value: 'UTC' }, ['UTC'])
+    ]); tzSel.value = RP.tz;
+    var modeSel = h('select', {}, [h('option', { value: 'historical' }, ['Historical reconstruction']), h('option', { value: 'whatif' }, ['What-if (hypothetical)'])]); modeSel.value = RP.mode;
+    var thrSel = h('select', {}, [4, 5, 6, 7].map(function (n) { return h('option', { value: n }, ['threshold ' + n]); })); thrSel.value = RP.threshold; thrSel.disabled = RP.mode !== 'whatif';
+    var winIn = h('input', { type: 'number', min: 1, max: 60, value: RP.windowDays, style: 'width:70px' });
+    var spdSel = h('select', {}, [[0.5, '0.5×'], [1, '1×'], [2, '2×'], [4, '4×']].map(function (s) { return h('option', { value: s[0] }, [s[1]]); })); spdSel.value = RP.speed;
+
+    function syncTimeLabel() { tl.innerHTML = 'T = <b>' + eat(RP.at) + ' EAT</b> · ' + new Date(RP.at).toISOString().slice(0, 16).replace('T', ' ') + ' UTC'; }
+    var tl = h('div', { class: 'note mut', style: 'margin-top:6px' });
+
+    atIn.onchange = function () { var v = atIn.value; if (!v) return; var m = v.match(/(\d+)-(\d+)-(\d+)T(\d+):(\d+)/); if (m) { RP.at = Math.min(wallToUtc(+m[1], +m[2], +m[3], +m[4], +m[5], RP.tz), Date.now()); syncTimeLabel(); } };
+    tzSel.onchange = function () { RP.tz = tzSel.value; atIn.value = utcToWall(RP.at, RP.tz); syncTimeLabel(); };
+    modeSel.onchange = function () { RP.mode = modeSel.value; thrSel.disabled = RP.mode !== 'whatif'; };
+    thrSel.onchange = function () { RP.threshold = +thrSel.value; };
+    winIn.onchange = function () { RP.windowDays = Math.max(1, Math.min(60, +winIn.value || 7)); };
+    spdSel.onchange = function () { RP.speed = +spdSel.value; };
+
+    var playBtn;
+    function field(lab, el) { return h('div', { class: 'rfield' }, [h('label', {}, [lab]), el]); }
+    var loadBtn = h('button', { class: 'rbtn primary', onclick: function () { stopPlay(); load({}); } }, ['Load snapshot']);
+    var prevBtn = h('button', { class: 'rbtn', onclick: function () { stopPlay(); step('prev'); } }, ['⏮ Prev']);
+    var nextBtn = h('button', { class: 'rbtn', onclick: function () { stopPlay(); step('next'); } }, ['Next ⏭']);
+    playBtn = h('button', { class: 'rbtn play', onclick: function () { RP.playing ? stopAndLabel() : play(); } }, ['▶ Play']);
+    var liveBtn = h('button', { class: 'rbtn', onclick: function () { stopPlay(); S.sec = 'strength'; [].forEach.call(document.querySelectorAll('.subtabs [data-sec]'), function (x) { x.classList.toggle('active', x.getAttribute('data-sec') === 'strength'); }); setURL(); render(); } }, ['Return to live ⟲']);
+    function stopAndLabel() { stopPlay(); playBtn.textContent = '▶ Play'; }
+
+    var panel = h('div', { class: 'rpanel' }, [
+      h('div', { class: 'rrow' }, [field('Replay time', atIn), field('Timezone', tzSel), field('Window (days)', winIn), field('Mode', modeSel), field('What-if', thrSel)]),
+      h('div', { class: 'rrow' }, [loadBtn, prevBtn, nextBtn, playBtn, field('Speed', spdSel), liveBtn]),
+      tl
+    ]);
+    syncTimeLabel();
+    wrap.appendChild(h('div', { class: 'banner-warn', html: '<b>Replay is a deterministic as-of recompute</b> — not a filter of today\'s dashboard. It reruns the exact engine on the candles completed by the selected time. Periods before this module existed are a <b>historical reconstruction</b> from stored candles (it cannot prove what the live feed delivered then). <b>What-if</b> applies a chosen threshold to the whole period, clearly hypothetical, and never overwrites recorded signals.' }));
+    wrap.appendChild(panel);
+    wrap.appendChild(out);
+
+    function setBusy(b) { loadBtn.disabled = prevBtn.disabled = nextBtn.disabled = b; }
+    function load(extra) {
+      setBusy(true); out.innerHTML = ''; out.appendChild(h('div', { class: 'card mut' }, ['Reconstructing…']));
+      replayApi(extra).then(function (j) {
+        setBusy(false);
+        if (!j || j.ok === false) { out.innerHTML = ''; out.appendChild(h('div', { class: 'state-banner sb-error' }, ['ERROR — ' + ((j && j.error) || 'request failed')])); return; }
+        if (j.available === false) { out.innerHTML = ''; out.appendChild(h('div', { class: 'card mut' }, ['No data for this strategy/time: ' + (j.reason || 'unavailable') + '.'])); return; }
+        if (!j.replay) { // a step hit the end/start — keep current view, note it
+          out.insertBefore(h('div', { class: 'banner-note' }, [j.message || 'No adjacent trigger candle.']), out.firstChild);
+          stopAndLabel(); return;
+        }
+        RP.data = j; RP.at = j.replay.atMs; atIn.value = utcToWall(RP.at, RP.tz); syncTimeLabel();
+        renderBlocks(out, j);
+      }).catch(function (e) { setBusy(false); out.innerHTML = ''; out.appendChild(h('div', { class: 'state-banner sb-error' }, ['ERROR — ' + (e.message || e)])); });
+    }
+    function step(dir) { load({ step: dir, from: RP.at }); }
+    function play() {
+      RP.playing = true; playBtn.textContent = '⏸ Pause';
+      var tick = function () {
+        if (!RP.playing) return;
+        replayApi({ step: 'next', from: RP.at }).then(function (j) {
+          if (!RP.playing) return;
+          if (!j || j.ok === false || j.available === false) { stopAndLabel(); return; }
+          if (!j.replay) { out.insertBefore(h('div', { class: 'banner-note' }, [j.message || 'Reached the last completed trigger candle.']), out.firstChild); stopAndLabel(); return; }
+          RP.data = j; RP.at = j.replay.atMs; atIn.value = utcToWall(RP.at, RP.tz); syncTimeLabel(); renderBlocks(out, j);
+          RP.timer = setTimeout(tick, Math.max(120, 1000 / RP.speed));
+        }).catch(function () { stopAndLabel(); });
+      };
+      tick();
+    }
+    return wrap;
+  }
+
+  function chip(cls, label) { var m = { strong: 's', weak: 'w', neutral: 'n', insufficient: 'i' }; return h('span', { class: 'chip ' + (m[cls] || 'n') }, [label]); }
+  function renderBlocks(out, j) {
+    out.innerHTML = '';
+    var r = j.replay, m = j.meta;
+    out.appendChild(h('div', { class: 'note mut', html: 'Reconstructed state at <b>' + eat(r.atMs) + ' EAT</b> · ' + m.configMode + ' · threshold ' + m.threshold + '/7 · ' + m.dirTf + '→' + m.triggerTf + ' · ' + m.version + (r.atBetweenCloses ? ' · <i>T falls between trigger closes; the latest completed close is ' + eat(r.latestTriggerCloseMs) + '</i>' : '') }));
+
+    // BLOCK 1 — qualification at T
+    var b1 = h('div', { class: 'rblock b1' }, [h('span', { class: 'bl' }, ['① Qualification at T'])]);
+    var strip = h('div', { class: 'strip' });
+    (r.qualificationAtT.strength || []).forEach(function (s) { strip.appendChild(chip(s.classification, s.currency + ' ' + (s.score == null ? '∅' : (s.score > 0 ? '+' : '') + s.score))); });
+    b1.appendChild(strip);
+    var ql = r.qualificationAtT.qualified || [];
+    b1.appendChild(h('div', { class: 'note mut', style: 'margin-top:6px' }, [ql.length + ' of 28 pairs qualify at T (strong vs weak).']));
+    if (ql.length) {
+      var t1 = h('table', { class: 'tbl' }, [h('thead', {}, [h('tr', {}, ['Pair', 'Dir', 'Base', 'Quote'].map(function (x) { return h('th', {}, [x]); }))])]);
+      var tb1 = h('tbody', {});
+      ql.forEach(function (p) { var nd = normDir(p.direction); tb1.appendChild(h('tr', { class: 'clk', onclick: function () { openPairDetail(p.pair, RP.at); } }, [h('td', {}, [p.pair]), h('td', { class: nd === 'BUY' ? 'up' : 'dn' }, [nd]), h('td', { html: spanCls(p.baseClass, p.baseScore) + ' ' + p.base }), h('td', { html: spanCls(p.quoteClass, p.quoteScore) + ' ' + p.quote })])); });
+      t1.appendChild(tb1); b1.appendChild(t1);
+    }
+    out.appendChild(b1);
+
+    // BLOCK 2 — trigger evaluation at the latest completed trigger close ≤ T
+    var b2 = h('div', { class: 'rblock b2' }, [h('span', { class: 'bl' }, ['② Trigger evaluation @ ' + (r.latestTriggerCloseMs ? eat(r.latestTriggerCloseMs) + ' EAT' : '—')])]);
+    var sac = r.triggerEvaluation.signalsAtClose || [];
+    b2.appendChild(h('div', { class: 'note mut' }, [sac.length ? (sac.length + ' confirmed signal(s) at this trigger close.') : 'No confirmed signal at this trigger close — a qualified pair needs a fresh ' + m.triggerTf + ' break in its direction.']));
+    if (sac.length) b2.appendChild(signalTableRP(sac));
+    var evs = (r.triggerEvaluation.triggerEvals || []).filter(function (e) { return e.decision && e.decision.reason; });
+    if (evs.length) {
+      var det = h('details', {}, [h('summary', { class: 'mut', style: 'font-size:11px;margin-top:6px' }, ['Why each qualified pair did / didn\'t fire (' + evs.length + ')'])]);
+      var t2 = h('table', { class: 'tbl' }, [h('thead', {}, [h('tr', {}, ['Pair', 'Cand', 'Trigger close', 'Break', 'Outcome'].map(function (x) { return h('th', {}, [x]); }))])]);
+      var tb2 = h('tbody', {});
+      evs.forEach(function (e) { var nd = normDir(e.candidateDir); var brk = e.trigger && e.trigger.break ? (e.trigger.break > 0 ? 'bull ' : 'bear ') + (e.trigger.boundary || '') : 'none'; tb2.appendChild(h('tr', { class: 'clk', onclick: function () { openPairDetail(e.pair, RP.at); } }, [h('td', {}, [e.pair]), h('td', { class: nd === 'BUY' ? 'up' : 'dn' }, [nd]), h('td', { class: 'mut' }, [e.triggerCloseMs ? eat(e.triggerCloseMs) : '—']), h('td', { class: 'mut' }, [brk]), h('td', { class: e.decision.signal ? 'up' : 'mut' }, [e.decision.signal ? '→ ' + e.decision.signal : e.decision.reason])])); });
+      t2.appendChild(tb2); det.appendChild(t2); b2.appendChild(det);
+    }
+    out.appendChild(b2);
+
+    // BLOCK 3 — signals generated earlier in the window
+    var win = r.signalsInWindow || [];
+    var b3 = h('div', { class: 'rblock b3' }, [h('span', { class: 'bl' }, ['③ Signals earlier in the ' + m.windowDays + '-day window'])]);
+    b3.appendChild(h('div', { class: 'note mut' }, [win.length ? (win.length + ' signal(s) in (' + eat(r.atMs - m.windowDays * 86400000) + ' → T], each judged at its own trigger close.') : 'No signals earlier in the window.']));
+    if (win.length) b3.appendChild(signalTableRP(win.slice().reverse()));
+    out.appendChild(b3);
+  }
+  function signalTableRP(rows) {
+    var head = ['Pair', 'Dir', 'Trigger close (EAT)', 'Broke', 'Ref close', 'Base', 'Quote'];
+    var t = h('table', { class: 'tbl' }, [h('thead', {}, [h('tr', {}, head.map(function (x) { return h('th', {}, [x]); }))])]);
+    var tb = h('tbody', {});
+    rows.forEach(function (r) {
+      tb.appendChild(h('tr', { class: 'clk', onclick: function () { openPairDetail(r.pair, r.triggerCloseMs); } }, [
+        h('td', {}, [r.pair]), h('td', { class: r.direction === 'BUY' ? 'up' : 'dn' }, [r.direction]),
+        h('td', {}, [eat(r.triggerCloseMs)]), h('td', { class: 'mut' }, [(r.brokenBoundary || '—') + (r.brokenLevel != null ? ' @ ' + px(r.pair, r.brokenLevel) : '')]),
+        h('td', {}, [px(r.pair, r.referenceClose)]), h('td', { class: r.baseScore > 0 ? 'up' : 'dn' }, [r.base + ' ' + (r.baseScore > 0 ? '+' : '') + num(r.baseScore, 0)]), h('td', { class: r.quoteScore > 0 ? 'up' : 'dn' }, [r.quote + ' ' + (r.quoteScore > 0 ? '+' : '') + num(r.quoteScore, 0)])
+      ]));
+    });
+    t.appendChild(tb); return t;
+  }
+
   // ── main render ────────────────────────────────────────────────────────────
   function render() {
+    stopPlay();
     if (!OV) return;
     host.innerHTML = '';
+    if (S.sec === 'replay') { host.appendChild(renderReplay()); return; }
     if (!OV.available) { host.appendChild(h('div', { class: 'card mut' }, ['This strategy has no usable data yet: ' + (OV.reason || 'unavailable') + '. MN1 needs more history than D1/W1.'])); return; }
     if (S.sec === 'strength') host.appendChild(renderStrength(OV));
     else if (S.sec === 'qualified') host.appendChild(renderQualified(OV));
