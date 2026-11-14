@@ -58,11 +58,18 @@ const TF = {
   },
 };
 
+// `methodology` identifies the RULES (never changes without a code release). The effective
+// `version` additionally encodes the active strong-threshold (`…-t5`) so that changing the
+// threshold creates a genuinely distinct settings version: past signals keep their version,
+// new ones carry the new one, and the two never collide on the deterministic signal id.
 const STRATEGIES = {
-  daily:   { key: 'daily',   label: 'Daily',   dirTf: 'D1',  triggerTf: 'H1', version: 'bss-d-1.0.0' },
-  weekly:  { key: 'weekly',  label: 'Weekly',  dirTf: 'W1',  triggerTf: 'H4', version: 'bss-w-1.0.0' },
-  monthly: { key: 'monthly', label: 'Monthly', dirTf: 'MN1', triggerTf: 'D1', version: 'bss-m-1.0.0' },
+  daily:   { key: 'daily',   label: 'Daily',   dirTf: 'D1',  triggerTf: 'H1', methodology: 'bss-d-1.0.0' },
+  weekly:  { key: 'weekly',  label: 'Weekly',  dirTf: 'W1',  triggerTf: 'H4', methodology: 'bss-w-1.0.0' },
+  monthly: { key: 'monthly', label: 'Monthly', dirTf: 'MN1', triggerTf: 'D1', methodology: 'bss-m-1.0.0' },
 };
+
+/** The effective settings version for a methodology + strong-threshold. */
+function versionFor(methodology, threshold) { return `${methodology}-t${threshold}`; }
 const STRATEGY_KEYS = ['daily', 'weekly', 'monthly'];
 
 // Strong/weak classification threshold — a CONFIGURABLE ASSUMPTION. One symmetric
@@ -80,13 +87,14 @@ function validThreshold(t) {
 function strategyDef(key, paramOverrides) {
   const s = STRATEGIES[key];
   if (!s) throw new Error('unknown strategy: ' + key);
-  const params = { strongThreshold: validThreshold((paramOverrides || {}).strongThreshold != null ? paramOverrides.strongThreshold : DEFAULT_PARAMS.strongThreshold) };
-  return { ...s, params };
+  const threshold = validThreshold((paramOverrides || {}).strongThreshold != null ? paramOverrides.strongThreshold : DEFAULT_PARAMS.strongThreshold);
+  const params = { strongThreshold: threshold };
+  return { ...s, params, methodologyVersion: s.methodology, version: versionFor(s.methodology, threshold) };
 }
 
 module.exports = {
   CURRENCIES, PAIRS, pairFor, legsFor,
   HOUR_MS, H4_MS, DAY_MS, EAT_OFFSET_MS,
   TF, STRATEGIES, STRATEGY_KEYS, DEFAULT_PARAMS, MIN_THRESHOLD, MAX_THRESHOLD,
-  validThreshold, strategyDef,
+  validThreshold, strategyDef, versionFor,
 };

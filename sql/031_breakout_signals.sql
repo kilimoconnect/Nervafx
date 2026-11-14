@@ -24,7 +24,7 @@
 CREATE TABLE IF NOT EXISTS breakout_settings_versions (
   id            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   strategy_key  TEXT        NOT NULL,            -- 'daily' | 'weekly' | 'monthly'
-  version       TEXT        NOT NULL,            -- e.g. 'bss-d-1.0.0'
+  version       TEXT        NOT NULL,            -- methodology + threshold, e.g. 'bss-d-1.0.0-t5'
   params        JSONB       NOT NULL,            -- frozen: { strongThreshold: 4..7 }
   active        BOOLEAN     NOT NULL DEFAULT TRUE,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),

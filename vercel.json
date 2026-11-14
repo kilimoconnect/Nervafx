@@ -3,7 +3,8 @@
   "crons": [
     { "path": "/api/cron-backtest-sync", "schedule": "*/15 * * * *" },
     { "path": "/api/run-pipeline?force=1", "schedule": "3 * * * *" },
-    { "path": "/api/cron-signals", "schedule": "6,21,36,51 * * * *" }
+    { "path": "/api/cron-signals", "schedule": "6,21,36,51 * * * *" },
+    { "path": "/api/cron-breakout", "schedule": "9,24,39,54 * * * *" }
   ],
   "functions": {
     "api/news-parse.js":          { "maxDuration": 30 },
@@ -17,6 +18,12 @@
     "api/cron-signals.js":        { "maxDuration": 300 },
     "api/backfill-signals.js":    { "maxDuration": 300 },
     "api/backfill-m5.js":         { "maxDuration": 300 },
+    "api/breakout-strength.js":   { "maxDuration": 120 },
+    "api/breakout-replay.js":     { "maxDuration": 120 },
+    "api/breakout-chart.js":      { "maxDuration": 60 },
+    "api/breakout-settings.js":   { "maxDuration": 30 },
+    "api/cron-breakout.js":       { "maxDuration": 300 },
+    "api/backfill-breakout.js":   { "maxDuration": 300 },
     "api/*-history.js":           { "maxDuration": 300 }
   },
   "rewrites": [
@@ -28,6 +35,8 @@
     { "source": "/comparison", "destination": "/currency-comparison.html" },
     { "source": "/trade-signals", "destination": "/trade-signals.html" },
     { "source": "/signals", "destination": "/trade-signals.html" },
+    { "source": "/breakout-strength", "destination": "/breakout-strength.html" },
+    { "source": "/breakout", "destination": "/breakout-strength.html" },
     { "source": "/login",  "destination": "/login.html"   },
     { "source": "/setup",  "destination": "/setup.html"   },
     { "source": "/profile","destination": "/profile.html" },

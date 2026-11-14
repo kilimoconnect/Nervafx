@@ -66,7 +66,7 @@ test('signals carry the fields needed to explain and reproduce the decision', ()
     assert.equal(typeof s.referenceClose, 'number');
     assert.equal(typeof s.triggerCloseMs, 'number');
     assert.ok(s.strengthSnapshot && Object.keys(s.strengthSnapshot).length === 8, 'all 8 currencies in the snapshot');
-    assert.ok(s.dedupKey.startsWith('daily|bss-d-1.0.0|' + s.pair + '|'));
+    assert.ok(s.dedupKey.startsWith('daily|bss-d-1.0.0-t5|' + s.pair + '|'));
     // the signal direction agrees with the base/quote classification at the trigger close
     if (s.direction === 'BUY') { assert.equal(s.strengthSnapshot[s.base].classification, 'strong'); assert.equal(s.strengthSnapshot[s.quote].classification, 'weak'); }
     else { assert.equal(s.strengthSnapshot[s.base].classification, 'weak'); assert.equal(s.strengthSnapshot[s.quote].classification, 'strong'); }
