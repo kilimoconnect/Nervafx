@@ -61,16 +61,25 @@ test('period position resets at the baseline while the fast window stays continu
   assert.notEqual(cc.fast.M, 0, 'fast-window movement is measured on the continuous index, not reset');
 });
 
-// ── §5 a market gap inside a window makes it unavailable (no bridged span) ───────────────────
-test('windowMetrics: a timeline gap inside the window → unavailable (market-gap)', () => {
+// ── §5 a scheduled-closure gap inside a window is TOLERATED and flagged (index skips closures) ─
+test('windowMetrics: a timeline gap inside the window is tolerated + flagged (not rejected)', () => {
   const by = genM15(60, EAT_DAY0);
   const built = buildIndices(by);
-  // splice out a middle step to simulate a gap, then re-point an index window over it
   const n = built.timeline.length;
-  built.timeline[n - 3] += 3 * M15;                 // stretch one interval beyond baseMs
+  built.timeline[n - 3] += 3 * M15;                 // stretch one interval (simulate a weekend gap)
   const w = windowMetrics(built, null, 'USD', n - 1, 4, null, 0.005);
+  assert.equal(w.available, true, 'window still available over a scheduled closure');
+  assert.ok(w.spansGap, 'the gap is flagged for disclosure');
+  assert.ok(w.gaps >= 1);
+});
+
+// a window with too little history is still unavailable
+test('windowMetrics: not enough history → unavailable', () => {
+  const by = genM15(60, EAT_DAY0);
+  const built = buildIndices(by);
+  const w = windowMetrics(built, null, 'USD', 2, 16, null, 0.005);   // only 3 obs, need 16
   assert.equal(w.available, false);
-  assert.equal(w.reason, 'market-gap');
+  assert.equal(w.reason, 'insufficient-history');
 });
 
 // ── §7 spread expansion ──────────────────────────────────────────────────────────────────────

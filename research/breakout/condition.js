@@ -46,23 +46,33 @@ function series(built, ccy, startPos, endPos) {
   return { xs, times };
 }
 
-/** Movement + breadth over a rolling window of `intervals` M15 steps ending at endPos. */
+/** Count scheduled-closure/missing gaps inside [startPos,endPos] (for disclosure). */
+function gapInfo(built, startPos, endPos) {
+  const tl = built.timeline; let gaps = 0, maxGapMs = 0;
+  for (let i = startPos + 1; i <= endPos; i++) { const d = tl[i] - tl[i - 1]; if (d !== built.baseMs) { gaps++; if (d > maxGapMs) maxGapMs = d; } }
+  return { gaps, maxGapMs };
+}
+
+/**
+ * Movement + breadth over a rolling window of the last `intervals` M15 OBSERVATIONS ending at
+ * endPos. Weekend/holiday closures are SKIPPED by the index, so a window is NOT rejected for
+ * containing a scheduled-closure gap (that is how the zero-sum index already treats closures);
+ * the gap is recorded and flagged. A window is unavailable only when there is not enough history.
+ */
 function windowMetrics(built, byPair, ccy, endPos, intervals, cfg, tol) {
   const startPos = endPos - intervals;
   if (startPos < 0) return { available: false, reason: 'insufficient-history', intervals: 0 };
-  const contig = contiguous(built, startPos, endPos);
   const { xs, times } = series(built, ccy, startPos, endPos);
   const m = movementMetrics(xs, times, tol);
+  if (!m.ok) return { available: false, reason: 'insufficient-observations', intervals };
+  const { gaps, maxGapMs } = gapInfo(built, startPos, endPos);
   const startMs = built.timeline[startPos], endMs = built.timeline[endPos];
   const br = (byPair && cfg) ? breadth(ccy, byPair, startMs, endMs, cfg) : null;
   return {
-    available: contig && m.ok, reason: contig ? (m.ok ? null : 'insufficient-observations') : 'market-gap',
-    intervals, startMs, endMs,
-    M: r4(m.M), direction: m.ok ? m.direction : null,
-    signedEff: m.ok && m.balance != null ? r4(m.balance / 100) : null,   // §5D signed efficiency ∈ [−1,1]
-    efficiency: m.ok ? m.efficiency : null,
-    pace: m.ok ? m.pace : null,
-    breadth: br,
+    available: true, reason: null, intervals, startMs, endMs, gaps, spansGap: gaps > 0, maxGapMs,
+    M: r4(m.M), direction: m.direction,
+    signedEff: m.balance != null ? r4(m.balance / 100) : null,   // §5D signed efficiency ∈ [−1,1]
+    efficiency: m.efficiency, pace: m.pace, breadth: br,
   };
 }
 
@@ -113,11 +123,11 @@ function currencyCondition(built, byPair, ccy, cutoffMs, cond, params, cfg = CON
   const slow = windowMetrics(built, byPair, ccy, endPos, cond.slow, cfg, tol);
   const classification = classify(fast, slow, params);
 
-  // pace change: fast window vs the immediately preceding equal-length window.
+  // pace change: fast window vs the immediately preceding equal-length window (gaps tolerated).
   let pc = null;
   if (fast.available) {
     const pe = endPos - cond.fast, ps = pe - cond.fast;
-    if (ps >= 0 && contiguous(built, ps, pe)) {
+    if (ps >= 0) {
       const prev = series(built, ccy, ps, pe);
       const pm = movementMetrics(prev.xs, prev.times, tol);
       if (pm.ok) pc = paceChange(fast.pace, pm.pace);
@@ -139,11 +149,10 @@ function conditionAll(built, byPair, cutoffMs, cond, params, cfg = CONFIG) {
   return out;
 }
 
-/** D(t) = pctBase − pctQuote over a rolling window (continuous index, rebased to the window open). */
+/** D(t) = pctBase − pctQuote over a rolling window (continuous index; scheduled gaps tolerated). */
 function dWindow(built, base, quote, endPos, intervals, tol) {
   const startPos = endPos - intervals;
   if (startPos < 0) return { available: false };
-  const contig = contiguous(built, startPos, endPos);
   const baseA = built.index[base][startPos], baseB = built.index[quote][startPos];
   const xs = [], times = [];
   for (let i = startPos; i <= endPos; i++) {
@@ -151,7 +160,7 @@ function dWindow(built, base, quote, endPos, intervals, tol) {
     times.push(built.timeline[i]);
   }
   const m = movementMetrics(xs, times, tol);
-  return { available: contig && m.ok, M: m.ok ? m.M : null, direction: m.ok ? m.direction : null };
+  return { available: m.ok, M: m.ok ? m.M : null, direction: m.ok ? m.direction : null };
 }
 
 /**
