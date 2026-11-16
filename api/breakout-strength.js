@@ -2,9 +2,9 @@
 
 /**
  * GET /api/breakout-strength — Breakout Strength & Signals, live or causal-replay snapshot
- * (research, UNVALIDATED). Computes the full methodology deterministically from stored H1:
- *   latest HTF break (per pair) → currency strength → strong-vs-weak qualification →
- *   fresh trigger break → signal.
+ * (research, UNVALIDATED). Computes the Evolution methodology (v2) deterministically:
+ *   zero-sum index → recent currency condition (fast/slow windows + breadth) →
+ *   strong-vs-weak qualification → widening index spread → fresh trigger break → signal.
  *
  *   ?strategy=daily|weekly|monthly   (default daily)
  *   ?asOf=<ms|ISO>                   causal replay cutoff (default live)
@@ -32,16 +32,21 @@ function shapeSignal(s) {
     base: s.base, quote: s.quote, dirTf: s.dirTf, triggerTf: s.triggerTf,
     triggerOpenMs: s.triggerOpenMs, triggerCloseMs: s.triggerCloseMs, triggerCloseUtc: iso(s.triggerCloseMs),
     brokenBoundary: s.brokenBoundary, brokenLevel: s.brokenLevel, referenceClose: s.referenceClose,
-    baseScore: s.baseScore, quoteScore: s.quoteScore, strengthSnapshot: s.strengthSnapshot,
-    breakoutDetail: s.breakoutDetail, triggerDetail: s.triggerDetail,
+    baseScore: s.baseScore, quoteScore: s.quoteScore,
+    conditionSnapshot: s.conditionSnapshot || s.strengthSnapshot, candidateDetail: s.candidateDetail,
+    evoSnapshotMs: s.evoSnapshotMs, marketCloseMs: s.marketCloseMs,
+    breakoutDetail: s.breakoutDetail, triggerDetail: s.triggerDetail, version: s.version,
   };
 }
 
-function shapeStrength(strength) {
-  return Object.values(strength).map((s) => ({
-    currency: s.currency, score: s.score, bull: s.bull, bear: s.bear,
-    classification: s.classification, complete: s.complete, contributions: s.contributions,
-  })).sort((a, b) => (a.complete !== b.complete ? (a.complete ? -1 : 1) : (b.score == null ? -99 : b.score) - (a.score == null ? -99 : a.score)));
+const CLASS_RANK = { strong: 0, mixed: 1, weak: 2, insufficient: 3 };
+/** The v2 currency condition, ranked strong → weak. */
+function shapeStrength(condition) {
+  return Object.values(condition).map((s) => ({
+    currency: s.currency, classification: s.classification, complete: s.complete, score: s.score,
+    periodPct: s.periodPct, periodPeak: s.periodPeak, periodTrough: s.periodTrough,
+    fast: s.fast, slow: s.slow, paceChange: s.paceChange,
+  })).sort((a, b) => (CLASS_RANK[a.classification] - CLASS_RANK[b.classification]) || ((b.score == null ? -999 : b.score) - (a.score == null ? -999 : a.score)));
 }
 
 module.exports = async function handler(req, res) {
@@ -68,9 +73,11 @@ module.exports = async function handler(req, res) {
 
     const meta = {
       strategy, dirTf: r.def.dirTf, triggerTf: r.def.triggerTf, version: r.def.version,
-      label: r.def.label, threshold: r.def ? (r.def.params || {}).strongThreshold : null,
+      label: r.def.label, methodology: 'Evolution-qualified breakout (v2)',
+      params: r.def.params,
+      windows: r.def.condition ? { fast: r.def.condition.fastLabel, slow: r.def.condition.slowLabel, period: r.def.condition.periodLabel } : null,
       alignment: 'EAT (UTC+3)', mode, asOfUtc: iso(asOfMs),
-      disclaimer: 'Breakout methodology research (EAT-aligned, aggregated from H1), UNVALIDATED. Signals only — no orders, stops, targets, or profitability claims; a trigger close is a reference price, not a fill.',
+      disclaimer: 'Evolution-qualified breakout research (zero-sum 1/8 index + EAT-aligned triggers), UNVALIDATED. Signals only — no orders, stops, targets, or profitability claims; a trigger close is a reference price, not a fill.',
     };
 
     if (!r.available) return res.json({ ok: true, available: false, mode, meta, reason: r.reason });

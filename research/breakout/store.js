@@ -28,7 +28,7 @@ function uuidv5(name) {
 
 function signalId(sig) { return uuidv5(sig.dedupKey); }
 
-function signalRow(sig, origin) {
+function signalRow(sig, origin, processedAtMs) {
   return {
     id: signalId(sig),
     strategy_key: sig.strategyKey, version: sig.version, origin: origin || 'historical',
@@ -36,10 +36,17 @@ function signalRow(sig, origin) {
     dir_tf: sig.dirTf, trigger_tf: sig.triggerTf,
     trigger_open_ms: sig.triggerOpenMs, trigger_close_ms: sig.triggerCloseMs,
     broken_boundary: sig.brokenBoundary, broken_level: sig.brokenLevel, reference_close: sig.referenceClose,
-    base_score: sig.baseScore, quote_score: sig.quoteScore,
-    strength_snapshot: sig.strengthSnapshot, breakout_detail: sig.breakoutDetail || {}, trigger_detail: sig.triggerDetail || {},
-    published_at_ms: sig.publishedAtMs, info_cutoff_ms: sig.infoCutoffMs, settings_version: sig.settingsVersion,
-    data_flags: { reconstruction: origin === 'historical' },
+    base_score: sig.baseScore == null ? null : sig.baseScore, quote_score: sig.quoteScore == null ? null : sig.quoteScore,
+    strength_snapshot: sig.strengthSnapshot,                               // v2: Evolution condition (alias)
+    condition_snapshot: sig.conditionSnapshot || sig.strengthSnapshot,     // v2 column
+    candidate_detail: sig.candidateDetail || {},
+    breakout_detail: sig.breakoutDetail || {}, trigger_detail: sig.triggerDetail || {},
+    published_at_ms: sig.publishedAtMs, info_cutoff_ms: sig.infoCutoffMs,
+    evo_snapshot_ms: sig.evoSnapshotMs == null ? sig.triggerCloseMs : sig.evoSnapshotMs,
+    market_close_ms: sig.marketCloseMs == null ? sig.triggerCloseMs : sig.marketCloseMs,
+    processed_at_ms: processedAtMs == null ? Date.now() : processedAtMs,
+    settings_version: sig.settingsVersion,
+    data_flags: { reconstruction: origin === 'historical', methodology: sig.version },
   };
 }
 
@@ -54,7 +61,8 @@ async function ensureVersion(sb, def) {
 /** Insert signals immutably (ON CONFLICT DO NOTHING via deterministic id). */
 async function putSignals(sb, sigs, origin) {
   if (!sigs || !sigs.length) return 0;
-  const rows = sigs.map((s) => signalRow(s, origin));
+  const processedAtMs = Date.now();                     // one processing timestamp per write batch
+  const rows = sigs.map((s) => signalRow(s, origin, processedAtMs));
   for (let i = 0; i < rows.length; i += 500) {
     const { error } = await sb.from('breakout_signals')
       .upsert(rows.slice(i, i + 500), { onConflict: 'id', ignoreDuplicates: true });
@@ -82,17 +90,27 @@ async function putPairStates(sb, timeframe, pairStates) {
   return rows.length;
 }
 
-/** Persist one all-28 decision snapshot (audit / reproduce). */
+/** Persist one all-28 decision snapshot (audit / reproduce). v2: stores the Evolution condition. */
 async function putDecisionSnapshot(sb, def, snap, origin) {
-  const strength = {};
+  const condition = {};
   for (const c of Object.keys(snap.strength)) {
     const s = snap.strength[c];
-    strength[c] = { score: s.score, classification: s.classification, bull: s.bull, bear: s.bear, complete: s.complete };
+    condition[c] = {
+      classification: s.classification, score: s.score, complete: s.complete, periodPct: s.periodPct,
+      fast: s.fast ? { M: s.fast.M, direction: s.fast.direction, signedEff: s.fast.signedEff } : null,
+      slow: s.slow ? { M: s.slow.M, direction: s.slow.direction, signedEff: s.slow.signedEff } : null,
+    };
   }
-  const ranks = snap.qualification.all.map((p) => ({ pair: p.pair, direction: p.direction, reason: p.reason, baseClass: p.baseClass, quoteClass: p.quoteClass, baseScore: p.baseScore, quoteScore: p.quoteScore }));
+  const ranks = snap.qualification.all.map((p) => ({
+    pair: p.pair, direction: p.direction, reason: p.reason, baseClass: p.baseClass, quoteClass: p.quoteClass,
+    baseScore: p.baseScore, quoteScore: p.quoteScore,
+    spread: p.spread ? { expanding: p.spread.expanding, fast: p.spread.fast, slow: p.spread.slow } : null,
+  }));
   const row = {
     strategy_key: def.key, version: def.version, origin: origin || 'forward',
-    info_cutoff_ms: snap.asOfMs, strength, ranks, settings_version: def.version,
+    info_cutoff_ms: snap.asOfMs, strength: condition, ranks,
+    decision_inputs: { params: def.params, condition: def.condition ? { fast: def.condition.fast, slow: def.condition.slow, periodLabel: def.condition.periodLabel } : null },
+    settings_version: def.version,
   };
   const { error } = await sb.from('breakout_decision_snapshots')
     .upsert([row], { onConflict: 'strategy_key,version,info_cutoff_ms', ignoreDuplicates: true });
