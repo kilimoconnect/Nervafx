@@ -22,6 +22,7 @@ function reasonFor(cb, cq) {
   if (cb === 'strong' && cq === 'strong') return 'both-strong';
   if (cb === 'weak' && cq === 'weak') return 'both-weak';
   if (cb === 'neutral' || cq === 'neutral') return 'neutral-leg';
+  if (cb === 'mixed' || cq === 'mixed') return 'mixed-leg';   // v2 Evolution condition
   return 'excluded';
 }
 

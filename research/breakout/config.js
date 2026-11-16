@@ -58,43 +58,76 @@ const TF = {
   },
 };
 
-// `methodology` identifies the RULES (never changes without a code release). The effective
-// `version` additionally encodes the active strong-threshold (`…-t5`) so that changing the
-// threshold creates a genuinely distinct settings version: past signals keep their version,
-// new ones carry the new one, and the two never collide on the deterministic signal id.
+// `methodology` identifies the RULES (never changes without a code release). v2 derives currency
+// direction from the Evolution index (see condition.js), NOT from persistent break-of-structure
+// votes. Each strategy carries a `condition` block: the EAT period baseline and the fast/slow
+// rolling windows (counted in M15 intervals) over which recent direction is measured.
+//   daily  : fast 1h (4×M15) / slow 4h (16×M15),  baseline = EAT day
+//   weekly : fast 4h (16×M15)/ slow 24h (96×M15), baseline = EAT week (Mon)
+//   monthly: fast 24h (96×M15)/slow 120h (480×M15), baseline = EAT month (1st)
+// The effective `version` encodes the methodology + the configurable params (breadth, windows,
+// deadbands) so any change creates a distinct settings version: past signals keep their version,
+// new ones carry the new one, and the two never collide on the deterministic signal id. v1 signals
+// (`bss-_-1.0.0-t_`) are preserved read-only and are never recomputed or relabelled.
 const STRATEGIES = {
-  daily:   { key: 'daily',   label: 'Daily',   dirTf: 'D1',  triggerTf: 'H1', methodology: 'bss-d-1.0.0' },
-  weekly:  { key: 'weekly',  label: 'Weekly',  dirTf: 'W1',  triggerTf: 'H4', methodology: 'bss-w-1.0.0' },
-  monthly: { key: 'monthly', label: 'Monthly', dirTf: 'MN1', triggerTf: 'D1', methodology: 'bss-m-1.0.0' },
+  daily:   { key: 'daily',   label: 'Daily',   dirTf: 'D1',  triggerTf: 'H1', methodology: 'bss-d-2.0.0',
+             condition: { periodStart: dayStart,   periodLabel: 'EAT day',   fast: 4,  slow: 16,  fastLabel: '1h',  slowLabel: '4h'   } },
+  weekly:  { key: 'weekly',  label: 'Weekly',  dirTf: 'W1',  triggerTf: 'H4', methodology: 'bss-w-2.0.0',
+             condition: { periodStart: weekStart,  periodLabel: 'EAT week',  fast: 16, slow: 96,  fastLabel: '4h',  slowLabel: '24h'  } },
+  monthly: { key: 'monthly', label: 'Monthly', dirTf: 'MN1', triggerTf: 'D1', methodology: 'bss-m-2.0.0',
+             condition: { periodStart: monthStart, periodLabel: 'EAT month', fast: 96, slow: 480, fastLabel: '24h', slowLabel: '120h' } },
 };
 
-/** The effective settings version for a methodology + strong-threshold. */
-function versionFor(methodology, threshold) { return `${methodology}-t${threshold}`; }
 const STRATEGY_KEYS = ['daily', 'weekly', 'monthly'];
 
-// Strong/weak classification threshold — a CONFIGURABLE ASSUMPTION. One symmetric
-// integer threshold in [4,7] so strong and weak can never overlap (7 contributions).
-const DEFAULT_PARAMS = { strongThreshold: 5 };
-const MIN_THRESHOLD = 4, MAX_THRESHOLD = 7;
+// Configurable condition assumptions (v2). All start permissive:
+//   breadthMin   : how many of a currency's 7 legs must agree inside the fast window (default 5/7).
+//   dirDeadband  : pp a window's net move must exceed to count as a direction (default 0).
+//   effDeadband  : min |signed efficiency| in the fast window (default 0).
+const DEFAULT_PARAMS = { breadthMin: 5, dirDeadband: 0, effDeadband: 0 };
+const PARAM_RANGES = { breadthMin: [4, 7], dirDeadband: [0, 5], effDeadband: [0, 1] };
 
-/** Clamp/validate a strong-threshold to an integer in [4,7]; default 5 on bad input. */
+// ── v1 legacy threshold helpers (retained so strength.js + its tests keep working; the live
+// v2 path no longer uses votes). ──────────────────────────────────────────────────────────
+const MIN_THRESHOLD = 4, MAX_THRESHOLD = 7;
 function validThreshold(t) {
   const n = Math.round(Number(t));
-  if (!Number.isFinite(n)) return DEFAULT_PARAMS.strongThreshold;
+  if (!Number.isFinite(n)) return 5;
   return Math.max(MIN_THRESHOLD, Math.min(MAX_THRESHOLD, n));
+}
+
+const clampInt = (v, lo, hi, dflt) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : dflt; };
+const clampNum = (v, lo, hi, dflt) => { const n = Number(v); return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : dflt; };
+
+/** Validate/clamp the v2 condition params; bad input falls back to the defaults. */
+function validParams(o = {}) {
+  o = o || {};
+  return {
+    breadthMin: clampInt(o.breadthMin, PARAM_RANGES.breadthMin[0], PARAM_RANGES.breadthMin[1], DEFAULT_PARAMS.breadthMin),
+    dirDeadband: clampNum(o.dirDeadband, PARAM_RANGES.dirDeadband[0], PARAM_RANGES.dirDeadband[1], DEFAULT_PARAMS.dirDeadband),
+    effDeadband: clampNum(o.effDeadband, PARAM_RANGES.effDeadband[0], PARAM_RANGES.effDeadband[1], DEFAULT_PARAMS.effDeadband),
+  };
+}
+
+const numTok = (x) => String(x).replace('.', 'p');   // 0.25 → "0p25" (filesystem/id-safe)
+/** Compact, distinct settings version for a strategy + params (windows included for provenance). */
+function versionFor(s, params) {
+  const p = validParams(params);
+  const c = s.condition || { fast: 0, slow: 0 };
+  return `${s.methodology}-b${p.breadthMin}f${c.fast}s${c.slow}d${numTok(p.dirDeadband)}e${numTok(p.effDeadband)}`;
 }
 
 function strategyDef(key, paramOverrides) {
   const s = STRATEGIES[key];
   if (!s) throw new Error('unknown strategy: ' + key);
-  const threshold = validThreshold((paramOverrides || {}).strongThreshold != null ? paramOverrides.strongThreshold : DEFAULT_PARAMS.strongThreshold);
-  const params = { strongThreshold: threshold };
-  return { ...s, params, methodologyVersion: s.methodology, version: versionFor(s.methodology, threshold) };
+  const params = validParams(paramOverrides);
+  return { ...s, params, methodologyVersion: s.methodology, version: versionFor(s, params) };
 }
 
 module.exports = {
   CURRENCIES, PAIRS, pairFor, legsFor,
   HOUR_MS, H4_MS, DAY_MS, EAT_OFFSET_MS,
-  TF, STRATEGIES, STRATEGY_KEYS, DEFAULT_PARAMS, MIN_THRESHOLD, MAX_THRESHOLD,
-  validThreshold, strategyDef, versionFor,
+  TF, STRATEGIES, STRATEGY_KEYS, DEFAULT_PARAMS, PARAM_RANGES,
+  MIN_THRESHOLD, MAX_THRESHOLD, validThreshold,
+  validParams, strategyDef, versionFor,
 };

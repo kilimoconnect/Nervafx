@@ -4,11 +4,11 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { strategyDef } = require('../../research/breakout/config');
 const { buildContext, snapshotAt } = require('../../research/breakout/evaluate');
-const { replayAt, triggerCloseTimes, latestTriggerClose, stepTriggerClose, sweepSignals } = require('../../research/breakout/replay');
-const { genH1, EAT_DAY0, HOUR } = require('./fixtures');
+const { replayAt, triggerCloseTimes, latestTriggerClose, stepTriggerClose, sweepSignals, m15CloseTimes, stepM15Close } = require('../../research/breakout/replay');
+const { genData, EAT_DAY0, HOUR } = require('./fixtures');
 
 const N = 700;
-const DATA = genH1(N, EAT_DAY0);
+const DATA = genData(N, EAT_DAY0);
 const LAST = EAT_DAY0 + (N - 1) * HOUR;
 const ctx = () => buildContext(strategyDef('daily'), DATA);
 
@@ -80,4 +80,16 @@ test('trigger close times are sorted, unique and within range', () => {
   const closes = triggerCloseTimes(c, EAT_DAY0, LAST);
   for (let i = 1; i < closes.length; i++) assert.ok(closes[i] > closes[i - 1], 'strictly increasing / unique');
   assert.ok(closes[0] > EAT_DAY0 && closes[closes.length - 1] <= LAST);
+});
+
+test('Evolution (M15) stepping: next/prev move over index closes, finer than trigger closes', () => {
+  const c = ctx();
+  const m15 = m15CloseTimes(c, EAT_DAY0, LAST);
+  const trig = triggerCloseTimes(c, EAT_DAY0, LAST);
+  assert.ok(m15.length > trig.length, 'M15 closes are more frequent than H1 trigger closes');
+  const i = Math.floor(m15.length / 2);
+  assert.equal(stepM15Close(c, m15[i], 1), m15[i + 1], 'next M15 close');
+  assert.equal(stepM15Close(c, m15[i], -1), m15[i - 1], 'prev M15 close');
+  // bounded stepping cannot pass the last completed M15 close
+  assert.equal(stepM15Close(c, m15[m15.length - 1], 1, LAST), null);
 });

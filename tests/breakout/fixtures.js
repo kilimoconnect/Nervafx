@@ -81,8 +81,51 @@ function cloneH1(by) {
   return out;
 }
 
+// ── M15 generator (for the Evolution index) ──────────────────────────────────
+// Same smooth drift + oscillation model as the H1 generator, at M15 resolution so the
+// index, breadth and fast/slow windows all move deterministically. A step k of M15 equals
+// hour k/4, so the oscillation periods mirror genH1's (hourly /6 → /24, hourly /13 → /52).
+const M15 = 15 * 60 * 1000;
+function vAtM15(ccy, k, K) {
+  return Math.exp(
+    DRIFT[ccy] * (k / K) * 0.06
+    + 0.013 * Math.sin(k / 24 + PHASE[ccy])
+    + 0.008 * Math.sin(k / 52 + PHASE[ccy] * 1.7),
+  );
+}
+/** Generate K completed M15 candles for all 28 pairs; last closeMs = startMs + K·M15. */
+function genM15(K, startMs) {
+  const by = {};
+  for (const p of PAIRS) by[p] = [];
+  for (let k = 0; k < K; k++) {
+    const t = startMs + k * M15;
+    for (const p of PAIRS) {
+      const j = p.indexOf('_'), b = p.slice(0, j), q = p.slice(j + 1);
+      const o = vAtM15(b, k, K) / vAtM15(q, k, K);
+      const c = vAtM15(b, k + 1, K) / vAtM15(q, k + 1, K);
+      const hi = Math.max(o, c) * (1 + 0.0004), lo = Math.min(o, c) * (1 - 0.0004);
+      by[p].push({ openMs: t, open: o, high: hi, low: lo, close: c, volume: 100 });
+    }
+  }
+  return by;
+}
+
+/**
+ * Combined engine input: H1 (triggers + diagnostic HTF) + M15 (Evolution index), covering the
+ * SAME span. `N` hourly samples → N−1 H1 candles and (N−1)·4 M15 candles, both ending at
+ * startMs + (N−1)·HOUR. This is what buildContext(def, data) expects.
+ */
+function genData(N, startMs) {
+  return { h1ByPair: genH1(N, startMs), m15ByPair: genM15((N - 1) * 4, startMs) };
+}
+
+/** Deep clone of a combined { h1ByPair, m15ByPair } data object. */
+function cloneData(data) {
+  return { h1ByPair: cloneH1(data.h1ByPair), m15ByPair: cloneH1(data.m15ByPair) };
+}
+
 // An EAT day start to anchor generated data on a clean boundary.
 const { dayStart } = require('../../research/comparison/periods');
 const EAT_DAY0 = dayStart(Date.UTC(2026, 2, 2, 12, 0, 0));
 
-module.exports = { candles, rankDir, RANK_VALUES, HOUR, T0, PAIRS, CURRENCIES, genH1, cloneH1, EAT_DAY0 };
+module.exports = { candles, rankDir, RANK_VALUES, HOUR, M15, T0, PAIRS, CURRENCIES, genH1, cloneH1, genM15, genData, cloneData, EAT_DAY0 };
