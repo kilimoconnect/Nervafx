@@ -1,13 +1,12 @@
 'use strict';
-/* NervaFX — Breakout Strength & Signals UI. Research, EAT-aligned, UNVALIDATED. Signals only. */
+/* NervaFX — Breakout Strength & Signals UI (v2, Evolution-based). Research, EAT-aligned, UNVALIDATED. Signals only. */
 (function () {
   var S = window.NFX_BSS || { strat: 'daily', sec: 'strength', days: 60 };
   var host = document.getElementById('host'), datahdr = document.getElementById('datahdr'), banners = document.getElementById('banners');
   var drawer = document.getElementById('drawer'), drawerBody = document.getElementById('drawerBody');
   document.getElementById('drawerX').onclick = function () { drawer.classList.remove('open'); };
 
-  var OV = null;            // overview payload for the active strategy (cached per strat)
-  var cache = {};           // strat -> overview
+  var OV = null, cache = {};
   var STRAT_LABEL = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' };
   var COL = { USD: '#60a5fa', EUR: '#a78bfa', GBP: '#f472b6', JPY: '#f87171', CHF: '#fb923c', CAD: '#fbbf24', AUD: '#34d399', NZD: '#22d3ee' };
 
@@ -23,13 +22,20 @@
     return fetch('/api/breakout-strength?' + qs).then(function (r) { return r.json(); });
   }
   function num(x, d) { return x == null ? '—' : (+x).toFixed(d == null ? 2 : d); }
+  function sgn(x, d) { if (x == null) return '—'; var v = +x; return (v > 0 ? '+' : '') + v.toFixed(d == null ? 2 : d); }
   function digits(pair) { return (pair && pair.slice(-4) === '_JPY') ? 3 : 5; }
   function px(pair, v) { return v == null ? '—' : (+v).toFixed(digits(pair)); }
   function eat(ms) { if (ms == null) return '—'; var d = new Date(ms + 3 * 3600000), p = function (n) { return (n < 10 ? '0' : '') + n; }; return d.getUTCFullYear() + '-' + p(d.getUTCMonth() + 1) + '-' + p(d.getUTCDate()) + ' ' + p(d.getUTCHours()) + ':' + p(d.getUTCMinutes()); }
   function setURL() { history.replaceState(null, '', location.pathname + '?strat=' + S.strat + '&sec=' + S.sec + '&days=' + S.days); }
   function normDir(d) { if (d === 'BUY' || d === 'SELL') return d; if (typeof d === 'number') return d > 0 ? 'BUY' : (d < 0 ? 'SELL' : null); return null; }
   function dirBadge(dir) { var t = normDir(dir); return h('span', { class: 'bias ' + (t || 'no') }, [t || 'none']); }
-  function clsTag(c) { return h('span', { class: 'clstag cls-' + c }, [c]); }
+  function clsTag(c) { return h('span', { class: 'clstag cls-' + (c || 'insufficient') }, [c || '—']); }
+  function clsSpan(c) { return '<span class="clstag cls-' + (c || 'insufficient') + '">' + (c || '—') + '</span>'; }
+  // movement direction → arrow + color class
+  function mv(dir) { if (dir === 'strengthening') return ['▲', 'up']; if (dir === 'weakening') return ['▼', 'dn']; return ['–', 'mut']; }
+  function mvCell(w) { if (!w || !w.available) return h('td', { class: 'mut' }, ['n/a']); var a = mv(w.direction); return h('td', { class: a[1] }, [a[0] + ' ' + sgn(w.M, 3) + (w.spansGap ? ' *' : '')]); }
+  function effCell(w) { if (!w || !w.available || w.signedEff == null) return h('td', { class: 'mut' }, ['—']); var e = w.signedEff; return h('td', { class: e > 0 ? 'up' : (e < 0 ? 'dn' : 'mut') }, [sgn(e, 2)]); }
+  function breadthStr(b) { if (!b) return '—'; return b.appreciated + '↑/' + b.depreciated + '↓' + (b.coverage && b.coverage.valid < 7 ? ' /' + b.coverage.valid : ''); }
 
   // ── tab wiring ─────────────────────────────────────────────────────────────
   function wireTabs() {
@@ -42,137 +48,166 @@
       b.onclick = function () { S.sec = b.getAttribute('data-sec'); [].forEach.call(document.querySelectorAll('.subtabs [data-sec]'), function (x) { x.classList.toggle('active', x === b); }); setURL(); render(); };
     });
   }
-
   function byPair(arr) { var m = {}; (arr || []).forEach(function (r) { m[r.pair] = r; }); return m; }
+  function windowsLabel(meta) { var w = meta.windows || {}; return 'fast ' + (w.fast || '?') + ' / slow ' + (w.slow || '?') + ' · period ' + (w.period || '?'); }
 
   // ── timezone helpers (wall-clock in an IANA zone ⇆ UTC ms) ──────────────────
   var LOCAL_TZ = (function () { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (e) { return 'UTC'; } })();
   function tzOffMs(utcMs, tz) { try { var m = {}; new Intl.DateTimeFormat('en-US', { timeZone: tz, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(new Date(utcMs)).forEach(function (p) { m[p.type] = p.value; }); return Date.UTC(+m.year, +m.month - 1, +m.day, +m.hour, +m.minute, +(m.second || 0)) - utcMs; } catch (e) { return 0; } }
-  function wallToUtc(y, mo, d, h, mi, tz) { var g = Date.UTC(y, mo - 1, d, h, mi); for (var i = 0; i < 2; i++) g = Date.UTC(y, mo - 1, d, h, mi) - tzOffMs(g, tz); return g; }
+  function wallToUtc(y, mo, d, hh, mi, tz) { var g = Date.UTC(y, mo - 1, d, hh, mi); for (var i = 0; i < 2; i++) g = Date.UTC(y, mo - 1, d, hh, mi) - tzOffMs(g, tz); return g; }
   function utcToWall(ms, tz) { var m = {}; new Intl.DateTimeFormat('en-US', { timeZone: tz, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(new Date(ms)).forEach(function (p) { m[p.type] = p.value; }); return m.year + '-' + m.month + '-' + m.day + 'T' + m.hour + ':' + m.minute; }
 
-  // ── currency strength ──────────────────────────────────────────────────────
+  // ── Evolution index chart (8 currency % paths from the period baseline) ──────
+  function drawEvolutionChart(el, legend, strat, asOf) {
+    if (!window.LightweightCharts) { el.innerHTML = '<div class="mut">chart library unavailable</div>'; return; }
+    fetch('/api/breakout-chart?view=evolution&strategy=' + strat + (asOf ? '&asOf=' + asOf : '')).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j || j.available === false || !j.series) { el.innerHTML = '<div class="mut">no index data</div>'; return; }
+      var chart = LightweightCharts.createChart(el, { height: 320, layout: { background: { color: 'transparent' }, textColor: '#9aa4b2' }, grid: { vertLines: { color: 'rgba(42,49,72,.4)' }, horzLines: { color: 'rgba(42,49,72,.4)' } }, rightPriceScale: { borderColor: '#2a3148' }, timeScale: { borderColor: '#2a3148', timeVisible: true } });
+      if (legend) legend.innerHTML = '';
+      j.series.forEach(function (s) {
+        if (!s.ok || !s.points || !s.points.length) return;
+        var ls = chart.addLineSeries({ color: COL[s.currency] || '#888', lineWidth: 2, priceLineVisible: false, lastValueVisible: true, title: s.currency });
+        ls.setData(s.points.map(function (p) { return { time: p.sec, value: p.pct }; }));
+        if (legend) { var lg = h('span', {}, [h('i', { style: 'background:' + (COL[s.currency] || '#888') }), s.currency + ' ' + sgn(s.last, 2) + '%']); legend.appendChild(lg); }
+      });
+      chart.timeScale().fitContent();
+    }).catch(function () { el.innerHTML = '<div class="mut">index chart failed</div>'; });
+  }
+
+  // ── currency condition ───────────────────────────────────────────────────────
   function renderStrength(o) {
     var wrap = h('div', {});
     var complete = (o.status && o.status.currenciesComplete) || 0;
-    wrap.appendChild(h('div', { class: 'note mut', html: 'Scores from the ' + o.meta.dirTf + ' break of each pair, as of <b>' + eat(o.cutoffMs) + ' EAT</b>. ' + complete + '/8 currencies have all seven legs known' + (complete === 8 ? ' — the eight scores sum to zero.' : ' (an unknown leg makes a currency <i>insufficient</i>, not neutral).') + ' Threshold for strong/weak: <b>' + o.meta.threshold + '</b> of 7. Click a currency for its seven contributions.' }));
-    var grid = h('div', { class: 'strengthgrid' });
-    var ps = byPair(o.pairStates);
+    wrap.appendChild(h('div', { class: 'note mut', html: 'Each currency\'s <b>recent condition</b> from the zero-sum index, as of <b>' + eat(o.cutoffMs) + ' EAT</b>. Windows: <b>' + windowsLabel(o.meta) + '</b>. ' + complete + '/8 currencies have both windows available. A currency is <b>strong</b> when BOTH windows strengthen with breadth ≥ ' + (o.meta.params ? o.meta.params.breadthMin : 5) + '/7 and positive signed efficiency (weak = the mirror); otherwise <i>mixed</i>. Period position is context only. Click a currency for its window detail.' }));
+
+    // Evolution chart
+    var ch = h('div', { class: 'echart' }); var lg = h('div', { class: 'legend' });
+    wrap.appendChild(h('div', { class: 'sec' }, [h('h3', {}, ['Evolution — index % from the ' + (o.meta.windows ? o.meta.windows.period : 'period') + ' open (EAT)']), lg, ch]));
+
+    // condition table
+    var t = h('table', { class: 'tbl' }, [h('thead', {}, [h('tr', {}, ['Currency', 'Condition', 'Period %', 'Fast (' + (o.meta.windows ? o.meta.windows.fast : '') + ')', 'Fast eff', 'Fast breadth', 'Slow (' + (o.meta.windows ? o.meta.windows.slow : '') + ')', 'Pace'].map(function (x) { return h('th', {}, [x]); }))])]);
+    var tb = h('tbody', {});
     (o.strength || []).forEach(function (c) {
-      var bullW = (c.bull / 7 * 100), bearW = (c.bear / 7 * 100);
-      var card = h('div', { class: 'ccard', onclick: function () { openStrengthDetail(c, ps, o); } }, [
-        h('div', { class: 'top' }, [
-          h('span', { class: 'dot', style: 'background:' + (COL[c.currency] || '#888') }),
-          h('span', { class: 'ccy' }, [c.currency]),
-          h('span', { class: 'score ' + (c.score > 0 ? 'up' : (c.score < 0 ? 'dn' : 'mut')) }, [c.score == null ? '—' : (c.score > 0 ? '+' : '') + c.score])
-        ]),
-        h('div', { style: 'margin-top:6px' }, [clsTag(c.classification)]),
-        h('div', { class: 'breadth' }, [h('span', { class: 'b-bull', style: 'width:' + bullW + '%' }), h('span', { class: 'b-bear', style: 'width:' + bearW + '%' })]),
-        h('div', { class: 'cnt' }, [c.complete ? (c.bull + ' bullish / ' + c.bear + ' bearish of 7 legs') : ((7 - c.contributions.filter(function (x) { return x.contribution != null; }).length) + ' of 7 legs unknown')])
-      ]);
-      grid.appendChild(card);
+      tb.appendChild(h('tr', { class: 'clk', onclick: function () { openCcyDetail(c, o); } }, [
+        h('td', { html: '<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:' + (COL[c.currency] || '#888') + ';margin-right:6px"></span>' + c.currency }),
+        h('td', {}, [clsTag(c.classification)]),
+        h('td', { class: c.periodPct > 0 ? 'up' : (c.periodPct < 0 ? 'dn' : 'mut') }, [sgn(c.periodPct, 3) + '%']),
+        mvCell(c.fast), effCell(c.fast),
+        h('td', { class: 'mut' }, [c.fast ? breadthStr(c.fast.breadth) : '—']),
+        mvCell(c.slow),
+        h('td', { class: 'mut' }, [c.paceChange ? c.paceChange.label : '—'])
+      ]));
     });
-    wrap.appendChild(grid);
+    t.appendChild(tb); wrap.appendChild(t);
+    wrap.appendChild(h('div', { class: 'note mut' }, ['* a window spanning a weekend/holiday closure (the index skips closed periods).']));
+    setTimeout(function () { drawEvolutionChart(ch, lg, S.strat, o.mode === 'historical' ? o.cutoffMs : null); }, 0);
     return wrap;
   }
 
-  function openStrengthDetail(c, ps, o) {
+  function openCcyDetail(c, o) {
     drawer.classList.add('open'); drawerBody.innerHTML = '';
-    drawerBody.appendChild(h('div', { html: '<div style="font-weight:800;font-size:17px"><span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:' + (COL[c.currency] || '#888') + ';margin-right:7px"></span>' + c.currency + ' <span class="' + (c.score > 0 ? 'up' : (c.score < 0 ? 'dn' : 'mut')) + '">' + (c.score == null ? 'insufficient' : (c.score > 0 ? '+' : '') + c.score) + '</span></div>' }));
-    drawerBody.appendChild(h('div', { style: 'margin:6px 0' }, [clsTag(c.classification), h('span', { class: 'mut', style: 'margin-left:8px;font-size:12px' }, [STRAT_LABEL[S.strat] + ' · ' + o.meta.dirTf + ' structure · threshold ' + o.meta.threshold + '/7'])]));
-    drawerBody.appendChild(h('div', { class: 'note mut', style: 'margin:6px 0 10px' }, [c.complete ? (c.bull + ' legs vote the currency up, ' + c.bear + ' vote it down (score = up − down).') : 'One or more legs are unknown, so this currency is excluded from qualification until its history fills in.']));
-    var t = h('table', { class: 'tbl' }, [h('thead', {}, [h('tr', {}, ['Pair', 'Role', 'Break (' + o.meta.dirTf + ')', 'Boundary', 'Age', 'Vote'].map(function (x) { return h('th', {}, [x]); }))])]);
+    drawerBody.appendChild(h('div', { html: '<div style="font-weight:800;font-size:17px"><span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:' + (COL[c.currency] || '#888') + ';margin-right:7px"></span>' + c.currency + '</div>' }));
+    drawerBody.appendChild(h('div', { style: 'margin:6px 0' }, [clsTag(c.classification), h('span', { class: 'mut', style: 'margin-left:8px;font-size:12px' }, [STRAT_LABEL[S.strat] + ' · condition from recent movement · ' + windowsLabel(o.meta)])]));
+    drawerBody.appendChild(h('div', { class: 'note mut', style: 'margin:6px 0 10px' }, ['Period position (context): ' + sgn(c.periodPct, 3) + '% since the ' + (o.meta.windows ? o.meta.windows.period : 'period') + ' open · peak ' + sgn(c.periodPeak, 3) + '% / trough ' + sgn(c.periodTrough, 3) + '%.']));
+    var t = h('table', { class: 'tbl' }, [h('thead', {}, [h('tr', {}, ['Window', 'Direction', 'Net move', 'Signed eff', 'Breadth', 'Spans gap'].map(function (x) { return h('th', {}, [x]); }))])]);
     var tb = h('tbody', {});
-    (c.contributions || []).forEach(function (g) {
-      var st = ps[g.pair] || {};
-      var voteTxt = g.contribution == null ? 'unknown' : (g.contribution > 0 ? '+1 up' : '−1 down');
-      var voteCls = g.contribution == null ? 'mut' : (g.contribution > 0 ? 'up' : 'dn');
-      var dirTxt = st.direction == null ? '—' : (st.direction > 0 ? 'bull' : (st.direction < 0 ? 'bear' : (st.reason === 'insufficient-history' ? 'insuff.' : 'none')));
+    [['Fast (' + (o.meta.windows ? o.meta.windows.fast : '') + ')', c.fast], ['Slow (' + (o.meta.windows ? o.meta.windows.slow : '') + ')', c.slow]].forEach(function (p) {
+      var w = p[1] || {}; var a = mv(w.direction);
       tb.appendChild(h('tr', {}, [
-        h('td', {}, [g.pair]),
-        h('td', { class: 'mut' }, [g.sign > 0 ? 'base' : 'quote']),
-        h('td', { class: st.direction > 0 ? 'up' : (st.direction < 0 ? 'dn' : 'mut') }, [dirTxt]),
-        h('td', { class: 'mut' }, [st.brokenBoundary ? (st.brokenBoundary + ' @ ' + px(g.pair, st.brokenLevel)) : '—']),
-        h('td', { class: 'mut' }, [st.ageCandles == null ? '—' : st.ageCandles + 'c']),
-        h('td', { class: voteCls }, [voteTxt])
+        h('td', {}, [p[0]]),
+        w.available ? h('td', { class: a[1] }, [a[0] + ' ' + w.direction]) : h('td', { class: 'mut' }, [w.reason || 'n/a']),
+        h('td', { class: w.M > 0 ? 'up' : (w.M < 0 ? 'dn' : 'mut') }, [sgn(w.M, 3)]),
+        h('td', { class: 'mut' }, [w.signedEff == null ? '—' : sgn(w.signedEff, 2)]),
+        h('td', { class: 'mut' }, [breadthStr(w.breadth)]),
+        h('td', { class: 'mut' }, [w.spansGap ? 'yes' : 'no'])
       ]));
     });
     t.appendChild(tb); drawerBody.appendChild(t);
+    if (c.fast && c.fast.breadth && c.fast.breadth.per) {
+      var bt = h('table', { class: 'tbl' }, [h('thead', {}, [h('tr', {}, ['Fast-window leg', 'Role', 'Oriented %', 'State'].map(function (x) { return h('th', {}, [x]); }))])]);
+      var bb = h('tbody', {});
+      c.fast.breadth.per.forEach(function (g) { bb.appendChild(h('tr', {}, [h('td', {}, [g.pair]), h('td', { class: 'mut' }, [g.role || '—']), h('td', { class: g.orientedReturnPct > 0 ? 'up' : (g.orientedReturnPct < 0 ? 'dn' : 'mut') }, [g.orientedReturnPct == null ? '—' : sgn(g.orientedReturnPct, 3)]), h('td', { class: g.classification === 'appreciated' ? 'up' : (g.classification === 'depreciated' ? 'dn' : 'mut') }, [g.classification])])); });
+      bt.appendChild(bb); drawerBody.appendChild(h('div', { class: 'sec' }, [h('h3', {}, ['Fast-window breadth — the 7 legs']), bt]));
+    }
   }
 
-  // ── qualified pairs ────────────────────────────────────────────────────────
+  // ── candidates (qualified pairs) ─────────────────────────────────────────────
   function renderQualified(o) {
     var wrap = h('div', {});
     var q = o.qualified || [], all = o.qualification || [];
     var te = byPair(o.triggerEvals), sigPairs = {}; (o.currentSignals || []).forEach(function (s) { sigPairs[s.pair] = s; });
-    wrap.appendChild(h('div', { class: 'note mut', html: '<b>' + q.length + '</b> of 28 pairs qualify (a strong currency against a weak one) as of <b>' + eat(o.cutoffMs) + ' EAT</b>. A qualified pair is a <i>watch</i>, not a signal — a signal needs a fresh ' + o.meta.triggerTf + ' break in the qualified direction. All 28 pairs are listed below; none is hidden or ranked away.' }));
-    if (!q.length) wrap.appendChild(h('div', { class: 'card mut' }, ['No pair qualifies right now: no strong currency is currently paired against a weak one at threshold ' + o.meta.threshold + '.']));
+    wrap.appendChild(h('div', { class: 'note mut', html: '<b>' + q.length + '</b> of 28 pairs qualify (strong vs weak, with a widening index spread) as of <b>' + eat(o.cutoffMs) + ' EAT</b>. A candidate is a <i>watch</i>, not a signal — a signal needs a fresh ' + o.meta.triggerTf + ' break in the qualified direction. All 28 are listed below.' }));
+    if (!q.length) wrap.appendChild(h('div', { class: 'card mut' }, ['No pair qualifies right now: no strong currency is paired against a weak one with a widening spread.']));
     var grid = h('div', { class: 'qgrid' });
     q.forEach(function (r) {
-      var ev = te[r.pair] || {}, dec = ev.decision || {};
-      var statusEl, sig = sigPairs[r.pair];
+      var ev = te[r.pair] || {}, dec = ev.decision || {}, statusEl, sig = sigPairs[r.pair];
       if (sig) statusEl = h('span', { class: 'st sig' }, ['● signal @ ' + eat(sig.triggerCloseMs)]);
+      else if (ev.spreadOk === false) statusEl = h('span', { class: 'st wait' }, ['spread stopped widening at trigger']);
       else if (dec.reason === 'no-signal:no-breakout') statusEl = h('span', { class: 'st wait' }, ['waiting · no fresh break']);
       else if (dec.reason === 'no-signal:breakout-against-direction') statusEl = h('span', { class: 'st wait' }, ['break against direction']);
+      else if (dec.reason === 'no-signal:qualification-lost') statusEl = h('span', { class: 'st wait' }, ['condition lost at trigger']);
       else if (dec.evaluable === false) statusEl = h('span', { class: 'st no' }, ['cannot evaluate yet']);
-      else statusEl = h('span', { class: 'st no' }, [dec.reason || 'waiting']);
+      else statusEl = h('span', { class: 'st no' }, [(dec.reason || 'waiting')]);
+      var sp = r.spread || {};
       var card = h('div', { class: 'qcard', onclick: function () { openPairDetail(r.pair); } }, [
         h('div', { style: 'display:flex;align-items:center;gap:8px' }, [h('span', { class: 'pr' }, [r.pair]), dirBadge(r.direction)]),
         h('div', { style: 'margin-top:6px' }, [statusEl]),
         h('div', { class: 'qmeta', html:
-          r.base + ' ' + spanCls(r.baseClass, r.baseScore) + ' · ' + r.quote + ' ' + spanCls(r.quoteClass, r.quoteScore) + '<br>' +
-          'Trigger ' + o.meta.triggerTf + ': ' + (ev.triggerCloseMs ? 'last close ' + eat(ev.triggerCloseMs) : '—') +
-          (ev.trigger && ev.trigger.break ? ' · broke ' + ev.trigger.boundary : '') })
+          r.base + ' ' + clsSpan(r.baseClass) + ' · ' + r.quote + ' ' + clsSpan(r.quoteClass) + '<br>' +
+          'Spread Δ: fast ' + sgn(sp.fast && sp.fast.M, 3) + ' · slow ' + sgn(sp.slow && sp.slow.M, 3) + '<br>' +
+          'Trigger ' + o.meta.triggerTf + ': ' + (ev.triggerCloseMs ? 'last close ' + eat(ev.triggerCloseMs) : '—') + (ev.trigger && ev.trigger.break ? ' · broke ' + ev.trigger.boundary : '') })
       ]);
       grid.appendChild(card);
     });
     wrap.appendChild(grid);
 
-    // full 28 qualification table (show-all, no top-N)
     var det = h('details', { class: 'sec' }, [h('summary', { class: 'mut', html: 'Inspect all 28 pairs (qualification matrix)' })]);
-    var t = h('table', { class: 'tbl' }, [h('thead', {}, [h('tr', {}, ['Pair', 'Direction', 'Base', 'Quote', 'Reason'].map(function (x) { return h('th', {}, [x]); }))])]);
+    var t = h('table', { class: 'tbl' }, [h('thead', {}, [h('tr', {}, ['Pair', 'Direction', 'Base', 'Quote', 'Spread widening', 'Reason'].map(function (x) { return h('th', {}, [x]); }))])]);
     var tb = h('tbody', {});
     all.forEach(function (r) {
-      var nd = normDir(r.direction);
+      var nd = normDir(r.direction), sp = r.spread || {};
       tb.appendChild(h('tr', { class: nd ? 'clk' : '', onclick: nd ? function () { openPairDetail(r.pair); } : null }, [
-        h('td', {}, [r.pair + (nd ? ' ★' : '')]),
+        h('td', {}, [r.pair + (nd && sp.expanding ? ' ★' : '')]),
         h('td', { class: nd === 'BUY' ? 'up' : (nd === 'SELL' ? 'dn' : 'mut') }, [nd || '—']),
-        h('td', { html: spanCls(r.baseClass, r.baseScore) + ' ' + r.base }),
-        h('td', { html: spanCls(r.quoteClass, r.quoteScore) + ' ' + r.quote }),
+        h('td', { html: clsSpan(r.baseClass) + ' ' + r.base }),
+        h('td', { html: clsSpan(r.quoteClass) + ' ' + r.quote }),
+        h('td', { class: sp.expanding ? 'up' : 'mut' }, [r.direction ? (sp.expanding ? 'yes' : 'no') : '—']),
         h('td', { class: 'mut' }, [r.reason])
       ]));
     });
     t.appendChild(tb); det.appendChild(t); wrap.appendChild(det);
     return wrap;
   }
-  function spanCls(cls, score) { return '<span class="clstag cls-' + cls + '">' + cls.slice(0, 4) + (score == null ? '' : ' ' + (score > 0 ? '+' : '') + score) + '</span>'; }
 
   // ── signals ────────────────────────────────────────────────────────────────
   function renderSignals(o) {
     var wrap = h('div', {});
     var cur = o.currentSignals || [], rec = o.recentSignals || [];
-    wrap.appendChild(h('div', { class: 'note mut', html: 'A <b>confirmed signal</b> = qualified pair + a fresh ' + o.meta.triggerTf + ' break in the qualified direction, re-checked at that candle\'s close. The trigger close is a <b>reference price, not a fill</b>. No stops, targets or sizing.' }));
+    wrap.appendChild(h('div', { class: 'note mut', html: 'A <b>confirmed signal</b> = qualified pair (strong vs weak + widening spread) + a fresh ' + o.meta.triggerTf + ' break in the qualified direction, re-checked at that candle\'s close. The trigger close is a <b>reference price, not a fill</b>. No stops, targets or sizing.' }));
     wrap.appendChild(h('div', { class: 'sec' }, [h('h3', {}, ['Signals at the latest trigger close (' + cur.length + ')'])]));
     if (!cur.length) wrap.appendChild(h('div', { class: 'card mut' }, ['No confirmed signal at the latest completed ' + o.meta.triggerTf + ' close.']));
     else wrap.appendChild(signalTable(cur));
-    wrap.appendChild(h('div', { class: 'sec' }, [h('h3', {}, ['Signal history · last ' + S.days + ' days (' + rec.length + ')']), h('div', { class: 'note mut' }, ['Every confirmed signal in the window, each judged at its own trigger close (newest first).'])]));
+    wrap.appendChild(h('div', { class: 'sec' }, [h('h3', {}, ['Signal history · last ' + S.days + ' days (' + rec.length + ')']), h('div', { class: 'note mut' }, ['Every confirmed signal in the window, each judged at its own trigger close (newest first). Methodology: ' + (o.meta.methodology || 'Evolution-qualified breakout') + '.'])]));
     if (!rec.length) wrap.appendChild(h('div', { class: 'card mut' }, ['No signals recorded in this window.']));
     else wrap.appendChild(signalTable(rec.slice().reverse()));
     return wrap;
   }
+  function condOf(sig, ccy) { var cs = sig.conditionSnapshot || {}; return cs[ccy] || {}; }
   function signalTable(rows) {
-    var head = ['Pair', 'Dir', 'Trigger close (EAT)', 'Broke', 'Ref close', 'Base', 'Quote'];
+    var head = ['Pair', 'Dir', 'Trigger close (EAT)', 'Broke', 'Ref close', 'Base', 'Quote', 'Spread'];
     var t = h('table', { class: 'tbl' }, [h('thead', {}, [h('tr', {}, head.map(function (x) { return h('th', {}, [x]); }))])]);
     var tb = h('tbody', {});
     rows.forEach(function (r) {
-      tb.appendChild(h('tr', { class: 'clk', onclick: function () { openPairDetail(r.pair); } }, [
+      var cb = condOf(r, r.base), cq = condOf(r, r.quote), sp = (r.candidateDetail && r.candidateDetail.spread) || {};
+      tb.appendChild(h('tr', { class: 'clk', onclick: function () { openPairDetail(r.pair, r.triggerCloseMs); } }, [
         h('td', {}, [r.pair]),
         h('td', { class: r.direction === 'BUY' ? 'up' : 'dn' }, [r.direction]),
         h('td', {}, [eat(r.triggerCloseMs)]),
         h('td', { class: 'mut' }, [(r.brokenBoundary || '—') + (r.brokenLevel != null ? ' @ ' + px(r.pair, r.brokenLevel) : '')]),
         h('td', {}, [px(r.pair, r.referenceClose)]),
-        h('td', { class: r.baseScore > 0 ? 'up' : 'dn' }, [r.base + ' ' + (r.baseScore > 0 ? '+' : '') + num(r.baseScore, 0)]),
-        h('td', { class: r.quoteScore > 0 ? 'up' : 'dn' }, [r.quote + ' ' + (r.quoteScore > 0 ? '+' : '') + num(r.quoteScore, 0)])
+        h('td', { html: clsSpan(cb.classification) + ' ' + r.base }),
+        h('td', { html: clsSpan(cq.classification) + ' ' + r.quote }),
+        h('td', { class: sp.expanding ? 'up' : 'mut' }, [sp.expanding ? 'widening' : '—'])
       ]));
     });
     t.appendChild(tb); return t;
@@ -188,52 +223,56 @@
   }
   function renderPairDetail(j, pair) {
     var meta = j.meta, ps = j.pairState || {}, qr = j.qualification || {}, ev = j.triggerEval || {}, dec = (ev && ev.decision) || {};
-    var strengthMap = {}; (j.strength || []).forEach(function (s) { strengthMap[s.currency] = s; });
+    var condMap = {}; (j.strength || []).forEach(function (s) { condMap[s.currency] = s; });
     var base = qr.base || pair.split('_')[0], quote = qr.quote || pair.split('_')[1];
     drawerBody.innerHTML = '';
-    var qd = normDir(qr.direction);
-    drawerBody.appendChild(h('div', { html: '<div style="font-weight:800;font-size:17px">' + pair + ' ' + (qd ? '<span class="' + (qd === 'BUY' ? 'up' : 'dn') + '">' + qd + '</span>' : '<span class="mut">not qualified</span>') + ' <span class="mut" style="font-size:12px">' + STRAT_LABEL[S.strat] + ' · ' + meta.dirTf + '→' + meta.triggerTf + ' · ' + meta.version + '</span></div>' }));
-    drawerBody.appendChild(h('div', { class: 'banner-note', html: 'As of <b>' + eat(j.cutoffMs) + ' EAT</b>. Research signal; a trigger close is a reference price, not a fill. No order was placed.' }));
+    var qd = normDir(qr.direction), sp = qr.spread || {};
+    drawerBody.appendChild(h('div', { html: '<div style="font-weight:800;font-size:17px">' + pair + ' ' + (qd ? '<span class="' + (qd === 'BUY' ? 'up' : 'dn') + '">' + qd + '</span>' : '<span class="mut">not qualified</span>') + ' <span class="mut" style="font-size:12px">' + STRAT_LABEL[S.strat] + ' · ' + meta.triggerTf + ' trigger · ' + meta.version + '</span></div>' }));
+    drawerBody.appendChild(h('div', { class: 'banner-note', html: 'As of <b>' + eat(j.cutoffMs) + ' EAT</b>. Evolution-qualified breakout (research). A trigger close is a reference price, not a fill. No order was placed.' }));
 
-    // qualification + trigger explanation
     var kv = h('div', { class: 'kv' });
-    var rows = [
-      [base + ' (base)', clsLine(strengthMap[base], qr.baseClass, qr.baseScore)],
-      [quote + ' (quote)', clsLine(strengthMap[quote], qr.quoteClass, qr.quoteScore)],
+    [
+      [base + ' (base)', condLine(condMap[base], qr.baseClass)],
+      [quote + ' (quote)', condLine(condMap[quote], qr.quoteClass)],
+      ['Spread (base−quote)', sp.expanding == null ? '—' : ((sp.expanding ? '<span class="up">widening</span>' : '<span class="mut">not widening</span>') + ' · fast ' + sgn(sp.fast && sp.fast.M, 3) + ' · slow ' + sgn(sp.slow && sp.slow.M, 3))],
       ['Qualification', qd ? (qd + ' — ' + qr.reason) : ('excluded — ' + (qr.reason || 'not qualified'))],
-      [meta.dirTf + ' structure', ps.direction ? ((ps.direction > 0 ? 'bullish' : 'bearish') + ' break, ' + ps.brokenBoundary + ' @ ' + px(pair, ps.brokenLevel) + ' (' + (ps.ageCandles == null ? '?' : ps.ageCandles) + ' candles ago)') : ('no break — ' + (ps.reason || 'unknown'))],
-      [meta.triggerTf + ' trigger', triggerLine(ev, dec, pair)]
-    ];
-    rows.forEach(function (p) { kv.appendChild(h('span', { class: 'k' }, [p[0]])); kv.appendChild(h('span', { html: p[1] })); });
+      [meta.triggerTf + ' trigger', triggerLine(ev, dec, pair)],
+      [meta.dirTf + ' structure (diag.)', ps.direction ? ((ps.direction > 0 ? 'bullish' : 'bearish') + ' break, ' + ps.brokenBoundary + ' @ ' + px(pair, ps.brokenLevel)) : ('no break — ' + (ps.reason || 'unknown'))]
+    ].forEach(function (p) { kv.appendChild(h('span', { class: 'k' }, [p[0]])); kv.appendChild(h('span', { html: p[1] })); });
     drawerBody.appendChild(h('div', { class: 'sec' }, [h('h3', {}, ['Decision']), kv]));
 
-    // charts
+    // charts: Evolution index (highlight base/quote) + trigger candles
     var cwrap = h('div', { class: 'cols' });
     var c1 = h('div', {}), c2 = h('div', {});
-    c1.appendChild(h('div', { class: 'note mut' }, [meta.dirTf + ' — latest break of structure (direction)']));
+    c1.appendChild(h('div', { class: 'note mut' }, ['Evolution — index % from the ' + (meta.windows ? meta.windows.period : 'period') + ' open']));
     c2.appendChild(h('div', { class: 'note mut' }, [meta.triggerTf + ' — latest trigger candle']));
     var chart1 = h('div', { class: 'dchart' }), chart2 = h('div', { class: 'dchart' });
     c1.appendChild(chart1); c2.appendChild(chart2); cwrap.appendChild(c1); cwrap.appendChild(c2);
-    drawerBody.appendChild(h('div', { class: 'sec' }, [h('h3', {}, ['Charts (EAT candles, completed only)']), cwrap]));
+    drawerBody.appendChild(h('div', { class: 'sec' }, [h('h3', {}, ['Charts (EAT, completed only)']), cwrap]));
 
-    // contributions of base & quote
+    // base & quote window metrics
     [base, quote].forEach(function (cc) {
-      var sc = strengthMap[cc]; if (!sc) return;
-      var t = h('table', { class: 'tbl' }, [h('thead', {}, [h('tr', {}, [cc + ' legs', 'Role', 'Vote'].map(function (x) { return h('th', {}, [x]); }))])]);
+      var sc = condMap[cc]; if (!sc) return;
+      var t = h('table', { class: 'tbl' }, [h('thead', {}, [h('tr', {}, [cc + ' window', 'Direction', 'Net', 'Signed eff', 'Breadth'].map(function (x) { return h('th', {}, [x]); }))])]);
       var tb = h('tbody', {});
-      (sc.contributions || []).forEach(function (g) { tb.appendChild(h('tr', {}, [h('td', {}, [g.pair]), h('td', { class: 'mut' }, [g.sign > 0 ? 'base' : 'quote']), h('td', { class: g.contribution == null ? 'mut' : (g.contribution > 0 ? 'up' : 'dn') }, [g.contribution == null ? 'unknown' : (g.contribution > 0 ? '+1' : '−1')])])); });
+      [['Fast', sc.fast], ['Slow', sc.slow]].forEach(function (p) { var w = p[1] || {}; var a = mv(w.direction); tb.appendChild(h('tr', {}, [h('td', {}, [p[0]]), w.available ? h('td', { class: a[1] }, [a[0] + ' ' + w.direction]) : h('td', { class: 'mut' }, ['n/a']), h('td', { class: w.M > 0 ? 'up' : (w.M < 0 ? 'dn' : 'mut') }, [sgn(w.M, 3)]), h('td', { class: 'mut' }, [w.signedEff == null ? '—' : sgn(w.signedEff, 2)]), h('td', { class: 'mut' }, [breadthStr(w.breadth)])])); });
       t.appendChild(tb);
-      drawerBody.appendChild(h('div', { class: 'sec' }, [h('h3', { html: cc + ' strength — ' + (sc.score == null ? 'insufficient' : (sc.score > 0 ? '+' : '') + sc.score + ' (' + sc.classification + ')') }), t]));
+      drawerBody.appendChild(h('div', { class: 'sec' }, [h('h3', { html: cc + ' condition — ' + (sc.classification || '—') }), t]));
     });
 
-    drawBreakoutChart(chart1, pair, meta.dirTf, j.cutoffMs, 'structure');
+    drawEvolutionChart(chart1, null, S.strat, j.cutoffMs);
     drawBreakoutChart(chart2, pair, meta.triggerTf, j.cutoffMs, 'trigger');
   }
-  function clsLine(s, cls, score) { return '<span class="clstag cls-' + (cls || (s && s.classification) || 'neutral') + '">' + (cls || (s && s.classification) || '—') + '</span> score ' + (score != null ? (score > 0 ? '+' : '') + score : (s && s.score != null ? (s.score > 0 ? '+' : '') + s.score : '—')); }
+  function condLine(s, cls) {
+    var c = cls || (s && s.classification) || 'insufficient';
+    var period = s && s.periodPct != null ? ' · period ' + sgn(s.periodPct, 2) + '%' : '';
+    var fast = s && s.fast && s.fast.available ? ' · fast ' + mv(s.fast.direction)[0] + ' ' + sgn(s.fast.M, 3) : '';
+    return clsSpan(c) + period + fast;
+  }
   function triggerLine(ev, dec, pair) {
     if (!ev || !ev.triggerCloseMs) return '<span class="mut">no completed trigger candle yet</span>';
     var brk = ev.trigger && ev.trigger.break ? (ev.trigger.break > 0 ? 'bullish' : 'bearish') + ' break ' + (ev.trigger.boundary || '') + ' @ ' + px(pair, ev.trigger.level) : 'no break';
-    var sig = dec.signal ? '<span class="up">→ ' + dec.signal + ' signal</span>' : '<span class="mut">→ ' + (dec.reason || 'no signal') + '</span>';
+    var sig = ev.fired ? '<span class="up">→ ' + dec.signal + ' signal</span>' : '<span class="mut">→ ' + (ev.spreadOk === false ? 'spread not widening' : (dec.reason || 'no signal')) + '</span>';
     return 'close ' + eat(ev.triggerCloseMs) + ' · ' + brk + ' ' + sig;
   }
 
@@ -261,12 +300,12 @@
   }
 
   // ── replay ─────────────────────────────────────────────────────────────────
-  var RP = { at: Date.now() - 3 * 86400000, tz: LOCAL_TZ, mode: 'historical', threshold: 5, windowDays: 7, playing: false, speed: 1, timer: null, data: null };
+  var RP = { at: Date.now() - 3 * 86400000, tz: LOCAL_TZ, mode: 'historical', breadthMin: 5, stepMode: 'trigger', windowDays: 7, playing: false, speed: 1, timer: null, data: null };
   function stopPlay() { RP.playing = false; if (RP.timer) { clearTimeout(RP.timer); RP.timer = null; } }
 
   function replayApi(extra) {
-    var p = { strategy: S.strat, at: RP.at, tz: RP.tz, mode: RP.mode, windowDays: RP.windowDays };
-    if (RP.mode === 'whatif') p.threshold = RP.threshold;
+    var p = { strategy: S.strat, at: RP.at, tz: RP.tz, mode: RP.mode, windowDays: RP.windowDays, stepMode: RP.stepMode };
+    if (RP.mode === 'whatif') p.breadthMin = RP.breadthMin;
     for (var k in (extra || {})) p[k] = extra[k];
     var qs = Object.keys(p).filter(function (k) { return p[k] != null && p[k] !== ''; }).map(function (k) { return k + '=' + encodeURIComponent(p[k]); }).join('&');
     return fetch('/api/breakout-replay?' + qs).then(function (r) { return r.json(); });
@@ -274,27 +313,24 @@
 
   function renderReplay() {
     var wrap = h('div', {});
-    var out = h('div', { id: 'rpout' }, [h('div', { class: 'card mut' }, ['Pick a past moment and load the reconstructed state, or step candle-by-candle.'])]);
+    var out = h('div', { id: 'rpout' }, [h('div', { class: 'card mut' }, ['Pick a past moment and load the reconstructed state, or step (Evolution = M15 index closes, Trigger = trigger-candle closes).'])]);
 
-    // controls
     var atIn = h('input', { type: 'datetime-local', value: utcToWall(RP.at, RP.tz) });
-    var tzSel = h('select', {}, [
-      h('option', { value: LOCAL_TZ }, ['Local (' + LOCAL_TZ + ')']),
-      h('option', { value: 'Africa/Nairobi' }, ['EAT (UTC+3)']),
-      h('option', { value: 'UTC' }, ['UTC'])
-    ]); tzSel.value = RP.tz;
+    var tzSel = h('select', {}, [h('option', { value: LOCAL_TZ }, ['Local (' + LOCAL_TZ + ')']), h('option', { value: 'Africa/Nairobi' }, ['EAT (UTC+3)']), h('option', { value: 'UTC' }, ['UTC'])]); tzSel.value = RP.tz;
     var modeSel = h('select', {}, [h('option', { value: 'historical' }, ['Historical reconstruction']), h('option', { value: 'whatif' }, ['What-if (hypothetical)'])]); modeSel.value = RP.mode;
-    var thrSel = h('select', {}, [4, 5, 6, 7].map(function (n) { return h('option', { value: n }, ['threshold ' + n]); })); thrSel.value = RP.threshold; thrSel.disabled = RP.mode !== 'whatif';
+    var bmSel = h('select', {}, [4, 5, 6, 7].map(function (n) { return h('option', { value: n }, ['breadth ' + n + '/7']); })); bmSel.value = RP.breadthMin; bmSel.disabled = RP.mode !== 'whatif';
+    var stepSel = h('select', {}, [h('option', { value: 'trigger' }, ['Step: trigger closes']), h('option', { value: 'evolution' }, ['Step: Evolution (M15)'])]); stepSel.value = RP.stepMode;
     var winIn = h('input', { type: 'number', min: 1, max: 60, value: RP.windowDays, style: 'width:70px' });
     var spdSel = h('select', {}, [[0.5, '0.5×'], [1, '1×'], [2, '2×'], [4, '4×']].map(function (s) { return h('option', { value: s[0] }, [s[1]]); })); spdSel.value = RP.speed;
 
-    function syncTimeLabel() { tl.innerHTML = 'T = <b>' + eat(RP.at) + ' EAT</b> · ' + new Date(RP.at).toISOString().slice(0, 16).replace('T', ' ') + ' UTC'; }
     var tl = h('div', { class: 'note mut', style: 'margin-top:6px' });
+    function syncTimeLabel() { tl.innerHTML = 'T = <b>' + eat(RP.at) + ' EAT</b> · ' + new Date(RP.at).toISOString().slice(0, 16).replace('T', ' ') + ' UTC · stepping by ' + (RP.stepMode === 'evolution' ? 'M15 index closes' : 'trigger closes'); }
 
     atIn.onchange = function () { var v = atIn.value; if (!v) return; var m = v.match(/(\d+)-(\d+)-(\d+)T(\d+):(\d+)/); if (m) { RP.at = Math.min(wallToUtc(+m[1], +m[2], +m[3], +m[4], +m[5], RP.tz), Date.now()); syncTimeLabel(); } };
     tzSel.onchange = function () { RP.tz = tzSel.value; atIn.value = utcToWall(RP.at, RP.tz); syncTimeLabel(); };
-    modeSel.onchange = function () { RP.mode = modeSel.value; thrSel.disabled = RP.mode !== 'whatif'; };
-    thrSel.onchange = function () { RP.threshold = +thrSel.value; };
+    modeSel.onchange = function () { RP.mode = modeSel.value; bmSel.disabled = RP.mode !== 'whatif'; };
+    bmSel.onchange = function () { RP.breadthMin = +bmSel.value; };
+    stepSel.onchange = function () { RP.stepMode = stepSel.value; syncTimeLabel(); };
     winIn.onchange = function () { RP.windowDays = Math.max(1, Math.min(60, +winIn.value || 7)); };
     spdSel.onchange = function () { RP.speed = +spdSel.value; };
 
@@ -308,14 +344,13 @@
     function stopAndLabel() { stopPlay(); playBtn.textContent = '▶ Play'; }
 
     var panel = h('div', { class: 'rpanel' }, [
-      h('div', { class: 'rrow' }, [field('Replay time', atIn), field('Timezone', tzSel), field('Window (days)', winIn), field('Mode', modeSel), field('What-if', thrSel)]),
-      h('div', { class: 'rrow' }, [loadBtn, prevBtn, nextBtn, playBtn, field('Speed', spdSel), liveBtn]),
+      h('div', { class: 'rrow' }, [field('Replay time', atIn), field('Timezone', tzSel), field('Window (days)', winIn), field('Mode', modeSel), field('What-if breadth', bmSel)]),
+      h('div', { class: 'rrow' }, [loadBtn, field('Step mode', stepSel), prevBtn, nextBtn, playBtn, field('Speed', spdSel), liveBtn]),
       tl
     ]);
     syncTimeLabel();
-    wrap.appendChild(h('div', { class: 'banner-warn', html: '<b>Replay is a deterministic as-of recompute</b> — not a filter of today\'s dashboard. It reruns the exact engine on the candles completed by the selected time. Periods before this module existed are a <b>historical reconstruction</b> from stored candles (it cannot prove what the live feed delivered then). <b>What-if</b> applies a chosen threshold to the whole period, clearly hypothetical, and never overwrites recorded signals.' }));
-    wrap.appendChild(panel);
-    wrap.appendChild(out);
+    wrap.appendChild(h('div', { class: 'banner-warn', html: '<b>Replay is a deterministic as-of recompute</b> — not a filter of today\'s dashboard. It reruns the exact engine on the candles completed by the selected time. Two stepping modes: <b>Evolution</b> advances one M15 index close at a time (the condition updates every M15); <b>Trigger</b> advances to the next completed trigger candle (where a signal can fire). <b>What-if</b> applies chosen condition params to the whole period, clearly hypothetical, and never overwrites recorded signals.' }));
+    wrap.appendChild(panel); wrap.appendChild(out);
 
     function setBusy(b) { loadBtn.disabled = prevBtn.disabled = nextBtn.disabled = b; }
     function load(extra) {
@@ -324,10 +359,7 @@
         setBusy(false);
         if (!j || j.ok === false) { out.innerHTML = ''; out.appendChild(h('div', { class: 'state-banner sb-error' }, ['ERROR — ' + ((j && j.error) || 'request failed')])); return; }
         if (j.available === false) { out.innerHTML = ''; out.appendChild(h('div', { class: 'card mut' }, ['No data for this strategy/time: ' + (j.reason || 'unavailable') + '.'])); return; }
-        if (!j.replay) { // a step hit the end/start — keep current view, note it
-          out.insertBefore(h('div', { class: 'banner-note' }, [j.message || 'No adjacent trigger candle.']), out.firstChild);
-          stopAndLabel(); return;
-        }
+        if (!j.replay) { out.insertBefore(h('div', { class: 'banner-note' }, [j.message || 'No adjacent close.']), out.firstChild); stopAndLabel(); return; }
         RP.data = j; RP.at = j.replay.atMs; atIn.value = utcToWall(RP.at, RP.tz); syncTimeLabel();
         renderBlocks(out, j);
       }).catch(function (e) { setBusy(false); out.innerHTML = ''; out.appendChild(h('div', { class: 'state-banner sb-error' }, ['ERROR — ' + (e.message || e)])); });
@@ -340,7 +372,7 @@
         replayApi({ step: 'next', from: RP.at }).then(function (j) {
           if (!RP.playing) return;
           if (!j || j.ok === false || j.available === false) { stopAndLabel(); return; }
-          if (!j.replay) { out.insertBefore(h('div', { class: 'banner-note' }, [j.message || 'Reached the last completed trigger candle.']), out.firstChild); stopAndLabel(); return; }
+          if (!j.replay) { out.insertBefore(h('div', { class: 'banner-note' }, [j.message || 'Reached the last completed close.']), out.firstChild); stopAndLabel(); return; }
           RP.data = j; RP.at = j.replay.atMs; atIn.value = utcToWall(RP.at, RP.tz); syncTimeLabel(); renderBlocks(out, j);
           RP.timer = setTimeout(tick, Math.max(120, 1000 / RP.speed));
         }).catch(function () { stopAndLabel(); });
@@ -350,23 +382,23 @@
     return wrap;
   }
 
-  function chip(cls, label) { var m = { strong: 's', weak: 'w', neutral: 'n', insufficient: 'i' }; return h('span', { class: 'chip ' + (m[cls] || 'n') }, [label]); }
+  function chip(cls, label) { var m = { strong: 's', weak: 'w', neutral: 'n', mixed: 'm', insufficient: 'i' }; return h('span', { class: 'chip ' + (m[cls] || 'n') }, [label]); }
   function renderBlocks(out, j) {
     out.innerHTML = '';
     var r = j.replay, m = j.meta;
-    out.appendChild(h('div', { class: 'note mut', html: 'Reconstructed state at <b>' + eat(r.atMs) + ' EAT</b> · ' + m.configMode + ' · threshold ' + m.threshold + '/7 · ' + m.dirTf + '→' + m.triggerTf + ' · ' + m.version + (r.atBetweenCloses ? ' · <i>T falls between trigger closes; the latest completed close is ' + eat(r.latestTriggerCloseMs) + '</i>' : '') }));
+    out.appendChild(h('div', { class: 'note mut', html: 'Reconstructed state at <b>' + eat(r.atMs) + ' EAT</b> · ' + m.configMode + ' · ' + windowsLabel(m) + ' · ' + m.version + (r.atBetweenCloses ? ' · <i>T falls between trigger closes; the latest completed close is ' + eat(r.latestTriggerCloseMs) + '</i>' : '') }));
 
-    // BLOCK 1 — qualification at T
-    var b1 = h('div', { class: 'rblock b1' }, [h('span', { class: 'bl' }, ['① Qualification at T'])]);
+    // BLOCK 1 — condition + qualification at T
+    var b1 = h('div', { class: 'rblock b1' }, [h('span', { class: 'bl' }, ['① Condition & qualification at T'])]);
     var strip = h('div', { class: 'strip' });
-    (r.qualificationAtT.strength || []).forEach(function (s) { strip.appendChild(chip(s.classification, s.currency + ' ' + (s.score == null ? '∅' : (s.score > 0 ? '+' : '') + s.score))); });
+    (r.qualificationAtT.strength || []).forEach(function (s) { strip.appendChild(chip(s.classification, s.currency + ' ' + (s.classification === 'strong' ? '▲' : (s.classification === 'weak' ? '▼' : '·')))); });
     b1.appendChild(strip);
     var ql = r.qualificationAtT.qualified || [];
-    b1.appendChild(h('div', { class: 'note mut', style: 'margin-top:6px' }, [ql.length + ' of 28 pairs qualify at T (strong vs weak).']));
+    b1.appendChild(h('div', { class: 'note mut', style: 'margin-top:6px' }, [ql.length + ' of 28 pairs qualify at T (strong vs weak + widening spread).']));
     if (ql.length) {
-      var t1 = h('table', { class: 'tbl' }, [h('thead', {}, [h('tr', {}, ['Pair', 'Dir', 'Base', 'Quote'].map(function (x) { return h('th', {}, [x]); }))])]);
+      var t1 = h('table', { class: 'tbl' }, [h('thead', {}, [h('tr', {}, ['Pair', 'Dir', 'Base', 'Quote', 'Spread'].map(function (x) { return h('th', {}, [x]); }))])]);
       var tb1 = h('tbody', {});
-      ql.forEach(function (p) { var nd = normDir(p.direction); tb1.appendChild(h('tr', { class: 'clk', onclick: function () { openPairDetail(p.pair, RP.at); } }, [h('td', {}, [p.pair]), h('td', { class: nd === 'BUY' ? 'up' : 'dn' }, [nd]), h('td', { html: spanCls(p.baseClass, p.baseScore) + ' ' + p.base }), h('td', { html: spanCls(p.quoteClass, p.quoteScore) + ' ' + p.quote })])); });
+      ql.forEach(function (p) { var nd = normDir(p.direction), sp = p.spread || {}; tb1.appendChild(h('tr', { class: 'clk', onclick: function () { openPairDetail(p.pair, RP.at); } }, [h('td', {}, [p.pair]), h('td', { class: nd === 'BUY' ? 'up' : 'dn' }, [nd]), h('td', { html: clsSpan(p.baseClass) + ' ' + p.base }), h('td', { html: clsSpan(p.quoteClass) + ' ' + p.quote }), h('td', { class: sp.expanding ? 'up' : 'mut' }, [sp.expanding ? 'widening' : '—'])])); });
       t1.appendChild(tb1); b1.appendChild(t1);
     }
     out.appendChild(b1);
@@ -374,14 +406,14 @@
     // BLOCK 2 — trigger evaluation at the latest completed trigger close ≤ T
     var b2 = h('div', { class: 'rblock b2' }, [h('span', { class: 'bl' }, ['② Trigger evaluation @ ' + (r.latestTriggerCloseMs ? eat(r.latestTriggerCloseMs) + ' EAT' : '—')])]);
     var sac = r.triggerEvaluation.signalsAtClose || [];
-    b2.appendChild(h('div', { class: 'note mut' }, [sac.length ? (sac.length + ' confirmed signal(s) at this trigger close.') : 'No confirmed signal at this trigger close — a qualified pair needs a fresh ' + m.triggerTf + ' break in its direction.']));
-    if (sac.length) b2.appendChild(signalTableRP(sac));
+    b2.appendChild(h('div', { class: 'note mut' }, [sac.length ? (sac.length + ' confirmed signal(s) at this trigger close.') : 'No confirmed signal at this trigger close — a qualified pair needs a fresh ' + m.triggerTf + ' break in its direction with the spread still widening.']));
+    if (sac.length) b2.appendChild(signalTable(sac));
     var evs = (r.triggerEvaluation.triggerEvals || []).filter(function (e) { return e.decision && e.decision.reason; });
     if (evs.length) {
-      var det = h('details', {}, [h('summary', { class: 'mut', style: 'font-size:11px;margin-top:6px' }, ['Why each qualified pair did / didn\'t fire (' + evs.length + ')'])]);
+      var det = h('details', {}, [h('summary', { class: 'mut', style: 'font-size:11px;margin-top:6px' }, ['Why each candidate did / didn\'t fire (' + evs.length + ')'])]);
       var t2 = h('table', { class: 'tbl' }, [h('thead', {}, [h('tr', {}, ['Pair', 'Cand', 'Trigger close', 'Break', 'Outcome'].map(function (x) { return h('th', {}, [x]); }))])]);
       var tb2 = h('tbody', {});
-      evs.forEach(function (e) { var nd = normDir(e.candidateDir); var brk = e.trigger && e.trigger.break ? (e.trigger.break > 0 ? 'bull ' : 'bear ') + (e.trigger.boundary || '') : 'none'; tb2.appendChild(h('tr', { class: 'clk', onclick: function () { openPairDetail(e.pair, RP.at); } }, [h('td', {}, [e.pair]), h('td', { class: nd === 'BUY' ? 'up' : 'dn' }, [nd]), h('td', { class: 'mut' }, [e.triggerCloseMs ? eat(e.triggerCloseMs) : '—']), h('td', { class: 'mut' }, [brk]), h('td', { class: e.decision.signal ? 'up' : 'mut' }, [e.decision.signal ? '→ ' + e.decision.signal : e.decision.reason])])); });
+      evs.forEach(function (e) { var nd = normDir(e.candidateDir); var brk = e.trigger && e.trigger.break ? (e.trigger.break > 0 ? 'bull ' : 'bear ') + (e.trigger.boundary || '') : 'none'; var outcome = e.fired ? '→ ' + e.decision.signal : (e.spreadOk === false ? 'spread not widening' : e.decision.reason); tb2.appendChild(h('tr', { class: 'clk', onclick: function () { openPairDetail(e.pair, RP.at); } }, [h('td', {}, [e.pair]), h('td', { class: nd === 'BUY' ? 'up' : 'dn' }, [nd]), h('td', { class: 'mut' }, [e.triggerCloseMs ? eat(e.triggerCloseMs) : '—']), h('td', { class: 'mut' }, [brk]), h('td', { class: e.fired ? 'up' : 'mut' }, [outcome])])); });
       t2.appendChild(tb2); det.appendChild(t2); b2.appendChild(det);
     }
     out.appendChild(b2);
@@ -390,28 +422,15 @@
     var win = r.signalsInWindow || [];
     var b3 = h('div', { class: 'rblock b3' }, [h('span', { class: 'bl' }, ['③ Signals earlier in the ' + m.windowDays + '-day window'])]);
     b3.appendChild(h('div', { class: 'note mut' }, [win.length ? (win.length + ' signal(s) in (' + eat(r.atMs - m.windowDays * 86400000) + ' → T], each judged at its own trigger close.') : 'No signals earlier in the window.']));
-    if (win.length) b3.appendChild(signalTableRP(win.slice().reverse()));
+    if (win.length) b3.appendChild(signalTable(win.slice().reverse()));
     out.appendChild(b3);
   }
-  function signalTableRP(rows) {
-    var head = ['Pair', 'Dir', 'Trigger close (EAT)', 'Broke', 'Ref close', 'Base', 'Quote'];
-    var t = h('table', { class: 'tbl' }, [h('thead', {}, [h('tr', {}, head.map(function (x) { return h('th', {}, [x]); }))])]);
-    var tb = h('tbody', {});
-    rows.forEach(function (r) {
-      tb.appendChild(h('tr', { class: 'clk', onclick: function () { openPairDetail(r.pair, r.triggerCloseMs); } }, [
-        h('td', {}, [r.pair]), h('td', { class: r.direction === 'BUY' ? 'up' : 'dn' }, [r.direction]),
-        h('td', {}, [eat(r.triggerCloseMs)]), h('td', { class: 'mut' }, [(r.brokenBoundary || '—') + (r.brokenLevel != null ? ' @ ' + px(r.pair, r.brokenLevel) : '')]),
-        h('td', {}, [px(r.pair, r.referenceClose)]), h('td', { class: r.baseScore > 0 ? 'up' : 'dn' }, [r.base + ' ' + (r.baseScore > 0 ? '+' : '') + num(r.baseScore, 0)]), h('td', { class: r.quoteScore > 0 ? 'up' : 'dn' }, [r.quote + ' ' + (r.quoteScore > 0 ? '+' : '') + num(r.quoteScore, 0)])
-      ]));
-    });
-    t.appendChild(tb); return t;
-  }
 
-  // ── all-pairs explorer ─────────────────────────────────────────────────────
+  // ── HTF structure explorer (diagnostic; not the v2 direction source) ─────────
   function dirWord(ps) { if (ps.direction > 0) return ['bullish', 'up']; if (ps.direction < 0) return ['bearish', 'dn']; if (ps.reason === 'insufficient-history') return ['insufficient', 'mut']; return ['no break', 'mut']; }
   function renderPairs(o) {
     var wrap = h('div', {});
-    wrap.appendChild(h('div', { class: 'note mut', html: 'Every one of the 28 pairs and its latest ' + o.meta.dirTf + ' break of structure (the direction that feeds currency strength), as of <b>' + eat(o.cutoffMs) + ' EAT</b>. There is no age limit — a break stays in force until the next one.' }));
+    wrap.appendChild(h('div', { class: 'note mut', html: '<b>Diagnostic:</b> each pair\'s latest ' + o.meta.dirTf + ' break of structure, as of <b>' + eat(o.cutoffMs) + ' EAT</b>. In v2 this is CONTEXT only — direction comes from the Evolution condition, not these breaks.' }));
     var f = { q: '', dir: '' };
     var bar = h('div', { class: 'filters' });
     var qin = h('input', { placeholder: 'filter pair e.g. EUR', oninput: function () { f.q = qin.value.toUpperCase(); draw(); } });
@@ -449,56 +468,55 @@
 
   function renderSettings(o) {
     var wrap = h('div', {});
-    var st = o.status || {};
-    // operational status (visible to all)
+    var st = o.status || {}, params = o.meta.params || {};
     var ops = h('div', { class: 'card' }, [h('h2', {}, ['Operational status — ' + STRAT_LABEL[S.strat]])]);
     var kv = h('div', { class: 'kv' });
     [
-      ['Timeframes', o.meta.dirTf + ' structure → ' + o.meta.triggerTf + ' trigger'],
+      ['Methodology', o.meta.methodology || 'Evolution-qualified breakout (v2)'],
+      ['Windows', windowsLabel(o.meta)],
+      ['Trigger timeframe', o.meta.triggerTf + ' (break of structure)'],
       ['Alignment', st.alignment || 'EAT (UTC+3, no DST)'],
-      ['Currencies complete', (st.currenciesComplete || 0) + ' / 8' + (st.currenciesComplete === 8 ? ' (scores sum to zero)' : '')],
-      ['Pairs with a direction', (st.pairsWithDirection || 0) + ' / 28' + (st.pairsInsufficientHistory ? ' · ' + st.pairsInsufficientHistory + ' insufficient history' : '')],
+      ['Index available', st.indexAvailable ? 'yes (zero-sum 1/8 M15)' : 'no'],
+      ['Currencies complete', (st.currenciesComplete || 0) + ' / 8'],
       ['First candle', eat(st.firstDataUtc ? Date.parse(st.firstDataUtc) : null) + ' EAT'],
       ['Last candle (cutoff)', eat(o.cutoffMs) + ' EAT'],
-      ['Active threshold', (o.meta.threshold) + ' / 7'],
+      ['Active params', 'breadth ' + params.breadthMin + '/7 · dir deadband ' + params.dirDeadband + ' · eff deadband ' + params.effDeadband],
       ['Settings version', o.meta.version],
       ['Live processing', 'Vercel cron every 15 min (forward, idempotent) + on-demand recompute; polling, not push.']
     ].forEach(function (p) { kv.appendChild(h('span', { class: 'k' }, [p[0]])); kv.appendChild(h('span', { html: p[1] })); });
-    ops.appendChild(kv);
-    wrap.appendChild(ops);
+    ops.appendChild(kv); wrap.appendChild(ops);
 
-    // settings (threshold) — read for all, edit for admin
-    var panel = h('div', { class: 'card' }, [h('h2', {}, ['Strong-threshold configuration'])]);
-    panel.appendChild(h('div', { class: 'note mut', html: 'The strong/weak threshold is a <b>configurable assumption</b> (symmetric integer 4–7). Raising it demands broader agreement. Changing it <b>versions forward</b> — a new <code>' + o.meta.version.replace(/-t\d+$/, '-t·') + '</code> row — and never rewrites already-published signals.' }));
+    var panel = h('div', { class: 'card' }, [h('h2', {}, ['Condition configuration'])]);
+    panel.appendChild(h('div', { class: 'note mut', html: 'The condition params are <b>configurable assumptions</b>. <b>breadthMin</b> (4–7) is how many of a currency\'s seven legs must agree inside the fast window. Changing it <b>versions forward</b> and never rewrites already-published signals. Movement deadbands default to 0.' }));
     var hist = h('div', {}, [h('div', { class: 'mut' }, ['Loading versions…'])]);
     panel.appendChild(hist);
 
     var admin = authUser().id === ADMIN_UID;
     var editRow = h('div', { class: 'filters', style: 'margin-top:10px' });
-    var thrSel = h('select', {}, [4, 5, 6, 7].map(function (n) { return h('option', { value: n }, ['threshold ' + n]); }));
-    var pubBtn = h('button', { class: 'btn2', onclick: function () { publish(); } }, ['Publish new version']);
+    var bmSel = h('select', {}, [4, 5, 6, 7].map(function (n) { return h('option', { value: n }, ['breadth ' + n + '/7']); }));
+    var pubBtn = h('button', { class: 'btn', onclick: function () { publish(); } }, ['Publish new version']);
     var msg = h('span', { class: 'note', style: 'align-self:center' });
-    if (admin) { editRow.appendChild(thrSel); editRow.appendChild(pubBtn); editRow.appendChild(msg); panel.appendChild(editRow); }
-    else panel.appendChild(h('div', { class: 'note mut', style: 'margin-top:8px' }, ['Read-only — changing the threshold requires an admin sign-in.']));
+    if (admin) { editRow.appendChild(bmSel); editRow.appendChild(pubBtn); editRow.appendChild(msg); panel.appendChild(editRow); }
+    else panel.appendChild(h('div', { class: 'note mut', style: 'margin-top:8px' }, ['Read-only — changing the condition params requires an admin sign-in.']));
     wrap.appendChild(panel);
 
     function loadHist() {
       fetch('/api/breakout-settings?strategy=' + S.strat).then(function (r) { return r.json(); }).then(function (j) {
         hist.innerHTML = '';
         if (!j || j.ok === false) { hist.appendChild(h('div', { class: 'mut' }, ['Could not read settings.'])); return; }
-        thrSel.value = j.threshold || 5;
-        hist.appendChild(h('div', { class: 'note mut' }, ['Active: threshold ' + j.threshold + ' (' + j.activeVersion + ').']));
+        bmSel.value = (j.params && j.params.breadthMin) || 5;
+        hist.appendChild(h('div', { class: 'note mut' }, ['Active: breadth ' + (j.params && j.params.breadthMin) + '/7 (' + j.activeVersion + ').']));
         var rows = j.history || [];
-        if (!rows.length) { hist.appendChild(h('div', { class: 'note mut' }, ['No stored version yet — the active threshold is the default (' + j.threshold + ') until the first version is published or the cron runs.'])); return; }
-        var t = h('table', { class: 'tbl' }, [h('thead', {}, [h('tr', {}, ['Version', 'Threshold', 'Active', 'Created'].map(function (x) { return h('th', {}, [x]); }))])]);
+        if (!rows.length) { hist.appendChild(h('div', { class: 'note mut' }, ['No stored version yet — the active params are the defaults until the first version is published or the cron runs.'])); return; }
+        var t = h('table', { class: 'tbl' }, [h('thead', {}, [h('tr', {}, ['Version', 'Breadth', 'Deadbands', 'Active', 'Created'].map(function (x) { return h('th', {}, [x]); }))])]);
         var tb = h('tbody', {});
-        rows.forEach(function (r) { tb.appendChild(h('tr', {}, [h('td', {}, [r.version]), h('td', {}, ['' + (r.params && r.params.strongThreshold)]), h('td', { class: r.active ? 'up' : 'mut' }, [r.active ? 'active' : '—']), h('td', { class: 'mut' }, [r.createdAt ? eat(Date.parse(r.createdAt)) : '—'])])); });
+        rows.forEach(function (r) { var pr = r.params || {}; tb.appendChild(h('tr', {}, [h('td', {}, [r.version]), h('td', {}, ['' + (pr.breadthMin == null ? '—' : pr.breadthMin)]), h('td', { class: 'mut' }, [(pr.dirDeadband == null ? 0 : pr.dirDeadband) + ' / ' + (pr.effDeadband == null ? 0 : pr.effDeadband)]), h('td', { class: r.active ? 'up' : 'mut' }, [r.active ? 'active' : '—']), h('td', { class: 'mut' }, [r.createdAt ? eat(Date.parse(r.createdAt)) : '—'])])); });
         t.appendChild(tb); hist.appendChild(t);
       }).catch(function () { hist.innerHTML = ''; hist.appendChild(h('div', { class: 'mut' }, ['Settings request failed.'])); });
     }
     function publish() {
-      var thr = +thrSel.value; pubBtn.disabled = true; msg.textContent = 'Publishing…'; msg.className = 'note mut';
-      fetch('/api/breakout-settings', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, tokenHeaders()), body: JSON.stringify({ strategy: S.strat, strongThreshold: thr }) })
+      var bm = +bmSel.value; pubBtn.disabled = true; msg.textContent = 'Publishing…'; msg.className = 'note mut';
+      fetch('/api/breakout-settings', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, tokenHeaders()), body: JSON.stringify({ strategy: S.strat, breadthMin: bm }) })
         .then(function (r) { return r.json().then(function (j) { return { s: r.status, j: j }; }); })
         .then(function (x) {
           pubBtn.disabled = false;
@@ -516,7 +534,7 @@
     if (!OV) return;
     host.innerHTML = '';
     if (S.sec === 'replay') { host.appendChild(renderReplay()); return; }
-    if (!OV.available) { host.appendChild(h('div', { class: 'card mut' }, ['This strategy has no usable data yet: ' + (OV.reason || 'unavailable') + '. MN1 needs more history than D1/W1.'])); return; }
+    if (!OV.available) { host.appendChild(h('div', { class: 'card mut' }, ['This strategy has no usable data yet: ' + (OV.reason || 'unavailable') + '.'])); return; }
     if (S.sec === 'strength') host.appendChild(renderStrength(OV));
     else if (S.sec === 'qualified') host.appendChild(renderQualified(OV));
     else if (S.sec === 'signals') host.appendChild(renderSignals(OV));
@@ -527,14 +545,12 @@
   function statusHdr(o) {
     if (!o.available) return 'No data for ' + STRAT_LABEL[S.strat] + ': ' + (o.reason || 'unavailable') + '.';
     var st = o.status || {};
-    return STRAT_LABEL[S.strat] + ' · ' + o.meta.dirTf + '→' + o.meta.triggerTf + ' · as of <b>' + eat(o.cutoffMs) + ' EAT</b> · ' +
-      (st.currenciesComplete || 0) + '/8 currencies complete · ' + (st.pairsWithDirection || 0) + '/28 pairs with direction' +
-      (st.pairsInsufficientHistory ? ' · ' + st.pairsInsufficientHistory + ' insufficient-history' : '') +
-      ' · threshold ' + o.meta.threshold + '/7 · <span class="mut">EAT-aligned, research, UNVALIDATED</span>';
+    return STRAT_LABEL[S.strat] + ' · ' + windowsLabel(o.meta) + ' → ' + o.meta.triggerTf + ' trigger · as of <b>' + eat(o.cutoffMs) + ' EAT</b> · ' +
+      (st.currenciesComplete || 0) + '/8 currencies complete · breadth ' + (o.meta.params ? o.meta.params.breadthMin : 5) + '/7 · <span class="mut">Evolution-qualified, EAT-aligned, research, UNVALIDATED</span>';
   }
 
   function boot() {
-    datahdr.innerHTML = 'Computing ' + STRAT_LABEL[S.strat] + ' breakout state from EAT candles…';
+    datahdr.innerHTML = 'Computing ' + STRAT_LABEL[S.strat] + ' Evolution condition from EAT candles…';
     host.innerHTML = '<div class="card mut">Loading…</div>';
     banners.innerHTML = '';
     if (cache[S.strat]) { OV = cache[S.strat]; datahdr.innerHTML = statusHdr(OV); render(); return; }

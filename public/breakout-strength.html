@@ -30,7 +30,7 @@
   .clstag{font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:5px;display:inline-block}
   .cls-strong{color:var(--up);background:rgba(22,199,132,.14)}
   .cls-weak{color:var(--dn);background:rgba(246,70,93,.14)}
-  .cls-neutral{color:var(--text-muted);background:rgba(148,163,184,.14)}
+  .cls-neutral,.cls-mixed{color:var(--text-muted);background:rgba(148,163,184,.14)}
   .cls-insufficient{color:var(--yellow);background:rgba(202,138,4,.14)}
   .breadth{display:flex;height:8px;border-radius:4px;overflow:hidden;margin-top:9px;background:rgba(148,163,184,.12)}
   .breadth .b-bull{background:var(--up)}.breadth .b-bear{background:var(--dn)}
@@ -86,8 +86,12 @@
   .chip{font-size:11px;font-weight:700;padding:3px 8px;border-radius:5px;border:1px solid var(--border)}
   .chip.s{color:var(--up);border-color:rgba(22,199,132,.5)}
   .chip.w{color:var(--dn);border-color:rgba(246,70,93,.5)}
-  .chip.n{color:var(--text-muted)}
+  .chip.n,.chip.m{color:var(--text-muted)}
   .chip.i{color:var(--yellow);border-color:rgba(202,138,4,.5)}
+  .echart{width:100%;height:320px;margin:8px 0}
+  .legend{display:flex;gap:10px;flex-wrap:wrap;font-size:11px;margin:4px 0}
+  .legend span{display:inline-flex;align-items:center;gap:4px}
+  .legend i{width:10px;height:3px;border-radius:2px;display:inline-block}
 </style>
 </head>
 <body>
@@ -104,10 +108,12 @@
   </header>
 
   <div class="banner-note" id="topnote">
-    One deterministic methodology: the <b>latest break of structure</b> on the higher timeframe sets each pair's
-    direction → <b>currency strength</b> (±1 base/quote votes) → <b>strong-vs-weak</b> pair qualification → a
-    <b>fresh break</b> on the trigger timeframe confirms a signal. A break is a completed candle closing beyond the
-    previous candle's high (bullish) or low (bearish) — strict, no wicks, no indicators. Three independent strategies.
+    One deterministic methodology (v2, Evolution-based): the zero-sum 1/8 currency index gives each currency a
+    <b>recent condition</b> from its movement over a fast and a slow window (direction, breadth, signed efficiency) →
+    <b>strong-vs-weak</b> pair qualification → the directional index <b>spread must be widening</b> → a
+    <b>fresh break of structure</b> on the trigger timeframe confirms a signal. Direction comes from <i>current
+    movement</i>, not an old break. The break is a completed candle closing beyond the previous candle's high
+    (bullish) / low (bearish) — strict, no wicks, no indicators. Three independent strategies.
     <b>No stops, targets, sizing or win-rate claims</b>; a trigger close is a reference price, not a fill.
   </div>
 
@@ -118,10 +124,10 @@
   </div>
 
   <div class="subtabs" role="tablist" aria-label="Section">
-    <button data-sec="strength"  role="tab">Currency strength</button>
-    <button data-sec="qualified" role="tab">Qualified pairs</button>
+    <button data-sec="strength"  role="tab">Currency condition</button>
+    <button data-sec="qualified" role="tab">Candidates</button>
     <button data-sec="signals"   role="tab">Signals</button>
-    <button data-sec="pairs"     role="tab">All pairs</button>
+    <button data-sec="pairs"     role="tab">HTF structure</button>
     <button data-sec="replay"    role="tab">Replay</button>
     <button data-sec="settings"  role="tab">Settings &amp; status</button>
   </div>
@@ -133,12 +139,15 @@
 
   <div class="foot" id="foot">
     Candle boundaries are <b>EAT (UTC+3, no DST)</b> — D1 at 00:00 EAT, W1 Monday 00:00 EAT, MN1 1st 00:00 EAT, H4 at
-    00/04/08/12/16/20 EAT — aggregated from stored H1 (not the broker's 17:00-NY day). Currency strength is a ±1
-    base/quote vote per pair; a currency needs all seven legs known to qualify (an unknown leg is not a neutral vote),
-    and with complete data the eight scores sum to zero. A pair qualifies only when a <b>strong</b> currency is paired
-    against a <b>weak</b> one; a signal is confirmed only when a fresh trigger-timeframe break agrees with that
-    direction and the pair still qualifies at the trigger candle's close. All figures are <b>research and UNVALIDATED</b>
-    — not advice, not orders, and not a record of real trades.
+    00/04/08/12/16/20 EAT — aggregated from stored H1 (not the broker's 17:00-NY day). The <b>Evolution index</b> is the
+    zero-sum 1/8 log-return basket, built from synchronized M15 closes (weekend/holiday gaps are skipped, never filled).
+    A currency's <b>condition</b> is read from its movement over a fast and a slow window — direction (both windows must
+    agree), recent breadth (how many of its seven legs agree), and signed efficiency — with the period position (vs the
+    day/week/month open) shown only as context. A pair qualifies when a <b>strong</b> currency is paired against a
+    <b>weak</b> one AND their index spread is widening; a signal is confirmed only when a fresh trigger-timeframe break
+    agrees with that direction and the condition + spread still hold at the trigger candle's close. Earlier
+    <b>vote-based</b> signals (if any) are preserved separately and never relabelled. All figures are <b>research and
+    UNVALIDATED</b> — not advice, not orders, and not a record of real trades.
   </div>
 </div>
 

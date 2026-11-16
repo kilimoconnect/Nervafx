@@ -24,7 +24,10 @@ const { CURRENCIES } = require('../research/comparison/config');
 
 const iso = (ms) => (ms == null ? null : new Date(ms).toISOString());
 const DAY = 24 * 60 * 60 * 1000;
-const PERIOD_DAYS = { daily: 2, weekly: 9, monthly: 35 };   // M15 span to cover the period baseline
+// M15 span to cover the period baseline AND reach back past a weekend/holiday to the last
+// pre-baseline candle (periodPath rebases to the index at/before the open; on a Monday the
+// day/week open falls in the closed market, so the baseline candle is the prior Friday).
+const PERIOD_DAYS = { daily: 5, weekly: 12, monthly: 40 };
 
 function precisionFor(pair) { return pair.endsWith('_JPY') ? 3 : 5; }
 
