@@ -45,7 +45,7 @@ function buildIndices(candlesByPair, opts) {
   const gaps = [];
   for (let i = 1; i < timeline.length; i++) { const d = timeline[i] - timeline[i - 1]; if (d > baseMs) gaps.push({ fromMs: timeline[i - 1], toMs: timeline[i], ms: d }); }
 
-  const resolution = baseMs === M5_MS ? 'M5' : (baseMs === M15_MS ? 'M15' : (baseMs === 3600000 ? 'H1' : 'custom'));
+  const resolution = baseMs === M5_MS ? 'M5' : (baseMs === M15_MS ? 'M15' : (baseMs === 3600000 ? 'H1' : (baseMs === 4 * 3600000 ? 'H4' : 'custom')));
   return { ok: true, timeline, index, firstMs: timeline[0], lastMs: timeline[timeline.length - 1], resolution, baseMs, nSteps: timeline.length, gaps, baseValue: base };
 }
 

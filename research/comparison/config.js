@@ -21,6 +21,7 @@
 const COMPARISON_VERSION = 'ccc-1.0.0';
 const M5_MS = 5 * 60 * 1000;
 const M15_MS = 15 * 60 * 1000;
+const H1_MS = 60 * 60 * 1000;
 const H4_MS = 4 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const BASE_VALUE = 100;
@@ -66,4 +67,4 @@ const CONFIG = {
   historyStartHintIso: '2025-05-01T00:00:00Z',   // actual available start is read from the data
 };
 
-module.exports = { COMPARISON_VERSION, M5_MS, M15_MS, H4_MS, DAY_MS, BASE_VALUE, CURRENCIES, PAIRS, pairFor, legsFor, SESSIONS, sessionByName, CONFIG };
+module.exports = { COMPARISON_VERSION, M5_MS, M15_MS, H1_MS, H4_MS, DAY_MS, BASE_VALUE, CURRENCIES, PAIRS, pairFor, legsFor, SESSIONS, sessionByName, CONFIG };

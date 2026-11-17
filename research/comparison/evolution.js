@@ -228,14 +228,17 @@ function historyScan(built, asOfMs, lastDataMs, { threshold = DEFAULT_THRESHOLD,
   const firstDay = period.start(built.firstMs);
   const lastDay = period.start(cutoff);
   const step = period.step;
+  // Variable-length periods (months) supply period.next(d) → the next bucket's start; fixed-length
+  // periods (day/H4/week) fall back to d + step. Either way buckets tile [firstDay, lastDay].
+  const next = period.next || ((d) => d + step);
 
   const agg = {}; for (const c of CURRENCIES) agg[c] = { currency: c, daysComplete: 0, daysUp: 0, daysDown: 0, daysEither: 0, maxUp: 0, maxDown: 0, sumPeakAbs: 0 };
   const matrix = [];           // one row per period-bucket with data
   const onsets = [];           // first spread-onset minutes into the bucket, for buckets that spread apart
   const episodeCounts = [];    // number of qualifying episodes per bucket
 
-  for (let d = firstDay; d <= lastDay; d += step) {
-    const dEnd = Math.min(d + step, cutoff);
+  for (let d = firstDay; d <= lastDay; d = next(d)) {
+    const dEnd = Math.min(next(d), cutoff);
     const cells = []; let anyData = false;
     for (const ccy of CURRENCIES) {
       const path = periodPath(built, ccy, d, dEnd);

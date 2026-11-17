@@ -13,6 +13,7 @@
 
 const { M15_MS, DAY_MS } = require('./config');
 const { idxAtOrBefore } = require('./index-build');
+const { h4Start } = require('./periods');
 
 const MIN = 60 * 1000, HOUR = 60 * MIN;
 // Fixed-width timeframes (UTC-epoch-aligned by flooring). W1/MN are handled specially.
@@ -57,6 +58,25 @@ function aggregatePairs(base, tf) {
   return order.map((b) => buckets.get(b));
 }
 
+/**
+ * Aggregate real OHLC pair candles ({openMs,open,high,low,close}) into EAT-aligned H4 buckets
+ * (00/04/08/12/16/20 EAT, anchored to the EAT day). H4 is not stored; it is rolled up from H1.
+ * EAT alignment (vs the UTC-floored bucketStart used for charting) is required here so a bucket
+ * boundary lands exactly on the EAT day/week/month open the evolution index is measured from.
+ * Output keys use openMs (what buildIndices reads). Input must be completed H1 candles, ascending.
+ */
+function aggregatePairsH4Eat(base) {
+  const buckets = new Map(); const order = [];
+  for (const c of base) {
+    const b = h4Start(c.openMs);
+    let m = buckets.get(b);
+    if (!m) { m = { openMs: b, open: +c.open, high: +c.high, low: +c.low, close: +c.close }; buckets.set(b, m); order.push(b); }
+    else { if (+c.high > m.high) m.high = +c.high; if (+c.low < m.low) m.low = +c.low; m.close = +c.close; }
+  }
+  order.sort((a, b) => a - b);
+  return order.map((b) => buckets.get(b));
+}
+
 /** Aggregate a currency's relative-index path (from buildIndices) into timeframe tf. */
 function aggregateIndexPath(built, ccy, tf) {
   const tl = built.timeline, arr = built.index[ccy], baseMs = built.baseMs || M15_MS;
@@ -76,4 +96,4 @@ function aggregateIndexPath(built, ccy, tf) {
   return order.map((b) => buckets.get(b));
 }
 
-module.exports = { TIMEFRAMES, TF_MS, baseForTf, lookbackDaysForTf, bucketStart, weekStartUtc, monthStartUtc, aggregatePairs, aggregateIndexPath };
+module.exports = { TIMEFRAMES, TF_MS, baseForTf, lookbackDaysForTf, bucketStart, weekStartUtc, monthStartUtc, aggregatePairs, aggregatePairsH4Eat, aggregateIndexPath };

@@ -4,8 +4,9 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { buildIndices } = require('../../research/comparison/index-build');
 const { liveEvolution, historyScan, windowCandleEvolution } = require('../../research/comparison/evolution');
-const { dayStart, h4Start } = require('../../research/comparison/periods');
-const { PAIRS, M15_MS, H4_MS } = require('../../research/comparison/config');
+const { aggregatePairsH4Eat } = require('../../research/comparison/aggregate');
+const { dayStart, h4Start, monthStart } = require('../../research/comparison/periods');
+const { PAIRS, M15_MS, H1_MS, H4_MS } = require('../../research/comparison/config');
 
 // EAT midnight (00:00 EAT = 21:00 UTC the prior day); [START, START+DAY) is one EAT day.
 const START = Date.UTC(2025, 4, 1, 21, 0, 0);
@@ -242,6 +243,39 @@ test('spread does NOT qualify on a flat day (no leader crosses ±0.25%)', () => 
   const sp = liveEvolution(built, asOf, built.lastMs, 0.25, 0.30).spread;
   assert.equal(sp.watchMs, null);
   assert.equal(sp.state, 'bunched');
+});
+
+// ── W1/M1 evolution building blocks ──────────────────────────────────────────────────────────
+test('aggregatePairsH4Eat: rolls H1 into EAT-aligned H4 buckets (00/04/08/12/16/20 EAT)', () => {
+  const t0 = START;                                   // an EAT day open (00:00 EAT)
+  const h1 = [];
+  for (let i = 0; i < 8; i++) h1.push({ openMs: t0 + i * H1_MS, open: 100 + i, high: 110 + i, low: 90 + i, close: 101 + i });
+  const h4 = aggregatePairsH4Eat(h1);
+  assert.equal(h4.length, 2, 'eight H1 → two EAT H4 blocks');
+  assert.equal(h4[0].openMs, h4Start(t0), 'first block anchored to the EAT H4 boundary');
+  assert.equal(h4[0].openMs, t0, 'and that boundary is the EAT day open');
+  assert.equal(h4[0].open, 100, 'block open = first H1 open');
+  assert.equal(h4[0].close, 104, 'block close = last H1 close in the block');
+  assert.equal(h4[0].high, 113, 'block high = max H1 high');
+  assert.equal(h4[0].low, 90, 'block low = min H1 low');
+  assert.equal(h4[1].openMs, t0 + H4_MS, 'second block opens 4h later');
+  assert.equal(h4[1].open, 104);
+  assert.equal(h4[1].close, 108);
+});
+
+test('historyScan honours period.next for variable-length months (buckets stay on month boundaries)', () => {
+  const by = network(PRE + 70 * STEPS_DAY, () => 0.0003);   // ~70 EAT days → spans 2–3 months
+  const built = buildIndices(by);
+  assert.ok(built.ok);
+  const asOf = built.lastMs;
+  const MONTH = { start: monthStart, step: 30 * DAY, next: (ms) => monthStart(ms + 32 * DAY) };
+  const h = historyScan(built, asOf, built.lastMs, { threshold: 0.25, period: MONTH, matrixDays: 12 });
+  assert.ok(h.matrix.length >= 2, 'spans at least two months, got ' + h.matrix.length);
+  // every bucket starts EXACTLY on a month boundary — a fixed stride would drift off the 1st
+  for (const row of h.matrix) assert.equal(row.dayMs, monthStart(row.dayMs), 'bucket aligned to a month start');
+  // buckets are consecutive EAT months (matrix is most-recent-first → sort ascending to walk forward)
+  const asc = h.matrix.map((r) => r.dayMs).slice().sort((a, b) => a - b);
+  for (let i = 1; i < asc.length; i++) assert.equal(asc[i], monthStart(asc[i - 1] + 32 * DAY), 'consecutive month starts, no drift');
 });
 
 test('historyScan: counts per-currency days reaching ±0.25% across EAT days', () => {
