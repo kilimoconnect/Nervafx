@@ -13,6 +13,8 @@
   function p2(n) { return (n < 10 ? '0' : '') + n; }
   function eatHM(ms) { var d = new Date(ms + 3 * 3600000); return p2(d.getUTCHours()) + ':' + p2(d.getUTCMinutes()); }
   function eatDate(ms) { var d = new Date(ms + 3 * 3600000); return d.getUTCFullYear() + '-' + p2(d.getUTCMonth() + 1) + '-' + p2(d.getUTCDate()); }
+  var DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  function dowDate(ms) { return DOW[new Date(ms + 3 * 3600000).getUTCDay()] + ' ' + eatDate(ms).slice(5); }   // "Mon 11-16" (EAT)
   function pct(x) { return (x == null) ? '—' : (x >= 0 ? '+' : '') + x.toFixed(2) + '%'; }
   function el(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
@@ -181,7 +183,7 @@
     for (var k = 0; k <= 6; k++) {
       var tm = t0 + (t1 - t0) * k / 6, xx = X(tm);
       if (multiDay) {
-        s += '<text x="' + xx + '" y="' + (H - 16) + '" text-anchor="middle" font-size="9.5" fill="var(--text-muted)">' + eatDate(tm).slice(5) + '</text>';
+        s += '<text x="' + xx + '" y="' + (H - 16) + '" text-anchor="middle" font-size="9.5" fill="var(--text-muted)">' + dowDate(tm) + '</text>';
         s += '<text x="' + xx + '" y="' + (H - 6) + '" text-anchor="middle" font-size="8.5" fill="var(--text-muted)" opacity="0.75">' + eatHM(tm) + '</text>';
       } else {
         s += '<text x="' + xx + '" y="' + (H - 8) + '" text-anchor="middle" font-size="10" fill="var(--text-muted)">' + eatHM(tm) + '</text>';
@@ -276,7 +278,7 @@
       // spread apart right now). This is the MAIN ranking; the biggest gaps lead.
       PAIRS28.forEach(function (p) { var ab = p.split('_'); if (vals[ab[0]] != null && vals[ab[1]] != null) arr.push({ b: ab[0], q: ab[1], d: vals[ab[0]] - vals[ab[1]] }); });
       arr.sort(function (a, b) { return Math.abs(b.d) - Math.abs(a.d); });
-      var h = '<div style="font-weight:800;margin-bottom:2px">' + (multiDay ? eatDate(ms).slice(5) + ' ' : '') + eatHM(ms) + ' EAT</div>'
+      var h = '<div style="font-weight:800;margin-bottom:2px">' + (multiDay ? dowDate(ms) + ' ' : '') + eatHM(ms) + ' EAT</div>'
         + '<div class="mut" style="font-size:10px;margin-bottom:5px">Top 5 pairs by currency-% spread — buyers vs sellers</div>';
       arr.slice(0, 5).forEach(function (o) {
         var up = o.d >= 0, cc = up ? 'var(--up)' : 'var(--dn)', ar = up ? '▲' : '▼', side = up ? 'buyers' : 'sellers';
@@ -599,7 +601,7 @@
     for (var k = 0; k <= 6; k++) {
       var tm = t0 + (t1 - t0) * k / 6, xx = X(tm);
       if (multiDay) {
-        s += '<text x="' + xx + '" y="' + (H - 13) + '" text-anchor="middle" font-size="9" fill="var(--text-muted)">' + eatDate(tm).slice(5) + '</text>';
+        s += '<text x="' + xx + '" y="' + (H - 13) + '" text-anchor="middle" font-size="9" fill="var(--text-muted)">' + dowDate(tm) + '</text>';
         s += '<text x="' + xx + '" y="' + (H - 4) + '" text-anchor="middle" font-size="8" fill="var(--text-muted)" opacity="0.75">' + eatHM(tm) + '</text>';
       } else {
         s += '<text x="' + xx + '" y="' + (H - 6) + '" text-anchor="middle" font-size="10" fill="var(--text-muted)">' + eatHM(tm) + '</text>';
@@ -652,7 +654,7 @@
     active.forEach(function (w, wi) {
       var hdr = el('div'); hdr.style.cssText = 'margin:12px 0 6px;font-weight:700;font-size:13px';
       var wMulti = (w.endMs - w.startMs) > 26 * 3600000;
-      var hmLabel = function (ms) { return (wMulti ? eatDate(ms).slice(5) + ' ' : '') + eatHM(ms); };
+      var hmLabel = function (ms) { return (wMulti ? dowDate(ms) + ' ' : '') + eatHM(ms); };
       hdr.innerHTML = '⏱ Window #' + (wi + 1) + ' · ' + hmLabel(w.startMs) + ' → ' + (w.ongoing ? '<span style="color:var(--up)">now ●</span>' : hmLabel(w.endMs)) + ' · ' + w.nSteps + ' ' + RES + ' steps';
       wrap.appendChild(hdr);
       wrap.appendChild(buildStrengthChart(w, col));
@@ -684,7 +686,7 @@
     for (var k = 0; k <= 6; k++) {
       var tm = t0 + (t1 - t0) * k / 6, xx = X(tm);
       if (multiDay) {
-        s += '<text x="' + xx + '" y="' + (H - 15) + '" text-anchor="middle" font-size="9.5" fill="var(--text-muted)">' + eatDate(tm).slice(5) + '</text>';
+        s += '<text x="' + xx + '" y="' + (H - 15) + '" text-anchor="middle" font-size="9.5" fill="var(--text-muted)">' + dowDate(tm) + '</text>';
         s += '<text x="' + xx + '" y="' + (H - 5) + '" text-anchor="middle" font-size="8.5" fill="var(--text-muted)" opacity="0.75">' + eatHM(tm) + '</text>';
       } else {
         s += '<text x="' + xx + '" y="' + (H - 7) + '" text-anchor="middle" font-size="10" fill="var(--text-muted)">' + eatHM(tm) + '</text>';

@@ -40,7 +40,7 @@ module.exports = async function handler(req, res) {
       if (!isNaN(t) && t < Date.now()) { asOfMs = t; mode = 'historical'; }
     }
     const days = Math.min(365, Math.max(7, parseInt(q.days, 10) || 180));   // H1 over ~26 weeks
-    const threshold = Math.min(5, Math.max(0.01, parseFloat(q.threshold) || 0.20));
+    const threshold = Math.min(5, Math.max(0.01, parseFloat(q.threshold) || 0.40));   // weekly moves are larger → wider band
     const spreadThreshold = Math.min(10, Math.max(0.01, parseFloat(q.spread) || 0.25));
 
     const sb = getClient();

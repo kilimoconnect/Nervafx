@@ -44,7 +44,7 @@ module.exports = async function handler(req, res) {
       if (!isNaN(t) && t < Date.now()) { asOfMs = t; mode = 'historical'; }
     }
     const days = Math.min(550, Math.max(31, parseInt(q.days, 10) || 365));   // H1 → H4 over ~12 months
-    const threshold = Math.min(5, Math.max(0.01, parseFloat(q.threshold) || 0.20));
+    const threshold = Math.min(5, Math.max(0.01, parseFloat(q.threshold) || 0.80));   // monthly moves are larger → wider band
     const spreadThreshold = Math.min(10, Math.max(0.01, parseFloat(q.spread) || 0.25));
 
     const sb = getClient();
