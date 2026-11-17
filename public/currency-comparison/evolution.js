@@ -154,10 +154,11 @@
   function buildChart(live, thr, col) {
     var wrap = el('div', 'card'); wrap.style.padding = '10px';
     var t0 = live.startMs, t1 = live.cutoffMs;
+    var multiDay = (t1 - t0) > 26 * 3600000;   // W1/M1 span several days → x-axis needs dates, not just HH:MM
     var any = live.rows.some(function (r) { return r.ok && r.points.length > 1; });
     if (!any || !(t1 > t0)) { wrap.innerHTML = '<div class="mut">The developing ' + PWORD + ' has just started — not enough ' + RES + ' points yet to plot. Check back after the next closes.</div>'; return wrap; }
 
-    var W = 920, H = 380, mL = 48, mR = 64, mT = 14, mB = 26;
+    var W = 920, H = 380, mL = 48, mR = 64, mT = 14, mB = multiDay ? 38 : 26;
     var yMax = thr * 1.2, yMin = -thr * 1.2;
     live.rows.forEach(function (r) { r.points.forEach(function (p) { if (p.pct > yMax) yMax = p.pct; if (p.pct < yMin) yMin = p.pct; }); });
     var pad = (yMax - yMin) * 0.08; yMax += pad; yMin -= pad;
@@ -176,8 +177,16 @@
       s += '<line x1="' + mL + '" y1="' + yy + '" x2="' + (W - mR) + '" y2="' + yy + '" stroke="var(--border)" ' + dash + '/>';
       s += '<text x="' + (mL - 6) + '" y="' + (yy + 3) + '" text-anchor="end" font-size="10" fill="var(--text-muted)">' + (lv > 0 ? '+' : '') + lv.toFixed(2) + '%</text>';
     });
-    // x ticks (EAT) — ~6
-    for (var k = 0; k <= 6; k++) { var tm = t0 + (t1 - t0) * k / 6, xx = X(tm); s += '<text x="' + xx + '" y="' + (H - 8) + '" text-anchor="middle" font-size="10" fill="var(--text-muted)">' + eatHM(tm) + '</text>'; }
+    // x ticks (EAT) — ~6. Multi-day periods (W1/M1) stack a small date over the time; D1 shows time only.
+    for (var k = 0; k <= 6; k++) {
+      var tm = t0 + (t1 - t0) * k / 6, xx = X(tm);
+      if (multiDay) {
+        s += '<text x="' + xx + '" y="' + (H - 16) + '" text-anchor="middle" font-size="9.5" fill="var(--text-muted)">' + eatDate(tm).slice(5) + '</text>';
+        s += '<text x="' + xx + '" y="' + (H - 6) + '" text-anchor="middle" font-size="8.5" fill="var(--text-muted)" opacity="0.75">' + eatHM(tm) + '</text>';
+      } else {
+        s += '<text x="' + xx + '" y="' + (H - 8) + '" text-anchor="middle" font-size="10" fill="var(--text-muted)">' + eatHM(tm) + '</text>';
+      }
+    }
     // spread episodes: shade each "watching" window (apart→back→apart…) + onset lines
     var sp = live.spread || {};
     var lblRows = [];   // placed onset labels per stagger row: [{x1}] so nearby labels drop to a free row
@@ -267,7 +276,7 @@
       // spread apart right now). This is the MAIN ranking; the biggest gaps lead.
       PAIRS28.forEach(function (p) { var ab = p.split('_'); if (vals[ab[0]] != null && vals[ab[1]] != null) arr.push({ b: ab[0], q: ab[1], d: vals[ab[0]] - vals[ab[1]] }); });
       arr.sort(function (a, b) { return Math.abs(b.d) - Math.abs(a.d); });
-      var h = '<div style="font-weight:800;margin-bottom:2px">' + eatHM(ms) + ' EAT</div>'
+      var h = '<div style="font-weight:800;margin-bottom:2px">' + (multiDay ? eatDate(ms).slice(5) + ' ' : '') + eatHM(ms) + ' EAT</div>'
         + '<div class="mut" style="font-size:10px;margin-bottom:5px">Top 5 pairs by currency-% spread — buyers vs sellers</div>';
       arr.slice(0, 5).forEach(function (o) {
         var up = o.d >= 0, cc = up ? 'var(--up)' : 'var(--dn)', ar = up ? '▲' : '▼', side = up ? 'buyers' : 'sellers';
@@ -561,7 +570,8 @@
     var sp = live.spread || {}, pts = sp.series || [];
     if (pts.length < 2) { wrap.innerHTML = '<div class="mut" style="font-size:12px">Spread (strongest − weakest) — not enough points yet.</div>'; return wrap; }
     var t0 = live.startMs, t1 = live.cutoffMs;
-    var W = 920, H = 150, mL = 48, mR = 64, mT = 16, mB = 22;
+    var multiDay = (t1 - t0) > 26 * 3600000;
+    var W = 920, H = 150, mL = 48, mR = 64, mT = 16, mB = multiDay ? 32 : 22;
     var yMax = sthr * 1.3; pts.forEach(function (p) { if (p.spread > yMax) yMax = p.spread; });
     yMax *= 1.08;
     var X = function (ms) { return mL + (ms - t0) / (t1 - t0) * (W - mL - mR); };
@@ -586,7 +596,15 @@
     });
     // mark qualified points
     pts.forEach(function (p) { if (p.qual) s += '<circle cx="' + X(p.ms).toFixed(1) + '" cy="' + Y(p.spread).toFixed(1) + '" r="1.6" fill="#eab308"/>'; });
-    for (var k = 0; k <= 6; k++) { var tm = t0 + (t1 - t0) * k / 6; s += '<text x="' + X(tm) + '" y="' + (H - 6) + '" text-anchor="middle" font-size="10" fill="var(--text-muted)">' + eatHM(tm) + '</text>'; }
+    for (var k = 0; k <= 6; k++) {
+      var tm = t0 + (t1 - t0) * k / 6, xx = X(tm);
+      if (multiDay) {
+        s += '<text x="' + xx + '" y="' + (H - 13) + '" text-anchor="middle" font-size="9" fill="var(--text-muted)">' + eatDate(tm).slice(5) + '</text>';
+        s += '<text x="' + xx + '" y="' + (H - 4) + '" text-anchor="middle" font-size="8" fill="var(--text-muted)" opacity="0.75">' + eatHM(tm) + '</text>';
+      } else {
+        s += '<text x="' + xx + '" y="' + (H - 6) + '" text-anchor="middle" font-size="10" fill="var(--text-muted)">' + eatHM(tm) + '</text>';
+      }
+    }
     s += '</svg>';
     wrap.innerHTML = s;
     return wrap;
@@ -633,7 +651,9 @@
 
     active.forEach(function (w, wi) {
       var hdr = el('div'); hdr.style.cssText = 'margin:12px 0 6px;font-weight:700;font-size:13px';
-      hdr.innerHTML = '⏱ Window #' + (wi + 1) + ' · ' + eatHM(w.startMs) + ' → ' + (w.ongoing ? '<span style="color:var(--up)">now ●</span>' : eatHM(w.endMs)) + ' · ' + w.nSteps + ' ' + RES + ' steps';
+      var wMulti = (w.endMs - w.startMs) > 26 * 3600000;
+      var hmLabel = function (ms) { return (wMulti ? eatDate(ms).slice(5) + ' ' : '') + eatHM(ms); };
+      hdr.innerHTML = '⏱ Window #' + (wi + 1) + ' · ' + hmLabel(w.startMs) + ' → ' + (w.ongoing ? '<span style="color:var(--up)">now ●</span>' : hmLabel(w.endMs)) + ' · ' + w.nSteps + ' ' + RES + ' steps';
       wrap.appendChild(hdr);
       wrap.appendChild(buildStrengthChart(w, col));
       wrap.appendChild(el('div', null, '<div class="mut" style="font-size:11px;margin:8px 0 2px">Qualifying currencies at ' + eatHM(w.endMs) + ' EAT — ranked by momentum (EMA velocity), fastest move first</div>'));
@@ -648,7 +668,8 @@
     var times = w.times || [], lines = w.lines || [];
     var t0 = times[0], t1 = times[times.length - 1];
     if (!(t1 > t0)) { box.innerHTML = '<div class="mut" style="font-size:12px">Not enough points to plot.</div>'; return box; }
-    var W = 920, H = 320, mL = 46, mR = 60, mT = 12, mB = 24;
+    var multiDay = (t1 - t0) > 26 * 3600000;
+    var W = 920, H = 320, mL = 46, mR = 60, mT = 12, mB = multiDay ? 34 : 24;
     var yMax = 0.05, yMin = -0.05;
     lines.forEach(function (ln) { ln.ema.forEach(function (v) { if (v > yMax) yMax = v; if (v < yMin) yMin = v; }); });
     var pad = (yMax - yMin) * 0.08; yMax += pad; yMin -= pad;
@@ -660,7 +681,15 @@
       s += '<line x1="' + mL + '" y1="' + yy + '" x2="' + (W - mR) + '" y2="' + yy + '" stroke="var(--border)" ' + dash + '/>';
       s += '<text x="' + (mL - 6) + '" y="' + (yy + 3) + '" text-anchor="end" font-size="10" fill="var(--text-muted)">' + (lv > 0 ? '+' : '') + lv.toFixed(2) + '%</text>';
     });
-    for (var k = 0; k <= 6; k++) { var tm = t0 + (t1 - t0) * k / 6; s += '<text x="' + X(tm) + '" y="' + (H - 7) + '" text-anchor="middle" font-size="10" fill="var(--text-muted)">' + eatHM(tm) + '</text>'; }
+    for (var k = 0; k <= 6; k++) {
+      var tm = t0 + (t1 - t0) * k / 6, xx = X(tm);
+      if (multiDay) {
+        s += '<text x="' + xx + '" y="' + (H - 15) + '" text-anchor="middle" font-size="9.5" fill="var(--text-muted)">' + eatDate(tm).slice(5) + '</text>';
+        s += '<text x="' + xx + '" y="' + (H - 5) + '" text-anchor="middle" font-size="8.5" fill="var(--text-muted)" opacity="0.75">' + eatHM(tm) + '</text>';
+      } else {
+        s += '<text x="' + xx + '" y="' + (H - 7) + '" text-anchor="middle" font-size="10" fill="var(--text-muted)">' + eatHM(tm) + '</text>';
+      }
+    }
     var strBy = {}; (w.strength || []).forEach(function (r) { strBy[r.currency] = r; });
     lines.forEach(function (ln) {
       var d = '';
