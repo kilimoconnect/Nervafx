@@ -164,11 +164,17 @@
     if(!flow||!flow.ok){ host.innerHTML='<div class="banner warn">'+esc((d.reason||flow&&flow.reason||'No data for this configuration')+'')+'</div>'; return; }
     var L=layout(flow);
     var showSeg = L.spans.length<=14;                 // A/B/C labels + counts when few blocks
-    var ML=60,MR=20,MT=28,MB=showSeg?60:42, H=(window.innerWidth<=620?380:480);
+    var mobile=window.innerWidth<=620;
+    var ML=60,MR=20,MT=28,MB=showSeg?60:42;
+    // fill the viewport height like a trading chart (clamped), measured once per render
+    var H=mobile?Math.max(320,Math.min(460,Math.round(window.innerHeight*0.52)))
+                :Math.max(420,Math.min(760,Math.round(window.innerHeight*0.60)));
     var scroll=document.createElement('div'); scroll.className='chartscroll';
-    var cw=host.clientWidth||900;
+    var cw=(host.clientWidth||900)-2;   // -2 for the .chartwrap 1px border each side
+    // fit the ENTIRE chart into the available width at zoom 1 (no horizontal scrollbar);
+    // zoom>1 widens it so you can pan to inspect, like a trading chart.
     var fitPx=(cw-ML-MR)/L.totalA;
-    var pxU=Math.max(fitPx,0.4)*S.zoom;
+    var pxU=fitPx*S.zoom;
     var W=Math.max(cw, ML+L.totalA*pxU+MR);
     var xAt=function(a){return ML+a*pxU;};
     var yAt=function(v){return (H-MB)-(v-L.vMin)/(L.vMax-L.vMin)*(H-MB-MT);};
