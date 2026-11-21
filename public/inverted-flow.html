@@ -56,8 +56,23 @@
   .flowtip b{color:var(--text)}
   .flowtip .muted{color:var(--text-muted)}
   .flowtip .up{color:var(--up)}.flowtip .dn{color:var(--dn)}
-  .cmpgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
-  @media(max-width:860px){.cmpgrid{grid-template-columns:1fr}}
+  .cmpgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  @media(max-width:1040px){.cmpgrid{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:560px){.cmpgrid{grid-template-columns:1fr}}
+  .cmpcard svg{height:96px}
+  /* pairs ranked by currency strength (strong vs weak), from the Renko index */
+  .pairrank{margin:16px 0 2px}
+  .pairrank h3{font-size:14px;font-weight:800;margin:0 0 8px;color:var(--text)}
+  .pairrank .sub{font-size:11.5px;color:var(--text-muted);margin:-4px 0 8px}
+  .ptbl{width:100%;border-collapse:collapse;font-size:12px}
+  .ptbl th,.ptbl td{padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap}
+  .ptbl th{font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);font-weight:700}
+  .ptbl td.num{text-align:right;font-variant-numeric:tabular-nums}
+  .ptbl tr{cursor:pointer}.ptbl tbody tr:hover{background:rgba(59,130,246,.08)}
+  .ptbl .pair{font-weight:700;color:var(--text)}
+  .ptbl .s{color:var(--up);font-weight:700}.ptbl .w{color:var(--dn);font-weight:700}
+  .ptbl .lean.up{color:var(--up)}.ptbl .lean.dn{color:var(--dn)}
+  .ptbl .bar{display:inline-block;height:8px;border-radius:4px;background:linear-gradient(90deg,var(--up),rgba(59,130,246,.7));vertical-align:middle}
   .cmpcard{background:var(--flow-bg);border:1px solid var(--border);border-radius:12px;padding:12px;cursor:pointer}
   .cmpcard:hover{border-color:var(--accent)}
   .cmpcard .top{display:flex;align-items:center;gap:8px;margin-bottom:6px}

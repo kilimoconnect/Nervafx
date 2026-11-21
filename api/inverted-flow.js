@@ -38,6 +38,8 @@ const parseMs = (v, dflt) => { if (v == null || v === '') return dflt; const t =
 
 // Default close window per resolution (bounded for the serverless budget; ≈1k observations each).
 const WINDOW_DAYS = { M5: { def: 3, cap: 10 }, M15: { def: 10, cap: 30 }, H1: { def: 45, cap: 120 } };
+// Index history window (M15 basket snapshots) — a rolling multi-day window like the pair charts.
+const INDEX_WINDOW = { def: 12, cap: 45 };
 
 async function instrumentRange(sb, instrument, tf) {
   const lo = await sb.from('backtest_candles').select('time').eq('instrument', instrument).eq('timeframe', tf).eq('complete', true).order('time', { ascending: true }).limit(1);
@@ -58,20 +60,28 @@ function runPairFlow(candles, resolution, step, precision, cutoffMs) {
   return r;
 }
 
-// Resolve the index day robustly: load a few days of M15 (covers weekends/data lag), build the index,
-// then anchor to 00:00 EAT of the latest day that actually has data at/at-or-before the cutoff. A
-// user-supplied ?date picks that EAT day instead. Returns { built, baselineMs, cutoffMs }.
-async function loadIndexDay(sb, q, asOfMs) {
+// Load the index over a ROLLING MULTI-DAY window (like the pair charts), build the zero-sum index and
+// rebase to the value at the window start — so the chart shows days of history, not just today. A
+// user-supplied ?date still pins a single documented day (baseline 00:00 EAT). ?days / ?since override
+// the window. Returns { built, baselineMs, cutoffMs, sinceMs, daily }.
+async function loadIndexWindow(sb, q, asOfMs) {
   const dateGiven = q.date != null && q.date !== '';
-  const target = dateGiven ? dayStart(parseMs(q.date, asOfMs)) : null;
-  const cutoffReq = Math.min(asOfMs, dateGiven ? (target + DAY_MS) : asOfMs);
-  const fromIso = iso(cutoffReq - 4 * DAY_MS);
-  const by = await loadM15Parallel(sb, PAIRS, { fromIso, toIso: iso(cutoffReq) }, 8);
+  if (dateGiven) {
+    const target = dayStart(parseMs(q.date, asOfMs));
+    const cutoffReq = Math.min(asOfMs, target + DAY_MS);
+    const by = await loadM15Parallel(sb, PAIRS, { fromIso: iso(target - 4 * DAY_MS), toIso: iso(cutoffReq) }, 8);
+    const built = buildIndices(by, { baseMs: M15_MS });
+    if (!built.ok) return { built };
+    return { built, baselineMs: target, cutoffMs: Math.min(cutoffReq, built.lastMs), sinceMs: target, daily: true };
+  }
+  const days = Math.min(INDEX_WINDOW.cap, Math.max(1, parseFloat(q.days) || INDEX_WINDOW.def));
+  const sinceMs = parseMs(q.since, asOfMs - days * DAY_MS);
+  const by = await loadM15Parallel(sb, PAIRS, { fromIso: iso(sinceMs - 2 * M15_MS), toIso: iso(asOfMs) }, 8);
   const built = buildIndices(by, { baseMs: M15_MS });
   if (!built.ok) return { built };
-  const cutoffMs = Math.min(cutoffReq, built.lastMs);
-  const baselineMs = dateGiven ? target : dayStart(cutoffMs);
-  return { built, baselineMs, cutoffMs };
+  const cutoffMs = Math.min(asOfMs, built.lastMs);
+  const baselineMs = Math.max(sinceMs, built.firstMs);
+  return { built, baselineMs, cutoffMs, sinceMs, daily: false };
 }
 
 function runIndexFlow(built, ccy, baselineMs, cutoffMs, step) {
@@ -111,7 +121,7 @@ module.exports = async function handler(req, res) {
 
     // ---- 8-index comparison -------------------------------------------------------------------
     if (view === 'compare') {
-      const day = await loadIndexDay(sb, q, asOfMs);
+      const day = await loadIndexWindow(sb, q, asOfMs);
       if (!day.built.ok) return res.json({ ok: true, available: false, reason: day.built.reason, mode, view });
       const built = day.built, baselineMs = day.baselineMs, cutoffMs = day.cutoffMs;
       const step = Math.min(5, Math.max(0.001, parseFloat(q.step) || DEFAULT_INDEX_STEP_PP));
@@ -128,10 +138,10 @@ module.exports = async function handler(req, res) {
       const ranked = panels.filter((p) => p.available).sort((a, b) => b.lastPp - a.lastPp).map((p, i) => ({ currency: p.currency, rank: i + 1, lastPp: p.lastPp }));
       return res.json({
         ok: true, version: FLOW_VERSION, mode, view: 'compare',
-        asOfUtc: iso(cutoffMs), baselineMs, baselineUtc: iso(baselineMs),
+        asOfUtc: iso(cutoffMs), baselineMs, baselineUtc: iso(baselineMs), sinceMs: day.sinceMs, sinceUtc: iso(day.sinceMs), daily: day.daily,
         meta: { kind: 'index', step, unit: 'constituent basket snapshots', valueLabel: '% from baseline (pp)', resolution: 'M15' },
         coverage: coverageForIndex(built), ranking: ranked, panels,
-        disclaimer: 'Zero-sum 1/8 currency indices on M15 basket snapshots (reconciles with Evolution), UNVALIDATED. Each panel keeps its own activity axis; the same x-position across panels is NOT the same clock time. No orders.',
+        disclaimer: 'Zero-sum 1/8 currency indices on M15 basket snapshots over the loaded window (reconciles with Evolution), UNVALIDATED. Each panel keeps its own activity axis; the same x-position across panels is NOT the same clock time. No orders.',
       });
     }
 
@@ -162,15 +172,15 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // index (single)
-    const day = await loadIndexDay(sb, q, asOfMs);
+    // index (single) — rolling multi-day window, like the pair charts
+    const day = await loadIndexWindow(sb, q, asOfMs);
     if (!day.built.ok) return res.json({ ok: true, available: false, reason: day.built.reason, mode, view, instrument: inst.id });
     const built = day.built, baselineMs = day.baselineMs, cutoffMs = day.cutoffMs;
     const step = Math.min(5, Math.max(0.001, parseFloat(q.step) || DEFAULT_INDEX_STEP_PP));
     const r = runIndexFlow(built, inst.currency, baselineMs, cutoffMs, step);
     return res.json({
       ok: true, version: FLOW_VERSION, mode: 'close', view: 'single', instrument: inst.id, available: !!r.ok, reason: r.ok ? null : r.reason,
-      asOfUtc: iso(cutoffMs), baselineMs, baselineUtc: iso(baselineMs),
+      asOfUtc: iso(cutoffMs), baselineMs, baselineUtc: iso(baselineMs), sinceMs: day.sinceMs, sinceUtc: iso(day.sinceMs), daily: day.daily,
       meta: {
         kind: 'index', label: inst.label, currency: inst.currency, step, precision: 3,
         unit: 'constituent basket snapshots', valueLabel: '% from baseline (pp)', resolution: 'M15',
@@ -178,7 +188,7 @@ module.exports = async function handler(req, res) {
       },
       coverage: coverageForIndex(built),
       flow: r.ok ? r : null,
-      disclaimer: 'Zero-sum 1/8 ' + inst.currency + ' index on M15 basket snapshots since 00:00 EAT (reconciles with Evolution), UNVALIDATED. Width = basket snapshots. No orders.',
+      disclaimer: 'Zero-sum 1/8 ' + inst.currency + ' index on M15 basket snapshots over the loaded window (reconciles with Evolution), UNVALIDATED. Width = basket snapshots. No orders.',
     });
   } catch (e) {
     res.status(500).json({ ok: false, error: String((e && e.message) || e) });

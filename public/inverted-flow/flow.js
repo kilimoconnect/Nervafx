@@ -302,6 +302,40 @@
       grid.appendChild(card);
     });
     host.innerHTML=''; host.appendChild(grid);
+    var pr=buildPairStrength(d.panels); if(pr) host.appendChild(pr);
+  }
+  // Rank the 28 pairs by the strength gap between their two currencies (from the Renko index pp):
+  // each pair has one strong and one weak currency; a bigger gap = a stronger directional lean.
+  function buildPairStrength(panels){
+    var strength={}, n=0;
+    (panels||[]).forEach(function(p){ if(p.available&&p.lastPp!=null){strength[p.currency]=p.lastPp;n++;} });
+    if(n<2) return null;
+    var rows=[];
+    PAIRS.forEach(function(pair){
+      var pq=pair.split('_'), b=pq[0], q=pq[1];
+      if(strength[b]==null||strength[q]==null) return;
+      var sb=strength[b], sq=strength[q], leanUp=sb>=sq;
+      rows.push({pair:pair, strong:leanUp?b:q, weak:leanUp?q:b, spread:Math.abs(sb-sq), leanUp:leanUp});
+    });
+    if(!rows.length) return null;
+    rows.sort(function(a,b){return b.spread-a.spread;});
+    var maxSp=rows[0].spread||1;
+    var wrap=document.createElement('div');wrap.className='pairrank';
+    var h='<h3>Pairs ranked by currency strength</h3>'
+      +'<div class="sub">From each currency’s Renko index over the loaded window: every pair pits its <b class="s" style="color:var(--up)">strong</b> currency against its <b class="w" style="color:var(--dn)">weak</b> one. <b>Spread</b> = strong − weak (pp); <b>Lean</b> = the way the gap points (strong base → pair up). Relative strength, research only — no signal, no orders.</div>'
+      +'<table class="ptbl"><thead><tr><th>#</th><th>Pair</th><th>Strong</th><th>Weak</th><th class="num">Spread&nbsp;(pp)</th><th>Lean</th><th style="width:22%">Strength&nbsp;gap</th></tr></thead><tbody>';
+    rows.forEach(function(r,i){
+      h+='<tr data-pair="'+r.pair+'"><td class="num">'+(i+1)+'</td>'
+        +'<td class="pair">'+r.pair.replace('_','/')+'</td>'
+        +'<td class="s">'+r.strong+'</td><td class="w">'+r.weak+'</td>'
+        +'<td class="num">'+r.spread.toFixed(3)+'</td>'
+        +'<td class="lean '+(r.leanUp?'up':'dn')+'">'+(r.leanUp?'▲ up':'▼ down')+'</td>'
+        +'<td><span class="bar" style="width:'+Math.max(4,Math.round(r.spread/maxSp*100))+'%"></span></td></tr>';
+    });
+    h+='</tbody></table>';
+    wrap.innerHTML=h;
+    wrap.querySelectorAll('tr[data-pair]').forEach(function(tr){tr.addEventListener('click',function(){var p=tr.getAttribute('data-pair');S.view='single';S.kind='pair';S.instrument=p;nav({view:null,instrument:p,resolution:S.resolution});});});
+    return wrap;
   }
   function miniSvg(flow,vMin,vMax){
     var L=layout(flow); var W=360,H=120,ML=4,MR=4,MT=8,MB=8;
@@ -327,10 +361,10 @@
     var d=S.data, hdr=document.getElementById('charthdr'), cov=document.getElementById('coverage');
     var title='', sub='';
     if(S.view==='sim'){ title='EUR/USD · Simulated example'; sub='<b>5-pip</b> step · 10-pip reversal · width = <b>received quote updates</b>'; }
-    else if(S.view==='compare'){ title='8-Index Comparison'; sub=d.meta?('step <b>'+d.meta.step+'pp</b> · '+d.meta.resolution+' basket snapshots · ranked by index value'):''; }
+    else if(S.view==='compare'){ title='Currency Strength · 8 Indices'; sub=d.meta?('step <b>'+d.meta.step+'pp</b> · '+d.meta.resolution+' basket snapshots · 8 currencies ranked, then every pair ranked by its strength gap'):''; }
     else if(d&&d.meta){ var m=d.meta; title=(m.label||S.instrument)+' · Inverted Flow';
       if(m.kind==='pair')sub='step <b>'+m.step+'</b> ('+m.stepPips+' pip) · <b>'+m.resolution+' closes</b> · width = received closes';
-      else sub='step <b>'+m.step+'pp</b> · <b>M15 basket snapshots</b> since 00:00 EAT · width = basket snapshots';
+      else sub='step <b>'+m.step+'pp</b> · <b>M15 basket snapshots</b>'+(d.daily?' · single day':' · multi-day window')+' · width = basket snapshots';
     }
     hdr.innerHTML='<div class="chrow"><span class="chTitle">'+esc(title)+'</span></div><div class="chSub">'+sub+'</div>';
     // coverage
