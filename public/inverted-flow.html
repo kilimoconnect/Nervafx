@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NervaFX — Inverted Flow Chart (research)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" href="/nervafx-icon.png">
+<link rel="stylesheet" href="/shared/styles.css">
+<style>
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:8px 0 6px}
+  .seg{display:inline-flex;gap:3px;background:var(--bg-card);border:1px solid var(--border);border-radius:9px;padding:3px}
+  .seg button{font-size:12px;font-weight:700;color:var(--text-muted);border:0;background:transparent;border-radius:7px;padding:6px 12px;cursor:pointer}
+  .seg button.on{color:var(--text);background:rgba(59,130,246,.18)}
+  .ctl{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-muted)}
+  .ctl select,.ctl input{font-size:12px;background:var(--bg-card);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:6px 8px}
+  .ctl input[type=number]{width:92px}
+  .ctl input[type=search]{width:120px}
+  .btn.tiny{font-size:11px;padding:5px 9px}
+  .chk{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--text);cursor:pointer;user-select:none}
+  .charthdr{display:flex;flex-direction:column;gap:4px;margin:6px 0 4px}
+  .chrow{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+  .chTitle{font-weight:800;font-size:17px}
+  .chSub{font-size:12px;color:var(--text-muted)}
+  .chSub b{color:var(--text);font-weight:700}
+  .coverage{font-size:11px;color:var(--text-muted);margin:2px 0 6px}
+  .coverage .warn{color:var(--yellow)}
+  .chartwrap{position:relative;width:100%;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+  .chartscroll{overflow-x:auto;overflow-y:hidden;width:100%}
+  svg.flow{display:block;height:460px}
+  @media(max-width:620px){svg.flow{height:380px}}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--text-muted);margin:8px 2px}
+  .legend .k{display:inline-flex;align-items:center;gap:5px}
+  .legend .sw{width:14px;height:10px;border-radius:2px;display:inline-block}
+  .sw.up{background:var(--up)}.sw.dn{background:var(--dn)}
+  .sw.form{background:repeating-linear-gradient(90deg,rgba(148,163,184,.5) 0 4px,transparent 4px 8px);border:1px dashed var(--text-muted)}
+  .sw.line{width:16px;height:2px;border-radius:0;background:var(--text)}
+  .replaybar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 2px;font-size:12px;color:var(--text-muted)}
+  .replaybar .pos{font-variant-numeric:tabular-nums}
+  .flowtip{position:absolute;pointer-events:none;z-index:6;background:#0b1220;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:11.5px;color:var(--text);box-shadow:0 8px 22px rgba(0,0,0,.5);max-width:300px;line-height:1.5;display:none}
+  .flowtip b{color:var(--text)}
+  .flowtip .muted{color:var(--text-muted)}
+  .flowtip .up{color:var(--up)}.flowtip .dn{color:var(--dn)}
+  .cmpgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+  @media(max-width:860px){.cmpgrid{grid-template-columns:1fr}}
+  .cmpcard{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:10px}
+  .cmpcard .top{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+  .cmpcard .ccy{font-size:15px;font-weight:800}
+  .cmpcard .rk{font-size:11px;color:var(--text-muted)}
+  .cmpcard .pp{margin-left:auto;font-size:14px;font-weight:800;font-variant-numeric:tabular-nums}
+  .cmpcard .pp.up{color:var(--up)}.cmpcard .pp.dn{color:var(--dn)}
+  .cmpcard svg{width:100%;height:120px;display:block}
+  .cmpcard .dir{font-size:10.5px;padding:1px 6px;border-radius:5px;border:1px solid var(--border);color:var(--text-muted)}
+  .cmpcard .dir.up{color:var(--up);border-color:rgba(22,199,132,.4)}
+  .cmpcard .dir.dn{color:var(--dn);border-color:rgba(246,70,93,.4)}
+  .banner{font-size:12px;border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin:6px 0;color:var(--text-muted);background:var(--bg-card)}
+  .banner.warn{border-color:#6b5e1a;color:var(--yellow)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="app">
+    <img src="/nervafx-logo.png" alt="NervaFX" style="height:26px;display:block" onerror="this.style.display='none'">
+    <span class="logo">Inverted Flow</span>
+    <span class="pill" id="ver">—</span>
+    <span class="pill warn">RESEARCH · UNVALIDATED</span>
+    <a class="btn sm" href="/app" style="margin-left:8px">← Comparison</a>
+    <a class="btn sm" href="/trade-signals" style="margin-left:8px">Trade Signals</a>
+    <a class="btn sm" href="/breakout-strength" style="margin-left:8px">Breakout</a>
+    <span class="spacer"></span>
+    <span class="mut" style="font-size:11px">Replay (EAT):</span>
+    <input type="datetime-local" id="histDt" class="btn" step="900">
+    <button class="btn sm" id="histGo">Go</button>
+    <button class="btn sm" id="histLive">● Live</button>
+  </header>
+
+  <div class="toolbar">
+    <span class="seg" id="kindSeg">
+      <button data-kind="pair">Pairs</button>
+      <button data-kind="index">Currency Indices</button>
+    </span>
+    <span class="ctl"><span>Instrument</span>
+      <select id="instSel"></select>
+      <input type="search" id="instSearch" placeholder="search…" autocomplete="off">
+    </span>
+    <span class="ctl" id="resCtl"><span>Resolution</span>
+      <span class="seg" id="resSeg">
+        <button data-res="M5">M5</button><button data-res="M15">M15</button><button data-res="H1">H1</button>
+      </span>
+    </span>
+    <span class="ctl"><span id="stepLbl">Step</span>
+      <input type="number" id="stepIn" step="0.00001" min="0"><span id="stepUnit" class="mut"></span>
+    </span>
+    <span class="seg" id="viewSeg">
+      <button data-view="single">Single</button>
+      <button data-view="compare">8-Index Compare</button>
+      <button data-view="sim">Simulated example</button>
+    </span>
+    <label class="chk"><input type="checkbox" id="revChk"> Reversal markers</label>
+    <span class="seg">
+      <button id="zoomOut" title="zoom out">−</button>
+      <button id="zoomReset" title="reset view">reset</button>
+      <button id="zoomIn" title="zoom in">+</button>
+    </span>
+  </div>
+
+  <div id="banners" aria-live="polite"></div>
+
+  <div class="charthdr" id="charthdr"></div>
+  <div class="coverage" id="coverage"></div>
+
+  <main id="host"><div class="banner">Loading Inverted Flow…</div></main>
+
+  <div class="legend" id="legend"></div>
+
+  <div class="replaybar" id="replaybar" style="display:none">
+    <button class="btn tiny" id="rpPlay">▶ Play</button>
+    <button class="btn tiny" id="rpStepObs" title="step one observation">▸ obs</button>
+    <button class="btn tiny" id="rpStepEvt" title="step one confirmed event">▸▸ event</button>
+    <button class="btn tiny" id="rpLive" title="jump to latest">⤒ latest</button>
+    <span class="ctl">Speed <select id="rpSpeed"><option value="1">1×</option><option value="2">2×</option><option value="4" selected>4×</option><option value="8">8×</option><option value="16">16×</option></select></span>
+    <span class="pos" id="rpPos"></span>
+  </div>
+
+  <div class="foot" id="foot"></div>
+</div>
+
+<script src="/inverted-flow/flow.js"></script>
+</body></html>
