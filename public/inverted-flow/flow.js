@@ -71,7 +71,7 @@
   function durStr(ms){if(ms==null)return '—';var s=Math.round(ms/1000);if(s<60)return s+'s';var m=Math.round(s/60);if(m<60)return m+'m';var h=Math.floor(m/60);return h+'h '+(m%60)+'m';}
 
   // ---------- query / state ----------
-  function qp(k){return (location.search.match(new RegExp('[?&]'+k+'=([^&]+)'))||[])[1];}
+  function qp(k){var m=location.search.match(new RegExp('[?&]'+k+'=([^&]+)'));if(!m)return undefined;try{return decodeURIComponent(m[1]);}catch(e){return m[1];}}
   var S={
     kind: qp('instrument') && qp('instrument').indexOf('IDX:')===0 ? 'index' : (qp('kind')||'pair'),
     instrument: qp('instrument') || 'EUR_USD',
@@ -179,14 +179,14 @@
       width:box.clientWidth, height:box.clientHeight||480,
       layout:{background:{color:'transparent'},textColor:'#94a3b8',fontFamily:'Inter, sans-serif'},
       grid:{vertLines:{color:'rgba(42,49,72,.45)'},horzLines:{color:'rgba(42,49,72,.45)'}},
-      rightPriceScale:{borderColor:'#2a3148',scaleMargins:{top:0.08,bottom:0.28}},
+      rightPriceScale:{borderColor:'#2a3148',scaleMargins:{top:0.05,bottom:0.16}},
       timeScale:{borderColor:'#2a3148',timeVisible:true,secondsVisible:false,tickMarkFormatter:lwEatTick,rightOffset:4,minBarSpacing:2},
       localization:{timeFormatter:lwEatFull},
       crosshair:{mode:0},
     });
     var candle=chart.addCandlestickSeries({upColor:'#16c784',downColor:'#f6465d',borderVisible:false,wickUpColor:'rgba(22,199,132,.95)',wickDownColor:'rgba(246,70,93,.95)'});
     var vol=chart.addHistogramSeries({priceFormat:{type:'volume'},priceScaleId:'vol',lastValueVisible:false});
-    chart.priceScale('vol').applyOptions({scaleMargins:{top:0.80,bottom:0}});
+    chart.priceScale('vol').applyOptions({scaleMargins:{top:0.88,bottom:0}});
     var resize=function(){var b=document.getElementById('flowchartbox');if(b&&LW&&LW.chart)LW.chart.applyOptions({width:b.clientWidth,height:b.clientHeight});};
     window.addEventListener('resize',resize);
     LW={chart:chart,candle:candle,vol:vol,resize:resize,byTime:{}};
