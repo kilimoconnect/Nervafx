@@ -321,14 +321,15 @@
     if(!rows.length) return null;
     rows.sort(function(a,b){return b.spread-a.spread;});
     var maxSp=rows[0].spread||1;
-    var nAligned=0,nStruct=0; rows.forEach(function(r){ if(r.struct){nStruct++; if((r.struct==='up')===r.leanUp)nAligned++;} });
+    var nAligned=0,nStruct=0; rows.forEach(function(r){ if(r.struct==='up'||r.struct==='down'){nStruct++; if((r.struct==='up')===r.leanUp)nAligned++;} });
     var wrap=document.createElement('div');wrap.className='pairrank';
     var h='<h3>Pairs ranked by currency strength</h3>'
-      +'<div class="sub">From each currency’s Renko index over the loaded window: every pair pits its <b class="s" style="color:var(--up)">strong</b> currency against its <b class="w" style="color:var(--dn)">weak</b> one. <b>Spread</b> = strong − weak (pp); <b>Lean</b> = the way the gap points (strong base → pair up). <b>Candle align</b> compares the Renko lean with the pair’s own <b>M5</b> candlestick structure (EMA20 vs EMA50 on its M5 closes, up to the selected time) — <b class="al ok">aligned</b> when both point the same way'+(nStruct?(' ('+nAligned+'/'+nStruct+' aligned now)'):'')+'. Relative strength, research only — no signal, no orders.</div>'
+      +'<div class="sub">From each currency’s Renko index over the loaded window: every pair pits its <b class="s" style="color:var(--up)">strong</b> currency against its <b class="w" style="color:var(--dn)">weak</b> one. <b>Spread</b> = strong − weak (pp); <b>Lean</b> = the way the gap points (strong base → pair up). <b>Candle align</b> compares the Renko lean with the pair’s own <b>M5</b> structure up to the selected time — <b>up</b> when M5 close &gt; EMA20 &gt; EMA50, <b>down</b> when close &lt; EMA20 &lt; EMA50, else <b>mixed</b>; <b class="al ok">aligned</b> when the clean up/down matches the lean'+(nStruct?(' ('+nAligned+'/'+nStruct+' aligned now)'):'')+'. Relative strength, research only — no signal, no orders.</div>'
       +'<table class="ptbl"><thead><tr><th>#</th><th>Pair</th><th>Strong</th><th>Weak</th><th class="num">Spread&nbsp;(pp)</th><th>Lean</th><th>Candle&nbsp;align</th><th style="width:20%">Strength&nbsp;gap</th></tr></thead><tbody>';
     rows.forEach(function(r,i){
       var al;
       if(!r.struct){ al='<td class="al none">—</td>'; }
+      else if(r.struct==='mixed'){ al='<td class="al mix">≈ mixed</td>'; }
       else { var cu=r.struct==='up', ok=(cu===r.leanUp); al='<td class="al '+(ok?'ok':'no')+'">'+(cu?'▲':'▼')+' '+(ok?'✓ aligned':'✗ diverging')+'</td>'; }
       h+='<tr data-pair="'+r.pair+'"><td class="num">'+(i+1)+'</td>'
         +'<td class="pair">'+r.pair.replace('_','/')+'</td>'
