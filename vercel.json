@@ -25,6 +25,7 @@
     "api/breakout-settings.js":   { "maxDuration": 30 },
     "api/cron-breakout.js":       { "maxDuration": 300 },
     "api/backfill-breakout.js":   { "maxDuration": 300 },
+    "api/inverted-flow.js":       { "maxDuration": 120 },
     "api/*-history.js":           { "maxDuration": 300 }
   },
   "rewrites": [
@@ -38,6 +39,8 @@
     { "source": "/signals", "destination": "/trade-signals.html" },
     { "source": "/breakout-strength", "destination": "/breakout-strength.html" },
     { "source": "/breakout", "destination": "/breakout-strength.html" },
+    { "source": "/inverted-flow", "destination": "/inverted-flow.html" },
+    { "source": "/flow", "destination": "/inverted-flow.html" },
     { "source": "/login",  "destination": "/login.html"   },
     { "source": "/setup",  "destination": "/setup.html"   },
     { "source": "/profile","destination": "/profile.html" },

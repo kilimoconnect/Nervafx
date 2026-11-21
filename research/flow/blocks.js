@@ -163,6 +163,9 @@ function runBlocks(observations, opts) {
   return {
     ok: true, anchor, step, precision,
     events, blocks, forming,
+    // the clean, ordered observation stream (seed first) so a client can replay deterministically
+    // with the SAME engine — historical and live processing of one input give one result.
+    observations: obs.map((p) => ({ value: p.value, ms: p.ms, bid: p.bid != null ? p.bid : null, ask: p.ask != null ? p.ask : null })),
     finalUnit: Cu, finalDir: dir,
     firstMs: obs[0].ms, lastMs: obs[obs.length - 1].ms,
     nObs: obs.length - 1,   // seed excluded
