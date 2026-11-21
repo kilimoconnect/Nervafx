@@ -75,8 +75,8 @@
   var S={
     kind: qp('instrument') && qp('instrument').indexOf('IDX:')===0 ? 'index' : (qp('kind')||'pair'),
     instrument: qp('instrument') || 'EUR_USD',
-    mode: qp('view')==='sim'?'sim':'close',
-    view: qp('view')==='compare'?'compare':(qp('view')==='sim'?'sim':'single'),
+    mode: 'close',
+    view: qp('view')==='compare'?'compare':'single',
     resolution: qp('resolution') || 'M5',
     step: qp('step') ? parseFloat(qp('step')) : null,
     asOf: qp('asOf') ? +qp('asOf') : null,
@@ -157,12 +157,14 @@
     return {spans:spans,totalA:cum||1,vMin:vMin,vMax:vMax};
   }
 
+  var LETTERS='ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   function renderSingle(){
     var d=S.data, meta=d.meta;
     var flow=computeFlow(d.flow, meta); S.computed=flow;
     if(!flow||!flow.ok){ host.innerHTML='<div class="banner warn">'+esc((d.reason||flow&&flow.reason||'No data for this configuration')+'')+'</div>'; return; }
     var L=layout(flow);
-    var ML=58,MR=18,MT=16,MB=36, H=(window.innerWidth<=620?380:460);
+    var showSeg = L.spans.length<=14;                 // A/B/C labels + counts when few blocks
+    var ML=60,MR=20,MT=28,MB=showSeg?60:42, H=(window.innerWidth<=620?380:480);
     var scroll=document.createElement('div'); scroll.className='chartscroll';
     var cw=host.clientWidth||900;
     var fitPx=(cw-ML-MR)/L.totalA;
@@ -172,6 +174,7 @@
     var yAt=function(v){return (H-MB)-(v-L.vMin)/(L.vMax-L.vMin)*(H-MB-MT);};
     var prec=meta.precision!=null?meta.precision:(meta.kind==='index'?3:5);
     var fmt=function(v){return meta.kind==='index'?(v>=0?'+':'')+v.toFixed(3):v.toFixed(prec);};
+    var unitShort = meta.kind==='index'?'snaps':(S.mode==='sim'?'quotes':'closes');
 
     var svg=el('svg',{class:'flow',width:W,height:H,viewBox:'0 0 '+W+' '+H});
 
@@ -179,70 +182,91 @@
     var u0=Math.ceil((L.vMin-flow.anchor)/flow.step), u1=Math.floor((L.vMax-flow.anchor)/flow.step);
     var uStep=Math.max(1,Math.ceil((u1-u0)/10));
     for(var u=u0;u<=u1;u+=uStep){var val=flow.anchor+u*flow.step; var y=yAt(val);
-      svg.appendChild(el('line',{x1:ML,y1:y,x2:W-MR,y2:y,stroke:'var(--border)','stroke-width':1,opacity:.5}));
-      var tl=el('text',{x:ML-6,y:y+3,'text-anchor':'end','font-size':10,fill:'var(--text-muted)'});tl.textContent=fmt(val);svg.appendChild(tl);
+      svg.appendChild(el('line',{x1:ML,y1:y,x2:W-MR,y2:y,stroke:'var(--flow-grid)','stroke-width':1}));
+      var tl=el('text',{x:ML-8,y:y+3.5,'text-anchor':'end','font-size':10.5,fill:'var(--flow-axis)'});tl.textContent=fmt(val);svg.appendChild(tl);
     }
-    // baseline (anchor) emphasized for index
-    if(meta.kind==='index'){var yb=yAt(flow.anchor);svg.appendChild(el('line',{x1:ML,y1:yb,x2:W-MR,y2:yb,stroke:'var(--text-muted)','stroke-width':1,'stroke-dasharray':'2 3',opacity:.7}));}
+    if(meta.kind==='index'){var yb=yAt(flow.anchor);svg.appendChild(el('line',{x1:ML,y1:yb,x2:W-MR,y2:yb,stroke:'var(--flow-axis)','stroke-width':1.2,'stroke-dasharray':'2 3'}));}
 
-    // bodies + traces
-    var revMarks=[];
-    L.spans.forEach(function(sp){
-      if(sp.type==='event'){
-        var ev=sp.ev, x0=xAt(sp.a0), x1=xAt(sp.a1), w=Math.max(0.5,x1-x0);
+    // bodies + traces + segment separators/labels
+    var revMarks=[], peak={v:-Infinity,x:0,y:0}, trough={v:Infinity,x:0,y:0};
+    function notePt(v,x,y){ if(v>peak.v){peak={v:v,x:x,y:y};} if(v<trough.v){trough={v:v,x:x,y:y};} }
+    L.spans.forEach(function(sp,si){
+      var isEv=sp.type==='event', x0=xAt(sp.a0), x1=xAt(sp.a1), w=Math.max(0.5,x1-x0);
+      // dotted segment separator at the right edge of each span (except the last)
+      if(showSeg && si<L.spans.length-1) svg.appendChild(el('line',{x1:x1,y1:MT,x2:x1,y2:H-MB,stroke:'var(--flow-axis)','stroke-width':1,'stroke-dasharray':'1 4','stroke-opacity':.55}));
+      if(isEv){
+        var ev=sp.ev;
         ev.levels.forEach(function(l){
-          var yo=yAt(l.open), yc=yAt(l.close);
-          var up=l.dir==='up';
-          svg.appendChild(el('rect',{x:x0,y:Math.min(yo,yc),width:w,height:Math.max(1,Math.abs(yo-yc)),fill:up?'var(--up)':'var(--dn)','fill-opacity':0.30,stroke:up?'var(--up)':'var(--dn)','stroke-opacity':0.55,'stroke-width':1}));
+          var yo=yAt(l.open), yc=yAt(l.close), up=l.dir==='up';
+          svg.appendChild(el('rect',{x:x0,y:Math.min(yo,yc),width:w,height:Math.max(1.5,Math.abs(yo-yc)),fill:up?'var(--flow-up)':'var(--flow-dn)','fill-opacity':0.85,stroke:up?'var(--flow-up-bd)':'var(--flow-dn-bd)','stroke-opacity':0.8,'stroke-width':1}));
           if(l.kind==='reversal')revMarks.push({x:x1,y:yc,dir:l.dir,close:l.close,ms:ev.ms});
         });
-        // trace
-        var pts=[[x0,yAt(ev.startValue)]];
-        for(var i=0;i<ev.trace.length;i++)pts.push([xAt(sp.a0+1+i),yAt(ev.trace[i].value)]);
-        svg.appendChild(el('polyline',{points:pts.map(function(p){return p[0].toFixed(1)+','+p[1].toFixed(1);}).join(' '),fill:'none',stroke:'var(--text)','stroke-width':1.3,'stroke-opacity':.85}));
-        // hit area
+        var pts=[[x0,yAt(ev.startValue)]]; notePt(ev.startValue,x0,yAt(ev.startValue));
+        for(var i=0;i<ev.trace.length;i++){var xx=xAt(sp.a0+1+i),yy=yAt(ev.trace[i].value);pts.push([xx,yy]);notePt(ev.trace[i].value,xx,yy);}
+        svg.appendChild(el('polyline',{points:pts.map(function(p){return p[0].toFixed(1)+','+p[1].toFixed(1);}).join(' '),fill:'none',stroke:'var(--flow-trace)','stroke-width':2.1,'stroke-linejoin':'round','stroke-linecap':'round'}));
         var hit=el('rect',{x:x0-Math.max(0,(14-w)/2),y:MT,width:Math.max(w,14),height:H-MB-MT,fill:'transparent'});
         hit.addEventListener('mousemove',function(e){showTip(e,ev,'event',meta);});
         hit.addEventListener('mouseleave',hideTip); hit.addEventListener('click',function(e){showTip(e,ev,'event',meta);});
         svg.appendChild(hit);
       } else {
-        var f=sp.f, fx0=xAt(sp.a0), fx1=xAt(sp.a1), fw=Math.max(0.5,fx1-fx0);
-        var yhi=yAt(f.obsHigh), ylo=yAt(f.obsLow);
-        svg.appendChild(el('rect',{x:fx0,y:Math.min(yhi,ylo),width:fw,height:Math.max(1,Math.abs(yhi-ylo)),fill:'var(--text-muted)','fill-opacity':0.10,stroke:'var(--text-muted)','stroke-opacity':0.7,'stroke-width':1,'stroke-dasharray':'4 3'}));
-        var fpts=[[fx0,yAt(f.startValue)]];
-        for(var j=0;j<f.trace.length;j++)fpts.push([xAt(sp.a0+1+j),yAt(f.trace[j].value)]);
-        svg.appendChild(el('polyline',{points:fpts.map(function(p){return p[0].toFixed(1)+','+p[1].toFixed(1);}).join(' '),fill:'none',stroke:'var(--text)','stroke-width':1.3,'stroke-opacity':.7,'stroke-dasharray':'3 2'}));
-        // hollow latest marker
-        svg.appendChild(el('circle',{cx:xAt(sp.a1),cy:yAt(f.latest.value),r:4.5,fill:'var(--bg-card)',stroke:'var(--text)','stroke-width':1.6}));
-        var fhit=el('rect',{x:fx0,y:MT,width:Math.max(fw,14),height:H-MB-MT,fill:'transparent'});
+        var f=sp.f, yhi=yAt(f.obsHigh), ylo=yAt(f.obsLow);
+        svg.appendChild(el('rect',{x:x0,y:Math.min(yhi,ylo),width:w,height:Math.max(1.5,Math.abs(yhi-ylo)),fill:'var(--flow-axis)','fill-opacity':0.12,stroke:'var(--flow-axis)','stroke-opacity':0.8,'stroke-width':1,'stroke-dasharray':'4 3'}));
+        var fpts=[[x0,yAt(f.startValue)]]; notePt(f.startValue,x0,yAt(f.startValue));
+        for(var j=0;j<f.trace.length;j++){var fx=xAt(sp.a0+1+j),fy=yAt(f.trace[j].value);fpts.push([fx,fy]);notePt(f.trace[j].value,fx,fy);}
+        svg.appendChild(el('polyline',{points:fpts.map(function(p){return p[0].toFixed(1)+','+p[1].toFixed(1);}).join(' '),fill:'none',stroke:'var(--flow-trace)','stroke-width':2.1,'stroke-opacity':.8,'stroke-dasharray':'4 3','stroke-linejoin':'round'}));
+        svg.appendChild(el('circle',{cx:xAt(sp.a1),cy:yAt(f.latest.value),r:5,fill:'var(--flow-bg)',stroke:'var(--flow-trace)','stroke-width':2}));
+        var fhit=el('rect',{x:x0,y:MT,width:Math.max(w,14),height:H-MB-MT,fill:'transparent'});
         fhit.addEventListener('mousemove',function(e){showTip(e,f,'forming',meta);});
         fhit.addEventListener('mouseleave',hideTip); fhit.addEventListener('click',function(e){showTip(e,f,'forming',meta);});
         svg.appendChild(fhit);
       }
+      // segment label (letter + activity count) under the block
+      if(showSeg){
+        var cx=(x0+x1)/2, act=isEv?sp.ev.activity:sp.f.activity;
+        var lt=el('text',{x:cx,y:H-MB+20,'text-anchor':'middle','font-size':12,'font-weight':800,fill:'var(--text)'});lt.textContent=LETTERS[si]||(si+1);svg.appendChild(lt);
+        var ct=el('text',{x:cx,y:H-MB+35,'text-anchor':'middle','font-size':10.5,fill:'var(--flow-axis)'});ct.textContent=act+' '+unitShort;svg.appendChild(ct);
+      }
     });
 
-    // reversal markers
+    // peak annotation (highest observed point), editorial leader + label
+    if(isFinite(peak.v) && (L.vMax-L.vMin)>0){
+      var plx=peak.x, ply=peak.y, right=plx<W-120, lx=right?plx+8:plx-8, tx2=right?plx+34:plx-34;
+      svg.appendChild(el('line',{x1:plx,y1:ply,x2:tx2,y2:ply-14,stroke:'var(--flow-peak)','stroke-width':1}));
+      var pt=el('text',{x:right?tx2+2:tx2-2,y:ply-16,'text-anchor':right?'start':'end','font-size':11,'font-weight':700,fill:'var(--flow-peak)'});pt.textContent='Peak '+fmt(peak.v);svg.appendChild(pt);
+      svg.appendChild(el('circle',{cx:plx,cy:ply,r:2.6,fill:'var(--flow-trace)'}));
+    }
+
+    // reversal markers — editorial ring + label chip
     if(S.showReversals){
       revMarks.forEach(function(m){
-        var up=m.dir==='up';
-        svg.appendChild(el('circle',{cx:m.x,cy:m.y,r:5,fill:'none',stroke:up?'var(--up)':'var(--dn)','stroke-width':2}));
+        var up=m.dir==='up', col=up?'var(--flow-up-bd)':'var(--flow-signal)';
+        svg.appendChild(el('circle',{cx:m.x,cy:m.y,r:6,fill:'none',stroke:col,'stroke-width':2.4}));
+        svg.appendChild(el('circle',{cx:m.x,cy:m.y,r:2,fill:col}));
         var label=(up?'Upward':'Downward')+' reversal confirmed · '+fmt(m.close);
-        var tx=m.x+8, anchor2='start'; if(tx+label.length*5.6>W-MR){tx=m.x-8;anchor2='end';}
-        var bg=el('rect',{x:anchor2==='start'?tx-2:tx-label.length*5.6-2,y:m.y-18,width:label.length*5.6+4,height:14,rx:3,fill:'#0b1220',stroke:up?'var(--up)':'var(--dn)','stroke-opacity':.6});
-        svg.appendChild(bg);
-        var t=el('text',{x:tx,y:m.y-7,'text-anchor':anchor2,'font-size':10,'font-weight':700,fill:up?'var(--up)':'var(--dn)'});t.textContent=label;svg.appendChild(t);
+        var wlab=label.length*5.9+12, below=m.y<H/2;
+        var bx=Math.min(Math.max(ML, m.x- wlab/2), W-MR-wlab), by=below?m.y+12:m.y-30;
+        svg.appendChild(el('rect',{x:bx,y:by,width:wlab,height:20,rx:5,fill:col}));
+        var t=el('text',{x:bx+wlab/2,y:by+13.5,'text-anchor':'middle','font-size':10.5,'font-weight':700,fill:'#fff'});t.textContent=label;svg.appendChild(t);
       });
     }
 
-    // x axis — cumulative activity ticks
-    var aTick=Math.max(1,Math.round(L.totalA/8));
-    for(var a=0;a<=L.totalA;a+=aTick){svg.appendChild(el('line',{x1:xAt(a),y1:H-MB,x2:xAt(a),y2:H-MB+4,stroke:'var(--text-muted)'}));var xt=el('text',{x:xAt(a),y:H-MB+16,'text-anchor':'middle','font-size':9.5,fill:'var(--text-muted)'});xt.textContent=a;svg.appendChild(xt);}
-    var axl=el('text',{x:ML+(W-ML-MR)/2,y:H-6,'text-anchor':'middle','font-size':10,fill:'var(--text-muted)'});axl.textContent='cumulative '+meta.unit+' →';svg.appendChild(axl);
+    // x axis
+    if(!showSeg){
+      var aTick=Math.max(1,Math.round(L.totalA/8));
+      for(var a=0;a<=L.totalA;a+=aTick){svg.appendChild(el('line',{x1:xAt(a),y1:H-MB,x2:xAt(a),y2:H-MB+4,stroke:'var(--flow-axis)'}));var xt=el('text',{x:xAt(a),y:H-MB+16,'text-anchor':'middle','font-size':10,fill:'var(--flow-axis)'});xt.textContent=a;svg.appendChild(xt);}
+    }
+    var axl=el('text',{x:ML+(W-ML-MR)/2,y:H-7,'text-anchor':'middle','font-size':10.5,'font-style':'italic',fill:'var(--flow-axis)'});axl.textContent='cumulative '+meta.unit+' →';svg.appendChild(axl);
 
     scroll.appendChild(svg);
     host.innerHTML=''; var wrap=document.createElement('div');wrap.className='chartwrap';wrap.appendChild(scroll);
     var tip=document.createElement('div');tip.className='flowtip';tip.id='flowtip';wrap.appendChild(tip);
     host.appendChild(wrap);
+    // caption
+    var cap=document.createElement('div');cap.className='flowcap';
+    cap.textContent = S.mode==='sim' ? 'Horizontal distance counts quote updates. The dark line joins successive observed midprices.'
+      : (meta.kind==='index' ? 'Horizontal distance counts constituent basket snapshots. The dark line joins successive index values.'
+      : 'Horizontal distance counts received '+meta.resolution+' closes. The dark line joins successive observed closes.');
+    host.appendChild(cap);
   }
 
   // tooltip
@@ -312,17 +336,17 @@
     var pxU=(W-ML-MR)/(L.totalA||1);
     var xAt=function(a){return ML+a*pxU;}, yAt=function(v){return (H-MB)-(v-vMin)/((vMax-vMin)||1)*(H-MB-MT);};
     var svg=el('svg',{viewBox:'0 0 '+W+' '+H,preserveAspectRatio:'none'});
-    svg.appendChild(el('line',{x1:ML,y1:yAt(0),x2:W-MR,y2:yAt(0),stroke:'var(--text-muted)','stroke-dasharray':'2 3',opacity:.6}));
+    svg.appendChild(el('line',{x1:ML,y1:yAt(0),x2:W-MR,y2:yAt(0),stroke:'var(--flow-axis)','stroke-dasharray':'2 3',opacity:.7}));
     L.spans.forEach(function(sp){
       if(sp.type==='event'){var x0=xAt(sp.a0),w=Math.max(0.5,xAt(sp.a1)-x0);
-        sp.ev.levels.forEach(function(l){var yo=yAt(l.open),yc=yAt(l.close),up=l.dir==='up';svg.appendChild(el('rect',{x:x0,y:Math.min(yo,yc),width:w,height:Math.max(1,Math.abs(yo-yc)),fill:up?'var(--up)':'var(--dn)','fill-opacity':.35}));});
-      } else {var fx0=xAt(sp.a0),fw=Math.max(0.5,xAt(sp.a1)-fx0),yhi=yAt(sp.f.obsHigh),ylo=yAt(sp.f.obsLow);svg.appendChild(el('rect',{x:fx0,y:Math.min(yhi,ylo),width:fw,height:Math.max(1,Math.abs(yhi-ylo)),fill:'var(--text-muted)','fill-opacity':.12,'stroke-dasharray':'3 2',stroke:'var(--text-muted)','stroke-opacity':.6}));}
+        sp.ev.levels.forEach(function(l){var yo=yAt(l.open),yc=yAt(l.close),up=l.dir==='up';svg.appendChild(el('rect',{x:x0,y:Math.min(yo,yc),width:w,height:Math.max(1,Math.abs(yo-yc)),fill:up?'var(--flow-up)':'var(--flow-dn)','fill-opacity':.8}));});
+      } else {var fx0=xAt(sp.a0),fw=Math.max(0.5,xAt(sp.a1)-fx0),yhi=yAt(sp.f.obsHigh),ylo=yAt(sp.f.obsLow);svg.appendChild(el('rect',{x:fx0,y:Math.min(yhi,ylo),width:fw,height:Math.max(1,Math.abs(yhi-ylo)),fill:'var(--flow-axis)','fill-opacity':.14,'stroke-dasharray':'3 2',stroke:'var(--flow-axis)','stroke-opacity':.7}));}
     });
     // continuous trace
     var pts=[], cum=0;
     (flow.events||[]).forEach(function(ev){pts.push([xAt(cum),yAt(ev.startValue)]);for(var i=0;i<ev.trace.length;i++)pts.push([xAt(cum+1+i),yAt(ev.trace[i].value)]);cum+=ev.activity;});
     if(flow.forming){pts.push([xAt(cum),yAt(flow.forming.startValue)]);for(var j=0;j<flow.forming.trace.length;j++)pts.push([xAt(cum+1+j),yAt(flow.forming.trace[j].value)]);}
-    if(pts.length)svg.appendChild(el('polyline',{points:pts.map(function(p){return p[0].toFixed(1)+','+p[1].toFixed(1);}).join(' '),fill:'none',stroke:'var(--text)','stroke-width':1,'stroke-opacity':.8,vector:'non-scaling-stroke'}));
+    if(pts.length)svg.appendChild(el('polyline',{points:pts.map(function(p){return p[0].toFixed(1)+','+p[1].toFixed(1);}).join(' '),fill:'none',stroke:'var(--flow-trace)','stroke-width':1.5,'stroke-opacity':.9,vector:'non-scaling-stroke'}));
     return svg;
   }
 
@@ -356,7 +380,7 @@
       +'<span class="k"><span class="sw line"></span> observed '+(S.view==='sim'?'midpoint path':(d&&d.meta&&d.meta.kind==='index'?'index path':'close path'))+'</span>'
       +'<span class="k">Height = price movement · Width = '+wUnit+'</span>';
     // footer
-    document.getElementById('foot').innerHTML='The <b>Inverted Flow Chart</b> draws a fixed-height block per confirmed '+((d&&d.meta&&d.meta.step)||'')+' step; the block\'s <b>width</b> is the number of eligible observations it took (feed activity), and the thin line is the <b>observed path</b> inside it. NervaFX stores completed midpoint candles only, so pairs/indices run in <b>close-only mode</b> (width = received closes / basket snapshots — NOT ticks, traded volume, or quote count) and no intrabar path is claimed. The <b>Simulated example</b> is the only quote-by-quote view and is clearly labelled, not broker history. Research / relative-movement only — <b>no orders, no signal, no profitability claim</b>. Times in EAT (UTC+3).';
+    document.getElementById('foot').innerHTML='The <b>Inverted Flow Chart</b> draws a fixed-height block per confirmed '+((d&&d.meta&&d.meta.step)||'')+' step; the block\'s <b>width</b> is the number of eligible observations it took (feed activity), and the thin line is the <b>observed path</b> inside it. NervaFX stores completed midpoint candles only, so pairs/indices run in <b>close-only mode</b> (width = received closes / basket snapshots — NOT ticks, traded volume, or quote count) and no intrabar path is claimed. Use <b>● Live</b> for the latest completed candle or the date picker to replay past data. Research / relative-movement only — <b>no orders, no signal, no profitability claim</b>. Times in EAT (UTC+3).';
   }
 
   // ========================= replay =========================
@@ -366,7 +390,7 @@
     if(S.view==='compare'||!S.data||!S.data.flow||!S.data.flow.observations){bar.style.display='none';return;}
     bar.style.display='flex';
     var total=S.data.flow.observations.length-1; var cur=S.cursor==null?total:S.cursor;
-    document.getElementById('rpPos').textContent='observation '+cur+' / '+total+(S.cursor==null?' (live)':'');
+    document.getElementById('rpPos').textContent='observation '+cur+' / '+total+(S.cursor==null?(S.asOf?' (as-of)':' (live)'):'');
     document.getElementById('rpPlay').textContent=S.play?'❚❚ Pause':'▶ Play';
   }
   function stopPlay(){ if(S.play){clearInterval(S.play);S.play=null;} }
