@@ -24,7 +24,7 @@
  */
 
 const { getClient, cors } = require('./_db');
-const { loadTf, loadM15Parallel } = require('../research/comparison/dbload');
+const { loadTf, loadM5Parallel, loadM15Parallel } = require('../research/comparison/dbload');
 const { buildIndices } = require('../research/comparison/index-build');
 const { dayStart, EAT_OFFSET_MS } = require('../research/comparison/periods');
 const { M15_MS, DAY_MS, PAIRS, CURRENCIES } = require('../research/comparison/config');
@@ -36,18 +36,17 @@ const { coverageForCandles, coverageForIndex } = require('../research/flow/cover
 const iso = (ms) => (ms == null ? null : new Date(ms).toISOString());
 const parseMs = (v, dflt) => { if (v == null || v === '') return dflt; const t = /^\d+$/.test('' + v) ? parseInt(v, 10) : Date.parse(v); return isNaN(t) ? dflt : t; };
 
-// Candlestick structure (trend) direction of a pair over the loaded window, from an EMA-fast vs
-// EMA-slow read on its own M15 closes — an INDEPENDENT signal from the Renko/index strength, used to
-// flag when the two agree. Returns 'up' | 'down' | null (insufficient data).
+// Current candlestick structure (trend) direction of a pair at the selected cutoff, from an EMA-fast
+// vs EMA-slow read on its recent M5 closes — an INDEPENDENT signal from the Renko/index strength, used
+// to flag when the two agree. Returns 'up' | 'down' | null (insufficient data).
 function ema(vals, period) { const k = 2 / (period + 1); let e = vals[0]; for (let i = 1; i < vals.length; i++) e = vals[i] * k + e * (1 - k); return e; }
-function structureDir(candles) {
-  if (!candles || candles.length < 30) return null;
+function structureDir(candles, fastP, slowP) {
+  const fp = fastP || 20, sp = slowP || 50, need = sp + 5;
+  if (!candles || candles.length < need) return null;
   const sorted = candles.slice().sort((a, b) => ((a.openMs != null ? a.openMs : Date.parse(a.time)) - (b.openMs != null ? b.openMs : Date.parse(b.time))));
   const closes = sorted.map((c) => +c.close).filter((x) => isFinite(x));
-  if (closes.length < 30) return null;
-  const slowP = Math.min(200, Math.max(20, Math.floor(closes.length / 2)));
-  const fastP = Math.min(50, Math.max(10, Math.floor(slowP / 4)));
-  return ema(closes, fastP) >= ema(closes, slowP) ? 'up' : 'down';
+  if (closes.length < need) return null;
+  return ema(closes, fp) >= ema(closes, sp) ? 'up' : 'down';
 }
 
 // Default close window per resolution (bounded for the serverless budget; ≈1k observations each).
@@ -138,9 +137,11 @@ module.exports = async function handler(req, res) {
       const day = await loadIndexWindow(sb, q, asOfMs);
       if (!day.built.ok) return res.json({ ok: true, available: false, reason: day.built.reason, mode, view });
       const built = day.built, baselineMs = day.baselineMs, cutoffMs = day.cutoffMs;
-      // candlestick structure per pair (from the same M15 candles the index was built from)
+      // current candlestick structure per pair from recent M5 closes up to the selected cutoff
+      // (EMA20 vs EMA50 on M5 — the same resolution as the pair Renko charts, independent of the index)
+      const m5by = await loadM5Parallel(sb, PAIRS, { fromIso: iso(cutoffMs - 2 * DAY_MS), toIso: iso(cutoffMs) }, 8);
       const structures = {};
-      PAIRS.forEach((p) => { const d = structureDir(day.byPair && day.byPair[p]); if (d) structures[p] = d; });
+      PAIRS.forEach((p) => { const d = structureDir(m5by[p], 20, 50); if (d) structures[p] = d; });
       const step = Math.min(5, Math.max(0.001, parseFloat(q.step) || DEFAULT_INDEX_STEP_PP));
       const panels = CURRENCIES.map((ccy) => {
         const r = runIndexFlow(built, ccy, baselineMs, cutoffMs, step);
@@ -158,7 +159,7 @@ module.exports = async function handler(req, res) {
         asOfUtc: iso(cutoffMs), baselineMs, baselineUtc: iso(baselineMs), sinceMs: day.sinceMs, sinceUtc: iso(day.sinceMs), daily: day.daily,
         meta: { kind: 'index', step, unit: 'constituent basket snapshots', valueLabel: '% from baseline (pp)', resolution: 'M15' },
         coverage: coverageForIndex(built), ranking: ranked, panels, structures,
-        disclaimer: 'Zero-sum 1/8 currency indices on M15 basket snapshots over the loaded window (reconciles with Evolution), UNVALIDATED. Pair "candle structure" = EMA-fast vs EMA-slow on that pair\'s M15 closes (independent of the index). Each panel keeps its own activity axis. No orders.',
+        disclaimer: 'Zero-sum 1/8 currency indices on M15 basket snapshots over the loaded window (reconciles with Evolution), UNVALIDATED. Pair "candle structure" = EMA20 vs EMA50 on that pair\'s M5 closes up to the selected time (independent of the index). Each panel keeps its own activity axis. No orders.',
       });
     }
 
