@@ -310,26 +310,32 @@
     var strength={}, n=0;
     (panels||[]).forEach(function(p){ if(p.available&&p.lastPp!=null){strength[p.currency]=p.lastPp;n++;} });
     if(n<2) return null;
+    var structures=(S.data&&S.data.structures)||{};
     var rows=[];
     PAIRS.forEach(function(pair){
       var pq=pair.split('_'), b=pq[0], q=pq[1];
       if(strength[b]==null||strength[q]==null) return;
       var sb=strength[b], sq=strength[q], leanUp=sb>=sq;
-      rows.push({pair:pair, strong:leanUp?b:q, weak:leanUp?q:b, spread:Math.abs(sb-sq), leanUp:leanUp});
+      rows.push({pair:pair, strong:leanUp?b:q, weak:leanUp?q:b, spread:Math.abs(sb-sq), leanUp:leanUp, struct:structures[pair]||null});
     });
     if(!rows.length) return null;
     rows.sort(function(a,b){return b.spread-a.spread;});
     var maxSp=rows[0].spread||1;
+    var nAligned=0,nStruct=0; rows.forEach(function(r){ if(r.struct){nStruct++; if((r.struct==='up')===r.leanUp)nAligned++;} });
     var wrap=document.createElement('div');wrap.className='pairrank';
     var h='<h3>Pairs ranked by currency strength</h3>'
-      +'<div class="sub">From each currency’s Renko index over the loaded window: every pair pits its <b class="s" style="color:var(--up)">strong</b> currency against its <b class="w" style="color:var(--dn)">weak</b> one. <b>Spread</b> = strong − weak (pp); <b>Lean</b> = the way the gap points (strong base → pair up). Relative strength, research only — no signal, no orders.</div>'
-      +'<table class="ptbl"><thead><tr><th>#</th><th>Pair</th><th>Strong</th><th>Weak</th><th class="num">Spread&nbsp;(pp)</th><th>Lean</th><th style="width:22%">Strength&nbsp;gap</th></tr></thead><tbody>';
+      +'<div class="sub">From each currency’s Renko index over the loaded window: every pair pits its <b class="s" style="color:var(--up)">strong</b> currency against its <b class="w" style="color:var(--dn)">weak</b> one. <b>Spread</b> = strong − weak (pp); <b>Lean</b> = the way the gap points (strong base → pair up). <b>Candle align</b> compares the Renko lean with the pair’s own candlestick structure (EMA-fast vs EMA-slow on its M15 closes) — <b class="al ok">aligned</b> when both point the same way'+(nStruct?(' ('+nAligned+'/'+nStruct+' aligned now)'):'')+'. Relative strength, research only — no signal, no orders.</div>'
+      +'<table class="ptbl"><thead><tr><th>#</th><th>Pair</th><th>Strong</th><th>Weak</th><th class="num">Spread&nbsp;(pp)</th><th>Lean</th><th>Candle&nbsp;align</th><th style="width:20%">Strength&nbsp;gap</th></tr></thead><tbody>';
     rows.forEach(function(r,i){
+      var al;
+      if(!r.struct){ al='<td class="al none">—</td>'; }
+      else { var cu=r.struct==='up', ok=(cu===r.leanUp); al='<td class="al '+(ok?'ok':'no')+'">'+(cu?'▲':'▼')+' '+(ok?'✓ aligned':'✗ diverging')+'</td>'; }
       h+='<tr data-pair="'+r.pair+'"><td class="num">'+(i+1)+'</td>'
         +'<td class="pair">'+r.pair.replace('_','/')+'</td>'
         +'<td class="s">'+r.strong+'</td><td class="w">'+r.weak+'</td>'
         +'<td class="num">'+r.spread.toFixed(3)+'</td>'
         +'<td class="lean '+(r.leanUp?'up':'dn')+'">'+(r.leanUp?'▲ up':'▼ down')+'</td>'
+        +al
         +'<td><span class="bar" style="width:'+Math.max(4,Math.round(r.spread/maxSp*100))+'%"></span></td></tr>';
     });
     h+='</tbody></table>';
