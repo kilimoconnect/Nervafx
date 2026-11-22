@@ -286,14 +286,17 @@
     d.panels.forEach(function(p){ if(!p.flow)return; var L=layout(p.flow); if(L.vMin<vMin)vMin=L.vMin; if(L.vMax>vMax)vMax=L.vMax; });
     if(vMin===Infinity){vMin=-0.5;vMax=0.5;}
     var order={}; (d.ranking||[]).forEach(function(r){order[r.currency]=r.rank;});
+    var bad=contradictSet(d.panels);
     var panels=d.panels.slice().sort(function(a,b){return (order[a.currency]||99)-(order[b.currency]||99);});
     var grid=document.createElement('div');grid.className='cmpgrid';
     panels.forEach(function(p){
-      var card=document.createElement('div');card.className='cmpcard';
+      var card=document.createElement('div');card.className='cmpcard'+(bad[p.currency]?' stale':'');
       var pp=p.lastPp;
       var top='<div class="top"><span class="ccy">'+p.currency+'</span><span class="rk">#'+(order[p.currency]||'–')+'</span>';
       if(p.finalDir)top+='<span class="dir '+(p.finalDir==='up'?'up':'dn')+'">'+(p.finalDir==='up'?'▲ up':'▼ down')+(p.lastConfirmMs?' · '+durStr(d.asOfUtc? (Date.parse(d.asOfUtc)-p.lastConfirmMs):null):'')+'</span>';
-      top+='<span class="pp '+(pp>=0?'up':'dn')+'">'+(pp==null?'—':(pp>=0?'+':'')+pp.toFixed(3)+'pp')+'</span></div>';
+      top+='<span class="pp '+(pp>=0?'up':'dn')+'">'+(pp==null?'—':(pp>=0?'+':'')+pp.toFixed(3)+'pp')+'</span>';
+      if(bad[p.currency])top+='<span class="xflag" title="Renko direction contradicts strength sign — pairs using it are hidden">⚠ excluded</span>';
+      top+='</div>';
       card.innerHTML=top;
       if(p.flow&&p.available){ card.appendChild(miniSvg(p.flow,vMin,vMax)); }
       else { var nd=document.createElement('div');nd.className='coverage warn';nd.textContent=p.reason||'unavailable';card.appendChild(nd); }
@@ -304,6 +307,17 @@
     host.innerHTML=''; host.appendChild(grid);
     var pr=buildPairStrength(d.panels); if(pr) host.appendChild(pr);
   }
+  // A currency is "contradicting" when its Renko last-confirmed direction disagrees with the
+  // sign of its strength (pp): net-strong (+pp) but pointing down, or net-weak (−pp) but pointing up.
+  // Its strength reading is stale/turning, so any pair that uses it has an unreliable lean → hidden.
+  function contradictSet(panels){
+    var out={};
+    (panels||[]).forEach(function(p){
+      if(!p.available||p.lastPp==null||!p.finalDir) return;
+      if((p.lastPp>0&&p.finalDir==='down')||(p.lastPp<0&&p.finalDir==='up')) out[p.currency]=true;
+    });
+    return out;
+  }
   // Rank the 28 pairs by the strength gap between their two currencies (from the Renko index pp):
   // each pair has one strong and one weak currency; a bigger gap = a stronger directional lean.
   function buildPairStrength(panels){
@@ -311,10 +325,12 @@
     (panels||[]).forEach(function(p){ if(p.available&&p.lastPp!=null){strength[p.currency]=p.lastPp;n++;} });
     if(n<2) return null;
     var structures=(S.data&&S.data.structures)||{};
-    var rows=[];
+    var bad=contradictSet(panels), badList=Object.keys(bad);
+    var rows=[], nHidden=0;
     PAIRS.forEach(function(pair){
       var pq=pair.split('_'), b=pq[0], q=pq[1];
       if(strength[b]==null||strength[q]==null) return;
+      if(bad[b]||bad[q]){ nHidden++; return; }
       var sb=strength[b], sq=strength[q], leanUp=sb>=sq;
       rows.push({pair:pair, strong:leanUp?b:q, weak:leanUp?q:b, spread:Math.abs(sb-sq), leanUp:leanUp, struct:structures[pair]||null});
     });
@@ -324,7 +340,7 @@
     var nAligned=0,nStruct=0; rows.forEach(function(r){ if(r.struct==='up'||r.struct==='down'){nStruct++; if((r.struct==='up')===r.leanUp)nAligned++;} });
     var wrap=document.createElement('div');wrap.className='pairrank';
     var h='<h3>Pairs ranked by currency strength</h3>'
-      +'<div class="sub">From each currency’s Renko index over the loaded window: every pair pits its <b class="s" style="color:var(--up)">strong</b> currency against its <b class="w" style="color:var(--dn)">weak</b> one. <b>Spread</b> = strong − weak (pp); <b>Lean</b> = the way the gap points (strong base → pair up). <b>Candle align</b> compares the Renko lean with the pair’s own <b>M5</b> structure up to the selected time — <b>up</b> when M5 close &gt; EMA20 &gt; EMA50, <b>down</b> when close &lt; EMA20 &lt; EMA50, else <b>mixed</b>; <b class="al ok">aligned</b> when the clean up/down matches the lean'+(nStruct?(' ('+nAligned+'/'+nStruct+' aligned now)'):'')+'. Relative strength, research only — no signal, no orders.</div>'
+      +'<div class="sub">From each currency’s Renko index over the loaded window: every pair pits its <b class="s" style="color:var(--up)">strong</b> currency against its <b class="w" style="color:var(--dn)">weak</b> one. <b>Spread</b> = strong − weak (pp); <b>Lean</b> = the way the gap points (strong base → pair up). <b>Candle align</b> compares the Renko lean with the pair’s own <b>M5</b> structure up to the selected time — <b>up</b> when M5 close &gt; EMA20 &gt; EMA50, <b>down</b> when close &lt; EMA20 &lt; EMA50, else <b>mixed</b>; <b class="al ok">aligned</b> when the clean up/down matches the lean'+(nStruct?(' ('+nAligned+'/'+nStruct+' aligned now)'):'')+'. Relative strength, research only — no signal, no orders.'+(nHidden?('<br><b class="hid">'+nHidden+' pair'+(nHidden===1?'':'s')+' hidden</b> — currency whose Renko direction contradicts its strength ('+badList.join(', ')+'): net-strong but pointing down, or net-weak but pointing up.'):'')+'</div>'
       +'<table class="ptbl"><thead><tr><th>#</th><th>Pair</th><th>Strong</th><th>Weak</th><th class="num">Spread&nbsp;(pp)</th><th>Lean</th><th>Candle&nbsp;align</th><th style="width:20%">Strength&nbsp;gap</th></tr></thead><tbody>';
     rows.forEach(function(r,i){
       var al;

@@ -390,7 +390,7 @@
 
         localStorage.removeItem('nfx_needs_setup');
         showMsg('✓ Account configured — launching dashboard…', 'success');
-        setTimeout(() => location.replace('/app'), 900);
+        setTimeout(() => location.replace('/inverted-flow?view=compare'), 900);
       } catch (err) {
         showMsg('Network error. Please try again.', 'error');
       } finally {
@@ -401,7 +401,7 @@
 
     function skipSetup() {
       localStorage.removeItem('nfx_needs_setup');
-      location.replace('/app');
+      location.replace('/inverted-flow?view=compare');
     }
   </script>
 </body>

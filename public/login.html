@@ -696,7 +696,7 @@
       if (!token) return;
       try {
         const pay = JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
-        if (pay.exp * 1000 > Date.now()) location.replace('/app');
+        if (pay.exp * 1000 > Date.now()) location.replace('/inverted-flow?view=compare');
       } catch (_) {}
     })();
 
@@ -800,7 +800,7 @@
           localStorage.setItem('nfx_needs_setup', 'true');
           location.replace('/setup');
         } else {
-          location.href = '/app?fresh=1';
+          location.href = '/inverted-flow?view=compare';
         }
       } catch (e) {
         console.error('OAuth callback error:', e);
@@ -1128,7 +1128,7 @@
         } catch (_) { /* plan will load on dashboard */ }
 
         showMsg('✓ Welcome back — redirecting…', 'success');
-        setTimeout(() => { location.href = '/app?fresh=1'; }, 800);
+        setTimeout(() => { location.href = '/inverted-flow?view=compare'; }, 800);
 
       } catch (err) {
         showMsg('Network error — check your connection and try again.', 'error');
