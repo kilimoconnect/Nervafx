@@ -82,6 +82,7 @@
     asOf: qp('asOf') ? +qp('asOf') : null,
     date: qp('date') || null,
     showReversals: false,
+    alignedOnly: qp('aligned')==='0' ? false : true,
     zoom: 1,
     cursor: null,            // replay cursor (null = full)
     data: null, computed: null, play: null, speed: 4,
@@ -336,13 +337,17 @@
     });
     if(!rows.length) return null;
     rows.sort(function(a,b){return b.spread-a.spread;});
-    var maxSp=rows[0].spread||1;
     var nAligned=0,nStruct=0; rows.forEach(function(r){ if(r.struct==='up'||r.struct==='down'){nStruct++; if((r.struct==='up')===r.leanUp)nAligned++;} });
+    var alignedOnly=S.alignedOnly!==false;
+    var shown=alignedOnly ? rows.filter(function(r){return (r.struct==='up'||r.struct==='down') && ((r.struct==='up')===r.leanUp);}) : rows;
+    var nNon=rows.length-shown.length;
+    var maxSp=(shown[0]&&shown[0].spread)||rows[0].spread||1;
     var wrap=document.createElement('div');wrap.className='pairrank';
-    var h='<h3>Pairs ranked by currency strength</h3>'
-      +'<div class="sub">From each currency’s Renko index over the loaded window: every pair pits its <b class="s" style="color:var(--up)">strong</b> currency against its <b class="w" style="color:var(--dn)">weak</b> one. <b>Spread</b> = strong − weak (pp); <b>Lean</b> = the way the gap points (strong base → pair up). <b>Candle align</b> compares the Renko lean with the pair’s own <b>M5</b> structure up to the selected time — <b>up</b> when M5 close &gt; EMA20 &gt; EMA50, <b>down</b> when close &lt; EMA20 &lt; EMA50, else <b>mixed</b>; <b class="al ok">aligned</b> when the clean up/down matches the lean'+(nStruct?(' ('+nAligned+'/'+nStruct+' aligned now)'):'')+'. Relative strength, research only — no signal, no orders.'+(nHidden?('<br><b class="hid">'+nHidden+' pair'+(nHidden===1?'':'s')+' hidden</b> — currency whose Renko direction contradicts its strength ('+badList.join(', ')+'): net-strong but pointing down, or net-weak but pointing up.'):'')+'</div>'
+    var h='<h3>Pairs ranked by currency strength<label class="flt"><input type="checkbox" id="alignedOnly"'+(alignedOnly?' checked':'')+'> Aligned only</label></h3>'
+      +'<div class="sub">From each currency’s Renko index over the loaded window: every pair pits its <b class="s" style="color:var(--up)">strong</b> currency against its <b class="w" style="color:var(--dn)">weak</b> one. <b>Spread</b> = strong − weak (pp); <b>Lean</b> = the way the gap points (strong base → pair up). <b>Candle align</b> compares the Renko lean with the pair’s own <b>M5</b> structure up to the selected time — <b>up</b> when M5 close &gt; EMA20 &gt; EMA50, <b>down</b> when close &lt; EMA20 &lt; EMA50, else <b>mixed</b>; <b class="al ok">aligned</b> when the clean up/down matches the lean'+(nStruct?(' ('+nAligned+'/'+nStruct+' aligned now)'):'')+'. Relative strength, research only — no signal, no orders.'+(nHidden?('<br><b class="hid">'+nHidden+' pair'+(nHidden===1?'':'s')+' hidden</b> — currency whose Renko direction contradicts its strength ('+badList.join(', ')+'): net-strong but pointing down, or net-weak but pointing up.'):'')+(alignedOnly&&nNon?('<br><b class="hid">'+nNon+' more hidden</b> — <b>Aligned only</b> is on; diverging and mixed pairs are filtered out. Untick to show all.'):'')+'</div>'
       +'<table class="ptbl"><thead><tr><th>#</th><th>Pair</th><th>Strong</th><th>Weak</th><th class="num">Spread&nbsp;(pp)</th><th>Lean</th><th>Candle&nbsp;align</th><th style="width:20%">Strength&nbsp;gap</th></tr></thead><tbody>';
-    rows.forEach(function(r,i){
+    if(!shown.length){ h+='<tr><td colspan="8" class="noalign">No aligned pairs at this time.</td></tr>'; }
+    shown.forEach(function(r,i){
       var al;
       if(!r.struct){ al='<td class="al none">—</td>'; }
       else if(r.struct==='mixed'){ al='<td class="al mix">≈ mixed</td>'; }
@@ -358,6 +363,8 @@
     h+='</tbody></table>';
     wrap.innerHTML=h;
     wrap.querySelectorAll('tr[data-pair]').forEach(function(tr){tr.addEventListener('click',function(){var p=tr.getAttribute('data-pair');S.view='single';S.kind='pair';S.instrument=p;nav({view:null,instrument:p,resolution:S.resolution});});});
+    var cb=wrap.querySelector('#alignedOnly');
+    if(cb)cb.addEventListener('change',function(){ S.alignedOnly=cb.checked; var fresh=buildPairStrength(panels); if(fresh)wrap.parentNode.replaceChild(fresh,wrap); });
     return wrap;
   }
   function miniSvg(flow,vMin,vMax){
