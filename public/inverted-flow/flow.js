@@ -305,8 +305,17 @@
       card.addEventListener('click',function(){ S.view='single'; S.kind='index'; S.instrument='IDX:'+p.currency; nav({view:null,instrument:'IDX:'+p.currency}); });
       grid.appendChild(card);
     });
-    host.innerHTML=''; host.appendChild(grid);
+    host.innerHTML='';
+    // 1) pairs ranked by strength — on top
     var pr=buildPairStrength(d.panels); if(pr) host.appendChild(pr);
+    // 2) currency strength section (title + meta + coverage) — below the table
+    var chead=document.createElement('div'); chead.className='cmpHead';
+    var meta=d.meta?('step <b>'+d.meta.step+'pp</b> · '+d.meta.resolution+' basket snapshots · 8 currencies ranked, then every pair ranked by its strength gap'):'';
+    var covLine=''; if(d.coverage){ var cc=d.coverage; covLine='Index M15 · '+(cc.nObs||0)+' snapshots · '+(cc.gaps&&cc.gaps.length?cc.gaps.length+' gap(s)':'no gaps')+' · baseline '+(d.baselineUtc?eatStamp(Date.parse(d.baselineUtc)):'—'); }
+    chead.innerHTML='<h3 class="cmpTitle">Currency Strength · 8 Indices</h3>'+(meta?'<div class="cmpMeta">'+meta+'</div>':'')+(covLine?'<div class="cmpMeta">'+covLine+'</div>':'');
+    host.appendChild(chead);
+    // 3) the 8 currency cards
+    host.appendChild(grid);
   }
   // A currency is "contradicting" when its Renko last-confirmed direction disagrees with the
   // sign of its strength (pp): net-strong (+pp) but pointing down, or net-weak (−pp) but pointing up.
@@ -399,7 +408,8 @@
       if(m.kind==='pair')sub='step <b>'+m.step+'</b> ('+m.stepPips+' pip) · <b>'+m.resolution+' closes</b> · width = received closes';
       else sub='step <b>'+m.step+'pp</b> · <b>M15 basket snapshots</b>'+(d.daily?' · single day':' · multi-day window')+' · width = basket snapshots';
     }
-    hdr.innerHTML='<div class="chrow"><span class="chTitle">'+esc(title)+'</span></div><div class="chSub">'+sub+'</div>';
+    // compare view renders its own title/coverage inside #host (below the pair table), so keep the fixed header empty
+    hdr.innerHTML=(S.view==='compare')?'':('<div class="chrow"><span class="chTitle">'+esc(title)+'</span></div><div class="chSub">'+sub+'</div>');
     // coverage
     var c='';
     if(S.view==='sim'){ c='Simulated illustrative quote sequence — NOT broker history.'; }
@@ -409,7 +419,7 @@
         c='Window '+(w&&w.ok?(w.nObs+' '+w.resolution+' closes · '+eatStamp(w.firstMs)+' → '+eatStamp(w.lastMs)):'—')+' · stored '+ir.resolution+' '+(ir.earliestMs?eatStamp(ir.earliestMs).slice(0,10):'?')+' → '+(ir.latestMs?eatStamp(ir.latestMs).slice(0,10):'?')+(w&&w.gaps&&w.gaps.length?' · <span class="warn">'+w.gaps.length+' gap(s)</span>':'');
       } else { c='Index M15 · baseline '+(d.baselineUtc?eatStamp(Date.parse(d.baselineUtc)):'—')+' · through '+(d.asOfUtc?eatStamp(Date.parse(d.asOfUtc)):'—'); }
     }
-    cov.innerHTML=c;
+    cov.innerHTML=(S.view==='compare')?'':c;
     // legend
     var leg=document.getElementById('legend');
     var wUnit = S.view==='sim'?'received quote updates':(d&&d.meta&&d.meta.kind==='index'?'constituent basket snapshots':'received '+((d&&d.meta&&d.meta.resolution)||'')+' closes');
