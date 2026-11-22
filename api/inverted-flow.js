@@ -36,11 +36,11 @@ const { coverageForCandles, coverageForIndex } = require('../research/flow/cover
 const iso = (ms) => (ms == null ? null : new Date(ms).toISOString());
 const parseMs = (v, dflt) => { if (v == null || v === '') return dflt; const t = /^\d+$/.test('' + v) ? parseInt(v, 10) : Date.parse(v); return isNaN(t) ? dflt : t; };
 
-// Current candlestick structure of a pair at the selected cutoff, from a STACKED-EMA read on its
+// Current candlestick structure of a pair at the selected cutoff, from an EMA read on its
 // recent M5 closes — an INDEPENDENT signal from the Renko/index strength, used to flag agreement:
-//   up (buy)   = last M5 close > EMA20 AND EMA20 > EMA50
-//   down (sell)= last M5 close < EMA20 AND EMA20 < EMA50
-//   mixed      = anything else (no clean stack)
+//   up (buy)   = EMA20 > EMA50
+//   down (sell)= EMA20 < EMA50
+//   mixed      = EMA20 == EMA50 (no separation)
 // Returns 'up' | 'down' | 'mixed' | null (insufficient data).
 function ema(vals, period) { const k = 2 / (period + 1); let e = vals[0]; for (let i = 1; i < vals.length; i++) e = vals[i] * k + e * (1 - k); return e; }
 function structureDir(candles) {
@@ -48,9 +48,9 @@ function structureDir(candles) {
   const sorted = candles.slice().sort((a, b) => ((a.openMs != null ? a.openMs : Date.parse(a.time)) - (b.openMs != null ? b.openMs : Date.parse(b.time))));
   const closes = sorted.map((c) => +c.close).filter((x) => isFinite(x));
   if (closes.length < 55) return null;
-  const last = closes[closes.length - 1], e20 = ema(closes, 20), e50 = ema(closes, 50);
-  if (last > e20 && e20 > e50) return 'up';
-  if (last < e20 && e20 < e50) return 'down';
+  const e20 = ema(closes, 20), e50 = ema(closes, 50);
+  if (e20 > e50) return 'up';
+  if (e20 < e50) return 'down';
   return 'mixed';
 }
 
@@ -164,7 +164,7 @@ module.exports = async function handler(req, res) {
         asOfUtc: iso(cutoffMs), baselineMs, baselineUtc: iso(baselineMs), sinceMs: day.sinceMs, sinceUtc: iso(day.sinceMs), daily: day.daily,
         meta: { kind: 'index', step, unit: 'constituent basket snapshots', valueLabel: '% from baseline (pp)', resolution: 'M15' },
         coverage: coverageForIndex(built), ranking: ranked, panels, structures,
-        disclaimer: 'Zero-sum 1/8 currency indices on M15 basket snapshots over the loaded window (reconciles with Evolution), UNVALIDATED. Pair "candle structure" (up = M5 close > EMA20 > EMA50; down = close < EMA20 < EMA50; else mixed) on that pair\'s M5 closes up to the selected time, independent of the index. Each panel keeps its own activity axis. No orders.',
+        disclaimer: 'Zero-sum 1/8 currency indices on M15 basket snapshots over the loaded window (reconciles with Evolution), UNVALIDATED. Pair "candle structure" (up = EMA20 > EMA50; down = EMA20 < EMA50; else mixed) on that pair\'s M5 closes up to the selected time, independent of the index. Each panel keeps its own activity axis. No orders.',
       });
     }
 
