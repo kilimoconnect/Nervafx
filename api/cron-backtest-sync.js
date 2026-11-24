@@ -202,12 +202,30 @@ module.exports = async function handler(req, res) {
   const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
   console.log(`[BT-SYNC] Done in ${elapsed}s — ${totalCandles} candles, ${errors} errors`);
 
+  // Fire Inverted Flow BoS email alerts on the freshly-synced candles. This piggybacks the candle
+  // sync so the alert runs on the trigger that already exists (no separate schedule/secret). Always
+  // non-fatal — a BoS failure must never affect the candle sync. Skipped if the sync is already near
+  // the Vercel deadline, so we never push this function past its timeout.
+  let bosAlerts = null;
+  try {
+    if (Date.now() - t0 < 200000) {
+      const { runBosAlerts } = require('../src/bosAlerts');
+      bosAlerts = await runBosAlerts(sb);
+    } else {
+      bosAlerts = { skipped: true, reason: 'sync near deadline' };
+    }
+  } catch (e) {
+    bosAlerts = { ok: false, error: String((e && e.message) || e) };
+    console.error('[BT-SYNC] BoS alerts error:', (e && e.message) || e);
+  }
+
   res.json({
     ok: true,
     candles: totalCandles,
     errors,
     elapsed: `${elapsed}s`,
     details: log,
+    bosAlerts,
   });
 };
 
