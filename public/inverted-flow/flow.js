@@ -118,25 +118,31 @@
     if(S.date)u+='&date='+encodeURIComponent(S.date);
     return u;
   }
+  var _lastLoadMs=0;
   function load(quiet){
     if(!quiet) host.innerHTML='<div class="banner">Loading…</div>';
+    _lastLoadMs=Date.now();
     fetch(apiUrl()).then(function(r){return r.json();}).then(function(j){
-      S.data=j; S.cursor=null;
+      S.data=j; S.cursor=null; _lastLoadMs=Date.now();
       if(j.version){var _v=document.getElementById('ver'); if(_v)_v.textContent=j.version;}
       // Live view: advance the Replay (EAT) time field to the data's latest timestamp (else now)
       if(S.asOf==null){ var _dt=document.getElementById('histDt'); if(_dt){ var tms=j.asOfUtc?Date.parse(j.asOfUtc):Date.now(); _dt.value=eatNaive(isFinite(tms)?tms:Date.now()); } }
       render();
     }).catch(function(e){ if(!quiet) host.innerHTML='<div class="banner warn">Failed to load: '+e+'</div>'; });
   }
-  // Background auto-refresh: silently re-pull the current view every 5 min, Live only.
-  // Skips historical replay (asOf set), active replay playback, and hidden tabs.
+  // Background auto-refresh: silently re-pull the current view, Live only.
+  // Skips historical replay (asOf set) and active replay playback.
   var AUTO_REFRESH_MS=300000;
-  setInterval(function(){
-    if(S.asOf!=null) return;      // viewing a past date — leave it be
-    if(S.play) return;            // mid replay-playback — don't disrupt
-    if(document.hidden) return;   // tab not visible — skip this tick
+  function autoRefresh(minGapMs){
+    if(S.asOf!=null) return;                                   // viewing a past date — leave it be
+    if(S.play) return;                                         // mid replay-playback — don't disrupt
+    if(minGapMs && (Date.now()-_lastLoadMs)<minGapMs) return;  // refreshed recently — skip
     load(true);
-  }, AUTO_REFRESH_MS);
+  }
+  setInterval(function(){ if(!document.hidden) autoRefresh(0); }, AUTO_REFRESH_MS);
+  // Returning to the tab (background timers get throttled/skipped) refreshes immediately if stale.
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) autoRefresh(60000); });
+  window.addEventListener('focus', function(){ autoRefresh(60000); });
 
   // ---------- compute (client engine from observations up to cursor) ----------
   function computeFlow(flow,meta){
