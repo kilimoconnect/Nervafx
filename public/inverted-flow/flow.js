@@ -85,6 +85,7 @@
     chartType: (function(){ var q=qp('chart'); if(q==='candles'||q==='renko')return q; try{var s=localStorage.getItem('nfx_flow_chart'); if(s==='candles')return 'candles';}catch(e){} return 'renko'; })(),
     candleTf: (function(){ var ok={'5m':1,'15m':1,'30m':1,'1H':1,'4H':1,'1D':1,'1W':1,'1M':1}; var q=qp('tf'); if(ok[q])return q; try{var s=localStorage.getItem('nfx_flow_tf'); if(ok[s])return s;}catch(e){} return '1H'; })(),
     alignedOnly: qp('aligned')==='0' ? false : true,
+    movingTrend: (function(){ var ok={all:1,up:1,down:1}; var q=qp('trend'); if(ok[q])return q; try{var s=localStorage.getItem('nfx_flow_trend'); if(ok[s])return s;}catch(e){} return 'all'; })(),
     zoom: 1,
     cursor: null,            // replay cursor (null = full)
     data: null, computed: null, play: null, speed: 4,
@@ -464,30 +465,43 @@
   function renderMoving(){
     var d=S.data; host.innerHTML='';
     if(!d||!d.ok){ host.innerHTML='<div class="banner warn">'+esc((d&&d.reason)||'Moving-pairs scan unavailable')+'</div>'; return; }
-    var rows=d.rows||[];
+    var all=d.rows||[];
+    var trend=(S.movingTrend==='up'||S.movingTrend==='down')?S.movingTrend:'all';
+    var nBuy=0,nSell=0; all.forEach(function(r){ if(r.dir==='up')nBuy++; else if(r.dir==='down')nSell++; });
+    var rows = trend==='all' ? all : all.filter(function(r){ return r.dir===trend; });
     var wrap=document.createElement('div'); wrap.className='pairrank';
     var asof=d.asOfUtc?eatStamp(Date.parse(d.asOfUtc)):'—';
-    var h='<h3>Moving pairs · two consecutive 15M Renko bars</h3>'
-      +'<div class="sub">Pairs whose M15 Renko confirmed a bar on each of the two most recent consecutive 15-minute candles (≥ one step of movement in two back-to-back 15M windows). Ranked by the current consecutive-candle run, then total step bars. As of '+esc(asof)+'. Research only — no orders.</div>';
+    // Renko-trend filter (Buy = up-trend, Sell = down-trend) — mirrors the compare view's filter design.
+    var filt='<label class="flt" style="margin-left:auto">Renko trend&nbsp;'
+      +'<select id="movingTrendSel">'
+      +'<option value="all"'+(trend==='all'?' selected':'')+'>All ('+all.length+')</option>'
+      +'<option value="up"'+(trend==='up'?' selected':'')+'>▲ Buy ('+nBuy+')</option>'
+      +'<option value="down"'+(trend==='down'?' selected':'')+'>▼ Sell ('+nSell+')</option>'
+      +'</select></label>';
+    var h='<h3>Moving pairs · two consecutive 15M Renko bars'+filt+'</h3>'
+      +'<div class="sub">Pairs whose M15 Renko confirmed a bar on each of the two most recent consecutive 15-minute candles (≥ one step of movement in two back-to-back 15M windows). <b>Renko trend</b> is the pair\'s M15 Renko direction read as a <b class="hid" style="color:var(--up)">Buy</b> (▲ up) or <b class="hid" style="color:var(--dn)">Sell</b> (▼ down) bias — filter with the control above. Ranked by the current consecutive-candle run, then total step bars. As of '+esc(asof)+'. Research only — no orders.</div>';
     if(!rows.length){
-      h+='<div class="noalign" style="padding:18px 4px">No pairs are moving on two consecutive 15M bars right now.</div>';
-      wrap.innerHTML=h; host.appendChild(wrap); return;
+      h+='<div class="sub" style="padding:14px 4px;text-align:center;font-style:italic">'
+        +(all.length?('No '+(trend==='up'?'Buy':'Sell')+' pairs are moving on two consecutive 15M bars right now.'):'No pairs are moving on two consecutive 15M bars right now.')+'</div>';
+    } else {
+      var maxRun=rows[0].runEvents||1;
+      h+='<table class="ptbl"><thead><tr><th>#</th><th>Pair</th><th title="M15 Renko trend read as a Buy/Sell bias">Renko trend</th><th class="num" title="Length of the current run of consecutive 15-minute bars">Run (15M bars)</th><th class="num" title="Total step bars confirmed within the run">Steps</th><th title="Confirm time of the latest bar (EAT)">Latest bar</th><th title="Confirm time of the bar before it (EAT)">Prev bar</th><th style="width:18%">Momentum</th></tr></thead><tbody>';
+      rows.forEach(function(r,i){
+        var up=r.dir==='up';
+        h+='<tr data-pair="'+esc(r.pair)+'"><td class="num">'+(i+1)+'</td>'
+          +'<td class="pair">'+esc(r.label||r.pair.replace('_','/'))+'</td>'
+          +'<td class="trend '+(up?'up':'dn')+'">'+(r.dir?(up?'▲ BUY':'▼ SELL'):'—')+'</td>'
+          +'<td class="num">'+r.runEvents+'</td>'
+          +'<td class="num">'+r.runSteps+'</td>'
+          +'<td>'+(r.lastMs?eatHM(r.lastMs):'—')+'</td>'
+          +'<td>'+(r.prevMs?eatHM(r.prevMs):'—')+'</td>'
+          +'<td><span class="bar" style="width:'+Math.max(6,Math.round((r.runEvents/maxRun)*100))+'%"></span></td></tr>';
+      });
+      h+='</tbody></table>';
     }
-    var maxRun=rows[0].runEvents||1;
-    h+='<table class="ptbl"><thead><tr><th>#</th><th>Pair</th><th>Dir</th><th class="num" title="Length of the current run of consecutive 15-minute bars">Run (15M bars)</th><th class="num" title="Total step bars confirmed within the run">Steps</th><th title="Confirm time of the latest bar (EAT)">Latest bar</th><th title="Confirm time of the bar before it (EAT)">Prev bar</th><th style="width:18%">Momentum</th></tr></thead><tbody>';
-    rows.forEach(function(r,i){
-      var up=r.dir==='up';
-      h+='<tr data-pair="'+esc(r.pair)+'"><td class="num">'+(i+1)+'</td>'
-        +'<td class="pair">'+esc(r.label||r.pair.replace('_','/'))+'</td>'
-        +'<td class="lean '+(up?'up':'dn')+'">'+(r.dir?(up?'▲ up':'▼ down'):'—')+'</td>'
-        +'<td class="num">'+r.runEvents+'</td>'
-        +'<td class="num">'+r.runSteps+'</td>'
-        +'<td>'+(r.lastMs?eatHM(r.lastMs):'—')+'</td>'
-        +'<td>'+(r.prevMs?eatHM(r.prevMs):'—')+'</td>'
-        +'<td><span class="bar" style="width:'+Math.max(6,Math.round((r.runEvents/maxRun)*100))+'%"></span></td></tr>';
-    });
-    h+='</tbody></table>';
     wrap.innerHTML=h;
+    var sel=wrap.querySelector('#movingTrendSel');
+    if(sel) sel.addEventListener('change',function(){ S.movingTrend=sel.value; try{localStorage.setItem('nfx_flow_trend',sel.value);}catch(e){} renderMoving(); });
     wrap.querySelectorAll('tr[data-pair]').forEach(function(tr){tr.addEventListener('click',function(){ var p=tr.getAttribute('data-pair'); S.view='single'; S.kind='pair'; S.instrument=p; S.resolution='M15'; nav({view:null,instrument:p,resolution:'M15'}); });});
     host.appendChild(wrap);
   }
