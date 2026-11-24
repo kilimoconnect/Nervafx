@@ -57,6 +57,31 @@ module.exports = async function handler(req, res) {
       return res.json({ ok: true, recipients: data || [] });
     }
 
+    // Send a test BoS email to the active recipients — uses the current aligned+BoS pairs if any,
+    // otherwise a clearly-marked sample so the format is visible. Does NOT write bos_alert_log, so a
+    // real alert for the same pair still fires normally today.
+    if (req.method === 'POST' && body.action === 'test') {
+      const { computeCompareData } = require('./inverted-flow');
+      const { alertablePairs } = require('../research/flow/ranking');
+      const { sendBulk, bosAlertEmail } = require('../src/emailService');
+
+      const { data: recRows } = await sb.from('bos_alert_recipients').select('email').eq('active', true);
+      const recipients = [...new Set((recRows || []).map((r) => String(r.email || '').trim().toLowerCase()).filter((e) => EMAIL_RE.test(e)))];
+      if (!recipients.length) return res.status(400).json({ ok: false, error: 'No active recipients to send to' });
+
+      const asOfMs = Date.now();
+      const cd = await computeCompareData(sb, { view: 'compare' }, asOfMs);
+      const live = cd.available ? alertablePairs(cd.panels, cd.structures, cd.bos) : [];
+      const pairs = live.length ? live : [{ pair: 'EUR_USD', direction: 'up', strong: 'EUR', weak: 'USD', spread: 0 }];
+      const asOfUtc = new Date(cd.available ? cd.cutoffMs : asOfMs).toISOString();
+
+      const tpl = bosAlertEmail({ asOfUtc, pairs });
+      tpl.subject = '[TEST] ' + tpl.subject + (live.length ? '' : ' (sample)');
+      const result = await sendBulk(recipients, tpl, { force: true });
+      const sent = Array.isArray(result) && result.length > 0;
+      return res.json({ ok: true, test: true, live: live.length > 0, pairs: pairs.length, recipients: recipients.length, sent });
+    }
+
     if (req.method === 'POST') {
       const email = String(body.email || '').trim().toLowerCase();
       const label = body.label ? String(body.label).trim().slice(0, 120) : null;

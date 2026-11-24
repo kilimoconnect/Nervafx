@@ -138,6 +138,7 @@
       </button>
       <div class="acctMenu" id="acctMenu" hidden role="menu">
         <div class="acctHead"><div class="acctHeadEmail" id="acctMenuEmail">—</div><div class="acctHeadPlan" id="acctMenuPlan"></div></div>
+        <a href="/admin" id="adminLink" role="menuitem" hidden>🛡 Admin</a>
         <a href="/profile" role="menuitem">⚙ Account settings</a>
         <button type="button" id="signoutBtn" role="menuitem" class="danger">⎋ Sign out</button>
       </div>
@@ -208,6 +209,9 @@
     if(elAvatar) elAvatar.textContent=(email&&email!=='Account'?email[0]:'?');
     if(elMenuEmail) elMenuEmail.textContent=email;
     if(elMenuPlan) elMenuPlan.textContent=plan?(plan+' plan'):'';
+    // Admin-only link (same admin uid as the server gate)
+    var ADMIN_UID='140f3854-2c85-488c-8e0a-0f965d562654';
+    if(pay&&pay.sub===ADMIN_UID){ var al=document.getElementById('adminLink'); if(al) al.hidden=false; }
     var acct=document.getElementById('acct'), btn=document.getElementById('acctBtn'), menu=document.getElementById('acctMenu');
     function setOpen(open){ if(!menu||!btn) return; menu.hidden=!open; btn.setAttribute('aria-expanded', open?'true':'false'); }
     if(btn) btn.addEventListener('click', function(e){ e.stopPropagation(); setOpen(menu.hidden); });

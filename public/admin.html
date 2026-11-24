@@ -188,10 +188,14 @@
 
     <!-- BoS Alert Recipients -->
     <div class="adm-section" style="padding:16px 20px;margin-bottom:18px">
-      <div style="margin-bottom:10px">
-        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">⚡ BoS Alert Recipients</div>
-        <div style="font-size:11px;color:var(--text-muted)">Emailed when an <b>aligned pair</b> shows a 15M break of structure on the Inverted Flow compare view. One batched email per alert; de-duplicated once per pair &amp; direction per EAT day.</div>
+      <div style="display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:10px">
+        <div style="flex:1;min-width:200px">
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">⚡ BoS Alert Recipients</div>
+          <div style="font-size:11px;color:var(--text-muted)">Emailed when an <b>aligned pair</b> shows a 15M break of structure on the Inverted Flow compare view. One batched email per alert; de-duplicated once per pair &amp; direction per EAT day.</div>
+        </div>
+        <button class="btn btn-sm" id="bos-test-btn" onclick="sendBosTest()" style="white-space:nowrap;background:#2563eb;color:#fff">📧 Send test</button>
       </div>
+      <div id="bos-test-result" style="font-size:11px;color:var(--text-muted);display:none;margin-bottom:10px"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
         <input class="adm-input" id="bos-email" type="email" placeholder="email@example.com" style="flex:1;min-width:200px;max-width:320px">
         <input class="adm-input" id="bos-label" type="text" placeholder="Label (optional)" style="flex:0 1 170px;min-width:120px">
@@ -786,6 +790,33 @@ Mon May 12 2026
       const j = await r.json();
       if (j.ok) loadBosRecipients(); else notyf.error(j.error || 'Failed');
     } catch(e){ notyf.error(e.message); }
+  }
+
+  async function sendBosTest() {
+    const btn = document.getElementById('bos-test-btn'), out = document.getElementById('bos-test-result');
+    btn.disabled = true; btn.textContent = '…sending';
+    out.style.display = 'block'; out.style.color = 'var(--text-muted)'; out.textContent = 'Sending test…';
+    try {
+      const r = await fetch('/api/bos-recipients', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json','Authorization':'Bearer '+token },
+        body: JSON.stringify({ action:'test' }),
+      });
+      const j = await r.json();
+      if (j.ok && j.sent) {
+        out.style.color = '#22c55e';
+        out.textContent = 'Test sent to '+j.recipients+' recipient(s)'+(j.live ? ' with '+j.pairs+' live aligned+BoS pair(s).' : ' (no live BoS right now — sent a sample).');
+        notyf.success('Test email sent');
+      } else if (j.ok && !j.sent) {
+        out.style.color = '#f59e0b';
+        out.textContent = 'Not sent — Brevo returned nothing. Check BREVO_API_KEY is set and the deployment was redeployed after adding it.';
+        notyf.error('Not sent — check BREVO_API_KEY');
+      } else {
+        out.style.color = '#f87171'; out.textContent = j.error || 'Failed';
+        notyf.error(j.error || 'Failed');
+      }
+    } catch(e){ out.style.color = '#f87171'; out.textContent = e.message; notyf.error(e.message); }
+    btn.disabled = false; btn.textContent = '📧 Send test';
   }
 
   async function removeBosRecipient(id) {
