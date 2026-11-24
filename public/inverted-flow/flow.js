@@ -76,13 +76,14 @@
     kind: qp('instrument') && qp('instrument').indexOf('IDX:')===0 ? 'index' : (qp('kind')||'pair'),
     instrument: qp('instrument') || 'EUR_USD',
     mode: 'close',
-    view: qp('view')==='compare'?'compare':'single',
+    view: qp('view')==='compare'?'compare':(qp('view')==='moving'?'moving':'single'),
     resolution: qp('resolution') || 'M5',
     step: qp('step') ? parseFloat(qp('step')) : null,
     asOf: qp('asOf') ? +qp('asOf') : null,
     date: qp('date') || null,
     showReversals: false,
     chartType: (function(){ var q=qp('chart'); if(q==='candles'||q==='renko')return q; try{var s=localStorage.getItem('nfx_flow_chart'); if(s==='candles')return 'candles';}catch(e){} return 'renko'; })(),
+    candleTf: (function(){ var ok={'5m':1,'15m':1,'30m':1,'1H':1,'4H':1,'1D':1,'1W':1,'1M':1}; var q=qp('tf'); if(ok[q])return q; try{var s=localStorage.getItem('nfx_flow_tf'); if(ok[s])return s;}catch(e){} return '1H'; })(),
     alignedOnly: qp('aligned')==='0' ? false : true,
     zoom: 1,
     cursor: null,            // replay cursor (null = full)
@@ -98,6 +99,7 @@
   function nav(params){
     var p={};
     if(S.view==='compare'){p.view='compare';}
+    else if(S.view==='moving'){p.view='moving';}
     else if(S.view==='sim'){p.view='sim';}
     else {p.instrument=S.instrument; if(S.kind==='pair')p.resolution=S.resolution;}
     if(S.step!=null)p.step=S.step;
@@ -112,6 +114,7 @@
   function apiUrl(){
     if(S.view==='sim') return '/api/inverted-flow?mode=sim';
     if(S.view==='compare'){var u='/api/inverted-flow?view=compare'; if(S.step!=null)u+='&step='+S.step; if(S.asOf)u+='&asOf='+S.asOf; if(S.date)u+='&date='+encodeURIComponent(S.date); return u;}
+    if(S.view==='moving'){var um='/api/inverted-flow?view=moving'; if(S.asOf)um+='&asOf='+S.asOf; return um;}
     var u='/api/inverted-flow?instrument='+encodeURIComponent(S.instrument);
     if(S.kind==='pair')u+='&resolution='+S.resolution;
     if(S.step!=null)u+='&step='+S.step;
@@ -216,10 +219,10 @@
     var d=S.data, meta=d.meta;
     if(!window.LightweightCharts){ host.innerHTML='<div class="banner warn">Chart library unavailable.</div>'; return; }
     var flow=computeFlow(d.flow, meta); S.computed=flow;
-    if(!flow||!flow.ok){ destroyLW(); host.innerHTML='<div class="banner warn">'+esc((d.reason||(flow&&flow.reason)||'No data for this configuration'))+'</div>'; return; }
     var prec=meta.precision!=null?meta.precision:(meta.kind==='index'?3:5);
     var built=ensureChart();
     if(S.chartType==='candles'){ renderCandleMode(d,meta,prec,built); return; }
+    if(!flow||!flow.ok){ destroyLW(); host.innerHTML='<div class="banner warn">'+esc((d.reason||(flow&&flow.reason)||'No data for this configuration'))+'</div>'; return; }
     var candles=[],vols=[],markers=[],byTime={},lastT=-Infinity;
     function pushCandle(o,c,hi,lo,ms,act,forming,ev){
       var t=Math.floor(ms/1000); if(t<=lastT)t=lastT+1; lastT=t;
@@ -247,34 +250,46 @@
       : ('Each brick = one '+meta.step+' ('+meta.stepPips+'-pip) step · wicks = observed '+meta.resolution+'-close range · lower panel = feed activity. Drag to pan · wheel to zoom.');
     updateLegend(null);
   }
-  // Normal candlestick view. Pairs: real OHLC (+volume) from the API. Indices: no OHLC exists, so
-  // close-to-close bodies of the index value series (labelled). Causal — API already cut to `asOf`.
+  // Normal candlestick view at a selectable timeframe. Fetches real OHLC from ?view=candles
+  // (pairs → OANDA at the chosen granularity; indices → the index-value series aggregated to the TF)
+  // and draws it. Cached per instrument|tf|asOf; stale responses are ignored.
   function renderCandleMode(d,meta,prec,built){
-    var obs=(d.flow&&d.flow.observations)||[];
-    var candles=[],vols=[],byTime={},lastT=-Infinity,hasVol=false;
-    function push(o,h,l,c,ms,vol){
-      var t=Math.floor(ms/1000); if(t<=lastT)t=lastT+1; lastT=t;
-      candles.push({time:t,open:o,high:Math.max(h,o,c),low:Math.min(l,o,c),close:c});
-      if(vol!=null){ vols.push({time:t,value:vol,color:c>=o?'rgba(22,199,132,.55)':'rgba(246,70,93,.55)'}); hasVol=true; }
-      byTime[t]={o:o,c:c,hi:h,lo:l,act:vol,forming:false,candle:true};
+    var key=S.instrument+'|'+S.candleTf+'|'+S.asOf;
+    if(S._candleCache&&S._candleCache.key===key){ drawCandles(S._candleCache.data,meta,prec,built,key); return; }
+    var leg=document.getElementById('lwlegend'); if(leg)leg.innerHTML='<b>'+esc(meta.label||S.instrument)+'</b> · loading '+esc(S.candleTf)+'…';
+    S._candleReq=key;
+    var u='/api/inverted-flow?view=candles&instrument='+encodeURIComponent(S.instrument)+'&tf='+encodeURIComponent(S.candleTf);
+    if(S.asOf)u+='&asOf='+S.asOf;
+    fetch(u).then(function(r){return r.json();}).then(function(j){
+      if(S._candleReq!==key||S.chartType!=='candles'||S.view!=='single')return;   // stale / view changed
+      S._candleCache={key:key,data:j};
+      drawCandles(j,meta,prec,built,key);
+    }).catch(function(e){ if(S._candleReq===key){ var l=document.getElementById('lwlegend'); if(l)l.innerHTML='<b>Candles failed:</b> '+esc(e.message||'load error'); } });
+  }
+  function drawCandles(j,meta,prec,built,key){
+    if(!LW)return;
+    if(!j||j.available===false||!j.candles||!j.candles.length){
+      var l=document.getElementById('lwlegend'); if(l)l.innerHTML='<b>'+esc(meta.label||S.instrument)+'</b> · no candles'+(j&&j.reason?' ('+esc(j.reason)+')':'');
+      LW.candle.setData([]);LW.vol.setData([]);LW.candle.setMarkers([]);LW.byTime={}; return;
     }
-    if(meta.kind==='pair'&&d.candles&&d.candles.length){
-      d.candles.forEach(function(c){ push(c.o,c.h,c.l,c.c,c.t,c.v); });
-    } else {
-      for(var i=0;i<obs.length;i++){ var c=obs[i].value, o=i>0?obs[i-1].value:obs[i].value; push(o,Math.max(o,c),Math.min(o,c),c,obs[i].ms,null); }
-    }
-    if(!candles.length){ host.innerHTML='<div class="banner warn">No candles for this configuration.</div>'; destroyLW(); return; }
+    var cands=[],vols=[],byTime={},lastT=-Infinity,hasVol=false;
+    j.candles.forEach(function(c){
+      var t=Math.floor(c.t/1000); if(t<=lastT)t=lastT+1; lastT=t;
+      cands.push({time:t,open:c.o,high:Math.max(c.h,c.o,c.c),low:Math.min(c.l,c.o,c.c),close:c.c});
+      if(c.v!=null){ vols.push({time:t,value:c.v,color:c.c>=c.o?'rgba(22,199,132,.55)':'rgba(246,70,93,.55)'}); hasVol=true; }
+      byTime[t]={o:c.o,c:c.c,hi:c.h,lo:c.l,act:c.v,forming:false,candle:true};
+    });
     LW.byTime=byTime;
     LW.candle.applyOptions({priceFormat:{type:'price',precision:prec,minMove:Math.pow(10,-prec)}});
-    LW.candle.setData(candles);
+    LW.candle.setData(cands);
     LW.vol.setData(hasVol?vols:[]);
     LW.candle.setMarkers([]);
-    var key=S.chartType+'|'+S.view+'|'+S.instrument+'|'+S.resolution+'|'+S.asOf+'|'+S.step;
-    if(built||key!==LWkey){ LW.chart.timeScale().fitContent(); LWkey=key; }
-    var cap=document.getElementById('flowcap');
+    var lwkey='C|'+key;
+    if(built||lwkey!==LWkey){ LW.chart.timeScale().fitContent(); LWkey=lwkey; }
+    var tf=j.tf||S.candleTf, cap=document.getElementById('flowcap');
     if(cap) cap.textContent = (meta.kind==='index')
-      ? ('Candlesticks — each = one M15 basket snapshot (close-to-close of the index value; an index has no intrabar range). Drag to pan · wheel to zoom.')
-      : ('Candlesticks — real '+meta.resolution+' OHLC from OANDA · lower panel = volume. Drag to pan · wheel to zoom.');
+      ? ((j.meta&&j.meta.currency||'')+' index aggregated to '+tf+' from M15 snapshots — no intrabar range exists for an index'+(j.clampedFrom?' · '+j.clampedFrom+'→'+tf+' (native M15)':'')+'. Drag to pan · wheel to zoom.')
+      : ('Real '+tf+' candlesticks (midpoint OHLC from OANDA) · lower panel = volume. Drag to pan · wheel to zoom.');
     updateLegend(null);
   }
   function updateLegend(param){
@@ -441,6 +456,42 @@
     if(cb)cb.addEventListener('change',function(){ S.alignedOnly=cb.checked; var fresh=buildPairStrength(panels); if(fresh)wrap.parentNode.replaceChild(fresh,wrap); });
     return wrap;
   }
+  // ========================= MOVING PAIRS (two consecutive 15M Renko bars) =========================
+  // A ranked table of the pairs whose M15 Renko just confirmed a bar on two back-to-back 15-minute
+  // candles (e.g. one at 12:15 and the next at 12:30) — i.e. the pair is moving now. Ranked by the
+  // current consecutive-candle run length, then total step bars in it (momentum). Research only.
+  function eatHM(ms){ var d=new Date(ms+EAT); return pad(d.getUTCHours())+':'+pad(d.getUTCMinutes()); }
+  function renderMoving(){
+    var d=S.data; host.innerHTML='';
+    if(!d||!d.ok){ host.innerHTML='<div class="banner warn">'+esc((d&&d.reason)||'Moving-pairs scan unavailable')+'</div>'; return; }
+    var rows=d.rows||[];
+    var wrap=document.createElement('div'); wrap.className='pairrank';
+    var asof=d.asOfUtc?eatStamp(Date.parse(d.asOfUtc)):'—';
+    var h='<h3>Moving pairs · two consecutive 15M Renko bars</h3>'
+      +'<div class="sub">Pairs whose M15 Renko confirmed a bar on each of the two most recent consecutive 15-minute candles (≥ one step of movement in two back-to-back 15M windows). Ranked by the current consecutive-candle run, then total step bars. As of '+esc(asof)+'. Research only — no orders.</div>';
+    if(!rows.length){
+      h+='<div class="noalign" style="padding:18px 4px">No pairs are moving on two consecutive 15M bars right now.</div>';
+      wrap.innerHTML=h; host.appendChild(wrap); return;
+    }
+    var maxRun=rows[0].runEvents||1;
+    h+='<table class="ptbl"><thead><tr><th>#</th><th>Pair</th><th>Dir</th><th class="num" title="Length of the current run of consecutive 15-minute bars">Run (15M bars)</th><th class="num" title="Total step bars confirmed within the run">Steps</th><th title="Confirm time of the latest bar (EAT)">Latest bar</th><th title="Confirm time of the bar before it (EAT)">Prev bar</th><th style="width:18%">Momentum</th></tr></thead><tbody>';
+    rows.forEach(function(r,i){
+      var up=r.dir==='up';
+      h+='<tr data-pair="'+esc(r.pair)+'"><td class="num">'+(i+1)+'</td>'
+        +'<td class="pair">'+esc(r.label||r.pair.replace('_','/'))+'</td>'
+        +'<td class="lean '+(up?'up':'dn')+'">'+(r.dir?(up?'▲ up':'▼ down'):'—')+'</td>'
+        +'<td class="num">'+r.runEvents+'</td>'
+        +'<td class="num">'+r.runSteps+'</td>'
+        +'<td>'+(r.lastMs?eatHM(r.lastMs):'—')+'</td>'
+        +'<td>'+(r.prevMs?eatHM(r.prevMs):'—')+'</td>'
+        +'<td><span class="bar" style="width:'+Math.max(6,Math.round((r.runEvents/maxRun)*100))+'%"></span></td></tr>';
+    });
+    h+='</tbody></table>';
+    wrap.innerHTML=h;
+    wrap.querySelectorAll('tr[data-pair]').forEach(function(tr){tr.addEventListener('click',function(){ var p=tr.getAttribute('data-pair'); S.view='single'; S.kind='pair'; S.instrument=p; S.resolution='M15'; nav({view:null,instrument:p,resolution:'M15'}); });});
+    host.appendChild(wrap);
+  }
+
   function miniSvg(flow,vMin,vMax){
     var L=layout(flow); var W=360,H=120,ML=4,MR=4,MT=8,MB=8;
     var pxU=(W-ML-MR)/(L.totalA||1);
@@ -470,8 +521,9 @@
       if(m.kind==='pair')sub='step <b>'+m.step+'</b> ('+m.stepPips+' pip) · <b>'+m.resolution+' closes</b> · width = received closes';
       else sub='step <b>'+m.step+'pp</b> · <b>M15 basket snapshots</b>'+(d.daily?' · single day':' · multi-day window')+' · width = basket snapshots';
     }
-    // compare view renders its own title/coverage inside #host (below the pair table), so keep the fixed header empty
-    hdr.innerHTML=(S.view==='compare')?'':('<div class="chrow"><span class="chTitle">'+esc(title)+'</span></div><div class="chSub">'+sub+'</div>');
+    // compare & moving views render their own title/coverage inside #host, so keep the fixed header empty
+    var ownHead=(S.view==='compare'||S.view==='moving');
+    hdr.innerHTML=ownHead?'':('<div class="chrow"><span class="chTitle">'+esc(title)+'</span></div><div class="chSub">'+sub+'</div>');
     // coverage
     var c='';
     if(S.view==='sim'){ c='Simulated illustrative quote sequence — NOT broker history.'; }
@@ -481,9 +533,10 @@
         c='Window '+(w&&w.ok?(w.nObs+' '+w.resolution+' closes · '+eatStamp(w.firstMs)+' → '+eatStamp(w.lastMs)):'—')+' · stored '+ir.resolution+' '+(ir.earliestMs?eatStamp(ir.earliestMs).slice(0,10):'?')+' → '+(ir.latestMs?eatStamp(ir.latestMs).slice(0,10):'?')+(w&&w.gaps&&w.gaps.length?' · <span class="warn">'+w.gaps.length+' gap(s)</span>':'');
       } else { c='Index M15 · baseline '+(d.baselineUtc?eatStamp(Date.parse(d.baselineUtc)):'—')+' · through '+(d.asOfUtc?eatStamp(Date.parse(d.asOfUtc)):'—'); }
     }
-    cov.innerHTML=(S.view==='compare')?'':c;
+    cov.innerHTML=ownHead?'':c;
     // legend
     var leg=document.getElementById('legend');
+    if(S.view==='moving'){ leg.innerHTML=''; var ft0=document.getElementById('foot'); if(ft0) ft0.innerHTML=''; return; }
     var wUnit = S.view==='sim'?'received quote updates':(d&&d.meta&&d.meta.kind==='index'?'constituent basket snapshots':'received '+((d&&d.meta&&d.meta.resolution)||'')+' closes');
     leg.innerHTML='<span class="k"><span class="sw up"></span> up brick</span>'
       +'<span class="k"><span class="sw dn"></span> down brick</span>'
@@ -514,8 +567,10 @@
     // controls visibility
     document.getElementById('resCtl').style.display = (S.view==='single'&&S.kind==='pair')?'inline-flex':'none';
     document.getElementById('chartSeg').style.display = (S.view==='single')?'inline-flex':'none';
-    document.getElementById('stepIn').parentElement.style.display = (S.view==='sim')?'none':'inline-flex';
+    document.getElementById('tfSel').style.display = (S.view==='single'&&S.chartType==='candles')?'inline-block':'none';
+    document.getElementById('stepIn').parentElement.style.display = (S.view==='sim'||S.view==='moving'||(S.view==='single'&&S.chartType==='candles'))?'none':'inline-flex';
     if(S.view==='compare'){ destroyLW(); renderCompare(); document.getElementById('replaybar').style.display='none'; }
+    else if(S.view==='moving'){ destroyLW(); renderMoving(); document.getElementById('replaybar').style.display='none'; }
     else { renderSingle(); renderReplay(); }
     syncControls();
   }
@@ -532,24 +587,26 @@
     document.querySelectorAll('#viewSeg button').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-view')===S.view);});
     document.querySelectorAll('#resSeg button').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-res')===S.resolution);});
     document.querySelectorAll('#chartSeg button').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-chart')===S.chartType);});
+    document.getElementById('tfSel').value=S.candleTf;
     var rc=document.getElementById('revChk'); rc.checked=S.showReversals&&S.chartType!=='candles'; rc.disabled=(S.chartType==='candles');
     rc.parentElement.style.opacity=(S.chartType==='candles')?'.4':'';
     // step field + unit
     var m=S.data&&S.data.meta;
     var stepIn=document.getElementById('stepIn'), unit=document.getElementById('stepUnit'), lbl=document.getElementById('stepLbl');
     if(m){ stepIn.value=m.step; if(m.kind==='index'){unit.textContent='pp';lbl.textContent='Step';stepIn.step='0.01';}else{unit.textContent='('+m.stepPips+' pip)';lbl.textContent='Step';stepIn.step=String(m.pip);} }
-    document.getElementById('instSel').parentElement.style.display = (S.view==='sim'||S.view==='compare')?'none':'inline-flex';
+    document.getElementById('instSel').parentElement.style.display = (S.view==='sim'||S.view==='compare'||S.view==='moving')?'none':'inline-flex';
   }
 
   // wire events
   document.querySelectorAll('#kindSeg button').forEach(function(b){b.onclick=function(){ S.kind=b.getAttribute('data-kind'); S.instrument = S.kind==='index'?'IDX:EUR':'EUR_USD'; S.step=null; S.view='single'; nav({view:null,instrument:S.instrument, resolution:S.kind==='pair'?S.resolution:null}); };});
-  document.querySelectorAll('#viewSeg button').forEach(function(b){b.onclick=function(){ var v=b.getAttribute('data-view'); if(v==='compare')nav({view:'compare',instrument:null,resolution:null}); else if(v==='sim')nav({view:'sim',instrument:null,resolution:null,step:null}); else nav({view:null,instrument:S.instrument}); };});
+  document.querySelectorAll('#viewSeg button').forEach(function(b){b.onclick=function(){ var v=b.getAttribute('data-view'); if(v==='compare')nav({view:'compare',instrument:null,resolution:null}); else if(v==='moving')nav({view:'moving',instrument:null,resolution:null,step:null}); else if(v==='sim')nav({view:'sim',instrument:null,resolution:null,step:null}); else nav({view:null,instrument:S.instrument}); };});
   document.querySelectorAll('#resSeg button').forEach(function(b){b.onclick=function(){ S.resolution=b.getAttribute('data-res'); S.step=null; nav({resolution:S.resolution,step:null}); };});
   document.getElementById('instSel').onchange=function(){ S.instrument=this.value; S.kind=this.value.indexOf('IDX:')===0?'index':'pair'; nav({instrument:S.instrument}); };
   document.getElementById('instSearch').oninput=function(){ buildInstruments(); };
   document.getElementById('stepIn').onchange=function(){ var v=parseFloat(this.value); if(isFinite(v)&&v>0){S.step=v;nav({step:v});} };
   document.getElementById('revChk').onchange=function(){ S.showReversals=this.checked; if(S.view==='single'||S.view==='sim')renderSingle(); };
-  document.querySelectorAll('#chartSeg button').forEach(function(b){b.onclick=function(){ var c=b.getAttribute('data-chart'); if(c===S.chartType)return; S.chartType=c; try{localStorage.setItem('nfx_flow_chart',c);}catch(e){} if(S.view==='single'){renderSingle();renderReplay();} syncControls(); };});
+  document.querySelectorAll('#chartSeg button').forEach(function(b){b.onclick=function(){ var c=b.getAttribute('data-chart'); if(c===S.chartType)return; S.chartType=c; try{localStorage.setItem('nfx_flow_chart',c);}catch(e){} render(); };});
+  document.getElementById('tfSel').onchange=function(){ S.candleTf=this.value; try{localStorage.setItem('nfx_flow_tf',this.value);}catch(e){} if(S.view==='single'&&S.chartType==='candles')renderSingle(); };
   function lwZoom(f){ if(!LW)return; var ts=LW.chart.timeScale(); var bs=(ts.options().barSpacing||6)*f; ts.applyOptions({barSpacing:Math.max(1,Math.min(80,bs))}); }
   document.getElementById('zoomIn').onclick=function(){ lwZoom(1.4); };
   document.getElementById('zoomOut').onclick=function(){ lwZoom(1/1.4); };
@@ -562,7 +619,7 @@
   document.getElementById('rpStepEvt').onclick=function(){ stopPlay(); var idx=eventConfirmIndices(S.data.flow); var cur=S.cursor==null?(S.data.flow.observations.length-1):S.cursor; var nx=idx.find(function(x){return x>cur;}); setCursor(nx==null?(S.data.flow.observations.length-1):nx); };
   document.getElementById('rpLive').onclick=function(){ stopPlay(); S.cursor=null; renderSingle(); renderReplay(); };
   document.getElementById('rpSpeed').onchange=function(){ S.speed=parseFloat(this.value)||4; if(S.play){stopPlay();document.getElementById('rpPlay').click();} };
-  window.addEventListener('resize',function(){ if(S.view==='compare')renderCompare(); /* single: lightweight-charts handles its own resize */ });
+  window.addEventListener('resize',function(){ if(S.view==='compare')renderCompare(); else if(S.view==='moving')renderMoving(); /* single: lightweight-charts handles its own resize */ });
 
   buildInstruments();
   load();

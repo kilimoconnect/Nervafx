@@ -24,6 +24,7 @@
  */
 
 const { getClient, cors } = require('./_db');
+const { fetchCandles } = require('../src/oanda');
 const { loadTf, loadM5Parallel, loadM15Parallel } = require('../research/comparison/dbload');
 const { buildIndices } = require('../research/comparison/index-build');
 const { dayStart, EAT_OFFSET_MS } = require('../research/comparison/periods');
@@ -89,6 +90,31 @@ function bosDirIndex(observations) {
 const WINDOW_DAYS = { M5: { def: 3, cap: 10 }, M15: { def: 10, cap: 30 }, H1: { def: 45, cap: 120 } };
 // Index history window (M15 basket snapshots) — a rolling multi-day window like the pair charts.
 const INDEX_WINDOW = { def: 12, cap: 45 };
+
+// ── Normal-candlestick view (?view=candles) ──────────────────────────────────────────────────
+// Real OHLC per selectable timeframe. Pairs fetch midpoint candles straight from OANDA at the
+// matching granularity; indices have no OHLC, so the index-value (pp) series is aggregated into
+// TF buckets (native resolution is M15, so 5m falls back to 15m).
+const TF_GRAN  = { '5m': 'M5', '15m': 'M15', '30m': 'M30', '1H': 'H1', '4H': 'H4', '1D': 'D', '1W': 'W', '1M': 'M' };
+const TF_MS    = { '5m': 3e5, '15m': 9e5, '30m': 18e5, '1H': 36e5, '4H': 144e5, '1D': 864e5, '1W': 6048e5 };
+const TF_COUNT = { '5m': 576, '15m': 672, '30m': 672, '1H': 480, '4H': 360, '1D': 365, '1W': 200, '1M': 120 };
+const TF_INDEX_DAYS = { '15m': 20, '30m': 30, '1H': 45, '4H': 45, '1D': 45, '1W': 45, '1M': 45 };
+
+function tfBucketKey(ms, tf) {
+  const e = ms + EAT_OFFSET_MS;                       // bucket on the EAT calendar
+  if (tf === '1M') { const d = new Date(e); return 'm' + (d.getUTCFullYear() * 12 + d.getUTCMonth()); }
+  return 'p' + Math.floor(e / TF_MS[tf]);
+}
+function aggregateIndexCandles(obs, tf) {
+  const map = new Map();
+  for (const o of obs) {
+    const k = tfBucketKey(o.ms, tf);
+    let b = map.get(k);
+    if (!b) { b = { t: o.ms, o: o.value, h: o.value, l: o.value, c: o.value, v: 0 }; map.set(k, b); }
+    b.h = Math.max(b.h, o.value); b.l = Math.min(b.l, o.value); b.c = o.value; b.v++;
+  }
+  return [...map.values()].sort((a, b) => a.t - b.t);
+}
 
 async function instrumentRange(sb, instrument, tf) {
   const lo = await sb.from('backtest_candles').select('time').eq('instrument', instrument).eq('timeframe', tf).eq('complete', true).order('time', { ascending: true }).limit(1);
@@ -174,6 +200,49 @@ async function computeCompareData(sb, q, asOfMs) {
   return { available: true, built, baselineMs, cutoffMs, sinceMs: day.sinceMs, daily: day.daily, step, structures, bos, panels, ranking };
 }
 
+// ── Moving-pairs scan (?view=moving) ──────────────────────────────────────────────────────────
+// Build each pair's Renko on M15 closes (per-pair step) and keep only the pairs that just confirmed a
+// bar on each of the two most recent CONSECUTIVE M15 candles — one bar at 12:15 and the next at 12:30,
+// i.e. ≥ one full step of movement in two back-to-back 15-minute windows ("the pair is moving"). Each
+// qualifying pair is ranked by the length of its current consecutive-candle run, then by the total
+// step bodies produced in that run. Relative-movement research only — no orders, no signal.
+const MOVING_WINDOW_DAYS = 5;
+
+async function computeMovingData(sb, asOfMs) {
+  const M15 = M15_MS;
+  const lastM15 = Math.floor(asOfMs / M15) * M15;   // latest completed M15 close ≤ asOf (quarter-hour aligned)
+  const by = await loadM15Parallel(sb, PAIRS, { fromIso: iso(asOfMs - MOVING_WINDOW_DAYS * DAY_MS), toIso: iso(asOfMs) }, 8);
+  const rows = [];
+  PAIRS.forEach((pair) => {
+    const inst = instrumentFor(pair);
+    if (!inst) return;
+    const r = runPairFlow(by[pair], 'M15', inst.step, inst.precision, asOfMs);
+    if (!r || !r.ok || !r.events || r.events.length < 2) return;
+    const ev = r.events;
+    const e1 = ev[ev.length - 1].ms, e0 = ev[ev.length - 2].ms;
+    // the two most recent bars are one M15 candle apart (consecutive) …
+    if ((e1 - e0) !== M15) return;
+    // … and that happened on the latest completed candle (allow one M15 of candle-sync lag) so it is "moving now".
+    if (e1 < lastM15 - M15) return;
+    // trailing run of consecutive-15M bars + total step bodies confirmed within it.
+    let runEvents = 1, runSteps = (ev[ev.length - 1].levels || []).length;
+    for (let k = ev.length - 1; k > 0; k--) {
+      if (ev[k].ms - ev[k - 1].ms === M15) { runEvents++; runSteps += (ev[k - 1].levels || []).length; }
+      else break;
+    }
+    const lastLv = ev[ev.length - 1].levels;
+    rows.push({
+      pair, label: inst.label,
+      dir: r.finalDir || (lastLv && lastLv.length ? lastLv[lastLv.length - 1].dir : null),
+      runEvents, runSteps, lastMs: e1, prevMs: e0,
+      stepPips: Math.round(inst.step / inst.pip * 10) / 10, precision: inst.precision,
+    });
+  });
+  rows.sort((a, b) => (b.runEvents - a.runEvents) || (b.runSteps - a.runSteps) || (b.lastMs - a.lastMs));
+  rows.forEach((row, i) => { row.rank = i + 1; });
+  return { asOfUtc: iso(asOfMs), lastM15Ms: lastM15, rows };
+}
+
 module.exports = async function handler(req, res) {
   cors(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -182,7 +251,7 @@ module.exports = async function handler(req, res) {
     const q = req.query || {};
     const asOfMs = Math.min(parseMs(q.asOf, Date.now()), Date.now());
     const mode = (q.mode === 'sim') ? 'sim' : 'close';
-    const view = (q.view === 'compare') ? 'compare' : 'single';
+    const view = (q.view === 'compare') ? 'compare' : (q.view === 'candles' ? 'candles' : (q.view === 'moving' ? 'moving' : 'single'));
 
     // ---- Simulated reference (the A–D example) ------------------------------------------------
     if (mode === 'sim') {
@@ -193,6 +262,43 @@ module.exports = async function handler(req, res) {
         meta: { kind: 'pair', pip: sim.pip, step: sim.step, stepPips: sim.stepPips, precision: sim.precision, unit: 'received quote updates', valueLabel: 'midpoint price', resolution: 'simulated quotes', anchor: sim.anchor },
         flow: r, segments: sim.segments,
         disclaimer: 'Simulated illustrative quote sequence — NOT broker history. No orders. Width = quote updates (feed activity), not traded volume.',
+      });
+    }
+
+    // ---- Normal candlesticks at a selectable timeframe ---------------------------------------
+    if (view === 'candles') {
+      const inst = instrumentFor(q.instrument) || instrumentFor('EUR_USD');
+      const tfReq = TF_GRAN[q.tf] ? q.tf : '1H';
+
+      if (inst.kind === 'pair') {
+        const raw = await fetchCandles(inst.id, { granularity: TF_GRAN[tfReq], count: TF_COUNT[tfReq], to: iso(asOfMs) });
+        const candles = (raw || [])
+          .filter((c) => c.complete)
+          .map((c) => ({ t: Date.parse(c.time), o: +c.mid.o, h: +c.mid.h, l: +c.mid.l, c: +c.mid.c, v: c.volume == null ? 0 : c.volume }))
+          .filter((c) => isFinite(c.t) && c.t <= asOfMs)
+          .sort((a, b) => a.t - b.t);
+        return res.json({
+          ok: true, view: 'candles', instrument: inst.id, tf: tfReq,
+          meta: { kind: 'pair', label: inst.label, precision: inst.precision, pip: inst.pip, resolution: tfReq, valueLabel: 'midpoint price' },
+          candles,
+          disclaimer: 'Real midpoint OHLC from OANDA at ' + tfReq + '. No orders.',
+        });
+      }
+
+      // index — no OHLC exists, so aggregate the zero-sum index-value (pp) series into TF buckets.
+      const effTf = tfReq === '5m' ? '15m' : tfReq;  // index native resolution is M15
+      const sbI = getClient();
+      const day = await loadIndexWindow(sbI, { days: TF_INDEX_DAYS[effTf] || 20 }, asOfMs);
+      if (!day.built.ok) return res.json({ ok: true, view: 'candles', available: false, reason: day.built.reason, instrument: inst.id, tf: effTf });
+      const io = indexObs(day.built, inst.currency, day.baselineMs, day.cutoffMs);
+      if (!io.ok) return res.json({ ok: true, view: 'candles', available: false, reason: io.reason, instrument: inst.id, tf: effTf });
+      const candles = aggregateIndexCandles(io.observations, effTf);
+      return res.json({
+        ok: true, view: 'candles', instrument: inst.id, tf: effTf,
+        clampedFrom: tfReq !== effTf ? tfReq : undefined,
+        meta: { kind: 'index', label: inst.label, currency: inst.currency, precision: 3, resolution: effTf, valueLabel: '% from baseline (pp)' },
+        candles,
+        disclaimer: 'Zero-sum 1/8 ' + inst.currency + ' index aggregated to ' + effTf + ' from M15 basket snapshots (no intrabar range exists for an index). No orders.',
       });
     }
 
@@ -211,6 +317,18 @@ module.exports = async function handler(req, res) {
       });
     }
 
+    // ---- Moving pairs (two consecutive M15 Renko bars) ---------------------------------------
+    if (view === 'moving') {
+      const md = await computeMovingData(sb, asOfMs);
+      return res.json({
+        ok: true, version: FLOW_VERSION, mode, view: 'moving',
+        asOfUtc: md.asOfUtc, lastM15Ms: md.lastM15Ms,
+        meta: { resolution: 'M15', unit: 'received M15 closes', condition: 'two consecutive M15 Renko bars (confirmed one 15-minute candle apart)' },
+        rows: md.rows,
+        disclaimer: 'Pairs whose Renko (M15 closes, per-pair step) confirmed a bar on each of the two most recent consecutive M15 candles — ≥ one full step of movement in two back-to-back 15-minute windows. Ranked by the length of the current consecutive-candle run, then total step bodies in it. Relative-movement research, UNVALIDATED. No orders.',
+      });
+    }
+
     // ---- Single instrument --------------------------------------------------------------------
     const inst = instrumentFor(q.instrument) || instrumentFor('EUR_USD');
 
@@ -220,16 +338,10 @@ module.exports = async function handler(req, res) {
       const days = Math.min(w.cap, Math.max(1, parseFloat(q.days) || w.def));
       const sinceMs = parseMs(q.since, asOfMs - days * DAY_MS);
       const step = Math.max(inst.pip, parseFloat(q.step) || inst.step);   // step ≥ one pip
-      const candles = await loadTf(sb, inst.id, resolution, { fromIso: iso(sinceMs), toIso: iso(asOfMs), withVolume: true });
+      const candles = await loadTf(sb, inst.id, resolution, { fromIso: iso(sinceMs), toIso: iso(asOfMs) });
       const r = runPairFlow(candles, resolution, step, inst.precision, asOfMs);
       const range = await instrumentRange(sb, inst.id, resolution);
       const cov = coverageForCandles(candles, RES_MS[resolution], resolution);
-      // Real OHLC bars for the optional "Candlesticks" chart view. Causally consistent with the
-      // Renko blocks: only candles whose close time is at/before the cutoff (no look-ahead).
-      const resMs = RES_MS[resolution];
-      const ohlc = candles
-        .filter((c) => (c.openMs + resMs) <= asOfMs)
-        .map((c) => ({ t: c.openMs, o: c.open, h: c.high, l: c.low, c: c.close, v: c.volume == null ? 0 : c.volume }));
       return res.json({
         ok: true, version: FLOW_VERSION, mode: 'close', view: 'single', instrument: inst.id, available: !!r.ok, reason: r.ok ? null : r.reason,
         asOfUtc: iso(asOfMs), sinceMs, sinceUtc: iso(sinceMs),
@@ -240,7 +352,6 @@ module.exports = async function handler(req, res) {
         },
         coverage: { window: cov, instrument: { earliestMs: range.earliestMs, latestMs: range.latestMs, resolution } },
         flow: r.ok ? r : null,
-        candles: ohlc,
         disclaimer: 'Close-only: width = received completed ' + resolution + ' closes (feed activity), NOT ticks, traded volume, or quote count. No intrabar path/reversal time is claimed. Midpoint OHLC from OANDA. No orders.',
       });
     }
