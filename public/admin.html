@@ -186,6 +186,20 @@
       </div>
     </div>
 
+    <!-- BoS Alert Recipients -->
+    <div class="adm-section" style="padding:16px 20px;margin-bottom:18px">
+      <div style="margin-bottom:10px">
+        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">⚡ BoS Alert Recipients</div>
+        <div style="font-size:11px;color:var(--text-muted)">Emailed when an <b>aligned pair</b> shows a 15M break of structure on the Inverted Flow compare view. One batched email per alert; de-duplicated once per pair &amp; direction per EAT day.</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <input class="adm-input" id="bos-email" type="email" placeholder="email@example.com" style="flex:1;min-width:200px;max-width:320px">
+        <input class="adm-input" id="bos-label" type="text" placeholder="Label (optional)" style="flex:0 1 170px;min-width:120px">
+        <button class="btn btn-primary" id="bos-add-btn" onclick="addBosRecipient()" style="white-space:nowrap">+ Add</button>
+      </div>
+      <div id="bos-recipients" style="font-size:12px;color:var(--text-muted)">Loading…</div>
+    </div>
+
     <!-- Stats -->
     <div class="stat-row" id="stat-row">
       <div class="stat-card"><div class="stat-card-label">Upcoming Events</div><div class="stat-card-val" id="stat-upcoming">—</div></div>
@@ -719,9 +733,78 @@ Mon May 12 2026
   document.getElementById('filter-from').value = today;
   document.getElementById('filter-to').value   = twoWeeks;
 
+  // ── BoS alert recipients ──────────────────────────────────────────────
+  function _escH(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+
+  async function loadBosRecipients() {
+    const box = document.getElementById('bos-recipients');
+    if (!box) return;
+    try {
+      const r = await fetch('/api/bos-recipients', { headers: { 'Authorization':'Bearer '+token } });
+      const j = await r.json();
+      if (!j.ok) { box.textContent = j.error || 'Failed to load'; return; }
+      const list = j.recipients || [];
+      if (!list.length) { box.innerHTML = '<span style="color:var(--text-muted)">No recipients yet — add one above.</span>'; return; }
+      box.innerHTML = list.map(function(x){
+        return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border2)">'
+          + '<span title="'+(x.active?'active':'disabled')+'" style="width:9px;height:9px;border-radius:50%;flex:none;background:'+(x.active?'#22c55e':'#64748b')+'"></span>'
+          + '<span style="color:var(--text);font-weight:600">'+_escH(x.email)+'</span>'
+          + (x.label?'<span style="color:var(--text-muted);font-size:11px">· '+_escH(x.label)+'</span>':'')
+          + '<span style="flex:1"></span>'
+          + '<button class="btn btn-sm" style="background:var(--bg3);border:1px solid var(--border2);color:var(--text-dim)" onclick="toggleBosRecipient(\''+x.id+'\','+(x.active?'false':'true')+')">'+(x.active?'Disable':'Enable')+'</button>'
+          + '<button class="btn btn-sm" style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.4);color:#f87171" onclick="removeBosRecipient(\''+x.id+'\')">Remove</button>'
+          + '</div>';
+      }).join('');
+    } catch(e){ box.textContent = 'Error: '+e.message; }
+  }
+
+  async function addBosRecipient() {
+    const emailEl = document.getElementById('bos-email'), labelEl = document.getElementById('bos-label');
+    const email = (emailEl.value||'').trim();
+    if (!email) { notyf.error('Enter an email'); return; }
+    const btn = document.getElementById('bos-add-btn'); btn.disabled = true;
+    try {
+      const r = await fetch('/api/bos-recipients', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json','Authorization':'Bearer '+token },
+        body: JSON.stringify({ email: email, label: (labelEl.value||'').trim() || null }),
+      });
+      const j = await r.json();
+      if (j.ok) { notyf.success(j.reactivated?'Recipient re-activated':'Recipient added'); emailEl.value=''; labelEl.value=''; loadBosRecipients(); }
+      else notyf.error(j.error || 'Failed to add');
+    } catch(e){ notyf.error(e.message); }
+    btn.disabled = false;
+  }
+
+  async function toggleBosRecipient(id, active) {
+    try {
+      const r = await fetch('/api/bos-recipients', {
+        method:'PATCH',
+        headers:{ 'Content-Type':'application/json','Authorization':'Bearer '+token },
+        body: JSON.stringify({ id: id, active: active }),
+      });
+      const j = await r.json();
+      if (j.ok) loadBosRecipients(); else notyf.error(j.error || 'Failed');
+    } catch(e){ notyf.error(e.message); }
+  }
+
+  async function removeBosRecipient(id) {
+    if (!confirm('Remove this recipient from BoS alerts?')) return;
+    try {
+      const r = await fetch('/api/bos-recipients', {
+        method:'DELETE',
+        headers:{ 'Content-Type':'application/json','Authorization':'Bearer '+token },
+        body: JSON.stringify({ id: id }),
+      });
+      const j = await r.json();
+      if (j.ok) { notyf.success('Removed'); loadBosRecipients(); } else notyf.error(j.error || 'Failed');
+    } catch(e){ notyf.error(e.message); }
+  }
+
   loadProfile();
   loadStats();
   loadManage();
+  loadBosRecipients();
   </script>
 </body>
 </html>

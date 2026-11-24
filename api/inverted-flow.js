@@ -145,6 +145,35 @@ function runIndexFlow(built, ccy, baselineMs, cutoffMs, step) {
   return r;
 }
 
+// Compute the full 8-index comparison payload (panels + per-pair candle structure + 15M BoS) at a
+// cutoff. Shared by the GET handler and the BoS email-alert cron so both see exactly the same set.
+// Returns { available:false, reason } or { available:true, built, baselineMs, cutoffMs, sinceMs,
+// daily, step, structures, bos, panels, ranking }.
+async function computeCompareData(sb, q, asOfMs) {
+  const day = await loadIndexWindow(sb, q, asOfMs);
+  if (!day.built.ok) return { available: false, reason: day.built.reason };
+  const built = day.built, baselineMs = day.baselineMs, cutoffMs = day.cutoffMs;
+  // current candlestick structure per pair from recent M5 closes up to the selected cutoff
+  // (EMA20 vs EMA50 on M5 — the same resolution as the pair Renko charts, independent of the index)
+  const m5by = await loadM5Parallel(sb, PAIRS, { fromIso: iso(cutoffMs - 2 * DAY_MS), toIso: iso(cutoffMs) }, 8);
+  const structures = {}, bos = {};
+  PAIRS.forEach((p) => { const d = structureDir(m5by[p]); if (d) structures[p] = d; const bd = bosDirCandles(day.byPair[p]); if (bd) bos[p] = bd; });
+  const step = Math.min(5, Math.max(0.001, parseFloat(q.step) || DEFAULT_INDEX_STEP_PP));
+  const panels = CURRENCIES.map((ccy) => {
+    const r = runIndexFlow(built, ccy, baselineMs, cutoffMs, step);
+    return {
+      currency: ccy, available: !!r.ok, reason: r.ok ? null : r.reason,
+      lastPp: r.ok ? r.lastPp : null, lastIndexValue: r.ok ? r.lastIndexValue : null,
+      finalDir: r.ok ? r.finalDir : null, lastConfirmMs: r.ok && r.events.length ? r.events[r.events.length - 1].ms : null,
+      bosDir: r.ok ? (r.bosDir || null) : null,
+      flow: r.ok ? r : null,
+    };
+  });
+  // rank by actual underlying index value at the common timestamp (partial moves count).
+  const ranking = panels.filter((p) => p.available).sort((a, b) => b.lastPp - a.lastPp).map((p, i) => ({ currency: p.currency, rank: i + 1, lastPp: p.lastPp }));
+  return { available: true, built, baselineMs, cutoffMs, sinceMs: day.sinceMs, daily: day.daily, step, structures, bos, panels, ranking };
+}
+
 module.exports = async function handler(req, res) {
   cors(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -171,32 +200,13 @@ module.exports = async function handler(req, res) {
 
     // ---- 8-index comparison -------------------------------------------------------------------
     if (view === 'compare') {
-      const day = await loadIndexWindow(sb, q, asOfMs);
-      if (!day.built.ok) return res.json({ ok: true, available: false, reason: day.built.reason, mode, view });
-      const built = day.built, baselineMs = day.baselineMs, cutoffMs = day.cutoffMs;
-      // current candlestick structure per pair from recent M5 closes up to the selected cutoff
-      // (EMA20 vs EMA50 on M5 — the same resolution as the pair Renko charts, independent of the index)
-      const m5by = await loadM5Parallel(sb, PAIRS, { fromIso: iso(cutoffMs - 2 * DAY_MS), toIso: iso(cutoffMs) }, 8);
-      const structures = {}, bos = {};
-      PAIRS.forEach((p) => { const d = structureDir(m5by[p]); if (d) structures[p] = d; const bd = bosDirCandles(day.byPair[p]); if (bd) bos[p] = bd; });
-      const step = Math.min(5, Math.max(0.001, parseFloat(q.step) || DEFAULT_INDEX_STEP_PP));
-      const panels = CURRENCIES.map((ccy) => {
-        const r = runIndexFlow(built, ccy, baselineMs, cutoffMs, step);
-        return {
-          currency: ccy, available: !!r.ok, reason: r.ok ? null : r.reason,
-          lastPp: r.ok ? r.lastPp : null, lastIndexValue: r.ok ? r.lastIndexValue : null,
-          finalDir: r.ok ? r.finalDir : null, lastConfirmMs: r.ok && r.events.length ? r.events[r.events.length - 1].ms : null,
-          bosDir: r.ok ? (r.bosDir || null) : null,
-          flow: r.ok ? r : null,
-        };
-      });
-      // rank by actual underlying index value at the common timestamp (partial moves count).
-      const ranked = panels.filter((p) => p.available).sort((a, b) => b.lastPp - a.lastPp).map((p, i) => ({ currency: p.currency, rank: i + 1, lastPp: p.lastPp }));
+      const cd = await computeCompareData(sb, q, asOfMs);
+      if (!cd.available) return res.json({ ok: true, available: false, reason: cd.reason, mode, view });
       return res.json({
         ok: true, version: FLOW_VERSION, mode, view: 'compare',
-        asOfUtc: iso(cutoffMs), baselineMs, baselineUtc: iso(baselineMs), sinceMs: day.sinceMs, sinceUtc: iso(day.sinceMs), daily: day.daily,
-        meta: { kind: 'index', step, unit: 'constituent basket snapshots', valueLabel: '% from baseline (pp)', resolution: 'M15' },
-        coverage: coverageForIndex(built), ranking: ranked, panels, structures, bos,
+        asOfUtc: iso(cd.cutoffMs), baselineMs: cd.baselineMs, baselineUtc: iso(cd.baselineMs), sinceMs: cd.sinceMs, sinceUtc: iso(cd.sinceMs), daily: cd.daily,
+        meta: { kind: 'index', step: cd.step, unit: 'constituent basket snapshots', valueLabel: '% from baseline (pp)', resolution: 'M15' },
+        coverage: coverageForIndex(cd.built), ranking: cd.ranking, panels: cd.panels, structures: cd.structures, bos: cd.bos,
         disclaimer: 'Zero-sum 1/8 currency indices on M15 basket snapshots over the loaded window (reconciles with Evolution), UNVALIDATED. Pair "candle structure" (up = EMA20 > EMA50; down = EMA20 < EMA50; else mixed) on that pair\'s M5 closes up to the selected time, independent of the index. The "BoS" badge flags a 15M break of structure in the trend direction (latest closed M15 closed beyond the prior 8-candle range); pairs use their own M15 OHLC, currencies the index-value series. Each panel keeps its own activity axis. No orders.',
       });
     }
@@ -252,3 +262,4 @@ module.exports = async function handler(req, res) {
 };
 
 module.exports.maxDuration = 120;
+module.exports.computeCompareData = computeCompareData;

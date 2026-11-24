@@ -1465,10 +1465,57 @@ function cmeStructureAlertEmail(signal, tz) {
   };
 }
 
+// ── Inverted Flow: aligned pair + 15M Break of Structure alert ───────────────
+// data = { asOfUtc, pairs: [{ pair, direction:'up'|'down', strong, weak, spread }] }
+// Each pair here is already "aligned" (currency-strength lean + EMA20/50 M5 structure agree) AND
+// has a 15M break of structure in that direction. Research/notification only — no orders.
+function _fmtEat(iso) {
+  const d = new Date(new Date(iso).getTime() + 3 * 60 * 60 * 1000);
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const hh = String(d.getUTCHours()).padStart(2, '0');
+  const mm = String(d.getUTCMinutes()).padStart(2, '0');
+  return `${days[d.getUTCDay()]}, ${d.getUTCDate()} ${mon[d.getUTCMonth()]} ${hh}:${mm} EAT`;
+}
+
+function bosAlertEmail(data) {
+  const pairs = (data && data.pairs) || [];
+  const rows = pairs.map((p) => {
+    const up = p.direction === 'up';
+    const color = up ? '#22c55e' : '#ef4444';
+    const bg = up ? 'rgba(34,197,94,0.10)' : 'rgba(239,68,68,0.10)';
+    const arrow = up ? '▲' : '▼';
+    const disp = String(p.pair).replace('_', '/');
+    const spread = (p.spread != null && isFinite(p.spread)) ? Number(p.spread).toFixed(3) + 'pp' : '';
+    return `<div style="background:${bg};border-left:3px solid ${color};border-radius:6px;padding:10px 14px;margin:6px 0">
+      <span style="color:${color};font-weight:800;font-size:15px">${arrow} ${disp}</span>
+      <span style="color:#94a3b8;font-size:12px;margin-left:10px">${p.strong || ''} strong ▸ ${p.weak || ''} weak</span>
+      ${spread ? `<span style="color:#64748b;font-size:11px;margin-left:10px">spread ${spread}</span>` : ''}
+    </div>`;
+  }).join('');
+
+  const n = pairs.length;
+  const label = pairs.map((p) => `${String(p.pair).replace('_', '/')} ${p.direction === 'up' ? '▲' : '▼'}`);
+  const subjList = label.slice(0, 3).join(', ') + (n > 3 ? ` +${n - 3}` : '');
+  const subject = `⚡ ${n} Inverted Flow BoS alert${n > 1 ? 's' : ''} — ${subjList}`;
+
+  return {
+    subject,
+    html: baseLayout(`
+      <h2>Break of Structure — aligned pairs</h2>
+      <p class="sub">${_fmtEat(data.asOfUtc)} · 15M BoS in the trend direction</p>
+      ${rows}
+      <p style="text-align:center;margin:24px 0"><a class="cta" href="https://nervafx.com/inverted-flow?view=compare">Open Inverted Flow →</a></p>
+      <p class="sm" style="text-align:center">Each pair's currency-strength lean and its M5 candle structure (EMA20 vs EMA50) agree, and the latest closed 15M candle broke the prior 8-candle range in that direction. Relative-movement research — not a trade recommendation. Apply your own risk management.</p>
+    `),
+  };
+}
+
 module.exports = {
   sendEmail,
   sendBulk,
   baseLayout,
+  bosAlertEmail,
   confirmationEmail,
   welcomeEmail,
   upgradePromptEmail,
