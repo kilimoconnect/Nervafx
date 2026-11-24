@@ -296,6 +296,7 @@
       var top='<div class="top"><span class="ccy">'+p.currency+'</span><span class="rk">#'+(order[p.currency]||'–')+'</span>';
       if(p.finalDir)top+='<span class="dir '+(p.finalDir==='up'?'up':'dn')+'">'+(p.finalDir==='up'?'▲ up':'▼ down')+(p.lastConfirmMs?' · '+durStr(d.asOfUtc? (Date.parse(d.asOfUtc)-p.lastConfirmMs):null):'')+'</span>';
       top+='<span class="pp '+(pp>=0?'up':'dn')+'">'+(pp==null?'—':(pp>=0?'+':'')+pp.toFixed(3)+'pp')+'</span>';
+      if(p.bosDir&&p.bosDir===p.finalDir)top+='<span class="bos '+(p.bosDir==='up'?'up':'dn')+'" title="15M break of structure in the trend direction — latest closed M15 closed '+(p.bosDir==='up'?'above the prior 8-candle high':'below the prior 8-candle low')+'">⚡ BoS '+(p.bosDir==='up'?'▲':'▼')+'</span>';
       if(bad[p.currency])top+='<span class="xflag" title="Renko direction contradicts strength sign — pairs using it are hidden">⚠ excluded</span>';
       top+='</div>';
       card.innerHTML=top;
@@ -335,6 +336,7 @@
     (panels||[]).forEach(function(p){ if(p.available&&p.lastPp!=null){strength[p.currency]=p.lastPp;n++;} });
     if(n<2) return null;
     var structures=(S.data&&S.data.structures)||{};
+    var bosMap=(S.data&&S.data.bos)||{};
     var bad=contradictSet(panels), badList=Object.keys(bad);
     var rows=[], nHidden=0, nSameSide=0;
     PAIRS.forEach(function(pair){
@@ -365,7 +367,7 @@
       else if(r.struct==='mixed'){ al='<td class="al mix">≈ mixed</td>'; }
       else { var cu=r.struct==='up', ok=(cu===r.leanUp); al='<td class="al '+(ok?'ok':'no')+'">'+(cu?'▲':'▼')+' '+(ok?'✓ aligned':'✗ diverging')+'</td>'; }
       h+='<tr data-pair="'+r.pair+'"><td class="num">'+(i+1)+'</td>'
-        +'<td class="pair">'+r.pair.replace('_','/')+'</td>'
+        +'<td class="pair">'+r.pair.replace('_','/')+((bosMap[r.pair]&&bosMap[r.pair]===(r.leanUp?'up':'down'))?(' <span class="bos '+(r.leanUp?'up':'dn')+'" title="15M break of structure in the lean direction — latest closed M15 closed '+(r.leanUp?'above the prior 8-candle high':'below the prior 8-candle low')+'">⚡ BoS '+(r.leanUp?'▲':'▼')+'</span>'):'')+'</td>'
         +'<td class="s">'+r.strong+'</td><td class="w">'+r.weak+'</td>'
         +'<td class="num">'+r.spread.toFixed(3)+'</td>'
         +'<td class="lean '+(r.leanUp?'up':'dn')+'">'+(r.leanUp?'▲ up':'▼ down')+'</td>'

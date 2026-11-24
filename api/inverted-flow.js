@@ -54,6 +54,37 @@ function structureDir(candles) {
   return 'mixed';
 }
 
+// 15M break of structure: the most recent CLOSED M15 candle closes beyond the range of the 8 M15
+// candles before it. up (buy) = close > max(high of prev 8); down (sell) = close < min(low of prev 8).
+// Returns 'up' | 'down' | null (no break / insufficient data). Caller gates on trend direction.
+function bosDirCandles(candles) {
+  if (!candles || candles.length < 9) return null;
+  const sorted = candles.slice().sort((a, b) => ((a.openMs != null ? a.openMs : Date.parse(a.time)) - (b.openMs != null ? b.openMs : Date.parse(b.time))));
+  const n = sorted.length, last = sorted[n - 1], prev8 = sorted.slice(n - 9, n - 1);
+  if (prev8.length < 8) return null;
+  const close = +last.close;
+  if (!isFinite(close)) return null;
+  const hi = Math.max(...prev8.map((c) => +c.high)), lo = Math.min(...prev8.map((c) => +c.low));
+  if (!isFinite(hi) || !isFinite(lo)) return null;
+  if (close > hi) return 'up';
+  if (close < lo) return 'down';
+  return null;
+}
+
+// Same break-of-structure idea on a currency index line (one value per M15 basket snapshot, no OHLC):
+// the latest value breaks above/below the range of the previous 8 snapshot values.
+function bosDirIndex(observations) {
+  if (!observations || observations.length < 9) return null;
+  const n = observations.length, v = +observations[n - 1].value, prev8 = observations.slice(n - 9, n - 1);
+  if (prev8.length < 8 || !isFinite(v)) return null;
+  const vals = prev8.map((o) => +o.value).filter((x) => isFinite(x));
+  if (vals.length < 8) return null;
+  const hi = Math.max(...vals), lo = Math.min(...vals);
+  if (v > hi) return 'up';
+  if (v < lo) return 'down';
+  return null;
+}
+
 // Default close window per resolution (bounded for the serverless budget; ≈1k observations each).
 const WINDOW_DAYS = { M5: { def: 3, cap: 10 }, M15: { def: 10, cap: 30 }, H1: { def: 45, cap: 120 } };
 // Index history window (M15 basket snapshots) — a rolling multi-day window like the pair charts.
@@ -110,6 +141,7 @@ function runIndexFlow(built, ccy, baselineMs, cutoffMs, step) {
   r.baselineValue = io.baselineValue;
   r.lastIndexValue = io.observations[io.observations.length - 1].raw;
   r.lastPp = io.observations[io.observations.length - 1].value;
+  r.bosDir = bosDirIndex(io.observations);
   return r;
 }
 
@@ -145,8 +177,8 @@ module.exports = async function handler(req, res) {
       // current candlestick structure per pair from recent M5 closes up to the selected cutoff
       // (EMA20 vs EMA50 on M5 — the same resolution as the pair Renko charts, independent of the index)
       const m5by = await loadM5Parallel(sb, PAIRS, { fromIso: iso(cutoffMs - 2 * DAY_MS), toIso: iso(cutoffMs) }, 8);
-      const structures = {};
-      PAIRS.forEach((p) => { const d = structureDir(m5by[p]); if (d) structures[p] = d; });
+      const structures = {}, bos = {};
+      PAIRS.forEach((p) => { const d = structureDir(m5by[p]); if (d) structures[p] = d; const bd = bosDirCandles(day.byPair[p]); if (bd) bos[p] = bd; });
       const step = Math.min(5, Math.max(0.001, parseFloat(q.step) || DEFAULT_INDEX_STEP_PP));
       const panels = CURRENCIES.map((ccy) => {
         const r = runIndexFlow(built, ccy, baselineMs, cutoffMs, step);
@@ -154,6 +186,7 @@ module.exports = async function handler(req, res) {
           currency: ccy, available: !!r.ok, reason: r.ok ? null : r.reason,
           lastPp: r.ok ? r.lastPp : null, lastIndexValue: r.ok ? r.lastIndexValue : null,
           finalDir: r.ok ? r.finalDir : null, lastConfirmMs: r.ok && r.events.length ? r.events[r.events.length - 1].ms : null,
+          bosDir: r.ok ? (r.bosDir || null) : null,
           flow: r.ok ? r : null,
         };
       });
@@ -163,8 +196,8 @@ module.exports = async function handler(req, res) {
         ok: true, version: FLOW_VERSION, mode, view: 'compare',
         asOfUtc: iso(cutoffMs), baselineMs, baselineUtc: iso(baselineMs), sinceMs: day.sinceMs, sinceUtc: iso(day.sinceMs), daily: day.daily,
         meta: { kind: 'index', step, unit: 'constituent basket snapshots', valueLabel: '% from baseline (pp)', resolution: 'M15' },
-        coverage: coverageForIndex(built), ranking: ranked, panels, structures,
-        disclaimer: 'Zero-sum 1/8 currency indices on M15 basket snapshots over the loaded window (reconciles with Evolution), UNVALIDATED. Pair "candle structure" (up = EMA20 > EMA50; down = EMA20 < EMA50; else mixed) on that pair\'s M5 closes up to the selected time, independent of the index. Each panel keeps its own activity axis. No orders.',
+        coverage: coverageForIndex(built), ranking: ranked, panels, structures, bos,
+        disclaimer: 'Zero-sum 1/8 currency indices on M15 basket snapshots over the loaded window (reconciles with Evolution), UNVALIDATED. Pair "candle structure" (up = EMA20 > EMA50; down = EMA20 < EMA50; else mixed) on that pair\'s M5 closes up to the selected time, independent of the index. The "BoS" badge flags a 15M break of structure in the trend direction (latest closed M15 closed beyond the prior 8-candle range); pairs use their own M15 OHLC, currencies the index-value series. Each panel keeps its own activity axis. No orders.',
       });
     }
 
