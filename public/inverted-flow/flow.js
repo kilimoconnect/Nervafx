@@ -90,7 +90,7 @@
   if (S.instrument.indexOf('IDX:')===0) S.kind='index';
 
   var host=document.getElementById('host');
-  document.getElementById('ver').textContent='flow';
+  var _ver=document.getElementById('ver'); if(_ver)_ver.textContent='flow';
   var histDt=document.getElementById('histDt'); histDt.value = S.asOf?eatNaive(S.asOf):eatNaive(Date.now());
 
   // ---------- navigation ----------
@@ -122,7 +122,7 @@
     host.innerHTML='<div class="banner">Loading…</div>';
     fetch(apiUrl()).then(function(r){return r.json();}).then(function(j){
       S.data=j; S.cursor=null;
-      if(j.version)document.getElementById('ver').textContent=j.version;
+      if(j.version){var _v=document.getElementById('ver'); if(_v)_v.textContent=j.version;}
       render();
     }).catch(function(e){ host.innerHTML='<div class="banner warn">Failed to load: '+e+'</div>'; });
   }
@@ -357,8 +357,12 @@
     var nNon=rows.length-shown.length;
     var maxSp=(shown[0]&&shown[0].spread)||rows[0].spread||1;
     var wrap=document.createElement('div');wrap.className='pairrank';
+    var notes=[];
+    if(nHidden) notes.push('<b class="hid">'+nHidden+' pair'+(nHidden===1?'':'s')+' hidden</b> — currency whose Renko direction contradicts its strength ('+badList.join(', ')+'): net-strong but pointing down, or net-weak but pointing up.');
+    if(nSameSide) notes.push('<b class="hid">'+nSameSide+' more hidden</b> — both currencies on the same side of the baseline (two strong or two weak); a pair needs one genuinely strong (+pp) and one genuinely weak (−pp).');
+    if(alignedOnly&&nNon) notes.push('<b class="hid">'+nNon+' more hidden</b> — <b>Aligned only</b> is on; diverging and mixed pairs are filtered out. Untick to show all.');
     var h='<h3>Pairs ranked by currency strength<label class="flt"><input type="checkbox" id="alignedOnly"'+(alignedOnly?' checked':'')+'> Aligned only</label></h3>'
-      +'<div class="sub">From each currency’s Renko index over the loaded window: every pair pits its <b class="s" style="color:var(--up)">strong</b> currency against its <b class="w" style="color:var(--dn)">weak</b> one. <b>Spread</b> = strong − weak (pp); <b>Lean</b> = the way the gap points (strong base → pair up). <b>Candle align</b> compares the Renko lean with the pair’s own <b>M5</b> structure up to the selected time — <b>up</b> when EMA20 &gt; EMA50, <b>down</b> when EMA20 &lt; EMA50, else <b>mixed</b>; <b class="al ok">aligned</b> when the clean up/down matches the lean'+(nStruct?(' ('+nAligned+'/'+nStruct+' aligned now)'):'')+'. Relative strength, research only — no signal, no orders.'+(nHidden?('<br><b class="hid">'+nHidden+' pair'+(nHidden===1?'':'s')+' hidden</b> — currency whose Renko direction contradicts its strength ('+badList.join(', ')+'): net-strong but pointing down, or net-weak but pointing up.'):'')+(nSameSide?('<br><b class="hid">'+nSameSide+' more hidden</b> — both currencies on the same side of the baseline (two strong or two weak); a pair needs one genuinely strong (+pp) and one genuinely weak (−pp).'):'')+(alignedOnly&&nNon?('<br><b class="hid">'+nNon+' more hidden</b> — <b>Aligned only</b> is on; diverging and mixed pairs are filtered out. Untick to show all.'):'')+'</div>'
+      +(notes.length?('<div class="sub">'+notes.join('<br>')+'</div>'):'')
       +'<table class="ptbl"><thead><tr><th>#</th><th>Pair</th><th>Strong</th><th>Weak</th><th class="num">Spread&nbsp;(pp)</th><th>Lean</th><th>Candle&nbsp;align</th><th style="width:20%">Strength&nbsp;gap</th></tr></thead><tbody>';
     if(!shown.length){ h+='<tr><td colspan="8" class="noalign">No aligned pairs at this time.</td></tr>'; }
     shown.forEach(function(r,i){
@@ -431,8 +435,8 @@
       +'<span class="k">wicks = observed range</span>'
       +'<span class="k">lower panel = activity ('+wUnit+')</span>'
       +'<span class="k">each brick = one '+((d&&d.meta&&d.meta.step)||'')+(d&&d.meta&&d.meta.kind==='index'?'pp':'')+' step</span>';
-    // footer
-    document.getElementById('foot').innerHTML='The <b>Inverted Flow Chart</b> plots one <b>brick</b> per confirmed '+((d&&d.meta&&d.meta.step)||'')+' step (body = the step, wicks = the observed range); the <b>lower panel</b> is feed activity — the number of eligible observations each brick took. <b>Scroll/drag to pan, wheel to zoom</b>, like any trading chart. NervaFX stores completed midpoint candles only, so pairs/indices run in <b>close-only mode</b> (activity = received closes / basket snapshots — NOT ticks, traded volume, or quote count) and no intrabar path is claimed. Use <b>● Live</b> for the latest completed candle or the date picker to replay past data. Research / relative-movement only — <b>no orders, no signal, no profitability claim</b>. Times in EAT (UTC+3).';
+    // footer (intentionally empty)
+    var ft=document.getElementById('foot'); if(ft) ft.innerHTML='';
   }
 
   // ========================= replay =========================
