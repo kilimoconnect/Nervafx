@@ -118,14 +118,23 @@
     if(S.date)u+='&date='+encodeURIComponent(S.date);
     return u;
   }
-  function load(){
-    host.innerHTML='<div class="banner">Loading…</div>';
+  function load(quiet){
+    if(!quiet) host.innerHTML='<div class="banner">Loading…</div>';
     fetch(apiUrl()).then(function(r){return r.json();}).then(function(j){
       S.data=j; S.cursor=null;
       if(j.version){var _v=document.getElementById('ver'); if(_v)_v.textContent=j.version;}
       render();
-    }).catch(function(e){ host.innerHTML='<div class="banner warn">Failed to load: '+e+'</div>'; });
+    }).catch(function(e){ if(!quiet) host.innerHTML='<div class="banner warn">Failed to load: '+e+'</div>'; });
   }
+  // Background auto-refresh: silently re-pull the current view every 5 min, Live only.
+  // Skips historical replay (asOf set), active replay playback, and hidden tabs.
+  var AUTO_REFRESH_MS=300000;
+  setInterval(function(){
+    if(S.asOf!=null) return;      // viewing a past date — leave it be
+    if(S.play) return;            // mid replay-playback — don't disrupt
+    if(document.hidden) return;   // tab not visible — skip this tick
+    load(true);
+  }, AUTO_REFRESH_MS);
 
   // ---------- compute (client engine from observations up to cursor) ----------
   function computeFlow(flow,meta){
