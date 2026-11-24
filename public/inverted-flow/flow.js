@@ -123,6 +123,8 @@
     fetch(apiUrl()).then(function(r){return r.json();}).then(function(j){
       S.data=j; S.cursor=null;
       if(j.version){var _v=document.getElementById('ver'); if(_v)_v.textContent=j.version;}
+      // Live view: advance the Replay (EAT) time field to the data's latest timestamp (else now)
+      if(S.asOf==null){ var _dt=document.getElementById('histDt'); if(_dt){ var tms=j.asOfUtc?Date.parse(j.asOfUtc):Date.now(); _dt.value=eatNaive(isFinite(tms)?tms:Date.now()); } }
       render();
     }).catch(function(e){ if(!quiet) host.innerHTML='<div class="banner warn">Failed to load: '+e+'</div>'; });
   }
