@@ -462,16 +462,30 @@
   // candles (e.g. one at 12:15 and the next at 12:30) — i.e. the pair is moving now. Ranked by the
   // current consecutive-candle run length, then total step bars in it (momentum). Research only.
   function eatHM(ms){ var d=new Date(ms+EAT); return pad(d.getUTCHours())+':'+pad(d.getUTCMinutes()); }
+  // The Renko-trend cell = most recent SHIFT OF CONTROL (a Renko reversal): up-reversal = Sellers→Buyers
+  // (Buy), down-reversal = Buyers→Sellers (Sell), with how long ago it flipped. No reversal = "held".
+  function movingTrendCell(r){
+    if(r.shiftDir==='up'||r.shiftDir==='down'){
+      var up=r.shiftDir==='up';
+      var when = (r.barsSince===0||r.barsSince==null) ? 'just now' : (r.barsSince+' bar'+(r.barsSince===1?'':'s')+' ago');
+      var trans = up ? 'Sellers→Buyers' : 'Buyers→Sellers';
+      var ttl = r.shiftMs ? ('Control shifted '+eatHM(r.shiftMs)+' EAT ('+when+')') : '';
+      return '<td class="trend '+(up?'up':'dn')+'" title="'+esc(ttl)+'">'+(up?'▲ BUY':'▼ SELL')
+        +'<span class="shift">'+trans+' · '+when+'</span></td>';
+    }
+    var side = r.dir==='up'?'buyers':(r.dir==='down'?'sellers':null);
+    return '<td class="trend held" title="No Renko reversal in the loaded window — control has not changed hands">held · no shift'+(side?'<span class="shift">('+side+' in control)</span>':'')+'</td>';
+  }
   function renderMoving(){
     var d=S.data; host.innerHTML='';
     if(!d||!d.ok){ host.innerHTML='<div class="banner warn">'+esc((d&&d.reason)||'Moving-pairs scan unavailable')+'</div>'; return; }
     var all=d.rows||[];
     var trend=(S.movingTrend==='up'||S.movingTrend==='down')?S.movingTrend:'all';
-    var nBuy=0,nSell=0; all.forEach(function(r){ if(r.dir==='up')nBuy++; else if(r.dir==='down')nSell++; });
-    var rows = trend==='all' ? all : all.filter(function(r){ return r.dir===trend; });
+    var nBuy=0,nSell=0,nHeld=0; all.forEach(function(r){ if(r.shiftDir==='up')nBuy++; else if(r.shiftDir==='down')nSell++; else nHeld++; });
+    var rows = trend==='all' ? all : all.filter(function(r){ return r.shiftDir===trend; });
     var wrap=document.createElement('div'); wrap.className='pairrank';
     var asof=d.asOfUtc?eatStamp(Date.parse(d.asOfUtc)):'—';
-    // Renko-trend filter (Buy = up-trend, Sell = down-trend) — mirrors the compare view's filter design.
+    // Filter by the direction of the last control shift (Buy = sellers→buyers, Sell = buyers→sellers).
     var filt='<label class="flt" style="margin-left:auto">Renko trend&nbsp;'
       +'<select id="movingTrendSel">'
       +'<option value="all"'+(trend==='all'?' selected':'')+'>All ('+all.length+')</option>'
@@ -479,18 +493,17 @@
       +'<option value="down"'+(trend==='down'?' selected':'')+'>▼ Sell ('+nSell+')</option>'
       +'</select></label>';
     var h='<h3>Moving pairs · two consecutive 15M Renko bars'+filt+'</h3>'
-      +'<div class="sub">Pairs whose M15 Renko confirmed a bar on each of the two most recent consecutive 15-minute candles (≥ one step of movement in two back-to-back 15M windows). <b>Renko trend</b> is the pair\'s M15 Renko direction read as a <b class="hid" style="color:var(--up)">Buy</b> (▲ up) or <b class="hid" style="color:var(--dn)">Sell</b> (▼ down) bias — filter with the control above. Ranked by the current consecutive-candle run, then total step bars. As of '+esc(asof)+'. Research only — no orders.</div>';
+      +'<div class="sub">Pairs whose M15 Renko confirmed a bar on each of the two most recent consecutive 15-minute candles (≥ one step of movement in two back-to-back 15M windows). <b>Renko trend</b> = the most recent <b>shift of control</b> (a Renko reversal): <b class="hid" style="color:var(--up)">▲ Sellers→Buyers</b> is a Buy, <b class="hid" style="color:var(--dn)">▼ Buyers→Sellers</b> is a Sell, with how long ago it flipped. Pairs with no reversal in the window are <b>held</b> (control unchanged)'+(nHeld?' — '+nHeld+' now, shown under All':'')+'. Filter uses the shift direction. Ranked by the current consecutive-candle run, then total step bars. As of '+esc(asof)+'. Research only — no orders.</div>';
     if(!rows.length){
       h+='<div class="sub" style="padding:14px 4px;text-align:center;font-style:italic">'
-        +(all.length?('No '+(trend==='up'?'Buy':'Sell')+' pairs are moving on two consecutive 15M bars right now.'):'No pairs are moving on two consecutive 15M bars right now.')+'</div>';
+        +(all.length?('No '+(trend==='up'?'Buy (sellers→buyers)':'Sell (buyers→sellers)')+' control shifts among the moving pairs right now.'):'No pairs are moving on two consecutive 15M bars right now.')+'</div>';
     } else {
       var maxRun=rows[0].runEvents||1;
-      h+='<table class="ptbl"><thead><tr><th>#</th><th>Pair</th><th title="M15 Renko trend read as a Buy/Sell bias">Renko trend</th><th class="num" title="Length of the current run of consecutive 15-minute bars">Run (15M bars)</th><th class="num" title="Total step bars confirmed within the run">Steps</th><th title="Confirm time of the latest bar (EAT)">Latest bar</th><th title="Confirm time of the bar before it (EAT)">Prev bar</th><th style="width:18%">Momentum</th></tr></thead><tbody>';
+      h+='<table class="ptbl"><thead><tr><th>#</th><th>Pair</th><th title="Most recent shift of control — a Renko reversal — and how long ago it flipped">Renko trend (control shift)</th><th class="num" title="Length of the current run of consecutive 15-minute bars">Run (15M bars)</th><th class="num" title="Total step bars confirmed within the run">Steps</th><th title="Confirm time of the latest bar (EAT)">Latest bar</th><th title="Confirm time of the bar before it (EAT)">Prev bar</th><th style="width:16%">Momentum</th></tr></thead><tbody>';
       rows.forEach(function(r,i){
-        var up=r.dir==='up';
         h+='<tr data-pair="'+esc(r.pair)+'"><td class="num">'+(i+1)+'</td>'
           +'<td class="pair">'+esc(r.label||r.pair.replace('_','/'))+'</td>'
-          +'<td class="trend '+(up?'up':'dn')+'">'+(r.dir?(up?'▲ BUY':'▼ SELL'):'—')+'</td>'
+          +movingTrendCell(r)
           +'<td class="num">'+r.runEvents+'</td>'
           +'<td class="num">'+r.runSteps+'</td>'
           +'<td>'+(r.lastMs?eatHM(r.lastMs):'—')+'</td>'

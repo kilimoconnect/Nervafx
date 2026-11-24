@@ -231,9 +231,19 @@ async function computeMovingData(sb, asOfMs) {
       else break;
     }
     const lastLv = ev[ev.length - 1].levels;
+    // Most recent SHIFT OF CONTROL = the latest Renko reversal in the window. An up-reversal means
+    // sellers lost control to buyers (a Buy); a down-reversal means buyers lost control to sellers
+    // (a Sell). barsSince = how many confirmed bars have formed since that flip (0 = just now). A pair
+    // with no reversal in the window has "held" — control never changed hands (shiftDir = null).
+    let shiftDir = null, shiftMs = null, barsSince = null;
+    for (let k = ev.length - 1; k >= 0; k--) {
+      const rl = (ev[k].levels || []).find((l) => l.kind === 'reversal');
+      if (rl) { shiftDir = rl.dir; shiftMs = ev[k].ms; barsSince = (ev.length - 1) - k; break; }
+    }
     rows.push({
       pair, label: inst.label,
       dir: r.finalDir || (lastLv && lastLv.length ? lastLv[lastLv.length - 1].dir : null),
+      shiftDir, shiftMs, barsSince,
       runEvents, runSteps, lastMs: e1, prevMs: e0,
       stepPips: Math.round(inst.step / inst.pip * 10) / 10, precision: inst.precision,
     });
