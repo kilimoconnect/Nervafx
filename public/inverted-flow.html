@@ -6,6 +6,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="icon" type="image/png" href="/nervafx-icon.png">
 <link rel="stylesheet" href="/shared/styles.css">
+<script src="/auth-guard.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <style>
   /* ---- Dark theme (base tokens come from /shared/styles.css) + dark chart palette ---- */
@@ -60,6 +61,21 @@
   @media(max-width:1040px){.cmpgrid{grid-template-columns:repeat(2,1fr)}}
   @media(max-width:560px){.cmpgrid{grid-template-columns:1fr}}
   .cmpcard svg{height:96px}
+  /* ---- account menu ---- */
+  .acct{position:relative}
+  #acctBtn{display:inline-flex;align-items:center;gap:6px}
+  .acctAvatar{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:var(--accent,#3b82f6);color:#fff;font-size:10px;font-weight:800;text-transform:uppercase}
+  #acctEmail{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .acctCaret{font-size:9px;opacity:.7}
+  .acctMenu{position:absolute;right:0;top:calc(100% + 6px);min-width:210px;background:var(--flow-bg,#0d1526);border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.45);padding:6px;z-index:50}
+  .acctMenu[hidden]{display:none}
+  .acctHead{padding:8px 10px 10px;border-bottom:1px solid var(--border);margin-bottom:6px}
+  .acctHeadEmail{font-size:12px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .acctHeadPlan{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-top:3px}
+  .acctMenu a,.acctMenu button{display:block;width:100%;text-align:left;padding:8px 10px;border-radius:7px;font-size:12.5px;font-weight:600;color:var(--text);background:none;border:0;cursor:pointer;text-decoration:none}
+  .acctMenu a:hover,.acctMenu button:hover{background:rgba(59,130,246,.12)}
+  .acctMenu button.danger{color:var(--dn,#f6465d)}
+  .acctMenu button.danger:hover{background:rgba(246,70,93,.12)}
   .cmpHead{margin:22px 0 10px;padding-top:16px;border-top:1px solid var(--border)}
   .cmpHead .cmpTitle{font-size:18px;font-weight:800;margin:0 0 4px;color:var(--text)}
   .cmpHead .cmpMeta{font-size:11.5px;color:var(--text-muted);line-height:1.5}
@@ -118,6 +134,16 @@
     <input type="datetime-local" id="histDt" class="btn" step="900">
     <button class="btn sm" id="histGo">Go</button>
     <button class="btn sm" id="histLive">● Live</button>
+    <div class="acct" id="acct" style="margin-left:8px">
+      <button class="btn sm" id="acctBtn" aria-haspopup="true" aria-expanded="false">
+        <span class="acctAvatar" id="acctAvatar">?</span><span id="acctEmail">Account</span><span class="acctCaret">▾</span>
+      </button>
+      <div class="acctMenu" id="acctMenu" hidden role="menu">
+        <div class="acctHead"><div class="acctHeadEmail" id="acctMenuEmail">—</div><div class="acctHeadPlan" id="acctMenuPlan"></div></div>
+        <a href="/profile" role="menuitem">⚙ Account settings</a>
+        <button type="button" id="signoutBtn" role="menuitem" class="danger">⎋ Sign out</button>
+      </div>
+    </div>
   </header>
 
   <div class="toolbar">
@@ -171,4 +197,29 @@
 </div>
 
 <script src="/inverted-flow/flow.js"></script>
+<script>
+  /* ---- account menu: identity, dropdown, sign out ---- */
+  (function(){
+    function decodeToken(){ try{ var t=localStorage.getItem('nfx_token'); if(!t) return null; return JSON.parse(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))); }catch(e){ return null; } }
+    var pay=decodeToken();
+    var email=(pay&&(pay.email||pay.user_metadata&&pay.user_metadata.email))||localStorage.getItem('nfx_email')||'Account';
+    var plan=(localStorage.getItem('nfx_plan')||'').trim();
+    var elEmail=document.getElementById('acctEmail'), elAvatar=document.getElementById('acctAvatar'),
+        elMenuEmail=document.getElementById('acctMenuEmail'), elMenuPlan=document.getElementById('acctMenuPlan');
+    if(elEmail) elEmail.textContent=email;
+    if(elAvatar) elAvatar.textContent=(email&&email!=='Account'?email[0]:'?');
+    if(elMenuEmail) elMenuEmail.textContent=email;
+    if(elMenuPlan) elMenuPlan.textContent=plan?(plan+' plan'):'';
+    var acct=document.getElementById('acct'), btn=document.getElementById('acctBtn'), menu=document.getElementById('acctMenu');
+    function setOpen(open){ if(!menu||!btn) return; menu.hidden=!open; btn.setAttribute('aria-expanded', open?'true':'false'); }
+    if(btn) btn.addEventListener('click', function(e){ e.stopPropagation(); setOpen(menu.hidden); });
+    document.addEventListener('click', function(e){ if(acct&&!acct.contains(e.target)) setOpen(false); });
+    document.addEventListener('keydown', function(e){ if(e.key==='Escape') setOpen(false); });
+    var out=document.getElementById('signoutBtn');
+    if(out) out.addEventListener('click', function(){
+      ['nfx_token','nfx_refresh_token','nfx_user','nfx_plan','nfx_plan_uid','nfx_email','nfx_needs_setup'].forEach(function(k){ try{ localStorage.removeItem(k); }catch(_){} });
+      location.replace('/login');
+    });
+  })();
+</script>
 </body></html>

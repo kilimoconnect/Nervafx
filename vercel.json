@@ -2,25 +2,19 @@
   "version": 2,
   "crons": [
     { "path": "/api/cron-backtest-sync", "schedule": "*/15 * * * *" },
-    { "path": "/api/run-pipeline?force=1", "schedule": "3 * * * *" },
-    { "path": "/api/cron-signals", "schedule": "6,21,36,51 * * * *" },
-    { "path": "/api/cron-breakout", "schedule": "9,24,39,54 * * * *" }
+    { "path": "/api/run-pipeline?force=1", "schedule": "3 * * * *" }
   ],
   "functions": {
     "api/news-parse.js":          { "maxDuration": 30 },
     "api/run-pipeline.js":        { "maxDuration": 120 },
     "api/cron-backtest-sync.js":  { "maxDuration": 300 },
-    "api/cron-signals.js":        { "maxDuration": 300 },
-    "api/backfill-signals.js":    { "maxDuration": 300 },
     "api/backfill-m5.js":         { "maxDuration": 300 },
-    "api/cron-breakout.js":       { "maxDuration": 300 },
-    "api/backfill-breakout.js":   { "maxDuration": 300 },
     "api/inverted-flow.js":       { "maxDuration": 120 },
     "api/*-history.js":           { "maxDuration": 300 }
   },
   "rewrites": [
-    { "source": "/",       "destination": "/login.html" },
-    { "source": "/home",   "destination": "/login.html" },
+    { "source": "/",       "destination": "/inverted-flow.html" },
+    { "source": "/home",   "destination": "/inverted-flow.html" },
     { "source": "/app",    "destination": "/inverted-flow.html" },
     { "source": "/workspace", "destination": "/inverted-flow.html" },
     { "source": "/inverted-flow", "destination": "/inverted-flow.html" },
