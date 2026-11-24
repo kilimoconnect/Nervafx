@@ -220,10 +220,16 @@ module.exports = async function handler(req, res) {
       const days = Math.min(w.cap, Math.max(1, parseFloat(q.days) || w.def));
       const sinceMs = parseMs(q.since, asOfMs - days * DAY_MS);
       const step = Math.max(inst.pip, parseFloat(q.step) || inst.step);   // step ≥ one pip
-      const candles = await loadTf(sb, inst.id, resolution, { fromIso: iso(sinceMs), toIso: iso(asOfMs) });
+      const candles = await loadTf(sb, inst.id, resolution, { fromIso: iso(sinceMs), toIso: iso(asOfMs), withVolume: true });
       const r = runPairFlow(candles, resolution, step, inst.precision, asOfMs);
       const range = await instrumentRange(sb, inst.id, resolution);
       const cov = coverageForCandles(candles, RES_MS[resolution], resolution);
+      // Real OHLC bars for the optional "Candlesticks" chart view. Causally consistent with the
+      // Renko blocks: only candles whose close time is at/before the cutoff (no look-ahead).
+      const resMs = RES_MS[resolution];
+      const ohlc = candles
+        .filter((c) => (c.openMs + resMs) <= asOfMs)
+        .map((c) => ({ t: c.openMs, o: c.open, h: c.high, l: c.low, c: c.close, v: c.volume == null ? 0 : c.volume }));
       return res.json({
         ok: true, version: FLOW_VERSION, mode: 'close', view: 'single', instrument: inst.id, available: !!r.ok, reason: r.ok ? null : r.reason,
         asOfUtc: iso(asOfMs), sinceMs, sinceUtc: iso(sinceMs),
@@ -234,6 +240,7 @@ module.exports = async function handler(req, res) {
         },
         coverage: { window: cov, instrument: { earliestMs: range.earliestMs, latestMs: range.latestMs, resolution } },
         flow: r.ok ? r : null,
+        candles: ohlc,
         disclaimer: 'Close-only: width = received completed ' + resolution + ' closes (feed activity), NOT ticks, traded volume, or quote count. No intrabar path/reversal time is claimed. Midpoint OHLC from OANDA. No orders.',
       });
     }

@@ -82,6 +82,7 @@
     asOf: qp('asOf') ? +qp('asOf') : null,
     date: qp('date') || null,
     showReversals: false,
+    chartType: (function(){ var q=qp('chart'); if(q==='candles'||q==='renko')return q; try{var s=localStorage.getItem('nfx_flow_chart'); if(s==='candles')return 'candles';}catch(e){} return 'renko'; })(),
     alignedOnly: qp('aligned')==='0' ? false : true,
     zoom: 1,
     cursor: null,            // replay cursor (null = full)
@@ -218,6 +219,7 @@
     if(!flow||!flow.ok){ destroyLW(); host.innerHTML='<div class="banner warn">'+esc((d.reason||(flow&&flow.reason)||'No data for this configuration'))+'</div>'; return; }
     var prec=meta.precision!=null?meta.precision:(meta.kind==='index'?3:5);
     var built=ensureChart();
+    if(S.chartType==='candles'){ renderCandleMode(d,meta,prec,built); return; }
     var candles=[],vols=[],markers=[],byTime={},lastT=-Infinity;
     function pushCandle(o,c,hi,lo,ms,act,forming,ev){
       var t=Math.floor(ms/1000); if(t<=lastT)t=lastT+1; lastT=t;
@@ -237,12 +239,42 @@
     LW.candle.setData(candles);
     LW.vol.setData(vols);
     LW.candle.setMarkers(markers);
-    var key=S.view+'|'+S.instrument+'|'+S.resolution+'|'+S.asOf+'|'+S.step;
+    var key=S.chartType+'|'+S.view+'|'+S.instrument+'|'+S.resolution+'|'+S.asOf+'|'+S.step;
     if(built||key!==LWkey){ LW.chart.timeScale().fitContent(); LWkey=key; }
     var cap=document.getElementById('flowcap');
     if(cap) cap.textContent = (meta.kind==='index')
       ? ('Each brick = one '+meta.step+'pp step of the index · wicks = observed snapshot range · lower panel = basket-snapshot activity. Drag to pan · wheel to zoom.')
       : ('Each brick = one '+meta.step+' ('+meta.stepPips+'-pip) step · wicks = observed '+meta.resolution+'-close range · lower panel = feed activity. Drag to pan · wheel to zoom.');
+    updateLegend(null);
+  }
+  // Normal candlestick view. Pairs: real OHLC (+volume) from the API. Indices: no OHLC exists, so
+  // close-to-close bodies of the index value series (labelled). Causal — API already cut to `asOf`.
+  function renderCandleMode(d,meta,prec,built){
+    var obs=(d.flow&&d.flow.observations)||[];
+    var candles=[],vols=[],byTime={},lastT=-Infinity,hasVol=false;
+    function push(o,h,l,c,ms,vol){
+      var t=Math.floor(ms/1000); if(t<=lastT)t=lastT+1; lastT=t;
+      candles.push({time:t,open:o,high:Math.max(h,o,c),low:Math.min(l,o,c),close:c});
+      if(vol!=null){ vols.push({time:t,value:vol,color:c>=o?'rgba(22,199,132,.55)':'rgba(246,70,93,.55)'}); hasVol=true; }
+      byTime[t]={o:o,c:c,hi:h,lo:l,act:vol,forming:false,candle:true};
+    }
+    if(meta.kind==='pair'&&d.candles&&d.candles.length){
+      d.candles.forEach(function(c){ push(c.o,c.h,c.l,c.c,c.t,c.v); });
+    } else {
+      for(var i=0;i<obs.length;i++){ var c=obs[i].value, o=i>0?obs[i-1].value:obs[i].value; push(o,Math.max(o,c),Math.min(o,c),c,obs[i].ms,null); }
+    }
+    if(!candles.length){ host.innerHTML='<div class="banner warn">No candles for this configuration.</div>'; destroyLW(); return; }
+    LW.byTime=byTime;
+    LW.candle.applyOptions({priceFormat:{type:'price',precision:prec,minMove:Math.pow(10,-prec)}});
+    LW.candle.setData(candles);
+    LW.vol.setData(hasVol?vols:[]);
+    LW.candle.setMarkers([]);
+    var key=S.chartType+'|'+S.view+'|'+S.instrument+'|'+S.resolution+'|'+S.asOf+'|'+S.step;
+    if(built||key!==LWkey){ LW.chart.timeScale().fitContent(); LWkey=key; }
+    var cap=document.getElementById('flowcap');
+    if(cap) cap.textContent = (meta.kind==='index')
+      ? ('Candlesticks — each = one M15 basket snapshot (close-to-close of the index value; an index has no intrabar range). Drag to pan · wheel to zoom.')
+      : ('Candlesticks — real '+meta.resolution+' OHLC from OANDA · lower panel = volume. Drag to pan · wheel to zoom.');
     updateLegend(null);
   }
   function updateLegend(param){
@@ -251,6 +283,13 @@
     var info=null, t=param&&param.time;
     if(t!=null&&LW.byTime[t])info=LW.byTime[t];
     if(!info){var ks=Object.keys(LW.byTime);if(!ks.length){leg.innerHTML='';return;}info=LW.byTime[ks[ks.length-1]];}
+    if(info.candle){
+      var cu=info.c>=info.o;
+      leg.innerHTML='<b>'+esc(meta.label||S.instrument)+'</b> · <b class="'+(cu?'up':'dn')+'">'+(cu?'up':'down')+'</b>'
+        +'<br>O '+fmtVal(info.o,meta)+' · C '+fmtVal(info.c,meta)
+        +'<br>H '+fmtVal(info.hi,meta)+' · L '+fmtVal(info.lo,meta)+(info.act!=null?' · vol '+info.act:'');
+      return;
+    }
     var up=info.c>=info.o;
     var dir=info.forming?'<b>forming</b>':('<b class="'+(up?'up':'dn')+'">'+(up?'up':'down')+(info.ev&&info.ev.levels.length>1?' ×'+info.ev.levels.length:'')+(info.ev&&info.ev.levels.some(function(l){return l.kind==='reversal';})?' · reversal':'')+'</b>');
     var unit=meta.kind==='index'?'snaps':(meta.resolution+' closes');
@@ -460,7 +499,7 @@
   function eventConfirmIndices(flow){ var idx=[],cum=0; (flow.events||[]).forEach(function(ev){cum+=ev.activity;idx.push(cum);}); return idx; }
   function renderReplay(){
     var bar=document.getElementById('replaybar');
-    if(S.view==='compare'||!S.data||!S.data.flow||!S.data.flow.observations){bar.style.display='none';return;}
+    if(S.view==='compare'||S.chartType==='candles'||!S.data||!S.data.flow||!S.data.flow.observations){bar.style.display='none';return;}
     bar.style.display='flex';
     var total=S.data.flow.observations.length-1; var cur=S.cursor==null?total:S.cursor;
     document.getElementById('rpPos').textContent='observation '+cur+' / '+total+(S.cursor==null?(S.asOf?' (as-of)':' (live)'):'');
@@ -474,6 +513,7 @@
     renderHeader();
     // controls visibility
     document.getElementById('resCtl').style.display = (S.view==='single'&&S.kind==='pair')?'inline-flex':'none';
+    document.getElementById('chartSeg').style.display = (S.view==='single')?'inline-flex':'none';
     document.getElementById('stepIn').parentElement.style.display = (S.view==='sim')?'none':'inline-flex';
     if(S.view==='compare'){ destroyLW(); renderCompare(); document.getElementById('replaybar').style.display='none'; }
     else { renderSingle(); renderReplay(); }
@@ -491,7 +531,9 @@
     document.querySelectorAll('#kindSeg button').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-kind')===S.kind);});
     document.querySelectorAll('#viewSeg button').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-view')===S.view);});
     document.querySelectorAll('#resSeg button').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-res')===S.resolution);});
-    document.getElementById('revChk').checked=S.showReversals;
+    document.querySelectorAll('#chartSeg button').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-chart')===S.chartType);});
+    var rc=document.getElementById('revChk'); rc.checked=S.showReversals&&S.chartType!=='candles'; rc.disabled=(S.chartType==='candles');
+    rc.parentElement.style.opacity=(S.chartType==='candles')?'.4':'';
     // step field + unit
     var m=S.data&&S.data.meta;
     var stepIn=document.getElementById('stepIn'), unit=document.getElementById('stepUnit'), lbl=document.getElementById('stepLbl');
@@ -507,6 +549,7 @@
   document.getElementById('instSearch').oninput=function(){ buildInstruments(); };
   document.getElementById('stepIn').onchange=function(){ var v=parseFloat(this.value); if(isFinite(v)&&v>0){S.step=v;nav({step:v});} };
   document.getElementById('revChk').onchange=function(){ S.showReversals=this.checked; if(S.view==='single'||S.view==='sim')renderSingle(); };
+  document.querySelectorAll('#chartSeg button').forEach(function(b){b.onclick=function(){ var c=b.getAttribute('data-chart'); if(c===S.chartType)return; S.chartType=c; try{localStorage.setItem('nfx_flow_chart',c);}catch(e){} if(S.view==='single'){renderSingle();renderReplay();} syncControls(); };});
   function lwZoom(f){ if(!LW)return; var ts=LW.chart.timeScale(); var bs=(ts.options().barSpacing||6)*f; ts.applyOptions({barSpacing:Math.max(1,Math.min(80,bs))}); }
   document.getElementById('zoomIn').onclick=function(){ lwZoom(1.4); };
   document.getElementById('zoomOut').onclick=function(){ lwZoom(1/1.4); };
