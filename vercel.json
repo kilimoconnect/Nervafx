@@ -9,8 +9,7 @@
     "api/run-pipeline.js":        { "maxDuration": 120 },
     "api/cron-backtest-sync.js":  { "maxDuration": 300 },
     "api/backfill-m5.js":         { "maxDuration": 300 },
-    "api/inverted-flow.js":       { "maxDuration": 120 },
-    "api/*-history.js":           { "maxDuration": 300 }
+    "api/inverted-flow.js":       { "maxDuration": 120 }
   },
   "rewrites": [
     { "source": "/",       "destination": "/inverted-flow.html" },
