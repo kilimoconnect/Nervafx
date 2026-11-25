@@ -12,7 +12,6 @@
 
 const { config }          = require('./config');
 const { supabase }        = require('./supabase');
-const { fetchCandles, sleep, RATE_LIMIT_DELAY } = require('./oanda');
 
 const CURRENCIES         = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
 const PAIRS_PER_CURRENCY = 7;
@@ -117,25 +116,29 @@ function computeImpulse(candles) {
 // Calculate and store M15 spreads for the latest common closed candle.
 // Called once per hourly update cycle (after H1 strength/smooth/spreads).
 async function calculateLatestM15Spreads() {
-  // ── 1. Fetch FETCH complete M15 candles per instrument (newest first) ────────
+  // ── 1. Read FETCH latest complete M15 candles per instrument (newest first) ──
+  // Sourced from the stored candle sync (backtest_candles), kept fresh every 15 min
+  // by the sync cron — no direct OANDA call. Full OHLC retained for DE computation.
   const arrays = {};
 
   for (const instrument of config.instruments) {
-    const raw = await fetchCandles(instrument, { count: FETCH, granularity: 'M15' });
+    const { data, error } = await supabase
+      .from('backtest_candles')
+      .select('time,open,high,low,close')
+      .eq('instrument', instrument)
+      .eq('timeframe', 'M15')
+      .eq('complete', true)
+      .order('time', { ascending: false })   // newest-first for positional indexing
+      .limit(FETCH);
+    if (error) throw new Error(`[M15] ${instrument}: ${error.message}`);
 
-    // Keep only completed candles; store newest-first for positional indexing
-    // Full OHLC retained for DE computation (close also used for spread calc)
-    const complete = raw
-      .filter(c => c.complete === true)
-      .map(c => ({
-        time:  new Date(c.time).toISOString(),
-        open:  parseFloat(c.mid.o),
-        high:  parseFloat(c.mid.h),
-        low:   parseFloat(c.mid.l),
-        close: parseFloat(c.mid.c),
-      }))
-      .reverse()   // OANDA returns ascending when using count; reverse → newest first
-      .slice(0, FETCH);
+    const complete = (data || []).map(c => ({
+      time:  new Date(c.time).toISOString(),
+      open:  parseFloat(c.open),
+      high:  parseFloat(c.high),
+      low:   parseFloat(c.low),
+      close: parseFloat(c.close),
+    }));
 
     if (complete.length < MIN_CANDLES) {
       throw new Error(
@@ -144,7 +147,6 @@ async function calculateLatestM15Spreads() {
     }
 
     arrays[instrument] = complete;
-    await sleep(RATE_LIMIT_DELAY);
   }
 
   // ── 2. RefTime = oldest "most recent candle" across all 28 instruments ───────
