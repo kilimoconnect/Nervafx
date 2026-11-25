@@ -493,21 +493,34 @@
       +'<option value="down"'+(trend==='down'?' selected':'')+'>▼ Sell ('+nSell+')</option>'
       +'</select></label>';
     var h='<h3>Moving pairs · two consecutive 15M Renko bars'+filt+'</h3>'
-      +'<div class="sub">Pairs whose M15 Renko confirmed a bar on each of the two most recent consecutive 15-minute candles (≥ one step of movement in two back-to-back 15M windows). <b>Renko trend</b> = the most recent <b>shift of control</b> (a Renko reversal): <b class="hid" style="color:var(--up)">▲ Sellers→Buyers</b> is a Buy, <b class="hid" style="color:var(--dn)">▼ Buyers→Sellers</b> is a Sell, with how long ago it flipped. Pairs with no reversal in the window are <b>held</b> (control unchanged)'+(nHeld?' — '+nHeld+' now, shown under All':'')+'. Filter uses the shift direction. Ranked by the current consecutive-candle run, then total step bars. As of '+esc(asof)+'. Research only — no orders.</div>';
+      +'<div class="sub">Pairs whose M15 Renko confirmed a bar on each of the two most recent consecutive 15-minute candles (≥ one step of movement in two back-to-back 15M windows). <b>Renko trend</b> = the most recent <b>shift of control</b> (a Renko reversal): <b class="hid" style="color:var(--up)">▲ Sellers→Buyers</b> is a Buy, <b class="hid" style="color:var(--dn)">▼ Buyers→Sellers</b> is a Sell, with how long ago it flipped. Pairs with no reversal in the window are <b>held</b> (control unchanged)'+(nHeld?' — '+nHeld+' now, shown under All':'')+'. Filter uses the shift direction. <b>Strong/Weak/Spread/Lean/Align</b> add the currency-strength layer from the 8-Index Compare ranking (EMA20/50 M5 structure vs the strength lean; <b>—</b> = a pair that ranking excludes — a contradicting or same-side currency)'+(d.strengthAvailable===false?' <b class="hid">(currency strength temporarily unavailable)</b>':'')+'. Ranked by the current consecutive-candle run, then total step bars. As of '+esc(asof)+'. Research only — no orders.</div>';
     if(!rows.length){
       h+='<div class="sub" style="padding:14px 4px;text-align:center;font-style:italic">'
         +(all.length?('No '+(trend==='up'?'Buy (sellers→buyers)':'Sell (buyers→sellers)')+' control shifts among the moving pairs right now.'):'No pairs are moving on two consecutive 15M bars right now.')+'</div>';
     } else {
       var maxRun=rows[0].runEvents||1;
-      h+='<table class="ptbl"><thead><tr><th>#</th><th>Pair</th><th title="Most recent shift of control — a Renko reversal — and how long ago it flipped">Renko trend (control shift)</th><th class="num" title="Length of the current run of consecutive 15-minute bars">Run (15M bars)</th><th class="num" title="Total step bars confirmed within the run">Steps</th><th title="Confirm time of the latest bar (EAT)">Latest bar</th><th title="Confirm time of the bar before it (EAT)">Prev bar</th><th style="width:16%">Momentum</th></tr></thead><tbody>';
+      h+='<table class="ptbl"><thead><tr><th>#</th><th>Pair</th><th title="Most recent shift of control — a Renko reversal — and how long ago it flipped">Renko trend (control shift)</th>'
+        +'<th title="Stronger currency (higher index pp)">Strong</th><th title="Weaker currency (lower index pp)">Weak</th><th class="num" title="Currency-strength gap (pp)">Spread</th><th title="Direction implied by the currency-strength gap">Lean</th><th title="M5 candle structure (EMA20 vs EMA50) vs the strength lean">Align</th>'
+        +'<th class="num" title="Length of the current run of consecutive 15-minute bars">Run</th><th class="num" title="Total step bars confirmed within the run">Steps</th><th title="Confirm time of the latest bar (EAT)">Latest</th><th style="width:12%">Momentum</th></tr></thead><tbody>';
       rows.forEach(function(r,i){
+        var hasStr=!!r.strong;
+        var pairCell='<td class="pair">'+esc(r.label||r.pair.replace('_','/'));
+        if(hasStr&&r.bos&&r.leanUp!=null&&r.bos===(r.leanUp?'up':'down')) pairCell+=' <span class="bos '+(r.leanUp?'up':'dn')+'" title="15M break of structure in the lean direction">⚡ BoS '+(r.leanUp?'▲':'▼')+'</span>';
+        pairCell+='</td>';
+        var sCell,wCell,spCell,lnCell;
+        if(hasStr){ sCell='<td class="s">'+esc(r.strong)+'</td>'; wCell='<td class="w">'+esc(r.weak)+'</td>'; spCell='<td class="num">'+(r.spread!=null?r.spread.toFixed(3):'—')+'</td>'; lnCell='<td class="lean '+(r.leanUp?'up':'dn')+'">'+(r.leanUp?'▲ up':'▼ down')+'</td>'; }
+        else { sCell='<td class="al none">—</td>'; wCell='<td class="al none">—</td>'; spCell='<td class="num">—</td>'; lnCell='<td class="al none">—</td>'; }
+        var alCell;
+        if(!hasStr||!r.struct){ alCell='<td class="al none">—</td>'; }
+        else if(r.struct==='mixed'){ alCell='<td class="al mix">≈ mixed</td>'; }
+        else { var cu=r.struct==='up'; alCell='<td class="al '+(r.aligned?'ok':'no')+'">'+(cu?'▲':'▼')+' '+(r.aligned?'✓ aligned':'✗ diverging')+'</td>'; }
         h+='<tr data-pair="'+esc(r.pair)+'"><td class="num">'+(i+1)+'</td>'
-          +'<td class="pair">'+esc(r.label||r.pair.replace('_','/'))+'</td>'
+          +pairCell
           +movingTrendCell(r)
+          +sCell+wCell+spCell+lnCell+alCell
           +'<td class="num">'+r.runEvents+'</td>'
           +'<td class="num">'+r.runSteps+'</td>'
           +'<td>'+(r.lastMs?eatHM(r.lastMs):'—')+'</td>'
-          +'<td>'+(r.prevMs?eatHM(r.prevMs):'—')+'</td>'
           +'<td><span class="bar" style="width:'+Math.max(6,Math.round((r.runEvents/maxRun)*100))+'%"></span></td></tr>';
       });
       h+='</tbody></table>';
