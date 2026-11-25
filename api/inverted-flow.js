@@ -295,7 +295,11 @@ module.exports = async function handler(req, res) {
       const tfReq = TF_GRAN[q.tf] ? q.tf : '1H';
 
       if (inst.kind === 'pair') {
-        const raw = await fetchCandles(inst.id, { granularity: TF_GRAN[tfReq], count: TF_COUNT[tfReq], to: iso(asOfMs) });
+        // OANDA v3 rejects `count` combined with `to`; request an explicit from→to window instead.
+        // '1M' has no fixed span in TF_MS, so fall back to ~1 calendar month per bar.
+        const spanMs = TF_MS[tfReq] || 2.63e9;
+        const fromMs = asOfMs - TF_COUNT[tfReq] * spanMs;
+        const raw = await fetchCandles(inst.id, { granularity: TF_GRAN[tfReq], from: iso(fromMs), to: iso(asOfMs) });
         const candles = (raw || [])
           .filter((c) => c.complete)
           .map((c) => ({ t: Date.parse(c.time), o: +c.mid.o, h: +c.mid.h, l: +c.mid.l, c: +c.mid.c, v: c.volume == null ? 0 : c.volume }))

@@ -479,7 +479,11 @@
   function renderMoving(){
     var d=S.data; host.innerHTML='';
     if(!d||!d.ok){ host.innerHTML='<div class="banner warn">'+esc((d&&d.reason)||'Moving-pairs scan unavailable')+'</div>'; return; }
-    var all=d.rows||[];
+    var raw=d.rows||[];
+    // Show only pairs that are in the 8-Index currency-strength ranking (a genuine strong-vs-weak
+    // currency pair); hide the ones the ranking excludes — contradicting or same-side — that showed "—".
+    var all=raw.filter(function(r){ return !!r.strong; });
+    var nHidden=raw.length-all.length;
     var trend=(S.movingTrend==='up'||S.movingTrend==='down')?S.movingTrend:'all';
     var nBuy=0,nSell=0,nHeld=0; all.forEach(function(r){ if(r.shiftDir==='up')nBuy++; else if(r.shiftDir==='down')nSell++; else nHeld++; });
     var rows = trend==='all' ? all : all.filter(function(r){ return r.shiftDir===trend; });
@@ -493,10 +497,10 @@
       +'<option value="down"'+(trend==='down'?' selected':'')+'>▼ Sell ('+nSell+')</option>'
       +'</select></label>';
     var h='<h3>Moving pairs · two consecutive 15M Renko bars'+filt+'</h3>'
-      +'<div class="sub">Pairs whose M15 Renko confirmed a bar on each of the two most recent consecutive 15-minute candles (≥ one step of movement in two back-to-back 15M windows). <b>Renko trend</b> = the most recent <b>shift of control</b> (a Renko reversal): <b class="hid" style="color:var(--up)">▲ Sellers→Buyers</b> is a Buy, <b class="hid" style="color:var(--dn)">▼ Buyers→Sellers</b> is a Sell, with how long ago it flipped. Pairs with no reversal in the window are <b>held</b> (control unchanged)'+(nHeld?' — '+nHeld+' now, shown under All':'')+'. Filter uses the shift direction. <b>Strong/Weak/Spread/Lean/Align</b> add the currency-strength layer from the 8-Index Compare ranking (EMA20/50 M5 structure vs the strength lean; <b>—</b> = a pair that ranking excludes — a contradicting or same-side currency)'+(d.strengthAvailable===false?' <b class="hid">(currency strength temporarily unavailable)</b>':'')+'. Ranked by the current consecutive-candle run, then total step bars. As of '+esc(asof)+'. Research only — no orders.</div>';
+      +'<div class="sub">Pairs whose M15 Renko confirmed a bar on each of the two most recent consecutive 15-minute candles (≥ one step of movement in two back-to-back 15M windows). <b>Renko trend</b> = the most recent <b>shift of control</b> (a Renko reversal): <b class="hid" style="color:var(--up)">▲ Sellers→Buyers</b> is a Buy, <b class="hid" style="color:var(--dn)">▼ Buyers→Sellers</b> is a Sell, with how long ago it flipped. Pairs with no reversal in the window are <b>held</b> (control unchanged)'+(nHeld?' — '+nHeld+' now, shown under All':'')+'. Filter uses the shift direction. Only pairs in the 8-Index Compare <b>currency-strength ranking</b> are shown — <b>Strong▸Weak</b>, Spread, Lean and candle <b>Align</b> (EMA20/50 M5 structure vs the lean)'+(nHidden?'; <b class="hid">'+nHidden+' moving pair'+(nHidden===1?'':'s')+' without a clear strong-vs-weak currency hidden</b>':'')+(d.strengthAvailable===false?' <b class="hid">(currency strength temporarily unavailable)</b>':'')+'. Ranked by the current consecutive-candle run, then total step bars. As of '+esc(asof)+'. Research only — no orders.</div>';
     if(!rows.length){
       h+='<div class="sub" style="padding:14px 4px;text-align:center;font-style:italic">'
-        +(all.length?('No '+(trend==='up'?'Buy (sellers→buyers)':'Sell (buyers→sellers)')+' control shifts among the moving pairs right now.'):'No pairs are moving on two consecutive 15M bars right now.')+'</div>';
+        +(all.length?('No '+(trend==='up'?'Buy (sellers→buyers)':'Sell (buyers→sellers)')+' control shifts among the moving pairs right now.'):(raw.length?'No moving pairs with a currency-strength lean right now.':'No pairs are moving on two consecutive 15M bars right now.'))+'</div>';
     } else {
       var maxRun=rows[0].runEvents||1;
       h+='<table class="ptbl"><thead><tr><th>#</th><th>Pair</th><th title="Most recent shift of control — a Renko reversal — and how long ago it flipped">Renko trend (control shift)</th>'
