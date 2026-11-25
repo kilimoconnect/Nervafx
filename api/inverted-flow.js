@@ -24,7 +24,6 @@
  */
 
 const { getClient, cors } = require('./_db');
-const { fetchCandles } = require('../src/oanda');
 const { loadTf, loadM5Parallel, loadM15Parallel } = require('../research/comparison/dbload');
 const { buildIndices } = require('../research/comparison/index-build');
 const { dayStart, EAT_OFFSET_MS } = require('../research/comparison/periods');
@@ -93,8 +92,9 @@ const WINDOW_DAYS = { M5: { def: 3, cap: 10 }, M15: { def: 10, cap: 30 }, H1: { 
 const INDEX_WINDOW = { def: 12, cap: 45 };
 
 // ── Normal-candlestick view (?view=candles) ──────────────────────────────────────────────────
-// Real OHLC per selectable timeframe. Pairs fetch midpoint candles straight from OANDA at the
-// matching granularity; indices have no OHLC, so the index-value (pp) series is aggregated into
+// Real OHLC per selectable timeframe, served from the stored candle sync (backtest_candles, which
+// holds M5/M15/H1) — no direct OANDA call. Pairs read the finest stored base and aggregate when the
+// requested TF isn't native; indices have no OHLC, so the index-value (pp) series is aggregated into
 // TF buckets (native resolution is M15, so 5m falls back to 15m).
 const TF_GRAN  = { '5m': 'M5', '15m': 'M15', '30m': 'M30', '1H': 'H1', '4H': 'H4', '1D': 'D', '1W': 'W', '1M': 'M' };
 const TF_MS    = { '5m': 3e5, '15m': 9e5, '30m': 18e5, '1H': 36e5, '4H': 144e5, '1D': 864e5, '1W': 6048e5 };
@@ -113,6 +113,27 @@ function aggregateIndexCandles(obs, tf) {
     let b = map.get(k);
     if (!b) { b = { t: o.ms, o: o.value, h: o.value, l: o.value, c: o.value, v: 0 }; map.set(k, b); }
     b.h = Math.max(b.h, o.value); b.l = Math.min(b.l, o.value); b.c = o.value; b.v++;
+  }
+  return [...map.values()].sort((a, b) => a.t - b.t);
+}
+
+// Candle view is served entirely from the stored candle sync (backtest_candles holds M5/M15/H1).
+// Non-native timeframes are aggregated from the finest stored base; no OANDA call.
+const CANDLE_BASE_TF = { '5m': 'M5', '15m': 'M15', '30m': 'M15', '1H': 'H1', '4H': 'H1', '1D': 'H1', '1W': 'H1', '1M': 'H1' };
+const CANDLE_BASE_RES = { 'M5': 'M5', 'M15': 'M15', 'H1': '1H' };   // base timeframe → TF_* key for its ms span
+const NATIVE_CANDLE_TF = { '5m': true, '15m': true, '1H': true };   // stored directly, no aggregation
+const MAX_CANDLE_LOOKBACK_MS = 2 * 365 * 864e5;                     // cap the base scan for 1D/1W/1M
+
+// OHLC roll-up of stored base candles into target-TF buckets (EAT-aligned, matching the index side).
+// Rows arrive ascending, so the first row in a bucket sets the open and the last sets the close.
+function aggregateCandles(rows, tf) {
+  const map = new Map();
+  for (const r of rows) {
+    const k = tfBucketKey(r.openMs, tf);
+    const vol = r.volume == null ? 0 : r.volume;
+    let b = map.get(k);
+    if (!b) { b = { t: r.openMs, o: r.open, h: r.high, l: r.low, c: r.close, v: vol }; map.set(k, b); }
+    else { b.h = Math.max(b.h, r.high); b.l = Math.min(b.l, r.low); b.c = r.close; b.v += vol; }
   }
   return [...map.values()].sort((a, b) => a.t - b.t);
 }
@@ -295,21 +316,23 @@ module.exports = async function handler(req, res) {
       const tfReq = TF_GRAN[q.tf] ? q.tf : '1H';
 
       if (inst.kind === 'pair') {
-        // OANDA v3 rejects `count` combined with `to`; request an explicit from→to window instead.
-        // '1M' has no fixed span in TF_MS, so fall back to ~1 calendar month per bar.
-        const spanMs = TF_MS[tfReq] || 2.63e9;
-        const fromMs = asOfMs - TF_COUNT[tfReq] * spanMs;
-        const raw = await fetchCandles(inst.id, { granularity: TF_GRAN[tfReq], from: iso(fromMs), to: iso(asOfMs) });
-        const candles = (raw || [])
-          .filter((c) => c.complete)
-          .map((c) => ({ t: Date.parse(c.time), o: +c.mid.o, h: +c.mid.h, l: +c.mid.l, c: +c.mid.c, v: c.volume == null ? 0 : c.volume }))
+        // Served from the stored candle sync (backtest_candles, completed candles only) — no OANDA call.
+        // Read the finest stored base timeframe, then aggregate to the requested TF when it isn't native.
+        const sbC = getClient();
+        const baseTf = CANDLE_BASE_TF[tfReq] || 'H1';
+        const spanMs = TF_MS[tfReq] || 2.63e9;   // '1M' has no fixed span; fall back to ~1 calendar month
+        const lookbackMs = Math.min(TF_COUNT[tfReq] * spanMs, MAX_CANDLE_LOOKBACK_MS);
+        const fromMs = asOfMs - lookbackMs;
+        const base = await loadTf(sbC, inst.id, baseTf, { fromIso: iso(fromMs), toIso: iso(asOfMs), withVolume: true });
+        const aggregated = !NATIVE_CANDLE_TF[tfReq];
+        const candles = aggregateCandles(base, tfReq)
           .filter((c) => isFinite(c.t) && c.t <= asOfMs)
-          .sort((a, b) => a.t - b.t);
+          .map((c) => ({ t: c.t, o: c.o, h: c.h, l: c.l, c: c.c, v: c.v }));
         return res.json({
-          ok: true, view: 'candles', instrument: inst.id, tf: tfReq,
+          ok: true, view: 'candles', instrument: inst.id, tf: tfReq, aggregatedFrom: aggregated ? baseTf : undefined,
           meta: { kind: 'pair', label: inst.label, precision: inst.precision, pip: inst.pip, resolution: tfReq, valueLabel: 'midpoint price' },
           candles,
-          disclaimer: 'Real midpoint OHLC from OANDA at ' + tfReq + '. No orders.',
+          disclaimer: 'Midpoint OHLC from the stored ' + baseTf + ' candle sync' + (aggregated ? ' aggregated to ' + tfReq : '') + '. No orders.',
         });
       }
 
@@ -380,7 +403,7 @@ module.exports = async function handler(req, res) {
         },
         coverage: { window: cov, instrument: { earliestMs: range.earliestMs, latestMs: range.latestMs, resolution } },
         flow: r.ok ? r : null,
-        disclaimer: 'Close-only: width = received completed ' + resolution + ' closes (feed activity), NOT ticks, traded volume, or quote count. No intrabar path/reversal time is claimed. Midpoint OHLC from OANDA. No orders.',
+        disclaimer: 'Close-only: width = received completed ' + resolution + ' closes (feed activity), NOT ticks, traded volume, or quote count. No intrabar path/reversal time is claimed. Midpoint OHLC from the stored candle sync. No orders.',
       });
     }
 

@@ -290,7 +290,7 @@
     var tf=j.tf||S.candleTf, cap=document.getElementById('flowcap');
     if(cap) cap.textContent = (meta.kind==='index')
       ? ((j.meta&&j.meta.currency||'')+' index aggregated to '+tf+' from M15 snapshots — no intrabar range exists for an index'+(j.clampedFrom?' · '+j.clampedFrom+'→'+tf+' (native M15)':'')+'. Drag to pan · wheel to zoom.')
-      : ('Real '+tf+' candlesticks (midpoint OHLC from OANDA) · lower panel = volume. Drag to pan · wheel to zoom.');
+      : ('Real '+tf+' candlesticks (midpoint OHLC'+(j.aggregatedFrom?', aggregated from stored '+j.aggregatedFrom:', stored sync')+') · lower panel = volume. Drag to pan · wheel to zoom.');
     updateLegend(null);
   }
   function updateLegend(param){
