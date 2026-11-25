@@ -2,6 +2,7 @@
   "version": 2,
   "crons": [
     { "path": "/api/cron-backtest-sync", "schedule": "*/15 * * * *" },
+    { "path": "/api/cron-bos-alerts", "schedule": "5-59/15 * * * *" },
     { "path": "/api/run-pipeline?force=1", "schedule": "3 * * * *" }
   ],
   "functions": {
