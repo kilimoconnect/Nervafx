@@ -157,6 +157,22 @@ module.exports = async function handler(req, res) {
   let totalCandles = 0;
   let errors = 0;
 
+  // Fire Inverted Flow BoS email alerts FIRST — before the long candle-sync loop consumes the
+  // function's time budget. Previously this piggybacked the END of the sync behind a `<200s` guard,
+  // but the M5+M15+H1 × 28 sync routinely exceeds 200s, so the alert was skipped on nearly every run
+  // ("sync near deadline") and no automatic server-side trigger ever executed. Running it up front
+  // guarantees it fires every cycle on this already-alive 15-min cron. It evaluates the latest
+  // completed M15 already in the DB from the previous cycle (≤15 min old) — fine for a notification.
+  // Always non-fatal: a BoS failure must never affect the candle sync.
+  let bosAlerts = null;
+  try {
+    const { runBosAlerts } = require('../src/bosAlerts');
+    bosAlerts = await runBosAlerts(sb, { source: 'candle-sync' });
+  } catch (e) {
+    bosAlerts = { ok: false, error: String((e && e.message) || e) };
+    console.error('[BT-SYNC] BoS alerts error:', (e && e.message) || e);
+  }
+
   for (const tf of TIMEFRAMES) {
     // Check deadline before starting next timeframe
     if (Date.now() - t0 > DEADLINE_MS) {
@@ -201,23 +217,6 @@ module.exports = async function handler(req, res) {
 
   const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
   console.log(`[BT-SYNC] Done in ${elapsed}s — ${totalCandles} candles, ${errors} errors`);
-
-  // Fire Inverted Flow BoS email alerts on the freshly-synced candles. This piggybacks the candle
-  // sync so the alert runs on the trigger that already exists (no separate schedule/secret). Always
-  // non-fatal — a BoS failure must never affect the candle sync. Skipped if the sync is already near
-  // the Vercel deadline, so we never push this function past its timeout.
-  let bosAlerts = null;
-  try {
-    if (Date.now() - t0 < 200000) {
-      const { runBosAlerts } = require('../src/bosAlerts');
-      bosAlerts = await runBosAlerts(sb);
-    } else {
-      bosAlerts = { skipped: true, reason: 'sync near deadline' };
-    }
-  } catch (e) {
-    bosAlerts = { ok: false, error: String((e && e.message) || e) };
-    console.error('[BT-SYNC] BoS alerts error:', (e && e.message) || e);
-  }
 
   res.json({
     ok: true,

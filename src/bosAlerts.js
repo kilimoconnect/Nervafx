@@ -23,17 +23,38 @@ function eatDateStr(ms) {
   return new Date(ms + 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
-// sb: a Supabase service-role client. opts: { asOfMs?, dry? }.
+// Heartbeat: record every invocation so the automatic trigger is observable (did it run? how often?
+// what did it find? did it send?). Non-fatal and best-effort — if the table isn't present yet, or the
+// write fails, it must never break the alert path. Query bos_alert_runs to see the cron's activity.
+async function recordRun(sb, source, out) {
+  try {
+    await sb.from('bos_alert_runs').insert({
+      ran_at: new Date().toISOString(),
+      source: source || 'unknown',
+      available: out.available !== false,
+      candidates: out.candidates || 0,
+      fresh: out.new || 0,
+      recipients: out.recipients || 0,
+      sent: out.sent === true,
+      reason: out.reason || (out.sent ? 'sent' : (out.available === false ? out.reason || 'unavailable' : null)),
+    });
+  } catch (_) { /* best-effort heartbeat only */ }
+}
+
+// sb: a Supabase service-role client. opts: { asOfMs?, dry?, source? }.
 async function runBosAlerts(sb, opts = {}) {
   const asOfMs = Math.min(opts.asOfMs || Date.now(), Date.now());
   const dry = !!opts.dry;
+  const source = opts.source || 'manual';
+  // Single exit: record a heartbeat on every return so the trigger is observable.
+  const finish = async (out) => { if (!dry) await recordRun(sb, source, out); return out; };
 
   // 1) Recompute the compare view and find aligned pairs with a trend-direction 15M BoS.
   const cd = await computeCompareData(sb, { view: 'compare' }, asOfMs);
-  if (!cd.available) return { ok: true, available: false, reason: cd.reason };
+  if (!cd.available) return finish({ ok: true, available: false, reason: cd.reason });
   const asOfUtc = iso(cd.cutoffMs);
   const candidates = alertablePairs(cd.panels, cd.structures, cd.bos);
-  if (!candidates.length) return { ok: true, asOfUtc, candidates: 0, new: 0 };
+  if (!candidates.length) return finish({ ok: true, asOfUtc, candidates: 0, new: 0, reason: 'no aligned+BoS pairs' });
 
   // 2) De-dup against what already fired today (EAT): one alert per pair+direction per EAT day.
   const eatDate = eatDateStr(cd.cutoffMs);
@@ -42,7 +63,7 @@ async function runBosAlerts(sb, opts = {}) {
   if (logErr) throw logErr;
   const seen = new Set((logged || []).map((r) => `${r.pair}:${r.direction}`));
   const fresh = candidates.filter((c) => !seen.has(`${c.pair}:${c.direction}`));
-  if (!fresh.length) return { ok: true, asOfUtc, eatDate, candidates: candidates.length, new: 0 };
+  if (!fresh.length) return finish({ ok: true, asOfUtc, eatDate, candidates: candidates.length, new: 0, reason: 'all already alerted today' });
 
   // 3) Active recipients (managed on /admin).
   const { data: recRows, error: recErr } = await sb
@@ -53,9 +74,9 @@ async function runBosAlerts(sb, opts = {}) {
   if (dry) {
     return { ok: true, dry: true, asOfUtc, eatDate, candidates: candidates.length, new: fresh.length, newPairs: fresh, recipients: recipients.length };
   }
-  // Nothing to send to — do NOT log, so these pairs still alert once a recipient is added today.
+  // Nothing to send to — do NOT log to bos_alert_log, so these pairs still alert once a recipient is added today.
   if (!recipients.length) {
-    return { ok: true, asOfUtc, eatDate, candidates: candidates.length, new: fresh.length, recipients: 0, sent: false, reason: 'no active recipients' };
+    return finish({ ok: true, asOfUtc, eatDate, candidates: candidates.length, new: fresh.length, recipients: 0, sent: false, reason: 'no active recipients' });
   }
 
   // 4) One batched email. force:true — this is an intended alert path, exempt from the global
@@ -79,7 +100,7 @@ async function runBosAlerts(sb, opts = {}) {
     if (insErr) throw insErr;
   }
 
-  return { ok: true, asOfUtc, eatDate, candidates: candidates.length, new: fresh.length, newPairs: fresh.map((c) => `${c.pair} ${c.direction}`), recipients: recipients.length, sent };
+  return finish({ ok: true, asOfUtc, eatDate, candidates: candidates.length, new: fresh.length, newPairs: fresh.map((c) => `${c.pair} ${c.direction}`), recipients: recipients.length, sent });
 }
 
 module.exports = { runBosAlerts };

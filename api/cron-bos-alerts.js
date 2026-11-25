@@ -39,7 +39,7 @@ module.exports = async function handler(req, res) {
 
   try {
     const sb = getClient();
-    const out = await runBosAlerts(sb, { asOfMs, dry });
+    const out = await runBosAlerts(sb, { asOfMs, dry, source: 'dedicated-cron' });
     return res.json(out);
   } catch (e) {
     return res.status(500).json({ ok: false, error: String((e && e.message) || e) });
