@@ -24,7 +24,7 @@
  */
 
 const { getClient, cors } = require('./_db');
-const { loadTf, loadM5Parallel, loadM15Parallel } = require('../research/comparison/dbload');
+const { loadTf, loadM5Parallel, loadM15Parallel, loadH1Parallel } = require('../research/comparison/dbload');
 const { buildIndices } = require('../research/comparison/index-build');
 const { dayStart, EAT_OFFSET_MS } = require('../research/comparison/periods');
 const { M15_MS, DAY_MS, PAIRS, CURRENCIES } = require('../research/comparison/config');
@@ -55,17 +55,18 @@ function structureDir(candles) {
   return 'mixed';
 }
 
-// 15M break of structure: the most recent CLOSED M15 candle closes beyond the range of the 8 M15
-// candles before it. up (buy) = close > max(high of prev 8); down (sell) = close < min(low of prev 8).
+// H1 break of structure: the most recent CLOSED H1 candle closes beyond the range of the 2 H1
+// candles before it. up (buy) = close > max(high of prev 2); down (sell) = close < min(low of prev 2).
 // Returns 'up' | 'down' | null (no break / insufficient data). Caller gates on trend direction.
+const BOS_LOOKBACK = 2;
 function bosDirCandles(candles) {
-  if (!candles || candles.length < 9) return null;
+  if (!candles || candles.length < BOS_LOOKBACK + 1) return null;
   const sorted = candles.slice().sort((a, b) => ((a.openMs != null ? a.openMs : Date.parse(a.time)) - (b.openMs != null ? b.openMs : Date.parse(b.time))));
-  const n = sorted.length, last = sorted[n - 1], prev8 = sorted.slice(n - 9, n - 1);
-  if (prev8.length < 8) return null;
+  const n = sorted.length, last = sorted[n - 1], prev = sorted.slice(n - 1 - BOS_LOOKBACK, n - 1);
+  if (prev.length < BOS_LOOKBACK) return null;
   const close = +last.close;
   if (!isFinite(close)) return null;
-  const hi = Math.max(...prev8.map((c) => +c.high)), lo = Math.min(...prev8.map((c) => +c.low));
+  const hi = Math.max(...prev.map((c) => +c.high)), lo = Math.min(...prev.map((c) => +c.low));
   if (!isFinite(hi) || !isFinite(lo)) return null;
   if (close > hi) return 'up';
   if (close < lo) return 'down';
@@ -193,7 +194,7 @@ function runIndexFlow(built, ccy, baselineMs, cutoffMs, step) {
   return r;
 }
 
-// Compute the full 8-index comparison payload (panels + per-pair candle structure + 15M BoS) at a
+// Compute the full 8-index comparison payload (panels + per-pair candle structure + H1 BoS) at a
 // cutoff. Shared by the GET handler and the BoS email-alert cron so both see exactly the same set.
 // Returns { available:false, reason } or { available:true, built, baselineMs, cutoffMs, sinceMs,
 // daily, step, structures, bos, panels, ranking }.
@@ -204,8 +205,11 @@ async function computeCompareData(sb, q, asOfMs) {
   // current candlestick structure per pair from recent M5 closes up to the selected cutoff
   // (EMA20 vs EMA50 on M5 — the same resolution as the pair Renko charts, independent of the index)
   const m5by = await loadM5Parallel(sb, PAIRS, { fromIso: iso(cutoffMs - 2 * DAY_MS), toIso: iso(cutoffMs) }, 8);
+  // H1 candles for the break-of-structure check (latest closed H1 vs the prior 2 H1 candles' range).
+  // 5-day window guarantees ≥ 3 H1 candles up to the cutoff even across a weekend/gaps.
+  const h1by = await loadH1Parallel(sb, PAIRS, { fromIso: iso(cutoffMs - 5 * DAY_MS), toIso: iso(cutoffMs) }, 8);
   const structures = {}, bos = {};
-  PAIRS.forEach((p) => { const d = structureDir(m5by[p]); if (d) structures[p] = d; const bd = bosDirCandles(day.byPair[p]); if (bd) bos[p] = bd; });
+  PAIRS.forEach((p) => { const d = structureDir(m5by[p]); if (d) structures[p] = d; const bd = bosDirCandles(h1by[p]); if (bd) bos[p] = bd; });
   const step = Math.min(5, Math.max(0.001, parseFloat(q.step) || DEFAULT_INDEX_STEP_PP));
   const panels = CURRENCIES.map((ccy) => {
     const r = runIndexFlow(built, ccy, baselineMs, cutoffMs, step);
@@ -364,7 +368,7 @@ module.exports = async function handler(req, res) {
         asOfUtc: iso(cd.cutoffMs), baselineMs: cd.baselineMs, baselineUtc: iso(cd.baselineMs), sinceMs: cd.sinceMs, sinceUtc: iso(cd.sinceMs), daily: cd.daily,
         meta: { kind: 'index', step: cd.step, unit: 'constituent basket snapshots', valueLabel: '% from baseline (pp)', resolution: 'M15' },
         coverage: coverageForIndex(cd.built), ranking: cd.ranking, panels: cd.panels, structures: cd.structures, bos: cd.bos,
-        disclaimer: 'Zero-sum 1/8 currency indices on M15 basket snapshots over the loaded window (reconciles with Evolution), UNVALIDATED. Pair "candle structure" (up = EMA20 > EMA50; down = EMA20 < EMA50; else mixed) on that pair\'s M5 closes up to the selected time, independent of the index. The "BoS" badge flags a 15M break of structure in the trend direction (latest closed M15 closed beyond the prior 8-candle range); pairs use their own M15 OHLC, currencies the index-value series. Each panel keeps its own activity axis. No orders.',
+        disclaimer: 'Zero-sum 1/8 currency indices on M15 basket snapshots over the loaded window (reconciles with Evolution), UNVALIDATED. Pair "candle structure" (up = EMA20 > EMA50; down = EMA20 < EMA50; else mixed) on that pair\'s M5 closes up to the selected time, independent of the index. The pair "BoS" badge flags an H1 break of structure in the trend direction (latest closed H1 closed beyond the prior 2-candle range, from the pair\'s own H1 OHLC); the per-currency BoS uses the same break-of-range idea on the index-value series. Each panel keeps its own activity axis. No orders.',
       });
     }
 
