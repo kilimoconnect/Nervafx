@@ -49,6 +49,7 @@ async function runBosAlerts(sb, opts = {}) {
   // Single exit: record a heartbeat on every return so the trigger is observable.
   const finish = async (out) => { if (!dry) await recordRun(sb, source, out); return out; };
 
+  try {
   // 1) Recompute the compare view and find aligned pairs with a trend-direction 15M BoS.
   const cd = await computeCompareData(sb, { view: 'compare' }, asOfMs);
   if (!cd.available) return finish({ ok: true, available: false, reason: cd.reason });
@@ -101,6 +102,11 @@ async function runBosAlerts(sb, opts = {}) {
   }
 
   return finish({ ok: true, asOfUtc, eatDate, candidates: candidates.length, new: fresh.length, newPairs: fresh.map((c) => `${c.pair} ${c.direction}`), recipients: recipients.length, sent });
+  } catch (e) {
+    // Record an error heartbeat so a thrown failure is visible in bos_alert_runs, not silent.
+    if (!dry) await recordRun(sb, source, { available: false, candidates: 0, new: 0, recipients: 0, sent: false, reason: 'ERROR: ' + ((e && e.message) || e) });
+    throw e;
+  }
 }
 
 module.exports = { runBosAlerts };
