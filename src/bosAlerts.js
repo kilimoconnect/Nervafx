@@ -1,12 +1,15 @@
 'use strict';
 
 /**
- * Inverted Flow "aligned pair + 15M Break of Structure" email-alert core.
+ * Inverted Flow "aligned pair + H1 Break of Structure" email-alert core.
  *
- * Shared by api/cron-bos-alerts.js (standalone endpoint, for dry runs) and api/cron-backtest-sync.js
- * (piggybacks the candle sync, so the alert fires on the trigger that already runs — no separate
- * schedule or secret). Emails the aligned+BoS set (same ⚡ badge set as the page) to the admin-managed
- * recipients, once per (pair, direction, EAT day), one batched email per invocation.
+ * Shared by api/cron-bos-alerts.js (standalone endpoint, for dry runs) and the scheduled pipeline
+ * (src/updater.js, run by the GitHub Action every ~15 min — fires on the trigger that already runs,
+ * no separate schedule or secret). Emails the aligned+BoS set (same ⚡ badge set as the page) to the
+ * admin-managed recipients. A send is TRIGGERED when at least one pair+direction newly qualifies for
+ * the EAT day (deduped so an unchanged list is not re-emailed every tick), and the email then lists
+ * the FULL current aligned+BoS set — so a pair that is still qualifying from an earlier alert rides
+ * along whenever a new pair joins it.
  *
  * Research/notification only — no orders, no buy/sell signal, no profitability claim.
  */
@@ -80,9 +83,12 @@ async function runBosAlerts(sb, opts = {}) {
     return finish({ ok: true, asOfUtc, eatDate, candidates: candidates.length, new: fresh.length, recipients: 0, sent: false, reason: 'no active recipients' });
   }
 
-  // 4) One batched email. force:true — this is an intended alert path, exempt from the global
-  //    ALERT_EMAILS_DISABLED guard (same mechanism the continuation cron uses).
-  const template = bosAlertEmail({ asOfUtc, pairs: fresh });
+  // 4) One batched email. A send is TRIGGERED by at least one fresh pair (a pair+direction not yet
+  //    alerted today) — so we don't re-email every tick for an unchanged list. But the email BODY
+  //    carries the FULL current aligned+BoS set (`candidates`), not just the fresh ones, so a pair
+  //    that is still qualifying (e.g. NZD/USD alerted earlier) rides along when a new pair joins.
+  //    force:true — intended alert path, exempt from the global ALERT_EMAILS_DISABLED guard.
+  const template = bosAlertEmail({ asOfUtc, pairs: candidates });
   const result = await sendBulk(recipients, template, { force: true });
   const sent = Array.isArray(result) && result.length > 0;
 
