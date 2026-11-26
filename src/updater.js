@@ -19,6 +19,7 @@ const { calculateLatestVolumeAnalysis }  = require('./volumeAnalysis');
 const { calculateM15Energy }           = require('./m15Energy');
 const { checkAudNzdAlerts }             = require('./audnzdAlerts');
 const { storeStructureSnapshots }      = require('./structureSnapshot');
+const { runBosAlerts }                 = require('./bosAlerts');
 
 const PARALLEL = 7; // instruments fetched in parallel (OANDA rate-limit safe)
 
@@ -161,6 +162,7 @@ async function hourlyUpdate() {
   await step('outcomes',         () => runOutcomeReviews());
   await step('structure_engine', () => storeStructureSnapshots(supabase));
   await step('audnzd_alerts',    () => checkAudNzdAlerts(supabase));
+  await step('bos_alerts',       () => runBosAlerts(supabase, { source: 'gha-hourly' }));
 
   console.log('[UPDATE] Complete.');
   return { status: 'CLEAN', check };
@@ -193,6 +195,7 @@ async function m15Update() {
   await step('m15_energy',        () => calculateM15Energy());
   await step('flow_perf',         () => calculateFlowPerformance());
   await step('audnzd_alerts',     () => checkAudNzdAlerts(supabase));
+  await step('bos_alerts',        () => runBosAlerts(supabase, { source: 'gha-m15' }));
 
   console.log('[M15-UPDATE] Complete.');
   return { status: 'OK' };
