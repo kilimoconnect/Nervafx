@@ -26,6 +26,7 @@ const { runOutcomeReviews }              = require('../src/outcomeReview');
 const { calculateLatestVolumeAnalysis } = require('../src/volumeAnalysis');
 const { calculateFlowPerformance }     = require('../src/flowPerformance');
 const { storeStructureSnapshots }      = require('../src/structureSnapshot');
+const { runBosAlerts }                 = require('../src/bosAlerts');
 
 const ADMIN_ID = '140f3854-2c85-488c-8e0a-0f965d562654';
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD'];
@@ -399,6 +400,11 @@ module.exports = async function handler(req, res) {
   });
   await step('spreads',  () => runSpreads(sb));
   await step('m15_spreads',      () => calculateLatestM15Spreads());
+  // Inverted Flow BoS email alert. This is the pipeline that actually runs every ~15 min (it drives
+  // m15_pair_spreads), so the alert must fire here — the Vercel cron-backtest-sync / cron-bos-alerts
+  // triggers were not executing. Self-contained + de-duped (one alert per pair+direction per EAT day),
+  // writes a bos_alert_runs heartbeat each run, and step() isolates any failure from the pipeline.
+  await step('bos_alerts',       () => runBosAlerts(sb, { source: 'run-pipeline' }));
   await step('volume_analysis',  () => calculateLatestVolumeAnalysis());
   await step('sentiment',        () => calculateLatestSentiment());
   await step('session_backfill', () => backfillSessionActivity());
