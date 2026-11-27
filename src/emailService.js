@@ -1487,11 +1487,11 @@ function bosAlertEmail(data) {
     const bg = up ? 'rgba(34,197,94,0.10)' : 'rgba(239,68,68,0.10)';
     const arrow = up ? '▲' : '▼';
     const disp = String(p.pair).replace('_', '/');
-    const spread = (p.spread != null && isFinite(p.spread)) ? Number(p.spread).toFixed(3) + 'pp' : '';
+    const g = (p.gap != null && isFinite(p.gap)) ? (p.gap >= 0 ? '+' : '') + Number(p.gap).toFixed(3) + 'pp' : '';
     return `<div style="background:${bg};border-left:3px solid ${color};border-radius:6px;padding:10px 14px;margin:6px 0">
       <span style="color:${color};font-weight:800;font-size:15px">${arrow} ${disp}</span>
-      <span style="color:#94a3b8;font-size:12px;margin-left:10px">${p.strong || ''} strong ▸ ${p.weak || ''} weak</span>
-      ${spread ? `<span style="color:#64748b;font-size:11px;margin-left:10px">spread ${spread}</span>` : ''}
+      <span style="color:#94a3b8;font-size:12px;margin-left:10px">${p.strong || ''} buy ▸ ${p.weak || ''} sell</span>
+      ${g ? `<span style="color:#64748b;font-size:11px;margin-left:10px">gap since setup ${g}</span>` : ''}
     </div>`;
   }).join('');
 
@@ -1507,7 +1507,7 @@ function bosAlertEmail(data) {
       <p class="sub">${_fmtEat(data.asOfUtc)} · 15M BoS in the trend direction</p>
       ${rows}
       <p style="text-align:center;margin:24px 0"><a class="cta" href="https://nervafx.com/inverted-flow?view=compare">Open Inverted Flow →</a></p>
-      <p class="sm" style="text-align:center">Each pair's currency-strength lean and its M5 candle structure (EMA20 vs EMA50) agree, and at least two of the last three closed M15 candles broke their prior-8-candle range in that direction (two consecutive, or the newest and two-back). Relative-movement research — not a trade recommendation. Apply your own risk management.</p>
+      <p class="sm" style="text-align:center">Each pair's two currencies point opposite ways on their current Renko brick (buy the green one, sell the red one), its M5 candle structure (EMA20 vs EMA50) agrees, and at least two of the last three closed M15 candles broke their prior-8-candle range in that direction (two consecutive, or the newest and two-back). "Gap since setup" is the signed pp the lean has gained since it formed. Relative-movement research — not a trade recommendation. Apply your own risk management.</p>
     `),
   };
 }

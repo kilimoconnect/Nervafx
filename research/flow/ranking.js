@@ -3,65 +3,91 @@
 /**
  * Shared pair-ranking + alert-trigger logic for the Inverted Flow compare view.
  *
- * This is the single source of truth for which pairs are "aligned with a BoS" — the exact set
- * that renders the ⚡ BoS badge on an aligned pair in public/inverted-flow/flow.js. Both the
- * frontend (buildPairStrength) and the email-alert cron (api/cron-bos-alerts.js) must agree, so
- * the logic lives here and is mirrored by the client renderer.
+ * Single source of truth for which pairs have an active "opposing-currency" setup and its signed gap,
+ * and for the ⚡ alert set (aligned + 15M BoS in the lean direction). Both the frontend renderer and
+ * the email-alert cron consume the rows produced here, so the logic lives in one place.
  *
- * Inputs (as produced by GET /api/inverted-flow?view=compare):
- *   panels      — [{ currency, available, lastPp, finalDir, ... }] per currency index
- *   structures  — { PAIR: 'up'|'down'|'mixed' }  candle structure (EMA20 vs EMA50 on M5 closes)
- *   bos         — { PAIR: 'up'|'down' }           15M BoS: ≥2 of last 3 M15 closes break prior-8 range
+ * DIRECTION comes from each currency's CURRENT confirmed Renko brick (continuous — no daily reset):
+ * green/up = buy, red/down = sell. A pair has an active SETUP only while its two currencies' confirmed
+ * bricks point OPPOSITE ways; the lean favours the green currency over the red. A setup begins at the
+ * first synchronized observation where that lean became active and holds (across midnight/weekends)
+ * until the currencies stop opposing or the lean flips directly. Pairs are ranked by the SIGNED GAP
+ * since the setup began:
  *
- * Direction rule: a currency's buy/sell direction is its CURRENT Renko brick (finalDir) — green/up
- * = buy, red/down = sell. A pair is tradeable only when its two currencies point OPPOSITE ways; the
- * lean is buy-the-pair (up) when the base is green and the quote red, sell (down) when base red and
- * quote green. The pp strength gap (|lastPp difference|) only orders the rows, it no longer decides
- * direction. No orders, no signal — relative-movement research only.
+ *     Gap = (green_now − green_at_setup_start) − (red_now − red_at_setup_start)   [percentage points]
+ *
+ * A positive gap = the lean has gained ground since it formed; negative = it has lost ground. Gap sign
+ * and size affect ranking only. No orders, no signal — relative-movement research only.
  */
 
 const { PAIRS } = require('../comparison/config');
 
-// Rank the pairs by the strength gap between their two currencies. A pair survives only when its two
-// currencies have OPPOSITE current-brick directions (one green/up, one red/down); the lean follows the
-// brick (buy the green one, sell the red one). Returns rows [{ pair, strong, weak, spread, leanUp,
-// dir, struct, bos }] sorted by spread desc. Not yet aligned-filtered — callers decide what to
-// show/alert.
-function rankedPairs(panels, structures, bos) {
+// Build a per-observation CONFIRMED-direction array aligned to `observations` from the Renko `events`.
+// dir[i] = direction of the last brick confirmed at or before observations[i].ms ('up'|'down'|null).
+// A confirming observation carries its own new direction from that index onward (no look-ahead).
+function dirSeries(observations, events) {
+  const n = (observations || []).length;
+  const dir = new Array(n).fill(null);
+  const ev = events || [];
+  let ei = 0, cur = null;
+  for (let i = 0; i < n; i++) {
+    const t = observations[i].ms;
+    while (ei < ev.length && ev[ei].ms <= t) {
+      const lv = ev[ei].levels || [];
+      if (lv.length) cur = lv[lv.length - 1].dir;   // net direction after this (possibly multi-level) event
+      ei++;
+    }
+    dir[i] = cur;
+  }
+  return dir;
+}
+
+// Rank pairs by the signed gap since each active setup began.
+//   series: { CCY: { ms:[...], pp:[...], dir:[...] } }  — all index-aligned to the SAME synchronized
+//           timeline (same ms sequence), pp in percentage points, dir the confirmed brick direction.
+//   structures: { PAIR: 'up'|'down'|'mixed' }  M5 EMA20/EMA50 candle structure.
+//   bos: { PAIR: 'up'|'down' }  15M break of structure.
+// Returns rows [{ pair, strong, weak, leanUp, dir, gap, setupStartMs, struct, bos }] for pairs with an
+// ACTIVE setup at the cutoff (last index), sorted by gap desc then pair name (deterministic).
+function rankedSetups(series, structures, bos) {
   structures = structures || {};
   bos = bos || {};
-  const strength = {}, dir = {};
-  let n = 0;
-  (panels || []).forEach((p) => {
-    if (!p || !p.available || p.lastPp == null || !p.finalDir) return;
-    strength[p.currency] = p.lastPp;   // magnitude only — orders the rows
-    dir[p.currency] = p.finalDir;      // current brick = buy (up) / sell (down)
-    n++;
-  });
-  if (n < 2) return [];
+  series = series || {};
   const rows = [];
   PAIRS.forEach((pair) => {
     const pq = pair.split('_'), b = pq[0], q = pq[1];
-    if (dir[b] == null || dir[q] == null) return;
-    // the two currencies must point opposite ways (one green, one red) — else no clear lean.
-    if (dir[b] === dir[q]) return;
-    const baseUp = dir[b] === 'up';    // base's brick is green → buy the pair
+    const sb = series[b], sq = series[q];
+    if (!sb || !sq || !sb.dir || !sq.dir) return;
+    const N = Math.min(sb.dir.length, sq.dir.length);
+    if (N < 2) return;
+    // Walk the shared timeline, tracking the CURRENT setup. A setup starts when the lean (which green,
+    // which red) first becomes active, and is kept while that same lean holds; it ends when the two
+    // currencies stop opposing, and a direct flip starts a new setup at that observation.
+    let lean = null, startIdx = -1;
+    for (let i = 0; i < N; i++) {
+      const db = sb.dir[i], dq = sq.dir[i];
+      const opposite = !!db && !!dq && db !== dq;
+      if (!opposite) { lean = null; startIdx = -1; continue; }
+      const curLean = (db === 'up') ? 'up' : 'down';   // base brick green → buy the pair (up)
+      if (lean !== curLean) { lean = curLean; startIdx = i; }
+    }
+    if (lean == null || startIdx < 0) return;           // no active setup at the cutoff
+    const last = N - 1;
+    const baseUp = (lean === 'up');
+    const green = baseUp ? b : q, red = baseUp ? q : b;
+    const gs = series[green], rs = series[red];
+    const gap = (gs.pp[last] - gs.pp[startIdx]) - (rs.pp[last] - rs.pp[startIdx]);
     rows.push({
-      pair,
-      strong: baseUp ? b : q,          // the green (bought) currency
-      weak: baseUp ? q : b,            // the red (sold) currency
-      spread: Math.abs(strength[b] - strength[q]),
-      leanUp: baseUp,
-      dir: baseUp ? 'up' : 'down',
-      struct: structures[pair] || null,
-      bos: bos[pair] || null,
+      pair, strong: green, weak: red, leanUp: baseUp, dir: lean,
+      gap, setupStartMs: sb.ms[startIdx],
+      struct: structures[pair] || null, bos: bos[pair] || null,
     });
   });
-  rows.sort((a, b) => b.spread - a.spread);
+  rows.sort((a, b) => (b.gap - a.gap) || (a.pair < b.pair ? -1 : a.pair > b.pair ? 1 : 0));
   return rows;
 }
 
-// Candle structure agrees with the strength lean.
+// Candle structure agrees with the brick lean.
 function isAligned(r) {
   return (r.struct === 'up' || r.struct === 'down') && ((r.struct === 'up') === r.leanUp);
 }
@@ -71,12 +97,12 @@ function hasBos(r) {
   return !!r.bos && r.bos === (r.leanUp ? 'up' : 'down');
 }
 
-// The alert trigger set: aligned pairs that also have a trend-direction 15M BoS.
-// Returns [{ pair, direction, strong, weak, spread }] sorted by spread desc.
-function alertablePairs(panels, structures, bos) {
-  return rankedPairs(panels, structures, bos)
+// The alert trigger set: active-setup pairs that are also aligned AND have a trend-direction 15M BoS.
+// Returns [{ pair, direction, strong, weak, gap }] preserving the gap-desc ranking order.
+function alertable(rows) {
+  return (rows || [])
     .filter((r) => isAligned(r) && hasBos(r))
-    .map((r) => ({ pair: r.pair, direction: r.dir, strong: r.strong, weak: r.weak, spread: r.spread }));
+    .map((r) => ({ pair: r.pair, direction: r.dir, strong: r.strong, weak: r.weak, gap: r.gap }));
 }
 
-module.exports = { rankedPairs, isAligned, hasBos, alertablePairs };
+module.exports = { dirSeries, rankedSetups, isAligned, hasBos, alertable };

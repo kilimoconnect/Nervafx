@@ -2,97 +2,177 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { rankedPairs, alertablePairs } = require('../../research/flow/ranking');
+const { dirSeries, rankedSetups, isAligned, hasBos, alertable } = require('../../research/flow/ranking');
 
-// Build a panel per currency. Direction comes from the CURRENT Renko brick (finalDir): up = green/buy,
-// down = red/sell. lastPp is the index value in pp — it only sizes the strength gap, not direction.
-function panel(currency, lastPp, finalDir) {
-  return { currency, available: true, lastPp, finalDir };
+// A per-currency series: index-aligned ms / pp / confirmed-brick-direction arrays (what
+// computeCompareData builds from each index's continuous Renko). ms are arbitrary ascending.
+function series(dirArr, ppArr, ms0) {
+  const base = ms0 || 1000;
+  return { ms: dirArr.map((_, i) => base + i * 900000), dir: dirArr.slice(), pp: ppArr.slice() };
 }
+const rowFor = (rows, pair) => rows.find((r) => r.pair === pair);
 
-// EUR/GBP/CHF/AUD are green (up); USD/JPY/CAD/NZD are red (down).
-function baseScenario() {
-  return [
-    panel('EUR', 1.00, 'up'),
-    panel('USD', -1.00, 'down'),
-    panel('GBP', 0.50, 'up'),
-    panel('JPY', -0.20, 'down'),
-    panel('CHF', 0.10, 'up'),
-    panel('CAD', 0.40, 'down'),
-    panel('AUD', 0.30, 'up'),
-    panel('NZD', -0.30, 'down'),
+test('an active setup forms when the two bricks oppose; gap = signed pp since it began', () => {
+  // EUR green (up), USD red (down) throughout → EUR_USD setup active from i=0.
+  const s = {
+    EUR: series(['up', 'up', 'up', 'up'], [0, 0.1, 0.2, 0.3]),
+    USD: series(['down', 'down', 'down', 'down'], [0, -0.1, -0.15, -0.2]),
+  };
+  const rows = rankedSetups(s, {}, {});
+  const r = rowFor(rows, 'EUR_USD');
+  assert.ok(r, 'EUR_USD has an active setup');
+  assert.strictEqual(r.leanUp, true);
+  assert.strictEqual(r.strong, 'EUR');       // green = buy
+  assert.strictEqual(r.weak, 'USD');         // red = sell
+  assert.strictEqual(r.setupStartMs, s.EUR.ms[0]);
+  // gap = (EUR 0.3−0) − (USD −0.2−0) = 0.3 + 0.2 = 0.5
+  assert.ok(Math.abs(r.gap - 0.5) < 1e-9, 'gap = +0.5 pp');
+});
+
+test('same-direction bricks produce no setup', () => {
+  const s = {
+    EUR: series(['up', 'up', 'up'], [0, 0.1, 0.2]),
+    GBP: series(['up', 'up', 'up'], [0, 0.05, 0.1]),
+  };
+  assert.ok(!rowFor(rankedSetups(s, {}, {}), 'EUR_GBP'), 'EUR_GBP (both green) has no setup');
+});
+
+test('lean follows the brick when the base is red (sell the pair)', () => {
+  // USD_CHF: USD red (base), CHF green (quote) → sell the pair; strong=CHF, weak=USD.
+  const s = {
+    USD: series(['down', 'down', 'down'], [0, -0.1, -0.2]),
+    CHF: series(['up', 'up', 'up'], [0, 0.1, 0.25]),
+  };
+  const r = rowFor(rankedSetups(s, {}, {}), 'USD_CHF');
+  assert.ok(r, 'USD_CHF active');
+  assert.strictEqual(r.leanUp, false);
+  assert.strictEqual(r.dir, 'down');
+  assert.strictEqual(r.strong, 'CHF');
+  assert.strictEqual(r.weak, 'USD');
+  // gap = (CHF 0.25−0) − (USD −0.2−0) = 0.25 + 0.2 = 0.45
+  assert.ok(Math.abs(r.gap - 0.45) < 1e-9, 'gap = +0.45 pp');
+});
+
+test('a setup survives midnight (the walk never resets on a day boundary)', () => {
+  // ms straddle an EAT midnight; the setup begins before it and the gap spans it.
+  const mid = Date.UTC(2026, 0, 2, 0, 0, 0);           // some UTC instant used as a "day boundary"
+  const s = {
+    EUR: series(['up', 'up', 'up', 'up'], [0, 0.1, 0.2, 0.4], mid - 2 * 900000),
+    USD: series(['down', 'down', 'down', 'down'], [0, -0.1, -0.2, -0.3], mid - 2 * 900000),
+  };
+  const r = rowFor(rankedSetups(s, {}, {}), 'EUR_USD');
+  assert.ok(r, 'setup still active across the boundary');
+  assert.strictEqual(r.setupStartMs, s.EUR.ms[0], 'setup start held across midnight');
+  assert.ok(Math.abs(r.gap - 0.7) < 1e-9, 'gap spans the boundary = 0.4 + 0.3');
+});
+
+test('an ended setup that later reforms restarts the reference', () => {
+  // USD loses its brick at i=2 (setup ends), reopposes at i=3 → new setup start at i=3.
+  const s = {
+    EUR: series(['up', 'up', 'up', 'up', 'up'], [0, 0.1, 0.2, 0.3, 0.5]),
+    USD: series(['down', 'down', null, 'down', 'down'], [0, -0.1, -0.2, -0.25, -0.35]),
+  };
+  const r = rowFor(rankedSetups(s, {}, {}), 'EUR_USD');
+  assert.ok(r, 'setup reformed');
+  assert.strictEqual(r.setupStartMs, s.EUR.ms[3], 'reference restarted at reformation (i=3)');
+  // gap = (EUR 0.5−0.3) − (USD −0.35−(−0.25)) = 0.2 − (−0.1) = 0.3
+  assert.ok(Math.abs(r.gap - 0.3) < 1e-9, 'gap measured from the reformation');
+});
+
+test('a direct lean reversal starts a new setup at the flip', () => {
+  // i0,i1: EUR up / USD down (lean up). i2: EUR down / USD up (opposite but flipped) → new setup, sell.
+  const s = {
+    EUR: series(['up', 'up', 'down'], [0, 0.1, 0.05]),
+    USD: series(['down', 'down', 'up'], [0, -0.1, 0.2]),
+  };
+  const r = rowFor(rankedSetups(s, {}, {}), 'EUR_USD');
+  assert.ok(r, 'reversed setup active');
+  assert.strictEqual(r.leanUp, false, 'lean flipped to down');
+  assert.strictEqual(r.setupStartMs, s.EUR.ms[2], 'new setup at the flip');
+  assert.strictEqual(r.strong, 'USD');   // USD now green
+  assert.strictEqual(r.weak, 'EUR');     // EUR now red
+  // gap = (USD 0.2−0.2) − (EUR 0.05−0.05) = 0  (started at the flip)
+  assert.ok(Math.abs(r.gap - 0) < 1e-9, 'gap = 0 at the flip observation');
+});
+
+test('a negative-gap setup still qualifies (lean lost ground)', () => {
+  // opposite bricks throughout, but pp moved AGAINST the lean → gap negative, row still present.
+  const s = {
+    EUR: series(['up', 'up', 'up'], [0, -0.05, -0.1]),
+    USD: series(['down', 'down', 'down'], [0, 0.05, 0.1]),
+  };
+  const r = rowFor(rankedSetups(s, {}, {}), 'EUR_USD');
+  assert.ok(r, 'negative-gap setup is still listed');
+  // gap = (EUR −0.1−0) − (USD 0.1−0) = −0.2
+  assert.ok(Math.abs(r.gap + 0.2) < 1e-9, 'gap = −0.2 pp');
+});
+
+test('rows sort by gap descending, then pair name', () => {
+  const s = {
+    EUR: series(['up', 'up'], [0, 0.4]),
+    GBP: series(['up', 'up'], [0, 0.4]),   // ties EUR for the gap vs USD
+    AUD: series(['up', 'up'], [0, 0.1]),
+    USD: series(['down', 'down'], [0, -0.2]),
+  };
+  const rows = rankedSetups(s, {}, {});
+  const gaps = rows.map((r) => r.gap);
+  for (let i = 1; i < gaps.length; i++) assert.ok(gaps[i - 1] >= gaps[i], 'gap desc');
+  // EUR_USD and GBP_USD tie (both 0.6); tie-break by pair name → EUR_USD before GBP_USD
+  const iEUR = rows.findIndex((r) => r.pair === 'EUR_USD');
+  const iGBP = rows.findIndex((r) => r.pair === 'GBP_USD');
+  assert.ok(iEUR >= 0 && iGBP >= 0 && iEUR < iGBP, 'EUR_USD before GBP_USD on the tie');
+});
+
+test('replay uses only data through the cutoff (prefix is deterministic)', () => {
+  const full = {
+    EUR: series(['up', 'up', 'up', 'up', 'up'], [0, 0.1, 0.2, 0.3, 0.9]),
+    USD: series(['down', 'down', 'down', 'down', 'down'], [0, -0.1, -0.2, -0.3, -0.9]),
+  };
+  const cut = 3; // through index 2
+  const prefix = {
+    EUR: { ms: full.EUR.ms.slice(0, cut), dir: full.EUR.dir.slice(0, cut), pp: full.EUR.pp.slice(0, cut) },
+    USD: { ms: full.USD.ms.slice(0, cut), dir: full.USD.dir.slice(0, cut), pp: full.USD.pp.slice(0, cut) },
+  };
+  const a = rankedSetups(prefix, {}, {});
+  const b = rankedSetups(prefix, {}, {});
+  assert.deepStrictEqual(a, b, 'same input → identical output');
+  const r = rowFor(a, 'EUR_USD');
+  // gap at cutoff index 2 = (0.2−0) − (−0.2−0) = 0.4 (NOT the full-series 1.8)
+  assert.ok(Math.abs(r.gap - 0.4) < 1e-9, 'gap computed only through the cutoff');
+});
+
+test('dirSeries carries the confirmed direction forward from each event', () => {
+  const obs = [{ ms: 100 }, { ms: 200 }, { ms: 300 }, { ms: 400 }];
+  // up brick confirmed at ms 200; down reversal confirmed at ms 400.
+  const events = [
+    { ms: 200, levels: [{ dir: 'up', kind: 'opening' }] },
+    { ms: 400, levels: [{ dir: 'down', kind: 'reversal' }] },
   ];
-}
-
-test('a pair ranks only when its two currencies point OPPOSITE ways on the brick', () => {
-  const rows = rankedPairs(baseScenario(), {}, {});
-  const byPair = Object.fromEntries(rows.map((r) => [r.pair, r]));
-  // EUR up, USD down → opposite → present, lean up (buy EUR, sell USD)
-  assert.ok(byPair.EUR_USD, 'EUR_USD present');
-  assert.strictEqual(byPair.EUR_USD.leanUp, true);
-  assert.strictEqual(byPair.EUR_USD.dir, 'up');
-  assert.strictEqual(byPair.EUR_USD.strong, 'EUR');  // green = bought
-  assert.strictEqual(byPair.EUR_USD.weak, 'USD');    // red = sold
-  // EUR up, GBP up → same brick direction → dropped
-  assert.ok(!byPair.EUR_GBP, 'EUR_GBP (both green) dropped');
+  assert.deepStrictEqual(dirSeries(obs, events), [null, 'up', 'up', 'down']);
 });
 
-test('lean follows the brick even when the base is red (sell the pair)', () => {
-  const rows = rankedPairs(baseScenario(), {}, {});
-  const uc = rows.find((r) => r.pair === 'USD_CHF');  // USD down (base), CHF up (quote)
-  assert.ok(uc, 'USD_CHF present (opposite bricks)');
-  assert.strictEqual(uc.leanUp, false);   // base red → sell the pair
-  assert.strictEqual(uc.dir, 'down');
-  assert.strictEqual(uc.strong, 'CHF');   // green = bought
-  assert.strictEqual(uc.weak, 'USD');     // red = sold
-});
-
-test('rows are ordered by the pp strength gap (descending)', () => {
-  const rows = rankedPairs(baseScenario(), {}, {});
-  for (let i = 1; i < rows.length; i++) {
-    assert.ok(rows[i - 1].spread >= rows[i].spread, 'sorted by spread desc');
-  }
-  const eu = rows.find((r) => r.pair === 'EUR_USD');
-  assert.ok(Math.abs(eu.spread - 2.0) < 1e-9, 'EUR_USD gap = |1.00 − (−1.00)| = 2.00');
-});
-
-test('a currency with no brick (finalDir null) contributes no pairs', () => {
-  const panels = baseScenario().map((p) => (p.currency === 'EUR' ? panel('EUR', 1.0, null) : p));
-  const rows = rankedPairs(panels, {}, {});
-  assert.ok(!rows.some((r) => r.pair.startsWith('EUR_') || r.pair.endsWith('_EUR')), 'no EUR pairs without a brick');
-});
-
-test('alertablePairs requires opposite-brick, aligned, and in-direction BoS', () => {
-  const panels = baseScenario();
-  const structures = {
-    EUR_USD: 'up',    // agrees with the up lean → aligned
-    AUD_USD: 'down',  // disagrees with AUD_USD's up lean → NOT aligned
-    USD_CHF: 'down',  // agrees with USD_CHF's down lean → aligned, but no BoS set below
+test('alertable keeps only aligned + in-direction-BoS rows, preserving order', () => {
+  const s = {
+    EUR: series(['up', 'up'], [0, 0.5]),
+    USD: series(['down', 'down'], [0, -0.5]),   // EUR_USD lean up, big gap
+    AUD: series(['up', 'up'], [0, 0.1]),        // AUD_USD lean up, small gap
   };
-  const bos = {
-    EUR_USD: 'up',    // in lean direction → fires
-    AUD_USD: 'up',    // present but the pair is not aligned → excluded
-  };
-  const alerts = alertablePairs(panels, structures, bos);
-  const pairs = alerts.map((a) => a.pair);
-  assert.ok(pairs.includes('EUR_USD'), 'EUR_USD aligned with an up BoS');
-  assert.ok(!pairs.includes('AUD_USD'), 'AUD_USD structure contradicts its lean → not aligned');
-  assert.ok(!pairs.includes('USD_CHF'), 'USD_CHF has no BoS');
-  const eu = alerts.find((a) => a.pair === 'EUR_USD');
-  assert.strictEqual(eu.direction, 'up');
-  assert.strictEqual(eu.strong, 'EUR');
-  assert.strictEqual(eu.weak, 'USD');
+  const structures = { EUR_USD: 'up', AUD_USD: 'down' };  // EUR_USD aligned; AUD_USD diverging
+  const bos = { EUR_USD: 'up', AUD_USD: 'up' };           // both have an up BoS
+  const rows = rankedSetups(s, structures, bos);
+  // sanity: isAligned/hasBos
+  assert.ok(isAligned(rowFor(rows, 'EUR_USD')) && hasBos(rowFor(rows, 'EUR_USD')));
+  assert.ok(!isAligned(rowFor(rows, 'AUD_USD')));
+  const al = alertable(rows);
+  const pairs = al.map((a) => a.pair);
+  assert.ok(pairs.includes('EUR_USD'), 'EUR_USD alerts (aligned + up BoS)');
+  assert.ok(!pairs.includes('AUD_USD'), 'AUD_USD excluded (structure diverges)');
+  assert.strictEqual(al[0].pair, 'EUR_USD');
+  assert.ok('gap' in al[0] && al[0].direction === 'up');
 });
 
-test('BoS against the lean direction does not fire', () => {
-  const panels = baseScenario();
-  const structures = { EUR_USD: 'up' };
-  const bos = { EUR_USD: 'down' }; // down BoS but the pair leans up → excluded
-  assert.strictEqual(alertablePairs(panels, structures, bos).length, 0);
-});
-
-test('fewer than two directional currencies → no rows', () => {
-  assert.deepStrictEqual(rankedPairs([panel('EUR', 1.0, 'up')], {}, {}), []);
-  // a currency present but without a brick is not counted
-  assert.deepStrictEqual(rankedPairs([panel('EUR', 1.0, 'up'), panel('USD', -1.0, null)], {}, {}), []);
+test('BoS against the lean direction does not alert', () => {
+  const s = { EUR: series(['up', 'up'], [0, 0.5]), USD: series(['down', 'down'], [0, -0.5]) };
+  const rows = rankedSetups(s, { EUR_USD: 'up' }, { EUR_USD: 'down' });  // down BoS, up lean
+  assert.strictEqual(alertable(rows).length, 0);
 });

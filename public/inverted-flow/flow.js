@@ -374,68 +374,55 @@
       grid.appendChild(card);
     });
     host.innerHTML='';
-    // 1) pairs ranked by strength — on top
-    var pr=buildPairStrength(d.panels); if(pr) host.appendChild(pr);
+    // 1) pairs ranked by gap since setup — on top
+    var pr=buildPairStrength(d.pairRows||[]); if(pr) host.appendChild(pr);
     // 2) currency strength section (title + meta + coverage) — below the table
     var chead=document.createElement('div'); chead.className='cmpHead';
-    var meta=d.meta?('step <b>'+d.meta.step+'pp</b> · '+d.meta.resolution+' basket snapshots · 8 currencies ranked, then every pair ranked by its strength gap'):'';
+    var meta=d.meta?('step <b>'+d.meta.step+'pp</b> · '+d.meta.resolution+' basket snapshots · continuous Renko over a fixed '+((d.meta.lookbackDays)||45)+'-day lookback · pairs ranked by gap since setup'):'';
     var covLine=''; if(d.coverage){ var cc=d.coverage; covLine='Index M15 · '+(cc.nObs||0)+' snapshots · '+(cc.gaps&&cc.gaps.length?cc.gaps.length+' gap(s)':'no gaps')+' · baseline '+(d.baselineUtc?eatStamp(Date.parse(d.baselineUtc)):'—'); }
     chead.innerHTML='<h3 class="cmpTitle">Currency Strength · 8 Indices</h3>'+(meta?'<div class="cmpMeta">'+meta+'</div>':'')+(covLine?'<div class="cmpMeta">'+covLine+'</div>':'');
     host.appendChild(chead);
     // 3) the 8 currency cards
     host.appendChild(grid);
   }
-  // Rank the 28 pairs by the strength gap between their two currencies (from the Renko index pp).
-  // DIRECTION comes from each currency's current Renko brick (finalDir): green/up = buy, red/down =
-  // sell. A pair survives only when its two currencies point OPPOSITE ways; lean = buy the green one,
-  // sell the red one. The pp gap only orders the rows. Mirrors research/flow/ranking.js.
-  function buildPairStrength(panels){
-    var strength={}, dir={}, n=0;
-    (panels||[]).forEach(function(p){ if(p.available&&p.lastPp!=null&&p.finalDir){strength[p.currency]=p.lastPp;dir[p.currency]=p.finalDir;n++;} });
-    if(n<2) return null;
-    var structures=(S.data&&S.data.structures)||{};
-    var bosMap=(S.data&&S.data.bos)||{};
-    var rows=[], nSameDir=0;
-    PAIRS.forEach(function(pair){
-      var pq=pair.split('_'), b=pq[0], q=pq[1];
-      if(dir[b]==null||dir[q]==null) return;
-      // the two currencies must point opposite ways (one green, one red) — else no clear lean.
-      if(dir[b]===dir[q]){ nSameDir++; return; }
-      var baseUp=dir[b]==='up';   // base brick green → buy the pair
-      rows.push({pair:pair, strong:baseUp?b:q, weak:baseUp?q:b, spread:Math.abs(strength[b]-strength[q]), leanUp:baseUp, struct:structures[pair]||null});
-    });
-    if(!rows.length) return null;
-    rows.sort(function(a,b){return b.spread-a.spread;});
+  // Render the pair ranking the server computed (research/flow/ranking.js rankedSetups): pairs with an
+  // ACTIVE opposing-currency setup (two currencies' current Renko bricks point opposite ways — green =
+  // buy, red = sell), ranked by the SIGNED GAP since each setup began. Rows already arrive gap-sorted.
+  function buildPairStrength(rows){
+    rows = rows || [];
+    var nTotal=(PAIRS&&PAIRS.length)||28, nNoSetup=nTotal-rows.length;
     var alignedOnly=S.alignedOnly!==false;
     var shown=alignedOnly ? rows.filter(function(r){return (r.struct==='up'||r.struct==='down') && ((r.struct==='up')===r.leanUp);}) : rows;
     var nNon=rows.length-shown.length;
-    var maxSp=(shown[0]&&shown[0].spread)||rows[0].spread||1;
+    var maxG=1; rows.forEach(function(r){ if(Math.abs(r.gap)>maxG) maxG=Math.abs(r.gap); });
     var wrap=document.createElement('div');wrap.className='pairrank';
     var notes=[];
-    if(nSameDir) notes.push('<b class="hid">'+nSameDir+' pair'+(nSameDir===1?'':'s')+' hidden</b> — both currencies'+"'"+' current Renko brick points the same way (both green or both red); a pair needs one green (buy) and one red (sell) to have a clear lean.');
+    if(nNoSetup>0) notes.push('<b class="hid">'+nNoSetup+' pair'+(nNoSetup===1?'':'s')+' without an active setup</b> — the two currencies'+"'"+' current Renko bricks are not pointing opposite ways (or a currency has no confirmed brick yet).');
     if(alignedOnly&&nNon) notes.push('<b class="hid">'+nNon+' more hidden</b> — <b>Aligned only</b> is on; diverging and mixed pairs are filtered out. Untick to show all.');
-    var h='<h3>Pairs ranked by currency strength<label class="flt"><input type="checkbox" id="alignedOnly"'+(alignedOnly?' checked':'')+'> Aligned only</label></h3>'
+    var h='<h3>Pairs ranked by gap since setup<label class="flt"><input type="checkbox" id="alignedOnly"'+(alignedOnly?' checked':'')+'> Aligned only</label></h3>'
       +(notes.length?('<div class="sub">'+notes.join('<br>')+'</div>'):'')
-      +'<table class="ptbl"><thead><tr><th>#</th><th>Pair</th><th>Strong</th><th>Weak</th><th class="num">Spread&nbsp;(pp)</th><th>Lean</th><th>Candle&nbsp;align</th><th style="width:20%">Strength&nbsp;gap</th></tr></thead><tbody>';
-    if(!shown.length){ h+='<tr><td colspan="8" class="noalign">No aligned pairs at this time.</td></tr>'; }
+      +'<table class="ptbl"><thead><tr><th>#</th><th>Pair</th><th title="Buy currency — current Renko brick is green (up)">Buy</th><th title="Sell currency — current Renko brick is red (down)">Sell</th><th class="num" title="(green now − green at setup start) − (red now − red at setup start), in pp">Gap since setup&nbsp;(pp)</th><th>Lean</th><th>Candle&nbsp;align</th><th style="width:20%">Gap</th></tr></thead><tbody>';
+    if(!shown.length){ h+='<tr><td colspan="8" class="noalign">No '+(alignedOnly?'aligned ':'')+'pairs with an active setup right now.</td></tr>'; }
     shown.forEach(function(r,i){
       var al;
       if(!r.struct){ al='<td class="al none">—</td>'; }
       else if(r.struct==='mixed'){ al='<td class="al mix">≈ mixed</td>'; }
       else { var cu=r.struct==='up', ok=(cu===r.leanUp); al='<td class="al '+(ok?'ok':'no')+'">'+(cu?'▲':'▼')+' '+(ok?'✓ aligned':'✗ diverging')+'</td>'; }
+      var gpos=r.gap>=0, gcol=gpos?'var(--up)':'var(--dn)', gstr=(gpos?'+':'')+Number(r.gap).toFixed(3);
+      var bosBadge=(r.bos&&r.bos===(r.leanUp?'up':'down'))?(' <span class="bos '+(r.leanUp?'up':'dn')+'" title="15M break of structure in the lean direction (≥2 of the last 3 M15 closes broke their prior-8 range)">⚡ BoS '+(r.leanUp?'▲':'▼')+'</span>'):'';
       h+='<tr data-pair="'+r.pair+'"><td class="num">'+(i+1)+'</td>'
-        +'<td class="pair">'+r.pair.replace('_','/')+((bosMap[r.pair]&&bosMap[r.pair]===(r.leanUp?'up':'down'))?(' <span class="bos '+(r.leanUp?'up':'dn')+'" title="15M break of structure in the lean direction — at least two of the last three M15 candles closed '+(r.leanUp?'above their prior-8-candle high':'below their prior-8-candle low')+' (two consecutive, or newest and two-back)">⚡ BoS '+(r.leanUp?'▲':'▼')+'</span>'):'')+'</td>'
+        +'<td class="pair">'+r.pair.replace('_','/')+bosBadge+'</td>'
         +'<td class="s">'+r.strong+'</td><td class="w">'+r.weak+'</td>'
-        +'<td class="num">'+r.spread.toFixed(3)+'</td>'
+        +'<td class="num" style="color:'+gcol+';font-weight:700">'+gstr+'</td>'
         +'<td class="lean '+(r.leanUp?'up':'dn')+'">'+(r.leanUp?'▲ up':'▼ down')+'</td>'
         +al
-        +'<td><span class="bar" style="width:'+Math.max(4,Math.round(r.spread/maxSp*100))+'%"></span></td></tr>';
+        +'<td><span class="bar" style="width:'+Math.max(4,Math.round(Math.abs(r.gap)/maxG*100))+'%;background:'+gcol+'"></span></td></tr>';
     });
     h+='</tbody></table>';
     wrap.innerHTML=h;
     wrap.querySelectorAll('tr[data-pair]').forEach(function(tr){tr.addEventListener('click',function(){var p=tr.getAttribute('data-pair');S.view='single';S.kind='pair';S.instrument=p;nav({view:null,instrument:p,resolution:S.resolution});});});
     var cb=wrap.querySelector('#alignedOnly');
-    if(cb)cb.addEventListener('change',function(){ S.alignedOnly=cb.checked; var fresh=buildPairStrength(panels); if(fresh)wrap.parentNode.replaceChild(fresh,wrap); });
+    if(cb)cb.addEventListener('change',function(){ S.alignedOnly=cb.checked; var fresh=buildPairStrength(rows); if(fresh)wrap.parentNode.replaceChild(fresh,wrap); });
     return wrap;
   }
   function miniSvg(flow,vMin,vMax){

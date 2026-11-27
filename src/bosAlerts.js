@@ -15,7 +15,7 @@
  */
 
 const { computeCompareData } = require('../api/inverted-flow');
-const { alertablePairs } = require('../research/flow/ranking');
+const { alertable } = require('../research/flow/ranking');
 const { sendBulk, bosAlertEmail } = require('./emailService');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -53,11 +53,12 @@ async function runBosAlerts(sb, opts = {}) {
   const finish = async (out) => { if (!dry) await recordRun(sb, source, out); return out; };
 
   try {
-  // 1) Recompute the compare view and find aligned pairs with a trend-direction 15M BoS.
+  // 1) Recompute the compare view and find active-setup pairs that are aligned with a trend-direction
+  //    15M BoS (ranked by the signed gap since each setup began — same rows the page shows).
   const cd = await computeCompareData(sb, { view: 'compare' }, asOfMs);
   if (!cd.available) return finish({ ok: true, available: false, reason: cd.reason });
   const asOfUtc = iso(cd.cutoffMs);
-  const candidates = alertablePairs(cd.panels, cd.structures, cd.bos);
+  const candidates = alertable(cd.pairRows);
   if (!candidates.length) return finish({ ok: true, asOfUtc, candidates: 0, new: 0, reason: 'no aligned+BoS pairs' });
 
   // 2) De-dup against what already fired today (EAT): one alert per pair+direction per EAT day.
@@ -98,7 +99,7 @@ async function runBosAlerts(sb, opts = {}) {
     const nowIso = new Date().toISOString();
     const rows = fresh.map((c) => ({
       pair: c.pair, direction: c.direction, eat_date: eatDate,
-      strong: c.strong, weak: c.weak, spread: c.spread,
+      strong: c.strong, weak: c.weak, spread: c.gap,   // `spread` column stores the signed gap-since-setup (pp)
       recipient_count: recipients.length, sent_at: nowIso,
     }));
     const { error: insErr } = await sb

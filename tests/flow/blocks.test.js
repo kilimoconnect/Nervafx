@@ -153,3 +153,37 @@ test('unitsOf treats an exact threshold as a crossing despite float noise', () =
   // (1.0835 − 1.0830)/0.0005 should be exactly 1, not 0.9999999999.
   assert.strictEqual(unitsOf(1.0835, 1.0830, 0.0005), 1);
 });
+
+test('continuous Renko confirms across an EAT midnight (0.12 pp before + 0.03 pp after = one 0.15 pp brick)', () => {
+  // Part 4: a partial move before midnight plus a smaller move after it together reach one full
+  // 0.15 pp step. With a fixed anchor and no daily reset, the brick confirms on the post-midnight
+  // observation — the engine is time-agnostic, so the day boundary changes nothing.
+  const mid = Date.UTC(2026, 0, 2, 0, 0, 0);            // an EAT day boundary (arbitrary instant)
+  const obs = [
+    { value: 0,    ms: mid - 20 * 60000 },             // anchor seed, 20 min before midnight
+    { value: 0.12, ms: mid - 5 * 60000 },              // +0.12 pp, still before midnight → no brick (< 0.15)
+    { value: 0.15, ms: mid + 5 * 60000 },              // +0.03 pp more, after midnight → cumulative 0.15 → confirms up
+  ];
+  const r = runBlocks(obs, { anchor: 0, step: 0.15, precision: 3 });
+  assert.strictEqual(r.events.length, 1, 'exactly one brick confirmed');
+  const ev = r.events[0];
+  assert.ok(ev.ms > mid, 'the brick confirms on the post-midnight observation');
+  assert.strictEqual(ev.levels[ev.levels.length - 1].dir, 'up', 'an up brick');
+});
+
+test('same cutoff is deterministic: a replay prefix reproduces the full run bricks', () => {
+  // Live vs replay at the same cutoff must agree. runBlocks on observations through a cutoff gives
+  // identical events to the matching prefix of a longer run (no window/zoom dependence).
+  const full = [
+    { value: 0, ms: 0 }, { value: 0.15, ms: 1 }, { value: 0.30, ms: 2 },
+    { value: 0.30, ms: 3 }, { value: 0.60, ms: 4 },
+  ];
+  const cut = 3;                                          // replay "as of" index 2 (three observations)
+  const whole = runBlocks(full, { anchor: 0, step: 0.15, precision: 3 });
+  const prefix = runBlocks(full.slice(0, cut), { anchor: 0, step: 0.15, precision: 3 });
+  // Every event in the prefix must match the corresponding early event of the whole run.
+  prefix.events.forEach((e, i) => {
+    assert.strictEqual(e.ms, whole.events[i].ms);
+    assert.deepStrictEqual(e.levels.map((l) => l.dir), whole.events[i].levels.map((l) => l.dir));
+  });
+});

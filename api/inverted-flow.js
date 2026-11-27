@@ -29,6 +29,7 @@ const { buildIndices } = require('../research/comparison/index-build');
 const { dayStart, EAT_OFFSET_MS } = require('../research/comparison/periods');
 const { M15_MS, DAY_MS, PAIRS, CURRENCIES } = require('../research/comparison/config');
 const { instrumentFor, RES_MS, PAIR_RESOLUTIONS, DEFAULT_PAIR_RESOLUTION, DEFAULT_INDEX_STEP_PP, FLOW_VERSION } = require('../research/flow/config');
+const { dirSeries, rankedSetups } = require('../research/flow/ranking');
 const { runBlocks } = require('../research/flow/blocks');
 const { closeObs, indexObs, simulatedEURUSD } = require('../research/flow/observations');
 const { coverageForCandles, coverageForIndex } = require('../research/flow/coverage');
@@ -208,34 +209,62 @@ function runIndexFlow(built, ccy, baselineMs, cutoffMs, step) {
   return r;
 }
 
-// Compute the full 8-index comparison payload (panels + per-pair candle structure + 15M BoS) at a
-// cutoff. Shared by the GET handler and the BoS email-alert cron so both see exactly the same set.
-// Returns { available:false, reason } or { available:true, built, baselineMs, cutoffMs, sinceMs,
-// daily, step, structures, bos, panels, ranking }.
+// Fixed compute lookback for the CONTINUOUS index Renko (decoupled from chart zoom/pan). A given
+// cutoff always loads the same window, so the bricks are stable per cutoff and carry across midnight
+// & weekends. 45 days / 0.15 pp is far more than enough history to re-establish the current direction
+// by real crossings, so the window edge does not affect the bricks at the cutoff in practice.
+const COMPARE_LOOKBACK_DAYS = 45;
+
+// Compute the full 8-index comparison payload (panels + per-pair candle structure + 15M BoS + the
+// signed gap-since-setup pair ranking) at a cutoff. Shared by the GET handler and the BoS email-alert
+// cron so both see exactly the same set. Returns { available:false, reason } or { available:true,
+// built, baselineMs, cutoffMs, step, structures, bos, panels, ranking, pairRows }.
 async function computeCompareData(sb, q, asOfMs) {
-  const day = await loadIndexWindow(sb, q, asOfMs);
-  if (!day.built.ok) return { available: false, reason: day.built.reason };
-  const built = day.built, baselineMs = day.baselineMs, cutoffMs = day.cutoffMs;
-  // current candlestick structure per pair from recent M5 closes up to the selected cutoff
-  // (EMA20 vs EMA50 on M5 — the same resolution as the pair Renko charts, independent of the index)
+  // Continuous engine: a FIXED lookback from the cutoff (no sliding/daily baseline). ?asOf sets the
+  // replay cutoff; ?date/?days/?since no longer reshape the compare engine (chart display only).
+  const fromMs = asOfMs - COMPARE_LOOKBACK_DAYS * DAY_MS;
+  const by = await loadM15Parallel(sb, PAIRS, { fromIso: iso(fromMs - 2 * M15_MS), toIso: iso(asOfMs) }, 8);
+  const built = buildIndices(by, { baseMs: M15_MS });
+  if (!built.ok) return { available: false, reason: built.reason };
+  const cutoffMs = Math.min(asOfMs, built.lastMs);
+  // Fixed grid reference = the first synchronized observation of the window (pp 0 there, Renko anchor 0).
+  const baselineMs = built.firstMs;
+  // current candlestick structure per pair from recent M5 closes up to the cutoff (EMA20 vs EMA50)
   const m5by = await loadM5Parallel(sb, PAIRS, { fromIso: iso(cutoffMs - 2 * DAY_MS), toIso: iso(cutoffMs) }, 8);
   const structures = {}, bos = {};
-  // BoS from the pair's own M15 candles (loaded for the index window — well over the 11 candles needed).
-  PAIRS.forEach((p) => { const d = structureDir(m5by[p]); if (d) structures[p] = d; const bd = bosDirCandles(day.byPair[p]); if (bd) bos[p] = bd; });
+  // BoS from the pair's own M15 candles (already loaded for the index window — well over the 11 needed).
+  PAIRS.forEach((p) => { const d = structureDir(m5by[p]); if (d) structures[p] = d; const bd = bosDirCandles(by[p]); if (bd) bos[p] = bd; });
   const step = Math.min(5, Math.max(0.001, parseFloat(q.step) || DEFAULT_INDEX_STEP_PP));
+  // One continuous Renko per currency; keep each currency's aligned pp + confirmed-direction series
+  // (all share the same synchronized timeline) so the setup/gap ranking can walk them together.
+  const series = {};
   const panels = CURRENCIES.map((ccy) => {
-    const r = runIndexFlow(built, ccy, baselineMs, cutoffMs, step);
+    const io = indexObs(built, ccy, baselineMs, cutoffMs);
+    if (!io.ok || io.observations.length < 2) {
+      return { currency: ccy, available: false, reason: io.ok ? 'insufficient basket snapshots' : io.reason, lastPp: null, lastIndexValue: null, finalDir: null, lastConfirmMs: null, bosDir: null, flow: null };
+    }
+    const r = runBlocks(io.observations, { anchor: 0, step, precision: 3 });
+    r.baselineValue = io.baselineValue;
+    r.lastIndexValue = io.observations[io.observations.length - 1].raw;
+    r.lastPp = io.observations[io.observations.length - 1].value;
+    r.bosDir = bosDirIndex(io.observations);
+    series[ccy] = {
+      ms: io.observations.map((o) => o.ms),
+      pp: io.observations.map((o) => o.value),
+      dir: dirSeries(io.observations, r.events),
+    };
     return {
-      currency: ccy, available: !!r.ok, reason: r.ok ? null : r.reason,
-      lastPp: r.ok ? r.lastPp : null, lastIndexValue: r.ok ? r.lastIndexValue : null,
-      finalDir: r.ok ? r.finalDir : null, lastConfirmMs: r.ok && r.events.length ? r.events[r.events.length - 1].ms : null,
-      bosDir: r.ok ? (r.bosDir || null) : null,
-      flow: r.ok ? r : null,
+      currency: ccy, available: true, reason: null,
+      lastPp: r.lastPp, lastIndexValue: r.lastIndexValue,
+      finalDir: r.finalDir, lastConfirmMs: r.events.length ? r.events[r.events.length - 1].ms : null,
+      bosDir: r.bosDir || null, flow: r,
     };
   });
-  // rank by actual underlying index value at the common timestamp (partial moves count).
+  // currency cards ranked by index value at the cutoff (partial moves count).
   const ranking = panels.filter((p) => p.available).sort((a, b) => b.lastPp - a.lastPp).map((p, i) => ({ currency: p.currency, rank: i + 1, lastPp: p.lastPp }));
-  return { available: true, built, byPair: day.byPair, baselineMs, cutoffMs, sinceMs: day.sinceMs, daily: day.daily, step, structures, bos, panels, ranking };
+  // pairs ranked by the signed gap since each active opposing-currency setup began.
+  const pairRows = rankedSetups(series, structures, bos);
+  return { available: true, built, byPair: by, baselineMs, cutoffMs, sinceMs: built.firstMs, daily: false, step, structures, bos, panels, ranking, pairRows };
 }
 
 module.exports = async function handler(req, res) {
@@ -312,9 +341,9 @@ module.exports = async function handler(req, res) {
       return res.json({
         ok: true, version: FLOW_VERSION, mode, view: 'compare',
         asOfUtc: iso(cd.cutoffMs), baselineMs: cd.baselineMs, baselineUtc: iso(cd.baselineMs), sinceMs: cd.sinceMs, sinceUtc: iso(cd.sinceMs), daily: cd.daily,
-        meta: { kind: 'index', step: cd.step, unit: 'constituent basket snapshots', valueLabel: '% from baseline (pp)', resolution: 'M15' },
-        coverage: coverageForIndex(cd.built), ranking: cd.ranking, panels: cd.panels, structures: cd.structures, bos: cd.bos,
-        disclaimer: 'Zero-sum 1/8 currency indices on M15 basket snapshots over the loaded window (reconciles with Evolution), UNVALIDATED. Pair "candle structure" (up = EMA20 > EMA50; down = EMA20 < EMA50; else mixed) on that pair\'s M5 closes up to the selected time, independent of the index. The pair "BoS" badge flags a 15M break of structure in the trend direction — at least two of the last three closed M15 candles closed beyond their own prior-8-candle range (two consecutive, or the newest and two-back), from the pair\'s own M15 OHLC; the per-currency BoS uses the same break-of-range idea on the index-value series. Each panel keeps its own activity axis. No orders.',
+        meta: { kind: 'index', step: cd.step, unit: 'constituent basket snapshots', valueLabel: '% from baseline (pp)', resolution: 'M15', lookbackDays: COMPARE_LOOKBACK_DAYS },
+        coverage: coverageForIndex(cd.built), ranking: cd.ranking, panels: cd.panels, structures: cd.structures, bos: cd.bos, pairRows: cd.pairRows,
+        disclaimer: 'Zero-sum 1/8 currency indices on M15 basket snapshots, Renko continuous over a fixed ' + COMPARE_LOOKBACK_DAYS + '-day lookback (carries across midnight & weekends; same cutoff → same bricks), UNVALIDATED. Pairs are ranked by the SIGNED GAP since each opposing-currency setup began: Gap = (green now − green at setup start) − (red now − red at setup start), pp. A setup is active while the two currencies\' current Renko bricks point opposite ways (green = buy, red = sell). Pair "candle structure" (EMA20 vs EMA50 on M5) and the 15M "BoS" badge (≥2 of the last 3 M15 closes beyond their prior-8 range, in the lean direction) are overlays. Each panel keeps its own activity axis. No orders.',
       });
     }
 
