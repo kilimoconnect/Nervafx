@@ -29,10 +29,11 @@ function pairPrecision(pair) { return JPY_PAIRS.has(pair) ? 3 : 5; }
 // DISPLAY preset only — its trading performance has not been established.
 const DEFAULT_PAIR_PIPS = 5;
 
-// Currency-index step is expressed in PERCENTAGE POINTS from the daily baseline. Default 0.05 pp.
-// If returns are stored as decimals, 0.05 pp corresponds to 0.0005 internally; this chart runs the
-// block engine on the index's signed % path (pp), so the step is literally 0.05 (pp).
-const DEFAULT_INDEX_STEP_PP = 0.05;
+// Currency-index step is expressed in PERCENTAGE POINTS from the daily baseline. Default 0.15 pp.
+// If returns are stored as decimals, 0.15 pp corresponds to 0.0015 internally; this chart runs the
+// block engine on the index's signed % path (pp), so the step is literally 0.15 (pp). Bigger bricks
+// = fewer, more significant direction flips — the current brick drives the currency's buy/sell lean.
+const DEFAULT_INDEX_STEP_PP = 0.15;
 
 const RES_MS = { M5: M5_MS, M15: M15_MS, H1: H1_MS };
 const PAIR_RESOLUTIONS = ['M5', 'M15', 'H1'];

@@ -13,50 +13,46 @@
  *   structures  — { PAIR: 'up'|'down'|'mixed' }  candle structure (EMA20 vs EMA50 on M5 closes)
  *   bos         — { PAIR: 'up'|'down' }           15M BoS: ≥2 of last 3 M15 closes break prior-8 range
  *
- * No orders, no signal — relative-movement research only.
+ * Direction rule: a currency's buy/sell direction is its CURRENT Renko brick (finalDir) — green/up
+ * = buy, red/down = sell. A pair is tradeable only when its two currencies point OPPOSITE ways; the
+ * lean is buy-the-pair (up) when the base is green and the quote red, sell (down) when base red and
+ * quote green. The pp strength gap (|lastPp difference|) only orders the rows, it no longer decides
+ * direction. No orders, no signal — relative-movement research only.
  */
 
 const { PAIRS } = require('../comparison/config');
 
-// Currencies whose Renko index direction contradicts their strength sign (strong-but-falling or
-// weak-but-rising) — any pair touching one is dropped, same as the frontend.
-function contradictSet(panels) {
-  const out = {};
-  (panels || []).forEach((p) => {
-    if (!p || !p.available || p.lastPp == null || !p.finalDir) return;
-    if ((p.lastPp > 0 && p.finalDir === 'down') || (p.lastPp < 0 && p.finalDir === 'up')) out[p.currency] = true;
-  });
-  return out;
-}
-
-// Rank the pairs by the strength gap between their two currencies, after the contradiction filter
-// and the same-side filter (one currency genuinely strong, the other genuinely weak). Returns rows
-// [{ pair, strong, weak, spread, leanUp, dir, struct, bos }] sorted by spread desc. Not yet
-// aligned-filtered — callers decide what to show/alert.
+// Rank the pairs by the strength gap between their two currencies. A pair survives only when its two
+// currencies have OPPOSITE current-brick directions (one green/up, one red/down); the lean follows the
+// brick (buy the green one, sell the red one). Returns rows [{ pair, strong, weak, spread, leanUp,
+// dir, struct, bos }] sorted by spread desc. Not yet aligned-filtered — callers decide what to
+// show/alert.
 function rankedPairs(panels, structures, bos) {
   structures = structures || {};
   bos = bos || {};
-  const strength = {};
+  const strength = {}, dir = {};
   let n = 0;
-  (panels || []).forEach((p) => { if (p && p.available && p.lastPp != null) { strength[p.currency] = p.lastPp; n++; } });
+  (panels || []).forEach((p) => {
+    if (!p || !p.available || p.lastPp == null || !p.finalDir) return;
+    strength[p.currency] = p.lastPp;   // magnitude only — orders the rows
+    dir[p.currency] = p.finalDir;      // current brick = buy (up) / sell (down)
+    n++;
+  });
   if (n < 2) return [];
-  const bad = contradictSet(panels);
   const rows = [];
   PAIRS.forEach((pair) => {
     const pq = pair.split('_'), b = pq[0], q = pq[1];
-    if (strength[b] == null || strength[q] == null) return;
-    if (bad[b] || bad[q]) return;
-    const sb = strength[b], sq = strength[q];
-    // one genuinely strong (pp above baseline) vs one genuinely weak (below) — not two of the same side
-    if (!((sb > 0 && sq < 0) || (sb < 0 && sq > 0))) return;
-    const leanUp = sb >= sq;
+    if (dir[b] == null || dir[q] == null) return;
+    // the two currencies must point opposite ways (one green, one red) — else no clear lean.
+    if (dir[b] === dir[q]) return;
+    const baseUp = dir[b] === 'up';    // base's brick is green → buy the pair
     rows.push({
       pair,
-      strong: leanUp ? b : q,
-      weak: leanUp ? q : b,
-      spread: Math.abs(sb - sq),
-      leanUp,
-      dir: leanUp ? 'up' : 'down',
+      strong: baseUp ? b : q,          // the green (bought) currency
+      weak: baseUp ? q : b,            // the red (sold) currency
+      spread: Math.abs(strength[b] - strength[q]),
+      leanUp: baseUp,
+      dir: baseUp ? 'up' : 'down',
       struct: structures[pair] || null,
       bos: bos[pair] || null,
     });
@@ -83,4 +79,4 @@ function alertablePairs(panels, structures, bos) {
     .map((r) => ({ pair: r.pair, direction: r.dir, strong: r.strong, weak: r.weak, spread: r.spread }));
 }
 
-module.exports = { contradictSet, rankedPairs, isAligned, hasBos, alertablePairs };
+module.exports = { rankedPairs, isAligned, hasBos, alertablePairs };

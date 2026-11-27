@@ -286,7 +286,8 @@ async function computeMovingData(sb, asOfMs) {
       if (rl) { shiftDir = rl.dir; shiftMs = ev[k].ms; barsSince = (ev.length - 1) - k; break; }
     }
     // currency-strength lean + candle alignment for this pair (null when the pair is excluded from the
-    // compare ranking — a contradicting currency, or both currencies on the same side of the baseline).
+    // compare ranking — i.e. its two currencies' current Renko bricks point the same way, so there is
+    // no clear buy-the-green / sell-the-red lean).
     const sr = strengthBy[pair] || null;
     rows.push({
       pair, label: inst.label,

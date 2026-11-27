@@ -359,17 +359,15 @@
     d.panels.forEach(function(p){ if(!p.flow)return; var L=layout(p.flow); if(L.vMin<vMin)vMin=L.vMin; if(L.vMax>vMax)vMax=L.vMax; });
     if(vMin===Infinity){vMin=-0.5;vMax=0.5;}
     var order={}; (d.ranking||[]).forEach(function(r){order[r.currency]=r.rank;});
-    var bad=contradictSet(d.panels);
     var panels=d.panels.slice().sort(function(a,b){return (order[a.currency]||99)-(order[b.currency]||99);});
     var grid=document.createElement('div');grid.className='cmpgrid';
     panels.forEach(function(p){
-      var card=document.createElement('div');card.className='cmpcard'+(bad[p.currency]?' stale':'');
+      var card=document.createElement('div');card.className='cmpcard';
       var pp=p.lastPp;
       var top='<div class="top"><span class="ccy">'+p.currency+'</span><span class="rk">#'+(order[p.currency]||'–')+'</span>';
       if(p.finalDir)top+='<span class="dir '+(p.finalDir==='up'?'up':'dn')+'">'+(p.finalDir==='up'?'▲ up':'▼ down')+(p.lastConfirmMs?' · '+durStr(d.asOfUtc? (Date.parse(d.asOfUtc)-p.lastConfirmMs):null):'')+'</span>';
       top+='<span class="pp '+(pp>=0?'up':'dn')+'">'+(pp==null?'—':(pp>=0?'+':'')+pp.toFixed(3)+'pp')+'</span>';
       if(p.bosDir&&p.bosDir===p.finalDir)top+='<span class="bos '+(p.bosDir==='up'?'up':'dn')+'" title="15M break of structure in the trend direction — latest closed M15 closed '+(p.bosDir==='up'?'above the prior 8-candle high':'below the prior 8-candle low')+'">⚡ BoS '+(p.bosDir==='up'?'▲':'▼')+'</span>';
-      if(bad[p.currency])top+='<span class="xflag" title="Renko direction contradicts strength sign — pairs using it are hidden">⚠ excluded</span>';
       top+='</div>';
       card.innerHTML=top;
       if(p.flow&&p.available){ card.appendChild(miniSvg(p.flow,vMin,vMax)); }
@@ -390,48 +388,34 @@
     // 3) the 8 currency cards
     host.appendChild(grid);
   }
-  // A currency is "contradicting" when its Renko last-confirmed direction disagrees with the
-  // sign of its strength (pp): net-strong (+pp) but pointing down, or net-weak (−pp) but pointing up.
-  // Its strength reading is stale/turning, so any pair that uses it has an unreliable lean → hidden.
-  function contradictSet(panels){
-    var out={};
-    (panels||[]).forEach(function(p){
-      if(!p.available||p.lastPp==null||!p.finalDir) return;
-      if((p.lastPp>0&&p.finalDir==='down')||(p.lastPp<0&&p.finalDir==='up')) out[p.currency]=true;
-    });
-    return out;
-  }
-  // Rank the 28 pairs by the strength gap between their two currencies (from the Renko index pp):
-  // each pair has one strong and one weak currency; a bigger gap = a stronger directional lean.
+  // Rank the 28 pairs by the strength gap between their two currencies (from the Renko index pp).
+  // DIRECTION comes from each currency's current Renko brick (finalDir): green/up = buy, red/down =
+  // sell. A pair survives only when its two currencies point OPPOSITE ways; lean = buy the green one,
+  // sell the red one. The pp gap only orders the rows. Mirrors research/flow/ranking.js.
   function buildPairStrength(panels){
-    var strength={}, n=0;
-    (panels||[]).forEach(function(p){ if(p.available&&p.lastPp!=null){strength[p.currency]=p.lastPp;n++;} });
+    var strength={}, dir={}, n=0;
+    (panels||[]).forEach(function(p){ if(p.available&&p.lastPp!=null&&p.finalDir){strength[p.currency]=p.lastPp;dir[p.currency]=p.finalDir;n++;} });
     if(n<2) return null;
     var structures=(S.data&&S.data.structures)||{};
     var bosMap=(S.data&&S.data.bos)||{};
-    var bad=contradictSet(panels), badList=Object.keys(bad);
-    var rows=[], nHidden=0, nSameSide=0;
+    var rows=[], nSameDir=0;
     PAIRS.forEach(function(pair){
       var pq=pair.split('_'), b=pq[0], q=pq[1];
-      if(strength[b]==null||strength[q]==null) return;
-      if(bad[b]||bad[q]){ nHidden++; return; }
-      var sb=strength[b], sq=strength[q];
-      // one genuinely strong (pp above baseline) vs one genuinely weak (below) — not two of the same side
-      if(!((sb>0&&sq<0)||(sb<0&&sq>0))){ nSameSide++; return; }
-      var leanUp=sb>=sq;
-      rows.push({pair:pair, strong:leanUp?b:q, weak:leanUp?q:b, spread:Math.abs(sb-sq), leanUp:leanUp, struct:structures[pair]||null});
+      if(dir[b]==null||dir[q]==null) return;
+      // the two currencies must point opposite ways (one green, one red) — else no clear lean.
+      if(dir[b]===dir[q]){ nSameDir++; return; }
+      var baseUp=dir[b]==='up';   // base brick green → buy the pair
+      rows.push({pair:pair, strong:baseUp?b:q, weak:baseUp?q:b, spread:Math.abs(strength[b]-strength[q]), leanUp:baseUp, struct:structures[pair]||null});
     });
     if(!rows.length) return null;
     rows.sort(function(a,b){return b.spread-a.spread;});
-    var nAligned=0,nStruct=0; rows.forEach(function(r){ if(r.struct==='up'||r.struct==='down'){nStruct++; if((r.struct==='up')===r.leanUp)nAligned++;} });
     var alignedOnly=S.alignedOnly!==false;
     var shown=alignedOnly ? rows.filter(function(r){return (r.struct==='up'||r.struct==='down') && ((r.struct==='up')===r.leanUp);}) : rows;
     var nNon=rows.length-shown.length;
     var maxSp=(shown[0]&&shown[0].spread)||rows[0].spread||1;
     var wrap=document.createElement('div');wrap.className='pairrank';
     var notes=[];
-    if(nHidden) notes.push('<b class="hid">'+nHidden+' pair'+(nHidden===1?'':'s')+' hidden</b> — currency whose Renko direction contradicts its strength ('+badList.join(', ')+'): net-strong but pointing down, or net-weak but pointing up.');
-    if(nSameSide) notes.push('<b class="hid">'+nSameSide+' more hidden</b> — both currencies on the same side of the baseline (two strong or two weak); a pair needs one genuinely strong (+pp) and one genuinely weak (−pp).');
+    if(nSameDir) notes.push('<b class="hid">'+nSameDir+' pair'+(nSameDir===1?'':'s')+' hidden</b> — both currencies'+"'"+' current Renko brick points the same way (both green or both red); a pair needs one green (buy) and one red (sell) to have a clear lean.');
     if(alignedOnly&&nNon) notes.push('<b class="hid">'+nNon+' more hidden</b> — <b>Aligned only</b> is on; diverging and mixed pairs are filtered out. Untick to show all.');
     var h='<h3>Pairs ranked by currency strength<label class="flt"><input type="checkbox" id="alignedOnly"'+(alignedOnly?' checked':'')+'> Aligned only</label></h3>'
       +(notes.length?('<div class="sub">'+notes.join('<br>')+'</div>'):'')
@@ -480,8 +464,9 @@
     var d=S.data; host.innerHTML='';
     if(!d||!d.ok){ host.innerHTML='<div class="banner warn">'+esc((d&&d.reason)||'Moving-pairs scan unavailable')+'</div>'; return; }
     var raw=d.rows||[];
-    // Show only pairs that are in the 8-Index currency-strength ranking (a genuine strong-vs-weak
-    // currency pair); hide the ones the ranking excludes — contradicting or same-side — that showed "—".
+    // Show only pairs in the 8-Index ranking (two currencies pointing OPPOSITE ways on their current
+    // Renko brick — one green/buy, one red/sell); hide the ones the ranking excludes (same-direction
+    // bricks or missing data) that showed "—".
     var all=raw.filter(function(r){ return !!r.strong; });
     var nHidden=raw.length-all.length;
     var trend=(S.movingTrend==='up'||S.movingTrend==='down')?S.movingTrend:'all';
@@ -497,14 +482,14 @@
       +'<option value="down"'+(trend==='down'?' selected':'')+'>▼ Sell ('+nSell+')</option>'
       +'</select></label>';
     var h='<h3>Moving pairs · two consecutive 15M Renko bars'+filt+'</h3>'
-      +'<div class="sub">Pairs whose M15 Renko confirmed a bar on each of the two most recent consecutive 15-minute candles (≥ one step of movement in two back-to-back 15M windows). <b>Renko trend</b> = the most recent <b>shift of control</b> (a Renko reversal): <b class="hid" style="color:var(--up)">▲ Sellers→Buyers</b> is a Buy, <b class="hid" style="color:var(--dn)">▼ Buyers→Sellers</b> is a Sell, with how long ago it flipped. Pairs with no reversal in the window are <b>held</b> (control unchanged)'+(nHeld?' — '+nHeld+' now, shown under All':'')+'. Filter uses the shift direction. Only pairs in the 8-Index Compare <b>currency-strength ranking</b> are shown — <b>Strong▸Weak</b>, Spread, Lean and candle <b>Align</b> (EMA20/50 M5 structure vs the lean)'+(nHidden?'; <b class="hid">'+nHidden+' moving pair'+(nHidden===1?'':'s')+' without a clear strong-vs-weak currency hidden</b>':'')+(d.strengthAvailable===false?' <b class="hid">(currency strength temporarily unavailable)</b>':'')+'. Ranked by the current consecutive-candle run, then total step bars. As of '+esc(asof)+'. Research only — no orders.</div>';
+      +'<div class="sub">Pairs whose M15 Renko confirmed a bar on each of the two most recent consecutive 15-minute candles (≥ one step of movement in two back-to-back 15M windows). <b>Renko trend</b> = the most recent <b>shift of control</b> (a Renko reversal): <b class="hid" style="color:var(--up)">▲ Sellers→Buyers</b> is a Buy, <b class="hid" style="color:var(--dn)">▼ Buyers→Sellers</b> is a Sell, with how long ago it flipped. Pairs with no reversal in the window are <b>held</b> (control unchanged)'+(nHeld?' — '+nHeld+' now, shown under All':'')+'. Filter uses the shift direction. Only pairs in the 8-Index Compare <b>ranking</b> are shown — direction from each currency'+"'"+'s current Renko brick (<b>Strong</b> = green/buy, <b>Weak</b> = red/sell), Spread, Lean and candle <b>Align</b> (EMA20/50 M5 structure vs the lean)'+(nHidden?'; <b class="hid">'+nHidden+' moving pair'+(nHidden===1?'':'s')+' hidden — both currencies'+"'"+' bricks point the same way</b>':'')+(d.strengthAvailable===false?' <b class="hid">(currency strength temporarily unavailable)</b>':'')+'. Ranked by the current consecutive-candle run, then total step bars. As of '+esc(asof)+'. Research only — no orders.</div>';
     if(!rows.length){
       h+='<div class="sub" style="padding:14px 4px;text-align:center;font-style:italic">'
         +(all.length?('No '+(trend==='up'?'Buy (sellers→buyers)':'Sell (buyers→sellers)')+' control shifts among the moving pairs right now.'):(raw.length?'No moving pairs with a currency-strength lean right now.':'No pairs are moving on two consecutive 15M bars right now.'))+'</div>';
     } else {
       var maxRun=rows[0].runEvents||1;
       h+='<table class="ptbl"><thead><tr><th>#</th><th>Pair</th><th title="Most recent shift of control — a Renko reversal — and how long ago it flipped">Renko trend (control shift)</th>'
-        +'<th title="Stronger currency (higher index pp)">Strong</th><th title="Weaker currency (lower index pp)">Weak</th><th class="num" title="Currency-strength gap (pp)">Spread</th><th title="Direction implied by the currency-strength gap">Lean</th><th title="M5 candle structure (EMA20 vs EMA50) vs the strength lean">Align</th>'
+        +'<th title="Buy currency — current Renko brick is green (up)">Strong</th><th title="Sell currency — current Renko brick is red (down)">Weak</th><th class="num" title="Currency index pp gap (orders the rows)">Spread</th><th title="Lean from the currency bricks — buy the green one, sell the red one">Lean</th><th title="M5 candle structure (EMA20 vs EMA50) vs the lean">Align</th>'
         +'<th class="num" title="Length of the current run of consecutive 15-minute bars">Run</th><th class="num" title="Total step bars confirmed within the run">Steps</th><th title="Confirm time of the latest bar (EAT)">Latest</th><th style="width:12%">Momentum</th></tr></thead><tbody>';
       rows.forEach(function(r,i){
         var hasStr=!!r.strong;
