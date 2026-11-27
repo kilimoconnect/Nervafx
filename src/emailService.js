@@ -1465,10 +1465,11 @@ function cmeStructureAlertEmail(signal, tz) {
   };
 }
 
-// ── Inverted Flow: aligned pair + H1 Break of Structure alert ────────────────
+// ── Inverted Flow: aligned pair + 15M Break of Structure alert ───────────────
 // data = { asOfUtc, pairs: [{ pair, direction:'up'|'down', strong, weak, spread }] }
 // Each pair here is already "aligned" (currency-strength lean + EMA20/50 M5 structure agree) AND
-// has an H1 break of structure in that direction. Research/notification only — no orders.
+// has a 15M break of structure in that direction (≥2 of the last 3 M15 closes broke their prior-8
+// range). Research/notification only — no orders.
 function _fmtEat(iso) {
   const d = new Date(new Date(iso).getTime() + 3 * 60 * 60 * 1000);
   const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -1503,10 +1504,10 @@ function bosAlertEmail(data) {
     subject,
     html: baseLayout(`
       <h2>Break of Structure — aligned pairs</h2>
-      <p class="sub">${_fmtEat(data.asOfUtc)} · H1 BoS in the trend direction</p>
+      <p class="sub">${_fmtEat(data.asOfUtc)} · 15M BoS in the trend direction</p>
       ${rows}
       <p style="text-align:center;margin:24px 0"><a class="cta" href="https://nervafx.com/inverted-flow?view=compare">Open Inverted Flow →</a></p>
-      <p class="sm" style="text-align:center">Each pair's currency-strength lean and its M5 candle structure (EMA20 vs EMA50) agree, and the latest closed H1 candle broke the prior 2-candle range in that direction. Relative-movement research — not a trade recommendation. Apply your own risk management.</p>
+      <p class="sm" style="text-align:center">Each pair's currency-strength lean and its M5 candle structure (EMA20 vs EMA50) agree, and at least two of the last three closed M15 candles broke their prior-8-candle range in that direction (two consecutive, or the newest and two-back). Relative-movement research — not a trade recommendation. Apply your own risk management.</p>
     `),
   };
 }

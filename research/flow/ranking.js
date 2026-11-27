@@ -11,7 +11,7 @@
  * Inputs (as produced by GET /api/inverted-flow?view=compare):
  *   panels      — [{ currency, available, lastPp, finalDir, ... }] per currency index
  *   structures  — { PAIR: 'up'|'down'|'mixed' }  candle structure (EMA20 vs EMA50 on M5 closes)
- *   bos         — { PAIR: 'up'|'down' }           H1 break of structure (prior-2-candle range)
+ *   bos         — { PAIR: 'up'|'down' }           15M BoS: ≥2 of last 3 M15 closes break prior-8 range
  *
  * No orders, no signal — relative-movement research only.
  */
@@ -70,12 +70,12 @@ function isAligned(r) {
   return (r.struct === 'up' || r.struct === 'down') && ((r.struct === 'up') === r.leanUp);
 }
 
-// An H1 break of structure fired in the lean direction.
+// A 15M break of structure (≥2 of the last 3 M15 breaks) fired in the lean direction.
 function hasBos(r) {
   return !!r.bos && r.bos === (r.leanUp ? 'up' : 'down');
 }
 
-// The alert trigger set: aligned pairs that also have a trend-direction H1 BoS.
+// The alert trigger set: aligned pairs that also have a trend-direction 15M BoS.
 // Returns [{ pair, direction, strong, weak, spread }] sorted by spread desc.
 function alertablePairs(panels, structures, bos) {
   return rankedPairs(panels, structures, bos)

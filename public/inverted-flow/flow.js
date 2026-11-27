@@ -443,7 +443,7 @@
       else if(r.struct==='mixed'){ al='<td class="al mix">≈ mixed</td>'; }
       else { var cu=r.struct==='up', ok=(cu===r.leanUp); al='<td class="al '+(ok?'ok':'no')+'">'+(cu?'▲':'▼')+' '+(ok?'✓ aligned':'✗ diverging')+'</td>'; }
       h+='<tr data-pair="'+r.pair+'"><td class="num">'+(i+1)+'</td>'
-        +'<td class="pair">'+r.pair.replace('_','/')+((bosMap[r.pair]&&bosMap[r.pair]===(r.leanUp?'up':'down'))?(' <span class="bos '+(r.leanUp?'up':'dn')+'" title="H1 break of structure in the lean direction — latest closed H1 closed '+(r.leanUp?'above the prior 2-candle high':'below the prior 2-candle low')+'">⚡ BoS '+(r.leanUp?'▲':'▼')+'</span>'):'')+'</td>'
+        +'<td class="pair">'+r.pair.replace('_','/')+((bosMap[r.pair]&&bosMap[r.pair]===(r.leanUp?'up':'down'))?(' <span class="bos '+(r.leanUp?'up':'dn')+'" title="15M break of structure in the lean direction — at least two of the last three M15 candles closed '+(r.leanUp?'above their prior-8-candle high':'below their prior-8-candle low')+' (two consecutive, or newest and two-back)">⚡ BoS '+(r.leanUp?'▲':'▼')+'</span>'):'')+'</td>'
         +'<td class="s">'+r.strong+'</td><td class="w">'+r.weak+'</td>'
         +'<td class="num">'+r.spread.toFixed(3)+'</td>'
         +'<td class="lean '+(r.leanUp?'up':'dn')+'">'+(r.leanUp?'▲ up':'▼ down')+'</td>'
@@ -509,7 +509,7 @@
       rows.forEach(function(r,i){
         var hasStr=!!r.strong;
         var pairCell='<td class="pair">'+esc(r.label||r.pair.replace('_','/'));
-        if(hasStr&&r.bos&&r.leanUp!=null&&r.bos===(r.leanUp?'up':'down')) pairCell+=' <span class="bos '+(r.leanUp?'up':'dn')+'" title="H1 break of structure in the lean direction">⚡ BoS '+(r.leanUp?'▲':'▼')+'</span>';
+        if(hasStr&&r.bos&&r.leanUp!=null&&r.bos===(r.leanUp?'up':'down')) pairCell+=' <span class="bos '+(r.leanUp?'up':'dn')+'" title="15M break of structure in the lean direction (≥2 of the last 3 M15 closes broke their prior-8 range)">⚡ BoS '+(r.leanUp?'▲':'▼')+'</span>';
         pairCell+='</td>';
         var sCell,wCell,spCell,lnCell;
         if(hasStr){ sCell='<td class="s">'+esc(r.strong)+'</td>'; wCell='<td class="w">'+esc(r.weak)+'</td>'; spCell='<td class="num">'+(r.spread!=null?r.spread.toFixed(3):'—')+'</td>'; lnCell='<td class="lean '+(r.leanUp?'up':'dn')+'">'+(r.leanUp?'▲ up':'▼ down')+'</td>'; }

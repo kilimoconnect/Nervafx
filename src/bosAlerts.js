@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Inverted Flow "aligned pair + H1 Break of Structure" email-alert core.
+ * Inverted Flow "aligned pair + 15M Break of Structure" email-alert core.
  *
  * Shared by api/cron-bos-alerts.js (standalone endpoint, for dry runs) and the scheduled pipeline
  * (src/updater.js, run by the GitHub Action every ~15 min — fires on the trigger that already runs,
