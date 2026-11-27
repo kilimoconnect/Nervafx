@@ -32,7 +32,6 @@ const { instrumentFor, RES_MS, PAIR_RESOLUTIONS, DEFAULT_PAIR_RESOLUTION, DEFAUL
 const { runBlocks } = require('../research/flow/blocks');
 const { closeObs, indexObs, simulatedEURUSD } = require('../research/flow/observations');
 const { coverageForCandles, coverageForIndex } = require('../research/flow/coverage');
-const { rankedPairs, isAligned } = require('../research/flow/ranking');
 
 const iso = (ms) => (ms == null ? null : new Date(ms).toISOString());
 const parseMs = (v, dflt) => { if (v == null || v === '') return dflt; const t = /^\d+$/.test('' + v) ? parseInt(v, 10) : Date.parse(v); return isNaN(t) ? dflt : t; };
@@ -239,73 +238,6 @@ async function computeCompareData(sb, q, asOfMs) {
   return { available: true, built, byPair: day.byPair, baselineMs, cutoffMs, sinceMs: day.sinceMs, daily: day.daily, step, structures, bos, panels, ranking };
 }
 
-// ── Moving-pairs scan (?view=moving) ──────────────────────────────────────────────────────────
-// Build each pair's Renko on M15 closes (per-pair step) and keep only the pairs that just confirmed a
-// bar on each of the two most recent CONSECUTIVE M15 candles — one bar at 12:15 and the next at 12:30,
-// i.e. ≥ one full step of movement in two back-to-back 15-minute windows ("the pair is moving"). Each
-// qualifying pair is ranked by the length of its current consecutive-candle run, then by the total
-// step bodies produced in that run. Relative-movement research only — no orders, no signal.
-const MOVING_WINDOW_DAYS = 5;
-
-async function computeMovingData(sb, asOfMs) {
-  const M15 = M15_MS;
-  const lastM15 = Math.floor(asOfMs / M15) * M15;   // latest completed M15 close ≤ asOf (quarter-hour aligned)
-  // Currency-strength + candle-alignment layer: reuse the 8-index comparison (same panels / structures /
-  // BoS the compare view ranks pairs with), and its already-loaded M15 candles for the Renko scan.
-  const cd = await computeCompareData(sb, {}, asOfMs);
-  const strengthBy = {};
-  if (cd && cd.available) rankedPairs(cd.panels, cd.structures, cd.bos).forEach((r) => { strengthBy[r.pair] = r; });
-  const by = (cd && cd.available && cd.byPair) ? cd.byPair
-    : await loadM15Parallel(sb, PAIRS, { fromIso: iso(asOfMs - MOVING_WINDOW_DAYS * DAY_MS), toIso: iso(asOfMs) }, 8);
-  const rows = [];
-  PAIRS.forEach((pair) => {
-    const inst = instrumentFor(pair);
-    if (!inst) return;
-    const r = runPairFlow(by[pair], 'M15', inst.step, inst.precision, asOfMs);
-    if (!r || !r.ok || !r.events || r.events.length < 2) return;
-    const ev = r.events;
-    const e1 = ev[ev.length - 1].ms, e0 = ev[ev.length - 2].ms;
-    // the two most recent bars are one M15 candle apart (consecutive) …
-    if ((e1 - e0) !== M15) return;
-    // … and that happened on the latest completed candle (allow one M15 of candle-sync lag) so it is "moving now".
-    if (e1 < lastM15 - M15) return;
-    // trailing run of consecutive-15M bars + total step bodies confirmed within it.
-    let runEvents = 1, runSteps = (ev[ev.length - 1].levels || []).length;
-    for (let k = ev.length - 1; k > 0; k--) {
-      if (ev[k].ms - ev[k - 1].ms === M15) { runEvents++; runSteps += (ev[k - 1].levels || []).length; }
-      else break;
-    }
-    const lastLv = ev[ev.length - 1].levels;
-    // Most recent SHIFT OF CONTROL = the latest Renko reversal in the window. An up-reversal means
-    // sellers lost control to buyers (a Buy); a down-reversal means buyers lost control to sellers
-    // (a Sell). barsSince = how many confirmed bars have formed since that flip (0 = just now). A pair
-    // with no reversal in the window has "held" — control never changed hands (shiftDir = null).
-    let shiftDir = null, shiftMs = null, barsSince = null;
-    for (let k = ev.length - 1; k >= 0; k--) {
-      const rl = (ev[k].levels || []).find((l) => l.kind === 'reversal');
-      if (rl) { shiftDir = rl.dir; shiftMs = ev[k].ms; barsSince = (ev.length - 1) - k; break; }
-    }
-    // currency-strength lean + candle alignment for this pair (null when the pair is excluded from the
-    // compare ranking — i.e. its two currencies' current Renko bricks point the same way, so there is
-    // no clear buy-the-green / sell-the-red lean).
-    const sr = strengthBy[pair] || null;
-    rows.push({
-      pair, label: inst.label,
-      dir: r.finalDir || (lastLv && lastLv.length ? lastLv[lastLv.length - 1].dir : null),
-      shiftDir, shiftMs, barsSince,
-      runEvents, runSteps, lastMs: e1, prevMs: e0,
-      stepPips: Math.round(inst.step / inst.pip * 10) / 10, precision: inst.precision,
-      strong: sr ? sr.strong : null, weak: sr ? sr.weak : null,
-      spread: sr ? sr.spread : null, leanUp: sr ? sr.leanUp : null,
-      struct: sr ? (sr.struct || null) : null, aligned: sr ? isAligned(sr) : false,
-      bos: sr ? (sr.bos || null) : null,
-    });
-  });
-  rows.sort((a, b) => (b.runEvents - a.runEvents) || (b.runSteps - a.runSteps) || (b.lastMs - a.lastMs));
-  rows.forEach((row, i) => { row.rank = i + 1; });
-  return { asOfUtc: iso(asOfMs), lastM15Ms: lastM15, rows, strengthAvailable: !!(cd && cd.available) };
-}
-
 module.exports = async function handler(req, res) {
   cors(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -314,7 +246,7 @@ module.exports = async function handler(req, res) {
     const q = req.query || {};
     const asOfMs = Math.min(parseMs(q.asOf, Date.now()), Date.now());
     const mode = (q.mode === 'sim') ? 'sim' : 'close';
-    const view = (q.view === 'compare') ? 'compare' : (q.view === 'candles' ? 'candles' : (q.view === 'moving' ? 'moving' : 'single'));
+    const view = (q.view === 'compare') ? 'compare' : (q.view === 'candles' ? 'candles' : 'single');
 
     // ---- Simulated reference (the A–D example) ------------------------------------------------
     if (mode === 'sim') {
@@ -383,18 +315,6 @@ module.exports = async function handler(req, res) {
         meta: { kind: 'index', step: cd.step, unit: 'constituent basket snapshots', valueLabel: '% from baseline (pp)', resolution: 'M15' },
         coverage: coverageForIndex(cd.built), ranking: cd.ranking, panels: cd.panels, structures: cd.structures, bos: cd.bos,
         disclaimer: 'Zero-sum 1/8 currency indices on M15 basket snapshots over the loaded window (reconciles with Evolution), UNVALIDATED. Pair "candle structure" (up = EMA20 > EMA50; down = EMA20 < EMA50; else mixed) on that pair\'s M5 closes up to the selected time, independent of the index. The pair "BoS" badge flags a 15M break of structure in the trend direction — at least two of the last three closed M15 candles closed beyond their own prior-8-candle range (two consecutive, or the newest and two-back), from the pair\'s own M15 OHLC; the per-currency BoS uses the same break-of-range idea on the index-value series. Each panel keeps its own activity axis. No orders.',
-      });
-    }
-
-    // ---- Moving pairs (two consecutive M15 Renko bars) ---------------------------------------
-    if (view === 'moving') {
-      const md = await computeMovingData(sb, asOfMs);
-      return res.json({
-        ok: true, version: FLOW_VERSION, mode, view: 'moving',
-        asOfUtc: md.asOfUtc, lastM15Ms: md.lastM15Ms, strengthAvailable: md.strengthAvailable,
-        meta: { resolution: 'M15', unit: 'received M15 closes', condition: 'two consecutive M15 Renko bars (confirmed one 15-minute candle apart)' },
-        rows: md.rows,
-        disclaimer: 'Pairs whose Renko (M15 closes, per-pair step) confirmed a bar on each of the two most recent consecutive M15 candles — ≥ one full step of movement in two back-to-back 15-minute windows. Ranked by the length of the current consecutive-candle run, then total step bodies in it. Relative-movement research, UNVALIDATED. No orders.',
       });
     }
 

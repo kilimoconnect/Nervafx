@@ -76,7 +76,7 @@
     kind: qp('instrument') && qp('instrument').indexOf('IDX:')===0 ? 'index' : (qp('kind')||'pair'),
     instrument: qp('instrument') || 'EUR_USD',
     mode: 'close',
-    view: qp('view')==='compare'?'compare':(qp('view')==='moving'?'moving':'single'),
+    view: qp('view')==='compare'?'compare':'single',
     resolution: qp('resolution') || 'M5',
     step: qp('step') ? parseFloat(qp('step')) : null,
     asOf: qp('asOf') ? +qp('asOf') : null,
@@ -85,7 +85,6 @@
     chartType: (function(){ var q=qp('chart'); if(q==='candles'||q==='renko')return q; try{var s=localStorage.getItem('nfx_flow_chart'); if(s==='candles')return 'candles';}catch(e){} return 'renko'; })(),
     candleTf: (function(){ var ok={'5m':1,'15m':1,'30m':1,'1H':1,'4H':1,'1D':1,'1W':1,'1M':1}; var q=qp('tf'); if(ok[q])return q; try{var s=localStorage.getItem('nfx_flow_tf'); if(ok[s])return s;}catch(e){} return '1H'; })(),
     alignedOnly: qp('aligned')==='0' ? false : true,
-    movingTrend: (function(){ var ok={all:1,up:1,down:1}; var q=qp('trend'); if(ok[q])return q; try{var s=localStorage.getItem('nfx_flow_trend'); if(ok[s])return s;}catch(e){} return 'all'; })(),
     zoom: 1,
     cursor: null,            // replay cursor (null = full)
     data: null, computed: null, play: null, speed: 4,
@@ -100,7 +99,6 @@
   function nav(params){
     var p={};
     if(S.view==='compare'){p.view='compare';}
-    else if(S.view==='moving'){p.view='moving';}
     else if(S.view==='sim'){p.view='sim';}
     else {p.instrument=S.instrument; if(S.kind==='pair')p.resolution=S.resolution;}
     if(S.step!=null)p.step=S.step;
@@ -115,7 +113,6 @@
   function apiUrl(){
     if(S.view==='sim') return '/api/inverted-flow?mode=sim';
     if(S.view==='compare'){var u='/api/inverted-flow?view=compare'; if(S.step!=null)u+='&step='+S.step; if(S.asOf)u+='&asOf='+S.asOf; if(S.date)u+='&date='+encodeURIComponent(S.date); return u;}
-    if(S.view==='moving'){var um='/api/inverted-flow?view=moving'; if(S.asOf)um+='&asOf='+S.asOf; return um;}
     var u='/api/inverted-flow?instrument='+encodeURIComponent(S.instrument);
     if(S.kind==='pair')u+='&resolution='+S.resolution;
     if(S.step!=null)u+='&step='+S.step;
@@ -441,86 +438,6 @@
     if(cb)cb.addEventListener('change',function(){ S.alignedOnly=cb.checked; var fresh=buildPairStrength(panels); if(fresh)wrap.parentNode.replaceChild(fresh,wrap); });
     return wrap;
   }
-  // ========================= MOVING PAIRS (two consecutive 15M Renko bars) =========================
-  // A ranked table of the pairs whose M15 Renko just confirmed a bar on two back-to-back 15-minute
-  // candles (e.g. one at 12:15 and the next at 12:30) — i.e. the pair is moving now. Ranked by the
-  // current consecutive-candle run length, then total step bars in it (momentum). Research only.
-  function eatHM(ms){ var d=new Date(ms+EAT); return pad(d.getUTCHours())+':'+pad(d.getUTCMinutes()); }
-  // The Renko-trend cell = most recent SHIFT OF CONTROL (a Renko reversal): up-reversal = Sellers→Buyers
-  // (Buy), down-reversal = Buyers→Sellers (Sell), with how long ago it flipped. No reversal = "held".
-  function movingTrendCell(r){
-    if(r.shiftDir==='up'||r.shiftDir==='down'){
-      var up=r.shiftDir==='up';
-      var when = (r.barsSince===0||r.barsSince==null) ? 'just now' : (r.barsSince+' bar'+(r.barsSince===1?'':'s')+' ago');
-      var trans = up ? 'Sellers→Buyers' : 'Buyers→Sellers';
-      var ttl = r.shiftMs ? ('Control shifted '+eatHM(r.shiftMs)+' EAT ('+when+')') : '';
-      return '<td class="trend '+(up?'up':'dn')+'" title="'+esc(ttl)+'">'+(up?'▲ BUY':'▼ SELL')
-        +'<span class="shift">'+trans+' · '+when+'</span></td>';
-    }
-    var side = r.dir==='up'?'buyers':(r.dir==='down'?'sellers':null);
-    return '<td class="trend held" title="No Renko reversal in the loaded window — control has not changed hands">held · no shift'+(side?'<span class="shift">('+side+' in control)</span>':'')+'</td>';
-  }
-  function renderMoving(){
-    var d=S.data; host.innerHTML='';
-    if(!d||!d.ok){ host.innerHTML='<div class="banner warn">'+esc((d&&d.reason)||'Moving-pairs scan unavailable')+'</div>'; return; }
-    var raw=d.rows||[];
-    // Show only pairs in the 8-Index ranking (two currencies pointing OPPOSITE ways on their current
-    // Renko brick — one green/buy, one red/sell); hide the ones the ranking excludes (same-direction
-    // bricks or missing data) that showed "—".
-    var all=raw.filter(function(r){ return !!r.strong; });
-    var nHidden=raw.length-all.length;
-    var trend=(S.movingTrend==='up'||S.movingTrend==='down')?S.movingTrend:'all';
-    var nBuy=0,nSell=0,nHeld=0; all.forEach(function(r){ if(r.shiftDir==='up')nBuy++; else if(r.shiftDir==='down')nSell++; else nHeld++; });
-    var rows = trend==='all' ? all : all.filter(function(r){ return r.shiftDir===trend; });
-    var wrap=document.createElement('div'); wrap.className='pairrank';
-    var asof=d.asOfUtc?eatStamp(Date.parse(d.asOfUtc)):'—';
-    // Filter by the direction of the last control shift (Buy = sellers→buyers, Sell = buyers→sellers).
-    var filt='<label class="flt" style="margin-left:auto">Renko trend&nbsp;'
-      +'<select id="movingTrendSel">'
-      +'<option value="all"'+(trend==='all'?' selected':'')+'>All ('+all.length+')</option>'
-      +'<option value="up"'+(trend==='up'?' selected':'')+'>▲ Buy ('+nBuy+')</option>'
-      +'<option value="down"'+(trend==='down'?' selected':'')+'>▼ Sell ('+nSell+')</option>'
-      +'</select></label>';
-    var h='<h3>Moving pairs · two consecutive 15M Renko bars'+filt+'</h3>'
-      +'<div class="sub">Pairs whose M15 Renko confirmed a bar on each of the two most recent consecutive 15-minute candles (≥ one step of movement in two back-to-back 15M windows). <b>Renko trend</b> = the most recent <b>shift of control</b> (a Renko reversal): <b class="hid" style="color:var(--up)">▲ Sellers→Buyers</b> is a Buy, <b class="hid" style="color:var(--dn)">▼ Buyers→Sellers</b> is a Sell, with how long ago it flipped. Pairs with no reversal in the window are <b>held</b> (control unchanged)'+(nHeld?' — '+nHeld+' now, shown under All':'')+'. Filter uses the shift direction. Only pairs in the 8-Index Compare <b>ranking</b> are shown — direction from each currency'+"'"+'s current Renko brick (<b>Strong</b> = green/buy, <b>Weak</b> = red/sell), Spread, Lean and candle <b>Align</b> (EMA20/50 M5 structure vs the lean)'+(nHidden?'; <b class="hid">'+nHidden+' moving pair'+(nHidden===1?'':'s')+' hidden — both currencies'+"'"+' bricks point the same way</b>':'')+(d.strengthAvailable===false?' <b class="hid">(currency strength temporarily unavailable)</b>':'')+'. Ranked by the current consecutive-candle run, then total step bars. As of '+esc(asof)+'. Research only — no orders.</div>';
-    if(!rows.length){
-      h+='<div class="sub" style="padding:14px 4px;text-align:center;font-style:italic">'
-        +(all.length?('No '+(trend==='up'?'Buy (sellers→buyers)':'Sell (buyers→sellers)')+' control shifts among the moving pairs right now.'):(raw.length?'No moving pairs with a currency-strength lean right now.':'No pairs are moving on two consecutive 15M bars right now.'))+'</div>';
-    } else {
-      var maxRun=rows[0].runEvents||1;
-      h+='<table class="ptbl"><thead><tr><th>#</th><th>Pair</th><th title="Most recent shift of control — a Renko reversal — and how long ago it flipped">Renko trend (control shift)</th>'
-        +'<th title="Buy currency — current Renko brick is green (up)">Strong</th><th title="Sell currency — current Renko brick is red (down)">Weak</th><th class="num" title="Currency index pp gap (orders the rows)">Spread</th><th title="Lean from the currency bricks — buy the green one, sell the red one">Lean</th><th title="M5 candle structure (EMA20 vs EMA50) vs the lean">Align</th>'
-        +'<th class="num" title="Length of the current run of consecutive 15-minute bars">Run</th><th class="num" title="Total step bars confirmed within the run">Steps</th><th title="Confirm time of the latest bar (EAT)">Latest</th><th style="width:12%">Momentum</th></tr></thead><tbody>';
-      rows.forEach(function(r,i){
-        var hasStr=!!r.strong;
-        var pairCell='<td class="pair">'+esc(r.label||r.pair.replace('_','/'));
-        if(hasStr&&r.bos&&r.leanUp!=null&&r.bos===(r.leanUp?'up':'down')) pairCell+=' <span class="bos '+(r.leanUp?'up':'dn')+'" title="15M break of structure in the lean direction (≥2 of the last 3 M15 closes broke their prior-8 range)">⚡ BoS '+(r.leanUp?'▲':'▼')+'</span>';
-        pairCell+='</td>';
-        var sCell,wCell,spCell,lnCell;
-        if(hasStr){ sCell='<td class="s">'+esc(r.strong)+'</td>'; wCell='<td class="w">'+esc(r.weak)+'</td>'; spCell='<td class="num">'+(r.spread!=null?r.spread.toFixed(3):'—')+'</td>'; lnCell='<td class="lean '+(r.leanUp?'up':'dn')+'">'+(r.leanUp?'▲ up':'▼ down')+'</td>'; }
-        else { sCell='<td class="al none">—</td>'; wCell='<td class="al none">—</td>'; spCell='<td class="num">—</td>'; lnCell='<td class="al none">—</td>'; }
-        var alCell;
-        if(!hasStr||!r.struct){ alCell='<td class="al none">—</td>'; }
-        else if(r.struct==='mixed'){ alCell='<td class="al mix">≈ mixed</td>'; }
-        else { var cu=r.struct==='up'; alCell='<td class="al '+(r.aligned?'ok':'no')+'">'+(cu?'▲':'▼')+' '+(r.aligned?'✓ aligned':'✗ diverging')+'</td>'; }
-        h+='<tr data-pair="'+esc(r.pair)+'"><td class="num">'+(i+1)+'</td>'
-          +pairCell
-          +movingTrendCell(r)
-          +sCell+wCell+spCell+lnCell+alCell
-          +'<td class="num">'+r.runEvents+'</td>'
-          +'<td class="num">'+r.runSteps+'</td>'
-          +'<td>'+(r.lastMs?eatHM(r.lastMs):'—')+'</td>'
-          +'<td><span class="bar" style="width:'+Math.max(6,Math.round((r.runEvents/maxRun)*100))+'%"></span></td></tr>';
-      });
-      h+='</tbody></table>';
-    }
-    wrap.innerHTML=h;
-    var sel=wrap.querySelector('#movingTrendSel');
-    if(sel) sel.addEventListener('change',function(){ S.movingTrend=sel.value; try{localStorage.setItem('nfx_flow_trend',sel.value);}catch(e){} renderMoving(); });
-    wrap.querySelectorAll('tr[data-pair]').forEach(function(tr){tr.addEventListener('click',function(){ var p=tr.getAttribute('data-pair'); S.view='single'; S.kind='pair'; S.instrument=p; S.resolution='M15'; nav({view:null,instrument:p,resolution:'M15'}); });});
-    host.appendChild(wrap);
-  }
-
   function miniSvg(flow,vMin,vMax){
     var L=layout(flow); var W=360,H=120,ML=4,MR=4,MT=8,MB=8;
     var pxU=(W-ML-MR)/(L.totalA||1);
@@ -550,8 +467,8 @@
       if(m.kind==='pair')sub='step <b>'+m.step+'</b> ('+m.stepPips+' pip) · <b>'+m.resolution+' closes</b> · width = received closes';
       else sub='step <b>'+m.step+'pp</b> · <b>M15 basket snapshots</b>'+(d.daily?' · single day':' · multi-day window')+' · width = basket snapshots';
     }
-    // compare & moving views render their own title/coverage inside #host, so keep the fixed header empty
-    var ownHead=(S.view==='compare'||S.view==='moving');
+    // the compare view renders its own title/coverage inside #host, so keep the fixed header empty
+    var ownHead=(S.view==='compare');
     hdr.innerHTML=ownHead?'':('<div class="chrow"><span class="chTitle">'+esc(title)+'</span></div><div class="chSub">'+sub+'</div>');
     // coverage
     var c='';
@@ -565,7 +482,6 @@
     cov.innerHTML=ownHead?'':c;
     // legend
     var leg=document.getElementById('legend');
-    if(S.view==='moving'){ leg.innerHTML=''; var ft0=document.getElementById('foot'); if(ft0) ft0.innerHTML=''; return; }
     var wUnit = S.view==='sim'?'received quote updates':(d&&d.meta&&d.meta.kind==='index'?'constituent basket snapshots':'received '+((d&&d.meta&&d.meta.resolution)||'')+' closes');
     leg.innerHTML='<span class="k"><span class="sw up"></span> up brick</span>'
       +'<span class="k"><span class="sw dn"></span> down brick</span>'
@@ -597,9 +513,8 @@
     document.getElementById('resCtl').style.display = (S.view==='single'&&S.kind==='pair')?'inline-flex':'none';
     document.getElementById('chartSeg').style.display = (S.view==='single')?'inline-flex':'none';
     document.getElementById('tfSel').style.display = (S.view==='single'&&S.chartType==='candles')?'inline-block':'none';
-    document.getElementById('stepIn').parentElement.style.display = (S.view==='sim'||S.view==='moving'||(S.view==='single'&&S.chartType==='candles'))?'none':'inline-flex';
+    document.getElementById('stepIn').parentElement.style.display = (S.view==='sim'||(S.view==='single'&&S.chartType==='candles'))?'none':'inline-flex';
     if(S.view==='compare'){ destroyLW(); renderCompare(); document.getElementById('replaybar').style.display='none'; }
-    else if(S.view==='moving'){ destroyLW(); renderMoving(); document.getElementById('replaybar').style.display='none'; }
     else { renderSingle(); renderReplay(); }
     syncControls();
   }
@@ -623,12 +538,12 @@
     var m=S.data&&S.data.meta;
     var stepIn=document.getElementById('stepIn'), unit=document.getElementById('stepUnit'), lbl=document.getElementById('stepLbl');
     if(m){ stepIn.value=m.step; if(m.kind==='index'){unit.textContent='pp';lbl.textContent='Step';stepIn.step='0.01';}else{unit.textContent='('+m.stepPips+' pip)';lbl.textContent='Step';stepIn.step=String(m.pip);} }
-    document.getElementById('instSel').parentElement.style.display = (S.view==='sim'||S.view==='compare'||S.view==='moving')?'none':'inline-flex';
+    document.getElementById('instSel').parentElement.style.display = (S.view==='sim'||S.view==='compare')?'none':'inline-flex';
   }
 
   // wire events
   document.querySelectorAll('#kindSeg button').forEach(function(b){b.onclick=function(){ S.kind=b.getAttribute('data-kind'); S.instrument = S.kind==='index'?'IDX:EUR':'EUR_USD'; S.step=null; S.view='single'; nav({view:null,instrument:S.instrument, resolution:S.kind==='pair'?S.resolution:null}); };});
-  document.querySelectorAll('#viewSeg button').forEach(function(b){b.onclick=function(){ var v=b.getAttribute('data-view'); if(v==='compare')nav({view:'compare',instrument:null,resolution:null}); else if(v==='moving')nav({view:'moving',instrument:null,resolution:null,step:null}); else if(v==='sim')nav({view:'sim',instrument:null,resolution:null,step:null}); else nav({view:null,instrument:S.instrument}); };});
+  document.querySelectorAll('#viewSeg button').forEach(function(b){b.onclick=function(){ var v=b.getAttribute('data-view'); if(v==='compare')nav({view:'compare',instrument:null,resolution:null}); else if(v==='sim')nav({view:'sim',instrument:null,resolution:null,step:null}); else nav({view:null,instrument:S.instrument}); };});
   document.querySelectorAll('#resSeg button').forEach(function(b){b.onclick=function(){ S.resolution=b.getAttribute('data-res'); S.step=null; nav({resolution:S.resolution,step:null}); };});
   document.getElementById('instSel').onchange=function(){ S.instrument=this.value; S.kind=this.value.indexOf('IDX:')===0?'index':'pair'; nav({instrument:S.instrument}); };
   document.getElementById('instSearch').oninput=function(){ buildInstruments(); };
@@ -648,7 +563,7 @@
   document.getElementById('rpStepEvt').onclick=function(){ stopPlay(); var idx=eventConfirmIndices(S.data.flow); var cur=S.cursor==null?(S.data.flow.observations.length-1):S.cursor; var nx=idx.find(function(x){return x>cur;}); setCursor(nx==null?(S.data.flow.observations.length-1):nx); };
   document.getElementById('rpLive').onclick=function(){ stopPlay(); S.cursor=null; renderSingle(); renderReplay(); };
   document.getElementById('rpSpeed').onchange=function(){ S.speed=parseFloat(this.value)||4; if(S.play){stopPlay();document.getElementById('rpPlay').click();} };
-  window.addEventListener('resize',function(){ if(S.view==='compare')renderCompare(); else if(S.view==='moving')renderMoving(); /* single: lightweight-charts handles its own resize */ });
+  window.addEventListener('resize',function(){ if(S.view==='compare')renderCompare(); /* single: lightweight-charts handles its own resize */ });
 
   buildInstruments();
   load();
