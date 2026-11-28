@@ -384,7 +384,9 @@ module.exports = async function handler(req, res) {
       const full = participationSeries(cd.series, GAP_MIN_PP);
       const windowDays = Math.min(14, Math.max(0.25, parseFloat(q.days) || 3));
       const fromMs = cd.cutoffMs - windowDays * DAY_MS;
-      const series = full.filter((pt) => pt.ms >= fromMs);
+      // Drop weekend snapshots (no FX market): a point's EAT (UTC+3) weekday of Sat(6) or Sun(0).
+      const isWeekendEat = (ms) => { const wd = new Date(ms + 3 * 3600000).getUTCDay(); return wd === 0 || wd === 6; };
+      const series = full.filter((pt) => pt.ms >= fromMs && !isWeekendEat(pt.ms));
       const last = series.length ? series[series.length - 1] : { sum: 0, count: 0 };
       // Pairs currently contributing (active setup, gap above the threshold), gap-desc — a breakdown.
       const contributors = (cd.pairRows || []).filter((r) => r.gap > GAP_MIN_PP)

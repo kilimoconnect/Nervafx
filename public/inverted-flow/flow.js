@@ -410,10 +410,13 @@
       var wrap=document.createElement('div'); wrap.className='partchart'; host.appendChild(wrap);
       var W=Math.max(320,(wrap.clientWidth||host.clientWidth||900)), H=360;
       var ML=58,MR=16,MT=20,MB=40;
-      var xMin=pts[0].ms, xMax=pts[pts.length-1].ms; if(xMax<=xMin)xMax=xMin+1;
       var maxV=0; pts.forEach(function(p){ if(p.sum>maxV)maxV=p.sum; }); var maxY=Math.max(0.5,maxV*1.12);
-      var xAt=function(ms){return ML+(ms-xMin)/(xMax-xMin)*(W-ML-MR);};
+      // ORDINAL x: points are equally spaced by index so the closed weekend (and any gap) collapses —
+      // Friday's last snapshot sits flush against Monday's first, with no empty span between them.
+      var n=pts.length, span=(W-ML-MR);
+      var xAt=function(i){return ML+(n<=1?span/2:(i/(n-1))*span);};
       var yAt=function(v){return (H-MB)-(v/maxY)*(H-MB-MT);};
+      var eatDay=function(ms){var dt=new Date(ms+EAT);return dt.getUTCFullYear()+'-'+dt.getUTCMonth()+'-'+dt.getUTCDate();};
       var g=[];
       g.push('<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="'+H+'" preserveAspectRatio="none" class="partsvg" style="display:block">');
       // y gridlines + pp labels
@@ -421,22 +424,22 @@
         g.push('<line x1="'+ML+'" y1="'+y.toFixed(1)+'" x2="'+(W-MR)+'" y2="'+y.toFixed(1)+'" stroke="var(--flow-axis)" stroke-opacity="'+(gi===0?0.5:0.16)+'"/>');
         g.push('<text x="'+(ML-8)+'" y="'+(y+3.5).toFixed(1)+'" text-anchor="end" font-size="11" fill="var(--mut,#94a3b8)">'+(gi===0?'0':('+'+vy.toFixed(2)))+'</text>');
       }
-      // vertical EAT-midnight separators
-      var DAYMS=86400000, firstMid=Math.ceil((xMin+EAT)/DAYMS)*DAYMS-EAT;
-      for(var mm=firstMid; mm<xMax; mm+=DAYMS){ var mx=xAt(mm);
-        g.push('<line x1="'+mx.toFixed(1)+'" y1="'+MT+'" x2="'+mx.toFixed(1)+'" y2="'+(H-MB)+'" stroke="var(--flow-axis)" stroke-opacity="0.22" stroke-dasharray="3 4"/>'); }
-      // x ticks (~6 evenly spaced)
-      var nT=Math.min(6,pts.length-1);
-      for(var ti=0;ti<=nT;ti++){ var tms=xMin+(xMax-xMin)*ti/nT, tx=xAt(tms);
-        g.push('<text x="'+tx.toFixed(1)+'" y="'+(H-MB+16)+'" text-anchor="middle" font-size="10.5" fill="var(--mut,#94a3b8)">'+eatShort(tms)+'</text>'); }
+      // session separators wherever the EAT calendar day changes between adjacent points (handles the
+      // Fri→Mon weekend jump too); a jump of more than a day gets a bolder "market closed" break.
+      for(var si=1;si<n;si++){ if(eatDay(pts[si].ms)!==eatDay(pts[si-1].ms)){
+        var sx=((xAt(si)+xAt(si-1))/2).toFixed(1), gap=pts[si].ms-pts[si-1].ms>36*3600000;
+        g.push('<line x1="'+sx+'" y1="'+MT+'" x2="'+sx+'" y2="'+(H-MB)+'" stroke="var(--flow-axis)" stroke-opacity="'+(gap?0.45:0.2)+'" stroke-dasharray="'+(gap?'2 2':'3 4')+'"/>'); } }
+      // x ticks (~6 evenly spaced by index)
+      var nT=Math.min(6,n-1);
+      for(var ti=0;ti<=nT;ti++){ var idx=Math.round((n-1)*ti/nT), tx=xAt(idx);
+        g.push('<text x="'+tx.toFixed(1)+'" y="'+(H-MB+16)+'" text-anchor="middle" font-size="10.5" fill="var(--mut,#94a3b8)">'+eatShort(pts[idx].ms)+'</text>'); }
       // area + line
-      var top=pts.map(function(p){return xAt(p.ms).toFixed(1)+','+yAt(p.sum).toFixed(1);});
-      var area='M'+xAt(pts[0].ms).toFixed(1)+','+yAt(0).toFixed(1)+' L'+top.join(' L')+' L'+xAt(pts[pts.length-1].ms).toFixed(1)+','+yAt(0).toFixed(1)+' Z';
+      var top=pts.map(function(p,i){return xAt(i).toFixed(1)+','+yAt(p.sum).toFixed(1);});
+      var area='M'+xAt(0).toFixed(1)+','+yAt(0).toFixed(1)+' L'+top.join(' L')+' L'+xAt(n-1).toFixed(1)+','+yAt(0).toFixed(1)+' Z';
       g.push('<path d="'+area+'" fill="var(--flow-up)" fill-opacity="0.16"/>');
       g.push('<polyline points="'+top.join(' ')+'" fill="none" stroke="var(--flow-up)" stroke-width="2" stroke-linejoin="round"/>');
       // current point marker
-      var lp=pts[pts.length-1];
-      g.push('<circle cx="'+xAt(lp.ms).toFixed(1)+'" cy="'+yAt(lp.sum).toFixed(1)+'" r="3.5" fill="var(--flow-up)"/>');
+      g.push('<circle cx="'+xAt(n-1).toFixed(1)+'" cy="'+yAt(pts[n-1].sum).toFixed(1)+'" r="3.5" fill="var(--flow-up)"/>');
       // hover cursor (hidden until mousemove)
       g.push('<line id="pcur" x1="0" y1="'+MT+'" x2="0" y2="'+(H-MB)+'" stroke="var(--flow-trace,#e2e8f0)" stroke-opacity="0.7" style="display:none"/>');
       g.push('<rect id="phit" x="'+ML+'" y="'+MT+'" width="'+(W-ML-MR)+'" height="'+(H-MT-MB)+'" fill="transparent"/>');
@@ -444,8 +447,8 @@
       wrap.innerHTML=g.join('');
       var tip=document.createElement('div'); tip.className='parttip'; tip.style.display='none'; wrap.appendChild(tip);
       var svg=wrap.querySelector('svg'), cur2=wrap.querySelector('#pcur'), hit=wrap.querySelector('#phit');
-      function nearest(cx){ var lo=0,hi=pts.length-1; var tms=xMin+(cx-ML)/(W-ML-MR)*(xMax-xMin); var best=0,bd=Infinity; for(var i=0;i<pts.length;i++){var dd=Math.abs(pts[i].ms-tms); if(dd<bd){bd=dd;best=i;}} return best; }
-      if(hit){ hit.addEventListener('mousemove',function(ev){ var r=svg.getBoundingClientRect(); var cx=(ev.clientX-r.left)/r.width*W; var i=nearest(cx); var p=pts[i]; var px=xAt(p.ms);
+      function nearest(cx){ if(n<=1)return 0; var i=Math.round((cx-ML)/span*(n-1)); return Math.max(0,Math.min(n-1,i)); }
+      if(hit){ hit.addEventListener('mousemove',function(ev){ var r=svg.getBoundingClientRect(); var cx=(ev.clientX-r.left)/r.width*W; var i=nearest(cx); var p=pts[i]; var px=xAt(i);
           cur2.setAttribute('x1',px); cur2.setAttribute('x2',px); cur2.style.display='';
           tip.style.display=''; tip.innerHTML='<b>'+(p.sum>=0?'+':'')+p.sum.toFixed(3)+' pp</b> · '+p.count+' pair'+(p.count===1?'':'s')+'<br><span class="mut">'+eatStamp(p.ms)+'</span>';
           var rel=px/W*r.width; tip.style.left=Math.max(4,Math.min(r.width-150,rel+8))+'px';
