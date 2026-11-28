@@ -390,26 +390,32 @@
   // buy, red = sell), ranked by the SIGNED GAP since each setup began. Rows already arrive gap-sorted.
   function buildPairStrength(rows){
     rows = rows || [];
+    var GAP_MIN=0.2;   // only list pairs whose setup gap is above +0.200 pp (mirrors the alert gate)
     var nTotal=(PAIRS&&PAIRS.length)||28, nNoSetup=nTotal-rows.length;
+    var qualifying=rows.filter(function(r){return r.gap>GAP_MIN;});
+    var nBelow=rows.length-qualifying.length;
     var alignedOnly=S.alignedOnly!==false;
-    var shown=alignedOnly ? rows.filter(function(r){return (r.struct==='up'||r.struct==='down') && ((r.struct==='up')===r.leanUp);}) : rows;
-    var nNon=rows.length-shown.length;
-    var maxG=1; rows.forEach(function(r){ if(Math.abs(r.gap)>maxG) maxG=Math.abs(r.gap); });
+    var shown=alignedOnly ? qualifying.filter(function(r){return (r.struct==='up'||r.struct==='down') && ((r.struct==='up')===r.leanUp);}) : qualifying;
+    var nNon=qualifying.length-shown.length;
+    var maxG=1; qualifying.forEach(function(r){ if(Math.abs(r.gap)>maxG) maxG=Math.abs(r.gap); });
     var wrap=document.createElement('div');wrap.className='pairrank';
     var notes=[];
     if(nNoSetup>0) notes.push('<b class="hid">'+nNoSetup+' pair'+(nNoSetup===1?'':'s')+' without an active setup</b> — the two currencies'+"'"+' current Renko bricks are not pointing opposite ways (or a currency has no confirmed brick yet).');
+    if(nBelow>0) notes.push('<b class="hid">'+nBelow+' setup'+(nBelow===1?'':'s')+' below +0.200&nbsp;pp</b> — the gap since the setup began has not yet cleared the +0.200&nbsp;pp threshold.');
     if(alignedOnly&&nNon) notes.push('<b class="hid">'+nNon+' more hidden</b> — <b>Aligned only</b> is on; diverging and mixed pairs are filtered out. Untick to show all.');
     var h='<h3>Pairs ranked by gap since setup<label class="flt"><input type="checkbox" id="alignedOnly"'+(alignedOnly?' checked':'')+'> Aligned only</label></h3>'
       +(notes.length?('<div class="sub">'+notes.join('<br>')+'</div>'):'')
       +'<table class="ptbl"><thead><tr><th>#</th><th>Pair</th><th title="Buy currency — current Renko brick is green (up)">Buy</th><th title="Sell currency — current Renko brick is red (down)">Sell</th><th class="num" title="(green now − green at setup start) − (red now − red at setup start), in pp">Gap since setup&nbsp;(pp)</th><th>Lean</th><th>Candle&nbsp;align</th><th style="width:20%">Gap</th></tr></thead><tbody>';
-    if(!shown.length){ h+='<tr><td colspan="8" class="noalign">No '+(alignedOnly?'aligned ':'')+'pairs with an active setup right now.</td></tr>'; }
+    if(!shown.length){ h+='<tr><td colspan="8" class="noalign">No '+(alignedOnly?'aligned ':'')+'pairs with a setup above +0.200&nbsp;pp right now.</td></tr>'; }
     shown.forEach(function(r,i){
       var al;
       if(!r.struct){ al='<td class="al none">—</td>'; }
       else if(r.struct==='mixed'){ al='<td class="al mix">≈ mixed</td>'; }
       else { var cu=r.struct==='up', ok=(cu===r.leanUp); al='<td class="al '+(ok?'ok':'no')+'">'+(cu?'▲':'▼')+' '+(ok?'✓ aligned':'✗ diverging')+'</td>'; }
       var gpos=r.gap>=0, gcol=gpos?'var(--up)':'var(--dn)', gstr=(gpos?'+':'')+Number(r.gap).toFixed(3);
-      var bosBadge=(r.bos&&r.bos===(r.leanUp?'up':'down'))?(' <span class="bos '+(r.leanUp?'up':'dn')+'" title="15M break of structure in the lean direction (≥2 of the last 3 M15 closes broke their prior-8 range)">⚡ BoS '+(r.leanUp?'▲':'▼')+'</span>'):'';
+      var leanDir=r.leanUp?'up':'down';
+      var hasB=r.bos&&(typeof r.bos==='string'?r.bos===leanDir:!!r.bos[leanDir]);
+      var bosBadge=hasB?(' <span class="bos '+(r.leanUp?'up':'dn')+'" title="Break of structure in the lean direction — a 15M BoS (≥2 of the last 3 M15 closes broke their prior-8 range) or an H1 BoS (latest H1 close broke its prior-2 range)">⚡ BoS '+(r.leanUp?'▲':'▼')+'</span>'):'';
       h+='<tr data-pair="'+r.pair+'"><td class="num">'+(i+1)+'</td>'
         +'<td class="pair">'+r.pair.replace('_','/')+bosBadge+'</td>'
         +'<td class="s">'+r.strong+'</td><td class="w">'+r.weak+'</td>'

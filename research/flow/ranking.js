@@ -22,6 +22,10 @@
 
 const { PAIRS } = require('../comparison/config');
 
+// A pair is only listed / alertable once its setup has gained real ground: signed gap strictly above
+// this many pp since the setup began. Keeps the table and the alert focused on movers.
+const GAP_MIN_PP = 0.2;
+
 // Build a per-observation CONFIRMED-direction array aligned to `observations` from the Renko `events`.
 // dir[i] = direction of the last brick confirmed at or before observations[i].ms ('up'|'down'|null).
 // A confirming observation carries its own new direction from that index onward (no look-ahead).
@@ -46,7 +50,8 @@ function dirSeries(observations, events) {
 //   series: { CCY: { ms:[...], pp:[...], dir:[...] } }  — all index-aligned to the SAME synchronized
 //           timeline (same ms sequence), pp in percentage points, dir the confirmed brick direction.
 //   structures: { PAIR: 'up'|'down'|'mixed' }  M5 EMA20/EMA50 candle structure.
-//   bos: { PAIR: 'up'|'down' }  15M break of structure.
+//   bos: { PAIR: {up:bool, down:bool} | 'up' | 'down' }  break of structure present per direction
+//        (15M ≥2-of-3-prior-8 OR H1 prior-2 — either source counts; legacy scalar also accepted).
 // Returns rows [{ pair, strong, weak, leanUp, dir, gap, setupStartMs, struct, bos }] for pairs with an
 // ACTIVE setup at the cutoff (last index), sorted by gap desc then pair name (deterministic).
 function rankedSetups(series, structures, bos) {
@@ -92,17 +97,22 @@ function isAligned(r) {
   return (r.struct === 'up' || r.struct === 'down') && ((r.struct === 'up') === r.leanUp);
 }
 
-// A 15M break of structure (≥2 of the last 3 M15 breaks) fired in the lean direction.
+// A break of structure fired in the lean direction — from EITHER the 15M (≥2 of the last 3 M15 breaks
+// of prior-8) OR the H1 (latest close breaks its prior-2 range). `r.bos` may be the combined
+// {up,down} presence object, or a legacy scalar direction string.
 function hasBos(r) {
-  return !!r.bos && r.bos === (r.leanUp ? 'up' : 'down');
+  const want = r.leanUp ? 'up' : 'down';
+  const b = r.bos;
+  if (!b) return false;
+  return (typeof b === 'string') ? (b === want) : !!b[want];
 }
 
-// The alert trigger set: active-setup pairs that are also aligned AND have a trend-direction 15M BoS.
-// Returns [{ pair, direction, strong, weak, gap }] preserving the gap-desc ranking order.
+// The alert trigger set: active-setup pairs with a gap above GAP_MIN_PP that are also aligned AND have
+// a trend-direction BoS. Returns [{ pair, direction, strong, weak, gap }] in gap-desc ranking order.
 function alertable(rows) {
   return (rows || [])
-    .filter((r) => isAligned(r) && hasBos(r))
+    .filter((r) => r.gap > GAP_MIN_PP && isAligned(r) && hasBos(r))
     .map((r) => ({ pair: r.pair, direction: r.dir, strong: r.strong, weak: r.weak, gap: r.gap }));
 }
 
-module.exports = { dirSeries, rankedSetups, isAligned, hasBos, alertable };
+module.exports = { dirSeries, rankedSetups, isAligned, hasBos, alertable, GAP_MIN_PP };

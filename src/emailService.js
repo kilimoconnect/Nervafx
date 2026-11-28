@@ -1504,10 +1504,10 @@ function bosAlertEmail(data) {
     subject,
     html: baseLayout(`
       <h2>Break of Structure — aligned pairs</h2>
-      <p class="sub">${_fmtEat(data.asOfUtc)} · 15M BoS in the trend direction</p>
+      <p class="sub">${_fmtEat(data.asOfUtc)} · 15M or H1 BoS in the trend direction · gap &gt; +0.200 pp</p>
       ${rows}
       <p style="text-align:center;margin:24px 0"><a class="cta" href="https://nervafx.com/inverted-flow?view=compare">Open Inverted Flow →</a></p>
-      <p class="sm" style="text-align:center">Each pair's two currencies point opposite ways on their current Renko brick (buy the green one, sell the red one), its M5 candle structure (EMA20 vs EMA50) agrees, and at least two of the last three closed M15 candles broke their prior-8-candle range in that direction (two consecutive, or the newest and two-back). "Gap since setup" is the signed pp the lean has gained since it formed. Relative-movement research — not a trade recommendation. Apply your own risk management.</p>
+      <p class="sm" style="text-align:center">Each pair's two currencies point opposite ways on their current Renko brick (buy the green one, sell the red one), its M5 candle structure (EMA20 vs EMA50) agrees, the signed gap the lean has gained since it formed is above +0.200 pp, and a break of structure fired in that direction — either on the 15M (at least two of the last three closed M15 candles broke their prior-8-candle range) or on the H1 (the latest closed H1 candle broke its prior-2-candle range). "Gap since setup" is that signed pp gain. Relative-movement research — not a trade recommendation. Apply your own risk management.</p>
     `),
   };
 }

@@ -176,3 +176,26 @@ test('BoS against the lean direction does not alert', () => {
   const rows = rankedSetups(s, { EUR_USD: 'up' }, { EUR_USD: 'down' });  // down BoS, up lean
   assert.strictEqual(alertable(rows).length, 0);
 });
+
+test('combined {up,down} BoS object qualifies when the lean direction is present', () => {
+  const s = { EUR: series(['up', 'up'], [0, 0.5]), USD: series(['down', 'down'], [0, -0.5]) };
+  // H1-only up BoS (15M absent) → object has up:true → alerts for the up lean.
+  const upOnly = rankedSetups(s, { EUR_USD: 'up' }, { EUR_USD: { up: true, down: false } });
+  assert.strictEqual(alertable(upOnly).length, 1);
+  assert.strictEqual(alertable(upOnly)[0].pair, 'EUR_USD');
+  // object with only down present, up lean → no alert.
+  const downOnly = rankedSetups(s, { EUR_USD: 'up' }, { EUR_USD: { up: false, down: true } });
+  assert.strictEqual(alertable(downOnly).length, 0);
+});
+
+test('a pair is not alertable until its gap clears +0.200 pp', () => {
+  // gap = 0.18 (< 0.2): aligned + BoS but below threshold → no alert.
+  const below = { EUR: series(['up', 'up'], [0, 0.15]), USD: series(['down', 'down'], [0, -0.03]) };
+  const rBelow = rankedSetups(below, { EUR_USD: 'up' }, { EUR_USD: { up: true, down: false } });
+  assert.ok(Math.abs(rowFor(rBelow, 'EUR_USD').gap - 0.18) < 1e-9);
+  assert.strictEqual(alertable(rBelow).length, 0, 'gap 0.18 pp does not alert');
+  // gap = 0.25 (> 0.2) → alerts.
+  const above = { EUR: series(['up', 'up'], [0, 0.2]), USD: series(['down', 'down'], [0, -0.05]) };
+  const rAbove = rankedSetups(above, { EUR_USD: 'up' }, { EUR_USD: { up: true, down: false } });
+  assert.strictEqual(alertable(rAbove).length, 1, 'gap 0.25 pp alerts');
+});

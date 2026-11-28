@@ -24,7 +24,7 @@
  */
 
 const { getClient, cors } = require('./_db');
-const { loadTf, loadM5Parallel, loadM15Parallel } = require('../research/comparison/dbload');
+const { loadTf, loadM5Parallel, loadM15Parallel, loadH1Parallel } = require('../research/comparison/dbload');
 const { buildIndices } = require('../research/comparison/index-build');
 const { dayStart, EAT_OFFSET_MS } = require('../research/comparison/periods');
 const { M15_MS, DAY_MS, PAIRS, CURRENCIES } = require('../research/comparison/config');
@@ -85,6 +85,24 @@ function bosDirCandles(candles) {
   }
   if (up >= BOS_MIN_HITS) return 'up';
   if (down >= BOS_MIN_HITS) return 'down';
+  return null;
+}
+
+// H1 break of structure over the PRIOR 2 H1 candles: the latest completed H1 close breaks above the
+// max high / below the min low of the two preceding H1 candles. Returns 'up' | 'down' | null. This is
+// an ALTERNATIVE BoS source to the 15M rule above — a pair qualifies on either.
+const BOS_H1_PRIOR = 2;
+function bosDirH1Prior2(candles) {
+  if (!candles || candles.length < BOS_H1_PRIOR + 1) return null;
+  const sorted = candles.slice().sort((a, b) => ((a.openMs != null ? a.openMs : Date.parse(a.time)) - (b.openMs != null ? b.openMs : Date.parse(b.time))));
+  const n = sorted.length;
+  const close = +sorted[n - 1].close;
+  if (!isFinite(close)) return null;
+  const prior = sorted.slice(n - 1 - BOS_H1_PRIOR, n - 1);
+  const hi = Math.max(...prior.map((c) => +c.high)), lo = Math.min(...prior.map((c) => +c.low));
+  if (!isFinite(hi) || !isFinite(lo)) return null;
+  if (close > hi) return 'up';
+  if (close < lo) return 'down';
   return null;
 }
 
@@ -231,9 +249,19 @@ async function computeCompareData(sb, q, asOfMs) {
   const baselineMs = built.firstMs;
   // current candlestick structure per pair from recent M5 closes up to the cutoff (EMA20 vs EMA50)
   const m5by = await loadM5Parallel(sb, PAIRS, { fromIso: iso(cutoffMs - 2 * DAY_MS), toIso: iso(cutoffMs) }, 8);
+  // H1 candles for the alternative H1/prior-2 BoS (a few days covers the 3 needed with margin).
+  const h1by = await loadH1Parallel(sb, PAIRS, { fromIso: iso(cutoffMs - 5 * DAY_MS), toIso: iso(cutoffMs) }, 8);
   const structures = {}, bos = {};
-  // BoS from the pair's own M15 candles (already loaded for the index window — well over the 11 needed).
-  PAIRS.forEach((p) => { const d = structureDir(m5by[p]); if (d) structures[p] = d; const bd = bosDirCandles(by[p]); if (bd) bos[p] = bd; });
+  // BoS from the pair's own candles: 15M (≥2-of-3 breaking prior-8, already loaded for the index window)
+  // OR H1 (latest close breaking prior-2). Either source counts, per direction → { up, down } presence.
+  PAIRS.forEach((p) => {
+    const d = structureDir(m5by[p]); if (d) structures[p] = d;
+    const m15Bos = bosDirCandles(by[p]);
+    const h1Bos = bosDirH1Prior2(h1by[p]);
+    const up = m15Bos === 'up' || h1Bos === 'up';
+    const down = m15Bos === 'down' || h1Bos === 'down';
+    if (up || down) bos[p] = { up, down };
+  });
   const step = Math.min(5, Math.max(0.001, parseFloat(q.step) || DEFAULT_INDEX_STEP_PP));
   // One continuous Renko per currency; keep each currency's aligned pp + confirmed-direction series
   // (all share the same synchronized timeline) so the setup/gap ranking can walk them together.
