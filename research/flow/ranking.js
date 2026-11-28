@@ -92,6 +92,41 @@ function rankedSetups(series, structures, bos) {
   return rows;
 }
 
+// Market-participation series: at every point on the shared synchronized timeline, the SUM of the
+// signed gap over all pairs whose opposing-currency setup is active AND whose gap is above `gapMin`
+// (the same pairs the compare list shows). A high sum = many pairs trending apart at once = broad
+// participation; a low sum = few, shallow setups. Returns [{ ms, sum, count }] for the whole timeline.
+//   series: { CCY: { ms:[...], pp:[...], dir:[...] } }  index-aligned (same ms grid for every currency).
+function participationSeries(series, gapMin) {
+  series = series || {};
+  gapMin = (gapMin == null) ? GAP_MIN_PP : gapMin;
+  // Canonical timeline = the longest available currency's ms (all share the synchronized grid).
+  let ms = null;
+  Object.keys(series).forEach((c) => { const s = series[c]; if (s && s.ms && (!ms || s.ms.length > ms.length)) ms = s.ms; });
+  if (!ms || ms.length < 2) return [];
+  const N = ms.length;
+  const sum = new Array(N).fill(0), count = new Array(N).fill(0);
+  PAIRS.forEach((pair) => {
+    const pq = pair.split('_'), b = pq[0], q = pq[1];
+    const sb = series[b], sq = series[q];
+    if (!sb || !sq || !sb.dir || !sq.dir) return;
+    const n = Math.min(sb.dir.length, sq.dir.length, N);
+    let lean = null, startIdx = -1;
+    for (let i = 0; i < n; i++) {
+      const db = sb.dir[i], dq = sq.dir[i];
+      const opposite = !!db && !!dq && db !== dq;
+      if (!opposite) { lean = null; startIdx = -1; continue; }
+      const curLean = (db === 'up') ? 'up' : 'down';
+      if (lean !== curLean) { lean = curLean; startIdx = i; }
+      const baseUp = (lean === 'up');
+      const gs = baseUp ? sb : sq, rs = baseUp ? sq : sb;
+      const gap = (gs.pp[i] - gs.pp[startIdx]) - (rs.pp[i] - rs.pp[startIdx]);
+      if (gap > gapMin) { sum[i] += gap; count[i] += 1; }
+    }
+  });
+  return ms.map((m, i) => ({ ms: m, sum: sum[i], count: count[i] }));
+}
+
 // Candle structure agrees with the brick lean.
 function isAligned(r) {
   return (r.struct === 'up' || r.struct === 'down') && ((r.struct === 'up') === r.leanUp);
@@ -115,4 +150,4 @@ function alertable(rows) {
     .map((r) => ({ pair: r.pair, direction: r.dir, strong: r.strong, weak: r.weak, gap: r.gap }));
 }
 
-module.exports = { dirSeries, rankedSetups, isAligned, hasBos, alertable, GAP_MIN_PP };
+module.exports = { dirSeries, rankedSetups, participationSeries, isAligned, hasBos, alertable, GAP_MIN_PP };

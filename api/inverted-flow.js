@@ -29,7 +29,7 @@ const { buildIndices } = require('../research/comparison/index-build');
 const { dayStart, EAT_OFFSET_MS } = require('../research/comparison/periods');
 const { M15_MS, DAY_MS, PAIRS, CURRENCIES } = require('../research/comparison/config');
 const { instrumentFor, RES_MS, PAIR_RESOLUTIONS, DEFAULT_PAIR_RESOLUTION, DEFAULT_INDEX_STEP_PP, FLOW_VERSION } = require('../research/flow/config');
-const { dirSeries, rankedSetups } = require('../research/flow/ranking');
+const { dirSeries, rankedSetups, participationSeries, GAP_MIN_PP } = require('../research/flow/ranking');
 const { runBlocks } = require('../research/flow/blocks');
 const { closeObs, indexObs, simulatedEURUSD } = require('../research/flow/observations');
 const { coverageForCandles, coverageForIndex } = require('../research/flow/coverage');
@@ -292,7 +292,7 @@ async function computeCompareData(sb, q, asOfMs) {
   const ranking = panels.filter((p) => p.available).sort((a, b) => b.lastPp - a.lastPp).map((p, i) => ({ currency: p.currency, rank: i + 1, lastPp: p.lastPp }));
   // pairs ranked by the signed gap since each active opposing-currency setup began.
   const pairRows = rankedSetups(series, structures, bos);
-  return { available: true, built, byPair: by, baselineMs, cutoffMs, sinceMs: built.firstMs, daily: false, step, structures, bos, panels, ranking, pairRows };
+  return { available: true, built, byPair: by, baselineMs, cutoffMs, sinceMs: built.firstMs, daily: false, step, structures, bos, panels, ranking, pairRows, series };
 }
 
 module.exports = async function handler(req, res) {
@@ -303,7 +303,7 @@ module.exports = async function handler(req, res) {
     const q = req.query || {};
     const asOfMs = Math.min(parseMs(q.asOf, Date.now()), Date.now());
     const mode = (q.mode === 'sim') ? 'sim' : 'close';
-    const view = (q.view === 'compare') ? 'compare' : (q.view === 'candles' ? 'candles' : 'single');
+    const view = (q.view === 'compare') ? 'compare' : (q.view === 'participation') ? 'participation' : (q.view === 'candles' ? 'candles' : 'single');
 
     // ---- Simulated reference (the A–D example) ------------------------------------------------
     if (mode === 'sim') {
@@ -372,6 +372,30 @@ module.exports = async function handler(req, res) {
         meta: { kind: 'index', step: cd.step, unit: 'constituent basket snapshots', valueLabel: '% from baseline (pp)', resolution: 'M15', lookbackDays: COMPARE_LOOKBACK_DAYS },
         coverage: coverageForIndex(cd.built), ranking: cd.ranking, panels: cd.panels, structures: cd.structures, bos: cd.bos, pairRows: cd.pairRows,
         disclaimer: 'Zero-sum 1/8 currency indices on M15 basket snapshots, Renko continuous over a fixed ' + COMPARE_LOOKBACK_DAYS + '-day lookback (carries across midnight & weekends; same cutoff → same bricks), UNVALIDATED. Pairs are ranked by the SIGNED GAP since each opposing-currency setup began: Gap = (green now − green at setup start) − (red now − red at setup start), pp. A setup is active while the two currencies\' current Renko bricks point opposite ways (green = buy, red = sell). Pair "candle structure" (EMA20 vs EMA50 on M5) and the 15M "BoS" badge (≥2 of the last 3 M15 closes beyond their prior-8 range, in the lean direction) are overlays. Each panel keeps its own activity axis. No orders.',
+      });
+    }
+
+    if (view === 'participation') {
+      // Market participation = the SUM of the gap-since-setup across all currently-qualifying pairs,
+      // as a continuous 15M series. Reuses the same continuous engine as the compare view, then slices
+      // a trailing display window ending at the cutoff (?days, default 3, capped at 14). ?asOf replays.
+      const cd = await computeCompareData(sb, q, asOfMs);
+      if (!cd.available) return res.json({ ok: true, available: false, reason: cd.reason, mode, view });
+      const full = participationSeries(cd.series, GAP_MIN_PP);
+      const windowDays = Math.min(14, Math.max(0.25, parseFloat(q.days) || 3));
+      const fromMs = cd.cutoffMs - windowDays * DAY_MS;
+      const series = full.filter((pt) => pt.ms >= fromMs);
+      const last = series.length ? series[series.length - 1] : { sum: 0, count: 0 };
+      // Pairs currently contributing (active setup, gap above the threshold), gap-desc — a breakdown.
+      const contributors = (cd.pairRows || []).filter((r) => r.gap > GAP_MIN_PP)
+        .map((r) => ({ pair: r.pair, strong: r.strong, weak: r.weak, leanUp: r.leanUp, gap: r.gap }));
+      return res.json({
+        ok: true, version: FLOW_VERSION, mode, view: 'participation',
+        asOfUtc: iso(cd.cutoffMs), baselineUtc: iso(cd.baselineMs),
+        series, current: { sum: last.sum, count: last.count }, contributors,
+        meta: { resolution: 'M15', step: cd.step, lookbackDays: COMPARE_LOOKBACK_DAYS, windowDays, gapMin: GAP_MIN_PP },
+        coverage: coverageForIndex(cd.built),
+        disclaimer: 'Market-participation breadth: at each M15 snapshot, the SUM of the signed gap-since-setup over every pair with an active opposing-currency setup whose gap exceeds +' + GAP_MIN_PP.toFixed(3) + ' pp (the same pairs the 8-Index Compare list shows). A rising sum = more pairs trending apart, or existing setups widening = broader participation; it is NOT a price, a directional call, or a trade signal. Continuous Renko over a fixed ' + COMPARE_LOOKBACK_DAYS + '-day lookback; same cutoff → same series. UNVALIDATED research.',
       });
     }
 

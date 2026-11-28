@@ -2,7 +2,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { dirSeries, rankedSetups, isAligned, hasBos, alertable } = require('../../research/flow/ranking');
+const { dirSeries, rankedSetups, participationSeries, isAligned, hasBos, alertable } = require('../../research/flow/ranking');
 
 // A per-currency series: index-aligned ms / pp / confirmed-brick-direction arrays (what
 // computeCompareData builds from each index's continuous Renko). ms are arbitrary ascending.
@@ -186,6 +186,28 @@ test('combined {up,down} BoS object qualifies when the lean direction is present
   // object with only down present, up lean → no alert.
   const downOnly = rankedSetups(s, { EUR_USD: 'up' }, { EUR_USD: { up: false, down: true } });
   assert.strictEqual(alertable(downOnly).length, 0);
+});
+
+test('participationSeries sums the gaps of only the pairs above +0.200 pp at each snapshot', () => {
+  const s = {
+    EUR: series(['up', 'up', 'up'], [0, 0.1, 0.3]),
+    USD: series(['down', 'down', 'down'], [0, -0.1, -0.3]),   // EUR_USD & GBP_USD oppose USD
+    GBP: series(['up', 'up', 'up'], [0, 0.05, 0.1]),
+  };
+  const ser = participationSeries(s, 0.2);
+  assert.strictEqual(ser.length, 3, 'one point per timeline snapshot');
+  // i=0: all gaps 0 → nothing qualifies.
+  assert.strictEqual(ser[0].sum, 0);
+  assert.strictEqual(ser[0].count, 0);
+  // i=1: EUR_USD gap exactly 0.2 (not > 0.2), GBP_USD 0.15 → still nothing.
+  assert.strictEqual(ser[1].count, 0, '0.200 pp is below the strict threshold');
+  // i=2: EUR_USD 0.6 + GBP_USD 0.4 both qualify → sum 1.0 over 2 pairs.
+  assert.strictEqual(ser[2].count, 2);
+  assert.ok(Math.abs(ser[2].sum - 1.0) < 1e-9, 'sum = 0.6 + 0.4');
+});
+
+test('participationSeries returns [] when there is no usable timeline', () => {
+  assert.deepStrictEqual(participationSeries({}, 0.2), []);
 });
 
 test('a pair is not alertable until its gap clears +0.200 pp', () => {

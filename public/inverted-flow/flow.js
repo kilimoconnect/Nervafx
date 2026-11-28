@@ -76,7 +76,7 @@
     kind: qp('instrument') && qp('instrument').indexOf('IDX:')===0 ? 'index' : (qp('kind')||'pair'),
     instrument: qp('instrument') || 'EUR_USD',
     mode: 'close',
-    view: qp('view')==='compare'?'compare':'single',
+    view: qp('view')==='compare'?'compare':(qp('view')==='participation'?'participation':'single'),
     resolution: qp('resolution') || 'M5',
     step: qp('step') ? parseFloat(qp('step')) : null,
     asOf: qp('asOf') ? +qp('asOf') : null,
@@ -99,6 +99,7 @@
   function nav(params){
     var p={};
     if(S.view==='compare'){p.view='compare';}
+    else if(S.view==='participation'){p.view='participation';}
     else if(S.view==='sim'){p.view='sim';}
     else {p.instrument=S.instrument; if(S.kind==='pair')p.resolution=S.resolution;}
     if(S.step!=null)p.step=S.step;
@@ -113,6 +114,7 @@
   function apiUrl(){
     if(S.view==='sim') return '/api/inverted-flow?mode=sim';
     if(S.view==='compare'){var u='/api/inverted-flow?view=compare'; if(S.step!=null)u+='&step='+S.step; if(S.asOf)u+='&asOf='+S.asOf; if(S.date)u+='&date='+encodeURIComponent(S.date); return u;}
+    if(S.view==='participation'){var up='/api/inverted-flow?view=participation'; if(S.step!=null)up+='&step='+S.step; if(S.asOf)up+='&asOf='+S.asOf; return up;}
     var u='/api/inverted-flow?instrument='+encodeURIComponent(S.instrument);
     if(S.kind==='pair')u+='&resolution='+S.resolution;
     if(S.step!=null)u+='&step='+S.step;
@@ -385,6 +387,89 @@
     // 3) the 8 currency cards
     host.appendChild(grid);
   }
+
+  // Short EAT stamp for axis ticks: "DD/MM HH:MM" from the full "YYYY-MM-DD HH:MM EAT".
+  function eatShort(ms){ var m=eatStamp(ms).match(/(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})/); return m?(m[3]+'/'+m[2]+' '+m[4]+':'+m[5]):eatStamp(ms); }
+
+  // Market-participation view: a 15M time series of the SUM of gap-since-setup across qualifying pairs.
+  // Higher = more pairs trending apart (or wider setups) = broader participation. ?asOf replays history.
+  function renderParticipation(){
+    var d=S.data; host.innerHTML='';
+    if(!d||!d.ok||!d.series){ host.innerHTML='<div class="banner warn">'+esc((d&&d.reason)||'Participation unavailable')+'</div>'; return; }
+    var pts=d.series||[], cur=d.current||{sum:0,count:0};
+    var gapMin=(d.meta&&d.meta.gapMin!=null)?Number(d.meta.gapMin).toFixed(3):'0.200';
+    var wDays=(d.meta&&d.meta.windowDays)||3;
+    var head=document.createElement('div'); head.className='cmpHead';
+    head.innerHTML='<h3 class="cmpTitle">Market Participation · Σ gap since setup</h3>'
+      +'<div class="partnow"><span class="big'+(cur.sum>0?' up':'')+'">'+(cur.sum>=0?'+':'')+Number(cur.sum).toFixed(3)+'&nbsp;pp</span>'
+      +'<span class="mut"> across <b>'+cur.count+'</b> qualifying pair'+(cur.count===1?'':'s')+' now</span></div>'
+      +'<div class="cmpMeta">window <b>'+wDays+'d</b> · 15M snapshots · each qualifying pair has an active setup with gap &gt; +'+gapMin+'&nbsp;pp · continuous Renko over '+((d.meta&&d.meta.lookbackDays)||45)+'-day lookback · through '+(d.asOfUtc?eatStamp(Date.parse(d.asOfUtc)):'—')+(S.asOf?' <b>(replay)</b>':' (live)')+'</div>';
+    host.appendChild(head);
+    if(pts.length<2){ var nb=document.createElement('div'); nb.className='coverage warn'; nb.textContent='Not enough 15M snapshots in this window to plot.'; host.appendChild(nb); }
+    else {
+      var wrap=document.createElement('div'); wrap.className='partchart'; host.appendChild(wrap);
+      var W=Math.max(320,(wrap.clientWidth||host.clientWidth||900)), H=360;
+      var ML=58,MR=16,MT=20,MB=40;
+      var xMin=pts[0].ms, xMax=pts[pts.length-1].ms; if(xMax<=xMin)xMax=xMin+1;
+      var maxV=0; pts.forEach(function(p){ if(p.sum>maxV)maxV=p.sum; }); var maxY=Math.max(0.5,maxV*1.12);
+      var xAt=function(ms){return ML+(ms-xMin)/(xMax-xMin)*(W-ML-MR);};
+      var yAt=function(v){return (H-MB)-(v/maxY)*(H-MB-MT);};
+      var g=[];
+      g.push('<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="'+H+'" preserveAspectRatio="none" class="partsvg" style="display:block">');
+      // y gridlines + pp labels
+      for(var gi=0;gi<=4;gi++){ var vy=maxY*gi/4, y=yAt(vy);
+        g.push('<line x1="'+ML+'" y1="'+y.toFixed(1)+'" x2="'+(W-MR)+'" y2="'+y.toFixed(1)+'" stroke="var(--flow-axis)" stroke-opacity="'+(gi===0?0.5:0.16)+'"/>');
+        g.push('<text x="'+(ML-8)+'" y="'+(y+3.5).toFixed(1)+'" text-anchor="end" font-size="11" fill="var(--mut,#94a3b8)">'+(gi===0?'0':('+'+vy.toFixed(2)))+'</text>');
+      }
+      // vertical EAT-midnight separators
+      var DAYMS=86400000, firstMid=Math.ceil((xMin+EAT)/DAYMS)*DAYMS-EAT;
+      for(var mm=firstMid; mm<xMax; mm+=DAYMS){ var mx=xAt(mm);
+        g.push('<line x1="'+mx.toFixed(1)+'" y1="'+MT+'" x2="'+mx.toFixed(1)+'" y2="'+(H-MB)+'" stroke="var(--flow-axis)" stroke-opacity="0.22" stroke-dasharray="3 4"/>'); }
+      // x ticks (~6 evenly spaced)
+      var nT=Math.min(6,pts.length-1);
+      for(var ti=0;ti<=nT;ti++){ var tms=xMin+(xMax-xMin)*ti/nT, tx=xAt(tms);
+        g.push('<text x="'+tx.toFixed(1)+'" y="'+(H-MB+16)+'" text-anchor="middle" font-size="10.5" fill="var(--mut,#94a3b8)">'+eatShort(tms)+'</text>'); }
+      // area + line
+      var top=pts.map(function(p){return xAt(p.ms).toFixed(1)+','+yAt(p.sum).toFixed(1);});
+      var area='M'+xAt(pts[0].ms).toFixed(1)+','+yAt(0).toFixed(1)+' L'+top.join(' L')+' L'+xAt(pts[pts.length-1].ms).toFixed(1)+','+yAt(0).toFixed(1)+' Z';
+      g.push('<path d="'+area+'" fill="var(--flow-up)" fill-opacity="0.16"/>');
+      g.push('<polyline points="'+top.join(' ')+'" fill="none" stroke="var(--flow-up)" stroke-width="2" stroke-linejoin="round"/>');
+      // current point marker
+      var lp=pts[pts.length-1];
+      g.push('<circle cx="'+xAt(lp.ms).toFixed(1)+'" cy="'+yAt(lp.sum).toFixed(1)+'" r="3.5" fill="var(--flow-up)"/>');
+      // hover cursor (hidden until mousemove)
+      g.push('<line id="pcur" x1="0" y1="'+MT+'" x2="0" y2="'+(H-MB)+'" stroke="var(--flow-trace,#e2e8f0)" stroke-opacity="0.7" style="display:none"/>');
+      g.push('<rect id="phit" x="'+ML+'" y="'+MT+'" width="'+(W-ML-MR)+'" height="'+(H-MT-MB)+'" fill="transparent"/>');
+      g.push('</svg>');
+      wrap.innerHTML=g.join('');
+      var tip=document.createElement('div'); tip.className='parttip'; tip.style.display='none'; wrap.appendChild(tip);
+      var svg=wrap.querySelector('svg'), cur2=wrap.querySelector('#pcur'), hit=wrap.querySelector('#phit');
+      function nearest(cx){ var lo=0,hi=pts.length-1; var tms=xMin+(cx-ML)/(W-ML-MR)*(xMax-xMin); var best=0,bd=Infinity; for(var i=0;i<pts.length;i++){var dd=Math.abs(pts[i].ms-tms); if(dd<bd){bd=dd;best=i;}} return best; }
+      if(hit){ hit.addEventListener('mousemove',function(ev){ var r=svg.getBoundingClientRect(); var cx=(ev.clientX-r.left)/r.width*W; var i=nearest(cx); var p=pts[i]; var px=xAt(p.ms);
+          cur2.setAttribute('x1',px); cur2.setAttribute('x2',px); cur2.style.display='';
+          tip.style.display=''; tip.innerHTML='<b>'+(p.sum>=0?'+':'')+p.sum.toFixed(3)+' pp</b> · '+p.count+' pair'+(p.count===1?'':'s')+'<br><span class="mut">'+eatStamp(p.ms)+'</span>';
+          var rel=px/W*r.width; tip.style.left=Math.max(4,Math.min(r.width-150,rel+8))+'px';
+        });
+        hit.addEventListener('mouseleave',function(){ cur2.style.display='none'; tip.style.display='none'; });
+      }
+    }
+    // contributors breakdown (current qualifying pairs, gap-desc)
+    var cons=d.contributors||[];
+    var tbl=document.createElement('div'); tbl.className='pairrank';
+    var h='<h3>Contributing pairs now <span class="mut" style="font-weight:400">'+cons.length+' with gap &gt; +'+gapMin+'&nbsp;pp</span></h3>';
+    if(!cons.length){ h+='<div class="sub">No pair currently has a setup above +'+gapMin+'&nbsp;pp.</div>'; }
+    else {
+      var maxG=1; cons.forEach(function(c){ if(c.gap>maxG)maxG=c.gap; });
+      h+='<table class="ptbl"><thead><tr><th>#</th><th>Pair</th><th>Buy</th><th>Sell</th><th class="num">Gap&nbsp;(pp)</th><th style="width:34%">Share</th></tr></thead><tbody>';
+      cons.forEach(function(c,i){ h+='<tr data-pair="'+c.pair+'"><td class="num">'+(i+1)+'</td><td class="pair">'+c.pair.replace('_','/')+'</td><td class="s">'+c.strong+'</td><td class="w">'+c.weak+'</td>'
+        +'<td class="num" style="color:var(--up);font-weight:700">+'+Number(c.gap).toFixed(3)+'</td>'
+        +'<td><span class="bar" style="width:'+Math.max(4,Math.round(c.gap/maxG*100))+'%;background:var(--up)"></span></td></tr>'; });
+      h+='</tbody></table>';
+    }
+    tbl.innerHTML=h; host.appendChild(tbl);
+    tbl.querySelectorAll('tr[data-pair]').forEach(function(tr){tr.addEventListener('click',function(){var p=tr.getAttribute('data-pair');S.view='single';S.kind='pair';S.instrument=p;nav({view:null,instrument:p,resolution:S.resolution});});});
+  }
+
   // Render the pair ranking the server computed (research/flow/ranking.js rankedSetups): pairs with an
   // ACTIVE opposing-currency setup (two currencies' current Renko bricks point opposite ways — green =
   // buy, red = sell), ranked by the SIGNED GAP since each setup began. Rows already arrive gap-sorted.
@@ -460,8 +545,8 @@
       if(m.kind==='pair')sub='step <b>'+m.step+'</b> ('+m.stepPips+' pip) · <b>'+m.resolution+' closes</b> · width = received closes';
       else sub='step <b>'+m.step+'pp</b> · <b>M15 basket snapshots</b>'+(d.daily?' · single day':' · multi-day window')+' · width = basket snapshots';
     }
-    // the compare view renders its own title/coverage inside #host, so keep the fixed header empty
-    var ownHead=(S.view==='compare');
+    // the compare & participation views render their own title/coverage inside #host — keep header empty
+    var ownHead=(S.view==='compare'||S.view==='participation');
     hdr.innerHTML=ownHead?'':('<div class="chrow"><span class="chTitle">'+esc(title)+'</span></div><div class="chSub">'+sub+'</div>');
     // coverage
     var c='';
@@ -475,6 +560,14 @@
     cov.innerHTML=ownHead?'':c;
     // legend
     var leg=document.getElementById('legend');
+    if(S.view==='participation'){
+      leg.innerHTML='<span class="k"><span class="sw up"></span> participation sum (pp)</span>'
+        +'<span class="k">higher = more pairs trending apart / wider setups</span>'
+        +'<span class="k">15M snapshots · select date &amp; time to replay</span>'
+        +'<span class="k">qualifying = active setup with gap &gt; +'+((d&&d.meta&&d.meta.gapMin!=null)?Number(d.meta.gapMin).toFixed(3):'0.200')+'&nbsp;pp</span>';
+      var ft0=document.getElementById('foot'); if(ft0) ft0.innerHTML='';
+      return;
+    }
     var wUnit = S.view==='sim'?'received quote updates':(d&&d.meta&&d.meta.kind==='index'?'constituent basket snapshots':'received '+((d&&d.meta&&d.meta.resolution)||'')+' closes');
     leg.innerHTML='<span class="k"><span class="sw up"></span> up brick</span>'
       +'<span class="k"><span class="sw dn"></span> down brick</span>'
@@ -506,8 +599,9 @@
     document.getElementById('resCtl').style.display = (S.view==='single'&&S.kind==='pair')?'inline-flex':'none';
     document.getElementById('chartSeg').style.display = (S.view==='single')?'inline-flex':'none';
     document.getElementById('tfSel').style.display = (S.view==='single'&&S.chartType==='candles')?'inline-block':'none';
-    document.getElementById('stepIn').parentElement.style.display = (S.view==='sim'||(S.view==='single'&&S.chartType==='candles'))?'none':'inline-flex';
+    document.getElementById('stepIn').parentElement.style.display = (S.view==='sim'||S.view==='participation'||(S.view==='single'&&S.chartType==='candles'))?'none':'inline-flex';
     if(S.view==='compare'){ destroyLW(); renderCompare(); document.getElementById('replaybar').style.display='none'; }
+    else if(S.view==='participation'){ destroyLW(); renderParticipation(); document.getElementById('replaybar').style.display='none'; }
     else { renderSingle(); renderReplay(); }
     syncControls();
   }
@@ -531,12 +625,12 @@
     var m=S.data&&S.data.meta;
     var stepIn=document.getElementById('stepIn'), unit=document.getElementById('stepUnit'), lbl=document.getElementById('stepLbl');
     if(m){ stepIn.value=m.step; if(m.kind==='index'){unit.textContent='pp';lbl.textContent='Step';stepIn.step='0.01';}else{unit.textContent='('+m.stepPips+' pip)';lbl.textContent='Step';stepIn.step=String(m.pip);} }
-    document.getElementById('instSel').parentElement.style.display = (S.view==='sim'||S.view==='compare')?'none':'inline-flex';
+    document.getElementById('instSel').parentElement.style.display = (S.view==='sim'||S.view==='compare'||S.view==='participation')?'none':'inline-flex';
   }
 
   // wire events
   document.querySelectorAll('#kindSeg button').forEach(function(b){b.onclick=function(){ S.kind=b.getAttribute('data-kind'); S.instrument = S.kind==='index'?'IDX:EUR':'EUR_USD'; S.step=null; S.view='single'; nav({view:null,instrument:S.instrument, resolution:S.kind==='pair'?S.resolution:null}); };});
-  document.querySelectorAll('#viewSeg button').forEach(function(b){b.onclick=function(){ var v=b.getAttribute('data-view'); if(v==='compare')nav({view:'compare',instrument:null,resolution:null}); else if(v==='sim')nav({view:'sim',instrument:null,resolution:null,step:null}); else nav({view:null,instrument:S.instrument}); };});
+  document.querySelectorAll('#viewSeg button').forEach(function(b){b.onclick=function(){ var v=b.getAttribute('data-view'); if(v==='compare')nav({view:'compare',instrument:null,resolution:null}); else if(v==='participation')nav({view:'participation',instrument:null,resolution:null}); else if(v==='sim')nav({view:'sim',instrument:null,resolution:null,step:null}); else nav({view:null,instrument:S.instrument}); };});
   document.querySelectorAll('#resSeg button').forEach(function(b){b.onclick=function(){ S.resolution=b.getAttribute('data-res'); S.step=null; nav({resolution:S.resolution,step:null}); };});
   document.getElementById('instSel').onchange=function(){ S.instrument=this.value; S.kind=this.value.indexOf('IDX:')===0?'index':'pair'; nav({instrument:S.instrument}); };
   document.getElementById('instSearch').oninput=function(){ buildInstruments(); };
@@ -556,7 +650,7 @@
   document.getElementById('rpStepEvt').onclick=function(){ stopPlay(); var idx=eventConfirmIndices(S.data.flow); var cur=S.cursor==null?(S.data.flow.observations.length-1):S.cursor; var nx=idx.find(function(x){return x>cur;}); setCursor(nx==null?(S.data.flow.observations.length-1):nx); };
   document.getElementById('rpLive').onclick=function(){ stopPlay(); S.cursor=null; renderSingle(); renderReplay(); };
   document.getElementById('rpSpeed').onchange=function(){ S.speed=parseFloat(this.value)||4; if(S.play){stopPlay();document.getElementById('rpPlay').click();} };
-  window.addEventListener('resize',function(){ if(S.view==='compare')renderCompare(); /* single: lightweight-charts handles its own resize */ });
+  window.addEventListener('resize',function(){ if(S.view==='compare')renderCompare(); else if(S.view==='participation')renderParticipation(); /* single: lightweight-charts handles its own resize */ });
 
   buildInstruments();
   load();
